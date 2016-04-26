@@ -149,17 +149,16 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 			ctx->ref.refcount = 100500;
 			redisAsyncFree (ud->ctx);
 			ctx->ref.refcount = 0;
+		}
+		LL_FOREACH_SAFE (ud->specific, cur, tmp) {
+			lua_redis_free_args (cur->args, cur->nargs);
+			event_del (&cur->timeout);
 
-			LL_FOREACH_SAFE (ud->specific, cur, tmp) {
-				lua_redis_free_args (cur->args, cur->nargs);
-				event_del (&cur->timeout);
-
-				if (cur->cbref != -1) {
-					luaL_unref (ud->L, LUA_REGISTRYINDEX, cur->cbref);
-				}
-
-				g_slice_free1 (sizeof (*cur), cur);
+			if (cur->cbref != -1) {
+				luaL_unref (ud->L, LUA_REGISTRYINDEX, cur->cbref);
 			}
+
+			g_slice_free1 (sizeof (*cur), cur);
 		}
 	}
 	else {
@@ -308,13 +307,13 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	ctx = sp_ud->ctx;
 	ud = sp_ud->c;
-	REF_RETAIN (ctx);
 
 	if (ud->terminated) {
 		/* We are already at the termination stage, just go out */
-		REF_RELEASE (ctx);
 		return;
 	}
+
+	event_del (&sp_ud->timeout);
 
 	if (c->err == 0) {
 		if (r != NULL) {
@@ -337,8 +336,6 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 			lua_redis_push_error (c->errstr, ctx, sp_ud, TRUE);
 		}
 	}
-
-	REF_RELEASE (ctx);
 }
 
 static void
@@ -346,12 +343,22 @@ lua_redis_timeout (int fd, short what, gpointer u)
 {
 	struct lua_redis_specific_userdata *sp_ud = u;
 	struct lua_redis_ctx *ctx;
-	ctx = sp_ud->ctx;
+	redisAsyncContext *ac;
 
-	REF_RETAIN (ctx);
+	ctx = sp_ud->ctx;
 	msg_info ("timeout while querying redis server");
 	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, TRUE);
-	REF_RELEASE (ctx);
+
+	if (sp_ud->c->ctx) {
+		ac = sp_ud->c->ctx;
+		/* Set to NULL to avoid double free in dtor */
+		sp_ud->c->ctx = NULL;
+		/*
+		 * This will call all callbacks pending so the entire context
+		 * will be destructed
+		 */
+		redisAsyncFree (ac);
+	}
 }
 
 
@@ -637,6 +644,7 @@ lua_redis_make_request (lua_State *L)
 					g_quark_from_static_string ("lua redis"));
 
 			sp_ud->ctx = ctx;
+			REF_RETAIN (ctx);
 			double_to_tv (timeout, &tv);
 			event_set (&sp_ud->timeout, -1, EV_TIMEOUT, lua_redis_timeout, sp_ud);
 			event_base_set (ud->task->ev_base, &sp_ud->timeout);
@@ -856,10 +864,6 @@ lua_redis_connect (lua_State *L)
 			ud = &ctx->d.async;
 			ud->task = task;
 			ud->L = L;
-			sp_ud = g_slice_alloc0 (sizeof (*sp_ud));
-			sp_ud->cbref = -1;
-			sp_ud->c = ud;
-			LL_PREPEND (ud->specific, sp_ud);
 			ret = TRUE;
 		}
 	}
