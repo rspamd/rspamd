@@ -1415,7 +1415,7 @@ local function post_process()
           rspamd_config:set_metric_symbol({
             name = k, score = r['score'],
             description = r['description'],
-            priority = 1,
+            priority = 2,
             one_shot = true })
           scores_added[k] = 1
         end
@@ -1478,7 +1478,7 @@ local function post_process()
     if not scores_added[key] then
       rspamd_config:set_metric_symbol({
             name = key, score = score,
-            priority = 1, flags = 'ignore'})
+            priority = 2, flags = 'ignore'})
     end
   end, scores)
 
