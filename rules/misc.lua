@@ -51,7 +51,8 @@ end
 -- Date issues
 rspamd_config.MISSING_DATE = function(task)
 	if rspamd_config:get_api_version() >= 5 then
-		if not task:get_header_raw('Date') then
+		local date = task:get_header_raw('Date')
+		if date == nil or date == '' then
 			return true
 		end
 	end
@@ -208,8 +209,18 @@ rspamd_config.HEADER_FORGED_MDN = {
 local headers_unique = {
   'Content-Type',
   'Content-Transfer-Encoding',
+  -- https://tools.ietf.org/html/rfc5322#section-3.6
   'Date',
-  'Message-ID'
+  'From',
+  'Sender',
+  'Reply-To',
+  'To',
+  'Cc',
+  'Bcc',
+  'Message-ID',
+  'In-Reply-To',
+  'References',
+  'Subject'
 }
 
 rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
@@ -312,3 +323,15 @@ rspamd_config.RCVD_TLS_ALL = {
     group = "encryption"
 }
 
+rspamd_config.MISSING_FROM = {
+    callback = function(task)
+      local from = task:get_header('From')
+      if from == nil or from == '' then
+        return true
+      end
+      return false
+    end,
+    score = 2.0,
+    group = 'headers',
+    description = 'Missing From: header'
+}
