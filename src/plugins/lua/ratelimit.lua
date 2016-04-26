@@ -126,15 +126,6 @@ local function check_limits(task, args)
   local key = _.foldl(function(acc, k) return acc .. k[2] end, '', args)
   local upstream = upstreams:get_upstream_by_hash(key)
   local addr = upstream:get_addr()
-  --- Called when value was set on server
-  local function rate_set_key_cb(task, err, data)
-    if err then
-      rspamd_logger.infox(task, 'got error while getting limit: %1', err)
-      upstream:fail()
-    else
-      upstream:ok()
-    end
-  end
   --- Called when value is got from server
   local function rate_get_cb(task, err, data)
     if data then
@@ -189,15 +180,6 @@ local function set_limits(task, args)
   local upstream = upstreams:get_upstream_by_hash(key)
   local addr = upstream:get_addr()
 
-  local function rate_set_key_cb(task, err, data)
-    if err then
-      rspamd_logger.infox(task, 'got error while setting limit: %1', err)
-      upstream:fail()
-    else
-      upstream:ok()
-    end
-  end
-
   local function rate_set_cb(task, err, data)
     if data then
       local tv = task:get_timeval()
@@ -227,12 +209,22 @@ local function set_limits(task, args)
         end
 
         local lstr = string.format('%.3f:%.3f:%.3f', ntime, bucket, ctime)
-        table.insert(values, limit[2])
-        table.insert(values, lstr)
+        table.insert(values, {limit[2], max_delay, lstr})
       end, _.zip(parse_limits(data), _.iter(args)))
 
-      local cmd = generate_format_string(values, true)
-      rspamd_redis.make_request(task, addr, rate_set_key_cb, cmd, values)
+      local conn = rspamd_redis.connect({
+        task = task,
+        host = addr
+      })
+
+      if conn then
+        _.each(function(v)
+          conn:add_cmd('setex', v)
+        end, values)
+      else
+        rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+        upstream:fail()
+      end
     elseif err then
       rspamd_logger.infox(task, 'got error while setting limit: %1', err)
       upstream:fail()
