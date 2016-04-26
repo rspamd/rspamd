@@ -51,7 +51,8 @@ end
 -- Date issues
 rspamd_config.MISSING_DATE = function(task)
 	if rspamd_config:get_api_version() >= 5 then
-		if not task:get_header_raw('Date') then
+		local date = task:get_header_raw('Date')
+		if date == nil or date == '' then
 			return true
 		end
 	end
