@@ -431,7 +431,7 @@ lua_redis_connect_cb (const struct redisAsyncContext *c, int status)
 static int
 lua_redis_make_request (lua_State *L)
 {
-	struct lua_redis_ctx *ctx;
+	struct lua_redis_ctx *ctx, **pctx;
 	rspamd_inet_addr_t *ip = NULL;
 	struct lua_redis_userdata *ud;
 	struct lua_redis_specific_userdata *sp_ud;
@@ -641,16 +641,27 @@ lua_redis_make_request (lua_State *L)
 			event_set (&sp_ud->timeout, -1, EV_TIMEOUT, lua_redis_timeout, sp_ud);
 			event_base_set (ud->task->ev_base, &sp_ud->timeout);
 			event_add (&sp_ud->timeout, &tv);
+			ret = TRUE;
 		}
 		else {
 			msg_info ("call to redis failed: %s", ud->ctx->errstr);
 			redisAsyncFree (ud->ctx);
 			ud->ctx = NULL;
 			REF_RELEASE (ctx);
+			ret = FALSE;
 		}
 	}
 
 	lua_pushboolean (L, ret);
+
+	if (ret) {
+
+		pctx = lua_newuserdata (L, sizeof (ctx));
+		*pctx = ctx;
+		rspamd_lua_setclass (L, "rspamd{redis}", -1);
+
+		return 2;
+	}
 
 	return 1;
 }
