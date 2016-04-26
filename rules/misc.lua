@@ -115,7 +115,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
     return false
   end,
   score = 3.0,
-  group = 'headers',
+  group = 'header',
   description = 'All capital letters in subject'
 }
 
@@ -129,7 +129,7 @@ rspamd_config.LONG_SUBJ = {
   end,
 
   score = 3.0,
-  group = 'headers',
+  group = 'header',
   description = 'Subject is too long'
 }
 
@@ -142,7 +142,7 @@ rspamd_config.BROKEN_HEADERS = {
     return false
   end,
   score = 1.0,
-  group = 'headers',
+  group = 'header',
   description = 'Headers structure is likely broken'
 }
 
@@ -171,7 +171,7 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
   end,
 
   score = 2.0,
-  group = 'headers',
+  group = 'header',
   description = 'Read confirmation address is different to from address'
 }
 
@@ -202,7 +202,7 @@ rspamd_config.HEADER_FORGED_MDN = {
   end,
 
   score = 2.0,
-  group = 'headers',
+  group = 'header',
   description = 'Read confirmation address is different to return path'
 }
 
@@ -245,7 +245,7 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
   end,
 
   score = 5.0,
-  group = 'headers',
+  group = 'header',
   description = 'Repeated unique headers'
 }
 
@@ -332,6 +332,6 @@ rspamd_config.MISSING_FROM = {
       return false
     end,
     score = 2.0,
-    group = 'headers',
+    group = 'header',
     description = 'Missing From: header'
 }
