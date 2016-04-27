@@ -955,9 +955,9 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 gboolean
 rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 {
-	gint threshold, threshold2 = -1, diff;
+	gint threshold, threshold2 = -1;
 	struct expression_argument *arg;
-	gint *pdiff;
+	gdouble *pdiff, diff;
 
 	if (args == NULL || args->len == 0) {
 		debug_task ("no threshold is specified, assume it 100");
@@ -997,12 +997,13 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 	if ((pdiff =
 		rspamd_mempool_get_variable (task->task_pool,
 		"parts_distance")) != NULL) {
-		diff = *pdiff;
+		diff = (1.0 - (*pdiff)) * 100.0;
+
 		if (diff != -1) {
 			if (threshold2 > 0) {
-				if (diff >=
-					MIN (threshold,
-					threshold2) && diff < MAX (threshold, threshold2)) {
+				if (diff >= MIN (threshold, threshold2) &&
+					diff < MAX (threshold, threshold2)) {
+
 					return TRUE;
 				}
 			}
