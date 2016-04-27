@@ -261,6 +261,28 @@ LUA_FUNCTION_DEF (util, stat);
  */
 LUA_FUNCTION_DEF (util, unlink);
 
+/***
+ * @function util.lock_file(fname, [fd])
+ * Lock the specified file. This function returns {number} which must be passed to `util.unlock_file` after usage
+ * or you'll have a resource leak
+ *
+ * @param {string} fname filename to remove
+ * @param {number} fd use the specified fd instead of opening one
+ * @return {number|nil} number if locking was successful or nil otherwise
+ */
+LUA_FUNCTION_DEF (util, lock_file);
+
+
+/***
+ * @function util.unlock_file(fname, [close_fd])
+ * Unlock the specified file closing the file descriptor associated.
+ *
+ * @param {string} fname filename to remove
+ * @param {boolean} close_fd close descriptor on unlocking (default: TRUE)
+ * @return {boolean} true if a file was unlocked
+ */
+LUA_FUNCTION_DEF (util, unlock_file);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -288,6 +310,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, get_ticks),
 	LUA_INTERFACE_DEF (util, stat),
 	LUA_INTERFACE_DEF (util, unlink),
+	LUA_INTERFACE_DEF (util, lock_file),
+	LUA_INTERFACE_DEF (util, unlock_file),
 	{NULL, NULL}
 };
 
@@ -1162,6 +1186,88 @@ lua_util_unlink (lua_State *L)
 
 	if (fpath) {
 		ret = unlink (fpath);
+
+		if (ret == -1) {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		lua_pushboolean (L, true);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_lock_file (lua_State *L)
+{
+	const gchar *fpath;
+	gint fd = -1;
+	gboolean own = FALSE;
+
+	fpath = luaL_checkstring (L, 1);
+
+	if (fpath) {
+		if (lua_isnumber (L, 2)) {
+			fd = lua_tonumber (L, 2);
+		}
+		else {
+			fd = open (fpath, O_RDONLY);
+			own = TRUE;
+		}
+
+		if (fd == -1) {
+			lua_pushnil (L);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		if (flock (fd, LOCK_EX) == -1) {
+			lua_pushnil (L);
+			lua_pushstring (L, strerror (errno));
+
+			if (own) {
+				close (fd);
+			}
+
+			return 2;
+		}
+
+		lua_pushnumber (L, fd);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_unlock_file (lua_State *L)
+{
+	gint fd = -1, ret, serrno;
+	gboolean do_close = TRUE;
+
+	if (lua_isnumber (L, 1)) {
+		fd = lua_tonumber (L, 1);
+
+		if (lua_isboolean (L, 2)) {
+			do_close = lua_toboolean (L, 2);
+		}
+
+		ret = flock (fd, LOCK_UN);
+
+		if (do_close) {
+			serrno = errno;
+			close (fd);
+			errno = serrno;
+		}
 
 		if (ret == -1) {
 			lua_pushboolean (L, false);
