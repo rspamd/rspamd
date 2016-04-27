@@ -479,6 +479,21 @@ LUA_FUNCTION_DEF (task, learn);
 LUA_FUNCTION_DEF (task, set_settings);
 
 /***
+ * @method task:get_settings()
+ * Gets users settings object for a task. The format of this object is described
+ * [here](https://rspamd.com/doc/configuration/settings.html).
+ * @return {lua object} lua object generated from UCL
+ */
+LUA_FUNCTION_DEF (task, get_settings);
+
+/***
+ * @method task:get_settings_id()
+ * Get numeric hash of settings id if specified for this task. 0 is returned otherwise.
+ * @param {any} obj any lua object that corresponds to the settings format
+ */
+LUA_FUNCTION_DEF (task, get_settings_id);
+
+/***
  * @method task:process_re(params)
  * Processes the specified regexp and returns number of captures (cached or new)
  * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
@@ -623,6 +638,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
+	LUA_INTERFACE_DEF (task, get_settings),
+	LUA_INTERFACE_DEF (task, get_settings_id),
 	LUA_INTERFACE_DEF (task, cache_get),
 	LUA_INTERFACE_DEF (task, cache_set),
 	LUA_INTERFACE_DEF (task, process_regexp),
@@ -2632,6 +2649,50 @@ lua_task_set_settings (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_get_settings (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task != NULL) {
+
+		if (task->settings) {
+			return ucl_object_push_lua (L, task->settings, true);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_settings_id (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint32 *hp;
+
+	if (task != NULL) {
+		hp = rspamd_mempool_get_variable (task->task_pool, "settings_hash");
+
+		if (hp) {
+			lua_pushnumber (L, *hp);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
