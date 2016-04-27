@@ -1856,7 +1856,7 @@ rspamd_message_parse (struct rspamd_task *task)
 								p2->normalized_words);
 						diff = (2.0 * (gdouble)dw) / (gdouble)tw;
 
-						msg_err_task (
+						msg_debug_task (
 								"different words: %d, total words: %d, "
 								"got diff between parts of %.2f",
 								dw, tw,
