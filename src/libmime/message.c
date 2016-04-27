@@ -2036,7 +2036,8 @@ rspamd_message_get_headers_array (struct rspamd_task *task, ...)
 
 	va_start (ap, task);
 
-	for (hname = va_arg (ap, const char *); hname != NULL;) {
+	for (hname = va_arg (ap, const char *); hname != NULL;
+			hname = va_arg (ap, const char *)) {
 		rh = g_hash_table_lookup (task->raw_headers, hname);
 
 		if (rh == NULL) {
@@ -2058,7 +2059,8 @@ rspamd_message_get_headers_array (struct rspamd_task *task, ...)
 	/* Restart varargs processing */
 	va_start (ap, task);
 
-	for (hname = va_arg (ap, const char *); hname != NULL;) {
+	for (hname = va_arg (ap, const char *); hname != NULL;
+			hname = va_arg (ap, const char *)) {
 		rh = g_hash_table_lookup (task->raw_headers, hname);
 
 		if (rh == NULL) {
@@ -2127,7 +2129,8 @@ rspamd_message_get_headers_array_str (struct rspamd_task *task, ...)
 
 	va_start (ap, task);
 
-	for (hname = va_arg (ap, const char *); hname != NULL;) {
+	for (hname = va_arg (ap, const char *); hname != NULL;
+			hname = va_arg (ap, const char *)) {
 		rh = g_hash_table_lookup (task->raw_headers, hname);
 
 		if (rh == NULL) {
@@ -2149,7 +2152,8 @@ rspamd_message_get_headers_array_str (struct rspamd_task *task, ...)
 	/* Restart varargs processing */
 	va_start (ap, task);
 
-	for (hname = va_arg (ap, const char *); hname != NULL;) {
+	for (hname = va_arg (ap, const char *); hname != NULL;
+			hname = va_arg (ap, const char *)) {
 		rh = g_hash_table_lookup (task->raw_headers, hname);
 
 		if (rh == NULL) {
