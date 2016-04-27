@@ -82,6 +82,7 @@
 #define NRCPT_HEADER "Recipient-Number"
 #define RCPT_HEADER "Rcpt"
 #define SUBJECT_HEADER "Subject"
+#define SETTINGS_ID_HEADER "Settings-ID"
 #define STATFILE_HEADER "Statfile"
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
@@ -395,6 +396,16 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'S':
 			IF_HEADER (SUBJECT_HEADER) {
 				task->subject = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
+			}
+			IF_HEADER (SETTINGS_ID_HEADER) {
+				guint64 h;
+				guint32 *hp;
+
+				h = XXH64 (hv_tok->begin, hv_tok->len, 0xdeadbabe);
+				hp = rspamd_mempool_alloc (task->task_pool, sizeof (*hp));
+				memcpy (hp, &h, sizeof (*hp));
+				rspamd_mempool_set_variable (task->task_pool, "settings_hash",
+						hp, NULL);
 			}
 			break;
 		case 'u':
@@ -1083,9 +1094,9 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 	struct metric_result *mres;
 	GHashTableIter it;
 	gpointer k, v;
-	rspamd_ftok_t srch, *hdr;
 	struct symbol *sym;
 	gint id, i;
+	guint32 *sid;
 	gsize sz;
 
 	LL_FOREACH (ctx->log_pipes, lp) {
@@ -1101,15 +1112,11 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 					ls = g_slice_alloc (sz);
 
 					/* Handle settings id */
-					srch.begin = "Settings-Id";
-					srch.len = sizeof ("Settings-Id") - 1;
-					hdr = g_hash_table_lookup (task->request_headers, &srch);
+					sid = rspamd_mempool_get_variable (task->task_pool,
+							"settings_hash");
 
-					if (hdr) {
-						guint64 h;
-
-						h = XXH64 (hdr->begin, hdr->len, 0xdeadbabe);
-						memcpy (&ls->settings_id, &h, sizeof (ls->settings_id));
+					if (sid) {
+						ls->settings_id = *sid;
 					}
 					else {
 						ls->settings_id = 0;
