@@ -75,7 +75,9 @@ local function load_fann(id)
     return false
   end
 
+  local fd = rspamd_util.lock_file(fname)
   data[id].fann = rspamd_fann.load(fname)
+  rspamd_util.unlock_file(fd) -- closes fd
 
   if data[id].fann then
     local n = rspamd_config:get_symbols_count()
@@ -182,7 +184,22 @@ local function fann_train_callback(score, required_score,results, cf, id, opts)
 
   if data[id].ntrains > max_trains then
     -- Store fann on disk
-    local res = data[id].fann_train:save(fname)
+    local res = false
+
+    if not rspamd_util.stat(fname) then
+      local fd,err = rspamd_util.create_file(fname)
+      if not fd then
+        rspamd_logger.errx(cf, 'cannot save fann in %s: %s', fname, err)
+      else
+        rspamd_util.lock_file(fname, fd)
+        res = data[id].fann_train:save(fname)
+        rspamd_util.unlock_file(fd) -- Closes fd as well
+      end
+    else
+      local fd = rspamd_util.lock_file(fname)
+      res = data[id].fann_train:save(fname)
+      rspamd_util.unlock_file(fd) -- Closes fd as well
+    end
 
     if not res then
       rspamd_logger.errx(cf, 'cannot save fann in %s', fname)
