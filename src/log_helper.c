@@ -116,8 +116,9 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 				pcfg = lua_newuserdata (ctx->L, sizeof (*pcfg));
 				*pcfg = ctx->cfg;
 				rspamd_lua_setclass (ctx->L, "rspamd{config}", -1);
+				lua_pushnumber (ctx->L, sm->settings_id);
 
-				if (lua_pcall (ctx->L, 4, 0, 0) != 0) {
+				if (lua_pcall (ctx->L, 5, 0, 0) != 0) {
 					msg_err ("error executing log handler code: %s",
 							lua_tostring (ctx->L, -1));
 					lua_pop (ctx->L, 1);
