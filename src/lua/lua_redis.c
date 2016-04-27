@@ -347,7 +347,7 @@ lua_redis_timeout (int fd, short what, gpointer u)
 
 	ctx = sp_ud->ctx;
 	msg_info ("timeout while querying redis server");
-	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, TRUE);
+	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, FALSE);
 
 	if (sp_ud->c->ctx) {
 		ac = sp_ud->c->ctx;
@@ -808,7 +808,6 @@ lua_redis_connect (lua_State *L)
 	rspamd_inet_addr_t *ip = NULL;
 	const gchar *host;
 	struct lua_redis_ctx *ctx = NULL, **pctx;
-	struct lua_redis_specific_userdata *sp_ud;
 	struct lua_redis_userdata *ud;
 	struct rspamd_task *task = NULL;
 	gboolean ret = FALSE;
