@@ -266,22 +266,40 @@ LUA_FUNCTION_DEF (util, unlink);
  * Lock the specified file. This function returns {number} which must be passed to `util.unlock_file` after usage
  * or you'll have a resource leak
  *
- * @param {string} fname filename to remove
+ * @param {string} fname filename to lock
  * @param {number} fd use the specified fd instead of opening one
- * @return {number|nil} number if locking was successful or nil otherwise
+ * @return {number|nil,string} number if locking was successful or nil + error otherwise
  */
 LUA_FUNCTION_DEF (util, lock_file);
 
-
 /***
- * @function util.unlock_file(fname, [close_fd])
+ * @function util.unlock_file(fd, [close_fd])
  * Unlock the specified file closing the file descriptor associated.
  *
- * @param {string} fname filename to remove
+ * @param {number} fd descriptor to unlock
  * @param {boolean} close_fd close descriptor on unlocking (default: TRUE)
- * @return {boolean} true if a file was unlocked
+ * @return {boolean[,string]} true if a file was unlocked
  */
 LUA_FUNCTION_DEF (util, unlock_file);
+
+/***
+ * @function util.create_file(fname, [mode])
+ * Creates the specified file with the default mode 0644
+ *
+ * @param {string} fname filename to create
+ * @param {number} mode open mode (you should use octal number here)
+ * @return {number|nil,string} file descriptor or pair nil + error string
+ */
+LUA_FUNCTION_DEF (util, create_file);
+
+/***
+ * @function util.close_file(fd)
+ * Closes descriptor fd
+ *
+ * @param {number} fd descriptor to close
+ * @return {boolean[,string]} true if a file was closed
+ */
+LUA_FUNCTION_DEF (util, close_file);
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -312,6 +330,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, unlink),
 	LUA_INTERFACE_DEF (util, lock_file),
 	LUA_INTERFACE_DEF (util, unlock_file),
+	LUA_INTERFACE_DEF (util, create_file),
+	LUA_INTERFACE_DEF (util, close_file),
 	{NULL, NULL}
 };
 
@@ -1270,6 +1290,61 @@ lua_util_unlock_file (lua_State *L)
 		}
 
 		if (ret == -1) {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		lua_pushboolean (L, true);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_create_file (lua_State *L)
+{
+	gint fd, mode = 00644;
+	const gchar *fpath;
+
+	fpath = luaL_checkstring (L, 1);
+
+	if (fpath) {
+		if (lua_isnumber (L, 2)) {
+			mode = lua_tonumber (L, 2);
+		}
+
+		fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT|O_EXCL, mode);
+
+		if (fd == -1) {
+			lua_pushnil (L);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		lua_pushnumber (L, fd);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_close_file (lua_State *L)
+{
+	gint fd = -1;
+
+	if (lua_isnumber (L, 1)) {
+		fd = lua_tonumber (L, 1);
+
+		if (close (fd) == -1) {
 			lua_pushboolean (L, false);
 			lua_pushstring (L, strerror (errno));
 
