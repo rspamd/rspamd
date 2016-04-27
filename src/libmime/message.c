@@ -1574,8 +1574,9 @@ rspamd_message_parse (struct rspamd_task *task)
 	const gchar *p;
 	gsize len;
 	goffset hdr_pos;
-	gint diff, *pdiff, i;
-	guint tw, dw;
+	gint i;
+	gdouble diff, *pdiff;
+	guint tw, *ptw, dw;
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
@@ -1847,25 +1848,33 @@ rspamd_message_parse (struct rspamd_task *task)
 				if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
 						p1->normalized_words && p2->normalized_words) {
 
-					tw = MAX (p1->normalized_words->len, p2->normalized_words->len);
+					tw = p1->normalized_words->len + p2->normalized_words->len;
 
 					if (tw > 0) {
 						dw = rspamd_words_levenshtein_distance (task,
 								p1->normalized_words,
 								p2->normalized_words);
-						diff = (100.0 * (gdouble)(tw - dw) / (gdouble)tw);
+						diff = (2.0 * (gdouble)dw) / (gdouble)tw;
 
-						debug_task (
+						msg_err_task (
 								"different words: %d, total words: %d, "
-								"got likeliness between parts of %d%%",
+								"got diff between parts of %.2f",
 								dw, tw,
 								diff);
 
-						pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
+						pdiff = rspamd_mempool_alloc (task->task_pool,
+								sizeof (gdouble));
 						*pdiff = diff;
 						rspamd_mempool_set_variable (task->task_pool,
 								"parts_distance",
 								pdiff,
+								NULL);
+						ptw = rspamd_mempool_alloc (task->task_pool,
+								sizeof (gint));
+						*ptw = tw;
+						rspamd_mempool_set_variable (task->task_pool,
+								"total_words",
+								ptw,
 								NULL);
 					}
 				}

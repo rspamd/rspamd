@@ -33,15 +33,24 @@ reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = function(task)
-  local distance = task:get_mempool():get_variable('parts_distance', 'int')
+  local distance = task:get_mempool():get_variable('parts_distance', 'double')
 
   if distance then
     local nd = tonumber(distance)
+    -- ND is relation of different words to total words
+    if nd >= 0.5 then
+      local tw = task:get_mempool():get_variable('total_words', 'int')
 
-    if nd < 50 then
-      local score = 1 - util.tanh(nd / 100.0)
-
-      task:insert_result('R_PARTS_DIFFER', score, tostring(nd) .. '%')
+      if tw then
+        if tw > 30 then
+          -- We are confident about difference
+          local score = (nd - 0.5) * 2.0
+        else
+          -- We are not so confident about difference
+          local score = (nd - 0.5)
+        end
+        task:insert_result('R_PARTS_DIFFER', score, tostring(100.0 * nd) .. '%')
+      end
     end
   end
 

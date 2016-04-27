@@ -28,7 +28,7 @@
 #define RSPAMD_LEARN_OP 1
 #define RSPAMD_UNLEARN_OP 2
 
-static const gint similarity_treshold = 80;
+static const gdouble similarity_treshold = 80.0;
 
 static void
 rspamd_stat_tokenize_header (struct rspamd_task *task,
@@ -173,7 +173,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	GArray *words;
 	gchar *sub;
 	guint i, reserved_len = 0;
-	gint *pdiff;
+	gdouble *pdiff;
 
 	for (i = 0; i < task->text_parts->len; i++) {
 		part = g_ptr_array_index (task->text_parts, i);
@@ -200,7 +200,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		}
 
 
-		if (pdiff != NULL && *pdiff > similarity_treshold) {
+		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_treshold) {
 			msg_debug_task ("message has two common parts (%d%%), so skip the last one",
 					*pdiff);
 			break;
