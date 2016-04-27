@@ -23,6 +23,7 @@
 #include "http.h"
 #include "email_addr.h"
 #include "worker_private.h"
+#include "xxhash.h"
 
 /* Max line size */
 #define OUTBUFSIZ BUFSIZ
@@ -1082,6 +1083,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 	struct metric_result *mres;
 	GHashTableIter it;
 	gpointer k, v;
+	rspamd_ftok_t srch, *hdr;
 	struct symbol *sym;
 	gint id, i;
 	gsize sz;
@@ -1097,6 +1099,22 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 							sizeof (struct rspamd_protocol_log_symbol_result) *
 							g_hash_table_size (mres->symbols);
 					ls = g_slice_alloc (sz);
+
+					/* Handle settings id */
+					srch.begin = "Settings-Id";
+					srch.len = sizeof ("Settings-Id") - 1;
+					hdr = g_hash_table_lookup (task->request_headers, &srch);
+
+					if (hdr) {
+						guint64 h;
+
+						h = XXH64 (hdr->begin, hdr->len, 0xdeadbabe);
+						memcpy (&ls->settings_id, &h, sizeof (ls->settings_id));
+					}
+					else {
+						ls->settings_id = 0;
+					}
+
 					ls->score = mres->score;
 					ls->required_score = mres->actions_limits[METRIC_ACTION_REJECT];
 					ls->nresults = g_hash_table_size (mres->symbols);
