@@ -831,7 +831,44 @@ local function process_sa_conf(f)
           rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
         end
       end
-    elseif words[1] == "rawbody" or words[1] == "full" then
+    elseif words[1] == "rawbody" then
+      -- body SYMBOL /regexp/
+      if valid_rule then
+        insert_cur_rule()
+      end
+
+      cur_rule['symbol'] = words[2]
+      if words[3] and (string.sub(words[3], 1, 1) == '/'
+          or string.sub(words[3], 1, 1) == 'm') then
+        cur_rule['type'] = 'sarawbody'
+        cur_rule['re_expr'] = words_to_re(words, 2)
+        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
+        if cur_rule['re'] then
+
+          rspamd_config:register_regexp({
+            re = cur_rule['re'],
+            type = 'sarawbody',
+            pcre_only = is_pcre_only(cur_rule['symbol']),
+          })
+          valid_rule = true
+          cur_rule['re']:set_limit(match_limit)
+          cur_rule['re']:set_max_hits(1)
+        end
+      else
+        -- might be function
+        local args = words_to_re(words, 2)
+        local func = maybe_parse_sa_function(args)
+
+        if func then
+          cur_rule['type'] = 'function'
+          cur_rule['symbol'] = words[2]
+          cur_rule['function'] = func
+          valid_rule = true
+        else
+          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+        end
+      end
+    elseif words[1] == "full" then
       -- body SYMBOL /regexp/
       if valid_rule then
         insert_cur_rule()
@@ -1306,10 +1343,10 @@ local function post_process()
     --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-    _.filter(function(k, r)
+  _.filter(function(k, r)
       return r['type'] == 'part'
-    end,
-      rules))
+  end, rules))
+
   -- SA body rules
   _.each(function(k, r)
     local f = function(task)
@@ -1318,7 +1355,7 @@ local function post_process()
         return 0
       end
 
-      local t = 'sabody'
+      local t = r['type']
 
       local ret = task:process_regexp(r['re'], t)
       return ret
@@ -1332,33 +1369,9 @@ local function post_process()
     --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-    _.filter(function(k, r)
-      return r['type'] == 'sabody'
-    end,
-      rules))
-  -- Raw body rules
-  _.each(function(k, r)
-    local f = function(task)
-      if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
-        return 0
-      end
-
-      return task:process_regexp(r['re'], 'body')
-    end
-    if r['score'] then
-      local real_score = r['score'] * calculate_score(k, r)
-      if math.abs(real_score) > meta_score_alpha then
-        add_sole_meta(k, r)
-      end
-    end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
-    atoms[k] = f
-  end,
-    _.filter(function(k, r)
-      return r['type'] == 'message'
-    end,
-      rules))
+  _.filter(function(k, r)
+      return r['type'] == 'sabody' or r['type'] == 'message' or r['type'] == 'sarawbody'
+  end, rules))
 
   -- URL rules
   _.each(function(k, r)
