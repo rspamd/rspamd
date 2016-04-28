@@ -106,6 +106,7 @@ rspamd_lua_test_func (void)
 	}
 
 	lua_setglobal (L, "tests_list");
+	rspamd_lua_set_path (L, NULL);
 
 	lua_pushcfunction (L, traceback);
 	luaL_loadfile (L, rp);
