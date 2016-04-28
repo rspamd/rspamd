@@ -43,6 +43,7 @@ struct mime_text_part {
 	const gchar *real_charset;
 	GByteArray *orig;
 	GByteArray *content;
+	GByteArray *stripped_content; /**< no newlines or html tags 			*/
 	struct html_content *html;
 	GList *urls_offset;	/**< list of offsets of urls						*/
 	GMimeObject *parent;
