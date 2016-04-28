@@ -31,6 +31,36 @@ local r_font_color = '/font color=[\\"\']?\\#FFFFFF[\\"\']?/iP'
 reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_color)
 reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
 
+-- Local functions
+local function insert_linear(task, a, x, symbol)
+    local f = a * x
+    task:insert_result(symbol, ( f < 1 ) and f or 1, tostring(x))
+end
+
+-- Subject issues
+local function subject(task)
+    local sbj = task:get_header('Subject')
+
+    if sbj then
+      local stripped_subject = subject_re:search(sbj, false, true)
+      if stripped_subject and stripped_subject[1] and stripped_subject[1][2] then
+        sbj = stripped_subject[1][2]
+      end
+
+      local l = util.strlen_utf8(sbj)
+      if l > 200 then
+        insert_linear(task, 1/400, l, 'LONG_SUBJ')
+      end
+      if util.is_uppercase(sbj) then
+        insert_linear(task, 1/40, l, 'SUBJ_ALL_CAPS')
+      end
+    end
+
+    return false
+end
+
+rspamd_config:register_symbols(subject, 1.0, 'SUBJ', 'LONG_SUBJ', 'SUBJ_ALL_CAPS');
+
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = function(task)
   local distance = task:get_mempool():get_variable('parts_distance', 'double')
@@ -105,42 +135,6 @@ rspamd_config.R_SUSPICIOUS_URL = function(task)
     end
     return false
 end
-
-rspamd_config.SUBJ_ALL_CAPS = {
-  callback = function(task)
-    local sbj = task:get_header('Subject')
-
-    if sbj then
-      local stripped_subject = subject_re:search(sbj, false, true)
-      if stripped_subject and stripped_subject[1] and stripped_subject[1][2] then
-        sbj = stripped_subject[1][2]
-      end
-
-      if util.is_uppercase(sbj) then
-        return true
-      end
-    end
-
-    return false
-  end,
-  score = 3.0,
-  group = 'header',
-  description = 'All capital letters in subject'
-}
-
-rspamd_config.LONG_SUBJ = {
-  callback = function(task)
-    local sbj = task:get_header('Subject')
-    if sbj and util.strlen_utf8(sbj) > 200 then
-      return true
-    end
-    return false
-  end,
-
-  score = 3.0,
-  group = 'header',
-  description = 'Subject is too long'
-}
 
 rspamd_config.BROKEN_HEADERS = {
   callback = function(task)
