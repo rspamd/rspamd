@@ -959,6 +959,15 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			for (i = 0; i < task->parts->len; i++) {
 				mime_part = g_ptr_array_index (task->parts, i);
 
+				if (mime_part->parent == NULL) {
+					/* Top level part */
+					scvec[i * 2 + 1] = (guchar *)"";
+					lenvec[i * 2 + 1] = 0;
+					scvec[i * 2 + 2] = (guchar *)"";
+					lenvec[i * 2 + 2] = 0;
+					continue;
+				}
+
 				if (mime_part->raw_headers_str) {
 					scvec[i * 2 + 1] = (guchar *)mime_part->raw_headers_str;
 					lenvec[i * 2 + 1] = strlen (mime_part->raw_headers_str);
