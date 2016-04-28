@@ -38,7 +38,7 @@ reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\
 local function test_subject(task, check_function, rate)
   local function normalize_linear(a, x)
       local f = a * x
-      return (( f < 1 ) and f or 1), tostring(x)
+      return true, (( f < 1 ) and f or 1), tostring(x)
   end
 
   local sbj = task:get_header('Subject')
