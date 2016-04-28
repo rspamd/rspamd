@@ -983,7 +983,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	struct sb_stemmer *stem = NULL;
 #endif
 	rspamd_ftok_t *w;
-	const guchar *r;
+	const guchar *r, *p, *c, *end;
 	gchar *temp_word;
 	guint i, nlen;
 
@@ -996,6 +996,35 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		}
 	}
 #endif
+	/* Strip newlines */
+	part->stripped_content = g_byte_array_sized_new (part->content->len);
+	p = part->content->data;
+	c = p;
+	end = p + part->content->len;
+
+	while (p < end) {
+		if (*p == '\r' || *p == '\n') {
+			if (p > c) {
+				g_byte_array_append (part->stripped_content, c, p - c);
+			}
+
+			while (p < end && (*p == '\r' || *p == '\n')) {
+				p ++;
+			}
+			c = p;
+		}
+		else {
+			p ++;
+		}
+	}
+
+	if (p > c) {
+		g_byte_array_append (part->stripped_content, c, p - c);
+	}
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) free_byte_array_callback,
+			part->stripped_content);
 
 	/* Ugly workaround */
 	part->normalized_words = rspamd_tokenize_text (part->content->data,
@@ -1124,7 +1153,7 @@ process_text_part (struct rspamd_task *task,
 	const gchar *cd, *p, *c;
 	guint remain;
 
-	/* Skip attachements */
+	/* Skip attachments */
 #ifndef GMIME24
 	cd = g_mime_part_get_content_disposition (GMIME_PART (mime_part->mime));
 	if (cd &&
