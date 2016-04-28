@@ -42,12 +42,13 @@ rspamd_config.R_PARTS_DIFFER = function(task)
       local tw = task:get_mempool():get_variable('total_words', 'int')
 
       if tw then
+        local score
         if tw > 30 then
           -- We are confident about difference
-          local score = (nd - 0.5) * 2.0
+          score = (nd - 0.5) * 2.0
         else
           -- We are not so confident about difference
-          local score = (nd - 0.5)
+          score = (nd - 0.5)
         end
         task:insert_result('R_PARTS_DIFFER', score, tostring(100.0 * nd) .. '%')
       end
