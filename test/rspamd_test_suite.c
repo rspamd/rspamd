@@ -7,7 +7,6 @@ struct rspamd_main             *rspamd_main = NULL;
 struct event_base              *base = NULL;
 worker_t *workers[] = { NULL };
 
-
 int
 main (int argc, char **argv)
 {
@@ -41,21 +40,22 @@ main (int argc, char **argv)
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);
-	g_test_add_func ("/rspamd/url", rspamd_url_test_func);
-	g_test_add_func ("/rspamd/statfile", rspamd_statfile_test_func);
 	g_test_add_func ("/rspamd/radix", rspamd_radix_test_func);
 	g_test_add_func ("/rspamd/dns", rspamd_dns_test_func);
-	g_test_add_func ("/rspamd/aio", rspamd_async_test_func);
 	g_test_add_func ("/rspamd/dkim", rspamd_dkim_test_func);
 	g_test_add_func ("/rspamd/rrd", rspamd_rrd_test_func);
 	g_test_add_func ("/rspamd/upstream", rspamd_upstream_test_func);
 	g_test_add_func ("/rspamd/shingles", rspamd_shingles_test_func);
 	g_test_add_func ("/rspamd/http", rspamd_http_test_func);
 	g_test_add_func ("/rspamd/lua", rspamd_lua_test_func);
-	g_test_add_func ("/rspamd/crypto", rspamd_cryptobox_test_func);
 	g_test_add_func ("/rspamd/cryptobox", rspamd_cryptobox_test_func);
 	g_test_add_func ("/rspamd/heap", rspamd_heap_test_func);
 
+#if 0
+	g_test_add_func ("/rspamd/url", rspamd_url_test_func);
+	g_test_add_func ("/rspamd/statfile", rspamd_statfile_test_func);
+	g_test_add_func ("/rspamd/aio", rspamd_async_test_func);
+#endif
 	g_test_run ();
 
 	g_mime_shutdown ();

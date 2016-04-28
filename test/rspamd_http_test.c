@@ -264,14 +264,14 @@ rspamd_http_test_func (void)
 	GString *b32_key;
 	double diff, total_diff = 0.0, *latency, mean, std;
 
-	rspamd_cryptobox_init ();
-	rspamd_snprintf (filepath, sizeof (filepath), "/tmp/http-test-XXXXXX");
-	g_assert ((fd = mkstemp (filepath)) != -1);
-
 	/* Read environment */
 	if ((env = getenv ("RSPAMD_HTTP_CONNS")) != NULL) {
 		pconns = strtoul (env, NULL, 10);
 	}
+	else {
+		return;
+	}
+
 	if ((env = getenv ("RSPAMD_HTTP_TESTS")) != NULL) {
 		ntests = strtoul (env, NULL, 10);
 	}
@@ -281,6 +281,10 @@ rspamd_http_test_func (void)
 	if ((env = getenv ("RSPAMD_HTTP_SERVERS")) != NULL) {
 		nservers = strtoul (env, NULL, 10);
 	}
+
+	rspamd_cryptobox_init ();
+	rspamd_snprintf (filepath, sizeof (filepath), "/tmp/http-test-XXXXXX");
+	g_assert ((fd = mkstemp (filepath)) != -1);
 
 	sfd = g_alloca (sizeof (*sfd) * nservers);
 	latency = g_malloc0 (pconns * ntests * sizeof (gdouble));
