@@ -729,7 +729,6 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	guint *lenvec;
 	gboolean raw = FALSE;
 	struct mime_text_part *part;
-	struct mime_part *mime_part;
 	struct rspamd_url *url;
 	struct rspamd_re_cache *cache = rt->cache;
 	gpointer k, v;
@@ -929,67 +928,84 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				rspamd_regexp_get_pattern (re), ret);
 		break;
 	case RSPAMD_RE_SABODY:
-		/*
-		 * For SA body we get all parts and extract headers + body from them
-		 *
+		/* According to SA docs:
+		 * The 'body' in this case is the textual parts of the message body;
+		 * any non-text MIME parts are stripped, and the message decoded from
+		 * Quoted-Printable or Base-64-encoded format if necessary. The message
+		 * Subject header is considered part of the body and becomes the first
+		 * paragraph when running the rules. All HTML tags and line breaks will
+		 * be removed before matching.
 		 */
-		if (task->parts->len > 0) {
-			cnt = task->parts->len * 2 + 1;
+		cnt = task->text_parts->len + 1;
+		scvec = g_malloc (sizeof (*scvec) * cnt);
+		lenvec = g_malloc (sizeof (*lenvec) * cnt);
+
+		/*
+		 * Body rules also include the Subject as the first line
+		 * of the body content.
+		 */
+
+		slist = rspamd_message_get_header (task, "Subject", FALSE);
+
+		if (slist) {
+			rh = slist->data;
+
+			scvec[0] = (guchar *)rh->decoded;
+			lenvec[0] = strlen (rh->decoded);
+		}
+		else {
+			scvec[0] = (guchar *)"";
+			lenvec[0] = 0;
+		}
+		for (i = 0; i < task->text_parts->len; i++) {
+			part = g_ptr_array_index (task->text_parts, i);
+
+			if (part->stripped_content) {
+				scvec[i + 1] = (guchar *)part->stripped_content->data;
+				lenvec[i + 1] = part->stripped_content->len;
+			}
+			else {
+				scvec[i + 1] = (guchar *)"";
+				lenvec[i + 1] = 0;
+			}
+		}
+
+		ret = rspamd_re_cache_process_regexp_data (rt, re,
+				task->task_pool, scvec, lenvec, cnt, TRUE);
+		debug_task ("checking sa body regexp: %s -> %d",
+				rspamd_regexp_get_pattern (re), ret);
+		g_free (scvec);
+		g_free (lenvec);
+		break;
+	case RSPAMD_RE_SARAWBODY:
+		/* According to SA docs:
+		 * The 'raw body' of a message is the raw data inside all textual
+		 * parts. The text will be decoded from base64 or quoted-printable
+		 * encoding, but HTML tags and line breaks will still be present.
+		 * Multiline expressions will need to be used to match strings that are
+		 * broken by line breaks.
+		 */
+		if (task->text_parts->len > 0) {
+			cnt = task->text_parts->len;
 			scvec = g_malloc (sizeof (*scvec) * cnt);
 			lenvec = g_malloc (sizeof (*lenvec) * cnt);
 
-			/*
-			 * Body rules also include the Subject as the first line
-			 * of the body content.
-			 */
+			for (i = 0; i < task->text_parts->len; i++) {
+				part = g_ptr_array_index (task->text_parts, i);
 
-			slist = rspamd_message_get_header (task, "Subject", FALSE);
-
-			if (slist) {
-				rh = slist->data;
-
-				scvec[0] = (guchar *)rh->decoded;
-				lenvec[0] = strlen (rh->decoded);
-			}
-			else {
-				scvec[0] = (guchar *)"";
-				lenvec[0] = 0;
-			}
-
-			for (i = 0; i < task->parts->len; i++) {
-				mime_part = g_ptr_array_index (task->parts, i);
-
-				if (mime_part->parent == NULL) {
-					/* Top level part */
-					scvec[i * 2 + 1] = (guchar *)"";
-					lenvec[i * 2 + 1] = 0;
-					scvec[i * 2 + 2] = (guchar *)"";
-					lenvec[i * 2 + 2] = 0;
-					continue;
-				}
-
-				if (mime_part->raw_headers_str) {
-					scvec[i * 2 + 1] = (guchar *)mime_part->raw_headers_str;
-					lenvec[i * 2 + 1] = strlen (mime_part->raw_headers_str);
+				if (part->orig) {
+					scvec[i] = (guchar *)part->orig->data;
+					lenvec[i] = part->orig->len;
 				}
 				else {
-					scvec[i * 2 + 1] = (guchar *)"";
-					lenvec[i * 2 + 1] = 0;
-				}
-
-				if (mime_part->content) {
-					scvec[i * 2 + 2] = (guchar *)mime_part->content->data;
-					lenvec[i * 2 + 2] = mime_part->content->len;
-				}
-				else {
-					scvec[i * 2 + 2] = (guchar *)"";
-					lenvec[i * 2 + 2] = 0;
+					scvec[i] = (guchar *)"";
+					lenvec[i] = 0;
 				}
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task->task_pool, scvec, lenvec, cnt, TRUE);
-			debug_task ("checking sa body regexp: %s -> %d",
+			debug_task ("checking sa rawbody regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
 			g_free (lenvec);
@@ -1135,6 +1151,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 	case RSPAMD_RE_SABODY:
 		ret = "sa body";
 		break;
+	case RSPAMD_RE_SARAWBODY:
+		ret = "sa body";
+		break;
 	case RSPAMD_RE_MAX:
 		ret = "invalid class";
 		break;
@@ -1158,32 +1177,36 @@ rspamd_re_cache_type_from_string (const char *str)
 		h = XXH64 (str, strlen (str), 0xdeadbabe);
 
 		switch (h) {
-		case 0x298b9c8a58887d44LLU:
+		case 0x298b9c8a58887d44LLU: /* header */
 			ret = RSPAMD_RE_HEADER;
 			break;
-		case 0x467bfb5cd7ddf890LLU:
+		case 0x467bfb5cd7ddf890LLU: /* rawheader */
 			ret = RSPAMD_RE_RAWHEADER;
 			break;
-		case 0xda081341fb600389LLU:
+		case 0xda081341fb600389LLU: /* mime */
 			ret = RSPAMD_RE_MIME;
 			break;
-		case 0xc35831e067a8221dLLU:
+		case 0xc35831e067a8221dLLU: /* rawmime */
 			ret = RSPAMD_RE_RAWMIME;
 			break;
-		case 0xc625e13dbe636de2LLU:
+		case 0xc625e13dbe636de2LLU: /* body */
+		case 0xCCDEBA43518F721CULL: /* message */
 			ret = RSPAMD_RE_BODY;
 			break;
-		case 0x286edbe164c791d2LLU:
+		case 0x286edbe164c791d2LLU: /* url */
 			ret = RSPAMD_RE_URL;
 			break;
-		case 0x796d62205a8778c7LLU:
+		case 0x796d62205a8778c7LLU: /* allheader */
 			ret = RSPAMD_RE_ALLHEADER;
 			break;
-		case 0xa3c6c153b3b00a5eLLU:
+		case 0xa3c6c153b3b00a5eLLU: /* mimeheader */
 			ret = RSPAMD_RE_MIMEHEADER;
 			break;
-		case 0x7794501506e604e9LLU:
+		case 0x7794501506e604e9LLU: /* sabody */
 			ret = RSPAMD_RE_SABODY;
+			break;
+		case 0x28828962E7D2A05FULL: /* sarawbody */
+			ret = RSPAMD_RE_SARAWBODY;
 			break;
 		default:
 			ret = RSPAMD_RE_MAX;
