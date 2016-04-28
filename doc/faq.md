@@ -643,3 +643,168 @@ Moreover, there is function `rspamd_logger.slog` that allows you to replace lua 
 ### Should I use `local` for my variables
 
 The answer is yes: always use `local` variables unless it is completely inevitable. Many global variables can cause significant performance degradation for all lua scripts.
+
+## Rmilter questions
+
+This section specifically added for rmilter related questions and issues.
+
+### Can rspamd run without Rmilter
+
+Rspamd can be integrated with MTA using different tools described in the [integration](integration.html) document. For Postfix and Sendmail MTA `rmilter` is the most appropriate tool so far. Moreover, rmilter adds missing features to rspamd, such as conditional greylisting, messages alteration and so on and so forth. That's why I would recommend using rmilter with rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
+
+### How to setup dkim signing in rmilter
+
+With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
+This could be done, for example by using `opendkim-genkey`:
+
+    opendkim-genkey --domain=example.com --selector=dkim
+
+That will generate `dkim.private` file with private key and `dkim.txt` with the suggested `TXT` record for your domain.
+
+```ucl
+dkim {
+    domain {
+      key = /etc/dkim;
+      domain = "*";
+      selector = "dkim";
+    };
+    header_canon = relaxed;
+    body_canon = relaxed;
+    sign_alg = sha256;
+};
+```
+
+Please note, that rmilter will sign merely mail for the **authenticated** users, hence you should also ensure that `{auth_authen}` macro
+is passed to milter on `MAIL FROM` stage:
+
+    milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
+
+It is also possible to sign mail for unauthenticated users which come from the local networks. To implement that, you could add the following option to your configuration:
+
+~~~ucl
+dkim {
+    domain {
+      key = /etc/dkim;
+      domain = "*";
+      selector = "dkim";
+    };
+    header_canon = relaxed;
+    body_canon = relaxed;
+    sign_alg = sha256;
+    dkim_sign_networks = 10.0.0.0/8, 127.0.0.1/32;
+};
+~~~
+
+### Setup whitelisting of reply messages
+
+It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of rmilter. To enable this
+feature, please ensure that you have `redis` server running and add the following lines to redis section:
+
+```ucl
+redis {
+  ...
+  # servers_id - redis servers used for message id storing, can not be mirrored
+  servers_id = localhost;
+
+  # id_prefix - prefix for extracting message ids from redis
+  # Default: empty (no prefix is prepended to key)
+  id_prefix = "message_id.";
+}
+```
+
+### Mirror some messages to evaluate rspamd filtering quality
+
+Sometimes it might be useful to watch how messages are processed by rspamd. For this purposes, rmilter
+can mirror some percentage of messages to [beanstalk](http://kr.github.io/beanstalkd/) service and check them using rspamc.
+First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab
+a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine would get messages from beanstalk and feed them to
+rspamc. Here is an example configuration file:
+
+```ini
+[instance1]
+host = 127.0.0.1
+port = 11300
+command = /usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user'
+```
+
+It is also possible, for example, to compare output for different rspamd versions or rules sets:
+
+```ini
+[instance1]
+host = 127.0.0.1
+port = 11300
+command = [ "/usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user1'", "/usr/bin/rspamc -h other_host:11333 --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user2'" ]
+```
+
+Then setup rmilter to mirror some traffic:
+
+```ucl
+beanstalk {
+  copy_server = localhost:11300;
+  send_beanstalk_copy = yes;
+  # Please note that copy probability is floating point number from 0.0 to 1.0
+  copy_probability = 0.1;
+}
+```
+
+Afterwards, it might be useful also to setup dovecot-sieve for sorting messages between folders by their spam scores:
+
+```
+require ["copy", "fileinto"];
+
+if header :contains "X-Spam-Symbols" "BAYES_SPAM" {
+        fileinto :copy "bayes_spam";
+}
+if header :contains "X-Spam-Symbols" "BAYES_HAM" {
+        fileinto :copy "bayes_ham";
+}
+
+if header :is "X-Spam-Action" "reject" {
+        fileinto "Spam";
+}
+if header :is "X-Spam-Action" "add header" {
+        fileinto "Probable";
+}
+if header :is "X-Spam-Action" "no action" {
+        fileinto "Ham";
+}
+if header :is "X-Spam-Action" "greylist" {
+        fileinto "Greylist";
+}
+```
+
+This script sort messages according their spam action and also copies messages with statistics symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
+
+### How to distinguish inbound and outbound traffic for rspamd instance
+
+From version `1.8.0`, rmilter can pass a special header to rspamd called `settings-id`. This header allows rspamd to apply some specific settings for a message scanned. This allows to set custom scores for message and to disable some rules or even group of rules when processing. For example, we want to disable some rules for outbound scanning. Then we could create an entry in [settings](https://rspamd.com/doc/configuration/settings.html) module:
+
+```ucl
+settings {
+  outbound {
+    priority = high;
+    id = "outbound";
+    apply "default" {
+      actions {
+        reject = 150.0;
+        "add header" = 6.0;
+      }
+      BAYES_SPAM = 7.0;
+      groups_disabled = [
+        "hfilter",
+        "spf",
+        "rbl"
+      ]
+    }
+  }
+}
+```
+
+Then, you can apply this settings ID on onbound MTA using rmilter configuration:
+
+```ucl
+spamd {
+  ...
+  spamd_settings_id = "outbound";
+}
+```
