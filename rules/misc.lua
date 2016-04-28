@@ -32,34 +32,55 @@ reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_c
 reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
 
 -- Local functions
-local function insert_linear(task, a, x, symbol)
-    local f = a * x
-    task:insert_result(symbol, ( f < 1 ) and f or 1, tostring(x))
-end
+
 
 -- Subject issues
-local function subject(task)
-    local sbj = task:get_header('Subject')
+local function test_subject(task, check_function, rate)
+  local function normalize_linear(a, x)
+      local f = a * x
+      return (( f < 1 ) and f or 1), tostring(x)
+  end
 
-    if sbj then
-      local stripped_subject = subject_re:search(sbj, false, true)
-      if stripped_subject and stripped_subject[1] and stripped_subject[1][2] then
-        sbj = stripped_subject[1][2]
-      end
+  local sbj = task:get_header('Subject')
 
-      local l = util.strlen_utf8(sbj)
-      if l > 200 then
-        insert_linear(task, 1/400, l, 'LONG_SUBJ')
-      end
-      if util.is_uppercase(sbj) then
-        insert_linear(task, 1/40, l, 'SUBJ_ALL_CAPS')
-      end
+  if sbj then
+    local stripped_subject = subject_re:search(sbj, false, true)
+    if stripped_subject and stripped_subject[1] and stripped_subject[1][2] then
+      sbj = stripped_subject[1][2]
     end
 
-    return false
+    local l = util.strlen_utf8(sbj)
+    if check_function(sbj, l) then
+      return normalize_linear(rate, l)
+    end
+  end
+
+  return false
 end
 
-rspamd_config:register_symbols(subject, 1.0, 'SUBJ', 'LONG_SUBJ', 'SUBJ_ALL_CAPS');
+rspamd_config.SUBJ_ALL_CAPS = {
+  callback = function(task)
+    local caps_test = function(sbj, len)
+      return util.is_uppercase(sbj)
+    end
+    return test_subject(task, caps_test, 1.0/40.0)
+  end,
+  score = 3.0,
+  group = 'subject',
+  description = 'All capital letters in subject'
+}
+
+rspamd_config.LONG_SUBJ = {
+  callback = function(task)
+    local length_test = function(sbj, len)
+      return len > 200
+    end
+    return test_subject(task, length_test, 1.0/400.0)
+  end,
+  score = 3.0,
+  group = 'subject',
+  description = 'Subject is too long'
+}
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = function(task)
