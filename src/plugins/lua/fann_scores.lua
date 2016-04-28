@@ -186,7 +186,8 @@ local function fann_train_callback(score, required_score,results, cf, id, opts)
     -- Store fann on disk
     local res = false
 
-    if not rspamd_util.stat(fname) then
+    local err,st = rspamd_util.stat(fname)
+    if not err then
       local fd,err = rspamd_util.create_file(fname)
       if not fd then
         rspamd_logger.errx(cf, 'cannot save fann in %s: %s', fname, err)
