@@ -108,21 +108,19 @@ Specifies clamav antivirus scanners.
 	+ Default: `10`
 - `whitelist`: list of ips or nets that should be not checked with spamd
 	+ Default: `empty`
-	
+
 Back to [top](#).
 
 ## Spamd section
 
-Specifies rspamd or spamassassin spam scanners.
+Specifies rspamd scanners.
 
-- `servers`: spamd (or rspamd) socket definitions in format:
+- `servers`: rspamd socket definitions in format:
 	1.  `/path/to/file`
 	2.  `host[:port]`
-	3.  `r:/path/to/file` - for rspamd protocol
-	4.  `r:host[:port]` - for rspamd protocol
-- `connect_timeout`: timeout in miliseconds for connecting to spamd
+- `connect_timeout`: timeout in milliseconds for connecting to spamd
 	+ Default: `1s`
-- `results_timeout`: timeout in miliseconds for waiting for spamd response
+- `results_timeout`: timeout in milliseconds for waiting for spamd response
 	+ Default: `20s`
 - `error_time`: time in seconds during which we are counting errors
 	+ Default: `10`
@@ -148,6 +146,8 @@ Specifies rspamd or spamassassin spam scanners.
 	+ Default: `false`
 - `spamd_temp_fail`: return temporary failure if spam servers could not be reached (ignore otherwise) (flag)
 	+ Default: `false`
+- `spamd_settings_id`: pass additional settings id for rspamd (e.g. to distinguish inbound and outbound messages)
+  + Default: `empty`
 
 Back to [top](#).
 
@@ -283,7 +283,7 @@ Back to [top](#).
 6.  SPF (EOM)
 7.  Message size (EOM) if failed, skip clamav, dcc and spamd checks
 8.  DCC (EOM)
-10. Spamassassin (EOM)
+10. Rspamd (EOM)
 9.  Clamav (EOM)
 11. Beanstalk (EOM)
 12. DKIM add signature (EOM)
