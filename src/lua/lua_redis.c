@@ -304,6 +304,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	struct lua_redis_specific_userdata *sp_ud = priv;
 	struct lua_redis_ctx *ctx;
 	struct lua_redis_userdata *ud;
+	redisAsyncContext *ac;
 
 	ctx = sp_ud->ctx;
 	ud = sp_ud->c;
@@ -314,6 +315,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 
 	event_del (&sp_ud->timeout);
+	ctx->cmds_pending --;
 
 	if (c->err == 0) {
 		if (r != NULL) {
@@ -335,6 +337,14 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		else {
 			lua_redis_push_error (c->errstr, ctx, sp_ud, TRUE);
 		}
+	}
+
+	if (ctx->cmds_pending == 0) {
+		/* Disconnect redis early as we don't need it anymore */
+		ud->terminated = 1;
+		ac = ud->ctx;
+		ud->ctx = NULL;
+		redisAsyncFree (ac);
 	}
 }
 
@@ -645,6 +655,7 @@ lua_redis_make_request (lua_State *L)
 
 			sp_ud->ctx = ctx;
 			REF_RETAIN (ctx);
+			ctx->cmds_pending ++;
 			double_to_tv (timeout, &tv);
 			event_set (&sp_ud->timeout, -1, EV_TIMEOUT, lua_redis_timeout, sp_ud);
 			event_base_set (ud->task->ev_base, &sp_ud->timeout);
@@ -1054,6 +1065,7 @@ lua_redis_add_cmd (lua_State *L)
 				event_base_set (sp_ud->c->task->ev_base, &sp_ud->timeout);
 				event_add (&sp_ud->timeout, &tv);
 				REF_RETAIN (ctx);
+				ctx->cmds_pending ++;
 			}
 			else {
 				msg_info ("call to redis failed: %s", sp_ud->c->ctx->errstr);
