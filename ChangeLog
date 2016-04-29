@@ -1,3 +1,28 @@
+1.2.6:
+	* Fix parsing of URLs in texts
+	* Fix creating of URLs from LUA
+	* Fix some more URL detector issues
+	* Fix unit tests
+	* Fix JIT compilation for PCRE2 expressions
+	* Fix JIT usage for PCRE2
+	* Fix UTF8 mode in PCRE2
+	* Add workaround for pre-historic compilers (#605)
+	* Fix and rescore R_PARTS_DIFFER logic
+	* Properly set lua paths for tests
+	* Fix SA rawbody processing - exclude top part
+	* Store text parts content with newlines stripped
+	* Properly support SA body regexps
+	* Fix body rules in SA plugin
+	* Fix setting of score for parts differ
+	* More fixes to parts distance calculations
+		- Use hashed words instead of full words for speed
+		- Improve levenstein distance calculations and penalise replaces
+		- Always return number from 0 to 1
+		- Use g_malloc instead of alloca
+	* Fix percents output in R_PARTS_DIFFER
+	* Plug memory leak in dkim module
+	* Plug minor memory leak in regexps creation
+
 1.2.5:
 	* Plug an important memory leak in headers getting code
 	* Remove some bad domains from whitelists
