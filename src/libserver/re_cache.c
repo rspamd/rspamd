@@ -1177,35 +1177,36 @@ rspamd_re_cache_type_from_string (const char *str)
 		h = XXH64 (str, strlen (str), 0xdeadbabe);
 
 		switch (h) {
-		case 0x298b9c8a58887d44LLU: /* header */
+		case G_GUINT64_CONSTANT(0x298b9c8a58887d44): /* header */
 			ret = RSPAMD_RE_HEADER;
 			break;
-		case 0x467bfb5cd7ddf890LLU: /* rawheader */
+		case G_GUINT64_CONSTANT(0x467bfb5cd7ddf890): /* rawheader */
 			ret = RSPAMD_RE_RAWHEADER;
 			break;
-		case 0xda081341fb600389LLU: /* mime */
+		case G_GUINT64_CONSTANT(0xda081341fb600389): /* mime */
 			ret = RSPAMD_RE_MIME;
 			break;
-		case 0xc35831e067a8221dLLU: /* rawmime */
+		case G_GUINT64_CONSTANT(0xc35831e067a8221d): /* rawmime */
 			ret = RSPAMD_RE_RAWMIME;
 			break;
-		case 0xc625e13dbe636de2LLU: /* body */
-		case 0xCCDEBA43518F721CULL: /* message */
+		case G_GUINT64_CONSTANT(0xc625e13dbe636de2): /* body */
+		case G_GUINT64_CONSTANT(0xCCDEBA43518F721C): /* message */
 			ret = RSPAMD_RE_BODY;
 			break;
-		case 0x286edbe164c791d2LLU: /* url */
+		case G_GUINT64_CONSTANT(0x286edbe164c791d2): /* url */
+		case G_GUINT64_CONSTANT(0x7D9ACDF6685661A1): /* uri */
 			ret = RSPAMD_RE_URL;
 			break;
-		case 0x796d62205a8778c7LLU: /* allheader */
+		case G_GUINT64_CONSTANT(0x796d62205a8778c7): /* allheader */
 			ret = RSPAMD_RE_ALLHEADER;
 			break;
-		case 0xa3c6c153b3b00a5eLLU: /* mimeheader */
+		case G_GUINT64_CONSTANT(0xa3c6c153b3b00a5e): /* mimeheader */
 			ret = RSPAMD_RE_MIMEHEADER;
 			break;
-		case 0x7794501506e604e9LLU: /* sabody */
+		case G_GUINT64_CONSTANT(0x7794501506e604e9): /* sabody */
 			ret = RSPAMD_RE_SABODY;
 			break;
-		case 0x28828962E7D2A05FULL: /* sarawbody */
+		case G_GUINT64_CONSTANT(0x28828962E7D2A05F): /* sarawbody */
 			ret = RSPAMD_RE_SARAWBODY;
 			break;
 		default:
