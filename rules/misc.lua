@@ -101,7 +101,8 @@ rspamd_config.R_PARTS_DIFFER = function(task)
           -- We are not so confident about difference
           score = (nd - 0.5)
         end
-        task:insert_result('R_PARTS_DIFFER', score, tostring(100.0 * nd) .. '%')
+        task:insert_result('R_PARTS_DIFFER', score,
+          string.format('%.1f%%', tostring(100.0 * nd)))
       end
     end
   end
