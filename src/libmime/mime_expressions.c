@@ -356,9 +356,13 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	g_string_free (re_flags, TRUE);
 
 	if (result->regexp == NULL || err != NULL) {
-		msg_warn_pool ("could not read regexp: %s while reading regexp %s",
-				err ? err->message : "unknown error",
-						src);
+		msg_warn_pool ("could not read regexp: %s while reading regexp %e",
+				err, src);
+
+		if (err) {
+			g_error_free (err);
+		}
+
 		return NULL;
 	}
 
