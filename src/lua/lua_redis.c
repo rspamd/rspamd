@@ -339,12 +339,15 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 	}
 
-	if (ctx->cmds_pending == 0) {
+	if (ctx->cmds_pending == 0 && !ud->terminated) {
 		/* Disconnect redis early as we don't need it anymore */
 		ud->terminated = 1;
 		ac = ud->ctx;
 		ud->ctx = NULL;
-		redisAsyncFree (ac);
+
+		if (ac != NULL) {
+			redisAsyncFree (ac);
+		}
 	}
 }
 
