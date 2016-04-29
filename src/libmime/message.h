@@ -49,6 +49,7 @@ struct mime_text_part {
 	GMimeObject *parent;
 	struct mime_part *mime_part;
 	GArray *normalized_words;
+	GArray *normalized_hashes;
 	guint nlines;
 	guint64 hash;
 };
