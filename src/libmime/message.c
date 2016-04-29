@@ -24,6 +24,7 @@
 #include "email_addr.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
+#include "xxhash.h"
 
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"
@@ -1034,7 +1035,12 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			NULL);
 
 	if (part->normalized_words) {
+		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
+				sizeof (guint64), part->normalized_words->len);
+
 		for (i = 0; i < part->normalized_words->len; i ++) {
+			guint64 h;
+
 			w = &g_array_index (part->normalized_words, rspamd_ftok_t, i);
 			r = NULL;
 #ifdef WITH_SNOWBALL
@@ -1066,6 +1072,11 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 					w->begin = temp_word;
 				}
 			}
+
+			if (w->len > 0) {
+				h = XXH64 (w->begin, w->len, rspamd_hash_seed ());
+				g_array_append_val (part->normalized_hashes, h);
+			}
 		}
 	}
 #ifdef WITH_SNOWBALL
@@ -1082,21 +1093,21 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 		GArray *w1, GArray *w2)
 {
 	guint s1len, s2len, x, y, lastdiag, olddiag;
-	guint *column;
-	rspamd_ftok_t *s1, *s2;
+	guint *column, ret;
+	guint64 *h1, *h2;
 	gint eq;
 	static const guint max_words = 8192;
 
 	s1len = w1->len;
 	s2len = w2->len;
 
-	if (s1len > max_words) {
+	if (s1len + s2len > max_words) {
 		msg_err_task ("cannot compare parts with more than %ud words: %ud",
 				max_words, s1len);
 		return 0;
 	}
 
-	column = g_alloca ((s1len + 1) * sizeof (guint));
+	column = g_malloc0 ((s1len + 1) * sizeof (guint));
 
 	for (y = 1; y <= s1len; y++) {
 		column[y] = y;
@@ -1107,16 +1118,23 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 
 		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
 			olddiag = column[y];
-			s1 = &g_array_index (w1, rspamd_ftok_t, y - 1);
-			s2 = &g_array_index (w2, rspamd_ftok_t, x - 1);
-			eq = rspamd_ftok_cmp (s1, s2) == 0 ? 0 : 1;
+			h1 = &g_array_index (w1, guint64, y - 1);
+			h2 = &g_array_index (w2, guint64, x - 1);
+			eq = h1 == h2;
+			/*
+			 * Cost of replacement is twice higher than cost of add/delete
+			 * to calculate percentage properly
+			 */
 			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
-					lastdiag + (eq));
+					lastdiag + (eq * 2));
 			lastdiag = olddiag;
 		}
 	}
 
-	return column[s1len];
+	ret = column[s1len];
+	g_free (column);
+
+	return ret;
 }
 
 static gboolean
@@ -1875,15 +1893,15 @@ rspamd_message_parse (struct rspamd_task *task)
 			}
 			else {
 				if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
-						p1->normalized_words && p2->normalized_words) {
+						p1->normalized_hashes && p2->normalized_hashes) {
 
-					tw = p1->normalized_words->len + p2->normalized_words->len;
+					tw = p1->normalized_hashes->len + p2->normalized_hashes->len;
 
 					if (tw > 0) {
 						dw = rspamd_words_levenshtein_distance (task,
-								p1->normalized_words,
-								p2->normalized_words);
-						diff = (2.0 * (gdouble)dw) / (gdouble)tw;
+								p1->normalized_hashes,
+								p2->normalized_hashes);
+						diff = dw / (gdouble)tw;
 
 						msg_debug_task (
 								"different words: %d, total words: %d, "
