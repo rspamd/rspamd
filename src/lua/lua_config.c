@@ -720,7 +720,8 @@ lua_config_register_post_filter (lua_State *L)
 			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 			cd);
 	}
-	return 1;
+
+	return 0;
 }
 
 void
@@ -792,7 +793,8 @@ lua_config_register_pre_filter (lua_State *L)
 			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 			cd);
 	}
-	return 1;
+
+	return 0;
 }
 
 static gint
