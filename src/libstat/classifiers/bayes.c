@@ -196,7 +196,7 @@ bayes_classify (struct rspamd_classifier * ctx,
 		GPtrArray *tokens,
 		struct rspamd_task *task)
 {
-	double final_prob, h, s;
+	double final_prob, h, s, *pprob;
 	char *sumbuf;
 	struct rspamd_statfile *st = NULL;
 	struct bayes_task_closure cl;
@@ -272,6 +272,9 @@ bayes_classify (struct rspamd_classifier * ctx,
 					task->message_id);
 		}
 	}
+
+	pprob = rspamd_mempool_alloc (task->task_pool, sizeof (*pprob));
+	rspamd_mempool_set_variable (task->task_pool, "bayes_prob", pprob, NULL);
 
 	if (cl.processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
 
