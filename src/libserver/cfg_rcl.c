@@ -1307,7 +1307,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 	ccf->tokenizer = tkcf;
 
 	/* Handle lua conditions */
-	val = ucl_object_lookup (obj, "condition");
+	val = ucl_object_lookup_any (obj, "condition", "learn_condition", NULL);
 
 	if (val) {
 		LL_FOREACH (val, cur) {
