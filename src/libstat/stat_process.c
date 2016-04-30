@@ -435,7 +435,13 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 {
 	struct rspamd_classifier *cl;
 	guint i;
-	gboolean learned = FALSE, too_small = FALSE, too_large = FALSE;
+	gboolean learned = FALSE, too_small = FALSE, too_large = FALSE,
+			conditionally_skipped = FALSE;
+	lua_State *L;
+	struct rspamd_task **ptask;
+	GList *cur;
+	gint cb_ref;
+	gchar *cond_str = NULL;
 
 	/* Check whether we have learned that file */
 	for (i = 0; i < st_ctx->classifiers->len; i ++) {
@@ -471,6 +477,47 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
+		/* Check all conditions for this classifier */
+		cur = cl->cfg->learn_conditions;
+		L = task->cfg->lua_state;
+
+		while (cur) {
+			cb_ref = GPOINTER_TO_INT (cur->data);
+
+			lua_rawgeti (L, LUA_REGISTRYINDEX, cb_ref);
+			/* Push task and two booleans: is_spam and is_unlearn */
+			ptask = lua_newuserdata (L, sizeof (*ptask));
+			*ptask = task;
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			lua_pushboolean (L, spam);
+			lua_pushboolean (L,
+					task->flags & RSPAMD_TASK_FLAG_UNLEARN ? true : false);
+
+			if (lua_pcall (L, 3, LUA_MULTRET, 0) != 0) {
+				msg_err_task ("call to %s failed: %s",
+						"condition callback",
+						lua_tostring (L, -1));
+			}
+			else {
+				if (lua_isboolean (L, 1)) {
+					if (!lua_toboolean (L, 1)) {
+						conditionally_skipped = TRUE;
+						/* Also check for error string if needed */
+						if (lua_isstring (L, 2)) {
+							cond_str = rspamd_mempool_strdup (task->task_pool,
+									lua_tostring (L, 2));
+						}
+
+						lua_settop (L, 0);
+						continue; /* Go to the next classifier */
+					}
+				}
+			}
+
+			lua_settop (L, 0);
+			cur = g_list_next (cur);
+		}
+
 		if (cl->subrs->learn_spam_func (cl, task->tokens, task, spam,
 				task->flags & RSPAMD_TASK_FLAG_UNLEARN, err)) {
 			learned = TRUE;
@@ -495,6 +542,14 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 					cl->cfg->name,
 					task->tokens->len,
 					cl->cfg->min_tokens);
+		}
+		else if (conditionally_skipped) {
+			g_set_error (err, rspamd_stat_quark (), 410,
+					"<%s> is skipped for %s classifier: "
+					"%s",
+					task->message_id,
+					cl->cfg->name,
+					cond_str ? cond_str : "unknown reason");
 		}
 	}
 
