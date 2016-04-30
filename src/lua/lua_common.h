@@ -256,14 +256,6 @@ void luaopen_fann (lua_State *L);
 void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
 
-gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
-gint rspamd_lua_call_chain_filter (const gchar *function,
-	struct rspamd_task *task,
-	gint *marks,
-	guint number);
-double rspamd_lua_consolidation_func (struct rspamd_task *task,
-	const gchar *metric_name,
-	const gchar *function_name);
 void rspamd_lua_call_post_filters (struct rspamd_task *task);
 void rspamd_lua_call_pre_filters (struct rspamd_task *task);
 void rspamd_lua_dostring (const gchar *line);
