@@ -209,7 +209,6 @@ rspamd_lua_init ()
 
 	L = luaL_newstate ();
 	luaL_openlibs (L);
-
 	luaopen_logger (L);
 	luaopen_mempool (L);
 	luaopen_config (L);
@@ -425,7 +424,7 @@ rspamd_lua_add_preload (lua_State *L, const gchar *name, lua_CFunction func)
 	lua_gettable (L, -2);
 	lua_pushcfunction (L, func);
 	lua_setfield (L, -2, name);
-	lua_pop (L, 1);
+	lua_pop (L, 2); /* preload key + global package */
 }
 
 
