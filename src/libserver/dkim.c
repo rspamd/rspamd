@@ -886,7 +886,7 @@ rspamd_create_dkim_context (const gchar *sig,
 
 		return NULL;
 	}
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 	ctx->body_hash = EVP_MD_CTX_create ();
 	EVP_DigestInit_ex (ctx->body_hash, md_alg, NULL);
 	ctx->headers_hash = EVP_MD_CTX_create ();
