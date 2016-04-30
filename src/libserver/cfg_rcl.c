@@ -1235,6 +1235,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
 	struct rspamd_tokenizer_config *tkcf = NULL;
+	lua_State *L;
 
 	g_assert (key != NULL);
 	ccf = rspamd_config_new_classifier (cfg, NULL);
@@ -1304,9 +1305,71 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 	}
 
 	ccf->tokenizer = tkcf;
+
+	/* Handle lua conditions */
+	val = ucl_object_lookup (obj, "condition");
+
+	if (val) {
+		LL_FOREACH (val, cur) {
+			if (ucl_object_type (cur) == UCL_STRING) {
+				const gchar *lua_script;
+				gsize slen;
+				gint err_idx, ref_idx;
+				GString *tb = NULL;
+
+				lua_script = ucl_object_tolstring (cur, &slen);
+				L = cfg->lua_state;
+				lua_pushcfunction (L, &rspamd_lua_traceback);
+				err_idx = lua_gettop (L);
+
+
+				/* Load file */
+				if (luaL_loadbuffer (L, lua_script, slen, "learn_condition") != 0) {
+					g_set_error (err,
+							CFG_RCL_ERROR,
+							EINVAL,
+							"cannot load lua condition script: %s",
+							lua_tostring (L, -1));
+					lua_settop (L, 0); /* Error function */
+
+					return FALSE;
+				}
+
+				/* Now do it */
+				if (lua_pcall (L, 0, 1, err_idx) != 0) {
+					tb = lua_touserdata (L, -1);
+					g_set_error (err,
+							CFG_RCL_ERROR,
+							EINVAL,
+							"cannot init lua condition script: %s",
+							tb->str);
+					g_string_free (tb, TRUE);
+					lua_settop (L, 0);
+
+					return FALSE;
+				}
+
+				if (!lua_isfunction (L, -1)) {
+					g_set_error (err,
+							CFG_RCL_ERROR,
+							EINVAL,
+							"cannot init lua condition script: "
+							"must return function");
+					lua_settop (L, 0);
+
+					return FALSE;
+				}
+
+				ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+				ccf->learn_conditions = g_list_append (ccf->learn_conditions,
+						GINT_TO_POINTER (ref_idx));
+				lua_settop (L, 0);
+			}
+		}
+	}
+
 	ccf->opts = (ucl_object_t *)obj;
 	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
-
 
 	return res;
 }

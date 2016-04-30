@@ -34,7 +34,7 @@ struct rspamd_statfile_runtime {
 /* Common classifier structure */
 struct rspamd_classifier {
 	struct rspamd_stat_ctx *ctx;
-	GArray *statfiles_ids;
+	GArray *statfiles_ids; /* int */
 	struct rspamd_stat_cache *cache;
 	gpointer cachecf;
 	gulong spam_learns;
