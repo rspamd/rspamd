@@ -1100,17 +1100,28 @@ rspamd_controller_handle_graph (
 
 	for (i = start_row, cnt = 0; cnt < rrd_result->rra_rows; cnt ++) {
 		for (j = 0; j < rrd_result->ds_count; j++) {
+			gdouble yval;
+
 			data_elt = ucl_object_typed_new (UCL_OBJECT);
 			t = ts * rrd_result->pdp_per_cdp;
 			ucl_object_insert_key (data_elt,
 					ucl_object_fromint (t),
 					"x", 1,
 					false);
-			ucl_object_insert_key (data_elt,
-					ucl_object_fromdouble (rrd_result->data[i *
-					rrd_result->ds_count + j]),
-					"y", 1,
-					false);
+			yval = rrd_result->data[i * rrd_result->ds_count + j];
+
+			if (!isnan (yval)) {
+				ucl_object_insert_key (data_elt,
+						ucl_object_fromdouble (yval),
+						"y", 1,
+						false);
+			}
+			else {
+				ucl_object_insert_key (data_elt,
+						ucl_object_typed_new (UCL_NULL),
+						"y", 1,
+						false);
+			}
 			ucl_array_append (elt[j], data_elt);
 		}
 
