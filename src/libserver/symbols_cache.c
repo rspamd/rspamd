@@ -155,6 +155,10 @@ static gboolean rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
 		struct cache_savepoint *checkpoint);
+static void rspamd_symbols_cache_enable_symbol (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol);
+static void rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
+		struct symbols_cache *cache);
 
 static GQuark
 rspamd_symbols_cache_quark (void)
@@ -1287,7 +1291,7 @@ static gboolean
 rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
-	const ucl_object_t *wl, *cur, *disabled;
+	const ucl_object_t *wl, *cur, *disabled, *enabled;
 	struct metric *def;
 	struct rspamd_symbols_group *gr;
 	GHashTableIter gr_it;
@@ -1300,6 +1304,42 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 		msg_info_task ("<%s> is whitelisted", task->message_id);
 		task->flags |= RSPAMD_TASK_FLAG_SKIP;
 		return TRUE;
+	}
+
+	enabled = ucl_object_lookup (task->settings, "symbols_enabled");
+
+	if (enabled) {
+		/* Disable all symbols but selected */
+		rspamd_symbols_cache_disable_all_symbols (task, cache);
+		it = NULL;
+
+		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
+			rspamd_symbols_cache_enable_symbol (task, cache,
+					ucl_object_tostring (cur));
+		}
+	}
+
+	/* Enable groups of symbols */
+	enabled = ucl_object_lookup (task->settings, "groups_enabled");
+	def = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
+
+	if (def && enabled) {
+		it = NULL;
+
+		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_STRING) {
+				gr = g_hash_table_lookup (def->groups,
+						ucl_object_tostring (cur));
+
+				if (gr) {
+					g_hash_table_iter_init (&gr_it, gr->symbols);
+
+					while (g_hash_table_iter_next (&gr_it, &k, &v)) {
+						rspamd_symbols_cache_enable_symbol (task, cache, k);
+					}
+				}
+			}
+		}
 	}
 
 	disabled = ucl_object_lookup (task->settings, "symbols_disabled");
@@ -1721,6 +1761,25 @@ rspamd_symbols_cache_symbols_count (struct symbols_cache *cache)
 	return cache->items_by_id->len;
 }
 
+static void
+rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
+		struct symbols_cache *cache)
+{
+	struct cache_savepoint *checkpoint;
+
+	if (task->checkpoint == NULL) {
+		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
+		task->checkpoint = checkpoint;
+	}
+	else {
+		checkpoint = task->checkpoint;
+	}
+
+	/* Set all symbols as started + finished to disable their execution */
+	memset (checkpoint->processed_bits, 0xff,
+			NBYTES (cache->used_items) * 2);
+}
+
 void
 rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
@@ -1750,6 +1809,38 @@ rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 	}
 	else {
 		msg_info_task ("cannot disable %s: not found", symbol);
+	}
+}
+
+static void
+rspamd_symbols_cache_enable_symbol (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol)
+{
+	struct cache_savepoint *checkpoint;
+	struct cache_item *item;
+	gint id;
+
+	if (task->checkpoint == NULL) {
+		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
+		task->checkpoint = checkpoint;
+	}
+	else {
+		checkpoint = task->checkpoint;
+	}
+
+	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+
+	if (id > 0) {
+		/* Set executed and finished flags */
+		item = g_ptr_array_index (cache->items_by_id, id);
+
+		clrbit (checkpoint->processed_bits, item->id * 2);
+		clrbit (checkpoint->processed_bits, item->id * 2 + 1);
+
+		msg_debug_task ("enable execution of %s", symbol);
+	}
+	else {
+		msg_info_task ("cannot enable %s: not found", symbol);
 	}
 }
 
