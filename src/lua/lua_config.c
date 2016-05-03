@@ -779,6 +779,12 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 				lua_tostring (cd->L, -1));
 			lua_pop (cd->L, 1);
 		}
+
+		if (task->pre_result.action != METRIC_ACTION_MAX) {
+			/* Stop processing on reaching some pre-result */
+			break;
+		}
+
 		cur = g_list_next (cur);
 	}
 }
