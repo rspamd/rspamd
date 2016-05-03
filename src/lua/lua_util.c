@@ -232,6 +232,21 @@ LUA_FUNCTION_DEF (util, strequal_caseless);
 LUA_FUNCTION_DEF (util, get_ticks);
 
 /***
+ * @function util.get_time()
+ * Returns current time as unix time in floating point representation
+ * @return {number} number of seconds since 01.01.1970
+ */
+LUA_FUNCTION_DEF (util, get_time);
+
+/***
+ * @function util.time_to_string(seconds)
+ * Converts time from Unix time to HTTP date format
+ * @param {number} seconds unix timestamp
+ * @return {string} date as HTTP date
+ */
+LUA_FUNCTION_DEF (util, time_to_string);
+
+/***
  * @function util.stat(fname)
  * Performs stat(2) on a specified filepath and returns table of values
  *
@@ -326,6 +341,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, get_ticks),
+	LUA_INTERFACE_DEF (util, get_time),
+	LUA_INTERFACE_DEF (util, time_to_string),
 	LUA_INTERFACE_DEF (util, stat),
 	LUA_INTERFACE_DEF (util, unlink),
 	LUA_INTERFACE_DEF (util, lock_file),
@@ -1147,6 +1164,49 @@ lua_util_get_ticks (lua_State *L)
 
 	ticks = rspamd_get_ticks ();
 	lua_pushnumber (L, ticks);
+
+	return 1;
+}
+
+static gint
+lua_util_get_time (lua_State *L)
+{
+	gdouble seconds;
+	struct timeval tv;
+
+	if (gettimeofday (&tv, NULL) == 0) {
+		seconds = tv_to_double (&tv);
+	}
+	else {
+		seconds = time (NULL);
+	}
+
+	lua_pushnumber (L, seconds);
+
+	return 1;
+}
+
+static gint
+lua_util_time_to_string (lua_State *L)
+{
+	gdouble seconds;
+	struct timeval tv;
+	char timebuf[128];
+
+	if (lua_isnumber (L, 1)) {
+		seconds = lua_tonumber (L, 1);
+	}
+	else {
+		if (gettimeofday (&tv, NULL) == 0) {
+			seconds = tv_to_double (&tv);
+		}
+		else {
+			seconds = time (NULL);
+		}
+	}
+
+	rspamd_http_date_format (timebuf, sizeof (timebuf), seconds);
+	lua_pushstring (L, timebuf);
 
 	return 1;
 }
