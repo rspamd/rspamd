@@ -266,9 +266,10 @@ LUA_FUNCTION_DEF (config, set_metric_action);
  */
 LUA_FUNCTION_DEF (config, add_composite);
 /***
- * @method rspamd_config:register_pre_filter(callback)
+ * @method rspamd_config:register_pre_filter(callback[, order])
  * Register function to be called prior to symbols processing.
  * @param {function} callback callback function
+ * @param {number} order filters are called from lower orders to higher orders, order is equal to 0 by default
  * @example
 local function check_function(task)
 	-- It is possible to manipulate the task object here: set settings, set pre-action and so on
@@ -279,9 +280,11 @@ rspamd_config:register_pre_filter(check_function)
  */
 LUA_FUNCTION_DEF (config, register_pre_filter);
 /***
- * @method rspamd_config:register_post_filter(callback)
+ * @method rspamd_config:register_post_filter(callback[, order])
  * Register function to be called after symbols are processed.
+ *
  * @param {function} callback callback function
+ * @param {number} order filters are called from lower orders to higher orders, order is equal to 0 by default
  */
 LUA_FUNCTION_DEF (config, register_post_filter);
 /* XXX: obsoleted */
@@ -629,6 +632,7 @@ struct lua_callback_data {
 		gint ref;
 	} callback;
 	gboolean cb_is_ref;
+	gint order;
 };
 
 /*
@@ -649,6 +653,15 @@ static gint
 lua_config_register_module_option (lua_State *L)
 {
 	return 0;
+}
+
+static gint
+rspamd_compare_order_func (gconstpointer a, gconstpointer b)
+{
+	const struct lua_callback_data *cb1 = a, *cb2 = b;
+
+	/* order of call goes from lower to higher */
+	return cb2->order - cb1->order;
 }
 
 void
@@ -695,12 +708,17 @@ lua_config_register_post_filter (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct lua_callback_data *cd;
+	gint order = 0;
 
 	if (cfg) {
 		cd =
 			rspamd_mempool_alloc (cfg->cfg_pool,
 				sizeof (struct lua_callback_data));
 		cd->magic = rspamd_lua_callback_magic;
+
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			order = lua_tonumber (L, 3);
+		}
 
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
@@ -715,7 +733,9 @@ lua_config_register_post_filter (lua_State *L)
 		}
 
 		cd->L = L;
-		cfg->post_filters = g_list_prepend (cfg->post_filters, cd);
+		cd->order = order;
+		cfg->post_filters = g_list_insert_sorted (cfg->post_filters, cd,
+				rspamd_compare_order_func);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 			cd);
@@ -768,12 +788,17 @@ lua_config_register_pre_filter (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct lua_callback_data *cd;
+	gint order = 0;
 
 	if (cfg) {
 		cd =
 			rspamd_mempool_alloc (cfg->cfg_pool,
 				sizeof (struct lua_callback_data));
 		cd->magic = rspamd_lua_callback_magic;
+
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			order = lua_tonumber (L, 3);
+		}
 
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
@@ -788,7 +813,9 @@ lua_config_register_pre_filter (lua_State *L)
 		}
 
 		cd->L = L;
-		cfg->pre_filters = g_list_prepend (cfg->pre_filters, cd);
+		cd->order = order;
+		cfg->pre_filters = g_list_insert_sorted (cfg->pre_filters, cd,
+				rspamd_compare_order_func);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 			cd);
