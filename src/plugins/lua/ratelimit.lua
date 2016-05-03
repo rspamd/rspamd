@@ -108,7 +108,7 @@ local function parse_limits(data)
     else
       return {0, 0, 0}
     end
-    end):totable()
+  end):totable()
 end
 
 local function generate_format_string(args, is_set)
@@ -129,8 +129,7 @@ local function check_limits(task, args)
   --- Called when value is got from server
   local function rate_get_cb(task, err, data)
     if data then
-      local tv = task:get_timeval()
-      local ntime = tv['tv_usec'] / 1000000. + tv['tv_sec']
+      local ntime = rspamd_util.get_time()
 
       _.each(function(elt, limit)
         local bucket = elt[2]
@@ -138,6 +137,8 @@ local function check_limits(task, args)
         local threshold = limit[1]
         local atime = elt[1]
         local ctime = elt[3]
+
+        if atime == 0 then return end
 
         if atime - ctime > max_delay then
           rspamd_logger.infox(task, 'limit is too old: %1 seconds; ignore it',
@@ -182,8 +183,7 @@ local function set_limits(task, args)
 
   local function rate_set_cb(task, err, data)
     if data then
-      local tv = task:get_timeval()
-      local ntime = tv['tv_usec'] / 1000000. + tv['tv_sec']
+      local ntime = rspamd_util.get_time()
       local values = {}
       _.each(function(elt, limit)
         local bucket = elt[2]
@@ -193,10 +193,11 @@ local function set_limits(task, args)
         local ctime = elt[3]
 
         if atime - ctime > max_delay then
-          bucket = 1
-          ctime = atime
           rspamd_logger.infox(task, 'limit is too old: %1 seconds; start it over',
             atime - ctime)
+          bucket = 1
+          ctime = ntime
+          atime = ntime
         else
           if bucket > 0 then
             bucket = bucket - rate * (ntime - atime) + 1;
@@ -207,6 +208,8 @@ local function set_limits(task, args)
             bucket = 1
           end
         end
+
+        if ctime == 0 then ctime = ntime end
 
         local lstr = string.format('%.3f:%.3f:%.3f', ntime, bucket, ctime)
         table.insert(values, {limit[2], max_delay, lstr})
