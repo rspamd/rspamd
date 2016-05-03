@@ -217,7 +217,7 @@ lua_cryptobox_pubkey_load (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "bad input arguments");
+		return luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
@@ -280,7 +280,7 @@ lua_cryptobox_pubkey_create (lua_State *L)
 
 	}
 	else {
-		luaL_error (L, "bad input arguments");
+		return luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
@@ -343,7 +343,7 @@ lua_cryptobox_keypair_load (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "bad input arguments");
+		return luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
@@ -527,7 +527,7 @@ lua_cryptobox_signature_save (lua_State *L)
 		}
 	}
 	else {
-		lua_pushboolean (L, FALSE);
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -543,10 +543,23 @@ static gint
 lua_cryptobox_signature_create (lua_State *L)
 {
 	rspamd_fstring_t *sig, **psig;
+	struct rspamd_lua_text *t;
 	const gchar *data;
 	gsize dlen;
 
-	data = luaL_checklstring (L, 1, &dlen);
+	if (lua_isuserdata (L, 1)) {
+		t = lua_check_text (L, 1);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		dlen = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 1, &dlen);
+	}
 
 	if (data != NULL) {
 		if (dlen == rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
@@ -557,7 +570,7 @@ lua_cryptobox_signature_create (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "bad input arguments");
+		return luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
@@ -616,7 +629,7 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -632,15 +645,28 @@ lua_cryptobox_hash_update (lua_State *L)
 {
 	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
 	const gchar *data;
+	struct rspamd_lua_text *t;
 	gsize len;
 
-	data = luaL_checklstring (L, 2, &len);
+	if (lua_isuserdata (L, 2)) {
+		t = lua_check_text (L, 2);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		len = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 2, &len);
+	}
 
 	if (h && data) {
 		rspamd_cryptobox_hash_update (h, data, len);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -666,7 +692,7 @@ lua_cryptobox_hash_hex (lua_State *L)
 		lua_pushstring (L, out_hex);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -688,7 +714,7 @@ lua_cryptobox_hash_bin (lua_State *L)
 		lua_pushlstring (L, out, sizeof (out));
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -718,13 +744,27 @@ lua_cryptobox_verify_memory (lua_State *L)
 {
 	struct rspamd_cryptobox_pubkey *pk;
 	rspamd_fstring_t *signature;
+	struct rspamd_lua_text *t;
 	const gchar *data;
 	gsize len;
 	gint ret;
 
 	pk = lua_check_cryptobox_pubkey (L, 1);
 	signature = lua_check_cryptobox_sign (L, 2);
-	data = luaL_checklstring (L, 3, &len);
+
+	if (lua_isuserdata (L, 3)) {
+		t = lua_check_text (L, 3);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		len = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 3, &len);
+	}
 
 	if (pk != NULL && signature != NULL && data != NULL) {
 		ret = rspamd_cryptobox_verify (signature->str, data, len,
@@ -738,7 +778,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -780,7 +820,7 @@ lua_cryptobox_verify_file (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	if (map != NULL) {
@@ -802,16 +842,29 @@ lua_cryptobox_sign_memory (lua_State *L)
 {
 	struct rspamd_cryptobox_keypair *kp;
 	const gchar *data;
+	struct rspamd_lua_text *t;
 	gsize len = 0;
 	rspamd_fstring_t *sig, **psig;
 
 	kp = lua_check_cryptobox_keypair (L, 1);
-	data = luaL_checklstring (L, 2, &len);
+
+	if (lua_isuserdata (L, 2)) {
+		t = lua_check_text (L, 2);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		len = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 2, &len);
+	}
+
 
 	if (!kp || !data) {
-		luaL_error (L, "invalid arguments");
-
-		return 1;
+		return luaL_error (L, "invalid arguments");
 	}
 
 	sig = rspamd_fstring_sized_new (rspamd_cryptobox_signature_bytes (
@@ -847,9 +900,7 @@ lua_cryptobox_sign_file (lua_State *L)
 	filename = luaL_checkstring (L, 2);
 
 	if (!kp || !filename) {
-		luaL_error (L, "invalid arguments");
-
-		return 1;
+		return luaL_error (L, "invalid arguments");
 	}
 
 	data = rspamd_file_xmap (filename, PROT_READ, &len);
