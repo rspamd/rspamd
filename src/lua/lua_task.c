@@ -146,9 +146,17 @@ LUA_FUNCTION_DEF (task, has_urls);
 /***
  * @method task:get_content()
  * Get raw content for the specified task
- * @return {string} the data contained in the task
+ * @return {text} the data contained in the task
  */
 LUA_FUNCTION_DEF (task, get_content);
+
+/***
+ * @method task:get_content()
+ * Get raw body for the specified task
+ * @return {text} the data contained in the task
+ */
+LUA_FUNCTION_DEF (task, get_rawbody);
+
 /***
  * @method task:get_emails()
  * Get all email addresses found in a message.
@@ -595,6 +603,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
 	LUA_INTERFACE_DEF (task, get_content),
+	LUA_INTERFACE_DEF (task, get_rawbody),
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
 	LUA_INTERFACE_DEF (task, get_parts),
@@ -1043,6 +1052,35 @@ lua_task_get_content (lua_State * L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->len = task->msg.len;
 		t->start = task->msg.begin;
+		t->own = FALSE;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_rawbody (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_text *t;
+
+	if (task) {
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+		if (task->raw_headers_content.len > 0) {
+			g_assert (task->raw_headers_content.len <= task->msg.len);
+			t->start = task->msg.begin + task->raw_headers_content.len;
+			t->len = task->msg.len - task->raw_headers_content.len;
+		}
+		else {
+			t->len = task->msg.len;
+			t->start = task->msg.begin;
+		}
+
 		t->own = FALSE;
 	}
 	else {
