@@ -426,6 +426,14 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		return TRUE;
 	}
 
+	if (task->pre_result.action != METRIC_ACTION_MAX) {
+		/* Skip all if we have result here */
+		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+		msg_info_task ("skip filters, as pre-filter returned %s action",
+				rspamd_action_to_str (task->pre_result.action));
+	}
+
+
 	task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
 
 	st = rspamd_task_select_processing_stage (task, stages);
@@ -439,13 +447,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 		rspamd_lua_call_pre_filters (task);
-
-		if (task->pre_result.action != METRIC_ACTION_MAX) {
-			/* Skip all if we have result here */
-			task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
-			msg_info_task ("skip filters, as pre-filter returned %s action",
-					rspamd_action_to_str (task->pre_result.action));
-		}
 		break;
 
 	case RSPAMD_TASK_STAGE_FILTERS:
