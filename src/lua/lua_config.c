@@ -671,14 +671,6 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 	struct rspamd_task **ptask;
 	GList *cur;
 
-	if (task->checkpoint == NULL) {
-		task->checkpoint = GUINT_TO_POINTER (0x1);
-	}
-	else {
-		/* Do not process if done */
-		return;
-	}
-
 	cur = task->cfg->post_filters;
 	while (cur) {
 		cd = cur->data;
@@ -750,14 +742,6 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 	struct lua_callback_data *cd;
 	struct rspamd_task **ptask;
 	GList *cur;
-
-	if (task->checkpoint == NULL) {
-		task->checkpoint = GUINT_TO_POINTER (0x1);
-	}
-	else {
-		/* Do not process if done */
-		return;
-	}
 
 	cur = task->cfg->pre_filters;
 	while (cur) {
