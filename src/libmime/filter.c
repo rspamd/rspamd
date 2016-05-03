@@ -57,14 +57,14 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	metric_res->metric = metric;
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
-	g_hash_table_insert (task->results, (gpointer) metric->name,
-			metric_res);
 
 	for (i = 0; i < METRIC_ACTION_MAX; i++) {
 		metric_res->actions_limits[i] = metric->actions[i].score;
 	}
 
 	metric_res->action = METRIC_ACTION_MAX;
+	g_hash_table_insert (task->results, (gpointer) metric->name,
+			metric_res);
 
 	return metric_res;
 }

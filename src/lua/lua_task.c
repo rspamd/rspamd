@@ -469,6 +469,21 @@ LUA_FUNCTION_DEF (task, get_metric_score);
  */
 LUA_FUNCTION_DEF (task, get_metric_action);
 /***
+ * @method task:set_metric_score(name, score)
+ * Set the current score of metric `name`. Should be used in post-filters only.
+ * @param {string} name name of a metric
+ * @param {number} score the current score of the metric
+ */
+LUA_FUNCTION_DEF (task, set_metric_score);
+/***
+ * @method task:set_metric_action(name, action)
+ * Set the current action of metric `name`. Should be used in post-filters only.
+ * @param {string} name name of a metric
+ * @param {string} action name to set
+ */
+LUA_FUNCTION_DEF (task, set_metric_action);
+
+/***
  * @method task:learn(is_spam[, classifier)
  * Learn classifier `classifier` with the task. If `is_spam` is true then message
  * is learnt as spam. Otherwise HAM is learnt. By default, this function learns
@@ -645,6 +660,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_timeval),
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
+	LUA_INTERFACE_DEF (task, set_metric_score),
+	LUA_INTERFACE_DEF (task, set_metric_action),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
 	LUA_INTERFACE_DEF (task, get_settings),
@@ -2874,6 +2891,77 @@ lua_task_get_metric_action (lua_State *L)
 		}
 		else {
 			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_set_metric_score (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *metric_name;
+	struct metric_result *metric_res;
+	gdouble nscore;
+
+	metric_name = luaL_checkstring (L, 2);
+	nscore = luaL_checknumber (L, 3);
+
+	if (metric_name == NULL) {
+		metric_name = DEFAULT_METRIC;
+	}
+
+	if (task && metric_name) {
+		if ((metric_res =
+			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+			metric_res->score = nscore;
+			lua_pushboolean (L, true);
+		}
+		else {
+			lua_pushboolean (L, false);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_set_metric_action (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *metric_name, *action_name;
+	struct metric_result *metric_res;
+	gint action;
+
+	metric_name = luaL_checkstring (L, 2);
+
+	if (metric_name == NULL) {
+		metric_name = DEFAULT_METRIC;
+	}
+
+	action_name = luaL_checkstring (L, 3);
+
+	if (task && metric_name && action_name) {
+		if ((metric_res =
+			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+
+			if (rspamd_action_from_str (action_name, &action)) {
+				metric_res->action = action;
+				lua_pushboolean (L, true);
+			}
+			else {
+				lua_pushboolean (L, false);
+			}
+		}
+		else {
+			lua_pushboolean (L, false);
 		}
 	}
 	else {

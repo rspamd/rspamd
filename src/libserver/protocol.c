@@ -835,7 +835,10 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	const gchar *subject;
 
 	m = mres->metric;
-	mres->action = rspamd_check_action_metric (task, mres);
+
+	if (mres->action == METRIC_ACTION_MAX) {
+		mres->action = rspamd_check_action_metric (task, mres);
+	}
 
 	action = mres->action;
 	is_spam = (action < METRIC_ACTION_GREYLIST);
@@ -1064,7 +1067,14 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		/* Update stat for default metric */
 		metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 		if (metric_res != NULL) {
-			action = rspamd_check_action_metric (task, metric_res);
+
+			if (metric_res->action != METRIC_ACTION_MAX) {
+				action = metric_res->action;
+			}
+			else {
+				action = rspamd_check_action_metric (task, metric_res);
+			}
+
 			if (action <= METRIC_ACTION_NOACTION) {
 #ifndef HAVE_ATOMIC_BUILTINS
 				task->worker->srv->stat->actions_stat[action]++;
