@@ -920,6 +920,10 @@ lua_task_insert_result (lua_State * L)
 			}
 		}
 
+		if (params) {
+			params = g_list_reverse (params);
+		}
+
 		rspamd_task_insert_result (task, symbol_name, flag, params);
 	}
 	else {
