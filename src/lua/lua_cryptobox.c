@@ -45,6 +45,8 @@ LUA_FUNCTION_DEF (cryptobox_hash, create);
 LUA_FUNCTION_DEF (cryptobox_hash, create_keyed);
 LUA_FUNCTION_DEF (cryptobox_hash, update);
 LUA_FUNCTION_DEF (cryptobox_hash, hex);
+LUA_FUNCTION_DEF (cryptobox_hash, base32);
+LUA_FUNCTION_DEF (cryptobox_hash, base64);
 LUA_FUNCTION_DEF (cryptobox_hash, bin);
 LUA_FUNCTION_DEF (cryptobox_hash, gc);
 LUA_FUNCTION_DEF (cryptobox,			 verify_memory);
@@ -106,6 +108,8 @@ static const struct luaL_reg cryptoboxhashlib_f[] = {
 static const struct luaL_reg cryptoboxhashlib_m[] = {
 	LUA_INTERFACE_DEF (cryptobox_hash, update),
 	LUA_INTERFACE_DEF (cryptobox_hash, hex),
+	LUA_INTERFACE_DEF (cryptobox_hash, base32),
+	LUA_INTERFACE_DEF (cryptobox_hash, base64),
 	LUA_INTERFACE_DEF (cryptobox_hash, bin),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_cryptobox_hash_gc},
@@ -701,6 +705,57 @@ lua_cryptobox_hash_hex (lua_State *L)
 		rspamd_encode_hex_buf (out, sizeof (out), out_hex, sizeof (out_hex));
 
 		lua_pushstring (L, out_hex);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method cryptobox_hash:base32()
+ * Finalizes hash and return it as zbase32 string
+ * @return {string} base32 value of hash
+ */
+static gint
+lua_cryptobox_hash_base32 (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
+	guchar out[rspamd_cryptobox_HASHBYTES],
+		out_b32[rspamd_cryptobox_HASHBYTES * 2];
+
+	if (h) {
+		memset (out_b32, 0, sizeof (out_b32));
+		rspamd_cryptobox_hash_final (h, out);
+		rspamd_encode_base32_buf (out, sizeof (out), out_b32, sizeof (out_b32));
+
+		lua_pushstring (L, out_b32);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method cryptobox_hash:base64()
+ * Finalizes hash and return it as base64 string
+ * @return {string} base64 value of hash
+ */
+static gint
+lua_cryptobox_hash_base64 (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
+	guchar out[rspamd_cryptobox_HASHBYTES], *b64;
+	gsize len;
+
+	if (h) {
+		rspamd_cryptobox_hash_final (h, out);
+		b64 = rspamd_encode_base64 (out, sizeof (out), 0, &len);
+		lua_pushlstring (L, b64, len);
+		g_free (b64);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
