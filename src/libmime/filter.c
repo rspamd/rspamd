@@ -346,23 +346,41 @@ enum rspamd_metric_action
 rspamd_check_action_metric (struct rspamd_task *task, struct metric_result *mres)
 {
 	struct metric_action *action, *selected_action = NULL;
-	double max_score = 0;
+	double max_score = 0, sc;
 	int i;
 
-	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-		double sc;
+	if (task->pre_result.action == METRIC_ACTION_MAX) {
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
+			action = &mres->metric->actions[i];
+			sc = mres->actions_limits[i];
 
-		action = &mres->metric->actions[i];
+			if (isnan (sc)) {
+				continue;
+			}
+
+			if (mres->score >= sc && sc > max_score) {
+				selected_action = action;
+				max_score = sc;
+			}
+		}
+	}
+	else {
+		i = task->pre_result.action;
+		selected_action = &mres->metric->actions[i];
 		sc = mres->actions_limits[i];
 
-		if (isnan (sc)) {
-			continue;
+		while (isnan (sc)) {
+			i = (i + 1) % METRIC_ACTION_MAX;
+			sc = mres->actions_limits[i];
+
+			if (i == task->pre_result.action) {
+				/* No scores defined, just avoid NaN */
+				sc = 0;
+				break;
+			}
 		}
 
-		if (mres->score >= sc && sc > max_score) {
-			selected_action = action;
-			max_score = sc;
-		}
+		mres->score = sc;
 	}
 
 	if (selected_action) {

@@ -172,7 +172,7 @@ struct rspamd_task {
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 
 	struct {
-		guint32 action;								/**< Action of pre filters							*/
+		gint action;								/**< Action of pre filters							*/
 		gchar *str;									/**< String describing action						*/
 	} pre_result;									/**< Result of pre-filters							*/
 

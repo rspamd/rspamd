@@ -97,7 +97,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
-	new_task->pre_result.action = METRIC_ACTION_NOACTION;
+	new_task->pre_result.action = METRIC_ACTION_MAX;
 
 	new_task->message_id = new_task->queue_id = "undef";
 
@@ -439,6 +439,13 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 		rspamd_lua_call_pre_filters (task);
+
+		if (task->pre_result.action != METRIC_ACTION_MAX) {
+			/* Skip all if we have result here */
+			task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+			msg_info_task ("skip filters, as pre-filter returned %s action",
+					rspamd_action_to_str (task->pre_result.action));
+		}
 		break;
 
 	case RSPAMD_TASK_STAGE_FILTERS:
