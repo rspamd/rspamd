@@ -662,6 +662,17 @@ lua_cryptobox_hash_update (lua_State *L)
 		data = luaL_checklstring (L, 2, &len);
 	}
 
+	if (lua_isnumber (L, 3)) {
+		gsize nlen = lua_tonumber (L, 3);
+
+		if (nlen > len) {
+			return luaL_error (L, "invalid length: %d while %d is available",
+					(int)nlen, (int)len);
+		}
+
+		len = nlen;
+	}
+
 	if (h && data) {
 		rspamd_cryptobox_hash_update (h, data, len);
 	}
