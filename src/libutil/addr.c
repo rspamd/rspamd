@@ -1245,7 +1245,7 @@ rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask)
 			umsk = htonl (G_MAXUINT32 << (32 - mask));
 			addr->u.in.addr.s4.sin_addr.s_addr &= umsk;
 		}
-		else if (addr->af == AF_INET && mask <= 128) {
+		else if (addr->af == AF_INET6 && mask <= 128) {
 			p = (uint32_t *)&addr->u.in.addr.s6.sin6_addr;
 			p += 3;
 			while (mask > 0) {
