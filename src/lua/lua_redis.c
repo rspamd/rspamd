@@ -135,6 +135,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 {
 	struct lua_redis_userdata *ud;
 	struct lua_redis_specific_userdata *cur, *tmp;
+	gboolean is_connected = FALSE;
 
 	if (ctx->async) {
 		ud = &ctx->d.async;
@@ -149,10 +150,14 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 			ctx->ref.refcount = 100500;
 			redisAsyncFree (ud->ctx);
 			ctx->ref.refcount = 0;
+			is_connected = TRUE;
 		}
 		LL_FOREACH_SAFE (ud->specific, cur, tmp) {
 			lua_redis_free_args (cur->args, cur->nargs);
-			event_del (&cur->timeout);
+
+			if (is_connected) {
+				event_del (&cur->timeout);
+			}
 
 			if (cur->cbref != -1) {
 				luaL_unref (ud->L, LUA_REGISTRYINDEX, cur->cbref);
