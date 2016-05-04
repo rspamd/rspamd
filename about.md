@@ -51,11 +51,11 @@ Rspamd uses a blend of techniques to make a final decision about a message. This
 
 Rspamd was designed to be fast. The core of rspamd is written in `C` and uses an event-driven model that allows the processing of multiple messages simultaneously without blocking. Moreover, a set of techniques was used in rspamd to speed up message processing:
 
-* **Finite state machines** - rspamd uses specialised finite state machines for performance-critical tasks to process input faster than a set of regular expressions. Of course, it is possible to implement these machines by ordinary `perl regular expressions` but then they won't be compact or human-readable. On the contrary, rspamd optimises such actions as header processing, received elements extraction and protocol operations by building concrete automata for an assigned task.
+* **Finite state machines** - rspamd uses specialised finite state machines for performance-critical tasks to process input faster than a set of regular expressions. Of course, it is possible to implement these machines by ordinary `perl regular expressions` but then they won't be compact or human-readable. On the contrary, rspamd optimizes such actions as header processing, received elements extraction and protocol operations by building concrete automata for an assigned task.
 
-* **Expression optimiser** - optimises expressions by the execution of `likely false` or `likely true` expressions in priority order. This reduces the number of expensive expression calls when scanning a message.
+* **Expression optimizer** - optimizes expressions by the execution of `likely false` or `likely true` expressions in priority order. This reduces the number of expensive expression calls when scanning a message.
 
-* **Symbol optimiser** - rspamd tries to first check rules that are frequent or inexpensive in terms of time or CPU resources, which allows blocking spam before the processing of expensive rules (rules with negative weights are always checked first). You can view my presentation about it [here](https://highsecure.ru/ast-rspamd.pdf).
+* **Symbol optimizer** - rspamd tries to first check rules that are frequent or inexpensive in terms of time or CPU resources, which allows blocking spam before the processing of expensive rules (rules with negative weights are always checked first). You can view my presentation about it [here](https://highsecure.ru/ast-rspamd.pdf).
 
 * **Event driven model** - rspamd is designed not to block anywhere in the code. Considering that spam checks require a lot of network operations, rspamd can process many messages simultaneously thus increasing the efficiency of shared DNS caches and other system resources. Moreover, event-driven systems normally scale automatically - you won't need to do any tuning in most cases.
 
