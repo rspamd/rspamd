@@ -634,8 +634,9 @@ lua_redis_make_request (lua_State *L)
 
 			REF_RELEASE (ctx);
 			lua_pushboolean (L, FALSE);
+			lua_pushnil (L);
 
-			return 1;
+			return 2;
 		}
 
 		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
@@ -686,11 +687,12 @@ lua_redis_make_request (lua_State *L)
 		pctx = lua_newuserdata (L, sizeof (ctx));
 		*pctx = ctx;
 		rspamd_lua_setclass (L, "rspamd{redis}", -1);
-
-		return 2;
+	}
+	else {
+		lua_pushnil (L);
 	}
 
-	return 1;
+	return 2;
 }
 
 /***
