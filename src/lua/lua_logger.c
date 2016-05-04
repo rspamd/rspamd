@@ -283,6 +283,7 @@ static gsize
 lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
 	gint r;
+	const gchar *str = NULL;
 
 	if (!lua_getmetatable (L, pos)) {
 		return 0;
@@ -296,16 +297,32 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		return 0;
 	}
 
-	lua_pushstring (L, "class");
+	lua_pushstring (L, "__tostring");
 	lua_gettable (L, -2);
 
-	if (!lua_isstring (L, -1)) {
-		lua_pop (L, 3);
-		return 0;
+	if (lua_isfunction (L, -1)) {
+		lua_pushvalue (L, pos);
+
+		if (lua_pcall (L, 1, 1, 0) != 0) {
+			lua_pop (L, 3);
+			return 0;
+		}
+
+		str = lua_tostring (L, -1);
+	}
+	else {
+		lua_pushstring (L, "class");
+		lua_gettable (L, -2);
+
+		if (!lua_isstring (L, -1)) {
+			lua_pop (L, 3);
+			return 0;
+		}
+
+		str = lua_tostring (L, -1);
 	}
 
-	r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", lua_tostring (L, -1),
-			lua_touserdata (L, pos));
+	r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", str, lua_touserdata (L, pos));
 	lua_pop (L, 3);
 
 	return r;
