@@ -1,4 +1,4 @@
---- 
+---
 layout: default
 title: About rspamd
 ---
@@ -75,7 +75,7 @@ Besides the `C` core, rspamd provides a [Lua](http://lua.org) API to access almo
 
 ~~~lua
 rspamd_config.MYFILTER = function(task)
--- Do something 
+-- Do something
 end
 ~~~
 
