@@ -255,7 +255,7 @@ local function greylist_set(task)
       end
     end
   else
-    if action ~= 'no action' then
+    if action ~= 'no action' and action ~= 'reject' then
       local grey_res = task:get_mempool():get_variable("grey_greylisted_body")
 
       if grey_res then
