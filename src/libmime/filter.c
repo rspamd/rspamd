@@ -19,6 +19,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "lua/lua_common.h"
+#include "xxhash.h"
 #include <math.h>
 
 

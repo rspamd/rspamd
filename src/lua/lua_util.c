@@ -826,12 +826,18 @@ lua_util_levenshtein_distance (lua_State *L)
 	const gchar *s1, *s2;
 	gsize s1len, s2len;
 	gint dist = 0;
+	guint replace_cost = 1;
 
 	s1 = luaL_checklstring (L, 1, &s1len);
 	s2 = luaL_checklstring (L, 2, &s2len);
 
+	if (lua_isnumber (L, 3)) {
+		replace_cost = lua_tonumber (L, 3);
+	}
+
 	if (s1 && s2) {
-		dist = rspamd_strings_levenshtein_distance (s1, s1len, s2, s2len);
+		dist = rspamd_strings_levenshtein_distance (s1, s1len, s2, s2len,
+				replace_cost);
 	}
 
 	lua_pushnumber (L, dist);
