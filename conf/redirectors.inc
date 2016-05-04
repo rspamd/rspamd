@@ -1,0 +1,16 @@
+7pisem.ru
+action-emails.ru
+autodesk.com
+bsndsy.ru
+flane.info
+ikeafamilynews.ru
+list-manage.com
+list-manage1.com
+mandrillapp.com
+mlcampaignru.com
+mlsendru.com
+mobotix-news.com
+pechkinspy.ru
+sendsay.ru
+vash-repetitor.ru
+webformyself.com
