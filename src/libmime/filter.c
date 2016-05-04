@@ -19,6 +19,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "lua/lua_common.h"
+#include "xxhash.h"
 #include <math.h>
 
 
@@ -270,52 +271,38 @@ rspamd_task_insert_result_single (struct rspamd_task *task,
 gboolean
 rspamd_action_from_str (const gchar *data, gint *result)
 {
-	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
+	guint64 h;
+
+	h = XXH64 (data, strlen (data), 0xdeadbabe);
+
+	switch (h) {
+	case 0x9917BFDB46332B8CULL: /* reject */
 		*result = METRIC_ACTION_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "greylist",
-		sizeof ("greylist") - 1) == 0) {
+		break;
+	case 0x7130EE37D07B3715ULL: /* greylist */
 		*result = METRIC_ACTION_GREYLIST;
-	}
-	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") -
-		1) == 0) {
+		break;
+	case 0xCA6087E05480C60CULL: /* add_header */
+	case 0x87A3D27783B16241ULL: /* add header */
 		*result = METRIC_ACTION_ADD_HEADER;
-	}
-	else if (g_ascii_strncasecmp (data, "rewrite_subject",
-		sizeof ("rewrite_subject") - 1) == 0) {
+		break;
+	case 0x4963374ED8B90449ULL: /* rewrite_subject */
+	case 0x5C9FC4679C025948ULL: /* rewrite subject */
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "add header", sizeof ("add header") -
-			1) == 0) {
-		*result = METRIC_ACTION_ADD_HEADER;
-	}
-	else if (g_ascii_strncasecmp (data, "rewrite subject",
-			sizeof ("rewrite subject") - 1) == 0) {
-		*result = METRIC_ACTION_REWRITE_SUBJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "soft_reject",
-			sizeof ("soft_reject") - 1) == 0) {
+		break;
+	case 0xFC7D6502EE71FDD9ULL: /* soft reject */
+	case 0x73576567C262A82DULL: /* soft_reject */
 		*result = METRIC_ACTION_SOFT_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "soft reject",
-			sizeof ("soft reject") - 1) == 0) {
-		*result = METRIC_ACTION_SOFT_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "no_action",
-			sizeof ("soft_reject") - 1) == 0) {
+		break;
+	case 0x207091B927D1EC0DULL: /* no action */
+	case 0xB7D92D002CD46325ULL: /* no_action */
+	case 0x167C0DF4BAA9BCECULL: /* accept */
 		*result = METRIC_ACTION_NOACTION;
-	}
-	else if (g_ascii_strncasecmp (data, "no action",
-			sizeof ("soft reject") - 1) == 0) {
-		*result = METRIC_ACTION_NOACTION;
-	}
-	else if (g_ascii_strncasecmp (data, "accept",
-			sizeof ("accept") - 1) == 0) {
-		*result = METRIC_ACTION_NOACTION;
-	}
-	else {
+		break;
+	default:
 		return FALSE;
 	}
+
 	return TRUE;
 }
 

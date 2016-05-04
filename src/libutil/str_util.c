@@ -963,13 +963,15 @@ rspamd_decode_url (gchar *dst, const gchar *src, gsize size)
 
 gint
 rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
-		const gchar *s2, gsize s2len)
+		const gchar *s2, gsize s2len,
+		guint replace_cost)
 {
 	guint x, y, lastdiag, olddiag;
 	gchar c1, c2;
 	guint *column;
 	gint eq;
 	static const guint max_cmp = 8192;
+	gint ret;
 
 	g_assert (s1 != NULL);
 	g_assert (s2 != NULL);
@@ -986,7 +988,7 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 		return 0;
 	}
 
-	column = g_alloca ((s1len + 1) * sizeof (guint));
+	column = g_malloc0 ((s1len + 1) * sizeof (guint));
 
 	for (y = 1; y <= s1len; y++) {
 		column[y] = y;
@@ -999,14 +1001,17 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 			olddiag = column[y];
 			c1 = s1[y - 1];
 			c2 = s2[x - 1];
-			eq = (c1 == c2) ? 0 : 1;
+			eq = (c1 == c2) ? 0 : replace_cost;
 			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
 					lastdiag + (eq));
 			lastdiag = olddiag;
 		}
 	}
 
-	return column[s1len];
+	ret = column[s1len];
+	g_free (column);
+
+	return ret;
 }
 
 GString *
