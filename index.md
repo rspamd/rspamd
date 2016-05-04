@@ -8,7 +8,7 @@ title: Rspamd spam filtering system
 			<div>
 					<h2>Performance</h2>
 					<p>&bull;&nbsp;Rspamd is a mail filtering tool that is designed to work as fast as possible.</p>
-					<p>&bull;&nbsp;It can <strong>save</strong> your hardware resources by applying clever techniques, such as an event based processing model, <a class="undecor" href="https://highsecure.ru/ast-rspamd.pdf">abstract syntax tree</a> constructions, careful algorithm selection and a number of global and local optimizations, such as the use of <a class="undecor" href="https://github.com/01org/hyperscan">hyperscan</a> for <a class="undecor" href="https://highsecure.ru/rspamd-hyperscan.pdf">regular expressions optimization</a>.</p>
+					<p>&bull;&nbsp;It can <strong>save</strong> your hardware resources by applying clever techniques, such as an event based processing model, <a class="undecor" href="https://highsecure.ru/ast-rspamd.pdf">abstract syntax tree</a> constructions, careful algorithm selection and a number of global and local optimisations, such as the use of <a class="undecor" href="https://github.com/01org/hyperscan">hyperscan</a> for <a class="undecor" href="https://highsecure.ru/rspamd-hyperscan.pdf">regular expressions optimisation</a>.</p>
 					<p>&bull;&nbsp;Rspamd's core is written completely in C and the most critical parts are written in dedicated assembly for the target hardware platforms.
 					</p>
 		 </div>
