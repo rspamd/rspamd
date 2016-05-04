@@ -30,7 +30,7 @@ local function phishing_cb(task)
 
   if urls then
     for _,url in ipairs(urls) do
-      if url:is_phished() then
+      if url:is_phished() and not url:is_redirected() then
         local found = false
         local purl = url:get_phished()
         local tld = url:get_tld()
@@ -41,7 +41,7 @@ local function phishing_cb(task)
         end
 
         local weight = 1.0
-        local dist = util.levenshtein_distance(tld, ptld)
+        local dist = util.levenshtein_distance(tld, ptld, 2)
         dist = 2 * dist / (#tld + #ptld)
 
         if dist > 0.3 and dist <= 1.0 then
