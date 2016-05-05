@@ -1460,8 +1460,8 @@ static gboolean
 rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
-	struct rspamd_email_address *addr;
-	GPtrArray *rcpts;
+	struct rspamd_email_address *addr = NULL;
+	GPtrArray *rcpts = NULL;
 	const gchar *type, *str = NULL;
 	guint i;
 
