@@ -198,6 +198,8 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 			}
 		}
 	}
+
+	lua_settop (L, 0);
 }
 
 /* Handle lua dynamic config param */

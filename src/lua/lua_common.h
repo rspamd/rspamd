@@ -335,5 +335,16 @@ void lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs);
  * @return
  */
 gboolean lua_push_internet_address (lua_State *L, InternetAddress *ia);
+
+/**
+ * Log lua object to string
+ * @param L
+ * @param pos
+ * @param outbuf
+ * @param len
+ * @return
+ */
+gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
+		gsize len);
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

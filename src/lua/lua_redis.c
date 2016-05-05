@@ -319,6 +319,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		return;
 	}
 
+	REF_RETAIN (ctx);
 	event_del (&sp_ud->timeout);
 	ctx->cmds_pending --;
 
@@ -354,6 +355,8 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 			redisAsyncFree (ac);
 		}
 	}
+
+	REF_RELEASE (ctx);
 }
 
 static void
@@ -364,6 +367,8 @@ lua_redis_timeout (int fd, short what, gpointer u)
 	redisAsyncContext *ac;
 
 	ctx = sp_ud->ctx;
+
+	REF_RETAIN (ctx);
 	msg_info ("timeout while querying redis server");
 	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, FALSE);
 
@@ -375,8 +380,10 @@ lua_redis_timeout (int fd, short what, gpointer u)
 		 * This will call all callbacks pending so the entire context
 		 * will be destructed
 		 */
+		sp_ud->c->terminated = 1;
 		redisAsyncFree (ac);
 	}
+	REF_RELEASE (ctx);
 }
 
 

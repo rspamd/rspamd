@@ -55,9 +55,6 @@ print(str)
 -- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
  */
 
-static gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
-		gsize len);
-
 /* Logger methods */
 /***
  * @function logger.err(msg)
@@ -404,7 +401,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 
 #undef MOVE_BUF
 
-static gsize
+gsize
 lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
 	gint type;
@@ -431,6 +428,12 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 			break;
 		case LUA_TFUNCTION:
 			r = rspamd_snprintf (outbuf, len + 1, "function");
+			break;
+		case LUA_TNIL:
+			r = rspamd_snprintf (outbuf, len + 1, "nil");
+			break;
+		case LUA_TNONE:
+			r = rspamd_snprintf (outbuf, len + 1, "no value");
 			break;
 		default:
 			/* Try to push everything as string using tostring magic */
