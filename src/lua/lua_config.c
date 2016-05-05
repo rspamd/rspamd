@@ -670,6 +670,9 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 	struct lua_callback_data *cd;
 	struct rspamd_task **ptask;
 	GList *cur;
+	lua_State *L = task->cfg->lua_state;
+	gint err_idx;
+	GString *tb;
 
 	if (task->checkpoint == NULL) {
 		task->checkpoint = GUINT_TO_POINTER (0x1);
@@ -681,6 +684,9 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 
 	cur = task->cfg->post_filters;
 	while (cur) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
 		cd = cur->data;
 		if (cd->cb_is_ref) {
 			lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -692,13 +698,15 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 		rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
-		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_err_task ("call to %s failed: %s",
-				cd->cb_is_ref ? "local function" :
-				cd->callback.name,
-				lua_tostring (cd->L, -1));
-			lua_pop (cd->L, 1);
+		if (lua_pcall (cd->L, 1, 0, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err_task ("call to post-filter failed: %v", tb);
+			g_string_free (tb, TRUE);
+			lua_pop (L, 1);
 		}
+
+		lua_pop (L, 1); /* Error function */
+
 		cur = g_list_next (cur);
 	}
 }
@@ -750,6 +758,9 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 	struct lua_callback_data *cd;
 	struct rspamd_task **ptask;
 	GList *cur;
+	lua_State *L = task->cfg->lua_state;
+	gint err_idx;
+	GString *tb;
 
 	if (task->checkpoint == NULL) {
 		task->checkpoint = GUINT_TO_POINTER (0x1);
@@ -761,6 +772,9 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 
 	cur = task->cfg->pre_filters;
 	while (cur) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
 		cd = cur->data;
 		if (cd->cb_is_ref) {
 			lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -772,13 +786,14 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 		rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
-		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_info_task ("call to %s failed: %s",
-				cd->cb_is_ref ? "local function" :
-				cd->callback.name,
-				lua_tostring (cd->L, -1));
-			lua_pop (cd->L, 1);
+		if (lua_pcall (cd->L, 1, 0, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err_task ("call to pre-filter failed: %v", tb);
+			g_string_free (tb, TRUE);
+			lua_pop (L, 1);
 		}
+
+		lua_pop (L, 1); /* Error function */
 
 		if (task->pre_result.action != METRIC_ACTION_MAX) {
 			/* Stop processing on reaching some pre-result */
