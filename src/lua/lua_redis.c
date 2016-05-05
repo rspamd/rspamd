@@ -69,6 +69,7 @@ static const struct luaL_reg redislib_m[] = {
 	LUA_INTERFACE_DEF (redis, exec),
 	{"__gc", lua_redis_gc},
 	{"__tostring", rspamd_lua_class_tostring},
+	{NULL, NULL}
 };
 
 #ifdef WITH_HIREDIS
