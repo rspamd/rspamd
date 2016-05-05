@@ -38,7 +38,7 @@ static const struct luaL_reg cdblib_f[] = {
 static struct cdb *
 lua_check_cdb (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{cdb}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{cdb}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'cdb' expected");
 	return ud ? *((struct cdb **)ud) : NULL;

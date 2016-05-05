@@ -484,7 +484,7 @@ static const guint64 rspamd_lua_callback_magic = 0x32c118af1e3263c7ULL;
 struct rspamd_config *
 lua_check_config (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{config}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, pos, "'config' expected");
 	return ud ? *((struct rspamd_config **)ud) : NULL;
 }

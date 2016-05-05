@@ -60,7 +60,7 @@ static const struct luaL_reg trielib_f[] = {
 static struct rspamd_multipattern *
 lua_check_trie (lua_State * L, gint idx)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{trie}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{trie}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'trie' expected");
 	return ud ? *((struct rspamd_multipattern **)ud) : NULL;

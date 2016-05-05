@@ -124,7 +124,7 @@ lua_expr_quark (void)
 struct lua_expression *
 rspamd_lua_expression (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{expr}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{expr}");
 	luaL_argcheck (L, ud != NULL, pos, "'expr' expected");
 	return ud ? *((struct lua_expression **)ud) : NULL;
 }
