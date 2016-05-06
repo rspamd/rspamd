@@ -101,6 +101,8 @@ struct rspamd_proxy_ctx {
 	struct event rotate_ev;
 	gdouble rotate_tm;
 	lua_State *lua_state;
+	/* Array of callback functions called on end of scan to compare results */
+	GArray *cmp_refs;
 };
 
 enum rspamd_backend_flags {
@@ -139,7 +141,7 @@ struct rspamd_proxy_session {
 static GQuark
 rspamd_proxy_quark (void)
 {
-	return g_quark_from_static_string ("http-proxy");
+	return g_quark_from_static_string ("rspamd-proxy");
 }
 
 static gboolean
@@ -247,7 +249,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 	if (ucl_object_type (obj) != UCL_OBJECT) {
 		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must be an object");
+				"mirror option must be an object");
 
 		return FALSE;
 	}
@@ -255,7 +257,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
 		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must have some name definition");
+				"mirror option must have some name definition");
 
 		return FALSE;
 	}
@@ -271,7 +273,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 		if (up->key == NULL) {
 			g_set_error (err, rspamd_proxy_quark (), 100,
-					"cannot read upstream key");
+					"cannot read mirror key");
 
 			goto err;
 		}
@@ -281,7 +283,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 	if (elt == NULL) {
 		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must have some hosts definition");
+				"mirror option must have some hosts definition");
 
 		goto err;
 	}
@@ -289,7 +291,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
 	if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
 		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream has bad hosts definition");
+				"mirror has bad hosts definition");
 
 		goto err;
 	}
@@ -351,7 +353,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 					"must return function");
 			lua_settop (L, 0);
 
-			return FALSE;
+			goto err;
 		}
 
 		ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
@@ -380,6 +382,99 @@ err:
 		g_slice_free1 (sizeof (*up), up);
 	}
 
+	return FALSE;
+}
+
+static gboolean
+rspamd_proxy_parse_script (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	const ucl_object_t *elt;
+	struct rspamd_proxy_ctx *ctx;
+	struct rspamd_rcl_struct_parser *pd = ud;
+	lua_State *L;
+	const gchar *lua_script;
+	gsize slen;
+	gint err_idx, ref_idx;
+	GString *tb = NULL;
+	struct stat st;
+
+	ctx = pd->user_struct;
+	L = ctx->lua_state;
+
+	if (ucl_object_type (obj) != UCL_STRING) {
+		g_set_error (err, rspamd_proxy_quark (), 100,
+				"script option must be a string with file or lua chunk");
+
+		return FALSE;
+	}
+
+	lua_script = ucl_object_tolstring (elt, &slen);
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	if (stat (lua_script, &st) != -1) {
+		/* Load file */
+		if (luaL_loadfile (L, lua_script) != 0) {
+			g_set_error (err,
+					rspamd_proxy_quark (),
+					EINVAL,
+					"cannot load lua parser script: %s",
+					lua_tostring (L, -1));
+			lua_settop (L, 0); /* Error function */
+
+			goto err;
+		}
+	}
+	else {
+		/* Load data directly */
+		if (luaL_loadbuffer (L, lua_script, slen, "proxy parser") != 0) {
+			g_set_error (err,
+					rspamd_proxy_quark (),
+					EINVAL,
+					"cannot load lua parser script: %s",
+					lua_tostring (L, -1));
+			lua_settop (L, 0); /* Error function */
+
+			goto err;
+		}
+	}
+
+	/* Now do it */
+	if (lua_pcall (L, 0, 1, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		g_set_error (err,
+				rspamd_proxy_quark (),
+				EINVAL,
+				"cannot init lua parser script: %s",
+				tb->str);
+		g_string_free (tb, TRUE);
+		lua_settop (L, 0);
+
+		goto err;
+	}
+
+	if (!lua_isfunction (L, -1)) {
+		g_set_error (err,
+				rspamd_proxy_quark (),
+				EINVAL,
+				"cannot init lua parser script: "
+				"must return function");
+		lua_settop (L, 0);
+
+		goto err;
+	}
+
+	ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+	lua_settop (L, 0);
+	g_array_append_val (ctx->cmp_refs, ref_idx);
+
+	return TRUE;
+
+err:
 	return FALSE;
 }
 
@@ -443,6 +538,15 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			0,
 			RSPAMD_CL_FLAG_MULTIPLE,
 			"List of mirrors");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"script",
+			rspamd_proxy_parse_script,
+			ctx,
+			0,
+			RSPAMD_CL_FLAG_MULTIPLE,
+			"Compare script to be executed");
 
 	return ctx;
 }
@@ -652,6 +756,7 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 		err->message);
 
 	proxy_backend_close_connection (bk_conn);
+	REF_RELEASE (bk_conn->s);
 }
 
 static gint
@@ -670,6 +775,7 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 	}
 
 	proxy_backend_close_connection (bk_conn);
+	REF_RELEASE (bk_conn->s);
 
 	return 0;
 }
@@ -739,6 +845,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				&session->ctx->io_tv, session->ctx->ev_base);
 
 		g_ptr_array_add (session->mirror_conns, bk_conn);
+		REF_RETAIN (session);
 		msg_info_session ("send request to %s", m->name);
 	}
 }
@@ -982,6 +1089,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 			ctx->ev_base,
 			worker->srv->cfg);
 	ctx->lua_state = worker->srv->cfg->lua_state;
+	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
 	double_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
 
