@@ -32,10 +32,17 @@ struct _rspamd_http_privbuf {
 	ref_entry_t ref;
 };
 
+enum rspamd_http_priv_flags {
+	RSPAMD_HTTP_CONN_FLAG_ENCRYPTED = 1 << 0,
+	RSPAMD_HTTP_CONN_FLAG_NEW_HEADER = 1 << 1,
+	RSPAMD_HTTP_CONN_FLAG_RESETED = 1 << 2
+};
+
+#define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
+#define IS_CONN_RESETED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)
+
 struct rspamd_http_connection_private {
 	struct _rspamd_http_privbuf *buf;
-	gboolean new_header;
-	gboolean encrypted;
 	struct rspamd_cryptobox_pubkey *peer_key;
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_http_header *header;
@@ -47,6 +54,7 @@ struct rspamd_http_connection_private {
 	struct rspamd_http_message *msg;
 	struct iovec *out;
 	guint outlen;
+	enum rspamd_http_priv_flags flags;
 	gsize wr_pos;
 	gsize wr_total;
 };
@@ -409,7 +417,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 
 	if (priv->local_key == NULL) {
 		/* In this case we cannot do anything, e.g. we cannot decrypt payload */
-		priv->encrypted = TRUE;
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 	else {
 		/* Check sanity of what we have */
@@ -440,7 +448,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 				}
 			}
 
-			priv->encrypted = TRUE;
+			priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 			g_free (decoded_id);
 		}
 	}
@@ -537,12 +545,12 @@ rspamd_http_on_header_field (http_parser * parser,
 	if (priv->header == NULL) {
 		rspamd_http_init_header (priv);
 	}
-	else if (priv->new_header) {
+	else if (priv->flags & RSPAMD_HTTP_CONN_FLAG_NEW_HEADER) {
 		rspamd_http_finish_header (conn, priv);
 		rspamd_http_init_header (priv);
 	}
 
-	priv->new_header = FALSE;
+	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 	priv->header->combined = rspamd_fstring_append (priv->header->combined,
 			at, length);
 
@@ -565,8 +573,8 @@ rspamd_http_on_header_value (http_parser * parser,
 		return -1;
 	}
 
-	if (!priv->new_header) {
-		priv->new_header = TRUE;
+	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_NEW_HEADER)) {
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 		priv->header->combined = rspamd_fstring_append (priv->header->combined,
 				": ", 2);
 		priv->header->name->len = priv->header->combined->len - 2;
@@ -591,7 +599,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		rspamd_http_finish_header (conn, priv);
 
 		priv->header = NULL;
-		priv->new_header = FALSE;
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 	}
 
 	if (parser->content_length != 0 && parser->content_length != ULLONG_MAX) {
@@ -627,7 +635,7 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 	priv->msg->body_buf.begin = priv->msg->body->str;
 	priv->msg->body_buf.len = priv->msg->body->len;
 
-	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !priv->encrypted) {
+	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !IS_CONN_ENCRYPTED (priv)) {
 		/* Incremental update is impossible for encrypted requests so far */
 		return (conn->body_handler (conn, priv->msg, at, length));
 	}
@@ -674,7 +682,7 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 		rspamd_http_finish_header (conn, priv);
 
 		priv->header = NULL;
-		priv->new_header = FALSE;
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 	}
 
 	if (parser->flags & F_SPAMC) {
@@ -769,7 +777,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 
 	priv = conn->priv;
 
-	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0 && priv->encrypted) {
+	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0 && IS_CONN_ENCRYPTED (priv)) {
 		mode = rspamd_keypair_alg (priv->local_key);
 
 		if (priv->local_key == NULL || priv->msg->peer_key == NULL ||
@@ -899,6 +907,7 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	}
 	else {
 		/* Want to write more */
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 		event_add (&priv->ev, priv->ptv);
 	}
 
@@ -1128,19 +1137,23 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 
 	conn->finished = FALSE;
 	/* Clear priv */
-	event_del (&priv->ev);
+
+	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)) {
+		event_del (&priv->ev);
+		rspamd_http_parser_reset (conn);
+	}
 
 	if (priv->buf != NULL) {
 		REF_RELEASE (priv->buf);
 		priv->buf = NULL;
 	}
 
-	rspamd_http_parser_reset (conn);
-
 	if (priv->out != NULL) {
 		g_slice_free1 (sizeof (struct iovec) * priv->outlen, priv->out);
 		priv->out = NULL;
 	}
+
+	priv->flags |= RSPAMD_HTTP_CONN_FLAG_RESETED;
 }
 
 struct rspamd_http_message *
@@ -1203,7 +1216,7 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	if (priv->peer_key) {
 		priv->msg->peer_key = priv->peer_key;
 		priv->peer_key = NULL;
-		priv->encrypted = TRUE;
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 
 	if (timeout == NULL) {
@@ -1218,7 +1231,7 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	priv->buf = g_slice_alloc0 (sizeof (*priv->buf));
 	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
 	priv->buf->data = rspamd_fstring_sized_new (8192);
-	priv->new_header = TRUE;
+	priv->flags |= RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 
 	event_set (&priv->ev,
 		fd,
@@ -1228,6 +1241,8 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	if (base != NULL) {
 		event_base_set (base, &priv->ev);
 	}
+
+	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 	event_add (&priv->ev, priv->ptv);
 }
 
@@ -1373,7 +1388,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	if (priv->peer_key && priv->local_key) {
 		priv->msg->peer_key = priv->peer_key;
 		priv->peer_key = NULL;
-		priv->encrypted = TRUE;
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 
 	if (priv->local_key != NULL && msg->peer_key != NULL) {
@@ -1734,6 +1749,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		event_base_set (base, &priv->ev);
 	}
 
+	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 	event_add (&priv->ev, priv->ptv);
 }
 

@@ -214,11 +214,8 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		if (task->http_conn != NULL) {
+			rspamd_http_connection_reset (task->http_conn);
 			rspamd_http_connection_unref (task->http_conn);
-		}
-
-		if (task->sock != -1) {
-			close (task->sock);
 		}
 
 		if (task->settings != NULL) {
@@ -243,6 +240,10 @@ rspamd_task_free (struct rspamd_task *task)
 
 		if (task->guard_ev) {
 			event_del (task->guard_ev);
+		}
+
+		if (task->sock != -1) {
+			close (task->sock);
 		}
 
 		rspamd_re_cache_runtime_destroy (task->re_rt);
