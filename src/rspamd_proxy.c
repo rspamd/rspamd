@@ -75,6 +75,7 @@ struct rspamd_proxy_ctx {
 };
 
 struct rspamd_proxy_session {
+	rspamd_mempool_t *pool;
 	struct rspamd_proxy_ctx *ctx;
 	struct event_base *ev_base;
 	struct rspamd_cryptobox_keypair *local_key;
@@ -86,6 +87,8 @@ struct rspamd_proxy_session {
 	struct rspamd_http_connection *client_conn;
 	struct rspamd_http_connection *backend_conn;
 	struct rspamd_dns_resolver *resolver;
+	gpointer map;
+	gsize map_len;
 	gboolean replied;
 };
 
@@ -249,10 +252,101 @@ proxy_session_cleanup (struct rspamd_proxy_session *session)
 		rspamd_http_connection_unref (session->client_conn);
 	}
 
+	if (session->map && session->map_len) {
+		munmap (session->map, session->map_len);
+	}
+
 	close (session->backend_sock);
 	close (session->client_sock);
-
+	rspamd_mempool_delete (session->pool);
 	g_slice_free1 (sizeof (*session), session);
+}
+
+static gboolean
+proxy_check_file (struct rspamd_http_message *msg,
+		struct rspamd_proxy_session *session)
+{
+	const rspamd_ftok_t *tok, *key_tok;
+	rspamd_ftok_t srch;
+	const gchar *file_str;
+	GHashTable *query_args;
+	GHashTableIter it;
+	gpointer k, v;
+	struct http_parser_url u;
+	rspamd_fstring_t *new_url;
+
+	tok = rspamd_http_message_find_header (msg, "File");
+
+	if (tok) {
+		file_str = rspamd_mempool_ftokdup (session->pool, tok);
+		session->map = rspamd_file_xmap (file_str, PROT_READ,
+				&session->map_len);
+
+		if (session->map == NULL) {
+			msg_err ("cannot map %s: %s", file_str, strerror (errno));
+
+			return FALSE;
+		}
+		/* Remove header after processing */
+		rspamd_http_message_remove_header (msg, "File");
+	}
+	else {
+		/* Need to parse query URL */
+		if (http_parser_parse_url (msg->url->str, msg->url->len, 0, &u) != 0) {
+			msg_err ("bad request url: %V", msg->url);
+
+			return FALSE;
+		}
+
+		if (u.field_set & (1 << UF_QUERY)) {
+			/* In case if we have a query, we need to store it somewhere */
+			query_args = rspamd_http_message_parse_query (msg);
+			srch.begin = "File";
+			srch.len = strlen ("File");
+			tok = g_hash_table_lookup (query_args, &srch);
+
+			if (tok) {
+				file_str = rspamd_mempool_ftokdup (session->pool, tok);
+				session->map = rspamd_file_xmap (file_str, PROT_READ,
+						&session->map_len);
+
+				if (session->map == NULL) {
+					msg_err ("cannot map %s: %s", file_str, strerror (errno));
+					g_hash_table_unref (query_args);
+
+					return FALSE;
+				}
+
+				/* We need to create a new URL with file attribute removed */
+				new_url = rspamd_fstring_new_init (msg->url->str,
+						u.field_data[UF_QUERY].off);
+				new_url = rspamd_fstring_append (new_url, "?", 1);
+
+				g_hash_table_iter_init (&it, query_args);
+
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					key_tok = k;
+					tok = v;
+
+					if (!rspamd_ftok_icase_equal (key_tok, &srch)) {
+						rspamd_printf_fstring (&new_url, "%T=%T&",
+								key_tok, tok);
+					}
+				}
+
+				/* Erase last character (might be either & or ?) */
+				rspamd_fstring_erase (new_url, new_url->len - 1, 1);
+
+				rspamd_fstring_free (msg->url);
+				msg->url = new_url;
+			}
+
+			g_hash_table_unref (query_args);
+		}
+
+	}
+
+	return TRUE;
 }
 
 static void
@@ -355,10 +449,15 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 				goto err;
 			}
 
+			if (!proxy_check_file (msg, session)) {
+				goto err;
+			}
+
 			rspamd_http_connection_steal_msg (session->client_conn);
 			rspamd_http_message_remove_header (msg, "Content-Length");
 			rspamd_http_message_remove_header (msg, "Key");
 			rspamd_http_connection_reset (session->client_conn);
+
 			session->backend_conn = rspamd_http_connection_new (
 					NULL,
 					proxy_backend_error_handler,
@@ -420,7 +519,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->client_addr = addr;
 
 	session->resolver = ctx->resolver;
-
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
 	session->client_conn = rspamd_http_connection_new (
 		NULL,
 		proxy_client_error_handler,
