@@ -403,7 +403,7 @@ lua_redis_timeout (int fd, short what, gpointer u)
 
 	REDIS_RETAIN (ctx);
 	msg_debug ("timeout while querying redis server");
-	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, FALSE);
+	lua_redis_push_error ("timeout while connecting the server", ctx, sp_ud, TRUE);
 
 	if (sp_ud->c->ctx) {
 		ac = sp_ud->c->ctx;
