@@ -277,9 +277,10 @@ accept_socket (gint fd, short what, void *arg)
 
 	task = rspamd_task_new (worker, ctx->cfg);
 
-	msg_info_task ("accepted connection from %s port %d",
+	msg_info_task ("accepted connection from %s port %d, task ptr: %p",
 		rspamd_inet_address_to_string (addr),
-		rspamd_inet_address_get_port (addr));
+		rspamd_inet_address_get_port (addr),
+		task);
 
 	/* Copy some variables */
 	if (ctx->is_mime) {
