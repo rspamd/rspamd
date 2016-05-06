@@ -561,10 +561,6 @@ proxy_backend_close_connection (struct rspamd_proxy_backend_connection *conn)
 
 	close (conn->backend_sock);
 
-	if (conn->results) {
-		ucl_object_unref (conn->results);
-	}
-
 	conn->flags |= RSPAMD_BACKEND_CLOSED;
 }
 
@@ -624,9 +620,54 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 }
 
 static void
+proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
+{
+	GString *tb = NULL;
+	gint err_idx;
+	guint i;
+	struct rspamd_proxy_backend_connection *conn;
+	lua_State *L;
+
+	L = session->ctx->lua_state;
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbref);
+
+	lua_createtable (L, 0, session->mirror_conns->len + 1);
+	/* Now push master results */
+	if (session->master_conn->results) {
+		lua_pushstring (L, "master");
+		ucl_object_push_lua (L, session->master_conn->results, true);
+		lua_settable (L, -3);
+	}
+
+	for (i = 0; i < session->mirror_conns->len; i ++) {
+		conn = g_ptr_array_index (session->mirror_conns, i);
+
+		if (conn->results) {
+			lua_pushstring (L, conn->name);
+			ucl_object_push_lua (L, conn->results, true);
+			lua_settable (L, -3);
+		}
+	}
+
+	if (lua_pcall (L, 1, 0, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_session (
+				"cannot run lua compare script: %s",
+				tb->str);
+		g_string_free (tb, TRUE);
+	}
+
+	lua_settop (L, 0);
+}
+
+static void
 proxy_session_dtor (struct rspamd_proxy_session *session)
 {
 	guint i;
+	gint cbref;
 	struct rspamd_proxy_backend_connection *conn;
 
 	if (session->master_conn) {
@@ -642,11 +683,20 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		rspamd_http_connection_unref (session->client_conn);
 	}
 
+	for (i = 0; i < session->ctx->cmp_refs->len; i ++) {
+		cbref = g_array_index (session->ctx->cmp_refs, gint, i);
+		proxy_call_cmp_script (session, cbref);
+	}
+
 	for (i = 0; i < session->mirror_conns->len; i ++) {
 		conn = g_ptr_array_index (session->mirror_conns, i);
 
 		if (!(conn->flags & RSPAMD_BACKEND_CLOSED)) {
 			proxy_backend_close_connection (conn);
+		}
+
+		if (conn->results) {
+			ucl_object_unref (conn->results);
 		}
 	}
 
