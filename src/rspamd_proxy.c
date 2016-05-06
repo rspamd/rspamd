@@ -31,6 +31,23 @@
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
 
+#define msg_err_session(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 gpointer init_rspamd_proxy (struct rspamd_config *cfg);
 void start_rspamd_proxy (struct rspamd_worker *worker);
 
@@ -81,15 +98,16 @@ struct rspamd_proxy_session {
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_cryptobox_pubkey *remote_key;
 	struct upstream *up;
-	gint client_sock;
-	gint backend_sock;
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	struct rspamd_http_connection *backend_conn;
 	struct rspamd_dns_resolver *resolver;
 	gpointer map;
 	gsize map_len;
+	gint client_sock;
+	gint backend_sock;
 	gboolean replied;
+	ref_entry_t ref;
 };
 
 static GQuark
@@ -241,7 +259,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 }
 
 static void
-proxy_session_cleanup (struct rspamd_proxy_session *session)
+proxy_session_dtor (struct rspamd_proxy_session *session)
 {
 	rspamd_inet_address_destroy (session->client_addr);
 
@@ -283,7 +301,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 				&session->map_len);
 
 		if (session->map == NULL) {
-			msg_err ("cannot map %s: %s", file_str, strerror (errno));
+			msg_err_session ("cannot map %s: %s", file_str, strerror (errno));
 
 			return FALSE;
 		}
@@ -293,7 +311,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 	else {
 		/* Need to parse query URL */
 		if (http_parser_parse_url (msg->url->str, msg->url->len, 0, &u) != 0) {
-			msg_err ("bad request url: %V", msg->url);
+			msg_err_session ("bad request url: %V", msg->url);
 
 			return FALSE;
 		}
@@ -311,7 +329,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 						&session->map_len);
 
 				if (session->map == NULL) {
-					msg_err ("cannot map %s: %s", file_str, strerror (errno));
+					msg_err_session ("cannot map %s: %s", file_str, strerror (errno));
 					g_hash_table_unref (query_args);
 
 					return FALSE;
@@ -366,7 +384,7 @@ proxy_backend_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_proxy_session *session = conn->ud;
 
-	msg_info ("abnormally closing connection from backend: %s, error: %s",
+	msg_info_session ("abnormally closing connection from backend: %s, error: %s",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->up)),
 		err->message);
 	rspamd_http_connection_reset (session->backend_conn);
@@ -396,10 +414,10 @@ proxy_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_proxy_session *session = conn->ud;
 
-	msg_info ("abnormally closing connection from: %s, error: %s",
+	msg_info_session ("abnormally closing connection from: %s, error: %s",
 		rspamd_inet_address_to_string (session->client_addr), err->message);
 	/* Terminate session immediately */
-	proxy_session_cleanup (session);
+	REF_RELEASE (session);
 }
 
 static gint
@@ -428,7 +446,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 		if (backend == NULL) {
 			/* No backend */
-			msg_err ("cannot find upstream for %s", host ? hostbuf : "default");
+			msg_err_session ("cannot find upstream for %s", host ? hostbuf : "default");
 			goto err;
 		}
 		else {
@@ -436,7 +454,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 
 			if (session->up == NULL) {
-				msg_err ("cannot select upstream for %s", host ? hostbuf : "default");
+				msg_err_session ("cannot select upstream for %s", host ? hostbuf : "default");
 				goto err;
 			}
 
@@ -444,7 +462,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					rspamd_upstream_addr (session->up), SOCK_STREAM, TRUE);
 
 			if (session->backend_sock == -1) {
-				msg_err ("cannot connect upstream for %s", host ? hostbuf : "default");
+				msg_err_session ("cannot connect upstream for %s", host ? hostbuf : "default");
 				rspamd_upstream_fail (session->up);
 				goto err;
 			}
@@ -477,7 +495,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 	}
 	else {
-		proxy_session_cleanup (session);
+		REF_RELEASE (session);
 	}
 
 	return 0;
@@ -510,11 +528,8 @@ proxy_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	msg_info ("accepted connection from %s port %d",
-		rspamd_inet_address_to_string (addr),
-		rspamd_inet_address_get_port (addr));
-
 	session = g_slice_alloc0 (sizeof (*session));
+	REF_INIT_RETAIN (session, proxy_session_dtor);
 	session->client_sock = nfd;
 	session->client_addr = addr;
 
@@ -534,11 +549,15 @@ proxy_accept_socket (gint fd, short what, void *arg)
 		rspamd_http_connection_set_key (session->client_conn, ctx->key);
 	}
 
+	msg_info_session ("accepted connection from %s port %d",
+			rspamd_inet_address_to_string (addr),
+			rspamd_inet_address_get_port (addr));
+
 	rspamd_http_connection_read_message (session->client_conn,
-		session,
-		nfd,
-		&ctx->io_tv,
-		ctx->ev_base);
+			session,
+			nfd,
+			&ctx->io_tv,
+			ctx->ev_base);
 }
 
 static void
