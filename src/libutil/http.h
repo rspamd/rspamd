@@ -247,6 +247,14 @@ struct rspamd_http_message * rspamd_http_connection_steal_msg (
 		struct rspamd_http_connection *conn);
 
 /**
+ * Copy the current message from a connection to deal with separately
+ * @param conn
+ * @return
+ */
+struct rspamd_http_message * rspamd_http_connection_copy_msg (
+		struct rspamd_http_connection *conn);
+
+/**
  * Create new HTTP message
  * @param type request or response
  * @return new http message
