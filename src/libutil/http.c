@@ -1177,6 +1177,58 @@ rspamd_http_connection_steal_msg (struct rspamd_http_connection *conn)
 	return msg;
 }
 
+struct rspamd_http_message *
+rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv;
+	struct rspamd_http_message *new_msg, *msg;
+	struct rspamd_http_header *hdr, *nhdr;
+
+	priv = conn->priv;
+	msg = priv->msg;
+
+	new_msg = rspamd_http_new_message (msg->type);
+
+	if (msg->body) {
+		new_msg->body = rspamd_fstring_new_init (msg->body->str,
+				msg->body->len);
+	}
+
+	if (msg->url) {
+		new_msg->url = rspamd_fstring_new_init (msg->url->str,
+				msg->url->len);
+	}
+
+	if (msg->host) {
+		new_msg->host = rspamd_fstring_new_init (msg->host->str,
+				msg->host->len);
+	}
+
+	new_msg->method = msg->method;
+	new_msg->port = msg->port;
+	new_msg->date = msg->date;
+	new_msg->flags = msg->flags;
+	new_msg->last_modified = msg->last_modified;
+
+	LL_FOREACH (msg->headers, hdr) {
+		nhdr = g_slice_alloc (sizeof (struct rspamd_http_header));
+		nhdr->name = g_slice_alloc (sizeof (*nhdr->name));
+		nhdr->value = g_slice_alloc (sizeof (*nhdr->value));
+		nhdr->combined = rspamd_fstring_new_init (hdr->combined->str,
+				hdr->combined->len);
+		nhdr->name->begin = nhdr->combined->str +
+				(hdr->name->begin - hdr->combined->str);
+		nhdr->name->len = hdr->name->len;
+		nhdr->value->begin = nhdr->combined->str +
+				(hdr->value->begin - hdr->combined->str);
+		nhdr->value->len = hdr->value->len;
+
+		DL_APPEND (new_msg->headers, nhdr);
+	}
+
+	return new_msg;
+}
+
 void
 rspamd_http_connection_free (struct rspamd_http_connection *conn)
 {
