@@ -16,7 +16,7 @@ SET(RSPAMADMSRC rspamadm.c
         ${CMAKE_SOURCE_DIR}/src/lua_worker.c
         ${CMAKE_SOURCE_DIR}/src/smtp_proxy.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
-        ${CMAKE_SOURCE_DIR}/src/http_proxy.c
+        ${CMAKE_SOURCE_DIR}/src/rspamd_proxy.c
         ${CMAKE_SOURCE_DIR}/src/log_helper.c)
 SET(RSPAMADMLUASRC
         ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_stat.lua

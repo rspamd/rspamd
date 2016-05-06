@@ -31,13 +31,13 @@
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
 
-gpointer init_http_proxy (struct rspamd_config *cfg);
-void start_http_proxy (struct rspamd_worker *worker);
+gpointer init_rspamd_proxy (struct rspamd_config *cfg);
+void start_rspamd_proxy (struct rspamd_worker *worker);
 
-worker_t http_proxy_worker = {
-	"http_proxy",               /* Name */
-	init_http_proxy,            /* Init function */
-	start_http_proxy,           /* Start function */
+worker_t rspamd_proxy_worker = {
+	"rspamd_proxy",               /* Name */
+	init_rspamd_proxy,            /* Init function */
+	start_rspamd_proxy,           /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
 	SOCK_STREAM,                /* TCP socket */
 	RSPAMD_WORKER_VER
@@ -49,9 +49,9 @@ struct rspamd_http_upstream {
 	struct rspamd_cryptobox_pubkey *key;
 };
 
-static const guint64 rspamd_http_proxy_magic = 0xcdeb4fd1fc351980ULL;
+static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
 
-struct http_proxy_ctx {
+struct rspamd_proxy_ctx {
 	guint64 magic;
 	gdouble timeout;
 	struct timeval io_tv;
@@ -74,8 +74,8 @@ struct http_proxy_ctx {
 	gdouble rotate_tm;
 };
 
-struct http_proxy_session {
-	struct http_proxy_ctx *ctx;
+struct rspamd_proxy_session {
+	struct rspamd_proxy_ctx *ctx;
 	struct event_base *ev_base;
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_cryptobox_pubkey *remote_key;
@@ -90,13 +90,13 @@ struct http_proxy_session {
 };
 
 static GQuark
-http_proxy_quark (void)
+rspamd_proxy_quark (void)
 {
 	return g_quark_from_static_string ("http-proxy");
 }
 
 static gboolean
-http_proxy_parse_upstream (rspamd_mempool_t *pool,
+rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -104,13 +104,13 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 {
 	const ucl_object_t *elt;
 	struct rspamd_http_upstream *up = NULL;
-	struct http_proxy_ctx *ctx;
+	struct rspamd_proxy_ctx *ctx;
 	struct rspamd_rcl_struct_parser *pd = ud;
 
 	ctx = pd->user_struct;
 
 	if (ucl_object_type (obj) != UCL_OBJECT) {
-		g_set_error (err, http_proxy_quark (), 100,
+		g_set_error (err, rspamd_proxy_quark (), 100,
 				"upstream option must be an object");
 
 		return FALSE;
@@ -118,7 +118,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
-		g_set_error (err, http_proxy_quark (), 100,
+		g_set_error (err, rspamd_proxy_quark (), 100,
 				"upstream option must have some name definition");
 
 		return FALSE;
@@ -133,7 +133,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
 
 		if (up->key == NULL) {
-			g_set_error (err, http_proxy_quark (), 100,
+			g_set_error (err, rspamd_proxy_quark (), 100,
 					"cannot read upstream key");
 
 			goto err;
@@ -143,7 +143,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 	elt = ucl_object_lookup (obj, "hosts");
 
 	if (elt == NULL) {
-		g_set_error (err, http_proxy_quark (), 100,
+		g_set_error (err, rspamd_proxy_quark (), 100,
 				"upstream option must have some hosts definition");
 
 		goto err;
@@ -151,7 +151,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
 	if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
-		g_set_error (err, http_proxy_quark (), 100,
+		g_set_error (err, rspamd_proxy_quark (), 100,
 				"upstream has bad hosts definition");
 
 		goto err;
@@ -183,15 +183,15 @@ err:
 }
 
 gpointer
-init_http_proxy (struct rspamd_config *cfg)
+init_rspamd_proxy (struct rspamd_config *cfg)
 {
-	struct http_proxy_ctx *ctx;
+	struct rspamd_proxy_ctx *ctx;
 	GQuark type;
 
-	type = g_quark_try_string ("http_proxy");
+	type = g_quark_try_string ("rspamd_proxy");
 
-	ctx = g_malloc0 (sizeof (struct http_proxy_ctx));
-	ctx->magic = rspamd_http_proxy_magic;
+	ctx = g_malloc0 (sizeof (struct rspamd_proxy_ctx));
+	ctx->magic = rspamd_rspamd_proxy_magic;
 	ctx->timeout = 5.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
@@ -202,7 +202,7 @@ init_http_proxy (struct rspamd_config *cfg)
 			"timeout",
 			rspamd_rcl_parse_struct_time,
 			ctx,
-			G_STRUCT_OFFSET (struct http_proxy_ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx,
 					timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"IO timeout");
@@ -211,7 +211,7 @@ init_http_proxy (struct rspamd_config *cfg)
 			"rotate",
 			rspamd_rcl_parse_struct_time,
 			ctx,
-			G_STRUCT_OFFSET (struct http_proxy_ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx,
 					rotate_tm),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"Rotation keys time, default: "
@@ -221,14 +221,14 @@ init_http_proxy (struct rspamd_config *cfg)
 			"keypair",
 			rspamd_rcl_parse_struct_keypair,
 			ctx,
-			G_STRUCT_OFFSET (struct http_proxy_ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx,
 					key),
 			0,
 			"Server's keypair");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"upstream",
-			http_proxy_parse_upstream,
+			rspamd_proxy_parse_upstream,
 			ctx,
 			0,
 			0,
@@ -238,7 +238,7 @@ init_http_proxy (struct rspamd_config *cfg)
 }
 
 static void
-proxy_session_cleanup (struct http_proxy_session *session)
+proxy_session_cleanup (struct rspamd_proxy_session *session)
 {
 	rspamd_inet_address_destroy (session->client_addr);
 
@@ -256,7 +256,7 @@ proxy_session_cleanup (struct http_proxy_session *session)
 }
 
 static void
-proxy_client_write_error (struct http_proxy_session *session, gint code)
+proxy_client_write_error (struct rspamd_proxy_session *session, gint code)
 {
 	struct rspamd_http_message *reply;
 
@@ -270,7 +270,7 @@ proxy_client_write_error (struct http_proxy_session *session, gint code)
 static void
 proxy_backend_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
-	struct http_proxy_session *session = conn->ud;
+	struct rspamd_proxy_session *session = conn->ud;
 
 	msg_info ("abnormally closing connection from backend: %s, error: %s",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->up)),
@@ -284,7 +284,7 @@ static gint
 proxy_backend_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
-	struct http_proxy_session *session = conn->ud;
+	struct rspamd_proxy_session *session = conn->ud;
 
 	rspamd_http_connection_steal_msg (session->backend_conn);
 	rspamd_http_message_remove_header (msg, "Content-Length");
@@ -300,7 +300,7 @@ proxy_backend_finish_handler (struct rspamd_http_connection *conn,
 static void
 proxy_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
-	struct http_proxy_session *session = conn->ud;
+	struct rspamd_proxy_session *session = conn->ud;
 
 	msg_info ("abnormally closing connection from: %s, error: %s",
 		rspamd_inet_address_to_string (session->client_addr), err->message);
@@ -312,7 +312,7 @@ static gint
 proxy_client_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
-	struct http_proxy_session *session = conn->ud;
+	struct rspamd_proxy_session *session = conn->ud;
 	struct rspamd_http_upstream *backend = NULL;
 	const rspamd_ftok_t *host;
 	gchar hostbuf[512];
@@ -394,9 +394,9 @@ static void
 proxy_accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
-	struct http_proxy_ctx *ctx;
+	struct rspamd_proxy_ctx *ctx;
 	rspamd_inet_addr_t *addr;
-	struct http_proxy_session *session;
+	struct rspamd_proxy_session *session;
 	gint nfd;
 
 	ctx = worker->ctx;
@@ -446,7 +446,7 @@ static void
 proxy_rotate_key (gint fd, short what, void *arg)
 {
 	struct timeval rot_tv;
-	struct http_proxy_ctx *ctx = arg;
+	struct rspamd_proxy_ctx *ctx = arg;
 	gpointer kp;
 
 	double_to_tv (ctx->rotate_tm, &rot_tv);
@@ -461,12 +461,12 @@ proxy_rotate_key (gint fd, short what, void *arg)
 }
 
 void
-start_http_proxy (struct rspamd_worker *worker)
+start_rspamd_proxy (struct rspamd_worker *worker)
 {
-	struct http_proxy_ctx *ctx = worker->ctx;
+	struct rspamd_proxy_ctx *ctx = worker->ctx;
 	struct timeval rot_tv;
 
-	ctx->ev_base = rspamd_prepare_worker (worker, "http_proxy",
+	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
@@ -503,4 +503,3 @@ start_http_proxy (struct rspamd_worker *worker)
 
 	exit (EXIT_SUCCESS);
 }
-
