@@ -263,7 +263,7 @@ else
           max_trains = opts['train']['max_train']
         end
         if opts['train']['max_epoch'] then
-          max_trains = opts['train']['max_epoch']
+          max_epoch = opts['train']['max_epoch']
         end
         cfg:register_worker_script("log_helper",
           function(score, req_score, results, cf, id)
