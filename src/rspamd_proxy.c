@@ -442,13 +442,19 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 }
 
 static void
+proxy_session_close_connection (struct rspamd_proxy_backend_connection *conn)
+{
+	if (conn->backend_conn) {
+		rspamd_http_connection_unref (conn->backend_conn);
+	}
+	close (conn->backend_sock);
+}
+
+static void
 proxy_session_dtor (struct rspamd_proxy_session *session)
 {
 	if (session->master_conn) {
-		if (session->master_conn->backend_conn) {
-			rspamd_http_connection_unref (session->master_conn->backend_conn);
-		}
-		close (session->master_conn->backend_sock);
+		proxy_session_close_connection (session->master_conn);
 	}
 
 	if (session->map && session->map_len) {
@@ -682,6 +688,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 	}
 	else {
+		proxy_session_close_connection (session->master_conn);
+		session->master_conn = NULL;
 		REF_RELEASE (session);
 	}
 
