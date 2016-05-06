@@ -106,13 +106,19 @@ struct rspamd_proxy_ctx {
 enum rspamd_backend_flags {
 	RSPAMD_BACKEND_REPLIED = 1 << 0,
 	RSPAMD_BACKEND_CLOSED = 1 << 1,
+	RSPAMD_BACKEND_PARSED = 1 << 2,
 };
 
+struct rspamd_proxy_session;
+
 struct rspamd_proxy_backend_connection {
+	const gchar *name;
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_cryptobox_pubkey *remote_key;
 	struct upstream *up;
 	struct rspamd_http_connection *backend_conn;
+	ucl_object_t *results;
+	struct rspamd_proxy_session *s;
 	gint backend_sock;
 	enum rspamd_backend_flags flags;
 };
@@ -442,19 +448,80 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 }
 
 static void
-proxy_session_close_connection (struct rspamd_proxy_backend_connection *conn)
+proxy_backend_close_connection (struct rspamd_proxy_backend_connection *conn)
 {
 	if (conn->backend_conn) {
+		rspamd_http_connection_reset (conn->backend_conn);
 		rspamd_http_connection_unref (conn->backend_conn);
 	}
+
 	close (conn->backend_sock);
+
+	if (conn->results) {
+		ucl_object_unref (conn->results);
+	}
+}
+
+static gboolean
+proxy_backend_parse_results (struct rspamd_proxy_session *session,
+		struct rspamd_proxy_backend_connection *conn,
+		lua_State *L, gint parser_ref,
+		const gchar *in, gsize inlen)
+{
+	struct ucl_parser *parser;
+	GString *tb = NULL;
+	gint err_idx;
+
+	if (inlen == 0 || in == NULL) {
+		return FALSE;
+	}
+
+	if (parser_ref != -1) {
+		/* Call parser function */
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
+		lua_rawgeti (L, LUA_REGISTRYINDEX, parser_ref);
+		/* XXX: copies all data */
+		lua_pushlstring (L, in, inlen);
+
+		if (lua_pcall (L, 1, 1, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err_session (
+					"cannot run lua parser script: %s",
+					tb->str);
+			g_string_free (tb, TRUE);
+			lua_settop (L, 0);
+
+			return FALSE;
+		}
+
+		conn->results = ucl_object_lua_import (L, -1);
+		lua_settop (L, 0);
+	}
+	else {
+		parser = ucl_parser_new (0);
+
+		if (!ucl_parser_add_chunk (parser, in, inlen)) {
+			msg_err_session ("cannot parse input: %s", ucl_parser_get_error (
+					parser));
+			ucl_parser_free (parser);
+
+			return FALSE;
+		}
+
+		conn->results = ucl_parser_get_object (parser);
+		ucl_parser_free (parser);
+	}
+
+	return TRUE;
 }
 
 static void
 proxy_session_dtor (struct rspamd_proxy_session *session)
 {
 	if (session->master_conn) {
-		proxy_session_close_connection (session->master_conn);
+		proxy_backend_close_connection (session->master_conn);
 	}
 
 	if (session->map && session->map_len) {
@@ -462,6 +529,7 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	}
 
 	if (session->client_conn) {
+		rspamd_http_connection_reset (session->client_conn);
 		rspamd_http_connection_unref (session->client_conn);
 	}
 
@@ -571,10 +639,12 @@ proxy_client_write_error (struct rspamd_proxy_session *session, gint code)
 }
 
 static void
-proxy_backend_error_handler (struct rspamd_http_connection *conn, GError *err)
+proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
-	struct rspamd_proxy_session *session = conn->ud;
+	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
+	struct rspamd_proxy_session *session;
 
+	session = bk_conn->s;
 	msg_info_session ("abnormally closing connection from backend: %s, error: %s",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
 		err->message);
@@ -584,11 +654,13 @@ proxy_backend_error_handler (struct rspamd_http_connection *conn, GError *err)
 }
 
 static gint
-proxy_backend_finish_handler (struct rspamd_http_connection *conn,
+proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
-	struct rspamd_proxy_session *session = conn->ud;
+	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
+	struct rspamd_proxy_session *session;
 
+	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
 	rspamd_http_message_remove_header (msg, "Content-Length");
 	rspamd_http_message_remove_header (msg, "Key");
@@ -623,6 +695,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 	if (!session->master_conn) {
 		session->master_conn = rspamd_mempool_alloc0 (session->pool,
 				sizeof (*session->master_conn));
+		session->master_conn->s = session;
+		session->master_conn->name = "master";
 		host = rspamd_http_message_find_header (msg, "Host");
 
 		if (host == NULL) {
@@ -672,8 +746,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 			session->master_conn->backend_conn = rspamd_http_connection_new (
 					NULL,
-					proxy_backend_error_handler,
-					proxy_backend_finish_handler,
+					proxy_backend_master_error_handler,
+					proxy_backend_master_finish_handler,
 					RSPAMD_HTTP_CLIENT_SIMPLE,
 					RSPAMD_HTTP_CLIENT,
 					session->ctx->keys_cache);
@@ -683,12 +757,13 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
 
 			rspamd_http_connection_write_message (session->master_conn->backend_conn,
-				msg, NULL, NULL, session, session->master_conn->backend_sock,
+				msg, NULL, NULL, session->master_conn,
+				session->master_conn->backend_sock,
 				&session->ctx->io_tv, session->ctx->ev_base);
 		}
 	}
 	else {
-		proxy_session_close_connection (session->master_conn);
+		proxy_backend_close_connection (session->master_conn);
 		session->master_conn = NULL;
 		REF_RELEASE (session);
 	}
