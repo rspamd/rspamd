@@ -554,14 +554,16 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 static void
 proxy_backend_close_connection (struct rspamd_proxy_backend_connection *conn)
 {
-	if (conn->backend_conn) {
-		rspamd_http_connection_reset (conn->backend_conn);
-		rspamd_http_connection_unref (conn->backend_conn);
+	if (conn) {
+		if (conn->backend_conn) {
+			rspamd_http_connection_reset (conn->backend_conn);
+			rspamd_http_connection_unref (conn->backend_conn);
+		}
+
+		close (conn->backend_sock);
+
+		conn->flags |= RSPAMD_BACKEND_CLOSED;
 	}
-
-	close (conn->backend_sock);
-
-	conn->flags |= RSPAMD_BACKEND_CLOSED;
 }
 
 static gboolean
@@ -1082,6 +1084,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	REF_INIT_RETAIN (session, proxy_session_dtor);
 	session->client_sock = nfd;
 	session->client_addr = addr;
+	session->mirror_conns = g_ptr_array_sized_new (ctx->mirrors->len);
 
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
 	session->client_conn = rspamd_http_connection_new (
