@@ -1079,7 +1079,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 	return 0;
 
 err:
-	proxy_client_write_error (session, 404);
+	proxy_client_write_error (session, 404, "Backend not found");
 
 	return 0;
 }
