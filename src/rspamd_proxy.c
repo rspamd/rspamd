@@ -821,7 +821,7 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 	session = bk_conn->s;
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			-1, msg->body->str, msg->body->len)) {
+			-1, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s",
 				bk_conn->name);
 	}
@@ -945,7 +945,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 		&session->ctx->io_tv, session->ctx->ev_base);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			-1, msg->body->str, msg->body->len)) {
+			-1, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the master backend");
 	}
 
