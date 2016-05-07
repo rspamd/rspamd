@@ -70,7 +70,7 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 struct rspamd_dns_resolver *
 lua_check_dns_resolver (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{resolver}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{resolver}");
 	luaL_argcheck (L, ud != NULL, 1, "'resolver' expected");
 	return ud ? *((struct rspamd_dns_resolver **)ud) : NULL;
 }
@@ -225,10 +225,10 @@ lua_dns_resolver_init (lua_State *L)
 	struct event_base *base, **pbase;
 
 	/* Check args */
-	pbase = luaL_checkudata (L, 1, "rspamd{ev_base}");
+	pbase = rspamd_lua_check_udata (L, 1, "rspamd{ev_base}");
 	luaL_argcheck (L, pbase != NULL, 1, "'ev_base' expected");
 	base = pbase ? *(pbase) : NULL;
-	pcfg = luaL_checkudata (L, 2, "rspamd{config}");
+	pcfg = rspamd_lua_check_udata (L, 2, "rspamd{config}");
 	luaL_argcheck (L, pcfg != NULL,	 2, "'config' expected");
 	cfg = pcfg ? *(pcfg) : NULL;
 
@@ -266,10 +266,10 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	/* Check arguments */
 	if (lua_type (L, first) == LUA_TUSERDATA) {
 		/* Legacy version */
-		psession = luaL_checkudata (L, first, "rspamd{session}");
+		psession = rspamd_lua_check_udata (L, first, "rspamd{session}");
 		luaL_argcheck (L, psession != NULL, first,	   "'session' expected");
 		session = psession ? *(psession) : NULL;
-		ppool = luaL_checkudata (L, first + 1, "rspamd{mempool}");
+		ppool = rspamd_lua_check_udata (L, first + 1, "rspamd{mempool}");
 		luaL_argcheck (L, ppool != NULL,	first + 1, "'mempool' expected");
 		pool = ppool ? *(ppool) : NULL;
 		to_resolve = luaL_checkstring (L, first + 2);
@@ -315,7 +315,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		if (task == NULL) {
 			lua_pushstring (L, "session");
 			lua_gettable (L, -2);
-			if (luaL_checkudata (L, -1, "rspamd{session}")) {
+			if (rspamd_lua_check_udata (L, -1, "rspamd{session}")) {
 				session = *(struct rspamd_async_session **)lua_touserdata (L, -1);
 			}
 			else {
@@ -325,7 +325,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 			lua_pushstring (L, "pool");
 			lua_gettable (L, -2);
-			if (luaL_checkudata (L, -1, "rspamd{mempool}")) {
+			if (rspamd_lua_check_udata (L, -1, "rspamd{mempool}")) {
 				pool = *(rspamd_mempool_t **)lua_touserdata (L, -1);
 			}
 			else {

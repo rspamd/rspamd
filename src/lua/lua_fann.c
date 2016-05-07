@@ -65,7 +65,7 @@ static const struct luaL_reg fannlib_m[] = {
 struct fann *
 rspamd_lua_check_fann (lua_State *L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{fann}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{fann}");
 	luaL_argcheck (L, ud != NULL, pos, "'fann' expected");
 	return ud ? *((struct fann **) ud) : NULL;
 }

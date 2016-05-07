@@ -209,7 +209,7 @@ lua_ip_new (lua_State *L, struct rspamd_lua_ip *old)
 struct rspamd_lua_ip *
 lua_check_ip (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{ip}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{ip}");
 
 	luaL_argcheck (L, ud != NULL, pos, "'ip' expected");
 	return ud ? *((struct rspamd_lua_ip **)ud) : NULL;

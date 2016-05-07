@@ -208,8 +208,9 @@ local function greylist_check(task)
   end
 
   if addr then
-    if not rspamd_redis.make_request(task, addr, redis_get_cb, 'MGET',
-        {body_key, meta_key}) then
+    local ret = rspamd_redis.make_request(task, addr, redis_get_cb, 'MGET',
+        {body_key, meta_key})
+    if not ret then
       rspamd_logger.errx(task, 'cannot make redis request to check results')
     end
   end
@@ -268,9 +269,16 @@ local function greylist_set(task)
         if grey_res then
           task:insert_result(settings['symbol'], 0.0, grey_res, 'meta')
           rspamd_logger.infox(task, 'greylisting delayed till "%s": meta', grey_res)
+        --[[
+        -- We got some redis error, but we don't know what, so we just ignore it
+        -- for now
         else
           task:insert_result(settings['symbol'], 0.0, 'unknown')
           rspamd_logger.infox(task, 'greylisting delayed: unknown, internal error')
+        --]]
+        else
+          task:insert_result(settings['symbol'], 0.0, 'greylisted', 'redis fail')
+          return
         end
       end
       task:set_metric_action('default', 'soft reject')

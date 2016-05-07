@@ -134,7 +134,7 @@ static const struct luaL_reg taglib_m[] = {
 static struct html_content *
 lua_check_html (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{html}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{html}");
 	luaL_argcheck (L, ud != NULL, pos, "'html' expected");
 	return ud ? *((struct html_content **)ud) : NULL;
 }
@@ -142,7 +142,7 @@ lua_check_html (lua_State * L, gint pos)
 static struct html_tag *
 lua_check_html_tag (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{html_tag}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{html_tag}");
 	luaL_argcheck (L, ud != NULL, pos, "'html_tag' expected");
 	return ud ? *((struct html_tag **)ud) : NULL;
 }

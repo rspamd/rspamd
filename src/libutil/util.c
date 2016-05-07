@@ -2027,7 +2027,7 @@ rspamd_hash_seed (void)
 }
 
 gdouble
-rspamd_time_jitter (gdouble in, gdouble jitter)
+rspamd_random_double (void)
 {
 	guint64 rnd_int;
 	double res;
@@ -2037,11 +2037,17 @@ rspamd_time_jitter (gdouble in, gdouble jitter)
 	res = rnd_int;
 	res *= transform_bias;
 
+	return res;
+}
+
+gdouble
+rspamd_time_jitter (gdouble in, gdouble jitter)
+{
 	if (jitter == 0) {
 		jitter = in;
 	}
 
-	return in + jitter * res;
+	return in + jitter * rspamd_random_double ();
 }
 
 gboolean

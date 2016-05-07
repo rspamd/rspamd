@@ -132,7 +132,7 @@ struct lua_mempool_udata {
 struct memory_pool_s *
 rspamd_lua_check_mempool (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{mempool}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{mempool}");
 	luaL_argcheck (L, ud != NULL, pos, "'mempool' expected");
 	return ud ? *((struct memory_pool_s **)ud) : NULL;
 }

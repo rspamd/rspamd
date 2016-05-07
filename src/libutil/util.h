@@ -410,6 +410,12 @@ guint64 rspamd_hash_seed (void);
 gdouble rspamd_time_jitter (gdouble in, gdouble jitter);
 
 /**
+ * Return random double in range [0..1)
+ * @return
+ */
+gdouble rspamd_random_double (void);
+
+/**
  * Constant time version of memcmp
  */
 gboolean rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len);

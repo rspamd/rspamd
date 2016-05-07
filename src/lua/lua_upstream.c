@@ -90,7 +90,7 @@ static const struct luaL_reg upstream_m[] = {
 static struct upstream *
 lua_check_upstream (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{upstream}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{upstream}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'upstream' expected");
 	return ud ? *((struct upstream **)ud) : NULL;
@@ -153,7 +153,7 @@ lua_upstream_ok (lua_State *L)
 static struct upstream_list *
 lua_check_upstream_list (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{upstream_list}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{upstream_list}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'upstream_list' expected");
 	return ud ? *((struct upstream_list **)ud) : NULL;

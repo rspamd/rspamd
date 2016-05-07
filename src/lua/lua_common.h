@@ -346,5 +346,14 @@ gboolean lua_push_internet_address (lua_State *L, InternetAddress *ia);
  */
 gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
 		gsize len);
+
+/**
+ * Safely checks userdata to match specified class
+ * @param L
+ * @param pos
+ * @param classname
+ */
+void *rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname);
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

@@ -714,7 +714,7 @@ static const struct luaL_reg textlib_m[] = {
 struct rspamd_task *
 lua_check_task (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{task}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{task}");
 	luaL_argcheck (L, ud != NULL, pos, "'task' expected");
 	return ud ? *((struct rspamd_task **)ud) : NULL;
 }
@@ -722,7 +722,7 @@ lua_check_task (lua_State * L, gint pos)
 static struct rspamd_image *
 lua_check_image (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{image}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{image}");
 	luaL_argcheck (L, ud != NULL, 1, "'image' expected");
 	return ud ? *((struct rspamd_image **)ud) : NULL;
 }
@@ -730,7 +730,7 @@ lua_check_image (lua_State * L)
 struct rspamd_lua_text *
 lua_check_text (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{text}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{text}");
 	luaL_argcheck (L, ud != NULL, pos, "'text' expected");
 	return ud ? (struct rspamd_lua_text *)ud : NULL;
 }
@@ -783,7 +783,7 @@ static int
 lua_task_set_cfg (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	void *ud = luaL_checkudata (L, 2, "rspamd{config}");
+	void *ud = rspamd_lua_check_udata (L, 2, "rspamd{config}");
 
 	if (task) {
 		luaL_argcheck (L, ud != NULL, 1, "'config' expected");

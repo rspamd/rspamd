@@ -66,7 +66,7 @@ static const struct luaL_reg sqlitestmtlib_m[] = {
 static sqlite3 *
 lua_check_sqlite3 (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{sqlite3}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{sqlite3}");
 	luaL_argcheck (L, ud != NULL, pos, "'sqlite3' expected");
 	return ud ? *((sqlite3 **)ud) : NULL;
 }
@@ -74,7 +74,7 @@ lua_check_sqlite3 (lua_State * L, gint pos)
 static sqlite3_stmt *
 lua_check_sqlite3_stmt (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{sqlite3_stmt}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{sqlite3_stmt}");
 	luaL_argcheck (L, ud != NULL, pos, "'sqlite3_stmt' expected");
 	return ud ? *((sqlite3_stmt **)ud) : NULL;
 }

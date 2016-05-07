@@ -57,7 +57,7 @@ struct lua_dispatcher_cbdata {
 struct rspamd_io_dispatcher_s *
 lua_check_io_dispatcher (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{io_dispatcher}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{io_dispatcher}");
 	luaL_argcheck (L, ud != NULL, 1, "'io_dispatcher' expected");
 	return ud ? *((struct rspamd_io_dispatcher_s **)ud) : NULL;
 }
@@ -65,7 +65,7 @@ lua_check_io_dispatcher (lua_State * L)
 struct event_base *
 lua_check_event_base (lua_State *L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{ev_base}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{ev_base}");
 	luaL_argcheck (L, ud != NULL, 1, "'ev_base' expected");
 	return ud ? *((struct event_base **)ud) : NULL;
 }

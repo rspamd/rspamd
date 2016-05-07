@@ -120,7 +120,7 @@ static const struct luaL_reg cryptoboxhashlib_m[] = {
 static struct rspamd_cryptobox_pubkey *
 lua_check_cryptobox_pubkey (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{cryptobox_pubkey}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{cryptobox_pubkey}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'cryptobox_pubkey' expected");
 	return ud ? *((struct rspamd_cryptobox_pubkey **)ud) : NULL;
@@ -129,7 +129,7 @@ lua_check_cryptobox_pubkey (lua_State * L, int pos)
 static struct rspamd_cryptobox_keypair *
 lua_check_cryptobox_keypair (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{cryptobox_keypair}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{cryptobox_keypair}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'cryptobox_keypair' expected");
 	return ud ? *((struct rspamd_cryptobox_keypair **)ud) : NULL;
@@ -138,7 +138,7 @@ lua_check_cryptobox_keypair (lua_State * L, int pos)
 static rspamd_fstring_t *
 lua_check_cryptobox_sign (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{cryptobox_signature}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{cryptobox_signature}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'cryptobox_signature' expected");
 	return ud ? *((rspamd_fstring_t **)ud) : NULL;
@@ -147,7 +147,7 @@ lua_check_cryptobox_sign (lua_State * L, int pos)
 static rspamd_cryptobox_hash_state_t *
 lua_check_cryptobox_hash (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{cryptobox_hash}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{cryptobox_hash}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'cryptobox_hash' expected");
 	return ud ? *((rspamd_cryptobox_hash_state_t **)ud) : NULL;

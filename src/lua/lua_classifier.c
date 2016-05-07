@@ -59,7 +59,7 @@ static struct rspamd_statfile_config * lua_check_statfile (lua_State * L);
 static struct rspamd_classifier_config *
 lua_check_classifier (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{classifier}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{classifier}");
 	luaL_argcheck (L, ud != NULL, 1, "'classifier' expected");
 	return ud ? *((struct rspamd_classifier_config **)ud) : NULL;
 }
@@ -96,7 +96,7 @@ call_classifier_pre_callback (struct rspamd_classifier_config *ccf,
 		if (lua_istable (L, -1)) {
 			lua_pushnil (L);
 			while (lua_next (L, -2)) {
-				pst = luaL_checkudata (L, -1, "rspamd{statfile}");
+				pst = rspamd_lua_check_udata (L, -1, "rspamd{statfile}");
 				if (pst) {
 					res = g_list_prepend (res, *pst);
 				}
@@ -378,7 +378,7 @@ lua_statfile_get_param (lua_State *L)
 static struct rspamd_statfile_config *
 lua_check_statfile (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{statfile}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{statfile}");
 	luaL_argcheck (L, ud != NULL, 1, "'statfile' expected");
 	return ud ? *((struct rspamd_statfile_config **)ud) : NULL;
 }

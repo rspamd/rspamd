@@ -91,7 +91,7 @@ static const struct luaL_reg rsasignlib_m[] = {
 static RSA *
 lua_check_rsa_pubkey (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{rsa_pubkey}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{rsa_pubkey}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'rsa_pubkey' expected");
 	return ud ? *((RSA **)ud) : NULL;
@@ -100,7 +100,7 @@ lua_check_rsa_pubkey (lua_State * L, int pos)
 static RSA *
 lua_check_rsa_privkey (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{rsa_privkey}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{rsa_privkey}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'rsa_privkey' expected");
 	return ud ? *((RSA **)ud) : NULL;
@@ -109,7 +109,7 @@ lua_check_rsa_privkey (lua_State * L, int pos)
 static rspamd_fstring_t *
 lua_check_rsa_sign (lua_State * L, int pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{rsa_signature}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{rsa_signature}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'rsa_signature' expected");
 	return ud ? *((rspamd_fstring_t **)ud) : NULL;

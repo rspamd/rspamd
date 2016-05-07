@@ -108,7 +108,7 @@ struct lua_map_callback_data {
 struct rspamd_lua_map  *
 lua_check_map (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{map}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{map}");
 	luaL_argcheck (L, ud != NULL, pos, "'map' expected");
 	return ud ? *((struct rspamd_lua_map **)ud) : NULL;
 }
@@ -542,7 +542,7 @@ lua_map_get_key (lua_State * L)
 				key_num = htonl (key_num);
 			}
 			else if (lua_type (L, 2) == LUA_TUSERDATA) {
-				ud = luaL_checkudata (L, 2, "rspamd{ip}");
+				ud = rspamd_lua_check_udata (L, 2, "rspamd{ip}");
 				if (ud != NULL) {
 					addr = *((struct rspamd_lua_ip **)ud);
 

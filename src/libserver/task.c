@@ -23,7 +23,8 @@
 #include "composites.h"
 #include "stat_api.h"
 #include "unix-std.h"
-#include <utlist.h>
+#include "utlist.h"
+#include <math.h>
 
 static GQuark
 rspamd_task_quark (void)
@@ -213,11 +214,8 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		if (task->http_conn != NULL) {
+			rspamd_http_connection_reset (task->http_conn);
 			rspamd_http_connection_unref (task->http_conn);
-		}
-
-		if (task->sock != -1) {
-			close (task->sock);
 		}
 
 		if (task->settings != NULL) {
@@ -242,6 +240,10 @@ rspamd_task_free (struct rspamd_task *task)
 
 		if (task->guard_ev) {
 			event_del (task->guard_ev);
+		}
+
+		if (task->sock != -1) {
+			close (task->sock);
 		}
 
 		rspamd_re_cache_runtime_destroy (task->re_rt);
@@ -711,6 +713,27 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 	return ret;
 }
 
+/*
+ * Sort by symbol's score -> name
+ */
+static gint
+rspamd_task_compare_log_sym (gconstpointer a, gconstpointer b)
+{
+	const struct symbol *s1 = *(const struct symbol **)a,
+			*s2 = *(const struct symbol **)b;
+	gdouble w1, w2;
+
+
+	w1 = fabs (s1->score);
+	w2 = fabs (s2->score);
+
+	if (w1 == w2 && s1->name && s2->name) {
+		return strcmp (s1->name, s2->name);
+	}
+
+	return (w2 - w1) * 1000.0;
+}
+
 static rspamd_ftok_t
 rspamd_task_log_metric_res (struct rspamd_task *task,
 		struct rspamd_log_format *lf)
@@ -723,6 +746,8 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	gpointer k, v;
 	rspamd_fstring_t *symbuf;
 	struct symbol *sym;
+	GPtrArray *sorted_symbols;
+	guint i;
 
 	mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
@@ -753,9 +778,16 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 		case RSPAMD_LOG_SYMBOLS:
 			symbuf = rspamd_fstring_sized_new (128);
 			g_hash_table_iter_init (&it, mres->symbols);
+			sorted_symbols = g_ptr_array_sized_new (g_hash_table_size (mres->symbols));
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
-				sym = (struct symbol *) v;
+				g_ptr_array_add (sorted_symbols, v);
+			}
+
+			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_sym);
+
+			for (i = 0; i < sorted_symbols->len; i ++) {
+				sym = g_ptr_array_index (sorted_symbols, i);
 
 				if (first) {
 					rspamd_printf_fstring (&symbuf, "%s", sym->name);
@@ -782,6 +814,8 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 
 				first = FALSE;
 			}
+
+			g_ptr_array_free (sorted_symbols, TRUE);
 
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)rspamd_fstring_free,

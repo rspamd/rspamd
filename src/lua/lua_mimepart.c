@@ -226,7 +226,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 static struct mime_text_part *
 lua_check_textpart (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{textpart}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{textpart}");
 	luaL_argcheck (L, ud != NULL, 1, "'textpart' expected");
 	return ud ? *((struct mime_text_part **)ud) : NULL;
 }
@@ -234,7 +234,7 @@ lua_check_textpart (lua_State * L)
 static struct mime_part *
 lua_check_mimepart (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{mimepart}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{mimepart}");
 	luaL_argcheck (L, ud != NULL, 1, "'mimepart' expected");
 	return ud ? *((struct mime_part **)ud) : NULL;
 }

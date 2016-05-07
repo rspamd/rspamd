@@ -72,7 +72,7 @@ rspamd_mempool_t *regexp_static_pool = NULL;
 static struct rspamd_lua_regexp *
 lua_check_regexp (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{regexp}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{regexp}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'regexp' expected");
 	return ud ? *((struct rspamd_lua_regexp **)ud) : NULL;

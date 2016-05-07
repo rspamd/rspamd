@@ -63,7 +63,7 @@ static const struct luaL_reg eventlib_m[] = {
 struct lua_session_udata *
 lua_check_session (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{session}");
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{session}");
 	luaL_argcheck (L, ud != NULL, 1, "'session' expected");
 	return ud ? *((struct lua_session_udata **)ud) : NULL;
 }
@@ -71,7 +71,7 @@ lua_check_session (lua_State * L)
 struct rspamd_async_event *
 lua_check_event (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{event}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{event}");
 	luaL_argcheck (L, ud != NULL, 1, "'event' expected");
 	return ud ? *((struct rspamd_async_event **)ud) : NULL;
 }
