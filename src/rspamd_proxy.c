@@ -120,6 +120,7 @@ struct rspamd_proxy_backend_connection {
 	struct upstream *up;
 	struct rspamd_http_connection *backend_conn;
 	ucl_object_t *results;
+	const gchar *err;
 	struct rspamd_proxy_session *s;
 	gint backend_sock;
 	enum rspamd_backend_flags flags;
@@ -661,7 +662,7 @@ proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 		}
 		else {
 			lua_pushstring (L, conn->name);
-			lua_pushstring (L, "no results");
+			lua_pushstring (L, conn->err ? conn->err : "unknown error");
 			lua_settable (L, -3);
 		}
 	}
@@ -815,9 +816,15 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 	struct rspamd_proxy_session *session;
 
 	session = bk_conn->s;
-	msg_info_session ("abnormally closing connection from backend: %s, error: %s",
-		rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
-		err->message);
+	msg_info_session ("abnormally closing connection from backend: %s:%s, "
+			"error: %e",
+			bk_conn->name,
+			rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
+			err);
+
+	if (err) {
+		bk_conn->err = rspamd_mempool_strdup (session->pool, err->message);
+	}
 
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
@@ -834,9 +841,13 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
 			-1, msg->body_buf.begin, msg->body_buf.len)) {
-		msg_warn_session ("cannot parse results from the mirror backend %s",
-				bk_conn->name);
+		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
+				bk_conn->name,
+				rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)));
+		bk_conn->err = "cannot parse ucl";
 	}
+
+	msg_info_session ("finished mirror connection to %s", bk_conn->name);
 
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
@@ -1057,6 +1068,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 	}
 	else {
+		msg_info_session ("finished master connection");
 		proxy_backend_close_connection (session->master_conn);
 		REF_RELEASE (session);
 	}
