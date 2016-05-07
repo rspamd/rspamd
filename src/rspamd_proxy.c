@@ -494,6 +494,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 	ctx->cfg = cfg;
 	ctx->lua_state = cfg->lua_state;
+	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -555,7 +556,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 static void
 proxy_backend_close_connection (struct rspamd_proxy_backend_connection *conn)
 {
-	if (conn) {
+	if (conn && !(conn->flags & RSPAMD_BACKEND_CLOSED)) {
 		if (conn->backend_conn) {
 			rspamd_http_connection_reset (conn->backend_conn);
 			rspamd_http_connection_unref (conn->backend_conn);
@@ -644,6 +645,11 @@ proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 		ucl_object_push_lua (L, session->master_conn->results, true);
 		lua_settable (L, -3);
 	}
+	else {
+		lua_pushstring (L, "master");
+		lua_pushstring (L, "no results");
+		lua_settable (L, -3);
+	}
 
 	for (i = 0; i < session->mirror_conns->len; i ++) {
 		conn = g_ptr_array_index (session->mirror_conns, i);
@@ -651,6 +657,11 @@ proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 		if (conn->results) {
 			lua_pushstring (L, conn->name);
 			ucl_object_push_lua (L, conn->results, true);
+			lua_settable (L, -3);
+		}
+		else {
+			lua_pushstring (L, conn->name);
+			lua_pushstring (L, "no results");
 			lua_settable (L, -3);
 		}
 	}
@@ -673,6 +684,11 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	gint cbref;
 	struct rspamd_proxy_backend_connection *conn;
 
+	for (i = 0; i < session->ctx->cmp_refs->len; i ++) {
+		cbref = g_array_index (session->ctx->cmp_refs, gint, i);
+		proxy_call_cmp_script (session, cbref);
+	}
+
 	if (session->master_conn) {
 		proxy_backend_close_connection (session->master_conn);
 	}
@@ -684,11 +700,6 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	if (session->client_conn) {
 		rspamd_http_connection_reset (session->client_conn);
 		rspamd_http_connection_unref (session->client_conn);
-	}
-
-	for (i = 0; i < session->ctx->cmp_refs->len; i ++) {
-		cbref = g_array_index (session->ctx->cmp_refs, gint, i);
-		proxy_call_cmp_script (session, cbref);
 	}
 
 	for (i = 0; i < session->mirror_conns->len; i ++) {
@@ -962,7 +973,6 @@ proxy_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 		rspamd_inet_address_to_string (session->client_addr), err->message);
 	/* Terminate session immediately */
 	proxy_backend_close_connection (session->master_conn);
-	session->master_conn = NULL;
 	REF_RELEASE (session);
 }
 
@@ -1048,7 +1058,6 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 	}
 	else {
 		proxy_backend_close_connection (session->master_conn);
-		session->master_conn = NULL;
 		REF_RELEASE (session);
 	}
 
@@ -1142,7 +1151,6 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
-	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
 	double_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
 
