@@ -1172,6 +1172,13 @@ rspamd_http_connection_steal_msg (struct rspamd_http_connection *conn)
 			msg->peer_key = NULL;
 		}
 		priv->msg = NULL;
+
+		/* We also might need to adjust body/body_buf */
+		if (msg->body_buf.begin > msg->body->str) {
+			memmove (msg->body->str, msg->body_buf.begin, msg->body_buf.len);
+			msg->body->len = msg->body_buf.len;
+			msg->body_buf.begin = msg->body->str;
+		}
 	}
 
 	return msg;
@@ -1192,6 +1199,8 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 	if (msg->body) {
 		new_msg->body = rspamd_fstring_new_init (msg->body->str,
 				msg->body->len);
+		new_msg->body_buf.begin = msg->body_buf.begin;
+		new_msg->body_buf.len = msg->body_buf.len;
 	}
 
 	if (msg->url) {
