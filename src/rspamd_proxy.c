@@ -392,7 +392,6 @@ rspamd_proxy_parse_script (rspamd_mempool_t *pool,
 	struct rspamd_rcl_section *section,
 	GError **err)
 {
-	const ucl_object_t *elt;
 	struct rspamd_proxy_ctx *ctx;
 	struct rspamd_rcl_struct_parser *pd = ud;
 	lua_State *L;
@@ -412,7 +411,7 @@ rspamd_proxy_parse_script (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	lua_script = ucl_object_tolstring (elt, &slen);
+	lua_script = ucl_object_tolstring (obj, &slen);
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
@@ -462,7 +461,8 @@ rspamd_proxy_parse_script (rspamd_mempool_t *pool,
 				rspamd_proxy_quark (),
 				EINVAL,
 				"cannot init lua parser script: "
-				"must return function");
+				"must return function, %s returned",
+				lua_typename (L, lua_type (L, -1)));
 		lua_settop (L, 0);
 
 		goto err;
@@ -493,6 +493,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 	ctx->mirrors = g_ptr_array_new ();
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 	ctx->cfg = cfg;
+	ctx->lua_state = cfg->lua_state;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1141,7 +1142,6 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
-	ctx->lua_state = worker->srv->cfg->lua_state;
 	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
 	double_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
