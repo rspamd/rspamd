@@ -607,7 +607,7 @@ lua_redis_make_request (lua_State *L)
 				luaL_unref (L, LUA_REGISTRYINDEX, cbref);
 			}
 
-			msg_err ("incorrect function invocation");
+			msg_err_task_check ("incorrect function invocation");
 		}
 	}
 	else if ((task = lua_check_task (L, 1)) != NULL) {
@@ -655,7 +655,7 @@ lua_redis_make_request (lua_State *L)
 			ret = TRUE;
 		}
 		else {
-			msg_err ("incorrect function invocation");
+			msg_err_task_check ("incorrect function invocation");
 		}
 	}
 
@@ -667,8 +667,13 @@ lua_redis_make_request (lua_State *L)
 
 		if (ud->ctx == NULL || ud->ctx->err) {
 			if (ud->ctx) {
+				msg_err_task_check ("cannot connect to redis: %s",
+						ud->ctx->errstr);
 				redisAsyncFree (ud->ctx);
 				ud->ctx = NULL;
+			}
+			else {
+				msg_err_task_check ("cannot connect to redis: unknown error");
 			}
 
 			REDIS_RELEASE (ctx);
@@ -713,7 +718,7 @@ lua_redis_make_request (lua_State *L)
 			ret = TRUE;
 		}
 		else {
-			msg_info ("call to redis failed: %s", ud->ctx->errstr);
+			msg_info_task_check ("call to redis failed: %s", ud->ctx->errstr);
 			redisAsyncFree (ud->ctx);
 			ud->ctx = NULL;
 			REDIS_RELEASE (ctx);
@@ -724,7 +729,6 @@ lua_redis_make_request (lua_State *L)
 	lua_pushboolean (L, ret);
 
 	if (ret) {
-
 		pctx = lua_newuserdata (L, sizeof (ctx));
 		*pctx = ctx;
 		rspamd_lua_setclass (L, "rspamd{redis}", -1);
@@ -936,6 +940,8 @@ lua_redis_connect (lua_State *L)
 				rspamd_inet_address_get_port (addr->addr));
 
 		if (ud->ctx == NULL || ud->ctx->err) {
+			msg_err_task_check ("cannot connect to redis: %s",
+					ud->ctx->errstr);
 			REDIS_RELEASE (ctx);
 			lua_pushboolean (L, FALSE);
 
@@ -1068,10 +1074,13 @@ lua_redis_add_cmd (lua_State *L)
 	guint nargs = 0;
 	gint cbref = -1, ret;
 	struct timeval tv;
+	struct rspamd_task *task;
 
 	if (ctx) {
 
 		if (ctx->async) {
+			task = ctx->d.async.task;
+
 			/* Async version */
 			if (lua_type (L, 2) == LUA_TSTRING) {
 				/* No callback version */
@@ -1121,7 +1130,8 @@ lua_redis_add_cmd (lua_State *L)
 				ctx->cmds_pending ++;
 			}
 			else {
-				msg_info ("call to redis failed: %s", sp_ud->c->ctx->errstr);
+				msg_info_task_check ("call to redis failed: %s",
+						sp_ud->c->ctx->errstr);
 				lua_pushboolean (L, 0);
 				lua_pushstring (L, sp_ud->c->ctx->errstr);
 				return 2;
