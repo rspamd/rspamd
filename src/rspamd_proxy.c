@@ -926,12 +926,14 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 }
 
 static void
-proxy_client_write_error (struct rspamd_proxy_session *session, gint code)
+proxy_client_write_error (struct rspamd_proxy_session *session, gint code,
+		const gchar *status)
 {
 	struct rspamd_http_message *reply;
 
 	reply = rspamd_http_new_message (HTTP_RESPONSE);
 	reply->code = code;
+	reply->status = rspamd_fstring_new_init (status, strlen (status));
 	rspamd_http_connection_write_message (session->client_conn,
 			reply, NULL, NULL, session, session->client_sock,
 			&session->ctx->io_tv, session->ctx->ev_base);
@@ -948,7 +950,8 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
 		err->message);
 	/* Terminate session immediately */
-	proxy_client_write_error (session, err->code);
+	proxy_client_write_error (session, err->code, err->message);
+	proxy_backend_close_connection (session->master_conn);
 }
 
 static gint
