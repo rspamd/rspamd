@@ -7,21 +7,21 @@ title: Rspamd+rmilter quick start
 
 ## Introduction
 
-This guide describes the main procedures to get and start working with rspamd. Further, we describe the following setup:
+This guide describes the main procedures to get and start working with rspamd. Furthermore, we describe the following setup:
 
-- postfix MTA setup;
-- rmilter setup;
-- redis cache setup;
-- webui setup with nginx proxy and letsencrypt certificates;
+- postfix MTA setup
+- rmilter setup
+- redis cache setup
+- webui setup with nginx proxy and letsencrypt certificates
 - dovecot with sieve plugin to sort mail and learn by moving messages to `Junk` folder
 
 For those who are planning migration from their SpamAssassin setups, it might be useful to check this [document](/doc/tutorials/migrate_sa.html)
 
 ## Preparation steps
 
-First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serve SMTP protocol for your domain. In this guide, we discuss setup of [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you could find details in the [integration document](/doc/integration.html).
+First of all, you need a working MTA (Mail Transfer Agent) which is able to serve the SMTP protocol for your domain. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
 
-We suppose that postfix is set using your OS packaging system (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
+We assume that you are installing Postfix with your OSs package manager (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
 <div><!-- Do not change the DOM structure -->
     <a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">
@@ -111,24 +111,24 @@ milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
 </code></pre>
 </div></div>
 
-Then you'd need dovecot installed. For APT based systems you might want to install the following packages:
+Then you will need to install dovecot. For APT based systems you might want to install the following packages:
 
 	apt-get install dovecot-imapd dovecot-postfix dovecot-sieve
 
-Configuration of dovecot is a bit out of the scope for this guide but you can always find many good guides at the [dovecot main site](http://dovecot.org).
+Configuration of dovecot is a bit out of the scope for this guide but you can find many good guides at the [dovecot main site](http://dovecot.org).
 
-To setup TLS for your mail system, we'd recommend to use [letsencrypt](https://letsencrypt.org) certificates as they are free to use and convenient for managing. To get such a certificate for your domain you need allow letsencrypt authority to check your domain. Unfortunately, the most common case is to have `HTTP` port opened for your domain. For example, if you need to get certificate for your MTA named `mail.example.com` then you need that to control port 80 on the host assoctiated with this name.
+To setup TLS for your mail system, we recommend using certificates issued by [letsencrypt](https://letsencrypt.org) as they are free to use and convenient to manage. To get such a certificate for your domain you need to allow letsencrypt to check your domain. Unfortunately, the most common case is to have `HTTP` port opened for your domain. For example, if you want to get a certificate for your MTA named `mail.example.com` then you need `mail.example.com` to control port 80 on the host associated with this domain.
 
 
 ## TLS Setup
 
-In this guide, we assume that all services have the same certificate which might not be desired if you need more level of security. However, for the most of purposes it is enough. First of all, install `letsencrypt` tool and obtain certificate for your domain. There is a good [guide](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-14-04) that describes the overall procedure for nginx web server. Since we suggest using nginx to proxy webui requests, then you might use the following guide for your setup. You might also want to use the same certificate and private key in postfix and dovecot (as described above).
+In this guide, we assume that all services have the same certificate which might not be desired if you want greater levels of security. However, for most purposes it is sufficient. First of all, install the `letsencrypt` tool and obtain the certificate for your domain. There is a good [guide here](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-14-04) which describes the overall procedure for nginx web server. Since we suggest using nginx to proxy webui requests, then you might use that guide for your setup. You might also want to use the same certificate and private key in postfix and dovecot (as described above).
 
 ## Caching setup
 
 Both rspamd and rmilter can use [redis](https://redis.io) for caching. Rmilter uses redis for the following features:
 
-- greylisting (delaying of the suspicious emails);
+- greylisting (delaying of suspicious emails)
 - rate limits
 - storing reply message IDs to avoid certain checks for replies to our own messages
 
@@ -140,23 +140,23 @@ Rspamd uses redis as well:
 
 Installation of redis is quite straightforward: install it using packages, start it with the default settings (it should listen on local interface using port 6379) and you are done. You might also want to limit memory used by redis at some sane value.
 
-Note that for the moment by default stable releases of redis listen for connections from all the network interfaces. It's dangerous and in most cases should be limited to loopback interfaces with configuration directive:
+Note that for the moment by default stable releases of redis listen for connections from all network interfaces. This is potentially dangerous and in most cases should be limited to the loopback interfaces, with the following configuration directive:
 
 	bind 127.0.0.1 ::1
 
 ## Rmilter setup
 
-Now, when you are done with postfix/dovecot/redis initial setup, it might be a good idea to setup rmilter. Rmilter is used to link postfix (or sendmail) with rspamd. It can alter messages, change topic, reject spam, perform greylisting, check rate limits and even sign messages for authorized users/networks with DKIM signatures.
+When you are done with postfix/dovecot/redis initial setup, it might be a good idea to setup rmilter. Rmilter is used to link postfix (or sendmail) with rspamd. It can alter messages, change topic, reject spam, perform greylisting, check rate limits and even sign messages for authorized users/networks with DKIM signatures.
 
-To install rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of rspamd. With the default configuration, rmilter will use redis and rspamd on the local machine. You might want to change the bind settings as the default settings assume using of the unix sockets which might not work in some circumstances. To use TCP sockets for rmilter, you might want to change your `/etc/rmilter.conf` altering `bind_socket` option according to your postfix setup:
+To install rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of rspamd. With the default configuration, rmilter will use redis and rspamd on the local machine. You might want to change the bind settings as the default settings the use of unix sockets which might not work in some circumstances. To use TCP sockets for rmilter, you might want to change your `/etc/rmilter.conf` altering `bind_socket` option according to your postfix setup:
 
 	bind_socket = inet:9900@127.0.0.1
 
-For advanced setup, please check the [rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have systemd-less system, then you can check rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
+For advanced setup, please check the [rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have a systemd-less system, then you can check rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
 
 ## Rspamd installation
 
-Download process is described in the [downloads page](/downloads.html) where you coould find how to obtain rspamd, how to install it in your system, and, alternatively, how to build rspamd from the sources.
+The download process is described in the [downloads page](/downloads.html) where you can find how to obtain rspamd, how to install it in your system, and, alternatively, how to build rspamd from source.
 
 ## Running Rspamd
 
@@ -201,28 +201,28 @@ To start once:
 
 ## Configuring Rspamd
 
-Though Rspamd's default config aims to be useful for most purposes you may wish to make some adjustments to it to suit your environment/tastes.
+Though Rspamd's default config aims to be useful for most purposes you may wish to make some adjustments to suit your environment/tastes.
 
-There are some different approaches you could take to this which suffer similar drawbacks:
+There are some different approaches you can take to this:
 
-1. Is to modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade- and may prompt you to merge changes or install these files with an added extension depending on your platform.
+1. Modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade - and may prompt you to merge changes or install these files with an added extension depending on your platform.
 
-2. Is to instead create an `rspamd.conf.local` and/or `rspamd.conf.local.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter config- `rspamd.conf.local` adds or _merges_ config elements (and is useful for example for setting custom metrics) while `rspamd.conf.local.override` adds or _replaces_ config elements (and is useful for example for configuring workers or RBLs).
+2. Create, instead, an `rspamd.conf.local` and/or `rspamd.conf.local.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter the configuration - `rspamd.conf.local` adds or _merges_ config elements (and is useful, for example, for setting custom metrics) while `rspamd.conf.local.override` adds or _replaces_ config elements (and is useful, for example, for configuring workers or RBLs).
 
-3. For each individual configuration file shipped with rspamd, there are two special includes (this is available from **rspamd 1.2**):
+3. For each individual configuration file shipped with rspamd, there are two special includes (available from **rspamd version 1.2 onwards**):
 
     .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
     .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
 
-Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in rspamd configuration.
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the configuration.
 
-For example, let's override some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
+For example, let's change some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
 
     symbol "BLAH" {
         score = 20.0;
     }
 
-We can also use override file, for example, let's redefine actions and set more restrictive `reject` score. For these purposes, we create `etc/rspamd/override.d/metrics.conf` with the following content:
+We can also use an override file. For example, let's redefine actions and set a more restrictive `reject` score. To do this, we create `etc/rspamd/override.d/metrics.conf` with the following content:
 
     actions {
       reject = 150;
@@ -230,17 +230,17 @@ We can also use override file, for example, let's redefine actions and set more 
       greylist = 4;
     }
 
-You need to set the complete objects to redefine the existing ones. For example, you **cannot** write something like
+You need to define complete objects to override existing ones. For example, you **cannot** write something like
 
     actions {
       reject = 150;
     }
 
-as this will set all other actions undefined.
+as this will set the other actions to be undefined.
 
 ### Setting listening interface
 
-Rspamd's normal worker will by default listen on all interfaces on port 11333. If you're running Rspamd on the same machine as your mailer (or whatever will be querying it) you might want to set this to 'localhost' instead.
+Rspamd's normal worker will, by default, listen on all interfaces on port 11333. If you're running Rspamd on the same machine as your mailer (or whatever will be querying it) you might want to set this to 'localhost' instead.
 
 This is configured in `rspamd.conf` or `rspamd.sysvinit.conf` on Debian Wheezy & Ubuntu. The config to be modified is shown below (`*` should be replaced with whatever address you would prefer to listen on).
 
@@ -251,29 +251,29 @@ worker {
 }
 {% endhighlight %}
 
-If you plan to leave this as is you may wish to use a firewall to restrict access to your own machines.
+If you plan to leave this as is you may wish to use a firewall to restrict access to your machine.
 
-### Setting controller password
+### Setting the controller password
 
-Rspamd requires a password when queried from non-trusted IPs except for scanning messages which is unrestricted (the default config trusts the loopback interface). This is configured in `worker-controller.inc`. The config to be modified is shown below (replace 'q1' with your chosen password):
+Rspamd requires a password when queried from non-trusted IPs, except for scanning messages which is unrestricted (the default config trusts the loopback interface). This is configured in the file `worker-controller.inc`. The config to be modified is shown below (replace 'q1' with your chosen password):
 
 `password = "q1";`
 
-Optionally you may set `enable_password` - if set, data-changing operations (such as training bayes or fuzzy storage) will require this password. For example:
+Optionally you may set `enable_password` - if set, data-changing operations (such as Bayes training or fuzzy storage) will require this password. For example:
 
 `enable_password = "q2";`
 
-Moreover, you can store encrypted password for better security. To generate such a password just type
+Moreover, you can store an encrypted password for better security. To generate such a password just type
 
 	$ rspamd --encrypt-password
 	Enter passphrase:
 	$1$4mqeynj3st9pb7cgbj6uoyhnyu3cp8d3$59y6xa4mrihaqdw3tf5mtpzg4k7u69ypebc3yba8jdssoh39x16y
 
-Then you can copy this string and store it in the configuration file. Rspamd uses [PBKDF2](http://en.wikipedia.org/wiki/PBKDF2) algorithm that makes it very hard to brute-force this password even if it has been compromised.
+Then you can copy this string and store it in the configuration file. Rspamd uses the [PBKDF2](http://en.wikipedia.org/wiki/PBKDF2) algorithm that makes it very hard to brute-force this password even if it has been compromised.
 
-### Setting up webui
+### Setting up the webui
 
-Webui is managed by a controller worker but you might want to proxy its requests using nginx, for example, for adding `TLS` support. Here is a minimal setup required for nginx to do that:
+Webui is managed by a controller worker but you might want to proxy its requests using nginx, for example, to add `TLS` support. Here is a minimal setup required for nginx to do that:
 
 <div>
 <a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf">nginx.conf<i class="fa fa-caret-square-o-down fa-pull-right"></i></a><div id="nginx_cf" class="collapse collapse-block"><pre><code>
@@ -360,7 +360,7 @@ Alternatively, you could setup HTTP authentication in nginx itself.
 
 ## Setup redis statistics
 
-From version 1.1, it is also possible to specify redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
+From version 1.1, it is also possible to specify redis as a backend for statistics and caching of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learning and checking and, besides, is very fast. To setup redis, you could specify `redis` backend for a classifier (cache is set to the same servers accordingly).
 
 {% highlight ucl %}
 classifier {
@@ -386,7 +386,7 @@ For other possibilities please read the full [documentation](/doc/statistic.html
 
 ## Adjusting scores and actions
 
-Unlike SA where there are only `spam` and `ham` results, Rspamd supports 4 levels of messages called `actions`:
+Unlike SA where there are only `spam` and `ham` results, Rspamd supports five levels of results called `actions`:
 
 + `no action` - ham message
 + `greylist` - turn on adaptive greylisting (which is also used on higher levels)
@@ -394,13 +394,13 @@ Unlike SA where there are only `spam` and `ham` results, Rspamd supports 4 level
 + `rewrite subject` - rewrite subject to `*** SPAM *** original subject`
 + `reject` - ultimately reject message
 
-Each action can have its own score limit which could also be modified by users settings. Rspamd assumes the following order of actions scores: `no action` <= `greylist` <= `add header` <= `rewrite subject` <= `reject`.
+Each action can have its own score limit which can be modified by user settings. Rspamd assumes the following order of action scores: `no action` <= `greylist` <= `add header` <= `rewrite subject` <= `reject`.
 
-Actions are **NOT** performed by rspamd itself - they are just recommendations for MTA agent, for example, rmilter that performs the necessary actions, such as adding headers or rejecting mail.
+Actions are **NOT** performed by rspamd itself - they are just recommendations for the MTA agent (rmilter, for example) which performs the necessary actions, such as adding headers or rejecting mail.
 
-SA `spam` is almost equal to rspamd `add header` action in the default setup. With this action, users will be able to observe messages in their `Junk` folder which is usually a desired behaviour.
+SA `spam` is almost equal to rspamd `add header` action in the default setup. With this action, users will be able to check for messages in their `Junk` or `Spam` folder which is usually a desired behaviour.
 
-Scores and action settings are defined in the `metric` section. To override for existing or add scores for new symbols, you can use `rspamd.conf.local` file. Here is an example of altering the `reject` action, changing the existing symbol and adding new symbol:
+Scores and action settings are defined in the `metric` section. To override existing settings, or add scores for new symbols, you can use the `rspamd.conf.local` file. Here is an example of altering the `reject` action, changing the existing symbol and adding new symbol:
 
 {% highlight ucl %}
 metric "default" {
@@ -419,9 +419,9 @@ metric "default" {
 }
 {% endhighlight %}
 
-Please mention, that this addition/rewriting logic is working for `metric` section only so far. For other sections you should use `rspamd.conf.override` file and redefine those sections completely.
+Please note that this addition/rewriting logic is only for the `metric` section; for other sections you should use `rspamd.conf.override` file and redefine those sections completely.
 
-Another note, the legacy syntax that you could observe in some default configuration files:
+Note also, the legacy syntax that you might find in some default configuration files:
 
 {% highlight ucl %}
 metric {
@@ -434,7 +434,7 @@ metric {
 }
 {% endhighlight %}
 
-is equal to the modern syntax:
+is equivalent to the modern syntax:
 
 {% highlight ucl %}
 metric "default" {
@@ -446,13 +446,13 @@ metric "default" {
 
 ## Configuring maps
 
-Another feature supported in Rspamd is maps support. Maps are lists of some values, for example, domain names or ip/networks listed in some external file or by HTTP that are periodically monitored by Rspamd and reloaded in case of updates. This technique is useful for writing your own rules, whitelisting/blacklistin some networks and so on. The important difference of maps is that no rspamd restart is required when those lists are changed. Maps are defined as `URI` strings:
+Another feature of Rspamd is maps support. Maps are lists of values, for example, domain names or ip/networks listed in an external file or by HTTP that are periodically monitored by Rspamd and reloaded in case of updates. This technique is useful for writing your own rules, whitelisting or blacklisting some networks and so on. The important difference with maps is that rspamd restart is not required when those lists are changed. Maps are defined as `URI` strings:
 
 * `http://example.com/file.map` - HTTP map (server should respect `If-Modified-Since` header to avoid unnecessary updates)
 * `file:///path/to/map` - file map
 * `/path/to/map` - alternative syntax for file map
 
-Within maps you can use whitespaces or comments. For example, here is an example of ip/network map:
+Within maps you can use whitespace or comments. For example, here is an example of ip/network map:
 
     # Example map
     127.0.0.1 # localhost
@@ -498,7 +498,7 @@ Common use-cases for `rspamc` include:
     rspamc file.eml
     rspamc directory1/ directory2/*.eml
 
-* Training bayesian classifier
+* Training the Bayesian classifier
 
     rspamc learn_spam < file.eml
     rspamc learn_ham file.eml
@@ -509,11 +509,11 @@ Common use-cases for `rspamc` include:
     rspamc -f 1 -w 1 fuzzy_add file.eml
     rspamc -f 2 fuzzy_del file2.eml
 
-* Acting as a local delivery agent (read in the [integration document](/doc/integration.html))
+* Acting as a local delivery agent (read the [integration document](/doc/integration.html))
 
-### Using rspamadm command
+### The rspamadm command
 
-Rspamadm is the new command that is intended to manage rspamd directly. It comes with the embedded help that could be displayed by typing
+Rspamadm is a new utility that is intended to manage rspamd directly. It comes with embedded help that can be displayed by typing:
 
     % rspamadm help
     Rspamadm 1.1.0
@@ -534,7 +534,7 @@ For example, it is possible to get help for a specific configuration option by t
 
 ### Using mail system utilities
 
-It is also useful to have a simple `Sieve` script to place all messages marked as spam to the `Junk` folder. Here is an example of such a script (~/.dovecot.sieve):
+It is also useful to have a simple `Sieve` script to place all messages marked as spam in the `Junk` folder. Here is an example of such a script (~/.dovecot.sieve):
 
 {% highlight nginx %}
 require ["fileinto"];
@@ -544,14 +544,14 @@ if header :is "X-Spam" "Yes" {
 }
 {% endhighlight %}
 
-You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend to use `/etc/aliases` for these purposes and `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `thunderbird` MUA). The desired aliases could be the following:
+You can also setup rspamc to learn via passing messages to a certain email address. I recommend using `/etc/aliases` for these purposes and `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `Thunderbird` MUA). The desired aliases could be the following:
 
 	learn-spam123: "| rspamc learn_spam"
 	learn-ham123: "| rspamc learn_ham"
 
 You'd need some less predictable aliases to avoid sending messages to such addresses by some adversary or just by a mistake to prevent statistics pollution.
 
-There is also an addon for Thunderbird MUA written by Alexander Moisseev to visualise rspamd stats. You can download it form its [homepage](https://addons.mozilla.org/en-GB/thunderbird/addon/rspamd-spamness/). You'd need to add extended spam headers by rmilter to make the whole setup working which could be done by adding the following line to `rmilter.conf`:
+There is also an addon for Thunderbird MUA written by Alexander Moisseev to visualise rspamd stats. You can download it from its [homepage](https://addons.mozilla.org/en-GB/thunderbird/addon/rspamd-spamness/). You'd need to add extended spam headers with rmilter to make the whole setup work. This could be done by adding the following line to `rmilter.conf`:
 
 {% highlight ucl %}
 spamd {
@@ -560,10 +560,10 @@ spamd {
 }
 {% endhighlight %}
 
-Here is the sample look of this addon:
+Here is a screenshot of this addon in use:
 
 <img class="img-responsive" src="/img/thunderbird_rspamd.png">
 
 ### Using the WebUI
 
-Rspamd has a built-in WebUI supporting setting metric actions & scores; training bayes & scanning messages- for more information see the [webui documentation](https://rspamd.com/webui).
+Rspamd has a built-in WebUI which supports setting metric actions and scores; Bayes training and scanning messages - for more information see the [webui documentation](https://rspamd.com/webui).
