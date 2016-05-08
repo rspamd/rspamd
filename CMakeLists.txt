@@ -474,6 +474,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 		"${CMAKE_SOURCE_DIR}/src/libstat"
 		"${CMAKE_SOURCE_DIR}/src/libcryptobox"
 		"${CMAKE_SOURCE_DIR}/contrib/libucl"
+		"${CMAKE_SOURCE_DIR}/contrib/linenoise"
 		"${CMAKE_SOURCE_DIR}/contrib/uthash"
 		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 		"${CMAKE_SOURCE_DIR}/contrib/libottery"
@@ -1108,6 +1109,7 @@ ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(contrib/aho-corasick)
 ADD_SUBDIRECTORY(contrib/lpeg)
+ADD_SUBDIRECTORY(contrib/linenoise)
 
 IF(ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_SUBDIRECTORY(clang-plugin)
