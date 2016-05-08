@@ -37,7 +37,7 @@ local hash = require 'rspamd_cryptobox_hash'
 local function make_key(goop)
   local h = hash.create()
   h:update(goop)
-  local key = h:base32()
+  local key = h:base32():sub(1, 20)
   key = settings['key_prefix'] .. key
   return key
 end
