@@ -353,7 +353,6 @@ struct rspamd_config {
 	gint clock_res;                                 /**< resolution of clock used							*/
 
 	GList *maps;                                    /**< maps active										*/
-	rspamd_mempool_t *map_pool;                     /**< static maps pool									*/
 	gdouble map_timeout;                            /**< maps watch timeout									*/
 
 	struct symbols_cache *cache;                    /**< symbols cache object								*/

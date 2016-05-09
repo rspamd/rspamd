@@ -4,6 +4,7 @@
 #include "config.h"
 #include <event.h>
 
+#include "ucl.h"
 #include "mem_pool.h"
 #include "radix.h"
 #include "dns.h"
@@ -18,9 +19,9 @@ struct map_cb_data;
 /**
  * Callback types
  */
-typedef gchar * (*map_cb_t)(rspamd_mempool_t *pool, gchar *chunk, gint len,
+typedef gchar * (*map_cb_t)(gchar *chunk, gint len,
 	struct map_cb_data *data, gboolean final);
-typedef void (*map_fin_cb_t)(rspamd_mempool_t *pool, struct map_cb_data *data);
+typedef void (*map_fin_cb_t)(struct map_cb_data *data);
 
 /**
  * Common map object
@@ -56,6 +57,15 @@ struct rspamd_map* rspamd_map_add (struct rspamd_config *cfg,
 	void **user_data);
 
 /**
+ * Add map from ucl
+ */
+struct rspamd_map* rspamd_map_add_from_ucl (struct rspamd_config *cfg,
+	const ucl_object_t *obj,
+	map_cb_t read_callback,
+	map_fin_cb_t fin_callback,
+	void **user_data);
+
+/**
  * Start watching of maps by adding events to libevent event loop
  */
 void rspamd_map_watch (struct rspamd_config *cfg,
@@ -77,50 +87,50 @@ typedef void (*insert_func) (gpointer st, gconstpointer key,
 /**
  * Radix list is a list like ip/mask
  */
-gchar * rspamd_radix_read (rspamd_mempool_t *pool,
+gchar * rspamd_radix_read (
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final);
-void rspamd_radix_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_radix_fin (struct map_cb_data *data);
 
 /**
  * Host list is an ordinal list of hosts or domains
  */
-gchar * rspamd_hosts_read (rspamd_mempool_t *pool,
+gchar * rspamd_hosts_read (
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final);
-void rspamd_hosts_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_hosts_fin (struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
  */
-gchar * rspamd_kv_list_read (rspamd_mempool_t *pool,
+gchar * rspamd_kv_list_read (
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final);
-void rspamd_kv_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_kv_list_fin (struct map_cb_data *data);
 
 /**
  * Regexp list is a list of regular expressions
  */
 struct rspamd_regexp_map;
 
-gchar * rspamd_regexp_list_read (rspamd_mempool_t *pool,
+gchar * rspamd_regexp_list_read (
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final);
-void rspamd_regexp_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_regexp_list_fin (struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
 gchar *
-rspamd_parse_kv_list (rspamd_mempool_t * pool,
+rspamd_parse_kv_list (
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
