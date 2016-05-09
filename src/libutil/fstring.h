@@ -153,4 +153,12 @@ rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
 rspamd_fstring_t * rspamd_fstring_grow (rspamd_fstring_t *str,
 		gsize needed_len) G_GNUC_WARN_UNUSED_RESULT;
 
+/**
+ * Copies ftok to zero terminated string (must be freed using g_free)
+ * @param src
+ * @return
+ */
+gchar *rspamd_ftokdup (const rspamd_ftok_t *src) G_GNUC_WARN_UNUSED_RESULT;
+
+
 #endif
