@@ -394,6 +394,7 @@ rspamadm_lua_run_repl (lua_State *L)
 	gchar *input;
 	gboolean is_multiline = FALSE;
 	GString *tb;
+	guint i;
 
 	for (;;) {
 		if (!is_multiline) {
@@ -435,11 +436,20 @@ rspamadm_lua_run_repl (lua_State *L)
 				is_multiline = FALSE;
 				linenoiseFree (input);
 				rspamadm_exec_input (L, tb->str);
+
+				/* Replace \n with ' ' for sanity */
+				for (i = 0; i < tb->len; i ++) {
+					if (tb->str[i] == '\n') {
+						tb->str[i] = ' ';
+					}
+				}
+
+				linenoiseHistoryAdd (tb->str);
 				g_string_free (tb, TRUE);
 			}
 			else {
 				g_string_append (tb, input);
-				g_string_append (tb, "\n");
+				g_string_append (tb, " \n");
 				linenoiseFree (input);
 			}
 		}
