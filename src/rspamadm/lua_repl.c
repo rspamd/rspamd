@@ -19,6 +19,9 @@
 #include "cryptobox.h"
 #include "printf.h"
 #include "lua/lua_common.h"
+#include "message.h"
+#include "task.h"
+#include "unix-std.h"
 #include "linenoise.h"
 #ifdef WITH_LUAJIT
 #include <luajit.h>
@@ -47,6 +50,40 @@ struct rspamadm_command lua_command = {
 		.help = rspamadm_lua_help,
 		.run = rspamadm_lua
 };
+
+/*
+ * Dot commands
+ */
+typedef void (*rspamadm_lua_dot_handler)(lua_State *L, gint argc, gchar **argv);
+struct rspamadm_lua_dot_command {
+	const gchar *name;
+	const gchar *description;
+	rspamadm_lua_dot_handler handler;
+};
+
+static void rspamadm_lua_help_handler (lua_State *L, gint argc, gchar **argv);
+static void rspamadm_lua_load_handler (lua_State *L, gint argc, gchar **argv);
+static void rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv);
+
+static struct rspamadm_lua_dot_command cmds[] = {
+	{
+		.name = "help",
+		.description = "shows help for commands",
+		.handler = rspamadm_lua_help_handler
+	},
+	{
+		.name = "load",
+		.description = "load lua file",
+		.handler = rspamadm_lua_load_handler
+	},
+	{
+		.name = "message",
+		.description = "scans message using specified callback: .message <callback_name> <file>...",
+		.handler = rspamadm_lua_message_handler
+	},
+};
+
+static GHashTable *cmds_hash = NULL;
 
 static GOptionEntry entries[] = {
 		{"script", 's', 0, G_OPTION_ARG_STRING_ARRAY, &scripts,
@@ -141,7 +178,7 @@ static void
 rspamadm_exec_input (lua_State *L, const gchar *input)
 {
 	GString *tb;
-	gint err_idx, i;
+	gint err_idx, i, cbref;
 	gchar outbuf[8192];
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -178,11 +215,174 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 
 	/* Print output */
 	for (i = err_idx + 1; i <= lua_gettop (L); i ++) {
-		lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
-		rspamd_printf ("%s\n", outbuf);
+		if (lua_isfunction (L, i)) {
+			lua_pushvalue (L, i);
+			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+			rspamd_printf ("local function: %d\n", cbref);
+		}
+		else {
+			lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
+			rspamd_printf ("%s\n", outbuf);
+		}
 	}
 
 	lua_settop (L, 0);
+}
+
+static void
+rspamadm_lua_help_handler (lua_State *L, gint argc, gchar **argv)
+{
+	guint i;
+	struct rspamadm_lua_dot_command *cmd;
+
+	if (argv[1] == NULL) {
+		/* Print all commands */
+		for (i = 0; i < G_N_ELEMENTS (cmds); i ++) {
+			rspamd_printf ("%s: %s\n", cmds[i].name, cmds[i].description);
+		}
+	}
+	else {
+		for (i = 1; argv[i] != NULL; i ++) {
+			cmd = g_hash_table_lookup (cmds_hash, argv[i]);
+
+			if (cmd) {
+				rspamd_printf ("%s: %s\n", cmds->name, cmds->description);
+			}
+			else {
+				rspamd_printf ("%s: no such command\n", argv[i]);
+			}
+		}
+	}
+}
+
+static void
+rspamadm_lua_load_handler (lua_State *L, gint argc, gchar **argv)
+{
+	guint i;
+	gboolean ret;
+
+	for (i = 1; argv[i] != NULL; i ++) {
+		ret = rspamadm_lua_load_script (L, argv[i]);
+		rspamd_printf ("%s: %sloaded\n", argv[i], ret ? "" : "NOT ");
+	}
+}
+
+static void
+rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv)
+{
+	gulong cbref;
+	gint err_idx, func_idx, i, j;
+	struct rspamd_task *task, **ptask;
+	gpointer map;
+	gsize len;
+	GString *tb;
+	gchar outbuf[8192];
+
+	if (argv[1] == NULL) {
+		rspamd_printf ("no callback is specified\n");
+		return;
+	}
+
+	if (rspamd_strtoul (argv[1], strlen (argv[1]), &cbref)) {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, cbref);
+	}
+	else {
+		lua_getglobal (L, argv[1]);
+	}
+
+	if (lua_type (L, -1) != LUA_TFUNCTION) {
+		rspamd_printf ("bad callback type: %s\n", lua_typename (L, lua_type (L, -1)));
+		return;
+	}
+
+	/* Save index to reuse */
+	func_idx = lua_gettop (L);
+
+	for (i = 2; argv[i] != NULL; i ++) {
+		map = rspamd_file_xmap (argv[i], PROT_READ, &len);
+
+		if (map == NULL) {
+			rspamd_printf ("cannot open %s: %s\n", argv[i], strerror (errno));
+		}
+		else {
+			task = rspamd_task_new (NULL, NULL);
+
+			if (!rspamd_task_load_message (task, NULL, map, len)) {
+				rspamd_printf ("cannot load %s\n", argv[i]);
+				rspamd_task_free (task);
+				munmap (map, len);
+				continue;
+			}
+
+			if (!rspamd_message_parse (task)) {
+				rspamd_printf ("cannot parse %s: %e\n", argv[i], task->err);
+				rspamd_task_free (task);
+				munmap (map, len);
+				continue;
+			}
+
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
+			lua_pushvalue (L, func_idx);
+			ptask = lua_newuserdata (L, sizeof (*ptask));
+			*ptask = task;
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+			if (lua_pcall (L, 1, LUA_MULTRET, err_idx) != 0) {
+				tb = lua_touserdata (L, -1);
+				rspamd_printf ("lua callback for %s failed: %v\n", argv[i], tb);
+				g_string_free (tb, TRUE);
+			}
+			else {
+				rspamd_printf ("lua callback for %s returned:\n", argv[i]);
+
+				for (j = err_idx + 1; j <= lua_gettop (L); j ++) {
+					lua_logger_out_type (L, j, outbuf, sizeof (outbuf));
+					rspamd_printf ("%s\n", outbuf);
+				}
+			}
+
+			rspamd_task_free (task);
+			munmap (map, len);
+			/* Pop all but the original function */
+			lua_settop (L, func_idx);
+		}
+	}
+
+	lua_settop (L, 0);
+}
+
+
+static gboolean
+rspamadm_lua_try_dot_command (lua_State *L, const gchar *input)
+{
+	struct rspamadm_lua_dot_command *cmd;
+	gchar **argv;
+
+	argv = g_strsplit_set (input + 1, " ", -1);
+
+	if (argv == NULL || argv[0] == NULL) {
+		if (argv) {
+			g_strfreev (argv);
+		}
+
+		return FALSE;
+	}
+
+	cmd = g_hash_table_lookup (cmds_hash, argv[0]);
+
+	if (cmd) {
+		cmd->handler (L, g_strv_length (argv), argv);
+		g_strfreev (argv);
+
+		return TRUE;
+	}
+
+	g_strfreev (argv);
+
+	return FALSE;
 }
 
 static void
@@ -198,6 +398,14 @@ rspamadm_lua_run_repl (lua_State *L)
 
 			if (input == NULL) {
 				return;
+			}
+
+			if (input[0] == '.') {
+				if (rspamadm_lua_try_dot_command (L, input)) {
+					linenoiseHistoryAdd (input);
+					linenoiseFree (input);
+					continue;
+				}
 			}
 
 			if (strcmp (input, "{{") == 0) {
@@ -241,6 +449,7 @@ rspamadm_lua (gint argc, gchar **argv)
 	GOptionContext *context;
 	GError *error = NULL;
 	gchar **elt;
+	guint i;
 	lua_State *L;
 
 	context = g_option_context_new ("lua - run lua interpreter");
@@ -293,6 +502,13 @@ rspamadm_lua (gint argc, gchar **argv)
 
 		histfile = hist_path->str;
 		g_string_free (hist_path, FALSE);
+	}
+
+	/* Init dot commands */
+	cmds_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+
+	for (i = 0; i < G_N_ELEMENTS (cmds); i ++) {
+		g_hash_table_insert (cmds_hash, (gpointer)cmds[i].name, &cmds[i]);
 	}
 
 	linenoiseHistorySetMaxLen (max_history);
