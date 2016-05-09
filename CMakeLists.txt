@@ -261,6 +261,8 @@ MACRO(FindLua)
 				PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
 				DOC "Lua library"
 			)
+		ELSE()
+			SET(WITH_LUAJIT 1)
 		ENDIF()
 	ELSE(ENABLE_LUAJIT MATCHES "ON")
 		MESSAGE(STATUS "Check for lua ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
@@ -474,6 +476,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 		"${CMAKE_SOURCE_DIR}/src/libstat"
 		"${CMAKE_SOURCE_DIR}/src/libcryptobox"
 		"${CMAKE_SOURCE_DIR}/contrib/libucl"
+		"${CMAKE_SOURCE_DIR}/contrib/linenoise"
 		"${CMAKE_SOURCE_DIR}/contrib/uthash"
 		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 		"${CMAKE_SOURCE_DIR}/contrib/libottery"
@@ -1108,6 +1111,7 @@ ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(contrib/aho-corasick)
 ADD_SUBDIRECTORY(contrib/lpeg)
+ADD_SUBDIRECTORY(contrib/linenoise)
 
 IF(ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_SUBDIRECTORY(clang-plugin)

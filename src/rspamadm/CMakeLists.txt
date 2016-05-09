@@ -9,6 +9,7 @@ SET(RSPAMADMSRC rspamadm.c
         confighelp.c
         stat_convert.c
         signtool.c
+        lua_repl.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
@@ -43,6 +44,7 @@ IF(ENABLE_HIREDIS MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamadm rspamd-hiredis)
 ENDIF()
 TARGET_LINK_LIBRARIES(rspamadm rspamd-actrie)
+TARGET_LINK_LIBRARIES(rspamadm rspamd-linenoise)
 
 IF (NOT DEBIAN_BUILD)
     SET_TARGET_PROPERTIES(rspamadm PROPERTIES VERSION ${RSPAMD_VERSION})
