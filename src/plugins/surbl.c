@@ -80,7 +80,7 @@ module_t surbl_module = {
 };
 
 static void
-exception_insert (gpointer st, gconstpointer key, gpointer value)
+exception_insert (gpointer st, gconstpointer key, gconstpointer value)
 {
 	GHashTable **t = st;
 	gint level = 0;
@@ -103,27 +103,27 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 	val = g_malloc (sizeof (rspamd_ftok_t));
 	val->begin = key;
 	val->len = strlen (key);
+
 	if (t[level] == NULL) {
 		t[level] = g_hash_table_new_full (rspamd_ftok_icase_hash,
 				rspamd_ftok_icase_equal,
 				g_free,
-				NULL);
+				g_free);
 	}
-	g_hash_table_insert (t[level], val, value);
+
+	g_hash_table_insert (t[level], val, g_strdup (value));
 }
 
 static gchar *
-read_exceptions_list (rspamd_mempool_t * pool,
-	gchar * chunk,
+read_exceptions_list (gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = rspamd_mempool_alloc0 (pool,
-				sizeof (GHashTable *) * MAX_LEVELS);
+		data->cur_data = g_malloc (sizeof (GHashTable *) * MAX_LEVELS);
 	}
-	return rspamd_parse_kv_list (pool,
+	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
 			   data,
@@ -133,7 +133,7 @@ read_exceptions_list (rspamd_mempool_t * pool,
 }
 
 static void
-fin_exceptions_list (rspamd_mempool_t * pool, struct map_cb_data *data)
+fin_exceptions_list (struct map_cb_data *data)
 {
 	GHashTable **t;
 	gint i;
@@ -145,11 +145,12 @@ fin_exceptions_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 				g_hash_table_destroy (t[i]);
 			}
 		}
+		g_free (t);
 	}
 }
 
 static void
-redirector_insert (gpointer st, gconstpointer key, gpointer value)
+redirector_insert (gpointer st, gconstpointer key, gconstpointer value)
 {
 	GHashTable *tld_hash = st;
 	const gchar *p = key, *begin = key;
@@ -200,8 +201,7 @@ redirector_item_free (gpointer p)
 }
 
 static gchar *
-read_redirectors_list (rspamd_mempool_t * pool,
-	gchar * chunk,
+read_redirectors_list (gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final)
@@ -217,17 +217,17 @@ read_redirectors_list (rspamd_mempool_t * pool,
 		data->cur_data = tld_hash;
 	}
 
-	return rspamd_parse_kv_list (pool,
+	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) redirector_insert,
+			   redirector_insert,
 			   "",
 			   final);
 }
 
 void
-fin_redirectors_list (rspamd_mempool_t * pool, struct map_cb_data *data)
+fin_redirectors_list (struct map_cb_data *data)
 {
 	GHashTable *tld_hash;
 

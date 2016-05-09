@@ -134,8 +134,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 
 /* Callbacks for reading json dynamic rules */
 static gchar *
-json_config_read_cb (rspamd_mempool_t * pool,
-	gchar * chunk,
+json_config_read_cb (gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final)
@@ -167,7 +166,7 @@ json_config_read_cb (rspamd_mempool_t * pool,
 }
 
 static void
-json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
+json_config_fin_cb (struct map_cb_data *data)
 {
 	struct config_json_buf *jb;
 	ucl_object_t *top;

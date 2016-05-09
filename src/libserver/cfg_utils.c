@@ -42,13 +42,11 @@ struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
 	GString *buf;
 };
-static gchar * rspamd_ucl_read_cb (rspamd_mempool_t * pool,
-	gchar * chunk,
+static gchar * rspamd_ucl_read_cb (gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final);
-static void rspamd_ucl_fin_cb (rspamd_mempool_t * pool,
-	struct map_cb_data *data);
+static void rspamd_ucl_fin_cb (struct map_cb_data *data);
 
 gboolean
 rspamd_parse_bind_line (struct rspamd_config *cfg,
@@ -1135,8 +1133,7 @@ rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 }
 
 static gchar *
-rspamd_ucl_read_cb (rspamd_mempool_t * pool,
-	gchar * chunk,
+rspamd_ucl_read_cb (gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final)
@@ -1157,7 +1154,7 @@ rspamd_ucl_read_cb (rspamd_mempool_t * pool,
 }
 
 static void
-rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_ucl_fin_cb (struct map_cb_data *data)
 {
 	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev =
 		data->prev_data;
@@ -1181,33 +1178,25 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 
 	checksum = XXH64 (cbdata->buf->str, cbdata->buf->len, 0);
-	if (data->map->checksum != checksum) {
-		/* New data available */
-		parser = ucl_parser_new (0);
-		if (!ucl_parser_add_chunk (parser, cbdata->buf->str,
+	/* New data available */
+	parser = ucl_parser_new (0);
+	if (!ucl_parser_add_chunk (parser, cbdata->buf->str,
 			cbdata->buf->len)) {
-			msg_err_config ("cannot parse map %s: %s",
-				data->map->uri,
+		msg_err_config ("cannot parse map %s: %s",
+				data->map->name,
 				ucl_parser_get_error (parser));
-			ucl_parser_free (parser);
-		}
-		else {
-			obj = ucl_parser_get_object (parser);
-			ucl_parser_free (parser);
-			it = NULL;
-
-			while ((cur = ucl_object_iterate (obj, &it, true))) {
-				ucl_object_replace_key (cbdata->cfg->rcl_obj, (ucl_object_t *)cur,
-						cur->key, cur->keylen, false);
-			}
-			ucl_object_unref (obj);
-			data->map->checksum = checksum;
-		}
+		ucl_parser_free (parser);
 	}
 	else {
-		msg_info_config ("do not reload map %s, checksum is the same: %d",
-			data->map->uri,
-			checksum);
+		obj = ucl_parser_get_object (parser);
+		ucl_parser_free (parser);
+		it = NULL;
+
+		while ((cur = ucl_object_iterate (obj, &it, true))) {
+			ucl_object_replace_key (cbdata->cfg->rcl_obj, (ucl_object_t *)cur,
+					cur->key, cur->keylen, false);
+		}
+		ucl_object_unref (obj);
 	}
 }
 
