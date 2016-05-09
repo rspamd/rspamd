@@ -1,14 +1,14 @@
 ---
 layout: doc_faq
-title: Rspamd frequently asked questions
+title: rspamd frequently asked questions
 ---
 
 # Frequently asked questions
 This document includes some questions and practical examples that are frequently asked by rspamd users.
 
 ## General questions
-### Where get help about rspamd
-The most convenient place for asking questions about rspamd is IRC channel _#rspamd_ in [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
+### Where to get help about rspamd
+The most convenient place for asking questions about rspamd is the IRC channel _#rspamd_ on [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
 
 ### I have systemd and rspamd won't start
 
@@ -31,9 +31,9 @@ systemctl status rspamd.socket
 ```
 
 ### How to figure out why rspamd process crashed
-Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following.
+Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following:
 
-First of all, you'd need to create a special directory for core files that will be allowed for writing for all users in the system:
+First of all, you need to create a special directory for core files that will be writeable by all users on the system:
 
 ```
 mkdir /coreland
@@ -46,7 +46,7 @@ For FreeBSD you can have either one core for all processes by setting:
 sysctl kern.corefile=/coreland/%N.core
 ```
 
-or a separated core for each crash (that includes PID of process):
+or a separate core for each crash (that includes PID of process):
 
 ```
 sysctl kern.corefile=/coreland/%N-%p.core
@@ -62,58 +62,57 @@ Additional settings:
 sysctl kernel.core_uses_pid = 1
 sysctl fs.suid_dumpable = 2
 ```
-first one added PID to core file name, and second allowed setuid processes to be dumped.
-A good idea is add this settings to `/etc/sysctl.conf` and then run `sysctl -p` for apply.
+The first one adds the PID to core file name, and the second allows setuid processes to be dumped. A good idea is to add these settings to `/etc/sysctl.conf` and then run `sysctl -p` to apply them.
 
-In case of distro with systemd (most mainstream Linux distros), there are additional settings.
-First, you need edit file `/etc/systemd/system.conf` and uncomment `DefaultLimitCORE` parameter and set it to `infinity` (`DefaultLimitCORE=infinity`) to enable systemd core dumps. After this, you need run `systemctl daemon-reload` to reread configuration followed by `systemstl daemon-reexec` to apply it.
+On a distro with systemd (most mainstream Linux distros), there are additional settings.
+First, you will need to edit the file `/etc/systemd/system.conf` and uncomment the `DefaultLimitCORE` parameter and set it to `infinity` (`DefaultLimitCORE=infinity`) to enable systemd core dumps. After this, you will need to run `systemctl daemon-reload` to reread the configuration followed by `systemstl daemon-reexec` to apply it.
 
-Then you need edit limit of coredumps for services. You should edit service unit and add parameter `LimitCORE=unlimited` to the `[Service]` section of unit (in theory, `DefaultLimitCORE` option is enough but in practice you may need to enforce `LimitCORE` for each service). A good practice is to add overrides to user file that is located in `/etc/systemd/system/` as the original unit-file will be replaced after upgrade.
+Then you will need to edit the limit of coredumps for services. You should edit the service unit and add the parameter `LimitCORE=unlimited` to the `[Service]` section of the unit. (In theory, the `DefaultLimitCORE` option is enough but in practice you may need to enforce `LimitCORE` for each service). A good practice is to add overrides to a user file that is located in `/etc/systemd/system/` as the original unit-file will be replaced after upgrade.
 
-After unit-file is changed you should run `systemctl daemon-reload` followed by `systemctl restart rmilter.service` or `systemctl restart rspamd.service`.
+After the unit file is changed you should run `systemctl daemon-reload` followed by `systemctl restart rmilter.service` or `systemctl restart rspamd.service`.
 
-In distributives with traditional SysV init you can use service init file, for example `/etc/init.d/rspamd` to permit dumping of core files by setting the appropriate resource limit. You need add line
+In distros with traditional SysV init you can use the service init file, for example `/etc/init.d/rspamd` to permit dumping of core files by setting the appropriate resource limit. You will need to add the following line
 
 ```
 ulimit -c unlimited
 ```
 
 just after the heading comment.
-In FreeBSD you can use `/usr/local/etc/rc.d/rspamd` file in the same way.
+On FreeBSD you can use the file `/usr/local/etc/rc.d/rspamd` in the same way.
 
-A good way to test core files setup is sending SIGILL signal to a process. For example, run `pkill --signal 4 rspamd` or `kill -s 4 <YOUR_PID>` and then check `/coreland` directory for a core dump.
+A good way to test the core files setup is sending a `SIGKILL` signal to a process. For example, run `pkill --signal 4 rspamd` or `kill -s 4 <YOUR_PID>` and then check the `/coreland` directory for a core dump.
 
-### Now I have too many core files, how to limit their amount
+### Now I have too many core files
 
-Rspamd can stop dumping cores upon reaching specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
+Rspamd can stop dumping cores upon reaching a specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
 
 ```ucl
 cores_dir = "/coreland/";
 max_cores_size = 1G;
 ```
 
-That will limit the joint amount of files in `/coreland/` folder to 1 gigabyte. After reaching this limit, rspamd will stop dumping core files. Rspamd cannot distinguish its own core files from other core files in a system. That is an inevitable limitation.
+That will limit the combined size of files in the `/coreland/` directory to 1 gigabyte. After reaching this limit, rspamd will stop dumping core files. (Please note that rspamd cannot distinguish its own core files from other core files in a system.)
 
-### What can I do with a core files
-In the most cases, it is enough to open core file with `gdb`  or other debugger, such as `lldb`:
+### What can I do with core files
+In most cases, it is enough to open core file with `gdb`  or another debugger, such as `lldb`:
 
 ```
 gdb `which rspamd` -c /coreland/rspamd.core
 lldb `which rspamd` -c /coreland/rspamd.core
 ```
 
-If a core file has been opened without errors then you can type `bt full` in debugger command line to get the full stack trace that caused this particular error.
+If a core file has been opened without errors then you can type `bt full` in the debugger command line to get the full stack trace that caused this particular error.
 
 ### Why can I have different results for the same message
-If your message is gains `reject` score, rspamd stops further checks to save some resources. However, some checks, such as network checks could still occur as they might be started before reaching this threshold for this message. Therefore, sometimes you might see different (but all more or equal to `reject` threshold) results for a same message. To avoid this behaviour you could set HTTP header
+If your message has gained a `reject` score, rspamd will stop further checks to save resources. However, some checks, such as network checks, could still occur as they might be started before reaching this threshold for the message. Therefore, sometimes you might see different (but all greater than or equal to the `reject` threshold) results for the same message. To avoid this behaviour you can set the HTTP header
 
 ```
 Pass: all
 ```
 
-when making request to rspamd (which is equal to `-p` flag for `rspamc` client).
+when making a request to rspamd (which is equal to `-p` flag for `rspamc` client).
 
-Another possible reason of different results is too low DNS timeouts or too low task timeout so asynchronous rules can't get results before killed by a timeout. To get help about the relevant options you can type the following commands:
+Another possible reason for different results is too low a DNS, or task, timeout setting so asynchronous rules can't get results before being killed by a timeout. To get help about the relevant options you can type the following commands:
 
 ```
 rspamadm confighelp options.DNS
@@ -121,21 +120,21 @@ rspamadm confighelp options.dns_max_requests
 rspamadm confighelp workers.normal.task_timeout
 ```
 
-and more general:
+and more generally:
 
 ```
 rspamadm confighelp -k timeout
 ```
 
 ### What is the difference between `rspamc` and `rspamadm`
-Rspamadm is administration tool that works with **local** rspamd daemon via unix socket and performs some management tasks. You could get help for this tool and all subtools by typing:
+rspamadm is an administration tool that works with the **local** rspamd daemon via a unix socket and performs management tasks. You can get help for this tool, and its options, by typing:
 
 ```
 rspamadm help
 rspamadm help <command>
 ```
 
-Rspamc is a client for rspamd remote daemon. It can talk with rspamd scanner process or rspamd controller process using HTTP (with optional encryption) protocol, get and fine-print the results. It can do such tasks as scanning, learning and getting statistics:
+rspamc is a client for an rspamd remote daemon. It can communicate with an rspamd scanner process or rspamd controller process using the HTTP (with optional encryption) protocol, getting and displaying the results. It can do tasks such as scanning, learning and getting statistics:
 
 ```
 rspamc message.eml # Scan a message
@@ -143,48 +142,46 @@ rspamc learn_spam message.eml # Learn message
 rspamc -f 1 -w 10 fuzzy_add message.eml # Add message to fuzzy storage
 ```
 
-### How rspamd support different characters sets
+### How does rspamd support different characters sets
 
-By default, rspamd converts all messages to `UTF-8`. This includes text parts (both `text/plain` and `text/html`), headers and MIME elements (boundaries, filenames). If there is no information of how to convert something to `UTF-8`, for example when there is no `charset` attribute in the `Content-Type` or if there are some broken `UTF-8` characters then rspamd treats this text as raw for safety considerations. The difference between raw and `UTF-8` texts is that for `UTF-8` texts it is possible to use unicode regular expressions by specifying `/U` flag. For raw texts, rspamd uses raw complementary expression which could lack some features.
+By default, rspamd converts all messages to `UTF-8` encoding. This includes text parts (both `text/plain` and `text/html`), headers and MIME elements (boundaries, filenames). If there is no information on how to convert something to `UTF-8` - for example, when there is no `charset` attribute in the `Content-Type` header or if there are some broken `UTF-8` characters - then rspamd treats this text as raw for safety considerations. The difference between raw and `UTF-8` text is that for `UTF-8` it is possible to use unicode regular expressions by specifying the `/U` flag. For raw texts, rspamd uses raw complementary expressions, which may lack some features.
 
-It is always safe to assume that everything will be in `utf-8`, even in the case of raw messages - you would just miss some particular features. There is also module called [chartable](https://rspamd.com/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and trying to guess if there is some obscuring attempt to mix characters sets.
+It is always safe to assume that everything will be encoded in `UTF-8`; even in the case of raw messages, you would just miss some particular features. There is also a module called [chartable](https://rspamd.com/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and tries to guess if there is an attempt to mix characters sets.
 
 ### Can I relearn messages for fuzzy storage or for statistics
 
-In case if you need to move some hash from one list (e.g. blacklist) to another one (e.g. whitelist), you need to call `rspamc fuzzy_del` command for the first list (lists are identified by number) followed by `rspamc fuzzy_add` command:
+In case you need to move a hash from one list (e.g. blacklist) to another (e.g. whitelist), you need to call the `rspamc fuzzy_del` command for the first list (lists are identified by number) followed by `rspamc fuzzy_add` command:
 
 ```
 rspamc -f 1 fuzzy_del message.eml
 rspamc -f 2 -w <weight> fuzzy_add message.eml
 ```
 
-If you need just to increase the score, then just call `fuzzy_add` with the score change. It is not possible to decrease score however.
+If you just need to increase a score, then call `fuzzy_add` with the score change. (It is not possible to decrease a score, however.)
 
-Statistics is a bit different. Rspamd keeps hashes of tokens learned in a special storage called `learn_cache`. If rspamd finds that this particular tokens combination has been already learned it performs the following:
+Statistics are treated a bit differently. rspamd keeps hashes of tokens learned in a special storage called the `learn_cache`. If rspamd finds that a particular token combination has been learned already it does the following:
 
-* if the class of tokens was the same (e.g. spam and spam) then rspamd just refuses to learn these tokens one more time
-* otherwise, rspamd performs so called `relearning`:
-    + scores in the current class are decreased for this tokens set;
-    + scores in the opposite class are increased for this tokens set;
-    + the class of tokens in the learn cache is updated accordingly.
+* if the class of tokens is the same (e.g. spam and spam) then rspamd just refuses to learn these tokens again
+* otherwise, rspamd performs so-called `relearning`:
+    + scores in the current class are decreased for this token set
+    + scores in the opposite class are increased for this token set
+    + the class of tokens in the learn cache is updated accordingly
 
-All these actions are performed automatically if `learn_cache` is enabled. It is highly recommended to use this logic since multiple learnings are quite bad for statistical module.
+All these actions are performed automatically if `learn_cache` is enabled. (It is highly recommended to enable this setting, as repeated learnings will affect the performance of the statistical module.)
 
 
-### Why some symbols have different scores for different messages
+### Why do some symbols have different scores for different messages
 
-Rspamd support so called `dynamic` symbols. The closest analogue in SA are multiple symbols that checks for some certain value (e.g. bayes probability). In rspamd it works in a more smoother way: the metric score is multiplied by some value (that is usually in range `[0..1]`) and added to the scan result. For example, bayes classifier adds score based on probability:
+rspamd supports so-called `dynamic` symbols. A metric score is multiplied by some value (that is usually in the range `[0..1]`) and added to the scan result. For example, the Bayes classifier adds a score based on probability:
 
-* if probability is close to `50%` then score is very close to 0;
-* if probability goes higher `[50% .. 75%]` then score slowly grows;
-* when the probability is closer to `90%` the symbol's score is close to 0.95 and on `100%` it is exactly 1.0;
+* if the probability is close to `50%` then the score is very close to 0
+* if the probability is higher `[50% .. 75%]` then the score increases gradually
+* when the probability is closer to `90%` the symbol's score is close to 0.95 and on `100%` it is exactly 1.0
 * this logic is reversed for HAM probability (from `50%` to `0%` spam probability)
 
-This allows to provide better fit between some rule's results and the desired score. Indeed, we should intuitively add higher scores for high probabilities and fairly low scores for lower probabilities.
+Many rspamd rules, such as `PHISHING` and fuzzy checks, use dynamic scoring.
 
-Many rspamd rules, such as `PHISHING` or fuzzy checks use this dynamic logic of scoring.
-
-### Can I check message on rspamd without rspamc
+### Can I check a message with rspamd without rspamc
 
 Yes: `curl --data-binary @- http://localhost:11333 < file.eml`.
 
@@ -200,18 +197,15 @@ Unlike SpamAssassin, rspamd **suggests** the desired action for a specific messa
 - `greylist`: delay message for a while
 - `no action`: pass message
 
-Rspamd itself **does not** alter a message, that is a task for MTA or any shim agent (e.g. [rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for end-user.
-
-### What are rspamd metrics
-Rspamd metrics is the concept of splitting results into different combinations. However, this concept was never used and so far there is only `default` metric that is supported by all clients I know. That's why you should consider another mechanisms to achieve this goal, for example, [user settings](https://rspamd.com/doc/configuration/settings.html).
+rspamd itself **does not** alter a message, that is a task for the MTA or any shim agent (e.g. [rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for the user.
 
 ### What are local and override config files
-Historically, rspamd provided configuration files that were desired for editing by hands. However, with the project development it has come clear that this idea does not fit very well: rspamd configuration influences the overall filtering quality, performance and other important metrics. Unfortunately, with the hand edited configuration files it is very hard to maintain these metrics up-to-date. Hence, I have decided to add two possibilities:
+Historically, rspamd provided user-editable configuration files. However, as the project developed, it became clear that this idea had drawbacks: rspamd configuration influences the overall filtering quality, performance and other important metrics and it was difficult to maintain local configurations with new releases of rspamd. Hence, I decided to add two possibilities:
 
 1. Override configurations
 2. Local configurations
 
-Override configuration (`etc/rspamd.conf.override`) is used to ultimately redefine the default values in rspamd. In this file, you redefine the **whole sections** of the default configuration. For example, if you have some module `example` defined in the default configuration as following:
+An override configuration (`etc/rspamd.conf.override`) is used to ultimately redefine the default values in rspamd. In this file, you can redefine **whole sections** of the default configuration. For example, if you have a module `example` defined in the default configuration as follows:
 
 ```ucl
 example {
@@ -220,7 +214,7 @@ example {
 }
 ```
 
-and then you decided to override `option2` and tried to add the following content to the `etc/rspamd.conf.override` file:
+and you wanted to override `option2` by adding the following to `etc/rspamd.conf.override`:
 
 ```ucl
 example {
@@ -228,7 +222,7 @@ example {
 }
 ```
 
-However, this might work unexpectedly: overrided config would have `example` section with a single key `option2` whilst `option1` will be missed. The global local file, namely, `rspamd.conf.local` has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or that things will be just ignored. The only exception from this rule is _metric_ section. So you could use something like:
+this might work unexpectedly: the new config would have an `example` section with a single key `option2`, while `option1` will be ignored. The global local file, namely, `rspamd.conf.local` has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or that things will be just ignored. The only exception from this rule is _metric_ section. So you could use something like:
 
 ```ucl
 metric "default" {
