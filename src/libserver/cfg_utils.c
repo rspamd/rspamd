@@ -658,7 +658,7 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 				G_DIR_SEPARATOR, "effective_tld_names.dat");
 
 		if (access (fpath->str, R_OK)) {
-			msg_warn_config ("url_tld option is not specified but %s is available,"
+			msg_info_config ("url_tld option is not specified but %s is available,"
 					" therefore this file is assumed as TLD file for URL"
 					" extraction", fpath->str);
 			cfg->tld_file = rspamd_mempool_strdup (cfg->cfg_pool, fpath->str);
