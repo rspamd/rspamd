@@ -147,12 +147,26 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
-	if (luaL_loadstring (L, input) != 0) {
-		rspamd_fprintf (stderr, "cannot load string %s\n",
-				input);
+	/* First try return + input */
+	tb = g_string_sized_new (strlen (input) + sizeof ("return "));
+	rspamd_printf_gstring (tb, "return %s", input);
+
+	if (luaL_loadstring (L, tb->str) != 0) {
+		/* Reset stack */
 		lua_settop (L, 0);
-		return;
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+		/* Try with no return */
+		if (luaL_loadstring (L, input) != 0) {
+			rspamd_fprintf (stderr, "cannot load string %s\n",
+					input);
+			g_string_free (tb, TRUE);
+			lua_settop (L, 0);
+			return;
+		}
 	}
+
+	g_string_free (tb, TRUE);
 
 	if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
 		tb = lua_touserdata (L, -1);
@@ -163,7 +177,7 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 	}
 
 	/* Print output */
-	for (i = err_idx; i < lua_gettop (L); i ++) {
+	for (i = err_idx + 1; i <= lua_gettop (L); i ++) {
 		lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
 		rspamd_printf ("%s\n", outbuf);
 	}
@@ -194,6 +208,7 @@ rspamadm_lua_run_repl (lua_State *L)
 			}
 
 			rspamadm_exec_input (L, input);
+			linenoiseHistoryAdd (input);
 			linenoiseFree (input);
 			lua_settop (L, 0);
 		}
