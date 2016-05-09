@@ -207,7 +207,7 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 
 	if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
 		tb = lua_touserdata (L, -1);
-		rspamd_fprintf (stderr, "call failed: %v", tb);
+		rspamd_fprintf (stderr, "call failed: %v\n", tb);
 		g_string_free (tb, TRUE);
 		lua_settop (L, 0);
 		return;
@@ -241,6 +241,9 @@ rspamadm_lua_help_handler (lua_State *L, gint argc, gchar **argv)
 		for (i = 0; i < G_N_ELEMENTS (cmds); i ++) {
 			rspamd_printf ("%s: %s\n", cmds[i].name, cmds[i].description);
 		}
+
+		rspamd_printf ("{{: start multiline input\n");
+		rspamd_printf ("}}: end multiline input\n");
 	}
 	else {
 		for (i = 1; argv[i] != NULL; i ++) {
