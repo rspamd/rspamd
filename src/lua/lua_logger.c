@@ -509,7 +509,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 
 				if (map) {
 					if (map->map) {
-						uid = map->map->pool->tag.uid;
+						uid = map->map->tag;
 					}
 					else {
 						uid = "embedded";

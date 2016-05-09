@@ -271,7 +271,7 @@ lua_config_add_kv_map (lua_State *L)
 
 
 static gchar *
-lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
+lua_map_read (gchar *chunk, gint len,
 	struct map_cb_data *data,
 	gboolean final)
 {
@@ -301,10 +301,13 @@ lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
 }
 
 static void
-lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
+lua_map_fin (struct map_cb_data *data)
 {
 	struct lua_map_callback_data *cbdata;
 	struct rspamd_lua_map **pmap;
+	struct rspamd_map *map;
+
+	map = data->map;
 
 	if (data->prev_data) {
 		data->prev_data = NULL;
@@ -314,12 +317,12 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		cbdata = (struct lua_map_callback_data *)data->cur_data;
 	}
 	else {
-		msg_err_pool ("no data read for map");
+		msg_err_map ("no data read for map");
 		return;
 	}
 
 	if (cbdata->ref == -1) {
-		msg_err_pool ("map has no callback set");
+		msg_err_map ("map has no callback set");
 	}
 	else if (cbdata->data != NULL && cbdata->data->len != 0) {
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
@@ -329,7 +332,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		rspamd_lua_setclass (cbdata->L, "rspamd{map}", -1);
 
 		if (lua_pcall (cbdata->L, 2, 0, 0) != 0) {
-			msg_info_pool ("call to %s failed: %s", "local function",
+			msg_info_map ("call to %s failed: %s", "local function",
 				lua_tostring (cbdata->L, -1));
 			lua_pop (cbdata->L, 1);
 		}
@@ -614,11 +617,17 @@ lua_map_is_signed (lua_State *L)
 {
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	gboolean ret = FALSE;
+	struct rspamd_map_backend *bk;
+	guint i;
 
 	if (map != NULL) {
 		if (map->map) {
-			if (map->map->is_signed) {
-				ret = TRUE;
+			for (i = 0; i < map->map->backends->len; i ++) {
+				bk = g_ptr_array_index (map->map->backends, i);
+				if (bk->is_signed) {
+					ret = TRUE;
+					break;
+				}
 			}
 		}
 	}
@@ -635,19 +644,28 @@ lua_map_get_proto (lua_State *L)
 {
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	const gchar *ret = "undefined";
+	struct rspamd_map_backend *bk;
+	guint i;
 
 	if (map != NULL) {
 		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || map->map == NULL) {
 			ret = "embedded";
+			lua_pushstring (L, ret);
+
+			return 1;
 		}
 		else {
-			switch (map->map->protocol) {
-			case MAP_PROTO_FILE:
-				ret = "file";
-				break;
-			case MAP_PROTO_HTTP:
-				ret = "http";
-				break;
+			for (i = 0; i < map->map->backends->len; i ++) {
+				bk = g_ptr_array_index (map->map->backends, i);
+				switch (bk->protocol) {
+				case MAP_PROTO_FILE:
+					ret = "file";
+					break;
+				case MAP_PROTO_HTTP:
+					ret = "http";
+					break;
+				}
+				lua_pushstring (L, ret);
 			}
 		}
 	}
@@ -655,14 +673,16 @@ lua_map_get_proto (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushstring (L, ret);
-	return 1;
+
+	return map->map->backends->len;
 }
 
 static int
 lua_map_get_sign_key (lua_State *L)
 {
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
+	struct rspamd_map_backend *bk;
+	guint i;
 	GString *ret = NULL;
 
 	if (map != NULL) {
@@ -671,33 +691,42 @@ lua_map_get_sign_key (lua_State *L)
 
 			return 1;
 		}
-		if (map->map && map->map->trusted_pubkey) {
-			ret = rspamd_pubkey_print (map->map->trusted_pubkey,
-					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+		for (i = 0; i < map->map->backends->len; i ++) {
+			bk = g_ptr_array_index (map->map->backends, i);
+
+			if (bk->trusted_pubkey) {
+				ret = rspamd_pubkey_print (bk->trusted_pubkey,
+						RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+			}
+			else {
+				ret = NULL;
+			}
+
+			if (ret) {
+				lua_pushlstring (L, ret->str, ret->len);
+				g_string_free (ret, TRUE);
+			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (ret) {
-		lua_pushlstring (L, ret->str, ret->len);
-		g_string_free (ret, TRUE);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
+	return map->map->backends->len;
 }
 
 static int
 lua_map_set_sign_key (lua_State *L)
 {
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
+	struct rspamd_map_backend *bk;
 	const gchar *pk_str;
 	struct rspamd_cryptobox_pubkey *pk;
 	gsize len;
+	guint i;
 
 	pk_str = lua_tolstring (L, 2, &len);
 
@@ -714,12 +743,17 @@ lua_map_set_sign_key (lua_State *L)
 			return luaL_error (L, "invalid pubkey string");
 		}
 
-		if (map->map->trusted_pubkey) {
-			/* Unref old pk */
-			rspamd_pubkey_unref (map->map->trusted_pubkey);
+		for (i = 0; i < map->map->backends->len; i ++) {
+			bk = g_ptr_array_index (map->map->backends, i);
+			if (bk->trusted_pubkey) {
+				/* Unref old pk */
+				rspamd_pubkey_unref (bk->trusted_pubkey);
+			}
+
+			bk->trusted_pubkey = rspamd_pubkey_ref (pk);
 		}
 
-		map->map->trusted_pubkey = pk;
+		rspamd_pubkey_unref (pk);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -753,21 +787,29 @@ lua_map_get_uri (lua_State *L)
 {
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	const gchar *ret = "undefined";
+	struct rspamd_map_backend *bk;
+		guint i;
 
 	if (map != NULL) {
 		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || map->map == NULL) {
 			ret = "embedded";
+			lua_pushstring (L, ret);
+
+			return 1;
 		}
 		else {
-			ret = map->map->uri;
+			for (i = 0; i < map->map->backends->len; i ++) {
+				bk = g_ptr_array_index (map->map->backends, i);
+				ret = bk->uri;
+				lua_pushstring (L, ret);
+			}
 		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushstring (L, ret);
-	return 1;
+	return map->map->backends->len;
 }
 
 void
