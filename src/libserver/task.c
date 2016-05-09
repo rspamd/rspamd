@@ -40,15 +40,18 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 {
 	struct rspamd_task *new_task;
 
-	g_assert (cfg != NULL);
-
 	new_task = g_slice_alloc0 (sizeof (struct rspamd_task));
 	new_task->worker = worker;
-	new_task->cfg = cfg;
-	REF_RETAIN (cfg);
 
-	if (cfg->check_all_filters) {
-		new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
+	if (cfg) {
+		new_task->cfg = cfg;
+		REF_RETAIN (cfg);
+
+		if (cfg->check_all_filters) {
+			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
+		}
+
+		new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
 	}
 
 	gettimeofday (&new_task->tv, NULL);
@@ -61,7 +64,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->results);
-	new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
+
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
@@ -246,8 +249,10 @@ rspamd_task_free (struct rspamd_task *task)
 			close (task->sock);
 		}
 
-		rspamd_re_cache_runtime_destroy (task->re_rt);
-		REF_RELEASE (task->cfg);
+		if (task->cfg) {
+			rspamd_re_cache_runtime_destroy (task->re_rt);
+			REF_RELEASE (task->cfg);
+		}
 
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);

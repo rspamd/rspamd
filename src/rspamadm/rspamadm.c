@@ -278,6 +278,15 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
 
+	cfg->log_level = G_LOG_LEVEL_WARNING;
+
+	cfg->log_type = RSPAMD_LOG_CONSOLE;
+	rspamd_set_logger (cfg, process_quark, rspamd_main);
+	(void) rspamd_log_open (rspamd_main->logger);
+	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
+	g_set_printerr_handler (rspamd_glib_printerr_function);
+	rspamd_config_post_load (cfg, FALSE);
+
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -285,12 +294,6 @@ main (gint argc, gchar **argv, gchar **env)
 	else {
 		cfg->log_level = G_LOG_LEVEL_INFO;
 	}
-
-	cfg->log_type = RSPAMD_LOG_CONSOLE;
-	rspamd_set_logger (cfg, process_quark, rspamd_main);
-	(void) rspamd_log_open (rspamd_main->logger);
-	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
-	g_set_printerr_handler (rspamd_glib_printerr_function);
 
 	gperf_profiler_init (cfg, "rspamadm");
 	setproctitle ("rspamdadm");

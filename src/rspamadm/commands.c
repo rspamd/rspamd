@@ -24,6 +24,7 @@ extern struct rspamadm_command control_command;
 extern struct rspamadm_command confighelp_command;
 extern struct rspamadm_command statconvert_command;
 extern struct rspamadm_command signtool_command;
+extern struct rspamadm_command lua_command;
 
 const struct rspamadm_command *commands[] = {
 	&help_command,
@@ -36,6 +37,7 @@ const struct rspamadm_command *commands[] = {
 	&confighelp_command,
 	&statconvert_command,
 	&signtool_command,
+	&lua_command,
 	NULL
 };
 

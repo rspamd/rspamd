@@ -770,7 +770,7 @@ convert_text_to_utf (struct rspamd_task *task,
 	gchar *res_str, *ocharset;
 	GByteArray *result_array;
 
-	if (task->cfg->raw_mode) {
+	if (task->cfg && task->cfg->raw_mode) {
 		SET_PART_RAW (text_part);
 		return part_content;
 	}
@@ -1177,7 +1177,7 @@ process_text_part (struct rspamd_task *task,
 	cd = g_mime_part_get_content_disposition (GMIME_PART (mime_part->mime));
 	if (cd &&
 		g_ascii_strcasecmp (cd,
-		"attachment") == 0 && !task->cfg->check_text_attachements) {
+		"attachment") == 0 && (task->cfg && !task->cfg->check_text_attachements)) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
@@ -1186,7 +1186,7 @@ process_text_part (struct rspamd_task *task,
 	if (cd &&
 		g_ascii_strcasecmp (cd,
 		GMIME_DISPOSITION_ATTACHMENT) == 0 &&
-		!task->cfg->check_text_attachements) {
+		(task->cfg && !task->cfg->check_text_attachements)) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
@@ -1552,7 +1552,7 @@ rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
 		ct = g_mime_content_type_new_from_string (ct_cpy);
 		g_free (ct_cpy);
 	}
-	else if (task->cfg->libs_ctx) {
+	else if (task->cfg && task->cfg->libs_ctx) {
 		/* Try to predict it by content (slow) */
 		mb = magic_buffer (task->cfg->libs_ctx->libmagic,
 				data->data,
@@ -1662,7 +1662,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		message = g_mime_parser_construct_message (parser);
 
 		if (message == NULL) {
-			if (!task->cfg->allow_raw_input) {
+			if (task->cfg && (!task->cfg->allow_raw_input)) {
 				msg_err_task ("cannot construct mime from stream");
 				g_set_error (&task->err,
 						rspamd_message_quark (),
@@ -1757,7 +1757,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		if (i == 0) {
 			gboolean need_recv_correction = FALSE;
 
-			if (recv->real_ip == NULL || task->cfg->ignore_received) {
+			if (recv->real_ip == NULL || (task->cfg && task->cfg->ignore_received)) {
 				need_recv_correction = TRUE;
 			}
 			else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
@@ -1799,7 +1799,7 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	/* Extract data from received header if we were not given IP */
 	if (task->received->len > 0 && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
-			!task->cfg->ignore_received) {
+			(task->cfg && !task->cfg->ignore_received)) {
 		recv = g_ptr_array_index (task->received, 0);
 		if (recv->real_ip) {
 			if (!rspamd_parse_inet_address (&task->from_addr,

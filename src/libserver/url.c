@@ -445,7 +445,7 @@ rspamd_url_init (const gchar *tld_file)
 			rspamd_url_parse_tld_file (tld_file, url_scanner);
 		}
 		else {
-			msg_warn (
+			msg_info (
 					"tld extension file is not specified, url matching is limited");
 		}
 
