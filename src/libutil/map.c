@@ -215,10 +215,7 @@ free_http_cbdata_common (struct http_callback_data *cbd)
 {
 	char fpath[PATH_MAX];
 	struct stat st;
-
-	/* Switch to the next backend */
-	cbd->periodic->cur_backend ++;
-	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+	struct map_periodic_cbdata *periodic = cbd->periodic;
 
 	if (cbd->out_fd != -1) {
 		close (cbd->out_fd);
@@ -257,8 +254,12 @@ free_http_cbdata_common (struct http_callback_data *cbd)
 	}
 
 	REF_RELEASE (cbd->bk);
-	REF_RELEASE (cbd->periodic);
+	REF_RELEASE (periodic);
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
+
+	/* Switch to the next backend */
+	periodic->cur_backend ++;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 }
 
 static void
@@ -802,7 +803,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 		/* We should not check other backends if some backend has failed */
 		jitter_timeout_event (cbd->map, FALSE, FALSE, TRUE);
 		g_atomic_int_set (cbd->map->locked, 0);
-		g_slice_free1 (sizeof (*cbd), cbd);
+		REF_RELEASE (cbd);
 
 		return;
 	}
