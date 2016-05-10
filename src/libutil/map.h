@@ -61,6 +61,7 @@ struct rspamd_map* rspamd_map_add (struct rspamd_config *cfg,
  */
 struct rspamd_map* rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	const ucl_object_t *obj,
+	const gchar *description,
 	map_cb_t read_callback,
 	map_fin_cb_t fin_callback,
 	void **user_data);

@@ -677,7 +677,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					lua_pop (L, 1);
 				}
 				break;
-			case 'u':
+			case 'O':
 				if (t != LUA_TNONE) {
 					*(va_arg (ap, ucl_object_t **)) = ucl_object_lua_import (L,
 							idx);

@@ -1181,8 +1181,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	map->poll_timeout = cfg->map_timeout;
 
 	if (description != NULL) {
-		map->description =
-			rspamd_mempool_strdup (cfg->cfg_pool, description);
+		map->description = g_strdup (description);
 	}
 
 	rspamd_map_calculate_hash (map);
@@ -1196,6 +1195,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 struct rspamd_map*
 rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	const ucl_object_t *obj,
+	const gchar *description,
 	map_cb_t read_callback,
 	map_fin_cb_t fin_callback,
 	void **user_data)
@@ -1223,6 +1223,10 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->backends = g_ptr_array_new ();
 	map->poll_timeout = cfg->map_timeout;
+
+	if (description) {
+		map->description = g_strdup (description);
+	}
 
 	if (ucl_object_type (obj) == UCL_ARRAY) {
 		/* Add array of maps as multiple backends */
@@ -1257,6 +1261,10 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 
 		elt = ucl_object_lookup (obj, "description");
 		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			if (map->description) {
+				g_free (map->description);
+			}
+
 			map->description = g_strdup (ucl_object_tostring (elt));
 		}
 

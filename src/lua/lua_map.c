@@ -345,8 +345,9 @@ gint
 lua_config_add_map (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *map_line = NULL, *description = NULL;
+	const char *description = NULL;
 	const gchar *type = NULL;
+	ucl_object_t *map_obj = NULL;
 	struct lua_map_callback_data *cbdata;
 	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
@@ -354,132 +355,22 @@ lua_config_add_map (lua_State *L)
 	GError *err = NULL;
 
 	if (cfg) {
-		if (lua_type (L, 2) == LUA_TTABLE) {
-			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-					"*type=S;description=S;callback=F;*url=S",
-					&type, &description, &cbidx, &map_line)) {
-				ret = luaL_error (L, "invalid table arguments: %s", err->message);
-				g_error_free (err);
+		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				"*url=O;description=S;callback=F;type=S",
+				&map_obj, &description, &cbidx, &type)) {
+			ret = luaL_error (L, "invalid table arguments: %s", err->message);
+			g_error_free (err);
 
-				return ret;
-			}
-
-			g_assert (type != NULL && map_line != NULL);
-
-			if (strcmp (type, "callback") == 0) {
-				if (cbidx == -1) {
-					ret = luaL_error (L, "invalid table arguments: callback missing");
-					return ret;
-				}
-
-				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-				map->type = RSPAMD_LUA_MAP_CALLBACK;
-				map->data.cbdata = rspamd_mempool_alloc0 (cfg->cfg_pool,
-						sizeof (*map->data.cbdata));
-				cbdata = map->data.cbdata;
-				cbdata->L = L;
-				cbdata->data = NULL;
-				cbdata->lua_map = map;
-				cbdata->ref = cbidx;
-
-				if ((m = rspamd_map_add (cfg, map_line, description,
-						lua_map_read, lua_map_fin,
-						(void **)&map->data.cbdata)) == NULL) {
-					msg_warn_config ("invalid map %s", map_line);
-					luaL_unref (L, LUA_REGISTRYINDEX, cbidx);
-					lua_pushnil (L);
-
-					return 1;
-				}
-			}
-			else if (strcmp (type, "set") == 0) {
-				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-				map->data.hash = g_hash_table_new (rspamd_strcase_hash,
-						rspamd_strcase_equal);
-				map->type = RSPAMD_LUA_MAP_SET;
-
-				if ((m = rspamd_map_add (cfg, map_line, description,
-						rspamd_hosts_read,
-						rspamd_hosts_fin,
-						(void **)&map->data.hash)) == NULL) {
-					msg_warn_config ("invalid set map %s", map_line);
-					g_hash_table_destroy (map->data.hash);
-					lua_pushnil (L);
-
-					return 1;
-				}
-			}
-			else if (strcmp (type, "map") == 0) {
-				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-				map->data.hash = g_hash_table_new (rspamd_strcase_hash,
-						rspamd_strcase_equal);
-				map->type = RSPAMD_LUA_MAP_HASH;
-
-				if ((m = rspamd_map_add (cfg, map_line, description,
-						rspamd_kv_list_read,
-						rspamd_kv_list_fin,
-						(void **)&map->data.hash)) == NULL) {
-					msg_warn_config ("invalid hash map %s", map_line);
-					g_hash_table_destroy (map->data.hash);
-					lua_pushnil (L);
-					return 1;
-				}
-			}
-			else if (strcmp (type, "radix") == 0) {
-				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-				map->data.radix = radix_create_compressed ();
-				map->type = RSPAMD_LUA_MAP_RADIX;
-
-				if ((m = rspamd_map_add (cfg, map_line, description,
-						rspamd_radix_read,
-						rspamd_radix_fin,
-						(void **)&map->data.radix)) == NULL) {
-					msg_warn_config ("invalid radix map %s", map_line);
-					radix_destroy_compressed (map->data.radix);
-					lua_pushnil (L);
-					return 1;
-				}
-			}
-			else if (strcmp (type, "regexp") == 0) {
-				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-				map->data.re_map = NULL;
-				map->type = RSPAMD_LUA_MAP_REGEXP;
-
-				if ((m = rspamd_map_add (cfg, map_line, description,
-						rspamd_regexp_list_read,
-						rspamd_regexp_list_fin,
-						(void **)&map->data.re_map)) == NULL) {
-					msg_warn_config ("invalid regexp map %s", map_line);
-					lua_pushnil (L);
-					return 1;
-				}
-			}
-			else {
-				ret = luaL_error (L, "invalid arguments: unknown type '%s'", type);
-
-				return ret;
-			}
-
-			map->map = m;
-			pmap = lua_newuserdata (L, sizeof (void *));
-			*pmap = map;
-			rspamd_lua_setclass (L, "rspamd{map}", -1);
+			return ret;
 		}
-		else {
-			/*
-			 * Legacy format add_map(map_line, description, callback)
-			 */
-			map_line = luaL_checkstring (L, 2);
 
-			if (lua_gettop (L) == 4) {
-				description = lua_tostring (L, 3);
-				cbidx = 4;
-			}
-			else {
-				description = NULL;
-				cbidx = 3;
-			}
+		g_assert (map_obj != NULL);
 
+		if (type == NULL) {
+			type = "callback";
+		}
+
+		if (strcmp (type, "callback") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
 			map->type = RSPAMD_LUA_MAP_CALLBACK;
 			map->data.cbdata = rspamd_mempool_alloc0 (cfg->cfg_pool,
@@ -488,37 +379,103 @@ lua_config_add_map (lua_State *L)
 			cbdata->L = L;
 			cbdata->data = NULL;
 			cbdata->lua_map = map;
+			cbdata->ref = cbidx;
 
-			if (lua_type (L, cbidx) == LUA_TFUNCTION) {
-				lua_pushvalue (L, cbidx);
-				/* Get a reference */
-				cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			}
-			else {
-				/*
-				 * Now we can create maps with delayed callbacks, to allow better
-				 * closures generation
-				 */
-				cbdata->ref = -1;
-			}
-
-			if ((m = rspamd_map_add (cfg, map_line, description,
+			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
 					lua_map_read, lua_map_fin,
 					(void **)&map->data.cbdata)) == NULL) {
-				msg_warn_config ("invalid map %s", map_line);
+
+				if (cbidx != -1) {
+					luaL_unref (L, LUA_REGISTRYINDEX, cbidx);
+				}
+
 				lua_pushnil (L);
-			}
-			else {
-				map->map = m;
-				pmap = lua_newuserdata (L, sizeof (void *));
-				*pmap = map;
-				rspamd_lua_setclass (L, "rspamd{map}", -1);
+
+				return 1;
 			}
 		}
+		else if (strcmp (type, "set") == 0) {
+			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+			map->data.hash = g_hash_table_new (rspamd_strcase_hash,
+					rspamd_strcase_equal);
+			map->type = RSPAMD_LUA_MAP_SET;
+
+			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
+					rspamd_hosts_read,
+					rspamd_hosts_fin,
+					(void **)&map->data.hash)) == NULL) {
+				g_hash_table_destroy (map->data.hash);
+				lua_pushnil (L);
+				ucl_object_unref (map_obj);
+
+				return 1;
+			}
+		}
+		else if (strcmp (type, "map") == 0) {
+			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+			map->data.hash = g_hash_table_new (rspamd_strcase_hash,
+					rspamd_strcase_equal);
+			map->type = RSPAMD_LUA_MAP_HASH;
+
+			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
+					rspamd_kv_list_read,
+					rspamd_kv_list_fin,
+					(void **)&map->data.hash)) == NULL) {
+				g_hash_table_destroy (map->data.hash);
+				lua_pushnil (L);
+				ucl_object_unref (map_obj);
+
+				return 1;
+			}
+		}
+		else if (strcmp (type, "radix") == 0) {
+			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+			map->data.radix = radix_create_compressed ();
+			map->type = RSPAMD_LUA_MAP_RADIX;
+
+			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
+					rspamd_radix_read,
+					rspamd_radix_fin,
+					(void **)&map->data.radix)) == NULL) {
+				radix_destroy_compressed (map->data.radix);
+				lua_pushnil (L);
+				ucl_object_unref (map_obj);
+
+				return 1;
+			}
+		}
+		else if (strcmp (type, "regexp") == 0) {
+			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+			map->data.re_map = NULL;
+			map->type = RSPAMD_LUA_MAP_REGEXP;
+
+			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
+					rspamd_regexp_list_read,
+					rspamd_regexp_list_fin,
+					(void **)&map->data.re_map)) == NULL) {
+				lua_pushnil (L);
+				ucl_object_unref (map_obj);
+
+				return 1;
+			}
+		}
+		else {
+			ret = luaL_error (L, "invalid arguments: unknown type '%s'", type);
+			ucl_object_unref (map_obj);
+
+			return ret;
+		}
+
+		map->map = m;
+		pmap = lua_newuserdata (L, sizeof (void *));
+		*pmap = map;
+		rspamd_lua_setclass (L, "rspamd{map}", -1);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	ucl_object_unref (map_obj);
 
 	return 1;
 }
