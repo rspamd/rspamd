@@ -1094,7 +1094,7 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 {
 	guint s1len, s2len, x, y, lastdiag, olddiag;
 	guint *column, ret;
-	guint64 *h1, *h2;
+	guint64 h1, h2;
 	gint eq;
 	static const guint max_words = 8192;
 
@@ -1118,9 +1118,9 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 
 		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
 			olddiag = column[y];
-			h1 = &g_array_index (w1, guint64, y - 1);
-			h2 = &g_array_index (w2, guint64, x - 1);
-			eq = h1 == h2;
+			h1 = g_array_index (w1, guint64, y - 1);
+			h2 = g_array_index (w2, guint64, x - 1);
+			eq = (h1 == h2) ? 1 : 0;
 			/*
 			 * Cost of replacement is twice higher than cost of add/delete
 			 * to calculate percentage properly
