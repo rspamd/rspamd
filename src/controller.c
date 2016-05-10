@@ -145,7 +145,7 @@ struct rspamd_controller_worker_ctx {
 	/* SSL private key */
 	gchar *ssl_key;
 	/* A map of secure IP */
-	GList *secure_ip;
+	const ucl_object_t *secure_ip;
 	radix_compressed_t *secure_map;
 
 	/* Static files dir */
@@ -2490,7 +2490,7 @@ init_controller_worker (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"secure_ip",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
 			0,
@@ -2499,7 +2499,7 @@ init_controller_worker (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"trusted_ips",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
 			0,
@@ -2545,12 +2545,12 @@ void
 start_controller_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
-	GList *cur;
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
 	struct rspamd_keypair_cache *cache;
-	gchar *secure_ip;
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = NULL;
 	gpointer m;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
@@ -2565,26 +2565,31 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	if (ctx->secure_ip != NULL) {
-		cur = ctx->secure_ip;
 
-		while (cur) {
-			secure_ip = cur->data;
-
-			/* Try map syntax */
-			if (!rspamd_map_is_map (secure_ip)) {
-				if (!radix_add_generic_iplist (secure_ip,
-						&ctx->secure_map)) {
-					msg_warn_ctx ("cannot load or parse ip list from '%s'",
-							secure_ip);
+		if (ucl_object_type (ctx->secure_ip) == UCL_ARRAY) {
+			while ((cur = ucl_object_iterate (ctx->secure_ip, &it, true)) != NULL) {
+				/* Try map syntax */
+				if (ucl_object_type (cur) == UCL_STRING &&
+						!rspamd_map_is_map (ucl_object_tostring (cur))) {
+					if (!radix_add_generic_iplist (ucl_object_tostring (cur),
+							&ctx->secure_map)) {
+						msg_warn_ctx ("cannot load or parse ip list from '%s'",
+								ucl_object_tostring (cur));
+					}
+				}
+				else {
+					rspamd_map_add_from_ucl (worker->srv->cfg, cur,
+							"Allow webui access from the specified IP",
+							rspamd_radix_read, rspamd_radix_fin,
+							(void **)&ctx->secure_map);
 				}
 			}
-			else {
-				rspamd_map_add (worker->srv->cfg, secure_ip,
+		}
+		else {
+			rspamd_map_add_from_ucl (worker->srv->cfg, ctx->secure_ip,
 					"Allow webui access from the specified IP",
 					rspamd_radix_read, rspamd_radix_fin,
 					(void **)&ctx->secure_map);
-			}
-			cur = g_list_next (cur);
 		}
 	}
 

@@ -213,12 +213,12 @@ spf_module_config (struct rspamd_config *cfg)
 
 		str = ucl_obj_tostring (value);
 
-		if (!rspamd_map_is_map (str)) {
+		if (str && !rspamd_map_is_map (str)) {
 			radix_add_generic_iplist (str,
 					&spf_module_ctx->whitelist_ip);
 		}
 		else {
-			rspamd_map_add (cfg, str,
+			rspamd_map_add_from_ucl (cfg, value,
 					"SPF whitelist", rspamd_radix_read, rspamd_radix_fin,
 					(void **)&spf_module_ctx->whitelist_ip);
 

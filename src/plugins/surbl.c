@@ -528,7 +528,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_hosts_map")) != NULL) {
-		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
+		if (!rspamd_map_add_from_ucl (cfg, value,
 			"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
 			(void **)&surbl_module_ctx->redirector_map_data)) {
 
@@ -546,7 +546,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
-		if (rspamd_map_add (cfg, ucl_obj_tostring (value),
+		if (rspamd_map_add_from_ucl (cfg, value,
 			"SURBL exceptions list", read_exceptions_list, fin_exceptions_list,
 			(void **)&surbl_module_ctx->exceptions)) {
 			surbl_module_ctx->tld2_file = rspamd_mempool_strdup (
@@ -556,7 +556,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
-		if (rspamd_map_add (cfg, ucl_obj_tostring (value),
+		if (rspamd_map_add_from_ucl (cfg, value,
 			"SURBL whitelist", rspamd_hosts_read, rspamd_hosts_fin,
 			(void **)&surbl_module_ctx->whitelist)) {
 			surbl_module_ctx->whitelist_file = rspamd_mempool_strdup (
