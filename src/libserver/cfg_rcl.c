@@ -1894,7 +1894,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Limit of files count in `cores_dir`");
 	rspamd_rcl_add_default_handler (sub,
 			"local_addrs",
-			rspamd_rcl_parse_struct_string,
+			rspamd_rcl_parse_struct_ucl,
 			G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
 			0,
 			"Use the specified addresses as local ones");

@@ -1981,12 +1981,13 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 
 	if (ctx != NULL) {
 		if (cfg->local_addrs) {
-			if (!rspamd_map_is_map (cfg->local_addrs)) {
-				radix_add_generic_iplist (cfg->local_addrs,
+			if (ucl_object_type (cfg->local_addrs) == UCL_STRING &&
+					!rspamd_map_is_map (ucl_object_tostring (cfg->local_addrs))) {
+				radix_add_generic_iplist (ucl_object_tostring (cfg->local_addrs),
 						(radix_compressed_t **)ctx->local_addrs);
 			}
 			else {
-				rspamd_map_add (cfg, cfg->local_addrs,
+				rspamd_map_add_from_ucl (cfg, cfg->local_addrs,
 					"Local addresses", rspamd_radix_read, rspamd_radix_fin,
 					(void **) ctx->local_addrs);
 			}

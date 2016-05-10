@@ -277,7 +277,7 @@ struct rspamd_config {
 	gchar *pid_file;                                /**< name of pid file									*/
 	gchar *temp_dir;                                /**< dir for temp files									*/
 	gchar *control_socket_path;                     /**< path to the control socket							*/
-	gchar *local_addrs;                             /**< tree of local addresses							*/
+	const ucl_object_t *local_addrs;                /**< tree of local addresses							*/
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif
