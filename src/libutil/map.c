@@ -35,12 +35,28 @@
 #include <pcre2.h>
 #endif
 
+#undef MAP_DEBUG_REFS
+#ifdef MAP_DEBUG_REFS
+#define MAP_RETAIN(x) do { \
+	msg_err ("retain ref %p, refcount: %d -> %d", (x), (x)->ref.refcount, (x)->ref.refcount + 1); \
+	REF_RETAIN(x);	\
+} while (0)
+
+#define MAP_RELEASE(x) do { \
+	msg_err ("release ref %p, refcount: %d -> %d", (x), (x)->ref.refcount, (x)->ref.refcount - 1); \
+	REF_RELEASE(x);	\
+} while (0)
+#else
+#define MAP_RETAIN REF_RETAIN
+#define MAP_RELEASE REF_RELEASE
+#endif
+
 static const gchar *hash_fill = "1";
-static void free_http_cbdata_common (struct http_callback_data *cbd);
+static void free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new);
 static void free_http_cbdata_dtor (gpointer p);
 static void free_http_cbdata (struct http_callback_data *cbd);
 static void rspamd_map_periodic_callback (gint fd, short what, void *ud);
-static void jitter_timeout_event (struct rspamd_map *map, gboolean locked,
+static void rspamd_map_schedule_periodic (struct rspamd_map *map, gboolean locked,
 		gboolean initial, gboolean errored);
 /**
  * Write HTTP request
@@ -91,7 +107,7 @@ write_http_request (struct http_callback_data *cbd)
 
 		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
 				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
-		REF_RETAIN (cbd);
+		MAP_RETAIN (cbd);
 	}
 	else {
 		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
@@ -211,7 +227,7 @@ rspamd_map_check_file_sig (const char *fname,
  * Callback for destroying HTTP callback data
  */
 static void
-free_http_cbdata_common (struct http_callback_data *cbd)
+free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 {
 	char fpath[PATH_MAX];
 	struct stat st;
@@ -253,13 +269,9 @@ free_http_cbdata_common (struct http_callback_data *cbd)
 		rspamd_inet_address_destroy (cbd->addr);
 	}
 
-	REF_RELEASE (cbd->bk);
-	REF_RELEASE (periodic);
+	MAP_RELEASE (cbd->bk);
+	MAP_RELEASE (periodic);
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
-
-	/* Switch to the next backend */
-	periodic->cur_backend ++;
-	rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 }
 
 static void
@@ -268,7 +280,7 @@ free_http_cbdata (struct http_callback_data *cbd)
 	cbd->map->dtor = NULL;
 	cbd->map->dtor_data = NULL;
 
-	free_http_cbdata_common (cbd);
+	free_http_cbdata_common (cbd, TRUE);
 }
 
 static void
@@ -279,7 +291,7 @@ free_http_cbdata_dtor (gpointer p)
 
 	map = cbd->map;
 	msg_warn_map ("connection with http server is terminated: worker is stopping");
-	free_http_cbdata_common (cbd);
+	free_http_cbdata_common (cbd, FALSE);
 }
 
 /*
@@ -295,7 +307,8 @@ http_map_error (struct rspamd_http_connection *conn,
 	map = cbd->map;
 	cbd->periodic->errored = TRUE;
 	msg_err_map ("connection with http server terminated incorrectly: %e", err);
-	REF_RELEASE (cbd);
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+	MAP_RELEASE (cbd);
 }
 
 static int
@@ -320,8 +333,9 @@ http_map_finish (struct rspamd_http_connection *conn,
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
 			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+			MAP_RELEASE (cbd);
 
-			goto end;
+			return 0;
 		}
 
 		if (cbd->stage == map_load_file) {
@@ -354,13 +368,14 @@ http_map_finish (struct rspamd_http_connection *conn,
 				if (cbd->out_fd == -1) {
 					msg_err_map ("cannot open pubkey file %s for writing: %s",
 							fpath, strerror (errno));
-					goto end;
+					goto err;
 				}
 
 				rspamd_http_connection_reset (cbd->conn);
 				write_http_request (cbd);
+				MAP_RELEASE (cbd);
 
-				goto end;
+				return 0;
 			}
 			else {
 				/* Unsinged version - just open file */
@@ -369,7 +384,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 				if (in == NULL) {
 					msg_err_map ("cannot read tempfile %s: %s", cbd->tmpfile,
 							strerror (errno));
-					goto end;
+					goto err;
 				}
 			}
 		}
@@ -380,7 +395,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (fstat (cbd->out_fd, &st) == -1) {
 				msg_err_map ("cannot stat pubkey file %s: %s",
 						fpath, strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			aux_data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED,
@@ -391,7 +406,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (aux_data == MAP_FAILED) {
 				msg_err_map ("cannot map pubkey file %s: %s",
 						fpath, strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			cbd->pk = rspamd_pubkey_from_base32 (aux_data, st.st_size,
@@ -401,7 +416,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (cbd->pk == NULL) {
 				msg_err_map ("cannot load pubkey file %s: bad pubkey",
 						fpath);
-				goto end;
+				goto err;
 			}
 
 			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
@@ -410,14 +425,15 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (cbd->out_fd == -1) {
 				msg_err_map ("cannot open signature file %s for writing: %s",
 						fpath, strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			cbd->stage = map_load_signature;
 			rspamd_http_connection_reset (cbd->conn);
 			write_http_request (cbd);
+			MAP_RELEASE (cbd);
 
-			goto end;
+			return 0;
 		}
 		else if (cbd->stage == map_load_signature) {
 			/* We can now check signature */
@@ -429,11 +445,11 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (in == NULL) {
 				msg_err_map ("cannot read tempfile %s: %s", cbd->tmpfile,
 						strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			if (!rspamd_map_check_sig_pk (cbd->tmpfile, map, in, inlen, cbd->pk)) {
-				goto end;
+				goto err;
 			}
 		}
 
@@ -441,6 +457,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 
 		map->read_callback (in, inlen, &cbd->periodic->cbdata, TRUE);
 		msg_info_map ("read map data from %s", cbd->data->host);
+		cbd->periodic->cur_backend ++;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	}
 	else if (msg->code == 304 && (cbd->check && cbd->stage == map_load_file)) {
 		msg_debug_map ("data is not modified for server %s",
@@ -458,8 +476,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 				bk->uri, cbd->data->host, msg->code);
 	}
 
-end:
-	REF_RELEASE (cbd);
+	MAP_RELEASE (cbd);
+	return 0;
+
+err:
+	cbd->periodic->errored = 1;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+	MAP_RELEASE (cbd);
 
 	return 0;
 }
@@ -482,7 +505,7 @@ http_map_read (struct rspamd_http_connection *conn,
 
 	if (write (cbd->out_fd, chunk, len) == -1) {
 		msg_err_map ("cannot write to %s: %s", cbd->tmpfile, strerror (errno));
-		REF_RELEASE (cbd);
+		MAP_RELEASE (cbd);
 
 		return -1;
 	}
@@ -547,13 +570,13 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 		/* Not modified */
 	}
 
-	jitter_timeout_event (periodic->map, FALSE, FALSE, FALSE);
+	rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
 	g_atomic_int_set (periodic->map->locked, 0);
 	g_slice_free1 (sizeof (*periodic), periodic);
 }
 
 static void
-jitter_timeout_event (struct rspamd_map *map,
+rspamd_map_schedule_periodic (struct rspamd_map *map,
 		gboolean locked, gboolean initial, gboolean errored)
 {
 	const gdouble error_mult = 20.0, lock_mult = 0.5;
@@ -641,7 +664,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		}
 	}
 
-	REF_RELEASE (cbd);
+	MAP_RELEASE (cbd);
 }
 
 /**
@@ -680,9 +703,9 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 	cbd->fd = -1;
 	cbd->check = check;
 	cbd->periodic = periodic;
-	REF_RETAIN (periodic);
+	MAP_RETAIN (periodic);
 	cbd->bk = bk;
-	REF_RETAIN (bk);
+	MAP_RETAIN (bk);
 	cbd->stage = map_resolve_host2;
 	double_to_tv (map->cfg->map_timeout, &cbd->tv);
 	REF_INIT_RETAIN (cbd, free_http_cbdata);
@@ -694,12 +717,12 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
 				data->host, RDNS_REQUEST_A)) {
-			REF_RETAIN (cbd);
+			MAP_RETAIN (cbd);
 		}
 		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
 				data->host, RDNS_REQUEST_AAAA)) {
-			REF_RETAIN (cbd);
+			MAP_RETAIN (cbd);
 		}
 
 		map->dtor = free_http_cbdata_dtor;
@@ -711,7 +734,7 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 	}
 
 	/* We don't need own ref as it is now ref counted by DNS handlers */
-	REF_RELEASE (cbd);
+	MAP_RELEASE (cbd);
 }
 
 static void
@@ -801,9 +824,9 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 
 	if (cbd->errored) {
 		/* We should not check other backends if some backend has failed */
-		jitter_timeout_event (cbd->map, FALSE, FALSE, TRUE);
+		rspamd_map_schedule_periodic (cbd->map, FALSE, FALSE, TRUE);
 		g_atomic_int_set (cbd->map->locked, 0);
-		REF_RELEASE (cbd);
+		MAP_RELEASE (cbd);
 
 		return;
 	}
@@ -811,7 +834,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 	/* For each backend we need to check for modifications */
 	if (cbd->cur_backend >= cbd->map->backends->len) {
 		/* Last backend */
-		REF_RELEASE (cbd);
+		MAP_RELEASE (cbd);
 
 		return;
 	}
@@ -858,10 +881,10 @@ rspamd_map_watch (struct rspamd_config *cfg,
 			msg_debug_map (
 					"don't try to reread map as it is locked by other process, "
 					"will reread it later");
-			jitter_timeout_event (map, TRUE, FALSE, FALSE);
+			rspamd_map_schedule_periodic (map, TRUE, FALSE, FALSE);
 		}
 		else {
-			jitter_timeout_event (map, FALSE, TRUE, FALSE);
+			rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
 		}
 
 		cur = g_list_next (cur);
@@ -881,7 +904,7 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 
 		for (i = 0; i < map->backends->len; i ++) {
 			bk = g_ptr_array_index (map->backends, i);
-			REF_RELEASE (bk);
+			MAP_RELEASE (bk);
 		}
 
 		if (map->dtor) {
@@ -1094,7 +1117,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	return bk;
 
 err:
-	REF_RELEASE (bk);
+	MAP_RELEASE (bk);
 
 	if (hdata) {
 		g_slice_free1 (sizeof (*hdata), hdata);
