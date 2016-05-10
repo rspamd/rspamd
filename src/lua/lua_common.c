@@ -677,6 +677,20 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					lua_pop (L, 1);
 				}
 				break;
+			case 'u':
+				if (t != LUA_TNONE) {
+					*(va_arg (ap, ucl_object_t **)) = ucl_object_lua_import (L,
+							idx);
+				}
+				else {
+					failed = TRUE;
+					*(va_arg (ap, ucl_object_t **)) = NULL;
+				}
+
+				if (is_table) {
+					lua_pop (L, 1);
+				}
+				break;
 			case 'U':
 				if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
