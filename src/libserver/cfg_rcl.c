@@ -2976,13 +2976,13 @@ static guint
 rspamd_worker_param_key_hash (gconstpointer p)
 {
 	const struct rspamd_worker_param_key *k = p;
-	XXH64_state_t st;
+	rspamd_cryptobox_fast_hash_state_t st;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
-	XXH64_update (&st, k->name, strlen (k->name));
-	XXH64_update (&st, &k->ptr, sizeof (gpointer));
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_update (&st, k->name, strlen (k->name));
+	rspamd_cryptobox_fast_hash_update (&st, &k->ptr, sizeof (gpointer));
 
-	return XXH64_digest (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 static gboolean

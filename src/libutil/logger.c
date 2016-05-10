@@ -18,7 +18,7 @@
 #include "util.h"
 #include "rspamd.h"
 #include "map.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 #include "unix-std.h"
 
 #ifdef HAVE_SYSLOG_H
@@ -82,12 +82,6 @@ static rspamd_logger_t *default_logger = NULL;
 	}											\
 } while (0)
 
-#if defined(__LP64__) || defined(_LP64)
-#define XXH_ONESHOT XXH64
-#else
-#define XXH_ONESHOT XXH32
-#endif
-
 static void
 		syslog_log_function (const gchar *log_domain, const gchar *module,
 		const gchar *id, const gchar *function,
@@ -106,7 +100,7 @@ static void
 static inline guint64
 rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 {
-	return XXH_ONESHOT (message, mlen, rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash (message, mlen, rspamd_hash_seed ());
 }
 
 /*

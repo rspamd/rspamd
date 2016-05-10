@@ -23,7 +23,7 @@
 #include "http.h"
 #include "email_addr.h"
 #include "worker_private.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 
 /* Max line size */
 #define OUTBUFSIZ BUFSIZ
@@ -401,7 +401,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				guint64 h;
 				guint32 *hp;
 
-				h = XXH64 (hv_tok->begin, hv_tok->len, 0xdeadbabe);
+				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+						hv_tok->begin, hv_tok->len, 0xdeadbabe);
 				hp = rspamd_mempool_alloc (task->task_pool, sizeof (*hp));
 				memcpy (hp, &h, sizeof (*hp));
 				rspamd_mempool_set_variable (task->task_pool, "settings_hash",

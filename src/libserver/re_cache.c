@@ -15,7 +15,6 @@
  */
 #include "libmime/message.h"
 #include "re_cache.h"
-#include "xxhash.h"
 #include "cryptobox.h"
 #include "ref.h"
 #include "libserver/url.h"
@@ -123,16 +122,16 @@ rspamd_re_cache_class_id (enum rspamd_re_type type,
 		gpointer type_data,
 		gsize datalen)
 {
-	XXH64_state_t st;
+	rspamd_cryptobox_fast_hash_state_t st;
 
-	XXH64_reset (&st, 0xdeadbabe);
-	XXH64_update (&st, &type, sizeof (type));
+	rspamd_cryptobox_fast_hash_init (&st, 0xdeadbabe);
+	rspamd_cryptobox_fast_hash_update (&st, &type, sizeof (type));
 
 	if (datalen > 0) {
-		XXH64_update (&st, type_data, datalen);
+		rspamd_cryptobox_fast_hash_update (&st, type_data, datalen);
 	}
 
-	return XXH64_digest (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 static void
@@ -1174,7 +1173,8 @@ rspamd_re_cache_type_from_string (const char *str)
 	 */
 
 	if (str != NULL) {
-		h = XXH64 (str, strlen (str), 0xdeadbabe);
+		h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+				str, strlen (str), 0xdeadbabe);
 
 		switch (h) {
 		case G_GUINT64_CONSTANT(0x298b9c8a58887d44): /* header */

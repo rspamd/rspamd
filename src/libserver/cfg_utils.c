@@ -1177,7 +1177,7 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 		return;
 	}
 
-	checksum = XXH64 (cbdata->buf->str, cbdata->buf->len, 0);
+	checksum = rspamd_cryptobox_fast_hash (cbdata->buf->str, cbdata->buf->len, 0);
 	/* New data available */
 	parser = ucl_parser_new (0);
 	if (!ucl_parser_add_chunk (parser, cbdata->buf->str,

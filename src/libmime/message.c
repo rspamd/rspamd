@@ -24,7 +24,7 @@
 #include "email_addr.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"
@@ -42,6 +42,7 @@
 static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 static rspamd_regexp_t *utf_compatible_re = NULL;
+static const guint64 words_hash_seed = 0xdeadbabe;
 
 static GQuark
 rspamd_message_quark (void)
@@ -1074,7 +1075,12 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			}
 
 			if (w->len > 0) {
-				h = XXH64 (w->begin, w->len, rspamd_hash_seed ());
+				/*
+				 * We use static hash seed if we would want to use that in shingles
+				 * computation in future
+				 */
+				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+						w->begin, w->len, words_hash_seed);
 				g_array_append_val (part->normalized_hashes, h);
 			}
 		}

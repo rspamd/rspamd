@@ -31,6 +31,7 @@
 #include "catena/catena.h"
 #include "ottery.h"
 #include "printf.h"
+#include "xxhash.h"
 
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
@@ -1407,4 +1408,74 @@ void rspamd_cryptobox_hash (guchar *out,
 	rspamd_cryptobox_hash_init (&st, key, keylen);
 	rspamd_cryptobox_hash_update (&st, data, len);
 	rspamd_cryptobox_hash_final (&st, out);
+}
+
+
+void
+rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
+		guint64 seed)
+{
+#if defined(__LP64__) || defined(_LP64)
+	XXH64_state_t *rst = (XXH64_state_t *)st;
+	XXH64_reset (rst, seed);
+#else
+	XXH32_state_t *rst = (XXH32_state_t *)st;
+	XXH32_reset (rst, seed);
+#endif
+}
+
+void
+rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
+		const void *data, gsize len)
+{
+#if defined(__LP64__) || defined(_LP64)
+	XXH64_state_t *rst = (XXH64_state_t *)st;
+	XXH64_update (rst, data, len);
+#else
+	XXH32_state_t *rst = (XXH32_state_t *)st;
+	XXH32_update (rst, data, len);
+#endif
+}
+
+guint64
+rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
+{
+#if defined(__LP64__) || defined(_LP64)
+	XXH64_state_t *rst = (XXH64_state_t *)st;
+	return XXH64_digest (rst);
+#else
+	XXH32_state_t *rst = (XXH32_state_t *)st;
+	XXH32_digest (rst);
+#endif
+
+}
+
+/**
+ * One in all function
+ */
+guint64
+rspamd_cryptobox_fast_hash (const void *data,
+		gsize len, guint64 seed)
+{
+#if defined(__LP64__) || defined(_LP64)
+	return XXH64 (data, len, seed);
+#else
+	return XXH32 (data, len, seed);
+#endif
+}
+
+
+guint64
+rspamd_cryptobox_fast_hash_specific (
+		enum rspamd_cryptobox_fast_hash_type type,
+		const void *data,
+		gsize len, guint64 seed)
+{
+	switch (type) {
+	case RSPAMD_CRYPTOBOX_XXHASH32:
+		return XXH32 (data, len, seed);
+	case RSPAMD_CRYPTOBOX_XXHASH64:
+	default:
+		return XXH64 (data, len, seed);
+	}
 }

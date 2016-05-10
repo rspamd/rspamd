@@ -19,7 +19,7 @@
 #include "ref.h"
 #include "cfg_file.h"
 #include "rdns.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 #include "utlist.h"
 
 struct upstream_inet_addr_entry {
@@ -785,7 +785,8 @@ rspamd_upstream_get_hashed (struct upstream_list *ups, const guint8 *key, guint 
 	guint32 idx;
 
 	/* Generate 64 bits input key */
-	k = XXH64 (key, keylen, ups->hash_seed);
+	k = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+			key, keylen, ups->hash_seed);
 
 	rspamd_mutex_lock (ups->lock);
 	idx = rspamd_consistent_hash (k, ups->alive->len);

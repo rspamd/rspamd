@@ -19,7 +19,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "lua/lua_common.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 #include <math.h>
 
 
@@ -273,7 +273,8 @@ rspamd_action_from_str (const gchar *data, gint *result)
 {
 	guint64 h;
 
-	h = XXH64 (data, strlen (data), 0xdeadbabe);
+	h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+			data, strlen (data), 0xdeadbabe);
 
 	switch (h) {
 	case 0x9917BFDB46332B8CULL: /* reject */
