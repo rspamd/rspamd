@@ -69,6 +69,7 @@ struct rspamd_http_upstream {
 
 struct rspamd_http_mirror {
 	gchar *name;
+	gchar *settings_id;
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
 	gdouble prob;
@@ -360,6 +361,11 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
 		up->parser_ref = ref_idx;
 		lua_settop (L, 0);
+	}
+
+	elt = ucl_object_lookup_any (obj, "settings", "settings_id", NULL);
+	if (elt && ucl_object_type (elt) == UCL_STRING) {
+		up->settings_id = g_strdup (ucl_object_tostring (elt));
 	}
 
 	g_ptr_array_add (ctx->mirrors, up);
@@ -901,6 +907,11 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 		msg = rspamd_http_connection_copy_msg (session->client_conn);
 		rspamd_http_message_remove_header (msg, "Content-Length");
 		rspamd_http_message_remove_header (msg, "Key");
+
+		if (m->settings_id != NULL) {
+			rspamd_http_message_remove_header (msg, "Settings-ID");
+			rspamd_http_message_add_header (msg, "Settings-ID", m->settings_id);
+		}
 
 		bk_conn->backend_conn = rspamd_http_connection_new (
 				NULL,
