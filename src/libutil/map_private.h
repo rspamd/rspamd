@@ -71,7 +71,7 @@ struct rspamd_map {
 	guint32 id;
 	struct event ev;
 	struct timeval tv;
-	guint poll_timeout;
+	gdouble poll_timeout;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	gchar tag[MEMPOOL_UID_LEN];

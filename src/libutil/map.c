@@ -588,13 +588,13 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 		timeout = 0.0;
 	}
 	else if (errored) {
-		timeout = map->cfg->map_timeout * error_mult;
+		timeout = map->poll_timeout * error_mult;
 	}
 	else if (locked) {
-		timeout = map->cfg->map_timeout * lock_mult;
+		timeout = map->poll_timeout * lock_mult;
 	}
 	else {
-		timeout = map->cfg->map_timeout;
+		timeout = map->poll_timeout;
 	}
 
 	cbd = g_slice_alloc0 (sizeof (*cbd));
@@ -1178,6 +1178,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	map->backends = g_ptr_array_sized_new (1);
 	g_ptr_array_add (map->backends, bk);
 	map->name = g_strdup (map_line);
+	map->poll_timeout = cfg->map_timeout;
 
 	if (description != NULL) {
 		map->description =
@@ -1190,6 +1191,140 @@ rspamd_map_add (struct rspamd_config *cfg,
 	cfg->maps = g_list_prepend (cfg->maps, map);
 
 	return map;
+}
+
+struct rspamd_map*
+rspamd_map_add_from_ucl (struct rspamd_config *cfg,
+	const ucl_object_t *obj,
+	map_cb_t read_callback,
+	map_fin_cb_t fin_callback,
+	void **user_data)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur, *elt;
+	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
+
+	g_assert (obj != NULL);
+
+	if (ucl_object_type (obj) == UCL_STRING) {
+		/* Just a plain string */
+		return rspamd_map_add (cfg, ucl_object_tostring (obj), NULL,
+				read_callback, fin_callback, user_data);
+	}
+
+	map = g_slice_alloc0 (sizeof (struct rspamd_map));
+	map->read_callback = read_callback;
+	map->fin_callback = fin_callback;
+	map->user_data = user_data;
+	map->cfg = cfg;
+	map->id = g_random_int ();
+	map->locked =
+			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+	map->backends = g_ptr_array_new ();
+	map->poll_timeout = cfg->map_timeout;
+
+	if (ucl_object_type (obj) == UCL_ARRAY) {
+		/* Add array of maps as multiple backends */
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_STRING) {
+				bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
+
+				if (bk != NULL) {
+					g_ptr_array_add (map->backends, bk);
+
+					if (!map->name) {
+						map->name = g_strdup (ucl_object_tostring (cur));
+					}
+				}
+			}
+			else {
+				msg_err_config ("bad map element type: %s",
+						ucl_object_type_to_string (ucl_object_type (cur)));
+			}
+		}
+
+		if (map->backends->len == 0) {
+			msg_err_config ("map has no urls to be loaded");
+			goto err;
+		}
+	}
+	else if (ucl_object_type (obj) == UCL_OBJECT) {
+		elt = ucl_object_lookup (obj, "name");
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			map->name = g_strdup (ucl_object_tostring (elt));
+		}
+
+		elt = ucl_object_lookup (obj, "description");
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			map->description = g_strdup (ucl_object_tostring (elt));
+		}
+
+		elt = ucl_object_lookup_any (obj, "timeout", "poll", "poll_time",
+				"watch_interval", NULL);
+		if (elt) {
+			map->poll_timeout = ucl_object_todouble (elt);
+		}
+
+		elt = ucl_object_lookup_any (obj, "upstreams", "url", "urls", NULL);
+		if (elt == NULL) {
+			msg_err_config ("map has no urls to be loaded");
+			goto err;
+		}
+
+		if (ucl_object_type (obj) == UCL_ARRAY) {
+			/* Add array of maps as multiple backends */
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_STRING) {
+					bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
+
+					if (bk != NULL) {
+						g_ptr_array_add (map->backends, bk);
+
+						if (!map->name) {
+							map->name = g_strdup (ucl_object_tostring (cur));
+						}
+					}
+				}
+				else {
+					msg_err_config ("bad map element type: %s",
+							ucl_object_type_to_string (ucl_object_type (cur)));
+					goto err;
+				}
+			}
+
+			if (map->backends->len == 0) {
+				msg_err_config ("map has no urls to be loaded");
+				goto err;
+			}
+		}
+		else if (ucl_object_type (elt) == UCL_STRING) {
+			bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (elt));
+
+			if (bk != NULL) {
+				g_ptr_array_add (map->backends, bk);
+
+				if (!map->name) {
+					map->name = g_strdup (ucl_object_tostring (cur));
+				}
+			}
+		}
+
+		if (map->backends->len == 0) {
+			msg_err_config ("map has no urls to be loaded");
+			goto err;
+		}
+	}
+
+	return map;
+
+err:
+	g_ptr_array_free (map->backends, TRUE);
+	g_free (map->name);
+	g_free (map->description);
+	g_slice_free1 (sizeof (*map), map);
+
+	return NULL;
 }
 
 /**
