@@ -40,6 +40,8 @@ static void free_http_cbdata_common (struct http_callback_data *cbd);
 static void free_http_cbdata_dtor (gpointer p);
 static void free_http_cbdata (struct http_callback_data *cbd);
 static void rspamd_map_periodic_callback (gint fd, short what, void *ud);
+static void jitter_timeout_event (struct rspamd_map *map, gboolean locked,
+		gboolean initial, gboolean errored);
 /**
  * Write HTTP request
  */
@@ -255,6 +257,7 @@ free_http_cbdata_common (struct http_callback_data *cbd)
 	}
 
 	REF_RELEASE (cbd->bk);
+	REF_RELEASE (cbd->periodic);
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
 }
 
@@ -315,7 +318,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			cbd->periodic->need_modify = TRUE;
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
-			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd);
+			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 
 			goto end;
 		}
@@ -532,12 +535,30 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 }
 
 static void
+rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
+{
+	if (periodic->need_modify) {
+		/* We are done */
+		periodic->map->fin_callback (&periodic->cbdata);
+		*periodic->map->user_data = periodic->cbdata.cur_data;
+	}
+	else {
+		/* Not modified */
+	}
+
+	jitter_timeout_event (periodic->map, FALSE, FALSE, FALSE);
+	g_atomic_int_set (periodic->map->locked, 0);
+	g_slice_free1 (sizeof (*periodic), periodic);
+}
+
+static void
 jitter_timeout_event (struct rspamd_map *map,
 		gboolean locked, gboolean initial, gboolean errored)
 {
 	const gdouble error_mult = 20.0, lock_mult = 0.5;
 	gdouble jittered_sec;
 	gdouble timeout;
+	struct map_periodic_cbdata *cbd;
 
 	if (initial) {
 		timeout = 0.0;
@@ -551,6 +572,16 @@ jitter_timeout_event (struct rspamd_map *map,
 	else {
 		timeout = map->cfg->map_timeout;
 	}
+
+	cbd = g_slice_alloc0 (sizeof (*cbd));
+	cbd->cbdata.state = 0;
+	cbd->cbdata.prev_data = *map->user_data;
+	cbd->cbdata.cur_data = NULL;
+	cbd->cbdata.map = map;
+	cbd->map = map;
+	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
+	evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
+	event_base_set (map->ev_base, &map->ev);
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
@@ -632,10 +663,11 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 	cbd->out_fd = mkstemp (tmpbuf);
 
 	if (cbd->out_fd == -1) {
-		g_slice_free1 (sizeof (*cbd), cbd);
 		msg_err_map ("cannot create tempfile: %s", strerror (errno));
-		jitter_timeout_event (map, FALSE, FALSE, TRUE);
 		g_atomic_int_set (map->locked, 0);
+		g_slice_free1 (sizeof (*cbd), cbd);
+		periodic->errored = TRUE;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
 		return;
 	}
@@ -647,6 +679,7 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 	cbd->fd = -1;
 	cbd->check = check;
 	cbd->periodic = periodic;
+	REF_RETAIN (periodic);
 	cbd->bk = bk;
 	REF_RETAIN (bk);
 	cbd->stage = map_resolve_host2;
@@ -668,7 +701,6 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 			REF_RETAIN (cbd);
 		}
 
-		jitter_timeout_event (map, FALSE, FALSE, FALSE);
 		map->dtor = free_http_cbdata_dtor;
 		map->dtor_data = cbd;
 	}
@@ -725,6 +757,10 @@ rspamd_map_file_check_callback (gint fd, short what, void *ud)
 		/* File was modified since last check */
 		memcpy (&data->st, &st, sizeof (struct stat));
 		periodic->need_modify = TRUE;
+		periodic->cur_backend = 0;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+
+		return;
 	}
 
 	/* Switch to the next backend */
@@ -748,10 +784,7 @@ rspamd_map_file_read_callback (gint fd, short what, void *ud)
 	msg_info_map ("rereading map file %s", data->filename);
 
 	if (!read_map_file (map, data, bk, periodic)) {
-		jitter_timeout_event (map, FALSE, FALSE, TRUE);
-	}
-	else {
-		jitter_timeout_event (map, FALSE, FALSE, FALSE);
+		periodic->errored = TRUE;
 	}
 
 	/* Switch to the next backend */
@@ -775,21 +808,9 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 	}
 
 	/* For each backend we need to check for modifications */
-	if (cbd->cur_backend == cbd->map->backends->len) {
+	if (cbd->cur_backend >= cbd->map->backends->len) {
 		/* Last backend */
-
-		if (cbd->need_modify) {
-			/* We are done */
-			cbd->map->fin_callback (&cbd->cbdata);
-			*cbd->map->user_data = cbd->cbdata.cur_data;
-		}
-		else {
-			/* Not modified */
-		}
-
-		jitter_timeout_event (cbd->map, FALSE, FALSE, FALSE);
-		g_atomic_int_set (cbd->map->locked, 0);
-		g_slice_free1 (sizeof (*cbd), cbd);
+		REF_RELEASE (cbd);
 
 		return;
 	}
@@ -825,22 +846,12 @@ rspamd_map_watch (struct rspamd_config *cfg,
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
-	struct map_periodic_cbdata *cbd;
 
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
 		map->ev_base = ev_base;
 		map->r = resolver;
-		event_base_set (map->ev_base, &map->ev);
-
-		cbd = g_slice_alloc0 (sizeof (*cbd));
-		cbd->cbdata.state = 0;
-		cbd->cbdata.prev_data = *map->user_data;
-		cbd->cbdata.cur_data = NULL;
-		cbd->cbdata.map = map;
-		cbd->map = map;
-		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
 
 		if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
 			msg_debug_map (
@@ -1142,6 +1153,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->backends = g_ptr_array_sized_new (1);
 	g_ptr_array_add (map->backends, bk);
+	map->name = g_strdup (map_line);
 
 	if (description != NULL) {
 		map->description =

@@ -113,6 +113,7 @@ struct map_periodic_cbdata {
 	gboolean need_modify;
 	gboolean errored;
 	guint cur_backend;
+	ref_entry_t ref;
 };
 
 struct http_callback_data {
