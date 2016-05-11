@@ -81,7 +81,8 @@ free_fuzzy_words (GArray *ar)
 }
 
 static void
-test_case (gsize cnt, gsize max_len, gdouble perm_factor)
+test_case (gsize cnt, gsize max_len, gdouble perm_factor,
+		enum rspamd_shingle_alg alg)
 {
 	GArray *input;
 	struct rspamd_shingle *sgl, *sgl_permuted;
@@ -93,17 +94,18 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 	input = generate_fuzzy_words (cnt, max_len);
 	ts1 = rspamd_get_ticks ();
 	sgl = rspamd_shingles_generate (input, key, NULL,
-			rspamd_shingles_default_filter, NULL);
+			rspamd_shingles_default_filter, NULL, alg);
 	ts2 = rspamd_get_ticks ();
 	permute_vector (input, perm_factor);
 	sgl_permuted = rspamd_shingles_generate (input, key, NULL,
-			rspamd_shingles_default_filter, NULL);
+			rspamd_shingles_default_filter, NULL, alg);
 
 	res = rspamd_shingles_compare (sgl, sgl_permuted);
 
-	msg_debug ("percentage of common shingles: %.3f, generate time: %hd usec",
-			res, (gint)(ts1 - ts2) * 1000);
-	g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.20);
+	msg_info ("%d (%z words of %z max len, %.2f perm factor):"
+			" percentage of common shingles: %.3f, generate time: %.4f sec",
+			alg, cnt, max_len, perm_factor, res, ts2 - ts1);
+	g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.25);
 
 	free_fuzzy_words (input);
 	g_free (sgl);
@@ -113,10 +115,15 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 void
 rspamd_shingles_test_func (void)
 {
-	//test_case (5, 100, 0.5);
-	test_case (200, 10, 0.1);
-	test_case (500, 20, 0.01);
-	test_case (5000, 20, 0.01);
-	test_case (5000, 15, 0);
-	test_case (5000, 30, 1.0);
+	enum rspamd_shingle_alg alg = RSPAMD_SHINGLES_OLD;
+
+	for (alg = RSPAMD_SHINGLES_OLD; alg <= RSPAMD_SHINGLES_MUMHASH; alg ++) {
+		test_case (200, 10, 0.1, alg);
+		test_case (500, 20, 0.01, alg);
+		test_case (5000, 20, 0.01, alg);
+		test_case (5000, 15, 0, alg);
+		test_case (5000, 30, 1.0, alg);
+		test_case (50000, 30, 0.02, alg);
+		test_case (50000, 5, 0.02, alg);
+	}
 }

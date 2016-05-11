@@ -25,6 +25,12 @@ struct rspamd_shingle {
 	guint64 hashes[RSPAMD_SHINGLE_SIZE];
 };
 
+enum rspamd_shingle_alg {
+	RSPAMD_SHINGLES_OLD = 0,
+	RSPAMD_SHINGLES_XXHASH,
+	RSPAMD_SHINGLES_MUMHASH,
+};
+
 /**
  * Shingles filtering function
  * @param input input array of hashes
@@ -48,7 +54,8 @@ struct rspamd_shingle* rspamd_shingles_generate (GArray *input,
 		const guchar key[16],
 		rspamd_mempool_t *pool,
 		rspamd_shingles_filter filter,
-		gpointer filterd);
+		gpointer filterd,
+		enum rspamd_shingle_alg alg);
 
 /**
  * Compares two shingles and return result as a floating point value - 1.0

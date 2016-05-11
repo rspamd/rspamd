@@ -1068,7 +1068,8 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 			rule->shingles_key->str);
 	sh = rspamd_shingles_generate (words,
 			rule->shingles_key->str, pool,
-			rspamd_shingles_default_filter, NULL);
+			rspamd_shingles_default_filter, NULL,
+			RSPAMD_SHINGLES_OLD);
 	if (sh != NULL) {
 		memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
 		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
