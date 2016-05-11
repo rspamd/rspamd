@@ -95,6 +95,8 @@ rspamd_shingles_generate (GArray *input,
 	}
 	else {
 		guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE];
+		guint64 RSPAMD_ALIGNED(32) tmpbuf[16];
+		guint rlen;
 
 		if (alg == RSPAMD_SHINGLES_XXHASH) {
 			ht = RSPAMD_CRYPTOBOX_XXHASH64;
@@ -117,11 +119,20 @@ rspamd_shingles_generate (GArray *input,
 
 					word = &g_array_index (input, rspamd_ftok_t, beg);
 					/* Insert the last element to the pipe */
+					if (word->len >= sizeof (tmpbuf)) {
+						rlen = sizeof (tmpbuf);
+						memcpy (tmpbuf, word->begin, rlen);
+					}
+					else {
+						rlen = word->len / sizeof (guint64) + 1;
+						memset (tmpbuf, 0, rlen * sizeof (guint64));
+						memcpy (tmpbuf, word->begin, word->len);
+					}
+
 					res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
 							rspamd_cryptobox_fast_hash_specific (ht,
-									word->begin, word->len,
+									tmpbuf,rlen * sizeof (guint64),
 									*(guint64 *)keys[j]);
-
 					val = 0;
 					for (k = 0; k < SHINGLES_WINDOW; k ++) {
 						val ^= res[j * SHINGLES_WINDOW + k];

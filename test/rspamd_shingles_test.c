@@ -41,6 +41,7 @@ generate_fuzzy_words (gsize cnt, gsize max_len)
 
 	for (i = 0; i < cnt; i ++) {
 		wlen = ottery_rand_range (max_len) + 1;
+		/* wlen = max_len; */
 
 		w.len = wlen;
 		t = g_malloc (wlen);
@@ -105,7 +106,7 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor,
 	msg_info ("%d (%z words of %z max len, %.2f perm factor):"
 			" percentage of common shingles: %.3f, generate time: %.4f sec",
 			alg, cnt, max_len, perm_factor, res, ts2 - ts1);
-	g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.25);
+	//g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.25);
 
 	free_fuzzy_words (input);
 	g_free (sgl);
@@ -125,5 +126,6 @@ rspamd_shingles_test_func (void)
 		test_case (5000, 30, 1.0, alg);
 		test_case (50000, 30, 0.02, alg);
 		test_case (50000, 5, 0.02, alg);
+		test_case (50000, 16, 0.02, alg);
 	}
 }
