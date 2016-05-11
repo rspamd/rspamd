@@ -232,7 +232,7 @@ _mum_final (uint64_t h) {
 }
 
 #if defined(__x86_64__) && defined(__GNUC__)
-
+#if 0
 /* We want to use AVX2 insn MULX instead of generic x86-64 MULQ where
    it is possible.  Although on modern Intel processors MULQ takes
    3-cycles vs. 4 for MULX, MULX permits more freedom in insn
@@ -241,6 +241,7 @@ static inline uint64_t _MUM_TARGET("arch=haswell")
 _mum_hash_avx2 (const void * key, size_t len, uint64_t seed) {
   return _mum_final (_mum_hash_aligned (seed + len, key, len));
 }
+#endif
 #endif
 
 #ifndef _MUM_UNALIGNED_ACCESS
@@ -350,11 +351,12 @@ mum_hash64 (uint64_t key, uint64_t seed) {
 static inline uint64_t
 mum_hash (const void *key, size_t len, uint64_t seed) {
 #if defined(__x86_64__) && defined(__GNUC__)
-  static int avx2_support = 0;
+#if 0
+	static int avx2_support = 0;
 
   if (avx2_support > 0)
     return _mum_hash_avx2 (key, len, seed);
-#if 0
+
   else if (! avx2_support) {
     __builtin_cpu_init ();
     avx2_support =  __builtin_cpu_supports ("avx2") ? 1 : -1;
