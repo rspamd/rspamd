@@ -32,6 +32,8 @@
 #include "ottery.h"
 #include "printf.h"
 #include "xxhash.h"
+#define MUM_TARGET_INDEPENDENT_HASH 1 /* For 32/64 bit equal hashes */
+#include "../../contrib/mumhash/mum.h"
 
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
@@ -1457,11 +1459,8 @@ guint64
 rspamd_cryptobox_fast_hash (const void *data,
 		gsize len, guint64 seed)
 {
-#if defined(__LP64__) || defined(_LP64)
-	return XXH64 (data, len, seed);
-#else
-	return XXH32 (data, len, seed);
-#endif
+	return rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_MUMHASH,
+			data, len, seed);
 }
 
 
@@ -1475,7 +1474,9 @@ rspamd_cryptobox_fast_hash_specific (
 	case RSPAMD_CRYPTOBOX_XXHASH32:
 		return XXH32 (data, len, seed);
 	case RSPAMD_CRYPTOBOX_XXHASH64:
-	default:
 		return XXH64 (data, len, seed);
+	case RSPAMD_CRYPTOBOX_MUMHASH:
+	default:
+		return mum_hash (data, len, seed);
 	}
 }

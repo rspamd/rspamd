@@ -356,7 +356,8 @@ guint64 rspamd_cryptobox_fast_hash (const void *data,
 
 enum rspamd_cryptobox_fast_hash_type {
 	RSPAMD_CRYPTOBOX_XXHASH64 = 0,
-	RSPAMD_CRYPTOBOX_XXHASH32
+	RSPAMD_CRYPTOBOX_XXHASH32,
+	RSPAMD_CRYPTOBOX_MUMHASH
 };
 /**
  * Platform independent version
