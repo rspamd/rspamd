@@ -1268,7 +1268,6 @@ process_text_part (struct rspamd_task *task,
 				type,
 				text_part);
 		text_part->orig = part_content;
-		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 		g_ptr_array_add (task->text_parts, text_part);
 	}
 	else {
@@ -1309,6 +1308,10 @@ process_text_part (struct rspamd_task *task,
 			remain -= p - c + 1;
 			c = p + 1;
 		}
+	}
+
+	if (!IS_PART_HTML (text_part)) {
+		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 	}
 }
 
