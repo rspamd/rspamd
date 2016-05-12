@@ -17,8 +17,8 @@ context("URL check functions", function()
   test("Extract urls from text", function()
     local pool = mpool.create()
     local cases = {
-      {"test.com text", {"test.com", nil}},
-      {" test.com text", {"test.com", nil}},
+      {"test.com", {"test.com", nil}},
+      {" test.com", {"test.com", nil}},
       {"<test.com> text", {"test.com", nil}},
       {"test.com. text", {"test.com", nil}},
       {"mailto:A.User@example.com text", {"example.com", "A.User"}},
