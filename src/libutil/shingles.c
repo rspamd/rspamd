@@ -109,7 +109,7 @@ rspamd_shingles_generate (GArray *input,
 			ht = RSPAMD_CRYPTOBOX_MUMHASH;
 			break;
 		default:
-			ht = RSPAMD_CRYPTOBOX_HASHFAST;
+			ht = RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT;
 			break;
 		}
 
@@ -133,7 +133,7 @@ rspamd_shingles_generate (GArray *input,
 									*(guint64 *)keys[j]);
 					val = 0;
 					for (k = 0; k < SHINGLES_WINDOW; k ++) {
-						val ^= res[j * SHINGLES_WINDOW + k] >> (8 * k);
+						val ^= res[j * SHINGLES_WINDOW + k] >> (8 * (SHINGLES_WINDOW - k - 1));
 					}
 
 					g_assert (hlen > beg);
