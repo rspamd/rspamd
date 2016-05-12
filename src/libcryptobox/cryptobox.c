@@ -34,7 +34,7 @@
 #include "xxhash.h"
 #define MUM_TARGET_INDEPENDENT_HASH 1 /* For 32/64 bit equal hashes */
 #include "../../contrib/mumhash/mum.h"
-
+#include "../../contrib/metrohash/metro.h"
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
 #endif
@@ -1455,25 +1455,39 @@ rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 /**
  * One in all function
  */
+static inline guint64
+rspamd_cryptobox_fast_hash_machdep (const void *data,
+		gsize len, guint64 seed)
+{
+	if (len >= 8 && len % 8 == 0) {
+		return mum_hash (data, len, seed);
+	}
+	else {
+#if defined(__LP64__) || defined(_LP64)
+		return metrohash64_1 (data, len, seed);
+#endif
+	}
+
+	return XXH32 (data, len, seed);
+}
+
+static inline guint64
+rspamd_cryptobox_fast_hash_indep (const void *data,
+		gsize len, guint64 seed)
+{
+	if (len >= 8 && len % 8 == 0) {
+		return mum_hash (data, len, seed);
+	}
+
+	return metrohash64_1 (data, len, seed);
+}
+
 guint64
 rspamd_cryptobox_fast_hash (const void *data,
 		gsize len, guint64 seed)
 {
-	if (len >= 8 && len % 8 == 0) {
-		return rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_MUMHASH,
-					data, len, seed);
-	}
-	else {
-#if defined(__LP64__) || defined(_LP64)
-		return rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-				data, len, seed);
-#endif
-	}
-
-	return rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH32,
-			data, len, seed);
+	return rspamd_cryptobox_fast_hash_machdep (data, len, seed);
 }
-
 
 guint64
 rspamd_cryptobox_fast_hash_specific (
@@ -1488,8 +1502,10 @@ rspamd_cryptobox_fast_hash_specific (
 		return XXH64 (data, len, seed);
 	case RSPAMD_CRYPTOBOX_MUMHASH:
 		return mum_hash (data, len, seed);
+	case RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT:
+		return rspamd_cryptobox_fast_hash_indep (data, len, seed);
 	case RSPAMD_CRYPTOBOX_HASHFAST:
 	default:
-		return rspamd_cryptobox_fast_hash (data, len, seed);
+		return rspamd_cryptobox_fast_hash_machdep (data, len, seed);
 	}
 }
