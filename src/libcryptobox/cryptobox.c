@@ -1459,7 +1459,7 @@ guint64
 rspamd_cryptobox_fast_hash (const void *data,
 		gsize len, guint64 seed)
 {
-	if (len > 8 && len % 8 == 0) {
+	if (len >= 8 && len % 8 == 0) {
 		return rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_MUMHASH,
 					data, len, seed);
 	}
