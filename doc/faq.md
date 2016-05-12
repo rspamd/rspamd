@@ -501,14 +501,14 @@ filename_blacklist {
 }
 ```
 
-Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You can specify `want_spam = yes` in a settings action and rspamd would skip messages that satisfy a particular settings rule's conditions.
+Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You can specify `want_spam = yes` and rspamd will skip messages that satisfy a particular rule's conditions.
 
 ### What are filters, pre-filters and post-filters
-Rspamd allows different types of filters depending on time of execution.
+rspamd executes different types of filters depending on the time of execution.
 
-- `pre-filters` are executed before everything else and they can set so called `pre-result` that ultimately classifies message setting the desired action. Filters and post-filters are not executed in this cases
-- `filters` are generic rspamd rules that are planned by rules scheduler
-- `post-filters` are guaranteed to be executed after all filters are finished that allows to execute actions that depends on result of scan
+- `pre-filters` are executed before everything else and they can set a `pre-result` that ultimately classifies a message. Filters and post-filters are not executed in this case.
+- `filters` are generic rspamd rules.
+- `post-filters` are guaranteed to be executed after all filters are finished and allow the execution of actions that depends on the results of scan
 
 The overall execution order in rspamd is the following:
 
@@ -519,27 +519,25 @@ The overall execution order in rspamd is the following:
 5. post-filters
 6. autolearn rules
 
-Pre-filters can skip all other steps. Rules can define dependencies on other rules. It is not possible neither to define dependencies on other categories of rules but normal filters nor to define dependencies inter-categories dependencies, such as pre-filters on normal filters for example.
+### What is the meaning of the `URIBL_BLOCKED` symbol
 
-### What is the meaning of `URIBL_BLOCKED` symbol
-
-This symbol means that you have exceed the amount of DNS queries allowed for non-commercial usage by SURBL terms. If you use some public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or setup one, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying [commercial subscription](http://www.surbl.org/df) or you won't be able to use this service. `URIBL_BLOCKED` itself has zero weight and is used just to inform you about this problem.
+This symbol means that you have exceeded the amount of DNS queries allowed for non-commercial usage by SURBL services. If you use some a public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or set one up, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying a [commercial subscription](http://www.surbl.org/df) or you won't be able to use the service. The `URIBL_BLOCKED` symbol has a weight of 0 and is used just to inform you about this problem.
 
 ## WebUI questions
 
-### What are `enable_password` and `password` for WebUI
+### What are `enable_password` and `password` for the WebUI
 
-Rspamd can limit functions available to WebUI by 3 ways:
+Rspamd can limit the functions available through the WebUI in three ways:
 
 1. Allow read-only commands when `password` is specified
 2. Allow all commands when `enable_password` is specified
-3. Allow all commands when IP matches `secure_ip` list in the controller configuration
+3. Allow all commands when client IP address matches the `secure_ip` list in the controller configuration
 
 When `password` is specified but `enable_password` is missing then `password` is used for **both** read and write commands.
 
 ### How to store passwords securely
 
-Rspamd can encrypt passwords stored using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use `rspamadm pw` command as following:
+Rspamd can encrypt passwords and store them using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use the `rspamadm pw` command as follows:
 
 ```
 rspamadm pw
@@ -547,9 +545,9 @@ Enter passphrase:
 $1$jhicbyeuiktgikkks7in6mecr5bycmok$boniuegw5zfc77pfbqf14bjdxmzd3yajnngwdekzwhjk1daqjixb
 ```
 
-Then you can use the resulting string (that has a format `$<algorithm_id>$<salt>$<encrypted_data>`) as `password` or `enable_password`. Please mention, that this command will generate **different** encrypted strings even for the same passwords. That is the intended behaviour.
+Then you can use the resulting string (in the format `$<algorithm_id>$<salt>$<encrypted_data>`) as `password` or `enable_password`. Please note that this command will generate **different** encrypted strings even for the same passwords. That is the intended behaviour.
 
-### How to use WebUI behind proxy server
+### How to use the WebUI behind a proxy server
 
 Here is an example for nginx:
 
@@ -562,27 +560,27 @@ location /rspamd/ {
 }
 ```
 
-When a connection comes from an IP listed in `secure_ip` or from a unix socket then rspamd checks for 2 headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`. That helps to organize `secure_ip` when connections are forwarded to rspamd.
+When a connection comes from an IP listed in `secure_ip` or from a unix socket then rspamd checks for two headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`.
 
-### Where WebUI stores results
+### Where does the WebUI store settings
 
-WebUI sends `AJAX` requests for rspamd and rspamd can store data in so called `dynamic_conf` file. By default, it is defined in `options.inc` as following:
+The WebUI sends `AJAX` requests for rspamd and rspamd can store data in a `dynamic_conf` file. By default, it is defined in `options.inc` as following:
 
 ```
 dynamic_conf = "$DBDIR/rspamd_dynamic";
 ```
 
-Rspamd loads symbols and actions settings from this file with priority 5 which allows you to redefine those settings in override configuration.
+Rspamd loads symbols and actions settings from this file with priority 5 which allows you to redefine those settings in an override configuration.
 
-### Why cannot I edit some maps with WebUI
+### Why can't I edit some maps with the WebUI
 
-They might have insufficient permissions or be absent in the filesystem. Rspamd also ignores all `HTTP` maps. Signed maps are not yet supported as well.
+The map file might have insufficient permissions, or not exist. The WebUI also ignores all `HTTP` maps. Editing of signed maps is not yet supported.
 
-## LUA questions
+## Lua questions
 
 ### What is the difference between plugins and rules
 
-Rules are intended to do simple checks and return either `true` when rule matches or `false` when rule does not match. Rules normally cannot execute any asynchronous requests nor insert multiple symbols. In theory, you can do this but registering plugins by `rspamd_config:register_symbol` functions is the recommended way for such a task. Plugins are expected to insert results by themselves using `task:insert_result` method.
+Rules are intended to do simple checks and return either `true` when rule matches or `false` when rule does not match. Rules normally cannot execute any asynchronous requests or insert multiple symbols. In theory, you can do this but registering plugins by `rspamd_config:register_symbol` functions is the recommended way to perform such a task. Plugins are expected to insert results by themselves using the `task:insert_result` method.
 
 ### What is table form of a function call
 
@@ -598,17 +596,18 @@ func({
 }) -- table form
 ```
 
-Historically, all Lua methods used the sequential call type. However, it has changed so far: many functions converted to allow table form invocation. The advantages of table form are clear:
+Historically, all Lua methods used the sequential call type. This has changed somewhat, however, and has the following advantages:
 
-- you don't need to remember the exact **order** of arguments;
-- you can see not only a value but a `name = value` pair which helps in debugging;
-- it is easier to **extend** methods with new features and to keep backward compatibility;
+- you don't need to remember the exact **order** of arguments
+- you can see not only a value but a `name = value` pair which helps in debugging
+- it is easier to **extend** methods with new features and to keep backward compatibility
 - it is much easier to allow **optional** arguments
 
-However, there is a drawback: table call is slightly more expensive in terms of computational resources. The difference is negligible in the vast majority of case, so rspamd now supports table form for the most of function that accept more than two or three arguments. You can always check in the [documentation](https://rspamd.com/doc/lua/) about what forms are allowed for a particular function.
+However, there is a drawback: table calls are slightly more expensive in terms of computational resources. The difference is negligible in the majority of cases so rspamd now supports the table form for most functions which accept more than two or three arguments. You can check in the [documentation](https://rspamd.com/doc/lua/) which forms are allowed for a particular function.
 
 ### How to use rspamd modules
-The normal way is to use `require` statement:
+
+Use a `require` statement:
 
 ```lua
 local rspamd_logger = require 'rspamd_logger'
@@ -621,7 +620,7 @@ Rspamd also ships some additional lua modules which you can use in your rules:
 - [Lua LPEG](http://www.inf.puc-rio.br/~roberto/lpeg/)
 
 ### How to write to rspamd log
-[Rspamd logger](https://rspamd.com/doc/lua/logger.html) provides many convenient methods to log data from lua rules and plugins. You should consider using of the modern methods (with `x` suffix) that allows to use `%s` and `%1` .. `%N` to fine print passed arguments. `%s` format is used to print the **next** argument, and `%<number>` is used to process the particular argument (starting from `1`):
+[Rspamd logger](https://rspamd.com/doc/lua/logger.html) provides many convenient methods to log data from lua rules and plugins. You should consider using one of the modern methods (with `x` suffix) that allow use of `%s` and `%1` .. `%N` notation. The `%s` format is used to print the **next** argument, and `%<number>` is used to process the particular argument (starting from `1`):
 
 ```lua
 local rspamd_logger = require 'rspamd_logger'
@@ -630,26 +629,24 @@ rspamd_logger.infox("%s %1 %2 %s", "abc", 1, {true, 1})
 -- This will show abc abc 1 [[1] = true, [2] = 1]
 ```
 
-It is also possible to use other objects, such as rspamd task or rspamd config to augment logger output with task or config logging tag.
+It is also possible to use other objects, such as rspamd task or rspamd config to augment logger output with a task or config logging tag.
 
-Moreover, there is function `rspamd_logger.slog` that allows you to replace lua standard function `string.format` when you need to print complex objects, such as tables.
+Moreover, there is an `rspamd_logger.slog` function which allows replacement of the Lua standard function `string.format` when you need to print complex objects, such as tables.
 
 ### Should I use `local` for my variables
 
-The answer is yes: always use `local` variables unless it is completely inevitable. Many global variables can cause significant performance degradation for all lua scripts.
+Yes: always use `local` variables unless it is unavoidable. Too many global variables can cause significant performance degradation for Lua scripts.
 
 ## Rmilter questions
 
-This section specifically added for rmilter related questions and issues.
-
 ### Can rspamd run without Rmilter
 
-Rspamd can be integrated with MTA using different tools described in the [integration](integration.html) document. For Postfix and Sendmail MTA `rmilter` is the most appropriate tool so far. Moreover, rmilter adds missing features to rspamd, such as conditional greylisting, messages alteration and so on and so forth. That's why I would recommend using rmilter with rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
+Rspamd can be integrated with an MTA using different methods described in the [integration](integration.html) document. For Postfix and Sendmail MTA `rmilter` is the most appropriate tool. Moreover, rmilter adds some features to rspamd, such as conditional greylisting and message alteration. That's why I would recommend using rmilter with rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
 
-### How to setup dkim signing in rmilter
+### How to set up dkim signing in rmilter
 
 With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
-This could be done, for example by using `opendkim-genkey`:
+This can be done using `opendkim-genkey`:
 
     opendkim-genkey --domain=example.com --selector=dkim
 
@@ -668,12 +665,11 @@ dkim {
 };
 ```
 
-Please note, that rmilter will sign merely mail for the **authenticated** users, hence you should also ensure that `{auth_authen}` macro
-is passed to milter on `MAIL FROM` stage:
+Please note that rmilter will sign mail only for **authenticated** users, hence you should also ensure that `{auth_authen}` macro is passed to the milter at the `MAIL FROM` stage:
 
     milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
 
-It is also possible to sign mail for unauthenticated users which come from the local networks. To implement that, you could add the following option to your configuration:
+It is also possible to sign mail for unauthenticated users from the local network. To implement that, you could add the following option to your configuration:
 
 ~~~ucl
 dkim {
@@ -691,8 +687,7 @@ dkim {
 
 ### Setup whitelisting of reply messages
 
-It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of rmilter. To enable this
-feature, please ensure that you have `redis` server running and add the following lines to redis section:
+It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages using rmilter. To enable this feature, please ensure that you have a `redis` server running and add the following lines to the redis section:
 
 ```ucl
 redis {
@@ -708,11 +703,9 @@ redis {
 
 ### Mirror some messages to evaluate rspamd filtering quality
 
-Sometimes it might be useful to watch how messages are processed by rspamd. For this purposes, rmilter
-can mirror some percentage of messages to [beanstalk](http://kr.github.io/beanstalkd/) service and check them using rspamc.
-First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab
-a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine would get messages from beanstalk and feed them to
-rspamc. Here is an example configuration file:
+Sometimes it might be useful to monitor how messages are processed by rspamd. For this purpose, rmilter can mirror a percentage of messages to a [beanstalk](http://kr.github.io/beanstalkd/) instance and check them using rspamc.
+
+First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine will get messages from beanstalk and feed them to rspamc. Here is an example configuration file:
 
 ```ini
 [instance1]
@@ -767,11 +760,11 @@ if header :is "X-Spam-Action" "greylist" {
 }
 ```
 
-This script sort messages according their spam action and also copies messages with statistics symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
+This script sort messages according to their spam action and also copies messages with the symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
 
 ### How to distinguish inbound and outbound traffic for rspamd instance
 
-From version `1.8.0`, rmilter can pass a special header to rspamd called `settings-id`. This header allows rspamd to apply some specific settings for a message scanned. This allows to set custom scores for message and to disable some rules or even group of rules when processing. For example, we want to disable some rules for outbound scanning. Then we could create an entry in [settings](https://rspamd.com/doc/configuration/settings.html) module:
+From version 1.8.0 onwards, rmilter can pass a special header to rspamd called `settings-id`. This header allows rspamd to apply specific settings for a message. You can set custom scores for a message or disable some rules or even a group of rules when scanning. For example, if we want to disable some rules for outbound scanning we could create an entry in the [settings](https://rspamd.com/doc/configuration/settings.html) module:
 
 ```ucl
 settings {
@@ -794,7 +787,7 @@ settings {
 }
 ```
 
-Then, you can apply this settings ID on onbound MTA using rmilter configuration:
+Then, we can apply this setting ID on the outbound MTA using the rmilter configuration:
 
 ```ucl
 spamd {
