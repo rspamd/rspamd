@@ -222,7 +222,7 @@ example {
 }
 ```
 
-this might work unexpectedly: the new config would have an `example` section with a single key `option2`, while `option1` will be ignored. The global local file, namely, `rspamd.conf.local` has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or that things will be just ignored. The only exception from this rule is _metric_ section. So you could use something like:
+this might work unexpectedly: the new config would have an `example` section with a single key `option2`, while `option1` would be ignored. The global local file, namely `rspamd.conf.local`, has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or it will just be ignored. The only exception to this rule is the _metric_ section. So you could use something like:
 
 ```ucl
 metric "default" {
@@ -235,17 +235,17 @@ metric "default" {
 
 and add this to the `rspamd.conf.local` (but not override).
 
-### What are local.d and override.d then
-From `rspamd 1.2`, the default configuration also provides 2 more ways to extend or redefine each configuration file shipped with rspamd. Within section definition, it includes 2 files with different priorities:
+### What are the local.d and override.d directories
+From rspamd version 1.2 onwards, the default configuration provides two more ways to extend or redefine each configuration file shipped with rspamd. Each section definition includes two files with different priorities:
 
-- `etc/rspamd/local.d/<conf_file>` - included with priority `1` that allows to redefine and extend the default rules but `dynamic updates` or things redefined via `webui` will have higher priority and can redefine the values included
-- `etc/rspamd/override.d/<conf_file>` - included with priority `10` that allows to redefine all other things that could change configuration in rspamd
+- `etc/rspamd/local.d/<conf_file>` - included with priority `1` that allows you to redefine and extend the default rules; but `dynamic updates` or items redefined via the WebUI will have higher priority and can redefine the values included
+- `etc/rspamd/override.d/<conf_file>` - included with priority `10` that allows you to redefine all other things that could change configuration in rspamd
 
-Another important difference from the global override and local rules is that these files are included within section. Here is an example of utilizing of local.d for `modules.d/example.conf` configuration file:
+Another important difference from the global override and local rules is that these files are included within each section. Here is an example of utilizing local.d for the `modules.d/example.conf` configuration file:
 
 ```ucl
 example {
-  # Webui include
+  # WebUI include
   .include(try=true,priority=5) "${DBDIR}/dynamic/example.conf"
   # Local include
   .include(try=true,priority=1) "$LOCAL_CONFDIR/local.d/example.conf"
@@ -263,7 +263,7 @@ option2 = false;
 option3 = 1.0;
 ```
 
-in  `override.d/example.conf`:
+in `override.d/example.conf`:
 
 ```ucl
 option3 = 2.0;
@@ -281,10 +281,10 @@ example {
 }
 ```
 
-This looks complicated but it allows smoother updates and simplifies automatic management. If you unsure about your configuration, then take a look at `rspamadm configdump` command that displays the target configuration with many options available and `rspamadm confighelp` that shows help for many of rspamd options.
+This looks complicated but it allows smoother updates and simplifies automatic management. If you are unsure about your configuration, then take a look at the output of the `rspamadm configdump` command, which displays the target configuration with many options available, and the `rspamadm confighelp` command which shows help for many rspamd options.
 
 ### What are maps
-Maps are files that contain lists of keys or key-value pairs that could be dynamically reloaded by rspamd when changed. The important difference to configuration elements is that maps reloading is done on flight without expensive restart procedure. Another important thing about maps is that rspamd can monitor both file and HTTP maps for changes (modification time for files and HTTP `If-Modified-Since` header for HTTP maps). Rspamd supports `HTTP` and `file` maps so far.
+Maps are files that contain lists of keys or key-value pairs that could be dynamically reloaded by rspamd when changed. The important difference to configuration elements is that map reloading is done 'live' without and expensive restart procedure. Another important thing about maps is that rspamd can monitor both file and HTTP maps for changes (modification time for files and HTTP `If-Modified-Since` header for HTTP maps). So far, rspamd supports `HTTP` and `file` maps.
 
 ### What can be in the maps
 
@@ -292,10 +292,10 @@ Maps can have the following objects:
 
 - spaces and one line comments started by `#` symbols
 - keys
-- optional values separated by space character
+- optional values separated by a space character
 - keys with spaces enclosed in double quotes
 - keys with slashes (regular expressions) enclosed in slashes
-- `IP` addresses with optional mask
+- IP addresses with optional mask
 
 Here are some examples:
 
@@ -326,7 +326,7 @@ IP maps:
 ```
 
 ### How to sign maps
-From rspamd 1.2 each map can have digital signature using `EdDSA` algorithm. To sign a map you can use `rspamadm signtool` and to generate signing keypair - `rspamadm kaypair -s -u`:
+From rspamd version 1.2 onwards, each map can have a digital signature using the `EdDSA` algorithm. To sign a map you can use `rspamadm signtool` and to generate a signing keypair - `rspamadm kyypair -s -u`:
 
 ```ucl
 keypair {
@@ -339,25 +339,25 @@ keypair {
 }
 ```
 
-Then you can use `signtool` to edit map's file:
+Then you can use `signtool` to edit the map file:
 
 ```
 rspamadm signtool -e --editor=vim -k <keypair_file> <map_file>
 ```
 
-To enforce signing policies you should add `sign+` string to your map definition:
+To enforce signing policies you should add a `sign+` string to your map definition:
 
 ```
 map = "sign+http://example.com/map"
 ```
 
-To specify trusted key you could either put **public** key from the keypair to `local.d/options.inc` file as following:
+To specify the trusted key you could either put the **public** key from the keypair in the `local.d/options.inc` file as following:
 
 ```
 trusted_keys = ["<public key string>"];
 ```
 
-or add it as `key` definition to the map string:
+or add it as a `key` definition in the map string:
 
 ```
 map = "sign+key=<key_string>+http://example.com/map"
@@ -365,11 +365,11 @@ map = "sign+key=<key_string>+http://example.com/map"
 
 ### What are one-shot rules
 
-In rspamd, each rule can be triggered multiple times. For example, if a message has 10 URLs and 8 of them are in some URL blacklist (based on their unique tld), then rspamd would add URIBL rule 8 times for this message. Sometimes, that's not a desired behaviour - in that case just add `one_shot = true` to the symbol's definition in metric and that symbol won't be added more than one time.
+In rspamd, each rule can be triggered multiple times. For example, if a message has 10 URLs and 8 of them are in some URL blacklist (based on their unique tld), then rspamd would add a URIBL rule 8 times for this message. Sometimes, that's not a desired behaviour - in that case just add `one_shot = true` to the symbol's definition in the metric for that symbol and the symbol won't be added multiple times.
 
 ### What is the use of symbol groups
 
-Symbol groups are intended to group somehow similar rules. The most useful feature is that group names could be used in composite expressions as `gr:<group_name>` and it is possible to set joint limit of score for a specific group:
+Symbol groups are intended to group similar rules. This is most useful when group names are used in composite expressions such as `gr:<group_name>`. It is also possible to set a joint limit for the score of a specific group:
 
 ```ucl
 group "test" {
@@ -384,11 +384,11 @@ group "test" {
 }
 ```
 
-In this case, if `test1` and `test2` both matches their joint score won't be more than `15`.
+In this case, if `test1` and `test2` both match, their joint score won't be more than `15`.
 
-### Why some symbols are missing in the metric configuration
+### Why are some symbols missing in the metric configuration
 
-It is now possible to set up rules completely from lua. That allows to set all necessary attributes without touching of configuration files. However, it is still possible to override this default scores in any configuration file. Here is an example of such a rule:
+It is now possible to set up rules completely using Lua. This allows setting all necessary attributes without touching the configuration files. However, it is still possible to override the default scores in any configuration file. Here is an example of such a rule:
 
 ~~~lua
 rspamd_config.LONG_SUBJ = {
@@ -406,22 +406,22 @@ rspamd_config.LONG_SUBJ = {
 }
 ~~~
 
-You can use the same approach when your own writing rules in `rspamd.local.lua`.
+You can use the same approach when writing rules in `rspamd.local.lua`.
 
 ### How can I disable some rspamd rules safely
 
-The best way to do it is to add so called `condition` for the specific symbol. This could be done, for example, in `rspamd.local.lua`:
+The best way is to add a condition for the specific symbol. This could be done, for example, in `rspamd.local.lua`:
 
 ~~~lua
 rspamd_config:add_condition('SOME_SYMBOL', function(task) return false end)
 ~~~
 
-You can add more complex conditions but this one is the easiest in terms of rules management and upgradeability.
+You can add more complex conditions but this one is the easiest in terms of rules management and upgrades.
 
 ## Administration questions
 
 ### How to read rspamd logs
-Rspamd logs are augmented meaning that each log line normally includes `tag` which could help to figure out log lines that are related to, for example, a specific task:
+rspamd logs are augmented, meaning that each log line normally includes a `tag` which can help to figure out log lines that are related to, for example, a specific task:
 
 ```
 # fgrep 'b120f6' /var/log/rspamd/rspamd.log
@@ -432,7 +432,7 @@ Rspamd logs are augmented meaning that each log line normally includes `tag` whi
 ```
 
 ### Can I customize log output for logger
-Yes, there is `log_format` option in `logging.inc`. Here is a useful configuration snippet that allows to add more information comparing to the default rspamd logger output:
+Yes, there is `log_format` option in `logging.inc`. Here is a useful configuration snippet that allows you to add more information in comparison to the default rspamd logger output:
 
 ```ucl
 log_format =<<EOD
@@ -459,28 +459,28 @@ EOD
 
 As you can see, you can use both embedded log variables and Lua code to customize log output. More information is available in the [logger documentation](https://rspamd.com/doc/configuration/logging.html)
 
-### What backend should I select for statistics
+### Which back end should I use for statistics
 
-Currently, I'd recommend `redis` for statistics backend. You can convert the existing statistics in sqlite by using `rspamadm statconvert` routine:
+Currently, I recommend using `redis` for the statistics back end. You can convert existing statistics in sqlite by using `rspamadm statconvert` routine:
 
 ```
 rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379  -s BAYES_SPAM
 ```
 
-The only limitation of redis plugin is that it doesn't support per language statistics, however, this feature is not needed in the vast majority of use cases. Per user statistic in redis works in a different way than one in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
+The only limitation of the redis plugin is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
 
 
 ### What redis keys are used by rspamd
 
-Statistics module uses <SYMBOL><username> as keys. Statistical tokens live within hash table with the corresponding name. `ratelimit` module uses a key for each value stored in redis: <https://rspamd.com/doc/modules/ratelimit.html>
-DMARC module also uses multiple keys to store cumulative reports: a separate key for each domain.
+The statistics module uses <SYMBOL><username> as keys. Statistical tokens are recorded within a hash table with the corresponding name. The `ratelimit` module uses a key for each value stored in redis: <https://rspamd.com/doc/modules/ratelimit.html>
+The DMARC module also uses multiple keys to store cumulative reports: a separate key for each domain.
 
-In conclusion, it is recommended to set a limit for dynamic rspamd data stored in redis: ratelimits, ip reputation, dmarc reports. You could use a separate redis instance for for statistical tokens and set different limits (to fit all tokens) or separated database (by specifying `dbname` when setting up redis backend).  
+It is recommended to set a limit for dynamic rspamd data stored in redis ratelimits, ip reputation, and dmarc reports. You could use a separate redis instance for statistical tokens and set different limits or use separate databases (by specifying `dbname` when setting up the redis backend).  
 
-## Plugins questions
+## Plugin questions
 
 ### How to whitelist messages
-You have multiple options here. First of all, if you need to define whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at [whitelist module](https://rspamd.com/doc/modules/whitelist.html). Otherwise, there is [multimap module](https://rspamd.com/doc/modules/multimap.html) that implements different types of checks to add symbols according to lists match or to set pre-action allowing to inevitably reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
+You have multiple options here. First of all, if you need to define a whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at the [whitelist module](https://rspamd.com/doc/modules/whitelist.html). Otherwise, there is a [multimap module](https://rspamd.com/doc/modules/multimap.html) that implements different types of checks to add symbols according to list matches or to set pre-actions which allow you to reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
 
 ```
 exe
@@ -501,7 +501,7 @@ filename_blacklist {
 }
 ```
 
-Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You might set `want_spam = yes` in settings' action and rspamd would skip messages that satisfy a particular settings rule's conditions.
+Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You can specify `want_spam = yes` in a settings action and rspamd would skip messages that satisfy a particular settings rule's conditions.
 
 ### What are filters, pre-filters and post-filters
 Rspamd allows different types of filters depending on time of execution.
