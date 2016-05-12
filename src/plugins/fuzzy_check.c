@@ -1072,8 +1072,12 @@ fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		struct mime_text_part *part)
 {
 	gchar key[32];
+	gint key_part;
 
-	rspamd_snprintf (key, sizeof (key), "%p%s", part, rule->algorithm_str);
+	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+			key_part);
+
 	return rspamd_mempool_get_variable (pool, key);
 }
 
@@ -1084,8 +1088,11 @@ fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
 		struct rspamd_fuzzy_encrypted_shingle_cmd *data)
 {
 	gchar key[32];
+	gint key_part;
 
-	rspamd_snprintf (key, sizeof (key), "%p%s", part, rule->algorithm_str);
+	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+			key_part);
 	/* Key is copied */
 	rspamd_mempool_set_variable (pool, key, data, NULL);
 }
@@ -1145,6 +1152,15 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 			memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
 			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 		}
+
+		/*
+		 * We always save encrypted command as it can handle both
+		 * encrypted and unencrypted requests.
+		 *
+		 * Since it is copied when obtained from the cache, it is safe to use
+		 * it this way.
+		 */
+		fuzzy_cmd_set_cached (rule, pool, part, encshcmd);
 	}
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
