@@ -93,10 +93,10 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor,
 
 	ottery_rand_bytes (key, sizeof (key));
 	input = generate_fuzzy_words (cnt, max_len);
-	ts1 = rspamd_get_ticks ();
+	ts1 = rspamd_get_virtual_ticks ();
 	sgl = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, alg);
-	ts2 = rspamd_get_ticks ();
+	ts2 = rspamd_get_virtual_ticks ();
 	permute_vector (input, perm_factor);
 	sgl_permuted = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, alg);
@@ -118,7 +118,7 @@ rspamd_shingles_test_func (void)
 {
 	enum rspamd_shingle_alg alg = RSPAMD_SHINGLES_OLD;
 
-	for (alg = RSPAMD_SHINGLES_OLD; alg <= RSPAMD_SHINGLES_MUMHASH; alg ++) {
+	for (alg = RSPAMD_SHINGLES_OLD; alg <= RSPAMD_SHINGLES_FAST; alg ++) {
 		test_case (200, 10, 0.1, alg);
 		test_case (500, 20, 0.01, alg);
 		test_case (5000, 20, 0.01, alg);

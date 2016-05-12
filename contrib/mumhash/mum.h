@@ -43,6 +43,7 @@
 #ifndef __MUM_HASH__
 #define __MUM_HASH__
 
+#include "config.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,8 +57,8 @@ typedef unsigned __int64 uint64_t;
 
 #ifdef __GNUC__
 #define _MUM_ATTRIBUTE_UNUSED  __attribute__((unused))
-#define _MUM_OPTIMIZE(opts) __attribute__((__optimize__ (opts)))
-#define _MUM_TARGET(opts) __attribute__((__target__ (opts)))
+#define _MUM_OPTIMIZE(opts) RSPAMD_OPTIMIZE(opts)
+#define _MUM_TARGET(opts)
 #else
 #define _MUM_ATTRIBUTE_UNUSED
 #define _MUM_OPTIMIZE(opts)
