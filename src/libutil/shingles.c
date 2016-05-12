@@ -133,7 +133,7 @@ rspamd_shingles_generate (GArray *input,
 									*(guint64 *)keys[j]);
 					val = 0;
 					for (k = 0; k < SHINGLES_WINDOW; k ++) {
-						val ^= res[j * SHINGLES_WINDOW + k];
+						val ^= res[j * SHINGLES_WINDOW + k] >> (8 * k);
 					}
 
 					g_assert (hlen > beg);
