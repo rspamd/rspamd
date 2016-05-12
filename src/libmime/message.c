@@ -1079,7 +1079,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				 * We use static hash seed if we would want to use that in shingles
 				 * computation in future
 				 */
-				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_MUMHASH,
+				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
 						w->begin, w->len, words_hash_seed);
 				g_array_append_val (part->normalized_hashes, h);
 			}
