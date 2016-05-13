@@ -15,7 +15,7 @@
  */
 #include "config.h"
 #include "util.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 #include "url.h"
 #include <math.h>
 
@@ -182,20 +182,6 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 	return FALSE;
 }
 
-#if defined(__LP64__) || defined(_LP64)
-#define XXH_STATE XXH64_state_t
-#define XXH_RESET XXH64_reset
-#define XXH_UPDATE XXH64_update
-#define XXH_DIGEST XXH64_digest
-#define XXH_ONESHOT XXH64
-#else
-#define XXH_STATE XXH32_state_t
-#define XXH_RESET XXH32_reset
-#define XXH_UPDATE XXH32_update
-#define XXH_DIGEST XXH32_digest
-#define XXH_ONESHOT XXH32
-#endif
-
 static guint
 rspamd_icase_hash (const gchar *in, gsize len)
 {
@@ -208,10 +194,10 @@ rspamd_icase_hash (const gchar *in, gsize len)
 		} c;
 		guint32 pp;
 	} u;
-	XXH_STATE st;
+	rspamd_cryptobox_fast_hash_state_t st;
 
 	fp = len - leftover;
-	XXH_RESET (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 
 	for (i = 0; i != fp; i += 4) {
 		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3];
@@ -219,7 +205,7 @@ rspamd_icase_hash (const gchar *in, gsize len)
 		u.c.c2 = lc_map[u.c.c2];
 		u.c.c3 = lc_map[u.c.c3];
 		u.c.c4 = lc_map[u.c.c4];
-		XXH_UPDATE (&st, &u.pp, sizeof (u));
+		rspamd_cryptobox_fast_hash_update (&st, &u.pp, sizeof (u));
 	}
 
 	u.pp = 0;
@@ -230,11 +216,11 @@ rspamd_icase_hash (const gchar *in, gsize len)
 		u.c.c2 = lc_map[(guchar)s[i++]];
 	case 1:
 		u.c.c1 = lc_map[(guchar)s[i]];
-		XXH_UPDATE (&st, &u.pp, leftover);
+		rspamd_cryptobox_fast_hash_update (&st, &u.pp, leftover);
 		break;
 	}
 
-	return XXH_DIGEST (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 guint
@@ -255,7 +241,7 @@ rspamd_str_hash (gconstpointer key)
 
 	len = strlen ((const gchar *)key);
 
-	return XXH_ONESHOT (key, len, rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash (key, len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -1814,17 +1800,17 @@ guint
 rspamd_url_hash (gconstpointer u)
 {
 	const struct rspamd_url *url = u;
-	XXH_STATE st;
+	rspamd_cryptobox_fast_hash_state_t st;
 
-	XXH_RESET (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 
 	if (url->urllen > 0) {
-		XXH_UPDATE (&st, url->string, url->urllen);
+		rspamd_cryptobox_fast_hash_update (&st, url->string, url->urllen);
 	}
 
-	XXH_UPDATE (&st, &url->flags, sizeof (url->flags));
+	rspamd_cryptobox_fast_hash_update (&st, &url->flags, sizeof (url->flags));
 
-	return XXH_DIGEST (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 /* Compare two emails for building emails tree */

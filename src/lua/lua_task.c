@@ -23,7 +23,7 @@
 #include "cfg_file.h"
 #include "email_addr.h"
 #include "utlist.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 
 /***
  * @module rspamd_task
@@ -1568,7 +1568,8 @@ lua_task_str_to_get_type (lua_State *L, gint pos)
 		type = lua_tolstring (L, pos, &sz);
 
 		if (type && sz > 0) {
-			h = XXH64 (type, sz, 0xdeadbabe);
+			h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+					type, sz, 0xdeadbabe);
 
 			switch (h) {
 			case 0xDA081341FB600389ULL: /* mime */

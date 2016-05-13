@@ -69,6 +69,8 @@ struct fuzzy_mime_type {
 struct fuzzy_rule {
 	struct upstream_list *servers;
 	const gchar *symbol;
+	const gchar *algorithm_str;
+	enum rspamd_shingle_alg alg;
 	GHashTable *mappings;
 	GList *mime_types;
 	GList *fuzzy_headers;
@@ -363,6 +365,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	rule = fuzzy_rule_new (fuzzy_module_ctx->default_symbol,
 			fuzzy_module_ctx->fuzzy_pool);
 	rule->learn_condition_cb = -1;
+	rule->alg = RSPAMD_SHINGLES_OLD;
 
 	if ((value = ucl_object_lookup (obj, "mime_types")) != NULL) {
 		it = NULL;
@@ -408,6 +411,46 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	}
 	if ((value = ucl_object_lookup (obj, "skip_unknown")) != NULL) {
 		rule->skip_unknown = ucl_obj_toboolean (value);
+	}
+
+	if ((value = ucl_object_lookup (obj, "algorithm")) != NULL) {
+		rule->algorithm_str = ucl_object_tostring (value);
+
+		if (rule->algorithm_str) {
+			if (g_ascii_strcasecmp (rule->algorithm_str, "old") == 0 ||
+					g_ascii_strcasecmp (rule->algorithm_str, "siphash") == 0) {
+				rule->alg = RSPAMD_SHINGLES_OLD;
+			}
+			else if (g_ascii_strcasecmp (rule->algorithm_str, "xxhash") == 0) {
+				rule->alg = RSPAMD_SHINGLES_XXHASH;
+			}
+			else if (g_ascii_strcasecmp (rule->algorithm_str, "mumhash") == 0) {
+				rule->alg = RSPAMD_SHINGLES_MUMHASH;
+			}
+			else if (g_ascii_strcasecmp (rule->algorithm_str, "fasthash") == 0 ||
+					g_ascii_strcasecmp (rule->algorithm_str, "fast") == 0) {
+				rule->alg = RSPAMD_SHINGLES_FAST;
+			}
+			else {
+				msg_warn_config ("unknown algorithm: %s, use siphash by default");
+			}
+		}
+	}
+
+	/* Set a consistent and short string name */
+	switch (rule->alg) {
+	case RSPAMD_SHINGLES_OLD:
+		rule->algorithm_str = "sip";
+		break;
+	case RSPAMD_SHINGLES_XXHASH:
+		rule->algorithm_str = "xx";
+		break;
+	case RSPAMD_SHINGLES_MUMHASH:
+		rule->algorithm_str = "mum";
+		break;
+	case RSPAMD_SHINGLES_FAST:
+		rule->algorithm_str = "fast";
+		break;
 	}
 
 	if ((value = ucl_object_lookup (obj, "servers")) != NULL) {
@@ -832,12 +875,12 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 
 		str = ucl_obj_tostring (value);
 
-		if (!rspamd_map_is_map (str)) {
+		if (str && !rspamd_map_is_map (str)) {
 			radix_add_generic_iplist (str,
 					&fuzzy_module_ctx->whitelist);
 		}
 		else {
-			rspamd_map_add (cfg, str,
+			rspamd_map_add_from_ucl (cfg, value,
 					"Fuzzy whitelist", rspamd_radix_read, rspamd_radix_fin,
 					(void **)&fuzzy_module_ctx->whitelist);
 
@@ -1023,6 +1066,37 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	return io;
 }
 
+static void *
+fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
+		rspamd_mempool_t *pool,
+		struct mime_text_part *part)
+{
+	gchar key[32];
+	gint key_part;
+
+	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+			key_part);
+
+	return rspamd_mempool_get_variable (pool, key);
+}
+
+static void
+fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
+		rspamd_mempool_t *pool,
+		struct mime_text_part *part,
+		struct rspamd_fuzzy_encrypted_shingle_cmd *data)
+{
+	gchar key[32];
+	gint key_part;
+
+	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+			key_part);
+	/* Key is copied */
+	rspamd_mempool_set_variable (pool, key, data, NULL);
+}
+
 /*
  * Create fuzzy command from a text part
  */
@@ -1035,7 +1109,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		struct mime_text_part *part)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd;
-	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd;
+	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
 	struct rspamd_shingle *sh;
 	guint i;
 	rspamd_cryptobox_hash_state_t st;
@@ -1043,40 +1117,56 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	GArray *words;
 	struct fuzzy_cmd_io *io;
 
-	if (rule->peer_key) {
-		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
+	cached = fuzzy_cmd_get_cached (rule, pool, part);
+
+	if (cached) {
+		/* Copy cached */
+		encshcmd = rspamd_mempool_alloc (pool, sizeof (*encshcmd));
+		memcpy (encshcmd, cached, sizeof (*encshcmd));
 		shcmd = &encshcmd->cmd;
 	}
 	else {
-		shcmd = rspamd_mempool_alloc0 (pool, sizeof (*shcmd));
-		encshcmd = NULL;
-	}
+		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
+		shcmd = &encshcmd->cmd;
 
-	/*
-	 * Generate hash from all words in the part
-	 */
-	rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
-	words = fuzzy_preprocess_words (part, pool);
+		/*
+		 * Generate hash from all words in the part
+		 */
+		rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
+		words = fuzzy_preprocess_words (part, pool);
 
-	for (i = 0; i < words->len; i ++) {
-		word = &g_array_index (words, rspamd_ftok_t, i);
-		rspamd_cryptobox_hash_update (&st, word->begin, word->len);
-	}
-	rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);
+		for (i = 0; i < words->len; i ++) {
+			word = &g_array_index (words, rspamd_ftok_t, i);
+			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
+		}
+		rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);
 
-	msg_debug_pool ("loading shingles with key %*xs", 16,
-			rule->shingles_key->str);
-	sh = rspamd_shingles_generate (words,
-			rule->shingles_key->str, pool,
-			rspamd_shingles_default_filter, NULL);
-	if (sh != NULL) {
-		memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
-		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+		msg_debug_pool ("loading shingles of type %s with key %*xs",
+				rule->algorithm_str,
+				16, rule->shingles_key->str);
+		sh = rspamd_shingles_generate (words,
+				rule->shingles_key->str, pool,
+				rspamd_shingles_default_filter, NULL,
+				rule->alg);
+		if (sh != NULL) {
+			memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
+			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+		}
+
+		/*
+		 * We always save encrypted command as it can handle both
+		 * encrypted and unencrypted requests.
+		 *
+		 * Since it is copied when obtained from the cache, it is safe to use
+		 * it this way.
+		 */
+		fuzzy_cmd_set_cached (rule, pool, part, encshcmd);
 	}
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
 	shcmd->basic.cmd = c;
 	shcmd->basic.version = RSPAMD_FUZZY_VERSION;
+
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
 		shcmd->basic.value = weight;

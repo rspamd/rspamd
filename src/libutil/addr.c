@@ -17,7 +17,7 @@
 #include "addr.h"
 #include "util.h"
 #include "logger.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 #include "radix.h"
 #include "unix-std.h"
 /* pwd and grp */
@@ -1352,28 +1352,28 @@ guint
 rspamd_inet_address_hash (gconstpointer a)
 {
 	const rspamd_inet_addr_t *addr = a;
-	XXH64_state_t st;
+	rspamd_cryptobox_fast_hash_state_t st;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
-	XXH64_update (&st, &addr->af, sizeof (addr->af));
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_update (&st, &addr->af, sizeof (addr->af));
 
 
 	if (addr->af == AF_UNIX && addr->u.un) {
-		XXH64_update (&st, addr->u.un, sizeof (*addr->u.un));
+		rspamd_cryptobox_fast_hash_update (&st, addr->u.un, sizeof (*addr->u.un));
 	}
 	else {
 		/* We ignore port part here */
 		if (addr->af == AF_INET) {
-			XXH64_update (&st, &addr->u.in.addr.s4.sin_addr,
+			rspamd_cryptobox_fast_hash_update (&st, &addr->u.in.addr.s4.sin_addr,
 					sizeof (addr->u.in.addr.s4.sin_addr));
 		}
 		else {
-			XXH64_update (&st, &addr->u.in.addr.s6.sin6_addr,
+			rspamd_cryptobox_fast_hash_update (&st, &addr->u.in.addr.s6.sin6_addr,
 					sizeof (addr->u.in.addr.s6.sin6_addr));
 		}
 	}
 
-	return XXH64_digest (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 gboolean

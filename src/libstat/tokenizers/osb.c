@@ -19,7 +19,6 @@
 
 #include "tokenizers.h"
 #include "stat_internal.h"
-#include "xxhash.h"
 #include "cryptobox.h"
 
 /* Size for features pipe */
@@ -280,7 +279,8 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	window_size = osb_cf->window_size;
 
 	if (prefix) {
-		seed = XXH64 (prefix, strlen (prefix), osb_cf->seed);
+		seed = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+				prefix, strlen (prefix), osb_cf->seed);
 	}
 	else {
 		seed = osb_cf->seed;
@@ -300,7 +300,8 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		else {
 			/* We know that the words are normalized */
 			if (osb_cf->ht == RSPAMD_OSB_HASH_XXHASH) {
-				cur = XXH64 (token->begin, token->len, osb_cf->seed);
+				cur = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+						token->begin, token->len, osb_cf->seed);
 			}
 			else {
 				rspamd_cryptobox_siphash ((guchar *)&cur, token->begin,

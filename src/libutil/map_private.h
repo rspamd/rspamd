@@ -24,30 +24,57 @@
 
 typedef void (*rspamd_map_dtor) (gpointer p);
 
+#define msg_err_map(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+		"map", map->tag, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_map(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+		"map", map->tag, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_map(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+		"map", map->tag, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_map(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "map", map->tag, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 enum fetch_proto {
 	MAP_PROTO_FILE,
 	MAP_PROTO_HTTP,
 };
-struct rspamd_map {
-	rspamd_mempool_t *pool;
-	struct rspamd_dns_resolver *r;
+
+struct rspamd_map_backend {
+	enum fetch_proto protocol;
 	gboolean is_signed;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
+	union {
+		struct file_map_data *fd;
+		struct http_map_data *hd;
+	} data;
+	gchar *uri;
+	ref_entry_t ref;
+};
+
+struct rspamd_map {
+	struct rspamd_dns_resolver *r;
 	struct rspamd_config *cfg;
-	enum fetch_proto protocol;
+	GPtrArray *backends;
 	map_cb_t read_callback;
 	map_fin_cb_t fin_callback;
 	void **user_data;
+	struct event_base *ev_base;
+	gchar *description;
+	gchar *name;
+	guint32 id;
 	struct event ev;
 	struct timeval tv;
-	struct event_base *ev_base;
-	void *map_data;
-	gchar *uri;
-	gchar *description;
-	guint32 id;
-	guint32 checksum;
+	gdouble poll_timeout;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
+	gchar tag[MEMPOOL_UID_LEN];
 	rspamd_map_dtor dtor;
 	gpointer dtor_data;
 };
@@ -56,7 +83,7 @@ struct rspamd_map {
  * Data specific to file maps
  */
 struct file_map_data {
-	const gchar *filename;
+	gchar *filename;
 	struct stat st;
 };
 
@@ -64,12 +91,12 @@ struct file_map_data {
  * Data specific to HTTP maps
  */
 struct http_map_data {
-	struct addrinfo *addr;
-	guint16 port;
 	gchar *path;
 	gchar *host;
+	gchar *last_signature;
 	time_t last_checked;
 	gboolean request_sent;
+	guint16 port;
 };
 
 enum rspamd_map_http_stage {
@@ -80,20 +107,31 @@ enum rspamd_map_http_stage {
 	map_load_signature
 };
 
+struct map_periodic_cbdata {
+	struct rspamd_map *map;
+	struct map_cb_data cbdata;
+	gboolean need_modify;
+	gboolean errored;
+	guint cur_backend;
+	ref_entry_t ref;
+};
+
 struct http_callback_data {
 	struct event_base *ev_base;
 	struct rspamd_http_connection *conn;
 	rspamd_inet_addr_t *addr;
-	struct timeval tv;
 	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
 	struct http_map_data *data;
-	struct map_cb_data cbdata;
+	struct map_periodic_cbdata *periodic;
 	struct rspamd_cryptobox_pubkey *pk;
+	gboolean check;
 	gchar *tmpfile;
 
 	enum rspamd_map_http_stage stage;
 	gint out_fd;
 	gint fd;
+	struct timeval tv;
 
 	ref_entry_t ref;
 };

@@ -1795,10 +1795,9 @@ url_tld_end (struct url_callback_data *cb,
 {
 	const gchar *p;
 
-	/* A url must be finished by tld, so it must be followed by space character */
 	p = pos + match->m_len;
 
-	if (p == cb->end || g_ascii_isspace (*p) || *p == ',') {
+	if (p == cb->end) {
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
@@ -2302,7 +2301,7 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 {
 	struct rspamd_url_mimepart_cbdata mcbd;
 
-	if (part->content == NULL || part->content->len == 0) {
+	if (part->stripped_content == NULL || part->stripped_content->len == 0) {
 		msg_warn_task ("got empty text part");
 		return;
 	}
@@ -2310,8 +2309,8 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	mcbd.task = task;
 	mcbd.part = part;
 
-	rspamd_url_find_multiple (task->task_pool, part->content->data,
-			part->content->len, is_html,
+	rspamd_url_find_multiple (task->task_pool, part->stripped_content->data,
+			part->stripped_content->len, is_html,
 			rspamd_url_text_part_callback, &mcbd);
 
 	/* Handle offsets of this part */

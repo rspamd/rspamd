@@ -15,7 +15,7 @@
  */
 #include "config.h"
 #include "bloom.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 
 /* 4 bits are used for counting (implementing delete operation) */
 #define SIZE_BIT 4
@@ -107,7 +107,8 @@ rspamd_bloom_add (rspamd_bloom_filter_t * bloom, const gchar *s)
 	}
 	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = XXH64 (s, len, bloom->seeds[n]) % bloom->asize;
+		v = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+				s, len, bloom->seeds[n]) % bloom->asize;
 		INCBIT (bloom->a, v, t);
 	}
 
@@ -126,7 +127,8 @@ rspamd_bloom_del (rspamd_bloom_filter_t * bloom, const gchar *s)
 	}
 	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = XXH64 (s, len, bloom->seeds[n]) % bloom->asize;
+		v = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+				s, len, bloom->seeds[n]) % bloom->asize;
 		DECBIT (bloom->a, v, t);
 	}
 
@@ -145,7 +147,8 @@ rspamd_bloom_check (rspamd_bloom_filter_t * bloom, const gchar *s)
 	}
 	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = XXH64 (s, len, bloom->seeds[n]) % bloom->asize;
+		v = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+				s, len, bloom->seeds[n]) % bloom->asize;
 		if (!(GETBIT (bloom->a, v))) {
 			return FALSE;
 		}

@@ -21,7 +21,7 @@
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
 #include "ottery.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 #include "utlist.h"
 #include "unix-std.h"
 /* sysexits */
@@ -409,30 +409,30 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 static inline uintptr_t
 make_listen_key (struct rspamd_worker_bind_conf *cf)
 {
-	XXH64_state_t st;
+	rspamd_cryptobox_fast_hash_state_t st;
 	guint i, keylen;
 	guint8 *key;
 	rspamd_inet_addr_t *addr;
 	guint16 port;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 	if (cf->is_systemd) {
-		XXH64_update (&st, "systemd", sizeof ("systemd"));
-		XXH64_update (&st, &cf->cnt, sizeof (cf->cnt));
+		rspamd_cryptobox_fast_hash_update (&st, "systemd", sizeof ("systemd"));
+		rspamd_cryptobox_fast_hash_update (&st, &cf->cnt, sizeof (cf->cnt));
 	}
 	else {
-		XXH64_update (&st, cf->name, strlen (cf->name));
+		rspamd_cryptobox_fast_hash_update (&st, cf->name, strlen (cf->name));
 		for (i = 0; i < cf->cnt; i ++) {
 			addr = g_ptr_array_index (cf->addrs, i);
 			key = rspamd_inet_address_get_radix_key (
 					addr, &keylen);
-			XXH64_update (&st, key, keylen);
+			rspamd_cryptobox_fast_hash_update (&st, key, keylen);
 			port = rspamd_inet_address_get_port (addr);
-			XXH64_update (&st, &port, sizeof (port));
+			rspamd_cryptobox_fast_hash_update (&st, &port, sizeof (port));
 		}
 	}
 
-	return XXH64_digest (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 static void
@@ -959,7 +959,7 @@ rspamd_control_handler (gint fd, short what, gpointer arg)
 static guint
 rspamd_spair_hash (gconstpointer p)
 {
-	return XXH64 (p, PAIR_ID_LEN, rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash (p, PAIR_ID_LEN, rspamd_hash_seed ());
 }
 
 static gboolean

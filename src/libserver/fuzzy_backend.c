@@ -93,6 +93,7 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_EXPIRE,
 	RSPAMD_FUZZY_BACKEND_VACUUM,
 	RSPAMD_FUZZY_BACKEND_DELETE_ORPHANED,
+	RSPAMD_FUZZY_BACKEND_VERSION,
 	RSPAMD_FUZZY_BACKEND_MAX
 };
 static struct rspamd_fuzzy_stmts {
@@ -211,6 +212,13 @@ static struct rspamd_fuzzy_stmts {
 		.args = "II",
 		.stmt = NULL,
 		.result = SQLITE_DONE
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_VERSION,
+		.sql = "PRAGMA user_version;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_ROW
 	},
 };
 
@@ -624,7 +632,8 @@ rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend)
 
 gboolean
 rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd)
+		const struct rspamd_fuzzy_cmd *cmd,
+		time_t timestamp)
 {
 	int rc, i;
 	gint64 id, flag;
@@ -680,7 +689,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				(gint) cmd->flag,
 				cmd->digest,
 				(gint64) cmd->value,
-				(gint64) time (NULL));
+				(gint64) timestamp);
 
 		if (rc == SQLITE_OK) {
 			if (cmd->shingles_count > 0) {
@@ -722,7 +731,9 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 gboolean
 rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
 {
-	gint rc, wal_frames, wal_checkpointed;
+	gint rc, wal_frames, wal_checkpointed, ver;
+	gint64 version = 0;
+	gchar version_buf[128];
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 			RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
@@ -743,6 +754,17 @@ rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
 			msg_info_fuzzy_backend ("total number of frames in the wal file: "
 					"%d, checkpointed: %d", wal_frames, wal_checkpointed);
 		}
+	}
+
+	/* Get and update version */
+	ver = rspamd_fuzzy_backend_version (backend);
+	++ver;
+	rspamd_snprintf (version_buf, sizeof (version_buf), "PRAGMA user_version=%d;",
+			ver);
+
+	if (sqlite3_exec (backend->db, version_buf, NULL, NULL, NULL) != SQLITE_OK) {
+			msg_err_fuzzy_backend ("cannot set database version to %L: %s",
+					version, sqlite3_errmsg (backend->db));
 	}
 
 	return TRUE;
@@ -951,6 +973,24 @@ rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend)
 	}
 
 	return 0;
+}
+
+gint
+rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend)
+{
+	gint ret = 0;
+
+	if (backend) {
+		if (rspamd_fuzzy_backend_run_stmt (backend, FALSE,
+				RSPAMD_FUZZY_BACKEND_VERSION) == SQLITE_OK) {
+			ret = sqlite3_column_int64 (
+					prepared_stmts[RSPAMD_FUZZY_BACKEND_VERSION].stmt, 0);
+		}
+
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_VERSION);
+	}
+
+	return ret;
 }
 
 gsize

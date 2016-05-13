@@ -1894,7 +1894,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Limit of files count in `cores_dir`");
 	rspamd_rcl_add_default_handler (sub,
 			"local_addrs",
-			rspamd_rcl_parse_struct_string,
+			rspamd_rcl_parse_struct_ucl,
 			G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
 			0,
 			"Use the specified addresses as local ones");
@@ -2976,13 +2976,13 @@ static guint
 rspamd_worker_param_key_hash (gconstpointer p)
 {
 	const struct rspamd_worker_param_key *k = p;
-	XXH64_state_t st;
+	rspamd_cryptobox_fast_hash_state_t st;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
-	XXH64_update (&st, k->name, strlen (k->name));
-	XXH64_update (&st, &k->ptr, sizeof (gpointer));
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_update (&st, k->name, strlen (k->name));
+	rspamd_cryptobox_fast_hash_update (&st, &k->ptr, sizeof (gpointer));
 
-	return XXH64_digest (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 static gboolean

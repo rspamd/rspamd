@@ -24,7 +24,7 @@
 #include "email_addr.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"
@@ -42,6 +42,7 @@
 static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 static rspamd_regexp_t *utf_compatible_re = NULL;
+static const guint64 words_hash_seed = 0xdeadbabe;
 
 static GQuark
 rspamd_message_quark (void)
@@ -1074,7 +1075,12 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			}
 
 			if (w->len > 0) {
-				h = XXH64 (w->begin, w->len, rspamd_hash_seed ());
+				/*
+				 * We use static hash seed if we would want to use that in shingles
+				 * computation in future
+				 */
+				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+						w->begin, w->len, words_hash_seed);
 				g_array_append_val (part->normalized_hashes, h);
 			}
 		}
@@ -1094,7 +1100,7 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 {
 	guint s1len, s2len, x, y, lastdiag, olddiag;
 	guint *column, ret;
-	guint64 *h1, *h2;
+	guint64 h1, h2;
 	gint eq;
 	static const guint max_words = 8192;
 
@@ -1118,9 +1124,9 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 
 		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
 			olddiag = column[y];
-			h1 = &g_array_index (w1, guint64, y - 1);
-			h2 = &g_array_index (w2, guint64, x - 1);
-			eq = h1 == h2;
+			h1 = g_array_index (w1, guint64, y - 1);
+			h2 = g_array_index (w2, guint64, x - 1);
+			eq = (h1 == h2) ? 1 : 0;
 			/*
 			 * Cost of replacement is twice higher than cost of add/delete
 			 * to calculate percentage properly
@@ -1262,7 +1268,6 @@ process_text_part (struct rspamd_task *task,
 				type,
 				text_part);
 		text_part->orig = part_content;
-		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 		g_ptr_array_add (task->text_parts, text_part);
 	}
 	else {
@@ -1303,6 +1308,10 @@ process_text_part (struct rspamd_task *task,
 			remain -= p - c + 1;
 			c = p + 1;
 		}
+	}
+
+	if (!IS_PART_HTML (text_part)) {
+		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 	}
 }
 

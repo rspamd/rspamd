@@ -209,6 +209,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 	struct rspamd_fuzzy_cmd *cmd;
 	gpointer ptr;
 	guint nupdates = 0;
+	time_t now = time (NULL);
 
 	if (ctx->updates_pending &&
 			g_queue_get_length (ctx->updates_pending) > 0 &&
@@ -227,7 +228,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 			}
 
 			if (cmd->cmd == FUZZY_WRITE) {
-				rspamd_fuzzy_backend_add (ctx->backend, ptr);
+				rspamd_fuzzy_backend_add (ctx->backend, ptr, now);
 			}
 			else {
 				rspamd_fuzzy_backend_del (ctx->backend, ptr);
@@ -248,7 +249,8 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 			}
 
 			g_queue_clear (ctx->updates_pending);
-			msg_info ("updated fuzzy storage: %ud updates processed", nupdates);
+			msg_info ("updated fuzzy storage: %ud updates processed, version: %d",
+					nupdates, rspamd_fuzzy_backend_version (ctx->backend));
 		}
 		else {
 			msg_err ("cannot commit update transaction to fuzzy backend, "

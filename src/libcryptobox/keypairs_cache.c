@@ -18,7 +18,6 @@
 #include "keypairs_cache.h"
 #include "keypair_private.h"
 #include "hash.h"
-#include "xxhash.h"
 
 struct rspamd_keypair_elt {
 	struct rspamd_cryptobox_nm *nm;
@@ -43,7 +42,8 @@ rspamd_keypair_hash (gconstpointer ptr)
 {
 	struct rspamd_keypair_elt *elt = (struct rspamd_keypair_elt *)ptr;
 
-	return XXH64 (elt->pair, sizeof (elt->pair), rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash (elt->pair, sizeof (elt->pair),
+			rspamd_hash_seed ());
 }
 
 static gboolean

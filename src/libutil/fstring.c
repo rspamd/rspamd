@@ -400,3 +400,19 @@ rspamd_ftok_cstr_equal (const rspamd_ftok_t *s, const gchar *pat,
 
 	return (rspamd_ftok_cmp (s, &srch) == 0);
 }
+
+gchar *
+rspamd_ftokdup (const rspamd_ftok_t *src)
+{
+	gchar *newstr;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	newstr = g_malloc (src->len + 1);
+	memcpy (newstr, src->begin, src->len);
+	newstr[src->len] = '\0';
+
+	return newstr;
+}

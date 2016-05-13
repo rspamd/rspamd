@@ -145,7 +145,7 @@ struct rspamd_controller_worker_ctx {
 	/* SSL private key */
 	gchar *ssl_key;
 	/* A map of secure IP */
-	GList *secure_ip;
+	const ucl_object_t *secure_ip;
 	radix_compressed_t *secure_map;
 
 	/* Static files dir */
@@ -775,9 +775,9 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur, *tmp = NULL;
 	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
 	gboolean editable;
 	ucl_object_t *obj, *top;
-
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -788,8 +788,10 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	cur = session->ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
-		if (map->protocol == MAP_PROTO_FILE) {
-			if (access (map->uri, R_OK) == 0) {
+		bk = g_ptr_array_index (map->backends, 0);
+
+		if (bk->protocol == MAP_PROTO_FILE) {
+			if (access (bk->uri, R_OK) == 0) {
 				tmp = g_list_prepend (tmp, map);
 			}
 		}
@@ -799,7 +801,8 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	cur = tmp;
 	while (cur) {
 		map = cur->data;
-		editable = (access (map->uri, W_OK) == 0);
+		bk = g_ptr_array_index (map->backends, 0);
+		editable = (access (bk->uri, W_OK) == 0);
 
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj,	   ucl_object_fromint (map->id),
@@ -808,7 +811,7 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 			ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
 					"description", 0, false);
 		}
-		ucl_object_insert_key (obj, ucl_object_fromstring (map->uri),
+		ucl_object_insert_key (obj, ucl_object_fromstring (bk->uri),
 				"uri", 0, false);
 		ucl_object_insert_key (obj,	  ucl_object_frombool (editable),
 				"editable", 0, false);
@@ -840,6 +843,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
 	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
 	const rspamd_ftok_t *idstr;
 	struct stat st;
 	gint fd;
@@ -870,7 +874,8 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	cur = session->ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
-		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
+		bk = g_ptr_array_index (map->backends, 0);
+		if (map->id == id && bk->protocol == MAP_PROTO_FILE) {
 			found = TRUE;
 			break;
 		}
@@ -883,8 +888,10 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (stat (map->uri, &st) == -1 || (fd = open (map->uri, O_RDONLY)) == -1) {
-		msg_err_session ("cannot open map %s: %s", map->uri, strerror (errno));
+	bk = g_ptr_array_index (map->backends, 0);
+
+	if (stat (bk->uri, &st) == -1 || (fd = open (bk->uri, O_RDONLY)) == -1) {
+		msg_err_session ("cannot open map %s: %s", bk->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map open error");
 		return 0;
 	}
@@ -898,7 +905,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	if (read (fd, reply->body->str, st.st_size) == -1) {
 		close (fd);
 		rspamd_http_message_free (reply);
-		msg_err_session ("cannot read map %s: %s", map->uri, strerror (errno));
+		msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
 		return 0;
 	}
@@ -1800,6 +1807,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
 	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
 	struct rspamd_controller_worker_ctx *ctx;
 	const rspamd_ftok_t *idstr;
 	gulong id;
@@ -1838,7 +1846,8 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	cur = ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
-		if (map->id == id && map->protocol == MAP_PROTO_FILE) {
+		bk = g_ptr_array_index (map->backends, 0);
+		if (map->id == id && bk->protocol == MAP_PROTO_FILE) {
 			found = TRUE;
 			break;
 		}
@@ -1851,24 +1860,24 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (g_atomic_int_get (map->locked)) {
-		msg_info_session ("map locked: %s", map->uri);
+	bk = g_ptr_array_index (map->backends, 0);
+	if (g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
+		msg_info_session ("map locked: %s", bk->uri);
 		rspamd_controller_send_error (conn_ent, 404, "Map is locked");
 		return 0;
 	}
 
 	/* Set lock */
-	g_atomic_int_set (map->locked, 1);
-	fd = open (map->uri, O_WRONLY | O_TRUNC);
+	fd = open (bk->uri, O_WRONLY | O_TRUNC);
 	if (fd == -1) {
 		g_atomic_int_set (map->locked, 0);
-		msg_info_session ("map %s open error: %s", map->uri, strerror (errno));
+		msg_info_session ("map %s open error: %s", bk->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
 		return 0;
 	}
 
 	if (write (fd, msg->body_buf.begin, msg->body_buf.len) == -1) {
-		msg_info_session ("map %s write error: %s", map->uri, strerror (errno));
+		msg_info_session ("map %s write error: %s", bk->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
 		rspamd_controller_send_error (conn_ent, 500, "Map write error");
@@ -1877,7 +1886,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	msg_info_session ("<%s>, map %s saved",
 		rspamd_inet_address_to_string (session->from_addr),
-		map->uri);
+		bk->uri);
 	/* Close and unlock */
 	close (fd);
 	g_atomic_int_set (map->locked, 0);
@@ -2481,7 +2490,7 @@ init_controller_worker (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"secure_ip",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
 			0,
@@ -2490,7 +2499,7 @@ init_controller_worker (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"trusted_ips",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
 			0,
@@ -2536,12 +2545,12 @@ void
 start_controller_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
-	GList *cur;
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
 	struct rspamd_keypair_cache *cache;
-	gchar *secure_ip;
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = NULL;
 	gpointer m;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
@@ -2556,26 +2565,31 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	if (ctx->secure_ip != NULL) {
-		cur = ctx->secure_ip;
 
-		while (cur) {
-			secure_ip = cur->data;
-
-			/* Try map syntax */
-			if (!rspamd_map_is_map (secure_ip)) {
-				if (!radix_add_generic_iplist (secure_ip,
-						&ctx->secure_map)) {
-					msg_warn_ctx ("cannot load or parse ip list from '%s'",
-							secure_ip);
+		if (ucl_object_type (ctx->secure_ip) == UCL_ARRAY) {
+			while ((cur = ucl_object_iterate (ctx->secure_ip, &it, true)) != NULL) {
+				/* Try map syntax */
+				if (ucl_object_type (cur) == UCL_STRING &&
+						!rspamd_map_is_map (ucl_object_tostring (cur))) {
+					if (!radix_add_generic_iplist (ucl_object_tostring (cur),
+							&ctx->secure_map)) {
+						msg_warn_ctx ("cannot load or parse ip list from '%s'",
+								ucl_object_tostring (cur));
+					}
+				}
+				else {
+					rspamd_map_add_from_ucl (worker->srv->cfg, cur,
+							"Allow webui access from the specified IP",
+							rspamd_radix_read, rspamd_radix_fin,
+							(void **)&ctx->secure_map);
 				}
 			}
-			else {
-				rspamd_map_add (worker->srv->cfg, secure_ip,
+		}
+		else {
+			rspamd_map_add_from_ucl (worker->srv->cfg, ctx->secure_ip,
 					"Allow webui access from the specified IP",
 					rspamd_radix_read, rspamd_radix_fin,
 					(void **)&ctx->secure_map);
-			}
-			cur = g_list_next (cur);
 		}
 	}
 

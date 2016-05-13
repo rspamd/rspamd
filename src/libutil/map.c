@@ -35,10 +35,29 @@
 #include <pcre2.h>
 #endif
 
+#undef MAP_DEBUG_REFS
+#ifdef MAP_DEBUG_REFS
+#define MAP_RETAIN(x) do { \
+	msg_err ("retain ref %p, refcount: %d -> %d", (x), (x)->ref.refcount, (x)->ref.refcount + 1); \
+	REF_RETAIN(x);	\
+} while (0)
+
+#define MAP_RELEASE(x) do { \
+	msg_err ("release ref %p, refcount: %d -> %d", (x), (x)->ref.refcount, (x)->ref.refcount - 1); \
+	REF_RELEASE(x);	\
+} while (0)
+#else
+#define MAP_RETAIN REF_RETAIN
+#define MAP_RELEASE REF_RELEASE
+#endif
+
 static const gchar *hash_fill = "1";
-static void free_http_cbdata_common (struct http_callback_data *cbd);
+static void free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new);
 static void free_http_cbdata_dtor (gpointer p);
 static void free_http_cbdata (struct http_callback_data *cbd);
+static void rspamd_map_periodic_callback (gint fd, short what, void *ud);
+static void rspamd_map_schedule_periodic (struct rspamd_map *map, gboolean locked,
+		gboolean initial, gboolean errored);
 /**
  * Write HTTP request
  */
@@ -47,9 +66,9 @@ write_http_request (struct http_callback_data *cbd)
 {
 	gchar datebuf[128];
 	struct rspamd_http_message *msg;
-	rspamd_mempool_t *pool;
+	struct rspamd_map *map;
 
-	pool = cbd->map->pool;
+	map = cbd->map;
 
 	if (cbd->fd != -1) {
 		close (cbd->fd);
@@ -60,10 +79,15 @@ write_http_request (struct http_callback_data *cbd)
 	if (cbd->fd != -1) {
 		msg = rspamd_http_new_message (HTTP_REQUEST);
 
+		if (cbd->check) {
+			msg->method = HTTP_HEAD;
+		}
+
 		if (cbd->stage == map_load_file) {
 			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
 
-			if (cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
+			if (cbd->check &&
+					cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
 				rspamd_http_date_format (datebuf, sizeof (datebuf),
 						cbd->data->last_checked);
 				rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
@@ -83,11 +107,12 @@ write_http_request (struct http_callback_data *cbd)
 
 		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
 				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
-		REF_RETAIN (cbd);
+		MAP_RETAIN (cbd);
 	}
 	else {
-		msg_err_pool ("cannot connect to %s: %s", cbd->data->host,
+		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
 				strerror (errno));
+		cbd->periodic->errored = TRUE;
 	}
 }
 
@@ -99,7 +124,6 @@ rspamd_map_check_sig_pk (const char *fname,
 		struct rspamd_cryptobox_pubkey *pk)
 {
 	gchar fpath[PATH_MAX];
-	rspamd_mempool_t *pool = map->pool;
 	guchar *data;
 	GString *b32_key;
 	gsize len = 0;
@@ -109,12 +133,12 @@ rspamd_map_check_sig_pk (const char *fname,
 	data = rspamd_file_xmap (fpath, PROT_READ, &len);
 
 	if (data == NULL) {
-		msg_err_pool ("can't open signature %s: %s", fpath, strerror (errno));
+		msg_err_map ("can't open signature %s: %s", fpath, strerror (errno));
 		return FALSE;
 	}
 
 	if (len != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err_pool ("can't open signature %s: invalid signature", fpath);
+		msg_err_map ("can't open signature %s: invalid signature", fpath);
 		munmap (data, len);
 
 		return FALSE;
@@ -122,7 +146,7 @@ rspamd_map_check_sig_pk (const char *fname,
 
 	if (!rspamd_cryptobox_verify (data, input, inlen,
 			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err_pool ("can't verify signature %s: incorrect signature", fpath);
+		msg_err_map ("can't verify signature %s: incorrect signature", fpath);
 		munmap (data, len);
 
 		return FALSE;
@@ -130,7 +154,7 @@ rspamd_map_check_sig_pk (const char *fname,
 
 	b32_key = rspamd_pubkey_print (pk,
 			RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
-	msg_info_pool ("verified signature in file %s using trusted key %v",
+	msg_info_map ("verified signature in file %s using trusted key %v",
 			fpath, b32_key);
 	g_string_free (b32_key, TRUE);
 
@@ -141,25 +165,26 @@ rspamd_map_check_sig_pk (const char *fname,
 
 static gboolean
 rspamd_map_check_file_sig (const char *fname,
-		struct rspamd_map *map, const guchar *input,
+		struct rspamd_map *map,
+		struct rspamd_map_backend *bk,
+		const guchar *input,
 		gsize inlen)
 {
 	gchar fpath[PATH_MAX];
-	rspamd_mempool_t *pool = map->pool;
 	guchar *data;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	GString *b32_key;
 	gboolean ret;
 	gsize len = 0;
 
-	if (map->trusted_pubkey == NULL) {
+	if (bk->trusted_pubkey == NULL) {
 		/* Try to load and check pubkey */
 		rspamd_snprintf (fpath, sizeof (fpath), "%s.pub", fname);
 
 		data = rspamd_file_xmap (fpath, PROT_READ, &len);
 
 		if (data == NULL) {
-			msg_err_pool ("can't open pubkey %s: %s", fpath, strerror (errno));
+			msg_err_map ("can't open pubkey %s: %s", fpath, strerror (errno));
 			return FALSE;
 		}
 
@@ -168,7 +193,7 @@ rspamd_map_check_file_sig (const char *fname,
 		munmap (data, len);
 
 		if (pk == NULL) {
-			msg_err_pool ("can't load pubkey %s", fpath);
+			msg_err_map ("can't load pubkey %s", fpath);
 			return FALSE;
 		}
 
@@ -178,7 +203,7 @@ rspamd_map_check_file_sig (const char *fname,
 		g_assert (b32_key != NULL);
 
 		if (g_hash_table_lookup (map->cfg->trusted_keys, b32_key->str) == NULL) {
-			msg_err_pool ("pubkey loaded from %s is untrusted: %v", fpath,
+			msg_err_map ("pubkey loaded from %s is untrusted: %v", fpath,
 					b32_key);
 			g_string_free (b32_key, TRUE);
 			rspamd_pubkey_unref (pk);
@@ -189,7 +214,7 @@ rspamd_map_check_file_sig (const char *fname,
 		g_string_free (b32_key, TRUE);
 	}
 	else {
-		pk = rspamd_pubkey_ref (map->trusted_pubkey);
+		pk = rspamd_pubkey_ref (bk->trusted_pubkey);
 	}
 
 	ret = rspamd_map_check_sig_pk (fname, map, input, inlen, pk);
@@ -202,10 +227,11 @@ rspamd_map_check_file_sig (const char *fname,
  * Callback for destroying HTTP callback data
  */
 static void
-free_http_cbdata_common (struct http_callback_data *cbd)
+free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 {
 	char fpath[PATH_MAX];
 	struct stat st;
+	struct map_periodic_cbdata *periodic = cbd->periodic;
 
 	if (cbd->out_fd != -1) {
 		close (cbd->out_fd);
@@ -243,7 +269,8 @@ free_http_cbdata_common (struct http_callback_data *cbd)
 		rspamd_inet_address_destroy (cbd->addr);
 	}
 
-	g_atomic_int_set (cbd->map->locked, 0);
+	MAP_RELEASE (cbd->bk);
+	MAP_RELEASE (periodic);
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
 }
 
@@ -253,18 +280,18 @@ free_http_cbdata (struct http_callback_data *cbd)
 	cbd->map->dtor = NULL;
 	cbd->map->dtor_data = NULL;
 
-	free_http_cbdata_common (cbd);
+	free_http_cbdata_common (cbd, TRUE);
 }
 
 static void
 free_http_cbdata_dtor (gpointer p)
 {
 	struct http_callback_data *cbd = p;
-	rspamd_mempool_t *pool;
+	struct rspamd_map *map;
 
-	pool = cbd->map->pool;
-	msg_warn_pool ("connection with http server is terminated: worker is stopping");
-	free_http_cbdata_common (cbd);
+	map = cbd->map;
+	msg_warn_map ("connection with http server is terminated: worker is stopping");
+	free_http_cbdata_common (cbd, FALSE);
 }
 
 /*
@@ -275,13 +302,13 @@ http_map_error (struct rspamd_http_connection *conn,
 	GError *err)
 {
 	struct http_callback_data *cbd = conn->ud;
-	rspamd_mempool_t *pool;
+	struct rspamd_map *map;
 
-	pool = cbd->map->pool;
-
-	msg_err_pool ("connection with http server terminated incorrectly: %s",
-			err->message);
-	REF_RELEASE (cbd);
+	map = cbd->map;
+	cbd->periodic->errored = TRUE;
+	msg_err_map ("connection with http server terminated incorrectly: %e", err);
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+	MAP_RELEASE (cbd);
 }
 
 static int
@@ -290,16 +317,26 @@ http_map_finish (struct rspamd_http_connection *conn,
 {
 	struct http_callback_data *cbd = conn->ud;
 	struct rspamd_map *map;
-	rspamd_mempool_t *pool;
+	struct rspamd_map_backend *bk;
 	char fpath[PATH_MAX];
 	guchar *aux_data, *in = NULL;
 	gsize inlen = 0;
 	struct stat st;
 
 	map = cbd->map;
-	pool = cbd->map->pool;
+	bk = cbd->bk;
 
 	if (msg->code == 200) {
+
+		if (cbd->check) {
+			cbd->periodic->need_modify = TRUE;
+			/* Reset the whole chain */
+			cbd->periodic->cur_backend = 0;
+			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+			MAP_RELEASE (cbd);
+
+			return 0;
+		}
 
 		if (cbd->stage == map_load_file) {
 			if (msg->last_modified) {
@@ -310,13 +347,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 			}
 
 			/* Maybe we need to check signature ? */
-			if (map->is_signed) {
+			if (bk->is_signed) {
 				close (cbd->out_fd);
 
-				if (map->trusted_pubkey) {
+				if (bk->trusted_pubkey) {
 					/* No need to load key */
 					cbd->stage = map_load_signature;
-					cbd->pk = rspamd_pubkey_ref (map->trusted_pubkey);
+					cbd->pk = rspamd_pubkey_ref (bk->trusted_pubkey);
 					rspamd_snprintf (fpath, sizeof (fpath), "%s.sig",
 							cbd->tmpfile);
 				}
@@ -329,24 +366,25 @@ http_map_finish (struct rspamd_http_connection *conn,
 				cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
 
 				if (cbd->out_fd == -1) {
-					msg_err_pool ("cannot open pubkey file %s for writing: %s",
+					msg_err_map ("cannot open pubkey file %s for writing: %s",
 							fpath, strerror (errno));
-					goto end;
+					goto err;
 				}
 
 				rspamd_http_connection_reset (cbd->conn);
 				write_http_request (cbd);
+				MAP_RELEASE (cbd);
 
-				goto end;
+				return 0;
 			}
 			else {
 				/* Unsinged version - just open file */
 				in = rspamd_file_xmap (cbd->tmpfile, PROT_READ, &inlen);
 
 				if (in == NULL) {
-					msg_err_pool ("cannot read tempfile %s: %s", cbd->tmpfile,
+					msg_err_map ("cannot read tempfile %s: %s", cbd->tmpfile,
 							strerror (errno));
-					goto end;
+					goto err;
 				}
 			}
 		}
@@ -355,9 +393,9 @@ http_map_finish (struct rspamd_http_connection *conn,
 			(void)lseek (cbd->out_fd, 0, SEEK_SET);
 
 			if (fstat (cbd->out_fd, &st) == -1) {
-				msg_err_pool ("cannot stat pubkey file %s: %s",
+				msg_err_map ("cannot stat pubkey file %s: %s",
 						fpath, strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			aux_data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED,
@@ -366,9 +404,9 @@ http_map_finish (struct rspamd_http_connection *conn,
 			cbd->out_fd = -1;
 
 			if (aux_data == MAP_FAILED) {
-				msg_err_pool ("cannot map pubkey file %s: %s",
+				msg_err_map ("cannot map pubkey file %s: %s",
 						fpath, strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			cbd->pk = rspamd_pubkey_from_base32 (aux_data, st.st_size,
@@ -376,25 +414,26 @@ http_map_finish (struct rspamd_http_connection *conn,
 			munmap (aux_data, st.st_size);
 
 			if (cbd->pk == NULL) {
-				msg_err_pool ("cannot load pubkey file %s: bad pubkey",
+				msg_err_map ("cannot load pubkey file %s: bad pubkey",
 						fpath);
-				goto end;
+				goto err;
 			}
 
 			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
 			cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
 
 			if (cbd->out_fd == -1) {
-				msg_err_pool ("cannot open signature file %s for writing: %s",
+				msg_err_map ("cannot open signature file %s for writing: %s",
 						fpath, strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			cbd->stage = map_load_signature;
 			rspamd_http_connection_reset (cbd->conn);
 			write_http_request (cbd);
+			MAP_RELEASE (cbd);
 
-			goto end;
+			return 0;
 		}
 		else if (cbd->stage == map_load_signature) {
 			/* We can now check signature */
@@ -404,26 +443,25 @@ http_map_finish (struct rspamd_http_connection *conn,
 			in = rspamd_file_xmap (cbd->tmpfile, PROT_READ, &inlen);
 
 			if (in == NULL) {
-				msg_err_pool ("cannot read tempfile %s: %s", cbd->tmpfile,
+				msg_err_map ("cannot read tempfile %s: %s", cbd->tmpfile,
 						strerror (errno));
-				goto end;
+				goto err;
 			}
 
 			if (!rspamd_map_check_sig_pk (cbd->tmpfile, map, in, inlen, cbd->pk)) {
-				goto end;
+				goto err;
 			}
 		}
 
 		g_assert (in != NULL);
 
-		map->read_callback (map->pool, in, inlen, &cbd->cbdata, TRUE);
-		map->fin_callback (map->pool, &cbd->cbdata);
-
-		*map->user_data = cbd->cbdata.cur_data;
-		msg_info_pool ("read map data from %s", cbd->data->host);
+		map->read_callback (in, inlen, &cbd->periodic->cbdata, TRUE);
+		msg_info_map ("read map data from %s", cbd->data->host);
+		cbd->periodic->cur_backend ++;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	}
-	else if (msg->code == 304 && cbd->stage == map_load_file) {
-		msg_debug_pool ("data is not modified for server %s",
+	else if (msg->code == 304 && (cbd->check && cbd->stage == map_load_file)) {
+		msg_debug_map ("data is not modified for server %s",
 				cbd->data->host);
 
 		if (msg->last_modified) {
@@ -434,12 +472,17 @@ http_map_finish (struct rspamd_http_connection *conn,
 		}
 	}
 	else {
-		msg_info_pool ("cannot load map %s from %s: HTTP error %d",
-				map->uri, cbd->data->host, msg->code);
+		msg_info_map ("cannot load map %s from %s: HTTP error %d",
+				bk->uri, cbd->data->host, msg->code);
 	}
 
-end:
-	REF_RELEASE (cbd);
+	MAP_RELEASE (cbd);
+	return 0;
+
+err:
+	cbd->periodic->errored = 1;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
+	MAP_RELEASE (cbd);
 
 	return 0;
 }
@@ -451,18 +494,18 @@ http_map_read (struct rspamd_http_connection *conn,
 	gsize len)
 {
 	struct http_callback_data *cbd = conn->ud;
-	rspamd_mempool_t *pool;
+	struct rspamd_map *map;
 
 	if (msg->code != 200 || len == 0) {
 		/* Ignore not full replies */
 		return 0;
 	}
 
-	pool = cbd->map->pool;
+	map = cbd->map;
 
 	if (write (cbd->out_fd, chunk, len) == -1) {
-		msg_err_pool ("cannot write to %s: %s", cbd->tmpfile, strerror (errno));
-		REF_RELEASE (cbd);
+		msg_err_map ("cannot write to %s: %s", cbd->tmpfile, strerror (errno));
+		MAP_RELEASE (cbd);
 
 		return -1;
 	}
@@ -474,38 +517,32 @@ http_map_read (struct rspamd_http_connection *conn,
  * Callback for reading data from file
  */
 static gboolean
-read_map_file (struct rspamd_map *map, struct file_map_data *data)
+read_map_file (struct rspamd_map *map, struct file_map_data *data,
+		struct rspamd_map_backend *bk, struct map_periodic_cbdata *periodic)
 {
-	struct map_cb_data cbdata;
 	guchar *bytes;
 	gsize len;
-	rspamd_mempool_t *pool = map->pool;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err_pool ("bad callback for reading map file");
+		msg_err_map ("bad callback for reading map file");
 		return FALSE;
 	}
 
 	if (access (data->filename, R_OK) == -1) {
 		/* File does not exist, skipping */
-		msg_err_pool ("map file is unavailable for reading");
-		return FALSE;
+		msg_err_map ("map file is unavailable for reading");
+		return TRUE;
 	}
 
 	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len);
 
 	if (bytes == NULL) {
-		msg_err_pool ("can't open map %s: %s", data->filename, strerror (errno));
+		msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));
 		return FALSE;
 	}
 
-	cbdata.state = 0;
-	cbdata.prev_data = *map->user_data;
-	cbdata.cur_data = NULL;
-	cbdata.map = map;
-
-	if (map->is_signed) {
-		if (!rspamd_map_check_file_sig (data->filename, map, bytes, len)) {
+	if (bk->is_signed) {
+		if (!rspamd_map_check_file_sig (data->filename, map, bk, bytes, len)) {
 			munmap (bytes, len);
 
 			return FALSE;
@@ -513,9 +550,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	}
 
 	if (len > 0) {
-		map->read_callback (map->pool, bytes, len, &cbdata, TRUE);
-		map->fin_callback (map->pool, &cbdata);
-		*map->user_data = cbdata.cur_data;
+		map->read_callback (bytes, len, &periodic->cbdata, TRUE);
 	}
 
 	munmap (bytes, len);
@@ -524,85 +559,74 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 }
 
 static void
-jitter_timeout_event (struct rspamd_map *map,
+rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
+{
+	if (periodic->need_modify) {
+		/* We are done */
+		periodic->map->fin_callback (&periodic->cbdata);
+		*periodic->map->user_data = periodic->cbdata.cur_data;
+	}
+	else {
+		/* Not modified */
+	}
+
+	rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
+	g_atomic_int_set (periodic->map->locked, 0);
+	g_slice_free1 (sizeof (*periodic), periodic);
+}
+
+static void
+rspamd_map_schedule_periodic (struct rspamd_map *map,
 		gboolean locked, gboolean initial, gboolean errored)
 {
 	const gdouble error_mult = 20.0, lock_mult = 0.5;
 	gdouble jittered_sec;
 	gdouble timeout;
+	struct map_periodic_cbdata *cbd;
+
+	timeout = map->poll_timeout;
 
 	if (initial) {
 		timeout = 0.0;
 	}
-	else if (errored) {
-		timeout = map->cfg->map_timeout * error_mult;
+
+	if (errored) {
+		timeout = map->poll_timeout * error_mult;
 	}
 	else if (locked) {
-		timeout = map->cfg->map_timeout * lock_mult;
-	}
-	else {
-		timeout = map->cfg->map_timeout;
+		timeout = map->poll_timeout * lock_mult;
 	}
 
-	/* Plan event again with jitter */
-	evtimer_del (&map->ev);
+	cbd = g_slice_alloc0 (sizeof (*cbd));
+	cbd->cbdata.state = 0;
+	cbd->cbdata.prev_data = *map->user_data;
+	cbd->cbdata.cur_data = NULL;
+	cbd->cbdata.map = map;
+	cbd->map = map;
+	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
+
+	if (initial) {
+		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
+		event_base_set (map->ev_base, &map->ev);
+	}
+	else {
+		evtimer_del (&map->ev);
+		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
+	}
+
 	jittered_sec = rspamd_time_jitter (timeout, 0);
 	double_to_tv (jittered_sec, &map->tv);
 
 	evtimer_add (&map->ev, &map->tv);
 }
 
-/**
- * Common file callback
- */
-static void
-file_callback (gint fd, short what, void *ud)
-{
-	struct rspamd_map *map = ud;
-	struct file_map_data *data = map->map_data;
-	struct stat st;
-	rspamd_mempool_t *pool;
-
-	pool = map->pool;
-
-	if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-		msg_debug_pool (
-			"don't try to reread map as it is locked by other process, will reread it later");
-		jitter_timeout_event (map, TRUE, FALSE, FALSE);
-		return;
-	}
-
-	if (stat (data->filename, &st) != -1 &&
-		(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
-		/* File was modified since last check */
-		memcpy (&data->st, &st, sizeof (struct stat));
-	}
-	else {
-		g_atomic_int_set (map->locked, 0);
-		jitter_timeout_event (map, FALSE, FALSE, FALSE);
-		return;
-	}
-
-	msg_info_pool ("rereading map file %s", data->filename);
-
-	if (!read_map_file (map, data)) {
-		jitter_timeout_event (map, FALSE, FALSE, TRUE);
-	}
-	else {
-		jitter_timeout_event (map, FALSE, FALSE, FALSE);
-	}
-
-	g_atomic_int_set (map->locked, 0);
-}
-
-
 static void
 rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 {
 	struct http_callback_data *cbd = arg;
-	rspamd_mempool_t *pool;
+	struct rspamd_map *map;
 
-	pool = cbd->map->pool;
+	map = cbd->map;
 
 	if (reply->code == RDNS_RC_NOERROR) {
 		/*
@@ -641,36 +665,25 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		}
 		else {
 			/* We could not resolve host, so cowardly fail here */
-			msg_err_pool ("cannot resolve %s", cbd->data->host);
+			msg_err_map ("cannot resolve %s", cbd->data->host);
 		}
 	}
 
-	REF_RELEASE (cbd);
+	MAP_RELEASE (cbd);
 }
 
 /**
  * Async HTTP callback
  */
 static void
-http_callback (gint fd, short what, void *ud)
+rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backend *bk,
+		struct map_periodic_cbdata *periodic, gboolean check)
 {
-	struct rspamd_map *map = ud;
 	struct http_map_data *data;
 	struct http_callback_data *cbd;
-	rspamd_mempool_t *pool;
 	gchar tmpbuf[PATH_MAX];
 
-	data = map->map_data;
-	pool = map->pool;
-
-	if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-		msg_debug_pool (
-				"don't try to reread map as it is locked by other process, will reread it later");
-		jitter_timeout_event (map, TRUE, FALSE, FALSE);
-		return;
-	}
-
-	/* Plan event */
+	data = bk->data.hd;
 	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
 
 	rspamd_snprintf (tmpbuf, sizeof (tmpbuf),
@@ -679,10 +692,11 @@ http_callback (gint fd, short what, void *ud)
 	cbd->out_fd = mkstemp (tmpbuf);
 
 	if (cbd->out_fd == -1) {
-		g_slice_free1 (sizeof (*cbd), cbd);
-		msg_err_pool ("cannot create tempfile: %s", strerror (errno));
-		jitter_timeout_event (map, FALSE, FALSE, TRUE);
+		msg_err_map ("cannot create tempfile: %s", strerror (errno));
 		g_atomic_int_set (map->locked, 0);
+		g_slice_free1 (sizeof (*cbd), cbd);
+		periodic->errored = TRUE;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
 		return;
 	}
@@ -692,39 +706,165 @@ http_callback (gint fd, short what, void *ud)
 	cbd->map = map;
 	cbd->data = data;
 	cbd->fd = -1;
-	cbd->cbdata.state = 0;
-	cbd->cbdata.prev_data = *cbd->map->user_data;
-	cbd->cbdata.cur_data = NULL;
-	cbd->cbdata.map = cbd->map;
+	cbd->check = check;
+	cbd->periodic = periodic;
+	MAP_RETAIN (periodic);
+	cbd->bk = bk;
+	MAP_RETAIN (bk);
 	cbd->stage = map_resolve_host2;
 	double_to_tv (map->cfg->map_timeout, &cbd->tv);
 	REF_INIT_RETAIN (cbd, free_http_cbdata);
 
-	msg_debug_pool ("reading map data from %s", data->host);
+	msg_debug_map ("%s map data from %s", check ? "checking" : "reading",
+			data->host);
 	/* Send both A and AAAA requests */
 	if (map->r->r) {
 		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
 				data->host, RDNS_REQUEST_A)) {
-			REF_RETAIN (cbd);
+			MAP_RETAIN (cbd);
 		}
 		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
 				data->host, RDNS_REQUEST_AAAA)) {
-			REF_RETAIN (cbd);
+			MAP_RETAIN (cbd);
 		}
 
-		jitter_timeout_event (map, FALSE, FALSE, FALSE);
 		map->dtor = free_http_cbdata_dtor;
 		map->dtor_data = cbd;
 	}
 	else {
-		msg_warn_pool ("cannot load map: DNS resolver is not initialized");
-		jitter_timeout_event (map, FALSE, FALSE, TRUE);
+		msg_warn_map ("cannot load map: DNS resolver is not initialized");
+		cbd->periodic->errored = TRUE;
 	}
 
-	/* We don't need own ref as it is now refcounted by DNS requests */
-	REF_RELEASE (cbd);
+	/* We don't need own ref as it is now ref counted by DNS handlers */
+	MAP_RELEASE (cbd);
+}
+
+static void
+rspamd_map_http_check_callback (gint fd, short what, void *ud)
+{
+	struct map_periodic_cbdata *cbd = ud;
+	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
+
+	map = cbd->map;
+	bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
+
+	rspamd_map_common_http_callback (map, bk, cbd, TRUE);
+}
+
+static void
+rspamd_map_http_read_callback (gint fd, short what, void *ud)
+{
+	struct map_periodic_cbdata *cbd = ud;
+	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
+
+	map = cbd->map;
+	bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
+	rspamd_map_common_http_callback (map, bk, cbd, FALSE);
+}
+
+static void
+rspamd_map_file_check_callback (gint fd, short what, void *ud)
+{
+	struct rspamd_map *map;
+	struct map_periodic_cbdata *periodic = ud;
+	struct file_map_data *data;
+	struct rspamd_map_backend *bk;
+	struct stat st;
+
+	map = periodic->map;
+
+	bk = g_ptr_array_index (map->backends, periodic->cur_backend);
+	data = bk->data.fd;
+
+	if (stat (data->filename, &st) != -1 &&
+			(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
+		/* File was modified since last check */
+		memcpy (&data->st, &st, sizeof (struct stat));
+		periodic->need_modify = TRUE;
+		periodic->cur_backend = 0;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+
+		return;
+	}
+
+	/* Switch to the next backend */
+	periodic->cur_backend ++;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+}
+
+static void
+rspamd_map_file_read_callback (gint fd, short what, void *ud)
+{
+	struct rspamd_map *map;
+	struct map_periodic_cbdata *periodic = ud;
+	struct file_map_data *data;
+	struct rspamd_map_backend *bk;
+
+	map = periodic->map;
+
+	bk = g_ptr_array_index (map->backends, periodic->cur_backend);
+	data = bk->data.fd;
+
+	msg_info_map ("rereading map file %s", data->filename);
+
+	if (!read_map_file (map, data, bk, periodic)) {
+		periodic->errored = TRUE;
+	}
+
+	/* Switch to the next backend */
+	periodic->cur_backend ++;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+}
+
+static void
+rspamd_map_periodic_callback (gint fd, short what, void *ud)
+{
+	struct rspamd_map_backend *bk;
+	struct map_periodic_cbdata *cbd = ud;
+
+	if (cbd->errored) {
+		/* We should not check other backends if some backend has failed */
+		rspamd_map_schedule_periodic (cbd->map, FALSE, FALSE, TRUE);
+		g_atomic_int_set (cbd->map->locked, 0);
+		MAP_RELEASE (cbd);
+
+		return;
+	}
+
+	/* For each backend we need to check for modifications */
+	if (cbd->cur_backend >= cbd->map->backends->len) {
+		/* Last backend */
+		MAP_RELEASE (cbd);
+
+		return;
+	}
+
+	bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
+	g_assert (bk != NULL);
+
+	if (cbd->need_modify) {
+		/* Load data from the next backend */
+		if (bk->protocol == MAP_PROTO_HTTP) {
+			rspamd_map_http_read_callback (fd, what, cbd);
+		}
+		else {
+			rspamd_map_file_read_callback (fd, what, cbd);
+		}
+	}
+	else {
+		/* Check the next backend */
+		if (bk->protocol == MAP_PROTO_HTTP) {
+			rspamd_map_http_check_callback (fd, what, cbd);
+		}
+		else {
+			rspamd_map_file_check_callback (fd, what, cbd);
+		}
+	}
 }
 
 /* Start watching event for all maps */
@@ -735,29 +875,21 @@ rspamd_map_watch (struct rspamd_config *cfg,
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
-	struct file_map_data *fdata;
 
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
 		map->ev_base = ev_base;
 		map->r = resolver;
-		event_base_set (map->ev_base, &map->ev);
 
-		if (map->protocol == MAP_PROTO_FILE) {
-			evtimer_set (&map->ev, file_callback, map);
-			/* Read initial data */
-			fdata = map->map_data;
-			if (fdata->st.st_mtime != -1) {
-				/* Do not try to read non-existent file */
-				read_map_file (map, map->map_data);
-			}
-			/* Plan event with jitter */
-			jitter_timeout_event (map, FALSE, TRUE, FALSE);
+		if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
+			msg_debug_map (
+					"don't try to reread map as it is locked by other process, "
+					"will reread it later");
+			rspamd_map_schedule_periodic (map, TRUE, TRUE, FALSE);
 		}
-		else if (map->protocol == MAP_PROTO_HTTP) {
-			evtimer_set (&map->ev, http_callback, map);
-			jitter_timeout_event (map, FALSE, TRUE, FALSE);
+		else {
+			rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
 		}
 
 		cur = g_list_next (cur);
@@ -769,9 +901,16 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 {
 	struct rspamd_map *map;
 	GList *cur;
+	struct rspamd_map_backend *bk;
+	guint i;
 
 	for (cur = cfg->maps; cur != NULL; cur = g_list_next (cur)) {
 		map = cur->data;
+
+		for (i = 0; i < map->backends->len; i ++) {
+			bk = g_ptr_array_index (map->backends, i);
+			MAP_RELEASE (bk);
+		}
 
 		if (map->dtor) {
 			map->dtor (map->dtor_data);
@@ -780,26 +919,21 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 
 	g_list_free (cfg->maps);
 	cfg->maps = NULL;
-
-	if (cfg->map_pool != NULL) {
-		rspamd_mempool_delete (cfg->map_pool);
-		cfg->map_pool = NULL;
-	}
 }
 
 static const gchar *
 rspamd_map_check_proto (struct rspamd_config *cfg,
-		const gchar *map_line, struct rspamd_map *map)
+		const gchar *map_line, struct rspamd_map_backend *bk)
 {
 	const gchar *pos = map_line, *end, *end_key;
 
-	g_assert (map != NULL);
+	g_assert (bk != NULL);
 	g_assert (pos != NULL);
 
 	end = pos + strlen (pos);
 
 	if (g_ascii_strncasecmp (pos, "sign+", sizeof ("sign+") - 1) == 0) {
-		map->is_signed = TRUE;
+		bk->is_signed = TRUE;
 		pos += sizeof ("sign+") - 1;
 	}
 
@@ -808,10 +942,10 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 		end_key = memchr (pos, '+', end - pos);
 
 		if (end_key != NULL) {
-			map->trusted_pubkey = rspamd_pubkey_from_base32 (pos, end_key - pos,
+			bk->trusted_pubkey = rspamd_pubkey_from_base32 (pos, end_key - pos,
 					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
 
-			if (map->trusted_pubkey == NULL) {
+			if (bk->trusted_pubkey == NULL) {
 				msg_err_config ("cannot read pubkey from map: %s",
 						map_line);
 				return NULL;
@@ -820,10 +954,10 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 		}
 		else if (end - pos > 64) {
 			/* Try hex encoding */
-			map->trusted_pubkey = rspamd_pubkey_from_hex (pos, 64,
+			bk->trusted_pubkey = rspamd_pubkey_from_hex (pos, 64,
 					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
 
-			if (map->trusted_pubkey == NULL) {
+			if (bk->trusted_pubkey == NULL) {
 				msg_err_config ("cannot read pubkey from map: %s",
 						map_line);
 				return NULL;
@@ -841,24 +975,24 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 		}
 	}
 
-	map->protocol = MAP_PROTO_FILE;
+	bk->protocol = MAP_PROTO_FILE;
 
 	if (g_ascii_strncasecmp (pos, "http://",
 			sizeof ("http://") - 1) == 0) {
-		map->protocol = MAP_PROTO_HTTP;
+		bk->protocol = MAP_PROTO_HTTP;
 		/* Include http:// */
-		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
+		bk->uri = g_strdup (pos);
 		pos += sizeof ("http://") - 1;
 	}
 	else if (g_ascii_strncasecmp (pos, "file://", sizeof ("file://") -
 			1) == 0) {
 		pos += sizeof ("file://") - 1;
 		/* Exclude file:// */
-		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
+		bk->uri = g_strdup (pos);
 	}
 	else if (*pos == '/') {
 		/* Trivial file case */
-		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
+		bk->uri = g_strdup (pos);
 	}
 	else {
 		msg_err_config ("invalid map fetching protocol: %s", map_line);
@@ -893,95 +1027,79 @@ rspamd_map_is_map (const gchar *map_line)
 	return ret;
 }
 
-struct rspamd_map *
-rspamd_map_add (struct rspamd_config *cfg,
-	const gchar *map_line,
-	const gchar *description,
-	map_cb_t read_callback,
-	map_fin_cb_t fin_callback,
-	void **user_data)
+static void
+rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 {
-	struct rspamd_map *new_map;
-	const gchar *def;
-	struct file_map_data *fdata;
-	struct http_map_data *hdata;
-	gchar *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
-	rspamd_mempool_t *pool;
+	if (bk->protocol == MAP_PROTO_FILE) {
+		g_free (bk->data.fd->filename);
+		g_slice_free1 (sizeof (*bk->data.fd), bk->data.fd);
+	}
+	else {
+		g_free (bk->data.hd->host);
+		g_free (bk->data.hd->path);
+		g_slice_free1 (sizeof (*bk->data.hd), bk->data.hd);
+	}
+
+	g_slice_free1 (sizeof (*bk), bk);
+}
+
+static struct rspamd_map_backend *
+rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
+{
+	struct rspamd_map_backend *bk;
+	struct file_map_data *fdata = NULL;
+	struct http_map_data *hdata = NULL;
 	struct http_parser_url up;
 	rspamd_ftok_t tok;
 
-	if (cfg->map_pool == NULL) {
-		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				"map");
-		memcpy (cfg->map_pool->tag.uid, cfg->cfg_pool->tag.uid,
-				sizeof (cfg->map_pool->tag.uid));
-	}
+	bk = g_slice_alloc0 (sizeof (*bk));
+	REF_INIT_RETAIN (bk, rspamd_map_backend_dtor);
 
-	new_map = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
-
-	/* First of all detect protocol line */
-	if (rspamd_map_check_proto (cfg, map_line, new_map) == NULL) {
-		return NULL;
-	}
-
-	new_map->read_callback = read_callback;
-	new_map->fin_callback = fin_callback;
-	new_map->user_data = user_data;
-	new_map->cfg = cfg;
-	new_map->id = g_random_int ();
-	new_map->locked =
-		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
-	def = new_map->uri;
-
-	if (description != NULL) {
-		new_map->description =
-			rspamd_mempool_strdup (cfg->cfg_pool, description);
+	if (!rspamd_map_check_proto (cfg, map_line, bk)) {
+		goto err;
 	}
 
 	/* Now check for each proto separately */
-	if (new_map->protocol == MAP_PROTO_FILE) {
-		fdata =
-			rspamd_mempool_alloc0 (cfg->map_pool,
-				sizeof (struct file_map_data));
-		if (access (def, R_OK) == -1) {
+	if (bk->protocol == MAP_PROTO_FILE) {
+		fdata = g_slice_alloc0 (sizeof (struct file_map_data));
+
+		if (access (bk->uri, R_OK) == -1) {
 			if (errno != ENOENT) {
-				msg_err_config ("cannot open file '%s': %s", def, strerror
-						(errno));
+				msg_err_config ("cannot open file '%s': %s", bk->uri, strerror (errno));
 				return NULL;
 
 			}
 			msg_info_config (
-				"map '%s' is not found, but it can be loaded automatically later",
-				def);
+					"map '%s' is not found, but it can be loaded automatically later",
+					bk->uri);
 			/* We still can add this file */
 			fdata->st.st_mtime = -1;
 		}
 		else {
-			stat (def, &fdata->st);
+			stat (bk->uri, &fdata->st);
 		}
-		fdata->filename = rspamd_mempool_strdup (cfg->map_pool, def);
-		new_map->map_data = fdata;
+
+		fdata->filename = g_strdup (bk->uri);
+		bk->data.fd = fdata;
 	}
-	else if (new_map->protocol == MAP_PROTO_HTTP) {
-		hdata =
-			rspamd_mempool_alloc0 (cfg->map_pool,
-				sizeof (struct http_map_data));
+	else if (bk->protocol == MAP_PROTO_HTTP) {
+		hdata = g_slice_alloc0 (sizeof (struct http_map_data));
 
 		memset (&up, 0, sizeof (up));
-		if (http_parser_parse_url (new_map->uri, strlen (new_map->uri), FALSE,
+		if (http_parser_parse_url (bk->uri, strlen (bk->uri), FALSE,
 				&up) != 0) {
-			msg_err_config ("cannot parse HTTP url: %s", new_map->uri);
-			return NULL;
+			msg_err_config ("cannot parse HTTP url: %s", bk->uri);
+			goto err;
 		}
 		else {
 			if (!(up.field_set & 1 << UF_HOST)) {
-				msg_err_config ("cannot parse HTTP url: %s: no host", new_map->uri);
+				msg_err_config ("cannot parse HTTP url: %s: no host", bk->uri);
 				return NULL;
 			}
 
-			tok.begin = new_map->uri + up.field_data[UF_HOST].off;
+			tok.begin = bk->uri + up.field_data[UF_HOST].off;
 			tok.len = up.field_data[UF_HOST].len;
-			hdata->host = rspamd_mempool_ftokdup (cfg->map_pool, &tok);
+			hdata->host = rspamd_ftokdup (&tok);
 
 			if (up.field_set & 1 << UF_PORT) {
 				hdata->port = up.port;
@@ -991,31 +1109,235 @@ rspamd_map_add (struct rspamd_config *cfg,
 			}
 
 			if (up.field_set & 1 << UF_PATH) {
-				tok.begin = new_map->uri + up.field_data[UF_PATH].off;
+				tok.begin = bk->uri + up.field_data[UF_PATH].off;
 				tok.len = strlen (tok.begin);
 
-				hdata->path = rspamd_mempool_ftokdup (cfg->map_pool, &tok);
+				hdata->path = rspamd_ftokdup (&tok);
 			}
 		}
 
-		new_map->map_data = hdata;
-
+		bk->data.hd = hdata;
 	}
 
-	/* Temp pool */
-	rspamd_cryptobox_hash (cksum, new_map->uri, strlen (new_map->uri), NULL, 0);
+	return bk;
+
+err:
+	MAP_RELEASE (bk);
+
+	if (hdata) {
+		g_slice_free1 (sizeof (*hdata), hdata);
+	}
+
+	if (fdata) {
+		g_slice_free1 (sizeof (*fdata), fdata);
+	}
+
+	return NULL;
+}
+
+static void
+rspamd_map_calculate_hash (struct rspamd_map *map)
+{
+	struct rspamd_map_backend *bk;
+	guint i;
+	rspamd_cryptobox_hash_state_t st;
+	gchar *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
+
+	rspamd_cryptobox_hash_init (&st, NULL, 0);
+
+	for (i = 0; i < map->backends->len; i ++) {
+		bk = g_ptr_array_index (map->backends, i);
+		rspamd_cryptobox_hash_update (&st, bk->uri, strlen (bk->uri));
+	}
+
+	rspamd_cryptobox_hash_final (&st, cksum);
 	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
-	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "map");
-	rspamd_strlcpy (new_map->pool->tag.uid, cksum_encoded,
-			sizeof (new_map->pool->tag.uid));
+	rspamd_strlcpy (map->tag, cksum_encoded, sizeof (map->tag));
 	g_free (cksum_encoded);
-	pool = new_map->pool;
-	msg_info_pool ("added map %s", new_map->uri);
+}
 
+struct rspamd_map *
+rspamd_map_add (struct rspamd_config *cfg,
+	const gchar *map_line,
+	const gchar *description,
+	map_cb_t read_callback,
+	map_fin_cb_t fin_callback,
+	void **user_data)
+{
+	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
 
-	cfg->maps = g_list_prepend (cfg->maps, new_map);
+	bk = rspamd_map_parse_backend (cfg, map_line);
+	if (bk == NULL) {
+		return NULL;
+	}
 
-	return new_map;
+	map = g_slice_alloc0 (sizeof (struct rspamd_map));
+	map->read_callback = read_callback;
+	map->fin_callback = fin_callback;
+	map->user_data = user_data;
+	map->cfg = cfg;
+	map->id = g_random_int ();
+	map->locked =
+		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+	map->backends = g_ptr_array_sized_new (1);
+	g_ptr_array_add (map->backends, bk);
+	map->name = g_strdup (map_line);
+	map->poll_timeout = cfg->map_timeout;
+
+	if (description != NULL) {
+		map->description = g_strdup (description);
+	}
+
+	rspamd_map_calculate_hash (map);
+	msg_info_map ("added map %s", bk->uri);
+
+	cfg->maps = g_list_prepend (cfg->maps, map);
+
+	return map;
+}
+
+struct rspamd_map*
+rspamd_map_add_from_ucl (struct rspamd_config *cfg,
+	const ucl_object_t *obj,
+	const gchar *description,
+	map_cb_t read_callback,
+	map_fin_cb_t fin_callback,
+	void **user_data)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur, *elt;
+	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
+
+	g_assert (obj != NULL);
+
+	if (ucl_object_type (obj) == UCL_STRING) {
+		/* Just a plain string */
+		return rspamd_map_add (cfg, ucl_object_tostring (obj), NULL,
+				read_callback, fin_callback, user_data);
+	}
+
+	map = g_slice_alloc0 (sizeof (struct rspamd_map));
+	map->read_callback = read_callback;
+	map->fin_callback = fin_callback;
+	map->user_data = user_data;
+	map->cfg = cfg;
+	map->id = g_random_int ();
+	map->locked =
+			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+	map->backends = g_ptr_array_new ();
+	map->poll_timeout = cfg->map_timeout;
+
+	if (description) {
+		map->description = g_strdup (description);
+	}
+
+	if (ucl_object_type (obj) == UCL_ARRAY) {
+		/* Add array of maps as multiple backends */
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_STRING) {
+				bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
+
+				if (bk != NULL) {
+					g_ptr_array_add (map->backends, bk);
+
+					if (!map->name) {
+						map->name = g_strdup (ucl_object_tostring (cur));
+					}
+				}
+			}
+			else {
+				msg_err_config ("bad map element type: %s",
+						ucl_object_type_to_string (ucl_object_type (cur)));
+			}
+		}
+
+		if (map->backends->len == 0) {
+			msg_err_config ("map has no urls to be loaded");
+			goto err;
+		}
+	}
+	else if (ucl_object_type (obj) == UCL_OBJECT) {
+		elt = ucl_object_lookup (obj, "name");
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			map->name = g_strdup (ucl_object_tostring (elt));
+		}
+
+		elt = ucl_object_lookup (obj, "description");
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			if (map->description) {
+				g_free (map->description);
+			}
+
+			map->description = g_strdup (ucl_object_tostring (elt));
+		}
+
+		elt = ucl_object_lookup_any (obj, "timeout", "poll", "poll_time",
+				"watch_interval", NULL);
+		if (elt) {
+			map->poll_timeout = ucl_object_todouble (elt);
+		}
+
+		elt = ucl_object_lookup_any (obj, "upstreams", "url", "urls", NULL);
+		if (elt == NULL) {
+			msg_err_config ("map has no urls to be loaded");
+			goto err;
+		}
+
+		if (ucl_object_type (obj) == UCL_ARRAY) {
+			/* Add array of maps as multiple backends */
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_STRING) {
+					bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
+
+					if (bk != NULL) {
+						g_ptr_array_add (map->backends, bk);
+
+						if (!map->name) {
+							map->name = g_strdup (ucl_object_tostring (cur));
+						}
+					}
+				}
+				else {
+					msg_err_config ("bad map element type: %s",
+							ucl_object_type_to_string (ucl_object_type (cur)));
+					goto err;
+				}
+			}
+
+			if (map->backends->len == 0) {
+				msg_err_config ("map has no urls to be loaded");
+				goto err;
+			}
+		}
+		else if (ucl_object_type (elt) == UCL_STRING) {
+			bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (elt));
+
+			if (bk != NULL) {
+				g_ptr_array_add (map->backends, bk);
+
+				if (!map->name) {
+					map->name = g_strdup (ucl_object_tostring (cur));
+				}
+			}
+		}
+
+		if (map->backends->len == 0) {
+			msg_err_config ("map has no urls to be loaded");
+			goto err;
+		}
+	}
+
+	return map;
+
+err:
+	g_ptr_array_free (map->backends, TRUE);
+	g_free (map->name);
+	g_free (map->description);
+	g_slice_free1 (sizeof (*map), map);
+
+	return NULL;
 }
 
 /**
@@ -1023,18 +1345,18 @@ rspamd_map_add (struct rspamd_config *cfg,
  */
 
 #define MAP_STORE_KEY do { \
-	key = rspamd_mempool_alloc (pool, p - c + 1); \
+	key = g_malloc (p - c + 1); \
 	rspamd_strlcpy (key, c, p - c + 1); \
 } while (0)
 
 #define MAP_STORE_VALUE do { \
-	value = rspamd_mempool_alloc (pool, p - c + 1); \
+	value = g_malloc (p - c + 1); \
 	rspamd_strlcpy (value, c, p - c + 1); \
 	value = g_strstrip (value); \
 } while (0)
 
 gchar *
-rspamd_parse_kv_list (rspamd_mempool_t * pool,
+rspamd_parse_kv_list (
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
@@ -1058,6 +1380,7 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	};
 
 	gchar *c, *p, *key = NULL, *value = NULL, *end;
+	struct rspamd_map *map = data->map;
 
 	p = chunk;
 	c = p;
@@ -1095,8 +1418,9 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_pool ("insert key only pair: %s -> %s",
+					msg_debug_map ("insert key only pair: %s -> %s",
 							key, default_value);
+					g_free (key);
 				}
 
 				key = NULL;
@@ -1107,8 +1431,9 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_pool ("insert key only pair: %s -> %s",
+					msg_debug_map ("insert key only pair: %s -> %s",
 							key, default_value);
+					g_free (key);
 				}
 
 				data->state = map_read_eol;
@@ -1176,8 +1501,9 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_pool ("insert key only pair: %s -> %s",
+					msg_debug_map ("insert key only pair: %s -> %s",
 							key, default_value);
+					g_free (key);
 					key = NULL;
 				}
 
@@ -1188,8 +1514,10 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_pool ("insert key only pair: %s -> %s",
+
+					msg_debug_map ("insert key only pair: %s -> %s",
 							key, default_value);
+					g_free (key);
 					key = NULL;
 				}
 
@@ -1234,15 +1562,18 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 					/* Store a single key */
 					MAP_STORE_VALUE;
 					func (data->cur_data, key, value);
-					msg_debug_pool ("insert key value pair: %s -> %s",
+					msg_debug_map ("insert key value pair: %s -> %s",
 							key, value);
+					g_free (key);
+					g_free (value);
 					key = NULL;
 					value = NULL;
 				}
 				else {
 					func (data->cur_data, key, default_value);
-					msg_debug_pool ("insert key only pair: %s -> %s",
+					msg_debug_map ("insert key only pair: %s -> %s",
 							key, default_value);
+					g_free (key);
 					key = NULL;
 				}
 
@@ -1253,15 +1584,18 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 					/* Store a single key */
 					MAP_STORE_VALUE;
 					func (data->cur_data, key, value);
-					msg_debug_pool ("insert key value pair: %s -> %s",
+					msg_debug_map ("insert key value pair: %s -> %s",
 							key, value);
+					g_free (key);
+					g_free (value);
 					key = NULL;
 					value = NULL;
 				}
 				else {
 					func (data->cur_data, key, default_value);
-					msg_debug_pool ("insert key only pair: %s -> %s",
+					msg_debug_map ("insert key only pair: %s -> %s",
 							key, default_value);
+					g_free (key);
 					key = NULL;
 				}
 
@@ -1314,8 +1648,9 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 				/* Store a single key */
 				MAP_STORE_KEY;
 				func (data->cur_data, key, default_value);
-				msg_debug_pool ("insert key only pair: %s -> %s",
+				msg_debug_map ("insert key only pair: %s -> %s",
 						key, default_value);
+				g_free (key);
 				key = NULL;
 			}
 			break;
@@ -1325,15 +1660,18 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 				/* Store a single key */
 				MAP_STORE_VALUE;
 				func (data->cur_data, key, value);
-				msg_debug_pool ("insert key value pair: %s -> %s",
+				msg_debug_map ("insert key value pair: %s -> %s",
 						key, value);
+				g_free (key);
+				g_free (value);
 				key = NULL;
 				value = NULL;
 			}
 			else {
 				func (data->cur_data, key, default_value);
-				msg_debug_pool ("insert key only pair: %s -> %s",
+				msg_debug_map ("insert key only pair: %s -> %s",
 						key, default_value);
+				g_free (key);
 				key = NULL;
 			}
 			break;
@@ -1347,80 +1685,95 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
  * Radix tree helper function
  */
 static void
-radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
+radix_tree_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
 {
 	radix_compressed_t *tree = (radix_compressed_t *)st;
 
 	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree, value);
 }
 
+static void
+hash_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
+{
+	GHashTable *ht = st;
+	gpointer k, v;
+
+	k = g_strdup (key);
+	v = g_strdup (value);
+	g_hash_table_replace (ht, k, v);
+}
+
 /* Helpers */
 gchar *
-rspamd_hosts_read (rspamd_mempool_t * pool,
+rspamd_hosts_read (
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		data->cur_data = g_hash_table_new_full (rspamd_strcase_hash,
+				rspamd_strcase_equal, g_free, g_free);
 	}
-	return rspamd_parse_kv_list (pool,
+	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) g_hash_table_insert,
+			   hash_insert_helper,
 			   hash_fill,
 			   final);
 }
 
 void
-rspamd_hosts_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_hosts_fin (struct map_cb_data *data)
 {
+	struct rspamd_map *map = data->map;
+
 	if (data->prev_data) {
-		g_hash_table_destroy (data->prev_data);
+		g_hash_table_unref (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info_pool ("read hash of %d elements", g_hash_table_size
+		msg_info_map ("read hash of %d elements", g_hash_table_size
 				(data->cur_data));
 	}
 }
 
 gchar *
-rspamd_kv_list_read (rspamd_mempool_t * pool,
+rspamd_kv_list_read (
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		data->cur_data = g_hash_table_new_full (rspamd_strcase_hash,
+				rspamd_strcase_equal, g_free, g_free);
 	}
-	return rspamd_parse_kv_list (pool,
+	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) g_hash_table_insert,
+			   hash_insert_helper,
 			   "",
 			   final);
 }
 
 void
-rspamd_kv_list_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_kv_list_fin (struct map_cb_data *data)
 {
+	struct rspamd_map *map = data->map;
+
 	if (data->prev_data) {
-		g_hash_table_destroy (data->prev_data);
+		g_hash_table_unref (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info_pool ("read hash of %d elements", g_hash_table_size
+		msg_info_map ("read hash of %d elements", g_hash_table_size
 				(data->cur_data));
 	}
 }
 
 gchar *
-rspamd_radix_read (rspamd_mempool_t * pool,
+rspamd_radix_read (
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
@@ -1428,30 +1781,33 @@ rspamd_radix_read (rspamd_mempool_t * pool,
 {
 	radix_compressed_t *tree;
 	rspamd_mempool_t *rpool;
+	struct rspamd_map *map = data->map;
 
 	if (data->cur_data == NULL) {
 		tree = radix_create_compressed ();
 		rpool = radix_get_pool (tree);
-		memcpy (rpool->tag.uid, pool->tag.uid, sizeof (rpool->tag.uid));
+		memcpy (rpool->tag.uid, map->tag, sizeof (rpool->tag.uid));
 		data->cur_data = tree;
 	}
-	return rspamd_parse_kv_list (pool,
+	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) radix_tree_insert_helper,
+			   radix_tree_insert_helper,
 			   hash_fill,
 			   final);
 }
 
 void
-rspamd_radix_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_radix_fin (struct map_cb_data *data)
 {
+	struct rspamd_map *map = data->map;
+
 	if (data->prev_data) {
 		radix_destroy_compressed (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info_pool ("read radix trie of %z elements: %s",
+		msg_info_map ("read radix trie of %z elements: %s",
 				radix_get_size (data->cur_data), radix_get_info (data->cur_data));
 	}
 }
@@ -1494,6 +1850,10 @@ rspamd_regexp_map_destroy (struct rspamd_regexp_map *re_map)
 		rspamd_regexp_unref (re);
 	}
 
+	for (i = 0; i < re_map->values->len; i ++) {
+		g_free (g_ptr_array_index (re_map->values, i));
+	}
+
 	g_ptr_array_free (re_map->regexps, TRUE);
 	g_ptr_array_free (re_map->values, TRUE);
 
@@ -1519,18 +1879,18 @@ rspamd_regexp_map_destroy (struct rspamd_regexp_map *re_map)
 }
 
 static void
-rspamd_re_map_insert_helper (gpointer st, gpointer key, gpointer value)
+rspamd_re_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
 {
 	struct rspamd_regexp_map *re_map = st;
+	struct rspamd_map *map;
 	rspamd_regexp_t *re;
 	GError *err = NULL;
-	rspamd_mempool_t *pool;
 
-	pool = re_map->map->pool;
+	map = re_map->map;
 	re = rspamd_regexp_new (key, NULL, &err);
 
 	if (re == NULL) {
-		msg_err_pool ("cannot parse regexp %s: %e", key, err);
+		msg_err_map ("cannot parse regexp %s: %e", key, err);
 
 		if (err) {
 			g_error_free (err);
@@ -1540,7 +1900,7 @@ rspamd_re_map_insert_helper (gpointer st, gpointer key, gpointer value)
 	}
 
 	g_ptr_array_add (re_map->regexps, re);
-	g_ptr_array_add (re_map->values, value);
+	g_ptr_array_add (re_map->values, g_strdup (value));
 }
 
 static void
@@ -1550,14 +1910,14 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 	guint i;
 	hs_platform_info_t plt;
 	hs_compile_error_t *err;
-	rspamd_mempool_t *pool;
+	struct rspamd_map *map;
 	rspamd_regexp_t *re;
 	gint pcre_flags;
 
-	pool = re_map->map->pool;
+	map = re_map->map;
 
 	if (hs_populate_platform (&plt) != HS_SUCCESS) {
-		msg_err_pool ("cannot populate hyperscan platform");
+		msg_err_map ("cannot populate hyperscan platform");
 		return;
 	}
 
@@ -1605,7 +1965,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 			&re_map->hs_db,
 			&err) != HS_SUCCESS) {
 
-		msg_err_pool ("cannot create tree of regexp when processing '%s': %s",
+		msg_err_map ("cannot create tree of regexp when processing '%s': %s",
 				re_map->patterns[err->expression], err->message);
 		re_map->hs_db = NULL;
 		hs_free_compile_error (err);
@@ -1614,7 +1974,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 	}
 
 	if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
-		msg_err_pool ("cannot allocate scratch space for hyperscan");
+		msg_err_map ("cannot allocate scratch space for hyperscan");
 		hs_free_database (re_map->hs_db);
 		re_map->hs_db = NULL;
 	}
@@ -1622,7 +1982,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 }
 
 gchar *
-rspamd_regexp_list_read (rspamd_mempool_t *pool,
+rspamd_regexp_list_read (
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data,
@@ -1635,19 +1995,20 @@ rspamd_regexp_list_read (rspamd_mempool_t *pool,
 		data->cur_data = re_map;
 	}
 
-	return rspamd_parse_kv_list (pool,
+	return rspamd_parse_kv_list (
 			chunk,
 			len,
 			data,
-			(insert_func) rspamd_re_map_insert_helper,
+			rspamd_re_map_insert_helper,
 			hash_fill,
 			final);
 }
 
 void
-rspamd_regexp_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data)
+rspamd_regexp_list_fin (struct map_cb_data *data)
 {
 	struct rspamd_regexp_map *re_map;
+	struct rspamd_map *map = data->map;
 
 	if (data->prev_data) {
 		rspamd_regexp_map_destroy (data->prev_data);
@@ -1655,7 +2016,7 @@ rspamd_regexp_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data)
 	if (data->cur_data) {
 		re_map = data->cur_data;
 		rspamd_re_map_finalize (re_map);
-		msg_info_pool ("read regexp list of %ud elements",
+		msg_info_map ("read regexp list of %ud elements",
 				re_map->regexps->len);
 	}
 }

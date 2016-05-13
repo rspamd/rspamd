@@ -26,6 +26,11 @@
 #include "utlist.h"
 #include <math.h>
 
+/*
+ * Do not print more than this amount of elts
+ */
+static const int max_log_elts = 7;
+
 static GQuark
 rspamd_task_quark (void)
 {
@@ -752,7 +757,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	rspamd_fstring_t *symbuf;
 	struct symbol *sym;
 	GPtrArray *sorted_symbols;
-	guint i;
+	guint i, j;
 
 	mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
@@ -810,8 +815,16 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 
 					rspamd_printf_fstring (&symbuf, "{");
 
+					j = 0;
+
 					for (cur = sym->options; cur != NULL; cur = g_list_next (cur)) {
 						rspamd_printf_fstring (&symbuf, "%s;", cur->data);
+
+						if (j >= max_log_elts) {
+							rspamd_printf_fstring (&symbuf, "...;");
+							break;
+						}
+						j ++;
 					}
 
 					rspamd_printf_fstring (&symbuf, "}");
@@ -892,6 +905,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 		lim = internet_address_list_length (ialist);
 	}
 
+
 	varbuf = rspamd_fstring_new ();
 
 	for (i = 0; i < lim; i++) {
@@ -907,6 +921,11 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 			if (i != lim - 1) {
 				varbuf = rspamd_fstring_append (varbuf, ",", 1);
 			}
+		}
+
+		if (i >= max_log_elts) {
+			varbuf = rspamd_fstring_append (varbuf, "...", 3);
+			break;
 		}
 	}
 
@@ -950,6 +969,11 @@ rspamd_task_write_addr_list (struct rspamd_task *task,
 			if (i != lim - 1) {
 				varbuf = rspamd_fstring_append (varbuf, ",", 1);
 			}
+		}
+
+		if (i >= max_log_elts) {
+			varbuf = rspamd_fstring_append (varbuf, "...", 3);
+			break;
 		}
 	}
 

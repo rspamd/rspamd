@@ -16,7 +16,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "events.h"
-#include "xxhash.h"
+#include "cryptobox.h"
 
 #define RSPAMD_SESSION_FLAG_WATCHING (1 << 0)
 #define RSPAMD_SESSION_FLAG_DESTROYING (1 << 1)
@@ -81,7 +81,7 @@ static guint
 rspamd_event_hash (gconstpointer a)
 {
 	const struct rspamd_async_event *ev = a;
-	XXH64_state_t st;
+	rspamd_cryptobox_fast_hash_state_t st;
 	union {
 		event_finalizer_t f;
 		gpointer p;
@@ -89,11 +89,11 @@ rspamd_event_hash (gconstpointer a)
 
 	u.f = ev->fin;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
-	XXH64_update (&st, &ev->user_data, sizeof (gpointer));
-	XXH64_update (&st, &u, sizeof (u));
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+	rspamd_cryptobox_fast_hash_update (&st, &ev->user_data, sizeof (gpointer));
+	rspamd_cryptobox_fast_hash_update (&st, &u, sizeof (u));
 
-	return XXH64_digest (&st);
+	return rspamd_cryptobox_fast_hash_final (&st);
 }
 
 

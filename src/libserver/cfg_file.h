@@ -277,7 +277,7 @@ struct rspamd_config {
 	gchar *pid_file;                                /**< name of pid file									*/
 	gchar *temp_dir;                                /**< dir for temp files									*/
 	gchar *control_socket_path;                     /**< path to the control socket							*/
-	gchar *local_addrs;                             /**< tree of local addresses							*/
+	const ucl_object_t *local_addrs;                /**< tree of local addresses							*/
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif
@@ -353,7 +353,6 @@ struct rspamd_config {
 	gint clock_res;                                 /**< resolution of clock used							*/
 
 	GList *maps;                                    /**< maps active										*/
-	rspamd_mempool_t *map_pool;                     /**< static maps pool									*/
 	gdouble map_timeout;                            /**< maps watch timeout									*/
 
 	struct symbols_cache *cache;                    /**< symbols cache object								*/
