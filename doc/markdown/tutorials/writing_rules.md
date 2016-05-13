@@ -1,40 +1,37 @@
 # Writing rspamd rules
 
-In this tutorial, I describe how to create new rules for rspamd both lua and regexp ones.
+In this tutorial, I describe how to create new rules for rspamd - both Lua and regexp rules.
 
 ## Introduction
 
-Rules are the essential part of spam filtering system and rspamd ships with some prepared rules. However, if you run your
-own system you might want to have your own rules for better spam filtering or better false positives rate. Rules are usually
-written in `lua` language, where you specify both custom logic and generic regular expressions.
+Rules are the essential part of a spam filtering system and rspamd ships with some prepared rules by default. However, if you run your own system you might want to have your own rules for better spam filtering or a better false positives rate. Rules are usually written in `Lua`, where you can specify both custom logic and generic regular expressions.
 
 ## Configuration files
 
-Since rspamd is shipped with internal rules it is a good idea to store your custom rules and configuration in some separate file
-to avoid clash with the pre-built rules that might change from version to version. There are some possibilities for these purposes:
+Since rspamd ships with its own rules it is a good idea to store your custom rules and configuration in separate files to avoid clashing with the default rules which might change from version to version. There are some possibilities to achieve this:
 
-- Local rules in lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd` or `/usr/local/etc/rspamd` for some systems)
+- Local rules in Lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd`, or `/usr/local/etc/rspamd` for some systems)
 - Local configuration that **adds** options to rspamd should be placed in `${CONFDIR}/rspamd.conf.local`
 - Local configuration that **overrides** the default settings should be placed in `${CONFDIR}/rspamd.conf.override`
 
-Lua local configuration can be used for both override and extending:
+Lua local configuration can be used to both override and extend:
 
-rspamd.lua:
+`rspamd.lua`:
 
 ~~~lua
 config['regexp']['symbol'] = '/some_re/'
 ~~~
 
-rspamd.local.lua:
+`rspamd.local.lua`:
 
 ~~~lua
 config['regexp']['symbol1'] = '/other_re/' -- add 'symbol1' key to the table
 config['regexp']['symbol'] = '/override_re/' -- replace regexp for 'symbol'
 ~~~
 
-For the configuration rules you can take a look at the following examples:
+For configuration rules you can take a look at the following examples:
 
-rspamd.conf:
+`rspamd.conf`:
 
 ~~~ucl
 var1 = "value1";
@@ -44,7 +41,7 @@ section "name" {
 }
 ~~~
 
-rspamd.conf.local:
+`rspamd.conf.local`:
 
 ~~~ucl
 var1 = "value2";
@@ -70,7 +67,7 @@ section "name" {
 
 Override example:
 
-rspamd.conf:
+`rspamd.conf`:
 
 ~~~ucl
 var1 = "value1";
@@ -80,7 +77,7 @@ section "name" {
 }
 ~~~
 
-rspamd.conf.override:
+`rspamd.conf.override`:
 
 ~~~ucl
 var1 = "value2";
@@ -96,6 +93,7 @@ Resulting config:
 var1 = "value2";
 
 # Note that var2 is removed completely
+
 section "name" {
 	var3 = "value3";
 }
@@ -106,7 +104,7 @@ For each individual configuration file shipped with rspamd, there are two specia
     .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
     .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
 
-Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in rspamd configuration.
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the rspamd configuration.
 
 For example, let's override some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
 
@@ -114,7 +112,7 @@ For example, let's override some default symbols shipped with rspamd. To do that
         score = 20.0;
     }
 
-We can also use override file, for example, let's redefine actions and set more restrictive `reject` score. For these purposes, we create `etc/rspamd/override.d/metrics.conf` with the following content:
+We can also use an override file. For example, let's redefine actions and set a more restrictive `reject` score. To do this, we create `etc/rspamd/override.d/metrics.conf` with the following content:
 
     actions {
       reject = 150;
@@ -122,15 +120,13 @@ We can also use override file, for example, let's redefine actions and set more 
       greylist = 4;
     }
 
-You need to set the complete objects to redefine the existing ones. For example, you **cannot** write something like
+Note that you need to define a complete action to redefine an existing one. For example, you **cannot** write something like
 
     actions {
       reject = 150;
     }
 
-as this will set all other actions undefined.
-
-The conjunction of `override` and `local` configs should allow to resolve complicated issues without having a Turing complete language to distinguish cases.
+as this will set the other actions (`add_header` and `greylist` as undefined).
 
 ## Writing rules
 
