@@ -611,6 +611,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	}
 	else {
 		evtimer_del (&map->ev);
+		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
 	}
 
 	jittered_sec = rspamd_time_jitter (timeout, 0);
