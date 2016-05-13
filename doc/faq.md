@@ -1,14 +1,14 @@
 ---
 layout: doc_faq
-title: Rspamd frequently asked questions
+title: rspamd frequently asked questions
 ---
 
 # Frequently asked questions
 This document includes some questions and practical examples that are frequently asked by rspamd users.
 
 ## General questions
-### Where get help about rspamd
-The most convenient place for asking questions about rspamd is IRC channel _#rspamd_ in [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
+### Where to get help about rspamd
+The most convenient place for asking questions about rspamd is the IRC channel _#rspamd_ on [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
 
 ### I have systemd and rspamd won't start
 
@@ -31,9 +31,9 @@ systemctl status rspamd.socket
 ```
 
 ### How to figure out why rspamd process crashed
-Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following.
+Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following:
 
-First of all, you'd need to create a special directory for core files that will be allowed for writing for all users in the system:
+First of all, you need to create a special directory for core files that will be writeable by all users on the system:
 
 ```
 mkdir /coreland
@@ -46,7 +46,7 @@ For FreeBSD you can have either one core for all processes by setting:
 sysctl kern.corefile=/coreland/%N.core
 ```
 
-or a separated core for each crash (that includes PID of process):
+or a separate core for each crash (that includes PID of process):
 
 ```
 sysctl kern.corefile=/coreland/%N-%p.core
@@ -62,58 +62,57 @@ Additional settings:
 sysctl kernel.core_uses_pid = 1
 sysctl fs.suid_dumpable = 2
 ```
-first one added PID to core file name, and second allowed setuid processes to be dumped.
-A good idea is add this settings to `/etc/sysctl.conf` and then run `sysctl -p` for apply.
+The first one adds the PID to core file name, and the second allows setuid processes to be dumped. A good idea is to add these settings to `/etc/sysctl.conf` and then run `sysctl -p` to apply them.
 
-In case of distro with systemd (most mainstream Linux distros), there are additional settings.
-First, you need edit file `/etc/systemd/system.conf` and uncomment `DefaultLimitCORE` parameter and set it to `infinity` (`DefaultLimitCORE=infinity`) to enable systemd core dumps. After this, you need run `systemctl daemon-reload` to reread configuration followed by `systemstl daemon-reexec` to apply it.
+On a distro with systemd (most mainstream Linux distros), there are additional settings.
+First, you will need to edit the file `/etc/systemd/system.conf` and uncomment the `DefaultLimitCORE` parameter and set it to `infinity` (`DefaultLimitCORE=infinity`) to enable systemd core dumps. After this, you will need to run `systemctl daemon-reload` to reread the configuration followed by `systemstl daemon-reexec` to apply it.
 
-Then you need edit limit of coredumps for services. You should edit service unit and add parameter `LimitCORE=unlimited` to the `[Service]` section of unit (in theory, `DefaultLimitCORE` option is enough but in practice you may need to enforce `LimitCORE` for each service). A good practice is to add overrides to user file that is located in `/etc/systemd/system/` as the original unit-file will be replaced after upgrade.
+Then you will need to edit the limit of coredumps for services. You should edit the service unit and add the parameter `LimitCORE=unlimited` to the `[Service]` section of the unit. (In theory, the `DefaultLimitCORE` option is enough but in practice you may need to enforce `LimitCORE` for each service). A good practice is to add overrides to a user file that is located in `/etc/systemd/system/` as the original unit-file will be replaced after upgrade.
 
-After unit-file is changed you should run `systemctl daemon-reload` followed by `systemctl restart rmilter.service` or `systemctl restart rspamd.service`.
+After the unit file is changed you should run `systemctl daemon-reload` followed by `systemctl restart rmilter.service` or `systemctl restart rspamd.service`.
 
-In distributives with traditional SysV init you can use service init file, for example `/etc/init.d/rspamd` to permit dumping of core files by setting the appropriate resource limit. You need add line
+In distros with traditional SysV init you can use the service init file, for example `/etc/init.d/rspamd` to permit dumping of core files by setting the appropriate resource limit. You will need to add the following line
 
 ```
 ulimit -c unlimited
 ```
 
 just after the heading comment.
-In FreeBSD you can use `/usr/local/etc/rc.d/rspamd` file in the same way.
+On FreeBSD you can use the file `/usr/local/etc/rc.d/rspamd` in the same way.
 
-A good way to test core files setup is sending SIGILL signal to a process. For example, run `pkill --signal 4 rspamd` or `kill -s 4 <YOUR_PID>` and then check `/coreland` directory for a core dump.
+A good way to test the core files setup is sending a `SIGKILL` signal to a process. For example, run `pkill --signal 4 rspamd` or `kill -s 4 <YOUR_PID>` and then check the `/coreland` directory for a core dump.
 
-### Now I have too many core files, how to limit their amount
+### Now I have too many core files
 
-Rspamd can stop dumping cores upon reaching specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
+Rspamd can stop dumping cores upon reaching a specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
 
 ```ucl
 cores_dir = "/coreland/";
 max_cores_size = 1G;
 ```
 
-That will limit the joint amount of files in `/coreland/` folder to 1 gigabyte. After reaching this limit, rspamd will stop dumping core files. Rspamd cannot distinguish its own core files from other core files in a system. That is an inevitable limitation.
+That will limit the combined size of files in the `/coreland/` directory to 1 gigabyte. After reaching this limit, rspamd will stop dumping core files. (Please note that rspamd cannot distinguish its own core files from other core files in a system.)
 
-### What can I do with a core files
-In the most cases, it is enough to open core file with `gdb`  or other debugger, such as `lldb`:
+### What can I do with core files
+In most cases, it is enough to open core file with `gdb`  or another debugger, such as `lldb`:
 
 ```
 gdb `which rspamd` -c /coreland/rspamd.core
 lldb `which rspamd` -c /coreland/rspamd.core
 ```
 
-If a core file has been opened without errors then you can type `bt full` in debugger command line to get the full stack trace that caused this particular error.
+If a core file has been opened without errors then you can type `bt full` in the debugger command line to get the full stack trace that caused this particular error.
 
 ### Why can I have different results for the same message
-If your message is gains `reject` score, rspamd stops further checks to save some resources. However, some checks, such as network checks could still occur as they might be started before reaching this threshold for this message. Therefore, sometimes you might see different (but all more or equal to `reject` threshold) results for a same message. To avoid this behaviour you could set HTTP header
+If your message has gained a `reject` score, rspamd will stop further checks to save resources. However, some checks, such as network checks, could still occur as they might be started before reaching this threshold for the message. Therefore, sometimes you might see different (but all greater than or equal to the `reject` threshold) results for the same message. To avoid this behaviour you can set the HTTP header
 
 ```
 Pass: all
 ```
 
-when making request to rspamd (which is equal to `-p` flag for `rspamc` client).
+when making a request to rspamd (which is equal to `-p` flag for `rspamc` client).
 
-Another possible reason of different results is too low DNS timeouts or too low task timeout so asynchronous rules can't get results before killed by a timeout. To get help about the relevant options you can type the following commands:
+Another possible reason for different results is too low a DNS, or task, timeout setting so asynchronous rules can't get results before being killed by a timeout. To get help about the relevant options you can type the following commands:
 
 ```
 rspamadm confighelp options.DNS
@@ -121,21 +120,21 @@ rspamadm confighelp options.dns_max_requests
 rspamadm confighelp workers.normal.task_timeout
 ```
 
-and more general:
+and more generally:
 
 ```
 rspamadm confighelp -k timeout
 ```
 
 ### What is the difference between `rspamc` and `rspamadm`
-Rspamadm is administration tool that works with **local** rspamd daemon via unix socket and performs some management tasks. You could get help for this tool and all subtools by typing:
+rspamadm is an administration tool that works with the **local** rspamd daemon via a unix socket and performs management tasks. You can get help for this tool, and its options, by typing:
 
 ```
 rspamadm help
 rspamadm help <command>
 ```
 
-Rspamc is a client for rspamd remote daemon. It can talk with rspamd scanner process or rspamd controller process using HTTP (with optional encryption) protocol, get and fine-print the results. It can do such tasks as scanning, learning and getting statistics:
+rspamc is a client for an rspamd remote daemon. It can communicate with an rspamd scanner process or rspamd controller process using the HTTP (with optional encryption) protocol, getting and displaying the results. It can do tasks such as scanning, learning and getting statistics:
 
 ```
 rspamc message.eml # Scan a message
@@ -143,48 +142,46 @@ rspamc learn_spam message.eml # Learn message
 rspamc -f 1 -w 10 fuzzy_add message.eml # Add message to fuzzy storage
 ```
 
-### How rspamd support different characters sets
+### How does rspamd support different characters sets
 
-By default, rspamd converts all messages to `UTF-8`. This includes text parts (both `text/plain` and `text/html`), headers and MIME elements (boundaries, filenames). If there is no information of how to convert something to `UTF-8`, for example when there is no `charset` attribute in the `Content-Type` or if there are some broken `UTF-8` characters then rspamd treats this text as raw for safety considerations. The difference between raw and `UTF-8` texts is that for `UTF-8` texts it is possible to use unicode regular expressions by specifying `/U` flag. For raw texts, rspamd uses raw complementary expression which could lack some features.
+By default, rspamd converts all messages to `UTF-8` encoding. This includes text parts (both `text/plain` and `text/html`), headers and MIME elements (boundaries, filenames). If there is no information on how to convert something to `UTF-8` - for example, when there is no `charset` attribute in the `Content-Type` header or if there are some broken `UTF-8` characters - then rspamd treats this text as raw for safety considerations. The difference between raw and `UTF-8` text is that for `UTF-8` it is possible to use unicode regular expressions by specifying the `/U` flag. For raw texts, rspamd uses raw complementary expressions, which may lack some features.
 
-It is always safe to assume that everything will be in `utf-8`, even in the case of raw messages - you would just miss some particular features. There is also module called [chartable](https://rspamd.com/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and trying to guess if there is some obscuring attempt to mix characters sets.
+It is always safe to assume that everything will be encoded in `UTF-8`; even in the case of raw messages, you would just miss some particular features. There is also a module called [chartable](https://rspamd.com/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and tries to guess if there is an attempt to mix characters sets.
 
 ### Can I relearn messages for fuzzy storage or for statistics
 
-In case if you need to move some hash from one list (e.g. blacklist) to another one (e.g. whitelist), you need to call `rspamc fuzzy_del` command for the first list (lists are identified by number) followed by `rspamc fuzzy_add` command:
+In case you need to move a hash from one list (e.g. blacklist) to another (e.g. whitelist), you need to call the `rspamc fuzzy_del` command for the first list (lists are identified by number) followed by `rspamc fuzzy_add` command:
 
 ```
 rspamc -f 1 fuzzy_del message.eml
 rspamc -f 2 -w <weight> fuzzy_add message.eml
 ```
 
-If you need just to increase the score, then just call `fuzzy_add` with the score change. It is not possible to decrease score however.
+If you just need to increase a score, then call `fuzzy_add` with the score change. (It is not possible to decrease a score, however.)
 
-Statistics is a bit different. Rspamd keeps hashes of tokens learned in a special storage called `learn_cache`. If rspamd finds that this particular tokens combination has been already learned it performs the following:
+Statistics are treated a bit differently. rspamd keeps hashes of tokens learned in a special storage called the `learn_cache`. If rspamd finds that a particular token combination has been learned already it does the following:
 
-* if the class of tokens was the same (e.g. spam and spam) then rspamd just refuses to learn these tokens one more time
-* otherwise, rspamd performs so called `relearning`:
-    + scores in the current class are decreased for this tokens set;
-    + scores in the opposite class are increased for this tokens set;
-    + the class of tokens in the learn cache is updated accordingly.
+* if the class of tokens is the same (e.g. spam and spam) then rspamd just refuses to learn these tokens again
+* otherwise, rspamd performs so-called `relearning`:
+    + scores in the current class are decreased for this token set
+    + scores in the opposite class are increased for this token set
+    + the class of tokens in the learn cache is updated accordingly
 
-All these actions are performed automatically if `learn_cache` is enabled. It is highly recommended to use this logic since multiple learnings are quite bad for statistical module.
+All these actions are performed automatically if `learn_cache` is enabled. (It is highly recommended to enable this setting, as repeated learnings will affect the performance of the statistical module.)
 
 
-### Why some symbols have different scores for different messages
+### Why do some symbols have different scores for different messages
 
-Rspamd support so called `dynamic` symbols. The closest analogue in SA are multiple symbols that checks for some certain value (e.g. bayes probability). In rspamd it works in a more smoother way: the metric score is multiplied by some value (that is usually in range `[0..1]`) and added to the scan result. For example, bayes classifier adds score based on probability:
+rspamd supports so-called `dynamic` symbols. A metric score is multiplied by some value (that is usually in the range `[0..1]`) and added to the scan result. For example, the Bayes classifier adds a score based on probability:
 
-* if probability is close to `50%` then score is very close to 0;
-* if probability goes higher `[50% .. 75%]` then score slowly grows;
-* when the probability is closer to `90%` the symbol's score is close to 0.95 and on `100%` it is exactly 1.0;
+* if the probability is close to `50%` then the score is very close to 0
+* if the probability is higher `[50% .. 75%]` then the score increases gradually
+* when the probability is closer to `90%` the symbol's score is close to 0.95 and on `100%` it is exactly 1.0
 * this logic is reversed for HAM probability (from `50%` to `0%` spam probability)
 
-This allows to provide better fit between some rule's results and the desired score. Indeed, we should intuitively add higher scores for high probabilities and fairly low scores for lower probabilities.
+Many rspamd rules, such as `PHISHING` and fuzzy checks, use dynamic scoring.
 
-Many rspamd rules, such as `PHISHING` or fuzzy checks use this dynamic logic of scoring.
-
-### Can I check message on rspamd without rspamc
+### Can I check a message with rspamd without rspamc
 
 Yes: `curl --data-binary @- http://localhost:11333 < file.eml`.
 
@@ -200,18 +197,15 @@ Unlike SpamAssassin, rspamd **suggests** the desired action for a specific messa
 - `greylist`: delay message for a while
 - `no action`: pass message
 
-Rspamd itself **does not** alter a message, that is a task for MTA or any shim agent (e.g. [rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for end-user.
-
-### What are rspamd metrics
-Rspamd metrics is the concept of splitting results into different combinations. However, this concept was never used and so far there is only `default` metric that is supported by all clients I know. That's why you should consider another mechanisms to achieve this goal, for example, [user settings](https://rspamd.com/doc/configuration/settings.html).
+rspamd itself **does not** alter a message, that is a task for the MTA or any shim agent (e.g. [rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for the user.
 
 ### What are local and override config files
-Historically, rspamd provided configuration files that were desired for editing by hands. However, with the project development it has come clear that this idea does not fit very well: rspamd configuration influences the overall filtering quality, performance and other important metrics. Unfortunately, with the hand edited configuration files it is very hard to maintain these metrics up-to-date. Hence, I have decided to add two possibilities:
+Historically, rspamd provided user-editable configuration files. However, as the project developed, it became clear that this idea had drawbacks: rspamd configuration influences the overall filtering quality, performance and other important metrics and it was difficult to maintain local configurations with new releases of rspamd. Hence, I decided to add two possibilities:
 
 1. Override configurations
 2. Local configurations
 
-Override configuration (`etc/rspamd.conf.override`) is used to ultimately redefine the default values in rspamd. In this file, you redefine the **whole sections** of the default configuration. For example, if you have some module `example` defined in the default configuration as following:
+An override configuration (`etc/rspamd.conf.override`) is used to ultimately redefine the default values in rspamd. In this file, you can redefine **whole sections** of the default configuration. For example, if you have a module `example` defined in the default configuration as follows:
 
 ```ucl
 example {
@@ -220,7 +214,7 @@ example {
 }
 ```
 
-and then you decided to override `option2` and tried to add the following content to the `etc/rspamd.conf.override` file:
+and you wanted to override `option2` by adding the following to `etc/rspamd.conf.override`:
 
 ```ucl
 example {
@@ -228,7 +222,7 @@ example {
 }
 ```
 
-However, this might work unexpectedly: overrided config would have `example` section with a single key `option2` whilst `option1` will be missed. The global local file, namely, `rspamd.conf.local` has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or that things will be just ignored. The only exception from this rule is _metric_ section. So you could use something like:
+this might work unexpectedly: the new config would have an `example` section with a single key `option2`, while `option1` would be ignored. The global local file, namely `rspamd.conf.local`, has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or it will just be ignored. The only exception to this rule is the _metric_ section. So you could use something like:
 
 ```ucl
 metric "default" {
@@ -241,17 +235,17 @@ metric "default" {
 
 and add this to the `rspamd.conf.local` (but not override).
 
-### What are local.d and override.d then
-From `rspamd 1.2`, the default configuration also provides 2 more ways to extend or redefine each configuration file shipped with rspamd. Within section definition, it includes 2 files with different priorities:
+### What are the local.d and override.d directories
+From rspamd version 1.2 onwards, the default configuration provides two more ways to extend or redefine each configuration file shipped with rspamd. Each section definition includes two files with different priorities:
 
-- `etc/rspamd/local.d/<conf_file>` - included with priority `1` that allows to redefine and extend the default rules but `dynamic updates` or things redefined via `webui` will have higher priority and can redefine the values included
-- `etc/rspamd/override.d/<conf_file>` - included with priority `10` that allows to redefine all other things that could change configuration in rspamd
+- `etc/rspamd/local.d/<conf_file>` - included with priority `1` that allows you to redefine and extend the default rules; but `dynamic updates` or items redefined via the WebUI will have higher priority and can redefine the values included
+- `etc/rspamd/override.d/<conf_file>` - included with priority `10` that allows you to redefine all other things that could change configuration in rspamd
 
-Another important difference from the global override and local rules is that these files are included within section. Here is an example of utilizing of local.d for `modules.d/example.conf` configuration file:
+Another important difference from the global override and local rules is that these files are included within each section. Here is an example of utilizing local.d for the `modules.d/example.conf` configuration file:
 
 ```ucl
 example {
-  # Webui include
+  # WebUI include
   .include(try=true,priority=5) "${DBDIR}/dynamic/example.conf"
   # Local include
   .include(try=true,priority=1) "$LOCAL_CONFDIR/local.d/example.conf"
@@ -269,7 +263,7 @@ option2 = false;
 option3 = 1.0;
 ```
 
-in  `override.d/example.conf`:
+in `override.d/example.conf`:
 
 ```ucl
 option3 = 2.0;
@@ -287,10 +281,10 @@ example {
 }
 ```
 
-This looks complicated but it allows smoother updates and simplifies automatic management. If you unsure about your configuration, then take a look at `rspamadm configdump` command that displays the target configuration with many options available and `rspamadm confighelp` that shows help for many of rspamd options.
+This looks complicated but it allows smoother updates and simplifies automatic management. If you are unsure about your configuration, then take a look at the output of the `rspamadm configdump` command, which displays the target configuration with many options available, and the `rspamadm confighelp` command which shows help for many rspamd options.
 
 ### What are maps
-Maps are files that contain lists of keys or key-value pairs that could be dynamically reloaded by rspamd when changed. The important difference to configuration elements is that maps reloading is done on flight without expensive restart procedure. Another important thing about maps is that rspamd can monitor both file and HTTP maps for changes (modification time for files and HTTP `If-Modified-Since` header for HTTP maps). Rspamd supports `HTTP` and `file` maps so far.
+Maps are files that contain lists of keys or key-value pairs that could be dynamically reloaded by rspamd when changed. The important difference to configuration elements is that map reloading is done 'live' without and expensive restart procedure. Another important thing about maps is that rspamd can monitor both file and HTTP maps for changes (modification time for files and HTTP `If-Modified-Since` header for HTTP maps). So far, rspamd supports `HTTP` and `file` maps.
 
 ### What can be in the maps
 
@@ -298,10 +292,10 @@ Maps can have the following objects:
 
 - spaces and one line comments started by `#` symbols
 - keys
-- optional values separated by space character
+- optional values separated by a space character
 - keys with spaces enclosed in double quotes
 - keys with slashes (regular expressions) enclosed in slashes
-- `IP` addresses with optional mask
+- IP addresses with optional mask
 
 Here are some examples:
 
@@ -332,7 +326,7 @@ IP maps:
 ```
 
 ### How to sign maps
-From rspamd 1.2 each map can have digital signature using `EdDSA` algorithm. To sign a map you can use `rspamadm signtool` and to generate signing keypair - `rspamadm kaypair -s -u`:
+From rspamd version 1.2 onwards, each map can have a digital signature using the `EdDSA` algorithm. To sign a map you can use `rspamadm signtool` and to generate a signing keypair - `rspamadm kyypair -s -u`:
 
 ```ucl
 keypair {
@@ -345,25 +339,25 @@ keypair {
 }
 ```
 
-Then you can use `signtool` to edit map's file:
+Then you can use `signtool` to edit the map file:
 
 ```
 rspamadm signtool -e --editor=vim -k <keypair_file> <map_file>
 ```
 
-To enforce signing policies you should add `sign+` string to your map definition:
+To enforce signing policies you should add a `sign+` string to your map definition:
 
 ```
 map = "sign+http://example.com/map"
 ```
 
-To specify trusted key you could either put **public** key from the keypair to `local.d/options.inc` file as following:
+To specify the trusted key you could either put the **public** key from the keypair in the `local.d/options.inc` file as following:
 
 ```
 trusted_keys = ["<public key string>"];
 ```
 
-or add it as `key` definition to the map string:
+or add it as a `key` definition in the map string:
 
 ```
 map = "sign+key=<key_string>+http://example.com/map"
@@ -371,11 +365,11 @@ map = "sign+key=<key_string>+http://example.com/map"
 
 ### What are one-shot rules
 
-In rspamd, each rule can be triggered multiple times. For example, if a message has 10 URLs and 8 of them are in some URL blacklist (based on their unique tld), then rspamd would add URIBL rule 8 times for this message. Sometimes, that's not a desired behaviour - in that case just add `one_shot = true` to the symbol's definition in metric and that symbol won't be added more than one time.
+In rspamd, each rule can be triggered multiple times. For example, if a message has 10 URLs and 8 of them are in some URL blacklist (based on their unique tld), then rspamd would add a URIBL rule 8 times for this message. Sometimes, that's not a desired behaviour - in that case just add `one_shot = true` to the symbol's definition in the metric for that symbol and the symbol won't be added multiple times.
 
 ### What is the use of symbol groups
 
-Symbol groups are intended to group somehow similar rules. The most useful feature is that group names could be used in composite expressions as `gr:<group_name>` and it is possible to set joint limit of score for a specific group:
+Symbol groups are intended to group similar rules. This is most useful when group names are used in composite expressions such as `gr:<group_name>`. It is also possible to set a joint limit for the score of a specific group:
 
 ```ucl
 group "test" {
@@ -390,11 +384,11 @@ group "test" {
 }
 ```
 
-In this case, if `test1` and `test2` both matches their joint score won't be more than `15`.
+In this case, if `test1` and `test2` both match, their joint score won't be more than `15`.
 
-### Why some symbols are missing in the metric configuration
+### Why are some symbols missing in the metric configuration
 
-It is now possible to set up rules completely from lua. That allows to set all necessary attributes without touching of configuration files. However, it is still possible to override this default scores in any configuration file. Here is an example of such a rule:
+It is now possible to set up rules completely using Lua. This allows setting all necessary attributes without touching the configuration files. However, it is still possible to override the default scores in any configuration file. Here is an example of such a rule:
 
 ~~~lua
 rspamd_config.LONG_SUBJ = {
@@ -412,22 +406,22 @@ rspamd_config.LONG_SUBJ = {
 }
 ~~~
 
-You can use the same approach when your own writing rules in `rspamd.local.lua`.
+You can use the same approach when writing rules in `rspamd.local.lua`.
 
 ### How can I disable some rspamd rules safely
 
-The best way to do it is to add so called `condition` for the specific symbol. This could be done, for example, in `rspamd.local.lua`:
+The best way is to add a condition for the specific symbol. This could be done, for example, in `rspamd.local.lua`:
 
 ~~~lua
 rspamd_config:add_condition('SOME_SYMBOL', function(task) return false end)
 ~~~
 
-You can add more complex conditions but this one is the easiest in terms of rules management and upgradeability.
+You can add more complex conditions but this one is the easiest in terms of rules management and upgrades.
 
 ## Administration questions
 
 ### How to read rspamd logs
-Rspamd logs are augmented meaning that each log line normally includes `tag` which could help to figure out log lines that are related to, for example, a specific task:
+rspamd logs are augmented, meaning that each log line normally includes a `tag` which can help to figure out log lines that are related to, for example, a specific task:
 
 ```
 # fgrep 'b120f6' /var/log/rspamd/rspamd.log
@@ -438,7 +432,7 @@ Rspamd logs are augmented meaning that each log line normally includes `tag` whi
 ```
 
 ### Can I customize log output for logger
-Yes, there is `log_format` option in `logging.inc`. Here is a useful configuration snippet that allows to add more information comparing to the default rspamd logger output:
+Yes, there is `log_format` option in `logging.inc`. Here is a useful configuration snippet that allows you to add more information in comparison to the default rspamd logger output:
 
 ```ucl
 log_format =<<EOD
@@ -465,28 +459,28 @@ EOD
 
 As you can see, you can use both embedded log variables and Lua code to customize log output. More information is available in the [logger documentation](https://rspamd.com/doc/configuration/logging.html)
 
-### What backend should I select for statistics
+### Which back end should I use for statistics
 
-Currently, I'd recommend `redis` for statistics backend. You can convert the existing statistics in sqlite by using `rspamadm statconvert` routine:
+Currently, I recommend using `redis` for the statistics back end. You can convert existing statistics in sqlite by using `rspamadm statconvert` routine:
 
 ```
 rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379  -s BAYES_SPAM
 ```
 
-The only limitation of redis plugin is that it doesn't support per language statistics, however, this feature is not needed in the vast majority of use cases. Per user statistic in redis works in a different way than one in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
+The only limitation of the redis plugin is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
 
 
 ### What redis keys are used by rspamd
 
-Statistics module uses <SYMBOL><username> as keys. Statistical tokens live within hash table with the corresponding name. `ratelimit` module uses a key for each value stored in redis: <https://rspamd.com/doc/modules/ratelimit.html>
-DMARC module also uses multiple keys to store cumulative reports: a separate key for each domain.
+The statistics module uses <SYMBOL><username> as keys. Statistical tokens are recorded within a hash table with the corresponding name. The `ratelimit` module uses a key for each value stored in redis: <https://rspamd.com/doc/modules/ratelimit.html>
+The DMARC module also uses multiple keys to store cumulative reports: a separate key for each domain.
 
-In conclusion, it is recommended to set a limit for dynamic rspamd data stored in redis: ratelimits, ip reputation, dmarc reports. You could use a separate redis instance for for statistical tokens and set different limits (to fit all tokens) or separated database (by specifying `dbname` when setting up redis backend).  
+It is recommended to set a limit for dynamic rspamd data stored in redis ratelimits, ip reputation, and dmarc reports. You could use a separate redis instance for statistical tokens and set different limits or use separate databases (by specifying `dbname` when setting up the redis backend).  
 
-## Plugins questions
+## Plugin questions
 
 ### How to whitelist messages
-You have multiple options here. First of all, if you need to define whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at [whitelist module](https://rspamd.com/doc/modules/whitelist.html). Otherwise, there is [multimap module](https://rspamd.com/doc/modules/multimap.html) that implements different types of checks to add symbols according to lists match or to set pre-action allowing to inevitably reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
+You have multiple options here. First of all, if you need to define a whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at the [whitelist module](https://rspamd.com/doc/modules/whitelist.html). Otherwise, there is a [multimap module](https://rspamd.com/doc/modules/multimap.html) that implements different types of checks to add symbols according to list matches or to set pre-actions which allow you to reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
 
 ```
 exe
@@ -507,14 +501,14 @@ filename_blacklist {
 }
 ```
 
-Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You might set `want_spam = yes` in settings' action and rspamd would skip messages that satisfy a particular settings rule's conditions.
+Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You can specify `want_spam = yes` and rspamd will skip messages that satisfy a particular rule's conditions.
 
 ### What are filters, pre-filters and post-filters
-Rspamd allows different types of filters depending on time of execution.
+rspamd executes different types of filters depending on the time of execution.
 
-- `pre-filters` are executed before everything else and they can set so called `pre-result` that ultimately classifies message setting the desired action. Filters and post-filters are not executed in this cases
-- `filters` are generic rspamd rules that are planned by rules scheduler
-- `post-filters` are guaranteed to be executed after all filters are finished that allows to execute actions that depends on result of scan
+- `pre-filters` are executed before everything else and they can set a `pre-result` that ultimately classifies a message. Filters and post-filters are not executed in this case.
+- `filters` are generic rspamd rules.
+- `post-filters` are guaranteed to be executed after all filters are finished and allow the execution of actions that depends on the results of scan
 
 The overall execution order in rspamd is the following:
 
@@ -525,27 +519,25 @@ The overall execution order in rspamd is the following:
 5. post-filters
 6. autolearn rules
 
-Pre-filters can skip all other steps. Rules can define dependencies on other rules. It is not possible neither to define dependencies on other categories of rules but normal filters nor to define dependencies inter-categories dependencies, such as pre-filters on normal filters for example.
+### What is the meaning of the `URIBL_BLOCKED` symbol
 
-### What is the meaning of `URIBL_BLOCKED` symbol
-
-This symbol means that you have exceed the amount of DNS queries allowed for non-commercial usage by SURBL terms. If you use some public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or setup one, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying [commercial subscription](http://www.surbl.org/df) or you won't be able to use this service. `URIBL_BLOCKED` itself has zero weight and is used just to inform you about this problem.
+This symbol means that you have exceeded the amount of DNS queries allowed for non-commercial usage by SURBL services. If you use some a public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or set one up, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying a [commercial subscription](http://www.surbl.org/df) or you won't be able to use the service. The `URIBL_BLOCKED` symbol has a weight of 0 and is used just to inform you about this problem.
 
 ## WebUI questions
 
-### What are `enable_password` and `password` for WebUI
+### What are `enable_password` and `password` for the WebUI
 
-Rspamd can limit functions available to WebUI by 3 ways:
+Rspamd can limit the functions available through the WebUI in three ways:
 
 1. Allow read-only commands when `password` is specified
 2. Allow all commands when `enable_password` is specified
-3. Allow all commands when IP matches `secure_ip` list in the controller configuration
+3. Allow all commands when client IP address matches the `secure_ip` list in the controller configuration
 
 When `password` is specified but `enable_password` is missing then `password` is used for **both** read and write commands.
 
 ### How to store passwords securely
 
-Rspamd can encrypt passwords stored using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use `rspamadm pw` command as following:
+Rspamd can encrypt passwords and store them using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use the `rspamadm pw` command as follows:
 
 ```
 rspamadm pw
@@ -553,9 +545,9 @@ Enter passphrase:
 $1$jhicbyeuiktgikkks7in6mecr5bycmok$boniuegw5zfc77pfbqf14bjdxmzd3yajnngwdekzwhjk1daqjixb
 ```
 
-Then you can use the resulting string (that has a format `$<algorithm_id>$<salt>$<encrypted_data>`) as `password` or `enable_password`. Please mention, that this command will generate **different** encrypted strings even for the same passwords. That is the intended behaviour.
+Then you can use the resulting string (in the format `$<algorithm_id>$<salt>$<encrypted_data>`) as `password` or `enable_password`. Please note that this command will generate **different** encrypted strings even for the same passwords. That is the intended behaviour.
 
-### How to use WebUI behind proxy server
+### How to use the WebUI behind a proxy server
 
 Here is an example for nginx:
 
@@ -568,27 +560,27 @@ location /rspamd/ {
 }
 ```
 
-When a connection comes from an IP listed in `secure_ip` or from a unix socket then rspamd checks for 2 headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`. That helps to organize `secure_ip` when connections are forwarded to rspamd.
+When a connection comes from an IP listed in `secure_ip` or from a unix socket then rspamd checks for two headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`.
 
-### Where WebUI stores results
+### Where does the WebUI store settings
 
-WebUI sends `AJAX` requests for rspamd and rspamd can store data in so called `dynamic_conf` file. By default, it is defined in `options.inc` as following:
+The WebUI sends `AJAX` requests for rspamd and rspamd can store data in a `dynamic_conf` file. By default, it is defined in `options.inc` as following:
 
 ```
 dynamic_conf = "$DBDIR/rspamd_dynamic";
 ```
 
-Rspamd loads symbols and actions settings from this file with priority 5 which allows you to redefine those settings in override configuration.
+Rspamd loads symbols and actions settings from this file with priority 5 which allows you to redefine those settings in an override configuration.
 
-### Why cannot I edit some maps with WebUI
+### Why can't I edit some maps with the WebUI
 
-They might have insufficient permissions or be absent in the filesystem. Rspamd also ignores all `HTTP` maps. Signed maps are not yet supported as well.
+The map file might have insufficient permissions, or not exist. The WebUI also ignores all `HTTP` maps. Editing of signed maps is not yet supported.
 
-## LUA questions
+## Lua questions
 
 ### What is the difference between plugins and rules
 
-Rules are intended to do simple checks and return either `true` when rule matches or `false` when rule does not match. Rules normally cannot execute any asynchronous requests nor insert multiple symbols. In theory, you can do this but registering plugins by `rspamd_config:register_symbol` functions is the recommended way for such a task. Plugins are expected to insert results by themselves using `task:insert_result` method.
+Rules are intended to do simple checks and return either `true` when rule matches or `false` when rule does not match. Rules normally cannot execute any asynchronous requests or insert multiple symbols. In theory, you can do this but registering plugins by `rspamd_config:register_symbol` functions is the recommended way to perform such a task. Plugins are expected to insert results by themselves using the `task:insert_result` method.
 
 ### What is table form of a function call
 
@@ -604,17 +596,18 @@ func({
 }) -- table form
 ```
 
-Historically, all Lua methods used the sequential call type. However, it has changed so far: many functions converted to allow table form invocation. The advantages of table form are clear:
+Historically, all Lua methods used the sequential call type. This has changed somewhat, however, and has the following advantages:
 
-- you don't need to remember the exact **order** of arguments;
-- you can see not only a value but a `name = value` pair which helps in debugging;
-- it is easier to **extend** methods with new features and to keep backward compatibility;
+- you don't need to remember the exact **order** of arguments
+- you can see not only a value but a `name = value` pair which helps in debugging
+- it is easier to **extend** methods with new features and to keep backward compatibility
 - it is much easier to allow **optional** arguments
 
-However, there is a drawback: table call is slightly more expensive in terms of computational resources. The difference is negligible in the vast majority of case, so rspamd now supports table form for the most of function that accept more than two or three arguments. You can always check in the [documentation](https://rspamd.com/doc/lua/) about what forms are allowed for a particular function.
+However, there is a drawback: table calls are slightly more expensive in terms of computational resources. The difference is negligible in the majority of cases so rspamd now supports the table form for most functions which accept more than two or three arguments. You can check in the [documentation](https://rspamd.com/doc/lua/) which forms are allowed for a particular function.
 
 ### How to use rspamd modules
-The normal way is to use `require` statement:
+
+Use a `require` statement:
 
 ```lua
 local rspamd_logger = require 'rspamd_logger'
@@ -627,7 +620,7 @@ Rspamd also ships some additional lua modules which you can use in your rules:
 - [Lua LPEG](http://www.inf.puc-rio.br/~roberto/lpeg/)
 
 ### How to write to rspamd log
-[Rspamd logger](https://rspamd.com/doc/lua/logger.html) provides many convenient methods to log data from lua rules and plugins. You should consider using of the modern methods (with `x` suffix) that allows to use `%s` and `%1` .. `%N` to fine print passed arguments. `%s` format is used to print the **next** argument, and `%<number>` is used to process the particular argument (starting from `1`):
+[Rspamd logger](https://rspamd.com/doc/lua/logger.html) provides many convenient methods to log data from lua rules and plugins. You should consider using one of the modern methods (with `x` suffix) that allow use of `%s` and `%1` .. `%N` notation. The `%s` format is used to print the **next** argument, and `%<number>` is used to process the particular argument (starting from `1`):
 
 ```lua
 local rspamd_logger = require 'rspamd_logger'
@@ -636,26 +629,24 @@ rspamd_logger.infox("%s %1 %2 %s", "abc", 1, {true, 1})
 -- This will show abc abc 1 [[1] = true, [2] = 1]
 ```
 
-It is also possible to use other objects, such as rspamd task or rspamd config to augment logger output with task or config logging tag.
+It is also possible to use other objects, such as rspamd task or rspamd config to augment logger output with a task or config logging tag.
 
-Moreover, there is function `rspamd_logger.slog` that allows you to replace lua standard function `string.format` when you need to print complex objects, such as tables.
+Moreover, there is an `rspamd_logger.slog` function which allows replacement of the Lua standard function `string.format` when you need to print complex objects, such as tables.
 
 ### Should I use `local` for my variables
 
-The answer is yes: always use `local` variables unless it is completely inevitable. Many global variables can cause significant performance degradation for all lua scripts.
+Yes: always use `local` variables unless it is unavoidable. Too many global variables can cause significant performance degradation for Lua scripts.
 
 ## Rmilter questions
 
-This section specifically added for rmilter related questions and issues.
-
 ### Can rspamd run without Rmilter
 
-Rspamd can be integrated with MTA using different tools described in the [integration](integration.html) document. For Postfix and Sendmail MTA `rmilter` is the most appropriate tool so far. Moreover, rmilter adds missing features to rspamd, such as conditional greylisting, messages alteration and so on and so forth. That's why I would recommend using rmilter with rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
+Rspamd can be integrated with an MTA using different methods described in the [integration](integration.html) document. For Postfix and Sendmail MTA `rmilter` is the most appropriate tool. Moreover, rmilter adds some features to rspamd, such as conditional greylisting and message alteration. That's why I would recommend using rmilter with rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
 
-### How to setup dkim signing in rmilter
+### How to set up dkim signing in rmilter
 
 With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
-This could be done, for example by using `opendkim-genkey`:
+This can be done using `opendkim-genkey`:
 
     opendkim-genkey --domain=example.com --selector=dkim
 
@@ -674,12 +665,11 @@ dkim {
 };
 ```
 
-Please note, that rmilter will sign merely mail for the **authenticated** users, hence you should also ensure that `{auth_authen}` macro
-is passed to milter on `MAIL FROM` stage:
+Please note that rmilter will sign mail only for **authenticated** users, hence you should also ensure that `{auth_authen}` macro is passed to the milter at the `MAIL FROM` stage:
 
     milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
 
-It is also possible to sign mail for unauthenticated users which come from the local networks. To implement that, you could add the following option to your configuration:
+It is also possible to sign mail for unauthenticated users from the local network. To implement that, you could add the following option to your configuration:
 
 ~~~ucl
 dkim {
@@ -697,8 +687,7 @@ dkim {
 
 ### Setup whitelisting of reply messages
 
-It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of rmilter. To enable this
-feature, please ensure that you have `redis` server running and add the following lines to redis section:
+It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages using rmilter. To enable this feature, please ensure that you have a `redis` server running and add the following lines to the redis section:
 
 ```ucl
 redis {
@@ -714,11 +703,9 @@ redis {
 
 ### Mirror some messages to evaluate rspamd filtering quality
 
-Sometimes it might be useful to watch how messages are processed by rspamd. For this purposes, rmilter
-can mirror some percentage of messages to [beanstalk](http://kr.github.io/beanstalkd/) service and check them using rspamc.
-First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab
-a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine would get messages from beanstalk and feed them to
-rspamc. Here is an example configuration file:
+Sometimes it might be useful to monitor how messages are processed by rspamd. For this purpose, rmilter can mirror a percentage of messages to a [beanstalk](http://kr.github.io/beanstalkd/) instance and check them using rspamc.
+
+First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine will get messages from beanstalk and feed them to rspamc. Here is an example configuration file:
 
 ```ini
 [instance1]
@@ -773,11 +760,11 @@ if header :is "X-Spam-Action" "greylist" {
 }
 ```
 
-This script sort messages according their spam action and also copies messages with statistics symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
+This script sort messages according to their spam action and also copies messages with the symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
 
 ### How to distinguish inbound and outbound traffic for rspamd instance
 
-From version `1.8.0`, rmilter can pass a special header to rspamd called `settings-id`. This header allows rspamd to apply some specific settings for a message scanned. This allows to set custom scores for message and to disable some rules or even group of rules when processing. For example, we want to disable some rules for outbound scanning. Then we could create an entry in [settings](https://rspamd.com/doc/configuration/settings.html) module:
+From version 1.8.0 onwards, rmilter can pass a special header to rspamd called `settings-id`. This header allows rspamd to apply specific settings for a message. You can set custom scores for a message or disable some rules or even a group of rules when scanning. For example, if we want to disable some rules for outbound scanning we could create an entry in the [settings](https://rspamd.com/doc/configuration/settings.html) module:
 
 ```ucl
 settings {
@@ -800,7 +787,7 @@ settings {
 }
 ```
 
-Then, you can apply this settings ID on onbound MTA using rmilter configuration:
+Then, we can apply this setting ID on the outbound MTA using the rmilter configuration:
 
 ```ucl
 spamd {
