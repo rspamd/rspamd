@@ -584,17 +584,17 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
 
+	timeout = map->poll_timeout;
+
 	if (initial) {
 		timeout = 0.0;
 	}
-	else if (errored) {
+
+	if (errored) {
 		timeout = map->poll_timeout * error_mult;
 	}
 	else if (locked) {
 		timeout = map->poll_timeout * lock_mult;
-	}
-	else {
-		timeout = map->poll_timeout;
 	}
 
 	cbd = g_slice_alloc0 (sizeof (*cbd));
@@ -604,11 +604,15 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	cbd->cbdata.map = map;
 	cbd->map = map;
 	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
-	evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
-	event_base_set (map->ev_base, &map->ev);
 
-	/* Plan event again with jitter */
-	evtimer_del (&map->ev);
+	if (initial) {
+		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
+		event_base_set (map->ev_base, &map->ev);
+	}
+	else {
+		evtimer_del (&map->ev);
+	}
+
 	jittered_sec = rspamd_time_jitter (timeout, 0);
 	double_to_tv (jittered_sec, &map->tv);
 
@@ -881,7 +885,7 @@ rspamd_map_watch (struct rspamd_config *cfg,
 			msg_debug_map (
 					"don't try to reread map as it is locked by other process, "
 					"will reread it later");
-			rspamd_map_schedule_periodic (map, TRUE, FALSE, FALSE);
+			rspamd_map_schedule_periodic (map, TRUE, TRUE, FALSE);
 		}
 		else {
 			rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
