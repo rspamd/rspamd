@@ -56,7 +56,8 @@ gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backe
  */
 gboolean rspamd_fuzzy_backend_add (
 		struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd);
+		const struct rspamd_fuzzy_cmd *cmd,
+		time_t timestamp);
 
 /**
  * Delete digest from the database
@@ -89,6 +90,7 @@ gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 void rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend);
 
 gsize rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend);
+gint rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend);
 gsize rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend);
 
 const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);
