@@ -320,9 +320,9 @@ accept_socket (gint fd, short what, void *arg)
 
 	rspamd_http_connection_read_message (task->http_conn,
 			task,
-		nfd,
-		&ctx->io_tv,
-		ctx->ev_base);
+			nfd,
+			&ctx->io_tv,
+			ctx->ev_base);
 }
 
 #ifdef WITH_HYPERSCAN
