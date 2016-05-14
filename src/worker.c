@@ -50,7 +50,7 @@ worker_t normal_worker = {
 		init_worker,                /* Init function */
 		start_worker,               /* Start function */
 		RSPAMD_WORKER_HAS_SOCKET|RSPAMD_WORKER_KILLABLE,
-		SOCK_STREAM,                /* TCP socket */
+		RSPAMD_WORKER_SOCKET_TCP,   /* TCP socket */
 		RSPAMD_WORKER_VER           /* Version info */
 };
 

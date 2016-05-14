@@ -53,7 +53,7 @@ worker_t fuzzy_worker = {
 		init_fuzzy,                 /* Init function */
 		start_fuzzy,                /* Start function */
 		RSPAMD_WORKER_HAS_SOCKET,
-		SOCK_DGRAM,                 /* UDP socket */
+		RSPAMD_WORKER_SOCKET_UDP,   /* UDP socket */
 		RSPAMD_WORKER_VER           /* Version info */
 };
 
@@ -1351,7 +1351,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 {
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 	GList *cur;
-	gint listen_socket;
+	struct rspamd_worker_listen_socket *ls;
 	struct event *accept_event;
 	gdouble next_check;
 
@@ -1368,16 +1368,18 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 	/* Start listening */
 	cur = worker->cf->listen_socks;
 	while (cur) {
-		listen_socket = GPOINTER_TO_INT (cur->data);
-		if (listen_socket != -1) {
+		ls = cur->data;
+
+		if (ls->fd != -1) {
 			accept_event = g_slice_alloc0 (sizeof (struct event));
-			event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
+			event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
 					accept_fuzzy_socket, worker);
 			event_base_set (ctx->ev_base, accept_event);
 			event_add (accept_event, NULL);
 			worker->accept_events = g_list_prepend (worker->accept_events,
 					accept_event);
 		}
+
 		cur = g_list_next (cur);
 	}
 

@@ -33,7 +33,7 @@ worker_t hs_helper_worker = {
 		init_hs_helper,             /* Init function */
 		start_hs_helper,            /* Start function */
 		RSPAMD_WORKER_UNIQUE|RSPAMD_WORKER_KILLABLE|RSPAMD_WORKER_ALWAYS_START,
-		SOCK_STREAM,                /* TCP socket */
+		RSPAMD_WORKER_SOCKET_NONE,  /* No socket */
 		RSPAMD_WORKER_VER           /* Version info */
 };
 

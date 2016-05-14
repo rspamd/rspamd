@@ -250,7 +250,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	struct event_base *ev_base;
 	struct event *accept_event;
 	GList *cur;
-	gint listen_socket;
+	struct rspamd_worker_listen_socket *ls;
 
 #ifdef WITH_PROFILER
 	extern void _start (void), etext (void);
@@ -271,17 +271,20 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	/* Accept all sockets */
 	if (accept_handler) {
 		cur = worker->cf->listen_socks;
+
 		while (cur) {
-			listen_socket = GPOINTER_TO_INT (cur->data);
-			if (listen_socket != -1) {
+			ls = cur->data;
+
+			if (ls->fd != -1) {
 				accept_event = g_slice_alloc0 (sizeof (struct event));
-				event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
+				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
 						accept_handler, worker);
 				event_base_set (ev_base, accept_event);
 				event_add (accept_event, NULL);
 				worker->accept_events = g_list_prepend (worker->accept_events,
 						accept_event);
 			}
+
 			cur = g_list_next (cur);
 		}
 	}

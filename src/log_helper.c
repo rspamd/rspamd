@@ -37,8 +37,8 @@ worker_t log_helper_worker = {
 		init_log_helper,             /* Init function */
 		start_log_helper,            /* Start function */
 		RSPAMD_WORKER_UNIQUE | RSPAMD_WORKER_KILLABLE,
-		SOCK_STREAM,                /* TCP socket */
-		RSPAMD_WORKER_VER           /* Version info */
+		RSPAMD_WORKER_SOCKET_NONE,   /* No socket */
+		RSPAMD_WORKER_VER            /* Version info */
 };
 
 static const guint64 rspamd_log_helper_magic = 0x1090bb46aaa74c9aULL;

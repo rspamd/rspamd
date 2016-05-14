@@ -340,20 +340,38 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 }
 
 static GList *
-create_listen_socket (GPtrArray *addrs, guint cnt, gint listen_type)
+create_listen_socket (GPtrArray *addrs, guint cnt,
+		enum rspamd_worker_socket_type listen_type)
 {
 	GList *result = NULL;
 	gint fd;
 	guint i;
-	gpointer p;
+	struct rspamd_worker_listen_socket *ls;
 
 	g_ptr_array_sort (addrs, rspamd_inet_address_compare_ptr);
 	for (i = 0; i < cnt; i ++) {
-		fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
-				listen_type, TRUE);
-		if (fd != -1) {
-			p = GINT_TO_POINTER (fd);
-			result = g_list_prepend (result, p);
+
+		if (listen_type & RSPAMD_WORKER_SOCKET_TCP) {
+			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
+					SOCK_STREAM, TRUE);
+			if (fd != -1) {
+				ls = g_slice_alloc0 (sizeof (*ls));
+				ls->addr = g_ptr_array_index (addrs, i);
+				ls->fd = fd;
+				ls->type = RSPAMD_WORKER_SOCKET_TCP;
+				result = g_list_prepend (result, ls);
+			}
+		}
+		if (listen_type & RSPAMD_WORKER_SOCKET_UDP) {
+			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
+					SOCK_DGRAM, TRUE);
+			if (fd != -1) {
+				ls = g_slice_alloc0 (sizeof (*ls));
+				ls->addr = g_ptr_array_index (addrs, i);
+				ls->fd = fd;
+				ls->type = RSPAMD_WORKER_SOCKET_TCP;
+				result = g_list_prepend (result, ls);
+			}
 		}
 	}
 
@@ -492,7 +510,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 					key = make_listen_key (bcf);
 					if ((p =
 						g_hash_table_lookup (listen_sockets,
-						GINT_TO_POINTER (key))) == NULL) {
+								GINT_TO_POINTER (key))) == NULL) {
 
 						if (!bcf->is_systemd) {
 							/* Create listen socket */
