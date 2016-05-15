@@ -282,7 +282,7 @@ _mum_final (uint64_t h) {
   return h;
 }
 
-#if defined(__x86_64__) && defined(__GNUC__)
+#if defined(__x86_64__) && defined(__GNUC__) && (__GNUC__ >= 4) &&  (__GNUC_MINOR__ >= 9) && !defined(__clang__)
 
 /* We want to use AVX2 insn MULX instead of generic x86-64 MULQ where
    it is possible.  Although on modern Intel processors MULQ takes
@@ -400,7 +400,7 @@ mum_hash64 (uint64_t key, uint64_t seed) {
    target endianess and the unroll factor.  */
 static inline uint64_t
 mum_hash (const void *key, size_t len, uint64_t seed) {
-#if defined(__x86_64__) && defined(__GNUC__) && !defined(__clang__)
+#if defined(__x86_64__) && defined(__GNUC__) && (__GNUC__ >= 4) &&  (__GNUC_MINOR__ >= 9) && !defined(__clang__)
   static int avx2_support = 0;
 
   if (avx2_support > 0)
