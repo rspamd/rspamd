@@ -1,14 +1,14 @@
-diff -ru exim-4.86.orig/src/spam.c exim-4.86/src/spam.c
---- exim-4.86.orig/src/spam.c	2016-04-09 13:54:51.583800284 +0200
-+++ exim-4.86/src/spam.c	2016-04-09 13:55:16.659806242 +0200
-@@ -499,7 +499,9 @@
+--- exim4-4.86.2.orig/src/spam.c
++++ exim4-4.86.2/src/spam.c
+@@ -499,7 +499,10 @@ if (ferror(mbox_file))
  (void)fclose(mbox_file);
  
  /* we're done sending, close socket for writing */
 -shutdown(spamd_sock,SHUT_WR);
-+if (!is_rspamd) {
++if (!sd->is_rspamd)
++  {
 +  shutdown(spamd_sock,SHUT_WR);
-+}
++  }
  
  /* read spamd response using what's left of the timeout.  */
  memset(spamd_buffer, 0, sizeof(spamd_buffer));
