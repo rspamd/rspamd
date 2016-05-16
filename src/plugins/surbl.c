@@ -121,7 +121,7 @@ read_exceptions_list (gchar * chunk,
 	gboolean final)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_malloc (sizeof (GHashTable *) * MAX_LEVELS);
+		data->cur_data = g_malloc0 (sizeof (GHashTable *) * MAX_LEVELS);
 	}
 	return rspamd_parse_kv_list (
 			   chunk,
