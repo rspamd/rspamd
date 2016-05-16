@@ -1062,6 +1062,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	/* Now check for each proto separately */
 	if (bk->protocol == MAP_PROTO_FILE) {
 		fdata = g_slice_alloc0 (sizeof (struct file_map_data));
+		fdata->st.st_mtime = -1;
 
 		if (access (bk->uri, R_OK) == -1) {
 			if (errno != ENOENT) {
@@ -1072,11 +1073,6 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 			msg_info_config (
 					"map '%s' is not found, but it can be loaded automatically later",
 					bk->uri);
-			/* We still can add this file */
-			fdata->st.st_mtime = -1;
-		}
-		else {
-			stat (bk->uri, &fdata->st);
 		}
 
 		fdata->filename = g_strdup (bk->uri);
