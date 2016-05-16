@@ -23,6 +23,7 @@
 #include "task.h"
 #include "unix-std.h"
 #include "linenoise.h"
+#include "worker_util.h"
 #ifdef WITH_LUAJIT
 #include <luajit.h>
 #endif
@@ -31,6 +32,7 @@ static gchar **paths = NULL;
 static gchar **scripts = NULL;
 static gchar *histfile = NULL;
 static guint max_history = 2000;
+static gchar *serve = NULL;
 
 static const char *default_history_file = ".rspamd_repl.hist";
 
@@ -94,6 +96,8 @@ static GOptionEntry entries[] = {
 				"Load history from the specified file", NULL},
 		{"max-history", 'm', 0, G_OPTION_ARG_INT, &max_history,
 				"Store this number of history entries", NULL},
+		{"serve", 'S', 0, G_OPTION_ARG_STRING, &serve,
+				"Serve http lua server", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -108,6 +112,7 @@ rspamadm_lua_help (gboolean full_help)
 				"Where options are:\n\n"
 				"-p: add additional lua paths (may be repeated)\n"
 				"-s: load scripts on start from specified files (may be repeated)\n"
+				"-S: listen on a specified address as HTTP server\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -456,6 +461,141 @@ rspamadm_lua_run_repl (lua_State *L)
 	}
 }
 
+struct rspamadm_lua_repl_context {
+	struct rspamd_http_connection_router *rt;
+	lua_State *L;
+};
+
+struct rspamadm_lua_repl_session {
+	struct rspamd_http_connection_router *rt;
+	rspamd_inet_addr_t *addr;
+	struct rspamadm_lua_repl_context *ctx;
+	gint sock;
+};
+
+static void
+rspamadm_lua_accept_cb (gint fd, short what, void *arg)
+{
+	struct rspamadm_lua_repl_context *ctx = arg;
+	rspamd_inet_addr_t *addr;
+	struct rspamadm_lua_repl_session *session;
+	gint nfd;
+
+	if ((nfd =
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
+		return;
+	}
+	/* Check for EAGAIN */
+	if (nfd == 0) {
+		return;
+	}
+
+	session = g_slice_alloc0 (sizeof (*session));
+	session->rt = ctx->rt;
+	session->ctx = ctx;
+	session->addr = addr;
+	session->sock = nfd;
+
+	rspamd_http_router_handle_socket (ctx->rt, nfd, session);
+}
+
+static void
+rspamadm_lua_error_handler (struct rspamd_http_connection_entry *conn_ent,
+	GError *err)
+{
+	struct rspamadm_lua_repl_session *session = conn_ent->ud;
+
+	rspamd_fprintf (stderr, "http error occurred: %s\n", err->message);
+}
+
+static void
+rspamadm_lua_finish_handler (struct rspamd_http_connection_entry *conn_ent)
+{
+	struct rspamadm_lua_repl_session *session = conn_ent->ud;
+
+	g_slice_free1 (sizeof (*session), session);
+}
+
+/*
+ * Exec command handler:
+ * request: /exec
+ * body: lua script
+ * reply: json {"status": "ok", "reply": {<lua json object>}}
+ */
+static int
+rspamadm_lua_handle_exec (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	GString *tb;
+	gint err_idx, i;
+	lua_State *L;
+	struct rspamadm_lua_repl_context *ctx;
+	struct rspamadm_lua_repl_session *session = conn_ent->ud;
+	ucl_object_t *obj, *elt;
+
+	ctx = session->ctx;
+	L = ctx->L;
+
+	if (msg->body == NULL || msg->body->len == 0) {
+		rspamd_controller_send_error (conn_ent, 400, "Empty lua script");
+
+		return 0;
+	}
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* First try return + input */
+	tb = g_string_sized_new (msg->body->len + sizeof ("return "));
+	rspamd_printf_gstring (tb, "return %V", msg->body);
+
+	if (luaL_loadstring (L, tb->str) != 0) {
+		/* Reset stack */
+		lua_settop (L, 0);
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+		/* Try with no return */
+		if (luaL_loadbuffer (L, msg->body->str, msg->body->len, "http input") != 0) {
+			rspamd_controller_send_error (conn_ent, 400, "Invalid lua script");
+
+			return 0;
+		}
+	}
+
+	g_string_free (tb, TRUE);
+
+	if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		rspamd_controller_send_error (conn_ent, 500, "call failed: %v\n", tb);
+		g_string_free (tb, TRUE);
+		lua_settop (L, 0);
+
+		return 0;
+	}
+
+	obj = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = err_idx + 1; i <= lua_gettop (L); i ++) {
+		if (lua_isfunction (L, i)) {
+			/* XXX: think about API */
+		}
+		else {
+			elt = ucl_object_lua_import (L, i);
+
+			if (elt) {
+				ucl_array_append (obj, elt);
+			}
+		}
+	}
+
+	rspamd_controller_send_ucl (conn_ent, obj);
+	ucl_object_unref (obj);
+	lua_settop (L, 0);
+
+	return 0;
+}
+
 static void
 rspamadm_lua (gint argc, gchar **argv)
 {
@@ -494,6 +634,55 @@ rspamadm_lua (gint argc, gchar **argv)
 				exit (EXIT_FAILURE);
 			}
 		}
+	}
+
+	if (serve) {
+		/* HTTP Server mode */
+		GPtrArray *addrs = NULL;
+		gchar *name = NULL;
+		struct event_base *ev_base;
+		struct rspamd_http_connection_router *http;
+		gint fd;
+		struct rspamadm_lua_repl_context *ctx;
+
+		if (!rspamd_parse_host_port_priority (serve, &addrs, NULL, &name,
+				10000, NULL)) {
+			fprintf (stderr, "cannot listen on %s", serve);
+			exit (EXIT_FAILURE);
+		}
+
+		ev_base = event_init ();
+		ctx = g_slice_alloc0  (sizeof (*ctx));
+		http = rspamd_http_router_new (rspamadm_lua_error_handler,
+						rspamadm_lua_finish_handler,
+						NULL, ev_base,
+						NULL, NULL);
+		ctx->L = L;
+		ctx->rt = http;
+		rspamd_http_router_add_path (http,
+				"/exec",
+				rspamadm_lua_handle_exec);
+
+		for (i = 0; i < addrs->len; i ++) {
+			rspamd_inet_addr_t *addr = g_ptr_array_index (addrs, i);
+
+			fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE);
+			if (fd != -1) {
+				struct event *ev;
+
+				ev = g_slice_alloc0 (sizeof (*ev));
+				event_set (ev, fd, EV_READ|EV_PERSIST, rspamadm_lua_accept_cb,
+						ctx);
+				event_base_set (ev_base, ev);
+				event_add (ev, NULL);
+				rspamd_printf ("listen on %s\n",
+						rspamd_inet_address_to_string_pretty (addr));
+			}
+		}
+
+		event_base_loop (ev_base, 0);
+
+		exit (EXIT_SUCCESS);
 	}
 
 	if (histfile == NULL) {
