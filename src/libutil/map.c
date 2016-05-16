@@ -784,9 +784,12 @@ rspamd_map_file_check_callback (gint fd, short what, void *ud)
 	if (stat (data->filename, &st) != -1 &&
 			(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
 		/* File was modified since last check */
+		msg_info_map ("old mtime is %t, new mtime is %t for map file %s",
+				data->st.st_mtime, st.st_mtime, data->filename);
 		memcpy (&data->st, &st, sizeof (struct stat));
 		periodic->need_modify = TRUE;
 		periodic->cur_backend = 0;
+
 		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
 		return;
