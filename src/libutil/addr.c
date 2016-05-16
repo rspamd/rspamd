@@ -667,6 +667,36 @@ rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr)
 	return "undefined";
 }
 
+const char *
+rspamd_inet_address_to_string_pretty (const rspamd_inet_addr_t *addr)
+{
+	static char addr_str[PATH_MAX + 5];
+
+	if (addr == NULL) {
+		return "<empty inet address>";
+	}
+
+	switch (addr->af) {
+	case AF_INET:
+		rspamd_snprintf (addr_str, sizeof (addr_str), "%s:%d",
+				rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+		break;
+	case AF_INET6:
+		rspamd_snprintf (addr_str, sizeof (addr_str), "[%s]:%d",
+				rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+		break;
+	case AF_UNIX:
+		rspamd_snprintf (addr_str, sizeof (addr_str), "unix:%s",
+				rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+		break;
+	}
+
+	return addr_str;
+}
+
 uint16_t
 rspamd_inet_address_get_port (const rspamd_inet_addr_t *addr)
 {

@@ -108,6 +108,13 @@ gboolean rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 const char * rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr);
 
 /**
+ * Returns pretty string representation of inet address
+ * @param addr
+ * @return statically allocated string pointer (not thread safe)
+ */
+const char * rspamd_inet_address_to_string_pretty (const rspamd_inet_addr_t *addr);
+
+/**
  * Returns port number for the specified inet address in host byte order
  * @param addr
  * @return
