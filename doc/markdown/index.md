@@ -1,24 +1,16 @@
-# Rspamd documentation project
+# rspamd documentation project
 
 ## Introduction
-Rspamd is a fast and advanced spam filtering system. It is based on event-driven processing model
-allowing to work with multiple messages simultaneously without blocking anywhere during messages
-processing. Rspamd contains various modules shipped in the default distribution and permits to be
-extended with the own custom modules and rules written in [Lua](http://lua.org) programming language.
-Rspamd uses complex estimation system based on a set of rules, each of those rules has its own score and
-the final score of a message is defined by a sum of rules' scores that were true for that message. This approach
-is similar to other complex spam filtering systems, such as [SpamAssassin](http://spamassassin.apache.org).
-At the same time, rspamd uses fuzzy logic to process unknown messages. That includes fuzzy hashes and 
-statistics module.
+rspamd is a fast and advanced spam filtering system. It is based on an event-driven processing model which allows it to work with multiple messages simultaneously without blocking anywhere during message processing. rspamd contains various modules shipped in the default distribution and allows extension with custom modules and rules written in [Lua](http://lua.org).
+
+rspamd uses a complex estimation system based on a set of rules. Each of these rules has its own score and the final score of a message is defined as the sum of the scores that were true for that message. This approach is similar to other complex spam filtering systems, such as [SpamAssassin](http://spamassassin.apache.org). rspamd also implements fuzzy logic, including fuzzy hashes and a statistics module, to process messages.
 
 ## Table of Contents
-This document contains the basic documentation for rspamd spam filtering system. It is divided into the following
-parts:
 
-- [Tutorials](tutorials/) a collection of tutorial like documents for rspamd
-- [Architecture](architecture/) presents the architecture of rspamd and how spam filtering is performed
-- [Rspamd configuration](configuration/) describes principles of rspamd configuration
-- [Modules](modules/) chapter lists rspamd modules and defines their configuration attributes
-- [Workers](workers/) section describes workers that are implemented in the rspamd
-- [Lua API](lua/) explains how to extend rspamd with own lua modules
-- [Migration](migration.md) section contains the list of incompatible changes between rspamd versions and recommendations of how to update your rspamd system. 
+- [Tutorials](tutorials/) a collection of tutorial-like documents for rspamd
+- [Architecture](architecture/) presents the architecture of rspamd and explains how spam filtering is performed
+- [Rspamd configuration](configuration/) describes the principles of rspamd configuration
+- [Modules](modules/) lists rspamd modules and defines their configuration attributes
+- [Workers](workers/) describes worker processes that are implemented in rspamd
+- [Lua API](lua/) explains how to extend rspamd with lua modules
+- [Migration](migration.md) contains the list of incompatible changes between rspamd versions and recommendations on how to update your rspamd system
