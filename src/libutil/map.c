@@ -1955,27 +1955,34 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 		re_map->ids[i] = i;
 	}
 
-	if (hs_compile_multi (re_map->patterns,
-			re_map->flags,
-			re_map->ids,
-			re_map->regexps->len,
-			HS_MODE_BLOCK,
-			&plt,
-			&re_map->hs_db,
-			&err) != HS_SUCCESS) {
+	if (re_map->regexps->len > 0 && re_map->patterns) {
+		if (hs_compile_multi (re_map->patterns,
+				re_map->flags,
+				re_map->ids,
+				re_map->regexps->len,
+				HS_MODE_BLOCK,
+				&plt,
+				&re_map->hs_db,
+				&err) != HS_SUCCESS) {
 
-		msg_err_map ("cannot create tree of regexp when processing '%s': %s",
-				re_map->patterns[err->expression], err->message);
-		re_map->hs_db = NULL;
-		hs_free_compile_error (err);
+			msg_err_map ("cannot create tree of regexp when processing '%s': %s",
+					err->expression >= 0 ?
+							re_map->patterns[err->expression] :
+							"unknown regexp", err->message);
+			re_map->hs_db = NULL;
+			hs_free_compile_error (err);
 
-		return;
+			return;
+		}
+
+		if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
+			msg_err_map ("cannot allocate scratch space for hyperscan");
+			hs_free_database (re_map->hs_db);
+			re_map->hs_db = NULL;
+		}
 	}
-
-	if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
-		msg_err_map ("cannot allocate scratch space for hyperscan");
-		hs_free_database (re_map->hs_db);
-		re_map->hs_db = NULL;
+	else {
+		msg_err_map ("regexp map is empty");
 	}
 #endif
 }
