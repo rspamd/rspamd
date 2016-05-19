@@ -2064,6 +2064,8 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 			res = 1;
 			ret = g_ptr_array_index (map->values, i);
 		}
+
+		return ret;
 	}
 #endif
 
