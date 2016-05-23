@@ -53,16 +53,20 @@ static const guint max_retries = 10;
 static const char *create_tables_sql =
 		"BEGIN;"
 		"CREATE TABLE IF NOT EXISTS digests("
-		"id INTEGER PRIMARY KEY,"
-		"flag INTEGER NOT NULL,"
-		"digest TEXT NOT NULL,"
-		"value INTEGER,"
-		"time INTEGER);"
+		"	id INTEGER PRIMARY KEY,"
+		"	flag INTEGER NOT NULL,"
+		"	digest TEXT NOT NULL,"
+		"	value INTEGER,"
+		"	time INTEGER);"
 		"CREATE TABLE IF NOT EXISTS shingles("
-		"value INTEGER NOT NULL,"
-		"number INTEGER NOT NULL,"
-		"digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE "
-		"ON UPDATE CASCADE);"
+		"	value INTEGER NOT NULL,"
+		"	number INTEGER NOT NULL,"
+		"	digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE "
+		"	ON UPDATE CASCADE);"
+		"CREATE TABLE IF NOT EXISTS sources("
+		"	name TEXT UNIQUE,"
+		"	version INTEGER,"
+		"	last INTEGER);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
 		"CREATE INDEX IF NOT EXISTS t ON digests(time);"
 		"CREATE INDEX IF NOT EXISTS dgst_id ON shingles(digest_id);"
@@ -93,7 +97,9 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_EXPIRE,
 	RSPAMD_FUZZY_BACKEND_VACUUM,
 	RSPAMD_FUZZY_BACKEND_DELETE_ORPHANED,
+	RSPAMD_FUZZY_BACKEND_ADD_SOURCE,
 	RSPAMD_FUZZY_BACKEND_VERSION,
+	RSPAMD_FUZZY_BACKEND_SET_VERSION,
 	RSPAMD_FUZZY_BACKEND_MAX
 };
 static struct rspamd_fuzzy_stmts {
@@ -214,11 +220,25 @@ static struct rspamd_fuzzy_stmts {
 		.result = SQLITE_DONE
 	},
 	{
+		.idx = RSPAMD_FUZZY_BACKEND_ADD_SOURCE,
+		.sql = "INSERT OR IGNORE INTO sources(name, version, last) VALUES (?1, ?2, ?3);",
+		.args = "TII",
+		.stmt = NULL,
+		.result = SQLITE_DONE
+	},
+	{
 		.idx = RSPAMD_FUZZY_BACKEND_VERSION,
-		.sql = "PRAGMA user_version;",
-		.args = "",
+		.sql = "SELECT version FROM sources WHERE name=?1;",
+		.args = "T",
 		.stmt = NULL,
 		.result = SQLITE_ROW
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_SET_VERSION,
+		.sql = "UPDATE sources SET version=?1, last=?2 WHERE name=?3;",
+		.args = "IIT",
+		.stmt = NULL,
+		.result = SQLITE_DONE
 	},
 };
 
@@ -610,7 +630,8 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 }
 
 gboolean
-rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend,
+		const gchar *source)
 {
 	gint rc;
 
@@ -729,42 +750,47 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 }
 
 gboolean
-rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
+		const gchar *source)
 {
 	gint rc, wal_frames, wal_checkpointed, ver;
-	gint64 version = 0;
-	gchar version_buf[128];
+
+	/* Get and update version */
+	ver = rspamd_fuzzy_backend_version (backend, source);
+	++ver;
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-			RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
+				RSPAMD_FUZZY_BACKEND_SET_VERSION,
+				(gint64)ver, (gint64)time (NULL), source);
 
-	if (rc != SQLITE_OK) {
-		msg_warn_fuzzy_backend ("cannot commit updates: %s",
+	if (rc == SQLITE_OK) {
+		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+				RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
+
+		if (rc != SQLITE_OK) {
+			msg_warn_fuzzy_backend ("cannot commit updates: %s",
+					sqlite3_errmsg (backend->db));
+			rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+					RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
+			return FALSE;
+		}
+		else {
+			if (!rspamd_sqlite3_sync (backend->db, &wal_frames, &wal_checkpointed)) {
+				msg_warn_fuzzy_backend ("cannot commit checkpoint: %s",
+						sqlite3_errmsg (backend->db));
+			}
+			else if (wal_checkpointed > 0) {
+				msg_info_fuzzy_backend ("total number of frames in the wal file: "
+						"%d, checkpointed: %d", wal_frames, wal_checkpointed);
+			}
+		}
+	}
+	else {
+		msg_warn_fuzzy_backend ("cannot update version for %s: %s", source,
 				sqlite3_errmsg (backend->db));
 		rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
 		return FALSE;
-	}
-	else {
-		if (!rspamd_sqlite3_sync (backend->db, &wal_frames, &wal_checkpointed)) {
-			msg_warn_fuzzy_backend ("cannot commit checkpoint: %s",
-					sqlite3_errmsg (backend->db));
-		}
-		else if (wal_checkpointed > 0) {
-			msg_info_fuzzy_backend ("total number of frames in the wal file: "
-					"%d, checkpointed: %d", wal_frames, wal_checkpointed);
-		}
-	}
-
-	/* Get and update version */
-	ver = rspamd_fuzzy_backend_version (backend);
-	++ver;
-	rspamd_snprintf (version_buf, sizeof (version_buf), "PRAGMA user_version=%d;",
-			ver);
-
-	if (sqlite3_exec (backend->db, version_buf, NULL, NULL, NULL) != SQLITE_OK) {
-			msg_err_fuzzy_backend ("cannot set database version to %L: %s",
-					version, sqlite3_errmsg (backend->db));
 	}
 
 	return TRUE;
@@ -976,13 +1002,14 @@ rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend)
 }
 
 gint
-rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend,
+		const gchar *source)
 {
-	gint ret = 0;
+	gint ret = -1;
 
 	if (backend) {
 		if (rspamd_fuzzy_backend_run_stmt (backend, FALSE,
-				RSPAMD_FUZZY_BACKEND_VERSION) == SQLITE_OK) {
+				RSPAMD_FUZZY_BACKEND_VERSION, source) == SQLITE_OK) {
 			ret = sqlite3_column_int64 (
 					prepared_stmts[RSPAMD_FUZZY_BACKEND_VERSION].stmt, 0);
 		}

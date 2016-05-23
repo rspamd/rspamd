@@ -44,6 +44,8 @@
 
 #define INVALID_NODE_TIME (guint64) - 1
 
+static const gchar *local_db_name = "local";
+
 /* Init functions */
 gpointer init_fuzzy (struct rspamd_config *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
@@ -259,7 +261,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 	guint32 rev;
 	const gchar *p;
 
-	rev = rspamd_fuzzy_backend_version (ctx->backend);
+	rev = rspamd_fuzzy_backend_version (ctx->backend, local_db_name);
 	rev = GUINT32_TO_LE (rev);
 	len = sizeof (guint32) * 2; /* revision + last chunk */
 
@@ -382,7 +384,8 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 }
 
 static void
-rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
+rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
+		const gchar *source)
 {
 	GList *cur;
 	struct fuzzy_peer_cmd *io_cmd;
@@ -394,7 +397,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 
 	if (ctx->updates_pending &&
 			g_queue_get_length (ctx->updates_pending) > 0 &&
-			rspamd_fuzzy_backend_prepare_update (ctx->backend)) {
+			rspamd_fuzzy_backend_prepare_update (ctx->backend, source)) {
 		cur = ctx->updates_pending->head;
 
 		while (cur) {
@@ -420,7 +423,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 			cur = g_list_next (cur);
 		}
 
-		if (rspamd_fuzzy_backend_finish_update (ctx->backend)) {
+		if (rspamd_fuzzy_backend_finish_update (ctx->backend, source)) {
 			ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
 
 			for (i = 0; i < ctx->mirrors->len; i ++) {
@@ -440,7 +443,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 
 			g_queue_clear (ctx->updates_pending);
 			msg_info ("updated fuzzy storage: %ud updates processed, version: %d",
-					nupdates, rspamd_fuzzy_backend_version (ctx->backend));
+					nupdates, rspamd_fuzzy_backend_version (ctx->backend, source));
 		}
 		else {
 			msg_err ("cannot commit update transaction to fuzzy backend, "
@@ -887,6 +890,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		struct rspamd_http_message *msg)
 {
 	const guchar *p;
+	gchar *src = NULL;
 	gsize remain;
 	guint32 revision, our_rev, len, cnt = 0;
 	struct fuzzy_peer_cmd cmd, *pcmd;
@@ -897,10 +901,21 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	} state = read_len;
 	GList *updates = NULL, *cur;
 
-	if (!msg->body || msg->body->len == 0) {
+	if (!msg->body || msg->body->len == 0 || !msg->url || msg->url->len == 0) {
 		msg_err ("empty update message, not processing");
 
 		return;
+	}
+
+	/* Detect source from url: /update_v1/<source>, so we look for the last '/' */
+	remain = msg->url->len;
+	src = rspamd_fstringdup (msg->url);
+
+	while (remain--) {
+		if (src[remain] == '/') {
+			src = &src[remain + 1];
+			break;
+		}
 	}
 
 	/*
@@ -918,11 +933,12 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	if (remain > sizeof (guint32) * 2) {
 		memcpy (&revision, p, sizeof (guint32));
 		revision = GUINT32_TO_LE (revision);
-		our_rev = rspamd_fuzzy_backend_version (session->ctx->backend);
+		our_rev = rspamd_fuzzy_backend_version (session->ctx->backend, src);
 
 		if (revision <= our_rev) {
 			msg_err ("remote revision:d %d is older than ours: %d, refusing update",
 					revision, our_rev);
+			g_free (src);
 
 			return;
 		}
@@ -1006,11 +1022,13 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		cur->data = NULL;
 	}
 
-	rspamd_fuzzy_process_updates_queue (session->ctx);
+	rspamd_fuzzy_process_updates_queue (session->ctx, src);
 	msg_info ("processed updates from the master, %ud operations processed,"
 			" revision: %ud", cnt, revision);
 
 err:
+	g_free (src);
+
 	if (updates) {
 		/* We still need to clear queue */
 		for (cur = updates; cur != NULL; cur = g_list_next (cur)) {
@@ -1253,7 +1271,7 @@ sync_callback (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if (ctx->backend) {
-		rspamd_fuzzy_process_updates_queue (ctx);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		/* Call backend sync */
 		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
@@ -1287,7 +1305,7 @@ rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 
 	if (ctx->backend) {
-		rspamd_fuzzy_process_updates_queue (ctx);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		/* Call backend sync */
 		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
@@ -2112,7 +2130,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	if (worker->index == 0) {
-		rspamd_fuzzy_process_updates_queue (ctx);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	}
 
