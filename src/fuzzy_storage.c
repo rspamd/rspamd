@@ -890,7 +890,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		struct rspamd_http_message *msg)
 {
 	const guchar *p;
-	gchar *src = NULL;
+	gchar *src = NULL, *psrc;
 	gsize remain;
 	guint32 revision, our_rev, len, cnt = 0;
 	struct fuzzy_peer_cmd cmd, *pcmd;
@@ -909,7 +909,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 
 	/* Detect source from url: /update_v1/<source>, so we look for the last '/' */
 	remain = msg->url->len;
-	src = rspamd_fstringdup (msg->url);
+	psrc = rspamd_fstringdup (msg->url);
+	src = psrc;
 
 	while (remain--) {
 		if (src[remain] == '/') {
@@ -938,7 +939,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		if (revision <= our_rev) {
 			msg_err ("remote revision:d %d is older than ours: %d, refusing update",
 					revision, our_rev);
-			g_free (src);
+			g_free (psrc);
 
 			return;
 		}
@@ -1027,7 +1028,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 			" revision: %ud", cnt, revision);
 
 err:
-	g_free (src);
+	g_free (psrc);
 
 	if (updates) {
 		/* We still need to clear queue */
