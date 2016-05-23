@@ -84,6 +84,12 @@ struct fuzzy_key_stat {
 	rspamd_lru_hash_t *last_ips;
 };
 
+struct rspamd_fuzzy_mirror {
+	gchar *name;
+	struct upstream_list *u;
+	struct rspamd_cryptobox_pubkey *key;
+};
+
 static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
 
 struct rspamd_fuzzy_storage_ctx {
@@ -98,6 +104,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_cryptobox_pubkey *master_key;
 	struct timeval master_io_tv;
 	gdouble master_timeout;
+	GPtrArray *mirrors;
 	gchar *update_map;
 	gchar *masters_map;
 	guint keypair_cache_size;
@@ -114,6 +121,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_fuzzy_backend *backend;
 	GQueue *updates_pending;
 	struct rspamd_dns_resolver *resolver;
+	struct rspamd_config *cfg;
 };
 
 enum fuzzy_cmd_type {
@@ -1403,6 +1411,88 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 }
 
 static gboolean
+fuzzy_storage_parse_mirror (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	const ucl_object_t *elt;
+	struct rspamd_fuzzy_mirror *up = NULL;
+	struct rspamd_rcl_struct_parser *pd = ud;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+
+	ctx = pd->user_struct;
+
+	if (ucl_object_type (obj) != UCL_OBJECT) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"mirror/slave option must be an object");
+
+		return FALSE;
+	}
+
+	elt = ucl_object_lookup (obj, "name");
+	if (elt == NULL) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"mirror option must have some name definition");
+
+		return FALSE;
+	}
+
+	up = g_slice_alloc0 (sizeof (*up));
+	up->name = g_strdup (ucl_object_tostring (elt));
+
+	elt = ucl_object_lookup (obj, "key");
+	if (elt != NULL) {
+		up->key = rspamd_pubkey_from_base32 (ucl_object_tostring (elt), 0,
+				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+	}
+
+	if (up->key == NULL) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"cannot read mirror key");
+
+		goto err;
+	}
+
+	elt = ucl_object_lookup (obj, "hosts");
+
+	if (elt == NULL) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"mirror option must have some hosts definition");
+
+		goto err;
+	}
+
+	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
+	if (!rspamd_upstreams_from_ucl (up->u, elt, 11335, NULL)) {
+		g_set_error (err,  g_quark_try_string ("fuzzy"), 100,
+				"mirror has bad hosts definition");
+
+		goto err;
+	}
+
+	g_ptr_array_add (ctx->mirrors, up);
+
+	return TRUE;
+
+err:
+
+	if (up) {
+		g_free (up->name);
+		rspamd_upstreams_destroy (up->u);
+
+		if (up->key) {
+			rspamd_pubkey_unref (up->key);
+		}
+
+		g_slice_free1 (sizeof (*up), up);
+	}
+
+	return FALSE;
+}
+
+static gboolean
 fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		const ucl_object_t *obj,
 		gpointer ud,
@@ -1504,6 +1594,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->errors_ips = rspamd_lru_hash_new_full (1024,
 			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
+	ctx->cfg = cfg;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1636,6 +1727,24 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, master_key),
 			0,
 			"Allow master/slave updates merely using the specified key");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"mirror",
+			fuzzy_storage_parse_mirror,
+			ctx,
+			0,
+			RSPAMD_CL_FLAG_MULTIPLE,
+			"List of slave hosts");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"slave",
+			fuzzy_storage_parse_mirror,
+			ctx,
+			0,
+			RSPAMD_CL_FLAG_MULTIPLE,
+			"List of slave hosts");
 
 	return ctx;
 }
