@@ -358,7 +358,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	}
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
-	rspamd_printf_fstring (&msg->url, "/update_v1");
+	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
 
 	conn->http_conn = rspamd_http_connection_new (
 			NULL,
