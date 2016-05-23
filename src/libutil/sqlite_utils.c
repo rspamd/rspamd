@@ -248,7 +248,7 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 
 sqlite3 *
 rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
-		gchar *create_sql, GError **err)
+		gchar *create_sql, guint version, GError **err)
 {
 	sqlite3 *sqlite;
 	gint rc, flags, lock_fd;
@@ -268,7 +268,8 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 			other_pragmas[] = 		"PRAGMA read_uncommitted=\"ON\";"
 									"PRAGMA cache_size="
-									G_STRINGIFY(RSPAMD_SQLITE_CACHE_SIZE) ";";
+									G_STRINGIFY(RSPAMD_SQLITE_CACHE_SIZE) ";",
+			db_version[] =			"PRAGMA user_version;";
 	gboolean create = FALSE, has_lock = FALSE;
 
 	flags = SQLITE_OPEN_READWRITE;
@@ -399,6 +400,79 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 			}
 
 			return NULL;
+		}
+	}
+	else if (has_lock && version > 0) {
+		/* Check user version */
+		sqlite3_stmt *stmt = NULL;
+		guint32 db_ver;
+		GString *new_ver_sql;
+
+		if (sqlite3_prepare (sqlite, db_version, -1, &stmt, NULL) != SQLITE_OK) {
+			msg_warn_pool_check ("Cannot get user version pragma",
+							sqlite3_errmsg (sqlite));
+		}
+		else {
+			if (sqlite3_step (stmt) != SQLITE_ROW) {
+				msg_warn_pool_check ("Cannot get user version pragma, step failed",
+											sqlite3_errmsg (sqlite));
+				sqlite3_finalize (stmt);
+			}
+			else {
+				db_ver = sqlite3_column_int (stmt, 0);
+				sqlite3_reset (stmt);
+				sqlite3_finalize (stmt);
+
+				if (version > db_ver) {
+					msg_warn_pool_check ("Database version %ud is less than "
+							"desired version %ud, run create script", db_ver,
+							version);
+
+					if (create_sql) {
+						if (sqlite3_exec (sqlite, create_sql, NULL, NULL, NULL) != SQLITE_OK) {
+							g_set_error (err, rspamd_sqlite3_quark (),
+									-1, "cannot execute create sql `%s`: %s",
+									create_sql, sqlite3_errmsg (sqlite));
+							sqlite3_close (sqlite);
+							rspamd_file_unlock (lock_fd, FALSE);
+							unlink (lock_path);
+							if (lock_fd != -1) {
+								close (lock_fd);
+							}
+
+							return NULL;
+						}
+					}
+
+					new_ver_sql = g_string_new ("PRAGMA user_version=");
+					rspamd_printf_gstring (new_ver_sql, "%ud", version);
+
+					if (sqlite3_exec (sqlite, new_ver_sql->str, NULL, NULL, NULL)
+							!= SQLITE_OK) {
+						g_set_error (err, rspamd_sqlite3_quark (),
+								-1, "cannot execute update version sql `%s`: %s",
+								new_ver_sql->str, sqlite3_errmsg (sqlite));
+						sqlite3_close (sqlite);
+						rspamd_file_unlock (lock_fd, FALSE);
+						unlink (lock_path);
+						if (lock_fd != -1) {
+							close (lock_fd);
+						}
+
+						g_string_free (new_ver_sql, TRUE);
+
+						return NULL;
+					}
+
+					g_string_free (new_ver_sql, TRUE);
+				}
+				else if (db_ver > version) {
+					msg_warn_pool_check ("Database version %ud is more than "
+							"desired version %ud, this could cause"
+							" unexpected behaviour", db_ver,
+							version);
+				}
+			}
 		}
 	}
 

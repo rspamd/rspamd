@@ -135,7 +135,7 @@ rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 	rspamd_snprintf (dbpath, sizeof (dbpath), "%s", path);
 
 	sqlite = rspamd_sqlite3_open_or_create (cfg->cfg_pool,
-			dbpath, create_tables_sql, &err);
+			dbpath, create_tables_sql, 0, &err);
 
 	if (sqlite == NULL) {
 		msg_err ("cannot open sqlite3 cache: %e", err);

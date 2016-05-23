@@ -52,13 +52,13 @@ static const guint max_retries = 10;
 
 static const char *create_tables_sql =
 		"BEGIN;"
-		"CREATE TABLE digests("
+		"CREATE TABLE IF NOT EXISTS digests("
 		"id INTEGER PRIMARY KEY,"
 		"flag INTEGER NOT NULL,"
 		"digest TEXT NOT NULL,"
 		"value INTEGER,"
 		"time INTEGER);"
-		"CREATE TABLE shingles("
+		"CREATE TABLE IF NOT EXISTS shingles("
 		"value INTEGER NOT NULL,"
 		"number INTEGER NOT NULL,"
 		"digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE "
@@ -410,7 +410,7 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	bk->expired = 0;
 	bk->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "fuzzy_backend");
 	bk->db = rspamd_sqlite3_open_or_create (bk->pool, bk->path,
-			create_tables_sql, err);
+			create_tables_sql, 0, err);
 
 	if (bk->db == NULL) {
 		rspamd_fuzzy_backend_close (bk);
