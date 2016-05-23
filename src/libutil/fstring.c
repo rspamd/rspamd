@@ -416,3 +416,19 @@ rspamd_ftokdup (const rspamd_ftok_t *src)
 
 	return newstr;
 }
+
+gchar *
+rspamd_fstringdup (const rspamd_fstring_t *src)
+{
+	gchar *newstr;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	newstr = g_malloc (src->len + 1);
+	memcpy (newstr, src->str, src->len);
+	newstr[src->len] = '\0';
+
+	return newstr;
+}
