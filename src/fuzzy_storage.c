@@ -701,7 +701,7 @@ reply:
 			flag = 0;
 		}
 
-		result.flag = flag;
+		result.flag = flag + 1;
 	}
 
 	memcpy (&session->reply.rep, &result, sizeof (result));

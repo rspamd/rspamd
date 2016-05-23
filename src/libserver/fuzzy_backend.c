@@ -528,8 +528,8 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			rep.flag = sqlite3_column_int (
 					prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 2);
 
-			if (!(rep.flag & flags_mask)) {
-				rep.flag = (1U << rep.flag) | flags_mask;
+			if (!(rep.flag & flags_mask) && rep.flag > 0) {
+				rep.flag = (1U << (rep.flag - 1)) | flags_mask;
 			}
 		}
 	}
@@ -615,8 +615,8 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 								prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
 								3);
 
-						if (!(rep.flag & flags_mask)) {
-							rep.flag = (1U << rep.flag) | flags_mask;
+						if (!(rep.flag & flags_mask) && rep.flag > 0) {
+							rep.flag = (1U << (rep.flag - 1)) | flags_mask;
 						}
 					}
 				}
@@ -673,7 +673,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		return FALSE;
 	}
 
-	if (cmd->flag > 31) {
+	if (cmd->flag > 31 || cmd->flag == 0) {
 		msg_err_fuzzy_backend ("flag more than 31 is no longer supported");
 		return FALSE;
 	}
@@ -689,7 +689,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				2);
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 
-		if ((flag & cmd->flag) == cmd->flag) {
+		if (flag & (1U << (cmd->flag - 1))) {
 			/* We need to increase weight */
 			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 					RSPAMD_FUZZY_BACKEND_UPDATE,
@@ -706,24 +706,24 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 			/* We need to relearn actually */
 			if (flag & flags_mask) {
 				/* This is already new format */
-				flag |= cmd->flag;
+				flag |= (1U << (cmd->flag - 1));
 			}
 			else {
 				/* Convert to the new format */
-				if (flag > 31) {
+				if (flag > 31 || flag == 0) {
 					msg_warn_fuzzy_backend ("storage had flag more than 31, remove "
 							"it");
 					flag = cmd->flag | flags_mask;
 				}
 				else {
-					flag = (1U << flag) | cmd->flag | flags_mask;
+					flag = (1U << (flag - 1)) | (1U << (cmd->flag - 1)) | flags_mask;
 				}
 			}
 
 			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 					RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
 					(gint64) cmd->value,
-					(gint64) cmd->flag,
+					(gint64) flag,
 					cmd->digest);
 
 			if (rc != SQLITE_OK) {
@@ -738,7 +738,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 		rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 				RSPAMD_FUZZY_BACKEND_INSERT,
-				(gint) (1U << cmd->flag),
+				(gint) (1U << (cmd->flag - 1)),
 				cmd->digest,
 				(gint64) cmd->value,
 				(gint64) timestamp);
