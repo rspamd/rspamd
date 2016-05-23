@@ -278,6 +278,21 @@ gboolean rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 	GError **err);
 
 /**
+ * Parse a pubkey field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_pubkey (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
+
+/**
  * Parse a inet addr field of a structure
  * @param cfg config pointer
  * @param obj object to parse

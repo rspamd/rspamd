@@ -2668,7 +2668,6 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 	struct rspamd_rcl_struct_parser *pd = ud;
 	struct rspamd_cryptobox_keypair **target, *kp;
 
-
 	target = (struct rspamd_cryptobox_keypair **)(((gchar *)pd->user_struct) +
 			pd->offset);
 	if (obj->type == UCL_OBJECT) {
@@ -2691,6 +2690,49 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 				CFG_RCL_ERROR,
 				EINVAL,
 				"no sane pubkey or privkey found in the keypair: %s",
+				ucl_object_key (obj));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_rcl_parse_struct_pubkey (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	struct rspamd_cryptobox_pubkey **target, *pk;
+	gsize len;
+	const gchar *str;
+
+	target = (struct rspamd_cryptobox_pubkey **)(((gchar *)pd->user_struct) +
+			pd->offset);
+	if (obj->type == UCL_STRING) {
+		str = ucl_object_tolstring (obj, &len);
+		pk = rspamd_pubkey_from_base32 (str, len, RSPAMD_KEYPAIR_KEX,
+				RSPAMD_CRYPTOBOX_MODE_25519);
+
+		if (pk != NULL) {
+			*target = pk;
+		}
+		else {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot load the pubkey specified: %s",
+					ucl_object_key (obj));
+			return FALSE;
+		}
+	}
+	else {
+		g_set_error (err,
+				CFG_RCL_ERROR,
+				EINVAL,
+				"no sane pubkey found in the element: %s",
 				ucl_object_key (obj));
 		return FALSE;
 	}
