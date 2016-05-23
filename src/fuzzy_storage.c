@@ -182,8 +182,12 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session)
 				session->addr) == RADIX_NO_VALUE) {
 			return FALSE;
 		}
+		else {
+			return TRUE;
+		}
 	}
-	return TRUE;
+
+	return FALSE;
 }
 
 static void
@@ -831,12 +835,14 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 
 err:
 	if (updates) {
+		/* We still need to clear queue */
 		for (cur = updates; cur != NULL; cur = g_list_next (cur)) {
 			if (cur->data) {
 				g_slice_free1 (sizeof (cmd), cur->data);
 			}
 		}
 
+		/* This also update our version id */
 		g_list_free (updates);
 	}
 }
