@@ -831,15 +831,60 @@ gboolean
 rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
-	int rc;
+	int rc = -1;
+	guint32 flag;
 
 	if (backend == NULL) {
 		return FALSE;
 	}
 
-	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-			RSPAMD_FUZZY_BACKEND_DELETE,
+	rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
+			RSPAMD_FUZZY_BACKEND_CHECK,
 			cmd->digest);
+
+	if (rc == SQLITE_OK) {
+		/* Check flag */
+		flag = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt,
+				2);
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
+
+		if (!(flag & flags_mask)) {
+			flag = (1U << (flag - 1)) | flags_mask;
+		}
+
+		if (flag & (1U << (cmd->flag - 1))) {
+			flag &= ~(1U << (cmd->flag - 1));
+
+			if (flag == 0) {
+				/* It is the last flag, so delete hash completely */
+				rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+							RSPAMD_FUZZY_BACKEND_DELETE,
+							cmd->digest);
+			}
+			else {
+				/* We need to delete specific flag */
+				rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+						RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
+						(gint64) cmd->value,
+						(gint64) flag,
+						cmd->digest);
+				if (rc != SQLITE_OK) {
+					msg_warn_fuzzy_backend ("cannot update hash to %d -> "
+							"%*xs: %s", (gint) cmd->flag,
+							(gint) sizeof (cmd->digest), cmd->digest,
+							sqlite3_errmsg (backend->db));
+				}
+			}
+		}
+		else {
+			/* The hash has a wrong flag, ignoring */
+		}
+	}
+	else {
+		/* Hash is missing */
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
+	}
 
 	return (rc == SQLITE_OK);
 }
