@@ -188,6 +188,13 @@ parse_flags (struct fuzzy_rule *rule,
 
 			if (elt != NULL) {
 				map->fuzzy_flag = ucl_obj_toint (elt);
+
+				if (map->fuzzy_flag > 31) {
+					msg_err_config ("flags more than 31 are no longer "
+							"supported by rspamd");
+					return;
+				}
+
 				elt = ucl_object_lookup (val, "max_score");
 
 				if (elt != NULL) {

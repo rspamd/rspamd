@@ -32,6 +32,7 @@ struct rspamd_fuzzy_backend {
 
 static const gdouble sql_sleep_time = 0.1;
 static const guint max_retries = 10;
+static const guint32 flags_mask = (1U << 31);
 
 #define msg_err_fuzzy_backend(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         backend->pool->tag.tagname, backend->pool->tag.uid, \
@@ -526,6 +527,10 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			rep.prob = 1.0;
 			rep.flag = sqlite3_column_int (
 					prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 2);
+
+			if (!(rep.flag & flags_mask)) {
+				rep.flag = (1U << rep.flag) | flags_mask;
+			}
 		}
 	}
 	else if (cmd->shingles_count > 0) {
@@ -609,6 +614,10 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 						rep.flag = sqlite3_column_int (
 								prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
 								3);
+
+						if (!(rep.flag & flags_mask)) {
+							rep.flag = (1U << rep.flag) | flags_mask;
+						}
 					}
 				}
 			}
@@ -664,6 +673,11 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		return FALSE;
 	}
 
+	if (cmd->flag > 31) {
+		msg_err_fuzzy_backend ("flag more than 31 is no longer supported");
+		return FALSE;
+	}
+
 	rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 			RSPAMD_FUZZY_BACKEND_CHECK,
 			cmd->digest);
@@ -675,7 +689,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				2);
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 
-		if (flag == cmd->flag) {
+		if ((flag & cmd->flag) == cmd->flag) {
 			/* We need to increase weight */
 			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 					RSPAMD_FUZZY_BACKEND_UPDATE,
@@ -690,11 +704,28 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		}
 		else {
 			/* We need to relearn actually */
+			if (flag & flags_mask) {
+				/* This is already new format */
+				flag |= cmd->flag;
+			}
+			else {
+				/* Convert to the new format */
+				if (flag > 31) {
+					msg_warn_fuzzy_backend ("storage had flag more than 31, remove "
+							"it");
+					flag = cmd->flag | flags_mask;
+				}
+				else {
+					flag = (1U << flag) | cmd->flag | flags_mask;
+				}
+			}
+
 			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 					RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
 					(gint64) cmd->value,
 					(gint64) cmd->flag,
 					cmd->digest);
+
 			if (rc != SQLITE_OK) {
 				msg_warn_fuzzy_backend ("cannot update hash to %d -> "
 						"%*xs: %s", (gint) cmd->flag,
@@ -707,7 +738,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 		rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 				RSPAMD_FUZZY_BACKEND_INSERT,
-				(gint) cmd->flag,
+				(gint) (1U << cmd->flag),
 				cmd->digest,
 				(gint64) cmd->value,
 				(gint64) timestamp);

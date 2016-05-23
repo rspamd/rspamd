@@ -685,6 +685,25 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 reply:
 	result.tag = cmd->tag;
+
+	if (session->epoch < RSPAMD_FUZZY_EPOCH11) {
+		/* We need to convert flags to legacy format */
+		guint32 flag = 0;
+
+		/* We select the least significant flag if multiple flags are set */
+		for (flag = 0; flag < 32; flag ++) {
+			if (result.flag & (1U << flag)) {
+				break;
+			}
+		}
+
+		if (flag == (1U << 31)) {
+			flag = 0;
+		}
+
+		result.flag = flag;
+	}
+
 	memcpy (&session->reply.rep, &result, sizeof (result));
 
 	rspamd_fuzzy_update_stats (session->ctx,
@@ -716,19 +735,32 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 {
 	enum rspamd_fuzzy_epoch ret = RSPAMD_FUZZY_EPOCH_MAX;
 
-	if (cmd->version == RSPAMD_FUZZY_VERSION) {
+	switch (cmd->version) {
+	case 4:
 		if (cmd->shingles_count > 0) {
 			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH9;
+				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		else {
 			if (r == sizeof (*cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH9;
+				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
-	}
-	else if (cmd->version == 2) {
+		break;
+	case 3:
+		if (cmd->shingles_count > 0) {
+			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH10;
+			}
+		}
+		else {
+			if (r == sizeof (*cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH10;
+			}
+		}
+		break;
+	case 2:
 		/*
 		 * rspamd 0.8 has slightly different tokenizer then it might be not
 		 * 100% compatible
@@ -741,6 +773,9 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 		else {
 			ret = RSPAMD_FUZZY_EPOCH8;
 		}
+		break;
+	default:
+		break;
 	}
 
 	return ret;
@@ -858,7 +893,7 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 			return FALSE;
 		}
 		/* Encrypted is epoch 10 at least */
-		s->epoch = RSPAMD_FUZZY_EPOCH10;
+		s->epoch = epoch;
 		break;
 	case sizeof (struct rspamd_fuzzy_encrypted_shingle_cmd):
 		s->cmd_type = CMD_ENCRYPTED_SHINGLE;
@@ -875,7 +910,7 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 			return FALSE;
 		}
 
-		s->epoch = RSPAMD_FUZZY_EPOCH10;
+		s->epoch = epoch;
 		break;
 	default:
 		msg_debug ("invalid fuzzy command of size %d received", buflen);
