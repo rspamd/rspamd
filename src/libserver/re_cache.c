@@ -1494,7 +1494,8 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			 * crc - 8 bytes checksum
 			 * <hyperscan blob>
 			 */
-			crc = XXH64 (hs_serialized, serialized_len, 0xdeadbabe);
+			crc = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+					hs_serialized, serialized_len, 0xdeadbabe);
 
 			if (cache->vectorized_hyperscan) {
 				iov[0].iov_base = (void *) rspamd_hs_magic_vector;
