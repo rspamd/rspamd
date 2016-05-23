@@ -2391,6 +2391,21 @@ rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 	priv->local_key = rspamd_keypair_ref (key);
 }
 
+const struct rspamd_cryptobox_pubkey*
+rspamd_http_connection_get_peer_key (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (priv->peer_key) {
+		return priv->peer_key;
+	}
+	else if (priv->msg) {
+		return priv->msg->peer_key;
+	}
+
+	return NULL;
+}
+
 gboolean
 rspamd_http_connection_is_encrypted (struct rspamd_http_connection *conn)
 {
