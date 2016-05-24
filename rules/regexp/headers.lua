@@ -87,7 +87,7 @@ reconf['SUSPICIOUS_RECIPS'] = 'compare_recipients_distance(0.65)'
 reconf['SORTED_RECIPS'] = 'is_recipients_sorted()'
 
 -- Spam string at the end of message to make statistics faults
-reconf['TRACKER_ID'] = '/^[a-z0-9]{6,24}[-_a-z0-9]{2,36}[a-z0-9]{6,24}\\s*\\z/isPr'
+reconf['TRACKER_ID'] = '/^[a-z0-9]{6,24}[-_a-z0-9]{12,36}[a-z0-9]{6,24}\\s*\\z/isPr'
 
 
 -- From that contains encoded characters while base 64 is not needed as all symbols are 7bit
