@@ -635,7 +635,8 @@ set:
 		else {
 			/* Register new item in the cache */
 			if (mime_atom->d.re->type == RSPAMD_RE_HEADER ||
-					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER) {
+					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER ||
+					mime_atom->d.re->type == RSPAMD_RE_MIMEHEADER) {
 
 				if (mime_atom->d.re->header != NULL) {
 					own_re = mime_atom->d.re->regexp;
