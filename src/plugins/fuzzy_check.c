@@ -53,6 +53,13 @@
 #define DEFAULT_RETRANSMITS 3
 #define DEFAULT_PORT 11335
 
+/*
+ * WARNING:
+ * As 1.3 is not yet stable, we want to keep compatibility here as 1.2 won't
+ * recognize version 4 unless 1.2.7
+ */
+#define RSPAMD_FUZZY_PLUGIN_VERSION 3
+
 static const gint rspamd_fuzzy_hash_len = 5;
 
 struct fuzzy_mapping {
@@ -1014,7 +1021,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_VERSION;
+	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
 	if (c != FUZZY_CHECK) {
 		cmd->flag = flag;
 		cmd->value = weight;
@@ -1172,7 +1179,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
 	shcmd->basic.cmd = c;
-	shcmd->basic.version = RSPAMD_FUZZY_VERSION;
+	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
 
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
@@ -1221,7 +1228,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_VERSION;
+	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
 	if (c != FUZZY_CHECK) {
 		cmd->flag = flag;
 		cmd->value = weight;
