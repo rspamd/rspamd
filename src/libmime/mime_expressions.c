@@ -1262,13 +1262,11 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	GMimeObject *part;
-#ifndef GMIME24
-	GMimePartEncodingType enc_req, part_enc;
-#else
-	GMimeContentEncoding enc_req, part_enc;
-#endif
+	GPtrArray *headerlist;
 	struct expression_argument *arg;
+	guint i;
+	struct raw_header *rh;
+	static const char *hname = "Content-Transfer-Encoding";
 
 	if (args == NULL) {
 		msg_warn_task ("no parameters to function");
@@ -1281,47 +1279,42 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 		return FALSE;
 	}
 
-#ifndef GMIME24
-	enc_req = g_mime_part_encoding_from_string (arg->data);
-	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {
-#else
-	enc_req = g_mime_content_encoding_from_string (arg->data);
-	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
-#endif
-		msg_warn_task ("bad encoding type: %s", (gchar *)arg->data);
-		return FALSE;
+	headerlist = rspamd_message_get_header_array (task, hname, FALSE);
+
+	if (headerlist) {
+		for (i = 0; i < headerlist->len; i ++) {
+			rh = g_ptr_array_index (headerlist, i);
+
+			if (rh->decoded == NULL) {
+				continue;
+			}
+
+			if (g_ascii_strcasecmp (rh->decoded, arg->data) == 0) {
+				return TRUE;
+			}
+		}
 	}
 
-	part = g_mime_message_get_mime_part (task->message);
-	if (part) {
-		if (GMIME_IS_PART (part)) {
-#ifndef GMIME24
-			part_enc = g_mime_part_get_encoding (GMIME_PART (part));
-			if (part_enc == GMIME_PART_ENCODING_DEFAULT) {
-				/* Assume 7bit as default transfer encoding */
-				part_enc = GMIME_PART_ENCODING_7BIT;
+	/*
+	 * In fact, we need to check 'Content-Transfer-Encoding' for each part
+	 * as gmime has 'strange' assumptions
+	 */
+	headerlist = rspamd_message_get_mime_header_array (task,
+			arg->data,
+			FALSE);
+
+	if (headerlist) {
+		for (i = 0; i < headerlist->len; i ++) {
+			rh = g_ptr_array_index (headerlist, i);
+
+			if (rh->decoded == NULL) {
+				continue;
 			}
-#else
-			part_enc = g_mime_part_get_content_encoding (GMIME_PART (part));
-			if (part_enc == GMIME_CONTENT_ENCODING_DEFAULT) {
-				/* Assume 7bit as default transfer encoding */
-				part_enc = GMIME_CONTENT_ENCODING_7BIT;
+
+			if (g_ascii_strcasecmp (rh->decoded, arg->data) == 0) {
+				return TRUE;
 			}
-#endif
-
-
-			debug_task ("got encoding in part: %d and compare with %d",
-				(gint)part_enc,
-				(gint)enc_req);
-#ifndef GMIME24
-			g_object_unref (part);
-#endif
-
-			return part_enc == enc_req;
 		}
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
 	}
 
 	return FALSE;
