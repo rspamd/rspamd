@@ -369,7 +369,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 				ls = g_slice_alloc0 (sizeof (*ls));
 				ls->addr = g_ptr_array_index (addrs, i);
 				ls->fd = fd;
-				ls->type = RSPAMD_WORKER_SOCKET_TCP;
+				ls->type = RSPAMD_WORKER_SOCKET_UDP;
 				result = g_list_prepend (result, ls);
 			}
 		}
