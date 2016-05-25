@@ -1,3 +1,23 @@
+1.2.7:
+	* Slightly reduce weights of rules with high FP rate
+	* Add workround for rspamd-1.3
+	* Fix possible FP in TRACKER_ID rule
+	* Simplify MISSING_MIMEOLE rule
+	* Add workaround for gmime CTE stupidity
+	* Fix mime headers processing
+	* Fix false positive URL detections in text parts
+	* Fix Exim shutdown patch
+	* Enable workaround for exim mailbox format
+	* Backport shingles static test
+	* Fix levenshtein distance calculations
+	* Fix max_train setup in ANN module
+	* Fix redis structure by adding {NULL, NULL} member
+	* Fix build with unmodified LibreSSL opensslv.h
+	* Repair optional dependencies
+	* Really skip filters in case of pre-result set
+	* Restore the intended pre-filters behaviour
+	* Fix ipv6 mask application
+
 1.2.6:
 	* Fix parsing of URLs in texts
 	* Fix creating of URLs from LUA
