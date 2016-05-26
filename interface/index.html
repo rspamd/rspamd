@@ -9,6 +9,7 @@
 	<link href="//cdnjs.cloudflare.com/ajax/libs/file-uploader/3.7.0/fineuploader.min.css" rel="stylesheet">
 	<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet">
 	<link rel="stylesheet" type="text/css" href="./css/datatables.min.css"/>
+	<link rel="stylesheet" type="text/css" href="//cdn.rawgit.com/moisseev/D3Evolution/fb6ea62c43e26e728b48a43012fb796c5ab6689c/d3evolution.css">
 	<link href="./css/rspamd.css" rel="stylesheet">
 </head>
 
@@ -25,6 +26,9 @@
 		</ul>
 		<ul class="nav navbar-nav nav-pills" role="tablist">
 			<li role="presentation" class="active"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab">Status</a></li>
+<!--
+			<li role="presentation"><a id="throughput_nav" aria-controls="throughput" role="tab" href="#throughput" data-toggle="tab">Throughput</a></li>
+-->
 			<li role="presentation"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab">Configuration</a></li>
 			<li role="presentation"><a id="learning_nav" aria-controls="learning" role="tab" href="#learning" data-toggle="tab">Learning</a></li>
 			<li role="presentation"><a id="scan_nav"aria-controls="scan" role="tab"  href="#scan" data-toggle="tab">Scan</a></li>
@@ -60,6 +64,49 @@
 								<noscript>Please enable Javascript</noscript>
 							</div>
 						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="tab-pane" id="throughput">
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-stats"></i></span>
+						<h5>Throughput</h5>
+					</div>
+					<div class="widget-content chart-content">
+						<div class="row row-chart">
+							<div class="chart" id="graph">
+								<span class="notice">Loading..</span>
+								<noscript>Please enable Javascript</noscript>
+							</div>
+						</div>
+						<form id="graph_controls" action="#">
+							Select dataset:
+							<select id="selData" class="form-control">
+								<option value="hourly" selected>Hourly</option>
+								<option value="daily">Daily</option>
+								<option value="weekly">Weekly</option>
+								<option value="monthly">Monthly</option>
+							</select>
+							Select chart type:
+							<select id="selType" class="form-control">
+								<option value="line" selected>Line</option>
+								<option value="area">Stacked area</option>
+							</select>
+							Select <a title="View Mike Bostock's Block." href="https://bl.ocks.org/mbostock/4342190" target="_blank">interpolation mode</a>:
+							<select id="selInterpolate" class="form-control">
+								<option value="linear" selected>linear</option>
+								<option value="step-before">step-before</option>
+								<option value="step-after">step-after</option>
+								<option value="basis">basis</option>
+								<option value="basis-open">basis-open</option>
+								<option value="bundle">bundle</option>
+								<option value="cardinal">cardinal</option>
+								<option value="cardinal-open">cardinal-open</option>
+								<option value="monotone">monotone</option>
+							</select>
+						</form>
 					</div>
 				</div>
 			</div>
@@ -313,6 +360,7 @@
 <script src="//cdnjs.cloudflare.com/ajax/libs/file-uploader/3.7.0/fineuploader.min.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
 <script src="./js/d3pie.min.js"></script>
+<script src="//cdn.rawgit.com/moisseev/D3Evolution/fb6ea62c43e26e728b48a43012fb796c5ab6689c/d3evolution.js"></script>
 <script src="./js/rspamd.js"></script>
 <script type="text/javascript" src="./js/datatables.min.js"></script>
 

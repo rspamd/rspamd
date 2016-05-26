@@ -28,9 +28,29 @@
         //$.cookie.json = true;
         var pie;
         var history;
+        var graph;
+
+        var selected = []; // Keep graph selectors state
+
+        // Bind event handlers to selectors
+        $("#selData").change(function () {
+            selected.selData = this.value;
+            getGraphData(this.value);
+        });
+        $("#selType").change(function () {
+            graph.type(this.value);
+        });
+        $("#selInterpolate").change(function () {
+            graph.interpolate(this.value);
+        });
+
         $('#disconnect').on('click', function (event) {
             if (pie) {
                 pie.destroy();
+            }
+            if (graph) {
+                graph.destroy();
+                graph = undefined;
             }
             if (history) {
                 history.destroy();
@@ -43,6 +63,7 @@
         $('#refresh').on('click', function (event) {
             statWidgets();
             getChart();
+            getGraphData(selected.selData);
         });
         // @supports session storage
         function supportsSessionStorage() {
@@ -461,6 +482,54 @@
                 }
             });
         }
+
+        function initGraph() {
+            // Get selectors' current state
+            var selIds = ["selData", "selType", "selInterpolate"];
+            selIds.forEach(function (id) {
+                var e = document.getElementById(id);
+                selected[id] = e.options[e.selectedIndex].value;
+            });
+
+            var options = {
+                title: "Rspamd throughput",
+                width: 1060,
+                height: 370,
+
+                type: selected.selType,
+                interpolate: selected.selInterpolate,
+
+                legend: {
+                    entries: [
+                        {label: "Rejected",      color: "#FF0000"},
+                        {label: "Probable spam", color: "#FFD700"},
+                        {label: "Greylisted",    color: "#436EEE"},
+                        {label: "Clean",         color: "#66cc00"}
+                    ]
+                }
+            };
+            graph = new D3Evolution("graph", options);
+        }
+
+        function getGraphData(type) {
+            $.ajax({
+                dataType: 'json',
+                type: 'GET',
+                url: 'graph?type=',
+                data: type,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
+                },
+                success: function (data) {
+                    graph.data(data);
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    alertMessage('alert-error', 'Cannot receive throughput data: ' +
+                        textStatus + ' ' + jqXHR.status + ' ' + errorThrown);
+                }
+            });
+        }
+
         // @get history log
         // function getChart() {
         // //console.log(data)
@@ -1115,6 +1184,7 @@
             getSymbols();
             getHistory();
             getChart();
+            initGraph();
             $('#progress').hide();
             $(disconnect).show();
         }
@@ -1127,6 +1197,9 @@
         });
         $('#status_nav').bind('click', function (e) {
             getChart();
+        });
+        $('#throughput_nav').bind('click', function () {
+            getGraphData(selected.selData);
         });
     });
 })();
