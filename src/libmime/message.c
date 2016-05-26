@@ -1663,6 +1663,7 @@ rspamd_message_parse (struct rspamd_task *task)
 				/* Skip to CRLF */
 				msg_info_task ("mailbox input detected, enable workaround");
 				p += sizeof ("From ") - 1;
+				len -= sizeof ("From ") - 1;
 
 				while (len > 0 && *p != '\n') {
 					p ++;
@@ -1678,6 +1679,8 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	tmp->data = (guint8 *)p;
 	tmp->len = len;
+	task->msg.begin = p;
+	task->msg.len = len;
 
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
 	/*
