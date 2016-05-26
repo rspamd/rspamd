@@ -129,7 +129,14 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 		}
 	}
 	else if (r == -1) {
-		msg_warn ("cannot read data from log pipe: %s", strerror (errno));
+		if (errno != EAGAIN || errno != EINTR) {
+			msg_warn ("cannot read data from log pipe: %s", strerror (errno));
+			event_del (&ctx->log_ev);
+		}
+	}
+	else if (r == 0) {
+		msg_warn ("cannot read data from log pipe: EOF");
+		event_del (&ctx->log_ev);
 	}
 }
 
