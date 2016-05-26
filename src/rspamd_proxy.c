@@ -647,7 +647,7 @@ proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 
 	lua_createtable (L, 0, session->mirror_conns->len + 1);
 	/* Now push master results */
-	if (session->master_conn->results) {
+	if (session->master_conn && session->master_conn->results) {
 		lua_pushstring (L, "master");
 		ucl_object_push_lua (L, session->master_conn->results, true);
 		lua_settable (L, -3);
