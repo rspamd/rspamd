@@ -1,36 +1,36 @@
 ---
 layout: doc
-title: Rspamd integration
+title: rspamd integration
 ---
 
-# Rspamd integration
+# rspamd integration
 
-This document describes several methods of integration rspamd to popular MTA. Among them are:
+This document describes several methods of integrating rspamd with some popular MTAs. Among them are:
 
 * [Postfix](http://www.postfix.org)
 * [Exim](http://exim.org)
 * [Sendmail](http://sendmail.org)
 * [Haraka](https://haraka.github.io/)
 
-Also this document describes rspamd LDA proxy mode that can be used for any MTA.
+This document also describes the rspamd LDA proxy mode that can be used for any MTA.
 
 ## Using rspamd with postfix MTA
 
-For using rspamd in postfix it is recommended to use milter, namely `rmilter`. The interactions between postfix and rspamd are depicted in the following image:
+To use rspamd with postfix it is recommended to use `rmilter`. The interactions between postfix and rspamd are depicted in the following image:
 
 <img class="img-responsive" src="/img/rspamd-schemes.007.png">
 
-Rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
+rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
 
 ### Configuring rmilter to work with rspamd
 
-First of all build and install rmilter from the source (or use your OS packages if applicable):
+First of all build and install rmilter from source (or use an OS package if applicable):
 
 	% ./configure
 	% make
 	# make install
 
-Rmilter configuration is described in the [documentation](https://rspamd.com/rmilter/)
+rmilter configuration is described in the [documentation](https://rspamd.com/rmilter/)
 Here is an example of configuration for rspamd:
 
 {% highlight nginx %}
@@ -83,7 +83,7 @@ spamd {
 }
 {% endhighlight %}
 
-This configuration allows milter to use rspamd actions for messages (including greylisting). Default settings are just reject or not a message according to rspamd reply.
+This configuration allows rmilter to use all rspamd actions, including greylisting. (The default is to reject or allow a message depending on the rspamd reply.)
 
 ### Configuring postfix
 
@@ -102,23 +102,22 @@ milter_default_action = accept
 
 ## Integration with exim MTA
 
-Starting from Exim 4.86, you can use rspamd directly just like spamassassin:
+Starting from exim 4.86, you can use rspamd directly just like SpamAssassin:
 
-![exim scheme](../img/rspamd_exim.png "Rspamd and exim interaction")
+![exim scheme](../img/rspamd_exim.png "rspamd and exim interaction")
 
-For versions 4.70 through 4.84, a patch can be applied to enable integration.
-From Exim source directory run `patch -p1 < ../rspamd/contrib/exim/patch-exim-src_spam.c.diff`.
+For versions 4.70 through 4.84, a patch can be applied to enable integration. In the exim source directory run `patch -p1 < ../rspamd/contrib/exim/patch-exim-src_spam.c.diff`.
 
-For version 4.85, run the following from `contrib/exim` in rspamd source directory:
+For version 4.85, run the following from `contrib/exim` in the rspamd source directory:
 `patch patch-exim-src_spam.c.diff < patch-exim-src_spam.c.diff.exim-4.85.diff`
-And then follow steps above to apply the patch.
+And then follow the steps above to apply the patch.
 
 For versions 4.86 and 4.87 it is recommended to apply a patch to disable half-closed sockets:
 `patch -p1 < ../rspamd/contrib/exim/shutdown.patch`
 
 Alternatively you can set `enable_shutdown_workaround = true` in `$LOCAL_CONFDIR/local.d/options.inc`
 
-Here is an example of exim configuration:
+Here is an example of an exim configuration:
 
 {% highlight make %}
 # Please note the variant parameter
@@ -151,28 +150,25 @@ acl_check_spam:
 
 ## Using rspamd with sendmail MTA
 
-Sendmail can use rspamd via rmilter as well as postfix.
-
-And configure it just like for postfix. Sendmail configuration may be like this:
+sendmail can use rspamd via rmilter and configuration is just like for postfix. sendmail configuration could be like:
 
 	MAIL_FILTER(`rmilter', `S=unix:/run/rmilter/rmilter.sock, F=T')
 	define(`confINPUT_MAIL_FILTERS', `rmilter')
 
-Then compile m4 to cf in an ordinary way.
+Then compile m4 to cf in the usual way.
 
-## Integration with Haraka MTA
+## Integration with haraka MTA
 
-Support for Rspamd is available in Haraka v2.7.0+. Documentation can be found [here](http://haraka.github.io/manual/plugins/rspamd.html).
+Support for rspamd is available in haraka v2.7.0+. Documentation can be found [here](http://haraka.github.io/manual/plugins/rspamd.html).
 
 To enable: add `rspamd` to the `DATA` section of your `config/plugins` file and edit `config/rspamd.ini` to suit your preferences.
 
 
 ## LDA mode
 
-In LDA mode, MTA calls rspamd client `rspamc` that scans a message on `rspamd` and appends scan results to the source message.
-The overall scheme is demonstrated in the following picture:
+In LDA mode, the MTA calls the rspamd client `rspamc` which scans a message with `rspamd` and appends scan results to the source message. The overall scheme is demonstrated in the following picture:
 
-![lda scheme](../img/rspamd_lda.png "Rspamd as LDA")
+![lda scheme](../img/rspamd_lda.png "rspamd as LDA")
 
 To enable LDA mode, `rspamc` has the following options implemented:
 
@@ -184,11 +180,11 @@ Here is an example of using `rspamc` + `dovecot` as LDA implemented using `fetch
 
     mda "/usr/bin/rspamc --mime --exec \"/usr/lib/dovecot/deliver -d %T\""
 
-In this mode, `rspamc` cannot reject or greylist messages, but it appends the following headers that could be used for further filtering by means of LDA (for example, `sieve`):
+In this mode, `rspamc` cannot reject or greylist messages, but it appends the following headers that can be used for further filtering by means of the LDA (for example, `sieve` or `procmail`):
 
 - `X-Spam-Scanner`: name and version of rspamd
 - `X-Spam`: has value `yes` if rspamd detects that a message as a spam (either `reject` or `add header` actions)
 - `X-Spam-Action`: the desired action for a message (e.g. `no action`, `add header` or `reject`)
 - `X-Spam-Result`: contains base64 encoded `JSON` reply from rspamd if `--json` option was given to `rspamc`
 
-Please note, that despite of the fact that this method can be used with any MTA (or even without MTA), it has more overhead than other methods and it cannot apply certain actions, namely, greylisting (however, that could also be implemented using external tools).
+Please note that despite the fact that this method can be used with any MTA (or even without an MTA), it has more overhead than other methods and it cannot apply certain actions, like greylisting (however, that could also be implemented using external tools).
