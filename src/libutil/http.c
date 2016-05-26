@@ -1204,8 +1204,14 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 	}
 
 	if (msg->url) {
-		new_msg->url = rspamd_fstring_new_init (msg->url->str,
-				msg->url->len);
+		if (new_msg->url) {
+			new_msg->url = rspamd_fstring_append (new_msg->url, msg->url->str,
+								msg->url->len);
+		}
+		else {
+			new_msg->url = rspamd_fstring_new_init (msg->url->str,
+					msg->url->len);
+		}
 	}
 
 	if (msg->host) {
