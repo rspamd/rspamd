@@ -1,20 +1,17 @@
-# Migrating between rspamd version
+# Migrating between rspamd versions
 
-This document describes incompatible changes introduced in the recent rspamd 
-versions. Here you can find information about how to overcome this incompatibilities
-and update your rules and configuration according to these changes.
+This document describes incompatible changes introduced in recent rspamd versions and details how to update your rules and configuration accordingly.
 
 ## Migrating from rspamd 1.0 to rspamd 1.1
 
-This notice affects merely users with per-user statistics enabled. There is an incompatible change in sqlite3 and per_user behaviour:
+The only change here affects users with per-user statistics enabled. There is an incompatible change in sqlite3 and per-user behaviour:
 
-Now both redis and sqlite3 follows the common principles for per-user statistics:
+Now both redis and sqlite3 follow common principles for per-user statistics:
 
 * If per-user statistics is enabled check per-user tokens **ONLY**
 * If per-user statistics is not enabled then check common tokens **ONLY**
 
-If you need old behaviour, then you'd need to use separate classifier
-for per-user statistics, for example:
+If you need the old behaviour, then you need to use a separate classifier for per-user statistics, for example:
 
 ~~~ucl
     classifier {
@@ -56,10 +53,7 @@ for per-user statistics, for example:
 
 ## Migrating from rspamd 0.9 to rspamd 1.0
 
-In rspamd 1.0, the default settings for statistics tokenization has been changed to `modern`, meaning
-that now tokens are generated from the normalized words and there are various improvements incompatible with the
-statistics model used in pre 1.0 versions. Therefore, to use all these advantages you should either **relearn**
-your statistics or continue using your old statistics **without** new features by adding `compat` parameter:
+In rspamd 1.0 the default settings for statistics tokenization have been changed to `modern`, meaning that tokens are now generated from normalized words and there are various improvements which are incompatible with the statistics model used in pre-1.0 versions. To use these new features you should either **relearn** your statistics or continue using your old statistics **without** new features by adding a `compat` parameter:
 
 ~~~ucl
 classifier {
@@ -71,7 +65,7 @@ classifier {
 }
 ~~~
 
-The recommended way to create statistics now is `sqlite3` backend (which is incompatible with old mmap backend however):
+The recommended way to store statistics now is the `sqlite3` backend (which is incompatible with the old mmap backend):
 
 ~~~ucl
 classifier {
@@ -100,21 +94,13 @@ classifier {
 
 ## Migrating from rspamd 0.6 to rspamd 0.7
 
-### Webui changes
+### WebUI changes
 
-Rspamd web interface is now a part of distribution. Moreover, all static files
-are now served by rspamd itself so you won't need to setup additional web server
-to distribute static files. At the same time, webui worker is now removed and
-the controller acts as webui+old_controller allowing to work with both web browser
-and rspamc client. However, one might still want to setup a full-featured HTTP
-server before rspamd to enable, for example TLS and access controls. 
+The rspamd web interface is now a part of the rspamd distribution. Moreover, all static files are now served by rspamd itself so you won't need to set up a separate web server to distribute static files. At the same time, the WebUI worker has been removed and the controller acts as WebUI+old_controller which allows it to work with both a web browser and the rspamc client. However, you might still want to set up a full-featured HTTP server in front of rspamd to enable, for example, TLS and access controls.
 
-Now there are two password levels for rspamd: `password` for read-only commands
-and `enable_password` for data changing commands. If `enable_password` is not
-specified then `password` is used for both commands.
+Now there are two password levels for rspamd: `password` for read-only commands and `enable_password` for data changing commands. If `enable_password` is not specified then `password` is used for both commands.
 
-Here is an example of the full configuration of rspamd controller worker to
-serve webui:
+Here is an example of the full configuration of the rspamd controller worker to serve the WebUI:
 
 ~~~ucl
 worker {
@@ -130,15 +116,11 @@ worker {
 
 ### Settings changes
 
-Settings system has been completely reworked. It is now a lua plugin that
-registers pre-filter and assign settings according to some dynamic map or
-a static configuration. Should you want to use the new settings system then
-please check the recent [documentation](https://rspamd.com/doc/configuration/settings.html).
-The old settings have been completely removed from rspamd.
+The settings system has been completely reworked. It is now a lua plugin that registers pre-filters and assigns settings according to dynamic maps or a static configuration. Should you want to use the new settings system then please check the recent [documentation](https://rspamd.com/doc/configuration/settings.html). The old settings have been completely removed from rspamd.
 
 ### Lua changes
 
-There are many changes in lua API and some of them are unfortunately breaking ones.
+There are many changes in the lua API and some of them are, unfortunately, breaking ones.
 
 * many superglobals are removed: now rspamd modules need to be loaded explicitly,
 the only global remaining is `rspamd_config`. This affects the following modules:
@@ -157,8 +139,7 @@ local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 ~~~
 
-* new system of symbols registration: now symbols can be registered by adding
-new indices to `rspamd_config` object. Old version:
+* new system of symbols registration: now symbols can be registered by adding new indices to `rspamd_config` object. Old version:
 
 ~~~lua
 local reconf = config['regexp']
@@ -175,21 +156,16 @@ rspamd_config.SYMBOL = function(task)
 end
 ~~~
 
-`rspamd_message` is **removed** completely, you should use task methods to
-access message's data. This includes such methods as:
+`rspamd_message` is **removed** completely; you should use task methods to access message data. This includes such methods as:
 
-* `get_date` - now this method can return date for task and message based on the arguments:
+* `get_date` - this method can now return a date for task and message based on the arguments:
 
 ~~~lua
 local dm = task:get_date{format = 'message'} -- MIME message date
 local dt = task:get_date{format = 'connect'} -- check date
 ~~~
 	
-* `get_header` - this function is now totally reworked. Now `get_header` version
-returns just a decoded string, `get_header_raw` returns undecoded string and
-`get_header_full` returns the full list of tables. Please consult with the
-corresponding [documentation](https://rspamd.com/doc/lua/task.html) for details.
-You also might want to correct old invocation of task:get_header to new one.
+* `get_header` - this function is totally reworked. Now `get_header` version returns just a decoded string, `get_header_raw` returns an undecoded string and `get_header_full` returns the full list of tables. Please consult the corresponding [documentation](https://rspamd.com/doc/lua/task.html) for details. You also might want to update the old invocation of task:get_header to the new one.
 Old version:
 
 ~~~lua
@@ -236,13 +212,7 @@ rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
 end
 ~~~
 
-* `get_from` and `get_recipients` now accepts optional numeric argument that
-specifies where to get a sender and recipients for a message. By default this
-argument is `0` which means that data is initially checked in SMTP envelope
-(meaning `MAIL FROM` and `RCPT TO` SMTP commands) and if envelope data is
-unaccessible then it is grabbed from MIME headers. Value `1` means that data
-is checked on envelope only, whilst `2` switches mode to MIME headers. Here is
-an example from `forged_recipients` module:
+* `get_from` and `get_recipients` now accept optional numeric arguments that specifies where to get sender and recipients for a message. By default, this argument is `0` which means that data is initially checked in the SMTP envelope (meaning `MAIL FROM` and `RCPT TO` SMTP commands) and if the envelope data is inaccessible then it is grabbed from MIME headers. Value `1` means that data is checked on envelope only, while `2` switches mode to MIME headers. Here is an example from the `forged_recipients` module:
 
 ~~~lua
 -- Check sender
@@ -259,7 +229,4 @@ end
 
 ### Protocol changes
 
-Rspamd now uses `HTTP` protocols for all operations, therefore an additional
-client library is unlikely needed. The fallback to old `spamc` protocol has also
-been implemented automatically to be compatible with `rmilter` and other software
-that uses `rspamc` protocol.
+rspamd now uses `HTTP` protocols for all operations, therefore an additional client library is unlikely to be needed. The fallback to the old `spamc` protocol has also been implemented to be automatically compatible with `rmilter` and other software that uses the `rspamc` protocol.
