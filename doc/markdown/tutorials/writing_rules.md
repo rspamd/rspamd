@@ -481,4 +481,4 @@ Rules in rspamd are checked in the following order:
 2. **All symbols***: can depend on each other by calling `rspamd_config:add_dependency(from, to)`
 3. **Statistics**: is checked only when all symbols are checked
 4. **Composites**: combine symbols to adjust the final results
-5. **Post filters**: are executed even if a message is already rejected and symbols processing has been stopped
+5. **Post-filters**: are executed even if a message is already rejected and symbols processing has been stopped
