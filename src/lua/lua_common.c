@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua/global_functions.lua.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -243,6 +244,11 @@ rspamd_lua_init ()
 	luaopen_cryptobox (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
+
+	if (luaL_dostring (L, rspamadm_script_global_functions) != 0) {
+		msg_err ("cannot execute lua global script: %s",
+				lua_tostring (L, -1));
+	}
 
 	return L;
 }
