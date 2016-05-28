@@ -15,6 +15,7 @@
  */
 #include "lua_common.h"
 #include "lua/global_functions.lua.h"
+#include "lptree.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -242,6 +243,7 @@ rspamd_lua_init ()
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
+	luaopen_lpeg (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 

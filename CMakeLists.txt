@@ -486,6 +486,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 		"${CMAKE_SOURCE_DIR}/contrib/librdns"
 		"${CMAKE_SOURCE_DIR}/contrib/aho-corasick"
 		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
+		"${CMAKE_SOURCE_DIR}/contrib/lpeg"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
