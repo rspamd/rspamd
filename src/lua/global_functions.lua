@@ -55,3 +55,11 @@ function rspamd_parse_redis_server(module_name)
 
   return ret
 end
+
+function rspamd_str_split(s, sep)
+  local lpeg = require "lpeg"
+  sep = lpeg.P(sep)
+  local elem = lpeg.C((1 - sep)^0)
+  local p = lpeg.Ct(elem * (sep * elem)^0)   -- make a table capture
+  return lpeg.match(p, s)
+end
