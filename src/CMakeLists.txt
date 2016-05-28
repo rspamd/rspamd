@@ -111,6 +111,8 @@ TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
 TARGET_LINK_LIBRARIES(rspamd-server lcbtrie)
 
+ADD_DEPENDENCIES(rspamd-server rspamd_lua_preprocess)
+
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
