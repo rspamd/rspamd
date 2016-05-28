@@ -6,6 +6,7 @@ function rspamd_parse_redis_server(module_name)
 
   local default_port = 6379
   local logger = require "rspamd_logger"
+  local upstream_list = require "rspamd_upstream_list"
 
   local function try_load_redis_servers(options)
     local key = options['servers']

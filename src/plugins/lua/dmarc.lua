@@ -35,7 +35,6 @@ local symbols = {
   dkim_deny_symbol = 'R_DKIM_REJECT',
 }
 -- Default port for redis upstreams
-local default_port = 6379
 local upstreams = nil
 local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
@@ -272,13 +271,9 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 
-if not opts['servers'] then
-  rspamd_logger.infox(rspamd_config, 'no servers are specified for dmarc stats')
-else
-  upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
-  if not upstreams then
-    rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
-  end
+upstreams = rspamd_parse_redis_server('dmarc')
+if not upstreams then
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
 end
 
 if opts['key_prefix'] then

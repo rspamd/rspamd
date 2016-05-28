@@ -18,7 +18,6 @@ limitations under the License.
 -- A plugin that implements replies check using redis
 
 -- Default port for redis upstreams
-local default_port = 6379
 local upstreams
 local whitelisted_ip
 local settings = {
@@ -102,17 +101,13 @@ end
 
 local opts = rspamd_config:get_all_opt('replies')
 if opts then
-  if not opts['servers'] then
-    rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
-  else
-    upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
+    upstreams = rspamd_parse_redis_server('replies')
     if not upstreams then
       rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     else
       rspamd_config:register_pre_filter(replies_check)
       rspamd_config:register_post_filter(replies_set, 10)
     end
-  end
 
   for k,v in pairs(opts) do
     settings[k] = v

@@ -16,8 +16,6 @@ limitations under the License.
 
 -- A plugin that implements ratelimits using redis or kvstorage server
 
--- Default port for redis upstreams
-local default_port = 6379
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
   -- Limit for all mail per recipient (burst 100, rate 2 per minute)
@@ -420,25 +418,21 @@ if opts then
     max_rcpt = tonumber(opts['max_delay'])
   end
 
-  if not opts['servers'] then
+  upstreams = rspamd_parse_redis_server('ratelimit')
+  if not upstreams then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
-    upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
-    if not upstreams then
-      rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    if not ratelimit_symbol then
+      rspamd_config:register_pre_filter(rate_test)
     else
-      if not ratelimit_symbol then
-        rspamd_config:register_pre_filter(rate_test)
-      else
-        rspamd_config:register_symbol({
-          name = ratelimit_symbol,
-          callback = rate_test,
-          flags = 'empty'
-        })
-      end
-
-      rspamd_config:register_post_filter(rate_set)
+      rspamd_config:register_symbol({
+        name = ratelimit_symbol,
+        callback = rate_test,
+        flags = 'empty'
+      })
     end
+
+    rspamd_config:register_post_filter(rate_set)
   end
 end
 
