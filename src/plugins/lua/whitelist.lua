@@ -58,11 +58,18 @@ local function whitelist_cb(symbol, rule, task)
   local from = task:get_from(1)
   local found = false
   local mult = 1.0
+  local spf_violated = false
+  local dkim_violated = false
+  local dmarc_violated = false
 
   if rule['valid_spf'] then
     if not task:has_symbol(options['spf_allow_symbol']) then
       -- Not whitelisted
-      return
+      if not rule['blacklist'] or rule['strict'] then
+        return
+      end
+
+      spf_violated = true
     end
 
     -- Now we can check from domain or helo
@@ -90,7 +97,11 @@ local function whitelist_cb(symbol, rule, task)
   if rule['valid_dkim'] then
     local sym = task:get_symbol(options['dkim_allow_symbol'])
     if not sym then
-      return
+      if not rule['blacklist'] or rule['strict'] then
+        return
+      end
+
+      dkim_violated = true
     end
 
     local dkim_opts = sym[1]['options']
@@ -109,7 +120,11 @@ local function whitelist_cb(symbol, rule, task)
 
   if rule['valid_dmarc'] then
     if not task:has_symbol(options['dmarc_allow_symbol']) then
-      return
+      if not rule['blacklist'] or rule['strict'] then
+        return
+      end
+
+      dmarc_violated = true
     end
     local from = task:get_from(2)
 
@@ -123,7 +138,28 @@ local function whitelist_cb(symbol, rule, task)
   end
 
   if found then
-    task:insert_result(symbol, mult, domains)
+    if not rule['blacklist'] or rule['strict'] then
+      task:insert_result(symbol, mult, domains)
+    else
+      -- Additional constraints for blacklist
+      if rule['valid_spf'] or rule['valid_dkim'] or rule['valid_dmarc'] then
+        if dmarc_violated or dkim_violated or spf_violated then
+
+          if rule['strict'] then
+            -- Inverse multiplier to convert whitelist to blacklist
+            mult = -mult
+          end
+
+          task:insert_result(symbol, mult, domains)
+        elseif rule['strict'] then
+          -- Add whitelist score (negative)
+          task:insert_result(symbol, mult, domains)
+        end
+      else
+        -- Unconstrained input
+        task:insert_result(symbol, mult, domains)
+      end
+    end
   end
 
 end
@@ -180,9 +216,14 @@ local configure_whitelist_module = function()
           return
         end
 
+        local flags = 'nice,empty'
+        if rule['blacklist'] then
+          flags = 'empty'
+        end
+
         local id = rspamd_config:register_symbol({
           name = symbol,
-          flags = 'nice,empty',
+          flags = flags,
           callback = gen_whitelist_cb(symbol, rule)
         })
 
