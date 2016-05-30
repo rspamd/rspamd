@@ -25,6 +25,7 @@
 #include "ottery.h"
 #include "libutil/rrd.h"
 #include "unix-std.h"
+#include "utlist.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -2564,9 +2565,10 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->srv = worker->srv;
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
-	if (ctx->secure_ip != NULL) {
 
+	if (ctx->secure_ip != NULL) {
 		if (ucl_object_type (ctx->secure_ip) == UCL_ARRAY) {
+
 			while ((cur = ucl_object_iterate (ctx->secure_ip, &it, true)) != NULL) {
 				/* Try map syntax */
 				if (ucl_object_type (cur) == UCL_STRING &&
@@ -2586,10 +2588,22 @@ start_controller_worker (struct rspamd_worker *worker)
 			}
 		}
 		else {
-			rspamd_map_add_from_ucl (worker->srv->cfg, ctx->secure_ip,
-					"Allow webui access from the specified IP",
-					rspamd_radix_read, rspamd_radix_fin,
-					(void **)&ctx->secure_map);
+			LL_FOREACH (ctx->secure_ip, cur) {
+				if (ucl_object_type (cur) == UCL_STRING &&
+						!rspamd_map_is_map (ucl_object_tostring (cur))) {
+					if (!radix_add_generic_iplist (ucl_object_tostring (cur),
+							&ctx->secure_map)) {
+						msg_warn_ctx ("cannot load or parse ip list from '%s'",
+								ucl_object_tostring (cur));
+					}
+				}
+				else {
+					rspamd_map_add_from_ucl (worker->srv->cfg, ctx->secure_ip,
+							"Allow webui access from the specified IP",
+							rspamd_radix_read, rspamd_radix_fin,
+							(void **)&ctx->secure_map);
+				}
+			}
 		}
 	}
 
