@@ -1328,6 +1328,11 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 		}
 	}
 
+	rspamd_map_calculate_hash (map);
+	msg_info_map ("added map from ucl");
+
+	cfg->maps = g_list_prepend (cfg->maps, map);
+
 	return map;
 
 err:
