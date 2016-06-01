@@ -494,9 +494,15 @@ static gboolean rspamd_controller_check_password(
 						"using password as enable_password for a privileged command");
 				check = ctx->password;
 			}
+
 			if (check != NULL) {
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					ret = rspamd_constant_memcmp (password->begin, check, password->len);
+					ret = FALSE;
+
+					if (strlen (check) == password->len) {
+						ret = rspamd_constant_memcmp (password->begin, check,
+								password->len);
+					}
 				}
 				else {
 					ret = rspamd_check_encrypted_password (ctx, password, check,
@@ -517,9 +523,15 @@ static gboolean rspamd_controller_check_password(
 			/* Accept both normal and enable passwords */
 			if (ctx->password != NULL) {
 				check = ctx->password;
+
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_normal = rspamd_constant_memcmp (password->begin, check,
-							password->len);
+					check_normal = FALSE;
+
+					if (strlen (check) == password->len) {
+						check_normal = rspamd_constant_memcmp (password->begin,
+								check,
+								password->len);
+					}
 				}
 				else {
 					check_normal = rspamd_check_encrypted_password (ctx,
@@ -531,11 +543,18 @@ static gboolean rspamd_controller_check_password(
 			else {
 				check_normal = FALSE;
 			}
+
 			if (ctx->enable_password != NULL) {
 				check = ctx->enable_password;
+
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_enable = rspamd_constant_memcmp (password->begin, check,
-							password->len);
+					check_enable = FALSE;
+
+					if (strlen (check) == password->len) {
+						check_enable = rspamd_constant_memcmp (password->begin,
+								check,
+								password->len);
+					}
 				}
 				else {
 					check_enable = rspamd_check_encrypted_password (ctx,
@@ -554,7 +573,7 @@ static gboolean rspamd_controller_check_password(
 	}
 
 	if (check_normal == FALSE && check_enable == FALSE) {
-		msg_info("absent or incorrect password has been specified");
+		msg_info ("absent or incorrect password has been specified");
 		ret = FALSE;
 	}
 
