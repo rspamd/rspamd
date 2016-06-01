@@ -256,7 +256,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 
 	pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "fuzzy_merge");
 	dest_db = rspamd_sqlite3_open_or_create (pool, target, create_tables_sql,
-			&error);
+			0, &error);
 
 	if (dest_db == NULL) {
 		rspamd_fprintf(stderr, "cannot open destination: %s\n", error->message);
@@ -281,7 +281,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 	unique_ops = g_hash_table_new (rspamadm_op_hash, rspamadm_op_equal);
 
 	for (i = 0; i < nsrc; i++) {
-		src = rspamd_sqlite3_open_or_create (pool, sources[i], NULL, &error);
+		src = rspamd_sqlite3_open_or_create (pool, sources[i], NULL, 0, &error);
 
 		if (src == NULL) {
 			rspamd_fprintf(stderr, "cannot open source %s: %s\n", sources[i],
@@ -299,7 +299,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 				nsrc_shingles = 0;
 
 		src = g_ptr_array_index (source_dbs, i);
-		
+
 		if (!quiet) {
 			rspamd_printf ("reading data from %s\n", sources[i]);
 		}
@@ -449,7 +449,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 		sqlite3_finalize (stmt);
 		sqlite3_close (src);
 	}
-	
+
 	if (!quiet) {
 		rspamd_printf ("start writing to %s, %ud ops pending\n", target, ops->len);
 	}

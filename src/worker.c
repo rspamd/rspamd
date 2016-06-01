@@ -50,7 +50,7 @@ worker_t normal_worker = {
 		init_worker,                /* Init function */
 		start_worker,               /* Start function */
 		RSPAMD_WORKER_HAS_SOCKET|RSPAMD_WORKER_KILLABLE,
-		SOCK_STREAM,                /* TCP socket */
+		RSPAMD_WORKER_SOCKET_TCP,   /* TCP socket */
 		RSPAMD_WORKER_VER           /* Version info */
 };
 
@@ -320,9 +320,9 @@ accept_socket (gint fd, short what, void *arg)
 
 	rspamd_http_connection_read_message (task->http_conn,
 			task,
-		nfd,
-		&ctx->io_tv,
-		ctx->ev_base);
+			nfd,
+			&ctx->io_tv,
+			ctx->ev_base);
 }
 
 #ifdef WITH_HYPERSCAN

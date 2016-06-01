@@ -44,7 +44,7 @@ worker_t smtp_proxy_worker = {
 	init_smtp_proxy,            /* Init function */
 	start_smtp_proxy,           /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
-	SOCK_STREAM,                /* TCP socket */
+	RSPAMD_WORKER_SOCKET_TCP,   /* TCP socket */
 	RSPAMD_WORKER_VER           /* Version info */
 };
 

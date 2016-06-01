@@ -16,8 +16,6 @@ limitations under the License.
 
 -- A plugin that implements greylisting using redis
 
--- Default port for redis upstreams
-local default_port = 6379
 local upstreams
 local whitelisted_ip
 local settings = {
@@ -295,16 +293,13 @@ if opts then
     whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'],
       'Greylist whitelist ip map')
   end
-  if not opts['servers'] then
+
+  upstreams = rspamd_parse_redis_server('greylist')
+  if not upstreams then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
-    upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
-    if not upstreams then
-      rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
-    else
-      rspamd_config:register_pre_filter(greylist_check)
-      rspamd_config:register_post_filter(greylist_set, 10)
-    end
+    rspamd_config:register_pre_filter(greylist_check)
+    rspamd_config:register_post_filter(greylist_set, 10)
   end
 
   for k,v in pairs(opts) do

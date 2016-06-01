@@ -23,7 +23,6 @@ local rspamd_util = require "rspamd_util"
 local _ = require "fun"
 
 -- Default settings
-local default_port = 6379
 local upstreams = nil
 local whitelist = nil
 local asn_cc_whitelist = nil
@@ -333,18 +332,16 @@ local configure_ip_score_module = function()
     for k,v in pairs(opts) do
       options[k] = v
     end
-    if options['servers'] and options['servers'] ~= '' then
-      upstreams = upstream_list.create(rspamd_config, options['servers'], default_port)
-      if not upstreams then
-        rspamd_logger.infox(rspamd_config, 'no servers are specified')
-      end
+    upstreams = rspamd_parse_redis_server('ip_score')
+    if not upstreams then
+      rspamd_logger.infox(rspamd_config, 'no servers are specified')
     end
-    if options['whitelist'] then
-      whitelist = rspamd_config:add_radix_map(opts['whitelist'])
-    end
-    if options['asn_cc_whitelist'] then
-      asn_cc_whitelist = rspamd_config:add_hash_map(opts['asn_cc_whitelist'])
-    end
+  end
+  if options['whitelist'] then
+    whitelist = rspamd_config:add_radix_map(opts['whitelist'])
+  end
+  if options['asn_cc_whitelist'] then
+    asn_cc_whitelist = rspamd_config:add_hash_map(opts['asn_cc_whitelist'])
   end
 end
 

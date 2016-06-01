@@ -98,7 +98,7 @@ lua_sqlite3_open (lua_State *L)
 		return 1;
 	}
 
-	db = rspamd_sqlite3_open_or_create (NULL, path, NULL, &err);
+	db = rspamd_sqlite3_open_or_create (NULL, path, NULL, 0, &err);
 
 	if (db == NULL) {
 		if (err) {

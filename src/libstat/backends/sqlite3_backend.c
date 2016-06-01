@@ -438,7 +438,8 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	};
 
 	bk = g_slice_alloc0 (sizeof (*bk));
-	bk->sqlite = rspamd_sqlite3_open_or_create (pool, path, create_tables_sql, err);
+	bk->sqlite = rspamd_sqlite3_open_or_create (pool, path, create_tables_sql,
+			0, err);
 	bk->pool = pool;
 
 	if (bk->sqlite == NULL) {

@@ -1,40 +1,37 @@
 # Writing rspamd rules
 
-In this tutorial, I describe how to create new rules for rspamd both lua and regexp ones.
+In this tutorial, I describe how to create new rules for rspamd - both Lua and regexp rules.
 
 ## Introduction
 
-Rules are the essential part of spam filtering system and rspamd ships with some prepared rules. However, if you run your
-own system you might want to have your own rules for better spam filtering or better false positives rate. Rules are usually
-written in `lua` language, where you specify both custom logic and generic regular expressions.
+Rules are the essential part of a spam filtering system and rspamd ships with some prepared rules by default. However, if you run your own system you might want to have your own rules for better spam filtering or a better false positives rate. Rules are usually written in `Lua`, where you can specify both custom logic and generic regular expressions.
 
 ## Configuration files
 
-Since rspamd is shipped with internal rules it is a good idea to store your custom rules and configuration in some separate file
-to avoid clash with the pre-built rules that might change from version to version. There are some possibilities for these purposes:
+Since rspamd ships with its own rules it is a good idea to store your custom rules and configuration in separate files to avoid clashing with the default rules which might change from version to version. There are some possibilities to achieve this:
 
-- Local rules in lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd` or `/usr/local/etc/rspamd` for some systems)
+- Local rules in Lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd`, or `/usr/local/etc/rspamd` for some systems)
 - Local configuration that **adds** options to rspamd should be placed in `${CONFDIR}/rspamd.conf.local`
 - Local configuration that **overrides** the default settings should be placed in `${CONFDIR}/rspamd.conf.override`
 
-Lua local configuration can be used for both override and extending:
+Lua local configuration can be used to both override and extend:
 
-rspamd.lua:
+`rspamd.lua`:
 
 ~~~lua
 config['regexp']['symbol'] = '/some_re/'
 ~~~
 
-rspamd.local.lua:
+`rspamd.local.lua`:
 
 ~~~lua
 config['regexp']['symbol1'] = '/other_re/' -- add 'symbol1' key to the table
 config['regexp']['symbol'] = '/override_re/' -- replace regexp for 'symbol'
 ~~~
 
-For the configuration rules you can take a look at the following examples:
+For configuration rules you can take a look at the following examples:
 
-rspamd.conf:
+`rspamd.conf`:
 
 ~~~ucl
 var1 = "value1";
@@ -44,7 +41,7 @@ section "name" {
 }
 ~~~
 
-rspamd.conf.local:
+`rspamd.conf.local`:
 
 ~~~ucl
 var1 = "value2";
@@ -70,7 +67,7 @@ section "name" {
 
 Override example:
 
-rspamd.conf:
+`rspamd.conf`:
 
 ~~~ucl
 var1 = "value1";
@@ -80,7 +77,7 @@ section "name" {
 }
 ~~~
 
-rspamd.conf.override:
+`rspamd.conf.override`:
 
 ~~~ucl
 var1 = "value2";
@@ -96,6 +93,7 @@ Resulting config:
 var1 = "value2";
 
 # Note that var2 is removed completely
+
 section "name" {
 	var3 = "value3";
 }
@@ -106,7 +104,7 @@ For each individual configuration file shipped with rspamd, there are two specia
     .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
     .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
 
-Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in rspamd configuration.
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the rspamd configuration.
 
 For example, let's override some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
 
@@ -114,7 +112,7 @@ For example, let's override some default symbols shipped with rspamd. To do that
         score = 20.0;
     }
 
-We can also use override file, for example, let's redefine actions and set more restrictive `reject` score. For these purposes, we create `etc/rspamd/override.d/metrics.conf` with the following content:
+We can also use an override file. For example, let's redefine actions and set a more restrictive `reject` score. To do this, we create `etc/rspamd/override.d/metrics.conf` with the following content:
 
     actions {
       reject = 150;
@@ -122,36 +120,33 @@ We can also use override file, for example, let's redefine actions and set more 
       greylist = 4;
     }
 
-You need to set the complete objects to redefine the existing ones. For example, you **cannot** write something like
+Note that you need to define a complete action to redefine an existing one. For example, you **cannot** write something like
 
     actions {
       reject = 150;
     }
 
-as this will set all other actions undefined.
-
-The conjunction of `override` and `local` configs should allow to resolve complicated issues without having a Turing complete language to distinguish cases.
+as this will set the other actions (`add_header` and `greylist`) as undefined.
 
 ## Writing rules
 
-There are two main types of rules that are normally defined by rspamd:
+There are two types of rules that are normally defined by rspamd:
 
-- `Lua` rules: pieces of code in lua programming language to work with messages processed
+- `Lua` rules: code in written in Lua
 - `Regexp` rules: regular expressions and combinations of regular expressions to match specific patterns
 
-Lua rules are useful to do some complex tasks: ask DNS, query redis or HTTP, examine some task specific details. Regexp rules are useful since they are
-optimized by rspamd heavily (especially when `hyperscan` is enabled) and allow to match custom patterns in headers, urls, text parts and even the whole message body.
+Lua rules are useful for some complex tasks: check DNS, query redis or HTTP, examine some task-specific details. Regexp rules are useful since they are heavily optimized by rspamd (especially when `hyperscan` is enabled) and allow matching custom patterns in headers, urls, text parts and even the entire message body.
 
-### Rules weights
+### Rule weights
 
-Rules weights are usually defined in the `metrics` which contain the following data:
+Rule weights are usually defined in the `metrics` section and contain the following data:
 
 - score triggers for different actions
-- symbols scores
-- symbols descriptions
+- symbol scores
+- symbol descriptions
 - symbol group definitions:
 	+ symbols in group
-	+ description of groups
+	+ description of group
 	+ joint group score limit
 
 For built-in rules scores are placed in the file called `${CONFDIR}/metrics.conf`, however, you have two possibilities to define scores for your rules:
@@ -167,7 +162,7 @@ metric "default" {
 }
 ~~~
 
-2. Define scores directly in lua when describing symbol:
+2. Define scores directly in Lua when describing symbol:
 
 ~~~lua
 -- regexp rule
@@ -192,15 +187,16 @@ rspamd_config.MY_LUA_SYMBOL = {
 
 ## Regexp rules
 
-Regexp rules are executed by `regexp` module of rspamd and you can find the detailed description of regexp syntax in [the module documentation](../modules/regexp.md)
-In this tutorial, I will give merely some performance considerations about regular expressions:
+Regexp rules are executed by the `regexp` module of rspamd. You can find a detailed description of the syntax in [the regexp module documentation](../modules/regexp.md)
 
-* Prefer lightweight regexps, such as header or url regexps to heavy ones, such as mime or body regexps
-* If you need to match some text in the message's content, prefer `mime` regexp as they are executed on text content only
-* If you **really** need to match the whole messages, then you might also consider [trie](../modules/trie.md) module as it is significantly faster
+Here are some hints to maximise performance of your regexp rules:
+
+* Prefer lightweight regexps, such as header or url, to heavy ones, such as mime or body regexps
+* If you need to match text in a message's content, prefer `mime` regexps as they are executed on text content only
+* If you **really** need to match the whole messages, then you might consider using the [trie](../modules/trie.md) module as it is significantly faster
 * Avoid complex regexps, avoid backtracing, avoid negative groups `(?!)`, avoid capturing patterns (replace with `(?:)`), avoid potentially empty patterns, e.g. `/^.*$/`
 
-Following these rules allows to create fast but still efficient rules. To add regexp rules you should use `config` global table that is defined in any lua file used by rspamd:
+Following these rules allows you to create fast but efficient rules. To add regexp rules you should use the `config` global table that is defined in any Lua file used by rspamd:
 
 ~~~lua
 config['regexp'] = {} -- Remove all regexp rules (including internal ones)
@@ -222,18 +218,15 @@ reconf['SYMBOL'] = {
 
 ## Lua rules
 
-Lua rules are more powerful than regexp ones but they are not optimized so heavily and can cause performance issues if written incorrectly. All lua rules
-accept a special parameter called `task` which represents a message scanned.
+Lua rules are more powerful than regexp ones but they are not as heavily optimized and can cause performance issues if written incorrectly. All Lua rules accept a special parameter called `task` which represents a scanned message.
 
 ### Return values
 
-Each lua rule can return 0 or false meaning that the rule has not matched or true if the symbol should be inserted.
-In fact, you can return any positive or negative number which would be multiplied by rule's score, e.g. if rule score is
-`1.2`, then when your function returns `1` then symbol will have score `1.2`, and when your function returns `2.0` then the symbol will have score `2.4`.
+Each Lua rule can return 0, or false, meaning that the rule has not matched, or true if the symbol should be inserted. In fact, you can return any positive or negative number which would be multiplied by the rule's score, e.g. if the rule score is `1.2`, then when your function returns `1` the symbol will have a  score of `1.2`, and when your function returns `2.0` then the symbol will have a score of `2.4`.
 
-### Rules conditions
+### Rule conditions
 
-Like regexp rules, conditions are allowed for lua regexps, for example:
+Like regexp rules, conditions are allowed for Lua regexps, for example:
 
 ~~~lua
 rspamd_config.SYMBOL = {
@@ -251,7 +244,7 @@ rspamd_config.SYMBOL = {
 
 ### Useful task manipulations
 
-There are a number of methods in [task](../lua/task.md) objects. For example, you can get any parts in a message:
+There are a number of methods in [task](../lua/task.md) objects. For example, you can get any part of a message:
 
 ~~~lua
 rspamd_config.HTML_MESSAGE = {
@@ -337,8 +330,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 }
 ~~~
 
-You can also access HTTP headers, urls and other useful properties of rspamd tasks. Moreover, you can use
-global convenience modules exported by rspamd, such as [rspamd_util](../lua/util.md) or [rspamd_logger](../lua/logger.md) by requiring them in your rules:
+You can also access HTTP headers, urls and other useful properties of rspamd tasks. Moreover, you can use global convenience modules exported by rspamd, such as [rspamd_util](../lua/util.md) or [rspamd_logger](../lua/logger.md) by requiring them in your rules:
 
 ~~~lua
 rspamd_config.SUBJ_ALL_CAPS = {
@@ -350,30 +342,27 @@ rspamd_config.SUBJ_ALL_CAPS = {
 }
 ~~~
 
-## Rspamd symbols
+## rspamd symbols
 
-Rspamd rules are represented as three major categories:
+rspamd rules fall under three categories:
 
 1. Pre-filters - run before other rules
 2. Filters - run normally
 3. Post-filters - run after all checks
 
-The most common type of rules is generic filters. Each filter is basically a callback that is
-executed by rspamd at some time and optional symbol name associated with this callback. In general, there
-are three possibilities to register symbols:
+The most common type of rules are generic filters. Each filter is basically a callback that is executed by rspamd at some time, along with an optional symbol name associated with this callback. In general, there are three options to register symbols:
 
 * register callback and associated symbol
 * register just a plain callback
-* register symbol with no own callback (*virtual* symbol)
+* register symbol with no callback (*virtual* symbol)
 
-The last option is useful when you have a single callback but with different results possible, for example
-`SYMBOL_ALLOW` and `SYMBOL_DENY` which have the opposite meaning. Filters are registered with three methods:
+The last option is useful when you have a single callback but with different possible results; for example `SYMBOL_ALLOW` or `SYMBOL_DENY`. Filters are registered with three methods:
 
 * `rspamd_config:register_symbol('SYMBOL', nominal_weight, callback)` - registers normal symbol
 * `rspamd_config:register_callback_symbol(nominal_weight, callback)` - registers callback only symbol
 * `rspamd_config:register_virtual_symbol('SYMBOL', nominal_weight, id)` - registers normal symbol
 
-`nominal_weight` is used to define priority and the initial score multiplier. It should be usually `1.0` for normal symbols and `-1.0` for symbols with negative scores that should be executed before other symbols. Here is an example of registering one callback and a couple of virtual symbols used in [dmarc](../modules/dmarc.md) module:
+`nominal_weight` is used to define priority and the initial score multiplier. It should usually be `1.0` for normal symbols and `-1.0` for symbols with negative scores that should be executed before other symbols. Here is an example of registering one callback and a couple of virtual symbols used in the [dmarc](../modules/dmarc.md) module:
 
 ~~~lua
 local id = rspamd_config:register_callback_symbol('DMARC_CALLBACK', 1.0,
@@ -386,19 +375,18 @@ rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
 rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
 ~~~
 
-Numeric `id` is returned by registration functions with callbacks (`register_symbol` or `register_callback_symbol`) and can be used to link symbols:
+Numeric `id` is returned by a registration function with callbacks (`register_symbol` or `register_callback_symbol`) and can be used to link symbols:
 
-* add virtual symbols associated with this callback;
-* correctly display average time for symbols without callbacks;
-* properly sort symbols;
+* add virtual symbols associated with this callback
+* correctly display average time for symbols without callbacks
+* properly sort symbols
 * register dependencies on virtual symbols (in fact, the true dependency is created based on the parent symbol but it is sometimes convenient to use virtual symbols for simplicity)
 
 ### Asynchronous actions
 
 For asynchronous actions, such as redis access or DNS checks it is recommended to use
-dedicated callbacks, called symbol handlers. The difference to generic lua rules is that
-dedicated callbacks are not obliged to return value but they use method `task:insert_result(symbol, weight)` to
-indicate match. All lua plugins are implemented as symbol handlers. Here is a simple example of symbol handler that checks DNS:
+dedicated callbacks, called symbol handlers. The difference to generic Lua rules is that
+dedicated callbacks are not obliged to return value but they use the method `task:insert_result(symbol, weight)` to indicate a match. All Lua plugins are implemented as symbol handlers. Here is a simple example of a symbol handler that checks DNS:
 
 ~~~lua
 rspamd_config:register_symbol('SOME_SYMBOL', 1.0,
@@ -420,7 +408,7 @@ rspamd_config:register_symbol('SOME_SYMBOL', 1.0,
 	end)
 ~~~
 
-You can also set the desired score and description if you'd like:
+You can also set the desired score and description:
 
 ~~~lua
 rspamd_config:set_metric_symbol('SOME_SYMBOL', 1.2, 'some description')
@@ -436,9 +424,7 @@ end
 
 ## Difference between `config` and `rspamd_config`
 
-It might be confusing that there are two variables with a common meaning. That comes from
-the history of rspamd and was used previously for a purpose. However, currently `rspamd_config` represents
-the object that can do many things:
+It might be confusing that there are two variables with a common meaning. (This is a legacy of older versions of rspamd). However, currently `rspamd_config` represents an object that can have many purposes:
 
 * Get configuration options:
 
@@ -465,11 +451,9 @@ rspamd_config:register_symbol('SOME_SYMBOL', 1.0, some_functions)
 rspamd_config.SYMBOL = {...}
 ~~~
 
-* Register composites, prefilters, postfilters and so on
+* Register composites, pre-filters, post-filters and so on
 
-On the contrary, `config` global is extremely simple: it's just a plain table of configuration options that is exactly the same
-as defined in `rspamd.conf` (and `rspamd.conf.local` or `rspamd.conf.override`). However, you can also use lua tables and even functions for some
-options. For example, `regexp` module also can accept `callback` argument:
+On the other hand, the `config` global is extremely simple: it's just a plain table of configuration options that is exactly the same as defined in `rspamd.conf` (and `rspamd.conf.local` or `rspamd.conf.override`). However, you can also use Lua tables and even functions for some options. For example, the `regexp` module also can accept a `callback` argument:
 
 ~~~lua
 config['regexp']['SYMBOL'] = {
@@ -478,23 +462,23 @@ config['regexp']['SYMBOL'] = {
 }
 ~~~
 
-However, such a syntax is discouraged and is preserved mostly for compatibility reasons.
+Such syntax is discouraged, however, and is preserved mostly for compatibility reasons.
 
-## Configuration applying order
+## Configuration order
 
-It might be unclear, but there is a strict order of configuration options application and replacements:
+There is a strict order of configuration application:
 
 1. `rspamd.conf` and `rspamd.conf.local` are processed
 2. `rspamd.conf.override` is processed and it **overrides** anything parsed on the previous step
-3. **Lua** rules are loaded and they can override everything from the previous steps, with the important exception of rules scores, that are **NOT** overriden if the according symbol is also defined in some `metric` section
-4. **Dynamic** configuration defined by webui (normally) is loaded and it can override rules scores or action scores from the previous steps
+3. **Lua** rules are loaded and they can override everything from the previous steps, with the important exception of rules scores, which are **NOT** overridden if the relevant symbol is also defined in a `metric` section
+4. **Dynamic** configuration options defined in the WebUI (normally) are loaded and can override rule scores or action scores from the previous steps
 
 ## Rules check order
 
 Rules in rspamd are checked in the following order:
 
-1. **Prefilters**: checked every time and can stop all further processing by calling `task:set_pre_result()`
+1. **Pre-filters**: checked every time and can stop all further processing by calling `task:set_pre_result()`
 2. **All symbols***: can depend on each other by calling `rspamd_config:add_dependency(from, to)`
 3. **Statistics**: is checked only when all symbols are checked
 4. **Composites**: combine symbols to adjust the final results
-5. **Post filters**: are executed even if a message is already rejected and symbols processing has been stopped
+5. **Post-filters**: are executed even if a message is already rejected and symbols processing has been stopped

@@ -46,7 +46,8 @@ struct rspamd_fuzzy_reply rspamd_fuzzy_backend_check (
 /**
  * Prepare storage for updates (by starting transaction)
  */
-gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend);
+gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend,
+		const gchar *source);
 
 /**
  * Add digest to the database
@@ -72,7 +73,8 @@ gboolean rspamd_fuzzy_backend_del (
 /**
  * Commit updates to storage
  */
-gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend);
+gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
+		const gchar *source);
 
 /**
  * Sync storage
@@ -90,7 +92,7 @@ gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 void rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend);
 
 gsize rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend);
-gint rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend);
+gint rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend, const gchar *source);
 gsize rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend);
 
 const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);

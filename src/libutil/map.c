@@ -784,9 +784,12 @@ rspamd_map_file_check_callback (gint fd, short what, void *ud)
 	if (stat (data->filename, &st) != -1 &&
 			(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
 		/* File was modified since last check */
+		msg_info_map ("old mtime is %t, new mtime is %t for map file %s",
+				data->st.st_mtime, st.st_mtime, data->filename);
 		memcpy (&data->st, &st, sizeof (struct stat));
 		periodic->need_modify = TRUE;
 		periodic->cur_backend = 0;
+
 		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
 		return;
@@ -1062,6 +1065,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	/* Now check for each proto separately */
 	if (bk->protocol == MAP_PROTO_FILE) {
 		fdata = g_slice_alloc0 (sizeof (struct file_map_data));
+		fdata->st.st_mtime = -1;
 
 		if (access (bk->uri, R_OK) == -1) {
 			if (errno != ENOENT) {
@@ -1072,11 +1076,6 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 			msg_info_config (
 					"map '%s' is not found, but it can be loaded automatically later",
 					bk->uri);
-			/* We still can add this file */
-			fdata->st.st_mtime = -1;
-		}
-		else {
-			stat (bk->uri, &fdata->st);
 		}
 
 		fdata->filename = g_strdup (bk->uri);
@@ -1328,6 +1327,11 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			goto err;
 		}
 	}
+
+	rspamd_map_calculate_hash (map);
+	msg_info_map ("added map from ucl");
+
+	cfg->maps = g_list_prepend (cfg->maps, map);
 
 	return map;
 
@@ -1956,27 +1960,34 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 		re_map->ids[i] = i;
 	}
 
-	if (hs_compile_multi (re_map->patterns,
-			re_map->flags,
-			re_map->ids,
-			re_map->regexps->len,
-			HS_MODE_BLOCK,
-			&plt,
-			&re_map->hs_db,
-			&err) != HS_SUCCESS) {
+	if (re_map->regexps->len > 0 && re_map->patterns) {
+		if (hs_compile_multi (re_map->patterns,
+				re_map->flags,
+				re_map->ids,
+				re_map->regexps->len,
+				HS_MODE_BLOCK,
+				&plt,
+				&re_map->hs_db,
+				&err) != HS_SUCCESS) {
 
-		msg_err_map ("cannot create tree of regexp when processing '%s': %s",
-				re_map->patterns[err->expression], err->message);
-		re_map->hs_db = NULL;
-		hs_free_compile_error (err);
+			msg_err_map ("cannot create tree of regexp when processing '%s': %s",
+					err->expression >= 0 ?
+							re_map->patterns[err->expression] :
+							"unknown regexp", err->message);
+			re_map->hs_db = NULL;
+			hs_free_compile_error (err);
 
-		return;
+			return;
+		}
+
+		if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
+			msg_err_map ("cannot allocate scratch space for hyperscan");
+			hs_free_database (re_map->hs_db);
+			re_map->hs_db = NULL;
+		}
 	}
-
-	if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
-		msg_err_map ("cannot allocate scratch space for hyperscan");
-		hs_free_database (re_map->hs_db);
-		re_map->hs_db = NULL;
+	else {
+		msg_err_map ("regexp map is empty");
 	}
 #endif
 }
@@ -2058,6 +2069,8 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 			res = 1;
 			ret = g_ptr_array_index (map->values, i);
 		}
+
+		return ret;
 	}
 #endif
 

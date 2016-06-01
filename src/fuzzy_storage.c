@@ -40,9 +40,11 @@
 /* Resync value in seconds */
 #define DEFAULT_SYNC_TIMEOUT 60.0
 #define DEFAULT_KEYPAIR_CACHE_SIZE 512
-
+#define DEFAULT_MASTER_TIMEOUT 10.0
 
 #define INVALID_NODE_TIME (guint64) - 1
+
+static const gchar *local_db_name = "local";
 
 /* Init functions */
 gpointer init_fuzzy (struct rspamd_config *cfg);
@@ -53,7 +55,7 @@ worker_t fuzzy_worker = {
 		init_fuzzy,                 /* Init function */
 		start_fuzzy,                /* Start function */
 		RSPAMD_WORKER_HAS_SOCKET,
-		SOCK_DGRAM,                 /* UDP socket */
+		RSPAMD_WORKER_SOCKET_UDP|RSPAMD_WORKER_SOCKET_TCP,   /* Both socket */
 		RSPAMD_WORKER_VER           /* Version info */
 };
 
@@ -84,6 +86,12 @@ struct fuzzy_key_stat {
 	rspamd_lru_hash_t *last_ips;
 };
 
+struct rspamd_fuzzy_mirror {
+	gchar *name;
+	struct upstream_list *u;
+	struct rspamd_cryptobox_pubkey *key;
+};
+
 static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
 
 struct rspamd_fuzzy_storage_ctx {
@@ -93,7 +101,14 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble expire;
 	gdouble sync_timeout;
 	radix_compressed_t *update_ips;
+	radix_compressed_t *master_ips;
+	struct rspamd_cryptobox_keypair *sync_keypair;
+	struct rspamd_cryptobox_pubkey *master_key;
+	struct timeval master_io_tv;
+	gdouble master_timeout;
+	GPtrArray *mirrors;
 	gchar *update_map;
+	gchar *masters_map;
 	guint keypair_cache_size;
 	struct event_base *ev_base;
 	gint peer_fd;
@@ -108,6 +123,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_fuzzy_backend *backend;
 	GQueue *updates_pending;
 	struct rspamd_dns_resolver *resolver;
+	struct rspamd_config *cfg;
 };
 
 enum fuzzy_cmd_type {
@@ -160,6 +176,12 @@ struct fuzzy_key {
 	struct fuzzy_key_stat *stat;
 };
 
+struct fuzzy_master_update_session {
+	struct rspamd_http_connection *conn;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	rspamd_inet_addr_t *addr;
+};
+
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
 
 static gboolean
@@ -170,8 +192,12 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session)
 				session->addr) == RADIX_NO_VALUE) {
 			return FALSE;
 		}
+		else {
+			return TRUE;
+		}
 	}
-	return TRUE;
+
+	return FALSE;
 }
 
 static void
@@ -201,20 +227,179 @@ fuzzy_key_dtor (gpointer p)
 	g_slice_free1 (sizeof (*key), key);
 }
 
+struct fuzzy_slave_connection {
+	struct rspamd_cryptobox_keypair *local_key;
+	struct rspamd_cryptobox_pubkey *remote_key;
+	struct upstream *up;
+	struct rspamd_http_connection *http_conn;
+	struct rspamd_fuzzy_mirror *mirror;
+	gint sock;
+};
+
 static void
-rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
+fuzzy_mirror_close_connection (struct fuzzy_slave_connection *conn)
+{
+	if (conn) {
+		if (conn->http_conn) {
+			rspamd_http_connection_reset (conn->http_conn);
+			rspamd_http_connection_unref (conn->http_conn);
+		}
+
+		close (conn->sock);
+
+		g_slice_free1 (sizeof (*conn), conn);
+	}
+}
+
+static void
+fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
+		struct rspamd_http_message *msg)
+{
+	GList *cur;
+	struct fuzzy_peer_cmd *io_cmd;
+	gsize len;
+	guint32 rev;
+	const gchar *p;
+
+	rev = rspamd_fuzzy_backend_version (ctx->backend, local_db_name);
+	rev = GUINT32_TO_LE (rev);
+	len = sizeof (guint32) * 2; /* revision + last chunk */
+
+	for (cur = ctx->updates_pending->head; cur != NULL; cur = g_list_next (cur)) {
+		io_cmd = cur->data;
+
+		if (io_cmd->is_shingle) {
+			len += sizeof (guint32) + sizeof (gboolean) +
+					sizeof (struct rspamd_fuzzy_shingle_cmd);
+		}
+		else {
+			len += sizeof (guint32) + sizeof (gboolean) +
+					sizeof (struct rspamd_fuzzy_cmd);
+		}
+	}
+
+	msg->body = rspamd_fstring_sized_new (len);
+	msg->body = rspamd_fstring_append (msg->body, (const char *)&rev,
+			sizeof (rev));
+
+	for (cur = ctx->updates_pending->head; cur != NULL; cur = g_list_next (cur)) {
+		io_cmd = cur->data;
+
+		if (io_cmd->is_shingle) {
+			len = sizeof (gboolean) +
+					sizeof (struct rspamd_fuzzy_shingle_cmd);
+		}
+		else {
+			len = sizeof (gboolean) +
+					sizeof (struct rspamd_fuzzy_cmd);
+		}
+
+		p = (const char *)io_cmd;
+		msg->body = rspamd_fstring_append (msg->body, (const char *)&len,
+					sizeof (len));
+		msg->body = rspamd_fstring_append (msg->body, p, len);
+	}
+
+	/* Last chunk */
+	len = 0;
+	msg->body = rspamd_fstring_append (msg->body, (const char *)&len,
+			sizeof (len));
+}
+
+static void
+fuzzy_mirror_error_handler (struct rspamd_http_connection *conn, GError *err)
+{
+	struct fuzzy_slave_connection *bk_conn = conn->ud;
+	msg_info ("abnormally closing connection from backend: %s:%s, "
+			"error: %e",
+			bk_conn->mirror->name,
+			rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
+			err);
+
+	fuzzy_mirror_close_connection (bk_conn);
+}
+
+static gint
+fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
+	struct rspamd_http_message *msg)
+{
+	struct fuzzy_slave_connection *bk_conn = conn->ud;
+
+	msg_info ("finished mirror connection to %s", bk_conn->mirror->name);
+	fuzzy_mirror_close_connection (bk_conn);
+
+	return 0;
+}
+
+static void
+rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
+		struct rspamd_fuzzy_mirror *m)
+{
+	struct fuzzy_slave_connection *conn;
+	struct rspamd_http_message *msg;
+	struct timeval tv;
+
+	conn = g_slice_alloc0 (sizeof (*conn));
+	conn->up = rspamd_upstream_get (m->u,
+			RSPAMD_UPSTREAM_MASTER_SLAVE, NULL, 0);
+	conn->mirror = m;
+
+	if (conn->up == NULL) {
+		msg_err ("cannot select upstream for %s", m->name);
+		return;
+	}
+
+	conn->sock = rspamd_inet_address_connect (
+			rspamd_upstream_addr (conn->up),
+			SOCK_STREAM, TRUE);
+
+	if (conn->sock == -1) {
+		msg_err ("cannot connect upstream for %s", m->name);
+		rspamd_upstream_fail (conn->up);
+		return;
+	}
+
+	msg = rspamd_http_new_message (HTTP_REQUEST);
+	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
+
+	conn->http_conn = rspamd_http_connection_new (
+			NULL,
+			fuzzy_mirror_error_handler,
+			fuzzy_mirror_finish_handler,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT,
+			ctx->keypair_cache);
+
+	rspamd_http_connection_set_key (conn->http_conn,
+			ctx->sync_keypair);
+	msg->peer_key = rspamd_pubkey_ref (m->key);
+	double_to_tv (ctx->sync_timeout, &tv);
+	fuzzy_mirror_updates_to_http (ctx, msg);
+
+	rspamd_http_connection_write_message (conn->http_conn,
+			msg, NULL, NULL, conn,
+			conn->sock,
+			&tv, ctx->ev_base);
+	msg_info ("send update request to %s", m->name);
+}
+
+static void
+rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
+		const gchar *source)
 {
 	GList *cur;
 	struct fuzzy_peer_cmd *io_cmd;
 	struct rspamd_fuzzy_cmd *cmd;
 	gpointer ptr;
-	guint nupdates = 0;
+	struct rspamd_fuzzy_mirror *m;
+	guint nupdates = 0, i;
 	time_t now = time (NULL);
 
 	if (ctx->updates_pending &&
 			g_queue_get_length (ctx->updates_pending) > 0 &&
-			rspamd_fuzzy_backend_prepare_update (ctx->backend)) {
+			rspamd_fuzzy_backend_prepare_update (ctx->backend, source)) {
 		cur = ctx->updates_pending->head;
+
 		while (cur) {
 			io_cmd = cur->data;
 
@@ -238,8 +423,16 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 			cur = g_list_next (cur);
 		}
 
-		if (rspamd_fuzzy_backend_finish_update (ctx->backend)) {
+		if (rspamd_fuzzy_backend_finish_update (ctx->backend, source)) {
 			ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
+
+			for (i = 0; i < ctx->mirrors->len; i ++) {
+				m = g_ptr_array_index (ctx->mirrors, i);
+
+				rspamd_fuzzy_send_update_mirror (ctx, m);
+			}
+
+			/* Clear updates */
 			cur = ctx->updates_pending->head;
 
 			while (cur) {
@@ -250,7 +443,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 
 			g_queue_clear (ctx->updates_pending);
 			msg_info ("updated fuzzy storage: %ud updates processed, version: %d",
-					nupdates, rspamd_fuzzy_backend_version (ctx->backend));
+					nupdates, rspamd_fuzzy_backend_version (ctx->backend, source));
 		}
 		else {
 			msg_err ("cannot commit update transaction to fuzzy backend, "
@@ -492,6 +685,25 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 reply:
 	result.tag = cmd->tag;
+
+	if (session->epoch < RSPAMD_FUZZY_EPOCH11) {
+		/* We need to convert flags to legacy format */
+		guint32 flag = 0;
+
+		/* We select the least significant flag if multiple flags are set */
+		for (flag = 0; flag < 32; flag ++) {
+			if (result.flag & (1U << flag)) {
+				break;
+			}
+		}
+
+		if (flag == (1U << 31)) {
+			flag = 0;
+		}
+
+		result.flag = flag + 1;
+	}
+
 	memcpy (&session->reply.rep, &result, sizeof (result));
 
 	rspamd_fuzzy_update_stats (session->ctx,
@@ -523,19 +735,32 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 {
 	enum rspamd_fuzzy_epoch ret = RSPAMD_FUZZY_EPOCH_MAX;
 
-	if (cmd->version == RSPAMD_FUZZY_VERSION) {
+	switch (cmd->version) {
+	case 4:
 		if (cmd->shingles_count > 0) {
 			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH9;
+				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
 		else {
 			if (r == sizeof (*cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH9;
+				ret = RSPAMD_FUZZY_EPOCH11;
 			}
 		}
-	}
-	else if (cmd->version == 2) {
+		break;
+	case 3:
+		if (cmd->shingles_count > 0) {
+			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH10;
+			}
+		}
+		else {
+			if (r == sizeof (*cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH10;
+			}
+		}
+		break;
+	case 2:
 		/*
 		 * rspamd 0.8 has slightly different tokenizer then it might be not
 		 * 100% compatible
@@ -548,6 +773,9 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 		else {
 			ret = RSPAMD_FUZZY_EPOCH8;
 		}
+		break;
+	default:
+		break;
 	}
 
 	return ret;
@@ -665,7 +893,7 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 			return FALSE;
 		}
 		/* Encrypted is epoch 10 at least */
-		s->epoch = RSPAMD_FUZZY_EPOCH10;
+		s->epoch = epoch;
 		break;
 	case sizeof (struct rspamd_fuzzy_encrypted_shingle_cmd):
 		s->cmd_type = CMD_ENCRYPTED_SHINGLE;
@@ -682,7 +910,7 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 			return FALSE;
 		}
 
-		s->epoch = RSPAMD_FUZZY_EPOCH10;
+		s->epoch = epoch;
 		break;
 	default:
 		msg_debug ("invalid fuzzy command of size %d received", buflen);
@@ -693,6 +921,165 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 }
 
 static void
+rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
+		struct rspamd_http_message *msg)
+{
+	const guchar *p;
+	gchar *src = NULL, *psrc;
+	gsize remain;
+	guint32 revision, our_rev, len, cnt = 0;
+	struct fuzzy_peer_cmd cmd, *pcmd;
+	enum {
+		read_len = 0,
+		read_data,
+		finish_processing
+	} state = read_len;
+	GList *updates = NULL, *cur;
+
+	if (!msg->body || msg->body->len == 0 || !msg->url || msg->url->len == 0) {
+		msg_err ("empty update message, not processing");
+
+		return;
+	}
+
+	/* Detect source from url: /update_v1/<source>, so we look for the last '/' */
+	remain = msg->url->len;
+	psrc = rspamd_fstringdup (msg->url);
+	src = psrc;
+
+	while (remain--) {
+		if (src[remain] == '/') {
+			src = &src[remain + 1];
+			break;
+		}
+	}
+
+	/*
+	 * Message format:
+	 * <uint32_le> - revision
+	 * <uint32_le> - size of the next element
+	 * <data> - command data
+	 * ...
+	 * <0> - end of data
+	 * ... - ignored
+	 */
+	p = (const guchar *)msg->body->str;
+	remain = msg->body->len;
+
+	if (remain > sizeof (guint32) * 2) {
+		memcpy (&revision, p, sizeof (guint32));
+		revision = GUINT32_TO_LE (revision);
+		our_rev = rspamd_fuzzy_backend_version (session->ctx->backend, src);
+
+		if (revision <= our_rev) {
+			msg_err ("remote revision:d %d is older than ours: %d, refusing update",
+					revision, our_rev);
+			g_free (psrc);
+
+			return;
+		}
+		else if (revision - our_rev > 1) {
+			msg_warn ("remote revision:d %d is newer more than 1 revision "
+					"than ours: %d, cold sync is recommended",
+								revision, our_rev);
+		}
+
+		remain -= sizeof (guint32);
+		p += sizeof (guint32);
+	}
+	else {
+		msg_err ("short update message, not processing");
+		goto err;
+	}
+
+	while (remain > 0) {
+		switch (state) {
+		case read_len:
+			if (remain < sizeof (guint32)) {
+				msg_err ("short update message while reading length, not processing");
+				goto err;
+			}
+
+			memcpy (&len, p, sizeof (guint32));
+			len = GUINT32_TO_LE (len);
+			remain -= sizeof (guint32);
+			p += sizeof (guint32);
+
+			if (len == 0) {
+				remain = 0;
+				state = finish_processing;
+			}
+			else {
+				state = read_data;
+			}
+			break;
+		case read_data:
+			if (remain < len) {
+				msg_err ("short update message while reading data, not processing");
+				return;
+			}
+
+			if (len < sizeof (struct rspamd_fuzzy_cmd) + sizeof (gboolean) ||
+					len > sizeof (cmd)) {
+				/* Bad size command */
+				msg_err ("incorrect element size: %d, at least %d expected", len,
+						(gint)(sizeof (struct rspamd_fuzzy_cmd) + sizeof (gboolean)));
+				goto err;
+			}
+
+			memcpy (&cmd, p, sizeof (gboolean));
+			if (cmd.is_shingle && len < sizeof (cmd)) {
+				/* Short command */
+				msg_err ("incorrect element size: %d, at least %d expected", len,
+						(gint)(sizeof (cmd)));
+				goto err;
+			}
+
+			pcmd = g_slice_alloc (sizeof (cmd));
+			memcpy (pcmd, p, len);
+			updates = g_list_prepend (updates, pcmd);
+
+			p += len;
+			remain -= len;
+			len = 0;
+			state = read_len;
+			cnt ++;
+			break;
+		case finish_processing:
+			/* Do nothing */
+			remain = 0;
+			break;
+		}
+	}
+
+	/* Insert elements to the updates from head */
+	for (cur = updates; cur != NULL; cur = g_list_next (cur)) {
+		g_queue_push_head (session->ctx->updates_pending, cur->data);
+		cur->data = NULL;
+	}
+
+	rspamd_fuzzy_process_updates_queue (session->ctx, src);
+	msg_info ("processed updates from the master, %ud operations processed,"
+			" revision: %ud", cnt, revision);
+
+err:
+	g_free (psrc);
+
+	if (updates) {
+		/* We still need to clear queue */
+		for (cur = updates; cur != NULL; cur = g_list_next (cur)) {
+			if (cur->data) {
+				g_slice_free1 (sizeof (cmd), cur->data);
+			}
+		}
+
+		/* This also update our version id */
+		g_list_free (updates);
+	}
+}
+
+
+static void
 fuzzy_session_destroy (gpointer d)
 {
 	struct fuzzy_session *session = d;
@@ -701,6 +1088,135 @@ fuzzy_session_destroy (gpointer d)
 	rspamd_explicit_memzero (session->nm, sizeof (session->nm));
 	session->worker->nconns--;
 	g_slice_free1 (sizeof (*session), session);
+}
+
+static void
+rspamd_fuzzy_mirror_session_destroy (struct fuzzy_master_update_session *session)
+{
+	if (session) {
+		rspamd_http_connection_unref (session->conn);
+		rspamd_inet_address_destroy (session->addr);
+		g_slice_free1 (sizeof (*session), session);
+	}
+}
+
+static void
+rspamd_fuzzy_mirror_error_handler (struct rspamd_http_connection *conn, GError *err)
+{
+	struct fuzzy_master_update_session *session = conn->ud;
+
+	msg_err ("abnormally closing connection from: %s, error: %e",
+		rspamd_inet_address_to_string (session->addr), err);
+	/* Terminate session immediately */
+	rspamd_fuzzy_mirror_session_destroy (session);
+}
+
+static gint
+rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
+	struct rspamd_http_message *msg)
+{
+	struct fuzzy_master_update_session *session = conn->ud;
+	const struct rspamd_cryptobox_pubkey *rk;
+
+	/* Check key */
+	if (!rspamd_http_connection_is_encrypted (conn)) {
+		msg_err ("refuse unencrypted update from: %s",
+				rspamd_inet_address_to_string (session->addr));
+		goto end;
+	}
+	else {
+
+		if (session->ctx->master_key) {
+			rk = rspamd_http_connection_get_peer_key (conn);
+			g_assert (rk != NULL);
+
+			if (!rspamd_pubkey_equal (rk, session->ctx->master_key)) {
+				msg_err ("refuse unknown pubkey update from: %s",
+						rspamd_inet_address_to_string (session->addr));
+				goto end;
+			}
+		}
+		else {
+			msg_warn ("no trusted key specified, accept any update from %s",
+					rspamd_inet_address_to_string (session->addr));
+		}
+
+		rspamd_fuzzy_mirror_process_update (session, msg);
+	}
+
+end:
+	rspamd_fuzzy_mirror_session_destroy (session);
+
+	return 0;
+}
+
+static void
+accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
+{
+	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
+	rspamd_inet_addr_t *addr;
+	gint nfd;
+	struct rspamd_http_connection *http_conn;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	struct fuzzy_master_update_session *session;
+
+	if ((nfd =
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
+		msg_warn ("accept failed: %s", strerror (errno));
+		return;
+	}
+	/* Check for EAGAIN */
+	if (nfd == 0) {
+		return;
+	}
+
+	ctx = worker->ctx;
+
+	if (!ctx->master_ips) {
+		msg_err ("deny update request from %s as no masters defined",
+				rspamd_inet_address_to_string (addr));
+		rspamd_inet_address_destroy (addr);
+		close (nfd);
+
+		return;
+	}
+	else if (radix_find_compressed_addr (ctx->master_ips, addr) == RADIX_NO_VALUE) {
+		msg_err ("deny update request from %s",
+				rspamd_inet_address_to_string (addr));
+		rspamd_inet_address_destroy (addr);
+		close (nfd);
+
+		return;
+	}
+
+	if (!ctx->sync_keypair) {
+		msg_err ("deny update request from %s, as no local keypair is specified",
+				rspamd_inet_address_to_string (addr));
+		rspamd_inet_address_destroy (addr);
+		close (nfd);
+
+		return;
+	}
+
+	session = g_slice_alloc0 (sizeof (*session));
+	http_conn = rspamd_http_connection_new (
+			NULL,
+			rspamd_fuzzy_mirror_error_handler,
+			rspamd_fuzzy_mirror_finish_handler,
+			0,
+			RSPAMD_HTTP_SERVER,
+			ctx->keypair_cache);
+
+	rspamd_http_connection_set_key (http_conn, ctx->sync_keypair);
+	session->ctx = ctx;
+	session->conn = http_conn;
+	session->addr = addr;
+
+	rspamd_http_connection_read_message (http_conn,
+			session,
+			nfd,
+			&ctx->master_io_tv,
+			ctx->ev_base);
 }
 
 /*
@@ -791,7 +1307,7 @@ sync_callback (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if (ctx->backend) {
-		rspamd_fuzzy_process_updates_queue (ctx);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		/* Call backend sync */
 		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
@@ -825,7 +1341,7 @@ rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 
 	if (ctx->backend) {
-		rspamd_fuzzy_process_updates_queue (ctx);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		/* Call backend sync */
 		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
@@ -1118,6 +1634,88 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 }
 
 static gboolean
+fuzzy_storage_parse_mirror (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	const ucl_object_t *elt;
+	struct rspamd_fuzzy_mirror *up = NULL;
+	struct rspamd_rcl_struct_parser *pd = ud;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+
+	ctx = pd->user_struct;
+
+	if (ucl_object_type (obj) != UCL_OBJECT) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"mirror/slave option must be an object");
+
+		return FALSE;
+	}
+
+	elt = ucl_object_lookup (obj, "name");
+	if (elt == NULL) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"mirror option must have some name definition");
+
+		return FALSE;
+	}
+
+	up = g_slice_alloc0 (sizeof (*up));
+	up->name = g_strdup (ucl_object_tostring (elt));
+
+	elt = ucl_object_lookup (obj, "key");
+	if (elt != NULL) {
+		up->key = rspamd_pubkey_from_base32 (ucl_object_tostring (elt), 0,
+				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+	}
+
+	if (up->key == NULL) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"cannot read mirror key");
+
+		goto err;
+	}
+
+	elt = ucl_object_lookup (obj, "hosts");
+
+	if (elt == NULL) {
+		g_set_error (err, g_quark_try_string ("fuzzy"), 100,
+				"mirror option must have some hosts definition");
+
+		goto err;
+	}
+
+	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
+	if (!rspamd_upstreams_from_ucl (up->u, elt, 11335, NULL)) {
+		g_set_error (err,  g_quark_try_string ("fuzzy"), 100,
+				"mirror has bad hosts definition");
+
+		goto err;
+	}
+
+	g_ptr_array_add (ctx->mirrors, up);
+
+	return TRUE;
+
+err:
+
+	if (up) {
+		g_free (up->name);
+		rspamd_upstreams_destroy (up->u);
+
+		if (up->key) {
+			rspamd_pubkey_unref (up->key);
+		}
+
+		g_slice_free1 (sizeof (*up), up);
+	}
+
+	return FALSE;
+}
+
+static gboolean
 fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		const ucl_object_t *obj,
 		gpointer ud,
@@ -1211,6 +1809,7 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	ctx->magic = rspamd_fuzzy_storage_magic;
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
+	ctx->master_timeout = DEFAULT_MASTER_TIMEOUT;
 	ctx->expire = DEFAULT_EXPIRE;
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
@@ -1218,6 +1817,8 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->errors_ips = rspamd_lru_hash_new_full (1024,
 			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
+	ctx->cfg = cfg;
+	ctx->mirrors = g_ptr_array_new ();
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1315,6 +1916,59 @@ init_fuzzy (struct rspamd_config *cfg)
 			0,
 			"Allow encrypted requests only (and forbid all unknown keys or plaintext requests)");
 
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"master_timeout",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, master_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Master protocol IO timeout");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"sync_keypair",
+			rspamd_rcl_parse_struct_keypair,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, sync_keypair),
+			0,
+			"Encryption key for master/slave updates");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"masters",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, masters_map),
+			0,
+			"Allow master/slave updates from the following IP addresses");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"master_key",
+			rspamd_rcl_parse_struct_pubkey,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, master_key),
+			0,
+			"Allow master/slave updates merely using the specified key");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"mirror",
+			fuzzy_storage_parse_mirror,
+			ctx,
+			0,
+			RSPAMD_CL_FLAG_MULTIPLE,
+			"List of slave hosts");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"slave",
+			fuzzy_storage_parse_mirror,
+			ctx,
+			0,
+			RSPAMD_CL_FLAG_MULTIPLE,
+			"List of slave hosts");
 
 	return ctx;
 }
@@ -1351,7 +2005,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 {
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 	GList *cur;
-	gint listen_socket;
+	struct rspamd_worker_listen_socket *ls;
 	struct event *accept_event;
 	gdouble next_check;
 
@@ -1368,16 +2022,30 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 	/* Start listening */
 	cur = worker->cf->listen_socks;
 	while (cur) {
-		listen_socket = GPOINTER_TO_INT (cur->data);
-		if (listen_socket != -1) {
-			accept_event = g_slice_alloc0 (sizeof (struct event));
-			event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
-					accept_fuzzy_socket, worker);
-			event_base_set (ctx->ev_base, accept_event);
-			event_add (accept_event, NULL);
-			worker->accept_events = g_list_prepend (worker->accept_events,
-					accept_event);
+		ls = cur->data;
+
+		if (ls->fd != -1) {
+			if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
+				accept_event = g_slice_alloc0 (sizeof (struct event));
+				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+						accept_fuzzy_socket, worker);
+				event_base_set (ctx->ev_base, accept_event);
+				event_add (accept_event, NULL);
+				worker->accept_events = g_list_prepend (worker->accept_events,
+						accept_event);
+			}
+			else if (worker->index == 0) {
+				/* We allow TCP listeners only for a update worker */
+				accept_event = g_slice_alloc0 (sizeof (struct event));
+				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+						accept_fuzzy_mirror_socket, worker);
+				event_base_set (ctx->ev_base, accept_event);
+				event_add (accept_event, NULL);
+				worker->accept_events = g_list_prepend (worker->accept_events,
+						accept_event);
+			}
 		}
+
 		cur = g_list_next (cur);
 	}
 
@@ -1413,6 +2081,7 @@ start_fuzzy (struct rspamd_worker *worker)
 			"fuzzy",
 			NULL);
 	ctx->peer_fd = -1;
+	double_to_tv (ctx->master_timeout, &ctx->master_io_tv);
 
 	/*
 	 * Open DB and perform VACUUM
@@ -1441,7 +2110,7 @@ start_fuzzy (struct rspamd_worker *worker)
 			rspamd_fuzzy_storage_stat, ctx);
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_FUZZY_SYNC,
 				rspamd_fuzzy_storage_sync, ctx);
-	/* Create radix tree */
+	/* Create radix trees */
 	if (ctx->update_map != NULL) {
 		if (!rspamd_map_is_map (ctx->update_map)) {
 			if (!radix_add_generic_iplist (ctx->update_map,
@@ -1455,6 +2124,22 @@ start_fuzzy (struct rspamd_worker *worker)
 					"Allow fuzzy updates from specified addresses",
 					rspamd_radix_read, rspamd_radix_fin,
 					(void **)&ctx->update_ips);
+
+		}
+	}
+	if (ctx->masters_map != NULL) {
+		if (!rspamd_map_is_map (ctx->masters_map)) {
+			if (!radix_add_generic_iplist (ctx->masters_map,
+					&ctx->master_ips)) {
+				msg_warn ("cannot load or parse ip list from '%s'",
+						ctx->masters_map);
+			}
+		}
+		else {
+			rspamd_map_add (worker->srv->cfg, ctx->masters_map,
+					"Allow fuzzy master/slave updates from specified addresses",
+					rspamd_radix_read, rspamd_radix_fin,
+					(void **)&ctx->master_ips);
 
 		}
 	}
@@ -1481,7 +2166,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	if (worker->index == 0) {
-		rspamd_fuzzy_process_updates_queue (ctx);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	}
 

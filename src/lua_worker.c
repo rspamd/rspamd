@@ -39,12 +39,12 @@ gpointer init_lua_worker (struct rspamd_config *cfg);
 void start_lua_worker (struct rspamd_worker *worker);
 
 worker_t lua_worker = {
-	"lua",                  /* Name */
-	init_lua_worker,        /* Init function */
-	start_lua_worker,       /* Start function */
+	"lua",                     /* Name */
+	init_lua_worker,           /* Init function */
+	start_lua_worker,          /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
-	SOCK_STREAM,            /* TCP socket */
-	RSPAMD_WORKER_VER       /* Version info */
+	RSPAMD_WORKER_SOCKET_TCP,  /* TCP socket */
+	RSPAMD_WORKER_VER          /* Version info */
 };
 
 static const guint64 rspamd_lua_ctx_magic = 0x8055e2652aacf96eULL;

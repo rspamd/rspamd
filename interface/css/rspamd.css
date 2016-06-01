@@ -653,3 +653,11 @@ td.maps-cell {
 #historyLog_wrapper div.row:last-child > div {
     padding: 5px 20px 0 20px;
     }
+
+/* Throughput graph controls */
+#graph_controls select {
+    margin: 10px 20px 0;
+    display: inline-block;
+    width: auto;
+    border: 1px solid grey;
+}

@@ -42,12 +42,14 @@ LUA_FUNCTION_DEF (trie, create);
 LUA_FUNCTION_DEF (trie, match);
 LUA_FUNCTION_DEF (trie, search_mime);
 LUA_FUNCTION_DEF (trie, search_rawmsg);
+LUA_FUNCTION_DEF (trie, search_rawbody);
 LUA_FUNCTION_DEF (trie, destroy);
 
 static const struct luaL_reg trielib_m[] = {
 	LUA_INTERFACE_DEF (trie, match),
 	LUA_INTERFACE_DEF (trie, search_mime),
 	LUA_INTERFACE_DEF (trie, search_rawmsg),
+	LUA_INTERFACE_DEF (trie, search_rawbody),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_trie_destroy},
 	{NULL, NULL}
@@ -293,6 +295,43 @@ lua_trie_search_rawmsg (lua_State *L)
 	if (trie) {
 		text = task->msg.begin;
 		len = task->msg.len;
+
+		if (lua_trie_search_str (L, trie, text, len) != 0) {
+			found = TRUE;
+		}
+	}
+
+	lua_pushboolean (L, found);
+	return 1;
+}
+
+/***
+ * @method trie:search_rawbody(task, cb[, caseless])
+ * This is a helper mehthod to search pattern within the whole undecoded content of task's body (not including headers)
+ * @param {task} task object
+ * @param {function} cb callback called on each pattern match @see trie:match
+ * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
+ * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
+ */
+static gint
+lua_trie_search_rawbody (lua_State *L)
+{
+	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
+	struct rspamd_task *task = lua_check_task (L, 2);
+	const gchar *text;
+	gsize len;
+	gboolean found = FALSE;
+
+	if (trie) {
+		if (task->raw_headers_content.len > 0) {
+			text = task->msg.begin + task->raw_headers_content.len;
+			len = task->msg.len - task->raw_headers_content.len;
+		}
+		else {
+			/* Treat as raw message */
+			text = task->msg.begin;
+			len = task->msg.len;
+		}
 
 		if (lua_trie_search_str (L, trie, text, len) != 0) {
 			found = TRUE;

@@ -92,7 +92,7 @@ rspamd_cryptobox_keypair_pk (struct rspamd_cryptobox_keypair *kp,
 }
 
 static void *
-rspamd_cryptobox_pubkey_pk (struct rspamd_cryptobox_pubkey *kp,
+rspamd_cryptobox_pubkey_pk (const struct rspamd_cryptobox_pubkey *kp,
 		guint *len)
 {
 	g_assert (kp != NULL);
@@ -879,4 +879,24 @@ rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
 	}
 
 	return TRUE;
+}
+
+gboolean
+rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
+		const struct rspamd_cryptobox_pubkey *k2)
+{
+	guchar *p1 = NULL, *p2 = NULL;
+	guint len1, len2;
+
+
+	if (k1->alg == k2->alg && k1->type == k2->type) {
+		p1 = rspamd_cryptobox_pubkey_pk (k1, &len1);
+		p2 = rspamd_cryptobox_pubkey_pk (k2, &len2);
+
+		if (len1 == len2) {
+			return (memcmp (p1, p2, len1) == 0);
+		}
+	}
+
+	return FALSE;
 }

@@ -80,6 +80,14 @@ LUA_FUNCTION_DEF (util, encode_base32);
 LUA_FUNCTION_DEF (util, decode_base32);
 
 /***
+ * @function util.decode_url(input)
+ * Decodes data from url encoding
+ * @param {text or string} input data to decode
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF (util, decode_url);
+
+/***
  * @function util.tokenize_text(input[, exceptions])
  * Create tokens from a text using optional exceptions list
  * @param {text/string} input input data
@@ -325,6 +333,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, encode_base32),
 	LUA_INTERFACE_DEF (util, decode_base32),
+	LUA_INTERFACE_DEF (util, decode_url),
 	LUA_INTERFACE_DEF (util, tokenize_text),
 	LUA_INTERFACE_DEF (util, tanh),
 	LUA_INTERFACE_DEF (util, parse_html),
@@ -659,11 +668,11 @@ lua_util_decode_base32 (lua_State *L)
 	}
 
 	if (s != NULL) {
-			t = lua_newuserdata (L, sizeof (*t));
-			rspamd_lua_setclass (L, "rspamd{text}", -1);
-			t->start = rspamd_decode_base32 (s, inlen, &outlen);
-			t->len = outlen;
-			t->own = TRUE;
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->start = rspamd_decode_base32 (s, inlen, &outlen);
+		t->len = outlen;
+		t->own = TRUE;
 	}
 	else {
 		lua_pushnil (L);
@@ -671,6 +680,41 @@ lua_util_decode_base32 (lua_State *L)
 
 	return 1;
 }
+
+static gint
+lua_util_decode_url (lua_State *L)
+{
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gsize inlen;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s != NULL) {
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->start = g_malloc (inlen);
+		memcpy ((char *)t->start, s, inlen);
+		t->len = rspamd_decode_url ((char *)t->start, s, inlen);
+		t->own = TRUE;
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_util_tokenize_text (lua_State *L)

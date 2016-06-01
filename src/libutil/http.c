@@ -1204,8 +1204,14 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 	}
 
 	if (msg->url) {
-		new_msg->url = rspamd_fstring_new_init (msg->url->str,
-				msg->url->len);
+		if (new_msg->url) {
+			new_msg->url = rspamd_fstring_append (new_msg->url, msg->url->str,
+								msg->url->len);
+		}
+		else {
+			new_msg->url = rspamd_fstring_new_init (msg->url->str,
+					msg->url->len);
+		}
 	}
 
 	if (msg->host) {
@@ -2389,6 +2395,21 @@ rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 
 	g_assert (key != NULL);
 	priv->local_key = rspamd_keypair_ref (key);
+}
+
+const struct rspamd_cryptobox_pubkey*
+rspamd_http_connection_get_peer_key (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (priv->peer_key) {
+		return priv->peer_key;
+	}
+	else if (priv->msg) {
+		return priv->msg->peer_key;
+	}
+
+	return NULL;
 }
 
 gboolean

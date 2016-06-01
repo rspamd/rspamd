@@ -160,5 +160,10 @@ rspamd_fstring_t * rspamd_fstring_grow (rspamd_fstring_t *str,
  */
 gchar *rspamd_ftokdup (const rspamd_ftok_t *src) G_GNUC_WARN_UNUSED_RESULT;
 
-
+/**
+ * Copies fstring to zero terminated string (must be freed using g_free)
+ * @param src
+ * @return
+ */
+gchar *rspamd_fstringdup (const rspamd_fstring_t *src) G_GNUC_WARN_UNUSED_RESULT;
 #endif

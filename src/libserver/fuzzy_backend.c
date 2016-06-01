@@ -32,6 +32,7 @@ struct rspamd_fuzzy_backend {
 
 static const gdouble sql_sleep_time = 0.1;
 static const guint max_retries = 10;
+static const guint32 flags_mask = (1U << 31);
 
 #define msg_err_fuzzy_backend(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         backend->pool->tag.tagname, backend->pool->tag.uid, \
@@ -52,17 +53,21 @@ static const guint max_retries = 10;
 
 static const char *create_tables_sql =
 		"BEGIN;"
-		"CREATE TABLE digests("
-		"id INTEGER PRIMARY KEY,"
-		"flag INTEGER NOT NULL,"
-		"digest TEXT NOT NULL,"
-		"value INTEGER,"
-		"time INTEGER);"
-		"CREATE TABLE shingles("
-		"value INTEGER NOT NULL,"
-		"number INTEGER NOT NULL,"
-		"digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE "
-		"ON UPDATE CASCADE);"
+		"CREATE TABLE IF NOT EXISTS digests("
+		"	id INTEGER PRIMARY KEY,"
+		"	flag INTEGER NOT NULL,"
+		"	digest TEXT NOT NULL,"
+		"	value INTEGER,"
+		"	time INTEGER);"
+		"CREATE TABLE IF NOT EXISTS shingles("
+		"	value INTEGER NOT NULL,"
+		"	number INTEGER NOT NULL,"
+		"	digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE "
+		"	ON UPDATE CASCADE);"
+		"CREATE TABLE IF NOT EXISTS sources("
+		"	name TEXT UNIQUE,"
+		"	version INTEGER,"
+		"	last INTEGER);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
 		"CREATE INDEX IF NOT EXISTS t ON digests(time);"
 		"CREATE INDEX IF NOT EXISTS dgst_id ON shingles(digest_id);"
@@ -93,7 +98,9 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_EXPIRE,
 	RSPAMD_FUZZY_BACKEND_VACUUM,
 	RSPAMD_FUZZY_BACKEND_DELETE_ORPHANED,
+	RSPAMD_FUZZY_BACKEND_ADD_SOURCE,
 	RSPAMD_FUZZY_BACKEND_VERSION,
+	RSPAMD_FUZZY_BACKEND_SET_VERSION,
 	RSPAMD_FUZZY_BACKEND_MAX
 };
 static struct rspamd_fuzzy_stmts {
@@ -214,11 +221,25 @@ static struct rspamd_fuzzy_stmts {
 		.result = SQLITE_DONE
 	},
 	{
+		.idx = RSPAMD_FUZZY_BACKEND_ADD_SOURCE,
+		.sql = "INSERT OR IGNORE INTO sources(name, version, last) VALUES (?1, ?2, ?3);",
+		.args = "TII",
+		.stmt = NULL,
+		.result = SQLITE_DONE
+	},
+	{
 		.idx = RSPAMD_FUZZY_BACKEND_VERSION,
-		.sql = "PRAGMA user_version;",
-		.args = "",
+		.sql = "SELECT version FROM sources WHERE name=?1;",
+		.args = "T",
 		.stmt = NULL,
 		.result = SQLITE_ROW
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_SET_VERSION,
+		.sql = "UPDATE sources SET version=?1, last=?2 WHERE name=?3;",
+		.args = "IIT",
+		.stmt = NULL,
+		.result = SQLITE_DONE
 	},
 };
 
@@ -410,7 +431,7 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	bk->expired = 0;
 	bk->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "fuzzy_backend");
 	bk->db = rspamd_sqlite3_open_or_create (bk->pool, bk->path,
-			create_tables_sql, err);
+			create_tables_sql, 0, err);
 
 	if (bk->db == NULL) {
 		rspamd_fuzzy_backend_close (bk);
@@ -506,6 +527,10 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			rep.prob = 1.0;
 			rep.flag = sqlite3_column_int (
 					prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 2);
+
+			if (!(rep.flag & flags_mask) && rep.flag > 0) {
+				rep.flag = (1U << (rep.flag - 1)) | flags_mask;
+			}
 		}
 	}
 	else if (cmd->shingles_count > 0) {
@@ -589,6 +614,10 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 						rep.flag = sqlite3_column_int (
 								prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
 								3);
+
+						if (!(rep.flag & flags_mask) && rep.flag > 0) {
+							rep.flag = (1U << (rep.flag - 1)) | flags_mask;
+						}
 					}
 				}
 			}
@@ -610,7 +639,8 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 }
 
 gboolean
-rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend,
+		const gchar *source)
 {
 	gint rc;
 
@@ -643,6 +673,11 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		return FALSE;
 	}
 
+	if (cmd->flag > 31 || cmd->flag == 0) {
+		msg_err_fuzzy_backend ("flag more than 31 is no longer supported");
+		return FALSE;
+	}
+
 	rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 			RSPAMD_FUZZY_BACKEND_CHECK,
 			cmd->digest);
@@ -654,7 +689,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				2);
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 
-		if (flag == cmd->flag) {
+		if (flag & (1U << (cmd->flag - 1))) {
 			/* We need to increase weight */
 			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 					RSPAMD_FUZZY_BACKEND_UPDATE,
@@ -669,11 +704,28 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		}
 		else {
 			/* We need to relearn actually */
+			if (flag & flags_mask) {
+				/* This is already new format */
+				flag |= (1U << (cmd->flag - 1));
+			}
+			else {
+				/* Convert to the new format */
+				if (flag > 31 || flag == 0) {
+					msg_warn_fuzzy_backend ("storage had flag more than 31, remove "
+							"it");
+					flag = cmd->flag | flags_mask;
+				}
+				else {
+					flag = (1U << (flag - 1)) | (1U << (cmd->flag - 1)) | flags_mask;
+				}
+			}
+
 			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 					RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
 					(gint64) cmd->value,
-					(gint64) cmd->flag,
+					(gint64) flag,
 					cmd->digest);
+
 			if (rc != SQLITE_OK) {
 				msg_warn_fuzzy_backend ("cannot update hash to %d -> "
 						"%*xs: %s", (gint) cmd->flag,
@@ -686,7 +738,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 		rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 				RSPAMD_FUZZY_BACKEND_INSERT,
-				(gint) cmd->flag,
+				(gint) (1U << (cmd->flag - 1)),
 				cmd->digest,
 				(gint64) cmd->value,
 				(gint64) timestamp);
@@ -729,42 +781,47 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 }
 
 gboolean
-rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
+		const gchar *source)
 {
 	gint rc, wal_frames, wal_checkpointed, ver;
-	gint64 version = 0;
-	gchar version_buf[128];
+
+	/* Get and update version */
+	ver = rspamd_fuzzy_backend_version (backend, source);
+	++ver;
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-			RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
+				RSPAMD_FUZZY_BACKEND_SET_VERSION,
+				(gint64)ver, (gint64)time (NULL), source);
 
-	if (rc != SQLITE_OK) {
-		msg_warn_fuzzy_backend ("cannot commit updates: %s",
+	if (rc == SQLITE_OK) {
+		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+				RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
+
+		if (rc != SQLITE_OK) {
+			msg_warn_fuzzy_backend ("cannot commit updates: %s",
+					sqlite3_errmsg (backend->db));
+			rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+					RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
+			return FALSE;
+		}
+		else {
+			if (!rspamd_sqlite3_sync (backend->db, &wal_frames, &wal_checkpointed)) {
+				msg_warn_fuzzy_backend ("cannot commit checkpoint: %s",
+						sqlite3_errmsg (backend->db));
+			}
+			else if (wal_checkpointed > 0) {
+				msg_info_fuzzy_backend ("total number of frames in the wal file: "
+						"%d, checkpointed: %d", wal_frames, wal_checkpointed);
+			}
+		}
+	}
+	else {
+		msg_warn_fuzzy_backend ("cannot update version for %s: %s", source,
 				sqlite3_errmsg (backend->db));
 		rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
 		return FALSE;
-	}
-	else {
-		if (!rspamd_sqlite3_sync (backend->db, &wal_frames, &wal_checkpointed)) {
-			msg_warn_fuzzy_backend ("cannot commit checkpoint: %s",
-					sqlite3_errmsg (backend->db));
-		}
-		else if (wal_checkpointed > 0) {
-			msg_info_fuzzy_backend ("total number of frames in the wal file: "
-					"%d, checkpointed: %d", wal_frames, wal_checkpointed);
-		}
-	}
-
-	/* Get and update version */
-	ver = rspamd_fuzzy_backend_version (backend);
-	++ver;
-	rspamd_snprintf (version_buf, sizeof (version_buf), "PRAGMA user_version=%d;",
-			ver);
-
-	if (sqlite3_exec (backend->db, version_buf, NULL, NULL, NULL) != SQLITE_OK) {
-			msg_err_fuzzy_backend ("cannot set database version to %L: %s",
-					version, sqlite3_errmsg (backend->db));
 	}
 
 	return TRUE;
@@ -774,15 +831,60 @@ gboolean
 rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
-	int rc;
+	int rc = -1;
+	guint32 flag;
 
 	if (backend == NULL) {
 		return FALSE;
 	}
 
-	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-			RSPAMD_FUZZY_BACKEND_DELETE,
+	rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
+			RSPAMD_FUZZY_BACKEND_CHECK,
 			cmd->digest);
+
+	if (rc == SQLITE_OK) {
+		/* Check flag */
+		flag = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt,
+				2);
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
+
+		if (!(flag & flags_mask)) {
+			flag = (1U << (flag - 1)) | flags_mask;
+		}
+
+		if (flag & (1U << (cmd->flag - 1))) {
+			flag &= ~(1U << (cmd->flag - 1));
+
+			if (flag == 0) {
+				/* It is the last flag, so delete hash completely */
+				rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+							RSPAMD_FUZZY_BACKEND_DELETE,
+							cmd->digest);
+			}
+			else {
+				/* We need to delete specific flag */
+				rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+						RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
+						(gint64) cmd->value,
+						(gint64) flag,
+						cmd->digest);
+				if (rc != SQLITE_OK) {
+					msg_warn_fuzzy_backend ("cannot update hash to %d -> "
+							"%*xs: %s", (gint) cmd->flag,
+							(gint) sizeof (cmd->digest), cmd->digest,
+							sqlite3_errmsg (backend->db));
+				}
+			}
+		}
+		else {
+			/* The hash has a wrong flag, ignoring */
+		}
+	}
+	else {
+		/* Hash is missing */
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
+	}
 
 	return (rc == SQLITE_OK);
 }
@@ -976,13 +1078,14 @@ rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend)
 }
 
 gint
-rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend,
+		const gchar *source)
 {
-	gint ret = 0;
+	gint ret = -1;
 
 	if (backend) {
 		if (rspamd_fuzzy_backend_run_stmt (backend, FALSE,
-				RSPAMD_FUZZY_BACKEND_VERSION) == SQLITE_OK) {
+				RSPAMD_FUZZY_BACKEND_VERSION, source) == SQLITE_OK) {
 			ret = sqlite3_column_int64 (
 					prepared_stmts[RSPAMD_FUZZY_BACKEND_VERSION].stmt, 0);
 		}

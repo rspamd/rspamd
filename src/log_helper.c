@@ -37,8 +37,8 @@ worker_t log_helper_worker = {
 		init_log_helper,             /* Init function */
 		start_log_helper,            /* Start function */
 		RSPAMD_WORKER_UNIQUE | RSPAMD_WORKER_KILLABLE,
-		SOCK_STREAM,                /* TCP socket */
-		RSPAMD_WORKER_VER           /* Version info */
+		RSPAMD_WORKER_SOCKET_NONE,   /* No socket */
+		RSPAMD_WORKER_VER            /* Version info */
 };
 
 static const guint64 rspamd_log_helper_magic = 0x1090bb46aaa74c9aULL;
@@ -129,7 +129,14 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 		}
 	}
 	else if (r == -1) {
-		msg_warn ("cannot read data from log pipe: %s", strerror (errno));
+		if (errno != EAGAIN || errno != EINTR) {
+			msg_warn ("cannot read data from log pipe: %s", strerror (errno));
+			event_del (&ctx->log_ev);
+		}
+	}
+	else if (r == 0) {
+		msg_warn ("cannot read data from log pipe: EOF");
+		event_del (&ctx->log_ev);
 	}
 }
 

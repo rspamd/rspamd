@@ -125,31 +125,6 @@ local function check_regexp(str, regexp_text)
   return false
 end
 
-local function split(str, delim, maxNb)
-  -- Eliminate bad cases...
-  if string.find(str, delim) == nil then
-    return { str }
-  end
-  if maxNb == nil or maxNb < 1 then
-    maxNb = 0    -- No limit
-  end
-  local result = {}
-  local pat = "(.-)" .. delim .. "()"
-  local nb = 0
-  local lastPos
-  for part, pos in string.gmatch(str, pat) do
-    nb = nb + 1
-    result[nb] = part
-    lastPos = pos
-    if nb == maxNb then break end
-  end
-  -- Handle the last field
-  if nb ~= maxNb then
-    result[nb + 1] = string.sub(str, lastPos)
-  end
-  return result
-end
-
 local function check_fqdn(domain)
   if check_regexp(domain, '(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z0-9-]{2,63}\\.?$)') then
     return true
@@ -407,7 +382,7 @@ local function hfilter(task)
     if from then
       --FROM host check
       for _,fr in ipairs(from) do
-        local fr_split = split(fr['addr'], '@', 0)
+        local fr_split = rspamd_str_split(fr['addr'], '@')
         if table.maxn(fr_split) == 2 then
           check_host(task, fr_split[2], 'FROMHOST', '', '')
           if fr_split[1] == 'postmaster' then
@@ -440,7 +415,7 @@ local function hfilter(task)
   if config['mid_enabled'] then
     local message_id = task:get_message_id()
     if message_id then
-      local mid_split = split(message_id, '@', 0)
+      local mid_split = rspamd_str_split(message_id, '@')
       if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
         check_host(task, mid_split[2], 'MID')
       end
