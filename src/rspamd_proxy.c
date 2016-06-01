@@ -65,6 +65,8 @@ struct rspamd_http_upstream {
 	gchar *name;
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
+	gint parser_from_ref;
+	gint parser_to_ref;
 };
 
 struct rspamd_http_mirror {
@@ -73,7 +75,8 @@ struct rspamd_http_mirror {
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
 	gdouble prob;
-	gint parser_ref;
+	gint parser_from_ref;
+	gint parser_to_ref;
 };
 
 static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
@@ -125,6 +128,8 @@ struct rspamd_proxy_backend_connection {
 	struct rspamd_proxy_session *s;
 	gint backend_sock;
 	enum rspamd_backend_flags flags;
+	gint parser_from_ref;
+	gint parser_to_ref;
 };
 
 struct rspamd_proxy_session {
@@ -234,6 +239,101 @@ err:
 }
 
 static gboolean
+rspamd_proxy_parse_lua_parser (lua_State *L, const ucl_object_t *obj,
+		gint *ref_from, gint *ref_to, GError **err)
+{
+	const gchar *lua_script;
+	gsize slen;
+	gint err_idx, ref_idx;
+	GString *tb = NULL;
+	gboolean has_ref = FALSE;
+
+	g_assert (obj != NULL);
+	g_assert (ref_from != NULL);
+	g_assert (ref_to != NULL);
+
+	*ref_from = -1;
+	*ref_to = -1;
+
+	lua_script = ucl_object_tolstring (obj, &slen);
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Load data */
+	if (luaL_loadbuffer (L, lua_script, slen, "proxy parser") != 0) {
+		g_set_error (err,
+				rspamd_proxy_quark (),
+				EINVAL,
+				"cannot load lua parser script: %s",
+				lua_tostring (L, -1));
+		lua_settop (L, 0); /* Error function */
+
+		return FALSE;
+	}
+
+	/* Now do it */
+	if (lua_pcall (L, 0, 1, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		g_set_error (err,
+				rspamd_proxy_quark (),
+				EINVAL,
+				"cannot init lua parser script: %s",
+				tb->str);
+		g_string_free (tb, TRUE);
+		lua_settop (L, 0);
+
+		return FALSE;
+	}
+
+	if (lua_istable (L, -1)) {
+		/*
+		 * We have a table, so we check for two keys:
+		 * 'from' -> function
+		 * 'to' -> function
+		 *
+		 * From converts parent request to a client one
+		 * To converts client request to a parent one
+		 */
+		lua_pushstring (L, "from");
+		lua_gettable (L, -2);
+
+		if (lua_isfunction (L, -1)) {
+			ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+			*ref_from = ref_idx;
+			has_ref = TRUE;
+		}
+
+		lua_pushstring (L, "to");
+		lua_gettable (L, -2);
+
+		if (lua_isfunction (L, -1)) {
+			ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+			*ref_to = ref_idx;
+			has_ref = TRUE;
+		}
+	}
+	else if (!lua_isfunction (L, -1)) {
+		g_set_error (err,
+				rspamd_proxy_quark (),
+				EINVAL,
+				"cannot init lua parser script: "
+				"must return function");
+		lua_settop (L, 0);
+
+		return FALSE;
+	}
+	else {
+		/* Just parser from protocol */
+		ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+		*ref_from = ref_idx;
+		lua_settop (L, 0);
+		has_ref = TRUE;
+	}
+
+	return has_ref;
+}
+
+static gboolean
 rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
@@ -266,7 +366,8 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 	up = g_slice_alloc0 (sizeof (*up));
 	up->name = g_strdup (ucl_object_tostring (elt));
-	up->parser_ref = -1;
+	up->parser_to_ref = -1;
+	up->parser_from_ref = -1;
 
 	elt = ucl_object_lookup (obj, "key");
 	if (elt != NULL) {
@@ -312,55 +413,10 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	 */
 	elt = ucl_object_lookup (obj, "parser");
 	if (elt) {
-		const gchar *lua_script;
-		gsize slen;
-		gint err_idx, ref_idx;
-		GString *tb = NULL;
-
-		lua_script = ucl_object_tolstring (elt, &slen);
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
-
-		/* Load data */
-		if (luaL_loadbuffer (L, lua_script, slen, "proxy parser") != 0) {
-			g_set_error (err,
-					rspamd_proxy_quark (),
-					EINVAL,
-					"cannot load lua parser script: %s",
-					lua_tostring (L, -1));
-			lua_settop (L, 0); /* Error function */
-
+		if (!rspamd_proxy_parse_lua_parser (L, elt, &up->parser_from_ref,
+				&up->parser_to_ref, err)) {
 			goto err;
 		}
-
-		/* Now do it */
-		if (lua_pcall (L, 0, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			g_set_error (err,
-					rspamd_proxy_quark (),
-					EINVAL,
-					"cannot init lua parser script: %s",
-					tb->str);
-			g_string_free (tb, TRUE);
-			lua_settop (L, 0);
-
-			goto err;
-		}
-
-		if (!lua_isfunction (L, -1)) {
-			g_set_error (err,
-					rspamd_proxy_quark (),
-					EINVAL,
-					"cannot init lua parser script: "
-					"must return function");
-			lua_settop (L, 0);
-
-			goto err;
-		}
-
-		ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
-		up->parser_ref = ref_idx;
-		lua_settop (L, 0);
 	}
 
 	elt = ucl_object_lookup_any (obj, "settings", "settings_id", NULL);
@@ -382,8 +438,11 @@ err:
 			rspamd_pubkey_unref (up->key);
 		}
 
-		if (up->parser_ref != -1) {
-			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_ref);
+		if (up->parser_from_ref != -1) {
+			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_from_ref);
+		}
+		if (up->parser_to_ref != -1) {
+			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_to_ref);
 		}
 
 		g_slice_free1 (sizeof (*up), up);
@@ -846,7 +905,7 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 	session = bk_conn->s;
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			-1, msg->body_buf.begin, msg->body_buf.len)) {
+			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
 				bk_conn->name,
 				rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)));
@@ -888,6 +947,8 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		bk_conn->up = rspamd_upstream_get (m->u,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+		bk_conn->parser_from_ref = m->parser_from_ref;
+		bk_conn->parser_to_ref = m->parser_to_ref;
 
 		if (bk_conn->up == NULL) {
 			msg_err_session ("cannot select upstream for %s", m->name);
