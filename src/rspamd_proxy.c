@@ -152,93 +152,6 @@ rspamd_proxy_quark (void)
 }
 
 static gboolean
-rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
-	const ucl_object_t *obj,
-	gpointer ud,
-	struct rspamd_rcl_section *section,
-	GError **err)
-{
-	const ucl_object_t *elt;
-	struct rspamd_http_upstream *up = NULL;
-	struct rspamd_proxy_ctx *ctx;
-	struct rspamd_rcl_struct_parser *pd = ud;
-
-	ctx = pd->user_struct;
-
-	if (ucl_object_type (obj) != UCL_OBJECT) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must be an object");
-
-		return FALSE;
-	}
-
-	elt = ucl_object_lookup (obj, "name");
-	if (elt == NULL) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must have some name definition");
-
-		return FALSE;
-	}
-
-	up = g_slice_alloc0 (sizeof (*up));
-	up->name = g_strdup (ucl_object_tostring (elt));
-
-	elt = ucl_object_lookup (obj, "key");
-	if (elt != NULL) {
-		up->key = rspamd_pubkey_from_base32 (ucl_object_tostring (elt), 0,
-				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
-
-		if (up->key == NULL) {
-			g_set_error (err, rspamd_proxy_quark (), 100,
-					"cannot read upstream key");
-
-			goto err;
-		}
-	}
-
-	elt = ucl_object_lookup (obj, "hosts");
-
-	if (elt == NULL) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must have some hosts definition");
-
-		goto err;
-	}
-
-	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
-	if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream has bad hosts definition");
-
-		goto err;
-	}
-
-	elt = ucl_object_lookup (obj, "default");
-	if (elt && ucl_object_toboolean (elt)) {
-		ctx->default_upstream = up;
-	}
-
-	g_hash_table_insert (ctx->upstreams, up->name, up);
-
-	return TRUE;
-
-err:
-
-	if (up) {
-		g_free (up->name);
-		rspamd_upstreams_destroy (up->u);
-
-		if (up->key) {
-			rspamd_pubkey_unref (up->key);
-		}
-
-		g_slice_free1 (sizeof (*up), up);
-	}
-
-	return FALSE;
-}
-
-static gboolean
 rspamd_proxy_parse_lua_parser (lua_State *L, const ucl_object_t *obj,
 		gint *ref_from, gint *ref_to, GError **err)
 {
@@ -331,6 +244,114 @@ rspamd_proxy_parse_lua_parser (lua_State *L, const ucl_object_t *obj,
 	}
 
 	return has_ref;
+}
+
+static gboolean
+rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	const ucl_object_t *elt;
+	struct rspamd_http_upstream *up = NULL;
+	struct rspamd_proxy_ctx *ctx;
+	struct rspamd_rcl_struct_parser *pd = ud;
+	lua_State *L;
+
+	ctx = pd->user_struct;
+	L = ctx->lua_state;
+
+	if (ucl_object_type (obj) != UCL_OBJECT) {
+		g_set_error (err, rspamd_proxy_quark (), 100,
+				"upstream option must be an object");
+
+		return FALSE;
+	}
+
+	elt = ucl_object_lookup (obj, "name");
+	if (elt == NULL) {
+		g_set_error (err, rspamd_proxy_quark (), 100,
+				"upstream option must have some name definition");
+
+		return FALSE;
+	}
+
+	up = g_slice_alloc0 (sizeof (*up));
+	up->name = g_strdup (ucl_object_tostring (elt));
+
+	elt = ucl_object_lookup (obj, "key");
+	if (elt != NULL) {
+		up->key = rspamd_pubkey_from_base32 (ucl_object_tostring (elt), 0,
+				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+
+		if (up->key == NULL) {
+			g_set_error (err, rspamd_proxy_quark (), 100,
+					"cannot read upstream key");
+
+			goto err;
+		}
+	}
+
+	elt = ucl_object_lookup (obj, "hosts");
+
+	if (elt == NULL) {
+		g_set_error (err, rspamd_proxy_quark (), 100,
+				"upstream option must have some hosts definition");
+
+		goto err;
+	}
+
+	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
+	if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
+		g_set_error (err, rspamd_proxy_quark (), 100,
+				"upstream has bad hosts definition");
+
+		goto err;
+	}
+
+	elt = ucl_object_lookup (obj, "default");
+	if (elt && ucl_object_toboolean (elt)) {
+		ctx->default_upstream = up;
+	}
+
+	/*
+	 * Accept lua function here in form
+	 * fun :: String -> UCL
+	 */
+	elt = ucl_object_lookup (obj, "parser");
+	if (elt) {
+		if (!rspamd_proxy_parse_lua_parser (L, elt, &up->parser_from_ref,
+				&up->parser_to_ref, err)) {
+			goto err;
+		}
+	}
+
+	g_hash_table_insert (ctx->upstreams, up->name, up);
+
+	return TRUE;
+
+err:
+
+	if (up) {
+		g_free (up->name);
+		rspamd_upstreams_destroy (up->u);
+
+		if (up->key) {
+			rspamd_pubkey_unref (up->key);
+		}
+
+		if (up->parser_from_ref != -1) {
+			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_from_ref);
+		}
+		if (up->parser_to_ref != -1) {
+			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_to_ref);
+		}
+
+		g_slice_free1 (sizeof (*up), up);
+	}
+
+	return FALSE;
 }
 
 static gboolean
