@@ -1040,6 +1040,16 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
+
+	/* Reset spamc legacy */
+	if (msg->method >= HTTP_CHECK) {
+		msg->method = HTTP_GET;
+	}
+
+	if (msg->url->len == 0) {
+		msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
+	}
+
 	rspamd_http_message_remove_header (msg, "Content-Length");
 	rspamd_http_message_remove_header (msg, "Key");
 	rspamd_http_connection_reset (session->master_conn->backend_conn);
@@ -1048,7 +1058,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 		&session->ctx->io_tv, session->ctx->ev_base);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			-1, msg->body_buf.begin, msg->body_buf.len)) {
+			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the master backend");
 	}
 
@@ -1129,6 +1139,15 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_http_message_remove_header (msg, "Key");
 			rspamd_http_connection_reset (session->client_conn);
 
+			/* Reset spamc legacy */
+			if (msg->method >= HTTP_CHECK) {
+				msg->method = HTTP_GET;
+			}
+
+			if (msg->url->len == 0) {
+				msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
+			}
+
 			session->master_conn->backend_conn = rspamd_http_connection_new (
 					NULL,
 					proxy_backend_master_error_handler,
@@ -1136,6 +1155,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					RSPAMD_HTTP_CLIENT_SIMPLE,
 					RSPAMD_HTTP_CLIENT,
 					session->ctx->keys_cache);
+			session->master_conn->parser_from_ref = backend->parser_from_ref;
+			session->master_conn->parser_to_ref = backend->parser_to_ref;
 
 			rspamd_http_connection_set_key (session->master_conn->backend_conn,
 					session->ctx->local_key);
