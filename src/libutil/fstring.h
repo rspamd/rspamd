@@ -81,6 +81,8 @@ rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
  */
 void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
 
+#define rspamd_fstring_clear(s) rspamd_fstring_erase(s, 0, s->len)
+
 /**
  * Convert fixed string to a zero terminated string. This string should be
  * freed by a caller
