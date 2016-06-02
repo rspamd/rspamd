@@ -139,9 +139,10 @@ struct rspamd_proxy_session {
 	struct rspamd_http_connection *client_conn;
 	gpointer map;
 	gsize map_len;
-	gint client_sock;
 	struct rspamd_proxy_backend_connection *master_conn;
 	GPtrArray *mirror_conns;
+	gint client_sock;
+	gboolean is_spamc;
 	ref_entry_t ref;
 };
 
@@ -1062,26 +1063,31 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
 
-	/* Reset spamc legacy */
-	if (msg->method >= HTTP_CHECK) {
-		msg->method = HTTP_GET;
-	}
-
-	if (msg->url->len == 0) {
-		msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
-	}
-
 	rspamd_http_message_remove_header (msg, "Content-Length");
 	rspamd_http_message_remove_header (msg, "Key");
 	rspamd_http_connection_reset (session->master_conn->backend_conn);
-	rspamd_http_connection_write_message (session->client_conn,
-		msg, NULL, NULL, session, session->client_sock,
-		&session->ctx->io_tv, session->ctx->ev_base);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
 			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the master backend");
 	}
+
+
+	if (session->is_spamc) {
+		/* We need to reformat ucl to fit with legacy spamc protocol */
+		if (bk_conn->results) {
+			rspamd_fstring_clear (msg->body);
+			rspamd_ucl_torspamc_output (bk_conn->results, &msg->body);
+		}
+		else {
+			msg_warn_session ("cannot parse results from the master backend, "
+					"return them as is");
+		}
+	}
+
+	rspamd_http_connection_write_message (session->client_conn,
+			msg, NULL, NULL, session, session->client_sock,
+			&session->ctx->io_tv, session->ctx->ev_base);
 
 	return 0;
 }
@@ -1163,6 +1169,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			/* Reset spamc legacy */
 			if (msg->method >= HTTP_CHECK) {
 				msg->method = HTTP_GET;
+				session->is_spamc = TRUE;
+				msg_info_session ("enabling legacy rspamc mode for session");
 			}
 
 			if (msg->url->len == 0) {
