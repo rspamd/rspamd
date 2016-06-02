@@ -874,8 +874,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 }
 
 void
-rspamd_ucl_torspamc_output (struct rspamd_task *task,
-	ucl_object_t *top,
+rspamd_ucl_torspamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
 	const ucl_object_t *metric, *score,
@@ -927,12 +926,15 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 		}
 	}
 
-	rspamd_printf_fstring (out, "Message-ID: %s\r\n", task->message_id);
+	elt = ucl_object_lookup (top, "message-id");
+	if (elt != NULL) {
+		rspamd_printf_fstring (out, "Message-ID: %s\r\n",
+				ucl_object_tostring (elt));
+	}
 }
 
 static void
-rspamd_ucl_tospamc_output (struct rspamd_task *task,
-	ucl_object_t *top,
+rspamd_ucl_tospamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
 	const ucl_object_t *metric, *score,
@@ -1055,10 +1057,10 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 	else {
 		if (RSPAMD_TASK_IS_SPAMC (task)) {
-			rspamd_ucl_tospamc_output (task, top, &msg->body);
+			rspamd_ucl_tospamc_output (top, &msg->body);
 		}
 		else {
-			rspamd_ucl_torspamc_output (task, top, &msg->body);
+			rspamd_ucl_torspamc_output (top, &msg->body);
 		}
 	}
 
