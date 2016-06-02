@@ -873,7 +873,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	return obj;
 }
 
-static void
+void
 rspamd_ucl_torspamc_output (struct rspamd_task *task,
 	ucl_object_t *top,
 	rspamd_fstring_t **out)
