@@ -67,12 +67,17 @@ static GList *children;
     g_queue_push_tail ((o), nh); \
 } while (0)
 
+static gboolean rspamc_password_callback (const gchar *option_name,
+		const gchar *value,
+		gpointer data,
+		GError **error);
+
 static GOptionEntry entries[] =
 {
 	{ "connect", 'h', 0, G_OPTION_ARG_STRING, &connect_str,
 	  "Specify host and port", NULL },
-	{ "password", 'P', 0, G_OPTION_ARG_STRING, &password,
-	  "Specify control password", NULL },
+	{ "password", 'P', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK,
+	  &rspamc_password_callback, "Specify control password", NULL },
 	{ "classifier", 'c', 0, G_OPTION_ARG_STRING, &classifier,
 	  "Classifier to learn spam or ham", NULL },
 	{ "weight", 'w', 0, G_OPTION_ARG_INT, &weight,
@@ -291,6 +296,31 @@ struct rspamc_callback_data {
 	gchar *filename;
 	gdouble start;
 };
+
+gboolean
+rspamc_password_callback (const gchar *option_name,
+		const gchar *value,
+		gpointer data,
+		GError **error)
+{
+	guint plen = 8192;
+
+	if (value != NULL) {
+		password = g_strdup (value);
+	}
+	else {
+		/* Read password from console */
+		password = g_malloc0 (plen);
+		plen = rspamd_read_passphrase (password, plen, 0, NULL);
+	}
+
+	if (plen == 0) {
+		rspamd_fprintf (stderr, "Invalid password\n");
+		exit (EXIT_FAILURE);
+	}
+
+	return TRUE;
+}
 
 /*
  * Parse command line
