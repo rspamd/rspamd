@@ -1167,7 +1167,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_http_connection_reset (session->client_conn);
 
 			/* Reset spamc legacy */
-			if (msg->method >= HTTP_CHECK) {
+			if (msg->method >= HTTP_SYMBOLS) {
 				msg->method = HTTP_GET;
 				session->is_spamc = TRUE;
 				msg_info_session ("enabling legacy rspamc mode for session");
