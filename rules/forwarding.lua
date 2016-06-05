@@ -81,24 +81,27 @@ rspamd_config.FORWARDED = {
         local matches = 0
         -- Retrieve and loop through all Received headers
         local rcvds = task:get_header_full('Received')
-        for _, rcvd in ipairs(rcvds) do
+
+        if rcvds then
+          for _, rcvd in ipairs(rcvds) do
             local _,_,addr = rcvd['decoded']:lower():find("%sfor%s<(.-)>")
             if addr then
-                matches = matches + 1
-                -- Check that it doesn't match the envrcpt
-                -- TODO: remove any plus addressing?
-                if addr ~= envrcpts[1].addr:lower() then
-                    -- Check for mailing-lists as they will have the same signature
-                    if matches < 2 and lu and to and to[1].addr:lower() == addr then
-                        return false
-                    else
-                        return true, addr
-                    end
+              matches = matches + 1
+              -- Check that it doesn't match the envrcpt
+              -- TODO: remove any plus addressing?
+              if addr ~= envrcpts[1].addr:lower() then
+                -- Check for mailing-lists as they will have the same signature
+                if matches < 2 and lu and to and to[1].addr:lower() == addr then
+                  return false
+                else
+                  return true, addr
                 end
-                -- Prevent any other iterations as we only want
-                -- process the first matching Received header
-                return false
+              end
+              -- Prevent any other iterations as we only want
+              -- process the first matching Received header
+              return false
             end
+          end
         end
         return false
     end,
