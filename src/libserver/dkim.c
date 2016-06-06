@@ -1260,6 +1260,147 @@ rspamd_dkim_simple_body_step (rspamd_dkim_context_t *ctx,
 	return (len != 0);
 }
 
+static const gchar *
+rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
+		guint type, gboolean *need_crlf)
+{
+	const gchar *p = end - 1, *t;
+	enum {
+		init = 0,
+		init_2,
+		got_cr,
+		got_lf,
+		got_crlf,
+		test_spaces,
+	} state = init;
+	guint skip = 0;
+
+	while (p >= start + 2) {
+		switch (state) {
+		case init:
+			if (*p == '\r') {
+				state = got_cr;
+			}
+			else if (*p == '\n') {
+				state = got_lf;
+			}
+			else if (type == DKIM_CANON_RELAXED && *p == ' ') {
+				skip = 0;
+				state = test_spaces;
+			}
+			else {
+				if (type == DKIM_CANON_SIMPLE) {
+					*need_crlf = TRUE;
+				}
+
+				goto end;
+			}
+			break;
+		case init_2:
+			if (*p == '\r') {
+				state = got_cr;
+			}
+			else if (*p == '\n') {
+				state = got_lf;
+			}
+			else if (type == DKIM_CANON_RELAXED && *p == ' ') {
+				skip = 0;
+				state = test_spaces;
+			}
+			else {
+				goto end;
+			}
+			break;
+		case got_cr:
+			if (*(p - 1) == '\r') {
+				p --;
+				state = got_cr;
+			}
+			else if (*(p - 1) == '\n') {
+				if ((*p - 2) == '\r') {
+					/* \r\n\r -> we know about one line */
+					p -= 1;
+					state = got_crlf;
+				}
+				else {
+					/* \n\r -> we know about one line */
+					p -= 1;
+					state = got_lf;
+				}
+			}
+			else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+				skip = 1;
+				state = test_spaces;
+			}
+			else {
+				goto end;
+			}
+			break;
+		case got_lf:
+			if (*(p - 1) == '\r') {
+				state = got_crlf;
+			}
+			else if (*(p - 1) == '\n') {
+				/* We know about one line */
+				p --;
+				state = got_lf;
+			}
+			else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+				skip = 1;
+				state = test_spaces;
+			}
+			else {
+				goto end;
+			}
+			break;
+		case got_crlf:
+			if (p > start - 2) {
+				if (*(p - 3) == '\r') {
+					p -= 2;
+					state = got_cr;
+				}
+				else if (*(p - 3) == '\n') {
+					p -= 2;
+					state = got_lf;
+				}
+				else if (type == DKIM_CANON_RELAXED && *(p - 3) == ' ') {
+					skip = 2;
+					state = test_spaces;
+				}
+				else {
+					goto end;
+				}
+			}
+			else {
+				goto end;
+			}
+			break;
+		case test_spaces:
+			t = p - skip;
+
+			while (t > start - 2 && *t == ' ') {
+				t --;
+			}
+
+			if (*t == '\r') {
+				p = t;
+				state = got_cr;
+			}
+			else if (*t == '\n') {
+				p = t;
+				state = got_lf;
+			}
+			else {
+				goto end;
+			}
+			break;
+		}
+	}
+
+end:
+	return p;
+}
+
 static gboolean
 rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 	const gchar *start,
@@ -1267,6 +1408,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 {
 	const gchar *p;
 	guint remain = ctx->len ? ctx->len : (guint)(end - start);
+	gboolean need_crlf = FALSE;
 
 	if (start == NULL) {
 		/* Empty body */
@@ -1279,22 +1421,9 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 	}
 	else {
 		/* Strip extra ending CRLF */
-		p = end - 1;
-		while (p >= start + 2) {
-			if (*p == '\n' && *(p - 1) == '\r' && *(p - 2) == '\n') {
-				p -= 2;
-			}
-			else if (*p == '\n' && *(p - 1) == '\n') {
-				p--;
-			}
-			else if (*p == '\r' && *(p - 1) == '\r') {
-				p--;
-			}
-			else {
-				break;
-			}
-		}
+		p = rspamd_dkim_skip_empty_lines (start, end, ctx->body_canon_type, &need_crlf);
 		end = p + 1;
+
 		if (end == start) {
 			/* Empty body */
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
@@ -1308,7 +1437,15 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
 				while (rspamd_dkim_simple_body_step (ctx, ctx->body_hash,
-						&start, end - start, &remain)) ;
+						&start, end - start, &remain));
+
+				if (need_crlf) {
+					start = "\r\n";
+					end = start + 2;
+					remain = 2;
+					rspamd_dkim_simple_body_step (ctx, ctx->body_hash,
+							&start, end - start, &remain);
+				}
 			}
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx, ctx->body_hash,
