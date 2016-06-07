@@ -207,6 +207,14 @@ rspamd_parse_long_option (const gchar *start, gsize len,
 		ret = TRUE;
 		a->type = RSPAMD_RE_RAWHEADER;
 	}
+	else if (rspamd_lc_cmp (start, "all_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_ALLHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "url", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_URL;
+	}
 	else if (rspamd_lc_cmp (start, "sabody", len) == 0) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SABODY;
