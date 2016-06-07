@@ -215,11 +215,11 @@ rspamd_parse_long_option (const gchar *start, gsize len,
 		ret = TRUE;
 		a->type = RSPAMD_RE_URL;
 	}
-	else if (rspamd_lc_cmp (start, "sabody", len) == 0) {
+	else if (rspamd_lc_cmp (start, "sa_body", len) == 0) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SABODY;
 	}
-	else if (rspamd_lc_cmp (start, "sabody", len) == 0) {
+	else if (rspamd_lc_cmp (start, "sa_raw_body", len) == 0) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SARAWBODY;
 	}
