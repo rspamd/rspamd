@@ -60,12 +60,24 @@ The match type is defined by special flags after the last `/` symbol:
 * `B` - MIME header regexp (applied for headers in MIME parts only)
 * `R` - full headers content (applied for all headers undecoded and for the message only - **not** including MIME headers)
 * `M` - raw message regexp
-* `P` - part regexp
+* `P` - part regexp without HTML tags
+* `Q` - part regexp with HTML tags
+* `C` - spamassassin `BODY` regexp analogue(see http://spamassassin.apache.org/full/3.4.x/doc/Mail_SpamAssassin_Conf.txt)
+* `D` - spamassassin `RAWBODY` regexp analogue
 * `U` - URL regexp
 
+From 1.3, it is also possible to specify long regexp types for convenience in curly braces:
 
-We strongly discourage from using of raw message regexps as they are expensive and
-should be replaced by [trie](trie.md) rules if possible.
+* `{header}` - header regexp
+* `{raw_header}` - undecoded header regexp (e.g. without quoted-printable decoding)
+* `{mime_header}` - MIME header regexp (applied for headers in MIME parts only)
+* `{all_header}` - full headers content (applied for all headers undecoded and for the message only - **not** including MIME headers)
+* `{body}` - raw message regexp
+* `{mime}` - part regexp without HTML tags
+* `{raw_mime}` - part regexp with HTML tags
+* `{sa_body}` - spamassassin `BODY` regexp analogue(see http://spamassassin.apache.org/full/3.4.x/doc/Mail_SpamAssassin_Conf.txt)
+* `{sa_raw_body}` - spamassassin `RAWBODY` regexp analogue
+* `{url}` - URL regexp
 
 Each regexp also supports the following flags:
 
@@ -122,7 +134,7 @@ Here is an example of table form definition of regexp rule:
 
 ~~~lua
 config['regexp']['RE_TEST'] = {
-    re = '/test/P',
+    re = '/test/i{mime}',
     score = 10.0,
     condition = function(task)
         if task:get_header('Subject') then
