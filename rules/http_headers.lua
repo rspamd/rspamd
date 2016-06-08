@@ -69,7 +69,7 @@ rspamd_config:add_condition("R_SPF_ALLOW", function(task)
       elseif obj['result'] == 'neutral' then
         task:insert_result('R_SPF_NEUTRAL', 1.0, 'http header')
       elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
-        task:insert_result('R_SPF_TEMPFAIL', 1.0, 'http header')
+        task:insert_result('R_SPF_SOFTFAIL', 1.0, 'http header')
       end
 
       return false
