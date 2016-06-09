@@ -1176,6 +1176,10 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			}
 
 			proxy_open_mirror_connections (session);
+			rspamd_http_connection_steal_msg (session->client_conn);
+			rspamd_http_message_remove_header (msg, "Content-Length");
+			rspamd_http_message_remove_header (msg, "Key");
+			rspamd_http_connection_reset (session->client_conn);
 
 			session->master_conn->backend_conn = rspamd_http_connection_new (
 					NULL,
@@ -1195,11 +1199,6 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 				msg, NULL, NULL, session->master_conn,
 				session->master_conn->backend_sock,
 				&session->ctx->io_tv, session->ctx->ev_base);
-			rspamd_http_connection_steal_msg (session->client_conn);
-			rspamd_http_message_remove_header (msg, "Content-Length");
-			rspamd_http_message_remove_header (msg, "Key");
-			rspamd_http_connection_reset (session->client_conn);
-
 		}
 	}
 	else {
