@@ -306,8 +306,15 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	cur = worker->accept_events;
 	while (cur) {
 		events = cur->data;
-		event_del (&events[0]);
-		event_del (&events[1]);
+
+		if (event_get_base (&events[0])) {
+			event_del (&events[0]);
+		}
+
+		if (event_get_base (&events[1])) {
+			event_del (&events[1]);
+		}
+
 		cur = g_list_next (cur);
 		g_slice_free1 (sizeof (struct event) * 2, events);
 	}
