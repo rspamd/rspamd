@@ -680,9 +680,9 @@ rspamd_redis_fin (gpointer data)
 
 	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
 		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		event_del (&rt->timeout_event);
+		REF_RELEASE (rt);
 	}
-
-	event_del (&rt->timeout_event);
 }
 
 static void
@@ -692,9 +692,9 @@ rspamd_redis_fin_learn (gpointer data)
 
 	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
 		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		event_del (&rt->timeout_event);
+		REF_RELEASE (rt);
 	}
-
-	event_del (&rt->timeout_event);
 }
 
 static void
@@ -705,12 +705,13 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 
 	task = rt->task;
 
-	msg_err_task ("connection to redis server %s timed out",
+	msg_err_task_check ("connection to redis server %s timed out",
 			rspamd_upstream_name (rt->selected));
 	rspamd_upstream_fail (rt->selected);
 	rt->conn_state = RSPAMD_REDIS_TIMEDOUT;
 	redisAsyncFree (rt->redis);
 	rt->redis = NULL;
+	REF_RELEASE (rt);
 }
 
 /* Called when we have connected to the redis server and got stats */
@@ -1148,6 +1149,8 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	event_base_set (task->ev_base, &rt->timeout_event);
 	double_to_tv (ctx->timeout, &tv);
 	event_add (&rt->timeout_event, &tv);
+	/* Cleared by timeout */
+	REF_RETAIN (rt);
 
 	rspamd_redis_maybe_auth (ctx, rt->redis);
 	redisAsyncCommand (rt->redis, rspamd_redis_connected, rt, "HGET %s %s",
