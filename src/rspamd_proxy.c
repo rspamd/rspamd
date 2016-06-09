@@ -804,6 +804,10 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		}
 	}
 
+	if (session->master_conn->results) {
+		ucl_object_unref (session->master_conn->results);
+	}
+
 	g_ptr_array_free (session->mirror_conns, TRUE);
 	rspamd_inet_address_destroy (session->client_addr);
 	close (session->client_sock);
