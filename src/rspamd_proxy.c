@@ -279,6 +279,8 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	}
 
 	up = g_slice_alloc0 (sizeof (*up));
+	up->parser_from_ref = -1;
+	up->parser_to_ref = -1;
 	up->name = g_strdup (ucl_object_tostring (elt));
 
 	elt = ucl_object_lookup (obj, "key");
