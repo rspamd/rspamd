@@ -1238,12 +1238,16 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		}
 		else {
 			if (cmd->need_input) {
-				rspamd_fprintf (out, "Results for file: %s (%.3f seconds)\n",
-						cbdata->filename, diff);
+				if (!compact) {
+					rspamd_fprintf (out, "Results for file: %s (%.3f seconds)\n",
+							cbdata->filename, diff);
+				}
 			}
 			else {
-				rspamd_fprintf (out, "Results for command: %s (%.3f seconds)\n",
-						cmd->name, diff);
+				if (!compact) {
+					rspamd_fprintf (out, "Results for command: %s (%.3f seconds)\n",
+							cmd->name, diff);
+				}
 			}
 
 			if (result != NULL) {
