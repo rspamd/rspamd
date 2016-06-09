@@ -31,6 +31,12 @@
 #define LOG_ID 6
 #define RSPAMD_LOGBUF_SIZE 8192
 
+#if defined(__LP64__) || defined(_LP64)
+#define XXH_ONESHOT XXH64
+#else
+#define XXH_ONESHOT XXH32
+#endif
+
 /**
  * Static structure that store logging parameters
  * It is NOT shared between processes and is created by main process
