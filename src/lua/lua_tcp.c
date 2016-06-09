@@ -348,10 +348,12 @@ static void
 lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 {
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *)ud;
+	const struct rdns_request_name *rn;
 
 	if (reply->code != RDNS_RC_NOERROR) {
+		rn = rdns_request_get_name (reply->request, NULL);
 		lua_tcp_push_error (cbd, "unable to resolve host: %s",
-				reply->requested_name);
+				rn->name);
 		lua_tcp_maybe_free (cbd);
 	}
 	else {
@@ -368,7 +370,7 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 
 		if (!lua_tcp_make_connection (cbd)) {
 			lua_tcp_push_error (cbd, "unable to make connection to the host %s",
-					reply->requested_name);
+					rspamd_inet_address_to_string (cbd->addr));
 			lua_tcp_maybe_free (cbd);
 		}
 	}
