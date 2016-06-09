@@ -1134,6 +1134,22 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			}
 		}
 
+		rspamd_http_connection_steal_msg (session->client_conn);
+		rspamd_http_message_remove_header (msg, "Content-Length");
+		rspamd_http_message_remove_header (msg, "Key");
+		rspamd_http_connection_reset (session->client_conn);
+
+		/* Reset spamc legacy */
+		if (msg->method >= HTTP_SYMBOLS) {
+			msg->method = HTTP_GET;
+			session->is_spamc = TRUE;
+			msg_info_session ("enabling legacy rspamc mode for session");
+		}
+
+		if (msg->url->len == 0) {
+			msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
+		}
+
 		if (backend == NULL) {
 			/* No backend */
 			msg_err_session ("cannot find upstream for %s", host ? hostbuf : "default");
@@ -1153,7 +1169,9 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					SOCK_STREAM, TRUE);
 
 			if (session->master_conn->backend_sock == -1) {
-				msg_err_session ("cannot connect upstream for %s", host ? hostbuf : "default");
+				msg_err_session ("cannot connect upstream: %s(%s)",
+						host ? hostbuf : "default",
+						rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)));
 				rspamd_upstream_fail (session->master_conn->up);
 				goto err;
 			}
@@ -1163,21 +1181,6 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			}
 
 			proxy_open_mirror_connections (session);
-			rspamd_http_connection_steal_msg (session->client_conn);
-			rspamd_http_message_remove_header (msg, "Content-Length");
-			rspamd_http_message_remove_header (msg, "Key");
-			rspamd_http_connection_reset (session->client_conn);
-
-			/* Reset spamc legacy */
-			if (msg->method >= HTTP_SYMBOLS) {
-				msg->method = HTTP_GET;
-				session->is_spamc = TRUE;
-				msg_info_session ("enabling legacy rspamc mode for session");
-			}
-
-			if (msg->url->len == 0) {
-				msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
-			}
 
 			session->master_conn->backend_conn = rspamd_http_connection_new (
 					NULL,
