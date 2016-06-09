@@ -1122,6 +1122,17 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		session->master_conn->name = "master";
 		host = rspamd_http_message_find_header (msg, "Host");
 
+		/* Reset spamc legacy */
+		if (msg->method >= HTTP_SYMBOLS) {
+			msg->method = HTTP_GET;
+			session->is_spamc = TRUE;
+			msg_info_session ("enabling legacy rspamc mode for session");
+		}
+
+		if (msg->url->len == 0) {
+			msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
+		}
+
 		if (host == NULL) {
 			backend = session->ctx->default_upstream;
 		}
@@ -1132,22 +1143,6 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			if (backend == NULL) {
 				backend = session->ctx->default_upstream;
 			}
-		}
-
-		rspamd_http_connection_steal_msg (session->client_conn);
-		rspamd_http_message_remove_header (msg, "Content-Length");
-		rspamd_http_message_remove_header (msg, "Key");
-		rspamd_http_connection_reset (session->client_conn);
-
-		/* Reset spamc legacy */
-		if (msg->method >= HTTP_SYMBOLS) {
-			msg->method = HTTP_GET;
-			session->is_spamc = TRUE;
-			msg_info_session ("enabling legacy rspamc mode for session");
-		}
-
-		if (msg->url->len == 0) {
-			msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
 		}
 
 		if (backend == NULL) {
@@ -1200,6 +1195,11 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 				msg, NULL, NULL, session->master_conn,
 				session->master_conn->backend_sock,
 				&session->ctx->io_tv, session->ctx->ev_base);
+			rspamd_http_connection_steal_msg (session->client_conn);
+			rspamd_http_message_remove_header (msg, "Content-Length");
+			rspamd_http_message_remove_header (msg, "Key");
+			rspamd_http_connection_reset (session->client_conn);
+
 		}
 	}
 	else {
@@ -1211,6 +1211,10 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 	return 0;
 
 err:
+	rspamd_http_connection_steal_msg (session->client_conn);
+	rspamd_http_message_remove_header (msg, "Content-Length");
+	rspamd_http_message_remove_header (msg, "Key");
+	rspamd_http_connection_reset (session->client_conn);
 	proxy_client_write_error (session, 404, "Backend not found");
 
 	return 0;
