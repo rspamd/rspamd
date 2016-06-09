@@ -959,7 +959,7 @@ rspamd_control_handler (gint fd, short what, gpointer arg)
 	gint nfd;
 
 	if ((nfd =
-				 rspamd_accept_from_socket (fd, &addr)) == -1) {
+				 rspamd_accept_from_socket (fd, &addr, NULL)) == -1) {
 		msg_warn_main ("accept failed: %s", strerror (errno));
 		return;
 	}

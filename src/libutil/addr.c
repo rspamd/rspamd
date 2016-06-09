@@ -199,8 +199,41 @@ rspamd_ip_is_valid (const rspamd_inet_addr_t *addr)
 	return ret;
 }
 
+static void
+rspamd_enable_accept_event (gint fd, short what, gpointer d)
+{
+	struct event *events = d;
+
+	event_del (&events[1]);
+	event_add (&events[0], NULL);
+}
+
+static void
+rspamd_disable_accept_events (gint sock, GList *accept_events)
+{
+	GList *cur;
+	struct event *events;
+	const gdouble throttling = 0.5;
+	struct timeval tv;
+	struct event_base *ev_base;
+
+	double_to_tv (throttling, &tv);
+
+	for (cur = accept_events; cur != NULL; cur = g_list_next (cur)) {
+		events = cur->data;
+
+		ev_base = event_get_base (&events[0]);
+		event_del (&events[0]);
+		event_set (&events[1], sock, EV_TIMEOUT, rspamd_enable_accept_event,
+				events);
+		event_base_set (ev_base, &events[1]);
+		event_add (&events[1], &tv);
+	}
+}
+
 gint
-rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target)
+rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target,
+		GList *accept_events)
 {
 	gint nfd, serrno;
 	union sa_union su;
@@ -215,6 +248,13 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target)
 		if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
 			return 0;
 		}
+		else if (errno == EMFILE || errno == ENFILE) {
+			/* Temporary disable accept event */
+			rspamd_disable_accept_events (sock, accept_events);
+
+			return 0;
+		}
+
 		return -1;
 	}
 

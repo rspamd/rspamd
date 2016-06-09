@@ -55,7 +55,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 	gint nfd;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_accept_from_socket (fd, &addr, NULL)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}

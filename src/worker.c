@@ -266,7 +266,7 @@ accept_socket (gint fd, short what, void *arg)
 	}
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}

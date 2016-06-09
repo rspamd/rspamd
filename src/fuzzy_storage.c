@@ -1161,7 +1161,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	struct fuzzy_master_update_session *session;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -2006,7 +2006,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 	GList *cur;
 	struct rspamd_worker_listen_socket *ls;
-	struct event *accept_event;
+	struct event *accept_events;
 	gdouble next_check;
 
 	ctx->peer_fd = rep_fd;
@@ -2026,23 +2026,23 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 
 		if (ls->fd != -1) {
 			if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
-				accept_event = g_slice_alloc0 (sizeof (struct event));
-				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_fuzzy_socket, worker);
-				event_base_set (ctx->ev_base, accept_event);
-				event_add (accept_event, NULL);
+				event_base_set (ctx->ev_base, &accept_events[0]);
+				event_add (&accept_events[0], NULL);
 				worker->accept_events = g_list_prepend (worker->accept_events,
-						accept_event);
+						accept_events);
 			}
 			else if (worker->index == 0) {
 				/* We allow TCP listeners only for a update worker */
-				accept_event = g_slice_alloc0 (sizeof (struct event));
-				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_fuzzy_mirror_socket, worker);
-				event_base_set (ctx->ev_base, accept_event);
-				event_add (accept_event, NULL);
+				event_base_set (ctx->ev_base, &accept_events[0]);
+				event_add (&accept_events[0], NULL);
 				worker->accept_events = g_list_prepend (worker->accept_events,
-						accept_event);
+						accept_events);
 			}
 		}
 

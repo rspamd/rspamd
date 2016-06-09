@@ -193,10 +193,12 @@ gboolean rspamd_ip_is_valid (const rspamd_inet_addr_t *addr);
 /**
  * Accept from listening socket filling addr structure
  * @param sock listening socket
- * @param addr allocated inet addr structur
+ * @param addr allocated inet addr structure
+ * @param accept_events events for accepting new sockets
  * @return
  */
-gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **addr);
+gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **addr,
+		GList *accept_events);
 
 /**
  * Parse host[:port[:priority]] line
