@@ -1,4 +1,4 @@
-/*  
+/*
 ** $Id: lptree.h,v 1.2 2013/03/24 13:51:12 roberto Exp $
 */
 
@@ -6,7 +6,7 @@
 #define lptree_h
 
 
-#include "lptypes.h" 
+#include "lptypes.h"
 
 
 /*
@@ -69,7 +69,7 @@ extern const byte numsiblings[];
 #define sib2(t)         ((t) + (t)->u.ps)
 
 
-
+int luaopen_lpeg (lua_State *L);
 
 
 

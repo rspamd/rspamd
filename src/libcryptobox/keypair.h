@@ -261,5 +261,14 @@ gboolean rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
 		const void *data, gsize len, guchar *sig, gsize siglen,
 		GError **err);
 
+/**
+ * Compares two public keys
+ * @param k1 key to compare
+ * @param k2 key to compare
+ * @return TRUE if two keys are equal
+ */
+gboolean rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
+		const struct rspamd_cryptobox_pubkey *k2);
+
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */

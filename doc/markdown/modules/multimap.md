@@ -22,6 +22,7 @@ Multimap module allows to build rules based on the dynamic maps content. Rspamd 
 map types in this module:
 
 * `hash map` - a list of domains or `user@domain`
+* `regexp map` - a list of regular expressions
 * `ip map` - an effective radix trie of `ip/mask` values (supports both IPv4 and IPv6 addresses)
 * `cdb` - constant database format (files only)
 
@@ -35,6 +36,8 @@ Multimap can also be used for pre-filtering of message: so if map matches then n
 The module itself contains a set of rules in form:
 
 	symbol { type = type; map = uri; [optional params] }
+
+### Map types
 
 Type attribute means what is matched with this map. The following types are supported:
 
@@ -52,7 +55,7 @@ Maps can also be specified as [CDB](http://www.corpit.ru/mjt/tinycdb.html) datab
 
 	map = "cdb:///path/to/file.cdb";
 
-Here is an example configuration of multimap module:
+### Pre-filter maps
 
 To enable pre-filter support, you should specify `action` parameter which can take the
 following values:
@@ -73,12 +76,27 @@ multimap {
 }
 ~~~
 
+### Regexp maps
+
+
 All maps but `ip` and `dnsbl` support `regexp` mode. In this mode, all keys in maps are treated as regular expressions, for example:
 
 	/example\d+\.com/i
 	/other\d+\.com/i test
+	# Comments are still enabled
 
 For performance considerations, use only expressions supported by [hyperscan](http://01org.github.io/hyperscan/dev-reference/compilation.html#pattern-support) as this engine provides blazing performance at no additional cost. Currently, there is no way to distinguish what particular regexp was matched in case if multiple regexp were matched.
+
+To enable regexp mode, you should set `regexp` option to `true`:
+
+~~~ucl
+sender_from_whitelist_user {
+  type = "from";
+  map = "file:///tmp/from.map";
+  symbol = "SENDER_FROM_WHITELIST";
+  regexp = true;
+}
+~~~
 
 ### Map filters
 

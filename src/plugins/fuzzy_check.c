@@ -53,6 +53,13 @@
 #define DEFAULT_RETRANSMITS 3
 #define DEFAULT_PORT 11335
 
+/*
+ * WARNING:
+ * As 1.3 is not yet stable, we want to keep compatibility here as 1.2 won't
+ * recognize version 4 unless 1.2.7
+ */
+#define RSPAMD_FUZZY_PLUGIN_VERSION 3
+
 static const gint rspamd_fuzzy_hash_len = 5;
 
 struct fuzzy_mapping {
@@ -188,6 +195,13 @@ parse_flags (struct fuzzy_rule *rule,
 
 			if (elt != NULL) {
 				map->fuzzy_flag = ucl_obj_toint (elt);
+
+				if (map->fuzzy_flag > 31) {
+					msg_err_config ("flags more than 31 are no longer "
+							"supported by rspamd");
+					return;
+				}
+
 				elt = ucl_object_lookup (val, "max_score");
 
 				if (elt != NULL) {
@@ -1007,7 +1021,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_VERSION;
+	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
 	if (c != FUZZY_CHECK) {
 		cmd->flag = flag;
 		cmd->value = weight;
@@ -1165,7 +1179,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
 	shcmd->basic.cmd = c;
-	shcmd->basic.version = RSPAMD_FUZZY_VERSION;
+	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
 
 	if (c != FUZZY_CHECK) {
 		shcmd->basic.flag = flag;
@@ -1214,7 +1228,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	}
 
 	cmd->cmd = c;
-	cmd->version = RSPAMD_FUZZY_VERSION;
+	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
 	if (c != FUZZY_CHECK) {
 		cmd->flag = flag;
 		cmd->value = weight;
@@ -1390,6 +1404,66 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 	return NULL;
 }
 
+static void
+fuzzy_insert_result (struct fuzzy_client_session *session,
+		const struct rspamd_fuzzy_reply *rep,
+		struct rspamd_fuzzy_cmd *cmd, guint flag)
+{
+	const gchar *symbol;
+	struct fuzzy_mapping *map;
+	struct rspamd_task *task = session->task;
+	double nval;
+	guchar buf[2048];
+
+	/* Get mapping by flag */
+	if ((map =
+			g_hash_table_lookup (session->rule->mappings,
+					GINT_TO_POINTER (rep->flag))) == NULL) {
+		/* Default symbol and default weight */
+		symbol = session->rule->symbol;
+
+	}
+	else {
+		/* Get symbol and weight from map */
+		symbol = map->symbol;
+	}
+
+
+	/*
+	 * Hash is assumed to be found if probability is more than 0.5
+	 * In that case `value` means number of matches
+	 * Otherwise `value` means error code
+	 */
+
+	nval = fuzzy_normalize (rep->value,
+			session->rule->max_score);
+	nval *= rep->prob;
+	msg_info_task (
+			"found fuzzy hash %*xs with weight: "
+			"%.2f, in list: %s:%d%s",
+			rspamd_fuzzy_hash_len, cmd->digest,
+			nval,
+			symbol,
+			rep->flag,
+			map == NULL ? "(unknown)" : "");
+	if (map != NULL || !session->rule->skip_unknown) {
+		rspamd_snprintf (buf,
+				sizeof (buf),
+				"%d:%*xs:%.2f",
+				rep->flag,
+				rspamd_fuzzy_hash_len, cmd->digest,
+				rep->prob,
+				nval);
+		rspamd_task_insert_result_single (session->task,
+				symbol,
+				nval,
+				g_list_prepend (NULL,
+						rspamd_mempool_strdup (
+								session->task->task_pool,
+								buf)));
+	}
+}
+
 /* Fuzzy check callback */
 static void
 fuzzy_check_io_callback (gint fd, short what, void *arg)
@@ -1397,14 +1471,12 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 	struct fuzzy_client_session *session = arg;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_task *task;
-	struct fuzzy_mapping *map;
 	guchar buf[2048], *p;
-	const gchar *symbol;
 	struct fuzzy_cmd_io *io;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	guint i;
 	gint r;
-	double nval;
+
 	enum {
 		return_error = 0,
 		return_want_more,
@@ -1427,68 +1499,30 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 
 			while ((rep = fuzzy_process_reply (&p, &r,
 					session->commands, session->rule, &cmd)) != NULL) {
-				/* Get mapping by flag */
-				if ((map =
-						g_hash_table_lookup (session->rule->mappings,
-								GINT_TO_POINTER (rep->flag))) == NULL) {
-					/* Default symbol and default weight */
-					symbol = session->rule->symbol;
-
-				}
-				else {
-					/* Get symbol and weight from map */
-					symbol = map->symbol;
-				}
-
-
-				/*
-				 * Hash is assumed to be found if probability is more than 0.5
-				 * In that case `value` means number of matches
-				 * Otherwise `value` means error code
-				 */
 				if (rep->prob > 0.5) {
-					nval = fuzzy_normalize (rep->value,
-							session->rule->max_score);
-					nval *= rep->prob;
-					msg_info_task (
-							"found fuzzy hash %*xs with weight: "
-									"%.2f, in list: %s:%d%s",
-							rspamd_fuzzy_hash_len, cmd->digest,
-							nval,
-							symbol,
-							rep->flag,
-							map == NULL ? "(unknown)" : "");
-					if (map != NULL || !session->rule->skip_unknown) {
-						rspamd_snprintf (buf,
-								sizeof (buf),
-								"%d:%*xs:%.2f",
-								rep->flag,
-								rspamd_fuzzy_hash_len, cmd->digest,
-								rep->prob,
-								nval);
-						rspamd_task_insert_result_single (session->task,
-								symbol,
-								nval,
-								g_list_prepend (NULL,
-										rspamd_mempool_strdup (
-												session->task->task_pool,
-												buf)));
+					if (rep->flag & (1U << 31)) {
+						/* Multi-flag */
+						for (i = 0; i < 31; i ++) {
+							if ((1U << i) & rep->flag) {
+								fuzzy_insert_result (session, rep, cmd, i + 1);
+							}
+						}
+					}
+					else {
+						fuzzy_insert_result (session, rep, cmd, rep->flag);
 					}
 				}
 				else if (rep->value == 403) {
 					msg_info_task (
-							"fuzzy check error for %s(%d): forbidden",
-							symbol,
+							"fuzzy check error for %d: forbidden",
 							rep->flag);
 				}
 				else if (rep->value != 0) {
 					msg_info_task (
-							"fuzzy check error for %s(%d): unknown error (%d)",
-							symbol,
+							"fuzzy check error for %d: unknown error (%d)",
 							rep->flag,
 							rep->value);
 				}
-				/* Not found */
 
 				ret = return_finished;
 			}

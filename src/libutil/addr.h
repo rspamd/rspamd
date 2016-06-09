@@ -108,6 +108,13 @@ gboolean rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 const char * rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr);
 
 /**
+ * Returns pretty string representation of inet address
+ * @param addr
+ * @return statically allocated string pointer (not thread safe)
+ */
+const char * rspamd_inet_address_to_string_pretty (const rspamd_inet_addr_t *addr);
+
+/**
  * Returns port number for the specified inet address in host byte order
  * @param addr
  * @return
@@ -186,10 +193,12 @@ gboolean rspamd_ip_is_valid (const rspamd_inet_addr_t *addr);
 /**
  * Accept from listening socket filling addr structure
  * @param sock listening socket
- * @param addr allocated inet addr structur
+ * @param addr allocated inet addr structure
+ * @param accept_events events for accepting new sockets
  * @return
  */
-gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **addr);
+gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **addr,
+		GList *accept_events);
 
 /**
  * Parse host[:port[:priority]] line

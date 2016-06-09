@@ -177,6 +177,56 @@ rspamd_mime_expr_quark (void)
 	return g_quark_from_static_string ("mime-expressions");
 }
 
+static gboolean
+rspamd_parse_long_option (const gchar *start, gsize len,
+		struct rspamd_regexp_atom *a)
+{
+	gboolean ret = FALSE;
+
+	if (rspamd_lc_cmp (start, "body", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_BODY;
+	}
+	else if (rspamd_lc_cmp (start, "part", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_MIME;
+	}
+	else if (rspamd_lc_cmp (start, "raw_part", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_RAWMIME;
+	}
+	else if (rspamd_lc_cmp (start, "header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_HEADER;
+	}
+	else if (rspamd_lc_cmp (start, "mime_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_MIMEHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "raw_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_RAWHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "all_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_ALLHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "url", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_URL;
+	}
+	else if (rspamd_lc_cmp (start, "sa_body", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_SABODY;
+	}
+	else if (rspamd_lc_cmp (start, "sa_raw_body", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_SARAWBODY;
+	}
+
+	return ret;
+}
+
 /*
  * Rspamd regexp utility functions
  */
@@ -184,7 +234,7 @@ static struct rspamd_regexp_atom *
 rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		struct rspamd_config *cfg)
 {
-	const gchar *begin, *end, *p, *src, *start;
+	const gchar *begin, *end, *p, *src, *start, *brace;
 	gchar *dbegin, *dend;
 	struct rspamd_regexp_atom *result;
 	GError *err = NULL;
@@ -291,6 +341,14 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			result->type = RSPAMD_RE_MIMEHEADER;
 			p++;
 			break;
+		case 'C':
+			result->type = RSPAMD_RE_SABODY;
+			p++;
+			break;
+		case 'D':
+			result->type = RSPAMD_RE_SARAWBODY;
+			p++;
+			break;
 		case 'M':
 			result->type = RSPAMD_RE_BODY;
 			p++;
@@ -310,6 +368,20 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		case 'X':
 			result->type = RSPAMD_RE_RAWHEADER;
 			p++;
+			break;
+		case '{':
+			/* Long definition */
+			if ((brace = strchr (p + 1, '}')) != NULL) {
+				if (!rspamd_parse_long_option (p + 1, brace - (p + 1), result)) {
+					p = NULL;
+				}
+				else {
+					p = brace + 1;
+				}
+			}
+			else {
+				p = NULL;
+			}
 			break;
 		/* Other flags */
 		case 'T':
@@ -636,7 +708,8 @@ set:
 		else {
 			/* Register new item in the cache */
 			if (mime_atom->d.re->type == RSPAMD_RE_HEADER ||
-					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER) {
+					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER ||
+					mime_atom->d.re->type == RSPAMD_RE_MIMEHEADER) {
 
 				if (mime_atom->d.re->header != NULL) {
 					own_re = mime_atom->d.re->regexp;
@@ -1261,13 +1334,11 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	GMimeObject *part;
-#ifndef GMIME24
-	GMimePartEncodingType enc_req, part_enc;
-#else
-	GMimeContentEncoding enc_req, part_enc;
-#endif
+	GPtrArray *headerlist;
 	struct expression_argument *arg;
+	guint i;
+	struct raw_header *rh;
+	static const char *hname = "Content-Transfer-Encoding";
 
 	if (args == NULL) {
 		msg_warn_task ("no parameters to function");
@@ -1280,47 +1351,42 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 		return FALSE;
 	}
 
-#ifndef GMIME24
-	enc_req = g_mime_part_encoding_from_string (arg->data);
-	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {
-#else
-	enc_req = g_mime_content_encoding_from_string (arg->data);
-	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
-#endif
-		msg_warn_task ("bad encoding type: %s", (gchar *)arg->data);
-		return FALSE;
+	headerlist = rspamd_message_get_header_array (task, hname, FALSE);
+
+	if (headerlist) {
+		for (i = 0; i < headerlist->len; i ++) {
+			rh = g_ptr_array_index (headerlist, i);
+
+			if (rh->decoded == NULL) {
+				continue;
+			}
+
+			if (g_ascii_strcasecmp (rh->decoded, arg->data) == 0) {
+				return TRUE;
+			}
+		}
 	}
 
-	part = g_mime_message_get_mime_part (task->message);
-	if (part) {
-		if (GMIME_IS_PART (part)) {
-#ifndef GMIME24
-			part_enc = g_mime_part_get_encoding (GMIME_PART (part));
-			if (part_enc == GMIME_PART_ENCODING_DEFAULT) {
-				/* Assume 7bit as default transfer encoding */
-				part_enc = GMIME_PART_ENCODING_7BIT;
+	/*
+	 * In fact, we need to check 'Content-Transfer-Encoding' for each part
+	 * as gmime has 'strange' assumptions
+	 */
+	headerlist = rspamd_message_get_mime_header_array (task,
+			arg->data,
+			FALSE);
+
+	if (headerlist) {
+		for (i = 0; i < headerlist->len; i ++) {
+			rh = g_ptr_array_index (headerlist, i);
+
+			if (rh->decoded == NULL) {
+				continue;
 			}
-#else
-			part_enc = g_mime_part_get_content_encoding (GMIME_PART (part));
-			if (part_enc == GMIME_CONTENT_ENCODING_DEFAULT) {
-				/* Assume 7bit as default transfer encoding */
-				part_enc = GMIME_CONTENT_ENCODING_7BIT;
+
+			if (g_ascii_strcasecmp (rh->decoded, arg->data) == 0) {
+				return TRUE;
 			}
-#endif
-
-
-			debug_task ("got encoding in part: %d and compare with %d",
-				(gint)part_enc,
-				(gint)enc_req);
-#ifndef GMIME24
-			g_object_unref (part);
-#endif
-
-			return part_enc == enc_req;
 		}
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
 	}
 
 	return FALSE;

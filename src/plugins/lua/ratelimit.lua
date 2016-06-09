@@ -16,8 +16,6 @@ limitations under the License.
 
 -- A plugin that implements ratelimits using redis or kvstorage server
 
--- Default port for redis upstreams
-local default_port = 6379
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
   -- Limit for all mail per recipient (burst 100, rate 2 per minute)
@@ -53,36 +51,10 @@ local rspamd_util = require "rspamd_util"
 local _ = require "fun"
 --local dumper = require 'pl.pretty'.dump
 
---- Utility function for split string to table
-local function split(str, delim, maxNb)
-  -- Eliminate bad cases...
-  if string.find(str, delim) == nil then
-    return { str }
-  end
-  if maxNb == nil or maxNb < 1 then
-    maxNb = 0    -- No limit
-  end
-  local result = {}
-  local pat = "(.-)" .. delim .. "()"
-  local nb = 0
-  local lastPos
-  for part, pos in string.gmatch(str, pat) do
-    nb = nb + 1
-    result[nb] = part
-    lastPos = pos
-    if nb == maxNb then break end
-  end
-  -- Handle the last field
-  if nb ~= maxNb then
-    result[nb + 1] = string.sub(str, lastPos)
-  end
-  return result
-end
-
 --- Parse atime and bucket of limit
 local function parse_limits(data)
   local function parse_limit_elt(str)
-    local elts = split(str, ':', 3)
+    local elts = rspamd_str_split(str, ':')
     if not elts or #elts < 2 then
       return {0, 0, 0}
     else
@@ -343,7 +315,7 @@ end
 
 --- Parse a single limit description
 local function parse_limit(str)
-  local params = split(str, ':', 0)
+  local params = rspamd_str_split(str, ':')
 
   local function set_limit(limit, burst, rate)
     limit[1] = tonumber(burst)
@@ -398,7 +370,7 @@ if opts then
   rspamd_logger.infox(rspamd_config, 'enabled rate buckets: %s', enabled_limits)
 
   if opts['whitelisted_rcpts'] and type(opts['whitelisted_rcpts']) == 'string' then
-    whitelisted_rcpts = split(opts['whitelisted_rcpts'], ',')
+    whitelisted_rcpts = rspamd_str_split(opts['whitelisted_rcpts'], ',')
   elseif type(opts['whitelisted_rcpts']) == 'table' then
     whitelisted_rcpts = opts['whitelisted_rcpts']
   end
@@ -420,25 +392,21 @@ if opts then
     max_rcpt = tonumber(opts['max_delay'])
   end
 
-  if not opts['servers'] then
+  upstreams = rspamd_parse_redis_server('ratelimit')
+  if not upstreams then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
-    upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
-    if not upstreams then
-      rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    if not ratelimit_symbol then
+      rspamd_config:register_pre_filter(rate_test)
     else
-      if not ratelimit_symbol then
-        rspamd_config:register_pre_filter(rate_test)
-      else
-        rspamd_config:register_symbol({
-          name = ratelimit_symbol,
-          callback = rate_test,
-          flags = 'empty'
-        })
-      end
-
-      rspamd_config:register_post_filter(rate_set)
+      rspamd_config:register_symbol({
+        name = ratelimit_symbol,
+        callback = rate_test,
+        flags = 'empty'
+      })
     end
+
+    rspamd_config:register_post_filter(rate_set)
   end
 end
 

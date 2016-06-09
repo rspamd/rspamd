@@ -198,6 +198,7 @@ fi
 %config(noreplace) %{rspamd_confdir}/common.conf
 %config(noreplace) %{rspamd_confdir}/logging.inc
 %config(noreplace) %{rspamd_confdir}/options.inc
+%config(noreplace) %{rspamd_confdir}/redirectors.inc
 %config(noreplace) %{rspamd_confdir}/worker-controller.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
 %config(noreplace) %{rspamd_confdir}/modules.d/*

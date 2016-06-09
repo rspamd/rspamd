@@ -21,7 +21,7 @@
 /* number of siblings for each tree */
 const byte numsiblings[] = {
   0, 0, 0,	/* char, set, any */
-  0, 0,		/* true, false */	
+  0, 0,		/* true, false */
   1,		/* rep */
   2, 2,		/* seq, choice */
   1, 1,		/* not, and */
@@ -1280,8 +1280,6 @@ static struct luaL_Reg metareg[] = {
   {NULL, NULL}
 };
 
-
-int luaopen_lpeg (lua_State *L);
 int luaopen_lpeg (lua_State *L) {
   luaL_newmetatable(L, PATTERN_T);
   lua_pushnumber(L, MAXBACK);  /* initialize maximum backtracking */

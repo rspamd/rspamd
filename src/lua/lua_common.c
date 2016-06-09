@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua/global_functions.lua.h"
+#include "lptree.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -185,13 +187,13 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 
 	if (additional_path) {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;%s/lua/?.lua;%s;%s;%s",
+				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s;%s",
 				RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR, RSPAMD_RULESDIR,
 				additional_path, old_path);
 	}
 	else {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;%s/lua/?.lua;%s;%s",
+				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s",
 				RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR, RSPAMD_RULESDIR,
 				old_path);
 	}
@@ -241,8 +243,14 @@ rspamd_lua_init ()
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
+	luaopen_lpeg (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
+
+	if (luaL_dostring (L, rspamadm_script_global_functions) != 0) {
+		msg_err ("cannot execute lua global script: %s",
+				lua_tostring (L, -1));
+	}
 
 	return L;
 }

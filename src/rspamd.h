@@ -165,12 +165,24 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_ALWAYS_START = (1 << 4),
 };
 
+enum rspamd_worker_socket_type {
+	RSPAMD_WORKER_SOCKET_NONE = 0,
+	RSPAMD_WORKER_SOCKET_TCP = (1 << 0),
+	RSPAMD_WORKER_SOCKET_UDP = (1 << 1),
+};
+
+struct rspamd_worker_listen_socket {
+	const rspamd_inet_addr_t *addr;
+	gint fd;
+	enum rspamd_worker_socket_type type;
+};
+
 typedef struct worker_s {
 	const gchar *name;
 	gpointer (*worker_init_func)(struct rspamd_config *cfg);
 	void (*worker_start_func)(struct rspamd_worker *worker);
 	enum rspamd_worker_flags flags;
-	gint listen_type;
+	enum rspamd_worker_socket_type listen_type;
 	guint worker_version;
 	guint64 rspamd_version;
 	const gchar *rspamd_features;

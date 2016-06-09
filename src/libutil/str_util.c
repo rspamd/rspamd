@@ -1237,7 +1237,7 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 	j = 0;
 	while (j <= inlen - srchlen) {
 
-		if (hash_srch == hash_in && g_ascii_strncasecmp (srch, in + j, srchlen) == 0) {
+		if (hash_srch == hash_in && rspamd_lc_cmp (srch, in + j, srchlen) == 0) {
 			return (goffset) j;
 		}
 

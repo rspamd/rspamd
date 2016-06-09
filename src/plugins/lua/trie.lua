@@ -22,26 +22,32 @@ local _ = require "fun"
 
 local mime_trie
 local raw_trie
+local body_trie
 
 -- here we store all patterns as text
 local mime_patterns = {}
 local raw_patterns = {}
+local body_patterns = {}
 
 -- here we store params for each pattern, so for each i = 1..n patterns[i]
 -- should have corresponding params[i]
 local mime_params = {}
 local raw_params = {}
+local body_params = {}
 
 local function tries_callback(task)
 
   local matched = {}
 
-  local function gen_trie_cb(raw)
+  local function gen_trie_cb(type)
     local patterns = mime_patterns
     local params = mime_params
-    if raw then
+    if type == 'rawmessage' then
       patterns = raw_patterns
       params = raw_params
+    elseif type == 'rawbody' then
+      patterns = body_patterns
+      params = body_params
     end
 
     return function (idx, pos)
@@ -51,7 +57,7 @@ local function tries_callback(task)
       if param['multi'] or not matched[pattern] then
         rspamd_logger.debugx(task, "<%1> matched pattern %2 at pos %3",
           task:get_message_id(), pattern, pos)
-        task:insert_result(param['symbol'], 1.0)
+        task:insert_result(param['symbol'], 1.0, type)
         if not param['multi'] then
           matched[pattern] = true
         end
@@ -60,10 +66,13 @@ local function tries_callback(task)
   end
 
   if mime_trie then
-    mime_trie:search_mime(task, gen_trie_cb(false))
+    mime_trie:search_mime(task, gen_trie_cb('mime'))
   end
   if raw_trie then
-    raw_trie:search_rawmsg(task, gen_trie_cb(true))
+    raw_trie:search_rawmsg(task, gen_trie_cb('rawmessage'))
+  end
+  if body_trie then
+    raw_trie:search_rawbody(task, gen_trie_cb('rawbody'))
   end
 end
 
@@ -75,6 +84,9 @@ local function process_single_pattern(pat, symbol, cf)
     if cf['raw'] then
       table.insert(raw_patterns, pat)
       table.insert(raw_params, {symbol=symbol, multi=multi})
+    elseif cf['body'] then
+      table.insert(body_patterns, pat)
+      table.insert(body_params, {symbol=symbol, multi=multi})
     else
       table.insert(mime_patterns, pat)
       table.insert(mime_params, {symbol=symbol, multi=multi})
@@ -101,15 +113,11 @@ local function process_trie_file(symbol, cf)
 end
 
 local function process_trie_conf(symbol, cf)
-  local raw = false
-
   if type(cf) ~= 'table' then
     rspamd_logger.errx(rspamd_config, 'invalid value for symbol %1: "%2", expected table',
       symbol, cf)
     return
   end
-
-  if cf['raw'] then raw = true end
 
   if cf['file'] then
     process_trie_file(symbol, cf)
@@ -136,8 +144,13 @@ if opts then
     rspamd_logger.infox(rspamd_config, 'registered mime search trie from %1 patterns', #mime_patterns)
   end
 
+  if #body_patterns > 0 then
+    body_trie = rspamd_trie.create(body_patterns)
+    rspamd_logger.infox(rspamd_config, 'registered body search trie from %1 patterns', #body_patterns)
+  end
+
   local id = -1
-  if mime_trie or raw_trie then
+  if mime_trie or raw_trie or body_trie then
     id = rspamd_config:register_symbol({
       type = 'callback',
       callback = tries_callback

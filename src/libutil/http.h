@@ -166,6 +166,14 @@ void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 		struct rspamd_cryptobox_keypair *key);
 
 /**
+ * Get peer's public key
+ * @param conn connection structure
+ * @return pubkey structure or NULL
+ */
+const struct rspamd_cryptobox_pubkey* rspamd_http_connection_get_peer_key (
+		struct rspamd_http_connection *conn);
+
+/**
  * Returns TRUE if a connection is encrypted
  * @param conn
  * @return

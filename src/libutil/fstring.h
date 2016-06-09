@@ -81,6 +81,8 @@ rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
  */
 void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
 
+#define rspamd_fstring_clear(s) rspamd_fstring_erase(s, 0, s->len)
+
 /**
  * Convert fixed string to a zero terminated string. This string should be
  * freed by a caller
@@ -160,5 +162,10 @@ rspamd_fstring_t * rspamd_fstring_grow (rspamd_fstring_t *str,
  */
 gchar *rspamd_ftokdup (const rspamd_ftok_t *src) G_GNUC_WARN_UNUSED_RESULT;
 
-
+/**
+ * Copies fstring to zero terminated string (must be freed using g_free)
+ * @param src
+ * @return
+ */
+gchar *rspamd_fstringdup (const rspamd_fstring_t *src) G_GNUC_WARN_UNUSED_RESULT;
 #endif

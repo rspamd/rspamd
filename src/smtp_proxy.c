@@ -44,7 +44,7 @@ worker_t smtp_proxy_worker = {
 	init_smtp_proxy,            /* Init function */
 	start_smtp_proxy,           /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
-	SOCK_STREAM,                /* TCP socket */
+	RSPAMD_WORKER_SOCKET_TCP,   /* TCP socket */
 	RSPAMD_WORKER_VER           /* Version info */
 };
 
@@ -902,7 +902,7 @@ accept_socket (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}

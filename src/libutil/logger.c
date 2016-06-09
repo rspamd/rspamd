@@ -61,26 +61,12 @@ struct rspamd_logger_s {
 	gchar *saved_module;
 	gchar *saved_id;
 	guint saved_loglevel;
-	rspamd_mempool_t *pool;
-	rspamd_mempool_mutex_t *mtx;
 	guint64 log_cnt[4];
 };
 
 static const gchar lf_chr = '\n';
 
 static rspamd_logger_t *default_logger = NULL;
-
-#define RSPAMD_LOGGER_LOCK(l) do {				\
-	if ((l) != NULL && !(l)->no_lock) {			\
-		rspamd_mempool_lock_mutex ((l)->mtx);	\
-	}											\
-} while (0)
-
-#define RSPAMD_LOGGER_UNLOCK(l) do {			\
-	if ((l) != NULL && !(l)->no_lock) {			\
-		rspamd_mempool_unlock_mutex ((l)->mtx);	\
-	}											\
-} while (0)
 
 static void
 		syslog_log_function (const gchar *log_domain, const gchar *module,
@@ -118,6 +104,10 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 	glong r;
 
 	if (rspamd_log->enabled) {
+		if (!rspamd_log->no_lock) {
+			rspamd_file_lock (rspamd_log->fd, FALSE);
+		}
+
 		if (is_iov) {
 			iov = (struct iovec *) data;
 			r = writev (rspamd_log->fd, iov, count);
@@ -126,6 +116,11 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 			line = (const gchar *) data;
 			r = write (rspamd_log->fd, line, count);
 		}
+
+		if (!rspamd_log->no_lock) {
+			rspamd_file_unlock (rspamd_log->fd, FALSE);
+		}
+
 		if (r == -1) {
 			/* We cannot write message to file, so we need to detect error and make decision */
 			if (errno == EINTR) {
@@ -321,11 +316,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 		struct rspamd_main *rspamd)
 {
 	if (rspamd->logger == NULL) {
-		rspamd->logger = g_malloc (sizeof (rspamd_logger_t));
-		memset (rspamd->logger, 0, sizeof (rspamd_logger_t));
-		/* Small pool for interlocking */
-		rspamd->logger->pool = rspamd_mempool_new (512, NULL);
-		rspamd->logger->mtx = rspamd_mempool_get_mutex (rspamd->logger->pool);
+		rspamd->logger = g_slice_alloc0 (sizeof (rspamd_logger_t));
 	}
 
 	rspamd->logger->type = cfg->log_type;
@@ -468,14 +459,12 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 	else {
 		if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			RSPAMD_LOGGER_LOCK (rspamd_log);
 			rspamd_log->log_func (NULL, module, id,
 					function,
 					log_level,
 					logbuf,
 					FALSE,
 					rspamd_log);
-			RSPAMD_LOGGER_UNLOCK (rspamd_log);
 		}
 
 		switch (log_level) {
@@ -936,7 +925,6 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 			}
 		}
 
-		RSPAMD_LOGGER_LOCK (rspamd_log);
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
@@ -947,7 +935,6 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 				logbuf,
 				TRUE,
 				rspamd_log);
-		RSPAMD_LOGGER_UNLOCK (rspamd_log);
 	}
 }
 
@@ -964,14 +951,12 @@ rspamd_glib_log_function (const gchar *log_domain,
 
 	if (rspamd_log->enabled &&
 			rspamd_logger_need_log (rspamd_log, log_level, NULL)) {
-		RSPAMD_LOGGER_LOCK (rspamd_log);
 		rspamd_log->log_func (log_domain, "glib", NULL,
 				NULL,
 				log_level,
 				message,
 				FALSE,
 				rspamd_log);
-		RSPAMD_LOGGER_UNLOCK (rspamd_log);
 	}
 }
 

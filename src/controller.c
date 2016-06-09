@@ -25,6 +25,7 @@
 #include "ottery.h"
 #include "libutil/rrd.h"
 #include "unix-std.h"
+#include "utlist.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -109,7 +110,7 @@ worker_t controller_worker = {
 	init_controller_worker,         /* Init function */
 	start_controller_worker,        /* Start function */
 	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
-	SOCK_STREAM,            /* TCP socket */
+	RSPAMD_WORKER_SOCKET_TCP,       /* TCP socket */
 	RSPAMD_WORKER_VER       /* Version info */
 };
 /*
@@ -503,9 +504,15 @@ static gboolean rspamd_controller_check_password(
 						"using password as enable_password for a privileged command");
 				check = ctx->password;
 			}
+
 			if (check != NULL) {
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					ret = rspamd_constant_memcmp (password->begin, check, password->len);
+					ret = FALSE;
+
+					if (strlen (check) == password->len) {
+						ret = rspamd_constant_memcmp (password->begin, check,
+								password->len);
+					}
 				}
 				else {
 					ret = rspamd_check_encrypted_password (ctx, password, check,
@@ -526,9 +533,15 @@ static gboolean rspamd_controller_check_password(
 			/* Accept both normal and enable passwords */
 			if (ctx->password != NULL) {
 				check = ctx->password;
+
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_normal = rspamd_constant_memcmp (password->begin, check,
-							password->len);
+					check_normal = FALSE;
+
+					if (strlen (check) == password->len) {
+						check_normal = rspamd_constant_memcmp (password->begin,
+								check,
+								password->len);
+					}
 				}
 				else {
 					check_normal = rspamd_check_encrypted_password (ctx,
@@ -540,11 +553,18 @@ static gboolean rspamd_controller_check_password(
 			else {
 				check_normal = FALSE;
 			}
+
 			if (ctx->enable_password != NULL) {
 				check = ctx->enable_password;
+
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_enable = rspamd_constant_memcmp (password->begin, check,
-							password->len);
+					check_enable = FALSE;
+
+					if (strlen (check) == password->len) {
+						check_enable = rspamd_constant_memcmp (password->begin,
+								check,
+								password->len);
+					}
 				}
 				else {
 					check_enable = rspamd_check_encrypted_password (ctx,
@@ -563,7 +583,7 @@ static gboolean rspamd_controller_check_password(
 	}
 
 	if (check_normal == FALSE && check_enable == FALSE) {
-		msg_info("absent or incorrect password has been specified");
+		msg_info ("absent or incorrect password has been specified");
 		ret = FALSE;
 	}
 
@@ -2196,7 +2216,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -2564,9 +2584,10 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->srv = worker->srv;
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
-	if (ctx->secure_ip != NULL) {
 
+	if (ctx->secure_ip != NULL) {
 		if (ucl_object_type (ctx->secure_ip) == UCL_ARRAY) {
+
 			while ((cur = ucl_object_iterate (ctx->secure_ip, &it, true)) != NULL) {
 				/* Try map syntax */
 				if (ucl_object_type (cur) == UCL_STRING &&
@@ -2586,10 +2607,22 @@ start_controller_worker (struct rspamd_worker *worker)
 			}
 		}
 		else {
-			rspamd_map_add_from_ucl (worker->srv->cfg, ctx->secure_ip,
-					"Allow webui access from the specified IP",
-					rspamd_radix_read, rspamd_radix_fin,
-					(void **)&ctx->secure_map);
+			LL_FOREACH (ctx->secure_ip, cur) {
+				if (ucl_object_type (cur) == UCL_STRING &&
+						!rspamd_map_is_map (ucl_object_tostring (cur))) {
+					if (!radix_add_generic_iplist (ucl_object_tostring (cur),
+							&ctx->secure_map)) {
+						msg_warn_ctx ("cannot load or parse ip list from '%s'",
+								ucl_object_tostring (cur));
+					}
+				}
+				else {
+					rspamd_map_add_from_ucl (worker->srv->cfg, ctx->secure_ip,
+							"Allow webui access from the specified IP",
+							rspamd_radix_read, rspamd_radix_fin,
+							(void **)&ctx->secure_map);
+				}
+			}
 		}
 	}
 

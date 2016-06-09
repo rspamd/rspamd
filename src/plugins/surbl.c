@@ -80,6 +80,15 @@ module_t surbl_module = {
 };
 
 static void
+exceptions_free_value (gpointer v)
+{
+	rspamd_ftok_t *val = v;
+
+	g_free ((gpointer)val->begin);
+	g_slice_free1 (sizeof (*val), val);
+}
+
+static void
 exception_insert (gpointer st, gconstpointer key, gconstpointer value)
 {
 	GHashTable **t = st;
@@ -100,18 +109,18 @@ exception_insert (gpointer st, gconstpointer key, gconstpointer value)
 		return;
 	}
 
-	val = g_malloc (sizeof (rspamd_ftok_t));
-	val->begin = key;
+	val = g_slice_alloc (sizeof (rspamd_ftok_t));
+	val->begin = g_strdup (key);
 	val->len = strlen (key);
 
 	if (t[level] == NULL) {
 		t[level] = g_hash_table_new_full (rspamd_ftok_icase_hash,
 				rspamd_ftok_icase_equal,
-				g_free,
+				exceptions_free_value,
 				g_free);
 	}
 
-	g_hash_table_insert (t[level], val, g_strdup (value));
+	g_hash_table_replace (t[level], val, g_strdup (value));
 }
 
 static gchar *
@@ -121,13 +130,13 @@ read_exceptions_list (gchar * chunk,
 	gboolean final)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_malloc (sizeof (GHashTable *) * MAX_LEVELS);
+		data->cur_data = g_malloc0 (sizeof (GHashTable *) * MAX_LEVELS);
 	}
 	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) exception_insert,
+			   exception_insert,
 			   "",
 			   final);
 }
@@ -256,9 +265,7 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	/* Zero exceptions hashes */
-	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
-		surbl_module_ctx->surbl_pool,
-		MAX_LEVELS * sizeof (GHashTable *));
+	surbl_module_ctx->exceptions = g_malloc0 (MAX_LEVELS * sizeof (GHashTable *));
 	/* Register destructors */
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_destroy,

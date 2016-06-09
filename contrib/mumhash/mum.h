@@ -43,12 +43,13 @@
 #ifndef __MUM_HASH__
 #define __MUM_HASH__
 
-#include "config.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+
 #ifdef _MSC_VER
+typedef unsigned __int16 uint16_t;
 typedef unsigned __int32 uint32_t;
 typedef unsigned __int64 uint64_t;
 #else
@@ -57,8 +58,13 @@ typedef unsigned __int64 uint64_t;
 
 #ifdef __GNUC__
 #define _MUM_ATTRIBUTE_UNUSED  __attribute__((unused))
-#define _MUM_OPTIMIZE(opts) RSPAMD_OPTIMIZE(opts)
+#ifndef __clang__
+#define _MUM_OPTIMIZE(opts) __attribute__((__optimize__ (opts)))
+#define _MUM_TARGET(opts) __attribute__((__target__ (opts)))
+#else
+#define _MUM_OPTIMIZE(opts)
 #define _MUM_TARGET(opts)
+#endif
 #else
 #define _MUM_ATTRIBUTE_UNUSED
 #define _MUM_OPTIMIZE(opts)
@@ -145,14 +151,18 @@ _mum (uint64_t v, uint64_t p) {
 }
 
 #if defined(_MSC_VER)
+#define _mum_bswap_32(x) _byteswap_uint32_t (x)
 #define _mum_bswap_64(x) _byteswap_uint64_t (x)
 #elif defined(__APPLE__)
 #include <libkern/OSByteOrder.h>
+#define _mum_bswap_32(x) OSSwapInt32 (x)
 #define _mum_bswap_64(x) OSSwapInt64 (x)
 #elif defined(__GNUC__)
+#define _mum_bswap32(x) __builtin_bswap32 (x)
 #define _mum_bswap64(x) __builtin_bswap64 (x)
 #else
 #include <byteswap.h>
+#define _mum_bswap32(x) bswap32 (x)
 #define _mum_bswap64(x) bswap64 (x)
 #endif
 
@@ -166,6 +176,18 @@ _mum_le (uint64_t v) {
 #error "Unknown endianess"
 #endif
 }
+
+static inline uint32_t
+_mum_le32 (uint32_t v) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ || !defined(MUM_TARGET_INDEPENDENT_HASH)
+  return v;
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  return _mum_bswap32 (v);
+#else
+#error "Unknown endianess"
+#endif
+}
+
 /* Macro defining how many times the most nested loop in
    _mum_hash_aligned will be unrolled by the compiler (although it can
    make an own decision:).  Use only a constant here to help a
@@ -196,7 +218,7 @@ static inline uint64_t _MUM_OPTIMIZE("unroll-loops")
 _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
   uint64_t result = start;
   const unsigned char *str = (const unsigned char *) key;
-  union {uint64_t i; unsigned char s[sizeof (uint64_t)];} p;
+  uint64_t u64;
   int i;
   size_t n;
 
@@ -217,9 +239,37 @@ _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
   for (i = 0; i < n; i++)
     result ^= _mum (_mum_le (((uint64_t *) str)[i]), _mum_primes[i]);
   len -= n * sizeof (uint64_t); str += n * sizeof (uint64_t);
-  if (len) {
-    p.i = 0; memcpy (p.s, str, len);
-    result ^= _mum (_mum_le (((uint64_t *) p.s)[0]), _mum_tail_prime);
+  switch (len) {
+  case 7:
+    u64 = _mum_le32 (*(uint32_t *) str);
+    u64 |= (uint64_t) str[4] << 32;
+    u64 |= (uint64_t) str[5] << 40;
+    u64 |= (uint64_t) str[6] << 48;
+    return result ^ _mum (u64, _mum_tail_prime);
+  case 6:
+    u64 = _mum_le32 (*(uint32_t *) str);
+    u64 |= (uint64_t) str[4] << 32;
+    u64 |= (uint64_t) str[5] << 40;
+    return result ^ _mum (u64, _mum_tail_prime);
+  case 5:
+    u64 = _mum_le32 (*(uint32_t *) str);
+    u64 |= (uint64_t) str[4] << 32;
+    return result ^ _mum (u64, _mum_tail_prime);
+  case 4:
+    u64 = _mum_le32 (*(uint32_t *) str);
+    return result ^ _mum (u64, _mum_tail_prime);
+  case 3:
+    u64 = str[0];
+    u64 |= (uint64_t) str[1] << 8;
+    u64 |= (uint64_t) str[2] << 16;
+    return result ^ _mum (u64, _mum_tail_prime);
+  case 2:
+    u64 = str[0];
+    u64 |= (uint64_t) str[1] << 8;
+    return result ^ _mum (u64, _mum_tail_prime);
+  case 1:
+    u64 = str[0];
+    return result ^ _mum (u64, _mum_tail_prime);
   }
   return result;
 }
@@ -232,8 +282,8 @@ _mum_final (uint64_t h) {
   return h;
 }
 
-#if defined(__x86_64__) && defined(__GNUC__)
-#if 0
+#if defined(__x86_64__) && defined(__GNUC__) && (__GNUC__ >= 4) &&  (__GNUC_MINOR__ >= 9) && !defined(__clang__)
+
 /* We want to use AVX2 insn MULX instead of generic x86-64 MULQ where
    it is possible.  Although on modern Intel processors MULQ takes
    3-cycles vs. 4 for MULX, MULX permits more freedom in insn
@@ -242,7 +292,6 @@ static inline uint64_t _MUM_TARGET("arch=haswell")
 _mum_hash_avx2 (const void * key, size_t len, uint64_t seed) {
   return _mum_final (_mum_hash_aligned (seed + len, key, len));
 }
-#endif
 #endif
 
 #ifndef _MUM_UNALIGNED_ACCESS
@@ -283,7 +332,7 @@ _mum_hash_default (const void *key, size_t len, uint64_t seed) {
   else {
     while (len != 0) {
       block_len = len < _MUM_BLOCK_LEN ? len : _MUM_BLOCK_LEN;
-      memcpy (buf, str, block_len);
+      memmove (buf, str, block_len);
       result = _mum_hash_aligned (result, buf, block_len);
       len -= block_len;
       str += block_len;
@@ -351,20 +400,17 @@ mum_hash64 (uint64_t key, uint64_t seed) {
    target endianess and the unroll factor.  */
 static inline uint64_t
 mum_hash (const void *key, size_t len, uint64_t seed) {
-#if defined(__x86_64__) && defined(__GNUC__)
-#if 0
-	static int avx2_support = 0;
+#if defined(__x86_64__) && defined(__GNUC__) && (__GNUC__ >= 4) &&  (__GNUC_MINOR__ >= 9) && !defined(__clang__)
+  static int avx2_support = 0;
 
   if (avx2_support > 0)
     return _mum_hash_avx2 (key, len, seed);
-
   else if (! avx2_support) {
     __builtin_cpu_init ();
     avx2_support =  __builtin_cpu_supports ("avx2") ? 1 : -1;
     if (avx2_support > 0)
       return _mum_hash_avx2 (key, len, seed);
   }
-#endif
 #endif
   return _mum_hash_default (key, len, seed);
 }

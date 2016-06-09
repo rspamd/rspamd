@@ -25,10 +25,10 @@ SET(RSPAMADMLUASRC
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 ADD_CUSTOM_TARGET(rspamadm_lua_preprocess
         ${PERL_EXECUTABLE}
-            "${CMAKE_CURRENT_SOURCE_DIR}/lua_preprocess.pl"
+            "${CMAKE_SOURCE_DIR}/lua_preprocess.pl"
             "${CMAKE_CURRENT_SOURCE_DIR}"
             "${CMAKE_CURRENT_BINARY_DIR}"
-        SOURCES ${RSPAMADMLUASRC} ${CMAKE_CURRENT_SOURCE_DIR}/lua_preprocess.pl)
+        SOURCES ${RSPAMADMLUASRC} ${CMAKE_SOURCE_DIR}/lua_preprocess.pl)
 IF (ENABLE_HYPERSCAN MATCHES "ON")
     LIST(APPEND RSPAMADMSRC "${CMAKE_SOURCE_DIR}/src/hs_helper.c")
 ENDIF()
