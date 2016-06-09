@@ -708,10 +708,14 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 	msg_err_task_check ("connection to redis server %s timed out",
 			rspamd_upstream_name (rt->selected));
 	rspamd_upstream_fail (rt->selected);
+
+	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
+		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
+	}
+
 	rt->conn_state = RSPAMD_REDIS_TIMEDOUT;
 	redisAsyncFree (rt->redis);
 	rt->redis = NULL;
-	REF_RELEASE (rt);
 }
 
 /* Called when we have connected to the redis server and got stats */
