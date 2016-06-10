@@ -34,11 +34,11 @@ To avoid unnecessary work, rspamd allows an MTA to pass pre-processed data about
 | :-------------- | :-------------------------------- |
 | **Deliver-To:** | Defines actual delivery recipient of message. Can be used for personalized statistics and for user specific options. |
 | **IP:**         | Defines IP from which this message is received. |
-| **Helo:**       | Defines SMTP |
-| **Hostname:**   | Defines resolved |
-| **From:**       | Defines SMTP mail from command |
+| **Helo:**       | Defines SMTP helo |
+| **Hostname:**   | Defines resolved hostname |
+| **From:**       | Defines SMTP mail from command data |
 | **Queue-Id:**   | Defines SMTP queue id for message (can be used instead of message id in logging). |
-| **Rcpt:**       | Defines SMTP recipient (it may be several `Rcpt` |
+| **Rcpt:**       | Defines SMTP recipient (there may be several `Rcpt` headers) |
 | **Pass:**       | If this header has `all` value, all filters would be checked for this message. |
 | **Subject:**    | Defines subject of message (is used for non-mime messages). |
 | **User:**       | Defines SMTP user. |
