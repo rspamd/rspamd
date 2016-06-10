@@ -40,7 +40,7 @@ struct rspamadm_command configtest_command = {
 
 static GOptionEntry entries[] = {
 		{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
-				"Supress output", NULL},
+				"Suppress output", NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
 				"Config file to test",     NULL},
 		{"strict", 's', 0, G_OPTION_ARG_NONE, &strict,

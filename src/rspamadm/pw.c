@@ -42,7 +42,7 @@ static GOptionEntry entries[] = {
 		{"check", 'c', 0, G_OPTION_ARG_NONE, &do_check,
 				"Check password", NULL},
 		{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
-				"Supress output", NULL},
+				"Suppress output", NULL},
 		{"password", 'p', 0, G_OPTION_ARG_STRING, &password,
 				"Input password", NULL},
 		{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
