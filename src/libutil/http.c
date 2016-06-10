@@ -2039,6 +2039,40 @@ rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
 }
 
 gboolean
+rspamd_http_message_set_body_from_fstring_steal (struct rspamd_http_message *msg,
+		rspamd_fstring_t *fstr)
+{
+	union _rspamd_storage_u *storage;
+
+	storage = &msg->body_buf.c;
+	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
+
+	storage->normal = fstr;
+	msg->body_buf.str = fstr->str;
+	msg->body_buf.begin = msg->body_buf.str;
+	msg->body_buf.len = fstr->len;
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_message_set_body_from_fstring_copy (struct rspamd_http_message *msg,
+		const rspamd_fstring_t *fstr)
+{
+	union _rspamd_storage_u *storage;
+
+	storage = &msg->body_buf.c;
+	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
+
+	storage->normal = rspamd_fstring_new_init (fstr->str, fstr->len);
+	msg->body_buf.str = storage->normal->str;
+	msg->body_buf.begin = msg->body_buf.str;
+	msg->body_buf.len = storage->normal->len;
+
+	return TRUE;
+}
+
+gboolean
 rspamd_http_message_append_body (struct rspamd_http_message *msg,
 		const gchar *data, gsize len)
 {

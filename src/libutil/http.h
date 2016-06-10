@@ -284,6 +284,24 @@ gboolean rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
 		gint fd);
 
 /**
+ * Uses rspamd_fstring_t as message's body, string is consumed by this operation
+ * @param msg
+ * @param fstr
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body_from_fstring_steal (struct rspamd_http_message *msg,
+		rspamd_fstring_t *fstr);
+
+/**
+ * Uses rspamd_fstring_t as message's body, string is copied by this operation
+ * @param msg
+ * @param fstr
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body_from_fstring_copy (struct rspamd_http_message *msg,
+		const rspamd_fstring_t *fstr);
+
+/**
  * Appends data to message's body
  * @param msg
  * @param data
