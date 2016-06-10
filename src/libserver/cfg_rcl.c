@@ -15,6 +15,8 @@
  */
 #include "cfg_rcl.h"
 #include "rspamd.h"
+#include "../../contrib/mumhash/mum.h"
+#define HASH_CASELESS
 #include "uthash_strcase.h"
 #include "utlist.h"
 #include "cfg_file.h"

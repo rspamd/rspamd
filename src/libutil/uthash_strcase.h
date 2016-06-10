@@ -27,52 +27,52 @@
 #define HASH_KEYCMP(a,b,len) memcmp(a,b,len)
 #else
 #define HASH_FUNCTION(key,keylen,num_bkts,hashv,bkt) do {\
-	unsigned len = keylen; \
-	unsigned leftover = keylen % 8; \
-	unsigned fp, i; \
-	const uint8_t* s = (const uint8_t*)key; \
+	unsigned _len = keylen; \
+	unsigned _leftover = keylen % 8; \
+	unsigned _fp, _i; \
+	const uint8_t* _s = (const uint8_t*)(key); \
 	union { \
 		struct { \
 			unsigned char c1, c2, c3, c4, c5, c6, c7, c8; \
 		} c; \
 		uint64_t pp; \
-	} u; \
-	uint64_t r; \
-	fp = len - leftover; \
-	r = 0xdeadbabe; \
-	for (i = 0; i != fp; i += 8) { \
-		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3]; \
-		u.c.c5 = s[i + 4], u.c.c6 = s[i + 5], u.c.c7 = s[i + 6], u.c.c8 = s[i + 7]; \
-		u.c.c1 = lc_map[u.c.c1]; \
-		u.c.c2 = lc_map[u.c.c2]; \
-		u.c.c3 = lc_map[u.c.c3]; \
-		u.c.c4 = lc_map[u.c.c4]; \
-		u.c.c1 = lc_map[u.c.c5]; \
-		u.c.c2 = lc_map[u.c.c6]; \
-		u.c.c3 = lc_map[u.c.c7]; \
-		u.c.c4 = lc_map[u.c.c8]; \
-		r = mum_hash_step (r, u.pp); \
+	} _u; \
+	uint64_t _r; \
+	_fp = _len - _leftover; \
+	_r = 0xdeadbabe; \
+	for (_i = 0; _i != _fp; _i += 8) { \
+		_u.c.c1 = _s[_i], _u.c.c2 = _s[_i + 1], _u.c.c3 = _s[_i + 2], _u.c.c4 = _s[_i + 3]; \
+		_u.c.c5 = _s[_i + 4], _u.c.c6 = _s[_i + 5], _u.c.c7 = _s[_i + 6], _u.c.c8 = _s[_i + 7]; \
+		_u.c.c1 = lc_map[_u.c.c1]; \
+		_u.c.c2 = lc_map[_u.c.c2]; \
+		_u.c.c3 = lc_map[_u.c.c3]; \
+		_u.c.c4 = lc_map[_u.c.c4]; \
+		_u.c.c1 = lc_map[_u.c.c5]; \
+		_u.c.c2 = lc_map[_u.c.c6]; \
+		_u.c.c3 = lc_map[_u.c.c7]; \
+		_u.c.c4 = lc_map[_u.c.c8]; \
+		_r = mum_hash_step (_r, _u.pp); \
 	} \
-	u.pp = 0; \
-	switch (leftover) { \
+	_u.pp = 0; \
+	switch (_leftover) { \
 	case 7: \
-		u.c.c7 = lc_map[(unsigned char)s[i++]]; \
+		_u.c.c7 = lc_map[(unsigned char)_s[_i++]]; \
 	case 6: \
-		u.c.c6 = lc_map[(unsigned char)s[i++]]; \
+		_u.c.c6 = lc_map[(unsigned char)_s[_i++]]; \
 	case 5: \
-		u.c.c5 = lc_map[(unsigned char)s[i++]]; \
+		_u.c.c5 = lc_map[(unsigned char)_s[_i++]]; \
 	case 4: \
-		u.c.c4 = lc_map[(unsigned char)s[i++]]; \
+		_u.c.c4 = lc_map[(unsigned char)_s[_i++]]; \
 	case 3: \
-		u.c.c3 = lc_map[(unsigned char)s[i++]]; \
+		_u.c.c3 = lc_map[(unsigned char)_s[_i++]]; \
 	case 2: \
-		u.c.c2 = lc_map[(unsigned char)s[i++]]; \
+		_u.c.c2 = lc_map[(unsigned char)_s[_i++]]; \
 	case 1: \
-		u.c.c1 = lc_map[(unsigned char)s[i]]; \
-		r = mum_hash_step (r, u.pp); \
+		_u.c.c1 = lc_map[(unsigned char)_s[_i]]; \
+		_r = mum_hash_step (_r, _u.pp); \
 		break; \
 	} \
-	hashv = mum_hash_finish (r); \
+	hashv = mum_hash_finish (_r); \
 	bkt = (hashv) & (num_bkts-1); \
 } while (0)
 #define HASH_KEYCMP(a,b,len) rspamd_lc_cmp(a,b,len)
