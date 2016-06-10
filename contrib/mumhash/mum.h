@@ -56,21 +56,6 @@ typedef unsigned __int64 uint64_t;
 #include <stdint.h>
 #endif
 
-#ifdef __GNUC__
-#define _MUM_ATTRIBUTE_UNUSED  __attribute__((unused))
-#ifndef __clang__
-#define _MUM_OPTIMIZE(opts) __attribute__((__optimize__ (opts)))
-#define _MUM_TARGET(opts) __attribute__((__target__ (opts)))
-#else
-#define _MUM_OPTIMIZE(opts)
-#define _MUM_TARGET(opts)
-#endif
-#else
-#define _MUM_ATTRIBUTE_UNUSED
-#define _MUM_OPTIMIZE(opts)
-#define _MUM_TARGET(opts)
-#endif
-
 /* Macro saying to use 128-bit integers implemented by GCC for some
    targets.  */
 #ifndef _MUM_USE_INT128
@@ -82,6 +67,20 @@ typedef unsigned __int64 uint64_t;
 #else
 #define _MUM_USE_INT128 0
 #endif
+#endif
+
+#if defined(__GNUC__) && ((__GNUC__ == 4) &&  (__GNUC_MINOR__ >= 9) || (__GNUC__ > 4))
+#define _MUM_FRESH_GCC
+#endif
+
+#if defined(__GNUC__) && !defined(__llvm__)
+#define _MUM_ATTRIBUTE_UNUSED  __attribute__((unused))
+#define _MUM_OPTIMIZE(opts) __attribute__((__optimize__ (opts)))
+#define _MUM_TARGET(opts) __attribute__((__target__ (opts)))
+#else
+#define _MUM_ATTRIBUTE_UNUSED
+#define _MUM_OPTIMIZE(opts)
+#define _MUM_TARGET(opts)
 #endif
 
 
@@ -236,7 +235,7 @@ _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
     result = _mum (result, _mum_unroll_prime);
   }
   n = len / sizeof (uint64_t);
-  for (i = 0; i < n; i++)
+  for (i = 0; i < (int)n; i++)
     result ^= _mum (_mum_le (((uint64_t *) str)[i]), _mum_primes[i]);
   len -= n * sizeof (uint64_t); str += n * sizeof (uint64_t);
   switch (len) {
@@ -282,7 +281,7 @@ _mum_final (uint64_t h) {
   return h;
 }
 
-#if defined(__x86_64__) && defined(__GNUC__) && (__GNUC__ >= 4) &&  (__GNUC_MINOR__ >= 9) && !defined(__clang__)
+#if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
 
 /* We want to use AVX2 insn MULX instead of generic x86-64 MULQ where
    it is possible.  Although on modern Intel processors MULQ takes
@@ -366,7 +365,7 @@ mum_hash_randomize (uint64_t seed) {
   _mum_block_start_prime = _mum_next_factor ();
   _mum_unroll_prime = _mum_next_factor ();
   _mum_tail_prime = _mum_next_factor ();
-  for (i = 0; i < sizeof (_mum_primes) / sizeof (uint64_t); i++)
+  for (i = 0; i < (int)(sizeof (_mum_primes) / sizeof (uint64_t)); i++)
     _mum_primes[i] = _mum_next_factor ();
 }
 
@@ -400,7 +399,7 @@ mum_hash64 (uint64_t key, uint64_t seed) {
    target endianess and the unroll factor.  */
 static inline uint64_t
 mum_hash (const void *key, size_t len, uint64_t seed) {
-#if defined(__x86_64__) && defined(__GNUC__) && (__GNUC__ >= 4) &&  (__GNUC_MINOR__ >= 9) && !defined(__clang__)
+#if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
   static int avx2_support = 0;
 
   if (avx2_support > 0)
