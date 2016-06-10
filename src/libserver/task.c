@@ -310,7 +310,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 			fp = &filepath[0];
 		}
 
-		fd = shm_open (fp, O_RDONLY);
+		fd = shm_open (fp, O_RDONLY, 00600);
 
 		if (fd == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
