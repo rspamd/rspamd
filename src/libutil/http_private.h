@@ -18,6 +18,7 @@
 
 #include "http.h"
 #include "str_util.h"
+#include "ref.h"
 #include "../../contrib/mumhash/mum.h"
 #define HASH_CASELESS
 #include "uthash_strcase.h"
@@ -52,8 +53,11 @@ struct rspamd_http_message {
 		/* Internal storage */
 		union _rspamd_storage_u {
 			rspamd_fstring_t *normal;
-			struct {
-				gchar *shm_name;
+			struct _rspamd_storage_shared_s {
+				struct _rspamd_storage_shmem_s {
+					gchar *shm_name;
+					ref_entry_t ref;
+				} *name;
 				gint shm_fd;
 			} shared;
 		} c;

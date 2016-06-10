@@ -196,6 +196,16 @@ void rspamd_http_connection_write_message (
 		struct timeval *timeout,
 		struct event_base *base);
 
+void rspamd_http_connection_write_message_shared (
+		struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg,
+		const gchar *host,
+		const gchar *mime_type,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
+
 /**
  * Free connection structure
  * @param conn
@@ -351,6 +361,17 @@ gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
  * @param msg
  */
 void rspamd_http_message_free (struct rspamd_http_message *msg);
+
+/**
+ * Increase refcount for shared file (if any) to prevent early memory unlinking
+ * @param msg
+ */
+void* rspamd_http_message_shmem_ref (struct rspamd_http_message *msg);
+/**
+ * Decrease external ref for shmem segment associated with a message
+ * @param msg
+ */
+void rspamd_http_message_shmem_unref (void *p);
 
 /**
  * Parse HTTP date header and return it as time_t

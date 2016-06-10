@@ -1217,7 +1217,12 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 			}
 
 			/* We don't own segment, so do not try to touch it */
-			storage->shared.shm_name = NULL;
+
+			if (msg->body_buf.c.shared.name) {
+				storage->shared.name = msg->body_buf.c.shared.name;
+				REF_RETAIN (storage->shared.name);
+			}
+
 			new_msg->body_buf.str = mmap (NULL, st.st_size,
 					PROT_READ, MAP_SHARED,
 					storage->shared.shm_fd, 0);
@@ -1481,10 +1486,11 @@ rspamd_http_detach_shared (struct rspamd_http_message *msg)
 	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
 }
 
-void
-rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
+static void
+rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base,
+		gboolean allow_shared)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr, *htmp;
@@ -1534,7 +1540,20 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	if (encrypted && (msg->flags &
 			(RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE|RSPAMD_HTTP_FLAG_SHMEM))) {
 		/* We cannot use immutable body to encrypt message in place */
+		allow_shared = FALSE;
 		rspamd_http_detach_shared (msg);
+	}
+
+	if (allow_shared) {
+		if (!(msg->flags & RSPAMD_HTTP_FLAG_SHMEM) ||
+				msg->body_buf.c.shared.name == NULL) {
+			allow_shared = FALSE;
+		}
+		else {
+			/* Insert new header */
+			rspamd_http_message_add_header (msg, "Shm",
+					msg->body_buf.c.shared.name->shm_name);
+		}
 	}
 
 	if (encrypted) {
@@ -1605,7 +1624,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	else {
 		if (msg->method < HTTP_SYMBOLS) {
-			if (msg->body_buf.len == 0) {
+			if (msg->body_buf.len == 0 || allow_shared) {
 				pbody = NULL;
 				bodylen = 0;
 				priv->outlen = 2;
@@ -1619,6 +1638,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			}
 		}
 		else if (msg->body_buf.len > 0) {
+			allow_shared = FALSE;
 			pbody = (gchar *)msg->body_buf.begin;
 			bodylen = msg->body_buf.len;
 			priv->outlen = 2;
@@ -1886,6 +1906,24 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	event_add (&priv->ev, priv->ptv);
 }
 
+void
+rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
+			ud, fd, timeout, base, FALSE);
+}
+
+void
+rspamd_http_connection_write_message_shared (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
+			ud, fd, timeout, base, TRUE);
+}
+
 struct rspamd_http_message *
 rspamd_http_new_message (enum http_parser_type type)
 {
@@ -1974,6 +2012,37 @@ rspamd_http_message_get_body (struct rspamd_http_message *msg,
 	return ret;
 }
 
+static void
+rspamd_http_shname_dtor (void *p)
+{
+	struct _rspamd_storage_shmem_s *n = p;
+
+	shm_unlink (n->shm_name);
+	g_free (n->shm_name);
+	g_slice_free1 (sizeof (*n), n);
+}
+
+void *
+rspamd_http_message_shmem_ref (struct rspamd_http_message *msg)
+{
+	if ((msg->flags & RSPAMD_HTTP_FLAG_SHMEM) && msg->body_buf.c.shared.name) {
+		REF_RETAIN (msg->body_buf.c.shared.name);
+		return msg->body_buf.c.shared.name;
+	}
+
+	return NULL;
+}
+
+void
+rspamd_http_message_shmem_unref (void *p)
+{
+	struct _rspamd_storage_shmem_s *n = p;
+
+	if (n) {
+		REF_RELEASE (n);
+	}
+}
+
 gboolean
 rspamd_http_message_set_body (struct rspamd_http_message *msg,
 		const gchar *data, gsize len)
@@ -1984,8 +2053,10 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 	rspamd_http_message_storage_cleanup (msg);
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
-		storage->shared.shm_name = g_strdup ("/rhm.XXXXXXXXXXXXXXXXXXXX");
-		storage->shared.shm_fd = rspamd_shmem_mkstemp (storage->shared.shm_name);
+		storage->shared.name = g_slice_alloc (sizeof (*storage->shared.name));
+		REF_INIT_RETAIN (storage->shared.name, rspamd_http_shname_dtor);
+		storage->shared.name->shm_name = g_strdup ("/rhm.XXXXXXXXXXXXXXXXXXXX");
+		storage->shared.shm_fd = rspamd_shmem_mkstemp (storage->shared.name->shm_name);
 
 		if (storage->shared.shm_fd == -1) {
 			return FALSE;
@@ -2192,9 +2263,8 @@ rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
 				close (storage->shared.shm_fd);
 			}
 
-			if (storage->shared.shm_name != NULL) {
-				shm_unlink (storage->shared.shm_name);
-				g_free (storage->shared.shm_name);
+			if (storage->shared.name != NULL) {
+				REF_RELEASE (storage->shared.name);
 			}
 
 			storage->shared.shm_fd = -1;

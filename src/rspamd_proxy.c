@@ -142,9 +142,10 @@ struct rspamd_proxy_session {
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	gpointer map;
-	gsize map_len;
+	gpointer shmem_ref;
 	struct rspamd_proxy_backend_connection *master_conn;
 	GPtrArray *mirror_conns;
+	gsize map_len;
 	gint client_sock;
 	gboolean is_spamc;
 	ref_entry_t ref;
@@ -823,6 +824,7 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	}
 
 	g_ptr_array_free (session->mirror_conns, TRUE);
+	rspamd_http_message_shmem_unref (session->shmem_ref);
 	rspamd_inet_address_destroy (session->client_addr);
 	close (session->client_sock);
 	rspamd_mempool_delete (session->pool);
@@ -1033,7 +1035,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				session->ctx->local_key);
 		msg->peer_key = rspamd_pubkey_ref (m->key);
 
-		rspamd_http_connection_write_message (bk_conn->backend_conn,
+		rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
 				msg, NULL, NULL, bk_conn,
 				bk_conn->backend_sock,
 				&session->ctx->io_tv, session->ctx->ev_base);
@@ -1200,6 +1202,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_http_message_remove_header (msg, "Content-Length");
 			rspamd_http_message_remove_header (msg, "Key");
 			rspamd_http_connection_reset (session->client_conn);
+			session->shmem_ref = rspamd_http_message_shmem_ref (msg);
 
 			session->master_conn->backend_conn = rspamd_http_connection_new (
 					NULL,
@@ -1215,10 +1218,11 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					session->ctx->local_key);
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
 
-			rspamd_http_connection_write_message (session->master_conn->backend_conn,
-				msg, NULL, NULL, session->master_conn,
-				session->master_conn->backend_sock,
-				&session->ctx->io_tv, session->ctx->ev_base);
+			rspamd_http_connection_write_message_shared (
+					session->master_conn->backend_conn,
+					msg, NULL, NULL, session->master_conn,
+					session->master_conn->backend_sock,
+					&session->ctx->io_tv, session->ctx->ev_base);
 		}
 	}
 	else {
