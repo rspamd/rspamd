@@ -1920,6 +1920,11 @@ rspamd_shmem_mkstemp (gchar *pattern)
 
 		if (fd != -1) {
 			rspamd_strlcpy (pattern, nbuf, blen + 1);
+			break;
+		}
+		else if (errno != EEXIST) {
+			g_error ("%s: failed to create temp shmem %s: %s",
+							G_STRLOC, nbuf, strerror (errno));
 		}
 	}
 
