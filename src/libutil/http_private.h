@@ -1,0 +1,73 @@
+/*-
+ * Copyright 2016 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#ifndef SRC_LIBUTIL_HTTP_PRIVATE_H_
+#define SRC_LIBUTIL_HTTP_PRIVATE_H_
+
+#include "http.h"
+#include "str_util.h"
+#include "../../contrib/mumhash/mum.h"
+#define HASH_CASELESS
+#include "uthash_strcase.h"
+
+/**
+ * HTTP header structure
+ */
+struct rspamd_http_header {
+	rspamd_ftok_t *name;
+	rspamd_ftok_t *value;
+	rspamd_fstring_t *combined;
+	UT_hash_handle hh;
+};
+
+/**
+ * HTTP message structure, used for requests and replies
+ */
+struct rspamd_http_message {
+	rspamd_fstring_t *url;
+	rspamd_fstring_t *host;
+	rspamd_fstring_t *status;
+	struct rspamd_http_header *headers;
+
+	struct _rspamd_body_buf_s {
+		/* Data start */
+		const gchar *begin;
+		/* Data len */
+		gsize len;
+		/* Data buffer (used to write data inside) */
+		gchar *str;
+
+		/* Internal storage */
+		union _rspamd_storage_u {
+			rspamd_fstring_t *normal;
+			struct {
+				gchar *shm_name;
+				gint shm_fd;
+			} shared;
+		} c;
+	} body_buf;
+
+	struct rspamd_cryptobox_pubkey *peer_key;
+	time_t date;
+	time_t last_modified;
+	unsigned port;
+	enum http_parser_type type;
+	gint code;
+	enum http_method method;
+	gint flags;
+};
+
+
+#endif /* SRC_LIBUTIL_HTTP_PRIVATE_H_ */

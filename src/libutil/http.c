@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "http.h"
+#include "http_private.h"
 #include "utlist.h"
 #include "util.h"
 #include "printf.h"

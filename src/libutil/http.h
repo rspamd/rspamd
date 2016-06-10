@@ -28,22 +28,18 @@
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "fstring.h"
-#include "uthash.h"
 
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
 	RSPAMD_HTTP_CLIENT
 };
 
-/**
- * HTTP header structure
- */
-struct rspamd_http_header {
-	rspamd_ftok_t *name;
-	rspamd_ftok_t *value;
-	rspamd_fstring_t *combined;
-	UT_hash_handle hh;
-};
+struct rspamd_http_header;
+struct rspamd_http_message;
+struct rspamd_http_connection_private;
+struct rspamd_http_connection;
+struct rspamd_http_connection_router;
+struct rspamd_http_connection_entry;
 
 /**
  * Legacy spamc protocol
@@ -59,44 +55,6 @@ struct rspamd_http_header {
 #define RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE (1 << 3)
 
 /**
- * HTTP message structure, used for requests and replies
- */
-struct rspamd_http_message {
-	rspamd_fstring_t *url;
-	rspamd_fstring_t *host;
-	rspamd_fstring_t *status;
-	struct rspamd_http_header *headers;
-
-	struct _rspamd_body_buf_s {
-		/* Data start */
-		const gchar *begin;
-		/* Data len */
-		gsize len;
-		/* Data buffer (used to write data inside) */
-		gchar *str;
-
-		/* Internal storage */
-		union _rspamd_storage_u {
-			rspamd_fstring_t *normal;
-			struct {
-				gchar *shm_name;
-				gint shm_fd;
-			} shared;
-		} c;
-	} body_buf;
-
-	struct rspamd_cryptobox_pubkey *peer_key;
-	time_t date;
-	time_t last_modified;
-	unsigned port;
-	enum http_parser_type type;
-	gint code;
-	enum http_method method;
-	gint flags;
-};
-
-
-/**
  * Options for HTTP connection
  */
 enum rspamd_http_options {
@@ -104,11 +62,6 @@ enum rspamd_http_options {
 	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */
 	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4 /**< Encrypt data for client */
 };
-
-struct rspamd_http_connection_private;
-struct rspamd_http_connection;
-struct rspamd_http_connection_router;
-struct rspamd_http_connection_entry;
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg,
