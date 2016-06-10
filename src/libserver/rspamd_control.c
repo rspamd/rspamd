@@ -16,7 +16,8 @@
 #include "config.h"
 #include "rspamd.h"
 #include "rspamd_control.h"
-#include "http.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "unix-std.h"
 #include "utlist.h"
 
@@ -107,6 +108,7 @@ rspamd_control_send_error (struct rspamd_control_session *session,
 		gint code, const gchar *error_msg, ...)
 {
 	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 	va_list args;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
@@ -118,8 +120,9 @@ rspamd_control_send_error (struct rspamd_control_session *session,
 
 	msg->date = time (NULL);
 	msg->code = code;
-	msg->body = rspamd_fstring_new ();
-	rspamd_printf_fstring (&msg->body, "{\"error\":\"%V\"}", msg->status);
+	reply = rspamd_fstring_sized_new (msg->status->len + 16);
+	rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (session->conn);
 	rspamd_http_connection_write_message (session->conn,
 			msg,
@@ -136,13 +139,15 @@ rspamd_control_send_ucl (struct rspamd_control_session *session,
 		ucl_object_t *obj)
 {
 	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	msg->body = rspamd_fstring_sized_new (BUFSIZ);
-	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &msg->body);
+	reply = rspamd_fstring_sized_new (BUFSIZ);
+	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (session->conn);
 	rspamd_http_connection_write_message (session->conn,
 			msg,

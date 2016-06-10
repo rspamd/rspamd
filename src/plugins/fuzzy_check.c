@@ -42,6 +42,7 @@
 #include "keypair.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
+#include "libutil/http_private.h"
 #include <math.h>
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"

@@ -16,7 +16,9 @@
 #include "config.h"
 #include "rspamd.h"
 #include "util.h"
-#include "http.h"
+#include "libutil/fstring.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "ottery.h"
 #include "cryptobox.h"
 #include "keypair.h"
@@ -83,6 +85,7 @@ rspamd_server_finish (struct rspamd_http_connection *conn,
 	gulong size;
 	const gchar *url_str;
 	guint url_len;
+	rspamd_fstring_t *body;
 
 	if (!session->reply) {
 		session->reply = TRUE;
@@ -100,9 +103,11 @@ rspamd_server_finish (struct rspamd_http_connection *conn,
 
 			reply->code = 200;
 			reply->status = rspamd_fstring_new_init ("OK", 2);
-			reply->body = rspamd_fstring_sized_new (size);
-			reply->body->len = size;
-			memset (reply->body->str, 0, size);
+			body = rspamd_fstring_sized_new (size);
+			body->len = size;
+			memset (body->str, 0, size);
+			rspamd_http_message_set_body_from_fstring_steal (msg, body);
+
 		}
 		else {
 			reply->code = 404;

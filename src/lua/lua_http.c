@@ -17,6 +17,7 @@
 #include "buffer.h"
 #include "dns.h"
 #include "http.h"
+#include "http_private.h"
 #include "utlist.h"
 #include "unix-std.h"
 
@@ -150,7 +151,9 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
-	struct rspamd_http_header *h;
+	struct rspamd_http_header *h, *htmp;
+	const gchar *body;
+	gsize body_len;
 
 	lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
 	/* Error */
@@ -158,14 +161,23 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	/* Reply code */
 	lua_pushinteger (cbd->L, msg->code);
 	/* Body */
-	lua_pushlstring (cbd->L, msg->body->str, msg->body->len);
+	body = rspamd_http_message_get_body (msg, &body_len);
+
+	if (body_len > 0) {
+		lua_pushlstring (cbd->L, body, body_len);
+	}
+	else {
+		lua_pushnil (cbd->L);
+	}
 	/* Headers */
 	lua_newtable (cbd->L);
-	LL_FOREACH (msg->headers, h) {
+
+	HASH_ITER (hh, msg->headers, h, htmp) {
 		lua_pushlstring (cbd->L, h->name->begin, h->name->len);
 		lua_pushlstring (cbd->L, h->value->begin, h->value->len);
 		lua_settable (cbd->L, -3);
 	}
+
 	if (lua_pcall (cbd->L, 4, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
 		lua_pop (cbd->L, 1);
@@ -296,19 +308,23 @@ lua_http_request (lua_State *L)
 		else {
 			ev_base = NULL;
 		}
+
 		if (lua_gettop (L) >= 4 && rspamd_lua_check_udata (L, 4, "rspamd{resolver}")) {
 			resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, 4);
 		}
 		else {
 			resolver = lua_http_global_resolver (ev_base);
 		}
+
 		if (lua_gettop (L) >= 5 && rspamd_lua_check_udata (L, 5, "rspamd{session}")) {
 			session = *(struct rspamd_async_session **)lua_touserdata (L, 5);
 		}
 		else {
 			session = NULL;
 		}
+
 		msg = rspamd_http_message_from_url (url);
+
 		if (msg == NULL) {
 			lua_pushboolean (L, FALSE);
 			return 1;
@@ -403,13 +419,13 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			lua_body = lua_tolstring (L, -1, &bodylen);
-			msg->body = rspamd_fstring_new_init (lua_body, bodylen);
+			rspamd_http_message_set_body (msg, lua_body, bodylen);
 		}
 		else if (lua_type (L, -1) == LUA_TUSERDATA) {
 			t = lua_check_text (L, -1);
 			/* TODO: think about zero-copy possibilities */
 			if (t) {
-				msg->body = rspamd_fstring_new_init (t->start, t->len);
+				rspamd_http_message_set_body (msg, t->start, t->len);
 			}
 		}
 

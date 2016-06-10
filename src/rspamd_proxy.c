@@ -17,6 +17,8 @@
 #include "libutil/util.h"
 #include "libutil/map.h"
 #include "libutil/upstream.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "libserver/protocol.h"
 #include "libserver/cfg_file.h"
 #include "libserver/url.h"
@@ -67,6 +69,7 @@ struct rspamd_http_upstream {
 	struct rspamd_cryptobox_pubkey *key;
 	gint parser_from_ref;
 	gint parser_to_ref;
+	gboolean local;
 };
 
 struct rspamd_http_mirror {
@@ -77,6 +80,7 @@ struct rspamd_http_mirror {
 	gdouble prob;
 	gint parser_from_ref;
 	gint parser_to_ref;
+	gboolean local;
 };
 
 static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
@@ -318,6 +322,11 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		ctx->default_upstream = up;
 	}
 
+	elt = ucl_object_lookup (obj, "local");
+	if (elt && ucl_object_toboolean (elt)) {
+		up->local = TRUE;
+	}
+
 	/*
 	 * Accept lua function here in form
 	 * fun :: String -> UCL
@@ -429,6 +438,11 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	}
 	else {
 		up->prob = 1.0;
+	}
+
+	elt = ucl_object_lookup (obj, "local");
+	if (elt && ucl_object_toboolean (elt)) {
+		up->local = TRUE;
 	}
 
 	/*
@@ -1065,6 +1079,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
 	struct rspamd_proxy_session *session;
+	rspamd_fstring_t *reply;
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
@@ -1082,8 +1097,9 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	if (session->is_spamc) {
 		/* We need to reformat ucl to fit with legacy spamc protocol */
 		if (bk_conn->results) {
-			rspamd_fstring_clear (msg->body);
-			rspamd_ucl_torspamc_output (bk_conn->results, &msg->body);
+			reply = rspamd_fstring_new ();
+			rspamd_ucl_torspamc_output (bk_conn->results, &reply);
+			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 		}
 		else {
 			msg_warn_session ("cannot parse results from the master backend, "

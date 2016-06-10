@@ -24,6 +24,7 @@
 #include "rspamd_control.h"
 #include "libutil/map.h"
 #include "libutil/map_private.h"
+#include "libutil/http_private.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <gperftools/profiler.h>
@@ -352,6 +353,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 {
 	struct rspamd_http_message *msg;
 	va_list args;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
@@ -362,8 +364,9 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 
 	msg->date = time (NULL);
 	msg->code = code;
-	msg->body = rspamd_fstring_new ();
-	rspamd_printf_fstring (&msg->body, "{\"error\":\"%V\"}", msg->status);
+	reply = rspamd_fstring_sized_new (msg->status->len + 16);
+	rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
@@ -381,12 +384,14 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	const gchar *str)
 {
 	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	msg->body = rspamd_fstring_new_init (str, strlen (str));
+	reply = rspamd_fstring_new_init (str, strlen (str));
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
@@ -404,13 +409,15 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	ucl_object_t *obj)
 {
 	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	msg->body = rspamd_fstring_sized_new (BUFSIZ);
-	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &msg->body);
+	reply = rspamd_fstring_sized_new (BUFSIZ);
+	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,

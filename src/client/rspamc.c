@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "util.h"
-#include "http.h"
+#include "libutil/util.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "rspamdclient.h"
 #include "utlist.h"
 #include "unix-std.h"
@@ -950,12 +951,12 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 static void
 rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *h;
+	struct rspamd_http_header *h, *htmp;
 
-	LL_FOREACH (msg->headers, h)
-	{
+	HASH_ITER (hh, msg->headers, h, htmp) {
 		rspamd_fprintf (out, "%T: %T\n", h->name, h->value);
 	}
+
 	rspamd_fprintf (out, "\n");
 }
 
@@ -1223,6 +1224,8 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamc_command *cmd;
 	FILE *out = stdout;
 	gdouble finish = rspamd_get_ticks (), diff;
+	const gchar *body;
+	gsize body_len;
 
 	cmd = cbdata->cmd;
 	diff = finish - cbdata->start;
@@ -1275,9 +1278,13 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 			else if (err != NULL) {
 				rspamd_fprintf (out, "%s\n", err->message);
 
-				if (json && msg != NULL && msg->body != NULL) {
-					/* We can also output the resulting json */
-					rspamd_fprintf (out, "%V\n", msg->body);
+				if (json && msg != NULL) {
+					body = rspamd_http_message_get_body (msg, &body_len);
+
+					if (body) {
+						/* We can also output the resulting json */
+						rspamd_fprintf (out, "%*s\n", (gint)body_len, body);
+					}
 				}
 			}
 		}

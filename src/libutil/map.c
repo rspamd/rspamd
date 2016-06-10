@@ -20,6 +20,7 @@
 #include "map.h"
 #include "map_private.h"
 #include "http.h"
+#include "http_private.h"
 #include "rspamd.h"
 #include "cryptobox.h"
 #include "unix-std.h"
