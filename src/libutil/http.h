@@ -47,7 +47,15 @@ struct rspamd_http_header {
 /**
  * Legacy spamc protocol
  */
-#define RSPAMD_HTTP_FLAG_SPAMC 1 << 1
+#define RSPAMD_HTTP_FLAG_SPAMC (1 << 0)
+/**
+ * Store body of the message in a shared memory segment
+ */
+#define RSPAMD_HTTP_FLAG_SHMEM (1 << 2)
+/**
+ * Store body of the message in an immutable shared memory segment
+ */
+#define RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE (1 << 3)
 
 /**
  * HTTP message structure, used for requests and replies
@@ -57,8 +65,25 @@ struct rspamd_http_message {
 	rspamd_fstring_t *host;
 	rspamd_fstring_t *status;
 	struct rspamd_http_header *headers;
-	rspamd_fstring_t *body;
-	rspamd_ftok_t body_buf;
+
+	struct _rspamd_body_buf_s {
+		/* Data start */
+		const gchar *begin;
+		/* Data len */
+		gsize len;
+		/* Data buffer (used to write data inside) */
+		gchar *str;
+
+		/* Internal storage */
+		union _rspamd_storage_u {
+			rspamd_fstring_t *normal;
+			struct {
+				gchar *shm_name;
+				gint shm_fd;
+			} shared;
+		} c;
+	} body_buf;
+
 	struct rspamd_cryptobox_pubkey *peer_key;
 	time_t date;
 	time_t last_modified;
@@ -275,6 +300,44 @@ struct rspamd_http_message * rspamd_http_new_message (enum http_parser_type type
  * @return new message or NULL
  */
 struct rspamd_http_message* rspamd_http_message_from_url (const gchar *url);
+
+/**
+ * Returns body for a message
+ * @param msg
+ * @param blen pointer where to save body length
+ * @return pointer to body start
+ */
+const gchar *rspamd_http_message_get_body (struct rspamd_http_message *msg,
+		gsize *blen);
+
+/**
+ * Set message's body from the string
+ * @param msg
+ * @param data
+ * @param len
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body (struct rspamd_http_message *msg,
+		const gchar *data, gsize len);
+
+/**
+ * Maps fd as message's body
+ * @param msg
+ * @param fd
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
+		gint fd);
+
+/**
+ * Appends data to message's body
+ * @param msg
+ * @param data
+ * @param len
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_append_body (struct rspamd_http_message *msg,
+		const gchar *data, gsize len);
 
 /**
  * Append a header to reply
