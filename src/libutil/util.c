@@ -1875,6 +1875,25 @@ randombytes (guchar *buf, guint64 len)
 	ottery_rand_bytes (buf, (size_t)len);
 }
 
+void
+rspamd_random_hex (guchar *buf, guint64 len)
+{
+	static const gchar hexdigests[16] = "0123456789abcdef";
+	gint64 i;
+
+	g_assert (len > 0);
+
+	ottery_rand_bytes (buf, (len / 2.0 + 0.5));
+
+	for (i = (gint64)len - 1; i >= 0; i -= 2) {
+		buf[i] = hexdigests[buf[i / 2] & 0xf];
+
+		if (i > 0) {
+			buf[i - 1] = hexdigests[(buf[i / 2] >> 4) & 0xf];
+		}
+	}
+}
+
 
 void
 rspamd_ptr_array_free_hard (gpointer p)

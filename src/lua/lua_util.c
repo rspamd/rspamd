@@ -324,6 +324,15 @@ LUA_FUNCTION_DEF (util, create_file);
  */
 LUA_FUNCTION_DEF (util, close_file);
 
+/**
+ * @function util.random_hex(size)
+ * Returns random hex string of the specified size
+ *
+ * @param {number} len length of desired string in bytes
+ * @return {string} string with random hex digests
+ */
+LUA_FUNCTION_DEF (util, random_hex);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -358,6 +367,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, unlock_file),
 	LUA_INTERFACE_DEF (util, create_file),
 	LUA_INTERFACE_DEF (util, close_file),
+	LUA_INTERFACE_DEF (util, random_hex),
 	{NULL, NULL}
 };
 
@@ -1466,6 +1476,26 @@ lua_util_close_file (lua_State *L)
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_random_hex (lua_State *L)
+{
+	gchar *buf;
+	gint buflen;
+
+	buflen = lua_tonumber (L, 1);
+
+	if (buflen <= 0) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	buf = g_malloc (buflen);
+	rspamd_random_hex (buf, buflen);
+	lua_pushlstring (L, buf, buflen);
+	g_free (buf);
 
 	return 1;
 }

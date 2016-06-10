@@ -405,6 +405,13 @@ void rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx);
 guint64 rspamd_hash_seed (void);
 
 /**
+ * Returns random hex string of the specified length
+ * @param buf
+ * @param len
+ */
+void rspamd_random_hex (guchar *buf, guint64 len);
+
+/**
  * Return jittered time value
  */
 gdouble rspamd_time_jitter (gdouble in, gdouble jitter);
