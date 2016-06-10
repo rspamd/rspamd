@@ -96,6 +96,8 @@ static const rspamd_ftok_t last_modified_header = {
 		.len = 13
 };
 
+static void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
+
 #define HTTP_ERROR http_error_quark ()
 GQuark
 http_error_quark (void)
@@ -1947,6 +1949,8 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 	union _rspamd_storage_u *storage;
 	storage = &msg->body_buf.c;
 
+	rspamd_http_message_storage_cleanup (msg);
+
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
 		storage->shared.shm_name = g_strdup ("/rhm.XXXXXXXXXXXXXXXXXXXX");
 		storage->shared.shm_fd = rspamd_shmem_mkstemp (storage->shared.shm_name);
@@ -2010,6 +2014,8 @@ rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
 	union _rspamd_storage_u *storage;
 	struct stat st;
 
+	rspamd_http_message_storage_cleanup (msg);
+
 	storage = &msg->body_buf.c;
 	msg->flags |= RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE;
 
@@ -2044,6 +2050,8 @@ rspamd_http_message_set_body_from_fstring_steal (struct rspamd_http_message *msg
 {
 	union _rspamd_storage_u *storage;
 
+	rspamd_http_message_storage_cleanup (msg);
+
 	storage = &msg->body_buf.c;
 	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
 
@@ -2060,6 +2068,8 @@ rspamd_http_message_set_body_from_fstring_copy (struct rspamd_http_message *msg,
 		const rspamd_fstring_t *fstr)
 {
 	union _rspamd_storage_u *storage;
+
+	rspamd_http_message_storage_cleanup (msg);
 
 	storage = &msg->body_buf.c;
 	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
@@ -2130,21 +2140,11 @@ rspamd_http_message_append_body (struct rspamd_http_message *msg,
 	return TRUE;
 }
 
-
-void
-rspamd_http_message_free (struct rspamd_http_message *msg)
+static void
+rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *hdr, *htmp;
 	union _rspamd_storage_u *storage;
 	struct stat st;
-
-	HASH_ITER (hh, msg->headers, hdr, htmp) {
-		HASH_DEL (msg->headers, hdr);
-		rspamd_fstring_free (hdr->combined);
-		g_slice_free1 (sizeof (*hdr->name), hdr->name);
-		g_slice_free1 (sizeof (*hdr->value), hdr->value);
-		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
-	}
 
 	if (msg->body_buf.len != 0) {
 		if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
@@ -2164,11 +2164,35 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 				shm_unlink (storage->shared.shm_name);
 				g_free (storage->shared.shm_name);
 			}
+
+			storage->shared.shm_fd = -1;
+			msg->body_buf.str = MAP_FAILED;
 		}
 		else {
 			rspamd_fstring_free (msg->body_buf.c.normal);
+			msg->body_buf.c.normal = NULL;
 		}
+
+		msg->body_buf.len = 0;
 	}
+}
+
+void
+rspamd_http_message_free (struct rspamd_http_message *msg)
+{
+	struct rspamd_http_header *hdr, *htmp;
+
+
+	HASH_ITER (hh, msg->headers, hdr, htmp) {
+		HASH_DEL (msg->headers, hdr);
+		rspamd_fstring_free (hdr->combined);
+		g_slice_free1 (sizeof (*hdr->name), hdr->name);
+		g_slice_free1 (sizeof (*hdr->value), hdr->value);
+		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
+	}
+
+
+	rspamd_http_message_storage_cleanup (msg);
 
 	if (msg->url != NULL) {
 		rspamd_fstring_free (msg->url);
