@@ -28,6 +28,7 @@
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "fstring.h"
+#include "uthash.h"
 
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
@@ -41,7 +42,7 @@ struct rspamd_http_header {
 	rspamd_ftok_t *name;
 	rspamd_ftok_t *value;
 	rspamd_fstring_t *combined;
-	struct rspamd_http_header *next, *prev;
+	UT_hash_handle hh;
 };
 
 /**
