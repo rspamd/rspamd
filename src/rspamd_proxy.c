@@ -1284,7 +1284,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 			rspamd_inet_address_to_string (addr),
 			rspamd_inet_address_get_port (addr));
 
-	rspamd_http_connection_read_message (session->client_conn,
+	rspamd_http_connection_read_message_shared (session->client_conn,
 			session,
 			nfd,
 			&ctx->io_tv,

@@ -1306,9 +1306,10 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 	g_slice_free1 (sizeof (struct rspamd_http_connection),		   conn);
 }
 
-void
-rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
-	gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+static void
+rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base,
+		gint flags)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_message *req;
@@ -1318,6 +1319,7 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	req = rspamd_http_new_message (
 		conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 	priv->msg = req;
+	req->flags = flags;
 
 	if (priv->peer_key) {
 		priv->msg->peer_key = priv->peer_key;
@@ -1350,6 +1352,21 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 	event_add (&priv->ev, priv->ptv);
+}
+
+void
+rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_read_message_common (conn, ud, fd, timeout, base, 0);
+}
+
+void
+rspamd_http_connection_read_message_shared (struct rspamd_http_connection *conn,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_read_message_common (conn, ud, fd, timeout, base,
+			RSPAMD_HTTP_FLAG_SHMEM);
 }
 
 static void
@@ -1455,10 +1472,19 @@ rspamd_http_connection_encrypt_message (
 	g_free (segments);
 }
 
+static void
+rspamd_http_detach_shared (struct rspamd_http_message *msg)
+{
+	rspamd_fstring_t *cpy_str;
+
+	cpy_str = rspamd_fstring_new_init (msg->body_buf.begin, msg->body_buf.len);
+	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
+}
+
 void
 rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-	gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr, *htmp;
@@ -1503,6 +1529,12 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			rspamd_keypair_cache_process (conn->cache,
 					priv->local_key, priv->msg->peer_key);
 		}
+	}
+
+	if (encrypted && (msg->flags &
+			(RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE|RSPAMD_HTTP_FLAG_SHMEM))) {
+		/* We cannot use immutable body to encrypt message in place */
+		rspamd_http_detach_shared (msg);
 	}
 
 	if (encrypted) {

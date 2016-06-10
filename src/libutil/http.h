@@ -166,11 +166,18 @@ gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *con
  * @param fd fd to read/write
  */
 void rspamd_http_connection_read_message (
-	struct rspamd_http_connection *conn,
-	gpointer ud,
-	gint fd,
-	struct timeval *timeout,
-	struct event_base *base);
+		struct rspamd_http_connection *conn,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
+
+void rspamd_http_connection_read_message_shared (
+		struct rspamd_http_connection *conn,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
 
 /**
  * Send reply using initialised connection
@@ -180,14 +187,14 @@ void rspamd_http_connection_read_message (
  * @param fd fd to read/write
  */
 void rspamd_http_connection_write_message (
-	struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *host,
-	const gchar *mime_type,
-	gpointer ud,
-	gint fd,
-	struct timeval *timeout,
-	struct event_base *base);
+		struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg,
+		const gchar *host,
+		const gchar *mime_type,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
 
 /**
  * Free connection structure
