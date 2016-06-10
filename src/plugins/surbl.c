@@ -40,6 +40,7 @@
 #include "surbl.h"
 #include "utlist.h"
 #include "libserver/html.h"
+#include "libutil/http_private.h"
 #include "unix-std.h"
 
 static struct surbl_ctx *surbl_module_ctx = NULL;

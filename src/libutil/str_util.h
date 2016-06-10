@@ -308,4 +308,6 @@ gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
 /* Compare two urls for building emails hash */
 gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
 
+extern const guchar lc_map[256];
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

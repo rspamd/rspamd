@@ -34,41 +34,25 @@ enum rspamd_http_connection_type {
 	RSPAMD_HTTP_CLIENT
 };
 
-/**
- * HTTP header structure
- */
-struct rspamd_http_header {
-	rspamd_ftok_t *name;
-	rspamd_ftok_t *value;
-	rspamd_fstring_t *combined;
-	struct rspamd_http_header *next, *prev;
-};
+struct rspamd_http_header;
+struct rspamd_http_message;
+struct rspamd_http_connection_private;
+struct rspamd_http_connection;
+struct rspamd_http_connection_router;
+struct rspamd_http_connection_entry;
 
 /**
  * Legacy spamc protocol
  */
-#define RSPAMD_HTTP_FLAG_SPAMC 1 << 1
-
+#define RSPAMD_HTTP_FLAG_SPAMC (1 << 0)
 /**
- * HTTP message structure, used for requests and replies
+ * Store body of the message in a shared memory segment
  */
-struct rspamd_http_message {
-	rspamd_fstring_t *url;
-	rspamd_fstring_t *host;
-	rspamd_fstring_t *status;
-	struct rspamd_http_header *headers;
-	rspamd_fstring_t *body;
-	rspamd_ftok_t body_buf;
-	struct rspamd_cryptobox_pubkey *peer_key;
-	time_t date;
-	time_t last_modified;
-	unsigned port;
-	enum http_parser_type type;
-	gint code;
-	enum http_method method;
-	gint flags;
-};
-
+#define RSPAMD_HTTP_FLAG_SHMEM (1 << 2)
+/**
+ * Store body of the message in an immutable shared memory segment
+ */
+#define RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE (1 << 3)
 
 /**
  * Options for HTTP connection
@@ -78,11 +62,6 @@ enum rspamd_http_options {
 	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */
 	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4 /**< Encrypt data for client */
 };
-
-struct rspamd_http_connection_private;
-struct rspamd_http_connection;
-struct rspamd_http_connection_router;
-struct rspamd_http_connection_entry;
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg,
@@ -275,6 +254,62 @@ struct rspamd_http_message * rspamd_http_new_message (enum http_parser_type type
  * @return new message or NULL
  */
 struct rspamd_http_message* rspamd_http_message_from_url (const gchar *url);
+
+/**
+ * Returns body for a message
+ * @param msg
+ * @param blen pointer where to save body length
+ * @return pointer to body start
+ */
+const gchar *rspamd_http_message_get_body (struct rspamd_http_message *msg,
+		gsize *blen);
+
+/**
+ * Set message's body from the string
+ * @param msg
+ * @param data
+ * @param len
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body (struct rspamd_http_message *msg,
+		const gchar *data, gsize len);
+
+/**
+ * Maps fd as message's body
+ * @param msg
+ * @param fd
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
+		gint fd);
+
+/**
+ * Uses rspamd_fstring_t as message's body, string is consumed by this operation
+ * @param msg
+ * @param fstr
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body_from_fstring_steal (struct rspamd_http_message *msg,
+		rspamd_fstring_t *fstr);
+
+/**
+ * Uses rspamd_fstring_t as message's body, string is copied by this operation
+ * @param msg
+ * @param fstr
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_set_body_from_fstring_copy (struct rspamd_http_message *msg,
+		const rspamd_fstring_t *fstr);
+
+/**
+ * Appends data to message's body
+ * @param msg
+ * @param data
+ * @param len
+ * @return TRUE if a message's body has been set
+ */
+gboolean rspamd_http_message_append_body (struct rspamd_http_message *msg,
+		const gchar *data, gsize len);
 
 /**
  * Append a header to reply

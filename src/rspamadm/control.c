@@ -17,7 +17,8 @@
 #include "rspamadm.h"
 #include "cryptobox.h"
 #include "printf.h"
-#include "http.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "addr.h"
 #include "unix-std.h"
 #include <event.h>
@@ -100,11 +101,14 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	struct ucl_parser *parser;
 	ucl_object_t *obj;
 	rspamd_fstring_t *out;
+	const gchar *body;
+	gsize body_len;
 	struct rspamadm_control_cbdata *cbdata = conn->ud;
 
+	body = rspamd_http_message_get_body (msg, &body_len);
 	parser = ucl_parser_new (0);
 
-	if (!ucl_parser_add_chunk (parser, msg->body->str, msg->body->len)) {
+	if (!body || !ucl_parser_add_chunk (parser, body, body_len)) {
 		rspamd_fprintf (stderr, "cannot parse server's reply: %s\n",
 				ucl_parser_get_error (parser));
 		ucl_parser_free (parser);

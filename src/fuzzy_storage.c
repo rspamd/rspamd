@@ -33,6 +33,7 @@
 #include "ref.h"
 #include "xxhash.h"
 #include "libutil/hash.h"
+#include "libutil/http_private.h"
 #include "unix-std.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
@@ -260,6 +261,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 	gsize len;
 	guint32 rev;
 	const gchar *p;
+	rspamd_fstring_t *reply;
 
 	rev = rspamd_fuzzy_backend_version (ctx->backend, local_db_name);
 	rev = GUINT32_TO_LE (rev);
@@ -278,8 +280,8 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 	}
 
-	msg->body = rspamd_fstring_sized_new (len);
-	msg->body = rspamd_fstring_append (msg->body, (const char *)&rev,
+	reply = rspamd_fstring_sized_new (len);
+	reply = rspamd_fstring_append (reply, (const char *)&rev,
 			sizeof (rev));
 
 	for (cur = ctx->updates_pending->head; cur != NULL; cur = g_list_next (cur)) {
@@ -295,15 +297,14 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 
 		p = (const char *)io_cmd;
-		msg->body = rspamd_fstring_append (msg->body, (const char *)&len,
-					sizeof (len));
-		msg->body = rspamd_fstring_append (msg->body, p, len);
+		reply = rspamd_fstring_append (reply, (const char *)&len, sizeof (len));
+		reply = rspamd_fstring_append (reply, p, len);
 	}
 
 	/* Last chunk */
 	len = 0;
-	msg->body = rspamd_fstring_append (msg->body, (const char *)&len,
-			sizeof (len));
+	reply = rspamd_fstring_append (reply, (const char *)&len, sizeof (len));
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 }
 
 static void
@@ -936,7 +937,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	} state = read_len;
 	GList *updates = NULL, *cur;
 
-	if (!msg->body || msg->body->len == 0 || !msg->url || msg->url->len == 0) {
+	if (!rspamd_http_message_get_body (msg, NULL) || !msg->url
+			|| msg->url->len == 0) {
 		msg_err ("empty update message, not processing");
 
 		return;
@@ -963,8 +965,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	 * <0> - end of data
 	 * ... - ignored
 	 */
-	p = (const guchar *)msg->body->str;
-	remain = msg->body->len;
+	p = rspamd_http_message_get_body (msg, &remain);
 
 	if (remain > sizeof (guint32) * 2) {
 		memcpy (&revision, p, sizeof (guint32));
