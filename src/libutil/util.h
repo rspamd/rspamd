@@ -412,6 +412,13 @@ guint64 rspamd_hash_seed (void);
 void rspamd_random_hex (guchar *buf, guint64 len);
 
 /**
+ * Returns
+ * @param pattern pattern to create (should end with some number of X symbols), modified by this function
+ * @return
+ */
+gint rspamd_shmem_mkstemp (gchar *pattern);
+
+/**
  * Return jittered time value
  */
 gdouble rspamd_time_jitter (gdouble in, gdouble jitter);

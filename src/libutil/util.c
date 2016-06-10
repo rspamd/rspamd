@@ -1894,6 +1894,39 @@ rspamd_random_hex (guchar *buf, guint64 len)
 	}
 }
 
+gint
+rspamd_shmem_mkstemp (gchar *pattern)
+{
+	gint fd = -1;
+	gchar *nbuf, *xpos;
+	gsize blen;
+
+	xpos = strchr (pattern, 'X');
+
+	if (xpos == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	blen = strlen (pattern);
+	nbuf = g_malloc (blen + 1);
+	rspamd_strlcpy (nbuf, pattern, blen + 1);
+	xpos = nbuf + (xpos - pattern);
+
+	for (;;) {
+		rspamd_random_hex (xpos, blen - (xpos - nbuf));
+
+		fd = shm_open (nbuf, O_RDWR | O_EXCL | O_CREAT, 0600);
+
+		if (fd != -1) {
+			rspamd_strlcpy (pattern, nbuf, blen + 1);
+		}
+	}
+
+	g_free (nbuf);
+
+	return fd;
+}
 
 void
 rspamd_ptr_array_free_hard (gpointer p)
