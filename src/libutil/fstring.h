@@ -147,6 +147,15 @@ void rspamd_fstring_mapped_ftok_free (gpointer p);
 rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
 
 /**
+ * Suggest suitable size to grow fstring
+ * @param len
+ * @param allocated
+ * @param needed_len
+ * @return
+ */
+gsize rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len);
+
+/**
  * Grow the specified fixed string
  * @param str
  * @param needed_len
