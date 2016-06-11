@@ -1550,9 +1550,13 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			allow_shared = FALSE;
 		}
 		else {
-			/* Insert new header */
+			/* Insert new headers */
 			rspamd_http_message_add_header (msg, "Shm",
 					msg->body_buf.c.shared.name->shm_name);
+			rspamd_snprintf (datebuf, sizeof (datebuf), "%d",
+					(int)(msg->body_buf.begin - msg->body_buf.str));
+			rspamd_http_message_add_header (msg, "Shm-Offset",
+					datebuf);
 		}
 	}
 

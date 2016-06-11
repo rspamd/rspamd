@@ -264,12 +264,17 @@ rspamd_task_free (struct rspamd_task *task)
 	}
 }
 
+struct rspamd_task_map {
+	gpointer begin;
+	gulong len;
+};
+
 static void
 rspamd_task_unmapper (gpointer ud)
 {
-	struct rspamd_task *task = ud;
+	struct rspamd_task_map *m = ud;
 
-	munmap ((void *)task->msg.begin, task->msg.len);
+	munmap (m->begin, m->len);
 }
 
 gboolean
@@ -281,9 +286,11 @@ rspamd_task_load_message (struct rspamd_task *task,
 	ucl_object_t *control_obj;
 	gchar filepath[PATH_MAX], *fp;
 	gint fd, flen;
+	gulong offset = 0;
 	rspamd_ftok_t srch, *tok;
 	gpointer map;
 	struct stat st;
+	struct rspamd_task_map *m;
 
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
@@ -336,13 +343,33 @@ rspamd_task_load_message (struct rspamd_task *task,
 		}
 
 		close (fd);
-		task->msg.begin = map;
-		task->msg.len = st.st_size;
+
+		srch.begin = "shm-offset";
+		srch.len = 10;
+		tok = g_hash_table_lookup (task->request_headers, &srch);
+
+		if (tok) {
+			rspamd_strtoul (tok->begin, tok->len, &offset);
+
+			if (offset > (gulong)st.st_size) {
+				msg_err_task ("invalid offset %ul (%ul available) for shm "
+						"segment %s", offset, st.st_size, fp);
+				munmap (map, st.st_size);
+
+				return FALSE;
+			}
+		}
+
+		task->msg.begin = ((guchar *)map) + offset;
+		task->msg.len = st.st_size - offset;
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
+		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
+		m->begin = map;
+		m->len = st.st_size;
 
 		msg_info_task ("loaded message from shared memory %s", fp);
 
-		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, task);
+		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 
 		return TRUE;
 	}
@@ -405,8 +432,11 @@ rspamd_task_load_message (struct rspamd_task *task,
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
 
 		msg_info_task ("loaded message from file %s", fp);
+		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
+		m->begin = map;
+		m->len = st.st_size;
 
-		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, task);
+		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 
 		return TRUE;
 	}
