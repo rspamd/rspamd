@@ -161,6 +161,13 @@ rspamd_config_new (void)
 	 */
 	cfg->enable_shutdown_workaround = TRUE;
 
+	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+#ifndef FREEBSD
+	cfg->ssl_ca_path = "/etc/ssl/certs/ca-certificates.crt";
+#else
+	cfg->ssl_ca_path = "/usr/local/etc/ssl/certs/ca-certificates.crt";
+#endif
+
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
 	return cfg;
