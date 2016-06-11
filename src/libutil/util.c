@@ -28,6 +28,7 @@
 #include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/ssl.h>
 #endif
 
 #ifdef HAVE_TERMIOS_H
@@ -1971,6 +1972,7 @@ rspamd_init_libs (void)
 	struct rlimit rlim;
 	struct rspamd_external_libs_ctx *ctx;
 	struct ottery_config *ottery_cfg;
+	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 
 	ctx = g_slice_alloc0 (sizeof (*ctx));
 	ctx->crypto_ctx = rspamd_cryptobox_init ();
@@ -2007,6 +2009,24 @@ rspamd_init_libs (void)
 	OpenSSL_add_all_algorithms ();
 	OpenSSL_add_all_digests ();
 	OpenSSL_add_all_ciphers ();
+	SSL_library_init ();
+	SSL_load_error_strings ();
+
+	if (RAND_poll () == 0) {
+		guchar seed[128];
+
+		/* Try to use ottery to seed rand */
+		ottery_rand_bytes (seed, sizeof (seed));
+		RAND_seed (seed, sizeof (seed));
+		rspamd_explicit_memzero (seed, sizeof (seed));
+	}
+
+	ctx->ssl_ctx = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ctx->ssl_ctx, SSL_VERIFY_PEER, NULL);
+	SSL_CTX_set_verify_depth (ctx->ssl_ctx, 4);
+	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_COMPRESSION);
+	/* Default settings */
+	SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
 #endif
 	g_random_set_seed (ottery_rand_uint32 ());
 
@@ -2067,6 +2087,7 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 #ifdef HAVE_OPENSSL
 		EVP_cleanup ();
 		ERR_free_strings ();
+		SSL_CTX_free (ctx->ssl_ctx);
 #endif
 		rspamd_inet_library_destroy ();
 	}
