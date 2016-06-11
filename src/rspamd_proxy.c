@@ -1035,10 +1035,19 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				session->ctx->local_key);
 		msg->peer_key = rspamd_pubkey_ref (m->key);
 
-		rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
-				msg, NULL, NULL, bk_conn,
-				bk_conn->backend_sock,
-				&session->ctx->io_tv, session->ctx->ev_base);
+		if (m->local ||
+				rspamd_inet_address_is_local (rspamd_upstream_addr (bk_conn->up))) {
+			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
+					msg, NULL, NULL, bk_conn,
+					bk_conn->backend_sock,
+					&session->ctx->io_tv, session->ctx->ev_base);
+		}
+		else {
+			rspamd_http_connection_write_message (bk_conn->backend_conn,
+					msg, NULL, NULL, bk_conn,
+					bk_conn->backend_sock,
+					&session->ctx->io_tv, session->ctx->ev_base);
+		}
 
 		g_ptr_array_add (session->mirror_conns, bk_conn);
 		REF_RETAIN (session);
@@ -1218,11 +1227,22 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					session->ctx->local_key);
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
 
-			rspamd_http_connection_write_message_shared (
-					session->master_conn->backend_conn,
-					msg, NULL, NULL, session->master_conn,
-					session->master_conn->backend_sock,
-					&session->ctx->io_tv, session->ctx->ev_base);
+			if (backend->local ||
+					rspamd_inet_address_is_local (
+							rspamd_upstream_addr (session->master_conn->up))) {
+				rspamd_http_connection_write_message_shared (
+						session->master_conn->backend_conn,
+						msg, NULL, NULL, session->master_conn,
+						session->master_conn->backend_sock,
+						&session->ctx->io_tv, session->ctx->ev_base);
+			}
+			else {
+				rspamd_http_connection_write_message (
+						session->master_conn->backend_conn,
+						msg, NULL, NULL, session->master_conn,
+						session->master_conn->backend_sock,
+						&session->ctx->io_tv, session->ctx->ev_base);
+			}
 		}
 	}
 	else {
