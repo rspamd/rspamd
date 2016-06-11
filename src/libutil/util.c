@@ -1974,7 +1974,6 @@ rspamd_init_libs (void)
 	struct rlimit rlim;
 	struct rspamd_external_libs_ctx *ctx;
 	struct ottery_config *ottery_cfg;
-	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 
 	ctx = g_slice_alloc0 (sizeof (*ctx));
 	ctx->crypto_ctx = rspamd_cryptobox_init ();
@@ -2041,8 +2040,6 @@ rspamd_init_libs (void)
 	SSL_CTX_set_verify (ctx->ssl_ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth (ctx->ssl_ctx, 4);
 	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_COMPRESSION);
-	/* Default settings */
-	SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
 #endif
 	g_random_set_seed (ottery_rand_uint32 ());
 
@@ -2070,6 +2067,8 @@ void
 rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		struct rspamd_config *cfg)
 {
+	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+
 	g_assert (cfg != NULL);
 
 	if (ctx != NULL) {
@@ -2083,6 +2082,30 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 				rspamd_map_add_from_ucl (cfg, cfg->local_addrs,
 					"Local addresses", rspamd_radix_read, rspamd_radix_fin,
 					(void **) ctx->local_addrs);
+			}
+		}
+
+		if (cfg->ssl_ca_path) {
+			if (SSL_CTX_load_verify_locations (ctx->ssl_ctx, cfg->ssl_ca_path,
+					NULL) != 1) {
+				msg_err_config ("cannot load CA certs from %s: %s",
+						cfg->ssl_ca_path,
+						ERR_error_string (ERR_get_error (), NULL));
+			}
+		}
+		else {
+			msg_warn_config ("ssl_ca_path is not set, using default CA path");
+			SSL_CTX_set_default_verify_paths (ctx->ssl_ctx);
+		}
+
+		if (cfg->ssl_ciphers) {
+			if (SSL_CTX_set_cipher_list (ctx->ssl_ctx, cfg->ssl_ciphers) != 1) {
+				msg_err_config ("cannot set ciphers set to %s: %s; fallback to %s",
+						cfg->ssl_ciphers,
+						ERR_error_string (ERR_get_error (), NULL),
+						secure_ciphers);
+				/* Default settings */
+				SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
 			}
 		}
 	}
