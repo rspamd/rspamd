@@ -38,7 +38,7 @@ static GOptionEntry entries[] = {
 		{"destination", 'd', 0, G_OPTION_ARG_STRING, &target,
 				"Destination db",     NULL},
 		{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
-				"Supress output", NULL},
+				"Suppress output", NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
