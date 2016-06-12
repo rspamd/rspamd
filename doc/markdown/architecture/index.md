@@ -69,20 +69,13 @@ The weight of rules is not necessarily constant. For example, for statistics rul
 
 ## Statistics
 
-rspamd uses statistic algorithms to precisely calculate the final score of a message. Currently, the only algorithm defined is OSB-Bayes. You can find details of this algorithm in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf). rspamd uses a window size of 5 words in its classification. During the classification procedure, rspamd splits a message into a set of tokens. Tokens are separated by punctuation or whitespace characters. Short tokens (less than 3 symbols) are ignored. For each token, rspamd calculates two non-cryptographic hashes used subsequently as indices. All these tokens are stored in memory-mapped files called `statistic files` (or `statfiles`). Each statfile is a set of token chains, indexed by the first hash. A new token may be inserted into a chain, and if this chain is full then rspamd tries to expire less significant tokens to insert the new one. It is possible to obtain the current state of tokens by running the
-
-	rspamc stat
-
-command which outputs statistics for free and used tokens in each statfile. Please note that if a statfile is close to being completely full then during subsequent learning you will lose existing data. Therefore, it is recommended to increase the size of such statfiles.
+rspamd uses statistic algorithms to precisely calculate the final score of a message. Currently, the only algorithm defined is OSB-Bayes. You can find details of this algorithm in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf). rspamd uses a window size of 5 words in its classification. During the classification procedure, rspamd splits a message into a set of tokens. Tokens are separated by punctuation or whitespace characters. Short tokens (less than 3 symbols) are ignored. For each token, rspamd calculates two non-cryptographic hashes used subsequently as indices. All these tokens are stored in different statistics backends (mmapped files, sqlite3 database or redis server). Currently, the recommended backend for statistics is `redis`.
 
 ## Running rspamd
 
 There are several command-line options that can be passed to rspamd. All of them can be displayed by passing the `--help` argument.
 
-All options are optional: by default rspamd will try to read the `etc/rspamd.conf` config file and run as a daemon. Also there is a test mode that can be turned on by passing the `-t` argument. In test mode, rspamd reads the config file and checks its syntax. If a configuration file is OK, the exit code is zero. Test mode is useful for testing new config files without restarting rspamd. The `--convert-config` option can be used to convert old style (pre 0.6.0) configs to [ucl](../configuration/ucl.md) format:
-
-	$ rspamd -c ./rspamd.xml --convert-conf ./rspamd.conf
-
+All options are optional: by default rspamd will try to read the `etc/rspamd.conf` config file and run as a daemon. Also there is a test mode that can be turned on by passing the `-t` argument. In test mode, rspamd reads the config file and checks its syntax. If a configuration file is OK, the exit code is zero. Test mode is useful for testing new config files without restarting rspamd.
 
 ## Managing rspamd using signals
 

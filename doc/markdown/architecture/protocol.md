@@ -2,7 +2,7 @@
 
 ## Protocol basics
 
-rspamd uses the HTTP protocol, either version 1.0 or 1.1. (There is also a compatibility layer described further in this document.) rspamd defines some headers which allow the passing of extra information about a scanned message, such as envelope data, IP address or SMTP sasl authentication data, etc. rspamd supports normal and chunked encoded HTTP requests; however, form URL encoding is **NOT** supported currently.
+rspamd uses the HTTP protocol, either version 1.0 or 1.1. (There is also a compatibility layer described further in this document.) rspamd defines some headers which allow the passing of extra information about a scanned message, such as envelope data, IP address or SMTP sasl authentication data, etc. rspamd supports normal and chunked encoded HTTP requests.
 
 ## rspamd HTTP request
 
@@ -135,7 +135,7 @@ Additional keys which may be in the reply include:
 
 ## rspamd JSON control block
 
-Since rspamd version 0.9 it is also possible to pass additional data by prepending a JSON control block to a message. So you can use either headers or a JSON block to pass data from the MTA to rspamd. The advantage of the JSON block is that it can be encrypted using `httpcrypt`. Header encryption is currently unsupported.
+Since rspamd version 0.9 it is also possible to pass additional data by prepending a JSON control block to a message. So you can use either headers or a JSON block to pass data from the MTA to rspamd.
 
 To use a JSON control block, you need to pass an extra header called `Message-Length` to rspamd. This header should be equal to the size of the message **excluding** the JSON control block. Therefore, the size of the control block is equal to `Content-Length - Message-Length`. rspamd assumes that a message starts immediately after the control block (with no extra CRLF). This method is equally compatible with streaming transfer, however even if you are not specifying `Content-Length` you are still required to specify `Message-Length`.
 
