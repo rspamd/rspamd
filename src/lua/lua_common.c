@@ -836,6 +836,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 			case 'U':
 				if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
+					*(va_arg (ap, void **)) = NULL;
 				}
 				else if (t != LUA_TUSERDATA) {
 					g_set_error (err,
