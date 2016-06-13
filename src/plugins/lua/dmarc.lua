@@ -80,7 +80,8 @@ local function dmarc_callback(task)
         task:get_resolver():resolve_txt({
           task=task,
           name = resolve_name,
-          callback = dmarc_dns_cb})
+          callback = dmarc_dns_cb,
+          forced = true})
         return
       end
 
@@ -182,7 +183,8 @@ local function dmarc_callback(task)
         task:get_resolver():resolve_txt({
           task=task,
           name = resolve_name,
-          callback = dmarc_dns_cb})
+          callback = dmarc_dns_cb,
+          forced = true})
 
         return
       else
@@ -263,7 +265,8 @@ local function dmarc_callback(task)
   task:get_resolver():resolve_txt({
     task=task,
     name = resolve_name,
-    callback = dmarc_dns_cb})
+    callback = dmarc_dns_cb,
+    forced = true})
 end
 
 local opts = rspamd_config:get_all_opt('dmarc')
