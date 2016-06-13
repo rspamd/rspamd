@@ -819,7 +819,7 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		}
 	}
 
-	if (session->master_conn->results) {
+	if (session->master_conn && session->master_conn->results) {
 		ucl_object_unref (session->master_conn->results);
 	}
 
