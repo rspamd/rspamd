@@ -1948,7 +1948,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			return;
 		}
 		else {
-			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx);
+			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx, base);
 			g_assert (priv->ssl != NULL);
 
 			if (!rspamd_ssl_connect_fd (priv->ssl, fd, host, &priv->ev,

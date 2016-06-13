@@ -80,6 +80,10 @@ write_http_request (struct http_callback_data *cbd)
 	if (cbd->fd != -1) {
 		msg = rspamd_http_new_message (HTTP_REQUEST);
 
+		if (cbd->bk->protocol == MAP_PROTO_HTTPS) {
+			msg->flags |= RSPAMD_HTTP_FLAG_SSL;
+		}
+
 		if (cbd->check) {
 			msg->method = HTTP_HEAD;
 		}
@@ -652,7 +656,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 									RSPAMD_HTTP_CLIENT_SIMPLE,
 							RSPAMD_HTTP_CLIENT,
 							NULL,
-							NULL);
+							cbd->map->cfg->libs_ctx->ssl_ctx);
 
 					write_http_request (cbd);
 				}
@@ -857,7 +861,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 
 	if (cbd->need_modify) {
 		/* Load data from the next backend */
-		if (bk->protocol == MAP_PROTO_HTTP) {
+		if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
 			rspamd_map_http_read_callback (fd, what, cbd);
 		}
 		else {
@@ -866,7 +870,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 	}
 	else {
 		/* Check the next backend */
-		if (bk->protocol == MAP_PROTO_HTTP) {
+		if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
 			rspamd_map_http_check_callback (fd, what, cbd);
 		}
 		else {
@@ -985,12 +989,17 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 
 	bk->protocol = MAP_PROTO_FILE;
 
-	if (g_ascii_strncasecmp (pos, "http://",
-			sizeof ("http://") - 1) == 0) {
+	if (g_ascii_strncasecmp (pos, "http://", sizeof ("http://") - 1) == 0) {
 		bk->protocol = MAP_PROTO_HTTP;
 		/* Include http:// */
 		bk->uri = g_strdup (pos);
 		pos += sizeof ("http://") - 1;
+	}
+	else if (g_ascii_strncasecmp (pos, "https://", sizeof ("https://") - 1) == 0) {
+		bk->protocol = MAP_PROTO_HTTPS;
+		/* Include http:// */
+		bk->uri = g_strdup (pos);
+		pos += sizeof ("https://") - 1;
 	}
 	else if (g_ascii_strncasecmp (pos, "file://", sizeof ("file://") -
 			1) == 0) {
@@ -1086,7 +1095,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		fdata->filename = g_strdup (bk->uri);
 		bk->data.fd = fdata;
 	}
-	else if (bk->protocol == MAP_PROTO_HTTP) {
+	else if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
 		hdata = g_slice_alloc0 (sizeof (struct http_map_data));
 
 		memset (&up, 0, sizeof (up));
@@ -1109,7 +1118,12 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 				hdata->port = up.port;
 			}
 			else {
-				hdata->port = 80;
+				if (bk->protocol == MAP_PROTO_HTTP) {
+					hdata->port = 80;
+				}
+				else {
+					hdata->port = 443;
+				}
 			}
 
 			if (up.field_set & 1 << UF_PATH) {

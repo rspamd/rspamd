@@ -29,7 +29,8 @@ typedef void (*rspamd_ssl_error_handler_t)(gpointer d, GError *err);
  * @param ssl_ctx initialized SSL_CTX structure
  * @return opaque connection data
  */
-struct rspamd_ssl_connection * rspamd_ssl_connection_new (gpointer ssl_ctx);
+struct rspamd_ssl_connection * rspamd_ssl_connection_new (gpointer ssl_ctx,
+		struct event_base *ev_base);
 
 /**
  * Connects SSL session using the specified (connected) FD

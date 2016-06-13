@@ -621,6 +621,9 @@ lua_map_get_proto (lua_State *L)
 				case MAP_PROTO_HTTP:
 					ret = "http";
 					break;
+				case MAP_PROTO_HTTPS:
+					ret = "https";
+					break;
 				}
 				lua_pushstring (L, ret);
 			}

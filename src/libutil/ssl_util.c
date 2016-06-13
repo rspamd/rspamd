@@ -392,13 +392,14 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 }
 
 struct rspamd_ssl_connection *
-rspamd_ssl_connection_new (gpointer ssl_ctx)
+rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base)
 {
 	struct rspamd_ssl_connection *c;
 
 	g_assert (ssl_ctx != NULL);
 	c = g_slice_alloc0 (sizeof (*c));
 	c->ssl = SSL_new (ssl_ctx);
+	c->ev_base = ev_base;
 
 	return c;
 }
@@ -424,7 +425,6 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	conn->handler = handler;
 	conn->err_handler = err_handler;
 	conn->handler_data = handler_data;
-	conn->ev_base = event_get_base (ev);
 
 	if (SSL_set_fd (conn->ssl, fd) != 1) {
 		return FALSE;
@@ -444,7 +444,9 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	if (ret == 1) {
 		conn->state = ssl_conn_connected;
 		event_set (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
-		event_base_set (conn->ev_base, ev);
+		if (conn->ev_base) {
+			event_base_set (conn->ev_base, ev);
+		}
 		event_add (ev, tv);
 	}
 	else {
