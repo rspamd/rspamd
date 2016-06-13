@@ -997,12 +997,11 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 	}
 	else if (g_ascii_strncasecmp (pos, "https://", sizeof ("https://") - 1) == 0) {
 		bk->protocol = MAP_PROTO_HTTPS;
-		/* Include http:// */
+		/* Include https:// */
 		bk->uri = g_strdup (pos);
 		pos += sizeof ("https://") - 1;
 	}
-	else if (g_ascii_strncasecmp (pos, "file://", sizeof ("file://") -
-			1) == 0) {
+	else if (g_ascii_strncasecmp (pos, "file://", sizeof ("file://") - 1) == 0) {
 		pos += sizeof ("file://") - 1;
 		/* Exclude file:// */
 		bk->uri = g_strdup (pos);
@@ -1037,7 +1036,10 @@ rspamd_map_is_map (const gchar *map_line)
 	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
 		ret = TRUE;
 	}
-	else if (g_ascii_strncasecmp (map_line, "http://", sizeof ("file://") - 1) == 0) {
+	else if (g_ascii_strncasecmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
+		ret = TRUE;
+	}
+	else if (g_ascii_strncasecmp (map_line, "https://", sizeof ("https://") - 1) == 0) {
 		ret = TRUE;
 	}
 
