@@ -302,6 +302,7 @@ struct rspamd_config * lua_check_config (lua_State * L, gint pos);
  * - V - size_t + const char *
  * - U{classname} - userdata of the following class (stored in gpointer)
  * - F - function
+ * - O - ucl_object_t *
  *
  * If any of keys is prefixed with `*` then it is treated as required argument
  * @param L lua state

@@ -68,36 +68,63 @@ rspamd_lua_new_class_full (lua_State *L,
 	luaL_register (L, static_name, func);
 }
 
+static const gchar *
+rspamd_lua_class_tostring_buf (lua_State *L, gboolean print_pointer, gint pos)
+{
+	static gchar buf[64];
+	const gchar *ret = NULL;
+	gint pop = 0;
+
+	if (!lua_getmetatable (L, pos)) {
+		goto err;
+	}
+
+	lua_pushstring (L, "__index");
+	lua_gettable (L, -2);
+	pop ++;
+
+	if (!lua_istable (L, -1)) {
+		goto err;
+	}
+
+	lua_pushstring (L, "class");
+	lua_gettable (L, -2);
+	pop ++;
+
+	if (!lua_isstring (L, -1)) {
+		goto err;
+	}
+
+	if (print_pointer) {
+		rspamd_snprintf (buf, sizeof (buf), "%s(%p)", lua_tostring (L, -1),
+				lua_touserdata (L, 1));
+	}
+	else {
+		rspamd_snprintf (buf, sizeof (buf), "%s", lua_tostring (L, -1));
+	}
+
+	ret = buf;
+
+err:
+	lua_pop (L, pop);
+
+	return ret;
+}
+
 gint
 rspamd_lua_class_tostring (lua_State * L)
 {
-	gchar buf[32];
+	const gchar *p;
 
-	if (!lua_getmetatable (L, 1)) {
-		goto error;
-	}
-	lua_pushstring (L, "__index");
-	lua_gettable (L, -2);
+	p = rspamd_lua_class_tostring_buf (L, TRUE, 1);
 
-	if (!lua_istable (L, -1)) {
-		goto error;
-	}
-	lua_pushstring (L, "class");
-	lua_gettable (L, -2);
-
-	if (!lua_isstring (L, -1)) {
-		goto error;
+	if (!p) {
+		lua_pushstring (L, "invalid object passed to 'lua_common.c:__tostring'");
+		return lua_error (L);
 	}
 
-	snprintf (buf, sizeof (buf), "%p", lua_touserdata (L, 1));
+	lua_pushstring (L, p);
 
-	lua_pushfstring (L, "%s: %s", lua_tostring (L, -1), buf);
-
-	return 1;
-
-error:
-	lua_pushstring (L, "invalid object passed to 'lua_common.c:__tostring'");
-	lua_error (L);
 	return 1;
 }
 
@@ -804,11 +831,11 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 						g_set_error (err,
 								lua_error_quark (),
 								2,
-								"invalid class for key %*.s, expected %s, got %s",
+								"invalid class for key %.*s, expected %s, got %s",
 								(gint) keylen,
 								key,
 								classbuf,
-								lua_tostring (L, idx));
+								rspamd_lua_class_tostring_buf (L, FALSE, idx));
 						va_end (ap);
 
 						return FALSE;
