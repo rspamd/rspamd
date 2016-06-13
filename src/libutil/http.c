@@ -1233,7 +1233,7 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 			}
 
 			new_msg->body_buf.begin = new_msg->body_buf.str;
-			new_msg->body_buf.len = st.st_size;
+			new_msg->body_buf.len = msg->body_buf.len;
 			new_msg->body_buf.begin = new_msg->body_buf.str +
 					(msg->body_buf.begin - msg->body_buf.str);
 		}
@@ -1556,6 +1556,10 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			rspamd_snprintf (datebuf, sizeof (datebuf), "%d",
 					(int)(msg->body_buf.begin - msg->body_buf.str));
 			rspamd_http_message_add_header (msg, "Shm-Offset",
+					datebuf);
+			rspamd_snprintf (datebuf, sizeof (datebuf), "%z",
+					msg->body_buf.len);
+			rspamd_http_message_add_header (msg, "Shm-Length",
 					datebuf);
 		}
 	}

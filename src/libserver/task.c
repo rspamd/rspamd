@@ -286,7 +286,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 	ucl_object_t *control_obj;
 	gchar filepath[PATH_MAX], *fp;
 	gint fd, flen;
-	gulong offset = 0;
+	gulong offset = 0, shmem_size = 0;
 	rspamd_ftok_t srch, *tok;
 	gpointer map;
 	struct stat st;
@@ -360,14 +360,32 @@ rspamd_task_load_message (struct rspamd_task *task,
 			}
 		}
 
+		srch.begin = "shm-length";
+		srch.len = 10;
+		tok = g_hash_table_lookup (task->request_headers, &srch);
+		shmem_size = st.st_size;
+
+		if (tok) {
+			rspamd_strtoul (tok->begin, tok->len, &shmem_size);
+
+			if (shmem_size > (gulong)st.st_size) {
+				msg_err_task ("invalid length %ul (%ul available) for shm "
+						"segment %s", shmem_size, st.st_size, fp);
+				munmap (map, st.st_size);
+
+				return FALSE;
+			}
+		}
+
 		task->msg.begin = ((guchar *)map) + offset;
-		task->msg.len = st.st_size - offset;
+		task->msg.len = shmem_size;
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
 		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
 		m->begin = map;
 		m->len = st.st_size;
 
-		msg_info_task ("loaded message from shared memory %s", fp);
+		msg_info_task ("loaded message from shared memory %s (%ul size, %ul offset)",
+				fp, shmem_size, offset);
 
 		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 
