@@ -156,9 +156,13 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	gint fd;
 
 	g_assert ((fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE)) != -1);
-	conn = rspamd_http_connection_new (rspamd_client_body, rspamd_client_err,
-			rspamd_client_finish, RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT, c);
+	conn = rspamd_http_connection_new (rspamd_client_body,
+			rspamd_client_err,
+			rspamd_client_finish,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT,
+			c,
+			NULL);
 	rspamd_snprintf (urlbuf, sizeof (urlbuf), "http://127.0.0.1/%s", path);
 	msg = rspamd_http_message_from_url (urlbuf);
 

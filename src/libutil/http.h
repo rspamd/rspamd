@@ -53,6 +53,10 @@ struct rspamd_http_connection_entry;
  * Store body of the message in an immutable shared memory segment
  */
 #define RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE (1 << 3)
+/**
+ * Use tls for this message
+ */
+#define RSPAMD_HTTP_FLAG_SSL (1 << 4)
 
 /**
  * Options for HTTP connection
@@ -64,24 +68,24 @@ enum rspamd_http_options {
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *chunk,
-	gsize len);
+		struct rspamd_http_message *msg,
+		const gchar *chunk,
+		gsize len);
 
 typedef void (*rspamd_http_error_handler_t) (struct rspamd_http_connection *conn,
-	GError *err);
+		GError *err);
 
 typedef int (*rspamd_http_finish_handler_t) (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg);
+		struct rspamd_http_message *msg);
 
 typedef int (*rspamd_http_router_handler_t) (struct rspamd_http_connection_entry
-	*conn_ent,
-	struct rspamd_http_message *msg);
+		*conn_ent,
+		struct rspamd_http_message *msg);
 typedef void (*rspamd_http_router_error_handler_t) (struct
-	rspamd_http_connection_entry *conn_ent,
-	GError *err);
+		rspamd_http_connection_entry *conn_ent,
+		GError *err);
 typedef void (*rspamd_http_router_finish_handler_t) (struct
-	rspamd_http_connection_entry *conn_ent);
+		rspamd_http_connection_entry *conn_ent);
 
 /**
  * HTTP connection structure
@@ -127,13 +131,14 @@ struct rspamd_http_connection_router {
  * @param opts options
  * @return new connection structure
  */
-struct rspamd_http_connection * rspamd_http_connection_new (
-	rspamd_http_body_handler_t body_handler,
-	rspamd_http_error_handler_t error_handler,
-	rspamd_http_finish_handler_t finish_handler,
-	unsigned opts,
-	enum rspamd_http_connection_type type,
-	struct rspamd_keypair_cache *cache);
+struct rspamd_http_connection *rspamd_http_connection_new (
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		unsigned opts,
+		enum rspamd_http_connection_type type,
+		struct rspamd_keypair_cache *cache,
+		gpointer ssl_ctx);
 
 
 /**
@@ -335,8 +340,8 @@ gboolean rspamd_http_message_append_body (struct rspamd_http_message *msg,
  * @param value
  */
 void rspamd_http_message_add_header (struct rspamd_http_message *msg,
-	const gchar *name,
-	const gchar *value);
+		const gchar *name,
+		const gchar *value);
 
 /**
  * Search for a specified header in message
@@ -354,7 +359,7 @@ const rspamd_ftok_t * rspamd_http_message_find_header (
  * @return
  */
 gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
-	const gchar *name);
+		const gchar *name);
 
 /**
  * Free HTTP message
@@ -390,12 +395,12 @@ time_t rspamd_http_parse_date (const gchar *header, gsize len);
  * @return
  */
 struct rspamd_http_connection_router * rspamd_http_router_new (
-	rspamd_http_router_error_handler_t eh,
-	rspamd_http_router_finish_handler_t fh,
-	struct timeval *timeout,
-	struct event_base *base,
-	const char *default_fs_path,
-	struct rspamd_keypair_cache *cache);
+		rspamd_http_router_error_handler_t eh,
+		rspamd_http_router_finish_handler_t fh,
+		struct timeval *timeout,
+		struct event_base *base,
+		const char *default_fs_path,
+		struct rspamd_keypair_cache *cache);
 
 /**
  * Set encryption key for the HTTP router
@@ -409,7 +414,7 @@ void rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
  * Add new path to the router
  */
 void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
-	const gchar *path, rspamd_http_router_handler_t handler);
+		const gchar *path, rspamd_http_router_handler_t handler);
 
 /**
  * Handle new accepted socket
@@ -418,9 +423,9 @@ void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
  * @param ud opaque userdata
  */
 void rspamd_http_router_handle_socket (
-	struct rspamd_http_connection_router *router,
-	gint fd,
-	gpointer ud);
+		struct rspamd_http_connection_router *router,
+		gint fd,
+		gpointer ud);
 
 /**
  * Free router and all connections associated

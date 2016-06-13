@@ -363,7 +363,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 			/* Verify certificate */
 			if (rspamd_ssl_peer_verify (c)) {
 				c->state = ssl_conn_connected;
-				c->handler (fd, what, c->handler_data);
+				c->handler (fd, EV_WRITE, c->handler_data);
 			}
 			else {
 				/* Error handler has been called from peer verify */

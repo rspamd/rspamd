@@ -503,8 +503,13 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 	session = g_slice_alloc0 (sizeof (*session));
 
 	session->fd = fd;
-	session->conn = rspamd_http_connection_new (NULL, rspamd_control_error_handler,
-			rspamd_control_finish_handler, 0, RSPAMD_HTTP_SERVER, NULL);
+	session->conn = rspamd_http_connection_new (NULL,
+			rspamd_control_error_handler,
+			rspamd_control_finish_handler,
+			0,
+			RSPAMD_HTTP_SERVER,
+			NULL,
+			NULL);
 	session->rspamd_main = rspamd_main;
 	rspamd_http_connection_read_message (session->conn, session, session->fd,
 			&io_timeout, rspamd_main->ev_base);

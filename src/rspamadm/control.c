@@ -230,9 +230,13 @@ rspamadm_control (gint argc, gchar **argv)
 
 	L = rspamd_lua_init ();
 
-	conn = rspamd_http_connection_new (NULL, rspamd_control_error_handler,
-			rspamd_control_finish_handler, RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT, NULL);
+	conn = rspamd_http_connection_new (NULL,
+			rspamd_control_error_handler,
+			rspamd_control_finish_handler,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT,
+			NULL,
+			NULL);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 	double_to_tv (timeout, &tv);

@@ -24,6 +24,7 @@
 #include "keypair_private.h"
 #include "cryptobox.h"
 #include "unix-std.h"
+#include "libutil/ssl_util.h"
 
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
@@ -42,6 +43,8 @@ enum rspamd_http_priv_flags {
 #define IS_CONN_RESETED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)
 
 struct rspamd_http_connection_private {
+	gpointer ssl_ctx;
+	struct rspamd_ssl_connection *ssl;
 	struct _rspamd_http_privbuf *buf;
 	struct rspamd_cryptobox_pubkey *peer_key;
 	struct rspamd_cryptobox_keypair *local_key;
@@ -834,9 +837,15 @@ static void
 rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 {
 	struct event_base *base;
+	struct rspamd_http_connection_private *priv;
+	gpointer ssl;
 
+	priv = conn->priv;
 	base = conn->priv->ev.ev_base;
+	ssl = priv->ssl;
+	priv->ssl = NULL;
 	rspamd_http_connection_reset (conn);
+	priv->ssl = ssl;
 	/* Plan read message */
 	rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
 			conn->priv->ptv, base);
@@ -949,6 +958,16 @@ rspamd_http_try_read (gint fd,
 	}
 
 	return r;
+}
+
+static void
+rspamd_http_ssl_err_handler (gpointer ud, GError *err)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)ud;
+
+	rspamd_http_connection_ref (conn);
+	conn->error_handler (conn, err);
+	rspamd_http_connection_unref (conn);
 }
 
 static void
@@ -1084,39 +1103,42 @@ rspamd_http_parser_reset (struct rspamd_http_connection *conn)
 }
 
 struct rspamd_http_connection *
-rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
-	rspamd_http_error_handler_t error_handler,
-	rspamd_http_finish_handler_t finish_handler,
-	unsigned opts,
-	enum rspamd_http_connection_type type,
-	struct rspamd_keypair_cache *cache)
+rspamd_http_connection_new (
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		unsigned opts,
+		enum rspamd_http_connection_type type,
+		struct rspamd_keypair_cache *cache,
+		gpointer ssl_ctx)
 {
-	struct rspamd_http_connection *new;
+	struct rspamd_http_connection *conn;
 	struct rspamd_http_connection_private *priv;
 
 	if (error_handler == NULL || finish_handler == NULL) {
 		return NULL;
 	}
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_http_connection));
-	new->opts = opts;
-	new->type = type;
-	new->body_handler = body_handler;
-	new->error_handler = error_handler;
-	new->finish_handler = finish_handler;
-	new->fd = -1;
-	new->ref = 1;
-	new->finished = FALSE;
-	new->cache = cache;
+	conn = g_slice_alloc0 (sizeof (struct rspamd_http_connection));
+	conn->opts = opts;
+	conn->type = type;
+	conn->body_handler = body_handler;
+	conn->error_handler = error_handler;
+	conn->finish_handler = finish_handler;
+	conn->fd = -1;
+	conn->ref = 1;
+	conn->finished = FALSE;
+	conn->cache = cache;
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));
-	new->priv = priv;
+	conn->priv = priv;
+	priv->ssl_ctx = ssl_ctx;
 
-	rspamd_http_parser_reset (new);
-	priv->parser.data = new;
+	rspamd_http_parser_reset (conn);
+	priv->parser.data = conn;
 
-	return new;
+	return conn;
 }
 
 void
@@ -1154,6 +1176,11 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 	if (priv->out != NULL) {
 		g_slice_free1 (sizeof (struct iovec) * priv->outlen, priv->out);
 		priv->out = NULL;
+	}
+
+	if (priv->ssl) {
+		rspamd_ssl_connection_free (priv->ssl);
+		priv->ssl = NULL;
 	}
 
 	priv->flags |= RSPAMD_HTTP_CONN_FLAG_RESETED;
@@ -1504,6 +1531,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	guchar *np = NULL, *mp = NULL, *meth_pos = NULL;
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	enum rspamd_cryptobox_mode mode;
+	GError *err;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -1900,18 +1928,51 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 	}
 
+	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
+
 	if (base != NULL && event_get_base (&priv->ev) == base) {
 		event_del (&priv->ev);
 	}
 
-	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
+	if (msg->flags & RSPAMD_HTTP_FLAG_SSL) {
+		if (base != NULL) {
+			event_base_set (base, &priv->ev);
+		}
+		if (!priv->ssl_ctx) {
+			err = g_error_new (HTTP_ERROR, errno, "ssl message requested "
+					"with no ssl ctx");
+			rspamd_http_connection_ref (conn);
+			conn->error_handler (conn, err);
+			rspamd_http_connection_unref (conn);
+			g_error_free (err);
+			return;
+		}
+		else {
+			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx);
+			g_assert (priv->ssl != NULL);
 
-	if (base != NULL) {
-		event_base_set (base, &priv->ev);
+			if (!rspamd_ssl_connect_fd (priv->ssl, fd, host, &priv->ev,
+					priv->ptv, rspamd_http_event_handler,
+					rspamd_http_ssl_err_handler, conn)) {
+
+				err = g_error_new (HTTP_ERROR, errno, "ssl connection error");
+				rspamd_http_connection_ref (conn);
+				conn->error_handler (conn, err);
+				rspamd_http_connection_unref (conn);
+				g_error_free (err);
+				return;
+			}
+		}
 	}
+	else {
+		event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
 
-	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
-	event_add (&priv->ev, priv->ptv);
+		if (base != NULL) {
+			event_base_set (base, &priv->ev);
+		}
+
+		event_add (&priv->ev, priv->ptv);
+	}
 }
 
 void
@@ -1961,6 +2022,7 @@ rspamd_http_message_from_url (const gchar *url)
 	struct rspamd_http_message *msg;
 	const gchar *host, *path;
 	size_t pathlen, urllen;
+	guint flags = 0;
 
 	if (url == NULL) {
 		return NULL;
@@ -1977,6 +2039,14 @@ rspamd_http_message_from_url (const gchar *url)
 		msg_warn ("no host argument in URL: %s", url);
 		return NULL;
 	}
+
+	if ((pu.field_set & (1 << UF_SCHEMA))) {
+		if (pu.field_data[UF_SCHEMA].len == sizeof ("https") - 1 &&
+				memcmp (url + pu.field_data[UF_SCHEMA].off, "https", 5) == 0) {
+			flags |= RSPAMD_HTTP_FLAG_SSL;
+		}
+	}
+
 	if ((pu.field_set & (1 << UF_PATH)) == 0) {
 		path = "/";
 		pathlen = 1;
@@ -1988,13 +2058,19 @@ rspamd_http_message_from_url (const gchar *url)
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	host = url + pu.field_data[UF_HOST].off;
+	msg->flags = flags;
 
 	if ((pu.field_set & (1 << UF_PORT)) != 0) {
 		msg->port = pu.port;
 	}
 	else {
 		/* XXX: magic constant */
-		msg->port = 80;
+		if (flags & RSPAMD_HTTP_FLAG_SSL) {
+			msg->port = 443;
+		}
+		else {
+			msg->port = 80;
+		}
 	}
 
 	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
@@ -2724,7 +2800,9 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 			rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler,
 			0,
-			RSPAMD_HTTP_SERVER, router->cache);
+			RSPAMD_HTTP_SERVER,
+			router->cache,
+			NULL);
 
 	if (router->key) {
 		rspamd_http_connection_set_key (conn->conn, router->key);

@@ -1023,13 +1023,13 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			rspamd_http_message_add_header (msg, "Settings-ID", m->settings_id);
 		}
 
-		bk_conn->backend_conn = rspamd_http_connection_new (
-				NULL,
+		bk_conn->backend_conn = rspamd_http_connection_new (NULL,
 				proxy_backend_mirror_error_handler,
 				proxy_backend_mirror_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
 				RSPAMD_HTTP_CLIENT,
-				session->ctx->keys_cache);
+				session->ctx->keys_cache,
+				NULL);
 
 		rspamd_http_connection_set_key (bk_conn->backend_conn,
 				session->ctx->local_key);
@@ -1219,7 +1219,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					proxy_backend_master_finish_handler,
 					RSPAMD_HTTP_CLIENT_SIMPLE,
 					RSPAMD_HTTP_CLIENT,
-					session->ctx->keys_cache);
+					session->ctx->keys_cache,
+					NULL);
 			session->master_conn->parser_from_ref = backend->parser_from_ref;
 			session->master_conn->parser_to_ref = backend->parser_to_ref;
 
@@ -1291,13 +1292,13 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->mirror_conns = g_ptr_array_sized_new (ctx->mirrors->len);
 
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
-	session->client_conn = rspamd_http_connection_new (
-		NULL,
-		proxy_client_error_handler,
-		proxy_client_finish_handler,
-		0,
-		RSPAMD_HTTP_SERVER,
-		ctx->keys_cache);
+	session->client_conn = rspamd_http_connection_new (NULL,
+			proxy_client_error_handler,
+			proxy_client_finish_handler,
+			0,
+			RSPAMD_HTTP_SERVER,
+			ctx->keys_cache,
+			NULL);
 	session->ctx = ctx;
 
 	if (ctx->key) {

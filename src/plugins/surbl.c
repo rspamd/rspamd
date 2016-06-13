@@ -1329,10 +1329,13 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			sizeof (struct redirector_param));
 	param->url = url;
 	param->task = task;
-	param->conn = rspamd_http_connection_new (NULL, surbl_redirector_error,
+	param->conn = rspamd_http_connection_new (NULL,
+			surbl_redirector_error,
 			surbl_redirector_finish,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT, NULL);
+			RSPAMD_HTTP_CLIENT,
+			NULL,
+			NULL);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
 	param->sock = s;

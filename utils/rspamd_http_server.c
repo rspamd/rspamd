@@ -150,8 +150,13 @@ rspamd_server_accept (gint fd, short what, void *arg)
 
 		rspamd_inet_address_destroy (addr);
 		session = g_slice_alloc (sizeof (*session));
-		session->conn = rspamd_http_connection_new (NULL, rspamd_server_error,
-				rspamd_server_finish, 0, RSPAMD_HTTP_SERVER, c);
+		session->conn = rspamd_http_connection_new (NULL,
+				rspamd_server_error,
+				rspamd_server_finish,
+				0,
+				RSPAMD_HTTP_SERVER,
+				c,
+				NULL);
 		rspamd_http_connection_set_key (session->conn, server_key);
 		rspamd_http_connection_read_message (session->conn,
 				session,

@@ -167,7 +167,8 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 			rspamd_client_finish_handler,
 			0,
 			RSPAMD_HTTP_CLIENT,
-			conn->keys_cache);
+			conn->keys_cache,
+			NULL);
 
 	conn->server_name = g_string_new (name);
 	if (port != 0) {

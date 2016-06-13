@@ -201,9 +201,13 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		return FALSE;
 	}
 	cbd->fd = fd;
-	cbd->conn = rspamd_http_connection_new (NULL, lua_http_error_handler,
-			lua_http_finish_handler, RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT, NULL);
+	cbd->conn = rspamd_http_connection_new (NULL,
+			lua_http_error_handler,
+			lua_http_finish_handler,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT,
+			NULL,
+			NULL);
 
 	rspamd_http_connection_write_message (cbd->conn, cbd->msg,
 			NULL, cbd->mime_type, cbd, fd, &cbd->tv, cbd->ev_base);

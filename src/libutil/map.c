@@ -646,9 +646,13 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 				if (cbd->fd != -1) {
 					cbd->stage = map_load_file;
 					cbd->conn = rspamd_http_connection_new (http_map_read,
-							http_map_error, http_map_finish,
-							RSPAMD_HTTP_BODY_PARTIAL|RSPAMD_HTTP_CLIENT_SIMPLE,
-							RSPAMD_HTTP_CLIENT, NULL);
+							http_map_error,
+							http_map_finish,
+							RSPAMD_HTTP_BODY_PARTIAL |
+									RSPAMD_HTTP_CLIENT_SIMPLE,
+							RSPAMD_HTTP_CLIENT,
+							NULL,
+							NULL);
 
 					write_http_request (cbd);
 				}
