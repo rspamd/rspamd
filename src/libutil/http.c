@@ -898,16 +898,23 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 #ifdef MSG_NOSIGNAL
 	flags = MSG_NOSIGNAL;
 #endif
-	r = sendmsg (conn->fd, &msg, flags);
+
+	if (priv->ssl) {
+		r = rspamd_ssl_writev (priv->ssl, msg.msg_iov, msg.msg_iovlen);
+	}
+	else {
+		r = sendmsg (conn->fd, &msg, flags);
+	}
 
 	if (r == -1) {
-		err =
-			g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (
-					errno));
-		rspamd_http_connection_ref (conn);
-		conn->error_handler (conn, err);
-		rspamd_http_connection_unref (conn);
-		g_error_free (err);
+		if (!priv->ssl) {
+			err = g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (errno));
+			rspamd_http_connection_ref (conn);
+			conn->error_handler (conn, err);
+			rspamd_http_connection_unref (conn);
+			g_error_free (err);
+		}
+
 		return;
 	}
 	else {
@@ -948,7 +955,13 @@ rspamd_http_try_read (gint fd,
 	rspamd_fstring_t *buf;
 
 	buf = priv->buf->data;
-	r = read (fd, buf->str, buf->allocated);
+
+	if (priv->ssl) {
+		r = rspamd_ssl_read (priv->ssl, buf->str, buf->allocated);
+	}
+	else {
+		r = read (fd, buf->str, buf->allocated);
+	}
 
 	if (r <= 0) {
 		return r;
@@ -1020,12 +1033,14 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			return;
 		}
 		else {
-			err = g_error_new (HTTP_ERROR,
-					errno,
-					"IO read error: %s",
-					strerror (errno));
-			conn->error_handler (conn, err);
-			g_error_free (err);
+			if (!priv->ssl) {
+				err = g_error_new (HTTP_ERROR,
+						errno,
+						"IO read error: %s",
+						strerror (errno));
+				conn->error_handler (conn, err);
+				g_error_free (err);
+			}
 
 			REF_RELEASE (pbuf);
 			rspamd_http_connection_unref (conn);
@@ -1178,11 +1193,6 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		priv->out = NULL;
 	}
 
-	if (priv->ssl) {
-		rspamd_ssl_connection_free (priv->ssl);
-		priv->ssl = NULL;
-	}
-
 	priv->flags |= RSPAMD_HTTP_CONN_FLAG_RESETED;
 }
 
@@ -1324,6 +1334,11 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 
 	if (priv != NULL) {
 		rspamd_http_connection_reset (conn);
+
+		if (priv->ssl) {
+			rspamd_ssl_connection_free (priv->ssl);
+			priv->ssl = NULL;
+		}
 
 		if (priv->local_key) {
 			rspamd_keypair_unref (priv->local_key);
@@ -1948,6 +1963,11 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			return;
 		}
 		else {
+			if (priv->ssl) {
+				/* Cleanup the existing connection */
+				rspamd_ssl_connection_free (priv->ssl);
+			}
+
 			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx, base);
 			g_assert (priv->ssl != NULL);
 
