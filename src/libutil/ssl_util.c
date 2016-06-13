@@ -29,7 +29,9 @@ struct rspamd_ssl_connection {
 	enum {
 		ssl_conn_reset = 0,
 		ssl_conn_init,
-		ssl_conn_connected
+		ssl_conn_connected,
+		ssl_next_read,
+		ssl_next_write
 	} state;
 	SSL *ssl;
 	gchar *hostname;
@@ -315,14 +317,6 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 
 		return FALSE;
 	}
-	else {
-		ver_err = ERR_get_error ();
-		g_set_error (&err, rspamd_ssl_quark (), ver_err,
-				"ssl connect error: %s", ERR_error_string (ver_err, NULL));
-		c->err_handler (c->handler_data, err);
-		g_error_free (err);
-		return FALSE;
-	}
 
 	/* Get server's certificate */
 	server_cert =  SSL_get_peer_certificate (c->ssl);
@@ -355,20 +349,24 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 	gint ret;
 	GError *err = NULL;
 
-	if (c->state == ssl_conn_init) {
+	switch (c->state) {
+	case ssl_conn_init:
 		/* Continue connection */
 		ret = SSL_connect (c->ssl);
 
 		if (ret == 1) {
+			event_del (c->ev);
 			/* Verify certificate */
 			if (rspamd_ssl_peer_verify (c)) {
 				c->state = ssl_conn_connected;
 				c->handler (fd, EV_WRITE, c->handler_data);
 			}
 			else {
-				/* Error handler has been called from peer verify */
-				return;
+				g_assert (0);
 			}
+		}
+		else {
+			ret = SSL_get_error (c->ssl, ret);
 
 			if (ret == SSL_ERROR_WANT_READ) {
 				what = EV_READ;
@@ -384,10 +382,28 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 				return;
 			}
 
-			event_set (c->ev, fd, EV_WRITE, rspamd_ssl_event_handler, c);
+			event_set (c->ev, fd, what, rspamd_ssl_event_handler, c);
 			event_base_set (c->ev_base, c->ev);
 			event_add (c->ev, c->tv);
 		}
+		break;
+	case ssl_next_read:
+		event_del (c->ev);
+		c->state = ssl_conn_connected;
+		c->handler (fd, EV_READ, c->handler_data);
+		break;
+	case ssl_next_write:
+	case ssl_conn_connected:
+		event_del (c->ev);
+		c->state = ssl_conn_connected;
+		c->handler (fd, EV_WRITE, c->handler_data);
+		break;
+	default:
+		g_set_error (&err, rspamd_ssl_quark (), EINVAL,
+				"ssl bad state error: %d", c->state);
+		c->err_handler (c->handler_data, err);
+		g_error_free (err);
+		break;
 	}
 }
 
@@ -444,9 +460,11 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	if (ret == 1) {
 		conn->state = ssl_conn_connected;
 		event_set (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
+
 		if (conn->ev_base) {
 			event_base_set (conn->ev_base, ev);
 		}
+
 		event_add (ev, tv);
 	}
 	else {
@@ -462,12 +480,182 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 			return FALSE;
 		}
 
-		event_set (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
+		event_set (ev, fd, what, rspamd_ssl_event_handler, conn);
 		event_base_set (conn->ev_base, ev);
 		event_add (ev, tv);
 	}
 
 	return TRUE;
+}
+
+gssize
+rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
+		gsize buflen)
+{
+	gint ret;
+	short what;
+	GError *err = NULL;
+
+	g_assert (conn != NULL);
+
+	if (conn->state != ssl_conn_connected && conn->state != ssl_next_read) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	ret = SSL_read (conn->ssl, buf, buflen);
+
+	if (ret > 0) {
+		conn->state = ssl_conn_connected;
+		return ret;
+	}
+	else if (ret == 0) {
+		ret = SSL_get_error (conn->ssl, ret);
+
+		if (ret == SSL_ERROR_ZERO_RETURN) {
+			conn->state = ssl_conn_reset;
+			return 0;
+		}
+		else {
+			g_set_error (&err, rspamd_ssl_quark (), ret,
+					"ssl write error: %s", ERR_error_string (ret, NULL));
+			conn->err_handler (conn->handler_data, err);
+			g_error_free (err);
+			errno = EINVAL;
+
+			return -1;
+		}
+	}
+	else {
+		ret = SSL_get_error (conn->ssl, ret);
+		conn->state = ssl_next_read;
+
+		if (ret == SSL_ERROR_WANT_READ) {
+			what = EV_READ;
+		}
+		else if (ret == SSL_ERROR_WANT_WRITE) {
+			what = EV_WRITE;
+		}
+		else {
+			g_set_error (&err, rspamd_ssl_quark (), ret,
+					"ssl read error: %s", ERR_error_string (ret, NULL));
+			conn->err_handler (conn->handler_data, err);
+			g_error_free (err);
+			errno = EINVAL;
+
+			return -1;
+		}
+
+		event_set (conn->ev, conn->fd, what, rspamd_ssl_event_handler, conn);
+		event_base_set (conn->ev_base, conn->ev);
+		event_add (conn->ev, conn->tv);
+
+		errno = EAGAIN;
+
+	}
+
+	return -1;
+}
+
+gssize
+rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
+		gsize buflen)
+{
+	gint ret;
+	short what;
+	GError *err = NULL;
+
+	g_assert (conn != NULL);
+
+	if (conn->state != ssl_conn_connected && conn->state != ssl_next_write) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	ret = SSL_write (conn->ssl, buf, buflen);
+
+	if (ret > 0) {
+		conn->state = ssl_conn_connected;
+		return ret;
+	}
+	else if (ret == 0) {
+		ret = SSL_get_error (conn->ssl, ret);
+
+		if (ret == SSL_ERROR_ZERO_RETURN) {
+			conn->state = ssl_conn_reset;
+			return 0;
+		}
+		else {
+			g_set_error (&err, rspamd_ssl_quark (), ret,
+					"ssl write error: %s", ERR_error_string (ret, NULL));
+			conn->err_handler (conn->handler_data, err);
+			g_error_free (err);
+			errno = EINVAL;
+
+			return -1;
+		}
+	}
+	else {
+		ret = SSL_get_error (conn->ssl, ret);
+		conn->state = ssl_next_read;
+
+		if (ret == SSL_ERROR_WANT_READ) {
+			what = EV_READ;
+		}
+		else if (ret == SSL_ERROR_WANT_WRITE) {
+			what = EV_WRITE;
+		}
+		else {
+			g_set_error (&err, rspamd_ssl_quark (), ret,
+					"ssl fatal write error: %s", ERR_error_string (ret, NULL));
+			conn->err_handler (conn->handler_data, err);
+			g_error_free (err);
+			errno = EINVAL;
+
+			return -1;
+		}
+
+		event_set (conn->ev, conn->fd, what, rspamd_ssl_event_handler, conn);
+		event_base_set (conn->ev_base, conn->ev);
+		event_add (conn->ev, conn->tv);
+
+		errno = EAGAIN;
+	}
+
+	return -1;
+}
+
+gssize
+rspamd_ssl_writev (struct rspamd_ssl_connection *conn, struct iovec *iov,
+		gsize iovlen)
+{
+	static guchar ssl_buf[16000];
+	guchar *p;
+	struct iovec *cur;
+	guint i, remain;
+
+	remain = sizeof (ssl_buf);
+	p = ssl_buf;
+
+	for (i = 0; i < iovlen; i ++) {
+		cur = &iov[i];
+
+		if (cur->iov_len > 0) {
+			if (remain >= cur->iov_len) {
+				memcpy (p, cur->iov_base, cur->iov_len);
+				p += cur->iov_len;
+				remain -= cur->iov_len;
+			}
+			else {
+				memcpy (p, cur->iov_base, remain);
+				p += remain;
+				remain = 0;
+				break;
+			}
+		}
+	}
+
+	return rspamd_ssl_write (conn, ssl_buf, p - ssl_buf);
 }
 
 /**

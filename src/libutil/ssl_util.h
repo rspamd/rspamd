@@ -49,6 +49,38 @@ gboolean rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 		gpointer handler_data);
 
 /**
+ * Perform async read from SSL socket
+ * @param conn
+ * @param buf
+ * @param buflen
+ * @return
+ */
+gssize rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
+		gsize buflen);
+
+/**
+ * Perform async write to ssl buffer
+ * @param conn
+ * @param buf
+ * @param buflen
+ * @param ev
+ * @param tv
+ * @return
+ */
+gssize rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
+		gsize buflen);
+
+/**
+ * Emulate writev by copying iovec to a temporary buffer
+ * @param conn
+ * @param buf
+ * @param buflen
+ * @return
+ */
+gssize rspamd_ssl_writev (struct rspamd_ssl_connection *conn, struct iovec *iov,
+		gsize iovlen);
+
+/**
  * Removes connection data
  * @param conn
  */
