@@ -475,6 +475,9 @@ http_map_finish (struct rspamd_http_connection *conn,
 		else {
 			cbd->data->last_checked = msg->date;
 		}
+
+		cbd->periodic->cur_backend ++;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	}
 	else {
 		msg_info_map ("cannot load map %s from %s: HTTP error %d",
@@ -566,6 +569,11 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 static void
 rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 {
+	struct rspamd_map *map;
+
+	map = periodic->map;
+	msg_debug_map ("periodic dtor %p", periodic);
+
 	if (periodic->need_modify) {
 		/* We are done */
 		periodic->map->fin_callback (&periodic->cbdata);
@@ -609,6 +617,8 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	cbd->cbdata.map = map;
 	cbd->map = map;
 	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
+
+	msg_debug_map ("schedule new periodic event %p in %.2f seconds", cbd, timeout);
 
 	if (initial) {
 		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
