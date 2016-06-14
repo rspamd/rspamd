@@ -18,9 +18,12 @@ limitations under the License.
 --
 --
 local symbol = 'PHISHED_URL'
+local openphish_symbol = 'PHISHED_OPENPHISH'
 local domains = nil
 local strict_domains = {}
 local redirector_domains = {}
+local openphish_map = 'https://www.openphish.com/feed.txt'
+local openphish_hash
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
@@ -30,6 +33,14 @@ local function phishing_cb(task)
 
   if urls then
     for _,url in ipairs(urls) do
+      if openphish_hash then
+        local t = url:get_text()
+
+        if openphish_hash:get_key(t) then
+          task:insert_result(openphish_symbol, 1.0, url:get_tld())
+        end
+      end
+
       if url:is_phished() and not url:is_redirected() then
         local found = false
         local purl = url:get_phished()
@@ -94,7 +105,11 @@ local function phishing_map(mapname, phishmap)
         local sym = string.sub(d, s + 1, -1)
         local map = string.sub(d, 1, s - 1)
         rspamd_config:register_virtual_symbol(sym, 1, id)
-        local rmap = rspamd_config:add_hash_map (map, 'Phishing ' .. mapname .. ' map')
+        local rmap = rspamd_config:add_map ({
+          type = 'set',
+          url = map,
+          description = 'Phishing ' .. mapname .. ' map',
+        })
         if rmap then
           local rule = {symbol = sym, map = rmap}
           table.insert(phishmap, rule)
@@ -113,13 +128,35 @@ if opts then
   if opts['symbol'] then
     symbol = opts['symbol']
     -- Register symbol's callback
-    rspamd_config:register_symbol({
+    local id = rspamd_config:register_symbol({
       name = symbol,
       callback = phishing_cb
     })
+
+    if opts['openphish_map'] then
+      openphish_map = opts['openphish_map']
+    end
+
+    openphish_hash = rspamd_config:add_map({
+      type = 'set',
+      url = openphish_map,
+      description = 'Open phishing feed map (see https://www.openphish.com for details)'
+    })
+
+    if openphish_hash then
+      rspamd_config:register_symbol({
+        type = 'virtual',
+        parent = id,
+        name = openphish_symbol,
+      })
+    end
   end
   if opts['domains'] and type(opt['domains']) == 'string' then
-    domains = rspamd_config:add_hash_map (opts['domains'])
+    domains = rspamd_config:add_map({
+      url = opts['domains'],
+      type = 'set',
+      description = 'Phishing domains'
+    })
   end
   phishing_map('strict_domains', strict_domains)
   phishing_map('redirector_domains', redirector_domains)
