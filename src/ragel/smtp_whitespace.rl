@@ -23,7 +23,8 @@
   Atom           = atext+;
   Dot_string     = Atom ("."  Atom)*;
   dot_atom_text  = atext+ ("." atext+)*;
-  FWS            =   ((WSP* CRLF)? WSP+);
+  #FWS            =   ((WSP* CRLF)? WSP+);
+  FWS            = WSP+; # We work with unfolded headers, so we can simplify machine
 
   comment        =   "(" (FWS? ctext)* FWS? ")";
   CFWS           =   ((FWS? comment)+ FWS?) | FWS;
