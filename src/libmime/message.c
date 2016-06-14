@@ -25,6 +25,7 @@
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
 #include "cryptobox.h"
+#include "./parsers/smtp_received_parser.c"
 
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"

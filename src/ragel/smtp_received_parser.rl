@@ -141,22 +141,22 @@
 
     if (real_domain_end && real_domain_start && real_domain_end > real_domain_start) {
       len = real_domain_end - real_domain_start;
-      rh->real_hostname = rspamd_mempool_alloc (len + 1);
+      rh->real_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
       rspamd_strlcpy (rh->real_hostname, real_domain_start, len + 1);
     }
     if (reported_domain_end && reported_domain_start && reported_domain_end > reported_domain_start) {
       len = reported_domain_end - reported_domain_start;
-      rh->from_hostname = rspamd_mempool_alloc (len + 1);
+      rh->from_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
       rspamd_strlcpy (rh->from_hostname, reported_domain_start, len + 1);
     }
     if (real_ip_end && real_ip_start && real_ip_end > real_ip_start) {
       len = real_ip_end - real_ip_start;
-      rh->real_ip = rspamd_mempool_alloc (len + 1);
+      rh->real_ip = rspamd_mempool_alloc (task->task_pool, len + 1);
       rspamd_strlcpy (rh->real_ip, real_ip_start, len + 1);
     }
     if (reported_ip_end && reported_ip_start && reported_ip_end > reported_ip_start) {
       len = reported_ip_end - reported_ip_start;
-      rh->from_ip = rspamd_mempool_alloc (len + 1);
+      rh->from_ip = rspamd_mempool_alloc (task->task_pool, len + 1);
       rspamd_strlcpy (rh->from_ip, reported_ip_start, len + 1);
     }
 
@@ -168,7 +168,7 @@
     }
 
     if (rh->real_ip && ip_start && ip_end && ip_end > ip_start) {
-      if (rspamd_parse_inet_address (&rh->addr, ip_start, ip_end)) {
+      if (rspamd_parse_inet_address (&rh->addr, ip_start, ip_end - ip_start)) {
         rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)rspamd_inet_address_destroy, rh->addr);
       }
     }
@@ -206,11 +206,13 @@ static int
 rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t len, struct received_header *rh)
 {
   struct rspamd_email_address for_addr, *addr;
-  const gchar *real_domain_start, *real_domain_end,
+  const char *real_domain_start, *real_domain_end,
               *real_ip_start, *real_ip_end,
               *reported_domain_start, *reported_domain_end,
               *reported_ip_start, *reported_ip_end,
               *ip_start, *ip_end;
+  const char *p = data, *pe = data + len, *eof;
+  int cs;
 
   memset (rh, 0, sizeof (*rh));
   real_domain_start = NULL;
@@ -227,6 +229,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
 
   memset (&for_addr, 0, sizeof (for_addr));
   addr = &for_addr;
+  eof = pe;
 
   %% write init;
   %% write exec;

@@ -7,6 +7,8 @@
 #define RSPAMD_MESSAGE_H
 
 #include "config.h"
+#include "email_addr.h"
+#include "addr.h"
 #include <gmime/gmime.h>
 
 struct rspamd_task;
@@ -54,12 +56,23 @@ struct mime_text_part {
 	guint64 hash;
 };
 
+enum rspamd_received_type {
+	RSPAMD_RECEIVED_SMTP = 0,
+	RSPAMD_RECEIVED_ESMTP,
+	RSPAMD_RECEIVED_ESMTPS,
+	RSPAMD_RECEIVED_LMTP,
+	RSPAMD_RECEIVED_IMAP,
+	RSPAMD_RECEIVED_UNKNOWN
+};
+
 struct received_header {
 	gchar *from_hostname;
 	gchar *from_ip;
 	gchar *real_hostname;
 	gchar *real_ip;
 	gchar *by_hostname;
+	rspamd_inet_addr_t *addr;
+	enum rspamd_received_type type;
 	gint is_error;
 };
 
