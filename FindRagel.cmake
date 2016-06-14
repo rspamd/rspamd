@@ -74,7 +74,7 @@ ${RAGEL_version_error}")
 		"INPUTS;DEPENDS;COMPILE_FLAGS" ${ARGN})
     add_custom_command(OUTPUT ${RAGEL_OUTPUT}
       COMMAND ${RAGEL_EXECUTABLE}
-      ARGS    ${RAGEL_EXECUTABLE_opts} -o${RAGEL_OUTPUT} ${RAGEL_INPUTS}
+      ARGS    ${RAGEL_COMPILE_FLAGS} -o${RAGEL_OUTPUT} ${RAGEL_INPUTS}
       DEPENDS ${RAGEL_INPUTS} ${RAGEL_DEPENDS}
       COMMENT
           "[RAGEL][${Name}] Compiling state machine with Ragel ${RAGEL_VERSION}"
@@ -83,7 +83,7 @@ ${RAGEL_version_error}")
     set(RAGEL_${Name}_DEFINED       TRUE)
     set(RAGEL_${Name}_OUTPUTS       ${RAGEL_OUTPUT})
     set(RAGEL_${Name}_INPUT         ${RAGEL_INPUTS})
-    set(RAGEL_${Name}_COMPILE_FLAGS ${RAGEL_EXECUTABLE_opts})
+    set(RAGEL_${Name}_COMPILE_FLAGS ${RAGEL_COMPILE_FLAGS})
   endmacro()
 
 endif()
