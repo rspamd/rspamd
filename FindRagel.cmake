@@ -7,8 +7,8 @@
 #
 # If ragel is found, the module defines the macros:
 #
-#  RAGEL_TARGET(<Name> <RagelInp> <CodeOutput>
-#              [COMPILE_FLAGS <string>])
+#  RAGEL_TARGET(<Name> INPUTS <inputs> OUTPUT <output>
+#              [COMPILE_FLAGS <string>] [DEPENDS <depends>])
 #
 # which will create  a custom rule to generate a state machine. <RagelInp> is
 # the path to a Ragel file. <CodeOutput> is the name of the source file
@@ -69,33 +69,20 @@ ${RAGEL_version_error}")
   # RAGEL_TARGET (public macro)
   #============================================================
   #
-  macro(RAGEL_TARGET Name Input Output)
-    set(RAGEL_TARGET_usage
-              "RAGEL_TARGET(<Name> <Input> <Output> [COMPILE_FLAGS <string>]")
-    if(${ARGC} GREATER 3)
-      if(${ARGC} EQUAL 5)
-        if("${ARGV3}" STREQUAL "COMPILE_FLAGS")
-          set(RAGEL_EXECUTABLE_opts  "${ARGV4}")
-          separate_arguments(RAGEL_EXECUTABLE_opts)
-        else()
-          message(SEND_ERROR ${RAGEL_TARGET_usage})
-        endif()
-      else()
-        message(SEND_ERROR ${RAGEL_TARGET_usage})
-      endif()
-    endif()
-
-    add_custom_command(OUTPUT ${Output}
+  macro(RAGEL_TARGET Name)
+    CMAKE_PARSE_ARGUMENTS(RAGEL "" "OUTPUT"
+		"INPUTS;DEPENDS;COMPILE_FLAGS" ${ARGN})
+    add_custom_command(OUTPUT ${RAGEL_OUTPUT}
       COMMAND ${RAGEL_EXECUTABLE}
-      ARGS    ${RAGEL_EXECUTABLE_opts} -o${Output} ${Input}
-      DEPENDS ${Input}
+      ARGS    ${RAGEL_EXECUTABLE_opts} -o${RAGEL_OUTPUT} ${RAGEL_INPUTS}
+      DEPENDS ${RAGEL_INPUTS} ${RAGEL_DEPENDS}
       COMMENT
           "[RAGEL][${Name}] Compiling state machine with Ragel ${RAGEL_VERSION}"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
     set(RAGEL_${Name}_DEFINED       TRUE)
-    set(RAGEL_${Name}_OUTPUTS       ${Output})
-    set(RAGEL_${Name}_INPUT         ${Input})
+    set(RAGEL_${Name}_OUTPUTS       ${RAGEL_OUTPUT})
+    set(RAGEL_${Name}_INPUT         ${RAGEL_INPUTS})
     set(RAGEL_${Name}_COMPILE_FLAGS ${RAGEL_EXECUTABLE_opts})
   endmacro()
 
