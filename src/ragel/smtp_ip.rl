@@ -15,5 +15,5 @@
                   (IPv6_hex (":" IPv6_hex){0,3} ":")?
                   IPv4_address_literal;
   IPv6_addr      = IPv6_full | IPv6_comp | IPv6v4_full | IPv6v4_comp;
-  IPv6_address_literal  = "IPv6:" (IPv6_addr >IP6_start %IP6_end);
+  IPv6_address_literal  = "IPv6:" %IP6_start IPv6_addr %IP6_end;
 }%%

@@ -52,338 +52,6 @@ rspamd_message_quark (void)
 }
 
 static void
-parse_qmail_recv (rspamd_mempool_t * pool,
-	gchar *line,
-	struct received_header *r)
-{
-	gchar *s, *p, t;
-
-	/* We are interested only with received from network headers */
-	if ((p = strstr (line, "from network")) == NULL) {
-		r->is_error = 2;
-		return;
-	}
-
-	p += sizeof ("from network") - 1;
-	while (g_ascii_isspace (*p) || *p == '[') {
-		p++;
-	}
-	/* format is ip/host */
-	s = p;
-	if (*p) {
-		while (g_ascii_isdigit (*++p) || *p == '.') ;
-		if (*p != '/') {
-			r->is_error = 1;
-			return;
-		}
-		else {
-			*p = '\0';
-			r->real_ip = rspamd_mempool_strdup (pool, s);
-			*p = '/';
-			/* Now try to parse hostname */
-			s = ++p;
-			while (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p ==
-				'_') {
-				p++;
-			}
-			t = *p;
-			*p = '\0';
-			r->real_hostname = rspamd_mempool_strdup (pool, s);
-			*p = t;
-		}
-	}
-}
-
-static void
-parse_recv_header (rspamd_mempool_t * pool,
-	struct raw_header *rh,
-	struct received_header *r)
-{
-	gchar *p, *s, t, **res = NULL;
-	gchar *line;
-	enum {
-		RSPAMD_RECV_STATE_INIT = 0,
-		RSPAMD_RECV_STATE_FROM,
-		RSPAMD_RECV_STATE_IP_BLOCK,
-		RSPAMD_RECV_STATE_BRACES_BLOCK,
-		RSPAMD_RECV_STATE_BY_BLOCK,
-		RSPAMD_RECV_STATE_PARSE_IP,
-		RSPAMD_RECV_STATE_PARSE_IP6,
-		RSPAMD_RECV_STATE_SKIP_SPACES,
-		RSPAMD_RECV_STATE_ERROR
-	} state = RSPAMD_RECV_STATE_INIT, next_state = RSPAMD_RECV_STATE_INIT;
-	gboolean is_exim = FALSE;
-
-	line = rh->decoded;
-	if (line == NULL) {
-		return;
-	}
-
-	g_strstrip (line);
-	p = line;
-	s = line;
-
-	while (*p) {
-		switch (state) {
-		/* Initial state, search for from */
-		case RSPAMD_RECV_STATE_INIT:
-			if (*p == 'f' || *p == 'F') {
-				if (g_ascii_tolower (*++p) == 'r' && g_ascii_tolower (*++p) ==
-					'o' && g_ascii_tolower (*++p) == 'm') {
-					p++;
-					state = RSPAMD_RECV_STATE_SKIP_SPACES;
-					next_state = RSPAMD_RECV_STATE_FROM;
-				}
-			}
-			else if (g_ascii_tolower (*p) == 'b' &&
-				g_ascii_tolower (*(p + 1)) == 'y') {
-				state = RSPAMD_RECV_STATE_IP_BLOCK;
-			}
-			else {
-				/* This can be qmail header, parse it separately */
-				parse_qmail_recv (pool, line, r);
-				return;
-			}
-			break;
-		/* Read hostname */
-		case RSPAMD_RECV_STATE_FROM:
-			if (*p == '[') {
-				/* This should be IP address */
-				res = &r->from_ip;
-				state = RSPAMD_RECV_STATE_PARSE_IP;
-				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
-				s = ++p;
-			}
-			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p ==
-				'_') {
-				p++;
-			}
-			else {
-				t = *p;
-				*p = '\0';
-				r->from_hostname = rspamd_mempool_strdup (pool, s);
-				*p = t;
-				state = RSPAMD_RECV_STATE_SKIP_SPACES;
-				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
-			}
-			break;
-		/* Try to extract additional info */
-		case RSPAMD_RECV_STATE_IP_BLOCK:
-			/* Try to extract ip or () info or by */
-			if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) ==
-				'y') {
-				p += 2;
-				/* Skip spaces after by */
-				state = RSPAMD_RECV_STATE_SKIP_SPACES;
-				next_state = RSPAMD_RECV_STATE_BY_BLOCK;
-			}
-			else if (*p == '(') {
-				state = RSPAMD_RECV_STATE_SKIP_SPACES;
-				next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
-				p++;
-			}
-			else if (*p == '[') {
-				/* Got ip before '(' so extract it */
-				s = ++p;
-				res = &r->from_ip;
-				state = RSPAMD_RECV_STATE_PARSE_IP;
-				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
-			}
-			else {
-				p++;
-			}
-			break;
-		/* We are in () block. Here can be found real hostname and real ip, this is written by some MTA */
-		case RSPAMD_RECV_STATE_BRACES_BLOCK:
-			/* End of block */
-			if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' ||
-				*p == '_' || *p == ':') {
-				p++;
-			}
-			else if (*p == '[') {
-				s = ++p;
-				state = RSPAMD_RECV_STATE_PARSE_IP;
-				res = &r->real_ip;
-				next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
-			}
-			else {
-				if (p > s) {
-					/* Got some real hostname */
-					/* check whether it is helo or p is not space symbol */
-					if (!g_ascii_isspace (*p) || *(p + 1) != '[') {
-						/* Exim style ([ip]:port helo=hostname) */
-						if (*s == ':' && (g_ascii_isspace (*p) || *p == ')')) {
-							/* Ip ending */
-							is_exim = TRUE;
-							state = RSPAMD_RECV_STATE_SKIP_SPACES;
-							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
-						}
-						else if (p - s == 4 && memcmp (s, "helo=", 5) == 0) {
-							p++;
-							is_exim = TRUE;
-							if (r->real_hostname == NULL && r->from_hostname !=
-								NULL) {
-								r->real_hostname = r->from_hostname;
-							}
-							s = p;
-							while (*p != ')' && !g_ascii_isspace (*p) && *p !=
-								'\0') {
-								p++;
-							}
-							if (p > s) {
-								r->from_hostname = rspamd_mempool_alloc (pool,
-										p - s + 1);
-								rspamd_strlcpy (r->from_hostname, s, p - s + 1);
-							}
-						}
-						else if (p - s == 4 && memcmp (s, "port=", 5) == 0) {
-							p++;
-							is_exim = TRUE;
-							while (g_ascii_isdigit (*p)) {
-								p++;
-							}
-							state = RSPAMD_RECV_STATE_SKIP_SPACES;
-							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
-						}
-						else if (*p == '=' && is_exim) {
-							/* Just skip unknown pairs */
-							p++;
-							while (!g_ascii_isspace (*p) && *p != ')' && *p !=
-								'\0') {
-								p++;
-							}
-							state = RSPAMD_RECV_STATE_SKIP_SPACES;
-							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
-						}
-						else {
-							/* skip all  */
-							while (*p++ != ')' && *p != '\0') ;
-							state = RSPAMD_RECV_STATE_IP_BLOCK;
-						}
-					}
-					else {
-						/* Postfix style (hostname [ip]) */
-						t = *p;
-						*p = '\0';
-						r->real_hostname = rspamd_mempool_strdup (pool, s);
-						*p = t;
-						/* Now parse ip */
-						p += 2;
-						s = p;
-						res = &r->real_ip;
-						state = RSPAMD_RECV_STATE_PARSE_IP;
-						next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
-						continue;
-					}
-					if (*p == ')') {
-						p++;
-						state = RSPAMD_RECV_STATE_SKIP_SPACES;
-						next_state = RSPAMD_RECV_STATE_IP_BLOCK;
-					}
-				}
-				else if (*p == ')') {
-					p++;
-					state = RSPAMD_RECV_STATE_SKIP_SPACES;
-					next_state = RSPAMD_RECV_STATE_IP_BLOCK;
-				}
-				else {
-					r->is_error = 1;
-					return;
-				}
-			}
-			break;
-		/* Got by word */
-		case RSPAMD_RECV_STATE_BY_BLOCK:
-			/* Here can be only hostname */
-			if ((g_ascii_isalnum (*p) || *p == '.' || *p == '-'
-				|| *p == '_') && p[1] != '\0') {
-				p++;
-			}
-			else {
-				/* We got something like hostname */
-				if (p[1] != '\0') {
-					t = *p;
-					*p = '\0';
-					r->by_hostname = rspamd_mempool_strdup (pool, s);
-					*p = t;
-				}
-				else {
-					r->by_hostname = rspamd_mempool_strdup (pool, s);
-				}
-				/* Now end of parsing */
-				if (is_exim) {
-					/* Adjust for exim received */
-					if (r->real_ip == NULL && r->from_ip != NULL) {
-						r->real_ip = r->from_ip;
-					}
-					else if (r->from_ip == NULL && r->real_ip != NULL) {
-						r->from_ip = r->real_ip;
-						if (r->real_hostname == NULL && r->from_hostname !=
-							NULL) {
-							r->real_hostname = r->from_hostname;
-						}
-					}
-				}
-				return;
-			}
-			break;
-
-		/* Extract ip */
-		case RSPAMD_RECV_STATE_PARSE_IP:
-			if (*p == 'I') {
-				/* IPv6: */
-				state = RSPAMD_RECV_STATE_PARSE_IP6;
-			}
-			else {
-				while (g_ascii_isxdigit (*p) || *p == '.' || *p == ':') {
-					p++;
-				}
-				if (*p != ']') {
-					/* Not an ip in fact */
-					state = RSPAMD_RECV_STATE_SKIP_SPACES;
-					p++;
-				}
-				else {
-					*p = '\0';
-					*res = rspamd_mempool_strdup (pool, s);
-					*p = ']';
-					p++;
-					state = RSPAMD_RECV_STATE_SKIP_SPACES;
-				}
-			}
-			break;
-		case RSPAMD_RECV_STATE_PARSE_IP6:
-			if (g_ascii_strncasecmp (p, "IPv6:", sizeof ("IPv6") - 1) == 0) {
-				p += sizeof ("IPv6") - 1;
-				s = p;
-				state = RSPAMD_RECV_STATE_PARSE_IP;
-			}
-			else {
-				state = RSPAMD_RECV_STATE_SKIP_SPACES;
-			}
-			break;
-		/* Skip spaces */
-		case RSPAMD_RECV_STATE_SKIP_SPACES:
-			if (!g_ascii_isspace (*p)) {
-				state = next_state;
-				s = p;
-			}
-			else {
-				p++;
-			}
-			break;
-		default:
-			r->is_error = 1;
-			return;
-			break;
-		}
-	}
-
-	r->is_error = 1;
-	return;
-}
-
-static void
 append_raw_header (struct rspamd_task *task,
 		GHashTable *target, struct raw_header *rh)
 {
@@ -1779,15 +1447,13 @@ rspamd_message_parse (struct rspamd_task *task)
 	rspamd_images_process (task);
 
 	/* Parse received headers */
-	first =
-			rspamd_message_get_header (task, "Received", FALSE);
+	first = rspamd_message_get_header (task, "Received", FALSE);
 
 	for (cur = first, i = 0; cur != NULL; cur = g_list_next (cur), i ++) {
-		recv =
-				rspamd_mempool_alloc0 (task->task_pool,
-						sizeof (struct received_header));
-		parse_recv_header (task->task_pool, cur->data, recv);
-
+		recv = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct received_header));
+		rh = cur->data;
+		rspamd_smtp_recieved_parse (task, rh->decoded, strlen (rh->decoded), recv);
 		/*
 		 * For the first header we must ensure that
 		 * received is consistent with the IP that we obtain through
@@ -1795,22 +1461,19 @@ rspamd_message_parse (struct rspamd_task *task)
 		 */
 		if (i == 0) {
 			gboolean need_recv_correction = FALSE;
+			rspamd_inet_addr_t *raddr = recv->addr;
 
 			if (recv->real_ip == NULL || (task->cfg && task->cfg->ignore_received)) {
 				need_recv_correction = TRUE;
 			}
 			else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
-				rspamd_inet_addr_t *raddr = NULL;
-
-				if (!rspamd_parse_inet_address (&raddr, recv->real_ip, 0)) {
+				if (raddr) {
 					need_recv_correction = TRUE;
 				}
 				else {
 					if (rspamd_inet_address_compare (raddr, task->from_addr) != 0) {
 						need_recv_correction = TRUE;
 					}
-
-					rspamd_inet_address_destroy (raddr);
 				}
 
 			}
@@ -1825,11 +1488,14 @@ rspamd_message_parse (struct rspamd_task *task)
 				trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
 						rspamd_inet_address_to_string (task->from_addr));
 				trecv->from_ip = trecv->real_ip;
+				trecv->addr = task->from_addr;
 
 				if (task->hostname) {
 					trecv->real_hostname = task->hostname;
 					trecv->from_hostname = trecv->real_hostname;
 				}
+
+				g_ptr_array_add (task->received, trecv);
 			}
 		}
 

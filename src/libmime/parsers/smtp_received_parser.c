@@ -1,7 +1,7 @@
 
 #line 1 "../rspamd/src/ragel/smtp_received_parser.rl"
 
-#line 201 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 237 "../rspamd/src/ragel/smtp_received_parser.rl"
 
 
 
@@ -6183,7 +6183,7 @@ static const int smtp_received_parser_error = 0;
 static const int smtp_received_parser_en_main = 1;
 
 
-#line 204 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 240 "../rspamd/src/ragel/smtp_received_parser.rl"
 
 static int
 rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t len, struct received_header *rh)
@@ -6195,7 +6195,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
               *reported_ip_start, *reported_ip_end,
               *ip_start, *ip_end;
   const char *p = data, *pe = data + len, *eof;
-  int cs;
+  int cs, in_v6 = 0;
 
   memset (rh, 0, sizeof (*rh));
   real_domain_start = NULL;
@@ -6220,7 +6220,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
 	cs = smtp_received_parser_start;
 	}
 
-#line 235 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 271 "../rspamd/src/ragel/smtp_received_parser.rl"
 
 #line 6226 "../rspamd/src/libmime/parsers/smtp_received_parser.c"
 	{
@@ -6292,23 +6292,26 @@ _match:
 	case 24:
 #line 6 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
+    in_v6 = 1;
     ip_start = p;
   }
 	break;
 	case 25:
-#line 12 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 14 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    ip_start = p;
+    if (!in_v6) {
+      ip_start = p;
+    }
   }
 	break;
 	case 9:
-#line 19 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 25 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->user = p;
   }
 	break;
 	case 11:
-#line 23 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 29 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->user) {
       addr->user_len = p - addr->user;
@@ -6316,20 +6319,20 @@ _match:
   }
 	break;
 	case 17:
-#line 29 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 35 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->domain = p;
   }
 	break;
 	case 19:
-#line 39 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 45 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->domain = p;
     addr->flags |= RSPAMD_EMAIL_ADDR_IP;
   }
 	break;
 	case 21:
-#line 44 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 50 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
@@ -6337,25 +6340,25 @@ _match:
   }
 	break;
 	case 13:
-#line 50 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 56 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_HAS_BACKSLASH;
   }
 	break;
 	case 12:
-#line 54 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 60 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_QUOTED;
   }
 	break;
 	case 16:
-#line 73 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 79 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->addr = p;
   }
 	break;
 	case 30:
-#line 77 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
@@ -6363,37 +6366,57 @@ _match:
   }
 	break;
 	case 4:
-#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = p;
   }
 	break;
 	case 36:
-#line 86 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 92 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_end = p;
   }
 	break;
 	case 5:
-#line 96 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 102 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    real_domain_start = p;
+    real_ip_start = p;
   }
 	break;
 	case 37:
-#line 99 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 105 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    real_domain_end = p;
+    if (ip_start && ip_end && ip_end > ip_start) {
+      real_ip_start = ip_start;
+      real_ip_end = ip_end;
+    }
+    else {
+      real_ip_end = p;
+    }
+
+    ip_start = NULL;
+    ip_end = NULL;
   }
 	break;
 	case 38:
-#line 135 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 160 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    /* Do nothing here for now */
+    guint len;
+
+    if (real_domain_end && real_domain_start && real_domain_end > real_domain_start) {
+      len = real_domain_end - real_domain_start;
+      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
+      rspamd_strlcpy (rh->by_hostname, real_domain_start, len + 1);
+    }
+    else if (reported_domain_end && reported_domain_start && reported_domain_end > reported_domain_start) {
+      len = reported_domain_end - reported_domain_start;
+      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
+      rspamd_strlcpy (rh->by_hostname, reported_domain_start, len + 1);
+    }
   }
 	break;
 	case 39:
-#line 139 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 175 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     guint len;
 
@@ -6425,49 +6448,50 @@ _match:
       rh->from_hostname = rh->real_hostname;
     }
 
-    if (rh->real_ip && ip_start && ip_end && ip_end > ip_start) {
-      if (rspamd_parse_inet_address (&rh->addr, ip_start, ip_end - ip_start)) {
+    if (rh->real_ip) {
+      if (rspamd_parse_inet_address (&rh->addr, rh->real_ip, strlen (rh->real_ip))) {
         rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)rspamd_inet_address_destroy, rh->addr);
       }
     }
   }
 	break;
 	case 35:
-#line 181 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 217 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     rh->type = RSPAMD_RECEIVED_SMTP;
   }
 	break;
 	case 32:
-#line 184 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 220 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     rh->type = RSPAMD_RECEIVED_ESMTPS;
   }
 	break;
 	case 31:
-#line 187 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 223 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     rh->type = RSPAMD_RECEIVED_ESMTP;
   }
 	break;
 	case 34:
-#line 190 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 226 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     rh->type = RSPAMD_RECEIVED_LMTP;
   }
 	break;
 	case 33:
-#line 193 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 229 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     rh->type = RSPAMD_RECEIVED_IMAP;
   }
 	break;
 	case 27:
-#line 9 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 10 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
+    in_v6 = 0;
     ip_end = p;
   }
-#line 44 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 50 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
@@ -6475,11 +6499,13 @@ _match:
   }
 	break;
 	case 23:
-#line 15 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 19 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    ip_end = p;
+    if (!in_v6) {
+      ip_end = p;
+    }
   }
-#line 44 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 50 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
@@ -6487,11 +6513,11 @@ _match:
   }
 	break;
 	case 10:
-#line 19 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 25 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->user = p;
   }
-#line 23 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 29 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->user) {
       addr->user_len = p - addr->user;
@@ -6499,13 +6525,13 @@ _match:
   }
 	break;
 	case 28:
-#line 33 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 39 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
     }
   }
-#line 77 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
@@ -6513,22 +6539,24 @@ _match:
   }
 	break;
 	case 20:
-#line 39 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 45 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->domain = p;
     addr->flags |= RSPAMD_EMAIL_ADDR_IP;
   }
-#line 12 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 14 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    ip_start = p;
+    if (!in_v6) {
+      ip_start = p;
+    }
   }
 	break;
 	case 14:
-#line 50 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 56 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_HAS_BACKSLASH;
   }
-#line 23 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 29 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->user) {
       addr->user_len = p - addr->user;
@@ -6536,39 +6564,39 @@ _match:
   }
 	break;
 	case 29:
-#line 69 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 75 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
   }
-#line 177 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 213 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
 
   }
 	break;
 	case 15:
-#line 73 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 79 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->addr = p;
   }
-#line 19 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 25 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     addr->user = p;
   }
 	break;
 	case 22:
-#line 77 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
   }
-#line 177 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 213 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
 
   }
 	break;
 	case 2:
-#line 109 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 134 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = NULL;
     real_domain_end = NULL;
@@ -6581,13 +6609,13 @@ _match:
     ip_start = NULL;
     ip_end = NULL;
   }
-#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = p;
   }
 	break;
 	case 7:
-#line 122 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 147 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = NULL;
     real_domain_end = NULL;
@@ -6600,21 +6628,24 @@ _match:
     ip_start = NULL;
     ip_end = NULL;
   }
-#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = p;
   }
 	break;
 	case 26:
-#line 15 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 19 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
+    if (!in_v6) {
+      ip_end = p;
+    }
+  }
+#line 10 "../rspamd/src/ragel/smtp_received_parser.rl"
+	{
+    in_v6 = 0;
     ip_end = p;
   }
-#line 9 "../rspamd/src/ragel/smtp_received_parser.rl"
-	{
-    ip_end = p;
-  }
-#line 44 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 50 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
@@ -6622,47 +6653,58 @@ _match:
   }
 	break;
 	case 18:
-#line 33 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 39 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
     }
   }
-#line 77 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
   }
-#line 177 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 213 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
 
   }
 	break;
 	case 8:
-#line 86 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 92 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_end = p;
   }
-#line 92 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 98 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     reported_domain_end = p;
   }
-#line 135 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 160 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
-    /* Do nothing here for now */
+    guint len;
+
+    if (real_domain_end && real_domain_start && real_domain_end > real_domain_start) {
+      len = real_domain_end - real_domain_start;
+      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
+      rspamd_strlcpy (rh->by_hostname, real_domain_start, len + 1);
+    }
+    else if (reported_domain_end && reported_domain_start && reported_domain_end > reported_domain_start) {
+      len = reported_domain_end - reported_domain_start;
+      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
+      rspamd_strlcpy (rh->by_hostname, reported_domain_start, len + 1);
+    }
   }
 	break;
 	case 3:
-#line 86 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 92 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_end = p;
   }
-#line 92 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 98 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     reported_domain_end = p;
   }
-#line 139 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 175 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     guint len;
 
@@ -6694,15 +6736,15 @@ _match:
       rh->from_hostname = rh->real_hostname;
     }
 
-    if (rh->real_ip && ip_start && ip_end && ip_end > ip_start) {
-      if (rspamd_parse_inet_address (&rh->addr, ip_start, ip_end - ip_start)) {
+    if (rh->real_ip) {
+      if (rspamd_parse_inet_address (&rh->addr, rh->real_ip, strlen (rh->real_ip))) {
         rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)rspamd_inet_address_destroy, rh->addr);
       }
     }
   }
 	break;
 	case 1:
-#line 109 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 134 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = NULL;
     real_domain_end = NULL;
@@ -6715,17 +6757,17 @@ _match:
     ip_start = NULL;
     ip_end = NULL;
   }
-#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = p;
   }
-#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 95 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     reported_domain_start = p;
   }
 	break;
 	case 6:
-#line 122 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 147 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = NULL;
     real_domain_end = NULL;
@@ -6738,16 +6780,16 @@ _match:
     ip_start = NULL;
     ip_end = NULL;
   }
-#line 83 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     real_domain_start = p;
   }
-#line 89 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 95 "../rspamd/src/ragel/smtp_received_parser.rl"
 	{
     reported_domain_start = p;
   }
 	break;
-#line 6751 "../rspamd/src/libmime/parsers/smtp_received_parser.c"
+#line 6793 "../rspamd/src/libmime/parsers/smtp_received_parser.c"
 	}
 
 _again:
@@ -6759,7 +6801,7 @@ _again:
 	_out: {}
 	}
 
-#line 236 "../rspamd/src/ragel/smtp_received_parser.rl"
+#line 272 "../rspamd/src/ragel/smtp_received_parser.rl"
 
   return cs;
 }
