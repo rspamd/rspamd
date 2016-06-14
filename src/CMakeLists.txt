@@ -117,9 +117,15 @@ RAGEL_TARGET(ragel_smtp_received
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_received_parser.rl.c)
 ######################### LINK SECTION ###############################
 
-ADD_LIBRARY(rspamd-server STATIC ${RSPAMD_CRYPTOBOX} ${RSPAMD_UTIL} ${RSPAMD_LUA} ${RSPAMD_SERVER}
-		${RSPAMD_STAT} ${RSPAMD_MIME}
-		${CMAKE_CURRENT_BINARY_DIR}/modules.c ${PLUGINSSRC}
+ADD_LIBRARY(rspamd-server STATIC
+		${RSPAMD_CRYPTOBOX}
+		${RSPAMD_UTIL}
+		${RSPAMD_LUA}
+		${RSPAMD_SERVER}
+		${RSPAMD_STAT}
+		${RSPAMD_MIME}
+		${CMAKE_CURRENT_BINARY_DIR}/modules.c
+		${PLUGINSSRC}
 		"${RAGEL_ragel_smtp_addr_OUTPUTS}"
 		"${RAGEL_ragel_smtp_received_OUTPUTS}")
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
@@ -130,6 +136,7 @@ TARGET_LINK_LIBRARIES(rspamd-server lcbtrie)
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
+ADD_DEPENDENCIES(rspamd-server rspamd_lua_preprocess)
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
