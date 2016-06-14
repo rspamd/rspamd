@@ -43,7 +43,7 @@ rspamd_process_file (const gchar *fname)
 
 	g_io_channel_set_encoding (f, NULL, NULL);
 	buf = g_string_sized_new (8192);
-	task = g_malloc0 (sizeof (task));
+	task = g_malloc0 (sizeof (*task));
 	task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "test");
 
 	while (g_io_channel_read_line_string (f, buf, NULL, &err)
