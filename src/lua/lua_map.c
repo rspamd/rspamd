@@ -309,16 +309,16 @@ lua_map_fin (struct map_cb_data *data)
 
 	map = data->map;
 
-	if (data->prev_data) {
-		data->prev_data = NULL;
-	}
-
 	if (data->cur_data) {
 		cbdata = (struct lua_map_callback_data *)data->cur_data;
 	}
 	else {
 		msg_err_map ("no data read for map");
 		return;
+	}
+
+	if (data->prev_data) {
+		data->prev_data = NULL;
 	}
 
 	if (cbdata->ref == -1) {

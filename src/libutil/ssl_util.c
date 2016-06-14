@@ -382,6 +382,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 				return;
 			}
 
+			event_del (c->ev);
 			event_set (c->ev, fd, what, rspamd_ssl_event_handler, c);
 			event_base_set (c->ev_base, c->ev);
 			event_add (c->ev, c->tv);
@@ -389,12 +390,22 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		break;
 	case ssl_next_read:
 		event_del (c->ev);
+		/* Restore handler */
+		event_set (c->ev, c->fd, EV_READ|EV_PERSIST,
+				c->handler, c->handler_data);
+		event_base_set (c->ev_base, c->ev);
+		event_add (c->ev, c->tv);
 		c->state = ssl_conn_connected;
 		c->handler (fd, EV_READ, c->handler_data);
 		break;
 	case ssl_next_write:
 	case ssl_conn_connected:
 		event_del (c->ev);
+		/* Restore handler */
+		event_set (c->ev, c->fd, EV_WRITE,
+				c->handler, c->handler_data);
+		event_base_set (c->ev_base, c->ev);
+		event_add (c->ev, c->tv);
 		c->state = ssl_conn_connected;
 		c->handler (fd, EV_WRITE, c->handler_data);
 		break;
@@ -459,6 +470,11 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 
 	if (ret == 1) {
 		conn->state = ssl_conn_connected;
+
+		if (event_get_base (ev)) {
+			event_del (ev);
+		}
+
 		event_set (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
 
 		if (conn->ev_base) {
@@ -478,6 +494,10 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 		}
 		else {
 			return FALSE;
+		}
+
+		if (event_get_base (ev)) {
+			event_del (ev);
 		}
 
 		event_set (ev, fd, what, rspamd_ssl_event_handler, conn);
@@ -546,6 +566,7 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 			return -1;
 		}
 
+		event_del (conn->ev);
 		event_set (conn->ev, conn->fd, what, rspamd_ssl_event_handler, conn);
 		event_base_set (conn->ev_base, conn->ev);
 		event_add (conn->ev, conn->tv);
@@ -615,6 +636,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 			return -1;
 		}
 
+		event_del (conn->ev);
 		event_set (conn->ev, conn->fd, what, rspamd_ssl_event_handler, conn);
 		event_base_set (conn->ev_base, conn->ev);
 		event_add (conn->ev, conn->tv);
