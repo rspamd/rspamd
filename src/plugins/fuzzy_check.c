@@ -1475,6 +1475,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 	guchar buf[2048], *p;
 	struct fuzzy_cmd_io *io;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
+	struct event_base *ev_base;
 	guint i;
 	gint r;
 
@@ -1545,9 +1546,11 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 
 	if (ret == return_want_more) {
 		/* Processed write, switch to reading */
+		ev_base = event_get_base (&session->ev);
 		event_del (&session->ev);
 		event_set (&session->ev, fd, EV_READ,
 				fuzzy_check_io_callback, session);
+		event_base_set (ev_base, &session->ev);
 		event_add (&session->ev, NULL);
 	}
 	else if (ret == return_error) {
@@ -1578,9 +1581,11 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		}
 		else {
 			/* Need to read more */
+			ev_base = event_get_base (&session->ev);
 			event_del (&session->ev);
 			event_set (&session->ev, fd, EV_READ,
 					fuzzy_check_io_callback, session);
+			event_base_set (ev_base, &session->ev);
 			event_add (&session->ev, NULL);
 		}
 	}
@@ -1592,6 +1597,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session *session = arg;
 	struct rspamd_task *task;
+	struct event_base *ev_base;
 
 	task = session->task;
 
@@ -1604,13 +1610,17 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	}
 	else {
 		/* Plan write event */
+		ev_base = event_get_base (&session->ev);
 		event_del (&session->ev);
 		event_set (&session->ev, fd, EV_WRITE|EV_READ,
 				fuzzy_check_io_callback, session);
+		event_base_set (ev_base, &session->ev);
 		event_add (&session->ev, NULL);
 
 		/* Plan new retransmit timer */
+		ev_base = event_get_base (&session->timev);
 		event_del (&session->timev);
+		event_base_set (ev_base, &session->timev);
 		event_add (&session->timev, &session->tv);
 		session->retransmits ++;
 	}
@@ -1628,6 +1638,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	struct fuzzy_cmd_io *io;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const gchar *symbol;
+	struct event_base *ev_base;
 	gint r;
 	enum {
 		return_error = 0,
@@ -1729,10 +1740,13 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	}
 
 	if (ret == return_want_more) {
+		ev_base = event_get_base (&session->ev);
 		event_del (&session->ev);
 		event_set (&session->ev, fd, EV_READ,
 				fuzzy_controller_io_callback, session);
+		event_base_set (ev_base, &session->ev);
 		event_add (&session->ev, NULL);
+
 		return;
 	}
 	else if (ret == return_error) {
@@ -1791,6 +1805,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_learn_session *session = arg;
 	struct rspamd_task *task;
+	struct event_base *ev_base;
 
 	task = session->task;
 
@@ -1817,13 +1832,17 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 	}
 	else {
 		/* Plan write event */
+		ev_base = event_get_base (&session->ev);
 		event_del (&session->ev);
 		event_set (&session->ev, fd, EV_WRITE|EV_READ,
 				fuzzy_controller_io_callback, session);
+		event_base_set (ev_base, &session->ev);
 		event_add (&session->ev, NULL);
 
 		/* Plan new retransmit timer */
+		ev_base = event_get_base (&session->timev);
 		event_del (&session->timev);
+		event_base_set (ev_base, &session->timev);
 		event_add (&session->timev, &session->tv);
 		session->retransmits ++;
 	}
