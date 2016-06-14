@@ -65,6 +65,7 @@ struct lua_http_cbdata {
 	struct timeval tv;
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
+	gchar *host;
 	gint fd;
 	gint cbref;
 };
@@ -108,6 +109,10 @@ lua_http_fin (gpointer arg)
 
 	if (cbd->mime_type) {
 		g_free (cbd->mime_type);
+	}
+
+	if (cbd->host) {
+		g_free (cbd->host);
 	}
 
 	g_slice_free1 (sizeof (struct lua_http_cbdata), cbd);
@@ -210,7 +215,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 			NULL);
 
 	rspamd_http_connection_write_message (cbd->conn, cbd->msg,
-			NULL, cbd->mime_type, cbd, fd, &cbd->tv, cbd->ev_base);
+			cbd->host, cbd->mime_type, cbd, fd,
+			&cbd->tv, cbd->ev_base);
 	/* Message is now owned by a connection object */
 	cbd->msg = NULL;
 
@@ -450,6 +456,10 @@ lua_http_request (lua_State *L)
 	cbd->mime_type = mime_type;
 	msec_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
+
+	if (msg->host) {
+		cbd->host = rspamd_fstring_cstr (msg->host);
+	}
 
 	if (session) {
 		cbd->session = session;
