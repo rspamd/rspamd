@@ -21,6 +21,10 @@
 
 static gdouble total_time = 0;
 static gint total_parsed = 0;
+static gint total_valid = 0;
+static gint total_real_ip = 0;
+static gint total_real_host = 0;
+static gint total_known_proto = 0;
 
 static void
 rspamd_process_file (const gchar *fname)
@@ -59,6 +63,20 @@ rspamd_process_file (const gchar *fname)
 
 		total_time += t2 - t1;
 		total_parsed ++;
+
+		if (rh.addr) {
+			total_real_ip ++;
+		}
+		if (rh.real_hostname) {
+			total_real_host ++;
+		}
+		if (rh.type != RSPAMD_RECEIVED_UNKNOWN) {
+			total_known_proto ++;
+		}
+
+		if (rh.by_hostname) {
+			total_valid ++;
+		}
 	}
 
 	if (err) {
@@ -83,8 +101,13 @@ main (int argc, char **argv)
 		}
 	}
 
-	rspamd_printf ("Parsed %d received headers in %.3f seconds\n",
-			total_parsed, total_time);
+	rspamd_printf ("Parsed %d received headers in %.3f seconds\n"
+			"Total valid (has by part): %d\n"
+			"Total real ip: %d\n"
+			"Total real host: %d\n"
+			"Total known proto: %d\n",
+			total_parsed, total_time,
+			total_valid, total_real_ip, total_real_host, total_known_proto);
 
 	return 0;
 }
