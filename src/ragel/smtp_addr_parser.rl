@@ -76,9 +76,11 @@
   main := SMTPAddr;
 }%%
 
+#include "smtp_parsers.h"
+
 %% write data;
 
-static int
+int
 rspamd_smtp_addr_parse (const char *data, size_t len, struct rspamd_email_address *addr)
 {
   const char *p = data, *pe = data + len, *eof;

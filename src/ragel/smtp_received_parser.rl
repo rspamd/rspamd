@@ -236,9 +236,11 @@
 
 }%%
 
+#include "smtp_parsers.h"
+
 %% write data;
 
-static int
+int
 rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t len, struct received_header *rh)
 {
   struct rspamd_email_address for_addr, *addr;
