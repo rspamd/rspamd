@@ -21,7 +21,7 @@
   minute          =   digit_2;
   second          =   digit_2;
   time_of_day     =   hour ":" minute (":" second )?;
-  zone            =   FWS ("+" | "-") >Sign_Start %Sign_End digit_4;
+  zone            =   FWS ("+" | "-") digit_4;
   time            =   time_of_day zone;
   date_time       =   (day_of_week ",")? date time;
 }%%
