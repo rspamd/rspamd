@@ -40,6 +40,6 @@
   For            = CFWS "FOR"i FWS ( Path | Mailbox ) %For_End;
   Additional_Registered_Clauses  = CFWS Atom FWS String;
   Opt_info       = Via? With? ID? For? Additional_Registered_Clauses?;
-  Received       = From_domain By_domain Opt_info CFWS? ";" FWS date_time >Date_Start %Date_End;
+  Received       = From_domain By_domain Opt_info CFWS? ";" FWS date_time >Date_Start %Date_End CFWS?;
 
 }%%

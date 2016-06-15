@@ -1478,6 +1478,11 @@ lua_task_get_received_headers (lua_State * L)
 			}
 			lua_pushstring (L, proto);
 			lua_settable (L, -3);
+
+			lua_pushstring (L, "timestamp");
+			lua_pushnumber (L, rh->timestamp);
+			lua_settable (L, -3);
+
 			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
 			lua_rawseti (L, -2, k ++);
 		}

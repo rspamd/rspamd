@@ -11,7 +11,7 @@
   day_name        =    "Mon" | "Tue" | "Wed" | "Thu" |
                        "Fri" | "Sat" | "Sun";
   day_of_week     =   FWS? day_name;
-  day             =   FWS? digit_2+ FWS;
+  day             =   FWS? digit{1,2} FWS;
   month           =    "Jan" | "Feb" | "Mar" | "Apr" |
                        "May" | "Jun" | "Jul" | "Aug" |
                        "Sep" | "Oct" | "Nov" | "Dec";
@@ -20,8 +20,8 @@
   hour            =   digit_2;
   minute          =   digit_2;
   second          =   digit_2;
-  time_of_day     =   hour ":" minute ( ":" second );
-  zone            =   (FWS ( "+" |"_" ) digit_4);
+  time_of_day     =   hour ":" minute (":" second )?;
+  zone            =   FWS ("+" | "-") >Sign_Start %Sign_End digit_4;
   time            =   time_of_day zone;
-  date_time       =   (day_of_week ",")? date time CFWS?;
+  date_time       =   (day_of_week ",")? date time;
 }%%
