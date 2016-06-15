@@ -15,6 +15,7 @@
                    "SMTP" %SMTP_proto |
                    "ESMTPS" %ESMTPS_proto |
                    "ESMTPA" %ESMTPA_proto |
+                   "ESMTPSA" %ESMTPSA_proto |
                    "LMTP" %LMTP_proto |
                    "IMAP" %IMAP_proto |
                    Attdl_Protocol;

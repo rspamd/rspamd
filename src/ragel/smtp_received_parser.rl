@@ -226,6 +226,9 @@
   action ESMTP_proto {
     rh->type = RSPAMD_RECEIVED_ESMTP;
   }
+  action ESMTPSA_proto {
+    rh->type = RSPAMD_RECEIVED_ESMTPSA;
+  }
   action LMTP_proto {
     rh->type = RSPAMD_RECEIVED_LMTP;
   }

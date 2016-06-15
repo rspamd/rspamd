@@ -1439,7 +1439,7 @@ lua_task_get_received_headers (lua_State * L)
 			if (G_UNLIKELY (rh->from_ip == NULL &&
 					rh->real_ip == NULL &&
 					rh->real_hostname == NULL &&
-					rh->by_hostname == NULL)) {
+					rh->by_hostname == NULL && rh->timestamp == 0)) {
 				continue;
 			}
 
@@ -1464,6 +1464,9 @@ lua_task_get_received_headers (lua_State * L)
 				break;
 			case RSPAMD_RECEIVED_ESMTPA:
 				proto = "esmtpa";
+				break;
+			case RSPAMD_RECEIVED_ESMTPSA:
+				proto = "esmtpsa";
 				break;
 			case RSPAMD_RECEIVED_LMTP:
 				proto = "lmtp";
