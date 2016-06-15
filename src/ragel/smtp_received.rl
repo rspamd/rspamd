@@ -51,7 +51,8 @@
 
   prepush {
     if (top >= st_storage.size) {
-      st_storage.data = realloc (st_storage.data, (top + 1) * 2);
+      st_storage.size = (top + 1) * 2;
+      st_storage.data = realloc (st_storage.data, st_storage.size * sizeof (int));
       g_assert (st_storage.data != NULL);
       stack = st_storage.data;
     }
