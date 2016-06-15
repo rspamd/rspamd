@@ -75,7 +75,7 @@ rspamd_process_file (const gchar *fname)
 			total_known_proto ++;
 		}
 
-		if (rh.by_hostname) {
+		if (rh.by_hostname || rh.timestamp > 0) {
 			total_valid ++;
 		}
 
