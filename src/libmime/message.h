@@ -59,6 +59,7 @@ struct mime_text_part {
 enum rspamd_received_type {
 	RSPAMD_RECEIVED_SMTP = 0,
 	RSPAMD_RECEIVED_ESMTP,
+	RSPAMD_RECEIVED_ESMTPA,
 	RSPAMD_RECEIVED_ESMTPS,
 	RSPAMD_RECEIVED_LMTP,
 	RSPAMD_RECEIVED_IMAP,
@@ -72,8 +73,8 @@ struct received_header {
 	gchar *real_ip;
 	gchar *by_hostname;
 	rspamd_inet_addr_t *addr;
+	time_t timestamp;
 	enum rspamd_received_type type;
-	gint is_error;
 };
 
 struct raw_header {

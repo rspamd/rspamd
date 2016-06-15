@@ -11,7 +11,13 @@
   Addtl_Link     = Atom;
   Link           = "TCP" | Addtl_Link;
   Attdl_Protocol = Atom;
-  Protocol       = "ESMTP" %ESMTP_proto | "SMTP" %SMTP_proto | "ESMTPS" %ESMTPS_proto | "LMTP" %LMTP_proto | "IMAP" %IMAP_proto | Attdl_Protocol;
+  Protocol       = "ESMTP" %ESMTP_proto |
+                   "SMTP" %SMTP_proto |
+                   "ESMTPS" %ESMTPS_proto |
+                   "ESMTPA" %ESMTPA_proto |
+                   "LMTP" %LMTP_proto |
+                   "IMAP" %IMAP_proto |
+                   Attdl_Protocol;
 
   TCP_info       = address_literal >Real_IP_Start %Real_IP_End |
                   ( Domain >Real_Domain_Start %Real_Domain_End FWS address_literal >Real_IP_Start %Real_IP_End );
@@ -34,6 +40,6 @@
   For            = CFWS "FOR"i FWS ( Path | Mailbox ) %For_End;
   Additional_Registered_Clauses  = CFWS Atom FWS String;
   Opt_info       = Via? With? ID? For? Additional_Registered_Clauses?;
-  Received       = From_domain By_domain Opt_info CFWS? ";" FWS date_time;
+  Received       = From_domain By_domain Opt_info CFWS? ";" FWS date_time >Date_Start %Date_End;
 
 }%%

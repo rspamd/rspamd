@@ -220,6 +220,9 @@
   action ESMTPS_proto {
     rh->type = RSPAMD_RECEIVED_ESMTPS;
   }
+  action ESMTPA_proto {
+    rh->type = RSPAMD_RECEIVED_ESMTPA;
+  }
   action ESMTP_proto {
     rh->type = RSPAMD_RECEIVED_ESMTP;
   }
@@ -228,6 +231,22 @@
   }
   action IMAP_proto {
     rh->type = RSPAMD_RECEIVED_IMAP;
+  }
+
+  action Date_Start {
+    date_start = p;
+  }
+  action Date_End {
+    if (date_start && p > date_start) {
+      guint len;
+      char *tdate;
+
+      len = p - date_start;
+      tdate = g_malloc (len + 1);
+      rspamd_strlcpy (tdate, date_start, len + 1);
+      rh->timestamp = g_mime_utils_header_decode_date (tdate, NULL);
+      g_free (tdate);
+    }
   }
 
   include smtp_received "smtp_received.rl";
@@ -248,7 +267,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
               *real_ip_start, *real_ip_end,
               *reported_domain_start, *reported_domain_end,
               *reported_ip_start, *reported_ip_end,
-              *ip_start, *ip_end;
+              *ip_start, *ip_end, *date_start;
   const char *p = data, *pe = data + len, *eof;
   int cs, in_v6 = 0;
 
@@ -263,6 +282,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
   reported_ip_end = NULL;
   ip_start = NULL;
   ip_end = NULL;
+  date_start = NULL;
   rh->type = RSPAMD_RECEIVED_UNKNOWN;
 
   memset (&for_addr, 0, sizeof (for_addr));
