@@ -25,6 +25,11 @@
                   ( Domain >Reported_Domain_Start %Reported_Domain_End FWS "(" TCP_info ")" ) | # Here domain is something specified by remote side
                   ( address_literal >Real_Domain_Start %Real_Domain_End FWS "(" TCP_info ")" );
 
+  ccontent = ctext | FWS | '(' @{ fcall balanced_ccontent; };
+  balanced_ccontent := ccontent* ')' @{ fret; };
+  comment        =   "(" (FWS? ccontent)* FWS? ")";
+  CFWS           =   ((FWS? comment)+ FWS?) | FWS;
+
   From_domain    = "FROM"i FWS Extended_Domain >From_Start %From_End;
   By_domain      = CFWS "BY"i FWS Extended_Domain >By_Start %By_End;
 
@@ -42,4 +47,11 @@
   Opt_info       = Via? With? ID? For? Additional_Registered_Clauses?;
   Received       = From_domain By_domain Opt_info CFWS? ";" FWS date_time >Date_Start %Date_End CFWS?;
 
+  prepush {
+    if (top >= st_storage.size) {
+      st_storage.data = realloc (st_storage.data, (top + 1) * 2);
+      g_assert (st_storage.data != NULL);
+      stack = st_storage.data;
+    }
+  }
 }%%
