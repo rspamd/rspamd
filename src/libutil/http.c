@@ -1526,6 +1526,7 @@ rspamd_http_detach_shared (struct rspamd_http_message *msg)
 
 	if (msg->body_buf.c.shared.shm_fd != -1) {
 		close (msg->body_buf.c.shared.shm_fd);
+		msg->body_buf.c.shared.shm_fd = -1;
 	}
 
 	REF_RELEASE (msg->body_buf.c.shared.name);
@@ -2314,27 +2315,26 @@ rspamd_http_message_append_body (struct rspamd_http_message *msg,
 			return FALSE;
 		}
 
-		/* Unmap as we need another size of segment */
-		if (msg->body_buf.str) {
-			munmap (msg->body_buf.str, msg->body_buf.len);
-		}
-
 		/* Check if we need to grow */
-		if (st.st_size - msg->body_buf.len < len) {
+		if (st.st_size < msg->body_buf.len + len) {
 			/* Need to grow */
 			newlen = rspamd_fstring_suggest_size (msg->body_buf.len, st.st_size,
 					len);
+			/* Unmap as we need another size of segment */
+			if (msg->body_buf.str != MAP_FAILED) {
+				munmap (msg->body_buf.str, st.st_size);
+			}
 
 			if (ftruncate (storage->shared.shm_fd, newlen) == -1) {
 				return FALSE;
 			}
-		}
 
-		msg->body_buf.str = mmap (NULL, msg->body_buf.len + len,
-				PROT_WRITE|PROT_READ, MAP_SHARED, storage->shared.shm_fd, 0);
-
-		if (msg->body_buf.str == MAP_FAILED) {
-			return FALSE;
+			msg->body_buf.str = mmap (NULL, newlen,
+					PROT_WRITE|PROT_READ, MAP_SHARED,
+					storage->shared.shm_fd, 0);
+			if (msg->body_buf.str == MAP_FAILED) {
+				return FALSE;
+			}
 		}
 
 		memcpy (msg->body_buf.str + msg->body_buf.len, data, len);
@@ -2645,6 +2645,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	reply_msg->code = 200;
 
 	if (!rspamd_http_message_set_body_from_fd (reply_msg, fd)) {
+		close (fd);
 		return FALSE;
 	}
 
