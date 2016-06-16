@@ -1,5 +1,6 @@
 SET(UTILSERVERSRC rspamd_http_server.c)
 SET(UTILBENCHSRC rspamd_http_bench.c)
+SET(RECVBENCHSRC received_parser_bench.c)
 
 ADD_EXECUTABLE(rspamd-http-server ${UTILSERVERSRC})
 SET_TARGET_PROPERTIES(rspamd-http-server PROPERTIES LINKER_LANGUAGE C)
@@ -9,13 +10,25 @@ TARGET_LINK_LIBRARIES(rspamd-http-server ${RSPAMD_REQUIRED_LIBRARIES})
 
 ADD_EXECUTABLE(rspamd-http-bench ${UTILBENCHSRC})
 SET_TARGET_PROPERTIES(rspamd-http-bench PROPERTIES LINKER_LANGUAGE C)
-TARGET_LINK_LIBRARIES(rspamd-http-bench rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd-http-bench rspamd-http-parser)
+TARGET_LINK_LIBRARIES(rspamd-http-bench rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd-http-bench ${RSPAMD_REQUIRED_LIBRARIES})
+
+ADD_EXECUTABLE(rspamd-received-bench ${RECVBENCHSRC})
+SET_TARGET_PROPERTIES(rspamd-received-bench PROPERTIES LINKER_LANGUAGE C)
+TARGET_LINK_LIBRARIES(rspamd-received-bench rspamd-server)
+IF (ENABLE_SNOWBALL MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-received-bench stemmer)
+ENDIF()
+IF(ENABLE_HIREDIS MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-received-bench rspamd-hiredis)
+ENDIF()
+TARGET_LINK_LIBRARIES(rspamd-received-bench ${RSPAMD_REQUIRED_LIBRARIES})
 
 IF (ENABLE_HYPERSCAN MATCHES "ON")
 	SET_TARGET_PROPERTIES(rspamd-http-bench PROPERTIES LINKER_LANGUAGE CXX)
 	SET_TARGET_PROPERTIES(rspamd-http-server PROPERTIES LINKER_LANGUAGE CXX)
+	SET_TARGET_PROPERTIES(rspamd-received-bench PROPERTIES LINKER_LANGUAGE CXX)
 ENDIF()
 
 # Redirector

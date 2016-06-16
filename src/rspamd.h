@@ -19,6 +19,7 @@
 #include "libserver/events.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
+#include <openssl/ssl.h>
 #include <magic.h>
 
 
@@ -295,6 +296,7 @@ struct rspamd_external_libs_ctx {
 	void **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
+	SSL_CTX *ssl_ctx;
 	ref_entry_t ref;
 };
 

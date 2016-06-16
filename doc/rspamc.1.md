@@ -64,16 +64,16 @@ requires input.
 :	Emulate that message was received from specified ip address
 
 -u *username*, \--user=*username*
-:	Emulate that message was from specified user
+:	Emulate that message was received from specified authenticated user
 
 -d *user@domain*, \--deliver=*user@domain*
-:	Emulate that message is delivered to specified user
+:	Emulate that message is delivered to specified user (for LDA/statistics)
 
 -F *user@domain*, \--from=*user@domain*
-:	Emulate that message is from specified user
+:	Emulate that message has specified SMTP FROM address
 
 -r *user@domain*, \--rcpt=*user@domain*
-:	Emulate that message is for specified user
+:	Emulate that message has specified SMTP RCPT address
 
 \--helo=*helo_string*
 :	Imitate SMTP HELO passing from MTA

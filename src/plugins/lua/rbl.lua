@@ -147,7 +147,8 @@ local function rbl_cb (task)
 	  task:get_resolver():resolve_a({task = task,
 	    name = havegot['helo'] .. '.' .. rbl['rbl'],
 	    callback = rbl_dns_cb,
-	    option = k})
+	    option = k,
+	    forced = true})
 	end)()
       end
 
@@ -173,7 +174,8 @@ local function rbl_cb (task)
             task:get_resolver():resolve_a({task = task,
               name = d .. '.' .. rbl['rbl'],
               callback = rbl_dns_cb,
-              option = k})
+              option = k,
+              forced = true})
           end
         end)()
       end
@@ -214,14 +216,16 @@ local function rbl_cb (task)
               task:get_resolver():resolve_a({task = task,
                 name = domain .. '.' .. rbl['rbl'],
                 callback = rbl_dns_cb,
-                option = k})
+                option = k,
+                forced = true})
             end
           else
             for _, email in pairs(havegot['emails']) do
               task:get_resolver():resolve_a({task = task,
                 name = email .. '.' .. rbl['rbl'],
                 callback = rbl_dns_cb,
-                option = k})
+                option = k,
+                forced = true})
             end
           end
         end)()
@@ -242,7 +246,8 @@ local function rbl_cb (task)
 	  task:get_resolver():resolve_a({task = task,
 	    name = havegot['rdns'] .. '.' .. rbl['rbl'],
 	    callback = rbl_dns_cb,
-	    option = k})
+	    option = k,
+	    forced = true})
 	end)()
       end
 
@@ -263,7 +268,8 @@ local function rbl_cb (task)
 	    task:get_resolver():resolve_a({task = task,
 	      name = ip_to_rbl(havegot['from'], rbl['rbl']),
 	      callback = rbl_dns_cb,
-	      option = k})
+	      option = k,
+	      forced = true})
 	  end
 	end)()
       end
@@ -287,10 +293,13 @@ local function rbl_cb (task)
                 ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
                 not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
                 not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
+                  -- Disable forced for received resolving, as we have no control on
+                  -- those headers count
                   task:get_resolver():resolve_a({task = task,
                     name = ip_to_rbl(rh['real_ip'], rbl['rbl']),
                     callback = rbl_dns_cb,
-                    option = k})
+                    option = k,
+                    forced = false})
               end
 	    end
 	  end

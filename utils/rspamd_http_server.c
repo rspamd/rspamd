@@ -16,7 +16,9 @@
 #include "config.h"
 #include "rspamd.h"
 #include "util.h"
-#include "http.h"
+#include "libutil/fstring.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "ottery.h"
 #include "cryptobox.h"
 #include "keypair.h"
@@ -83,6 +85,7 @@ rspamd_server_finish (struct rspamd_http_connection *conn,
 	gulong size;
 	const gchar *url_str;
 	guint url_len;
+	rspamd_fstring_t *body;
 
 	if (!session->reply) {
 		session->reply = TRUE;
@@ -100,9 +103,11 @@ rspamd_server_finish (struct rspamd_http_connection *conn,
 
 			reply->code = 200;
 			reply->status = rspamd_fstring_new_init ("OK", 2);
-			reply->body = rspamd_fstring_sized_new (size);
-			reply->body->len = size;
-			memset (reply->body->str, 0, size);
+			body = rspamd_fstring_sized_new (size);
+			body->len = size;
+			memset (body->str, 0, size);
+			rspamd_http_message_set_body_from_fstring_steal (msg, body);
+
 		}
 		else {
 			reply->code = 404;
@@ -134,7 +139,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 
 	do {
 		if ((nfd =
-					 rspamd_accept_from_socket (fd, &addr)) == -1) {
+					 rspamd_accept_from_socket (fd, &addr, NULL)) == -1) {
 			rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
 			return;
 		}
@@ -145,8 +150,13 @@ rspamd_server_accept (gint fd, short what, void *arg)
 
 		rspamd_inet_address_destroy (addr);
 		session = g_slice_alloc (sizeof (*session));
-		session->conn = rspamd_http_connection_new (NULL, rspamd_server_error,
-				rspamd_server_finish, 0, RSPAMD_HTTP_SERVER, c);
+		session->conn = rspamd_http_connection_new (NULL,
+				rspamd_server_error,
+				rspamd_server_finish,
+				0,
+				RSPAMD_HTTP_SERVER,
+				c,
+				NULL);
 		rspamd_http_connection_set_key (session->conn, server_key);
 		rspamd_http_connection_read_message (session->conn,
 				session,

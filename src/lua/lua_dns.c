@@ -256,92 +256,34 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	enum rdns_request_type type,
 	int first)
 {
-	struct rspamd_async_session *session = NULL, **psession;
-	rspamd_mempool_t *pool = NULL, **ppool;
-	const gchar *to_resolve, *user_str = NULL;
+	struct rspamd_async_session *session = NULL;
+	rspamd_mempool_t *pool = NULL;
+	const gchar *to_resolve = NULL, *user_str = NULL;
 	struct lua_dns_cbdata *cbdata;
-	gint cbref = -1;
+	gint cbref = -1, ret;
 	struct rspamd_task *task = NULL;
+	GError *err = NULL;
+	gboolean forced = FALSE;
 
 	/* Check arguments */
-	if (lua_type (L, first) == LUA_TUSERDATA) {
-		/* Legacy version */
-		psession = rspamd_lua_check_udata (L, first, "rspamd{session}");
-		luaL_argcheck (L, psession != NULL, first,	   "'session' expected");
-		session = psession ? *(psession) : NULL;
-		ppool = rspamd_lua_check_udata (L, first + 1, "rspamd{mempool}");
-		luaL_argcheck (L, ppool != NULL,	first + 1, "'mempool' expected");
-		pool = ppool ? *(ppool) : NULL;
-		to_resolve = luaL_checkstring (L, first + 2);
+	if (!rspamd_lua_parse_table_arguments (L, first, &err,
+			"session=U{session};mempool=U{mempool};*name=S;*callback=F;"
+			"option=S;task=U{task};forced=B",
+			&session, &pool, &to_resolve, &cbref, &user_str, &task, &forced)) {
 
-		lua_pushvalue (L, first + 3);
-		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		if (err) {
+			ret = luaL_error (L, "invalid arguments: %s", err->message);
+			g_error_free (err);
 
-		if (lua_gettop (L) > first + 3) {
-			user_str = lua_tostring (L, first + 4);
+			return ret;
 		}
-		else {
-			user_str = NULL;
-		}
+
+		return luaL_error (L, "invalid arguments");
 	}
-	else if (lua_type (L, first) == LUA_TTABLE) {
-		lua_pushvalue (L, first);
 
-		lua_pushstring (L, "name");
-		lua_gettable (L, -2);
-		to_resolve = luaL_checkstring (L, -1);
-		lua_pop (L, 1);
-
-		lua_pushstring (L, "callback");
-		lua_gettable (L, -2);
-
-		if (to_resolve == NULL || lua_type (L, -1) != LUA_TFUNCTION) {
-			lua_pop (L, 2);
-			msg_err ("DNS request has bad params");
-			lua_pushboolean (L, FALSE);
-			return 1;
-		}
-		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-
-		lua_pushstring (L, "task");
-		lua_gettable (L, -2);
-		if (lua_type (L, -1) == LUA_TUSERDATA) {
-			task = lua_check_task (L, -1);
-			session = task->s;
-			pool = task->task_pool;
-		}
-		lua_pop (L, 1);
-
-		if (task == NULL) {
-			lua_pushstring (L, "session");
-			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata (L, -1, "rspamd{session}")) {
-				session = *(struct rspamd_async_session **)lua_touserdata (L, -1);
-			}
-			else {
-				session = NULL;
-			}
-			lua_pop (L, 1);
-
-			lua_pushstring (L, "pool");
-			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata (L, -1, "rspamd{mempool}")) {
-				pool = *(rspamd_mempool_t **)lua_touserdata (L, -1);
-			}
-			else {
-				pool = NULL;
-			}
-			lua_pop (L, 1);
-		}
-
-		lua_pushstring (L, "option");
-		lua_gettable (L, -2);
-		if (lua_type (L, -1) == LUA_TSTRING) {
-			user_str = luaL_checkstring (L, -1);
-		}
-		lua_pop (L, 1);
-
-		lua_pop (L, 1);
+	if (task) {
+		pool = task->task_pool;
+		session = task->s;
 	}
 
 	if (pool != NULL && session != NULL && to_resolve != NULL && cbref != -1) {
@@ -360,8 +302,10 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			ptr_str = rdns_generate_ptr_from_str (to_resolve);
 
 			if (ptr_str == NULL) {
-				msg_err ("wrong resolve string to PTR request: %s", to_resolve);
+				msg_err_task_check ("wrong resolve string to PTR request: %s",
+						to_resolve);
 				lua_pushnil (L);
+
 				return 1;
 			}
 
@@ -392,11 +336,22 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 		}
 		else {
-			if (make_dns_request_task (task,
-					lua_dns_callback,
-					cbdata,
-					type,
-					to_resolve)) {
+			if (forced) {
+				ret = make_dns_request_task_forced (task,
+						lua_dns_callback,
+						cbdata,
+						type,
+						to_resolve);
+			}
+			else {
+				ret = make_dns_request_task (task,
+						lua_dns_callback,
+						cbdata,
+						type,
+						to_resolve);
+			}
+
+			if (ret) {
 				lua_pushboolean (L, TRUE);
 				cbdata->s = session;
 				cbdata->w = rspamd_session_get_watcher (session);
@@ -408,8 +363,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		}
 	}
 	else {
-		msg_err ("invalid arguments to lua_resolve");
-		lua_pushnil (L);
+		return luaL_error (L, "invalid arguments to lua_resolve");
 	}
 
 	return 1;

@@ -16,7 +16,8 @@
 #include "config.h"
 #include "rspamd.h"
 #include "util.h"
-#include "http.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "ottery.h"
 #include "cryptobox.h"
 #include "unix-std.h"
@@ -145,9 +146,13 @@ rspamd_http_client_func (struct event_base *ev_base, struct lat_elt *latency,
 	g_assert (fd != -1);
 	flags = 1;
 	(void)setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof (flags));
-	conn = rspamd_http_connection_new (rspamd_client_body, rspamd_client_err,
-			rspamd_client_finish, RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT, c);
+	conn = rspamd_http_connection_new (rspamd_client_body,
+			rspamd_client_err,
+			rspamd_client_finish,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT,
+			c,
+			NULL);
 	rspamd_snprintf (urlbuf, sizeof (urlbuf), "http://%s/%d", host, file_size);
 	msg = rspamd_http_message_from_url (urlbuf);
 

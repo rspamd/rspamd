@@ -17,6 +17,8 @@
 #include "libutil/util.h"
 #include "libutil/map.h"
 #include "libutil/upstream.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "libserver/protocol.h"
 #include "libserver/cfg_file.h"
 #include "libserver/url.h"
@@ -67,6 +69,7 @@ struct rspamd_http_upstream {
 	struct rspamd_cryptobox_pubkey *key;
 	gint parser_from_ref;
 	gint parser_to_ref;
+	gboolean local;
 };
 
 struct rspamd_http_mirror {
@@ -77,6 +80,7 @@ struct rspamd_http_mirror {
 	gdouble prob;
 	gint parser_from_ref;
 	gint parser_to_ref;
+	gboolean local;
 };
 
 static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
@@ -138,10 +142,12 @@ struct rspamd_proxy_session {
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	gpointer map;
-	gsize map_len;
-	gint client_sock;
+	gpointer shmem_ref;
 	struct rspamd_proxy_backend_connection *master_conn;
 	GPtrArray *mirror_conns;
+	gsize map_len;
+	gint client_sock;
+	gboolean is_spamc;
 	ref_entry_t ref;
 };
 
@@ -278,6 +284,8 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	}
 
 	up = g_slice_alloc0 (sizeof (*up));
+	up->parser_from_ref = -1;
+	up->parser_to_ref = -1;
 	up->name = g_strdup (ucl_object_tostring (elt));
 
 	elt = ucl_object_lookup (obj, "key");
@@ -313,6 +321,11 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	elt = ucl_object_lookup (obj, "default");
 	if (elt && ucl_object_toboolean (elt)) {
 		ctx->default_upstream = up;
+	}
+
+	elt = ucl_object_lookup (obj, "local");
+	if (elt && ucl_object_toboolean (elt)) {
+		up->local = TRUE;
 	}
 
 	/*
@@ -426,6 +439,11 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	}
 	else {
 		up->prob = 1.0;
+	}
+
+	elt = ucl_object_lookup (obj, "local");
+	if (elt && ucl_object_toboolean (elt)) {
+		up->local = TRUE;
 	}
 
 	/*
@@ -801,7 +819,12 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		}
 	}
 
+	if (session->master_conn && session->master_conn->results) {
+		ucl_object_unref (session->master_conn->results);
+	}
+
 	g_ptr_array_free (session->mirror_conns, TRUE);
+	rspamd_http_message_shmem_unref (session->shmem_ref);
 	rspamd_inet_address_destroy (session->client_addr);
 	close (session->client_sock);
 	rspamd_mempool_delete (session->pool);
@@ -1000,22 +1023,31 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			rspamd_http_message_add_header (msg, "Settings-ID", m->settings_id);
 		}
 
-		bk_conn->backend_conn = rspamd_http_connection_new (
-				NULL,
+		bk_conn->backend_conn = rspamd_http_connection_new (NULL,
 				proxy_backend_mirror_error_handler,
 				proxy_backend_mirror_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
 				RSPAMD_HTTP_CLIENT,
-				session->ctx->keys_cache);
+				session->ctx->keys_cache,
+				NULL);
 
 		rspamd_http_connection_set_key (bk_conn->backend_conn,
 				session->ctx->local_key);
 		msg->peer_key = rspamd_pubkey_ref (m->key);
 
-		rspamd_http_connection_write_message (bk_conn->backend_conn,
-				msg, NULL, NULL, bk_conn,
-				bk_conn->backend_sock,
-				&session->ctx->io_tv, session->ctx->ev_base);
+		if (m->local ||
+				rspamd_inet_address_is_local (rspamd_upstream_addr (bk_conn->up))) {
+			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
+					msg, NULL, NULL, bk_conn,
+					bk_conn->backend_sock,
+					&session->ctx->io_tv, session->ctx->ev_base);
+		}
+		else {
+			rspamd_http_connection_write_message (bk_conn->backend_conn,
+					msg, NULL, NULL, bk_conn,
+					bk_conn->backend_sock,
+					&session->ctx->io_tv, session->ctx->ev_base);
+		}
 
 		g_ptr_array_add (session->mirror_conns, bk_conn);
 		REF_RETAIN (session);
@@ -1058,30 +1090,37 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
 	struct rspamd_proxy_session *session;
+	rspamd_fstring_t *reply;
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
 
-	/* Reset spamc legacy */
-	if (msg->method >= HTTP_CHECK) {
-		msg->method = HTTP_GET;
-	}
-
-	if (msg->url->len == 0) {
-		msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
-	}
-
 	rspamd_http_message_remove_header (msg, "Content-Length");
 	rspamd_http_message_remove_header (msg, "Key");
 	rspamd_http_connection_reset (session->master_conn->backend_conn);
-	rspamd_http_connection_write_message (session->client_conn,
-		msg, NULL, NULL, session, session->client_sock,
-		&session->ctx->io_tv, session->ctx->ev_base);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
 			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the master backend");
 	}
+
+
+	if (session->is_spamc) {
+		/* We need to reformat ucl to fit with legacy spamc protocol */
+		if (bk_conn->results) {
+			reply = rspamd_fstring_new ();
+			rspamd_ucl_torspamc_output (bk_conn->results, &reply);
+			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+		}
+		else {
+			msg_warn_session ("cannot parse results from the master backend, "
+					"return them as is");
+		}
+	}
+
+	rspamd_http_connection_write_message (session->client_conn,
+			msg, NULL, NULL, session, session->client_sock,
+			&session->ctx->io_tv, session->ctx->ev_base);
 
 	return 0;
 }
@@ -1114,6 +1153,17 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		session->master_conn->name = "master";
 		host = rspamd_http_message_find_header (msg, "Host");
 
+		/* Reset spamc legacy */
+		if (msg->method >= HTTP_SYMBOLS) {
+			msg->method = HTTP_GET;
+			session->is_spamc = TRUE;
+			msg_info_session ("enabling legacy rspamc mode for session");
+		}
+
+		if (msg->url->len == 0) {
+			msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
+		}
+
 		if (host == NULL) {
 			backend = session->ctx->default_upstream;
 		}
@@ -1145,7 +1195,9 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					SOCK_STREAM, TRUE);
 
 			if (session->master_conn->backend_sock == -1) {
-				msg_err_session ("cannot connect upstream for %s", host ? hostbuf : "default");
+				msg_err_session ("cannot connect upstream: %s(%s)",
+						host ? hostbuf : "default",
+						rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)));
 				rspamd_upstream_fail (session->master_conn->up);
 				goto err;
 			}
@@ -1159,15 +1211,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_http_message_remove_header (msg, "Content-Length");
 			rspamd_http_message_remove_header (msg, "Key");
 			rspamd_http_connection_reset (session->client_conn);
-
-			/* Reset spamc legacy */
-			if (msg->method >= HTTP_CHECK) {
-				msg->method = HTTP_GET;
-			}
-
-			if (msg->url->len == 0) {
-				msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
-			}
+			session->shmem_ref = rspamd_http_message_shmem_ref (msg);
 
 			session->master_conn->backend_conn = rspamd_http_connection_new (
 					NULL,
@@ -1175,7 +1219,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					proxy_backend_master_finish_handler,
 					RSPAMD_HTTP_CLIENT_SIMPLE,
 					RSPAMD_HTTP_CLIENT,
-					session->ctx->keys_cache);
+					session->ctx->keys_cache,
+					NULL);
 			session->master_conn->parser_from_ref = backend->parser_from_ref;
 			session->master_conn->parser_to_ref = backend->parser_to_ref;
 
@@ -1183,10 +1228,22 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					session->ctx->local_key);
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
 
-			rspamd_http_connection_write_message (session->master_conn->backend_conn,
-				msg, NULL, NULL, session->master_conn,
-				session->master_conn->backend_sock,
-				&session->ctx->io_tv, session->ctx->ev_base);
+			if (backend->local ||
+					rspamd_inet_address_is_local (
+							rspamd_upstream_addr (session->master_conn->up))) {
+				rspamd_http_connection_write_message_shared (
+						session->master_conn->backend_conn,
+						msg, NULL, NULL, session->master_conn,
+						session->master_conn->backend_sock,
+						&session->ctx->io_tv, session->ctx->ev_base);
+			}
+			else {
+				rspamd_http_connection_write_message (
+						session->master_conn->backend_conn,
+						msg, NULL, NULL, session->master_conn,
+						session->master_conn->backend_sock,
+						&session->ctx->io_tv, session->ctx->ev_base);
+			}
 		}
 	}
 	else {
@@ -1198,6 +1255,10 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 	return 0;
 
 err:
+	rspamd_http_connection_steal_msg (session->client_conn);
+	rspamd_http_message_remove_header (msg, "Content-Length");
+	rspamd_http_message_remove_header (msg, "Key");
+	rspamd_http_connection_reset (session->client_conn);
 	proxy_client_write_error (session, 404, "Backend not found");
 
 	return 0;
@@ -1215,7 +1276,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -1231,13 +1292,13 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->mirror_conns = g_ptr_array_sized_new (ctx->mirrors->len);
 
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
-	session->client_conn = rspamd_http_connection_new (
-		NULL,
-		proxy_client_error_handler,
-		proxy_client_finish_handler,
-		0,
-		RSPAMD_HTTP_SERVER,
-		ctx->keys_cache);
+	session->client_conn = rspamd_http_connection_new (NULL,
+			proxy_client_error_handler,
+			proxy_client_finish_handler,
+			0,
+			RSPAMD_HTTP_SERVER,
+			ctx->keys_cache,
+			NULL);
 	session->ctx = ctx;
 
 	if (ctx->key) {
@@ -1248,7 +1309,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 			rspamd_inet_address_to_string (addr),
 			rspamd_inet_address_get_port (addr));
 
-	rspamd_http_connection_read_message (session->client_conn,
+	rspamd_http_connection_read_message_shared (session->client_conn,
 			session,
 			nfd,
 			&ctx->io_tv,

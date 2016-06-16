@@ -431,7 +431,7 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	bk->expired = 0;
 	bk->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "fuzzy_backend");
 	bk->db = rspamd_sqlite3_open_or_create (bk->pool, bk->path,
-			create_tables_sql, 0, err);
+			create_tables_sql, 1, err);
 
 	if (bk->db == NULL) {
 		rspamd_fuzzy_backend_close (bk);

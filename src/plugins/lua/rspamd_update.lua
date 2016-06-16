@@ -144,7 +144,8 @@ if section then
 
   each(function(k, map)
     -- Check sanity for maps
-    if map:get_proto() == 'http' and not map:get_sign_key() then
+    local proto = map:get_proto()
+    if (proto == 'http' or proto == 'https') and not map:get_sign_key() then
       if trusted_key then
         map:set_sign_key(trusted_key)
       else

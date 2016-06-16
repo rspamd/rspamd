@@ -17,6 +17,8 @@
 #include "config.h"
 #include "rspamadm.h"
 #include "cryptobox.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "printf.h"
 #include "lua/lua_common.h"
 #include "message.h"
@@ -482,7 +484,7 @@ rspamadm_lua_accept_cb (gint fd, short what, void *arg)
 	gint nfd;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_accept_from_socket (fd, &addr, NULL)) == -1) {
 		rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
 		return;
 	}
@@ -533,11 +535,14 @@ rspamadm_lua_handle_exec (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamadm_lua_repl_context *ctx;
 	struct rspamadm_lua_repl_session *session = conn_ent->ud;
 	ucl_object_t *obj, *elt;
+	const gchar *body;
+	gsize body_len;
 
 	ctx = session->ctx;
 	L = ctx->L;
+	body = rspamd_http_message_get_body (msg, &body_len);
 
-	if (msg->body == NULL || msg->body->len == 0) {
+	if (body == NULL) {
 		rspamd_controller_send_error (conn_ent, 400, "Empty lua script");
 
 		return 0;
@@ -547,8 +552,8 @@ rspamadm_lua_handle_exec (struct rspamd_http_connection_entry *conn_ent,
 	err_idx = lua_gettop (L);
 
 	/* First try return + input */
-	tb = g_string_sized_new (msg->body->len + sizeof ("return "));
-	rspamd_printf_gstring (tb, "return %V", msg->body);
+	tb = g_string_sized_new (body_len + sizeof ("return "));
+	rspamd_printf_gstring (tb, "return %*s", (gint)body_len, body);
 
 	if (luaL_loadstring (L, tb->str) != 0) {
 		/* Reset stack */
@@ -556,7 +561,7 @@ rspamadm_lua_handle_exec (struct rspamd_http_connection_entry *conn_ent,
 		lua_pushcfunction (L, &rspamd_lua_traceback);
 		err_idx = lua_gettop (L);
 		/* Try with no return */
-		if (luaL_loadbuffer (L, msg->body->str, msg->body->len, "http input") != 0) {
+		if (luaL_loadbuffer (L, body, body_len, "http input") != 0) {
 			rspamd_controller_send_error (conn_ent, 400, "Invalid lua script");
 
 			return 0;

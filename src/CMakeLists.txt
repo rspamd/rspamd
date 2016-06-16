@@ -101,21 +101,44 @@ ENDIF()
 
 AddModules(MODULES_LIST WORKERS_LIST)
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
+
+SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
+	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_date.rl"
+	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip.rl"
+	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_whitespace.rl"
+	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl")
+RAGEL_TARGET(ragel_smtp_addr
+	INPUTS ragel/smtp_addr_parser.rl
+	DEPENDS ${RAGEL_DEPENDS}
+	COMPILE_FLAGS -T1
+	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_addr_parser.rl.c)
+RAGEL_TARGET(ragel_smtp_received
+	INPUTS ragel/smtp_received_parser.rl
+	DEPENDS ${RAGEL_DEPENDS}
+	COMPILE_FLAGS -T1
+	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_received_parser.rl.c)
 ######################### LINK SECTION ###############################
 
-ADD_LIBRARY(rspamd-server STATIC ${RSPAMD_CRYPTOBOX} ${RSPAMD_UTIL} ${RSPAMD_LUA} ${RSPAMD_SERVER}
-		${RSPAMD_STAT} ${RSPAMD_MIME}
-		${CMAKE_CURRENT_BINARY_DIR}/modules.c ${PLUGINSSRC})
+ADD_LIBRARY(rspamd-server STATIC
+		${RSPAMD_CRYPTOBOX}
+		${RSPAMD_UTIL}
+		${RSPAMD_LUA}
+		${RSPAMD_SERVER}
+		${RSPAMD_STAT}
+		${RSPAMD_MIME}
+		${CMAKE_CURRENT_BINARY_DIR}/modules.c
+		${PLUGINSSRC}
+		"${RAGEL_ragel_smtp_addr_OUTPUTS}"
+		"${RAGEL_ragel_smtp_received_OUTPUTS}")
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
 TARGET_LINK_LIBRARIES(rspamd-server lcbtrie)
 
-ADD_DEPENDENCIES(rspamd-server rspamd_lua_preprocess)
-
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
+ADD_DEPENDENCIES(rspamd-server rspamd_lua_preprocess)
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)

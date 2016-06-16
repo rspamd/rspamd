@@ -264,12 +264,17 @@ rspamd_task_free (struct rspamd_task *task)
 	}
 }
 
+struct rspamd_task_map {
+	gpointer begin;
+	gulong len;
+};
+
 static void
 rspamd_task_unmapper (gpointer ud)
 {
-	struct rspamd_task *task = ud;
+	struct rspamd_task_map *m = ud;
 
-	munmap ((void *)task->msg.begin, task->msg.len);
+	munmap (m->begin, m->len);
 }
 
 gboolean
@@ -281,12 +286,110 @@ rspamd_task_load_message (struct rspamd_task *task,
 	ucl_object_t *control_obj;
 	gchar filepath[PATH_MAX], *fp;
 	gint fd, flen;
+	gulong offset = 0, shmem_size = 0;
 	rspamd_ftok_t srch, *tok;
 	gpointer map;
 	struct stat st;
+	struct rspamd_task_map *m;
 
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
+	}
+
+	srch.begin = "shm";
+	srch.len = 3;
+	tok = g_hash_table_lookup (task->request_headers, &srch);
+
+	if (tok) {
+		/* Shared memory part */
+		r = rspamd_strlcpy (filepath, tok->begin,
+				MIN (sizeof (filepath), tok->len + 1));
+
+		rspamd_decode_url (filepath, filepath, r + 1);
+		flen = strlen (filepath);
+
+		if (filepath[0] == '"' && flen > 2) {
+			/* We need to unquote filepath */
+			fp = &filepath[1];
+			fp[flen - 2] = '\0';
+		}
+		else {
+			fp = &filepath[0];
+		}
+
+		fd = shm_open (fp, O_RDONLY, 00600);
+
+		if (fd == -1) {
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Cannot open shm segment (%s): %s", fp, strerror (errno));
+			return FALSE;
+		}
+
+		if (fstat (fd, &st) == -1) {
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Cannot stat shm segment (%s): %s", fp, strerror (errno));
+			close (fd);
+
+			return FALSE;
+		}
+
+		map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+		if (map == MAP_FAILED) {
+			close (fd);
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Cannot mmap file (%s): %s", fp, strerror (errno));
+			return FALSE;
+		}
+
+		close (fd);
+
+		srch.begin = "shm-offset";
+		srch.len = 10;
+		tok = g_hash_table_lookup (task->request_headers, &srch);
+
+		if (tok) {
+			rspamd_strtoul (tok->begin, tok->len, &offset);
+
+			if (offset > (gulong)st.st_size) {
+				msg_err_task ("invalid offset %ul (%ul available) for shm "
+						"segment %s", offset, st.st_size, fp);
+				munmap (map, st.st_size);
+
+				return FALSE;
+			}
+		}
+
+		srch.begin = "shm-length";
+		srch.len = 10;
+		tok = g_hash_table_lookup (task->request_headers, &srch);
+		shmem_size = st.st_size;
+
+		if (tok) {
+			rspamd_strtoul (tok->begin, tok->len, &shmem_size);
+
+			if (shmem_size > (gulong)st.st_size) {
+				msg_err_task ("invalid length %ul (%ul available) for shm "
+						"segment %s", shmem_size, st.st_size, fp);
+				munmap (map, st.st_size);
+
+				return FALSE;
+			}
+		}
+
+		task->msg.begin = ((guchar *)map) + offset;
+		task->msg.len = shmem_size;
+		task->flags |= RSPAMD_TASK_FLAG_FILE;
+		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
+		m->begin = map;
+		m->len = st.st_size;
+
+		msg_info_task ("loaded message from shared memory %s (%ul size, %ul offset)",
+				fp, shmem_size, offset);
+
+		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
+
+		return TRUE;
 	}
 
 	srch.begin = "file";
@@ -317,7 +420,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 			fp = &filepath[0];
 		}
 
-		if (access (fp, R_OK) == -1 || stat (fp, &st) == -1) {
+		if (stat (fp, &st) == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 					"Invalid file (%s): %s", fp, strerror (errno));
 			return FALSE;
@@ -346,46 +449,53 @@ rspamd_task_load_message (struct rspamd_task *task,
 		task->msg.len = st.st_size;
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
 
-		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, task);
+		msg_info_task ("loaded message from file %s", fp);
+		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
+		m->begin = map;
+		m->len = st.st_size;
+
+		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
+
+		return TRUE;
 	}
-	else {
-		debug_task ("got input of length %z", task->msg.len);
-		task->msg.begin = start;
-		task->msg.len = len;
 
-		if (task->msg.len == 0) {
-			task->flags |= RSPAMD_TASK_FLAG_EMPTY;
+	/* Plain data */
+	debug_task ("got input of length %z", task->msg.len);
+	task->msg.begin = start;
+	task->msg.len = len;
+
+	if (task->msg.len == 0) {
+		task->flags |= RSPAMD_TASK_FLAG_EMPTY;
+	}
+
+	if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
+		/* We have control chunk, so we need to process it separately */
+		if (task->msg.len < task->message_len) {
+			msg_warn_task ("message has invalid message length: %ul and total len: %ul",
+					task->message_len, task->msg.len);
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Invalid length");
+			return FALSE;
 		}
+		control_len = task->msg.len - task->message_len;
 
-		if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
-			/* We have control chunk, so we need to process it separately */
-			if (task->msg.len < task->message_len) {
-				msg_warn_task ("message has invalid message length: %ul and total len: %ul",
-						task->message_len, task->msg.len);
-				g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-						"Invalid length");
-				return FALSE;
+		if (control_len > 0) {
+			parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+
+			if (!ucl_parser_add_chunk (parser, task->msg.begin, control_len)) {
+				msg_warn_task ("processing of control chunk failed: %s",
+						ucl_parser_get_error (parser));
+				ucl_parser_free (parser);
 			}
-			control_len = task->msg.len - task->message_len;
-
-			if (control_len > 0) {
-				parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
-
-				if (!ucl_parser_add_chunk (parser, task->msg.begin, control_len)) {
-					msg_warn_task ("processing of control chunk failed: %s",
-							ucl_parser_get_error (parser));
-					ucl_parser_free (parser);
-				}
-				else {
-					control_obj = ucl_parser_get_object (parser);
-					ucl_parser_free (parser);
-					rspamd_protocol_handle_control (task, control_obj);
-					ucl_object_unref (control_obj);
-				}
-
-				task->msg.begin += control_len;
-				task->msg.len -= control_len;
+			else {
+				control_obj = ucl_parser_get_object (parser);
+				ucl_parser_free (parser);
+				rspamd_protocol_handle_control (task, control_obj);
+				ucl_object_unref (control_obj);
 			}
+
+			task->msg.begin += control_len;
+			task->msg.len -= control_len;
 		}
 	}
 

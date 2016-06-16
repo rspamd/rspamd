@@ -44,6 +44,7 @@ typedef void (*rspamd_map_dtor) (gpointer p);
 enum fetch_proto {
 	MAP_PROTO_FILE,
 	MAP_PROTO_HTTP,
+	MAP_PROTO_HTTPS
 };
 
 struct rspamd_map_backend {

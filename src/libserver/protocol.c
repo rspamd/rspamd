@@ -21,6 +21,7 @@
 #include "message.h"
 #include "utlist.h"
 #include "http.h"
+#include "http_private.h"
 #include "email_addr.h"
 #include "worker_private.h"
 #include "cryptobox.h"
@@ -270,11 +271,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	rspamd_fstring_t *hn, *hv;
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
 	gboolean fl, has_ip = FALSE;
-	struct rspamd_http_header *h;
+	struct rspamd_http_header *h, *htmp;
 	struct rspamd_email_address *addr;
 
-	LL_FOREACH (msg->headers, h)
-	{
+	HASH_ITER (hh, msg->headers, h, htmp) {
 		hn = rspamd_fstring_new_init (h->name->begin, h->name->len);
 		hv = rspamd_fstring_new_init (h->value->begin, h->value->len);
 		hn_tok = rspamd_ftok_map (hn);
@@ -873,9 +873,8 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	return obj;
 }
 
-static void
-rspamd_ucl_torspamc_output (struct rspamd_task *task,
-	ucl_object_t *top,
+void
+rspamd_ucl_torspamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
 	const ucl_object_t *metric, *score,
@@ -927,12 +926,15 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 		}
 	}
 
-	rspamd_printf_fstring (out, "Message-ID: %s\r\n", task->message_id);
+	elt = ucl_object_lookup (top, "message-id");
+	if (elt != NULL) {
+		rspamd_printf_fstring (out, "Message-ID: %s\r\n",
+				ucl_object_tostring (elt));
+	}
 }
 
 static void
-rspamd_ucl_tospamc_output (struct rspamd_task *task,
-	ucl_object_t *top,
+rspamd_ucl_tospamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
 	const ucl_object_t *metric, *score,
@@ -1015,6 +1017,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	const struct rspamd_re_cache_stat *restat;
 	gpointer h, v;
 	ucl_object_t *top = NULL;
+	rspamd_fstring_t *reply;
 	gint action;
 
 	/* Write custom headers */
@@ -1048,21 +1051,22 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 				restat->bytes_scanned);
 	}
 
-	msg->body = rspamd_fstring_sized_new (1000);
+	reply = rspamd_fstring_sized_new (1000);
 
 	if (msg->method < HTTP_SYMBOLS && !RSPAMD_TASK_IS_SPAMC (task)) {
-		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &msg->body);
+		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &reply);
 	}
 	else {
 		if (RSPAMD_TASK_IS_SPAMC (task)) {
-			rspamd_ucl_tospamc_output (task, top, &msg->body);
+			rspamd_ucl_tospamc_output (top, &reply);
 		}
 		else {
-			rspamd_ucl_torspamc_output (task, top, &msg->body);
+			rspamd_ucl_torspamc_output (top, &reply);
 		}
 	}
 
 	ucl_object_unref (top);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
 		/* Update stat for default metric */
@@ -1185,6 +1189,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	struct rspamd_http_message *msg;
 	const gchar *ctype = "application/json";
 	struct rspamd_abstract_worker_ctx *actx;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
@@ -1216,9 +1221,10 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		ucl_object_insert_key (top,
 			ucl_object_fromstring (g_quark_to_string (task->err->domain)),
 			"error_domain", 0, false);
-		msg->body = rspamd_fstring_sized_new (256);
-		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &msg->body);
+		reply = rspamd_fstring_sized_new (256);
+		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &reply);
 		ucl_object_unref (top);
+		rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	}
 	else {
 		msg->status = rspamd_fstring_new_init ("OK", 2);
@@ -1241,7 +1247,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 			}
 			break;
 		case CMD_PING:
-			msg->body = rspamd_fstring_new_init ("pong" CRLF, 6);
+			rspamd_http_message_set_body (msg, "pong" CRLF, 6);
 			ctype = "text/plain";
 			break;
 		case CMD_OTHER:

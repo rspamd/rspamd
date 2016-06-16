@@ -93,7 +93,9 @@ context("Rspamd expressions", function()
        {'F && ((A + B + C + D) > 1)', 0},
        {'(E) && ((B + B + B + B) >= 1)', 0},
        {'!!C', 1},
-       {'(B) & (D) & ((G) | (H) | (I) | (A))', 0}
+       {'(B) & (D) & ((G) | (H) | (I) | (A))', 0},
+       {'A & C & (!D || !C || !E)', 1},
+       {'A & C & !(D || C || E)', 0},
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1],
@@ -102,8 +104,8 @@ context("Rspamd expressions", function()
       assert_not_nil(expr, "Cannot parse " .. c[1])
       --print(expr)
       res = expr:process(atoms)
-      assert_equal(res, c[2], string.format("Processed expr '%s' returned '%d', expected: '%d'",
-        expr:to_string(), res, c[2]))
+      assert_equal(res, c[2], string.format("Processed expr '%s'{%s} returned '%d', expected: '%d'",
+        expr:to_string(), c[1], res, c[2]))
     end
 
     pool:destroy()

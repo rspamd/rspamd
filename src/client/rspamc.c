@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "util.h"
-#include "http.h"
+#include "libutil/util.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "rspamdclient.h"
 #include "utlist.h"
 #include "unix-std.h"
@@ -67,12 +68,17 @@ static GList *children;
     g_queue_push_tail ((o), nh); \
 } while (0)
 
+static gboolean rspamc_password_callback (const gchar *option_name,
+		const gchar *value,
+		gpointer data,
+		GError **error);
+
 static GOptionEntry entries[] =
 {
 	{ "connect", 'h', 0, G_OPTION_ARG_STRING, &connect_str,
 	  "Specify host and port", NULL },
-	{ "password", 'P', 0, G_OPTION_ARG_STRING, &password,
-	  "Specify control password", NULL },
+	{ "password", 'P', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK,
+	  &rspamc_password_callback, "Specify control password", NULL },
 	{ "classifier", 'c', 0, G_OPTION_ARG_STRING, &classifier,
 	  "Classifier to learn spam or ham", NULL },
 	{ "weight", 'w', 0, G_OPTION_ARG_INT, &weight,
@@ -87,13 +93,13 @@ static GOptionEntry entries[] =
 	  "Emulate that message was received from specified ip address",
 	  NULL },
 	{ "user", 'u', 0, G_OPTION_ARG_STRING, &user,
-	  "Emulate that message was from specified user", NULL },
+	  "Emulate that message was received from specified authenticated user", NULL },
 	{ "deliver", 'd', 0, G_OPTION_ARG_STRING, &deliver_to,
-	  "Emulate that message is delivered to specified user", NULL },
+	  "Emulate that message is delivered to specified user (for LDA/statistics)", NULL },
 	{ "from", 'F', 0, G_OPTION_ARG_STRING, &from,
-	  "Emulate that message is from specified user", NULL },
+	  "Emulate that message has specified SMTP FROM address", NULL },
 	{ "rcpt", 'r', 0, G_OPTION_ARG_STRING_ARRAY, &rcpts,
-	  "Emulate that message is for specified user", NULL },
+	  "Emulate that message has specified SMTP RCPT address", NULL },
 	{ "helo", 0, 0, G_OPTION_ARG_STRING, &helo,
 	  "Imitate SMTP HELO passing from MTA", NULL },
 	{ "hostname", 0, 0, G_OPTION_ARG_STRING, &hostname,
@@ -291,6 +297,31 @@ struct rspamc_callback_data {
 	gchar *filename;
 	gdouble start;
 };
+
+gboolean
+rspamc_password_callback (const gchar *option_name,
+		const gchar *value,
+		gpointer data,
+		GError **error)
+{
+	guint plen = 8192;
+
+	if (value != NULL) {
+		password = g_strdup (value);
+	}
+	else {
+		/* Read password from console */
+		password = g_malloc0 (plen);
+		plen = rspamd_read_passphrase (password, plen, 0, NULL);
+	}
+
+	if (plen == 0) {
+		rspamd_fprintf (stderr, "Invalid password\n");
+		exit (EXIT_FAILURE);
+	}
+
+	return TRUE;
+}
 
 /*
  * Parse command line
@@ -920,12 +951,12 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 static void
 rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *h;
+	struct rspamd_http_header *h, *htmp;
 
-	LL_FOREACH (msg->headers, h)
-	{
+	HASH_ITER (hh, msg->headers, h, htmp) {
 		rspamd_fprintf (out, "%T: %T\n", h->name, h->value);
 	}
+
 	rspamd_fprintf (out, "\n");
 }
 
@@ -1193,6 +1224,8 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamc_command *cmd;
 	FILE *out = stdout;
 	gdouble finish = rspamd_get_ticks (), diff;
+	const gchar *body;
+	gsize body_len;
 
 	cmd = cbdata->cmd;
 	diff = finish - cbdata->start;
@@ -1208,12 +1241,16 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		}
 		else {
 			if (cmd->need_input) {
-				rspamd_fprintf (out, "Results for file: %s (%.3f seconds)\n",
-						cbdata->filename, diff);
+				if (!compact) {
+					rspamd_fprintf (out, "Results for file: %s (%.3f seconds)\n",
+							cbdata->filename, diff);
+				}
 			}
 			else {
-				rspamd_fprintf (out, "Results for command: %s (%.3f seconds)\n",
-						cmd->name, diff);
+				if (!compact) {
+					rspamd_fprintf (out, "Results for command: %s (%.3f seconds)\n",
+							cmd->name, diff);
+				}
 			}
 
 			if (result != NULL) {
@@ -1241,9 +1278,13 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 			else if (err != NULL) {
 				rspamd_fprintf (out, "%s\n", err->message);
 
-				if (json && msg != NULL && msg->body != NULL) {
-					/* We can also output the resulting json */
-					rspamd_fprintf (out, "%V\n", msg->body);
+				if (json && msg != NULL) {
+					body = rspamd_http_message_get_body (msg, &body_len);
+
+					if (body) {
+						/* We can also output the resulting json */
+						rspamd_fprintf (out, "%*s\n", (gint)body_len, body);
+					}
 				}
 			}
 		}

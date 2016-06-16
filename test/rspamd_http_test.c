@@ -16,7 +16,8 @@
 #include "config.h"
 #include "rspamd.h"
 #include "util.h"
-#include "http.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "tests.h"
 #include "ottery.h"
 #include "cryptobox.h"
@@ -55,7 +56,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 	gint nfd;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_accept_from_socket (fd, &addr, NULL)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -155,9 +156,13 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	gint fd;
 
 	g_assert ((fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE)) != -1);
-	conn = rspamd_http_connection_new (rspamd_client_body, rspamd_client_err,
-			rspamd_client_finish, RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT, c);
+	conn = rspamd_http_connection_new (rspamd_client_body,
+			rspamd_client_err,
+			rspamd_client_finish,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT,
+			c,
+			NULL);
 	rspamd_snprintf (urlbuf, sizeof (urlbuf), "http://127.0.0.1/%s", path);
 	msg = rspamd_http_message_from_url (urlbuf);
 

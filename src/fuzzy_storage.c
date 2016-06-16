@@ -33,6 +33,7 @@
 #include "ref.h"
 #include "xxhash.h"
 #include "libutil/hash.h"
+#include "libutil/http_private.h"
 #include "unix-std.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
@@ -260,6 +261,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 	gsize len;
 	guint32 rev;
 	const gchar *p;
+	rspamd_fstring_t *reply;
 
 	rev = rspamd_fuzzy_backend_version (ctx->backend, local_db_name);
 	rev = GUINT32_TO_LE (rev);
@@ -278,8 +280,8 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 	}
 
-	msg->body = rspamd_fstring_sized_new (len);
-	msg->body = rspamd_fstring_append (msg->body, (const char *)&rev,
+	reply = rspamd_fstring_sized_new (len);
+	reply = rspamd_fstring_append (reply, (const char *)&rev,
 			sizeof (rev));
 
 	for (cur = ctx->updates_pending->head; cur != NULL; cur = g_list_next (cur)) {
@@ -295,15 +297,14 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 
 		p = (const char *)io_cmd;
-		msg->body = rspamd_fstring_append (msg->body, (const char *)&len,
-					sizeof (len));
-		msg->body = rspamd_fstring_append (msg->body, p, len);
+		reply = rspamd_fstring_append (reply, (const char *)&len, sizeof (len));
+		reply = rspamd_fstring_append (reply, p, len);
 	}
 
 	/* Last chunk */
 	len = 0;
-	msg->body = rspamd_fstring_append (msg->body, (const char *)&len,
-			sizeof (len));
+	reply = rspamd_fstring_append (reply, (const char *)&len, sizeof (len));
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 }
 
 static void
@@ -362,13 +363,13 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
 
-	conn->http_conn = rspamd_http_connection_new (
-			NULL,
+	conn->http_conn = rspamd_http_connection_new (NULL,
 			fuzzy_mirror_error_handler,
 			fuzzy_mirror_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT,
-			ctx->keypair_cache);
+			ctx->keypair_cache,
+			NULL);
 
 	rspamd_http_connection_set_key (conn->http_conn,
 			ctx->sync_keypair);
@@ -936,7 +937,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	} state = read_len;
 	GList *updates = NULL, *cur;
 
-	if (!msg->body || msg->body->len == 0 || !msg->url || msg->url->len == 0) {
+	if (!rspamd_http_message_get_body (msg, NULL) || !msg->url
+			|| msg->url->len == 0) {
 		msg_err ("empty update message, not processing");
 
 		return;
@@ -963,8 +965,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	 * <0> - end of data
 	 * ... - ignored
 	 */
-	p = (const guchar *)msg->body->str;
-	remain = msg->body->len;
+	p = rspamd_http_message_get_body (msg, &remain);
 
 	if (remain > sizeof (guint32) * 2) {
 		memcpy (&revision, p, sizeof (guint32));
@@ -1161,7 +1162,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	struct fuzzy_master_update_session *session;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -1199,13 +1200,13 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	}
 
 	session = g_slice_alloc0 (sizeof (*session));
-	http_conn = rspamd_http_connection_new (
-			NULL,
+	http_conn = rspamd_http_connection_new (NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
 			0,
 			RSPAMD_HTTP_SERVER,
-			ctx->keypair_cache);
+			ctx->keypair_cache,
+			NULL);
 
 	rspamd_http_connection_set_key (http_conn, ctx->sync_keypair);
 	session->ctx = ctx;
@@ -2006,7 +2007,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 	GList *cur;
 	struct rspamd_worker_listen_socket *ls;
-	struct event *accept_event;
+	struct event *accept_events;
 	gdouble next_check;
 
 	ctx->peer_fd = rep_fd;
@@ -2026,23 +2027,23 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 
 		if (ls->fd != -1) {
 			if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
-				accept_event = g_slice_alloc0 (sizeof (struct event));
-				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_fuzzy_socket, worker);
-				event_base_set (ctx->ev_base, accept_event);
-				event_add (accept_event, NULL);
+				event_base_set (ctx->ev_base, &accept_events[0]);
+				event_add (&accept_events[0], NULL);
 				worker->accept_events = g_list_prepend (worker->accept_events,
-						accept_event);
+						accept_events);
 			}
 			else if (worker->index == 0) {
 				/* We allow TCP listeners only for a update worker */
-				accept_event = g_slice_alloc0 (sizeof (struct event));
-				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_fuzzy_mirror_socket, worker);
-				event_base_set (ctx->ev_base, accept_event);
-				event_add (accept_event, NULL);
+				event_base_set (ctx->ev_base, &accept_events[0]);
+				event_add (&accept_events[0], NULL);
 				worker->accept_events = g_list_prepend (worker->accept_events,
-						accept_event);
+						accept_events);
 			}
 		}
 

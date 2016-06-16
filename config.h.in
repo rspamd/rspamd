@@ -78,6 +78,7 @@
 #cmakedefine HAVE_SETSIG         1
 #cmakedefine HAVE_SIGINFO_H      1
 #cmakedefine HAVE_SOCK_SEQPACKET 1
+#cmakedefine HAVE_SSL_TLSEXT_HOSTNAME 1
 #cmakedefine HAVE_STDBOOL_H      1
 #cmakedefine HAVE_STDINT_H       1
 #cmakedefine HAVE_STDIO_H        1

@@ -81,6 +81,8 @@ rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
  */
 void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
 
+#define rspamd_fstring_clear(s) rspamd_fstring_erase(s, 0, s->len)
+
 /**
  * Convert fixed string to a zero terminated string. This string should be
  * freed by a caller
@@ -143,6 +145,15 @@ void rspamd_fstring_mapped_ftok_free (gpointer p);
  * Map token to a specified string. Token must be freed using g_slice_free1
  */
 rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
+
+/**
+ * Suggest suitable size to grow fstring
+ * @param len
+ * @param allocated
+ * @param needed_len
+ * @return
+ */
+gsize rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len);
 
 /**
  * Grow the specified fixed string

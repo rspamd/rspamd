@@ -2,6 +2,11 @@
 
   machine smtp_addr_parser;
 
+  action IP6_start {}
+  action IP6_end {}
+  action IP4_start {}
+  action IP4_end {}
+
   action User_start {
     addr->user = p;
   }
@@ -71,9 +76,11 @@
   main := SMTPAddr;
 }%%
 
+#include "smtp_parsers.h"
+
 %% write data;
 
-static int
+int
 rspamd_smtp_addr_parse (const char *data, size_t len, struct rspamd_email_address *addr)
 {
   const char *p = data, *pe = data + len, *eof;

@@ -161,6 +161,8 @@ rspamd_config_new (void)
 	 */
 	cfg->enable_shutdown_workaround = TRUE;
 
+	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
 	return cfg;

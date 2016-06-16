@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #include "rspamdclient.h"
-#include "util.h"
-#include "http.h"
+#include "libutil/util.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
 #include "unix-std.h"
 
 #ifdef HAVE_FETCH_H
@@ -115,7 +116,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 	else {
-		if (msg->body == NULL || msg->body_buf.len == 0 || msg->code != 200) {
+		if (rspamd_http_message_get_body (msg, NULL) == NULL || msg->code != 200) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 					msg->code,
 					(gint)msg->status->len, msg->status->str);
@@ -166,7 +167,8 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 			rspamd_client_finish_handler,
 			0,
 			RSPAMD_HTTP_CLIENT,
-			conn->keys_cache);
+			conn->keys_cache,
+			NULL);
 
 	conn->server_name = g_string_new (name);
 	if (port != 0) {
@@ -205,6 +207,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	gsize remain, old_len;
 	GList *cur;
 	GString *input = NULL;
+	rspamd_fstring_t *body;
 
 	req = g_slice_alloc0 (sizeof (struct rspamd_client_request));
 	req->conn = conn;
@@ -243,11 +246,11 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			return FALSE;
 		}
 
-		req->msg->body = rspamd_fstring_new_init (input->str, input->len);
+		body = rspamd_fstring_new_init (input->str, input->len);
+		rspamd_http_message_set_body_from_fstring_steal (req->msg, body);
 		req->input = input;
 	}
 	else {
-		req->msg->body = NULL;
 		req->input = NULL;
 	}
 

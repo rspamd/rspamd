@@ -266,7 +266,7 @@ accept_socket (gint fd, short what, void *arg)
 	}
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -298,13 +298,13 @@ accept_socket (gint fd, short what, void *arg)
 	/* TODO: allow to disable autolearn in protocol */
 	task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
 
-	task->http_conn = rspamd_http_connection_new (
-		rspamd_worker_body_handler,
-		rspamd_worker_error_handler,
-		rspamd_worker_finish_handler,
-		0,
-		RSPAMD_HTTP_SERVER,
-		ctx->keys_cache);
+	task->http_conn = rspamd_http_connection_new (rspamd_worker_body_handler,
+			rspamd_worker_error_handler,
+			rspamd_worker_finish_handler,
+			0,
+			RSPAMD_HTTP_SERVER,
+			ctx->keys_cache,
+			NULL);
 	task->ev_base = ctx->ev_base;
 	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,

@@ -177,6 +177,56 @@ rspamd_mime_expr_quark (void)
 	return g_quark_from_static_string ("mime-expressions");
 }
 
+static gboolean
+rspamd_parse_long_option (const gchar *start, gsize len,
+		struct rspamd_regexp_atom *a)
+{
+	gboolean ret = FALSE;
+
+	if (rspamd_lc_cmp (start, "body", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_BODY;
+	}
+	else if (rspamd_lc_cmp (start, "part", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_MIME;
+	}
+	else if (rspamd_lc_cmp (start, "raw_part", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_RAWMIME;
+	}
+	else if (rspamd_lc_cmp (start, "header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_HEADER;
+	}
+	else if (rspamd_lc_cmp (start, "mime_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_MIMEHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "raw_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_RAWHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "all_header", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_ALLHEADER;
+	}
+	else if (rspamd_lc_cmp (start, "url", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_URL;
+	}
+	else if (rspamd_lc_cmp (start, "sa_body", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_SABODY;
+	}
+	else if (rspamd_lc_cmp (start, "sa_raw_body", len) == 0) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_SARAWBODY;
+	}
+
+	return ret;
+}
+
 /*
  * Rspamd regexp utility functions
  */
@@ -184,7 +234,7 @@ static struct rspamd_regexp_atom *
 rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		struct rspamd_config *cfg)
 {
-	const gchar *begin, *end, *p, *src, *start;
+	const gchar *begin, *end, *p, *src, *start, *brace;
 	gchar *dbegin, *dend;
 	struct rspamd_regexp_atom *result;
 	GError *err = NULL;
@@ -291,6 +341,14 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			result->type = RSPAMD_RE_MIMEHEADER;
 			p++;
 			break;
+		case 'C':
+			result->type = RSPAMD_RE_SABODY;
+			p++;
+			break;
+		case 'D':
+			result->type = RSPAMD_RE_SARAWBODY;
+			p++;
+			break;
 		case 'M':
 			result->type = RSPAMD_RE_BODY;
 			p++;
@@ -310,6 +368,20 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		case 'X':
 			result->type = RSPAMD_RE_RAWHEADER;
 			p++;
+			break;
+		case '{':
+			/* Long definition */
+			if ((brace = strchr (p + 1, '}')) != NULL) {
+				if (!rspamd_parse_long_option (p + 1, brace - (p + 1), result)) {
+					p = NULL;
+				}
+				else {
+					p = brace + 1;
+				}
+			}
+			else {
+				p = NULL;
+			}
 			break;
 		/* Other flags */
 		case 'T':

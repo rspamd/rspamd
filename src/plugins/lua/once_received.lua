@@ -80,7 +80,8 @@ local function check_quantity_received (task)
   if (not hn or hn == 'unknown') and task_ip and task_ip:is_valid() then
     task:get_resolver():resolve_ptr({task = task,
       name = task_ip:to_string(),
-      callback = recv_dns_cb
+      callback = recv_dns_cb,
+      forced = true
     })
     return
   end

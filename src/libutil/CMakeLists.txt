@@ -20,6 +20,7 @@ SET(LIBRSPAMDUTILSRC
 								${CMAKE_CURRENT_SOURCE_DIR}/upstream.c
 								${CMAKE_CURRENT_SOURCE_DIR}/util.c
 								${CMAKE_CURRENT_SOURCE_DIR}/heap.c
-								${CMAKE_CURRENT_SOURCE_DIR}/multipattern.c)
+								${CMAKE_CURRENT_SOURCE_DIR}/multipattern.c
+								${CMAKE_CURRENT_SOURCE_DIR}/ssl_util.c)
 # Rspamdutil
 SET(RSPAMD_UTIL ${LIBRSPAMDUTILSRC} PARENT_SCOPE)

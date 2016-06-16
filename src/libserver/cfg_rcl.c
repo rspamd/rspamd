@@ -15,6 +15,8 @@
  */
 #include "cfg_rcl.h"
 #include "rspamd.h"
+#include "../../contrib/mumhash/mum.h"
+#define HASH_CASELESS
 #include "uthash_strcase.h"
 #include "utlist.h"
 #include "cfg_file.h"
@@ -1922,6 +1924,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, ignore_received),
 			0,
 			"Ignore data from the first received header");
+	rspamd_rcl_add_default_handler (sub,
+			"ssl_ca_path",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, ssl_ca_path),
+			RSPAMD_CL_FLAG_STRING_PATH,
+			"Path to ssl CA file");
+	rspamd_rcl_add_default_handler (sub,
+			"ssl_ciphers",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, ssl_ciphers),
+			0,
+			"List of ssl ciphers (e.g. HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4)");
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE,

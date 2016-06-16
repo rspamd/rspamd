@@ -82,5 +82,13 @@ ucl_object_t * rspamd_protocol_write_ucl (struct rspamd_task *task);
  */
 void rspamd_protocol_write_reply (struct rspamd_task *task);
 
+/**
+ * Convert rspamd output to legacy protocol reply
+ * @param task
+ * @param top
+ * @param out
+ */
+void rspamd_ucl_torspamc_output (const ucl_object_t *top,
+	rspamd_fstring_t **out);
 
 #endif

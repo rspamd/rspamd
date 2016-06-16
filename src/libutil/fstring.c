@@ -17,8 +17,6 @@
 #include "str_util.h"
 
 static const gsize default_initial_size = 48;
-/* Maximum size when we double the size of new string */
-static const gsize max_grow = 1024 * 1024;
 
 #define fstravail(s) ((s)->allocated - (s)->len)
 
@@ -27,7 +25,13 @@ rspamd_fstring_new (void)
 {
 	rspamd_fstring_t *s;
 
-	g_assert (posix_memalign ((void**)&s, 16, default_initial_size + sizeof (*s)) == 0);
+	if (posix_memalign ((void**)&s, 16, default_initial_size + sizeof (*s)) != 0) {
+		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
+				G_STRLOC, default_initial_size + sizeof (*s));
+
+		return NULL;
+	}
+
 	s->len = 0;
 	s->allocated = default_initial_size;
 
@@ -40,7 +44,12 @@ rspamd_fstring_sized_new (gsize initial_size)
 	rspamd_fstring_t *s;
 	gsize real_size = MAX (default_initial_size, initial_size);
 
-	g_assert (posix_memalign ((void **)&s, 16, real_size + sizeof (*s)) == 0);
+	if (posix_memalign ((void **)&s, 16, real_size + sizeof (*s)) != 0) {
+		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
+				G_STRLOC, real_size + sizeof (*s));
+
+		return NULL;
+	}
 	s->len = 0;
 	s->allocated = real_size;
 
@@ -53,7 +62,13 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 	rspamd_fstring_t *s;
 	gsize real_size = MAX (default_initial_size, len);
 
-	g_assert (posix_memalign ((void **) &s, 16, real_size + sizeof (*s)) == 0);
+	if (posix_memalign ((void **) &s, 16, real_size + sizeof (*s)) != 0) {
+		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
+				G_STRLOC, real_size + sizeof (*s));
+
+		return NULL;
+	}
+
 	s->len = len;
 	s->allocated = real_size;
 	memcpy (s->str, init, len);
@@ -85,13 +100,14 @@ rspamd_fstring_free (rspamd_fstring_t *str)
 	free (str);
 }
 
-rspamd_fstring_t *
-rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
+inline gsize
+rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len)
 {
 	gsize newlen;
-	gpointer nptr;
+	/* Maximum size when we double the size of new string */
+	static const gsize max_grow = 1024 * 1024;
 
-	newlen = str->allocated;
+	newlen = allocated;
 
 	/*
 	 * Stop exponential grow at some point, since it might be slow for the
@@ -107,8 +123,8 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 	/*
 	 * Check for overflow
 	 */
-	if (newlen <= str->len + needed_len) {
-		newlen = str->len + needed_len;
+	if (newlen <= len + needed_len) {
+		newlen = len + needed_len;
 
 		if (newlen < max_grow) {
 			newlen *= 2;
@@ -118,12 +134,26 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 		}
 	}
 
+	return newlen;
+}
+
+rspamd_fstring_t *
+rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
+{
+	gsize newlen;
+	gpointer nptr;
+
+	newlen = rspamd_fstring_suggest_size (str->len, str->allocated, needed_len);
+
 	nptr = realloc (str, newlen + sizeof (*str));
 
 	if (nptr == NULL) {
 		/* Avoid memory leak */
 		free (str);
-		g_assert (nptr);
+		g_error ("%s: failed to re-allocate %"G_GSIZE_FORMAT" bytes",
+				G_STRLOC, newlen + sizeof (*str));
+
+		return NULL;
 	}
 
 	str = nptr;

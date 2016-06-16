@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "http.h"
+#include "http_private.h"
 #include "utlist.h"
 #include "util.h"
 #include "printf.h"
@@ -24,6 +24,7 @@
 #include "keypair_private.h"
 #include "cryptobox.h"
 #include "unix-std.h"
+#include "libutil/ssl_util.h"
 
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
@@ -42,6 +43,8 @@ enum rspamd_http_priv_flags {
 #define IS_CONN_RESETED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)
 
 struct rspamd_http_connection_private {
+	gpointer ssl_ctx;
+	struct rspamd_ssl_connection *ssl;
 	struct _rspamd_http_privbuf *buf;
 	struct rspamd_cryptobox_pubkey *peer_key;
 	struct rspamd_cryptobox_keypair *local_key;
@@ -95,6 +98,8 @@ static const rspamd_ftok_t last_modified_header = {
 		.begin = "Last-Modified",
 		.len = 13
 };
+
+static void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
 
 #define HTTP_ERROR http_error_quark ()
 GQuark
@@ -517,7 +522,8 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 	priv->header->value->begin = priv->header->combined->str +
 			priv->header->name->len + 2;
 	priv->header->name->begin = priv->header->combined->str;
-	DL_APPEND (priv->msg->headers, priv->header);
+	HASH_ADD_KEYPTR (hh, priv->msg->headers, priv->header->name->begin,
+			priv->header->name->len, priv->header);
 
 	rspamd_http_check_special_header (conn, priv);
 }
@@ -592,8 +598,10 @@ rspamd_http_on_headers_complete (http_parser * parser)
 	struct rspamd_http_connection *conn =
 		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
+	struct rspamd_http_message *msg;
 
 	priv = conn->priv;
+	msg = priv->msg;
 
 	if (priv->header != NULL) {
 		rspamd_http_finish_header (conn, priv);
@@ -602,20 +610,17 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 	}
 
-	if (parser->content_length != 0 && parser->content_length != ULLONG_MAX) {
-		priv->msg->body = rspamd_fstring_sized_new (parser->content_length);
-	}
-	else {
-		priv->msg->body = rspamd_fstring_new ();
+	if (!rspamd_http_message_set_body (msg, NULL, parser->content_length)) {
+		return -1;
 	}
 
 	if (parser->flags & F_SPAMC) {
-		priv->msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
+		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 
-	priv->msg->body_buf.begin = priv->msg->body->str;
-	priv->msg->method = parser->method;
-	priv->msg->code = parser->status_code;
+
+	msg->method = parser->method;
+	msg->code = parser->status_code;
 
 	return 0;
 }
@@ -626,18 +631,18 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 	struct rspamd_http_connection *conn =
 		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
+	struct rspamd_http_message *msg;
 
 	priv = conn->priv;
+	msg = priv->msg;
 
-	priv->msg->body = rspamd_fstring_append (priv->msg->body, at, length);
-
-	/* Append might cause realloc */
-	priv->msg->body_buf.begin = priv->msg->body->str;
-	priv->msg->body_buf.len = priv->msg->body->len;
+	if (!rspamd_http_message_append_body (msg, at, length)) {
+		return -1;
+	}
 
 	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !IS_CONN_ENCRYPTED (priv)) {
 		/* Incremental update is impossible for encrypted requests so far */
-		return (conn->body_handler (conn, priv->msg, at, length));
+		return (conn->body_handler (conn, msg, at, length));
 	}
 
 	return 0;
@@ -710,10 +715,10 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	enum rspamd_cryptobox_mode mode;
 
 	mode = rspamd_keypair_alg (priv->local_key);
-	nonce = msg->body->str;
-	m = msg->body->str + rspamd_cryptobox_nonce_bytes (mode) +
+	nonce = msg->body_buf.str;
+	m = msg->body_buf.str + rspamd_cryptobox_nonce_bytes (mode) +
 			rspamd_cryptobox_mac_bytes (mode);
-	dec_len = msg->body->len - rspamd_cryptobox_nonce_bytes (mode) -
+	dec_len = msg->body_buf.len - rspamd_cryptobox_nonce_bytes (mode) -
 			rspamd_cryptobox_mac_bytes (mode);
 
 	if ((nm = rspamd_pubkey_get_nm (peer_key)) == NULL) {
@@ -727,7 +732,8 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	}
 
 	/* Cleanup message */
-	DL_FOREACH_SAFE (msg->headers, hdr, hdrtmp) {
+	HASH_ITER (hh, msg->headers, hdr, hdrtmp) {
+		HASH_DELETE (hh, msg->headers, hdr);
 		rspamd_fstring_free (hdr->combined);
 		g_slice_free1 (sizeof (*hdr->name), hdr->name);
 		g_slice_free1 (sizeof (*hdr->value), hdr->value);
@@ -781,7 +787,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 		mode = rspamd_keypair_alg (priv->local_key);
 
 		if (priv->local_key == NULL || priv->msg->peer_key == NULL ||
-				priv->msg->body->len < rspamd_cryptobox_nonce_bytes (mode) +
+				priv->msg->body_buf.len < rspamd_cryptobox_nonce_bytes (mode) +
 				rspamd_cryptobox_mac_bytes (mode)) {
 			msg_err ("cannot decrypt message");
 			return -1;
@@ -831,9 +837,15 @@ static void
 rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 {
 	struct event_base *base;
+	struct rspamd_http_connection_private *priv;
+	gpointer ssl;
 
+	priv = conn->priv;
 	base = conn->priv->ev.ev_base;
+	ssl = priv->ssl;
+	priv->ssl = NULL;
 	rspamd_http_connection_reset (conn);
+	priv->ssl = ssl;
 	/* Plan read message */
 	rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
 			conn->priv->ptv, base);
@@ -886,16 +898,23 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 #ifdef MSG_NOSIGNAL
 	flags = MSG_NOSIGNAL;
 #endif
-	r = sendmsg (conn->fd, &msg, flags);
+
+	if (priv->ssl) {
+		r = rspamd_ssl_writev (priv->ssl, msg.msg_iov, msg.msg_iovlen);
+	}
+	else {
+		r = sendmsg (conn->fd, &msg, flags);
+	}
 
 	if (r == -1) {
-		err =
-			g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (
-					errno));
-		rspamd_http_connection_ref (conn);
-		conn->error_handler (conn, err);
-		rspamd_http_connection_unref (conn);
-		g_error_free (err);
+		if (!priv->ssl) {
+			err = g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (errno));
+			rspamd_http_connection_ref (conn);
+			conn->error_handler (conn, err);
+			rspamd_http_connection_unref (conn);
+			g_error_free (err);
+		}
+
 		return;
 	}
 	else {
@@ -936,7 +955,13 @@ rspamd_http_try_read (gint fd,
 	rspamd_fstring_t *buf;
 
 	buf = priv->buf->data;
-	r = read (fd, buf->str, buf->allocated);
+
+	if (priv->ssl) {
+		r = rspamd_ssl_read (priv->ssl, buf->str, buf->allocated);
+	}
+	else {
+		r = read (fd, buf->str, buf->allocated);
+	}
 
 	if (r <= 0) {
 		return r;
@@ -946,6 +971,16 @@ rspamd_http_try_read (gint fd,
 	}
 
 	return r;
+}
+
+static void
+rspamd_http_ssl_err_handler (gpointer ud, GError *err)
+{
+	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)ud;
+
+	rspamd_http_connection_ref (conn);
+	conn->error_handler (conn, err);
+	rspamd_http_connection_unref (conn);
 }
 
 static void
@@ -998,12 +1033,14 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			return;
 		}
 		else {
-			err = g_error_new (HTTP_ERROR,
-					errno,
-					"IO read error: %s",
-					strerror (errno));
-			conn->error_handler (conn, err);
-			g_error_free (err);
+			if (!priv->ssl) {
+				err = g_error_new (HTTP_ERROR,
+						errno,
+						"IO read error: %s",
+						strerror (errno));
+				conn->error_handler (conn, err);
+				g_error_free (err);
+			}
 
 			REF_RELEASE (pbuf);
 			rspamd_http_connection_unref (conn);
@@ -1081,39 +1118,42 @@ rspamd_http_parser_reset (struct rspamd_http_connection *conn)
 }
 
 struct rspamd_http_connection *
-rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
-	rspamd_http_error_handler_t error_handler,
-	rspamd_http_finish_handler_t finish_handler,
-	unsigned opts,
-	enum rspamd_http_connection_type type,
-	struct rspamd_keypair_cache *cache)
+rspamd_http_connection_new (
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		unsigned opts,
+		enum rspamd_http_connection_type type,
+		struct rspamd_keypair_cache *cache,
+		gpointer ssl_ctx)
 {
-	struct rspamd_http_connection *new;
+	struct rspamd_http_connection *conn;
 	struct rspamd_http_connection_private *priv;
 
 	if (error_handler == NULL || finish_handler == NULL) {
 		return NULL;
 	}
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_http_connection));
-	new->opts = opts;
-	new->type = type;
-	new->body_handler = body_handler;
-	new->error_handler = error_handler;
-	new->finish_handler = finish_handler;
-	new->fd = -1;
-	new->ref = 1;
-	new->finished = FALSE;
-	new->cache = cache;
+	conn = g_slice_alloc0 (sizeof (struct rspamd_http_connection));
+	conn->opts = opts;
+	conn->type = type;
+	conn->body_handler = body_handler;
+	conn->error_handler = error_handler;
+	conn->finish_handler = finish_handler;
+	conn->fd = -1;
+	conn->ref = 1;
+	conn->finished = FALSE;
+	conn->cache = cache;
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));
-	new->priv = priv;
+	conn->priv = priv;
+	priv->ssl_ctx = ssl_ctx;
 
-	rspamd_http_parser_reset (new);
-	priv->parser.data = new;
+	rspamd_http_parser_reset (conn);
+	priv->parser.data = conn;
 
-	return new;
+	return conn;
 }
 
 void
@@ -1172,13 +1212,6 @@ rspamd_http_connection_steal_msg (struct rspamd_http_connection *conn)
 			msg->peer_key = NULL;
 		}
 		priv->msg = NULL;
-
-		/* We also might need to adjust body/body_buf */
-		if (msg->body_buf.begin > msg->body->str) {
-			memmove (msg->body->str, msg->body_buf.begin, msg->body_buf.len);
-			msg->body->len = msg->body_buf.len;
-			msg->body_buf.begin = msg->body->str;
-		}
 	}
 
 	return msg;
@@ -1189,18 +1222,66 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 {
 	struct rspamd_http_connection_private *priv;
 	struct rspamd_http_message *new_msg, *msg;
-	struct rspamd_http_header *hdr, *nhdr;
+	struct rspamd_http_header *hdr, *nhdr, *thdr;
+	const gchar *old_body;
+	gsize old_len;
+	struct stat st;
+	union _rspamd_storage_u *storage;
 
 	priv = conn->priv;
 	msg = priv->msg;
 
 	new_msg = rspamd_http_new_message (msg->type);
+	new_msg->flags = msg->flags;
 
-	if (msg->body) {
-		new_msg->body = rspamd_fstring_new_init (msg->body->str,
-				msg->body->len);
-		new_msg->body_buf.begin = msg->body_buf.begin;
-		new_msg->body_buf.len = msg->body_buf.len;
+	if (msg->body_buf.len > 0) {
+
+		if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+			/* Avoid copying by just maping a shared segment */
+			new_msg->flags |= RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE;
+
+			storage = &new_msg->body_buf.c;
+			storage->shared.shm_fd = dup (msg->body_buf.c.shared.shm_fd);
+
+			if (storage->shared.shm_fd == -1) {
+				rspamd_http_message_free (new_msg);
+				return NULL;
+			}
+
+			if (fstat (storage->shared.shm_fd, &st) == -1) {
+				rspamd_http_message_free (new_msg);
+				return NULL;
+			}
+
+			/* We don't own segment, so do not try to touch it */
+
+			if (msg->body_buf.c.shared.name) {
+				storage->shared.name = msg->body_buf.c.shared.name;
+				REF_RETAIN (storage->shared.name);
+			}
+
+			new_msg->body_buf.str = mmap (NULL, st.st_size,
+					PROT_READ, MAP_SHARED,
+					storage->shared.shm_fd, 0);
+
+			if (new_msg->body_buf.str == MAP_FAILED) {
+				rspamd_http_message_free (new_msg);
+				return NULL;
+			}
+
+			new_msg->body_buf.begin = new_msg->body_buf.str;
+			new_msg->body_buf.len = msg->body_buf.len;
+			new_msg->body_buf.begin = new_msg->body_buf.str +
+					(msg->body_buf.begin - msg->body_buf.str);
+		}
+		else {
+			old_body = rspamd_http_message_get_body (msg, &old_len);
+
+			if (!rspamd_http_message_set_body (new_msg, old_body, old_len)) {
+				rspamd_http_message_free (new_msg);
+				return NULL;
+			}
+		}
 	}
 
 	if (msg->url) {
@@ -1222,10 +1303,9 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 	new_msg->method = msg->method;
 	new_msg->port = msg->port;
 	new_msg->date = msg->date;
-	new_msg->flags = msg->flags;
 	new_msg->last_modified = msg->last_modified;
 
-	LL_FOREACH (msg->headers, hdr) {
+	HASH_ITER (hh, msg->headers, hdr, thdr) {
 		nhdr = g_slice_alloc (sizeof (struct rspamd_http_header));
 		nhdr->name = g_slice_alloc (sizeof (*nhdr->name));
 		nhdr->value = g_slice_alloc (sizeof (*nhdr->value));
@@ -1238,7 +1318,8 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 				(hdr->value->begin - hdr->combined->str);
 		nhdr->value->len = hdr->value->len;
 
-		DL_APPEND (new_msg->headers, nhdr);
+		HASH_ADD_KEYPTR (hh, new_msg->headers, nhdr->name->begin,
+				nhdr->name->len, nhdr);
 	}
 
 	return new_msg;
@@ -1254,6 +1335,11 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 	if (priv != NULL) {
 		rspamd_http_connection_reset (conn);
 
+		if (priv->ssl) {
+			rspamd_ssl_connection_free (priv->ssl);
+			priv->ssl = NULL;
+		}
+
 		if (priv->local_key) {
 			rspamd_keypair_unref (priv->local_key);
 		}
@@ -1267,9 +1353,10 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 	g_slice_free1 (sizeof (struct rspamd_http_connection),		   conn);
 }
 
-void
-rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
-	gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+static void
+rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base,
+		gint flags)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_message *req;
@@ -1279,6 +1366,7 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	req = rspamd_http_new_message (
 		conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 	priv->msg = req;
+	req->flags = flags;
 
 	if (priv->peer_key) {
 		priv->msg->peer_key = priv->peer_key;
@@ -1313,6 +1401,21 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	event_add (&priv->ev, priv->ptv);
 }
 
+void
+rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_read_message_common (conn, ud, fd, timeout, base, 0);
+}
+
+void
+rspamd_http_connection_read_message_shared (struct rspamd_http_connection *conn,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_read_message_common (conn, ud, fd, timeout, base,
+			RSPAMD_HTTP_FLAG_SHMEM);
+}
+
 static void
 rspamd_http_connection_encrypt_message (
 		struct rspamd_http_connection *conn,
@@ -1333,7 +1436,7 @@ rspamd_http_connection_encrypt_message (
 	const guchar *nm;
 	gint i, cnt;
 	guint outlen;
-	struct rspamd_http_header *hdr;
+	struct rspamd_http_header *hdr, *htmp;
 	enum rspamd_cryptobox_mode mode;
 
 	mode = rspamd_keypair_alg (priv->local_key);
@@ -1368,7 +1471,7 @@ rspamd_http_connection_encrypt_message (
 	}
 
 
-	LL_FOREACH (msg->headers, hdr) {
+	HASH_ITER (hh, msg->headers, hdr, htmp) {
 		segments[i].data = hdr->combined->str;
 		segments[i++].len = hdr->combined->len;
 	}
@@ -1416,13 +1519,30 @@ rspamd_http_connection_encrypt_message (
 	g_free (segments);
 }
 
-void
-rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-	gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+static void
+rspamd_http_detach_shared (struct rspamd_http_message *msg)
+{
+	rspamd_fstring_t *cpy_str;
+
+	if (msg->body_buf.c.shared.shm_fd != -1) {
+		close (msg->body_buf.c.shared.shm_fd);
+		msg->body_buf.c.shared.shm_fd = -1;
+	}
+
+	REF_RELEASE (msg->body_buf.c.shared.name);
+
+	cpy_str = rspamd_fstring_new_init (msg->body_buf.begin, msg->body_buf.len);
+	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
+}
+
+static void
+rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base,
+		gboolean allow_shared)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
-	struct rspamd_http_header *hdr;
+	struct rspamd_http_header *hdr, *htmp;
 	struct tm t, *ptm;
 	gchar datebuf[64], repbuf[512], *pbody;
 	gint i, hdrcount, meth_len = 0, preludelen = 0;
@@ -1433,6 +1553,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	guchar *np = NULL, *mp = NULL, *meth_pos = NULL;
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	enum rspamd_cryptobox_mode mode;
+	GError *err;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -1466,17 +1587,44 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 	}
 
+	if (encrypted && (msg->flags &
+			(RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE|RSPAMD_HTTP_FLAG_SHMEM))) {
+		/* We cannot use immutable body to encrypt message in place */
+		allow_shared = FALSE;
+		rspamd_http_detach_shared (msg);
+	}
+
+	if (allow_shared) {
+		if (!(msg->flags & RSPAMD_HTTP_FLAG_SHMEM) ||
+				msg->body_buf.c.shared.name == NULL) {
+			allow_shared = FALSE;
+		}
+		else {
+			/* Insert new headers */
+			rspamd_http_message_add_header (msg, "Shm",
+					msg->body_buf.c.shared.name->shm_name);
+			rspamd_snprintf (datebuf, sizeof (datebuf), "%d",
+					(int)(msg->body_buf.begin - msg->body_buf.str));
+			rspamd_http_message_add_header (msg, "Shm-Offset",
+					datebuf);
+			rspamd_snprintf (datebuf, sizeof (datebuf), "%z",
+					msg->body_buf.len);
+			rspamd_http_message_add_header (msg, "Shm-Length",
+					datebuf);
+		}
+	}
+
 	if (encrypted) {
 		mode = rspamd_keypair_alg (priv->local_key);
 
-		if (msg->body == NULL || msg->body->len == 0) {
+		if (msg->body_buf.len == 0) {
 			pbody = NULL;
 			bodylen = 0;
 			msg->method = HTTP_GET;
 		}
 		else {
-			pbody = msg->body->str;
-			bodylen = msg->body->len;
+			pbody = (gchar *)msg->body_buf.begin;
+			bodylen = msg->body_buf.len;
 			msg->method = HTTP_POST;
 		}
 
@@ -1534,22 +1682,23 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	else {
 		if (msg->method < HTTP_SYMBOLS) {
-			if (msg->body == NULL || msg->body->len == 0) {
+			if (msg->body_buf.len == 0 || allow_shared) {
 				pbody = NULL;
 				bodylen = 0;
 				priv->outlen = 2;
 				msg->method = HTTP_GET;
 			}
 			else {
-				pbody = msg->body->str;
-				bodylen = msg->body->len;
+				pbody = (gchar *)msg->body_buf.begin;
+				bodylen = msg->body_buf.len;
 				priv->outlen = 3;
 				msg->method = HTTP_POST;
 			}
 		}
-		else if (msg->body != NULL) {
-			pbody = msg->body->str;
-			bodylen = msg->body->len;
+		else if (msg->body_buf.len > 0) {
+			allow_shared = FALSE;
+			pbody = (gchar *)msg->body_buf.begin;
+			bodylen = msg->body_buf.len;
 			priv->outlen = 2;
 		}
 		else {
@@ -1563,7 +1712,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->wr_total = bodylen + buf->len + 2;
 	hdrcount = 0;
 
-	DL_FOREACH (msg->headers, hdr) {
+	HASH_ITER (hh, msg->headers, hdr, htmp) {
 		/* <name: value\r\n> */
 		priv->wr_total += hdr->combined->len;
 		enclen += hdr->combined->len;
@@ -1782,7 +1931,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	else {
 		i = 1;
-		LL_FOREACH (msg->headers, hdr) {
+		HASH_ITER (hh, msg->headers, hdr, htmp) {
 			priv->out[i].iov_base = hdr->combined->str;
 			priv->out[i++].iov_len = hdr->combined->len;
 		}
@@ -1796,28 +1945,79 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 
 		if (pbody != NULL) {
-
-			if (msg->body_buf.begin == NULL && msg->body_buf.len == 0) {
-				msg->body_buf.begin = msg->body->str;
-			}
-
 			priv->out[i].iov_base = pbody;
 			priv->out[i++].iov_len = bodylen;
 		}
 	}
 
+	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
+
 	if (base != NULL && event_get_base (&priv->ev) == base) {
 		event_del (&priv->ev);
 	}
 
-	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
+	if (msg->flags & RSPAMD_HTTP_FLAG_SSL) {
+		if (base != NULL) {
+			event_base_set (base, &priv->ev);
+		}
+		if (!priv->ssl_ctx) {
+			err = g_error_new (HTTP_ERROR, errno, "ssl message requested "
+					"with no ssl ctx");
+			rspamd_http_connection_ref (conn);
+			conn->error_handler (conn, err);
+			rspamd_http_connection_unref (conn);
+			g_error_free (err);
+			return;
+		}
+		else {
+			if (priv->ssl) {
+				/* Cleanup the existing connection */
+				rspamd_ssl_connection_free (priv->ssl);
+			}
 
-	if (base != NULL) {
-		event_base_set (base, &priv->ev);
+			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx, base);
+			g_assert (priv->ssl != NULL);
+
+			if (!rspamd_ssl_connect_fd (priv->ssl, fd, host, &priv->ev,
+					priv->ptv, rspamd_http_event_handler,
+					rspamd_http_ssl_err_handler, conn)) {
+
+				err = g_error_new (HTTP_ERROR, errno, "ssl connection error");
+				rspamd_http_connection_ref (conn);
+				conn->error_handler (conn, err);
+				rspamd_http_connection_unref (conn);
+				g_error_free (err);
+				return;
+			}
+		}
 	}
+	else {
+		event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
 
-	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
-	event_add (&priv->ev, priv->ptv);
+		if (base != NULL) {
+			event_base_set (base, &priv->ev);
+		}
+
+		event_add (&priv->ev, priv->ptv);
+	}
+}
+
+void
+rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
+			ud, fd, timeout, base, FALSE);
+}
+
+void
+rspamd_http_connection_write_message_shared (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+{
+	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
+			ud, fd, timeout, base, TRUE);
 }
 
 struct rspamd_http_message *
@@ -1825,7 +2025,8 @@ rspamd_http_new_message (enum http_parser_type type)
 {
 	struct rspamd_http_message *new;
 
-	new = g_slice_alloc (sizeof (struct rspamd_http_message));
+	new = g_slice_alloc0 (sizeof (struct rspamd_http_message));
+
 	if (type == HTTP_REQUEST) {
 		new->url = rspamd_fstring_new ();
 	}
@@ -1834,17 +2035,9 @@ rspamd_http_new_message (enum http_parser_type type)
 		new->code = 200;
 	}
 
-	new->headers = NULL;
-	new->date = 0;
-	new->body = NULL;
-	memset (&new->body_buf, 0, sizeof (new->body_buf));
-	new->status = NULL;
-	new->host = NULL;
 	new->port = 80;
 	new->type = type;
 	new->method = HTTP_GET;
-	new->peer_key = NULL;
-	new->flags = 0;
 
 	return new;
 }
@@ -1856,6 +2049,7 @@ rspamd_http_message_from_url (const gchar *url)
 	struct rspamd_http_message *msg;
 	const gchar *host, *path;
 	size_t pathlen, urllen;
+	guint flags = 0;
 
 	if (url == NULL) {
 		return NULL;
@@ -1872,6 +2066,14 @@ rspamd_http_message_from_url (const gchar *url)
 		msg_warn ("no host argument in URL: %s", url);
 		return NULL;
 	}
+
+	if ((pu.field_set & (1 << UF_SCHEMA))) {
+		if (pu.field_data[UF_SCHEMA].len == sizeof ("https") - 1 &&
+				memcmp (url + pu.field_data[UF_SCHEMA].off, "https", 5) == 0) {
+			flags |= RSPAMD_HTTP_FLAG_SSL;
+		}
+	}
+
 	if ((pu.field_set & (1 << UF_PATH)) == 0) {
 		path = "/";
 		pathlen = 1;
@@ -1883,13 +2085,19 @@ rspamd_http_message_from_url (const gchar *url)
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	host = url + pu.field_data[UF_HOST].off;
+	msg->flags = flags;
 
 	if ((pu.field_set & (1 << UF_PORT)) != 0) {
 		msg->port = pu.port;
 	}
 	else {
 		/* XXX: magic constant */
-		msg->port = 80;
+		if (flags & RSPAMD_HTTP_FLAG_SSL) {
+			msg->port = 443;
+		}
+		else {
+			msg->port = 80;
+		}
 	}
 
 	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
@@ -1898,21 +2106,306 @@ rspamd_http_message_from_url (const gchar *url)
 	return msg;
 }
 
+const gchar *
+rspamd_http_message_get_body (struct rspamd_http_message *msg,
+		gsize *blen)
+{
+	const gchar *ret = NULL;
+
+	if (msg->body_buf.len > 0) {
+		ret = msg->body_buf.begin;
+	}
+
+	if (blen) {
+		*blen = msg->body_buf.len;
+	}
+
+	return ret;
+}
+
+static void
+rspamd_http_shname_dtor (void *p)
+{
+	struct _rspamd_storage_shmem_s *n = p;
+
+	shm_unlink (n->shm_name);
+	g_free (n->shm_name);
+	g_slice_free1 (sizeof (*n), n);
+}
+
+void *
+rspamd_http_message_shmem_ref (struct rspamd_http_message *msg)
+{
+	if ((msg->flags & RSPAMD_HTTP_FLAG_SHMEM) && msg->body_buf.c.shared.name) {
+		REF_RETAIN (msg->body_buf.c.shared.name);
+		return msg->body_buf.c.shared.name;
+	}
+
+	return NULL;
+}
+
+void
+rspamd_http_message_shmem_unref (void *p)
+{
+	struct _rspamd_storage_shmem_s *n = p;
+
+	if (n) {
+		REF_RELEASE (n);
+	}
+}
+
+gboolean
+rspamd_http_message_set_body (struct rspamd_http_message *msg,
+		const gchar *data, gsize len)
+{
+	union _rspamd_storage_u *storage;
+	storage = &msg->body_buf.c;
+
+	rspamd_http_message_storage_cleanup (msg);
+
+	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+		storage->shared.name = g_slice_alloc (sizeof (*storage->shared.name));
+		REF_INIT_RETAIN (storage->shared.name, rspamd_http_shname_dtor);
+		storage->shared.name->shm_name = g_strdup ("/rhm.XXXXXXXXXXXXXXXXXXXX");
+		storage->shared.shm_fd = rspamd_shmem_mkstemp (storage->shared.name->shm_name);
+
+		if (storage->shared.shm_fd == -1) {
+			return FALSE;
+		}
+
+		if (len != 0 && len != ULLONG_MAX) {
+			if (ftruncate (storage->shared.shm_fd, len) == -1) {
+				return FALSE;
+			}
+
+			msg->body_buf.str = mmap (NULL, len,
+					PROT_WRITE|PROT_READ, MAP_SHARED,
+					storage->shared.shm_fd, 0);
+
+			if (msg->body_buf.str == MAP_FAILED) {
+				return FALSE;
+			}
+
+			msg->body_buf.begin = msg->body_buf.str;
+
+			if (data != NULL) {
+				memcpy (msg->body_buf.str, data, len);
+				msg->body_buf.len = len;
+			}
+		}
+		else {
+			msg->body_buf.len = 0;
+			msg->body_buf.begin = NULL;
+			msg->body_buf.str = NULL;
+		}
+	}
+	else {
+		if (len != 0 && len != ULLONG_MAX) {
+			if (data == NULL) {
+				storage->normal = rspamd_fstring_sized_new (len);
+				msg->body_buf.len = 0;
+			}
+			else {
+				storage->normal = rspamd_fstring_new_init (data, len);
+				msg->body_buf.len = len;
+			}
+		}
+		else {
+			storage->normal = rspamd_fstring_new ();
+		}
+
+		msg->body_buf.begin = storage->normal->str;
+		msg->body_buf.str = storage->normal->str;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
+		gint fd)
+{
+	union _rspamd_storage_u *storage;
+	struct stat st;
+
+	rspamd_http_message_storage_cleanup (msg);
+
+	storage = &msg->body_buf.c;
+	msg->flags |= RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE;
+
+	storage->shared.shm_fd = dup (fd);
+	msg->body_buf.str = MAP_FAILED;
+
+	if (storage->shared.shm_fd == -1) {
+		return FALSE;
+	}
+
+	if (fstat (storage->shared.shm_fd, &st) == -1) {
+		return FALSE;
+	}
+
+	msg->body_buf.str = mmap (NULL, st.st_size,
+			PROT_READ, MAP_SHARED,
+			storage->shared.shm_fd, 0);
+
+	if (msg->body_buf.str == MAP_FAILED) {
+		return FALSE;
+	}
+
+	msg->body_buf.begin = msg->body_buf.str;
+	msg->body_buf.len = st.st_size;
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_message_set_body_from_fstring_steal (struct rspamd_http_message *msg,
+		rspamd_fstring_t *fstr)
+{
+	union _rspamd_storage_u *storage;
+
+	rspamd_http_message_storage_cleanup (msg);
+
+	storage = &msg->body_buf.c;
+	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
+
+	storage->normal = fstr;
+	msg->body_buf.str = fstr->str;
+	msg->body_buf.begin = msg->body_buf.str;
+	msg->body_buf.len = fstr->len;
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_message_set_body_from_fstring_copy (struct rspamd_http_message *msg,
+		const rspamd_fstring_t *fstr)
+{
+	union _rspamd_storage_u *storage;
+
+	rspamd_http_message_storage_cleanup (msg);
+
+	storage = &msg->body_buf.c;
+	msg->flags &= ~(RSPAMD_HTTP_FLAG_SHMEM|RSPAMD_HTTP_FLAG_SHMEM_IMMUTABLE);
+
+	storage->normal = rspamd_fstring_new_init (fstr->str, fstr->len);
+	msg->body_buf.str = storage->normal->str;
+	msg->body_buf.begin = msg->body_buf.str;
+	msg->body_buf.len = storage->normal->len;
+
+	return TRUE;
+}
+
+gboolean
+rspamd_http_message_append_body (struct rspamd_http_message *msg,
+		const gchar *data, gsize len)
+{
+	struct stat st;
+	union _rspamd_storage_u *storage;
+	gsize newlen;
+
+	storage = &msg->body_buf.c;
+
+	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+		if (storage->shared.shm_fd == -1) {
+			return FALSE;
+		}
+
+		if (fstat (storage->shared.shm_fd, &st) == -1) {
+			return FALSE;
+		}
+
+		/* Check if we need to grow */
+		if (st.st_size < msg->body_buf.len + len) {
+			/* Need to grow */
+			newlen = rspamd_fstring_suggest_size (msg->body_buf.len, st.st_size,
+					len);
+			/* Unmap as we need another size of segment */
+			if (msg->body_buf.str != MAP_FAILED) {
+				munmap (msg->body_buf.str, st.st_size);
+			}
+
+			if (ftruncate (storage->shared.shm_fd, newlen) == -1) {
+				return FALSE;
+			}
+
+			msg->body_buf.str = mmap (NULL, newlen,
+					PROT_WRITE|PROT_READ, MAP_SHARED,
+					storage->shared.shm_fd, 0);
+			if (msg->body_buf.str == MAP_FAILED) {
+				return FALSE;
+			}
+		}
+
+		memcpy (msg->body_buf.str + msg->body_buf.len, data, len);
+		msg->body_buf.len += len;
+		msg->body_buf.begin = msg->body_buf.str;
+	}
+	else {
+		storage->normal = rspamd_fstring_append (storage->normal, data, len);
+
+		/* Append might cause realloc */
+		msg->body_buf.begin = storage->normal->str;
+		msg->body_buf.len = storage->normal->len;
+		msg->body_buf.str = storage->normal->str;
+	}
+
+	return TRUE;
+}
+
+static void
+rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
+{
+	union _rspamd_storage_u *storage;
+	struct stat st;
+
+	if (msg->body_buf.len != 0) {
+		if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+			storage = &msg->body_buf.c;
+
+			if (storage->shared.shm_fd != -1) {
+				g_assert (fstat (storage->shared.shm_fd, &st) != -1);
+
+				if (msg->body_buf.str != MAP_FAILED) {
+					munmap (msg->body_buf.str, st.st_size);
+				}
+
+				close (storage->shared.shm_fd);
+			}
+
+			if (storage->shared.name != NULL) {
+				REF_RELEASE (storage->shared.name);
+			}
+
+			storage->shared.shm_fd = -1;
+			msg->body_buf.str = MAP_FAILED;
+		}
+		else {
+			rspamd_fstring_free (msg->body_buf.c.normal);
+			msg->body_buf.c.normal = NULL;
+		}
+
+		msg->body_buf.len = 0;
+	}
+}
+
 void
 rspamd_http_message_free (struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *hdr, *tmp_hdr;
+	struct rspamd_http_header *hdr, *htmp;
 
-	LL_FOREACH_SAFE (msg->headers, hdr, tmp_hdr)
-	{
+
+	HASH_ITER (hh, msg->headers, hdr, htmp) {
+		HASH_DEL (msg->headers, hdr);
 		rspamd_fstring_free (hdr->combined);
 		g_slice_free1 (sizeof (*hdr->name), hdr->name);
 		g_slice_free1 (sizeof (*hdr->value), hdr->value);
 		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
 	}
-	if (msg->body != NULL) {
-		rspamd_fstring_free (msg->body);
-	}
+
+
+	rspamd_http_message_storage_cleanup (msg);
+
 	if (msg->url != NULL) {
 		rspamd_fstring_free (msg->url);
 	}
@@ -1949,7 +2442,7 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 		hdr->name->len = nlen;
 		hdr->value->begin = hdr->combined->str + nlen + 2;
 		hdr->value->len = vlen;
-		DL_APPEND (msg->headers, hdr);
+		HASH_ADD_KEYPTR (hh, msg->headers, hdr->name->begin, hdr->name->len, hdr);
 	}
 }
 
@@ -1959,46 +2452,37 @@ rspamd_http_message_find_header (struct rspamd_http_message *msg,
 {
 	struct rspamd_http_header *hdr;
 	const rspamd_ftok_t *res = NULL;
-	rspamd_ftok_t cmp;
 	guint slen = strlen (name);
 
 	if (msg != NULL) {
-		cmp.begin = name;
-		cmp.len = slen;
+		HASH_FIND (hh, msg->headers, name, slen, hdr);
 
-		LL_FOREACH (msg->headers, hdr) {
-			if (rspamd_ftok_casecmp (hdr->name, &cmp) == 0) {
-				res = hdr->value;
-				break;
-			}
+		if (hdr) {
+			res = hdr->value;
 		}
 	}
 
 	return res;
 }
 
-gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
+gboolean
+rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 	const gchar *name)
 {
-	struct rspamd_http_header *hdr, *tmp;
+	struct rspamd_http_header *hdr;
 	gboolean res = FALSE;
 	guint slen = strlen (name);
-	rspamd_ftok_t cmp;
 
 	if (msg != NULL) {
-		cmp.begin = name;
-		cmp.len = slen;
+		HASH_FIND (hh, msg->headers, name, slen, hdr);
 
-		DL_FOREACH_SAFE (msg->headers, hdr, tmp) {
-			if (rspamd_ftok_casecmp (hdr->name, &cmp) == 0) {
-				res = TRUE;
-				DL_DELETE (msg->headers, hdr);
-
-				rspamd_fstring_free (hdr->combined);
-				g_slice_free1 (sizeof (*hdr->value), hdr->value);
-				g_slice_free1 (sizeof (*hdr->name), hdr->name);
-				g_slice_free1 (sizeof (*hdr), hdr);
-			}
+		if (hdr) {
+			HASH_DEL (msg->headers, hdr);
+			res = TRUE;
+			rspamd_fstring_free (hdr->combined);
+			g_slice_free1 (sizeof (*hdr->value), hdr->value);
+			g_slice_free1 (sizeof (*hdr->name), hdr->name);
+			g_slice_free1 (sizeof (*hdr), hdr);
 		}
 	}
 
@@ -2046,7 +2530,7 @@ rspamd_http_router_error_handler (struct rspamd_http_connection *conn,
 		msg = rspamd_http_new_message (HTTP_RESPONSE);
 		msg->date = time (NULL);
 		msg->code = err->code;
-		msg->body = rspamd_fstring_new_init (err->message, strlen (err->message));
+		rspamd_http_message_set_body (msg, err->message, strlen (err->message));
 		rspamd_http_connection_reset (entry->conn);
 		rspamd_http_connection_write_message (entry->conn,
 			msg,
@@ -2160,14 +2644,8 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	reply_msg->date = time (NULL);
 	reply_msg->code = 200;
 
-	reply_msg->body = rspamd_fstring_sized_new (st.st_size);
-	reply_msg->body->len = st.st_size;
-	reply_msg->body_buf.len = st.st_size;
-	reply_msg->body_buf.begin = reply_msg->body->str;
-
-	if (read (fd, reply_msg->body->str, st.st_size) != st.st_size) {
+	if (!rspamd_http_message_set_body_from_fd (reply_msg, fd)) {
 		close (fd);
-		rspamd_http_message_free (reply_msg);
 		return FALSE;
 	}
 
@@ -2239,7 +2717,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
 				err_msg->date = time (NULL);
 				err_msg->code = err->code;
-				err_msg->body = rspamd_fstring_new_init (err->message,
+				rspamd_http_message_set_body (err_msg, err->message,
 						strlen (err->message));
 				rspamd_http_connection_reset (entry->conn);
 				rspamd_http_connection_write_message (entry->conn,
@@ -2349,7 +2827,9 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 			rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler,
 			0,
-			RSPAMD_HTTP_SERVER, router->cache);
+			RSPAMD_HTTP_SERVER,
+			router->cache,
+			NULL);
 
 	if (router->key) {
 		rspamd_http_connection_set_key (conn->conn, router->key);

@@ -24,6 +24,7 @@
 #include "rspamd_control.h"
 #include "libutil/map.h"
 #include "libutil/map_private.h"
+#include "libutil/http_private.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <gperftools/profiler.h>
@@ -248,7 +249,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	void (*accept_handler)(int, short, void *))
 {
 	struct event_base *ev_base;
-	struct event *accept_event;
+	struct event *accept_events;
 	GList *cur;
 	struct rspamd_worker_listen_socket *ls;
 
@@ -276,13 +277,13 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 			ls = cur->data;
 
 			if (ls->fd != -1) {
-				accept_event = g_slice_alloc0 (sizeof (struct event));
-				event_set (accept_event, ls->fd, EV_READ | EV_PERSIST,
+				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_handler, worker);
-				event_base_set (ev_base, accept_event);
-				event_add (accept_event, NULL);
+				event_base_set (ev_base, &accept_events[0]);
+				event_add (&accept_events[0], NULL);
 				worker->accept_events = g_list_prepend (worker->accept_events,
-						accept_event);
+						accept_events);
 			}
 
 			cur = g_list_next (cur);
@@ -296,7 +297,7 @@ void
 rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
 	GList *cur;
-	struct event *event;
+	struct event *events;
 	GHashTableIter it;
 	struct rspamd_worker_signal_handler *sigh;
 	gpointer k, v;
@@ -305,10 +306,18 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	/* Remove all events */
 	cur = worker->accept_events;
 	while (cur) {
-		event = cur->data;
-		event_del (event);
+		events = cur->data;
+
+		if (event_get_base (&events[0])) {
+			event_del (&events[0]);
+		}
+
+		if (event_get_base (&events[1])) {
+			event_del (&events[1]);
+		}
+
 		cur = g_list_next (cur);
-		g_slice_free1 (sizeof (struct event), event);
+		g_slice_free1 (sizeof (struct event) * 2, events);
 	}
 
 	if (worker->accept_events != NULL) {
@@ -344,6 +353,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 {
 	struct rspamd_http_message *msg;
 	va_list args;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
@@ -354,8 +364,9 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 
 	msg->date = time (NULL);
 	msg->code = code;
-	msg->body = rspamd_fstring_new ();
-	rspamd_printf_fstring (&msg->body, "{\"error\":\"%V\"}", msg->status);
+	reply = rspamd_fstring_sized_new (msg->status->len + 16);
+	rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
@@ -373,12 +384,14 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	const gchar *str)
 {
 	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	msg->body = rspamd_fstring_new_init (str, strlen (str));
+	reply = rspamd_fstring_new_init (str, strlen (str));
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
@@ -396,13 +409,15 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	ucl_object_t *obj)
 {
 	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	msg->body = rspamd_fstring_sized_new (BUFSIZ);
-	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &msg->body);
+	reply = rspamd_fstring_sized_new (BUFSIZ);
+	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,

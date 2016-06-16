@@ -18,6 +18,7 @@
 #include "libutil/rrd.h"
 #include "libutil/map.h"
 #include "libutil/map_private.h"
+#include "libutil/http_private.h"
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
@@ -871,7 +872,6 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	gboolean found = FALSE;
 	struct rspamd_http_message *reply;
 
-
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
 	}
@@ -919,18 +919,14 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	reply = rspamd_http_new_message (HTTP_RESPONSE);
 	reply->date = time (NULL);
 	reply->code = 200;
-	reply->body = rspamd_fstring_sized_new (st.st_size);
 
-	/* Read the whole buffer */
-	if (read (fd, reply->body->str, st.st_size) == -1) {
+	if (!rspamd_http_message_set_body_from_fd (reply, fd)) {
 		close (fd);
 		rspamd_http_message_free (reply);
 		msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
 		return 0;
 	}
-
-	reply->body->len = st.st_size;
 
 	close (fd);
 
@@ -1420,7 +1416,7 @@ rspamd_controller_handle_learn_common (
 		return 0;
 	}
 
-	if (msg->body == NULL || msg->body->len == 0) {
+	if (rspamd_http_message_get_body (msg, NULL) == NULL) {
 		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
@@ -1521,7 +1517,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body == NULL || msg->body->len == 0) {
+	if (rspamd_http_message_get_body (msg, NULL) == NULL) {
 		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
@@ -1595,7 +1591,7 @@ rspamd_controller_handle_saveactions (
 		return 0;
 	}
 
-	if (msg->body == NULL || msg->body->len == 0) {
+	if (rspamd_http_message_get_body (msg, NULL) == NULL) {
 		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
@@ -1714,7 +1710,7 @@ rspamd_controller_handle_savesymbols (
 		return 0;
 	}
 
-	if (msg->body == NULL || msg->body->len == 0) {
+	if (rspamd_http_message_get_body (msg, NULL) == NULL) {
 		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
@@ -1840,7 +1836,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (msg->body == NULL || msg->body->len == 0) {
+	if (rspamd_http_message_get_body (msg, NULL) == NULL) {
 		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
@@ -2162,7 +2158,7 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		cmd->privilleged)) {
 		return 0;
 	}
-	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
+	if (cmd->require_message && (rspamd_http_message_get_body (msg, NULL) == NULL)) {
 		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
@@ -2216,7 +2212,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
 		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}

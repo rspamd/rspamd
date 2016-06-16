@@ -1427,6 +1427,7 @@ lua_task_get_received_headers (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct received_header *rh;
+	const gchar *proto;
 	guint i, k = 1;
 
 	if (task) {
@@ -1435,23 +1436,56 @@ lua_task_get_received_headers (lua_State * L)
 		for (i = 0; i < task->received->len; i ++) {
 			rh = g_ptr_array_index (task->received, i);
 
-			if (rh->is_error || G_UNLIKELY (
-					rh->from_ip == NULL &&
+			if (G_UNLIKELY (rh->from_ip == NULL &&
 					rh->real_ip == NULL &&
 					rh->real_hostname == NULL &&
-					rh->by_hostname == NULL)) {
+					rh->by_hostname == NULL && rh->timestamp == 0)) {
 				continue;
 			}
 
 			lua_newtable (L);
 			rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
-			lua_pushstring (L, "from_ip");
-			rspamd_lua_ip_push_fromstring (L, rh->from_ip);
-			lua_settable (L, -3);
+			rspamd_lua_table_set (L, "from_ip", rh->from_ip);
 			rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
 			lua_pushstring (L, "real_ip");
-			rspamd_lua_ip_push_fromstring (L, rh->real_ip);
+			rspamd_lua_ip_push (L, rh->addr);
 			lua_settable (L, -3);
+			lua_pushstring (L, "proto");
+
+			switch (rh->type) {
+			case RSPAMD_RECEIVED_SMTP:
+				proto = "smtp";
+				break;
+			case RSPAMD_RECEIVED_ESMTP:
+				proto = "esmtp";
+				break;
+			case RSPAMD_RECEIVED_ESMTPS:
+				proto = "esmtps";
+				break;
+			case RSPAMD_RECEIVED_ESMTPA:
+				proto = "esmtpa";
+				break;
+			case RSPAMD_RECEIVED_ESMTPSA:
+				proto = "esmtpsa";
+				break;
+			case RSPAMD_RECEIVED_LMTP:
+				proto = "lmtp";
+				break;
+			case RSPAMD_RECEIVED_IMAP:
+				proto = "imap";
+				break;
+			case RSPAMD_RECEIVED_UNKNOWN:
+			default:
+				proto = "unknown";
+				break;
+			}
+			lua_pushstring (L, proto);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "timestamp");
+			lua_pushnumber (L, rh->timestamp);
+			lua_settable (L, -3);
+
 			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
 			lua_rawseti (L, -2, k ++);
 		}
