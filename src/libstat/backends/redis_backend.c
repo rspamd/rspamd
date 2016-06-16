@@ -50,7 +50,8 @@ struct redis_stat_ctx {
 enum rspamd_redis_connection_state {
 	RSPAMD_REDIS_DISCONNECTED = 0,
 	RSPAMD_REDIS_CONNECTED,
-	RSPAMD_REDIS_TIMEDOUT
+	RSPAMD_REDIS_TIMEDOUT,
+	RSPAMD_REDIS_TERMINATED
 };
 
 struct redis_stat_runtime {
@@ -679,7 +680,7 @@ rspamd_redis_fin (gpointer data)
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (data);
 
 	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
-		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		event_del (&rt->timeout_event);
 		REF_RELEASE (rt);
 	}
@@ -691,7 +692,7 @@ rspamd_redis_fin_learn (gpointer data)
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (data);
 
 	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
-		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		event_del (&rt->timeout_event);
 		REF_RELEASE (rt);
 	}
@@ -710,7 +711,7 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 			rspamd_upstream_name (rt->selected));
 	rspamd_upstream_fail (rt->selected);
 
-	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
+	if (rt->conn_state != RSPAMD_REDIS_TERMINATED) {
 		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 	}
 
@@ -731,7 +732,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	task = rt->task;
 
-	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
+	if (rt->conn_state == RSPAMD_REDIS_TERMINATED) {
 		/* Task has disappeared already */
 		REF_RELEASE (rt);
 		return;
@@ -799,7 +800,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	task = rt->task;
 
-	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
+	if (rt->conn_state == RSPAMD_REDIS_TERMINATED) {
 		/* Task has disappeared already */
 		REF_RELEASE (rt);
 		return;
@@ -885,7 +886,7 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	task = rt->task;
 
-	if (rt->conn_state != RSPAMD_REDIS_CONNECTED) {
+	if (rt->conn_state == RSPAMD_REDIS_TERMINATED) {
 		/* Task has disappeared already */
 		REF_RELEASE (rt);
 		return;
@@ -904,7 +905,7 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
 		redisAsyncFree (rt->redis);
-		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 	}
 
 	REF_RELEASE (rt);
@@ -1238,7 +1239,7 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 		redisAsyncFree (rt->redis);
 		rt->redis = NULL;
 
-		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 
 		REF_RELEASE (rt);
 	}
@@ -1257,7 +1258,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	rspamd_token_t *tok;
 	gint ret;
 
-	if (rt->conn_state != RSPAMD_REDIS_DISCONNECTED) {
+	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
 		/* We are likely in some bad state */
 		msg_err_task ("invalid state for function: %d", rt->conn_state);
 
@@ -1377,7 +1378,7 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		redisAsyncFree (rt->redis);
 		rt->redis = NULL;
 
-		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		REF_RELEASE (rt);
 	}
 }
@@ -1435,7 +1436,7 @@ rspamd_redis_get_stat (gpointer runtime,
 			redisAsyncFree (rt->redis);
 			rt->redis = NULL;
 
-			rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+			rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		}
 
 		if (st->stat) {
