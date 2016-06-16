@@ -712,12 +712,16 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 			rspamd_upstream_name (rt->selected));
 	rspamd_upstream_fail (rt->selected);
 
-	if (rt->conn_state == RSPAMD_REDIS_REQUEST_SENT) {
+	if (rt->conn_state == RSPAMD_REDIS_REQUEST_SENT && rt->task) {
 		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 	}
 
 	rt->conn_state = RSPAMD_REDIS_TERMINATED;
-	redisAsyncFree (rt->redis);
+
+	if (rt->redis) {
+		redisAsyncFree (rt->redis);
+	}
+
 	rt->redis = NULL;
 	REF_RELEASE (rt);
 }
@@ -1436,6 +1440,9 @@ rspamd_redis_get_stat (gpointer runtime,
 		st = rt->ctx->stat_elt->ud;
 
 		if (rt->redis) {
+			if (rt->conn_state == RSPAMD_REDIS_REQUEST_SENT && rt->task) {
+				rspamd_session_remove_event (rt->task->s, rspamd_redis_fin, rt);
+			}
 			event_del (&rt->timeout_event);
 			rt->conn_state = RSPAMD_REDIS_TERMINATED;
 			redisAsyncFree (rt->redis);
