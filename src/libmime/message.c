@@ -679,6 +679,10 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		p = memchr (c, '\n', end - c);
 
 		if (p) {
+			if (*(p - 1) == '\r') {
+				p --;
+			}
+
 			if (p > c) {
 				g_byte_array_append (part->stripped_content, c, p - c);
 			}
