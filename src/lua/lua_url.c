@@ -537,7 +537,7 @@ lua_url_all (lua_State *L)
 
 		if (text != NULL) {
 			lua_newtable (L);
-			rspamd_url_find_multiple (pool, text, length, FALSE,
+			rspamd_url_find_multiple (pool, text, length, FALSE, NULL,
 					lua_url_table_inserter, L);
 
 		}

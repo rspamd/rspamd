@@ -1588,7 +1588,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		rh = cur->data;
 		p = rh->decoded;
 		len = strlen (p);
-		rspamd_url_find_multiple (task->task_pool, p, len, FALSE,
+		rspamd_url_find_multiple (task->task_pool, p, len, FALSE, NULL,
 				rspamd_url_task_callback, task);
 	}
 
