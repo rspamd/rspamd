@@ -680,7 +680,7 @@ rspamd_redis_fin (gpointer data)
 {
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (data);
 
-	if (rt->conn_state == RSPAMD_REDIS_TERMINATED) {
+	if (rt->conn_state != RSPAMD_REDIS_TERMINATED) {
 		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		event_del (&rt->timeout_event);
 		REF_RELEASE (rt);
@@ -692,7 +692,7 @@ rspamd_redis_fin_learn (gpointer data)
 {
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (data);
 
-	if (rt->conn_state == RSPAMD_REDIS_TERMINATED) {
+	if (rt->conn_state != RSPAMD_REDIS_TERMINATED) {
 		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		event_del (&rt->timeout_event);
 		REF_RELEASE (rt);
