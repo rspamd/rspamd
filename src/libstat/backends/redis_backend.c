@@ -715,7 +715,7 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 	}
 
-	rt->conn_state = RSPAMD_REDIS_TIMEDOUT;
+	rt->conn_state = RSPAMD_REDIS_TERMINATED;
 	redisAsyncFree (rt->redis);
 	rt->redis = NULL;
 	REF_RELEASE (rt);
