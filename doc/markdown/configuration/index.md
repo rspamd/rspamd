@@ -1,29 +1,25 @@
-# Rspamd configuration
+# rspamd configuration
 
-Rspamd uses UCL for its configuration. UCL format is described in details in
-this [document](ucl.md). Rspamd defines several variables and macros to extend
+rspamd uses the Universal Configuration Language (UCL) for its configuration. The UCL format is described in detail in this [document](ucl.md). rspamd defines several variables and macros to extend
 UCL functionality.
 
-## Rspamd variables
+## rspamd variables
 
-- *CONFDIR*: configuration directory for rspamd, it is $PREFIX/etc/rspamd/
+- *CONFDIR*: configuration directory for rspamd, found in `$PREFIX/etc/rspamd/`
 - *RUNDIR*: runtime directory to store pidfiles or unix sockets
 - *DBDIR*: persistent databases directory (used for statistics or symbols cache).
 - *LOGDIR*: a directory to store log files
-- *PLUGINSDIR*: plugins directory where lua plugins live
+- *PLUGINSDIR*: plugins directory for lua plugins
 - *PREFIX*: basic installation prefix
 - *VERSION*: rspamd version string (e.g. "0.6.6")
 
-## Rspamd specific macros
+## rspamd specific macros
 
-- *.include_map*: defines a map that is dynamically reloaded and updated if its
-content has been changed. This macros is intended to define dynamic configuration
-parts.
+- *.include_map*: defines a map that is dynamically reloaded and updated if its content has changed. This macro is intended to define dynamic configuration files.
 
-## Rspamd basic configuration
+## rspamd basic configuration
 
-The basic rspamd configuration is stored in $CONFDIR/rspamd.conf. By default, this
-file looks like this one:
+The basic rspamd configuration is stored in `$CONFDIR/rspamd.conf`. By default, this file looks like this one:
 
 ~~~ucl
 lua = "$CONFDIR/lua/rspamd.lua"
@@ -43,15 +39,7 @@ modules {
 }
 ~~~
 
-In this file, we open lua script placed in `$CONFDIR/lua/rspamd.lua` and load
-lua rules from it. Then we include global [options](options.md) section followed
-by [logging](logging.md) logging configuration. [Metrics](metrics.md) section defines
-metric settings, including rules weights and rspamd actions. [Workers](../workers/index.md)
-section specifies rspamd workers settings. [Composites](composites.md) is an utility
-section that describes composite symbols. Statistical filters are defined in 
-[statistic](statistic.md) section. Rspamd stores modules configuration (for both lua
-and internal modules) in [modules](../modules/index.md) section while modules itself are
-loaded from the following portion of configuration:
+In this file, we read a lua script placed in `$CONFDIR/lua/rspamd.lua` and load lua rules from it. Then we include a global [options](options.md) section followed by [logging](logging.md) logging configuration. The [metrics](metrics.md) section defines metric settings, including rule weights and rspamd actions. The [workers](../workers/index.md) section specifies rspamd workers settings. [Composites](composites.md) is a utility section that describes composite symbols. Statistical filters are defined in the [statistic](statistic.md) section. rspamd stores module configurations (for both lua and internal modules) in the [modules](../modules/index.md) section while modules themselves are loaded from the following portion of the configuration:
 
 ~~~ucl
 modules {
@@ -59,13 +47,6 @@ modules {
 }
 ~~~
 
-This section defines one or single path to either directories or specific files.
-If directory is used then all files with suffix `.lua` are loaded as lua plugins
-(it is `*.lua` shell pattern therefore).
+The modules section defines the path or paths of directories or specific files. If a directory is specified then all files with a `.lua` suffix are loaded as lua plugins (the directory path is treated as a `*.lua` shell pattern).
 
-This configuration is not intended to be changed by user, but you can include your
-own configuration in further. To redefine symbols weight and actions rspamd encourages
-to use [dynamic configuration](settings.md). Nevertheless, rspamd installation
-script will never rewrite user's configuration if it exists already. So please 
-read ChangeLog carefully if you upgrade rspamd to a new version for all incompatible
-configuration changes.
+This configuration is not intended to be changed by the user, rather you can include your own configuration options as `.include`s. To redefine symbol weights and actions, it is recommended to use [dynamic configuration](settings.md). Nevertheless, the rspamd installation script will never overwrite a user's configuration if it exists already. Please read the rspamd changelog carefully, if you upgrade rspamd to a new version, for all incompatible configuration changes.
