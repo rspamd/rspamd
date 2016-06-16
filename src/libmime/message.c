@@ -670,23 +670,37 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 #endif
 	/* Strip newlines */
 	part->stripped_content = g_byte_array_sized_new (part->content->len);
+	part->newlines = g_ptr_array_sized_new (128);
 	p = part->content->data;
 	c = p;
 	end = p + part->content->len;
 
 	while (p < end) {
-		if (*p == '\r' || *p == '\n') {
+		p = memchr (c, '\n', end - c);
+
+		if (p) {
 			if (p > c) {
 				g_byte_array_append (part->stripped_content, c, p - c);
 			}
 
+			/* As it could cause reallocation, we initially store offsets */
+			g_ptr_array_add (part->newlines,
+					GUINT_TO_POINTER (part->stripped_content->len));
+			part->nlines ++;
+			p ++;
+
 			while (p < end && (*p == '\r' || *p == '\n')) {
+				if (*p == '\n') {
+					part->nlines ++;
+				}
+
 				p ++;
 			}
 			c = p;
 		}
 		else {
-			p ++;
+			p = end;
+			break;
 		}
 	}
 
@@ -694,9 +708,18 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		g_byte_array_append (part->stripped_content, c, p - c);
 	}
 
+	/* Now convert offsets to real pointers for convenience */
+	for (i = 0; i < part->newlines->len; i ++) {
+		guint off = GPOINTER_TO_UINT (g_ptr_array_index (part->newlines, i));
+		g_ptr_array_index (part->newlines, i) = part->stripped_content->data + off;
+	}
+
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			part->stripped_content);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+			part->newlines);
 
 	/* Ugly workaround */
 	part->normalized_words = rspamd_tokenize_text (part->content->data,
@@ -844,8 +867,7 @@ process_text_part (struct rspamd_task *task,
 	gboolean is_empty)
 {
 	struct mime_text_part *text_part;
-	const gchar *cd, *p, *c;
-	guint remain;
+	const gchar *cd;
 
 	/* Skip attachments */
 #ifndef GMIME24
@@ -963,21 +985,6 @@ process_text_part (struct rspamd_task *task,
 	/* Post process part */
 	detect_text_language (text_part);
 	rspamd_normalize_text_part (task, text_part);
-
-	/* Calculate number of lines */
-	p = text_part->content->data;
-	remain = text_part->content->len;
-	c = p;
-
-	while (p != NULL && remain > 0) {
-		p = memchr (c, '\n', remain);
-
-		if (p != NULL) {
-			text_part->nlines ++;
-			remain -= p - c + 1;
-			c = p + 1;
-		}
-	}
 
 	if (!IS_PART_HTML (text_part)) {
 		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
