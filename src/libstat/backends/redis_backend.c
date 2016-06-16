@@ -904,8 +904,8 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 
 	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
-		redisAsyncFree (rt->redis);
 		rt->conn_state = RSPAMD_REDIS_TERMINATED;
+		redisAsyncFree (rt->redis);
 	}
 
 	REF_RELEASE (rt);
@@ -1236,11 +1236,10 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 
 	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
 		event_del (&rt->timeout_event);
-		redisAsyncFree (rt->redis);
-		rt->redis = NULL;
-
 		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 
+		redisAsyncFree (rt->redis);
+		rt->redis = NULL;
 		REF_RELEASE (rt);
 	}
 }
@@ -1375,10 +1374,9 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 
 	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
 		event_del (&rt->timeout_event);
+		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		redisAsyncFree (rt->redis);
 		rt->redis = NULL;
-
-		rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		REF_RELEASE (rt);
 	}
 }
@@ -1433,10 +1431,9 @@ rspamd_redis_get_stat (gpointer runtime,
 
 		if (rt->redis) {
 			event_del (&rt->timeout_event);
+			rt->conn_state = RSPAMD_REDIS_TERMINATED;
 			redisAsyncFree (rt->redis);
 			rt->redis = NULL;
-
-			rt->conn_state = RSPAMD_REDIS_TERMINATED;
 		}
 
 		if (st->stat) {
