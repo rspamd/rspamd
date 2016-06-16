@@ -1465,18 +1465,97 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	}
 }
 
+static gint
+fuzzy_check_try_read (struct fuzzy_client_session *session)
+{
+	struct rspamd_task *task;
+	const struct rspamd_fuzzy_reply *rep;
+	struct rspamd_fuzzy_cmd *cmd = NULL;
+	guint i;
+	gint r, ret;
+	guchar buf[2048], *p;
+
+	task = session->task;
+
+	if ((r = read (session->fd, buf, sizeof (buf) - 1)) == -1) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+			return 0;
+		}
+		else {
+			return -1;
+		}
+	}
+	else {
+		p = buf;
+
+		ret = 0;
+
+		while ((rep = fuzzy_process_reply (&p, &r,
+				session->commands, session->rule, &cmd)) != NULL) {
+			if (rep->prob > 0.5) {
+				if (rep->flag & (1U << 31)) {
+					/* Multi-flag */
+					for (i = 0; i < 31; i ++) {
+						if ((1U << i) & rep->flag) {
+							fuzzy_insert_result (session, rep, cmd, i + 1);
+						}
+					}
+				}
+				else {
+					fuzzy_insert_result (session, rep, cmd, rep->flag);
+				}
+			}
+			else if (rep->value == 403) {
+				msg_info_task (
+						"fuzzy check error for %d: forbidden",
+						rep->flag);
+			}
+			else if (rep->value != 0) {
+				msg_info_task (
+						"fuzzy check error for %d: unknown error (%d)",
+						rep->flag,
+						rep->value);
+			}
+
+			ret = 1;
+		}
+	}
+
+	return ret;
+}
+
+static gboolean
+fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
+{
+	struct fuzzy_cmd_io *io;
+	guint nreplied = 0, i;
+
+	rspamd_upstream_ok (session->server);
+
+	for (i = 0; i < session->commands->len; i++) {
+		io = g_ptr_array_index (session->commands, i);
+
+		if (io->flags & FUZZY_CMD_FLAG_REPLIED) {
+			nreplied++;
+		}
+	}
+
+	if (nreplied == session->commands->len) {
+		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 /* Fuzzy check callback */
 static void
 fuzzy_check_io_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session *session = arg;
-	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_task *task;
-	guchar buf[2048], *p;
-	struct fuzzy_cmd_io *io;
-	struct rspamd_fuzzy_cmd *cmd = NULL;
 	struct event_base *ev_base;
-	guint i;
 	gint r;
 
 	enum {
@@ -1489,45 +1568,18 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 
 	if ((what & EV_READ) || session->state == 1) {
 		/* Try to read reply */
-		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-				event_add (&session->ev, NULL);
-				return;
-			}
-		}
-		else {
-			p = buf;
+		r = fuzzy_check_try_read (session);
+
+		switch (r) {
+		case 0:
 			ret = return_want_more;
-
-			while ((rep = fuzzy_process_reply (&p, &r,
-					session->commands, session->rule, &cmd)) != NULL) {
-				if (rep->prob > 0.5) {
-					if (rep->flag & (1U << 31)) {
-						/* Multi-flag */
-						for (i = 0; i < 31; i ++) {
-							if ((1U << i) & rep->flag) {
-								fuzzy_insert_result (session, rep, cmd, i + 1);
-							}
-						}
-					}
-					else {
-						fuzzy_insert_result (session, rep, cmd, rep->flag);
-					}
-				}
-				else if (rep->value == 403) {
-					msg_info_task (
-							"fuzzy check error for %d: forbidden",
-							rep->flag);
-				}
-				else if (rep->value != 0) {
-					msg_info_task (
-							"fuzzy check error for %d: unknown error (%d)",
-							rep->flag,
-							rep->value);
-				}
-
-				ret = return_finished;
-			}
+			break;
+		case 1:
+			ret = return_finished;
+			break;
+		default:
+			ret = return_error;
+			break;
 		}
 	}
 	else if (what & EV_WRITE) {
@@ -1565,25 +1617,11 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 	}
 	else {
 		/* Read something from network */
-		rspamd_upstream_ok (session->server);
-		guint nreplied = 0;
-
-		for (i = 0; i < session->commands->len; i++) {
-			io = g_ptr_array_index (session->commands, i);
-
-			if (io->flags & FUZZY_CMD_FLAG_REPLIED) {
-				nreplied++;
-			}
-		}
-
-		if (nreplied == session->commands->len) {
-			rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
-		}
-		else {
+		if (!fuzzy_check_session_is_completed (session)) {
 			/* Need to read more */
 			ev_base = event_get_base (&session->ev);
 			event_del (&session->ev);
-			event_set (&session->ev, fd, EV_READ,
+			event_set (&session->ev, session->fd, EV_READ,
 					fuzzy_check_io_callback, session);
 			event_base_set (ev_base, &session->ev);
 			event_add (&session->ev, NULL);
@@ -1600,6 +1638,13 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	struct event_base *ev_base;
 
 	task = session->task;
+
+	/* We might be here because of other checks being slow */
+	if (fuzzy_check_try_read (session) > 0) {
+		if (fuzzy_check_session_is_completed (session)) {
+			return;
+		}
+	}
 
 	if (session->retransmits >= fuzzy_module_ctx->retransmits) {
 		msg_err_task ("got IO timeout with server %s, after %d retransmits",
