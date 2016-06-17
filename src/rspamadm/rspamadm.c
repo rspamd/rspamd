@@ -56,7 +56,7 @@ static GOptionEntry entries[] = {
 			"Redefine UCL variable", NULL},
 	{"help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 			"Show help", NULL},
-	{"version", 'h', 0, G_OPTION_ARG_NONE, &show_version,
+	{"version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
 			"Show version", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };

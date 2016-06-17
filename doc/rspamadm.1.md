@@ -8,21 +8,19 @@ rspamadm - rspamd administration utility
 
 rspamadm [*global_options*] [*command*] [*command_options*]...
 
-rspamadm -l
-
-rspamadm help
-
-rspamadm help <command>
-
-rspamadm --help
-
 # DESCRIPTION
 
 `rspamadm` is a routine to manage rspamd spam filtering system. It is intended to perform
 such actions as merging databases, performing configuration tests, encrypting passwords,
-signing configurations and so on. You can get a list of available commands by running
+signing configurations and so on. You can get a list of available **commands** by running
 
     rspamadm -l
+
+Also for each command you can check list of available **command_options** by running
+
+    rspamadm help command
+    rspamadm command --help
+    
 
 # OPTIONS
 
