@@ -767,14 +767,13 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 
 			rt->learned = val;
-
-			rt->conn_state = RSPAMD_REDIS_CONNECTED;
 			REF_RETAIN (rt);
-
 			msg_debug_task ("connected to redis server, tokens learned for %s: %uL",
 					rt->redis_object_expanded, rt->learned);
 			rspamd_upstream_ok (rt->selected);
+			/* This also set state to terminated state */
 			rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
+			rt->conn_state = RSPAMD_REDIS_CONNECTED;
 		}
 		else {
 			/* This could be caused by removing redis context forcefully */
