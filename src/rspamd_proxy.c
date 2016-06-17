@@ -67,6 +67,8 @@ struct rspamd_http_upstream {
 	gchar *name;
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
+	gdouble timeout;
+	struct timeval io_tv;
 	gint parser_from_ref;
 	gint parser_to_ref;
 	gboolean local;
@@ -78,6 +80,8 @@ struct rspamd_http_mirror {
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
 	gdouble prob;
+	gdouble timeout;
+	struct timeval io_tv;
 	gint parser_from_ref;
 	gint parser_to_ref;
 	gboolean local;
@@ -130,6 +134,7 @@ struct rspamd_proxy_backend_connection {
 	ucl_object_t *results;
 	const gchar *err;
 	struct rspamd_proxy_session *s;
+	struct timeval *io_tv;
 	gint backend_sock;
 	enum rspamd_backend_flags flags;
 	gint parser_from_ref;
@@ -287,6 +292,7 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	up->parser_from_ref = -1;
 	up->parser_to_ref = -1;
 	up->name = g_strdup (ucl_object_tostring (elt));
+	up->timeout = ctx->timeout;
 
 	elt = ucl_object_lookup (obj, "key");
 	if (elt != NULL) {
@@ -328,6 +334,11 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		up->local = TRUE;
 	}
 
+	elt = ucl_object_lookup (obj, "timeout");
+	if (elt) {
+		ucl_object_todouble_safe (elt, &up->timeout);
+	}
+
 	/*
 	 * Accept lua function here in form
 	 * fun :: String -> UCL
@@ -339,6 +350,8 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 			goto err;
 		}
 	}
+
+	double_to_tv (up->timeout, &up->io_tv);
 
 	g_hash_table_insert (ctx->upstreams, up->name, up);
 
@@ -402,6 +415,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	up->name = g_strdup (ucl_object_tostring (elt));
 	up->parser_to_ref = -1;
 	up->parser_from_ref = -1;
+	up->timeout = ctx->timeout;
 
 	elt = ucl_object_lookup (obj, "key");
 	if (elt != NULL) {
@@ -446,6 +460,11 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		up->local = TRUE;
 	}
 
+	elt = ucl_object_lookup (obj, "timeout");
+	if (elt) {
+		ucl_object_todouble_safe (elt, &up->timeout);
+	}
+
 	/*
 	 * Accept lua function here in form
 	 * fun :: String -> UCL
@@ -462,6 +481,8 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	if (elt && ucl_object_type (elt) == UCL_STRING) {
 		up->settings_id = g_strdup (ucl_object_tostring (elt));
 	}
+
+	double_to_tv (up->timeout, &up->io_tv);
 
 	g_ptr_array_add (ctx->mirrors, up);
 
@@ -593,7 +614,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_proxy_ctx));
 	ctx->magic = rspamd_rspamd_proxy_magic;
-	ctx->timeout = 5.0;
+	ctx->timeout = 10.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	ctx->mirrors = g_ptr_array_new ();
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
@@ -987,7 +1008,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				sizeof (*bk_conn));
 		bk_conn->s = session;
 		bk_conn->name = m->name;
-
+		bk_conn->io_tv = &m->io_tv;
 
 		bk_conn->up = rspamd_upstream_get (m->u,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
@@ -1040,13 +1061,13 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
 					bk_conn->backend_sock,
-					&session->ctx->io_tv, session->ctx->ev_base);
+					bk_conn->io_tv, session->ctx->ev_base);
 		}
 		else {
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
 					bk_conn->backend_sock,
-					&session->ctx->io_tv, session->ctx->ev_base);
+					bk_conn->io_tv, session->ctx->ev_base);
 		}
 
 		g_ptr_array_add (session->mirror_conns, bk_conn);
@@ -1120,7 +1141,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 
 	rspamd_http_connection_write_message (session->client_conn,
 			msg, NULL, NULL, session, session->client_sock,
-			&session->ctx->io_tv, session->ctx->ev_base);
+			bk_conn->io_tv, session->ctx->ev_base);
 
 	return 0;
 }
@@ -1184,6 +1205,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		else {
 			session->master_conn->up = rspamd_upstream_get (backend->u,
 					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+			session->master_conn->io_tv = &backend->io_tv;
 
 			if (session->master_conn->up == NULL) {
 				msg_err_session ("cannot select upstream for %s", host ? hostbuf : "default");
@@ -1235,14 +1257,14 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 						session->master_conn->backend_conn,
 						msg, NULL, NULL, session->master_conn,
 						session->master_conn->backend_sock,
-						&session->ctx->io_tv, session->ctx->ev_base);
+						session->master_conn->io_tv, session->ctx->ev_base);
 			}
 			else {
 				rspamd_http_connection_write_message (
 						session->master_conn->backend_conn,
 						msg, NULL, NULL, session->master_conn,
 						session->master_conn->backend_sock,
-						&session->ctx->io_tv, session->ctx->ev_base);
+						session->master_conn->io_tv, session->ctx->ev_base);
 			}
 		}
 	}
