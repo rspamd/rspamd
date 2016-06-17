@@ -66,6 +66,7 @@ struct redis_stat_runtime {
 	redisAsyncContext *redis;
 	guint64 learned;
 	gint id;
+	gboolean has_event;
 };
 
 /* Used to get statistics from redis */
@@ -679,6 +680,7 @@ rspamd_redis_fin (gpointer data)
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (data);
 	redisAsyncContext *redis;
 
+	rt->has_event = FALSE;
 	/* Stop timeout */
 	if (event_get_base (&rt->timeout_event)) {
 		event_del (&rt->timeout_event);
@@ -698,6 +700,7 @@ rspamd_redis_fin_learn (gpointer data)
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (data);
 	redisAsyncContext *redis;
 
+	rt->has_event = FALSE;
 	/* Stop timeout */
 	if (event_get_base (&rt->timeout_event)) {
 		event_del (&rt->timeout_event);
@@ -859,7 +862,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 	}
 
-	if (rt->redis) {
+	if (rt->has_event) {
 		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 	}
 }
@@ -885,7 +888,7 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 	}
 
-	if (rt->redis) {
+	if (rt->has_event) {
 		rspamd_session_remove_event (task->s, rspamd_redis_fin_learn, rt);
 	}
 }
@@ -1164,6 +1167,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt,
 				rspamd_redis_stat_quark ());
+		rt->has_event = TRUE;
 
 		if (event_get_base (&rt->timeout_event)) {
 			event_del (&rt->timeout_event);
@@ -1311,6 +1315,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	if (ret == REDIS_OK) {
 		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt,
 				rspamd_redis_stat_quark ());
+		rt->has_event = TRUE;
 		/* Set timeout */
 		if (event_get_base (&rt->timeout_event)) {
 			event_del (&rt->timeout_event);
