@@ -53,25 +53,29 @@ sysctl kern.corefile=/coreland/%N-%p.core
 ```
 
 For Linux this setting is slightly different:
-`sysctl kernel.core_pattern = /coreland/%e.core`
-or
-`sysctl kernel.core_pattern = /coreland/%e-%p.core`
+
+```
+sysctl kernel.core_pattern = /coreland/%e.core
+```
+
+or (with PID)
+
+```
+sysctl kernel.core_pattern = /coreland/%e-%p.core
+```
 
 Additional settings:
+
 ```
 sysctl kernel.core_uses_pid = 1
 sysctl fs.suid_dumpable = 2
 ```
+
 The first one adds the PID to core file name, and the second allows setuid processes to be dumped. A good idea is to add these settings to `/etc/sysctl.conf` and then run `sysctl -p` to apply them.
 
-On a distro with systemd (most mainstream Linux distros), there are additional settings.
-First, you will need to edit the file `/etc/systemd/system.conf` and uncomment the `DefaultLimitCORE` parameter and set it to `infinity` (`DefaultLimitCORE=infinity`) to enable systemd core dumps. After this, you will need to run `systemctl daemon-reload` to reread the configuration followed by `systemstl daemon-reexec` to apply it.
+#### Setting system limits
 
-Then you will need to edit the limit of coredumps for services. You should edit the service unit and add the parameter `LimitCORE=unlimited` to the `[Service]` section of the unit. (In theory, the `DefaultLimitCORE` option is enough but in practice you may need to enforce `LimitCORE` for each service). A good practice is to add overrides to a user file that is located in `/etc/systemd/system/` as the original unit-file will be replaced after upgrade.
-
-After the unit file is changed you should run `systemctl daemon-reload` followed by `systemctl restart rmilter.service` or `systemctl restart rspamd.service`.
-
-In distros with traditional SysV init you can use the service init file, for example `/etc/init.d/rspamd` to permit dumping of core files by setting the appropriate resource limit. You will need to add the following line
+In distros with traditional SysV init, you can use the service init file, for example `/etc/init.d/rspamd` to permit dumping of core files by setting the appropriate resource limit. You will need to add the following line:
 
 ```
 ulimit -c unlimited
@@ -80,10 +84,22 @@ ulimit -c unlimited
 just after the heading comment.
 On FreeBSD you can use the file `/usr/local/etc/rc.d/rspamd` in the same way.
 
-A good way to test the core files setup is sending a `SIGKILL` signal to a process. For example, run `pkill --signal 4 rspamd` or `kill -s 4 <YOUR_PID>` and then check the `/coreland` directory for a core dump.
+A good way to test the core files setup is sending a `SIGILL` signal to a process. For example, run `pkill --signal 4 rspamd` or `kill -s 4 <YOUR_PID>` and then check the `/coreland` directory for a core dump.
 
-### Now I have too many core files
+#### Systemd notes
 
+On a distro with systemd (most mainstream Linux distros), things are a bit different.
+First, you will need to edit the file `/etc/systemd/system.conf` and uncomment the `DefaultLimitCORE` parameter to enable systemd core dumps:
+
+```
+DefaultLimitCORE=infinity
+```
+
+After this, you will need to run `systemctl daemon-reload` to reread the configuration followed by `systemctl daemon-reexec` to apply it.
+
+The more information about core dumps and systemd could be found here: <https://wiki.archlinux.org/index.php/Core_dump>
+
+### How to limit number of core files
 Rspamd can stop dumping cores upon reaching a specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
 
 ```ucl
@@ -182,8 +198,10 @@ rspamd supports so-called `dynamic` symbols. A metric score is multiplied by som
 Many rspamd rules, such as `PHISHING` and fuzzy checks, use dynamic scoring.
 
 ### Can I check a message with rspamd without rspamc
-
-Yes: `curl --data-binary @- http://localhost:11333 < file.eml`.
+ 
+```
+curl --data-binary @- http://localhost:11333 < file.eml
+```
 
 ## Configuration questions
 
