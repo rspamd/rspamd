@@ -1031,6 +1031,13 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 		}
 
 		msg = rspamd_http_connection_copy_msg (session->client_conn);
+
+		if (msg == NULL) {
+			msg_err_session ("cannot copy message to send to a mirror %s: %s",
+					m->name, strerror (errno));
+			continue;
+		}
+
 		rspamd_http_message_remove_header (msg, "Content-Length");
 		rspamd_http_message_remove_header (msg, "Key");
 		msg->method = HTTP_GET;
