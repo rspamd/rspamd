@@ -1926,8 +1926,11 @@ rspamd_shmem_mkstemp (gchar *pattern)
 			break;
 		}
 		else if (errno != EEXIST) {
-			g_error ("%s: failed to create temp shmem %s: %s",
+			msg_err ("%s: failed to create temp shmem %s: %s",
 							G_STRLOC, nbuf, strerror (errno));
+			g_free (nbuf);
+
+			return -1;
 		}
 	}
 
