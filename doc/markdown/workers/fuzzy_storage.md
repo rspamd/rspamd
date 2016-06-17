@@ -103,8 +103,18 @@ generally `match_count / shingles_count`.
 
 Fuzzy storage accepts the following extra options:
 
-- `database` - path to the sqlite storage
-- `expire` - time value for hashes expiration
+- `hashfile` - path to the sqlite storage (where are also few outdated aliases for this command exist: hash_file, file, database)
+- `sync` - time to perform database sync in seconds, default value: 60
+- `expire` - time value for hashes expiration in seconds, default value: 2 days
+- `keypair` - encryption keypair (can be repeated for different keys), can be obtained via *rspamadm keypair -u* command
+- `keypair_cache_size` - Size of keypairs cache, default value: 512
+- `encrypted_only` - allow encrypted requests only (and forbid all unknown keys or plaintext requests)
+- `master_timeout` - master protocol IO timeout
+- `sync_keypair` - encryption key for master/slave updates
+- `masters` - string, allow master/slave updates from the following IP addresses
+- `master_key` - allow master/slave updates merely using the specified key
+- `slave` - list of slave hosts.
+- `mirror` - list of slave hosts, same as `slave`
 - `allow_update` - string, array of strings or a map of IP addresses that are allowed
 to perform changes to fuzzy storage (you should also set `read_only = no` in your fuzzy_check plugin).
 
@@ -114,7 +124,7 @@ Here is an example configuration of fuzzy storage:
 worker {
    type = "fuzzy";
    bind_socket = "*:11335";
-   hash_file = "${DBDIR}/fuzzy.db"
+   hashfile = "${DBDIR}/fuzzy.db"
    expire = 90d;
    allow_update = "127.0.0.1";
 }
