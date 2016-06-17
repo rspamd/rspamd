@@ -853,10 +853,15 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 	else {
 		msg_err_task ("error getting reply from redis server %s: %s",
 				rspamd_upstream_name (rt->selected), c->errstr);
-		rspamd_upstream_fail (rt->selected);
+
+		if (rt->redis) {
+			rspamd_upstream_fail (rt->selected);
+		}
 	}
 
-	rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
+	if (rt->redis) {
+		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
+	}
 }
 
 /* Called when we have set tokens during learning */
@@ -870,12 +875,17 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (c->err == 0) {
 		rspamd_upstream_ok (rt->selected);
-		rspamd_session_remove_event (task->s, rspamd_redis_fin_learn, rt);
 	}
 	else {
 		msg_err_task_check ("error getting reply from redis server %s: %s",
 				rspamd_upstream_name (rt->selected), c->errstr);
-		rspamd_upstream_fail (rt->selected);
+
+		if (rt->redis) {
+			rspamd_upstream_fail (rt->selected);
+		}
+	}
+
+	if (rt->redis) {
 		rspamd_session_remove_event (task->s, rspamd_redis_fin_learn, rt);
 	}
 }
