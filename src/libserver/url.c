@@ -2194,7 +2194,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 	if (cb->newlines && cb->newlines->len > 0) {
 		newline_pos = g_ptr_array_index (cb->newlines, cb->newline_idx);
 
-		while (pos > newline_pos && cb->newline_idx < cb->newlines->len) {
+		while (pos > newline_pos && cb->newline_idx < cb->newlines->len - 1) {
 			cb->newline_idx ++;
 			newline_pos = g_ptr_array_index (cb->newlines, cb->newline_idx);
 		}
