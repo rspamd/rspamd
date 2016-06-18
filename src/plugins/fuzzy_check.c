@@ -78,6 +78,7 @@ struct fuzzy_rule {
 	struct upstream_list *servers;
 	const gchar *symbol;
 	const gchar *algorithm_str;
+	const gchar *name;
 	enum rspamd_shingle_alg alg;
 	GHashTable *mappings;
 	GList *mime_types;
@@ -365,7 +366,8 @@ fuzzy_free_rule (gpointer r)
 }
 
 static gint
-fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id)
+fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
+		const gchar *name, gint cb_id)
 {
 	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
@@ -418,12 +420,23 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	if ((value = ucl_object_lookup (obj, "max_score")) != NULL) {
 		rule->max_score = ucl_obj_todouble (value);
 	}
+
 	if ((value = ucl_object_lookup (obj,  "symbol")) != NULL) {
 		rule->symbol = ucl_obj_tostring (value);
 	}
+
+	if (name) {
+		rule->name = name;
+	}
+	else {
+		rule->name = rule->symbol;
+	}
+
+
 	if ((value = ucl_object_lookup (obj, "read_only")) != NULL) {
 		rule->read_only = ucl_obj_toboolean (value);
 	}
+
 	if ((value = ucl_object_lookup (obj, "skip_unknown")) != NULL) {
 		rule->skip_unknown = ucl_obj_toboolean (value);
 	}
@@ -515,7 +528,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 					rule->learn_condition_cb = luaL_ref (cfg->lua_state,
 							LUA_REGISTRYINDEX);
 					msg_info_config ("loaded learn condition script for fuzzy rule:"
-							" %s", rule->symbol);
+							" %s", rule->name);
 				}
 				else {
 					msg_err_config ("lua script must return "
@@ -554,8 +567,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	rule->shingles_key->len = 16;
 
 	if (rspamd_upstreams_count (rule->servers) == 0) {
-		msg_err_config ("no servers defined for fuzzy rule with symbol: %s",
-			rule->symbol);
+		msg_err_config ("no servers defined for fuzzy rule with name: %s",
+			rule->name);
 		return -1;
 	}
 	else {
@@ -816,7 +829,8 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 gint
 fuzzy_check_module_config (struct rspamd_config *cfg)
 {
-	const ucl_object_t *value, *cur;
+	const ucl_object_t *value, *cur, *elt;
+	ucl_object_iter_t it;
 	gint res = TRUE, cb_id, nrules = 0;
 	const gchar *str;
 
@@ -913,9 +927,49 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 					SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_FINE,
 					-1);
 
+		/*
+		 * Here we can have 2 possibilities:
+		 *
+		 * unnamed rules:
+		 *
+		 * rule {
+		 * ...
+		 * }
+		 * rule {
+		 * ...
+		 * }
+		 *
+		 * - or - named rules:
+		 *
+		 * rule {
+		 * 	"rule1": {
+		 * 	...
+		 * 	}
+		 * 	"rule2": {
+		 * 	...
+		 * 	}
+		 * }
+		 *
+		 * So, for each element, we check, if there 'servers' key. If 'servers' is
+		 * presented, then we treat it as unnamed rule, otherwise we treat it as
+		 * named rule.
+		 */
 		LL_FOREACH (value, cur) {
-			fuzzy_parse_rule (cfg, cur, cb_id);
-			nrules ++;
+
+			if (ucl_object_lookup (cur, "servers")) {
+				/* Unnamed rule */
+				fuzzy_parse_rule (cfg, cur, NULL, cb_id);
+				nrules ++;
+			}
+			else {
+				/* Named rule */
+				it = NULL;
+
+				while ((elt = ucl_object_iterate (cur, &it, true)) != NULL) {
+					fuzzy_parse_rule (cfg, elt, ucl_object_key (elt), cb_id);
+					nrules ++;
+				}
+			}
 		}
 	}
 
@@ -2203,7 +2257,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		if (g_hash_table_lookup (rule->mappings,
 			GINT_TO_POINTER (flag)) == NULL) {
 			msg_info_task ("skip rule %s as it has no flag %d defined"
-					" false", rule->symbol, flag);
+					" false", rule->name, flag);
 			cur = g_list_next (cur);
 			continue;
 		}
@@ -2234,7 +2288,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 			if (skip) {
 				msg_info_task ("skip rule %s as its condition callback returned"
-						" false", rule->symbol);
+						" false", rule->name);
 				cur = g_list_next (cur);
 				continue;
 			}
