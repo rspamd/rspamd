@@ -1248,12 +1248,6 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	g_assert (rt->redis != NULL);
 
 	redisLibeventAttach (rt->redis, task->ev_base);
-
-	event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-	event_base_set (task->ev_base, &rt->timeout_event);
-	double_to_tv (rt->ctx->timeout, &tv);
-	event_add (&rt->timeout_event, &tv);
-
 	rspamd_redis_maybe_auth (rt->ctx, rt->redis);
 
 	if (rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER) {
@@ -1316,6 +1310,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt,
 				rspamd_redis_stat_quark ());
 		rt->has_event = TRUE;
+
 		/* Set timeout */
 		if (event_get_base (&rt->timeout_event)) {
 			event_del (&rt->timeout_event);
