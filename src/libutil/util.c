@@ -1977,6 +1977,7 @@ rspamd_init_libs (void)
 	struct rlimit rlim;
 	struct rspamd_external_libs_ctx *ctx;
 	struct ottery_config *ottery_cfg;
+	gint ssl_options;
 
 	ctx = g_slice_alloc0 (sizeof (*ctx));
 	ctx->crypto_ctx = rspamd_cryptobox_init ();
@@ -2042,7 +2043,15 @@ rspamd_init_libs (void)
 	ctx->ssl_ctx = SSL_CTX_new (SSLv23_method ());
 	SSL_CTX_set_verify (ctx->ssl_ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth (ctx->ssl_ctx, 4);
-	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_COMPRESSION);
+	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+
+#ifdef SSL_OP_NO_COMPRESSION
+	ssl_options |= SSL_OP_NO_COMPRESSION;
+#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
+	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
+#endif
+
+	SSL_CTX_set_options (ctx->ssl_ctx, ssl_options);
 #endif
 	g_random_set_seed (ottery_rand_uint32 ());
 
