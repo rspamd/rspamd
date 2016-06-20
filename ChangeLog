@@ -1,3 +1,15 @@
+1.2.8:
+	* Another fix for exim workaround (#637)
+	* Fix unencrypted passwords processing in the controller
+	* Fix setting path for lua (#652)
+	* Fix usage of rdns reply structure (#654)
+	* Use file lock in logger to avoid deadlocks
+	* Add `application/octet-stream` mime type for `pdf` extension (by @moisseev)
+	* Implement new automata to skip empty lines for dkim signing (#651)
+	* Fix parsing of missing classes
+	* Clarify some rspamc arguments (by @fatalbanana)
+	* Correct suppress spelling
+
 1.2.7:
 	* Slightly reduce weights of rules with high FP rate
 	* Add workround for rspamd-1.3
