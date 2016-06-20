@@ -619,6 +619,7 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 	struct metric *def_metric;
 	struct rspamd_config_post_load_script *sc;
 	struct rspamd_config **pcfg;
+	gboolean ret = TRUE;
 
 #ifdef HAVE_CLOCK_GETTIME
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
@@ -657,18 +658,34 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 		rspamd_printf_gstring (fpath, "%s%c%s", RSPAMD_PLUGINSDIR,
 				G_DIR_SEPARATOR, "effective_tld_names.dat");
 
-		if (access (fpath->str, R_OK)) {
-			msg_info_config ("url_tld option is not specified but %s is available,"
+		if (access (fpath->str, R_OK) != -1) {
+			msg_debug_config ("url_tld option is not specified but %s is available,"
 					" therefore this file is assumed as TLD file for URL"
 					" extraction", fpath->str);
 			cfg->tld_file = rspamd_mempool_strdup (cfg->cfg_pool, fpath->str);
 		}
 		else {
-			msg_err_config ("no url_tld option has been specified, URL's detection "
-					"will be awfully broken");
+			if (validate_cache) {
+				msg_err_config ("no url_tld option has been specified");
+				ret = FALSE;
+			}
 		}
 
 		g_string_free (fpath, TRUE);
+	}
+	else {
+		if (access (cfg->tld_file, R_OK) == -1) {
+			if (validate_cache) {
+				ret = FALSE;
+				msg_err_config ("cannot access tld file %s: %s", cfg->tld_file,
+						strerror (errno));
+			}
+			else {
+				msg_debug_config ("cannot access tld file %s: %s", cfg->tld_file,
+						strerror (errno));
+				cfg->tld_file = NULL;
+			}
+		}
 	}
 
 	init_dynamic_config (cfg);
@@ -709,10 +726,10 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 
 	/* Validate cache */
 	if (validate_cache) {
-		return rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE);
+		return rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
 	}
 
-	return TRUE;
+	return ret;
 }
 
 #if 0

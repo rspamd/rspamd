@@ -448,10 +448,6 @@ rspamd_url_init (const gchar *tld_file)
 		if (tld_file != NULL) {
 			rspamd_url_parse_tld_file (tld_file, url_scanner);
 		}
-		else {
-			msg_info (
-					"tld extension file is not specified, url matching is limited");
-		}
 
 		if (!rspamd_multipattern_compile (url_scanner->search_trie, &err)) {
 			msg_err ("cannot compile tld patterns, url matching will be "
@@ -459,7 +455,7 @@ rspamd_url_init (const gchar *tld_file)
 			g_error_free (err);
 		}
 
-		msg_info ("initialized trie of %ud elements",
+		msg_debug ("initialized trie of %ud elements",
 				url_scanner->matchers->len);
 	}
 }

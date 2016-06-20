@@ -2097,7 +2097,7 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			}
 		}
 		else {
-			msg_warn_config ("ssl_ca_path is not set, using default CA path");
+			msg_debug_config ("ssl_ca_path is not set, using default CA path");
 			SSL_CTX_set_default_verify_paths (ctx->ssl_ctx);
 		}
 
