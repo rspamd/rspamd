@@ -1412,44 +1412,77 @@ void rspamd_cryptobox_hash (guchar *out,
 	rspamd_cryptobox_hash_final (&st, out);
 }
 
+/* MUST be 64 bytes at maximum */
+struct rspamd_cryptobox_fast_hash_state_real {
+	guint64 h;  /* current hash value */
+	guint64 pos; /* pos in bytes in the buf */
+	guint64 buf;
+};
 
 void
 rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
 		guint64 seed)
 {
-#if defined(__LP64__) || defined(_LP64)
-	XXH64_state_t *rst = (XXH64_state_t *)st;
-	XXH64_reset (rst, seed);
-#else
-	XXH32_state_t *rst = (XXH32_state_t *)st;
-	XXH32_reset (rst, seed);
-#endif
+	struct rspamd_cryptobox_fast_hash_state_real *rst =
+			(struct rspamd_cryptobox_fast_hash_state_real *)st;
+
+	memset (rst, 0, sizeof (*rst));
+	rst->h = seed;
 }
 
 void
 rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
 		const void *data, gsize len)
 {
-#if defined(__LP64__) || defined(_LP64)
-	XXH64_state_t *rst = (XXH64_state_t *)st;
-	XXH64_update (rst, data, len);
+	struct rspamd_cryptobox_fast_hash_state_real *rst =
+			(struct rspamd_cryptobox_fast_hash_state_real *)st;
+	const guchar *d = data;
+	guint leftover;
+	guint64 n;
+
+	leftover = rst->pos;
+
+	if (leftover > 0 && len + leftover >= 8) {
+		n = sizeof (rst->buf) - leftover;
+		memcpy (((guchar *)&rst->buf) + leftover, d, n);
+		d += n;
+		len -= n;
+		rst->h = mum_hash_step (rst->h, rst->buf);
+		rst->buf = 0;
+	}
+
+	while (len > 8) {
+#ifdef _MUM_UNALIGNED_ACCESS
+		rst->h = mum_hash_step (rst->h, *(guint64 *)d);
 #else
-	XXH32_state_t *rst = (XXH32_state_t *)st;
-	XXH32_update (rst, data, len);
+		memcpy (&n, d, sizeof (n));
+		rst->h = mum_hash_step (rst->h, n);
 #endif
+		len -= 8;
+		d += 8;
+	}
+
+	if (len > 0 && rst->pos + len <= 8) {
+		memcpy (((guchar *)&rst->buf) + rst->pos, d, len);
+		rst->pos += len;
+	}
 }
 
 guint64
 rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 {
-#if defined(__LP64__) || defined(_LP64)
-	XXH64_state_t *rst = (XXH64_state_t *)st;
-	return XXH64_digest (rst);
-#else
-	XXH32_state_t *rst = (XXH32_state_t *)st;
-	XXH32_digest (rst);
-#endif
+	struct rspamd_cryptobox_fast_hash_state_real *rst =
+			(struct rspamd_cryptobox_fast_hash_state_real *)st;
+	guint leftover;
 
+	leftover = rst->pos;
+
+	if (leftover > 0) {
+		memset (((guchar *)&rst->buf) + leftover, 0, sizeof (rst->buf) - leftover);
+		rst->h = mum_hash_step (rst->h, rst->buf);
+	}
+
+	return rst->h;
 }
 
 /**

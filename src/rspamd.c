@@ -508,6 +508,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 			if (cf->worker->flags & RSPAMD_WORKER_HAS_SOCKET) {
 				LL_FOREACH (cf->bind_conf, bcf) {
 					key = make_listen_key (bcf);
+
 					if ((p =
 						g_hash_table_lookup (listen_sockets,
 								GINT_TO_POINTER (key))) == NULL) {
