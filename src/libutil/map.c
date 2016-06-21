@@ -122,50 +122,38 @@ write_http_request (struct http_callback_data *cbd)
 }
 
 static gboolean
-rspamd_map_check_sig_pk (const char *fname,
+rspamd_map_check_sig_pk_mem (const guchar *sig,
+		gsize siglen,
 		struct rspamd_map *map,
 		const guchar *input,
 		gsize inlen,
 		struct rspamd_cryptobox_pubkey *pk)
 {
-	gchar fpath[PATH_MAX];
-	guchar *data;
 	GString *b32_key;
-	gsize len = 0;
+	gboolean ret = TRUE;
 
-	/* Now load signature */
-	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", fname);
-	data = rspamd_file_xmap (fpath, PROT_READ, &len);
+	if (siglen != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
+		msg_err_map ("can't open signature for %s: invalid size: %z", map->name, siglen);
 
-	if (data == NULL) {
-		msg_err_map ("can't open signature %s: %s", fpath, strerror (errno));
-		return FALSE;
+		ret = FALSE;
 	}
 
-	if (len != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err_map ("can't open signature %s: invalid signature", fpath);
-		munmap (data, len);
-
-		return FALSE;
-	}
-
-	if (!rspamd_cryptobox_verify (data, input, inlen,
+	if (ret && !rspamd_cryptobox_verify (sig, input, inlen,
 			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err_map ("can't verify signature %s: incorrect signature", fpath);
-		munmap (data, len);
+		msg_err_map ("can't verify signature for %s: incorrect signature", map->name);
 
-		return FALSE;
+		ret = FALSE;
 	}
 
-	b32_key = rspamd_pubkey_print (pk,
-			RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
-	msg_info_map ("verified signature in file %s using trusted key %v",
-			fpath, b32_key);
-	g_string_free (b32_key, TRUE);
+	if (ret) {
+		b32_key = rspamd_pubkey_print (pk,
+				RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
+		msg_info_map ("verified signature for %s using trusted key %v",
+				map->name, b32_key);
+		g_string_free (b32_key, TRUE);
+	}
 
-	munmap (data, len);
-
-	return TRUE;
+	return ret;
 }
 
 static gboolean
@@ -175,17 +163,16 @@ rspamd_map_check_file_sig (const char *fname,
 		const guchar *input,
 		gsize inlen)
 {
-	gchar fpath[PATH_MAX];
 	guchar *data;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	GString *b32_key;
-	gboolean ret;
+	gboolean ret = TRUE;
 	gsize len = 0;
+	gchar fpath[PATH_MAX];
 
 	if (bk->trusted_pubkey == NULL) {
 		/* Try to load and check pubkey */
 		rspamd_snprintf (fpath, sizeof (fpath), "%s.pub", fname);
-
 		data = rspamd_file_xmap (fpath, PROT_READ, &len);
 
 		if (data == NULL) {
@@ -222,7 +209,19 @@ rspamd_map_check_file_sig (const char *fname,
 		pk = rspamd_pubkey_ref (bk->trusted_pubkey);
 	}
 
-	ret = rspamd_map_check_sig_pk (fname, map, input, inlen, pk);
+	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", fname);
+	data = rspamd_shmem_xmap (fpath, PROT_READ, &len);
+
+	if (data == NULL) {
+		msg_err_map ("can't open signature %s: %s", fpath, strerror (errno));
+		ret = FALSE;
+	}
+
+	if (ret) {
+		ret = rspamd_map_check_sig_pk_mem (data, len, map, input, inlen, pk);
+		munmap (data, len);
+	}
+
 	rspamd_pubkey_unref (pk);
 
 	return ret;
@@ -234,27 +233,18 @@ rspamd_map_check_file_sig (const char *fname,
 static void
 free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 {
-	char fpath[PATH_MAX];
-	struct stat st;
 	struct map_periodic_cbdata *periodic = cbd->periodic;
 
-	if (cbd->out_fd != -1) {
-		close (cbd->out_fd);
+	if (cbd->shmem_sig) {
+		rspamd_http_message_shmem_unref (cbd->shmem_sig);
 	}
 
-	rspamd_snprintf (fpath, sizeof (fpath), "%s", cbd->tmpfile);
-	if (stat (fpath, &st) != -1 && S_ISREG (st.st_mode)) {
-		(void)unlink (fpath);
+	if (cbd->shmem_pubkey) {
+		rspamd_http_message_shmem_unref (cbd->shmem_pubkey);
 	}
 
-	rspamd_snprintf (fpath, sizeof (fpath), "%s.pub", cbd->tmpfile);
-	if (stat (fpath, &st) != -1 && S_ISREG (st.st_mode)) {
-		(void)unlink (fpath);
-	}
-
-	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
-	if (stat (fpath, &st) != -1 && S_ISREG (st.st_mode)) {
-		(void)unlink (fpath);
+	if (cbd->shmem_data) {
+		rspamd_http_message_shmem_unref (cbd->shmem_data);
 	}
 
 	if (cbd->pk) {
@@ -323,10 +313,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 	struct http_callback_data *cbd = conn->ud;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
-	char fpath[PATH_MAX];
 	guchar *aux_data, *in = NULL;
-	gsize inlen = 0;
-	struct stat st;
+	gsize inlen = 0, dlen = 0;
 
 	map = cbd->map;
 	bk = cbd->bk;
@@ -353,29 +341,18 @@ http_map_finish (struct rspamd_http_connection *conn,
 
 			/* Maybe we need to check signature ? */
 			if (bk->is_signed) {
-				close (cbd->out_fd);
 
 				if (bk->trusted_pubkey) {
 					/* No need to load key */
 					cbd->stage = map_load_signature;
 					cbd->pk = rspamd_pubkey_ref (bk->trusted_pubkey);
-					rspamd_snprintf (fpath, sizeof (fpath), "%s.sig",
-							cbd->tmpfile);
 				}
 				else {
-					rspamd_snprintf (fpath, sizeof (fpath), "%s.pub",
-							cbd->tmpfile);
 					cbd->stage = map_load_pubkey;
 				}
 
-				cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
-
-				if (cbd->out_fd == -1) {
-					msg_err_map ("cannot open pubkey file %s for writing: %s",
-							fpath, strerror (errno));
-					goto err;
-				}
-
+				cbd->shmem_data = rspamd_http_message_shmem_ref (msg);
+				cbd->data_len = msg->body_buf.len;
 				rspamd_http_connection_reset (cbd->conn);
 				write_http_request (cbd);
 				MAP_RELEASE (cbd);
@@ -384,10 +361,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 			}
 			else {
 				/* Unsinged version - just open file */
-				in = rspamd_file_xmap (cbd->tmpfile, PROT_READ, &inlen);
+				cbd->shmem_data = rspamd_http_message_shmem_ref (msg);
+				in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &inlen);
+				cbd->data_len = msg->body_buf.len;
 
 				if (in == NULL) {
-					msg_err_map ("cannot read tempfile %s: %s", cbd->tmpfile,
+					msg_err_map ("cannot read tempfile %s: %s",
+							cbd->shmem_data->shm_name,
 							strerror (errno));
 					goto err;
 				}
@@ -395,41 +375,32 @@ http_map_finish (struct rspamd_http_connection *conn,
 		}
 		else if (cbd->stage == map_load_pubkey) {
 			/* We now can load pubkey */
-			(void)lseek (cbd->out_fd, 0, SEEK_SET);
+			cbd->shmem_pubkey = rspamd_http_message_shmem_ref (msg);
+			cbd->pubkey_len = msg->body_buf.len;
 
-			if (fstat (cbd->out_fd, &st) == -1) {
-				msg_err_map ("cannot stat pubkey file %s: %s",
-						fpath, strerror (errno));
-				goto err;
-			}
+			aux_data = rspamd_shmem_xmap (cbd->shmem_pubkey->shm_name,
+					PROT_READ, &inlen);
 
-			aux_data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED,
-					cbd->out_fd, 0);
-			close (cbd->out_fd);
-			cbd->out_fd = -1;
-
-			if (aux_data == MAP_FAILED) {
+			if (aux_data == NULL) {
 				msg_err_map ("cannot map pubkey file %s: %s",
-						fpath, strerror (errno));
+						cbd->shmem_pubkey->shm_name, strerror (errno));
 				goto err;
 			}
 
-			cbd->pk = rspamd_pubkey_from_base32 (aux_data, st.st_size,
+			if (inlen < cbd->pubkey_len) {
+				msg_err_map ("cannot map pubkey file %s: %s",
+						cbd->shmem_pubkey->shm_name, strerror (errno));
+				munmap (aux_data, inlen);
+				goto err;
+			}
+
+			cbd->pk = rspamd_pubkey_from_base32 (aux_data, cbd->pubkey_len,
 					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
-			munmap (aux_data, st.st_size);
+			munmap (aux_data, inlen);
 
 			if (cbd->pk == NULL) {
 				msg_err_map ("cannot load pubkey file %s: bad pubkey",
-						fpath);
-				goto err;
-			}
-
-			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
-			cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
-
-			if (cbd->out_fd == -1) {
-				msg_err_map ("cannot open signature file %s for writing: %s",
-						fpath, strerror (errno));
+						cbd->shmem_pubkey->shm_name);
 				goto err;
 			}
 
@@ -442,27 +413,60 @@ http_map_finish (struct rspamd_http_connection *conn,
 		}
 		else if (cbd->stage == map_load_signature) {
 			/* We can now check signature */
-			close (cbd->out_fd);
-			cbd->out_fd = -1;
+			cbd->shmem_sig = rspamd_http_message_shmem_ref (msg);
+			cbd->sig_len = msg->body_buf.len;
 
-			in = rspamd_file_xmap (cbd->tmpfile, PROT_READ, &inlen);
+			aux_data = rspamd_shmem_xmap (cbd->shmem_sig->shm_name,
+					PROT_READ, &inlen);
+
+			if (aux_data == NULL) {
+				msg_err_map ("cannot map signature file %s: %s",
+						cbd->shmem_sig->shm_name, strerror (errno));
+				goto err;
+			}
+
+			if (inlen < cbd->sig_len) {
+				msg_err_map ("cannot map pubkey file %s: %s",
+						cbd->shmem_pubkey->shm_name, strerror (errno));
+				munmap (aux_data, inlen);
+				goto err;
+			}
+
+			in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &dlen);
 
 			if (in == NULL) {
-				msg_err_map ("cannot read tempfile %s: %s", cbd->tmpfile,
+				msg_err_map ("cannot read tempfile %s: %s",
+						cbd->shmem_data->shm_name,
 						strerror (errno));
+				munmap (aux_data, inlen);
 				goto err;
 			}
 
-			if (!rspamd_map_check_sig_pk (cbd->tmpfile, map, in, inlen, cbd->pk)) {
+			if (!rspamd_map_check_sig_pk_mem (aux_data, cbd->sig_len, map, in,
+					cbd->data_len, cbd->pk)) {
+				munmap (aux_data, inlen);
+				munmap (in, dlen);
 				goto err;
 			}
+
+			munmap (in, dlen);
 		}
 
-		g_assert (in != NULL);
+		g_assert (cbd->shmem_data != NULL);
 
-		map->read_callback (in, inlen, &cbd->periodic->cbdata, TRUE);
+		in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &dlen);
+
+		if (in == NULL) {
+			msg_err_map ("cannot read tempfile %s: %s",
+					cbd->shmem_data->shm_name,
+					strerror (errno));
+			goto err;
+		}
+
+		map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 		msg_info_map ("read map data from %s", cbd->data->host);
 		cbd->periodic->cur_backend ++;
+		munmap (in, dlen);
 		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	}
 	else if (msg->code == 304 && (cbd->check && cbd->stage == map_load_file)) {
@@ -491,32 +495,6 @@ err:
 	cbd->periodic->errored = 1;
 	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	MAP_RELEASE (cbd);
-
-	return 0;
-}
-
-static int
-http_map_read (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *chunk,
-	gsize len)
-{
-	struct http_callback_data *cbd = conn->ud;
-	struct rspamd_map *map;
-
-	if (msg->code != 200 || len == 0) {
-		/* Ignore not full replies */
-		return 0;
-	}
-
-	map = cbd->map;
-
-	if (write (cbd->out_fd, chunk, len) == -1) {
-		msg_err_map ("cannot write to %s: %s", cbd->tmpfile, strerror (errno));
-		MAP_RELEASE (cbd);
-
-		return -1;
-	}
 
 	return 0;
 }
@@ -640,6 +618,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 {
 	struct http_callback_data *cbd = arg;
 	struct rspamd_map *map;
+	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_SHARED;
 
 	map = cbd->map;
 
@@ -659,11 +638,10 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 
 				if (cbd->fd != -1) {
 					cbd->stage = map_load_file;
-					cbd->conn = rspamd_http_connection_new (http_map_read,
+					cbd->conn = rspamd_http_connection_new (NULL,
 							http_map_error,
 							http_map_finish,
-							RSPAMD_HTTP_BODY_PARTIAL |
-									RSPAMD_HTTP_CLIENT_SIMPLE,
+							flags,
 							RSPAMD_HTTP_CLIENT,
 							NULL,
 							cbd->map->cfg->libs_ctx->ssl_ctx);
@@ -700,27 +678,10 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 {
 	struct http_map_data *data;
 	struct http_callback_data *cbd;
-	gchar tmpbuf[PATH_MAX];
 
 	data = bk->data.hd;
 	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
 
-	rspamd_snprintf (tmpbuf, sizeof (tmpbuf),
-			"%s" G_DIR_SEPARATOR_S "rspamd_map%d-XXXXXX",
-			map->cfg->temp_dir, map->id);
-	cbd->out_fd = mkstemp (tmpbuf);
-
-	if (cbd->out_fd == -1) {
-		msg_err_map ("cannot create tempfile: %s", strerror (errno));
-		g_atomic_int_set (map->locked, 0);
-		g_slice_free1 (sizeof (*cbd), cbd);
-		periodic->errored = TRUE;
-		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
-
-		return;
-	}
-
-	cbd->tmpfile = g_strdup (tmpbuf);
 	cbd->ev_base = map->ev_base;
 	cbd->map = map;
 	cbd->data = data;

@@ -127,10 +127,14 @@ struct http_callback_data {
 	struct map_periodic_cbdata *periodic;
 	struct rspamd_cryptobox_pubkey *pk;
 	gboolean check;
-	gchar *tmpfile;
+	struct rspamd_storage_shmem *shmem_data;
+	struct rspamd_storage_shmem *shmem_sig;
+	struct rspamd_storage_shmem *shmem_pubkey;
+	gsize data_len;
+	gsize sig_len;
+	gsize pubkey_len;
 
 	enum rspamd_map_http_stage stage;
-	gint out_fd;
 	gint fd;
 	struct timeval tv;
 

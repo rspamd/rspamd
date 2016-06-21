@@ -849,7 +849,7 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 	priv->ssl = ssl;
 	/* Plan read message */
 
-	if (priv->flags & RSPAMD_HTTP_CLIENT_SHARED) {
+	if (conn->opts & RSPAMD_HTTP_CLIENT_SHARED) {
 		rspamd_http_connection_read_message_shared (conn, conn->ud, conn->fd,
 				conn->priv->ptv, base);
 	}
