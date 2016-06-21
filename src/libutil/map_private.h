@@ -59,6 +59,13 @@ struct rspamd_map_backend {
 	ref_entry_t ref;
 };
 
+struct rspamd_map_cachepoint {
+	gint available;
+	gsize len;
+	time_t last_checked;
+	gchar shmem_name[256];
+};
+
 struct rspamd_map {
 	struct rspamd_dns_resolver *r;
 	struct rspamd_config *cfg;
@@ -75,6 +82,8 @@ struct rspamd_map {
 	gdouble poll_timeout;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
+	/* Shared cache data */
+	struct rspamd_map_cachepoint *cache;
 	gchar tag[MEMPOOL_UID_LEN];
 	rspamd_map_dtor dtor;
 	gpointer dtor_data;
