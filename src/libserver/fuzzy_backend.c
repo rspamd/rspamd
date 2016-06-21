@@ -135,14 +135,14 @@ static struct rspamd_fuzzy_stmts {
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INSERT,
 		.sql = "INSERT INTO digests(flag, digest, value, time) VALUES"
-				"(?1, ?2, ?3, ?4);",
-		.args = "SDII",
+				"(?1, ?2, ?3, strftime('%s','now'));",
+		.args = "SDI",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_UPDATE,
-		.sql = "UPDATE digests SET value = value + ?1 WHERE "
+		.sql = "UPDATE digests SET value = value + ?1, time = strftime('%s','now') WHERE "
 				"digest==?2;",
 		.args = "ID",
 		.stmt = NULL,
@@ -150,7 +150,7 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
-		.sql = "UPDATE digests SET value = ?1, flag = ?2 WHERE "
+		.sql = "UPDATE digests SET value = ?1, flag = ?2, time = strftime('%s','now') WHERE "
 				"digest==?3;",
 		.args = "IID",
 		.stmt = NULL,
@@ -662,8 +662,7 @@ rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend,
 
 gboolean
 rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd,
-		time_t timestamp)
+		const struct rspamd_fuzzy_cmd *cmd)
 {
 	int rc, i;
 	gint64 id, flag;
@@ -740,8 +739,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				RSPAMD_FUZZY_BACKEND_INSERT,
 				(gint) (1U << (cmd->flag - 1)),
 				cmd->digest,
-				(gint64) cmd->value,
-				(gint64) timestamp);
+				(gint64) cmd->value);
 
 		if (rc == SQLITE_OK) {
 			if (cmd->shingles_count > 0) {

@@ -55,10 +55,8 @@ gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backe
  * @param cmd
  * @return
  */
-gboolean rspamd_fuzzy_backend_add (
-		struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd,
-		time_t timestamp);
+gboolean rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
+		const struct rspamd_fuzzy_cmd *cmd);
 
 /**
  * Delete digest from the database
