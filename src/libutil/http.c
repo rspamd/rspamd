@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
+#include "../../contrib/mumhash/mum.h"
 #include "http_private.h"
 #include "utlist.h"
 #include "util.h"
@@ -847,8 +848,15 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 	rspamd_http_connection_reset (conn);
 	priv->ssl = ssl;
 	/* Plan read message */
-	rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
-			conn->priv->ptv, base);
+
+	if (priv->flags & RSPAMD_HTTP_CLIENT_SHARED) {
+		rspamd_http_connection_read_message_shared (conn, conn->ud, conn->fd,
+				conn->priv->ptv, base);
+	}
+	else {
+		rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
+				conn->priv->ptv, base);
+	}
 }
 
 static void
@@ -1535,6 +1543,148 @@ rspamd_http_detach_shared (struct rspamd_http_message *msg)
 	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
 }
 
+gint
+rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
+		gchar *repbuf, gsize replen, gsize bodylen, gsize enclen, const gchar* host,
+		struct rspamd_http_connection* conn, struct rspamd_http_message* msg,
+		rspamd_fstring_t** buf,
+		struct rspamd_http_connection_private* priv,
+		struct rspamd_cryptobox_pubkey* peer_key)
+{
+	gchar datebuf[64];
+	gint meth_len = 0;
+	struct tm t, *ptm;
+
+	if (conn->type == RSPAMD_HTTP_SERVER) {
+		/* Format reply */
+		if (msg->method < HTTP_SYMBOLS) {
+			ptm = gmtime (&msg->date);
+			t = *ptm;
+			rspamd_snprintf (datebuf, sizeof(datebuf),
+					"%s, %02d %s %4d %02d:%02d:%02d GMT", http_week[t.tm_wday],
+					t.tm_mday, http_month[t.tm_mon], t.tm_year + 1900,
+					t.tm_hour, t.tm_min, t.tm_sec);
+			if (mime_type == NULL) {
+				mime_type =
+						encrypted ? "application/octet-stream" : "text/plain";
+			}
+			if (encrypted) {
+				/* Internal reply (encrypted) */
+				meth_len =
+						rspamd_snprintf (repbuf, replen,
+								"HTTP/1.1 %d %V\r\n"
+								"Connection: close\r\n"
+								"Server: %s\r\n"
+								"Date: %s\r\n"
+								"Content-Length: %z\r\n"
+								"Content-Type: %s", /* NO \r\n at the end ! */
+								msg->code, msg->status, "rspamd/1.3.0", datebuf,
+								bodylen, mime_type);
+				enclen += meth_len;
+				/* External reply */
+				rspamd_printf_fstring (buf,
+						"HTTP/1.1 200 OK\r\n"
+						"Connection: close\r\n"
+						"Server: rspamd\r\n"
+						"Date: %s\r\n"
+						"Content-Length: %z\r\n"
+						"Content-Type: application/octet-stream\r\n",
+						datebuf, enclen);
+			}
+			else {
+				meth_len =
+						rspamd_printf_fstring (buf,
+								"HTTP/1.1 %d %V\r\n"
+								"Connection: close\r\n"
+								"Server: %s\r\n"
+								"Date: %s\r\n"
+								"Content-Length: %z\r\n"
+								"Content-Type: %s\r\n",
+								msg->code, msg->status, "rspamd/1.3.0", datebuf,
+								bodylen, mime_type);
+			}
+		}
+		else {
+			/* Legacy spamd reply */
+			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
+				rspamd_printf_fstring (buf, "SPAMD/1.1 0 EX_OK\r\n");
+			}
+			else {
+				rspamd_printf_fstring (buf, "RSPAMD/1.3 0 EX_OK\r\n");
+			}
+		}
+	}
+	else {
+		/* Format request */
+		enclen += msg->url->len + strlen (http_method_str (msg->method)) + 1;
+
+		if (host == NULL && msg->host == NULL) {
+			/* Fallback to HTTP/1.0 */
+			if (encrypted) {
+				rspamd_printf_fstring (buf,
+						"%s %s HTTP/1.0\r\nContent-Length: %z\r\n", "POST",
+						"/post", enclen);
+			}
+			else {
+				rspamd_printf_fstring (buf,
+						"%s %V HTTP/1.0\r\nContent-Length: %z\r\n",
+						http_method_str (msg->method), msg->url, bodylen);
+			}
+		}
+		else {
+			if (encrypted) {
+				if (host != NULL) {
+					rspamd_printf_fstring (buf,
+							"%s %s HTTP/1.1\r\n"
+							"Connection: close\r\n"
+							"Host: %s\r\n"
+							"Content-Length: %z\r\n",
+							"POST", "/post", host, enclen);
+				}
+				else {
+					rspamd_printf_fstring (buf,
+							"%s %s HTTP/1.1\r\n"
+							"Connection: close\r\n"
+							"Host: %V\r\n"
+							"Content-Length: %z\r\n",
+							"POST", "/post", msg->host, enclen);
+				}
+			}
+			else {
+				if (host != NULL) {
+					rspamd_printf_fstring (buf,
+							"%s %V HTTP/1.1\r\nConnection: close\r\nHost: %s\r\nContent-Length: %z\r\n",
+							http_method_str (msg->method), msg->url, host,
+							bodylen);
+				}
+				else {
+					rspamd_printf_fstring (buf,
+							"%s %V HTTP/1.1\r\n"
+							"Connection: close\r\n"
+							"Host: %V\r\n"
+							"Content-Length: %z\r\n",
+							http_method_str (msg->method), msg->url, msg->host,
+							bodylen);
+				}
+			}
+		}
+		if (encrypted) {
+			GString *b32_key, *b32_id;
+
+			b32_key = rspamd_keypair_print (priv->local_key,
+					RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
+			b32_id = rspamd_pubkey_print (peer_key,
+					RSPAMD_KEYPAIR_ID_SHORT | RSPAMD_KEYPAIR_BASE32);
+			/* XXX: add some fuzz here */
+			rspamd_printf_fstring (&*buf, "Key: %v=%v\r\n", b32_id, b32_key);
+			g_string_free (b32_key, TRUE);
+			g_string_free (b32_id, TRUE);
+		}
+	}
+
+	return meth_len;
+}
+
 static void
 rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
@@ -1543,8 +1693,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr, *htmp;
-	struct tm t, *ptm;
-	gchar datebuf[64], repbuf[512], *pbody;
+	gchar repbuf[512], *pbody;
 	gint i, hdrcount, meth_len = 0, preludelen = 0;
 	gsize bodylen, enclen = 0;
 	rspamd_fstring_t *buf;
@@ -1595,6 +1744,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	}
 
 	if (allow_shared) {
+		gchar tmpbuf[64];
+
 		if (!(msg->flags & RSPAMD_HTTP_FLAG_SHMEM) ||
 				msg->body_buf.c.shared.name == NULL) {
 			allow_shared = FALSE;
@@ -1603,14 +1754,14 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			/* Insert new headers */
 			rspamd_http_message_add_header (msg, "Shm",
 					msg->body_buf.c.shared.name->shm_name);
-			rspamd_snprintf (datebuf, sizeof (datebuf), "%d",
+			rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%d",
 					(int)(msg->body_buf.begin - msg->body_buf.str));
 			rspamd_http_message_add_header (msg, "Shm-Offset",
-					datebuf);
-			rspamd_snprintf (datebuf, sizeof (datebuf), "%z",
+					tmpbuf);
+			rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%z",
 					msg->body_buf.len);
 			rspamd_http_message_add_header (msg, "Shm-Length",
-					datebuf);
+					tmpbuf);
 		}
 	}
 
@@ -1703,7 +1854,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 		else {
 			/* Invalid body for spamc method */
-			return;
+			g_assert (0);
 		}
 	}
 
@@ -1724,156 +1875,10 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	priv->out = g_slice_alloc (sizeof (struct iovec) * priv->outlen);
 	priv->wr_pos = 0;
 
-	if (conn->type == RSPAMD_HTTP_SERVER) {
-		/* Format reply */
-		if (msg->method < HTTP_SYMBOLS) {
-			ptm = gmtime (&msg->date);
-			t = *ptm;
-			rspamd_snprintf (datebuf,
-				sizeof (datebuf),
-				"%s, %02d %s %4d %02d:%02d:%02d GMT",
-				http_week[t.tm_wday],
-				t.tm_mday,
-				http_month[t.tm_mon],
-				t.tm_year + 1900,
-				t.tm_hour,
-				t.tm_min,
-				t.tm_sec);
-			if (mime_type == NULL) {
-				mime_type = encrypted ? "application/octet-stream" : "text/plain";
-			}
-			if (encrypted) {
-				/* Internal reply (encrypted) */
-				meth_len = rspamd_snprintf (repbuf, sizeof (repbuf),
-						"HTTP/1.1 %d %V\r\n"
-						"Connection: close\r\n"
-						"Server: %s\r\n"
-						"Date: %s\r\n"
-						"Content-Length: %z\r\n"
-						"Content-Type: %s", /* NO \r\n at the end ! */
-						msg->code,
-						msg->status,
-						"rspamd/" RVERSION,
-						datebuf,
-						bodylen,
-						mime_type);
-				enclen += meth_len;
-				/* External reply */
-				rspamd_printf_fstring (&buf, "HTTP/1.1 200 OK\r\n"
-						"Connection: close\r\n"
-						"Server: rspamd\r\n"
-						"Date: %s\r\n"
-						"Content-Length: %z\r\n"
-						"Content-Type: application/octet-stream\r\n",
-						datebuf,
-						enclen);
-			}
-			else {
-				meth_len = rspamd_printf_fstring (&buf, "HTTP/1.1 %d %V\r\n"
-						"Connection: close\r\n"
-						"Server: %s\r\n"
-						"Date: %s\r\n"
-						"Content-Length: %z\r\n"
-						"Content-Type: %s\r\n",
-						msg->code,
-						msg->status,
-						"rspamd/" RVERSION,
-						datebuf,
-						bodylen,
-						mime_type);
-			}
-		}
-		else {
-			/* Legacy spamd reply */
-			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
-				rspamd_printf_fstring (&buf, "SPAMD/1.1 0 EX_OK\r\n");
-			}
-			else {
-				rspamd_printf_fstring (&buf, "RSPAMD/1.3 0 EX_OK\r\n");
-			}
-		}
-	}
-	else {
-		/* Format request */
-		enclen += msg->url->len +
-				strlen (http_method_str (msg->method)) + 1 /* method + space */;
-		if (host == NULL && msg->host == NULL) {
-			/* Fallback to HTTP/1.0 */
-			if (encrypted) {
-				rspamd_printf_fstring (&buf, "%s %s HTTP/1.0\r\n"
-					"Content-Length: %z\r\n",
-					"POST",
-					"/post",
-					enclen);
-			}
-			else {
-				rspamd_printf_fstring (&buf, "%s %V HTTP/1.0\r\n"
-					"Content-Length: %z\r\n",
-					http_method_str (msg->method),
-					msg->url,
-					bodylen);
-			}
-		}
-		else {
-			if (encrypted) {
-				if (host != NULL) {
-					rspamd_printf_fstring (&buf, "%s %s HTTP/1.1\r\n"
-									"Connection: close\r\n"
-									"Host: %s\r\n"
-									"Content-Length: %z\r\n",
-							"POST",
-							"/post",
-							host,
-							enclen);
-				}
-				else {
-					rspamd_printf_fstring (&buf, "%s %s HTTP/1.1\r\n"
-									"Connection: close\r\n"
-									"Host: %V\r\n"
-									"Content-Length: %z\r\n",
-							"POST",
-							"/post",
-							msg->host,
-							enclen);
-				}
-			}
-			else {
-				if (host != NULL) {
-					rspamd_printf_fstring (&buf, "%s %V HTTP/1.1\r\n"
-									"Connection: close\r\n"
-									"Host: %s\r\n"
-									"Content-Length: %z\r\n",
-							http_method_str (msg->method),
-							msg->url,
-							host,
-							bodylen);
-				}
-				else {
-					rspamd_printf_fstring (&buf, "%s %V HTTP/1.1\r\n"
-									"Connection: close\r\n"
-									"Host: %V\r\n"
-									"Content-Length: %z\r\n",
-							http_method_str (msg->method),
-							msg->url,
-							msg->host,
-							bodylen);
-				}
-			}
-
-		}
-		if (encrypted) {
-			GString *b32_key, *b32_id;
-
-			b32_key = rspamd_keypair_print (priv->local_key,
-					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
-			b32_id = rspamd_pubkey_print (peer_key,
-					RSPAMD_KEYPAIR_ID_SHORT|RSPAMD_KEYPAIR_BASE32);
-			/* XXX: add some fuzz here */
-			rspamd_printf_fstring (&buf, "Key: %v=%v\r\n", b32_id, b32_key);
-			g_string_free (b32_key, TRUE);
-			g_string_free (b32_id, TRUE);
-		}
-	}
+	meth_len = rspamd_http_message_write_header (mime_type, encrypted,
+			repbuf, sizeof (repbuf), bodylen, enclen,
+			host, conn, msg,
+			&buf, priv, peer_key);
 
 	/* Setup external request body */
 	priv->out[0].iov_base = buf->str;
@@ -2126,14 +2131,14 @@ rspamd_http_message_get_body (struct rspamd_http_message *msg,
 static void
 rspamd_http_shname_dtor (void *p)
 {
-	struct _rspamd_storage_shmem_s *n = p;
+	struct rspamd_storage_shmem *n = p;
 
 	shm_unlink (n->shm_name);
 	g_free (n->shm_name);
 	g_slice_free1 (sizeof (*n), n);
 }
 
-void *
+struct rspamd_storage_shmem *
 rspamd_http_message_shmem_ref (struct rspamd_http_message *msg)
 {
 	if ((msg->flags & RSPAMD_HTTP_FLAG_SHMEM) && msg->body_buf.c.shared.name) {
@@ -2145,13 +2150,9 @@ rspamd_http_message_shmem_ref (struct rspamd_http_message *msg)
 }
 
 void
-rspamd_http_message_shmem_unref (void *p)
+rspamd_http_message_shmem_unref (struct rspamd_storage_shmem *p)
 {
-	struct _rspamd_storage_shmem_s *n = p;
-
-	if (n) {
-		REF_RELEASE (n);
-	}
+	REF_RELEASE (p);
 }
 
 gboolean
@@ -2316,7 +2317,7 @@ rspamd_http_message_append_body (struct rspamd_http_message *msg,
 		}
 
 		/* Check if we need to grow */
-		if (st.st_size < msg->body_buf.len + len) {
+		if ((gsize)st.st_size < msg->body_buf.len + len) {
 			/* Need to grow */
 			newlen = rspamd_fstring_suggest_size (msg->body_buf.len, st.st_size,
 					len);

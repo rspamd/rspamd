@@ -28,6 +28,7 @@
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "fstring.h"
+#include "ref.h"
 
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
@@ -40,6 +41,11 @@ struct rspamd_http_connection_private;
 struct rspamd_http_connection;
 struct rspamd_http_connection_router;
 struct rspamd_http_connection_entry;
+
+struct rspamd_storage_shmem {
+	gchar *shm_name;
+	ref_entry_t ref;
+};
 
 /**
  * Legacy spamc protocol
@@ -64,7 +70,8 @@ struct rspamd_http_connection_entry;
 enum rspamd_http_options {
 	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions */
 	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */
-	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4 /**< Encrypt data for client */
+	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4, /**< Encrypt data for client */
+	RSPAMD_HTTP_CLIENT_SHARED = 0x8, /**< Store reply in shared memory */
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
@@ -371,12 +378,12 @@ void rspamd_http_message_free (struct rspamd_http_message *msg);
  * Increase refcount for shared file (if any) to prevent early memory unlinking
  * @param msg
  */
-void* rspamd_http_message_shmem_ref (struct rspamd_http_message *msg);
+struct rspamd_storage_shmem* rspamd_http_message_shmem_ref (struct rspamd_http_message *msg);
 /**
  * Decrease external ref for shmem segment associated with a message
  * @param msg
  */
-void rspamd_http_message_shmem_unref (void *p);
+void rspamd_http_message_shmem_unref (struct rspamd_storage_shmem *p);
 
 /**
  * Parse HTTP date header and return it as time_t
