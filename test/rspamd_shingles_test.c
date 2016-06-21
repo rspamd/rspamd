@@ -19,6 +19,29 @@
 #include "ottery.h"
 #include <math.h>
 
+static const gchar *
+algorithm_to_string (enum rspamd_shingle_alg alg)
+{
+	const gchar *ret = "unknown";
+
+	switch (alg) {
+	case RSPAMD_SHINGLES_OLD:
+		ret = "siphash";
+		break;
+	case RSPAMD_SHINGLES_XXHASH:
+		ret = "xxhash";
+		break;
+	case RSPAMD_SHINGLES_MUMHASH:
+		ret = "mumhash";
+		break;
+	case RSPAMD_SHINGLES_FAST:
+		ret = "fasthash";
+		break;
+	}
+
+	return ret;
+}
+
 static void
 generate_random_string (char *begin, size_t len)
 {
@@ -103,9 +126,9 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor,
 
 	res = rspamd_shingles_compare (sgl, sgl_permuted);
 
-	msg_info ("%d (%z words of %z max len, %.2f perm factor):"
+	msg_info ("%s (%z words of %z max len, %.2f perm factor):"
 			" percentage of common shingles: %.3f, generate time: %.4f sec",
-			alg, cnt, max_len, perm_factor, res, ts2 - ts1);
+			algorithm_to_string (alg), cnt, max_len, perm_factor, res, ts2 - ts1);
 	//g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.25);
 
 	free_fuzzy_words (input);
