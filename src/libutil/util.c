@@ -2276,3 +2276,44 @@ rspamd_file_xmap (const char *fname, guint mode,
 
 	return map;
 }
+
+
+gpointer
+rspamd_shmem_xmap (const char *fname, guint mode,
+		gsize *size)
+{
+	gint fd;
+	struct stat sb;
+	gpointer map;
+
+	g_assert (fname != NULL);
+	g_assert (size != NULL);
+
+	if (mode & PROT_WRITE) {
+		fd = shm_open (fname, O_RDWR, 0);
+	}
+	else {
+		fd = shm_open (fname, O_RDONLY, 0);
+	}
+
+	if (fd == -1) {
+		return NULL;
+	}
+
+	if (fstat (fd, &sb) == -1) {
+		close (fd);
+
+		return NULL;
+	}
+
+	map = mmap (NULL, sb.st_size, mode, MAP_SHARED, fd, 0);
+	close (fd);
+
+	if (map == MAP_FAILED) {
+		return NULL;
+	}
+
+	*size = sb.st_size;
+
+	return map;
+}

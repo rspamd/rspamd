@@ -463,4 +463,14 @@ int rspamd_file_xopen (const char *fname, int oflags, guint mode);
 gpointer rspamd_file_xmap (const char *fname, guint mode,
 		gsize *size);
 
+/**
+ * Map named shared memory segment
+ * @param fname filename
+ * @param mode mode to open
+ * @param size target size (must NOT be NULL)
+ * @return pointer to memory (should be freed using munmap) or NULL in case of error
+ */
+gpointer rspamd_shmem_xmap (const char *fname, guint mode,
+		gsize *size);
+
 #endif
