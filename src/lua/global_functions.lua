@@ -142,7 +142,8 @@ function rspamd_redis_make_request(task, redis_params, key, is_write, callback, 
     options['dbname'] = redis_params['db']
   end
 
-  return rspamd_redis.make_request(options),addr
+  local ret,conn = rspamd_redis.make_request(options)
+  return ret,conn,addr
 end
 
 function rspamd_str_split(s, sep)

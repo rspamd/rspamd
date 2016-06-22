@@ -211,7 +211,7 @@ local function set_limits(task, args)
   ret,_,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
-    false, -- is write
+    true, -- is write
     rate_set_cb, --callback
     cmd, -- command
     fun.totable(fun.map(function(l) return l[2] end, args)) -- arguments

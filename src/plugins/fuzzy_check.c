@@ -2255,7 +2255,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 		/* Check for flag */
 		if (g_hash_table_lookup (rule->mappings,
-			GINT_TO_POINTER (flag)) == NULL) {
+				GINT_TO_POINTER (flag)) == NULL) {
 			msg_info_task ("skip rule %s as it has no flag %d defined"
 					" false", rule->name, flag);
 			cur = g_list_next (cur);
