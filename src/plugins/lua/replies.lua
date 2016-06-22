@@ -18,7 +18,7 @@ limitations under the License.
 -- A plugin that implements replies check using redis
 
 -- Default port for redis upstreams
-local upstreams
+local redis_params
 local whitelisted_ip
 local settings = {
   action = nil,
@@ -62,10 +62,17 @@ local function replies_check(task)
   end
   -- Create hash of in-reply-to and query redis
   local key = make_key(irt)
-  local upstream = upstreams:get_upstream_by_hash(key)
-  local addr = upstream:get_addr()
-  if not rspamd_redis.make_request({task = task, host = addr, callback = redis_get_cb,
-      cmd = 'GET', args = {key}}) then
+
+  local ret,_,_ = rspamd_redis_make_request(task,
+    redis_params, -- connect params
+    key, -- hash key
+    false, -- is write
+    redis_get_cb, --callback
+    'GET', -- command
+    key -- arguments
+  )
+
+  if not ret then
     rspamd_logger.errx("redis request wasn't scheduled")
   end
 end
@@ -87,22 +94,23 @@ local function replies_set(task)
   end
   -- Create hash of message-id and store to redis
   local key = make_key(msg_id)
-  local upstream = upstreams:get_upstream_by_hash(key)
-  local addr = upstream:get_addr()
-  if not addr then
-    rspamd_logger.errx("couldn't get address for upstream")
-    return
-  end
-  if not rspamd_redis.make_request({task = task, host = addr, callback = redis_set_cb,
-      cmd = 'SET', args = {key, 1, "ex", settings['expire']}}) then
+  local ret,_,_ = rspamd_redis_make_request(task,
+    redis_params, -- connect params
+    key, -- hash key
+    true, -- is write
+    redis_set_cb, --callback
+    'SET', -- command
+    {key, 1, "ex", settings['expire']} -- arguments
+  )
+  if not ret then
     rspamd_logger.errx("redis request wasn't scheduled")
   end
 end
 
 local opts = rspamd_config:get_all_opt('replies')
 if opts then
-    upstreams = rspamd_parse_redis_server('replies')
-    if not upstreams then
+    redis_params = rspamd_parse_redis_server('replies')
+    if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     else
       rspamd_config:register_pre_filter(replies_check)
