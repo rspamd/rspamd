@@ -5,20 +5,53 @@
 function rspamd_parse_redis_server(module_name)
 
   local default_port = 6379
+  local default_timeout = 1.0
   local logger = require "rspamd_logger"
   local upstream_list = require "rspamd_upstream_list"
 
   local function try_load_redis_servers(options)
-    local key = options['servers']
+    -- Try to get read servers:
+    local upstreams_read, upstreams_write
 
-    if not key then key = options['server'] end
+    if options['read_servers'] then
+      upstreams_read = upstream_list.create(rspamd_config,
+        options['read_servers'], default_port)
+    elseif options['servers'] then
+      upstreams_read = upstream_list.create(rspamd_config,
+        options['servers'], default_port)
+    elseif options['server'] then
+      upstreams_read = upstream_list.create(rspamd_config,
+        options['server'], default_port)
+    end
 
-    if key then
-      local upstreams = upstream_list.create(rspamd_config, key, default_port)
-
-      if upstreams then
-        return upstreams
+    if upstreams_read then
+      if options['write_servers'] then
+        upstreams_write = upstream_list.create(rspamd_config,
+          options['read_servers'], default_port)
+      else
+        upstreams_write = upstreams_read
       end
+    end
+
+    if upstreams_write and upstreams_read then
+      local ret = {
+        read_servers = upstreams_read,
+        write_servers = upstreams_write,
+      }
+      ret['timeout'] = default_timeout
+      if options['timeout'] then
+        ret['timeout'] = tonumber(options['timeout'])
+      end
+      if options['prefix'] then
+        ret['prefix'] = options['prefix']
+      end
+      if options['db'] then
+        ret['db'] = options['db']
+      end
+      if options['password'] then
+        ret['password'] = options['password']
+      end
+      return ret
     end
 
     return nil
