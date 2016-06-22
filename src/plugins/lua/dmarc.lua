@@ -35,7 +35,7 @@ local symbols = {
   dkim_deny_symbol = 'R_DKIM_REJECT',
 }
 -- Default port for redis upstreams
-local upstreams = nil
+local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
 local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
@@ -244,16 +244,20 @@ local function dmarc_callback(task)
       task:insert_result('DMARC_POLICY_ALLOW', res, lookup_domain)
     end
 
-    if rua and not(spf_ok or dkim_ok) and upstreams then
+    if rua and not(spf_ok or dkim_ok) and redis_params then
       -- Prepare and send redis report element
-      local upstream = upstreams:get_upstream_by_hash(from[1]['domain'])
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
-      local addr = upstream:get_addr()
       local report_data = dmarc_report(task, spf_ok, dkim_ok)
 
       if report_data then
-        rspamd_redis.make_request(task, addr, dmarc_report_cb,
-          'LPUSH', {redis_key, report_data})
+        rspamd_redis_make_request(task,
+          redis_params, -- connect params
+          from[1]['domain'], -- hash key
+          true, -- is write
+          dmarc_report_cb, --callback
+          'LPUSH', -- command
+          {redis_key, report_data} -- arguments
+        )
       end
     end
 
@@ -274,9 +278,9 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 
-upstreams = rspamd_parse_redis_server('dmarc')
-if not upstreams then
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
+redis_params = rspamd_parse_redis_server('dmarc')
+if not redis_params then
+  rspamd_logger.infox(rspamd_config, 'cannot parse servers parameter')
 end
 
 if opts['key_prefix'] then
