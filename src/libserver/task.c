@@ -604,7 +604,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
 		rspamd_lua_call_post_filters (task);
 		if ((task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
-				!RSPAMD_TASK_IS_EMPTY (task)) {
+				!RSPAMD_TASK_IS_EMPTY (task) &&
+				!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM|RSPAMD_TASK_FLAG_LEARN_HAM))) {
 			rspamd_stat_check_autolearn (task);
 		}
 		break;
@@ -621,6 +622,9 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 					if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
 						task->err = stat_error;
+					}
+					else if (stat_error) {
+						g_error_free (stat_error);
 					}
 
 					msg_err_task ("learn error: %e", stat_error);
