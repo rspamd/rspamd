@@ -105,6 +105,7 @@ function rspamd_redis_make_request(task, redis_params, key, is_write, callback, 
   end
 
   local addr
+  local rspamd_redis = require "rspamd_redis"
 
   if key then
     if is_write then
