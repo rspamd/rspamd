@@ -16,7 +16,7 @@ limitations under the License.
 
 -- A plugin that implements greylisting using redis
 
-local upstreams
+local redis_params
 local whitelisted_ip
 local settings = {
   expire = 86400, -- 1 day by default
@@ -128,8 +128,17 @@ end
 local function greylist_check(task)
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
-  local upstream = upstreams:get_upstream_by_hash(body_key .. meta_key)
-  local addr = upstream:get_addr()
+  local hash_key = body_key .. meta_key
+  local upstream
+
+  local function redis_set_cb(task, err, data)
+    if not err then
+      upstream:ok()
+    else
+      rspamd_logger.infox(task, 'got error %s when setting greylisting record on server %s',
+          err, upstream:get_addr())
+    end
+  end
 
   local function redis_get_cb(task, err, data)
     local ret_body = false
@@ -159,6 +168,7 @@ local function greylist_check(task)
           end
         end
       end
+
       upstream:ok()
 
       if not ret_body and not ret_meta then
@@ -169,35 +179,36 @@ local function greylist_check(task)
           'new record')
         task:set_pre_result('soft reject', settings['message'])
         -- Create new record
-        if addr then
-          local conn = rspamd_redis.connect({
-            task = task,
-            host = addr
-          })
+        local ret, conn
+        ret,conn,upstream = rspamd_redis_make_request(task,
+          redis_params, -- connect params
+          hash_key, -- hash key
+          true, -- is write
+          redis_set_cb, --callback
+          'SETEX', -- command
+          {body_key, tostring(settings['expire']), t} -- arguments
+        )
 
-          if conn then
-            conn:add_cmd('SETEX', {
-              body_key, tostring(settings['expire']), t
-            })
-            conn:add_cmd('SETEX', {
-              meta_key, tostring(settings['expire']), t
-            })
-            local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
-               + settings['timeout'])
-            task:get_mempool():set_variable("grey_greylisted", end_time)
-          else
-            rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
-            upstream:fail()
-          end
-        elseif greylisted_body and greylisted_meta then
-          local end_time = rspamd_util.time_to_string(time + settings['timeout'])
-          rspamd_logger.infox(task, 'greylisted till "%s" using %s key',
-            end_time, type)
-          task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
-            greylist_type)
-          task:set_pre_result('soft reject', settings['message'])
+        if conn then
+          conn:add_cmd('SETEX', {
+            meta_key, tostring(settings['expire']), t
+          })
+          local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
+             + settings['timeout'])
           task:get_mempool():set_variable("grey_greylisted", end_time)
+        else
+          rspamd_logger.infox(task, 'got error while connecting to redis: %s',
+            upstream:get_addr())
+          upstream:fail()
         end
+      elseif greylisted_body and greylisted_meta then
+        local end_time = rspamd_util.time_to_string(time + settings['timeout'])
+        rspamd_logger.infox(task, 'greylisted till "%s" using %s key',
+          end_time, type)
+        task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
+          greylist_type)
+        task:set_pre_result('soft reject', settings['message'])
+        task:get_mempool():set_variable("grey_greylisted", end_time)
       end
     elseif err then
       rspamd_logger.infox(task, 'got error while getting greylisting keys: %1', err)
@@ -206,8 +217,15 @@ local function greylist_check(task)
   end
 
   if addr then
-    local ret = rspamd_redis.make_request(task, addr, redis_get_cb, 'MGET',
-        {body_key, meta_key})
+    local ret
+    ret,_,upstream = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      hash_key, -- hash key
+      false, -- is write
+      redis_get_cb, --callback
+      'MGET', -- command
+      {body_key, meta_key} -- arguments
+    )
     if not ret then
       rspamd_logger.errx(task, 'cannot make redis request to check results')
     end
@@ -220,8 +238,17 @@ local function greylist_set(task)
   local action = task:get_metric_action('default')
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
-  local upstream = upstreams:get_upstream_by_hash(body_key .. meta_key)
-  local addr = upstream:get_addr()
+  local upstream, ret, conn
+  local hash_key = body_key .. meta_key
+
+  local function redis_set_cb(task, err, data)
+    if not err then
+      upstream:ok()
+    else
+      rspamd_logger.infox(task, 'got error %s when setting greylisting record on server %s',
+          err, upstream:get_addr())
+    end
+  end
 
   if is_whitelisted then
     if action == 'greylist' then
@@ -234,24 +261,22 @@ local function greylist_set(task)
       is_whitelisted,
       rspamd_util.time_to_string(rspamd_util.get_time() + settings['expire']))
 
+    ret,conn,upstream = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      hash_key, -- hash key
+      true, -- is write
+      redis_set_cb, --callback
+      'EXPIRE', -- command
+      {body_key, tostring(settings['expire'])} -- arguments
+    )
     -- Update greylisting record expire
-    if addr then
-      local conn = rspamd_redis.connect({
-        task = task,
-        host = addr
+    if conn then
+      conn:add_cmd('EXPIRE', {
+        meta_key, tostring(settings['expire'])
       })
-
-      if conn then
-        conn:add_cmd('EXPIRE', {
-          body_key, tostring(settings['expire'])
-        })
-        conn:add_cmd('EXPIRE', {
-          meta_key, tostring(settings['expire'])
-        })
-      else
-        rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
-        upstream:fail()
-      end
+    else
+     rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+     upstream:fail()
     end
   else
     if action ~= 'no action' and action ~= 'reject' then
@@ -294,8 +319,8 @@ if opts then
       'Greylist whitelist ip map')
   end
 
-  upstreams = rspamd_parse_redis_server('greylist')
-  if not upstreams then
+  redis_params = rspamd_parse_redis_server('greylist')
+  if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
     rspamd_config:register_pre_filter(greylist_check)
