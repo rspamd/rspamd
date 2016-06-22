@@ -155,6 +155,14 @@ local function set_limits(task, args)
   local ret, upstream
 
   local function rate_set_cb(task, err, data)
+    if not err then
+      upstream:ok()
+    else
+      rspamd_logger.infox(task, 'got error %s when setting ratelimit record on server %s',
+        err, upstream:get_addr())
+    end
+  end
+  local function rate_get_cb(task, err, data)
     if data then
       local ntime = rspamd_util.get_time()
       local values = {}
@@ -188,15 +196,20 @@ local function set_limits(task, args)
         table.insert(values, {limit[2], max_delay, lstr})
       end, fun.zip(parse_limits(data), fun.iter(args)))
 
-      local conn = rspamd_redis.connect({
-        task = task,
-        host = upstream:get_addr()
-      })
+      local conn
+      ret,conn,upstream = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        key, -- hash key
+        true, -- is write
+        rate_set_cb, --callback
+        'setex', -- command
+        values[1] -- arguments
+      )
 
       if conn then
         fun.each(function(v)
           conn:add_cmd('setex', v)
-        end, values)
+        end, fun.drop_n(1, values))
       else
         rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
         upstream:fail()
@@ -211,8 +224,8 @@ local function set_limits(task, args)
   ret,_,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
-    true, -- is write
-    rate_set_cb, --callback
+    false, -- is write
+    rate_get_cb, --callback
     cmd, -- command
     fun.totable(fun.map(function(l) return l[2] end, args)) -- arguments
   )
