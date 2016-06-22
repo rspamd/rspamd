@@ -23,7 +23,7 @@ local rspamd_util = require "rspamd_util"
 local _ = require "fun"
 
 -- Default settings
-local upstreams = nil
+local redis_params = nil
 local whitelist = nil
 local asn_cc_whitelist = nil
 
@@ -167,20 +167,26 @@ local ip_score_set = function(task)
   score = score_mult * rspamd_util.tanh (2.718 * score)
 
   local hkey = ip_score_hash_key(asn, country, ipnet, ip)
-  local upstream = upstreams:get_upstream_by_hash(hkey)
-  local addr = upstream:get_addr()
+  local upstream,ret
 
   asn_score,total_asn = new_score_set(score, asn_score, total_asn)
   country_score,total_country = new_score_set(score, country_score, total_country)
   ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
   ip_score,total_ip = new_score_set(score, ip_score, total_ip)
-
-  rspamd_redis.make_request(task, addr, score_set_cb,
-    'HMSET', {options['hash'],
+  local redis_args = {options['hash'],
     options['asn_prefix'] .. asn, string.format('%f|%d', asn_score, total_asn),
     options['country_prefix'] .. country, string.format('%f|%d', country_score, total_country),
     options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
-    ip:to_string(), string.format('%f|%d', ip_score, total_ip)})
+    ip:to_string(), string.format('%f|%d', ip_score, total_ip)}
+
+  ret,_,upstream = rspamd_redis_make_request(task,
+    redis_params, -- connect params
+    hkey, -- hash key
+    true, -- is write
+    score_set_cb, --callback
+    'HMSET', -- command
+    redis_args -- arguments
+  )
 end
 
 -- Check score for ip in keystorage
@@ -259,8 +265,12 @@ local ip_score_check = function(task)
         table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
       end
 
-      if options['max_score'] and (total_score*10) > options['max_score'] then total_score = options['max_score']/10 end
-      if options['min_score'] and (total_score*10) < options['min_score'] then total_score = options['min_score']/10 end
+      if options['max_score'] and (total_score*10) > options['max_score'] then
+        total_score = options['max_score']/10
+      end
+      if options['min_score'] and (total_score*10) < options['min_score'] then
+        total_score = options['min_score']/10
+      end
 
       if total_score ~= 0 then
         task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
@@ -317,10 +327,15 @@ local ip_score_check = function(task)
     end
 
     local cmd, args = create_get_command(ip, asn, country, ipnet)
-    local upstream = upstreams:get_upstream_by_hash(
-      ip_score_hash_key(asn, country, ipnet, ip))
-    local addr = upstream:get_addr()
-    rspamd_redis.make_request(task, addr, ip_score_redis_cb, cmd, args)
+
+    local ret,_,upstream = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      ip_score_hash_key(asn, country, ipnet, ip), -- hash key
+      false, -- is write
+      ip_score_redis_cb, --callback
+      cmd, -- command
+      args -- arguments
+    )
   end
 end
 
@@ -332,8 +347,8 @@ local configure_ip_score_module = function()
     for k,v in pairs(opts) do
       options[k] = v
     end
-    upstreams = rspamd_parse_redis_server('ip_score')
-    if not upstreams then
+    redis_params = rspamd_parse_redis_server('ip_score')
+    if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no servers are specified')
     end
   end
@@ -347,7 +362,7 @@ end
 
 
 configure_ip_score_module()
-if upstreams then
+if redis_params then
   -- Register ip_score module
   if options['asn_provider'] then
     rspamd_config:register_pre_filter(asn_check)
