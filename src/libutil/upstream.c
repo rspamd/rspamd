@@ -416,7 +416,7 @@ rspamd_upstream_fail (struct upstream *up)
 					max_error_rate = 0;
 				}
 
-				if (error_rate > max_error_rate && up->active_idx != -1) {
+				if (up->ls->ups->len > 1 && error_rate > max_error_rate) {
 					/* Remove upstream from the active list */
 					up->errors = 0;
 					rspamd_upstream_set_inactive (up->ls, up);
@@ -723,7 +723,10 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 
 	/* Here the upstreams list is already locked */
 	RSPAMD_UPSTREAM_LOCK (up->lock);
-	event_del (&up->ev);
+
+	if (event_get_base (&up->ev)) {
+		event_del (&up->ev);
+	}
 	g_ptr_array_add (ups->alive, up);
 	up->active_idx = ups->alive->len - 1;
 	RSPAMD_UPSTREAM_UNLOCK (up->lock);
