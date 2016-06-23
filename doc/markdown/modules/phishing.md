@@ -32,8 +32,8 @@ phishing {
 	domains = "file:///path/to/map";
 	
 	# Make exclusions for known redirectors
+	# Entry format: URL/path for map, colon, name of symbol
 	redirector_domains = [
-		# URL/path for map, colon, name of symbol
 		"${CONFDIR}/redirectors.map:REDIRECTOR_FALSE"
 	];
 	# For certain domains from the specified strict maps
