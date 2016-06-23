@@ -372,7 +372,7 @@ rspamd_upstream_fail (struct upstream *up)
 {
 	struct timeval tv;
 	gdouble error_rate, max_error_rate;
-	gint msec_last, msec_cur;
+	gdouble sec_last, sec_cur;
 	struct upstream_addr_elt *addr_elt;
 
 	gettimeofday (&tv, NULL);
@@ -384,11 +384,14 @@ rspamd_upstream_fail (struct upstream *up)
 		up->errors = 1;
 	}
 	else if (up->active_idx != -1) {
-		msec_last = tv_to_msec (&up->tv) / 1000.;
-		msec_cur = tv_to_msec (&tv) / 1000.;
-		if (msec_cur >= msec_last) {
-			if (msec_cur > msec_last) {
-				error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
+		sec_last = tv_to_double (&up->tv);
+		sec_cur = tv_to_double (&tv);
+
+		if (sec_cur >= sec_last) {
+			up->errors ++;
+
+			if (sec_cur > sec_last) {
+				error_rate = ((gdouble)up->errors) / (sec_cur - sec_last);
 				max_error_rate = ((gdouble)up->ctx->max_errors) / up->ctx->error_time;
 			}
 			else {
