@@ -198,12 +198,6 @@ parse_flags (struct fuzzy_rule *rule,
 			if (elt != NULL) {
 				map->fuzzy_flag = ucl_obj_toint (elt);
 
-				if (map->fuzzy_flag > 31) {
-					msg_err_config ("flags more than 31 are no longer "
-							"supported by rspamd");
-					return;
-				}
-
 				elt = ucl_object_lookup (val, "max_score");
 
 				if (elt != NULL) {
@@ -1525,7 +1519,6 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 	struct rspamd_task *task;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
-	guint i;
 	gint r, ret;
 	guchar buf[2048], *p;
 
@@ -1547,17 +1540,7 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 		while ((rep = fuzzy_process_reply (&p, &r,
 				session->commands, session->rule, &cmd)) != NULL) {
 			if (rep->prob > 0.5) {
-				if (rep->flag & (1U << 31)) {
-					/* Multi-flag */
-					for (i = 0; i < 31; i ++) {
-						if ((1U << i) & rep->flag) {
-							fuzzy_insert_result (session, rep, cmd, i + 1);
-						}
-					}
-				}
-				else {
-					fuzzy_insert_result (session, rep, cmd, rep->flag);
-				}
+				fuzzy_insert_result (session, rep, cmd, rep->flag);
 			}
 			else if (rep->value == 403) {
 				msg_info_task (

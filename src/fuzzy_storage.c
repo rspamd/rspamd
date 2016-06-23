@@ -686,24 +686,6 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 reply:
 	result.tag = cmd->tag;
 
-	if (session->epoch < RSPAMD_FUZZY_EPOCH11) {
-		/* We need to convert flags to legacy format */
-		guint32 flag = 0;
-
-		/* We select the least significant flag if multiple flags are set */
-		for (flag = 0; flag < 32; flag ++) {
-			if (result.flag & (1U << flag)) {
-				break;
-			}
-		}
-
-		if (flag == (1U << 31)) {
-			flag = 0;
-		}
-
-		result.flag = flag + 1;
-	}
-
 	memcpy (&session->reply.rep, &result, sizeof (result));
 
 	rspamd_fuzzy_update_stats (session->ctx,
