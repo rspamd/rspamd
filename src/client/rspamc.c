@@ -21,6 +21,8 @@
 #include "utlist.h"
 #include "unix-std.h"
 
+#include <fts.h>
+
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
@@ -1377,51 +1379,48 @@ static void
 rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
 {
-	DIR *d;
+	FTS *fts;
+	FTSENT *entry;
 	gint cur_req = 0;
-	struct dirent *ent;
-#if defined(__sun)
-	struct stat sb;
-#endif
 	FILE *in;
-	char filebuf[PATH_MAX];
 
-	d = opendir (name);
+	gchar * const names[] = {
+			(gchar *)name,
+			NULL
+	};
 
-	if (d != NULL) {
-		while ((ent = readdir (d))) {
-			rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%s",
-					name, G_DIR_SEPARATOR, ent->d_name);
-#if defined(__sun)
-			if (stat (filebuf, &sb)) continue;
-			if (S_ISREG (sb.st_mode)) {
-#else
-			if (ent->d_type == DT_REG || ent->d_type == DT_UNKNOWN) {
-#endif
-				if (access (filebuf, R_OK) != -1) {
-					in = fopen (filebuf, "r");
-					if (in == NULL) {
-						fprintf (stderr, "cannot open file %s\n", filebuf);
-						exit (EXIT_FAILURE);
-					}
-					rspamc_process_input (ev_base, cmd, in, filebuf, attrs);
-					cur_req++;
-					fclose (in);
-					if (cur_req >= max_requests) {
-						cur_req = 0;
-						/* Wait for completion */
-						event_base_loop (ev_base, 0);
-					}
-				}
+	 fts = fts_open (&names[0], FTS_LOGICAL|FTS_XDEV, NULL);
+
+	if (fts != NULL) {
+		while ((entry = fts_read (fts))) {
+			if (entry->fts_info != FTS_F) {
+				continue;
+			}
+
+			in = fopen (entry->fts_path, "r");
+			if (in == NULL) {
+				rspamd_fprintf (stderr, "cannot open file %s: %s\n",
+						entry->fts_path, strerror (errno));
+				continue;
+			}
+
+			rspamc_process_input (ev_base, cmd, in, entry->fts_path, attrs);
+			cur_req++;
+			fclose (in);
+
+			if (cur_req >= max_requests) {
+				cur_req = 0;
+				/* Wait for completion */
+				event_base_loop (ev_base, 0);
 			}
 		}
 	}
 	else {
-		fprintf (stderr, "cannot open directory %s\n", name);
+		fprintf (stderr, "cannot open directory %s: %s\n", name, strerror (errno));
 		exit (EXIT_FAILURE);
 	}
 
-	closedir (d);
+	fts_close (fts);
 	event_base_loop (ev_base, 0);
 }
 
