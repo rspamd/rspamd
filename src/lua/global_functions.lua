@@ -27,7 +27,7 @@ function rspamd_parse_redis_server(module_name)
     if upstreams_read then
       if options['write_servers'] then
         upstreams_write = upstream_list.create(rspamd_config,
-          options['read_servers'], default_port)
+          options['write_servers'], default_port)
       else
         upstreams_write = upstreams_read
       end
