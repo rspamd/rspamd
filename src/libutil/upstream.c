@@ -743,6 +743,15 @@ rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
 		}
 	}
 
+	if (max_weight == 0) {
+		/*
+		 * We actually don't have any weight information, so we could use
+		 * random selection here
+		 */
+		selected = g_ptr_array_index (ups->alive,
+				ottery_rand_range (ups->alive->len - 1));
+	}
+
 	if (use_cur && selected) {
 		if (selected->cur_weight > 0) {
 			selected->cur_weight--;
