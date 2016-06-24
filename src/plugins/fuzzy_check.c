@@ -1789,7 +1789,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					if (*(session->err) == NULL) {
 						g_set_error (session->err,
 							g_quark_from_static_string ("fuzzy check"),
-							EINVAL, "process fuzzy error");
+							rep->value, "process fuzzy error");
 					}
 					ret = return_finished;
 				}
