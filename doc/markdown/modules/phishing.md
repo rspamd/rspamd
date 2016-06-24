@@ -27,10 +27,10 @@ Here is an example of full module configuration.
 ~~~ucl
 phishing {
 	symbol = "R_PHISHING"; # Default symbol
-	
+
 	# Check only domains from this list
 	domains = "file:///path/to/map";
-	
+
 	# Make exclusions for known redirectors
 	redirector_domains = [
 		# URL/path for map, colon, name of symbol
@@ -57,3 +57,27 @@ payments system phishing.
 
 Finally, the default symbol is yielded- if `domains` is specified then
 only if the phished domain is found in the related map.
+
+## Openphish support
+
+Since version 1.3, there is [openphish](https://openphish.com) support in rspamd.
+Now rspamd loads this public feed as a map (using HTTPS) and checks URLs in messages using
+openphish list. If any match is found, then rspamd adds symbol `PHISHED_OPENPHISH`.
+
+If you use research or commercial data feed, rspamd can also use its data and gives
+more details about URLs found: their sector (e.g. 'Finance'), brand name (e.g.
+'Bank of Zimbabwe') and other useful information.
+
+There are couple of options available to configure openphish module:
+
+~~~ucl
+phishing {
+	# URL of feed, default is public url:
+	openphish_map = "https://www.openphish.com/feed.txt";
+	# For premium feed, change that to your personal URL, e.g.
+	# openphish_map = "https://openphish.com/samples/premium_feed.json";
+
+	# Change this to true if premium feed is enabled
+	openphish_premium = false;
+}
+~~~
