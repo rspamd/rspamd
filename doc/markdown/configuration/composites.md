@@ -1,13 +1,10 @@
-# Rspamd composite symbols
+# rspamd composite symbols
 
 ## Introduction
 
-Rspamd composites are used to combine rules and create more complex rules.
-Composite rules are defined by `composite` keys. The value of this key should be
-an object that defines composite's name and value, which is the combination of rules
-in a joint expression.
+rspamd composites are used to combine rules and create more complex rules. Composite rules are defined by `composite` keys. The value of the key should be an object that defines the composite's name and value, which is the combination of rules in a joint expression.
 
-For example, you can define a composite that is added when two of symbols are found:
+For example, you can define a composite that is added when two specific symbols are found:
 
 ~~~ucl
 composite {
@@ -16,20 +13,17 @@ composite {
 }
 ~~~
 
-In this case, if a message has `SYMBOL1` and `SYMBOL2` simultaneously then they are replaced by
-symbol `TEST_COMPOSITE`. The weights of `SYMBOL1` and `SYMBOL2` are substracted from the metric
-accordingly.
+In this case, if a message has both `SYMBOL1` and `SYMBOL2` then they are replaced by symbol `TEST_COMPOSITE`. The weights of `SYMBOL1` and `SYMBOL2` are subtracted from the metric accordingly.
 
-## Composite expression
+## Composite expressions
 
 You can use the following operations in a composite expression:
 
-* `AND` `&` - matches true only if both of operands are true
-* `OR` `|` - matches true if any of operands are true
+* `AND` `&` - matches true only if both operands are true
+* `OR` `|` - matches true if any operands are true
 * `NOT` `!` - matches true if operand is false
 
-You also can use braces to define priorities. Otherwise operators are evaluated from left to right.
-For example:
+You also can use braces to define priorities. Otherwise operators are evaluated from left to right. For example:
 
 ~~~ucl
 composite {
@@ -38,7 +32,8 @@ composite {
 }
 ~~~
 
-Composite rule can include other composites in the body. There is no restriction of definition order:
+Composite rule can include other composites in the body. There is no restriction on definition order:
+
 ~~~ucl
 composite {
     name = "TEST1";
@@ -50,22 +45,18 @@ composite {
 }
 ~~~
 
-Composites should not be recursive and it is normally detected by rspamd.
+Composites should not be recursive; this is normally detected by rspamd.
 
-## Composite weights rules
+## Composite weight rules
 
-Composites can leave the symbols in a metric or leave their weights. That could be used to create
-non-captive composites.
-For example, you have symbol `A` and `B` with weights `W_a` and `W_b` and a composite `C` with weight `W_c`.
+Composites can record symbols in a metric or record their weights. That could be used to create non-captive composites. For example, you have symbol `A` and `B` with weights `W_a` and `W_b` and a composite `C` with weight `W_c`.
 
 * If `C` is `A & B` then if rule `A` and rule `B` matched then these symbols are *removed* and their weights are removed as well, leading to a single symbol `C` with weight `W_c`.
 * If `C` is `-A & B`, then rule `A` is preserved, but the symbol `C` is inserted. The weight of `A` is preserved as well, so the total weight of `-A & B` will be `W_a + W_c`.
 * If `C` is `~A & B`, then rule `A` is *removed* but its weight is *preserved*,
   leading to a single symbol `C` with weight `W_a + W_c`
 
-When you have multiple composites which include the same symbol and some
-composites want to remove symbol and other want to preserve it then a symbol is
-preserved by default. Here are some more examples:
+When you have multiple composites which include the same symbol and a composite wants to remove the symbol and another composite wants to preserve it, then the symbol is preserved by default. Here are some more examples:
 
 ~~~ucl
 composite "COMP1" {
@@ -79,11 +70,9 @@ composite "COMP3" {
 }
 ~~~
 
-Both `BLAH` and `DATE_IN_PAST` exist in the message's check results. However,
-`COMP3` wants to preserve `DATE_IN_PAST` so it will be saved in the output.
+Both `BLAH` and `DATE_IN_PAST` exist in the message's check results. However, `COMP3` wants to preserve `DATE_IN_PAST` so it will be saved in the output.
 
-If we rewrite the previous example but replace `-` to `~` then `DATE_IN_PAST`
-will be removed (however, its weight won't be removed):
+If we rewrite the previous example but replace `-` with `~` then `DATE_IN_PAST` will be removed (however, its weight won't be removed):
 
 ~~~ucl
 composite "COMP1" {
@@ -97,8 +86,7 @@ composite "COMP3" {
 }
 ~~~
 
-When we want to remove symbol despite of other composites combinations it is
-also possible to add prefix '^' to this symbol:
+When we want to remove a symbol, despite other composites combinations, it is possible to add the prefix `^` to the symbol:
 
 ~~~ucl
 composite "COMP1" {
@@ -112,13 +100,11 @@ composite "COMP3" {
 }
 ~~~
 
-In this example `COMP3` wants to save `DATE_IN_PAST` once again, however `COMP2`
-overrides this and removes `DATE_IN_PAST`.
+In this example `COMP3` wants to save `DATE_IN_PAST` once again, however `COMP2` overrides this and removes `DATE_IN_PAST`.
 
 ## Composites with symbol groups
 
-It is also possible to include the whole group of symbols to a composite rule. This
-efficiently means **any** symbol of the specified group:
+It is possible to include a group of symbols in a composite rule. This effectively means **any** symbol of the specified group:
 
 ~~~ucl
 composite {
