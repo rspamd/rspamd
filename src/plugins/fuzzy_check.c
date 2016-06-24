@@ -113,6 +113,7 @@ struct fuzzy_client_session {
 	GPtrArray *commands;
 	struct rspamd_task *task;
 	struct upstream *server;
+	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
 	struct event ev;
 	struct event timev;
@@ -128,6 +129,7 @@ struct fuzzy_learn_session {
 	GError **err;
 	struct rspamd_http_connection_entry *http_entry;
 	struct upstream *server;
+	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
 	struct rspamd_task *task;
 	struct event ev;
@@ -1644,8 +1646,9 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 	}
 	else if (ret == return_error) {
 		/* Error state */
-		msg_err_task ("got error on IO with server %s, on %s, %d, %s",
+		msg_err_task ("got error on IO with server %s(%s), on %s, %d, %s",
 			rspamd_upstream_name (session->server),
+			rspamd_inet_address_to_string (session->addr),
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
@@ -1684,8 +1687,9 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	}
 
 	if (session->retransmits >= fuzzy_module_ctx->retransmits) {
-		msg_err_task ("got IO timeout with server %s, after %d retransmits",
+		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
+				rspamd_inet_address_to_string (session->addr),
 				session->retransmits);
 		rspamd_upstream_fail (session->server);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
@@ -1832,8 +1836,10 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 		return;
 	}
 	else if (ret == return_error) {
-		msg_err_task ("got error in IO with server %s, %d, %s",
-				rspamd_upstream_name (session->server), errno, strerror (errno));
+		msg_err_task ("got error in IO with server %s(%s), %d, %s",
+				rspamd_upstream_name (session->server),
+				rspamd_inet_address_to_string (session->addr),
+				errno, strerror (errno));
 		rspamd_upstream_fail (session->server);
 	}
 
@@ -1895,8 +1901,9 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 		rspamd_upstream_fail (session->server);
 		rspamd_controller_send_error (session->http_entry,
 				500, "IO timeout with fuzzy storage");
-		msg_err_task ("got IO timeout with server %s, after %d retransmits",
+		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
+				rspamd_inet_address_to_string (session->addr),
 				session->retransmits);
 
 		if (*session->saved > 0 ) {
@@ -2055,16 +2062,18 @@ register_fuzzy_client_call (struct rspamd_task *task,
 {
 	struct fuzzy_client_session *session;
 	struct upstream *selected;
+	rspamd_inet_addr_t *addr;
 	gint sock;
 
 	/* Get upstream */
 	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN,
 			NULL, 0);
 	if (selected) {
-		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
-				SOCK_DGRAM, TRUE)) == -1) {
-			msg_warn_task ("cannot connect to %s, %d, %s",
+		addr = rspamd_upstream_addr (selected);
+		if ((sock = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE)) == -1) {
+			msg_warn_task ("cannot connect to %s(%s), %d, %s",
 				rspamd_upstream_name (selected),
+				rspamd_inet_address_to_string (addr),
 				errno,
 				strerror (errno));
 			rspamd_upstream_fail (selected);
@@ -2081,6 +2090,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 			session->fd = sock;
 			session->server = selected;
 			session->rule = rule;
+			session->addr = addr;
 
 			event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
 					session);
@@ -2140,6 +2150,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 {
 	struct fuzzy_learn_session *s;
 	struct upstream *selected;
+	rspamd_inet_addr_t *addr;
 	struct rspamd_controller_session *session = entry->ud;
 	gint sock;
 	gboolean ret = FALSE;
@@ -2149,7 +2160,9 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	while ((selected = rspamd_upstream_get (rule->servers,
 			RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
 		/* Create UDP socket */
-		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+		addr = rspamd_upstream_addr (selected);
+
+		if ((sock = rspamd_inet_address_connect (addr,
 				SOCK_DGRAM, TRUE)) == -1) {
 			rspamd_upstream_fail (selected);
 		}
@@ -2160,6 +2173,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
 			s->task = task;
+			s->addr = addr;
 			s->commands = commands;
 			s->http_entry = entry;
 			s->server = selected;
