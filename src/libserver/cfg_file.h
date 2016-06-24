@@ -453,12 +453,21 @@ const ucl_object_t * rspamd_config_get_module_opt (struct rspamd_config *cfg,
  */
 gchar rspamd_config_parse_flag (const gchar *str, guint len);
 
+enum rspamd_post_load_options {
+	RSPAMD_CONFIG_INIT_URL = 1 << 0,
+	RSPAMD_CONFIG_INIT_LIBS = 1 << 1,
+	RSPAMD_CONFIG_INIT_SYMCACHE = 1 << 2,
+	RSPAMD_CONFIG_INIT_VALIDATE = 1 << 3
+};
+
+#define RSPAMD_CONFIG_LOAD_ALL (RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_SYMCACHE|RSPAMD_CONFIG_INIT_VALIDATE)
+
 /**
  * Do post load actions for config
  * @param cfg config file
  */
 gboolean rspamd_config_post_load (struct rspamd_config *cfg,
-		gboolean validate_cache);
+		enum rspamd_post_load_options opts);
 
 /**
  * Calculate checksum for config file

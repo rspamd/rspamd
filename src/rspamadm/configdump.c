@@ -290,7 +290,7 @@ rspamadm_configdump (gint argc, gchar **argv)
 		}
 
 		if (ret) {
-			ret = rspamd_config_post_load (cfg, FALSE);
+			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 		}
 	}
 

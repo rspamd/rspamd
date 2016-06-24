@@ -285,7 +285,7 @@ main (gint argc, gchar **argv, gchar **env)
 	(void) rspamd_log_open (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler (rspamd_glib_printerr_function);
-	rspamd_config_post_load (cfg, FALSE);
+	rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_LIBS);
 
 	/* Setup logger */
 	if (verbose) {

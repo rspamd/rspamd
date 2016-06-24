@@ -399,7 +399,7 @@ lua_util_load_rspamd_config (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			rspamd_config_post_load (cfg, FALSE);
+			rspamd_config_post_load (cfg, 0);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
@@ -433,7 +433,7 @@ lua_util_config_from_ucl (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			rspamd_config_post_load (cfg, FALSE);
+			rspamd_config_post_load (cfg, 0);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;

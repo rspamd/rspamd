@@ -150,7 +150,7 @@ rspamadm_configtest (gint argc, gchar **argv)
 		}
 
 		if (ret) {
-			ret = rspamd_config_post_load (cfg, FALSE);
+			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 		}
 
 		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
