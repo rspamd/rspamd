@@ -23,7 +23,9 @@ local domains = nil
 local strict_domains = {}
 local redirector_domains = {}
 local openphish_map = 'https://www.openphish.com/feed.txt'
+local openphish_premium = false
 local openphish_hash
+local openphish_json = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
@@ -36,8 +38,19 @@ local function phishing_cb(task)
       if openphish_hash then
         local t = url:get_text()
 
-        if openphish_hash:get_key(t) then
-          task:insert_result(openphish_symbol, 1.0, url:get_tld())
+        if openphish_premium then
+          local elt = openphish_json[t]
+          if elt then
+            task:insert_result(openphish_symbol, 1.0, {
+              elt['tld'],
+              elt['sector'],
+              elt['brand'],
+            })
+          end
+        else
+          if openphish_hash:get_key(t) then
+            task:insert_result(openphish_symbol, 1.0, url:get_tld())
+          end
         end
       end
 
@@ -123,6 +136,46 @@ local function phishing_map(mapname, phishmap)
   end
 end
 
+local function rspamd_str_split_fun(s, sep, func)
+  local lpeg = require "lpeg"
+  sep = lpeg.P(sep)
+  local elem = lpeg.C((1 - sep)^0 / func)
+  local p = lpeg.C(elem * (sep * elem)^0)   -- make a table capture
+  return lpeg.match(p, s)
+end
+
+local function openphish_json_cb(string)
+  local ucl = require "ucl"
+  local nelts = 0
+  local new_json_map = {}
+  local valid = true
+
+  local function openphish_elt_parser(cap)
+    if valid then
+      local parser = ucl.parser()
+      local res,err = parser:parse_string(cap)
+      if not res then
+        valid = false
+        rspamd_logger.warnx(rspamd_config, 'cannot parse openphish map: ' .. err)
+      else
+        local obj = parser:get_object()
+
+        if obj['url'] then
+          new_json_map[obj['url']] = obj
+          nelts = nelts + 1
+        end
+      end
+    end
+  end
+
+  rspamd_str_split_fun(string, '\n', openphish_elt_parser)
+
+  if valid then
+    openphish_json = new_json_map
+    rspamd_logger.infox(openphish_hash, "parsed %s elements from openphish feed",
+      nelts)
+  end
+end
 
 if opts then
   if opts['symbol'] then
@@ -137,11 +190,24 @@ if opts then
       openphish_map = opts['openphish_map']
     end
 
-    openphish_hash = rspamd_config:add_map({
-      type = 'set',
-      url = openphish_map,
-      description = 'Open phishing feed map (see https://www.openphish.com for details)'
-    })
+    if opts['openphish_premium'] then
+      openphish_premium = true
+    end
+
+    if not openphish_premium then
+      openphish_hash = rspamd_config:add_map({
+        type = 'set',
+        url = openphish_map,
+        description = 'Open phishing feed map (see https://www.openphish.com for details)'
+      })
+    else
+      openphish_hash = rspamd_config:add_map({
+          type = 'callback',
+          url = openphish_map,
+          callback = openphish_json_cb,
+          description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
+        })
+    end
 
     if openphish_hash then
       rspamd_config:register_symbol({

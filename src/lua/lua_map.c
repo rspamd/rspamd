@@ -547,7 +547,7 @@ lua_map_get_key (lua_State * L)
 				}
 			}
 		}
-		else {
+		else if (map->type == RSPAMD_LUA_MAP_HASH) {
 			/* key-value map */
 			key = lua_tostring (L, 2);
 
@@ -559,6 +559,11 @@ lua_map_get_key (lua_State * L)
 				lua_pushstring (L, value);
 				return 1;
 			}
+		}
+		else {
+			/* callback map or unknown type map */
+			lua_pushnil (L);
+			return 1;
 		}
 	}
 	else {
