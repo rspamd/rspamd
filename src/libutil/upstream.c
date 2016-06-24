@@ -443,7 +443,6 @@ rspamd_upstream_ok (struct upstream *up)
 	if (up->errors > 0 && up->active_idx != -1) {
 		/* We touch upstream if and only if it is active */
 		up->errors = 0;
-		rspamd_upstream_set_active (up->ls, up);
 
 		if (up->addrs.addr) {
 			addr_elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
