@@ -2,8 +2,73 @@
 layout: default
 title: Rspamd spam filtering system
 ---
+<div class="row main-small-text-block">
+		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
+		    <div class="thumbnail">
+				    <img src="img/performance.jpg" class="" height="80" width="80">
+						<div class="caption">
+								<h2><a href="#">Performance <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<p>Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.</p>
+						</div>
+				</div>
+		</div>
+		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
+		    <div class="thumbnail">
+				    <img src="img/features.jpg" class="" height="80" width="80">
+						<div class="caption">
+								<h2><a href="#">Features <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<p>Short simple text.Short simple text. Short simple text.</p>
+						</div>
+				</div>
+		</div>
+		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
+				<div class="thumbnail">
+						<img src="img/compare.jpg" class="" height="80" width="80">
+						<div class="caption">
+								<h2><a href="#">Compare <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<p>Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.</p>
+						</div>
+				</div>
+		</div>
+		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
+				<div class="thumbnail">
+						<img src="img/documentation.jpg" class="" height="80" width="80">
+						<div class="caption">
+								<h2><a href="#">Documentation <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<p>Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.</p>
+						</div>
+				</div>
+		</div>
+		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
+				<div class="thumbnail">
+						<img src="img/media.jpg" class="" height="80" width="80">
+						<div class="caption">
+								<h2><a href="#">Media <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<p>Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.</p>
+						</div>
+				</div>
+		</div>
+		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
+				<div class="thumbnail">
+						<img src="img/support.jpg" class="" height="80" width="80">
+						<div class="caption">
+								<h2><a href="#">Donation & Support <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<p>Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.
+								Short simple text.Short simple text. Short simple text.</p>
+						</div>
+				</div>
+		</div>
+</div>
 
-<div class="row myRowEq">
+
+<!--div class="row myRowEq">
 	<div class="col-xs-12 col-sm-4 myMainPageText">
 			<div>
 					<h2>Performance</h2>
@@ -33,7 +98,7 @@ title: Rspamd spam filtering system
       </div>
 			<a class="btn btn-primary" href="about.html#extensions">View details &raquo;</a>
 	</div>
-</div>
+</div-->
 
 {% for post in site.posts limit:3 %}
 <div class="row">

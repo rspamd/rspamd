@@ -110,3 +110,15 @@ short-news p {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.main-small-text{
+  text-align: center;
+  padding: 10px;
+}
+.main-small-text-block{
+  padding-top: 10px;
+  padding-bottom: 50px;
+}
+.thumbnail{
+  height: 300px;
+  padding: 10px;
+}
