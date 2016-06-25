@@ -575,7 +575,7 @@ rspamd_protocol_handle_control (struct rspamd_task *task,
 
 	rspamd_protocol_control_parser_init ();
 
-	if (!rspamd_rcl_parse (control_parser, task, task->task_pool,
+	if (!rspamd_rcl_parse (control_parser, task->cfg, task, task->task_pool,
 			control, &err)) {
 		msg_warn_task ("cannot parse control block: %e", err);
 		g_error_free (err);

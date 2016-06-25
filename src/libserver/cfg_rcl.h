@@ -49,6 +49,7 @@ enum rspamd_rcl_flag {
 };
 
 struct rspamd_rcl_struct_parser {
+	struct rspamd_config *cfg;
 	gpointer user_struct;
 	goffset offset;
 	enum rspamd_rcl_flag flags;
@@ -142,13 +143,17 @@ struct rspamd_rcl_section * rspamd_rcl_config_get_section (
 	const char *path);
 
 /**
- * Read RCL configuration and parse it to a config file
+ * Parse configuration
  * @param top top section
- * @param cfg target configuration
- * @param obj object to handle
- * @return TRUE if an object can be parsed
+ * @param cfg rspamd configuration
+ * @param ptr pointer to the target
+ * @param pool pool object
+ * @param obj ucl object to parse
+ * @param err error pointer
+ * @return
  */
 gboolean rspamd_rcl_parse (struct rspamd_rcl_section *top,
+		struct rspamd_config *cfg,
 		gpointer ptr, rspamd_mempool_t *pool,
 		const ucl_object_t *obj, GError **err);
 
@@ -162,9 +167,10 @@ gboolean rspamd_rcl_parse (struct rspamd_rcl_section *top,
  * @param err error ptr
  * @return TRUE if the object has been parsed
  */
-gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
-	rspamd_mempool_t *pool, const ucl_object_t *obj, gpointer ptr,
-	GError **err);
+gboolean rspamd_rcl_section_parse_defaults (struct rspamd_config *cfg,
+		struct rspamd_rcl_section *section,
+		rspamd_mempool_t *pool, const ucl_object_t *obj, gpointer ptr,
+		GError **err);
 /**
  * Here is a section of common handlers that accepts rcl_struct_parser
  * which itself contains a struct pointer and the offset of a member in a
