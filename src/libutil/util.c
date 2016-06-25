@@ -2010,25 +2010,26 @@ rspamd_init_libs (void)
 
 #ifdef HAVE_OPENSSL
 	ERR_load_crypto_strings ();
+	SSL_load_error_strings ();
 
 	OpenSSL_add_all_algorithms ();
 	OpenSSL_add_all_digests ();
 	OpenSSL_add_all_ciphers ();
 
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
 	ENGINE_load_builtin_engines ();
 
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
 		RAND_set_rand_engine (NULL);
 	}
 #endif
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 	SSL_library_init ();
 #else
 	OPENSSL_init_ssl (0, NULL);
 #endif
-	SSL_library_init ();
-	SSL_load_error_strings ();
+
 	OPENSSL_config (NULL);
 
 	if (RAND_poll () == 0) {
