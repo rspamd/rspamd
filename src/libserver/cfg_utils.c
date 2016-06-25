@@ -1642,3 +1642,81 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 
 	return TRUE;
 }
+
+
+gboolean
+rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
+		const ucl_object_t *obj,
+		const gchar *description,
+		radix_compressed_t **target,
+		GError **err)
+{
+	ucl_type_t type;
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+	const gchar *str;
+
+	type = ucl_object_type (obj);
+
+	switch (type) {
+	case UCL_STRING:
+		/* Either map or a list of IPs */
+		str = ucl_object_tostring (obj);
+
+		if (rspamd_map_is_map (str)) {
+			if (rspamd_map_add_from_ucl (cfg, cfg->local_addrs,
+					description, rspamd_radix_read, rspamd_radix_fin,
+					(void **)target) == NULL) {
+				g_set_error (err, g_quark_from_static_string ("rspamd-config"),
+						EINVAL, "bad map definition %s for %s", str,
+						ucl_object_key (obj));
+				return FALSE;
+			}
+		}
+		else {
+			/* Just a list */
+			if (!radix_add_generic_iplist (str, target)) {
+				g_set_error (err, g_quark_from_static_string ("rspamd-config"),
+						EINVAL, "bad map definition %s for %s", str,
+						ucl_object_key (obj));
+				return FALSE;
+			}
+		}
+		break;
+	case UCL_OBJECT:
+		/* Should be a map description */
+		if (rspamd_map_add_from_ucl (cfg, cfg->local_addrs,
+				description, rspamd_radix_read, rspamd_radix_fin,
+				(void **)target) == NULL) {
+			g_set_error (err, g_quark_from_static_string ("rspamd-config"),
+					EINVAL, "bad map object for %s", ucl_object_key (obj));
+			return FALSE;
+		}
+		break;
+	case UCL_ARRAY:
+		/* List of IP addresses */
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+			str = ucl_object_tostring (cur);
+
+			if (str == NULL || !radix_add_generic_iplist (str, target)) {
+				g_set_error (err, g_quark_from_static_string ("rspamd-config"),
+						EINVAL, "bad map element %s for %s", str,
+						ucl_object_key (obj));
+
+				if (*target) {
+					radix_destroy_compressed (*target);
+				}
+
+				return FALSE;
+			}
+		}
+		break;
+	default:
+		g_set_error (err, g_quark_from_static_string ("rspamd-config"),
+				EINVAL, "bad map type %s for %s", ucl_object_type_to_string (type),
+				ucl_object_key (obj));
+		return FALSE;
+	}
+
+	return TRUE;
+}

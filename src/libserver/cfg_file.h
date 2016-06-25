@@ -15,6 +15,7 @@
 #include "regexp.h"
 #include "libserver/re_cache.h"
 #include "ref.h"
+#include "libutil/radix.h"
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -605,6 +606,20 @@ gboolean rspamd_config_set_action_score (struct rspamd_config *cfg,
  */
 gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		const gchar *module_name);
+
+/**
+ * Parse radix tree or radix map from ucl object
+ * @param cfg configuration object
+ * @param obj ucl object with parameter
+ * @param target target radix tree
+ * @param err error pointer
+ * @return
+ */
+gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
+		const ucl_object_t *obj,
+		const gchar *description,
+		radix_compressed_t **target,
+		GError **err);
 
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
