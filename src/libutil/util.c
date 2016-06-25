@@ -2085,16 +2085,8 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 
 	if (ctx != NULL) {
 		if (cfg->local_addrs) {
-			if (ucl_object_type (cfg->local_addrs) == UCL_STRING &&
-					!rspamd_map_is_map (ucl_object_tostring (cfg->local_addrs))) {
-				radix_add_generic_iplist (ucl_object_tostring (cfg->local_addrs),
-						(radix_compressed_t **)ctx->local_addrs);
-			}
-			else {
-				rspamd_map_add_from_ucl (cfg, cfg->local_addrs,
-					"Local addresses", rspamd_radix_read, rspamd_radix_fin,
-					(void **) ctx->local_addrs);
-			}
+			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs, "Local addresses",
+					ctx->local_addrs, NULL);
 		}
 
 		if (cfg->ssl_ca_path) {

@@ -108,8 +108,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct timeval master_io_tv;
 	gdouble master_timeout;
 	GPtrArray *mirrors;
-	gchar *update_map;
-	gchar *masters_map;
+	const ucl_object_t *update_map;
+	const ucl_object_t *masters_map;
 	guint keypair_cache_size;
 	struct event_base *ev_base;
 	gint peer_fd;
@@ -1863,7 +1863,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"allow_update",
-			rspamd_rcl_parse_struct_string,
+			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map),
 			0,
@@ -1919,7 +1919,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"masters",
-			rspamd_rcl_parse_struct_string,
+			rspamd_rcl_parse_struct_ucl,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, masters_map),
 			0,
@@ -2094,36 +2094,14 @@ start_fuzzy (struct rspamd_worker *worker)
 				rspamd_fuzzy_storage_sync, ctx);
 	/* Create radix trees */
 	if (ctx->update_map != NULL) {
-		if (!rspamd_map_is_map (ctx->update_map)) {
-			if (!radix_add_generic_iplist (ctx->update_map,
-					&ctx->update_ips)) {
-				msg_warn ("cannot load or parse ip list from '%s'",
-						ctx->update_map);
-			}
-		}
-		else {
-			rspamd_map_add (worker->srv->cfg, ctx->update_map,
-					"Allow fuzzy updates from specified addresses",
-					rspamd_radix_read, rspamd_radix_fin,
-					(void **)&ctx->update_ips);
-
-		}
+		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->update_map,
+				"Allow fuzzy updates from specified addresses",
+				&ctx->update_ips, NULL);
 	}
 	if (ctx->masters_map != NULL) {
-		if (!rspamd_map_is_map (ctx->masters_map)) {
-			if (!radix_add_generic_iplist (ctx->masters_map,
-					&ctx->master_ips)) {
-				msg_warn ("cannot load or parse ip list from '%s'",
-						ctx->masters_map);
-			}
-		}
-		else {
-			rspamd_map_add (worker->srv->cfg, ctx->masters_map,
-					"Allow fuzzy master/slave updates from specified addresses",
-					rspamd_radix_read, rspamd_radix_fin,
-					(void **)&ctx->master_ips);
-
-		}
+		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->masters_map,
+				"Allow fuzzy master/slave updates from specified addresses",
+				&ctx->master_ips, NULL);
 	}
 
 	/* Maps events */

@@ -1506,10 +1506,10 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
 	return FALSE;
 }
 
-void **
+radix_compressed_t **
 rspamd_inet_library_init (void)
 {
-	return (void **)&local_addrs;
+	return &local_addrs;
 }
 
 void

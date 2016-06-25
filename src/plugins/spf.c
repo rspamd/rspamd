@@ -164,7 +164,6 @@ spf_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id;
 	guint cache_size;
-	const gchar *str;
 
 	if (!rspamd_config_is_module_enabled (cfg, "spf")) {
 		return TRUE;
@@ -211,18 +210,8 @@ spf_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "whitelist")) != NULL) {
 
-		str = ucl_obj_tostring (value);
-
-		if (str && !rspamd_map_is_map (str)) {
-			radix_add_generic_iplist (str,
-					&spf_module_ctx->whitelist_ip);
-		}
-		else {
-			rspamd_map_add_from_ucl (cfg, value,
-					"SPF whitelist", rspamd_radix_read, rspamd_radix_fin,
-					(void **)&spf_module_ctx->whitelist_ip);
-
-		}
+		rspamd_config_radix_from_ucl (cfg, value, "SPF whitelist",
+				&spf_module_ctx->whitelist_ip, NULL);
 	}
 
 	cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,

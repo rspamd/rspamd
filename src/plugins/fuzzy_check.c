@@ -828,7 +828,6 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value, *cur, *elt;
 	ucl_object_iter_t it;
 	gint res = TRUE, cb_id, nrules = 0;
-	const gchar *str;
 
 	if (!rspamd_config_is_module_enabled (cfg, "fuzzy_check")) {
 		return TRUE;
@@ -895,21 +894,8 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check",
 		"whitelist")) != NULL) {
-		fuzzy_module_ctx->whitelist = radix_create_compressed ();
-		ucl_obj_tostring (value);
-
-		str = ucl_obj_tostring (value);
-
-		if (str && !rspamd_map_is_map (str)) {
-			radix_add_generic_iplist (str,
-					&fuzzy_module_ctx->whitelist);
-		}
-		else {
-			rspamd_map_add_from_ucl (cfg, value,
-					"Fuzzy whitelist", rspamd_radix_read, rspamd_radix_fin,
-					(void **)&fuzzy_module_ctx->whitelist);
-
-		}
+		rspamd_config_radix_from_ucl (cfg, value, "Fuzzy whitelist",
+				&fuzzy_module_ctx->whitelist, NULL);
 	}
 	else {
 		fuzzy_module_ctx->whitelist = NULL;

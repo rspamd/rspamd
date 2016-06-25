@@ -13,6 +13,7 @@
 #include "libutil/logger.h"
 #include "libutil/http.h"
 #include "libutil/upstream.h"
+#include "libutil/radix.h"
 #include "libserver/url.h"
 #include "libserver/protocol.h"
 #include "libserver/buffer.h"
@@ -293,7 +294,7 @@ struct controller_session {
 
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
-	void **local_addrs;
+	radix_compressed_t **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
 	SSL_CTX *ssl_ctx;

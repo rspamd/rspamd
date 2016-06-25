@@ -39,8 +39,9 @@
  * Opaque structure
  */
 typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
+struct radix_tree_compressed;
 
-void **rspamd_inet_library_init (void);
+struct radix_tree_compressed **rspamd_inet_library_init (void);
 void rspamd_inet_library_destroy (void);
 
 /**

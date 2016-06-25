@@ -306,7 +306,7 @@ struct rspamd_config {
 	gchar *log_file;                                /**< path to logfile in case of file logging			*/
 	gboolean log_buffered;                          /**< whether logging is buffered						*/
 	guint32 log_buf_size;                           /**< length of log buffer								*/
-	gchar *debug_ip_map;                            /**< turn on debugging for specified ip addresses       */
+	const ucl_object_t *debug_ip_map;               /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;                              /**< whether we should log URLs                         */
 	GList *debug_symbols;                           /**< symbols to debug									*/
 	GHashTable *debug_modules;                      /**< logging modules to debug							*/
