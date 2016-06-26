@@ -126,7 +126,7 @@ worker {
    bind_socket = "*:11335";
    hashfile = "${DBDIR}/fuzzy.db"
    expire = 90d;
-   allow_update = "127.0.0.1";
+   allow_update = ["127.0.0.1", "::1"];
 }
 ~~~
 
