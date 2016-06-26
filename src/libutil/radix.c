@@ -142,7 +142,7 @@ gint
 rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 		radix_compressed_t *tree, gconstpointer value)
 {
-	gchar *token, *ipnet, *err_str, **strv, **cur;
+	gchar *token, *ipnet, *err_str, **strv, **cur, *brace;
 	struct in_addr ina;
 	struct in6_addr ina6;
 	guint k = G_MAXINT;
@@ -176,17 +176,44 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 		}
 
 		/* Check IP */
-		if (inet_pton (AF_INET, token, &ina) == 1) {
-			af = AF_INET;
-		}
-		else if (inet_pton (AF_INET6, token, &ina6) == 1) {
-			af = AF_INET6;
+		if (token[0] == '[') {
+			/* Braced IPv6 */
+			brace = strrchr (token, ']');
+
+			if (brace != NULL) {
+				token ++;
+				*brace = '\0';
+
+				if (inet_pton (AF_INET6, token, &ina6) == 1) {
+					af = AF_INET6;
+				}
+				else {
+					msg_warn_radix ("invalid IP address: %s", token);
+
+					cur ++;
+					continue;
+				}
+			}
+			else {
+				msg_warn_radix ("invalid IP address: %s", token);
+
+				cur ++;
+				continue;
+			}
 		}
 		else {
-			msg_warn_radix ("invalid IP address: %s", token);
+			if (inet_pton (AF_INET, token, &ina) == 1) {
+				af = AF_INET;
+			}
+			else if (inet_pton (AF_INET6, token, &ina6) == 1) {
+				af = AF_INET6;
+			}
+			else {
+				msg_warn_radix ("invalid IP address: %s", token);
 
-			cur ++;
-			continue;
+				cur ++;
+				continue;
+			}
 		}
 
 		if (af == AF_INET) {
