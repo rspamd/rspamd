@@ -235,7 +235,7 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_SET_VERSION,
-		.sql = "UPDATE sources SET version=?1, last=?2 WHERE name=?3;",
+		.sql = "INSERT OR REPLACE INTO sources (name, version, last) VALUES (?3, ?1, ?2);",
 		.args = "IIT",
 		.stmt = NULL,
 		.result = SQLITE_DONE
