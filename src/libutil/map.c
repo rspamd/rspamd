@@ -1780,7 +1780,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
 {
 	radix_compressed_t *tree = (radix_compressed_t *)st;
 
-	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree, value);
+	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree, value, FALSE);
 }
 
 static void

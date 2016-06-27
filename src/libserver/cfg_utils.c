@@ -1676,7 +1676,7 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			}
 			else {
 				/* Just a list */
-				if (!radix_add_generic_iplist (str, target)) {
+				if (!radix_add_generic_iplist (str, target, TRUE)) {
 					g_set_error (err, g_quark_from_static_string ("rspamd-config"),
 							EINVAL, "bad map definition %s for %s", str,
 							ucl_object_key (obj));
@@ -1699,7 +1699,7 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			while ((cur = ucl_iterate_object (cur_elt, &it, true)) != NULL) {
 				str = ucl_object_tostring (cur);
 
-				if (str == NULL || !radix_add_generic_iplist (str, target)) {
+				if (str == NULL || !radix_add_generic_iplist (str, target, TRUE)) {
 					g_set_error (err, g_quark_from_static_string ("rspamd-config"),
 							EINVAL, "bad map element %s for %s", str,
 							ucl_object_key (obj));

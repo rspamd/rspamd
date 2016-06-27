@@ -140,14 +140,15 @@ radix_find_compressed_addr (radix_compressed_t *tree,
 
 gint
 rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
-		radix_compressed_t *tree, gconstpointer value)
+		radix_compressed_t *tree, gconstpointer value, gboolean resolve)
 {
 	gchar *token, *ipnet, *err_str, **strv, **cur, *brace;
 	struct in_addr ina;
 	struct in6_addr ina6;
 	guint k = G_MAXINT;
 	gint af;
-	gint res = 0;
+	gint res = 0, r;
+	struct addrinfo hints, *ai_res, *cur_ai;
 
 	/* Split string if there are multiple items inside a single string */
 	strv = g_strsplit_set (list, separators, 0);
@@ -209,10 +210,63 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				af = AF_INET6;
 			}
 			else {
-				msg_warn_radix ("invalid IP address: %s", token);
 
-				cur ++;
-				continue;
+				if (resolve) {
+					memset (&hints, 0, sizeof (hints));
+					hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
+					hints.ai_flags = AI_NUMERICSERV;
+					hints.ai_family = AF_UNSPEC;
+
+					if ((r = getaddrinfo (token, NULL, &hints, &ai_res)) == 0) {
+						for (cur_ai = ai_res; cur_ai != NULL;
+								cur_ai = cur_ai->ai_next) {
+
+							if (cur_ai->ai_family == AF_INET) {
+								struct sockaddr_in *sin;
+
+								sin = (struct sockaddr_in *)cur_ai->ai_addr;
+								if (k > 32) {
+									k = 32;
+								}
+
+								radix_insert_compressed (tree,
+										(guint8 *)&sin->sin_addr,
+										sizeof (sin->sin_addr),
+										32 - k, (uintptr_t)value);
+								res ++;
+							}
+							else if (cur_ai->ai_family == AF_INET6) {
+								struct sockaddr_in6 *sin6;
+
+								sin6 = (struct sockaddr_in6 *)cur_ai->ai_addr;
+								if (k > 128) {
+									k = 128;
+								}
+
+								radix_insert_compressed (tree,
+										(guint8 *)&sin6->sin6_addr,
+										sizeof (sin6->sin6_addr),
+										128 - k, (uintptr_t)value);
+								res ++;
+							}
+						}
+
+						freeaddrinfo (ai_res);
+					}
+					else {
+						msg_warn_radix ("getaddrinfo failed for %s: %s", token,
+								gai_strerror (r));
+					}
+
+					cur ++;
+					continue;
+				}
+				else {
+					msg_warn_radix ("invalid IP address: %s", token);
+
+					cur ++;
+					continue;
+				}
 			}
 		}
 
@@ -241,14 +295,15 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 }
 
 gboolean
-radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree)
+radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree,
+		gboolean resolve)
 {
 	if (*tree == NULL) {
 		*tree = radix_create_compressed ();
 	}
 
 	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree,
-			GINT_TO_POINTER (1)) > 0);
+			GINT_TO_POINTER (1), resolve) > 0);
 }
 
 
