@@ -669,6 +669,11 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 				session->ctx->expire);
 	}
+	else if (cmd->cmd == FUZZY_STAT) {
+		result.prob = 1.0;
+		result.value = 0;
+		result.flag = rspamd_fuzzy_backend_count (session->ctx->backend);
+	}
 	else {
 		if (rspamd_fuzzy_check_client (session)) {
 

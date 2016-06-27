@@ -1117,6 +1117,48 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	return io;
 }
 
+static struct fuzzy_cmd_io *
+fuzzy_cmd_stat (struct fuzzy_rule *rule,
+		int c,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool)
+{
+	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_encrypted_cmd *enccmd;
+	struct fuzzy_cmd_io *io;
+
+	if (rule->peer_key) {
+		enccmd = rspamd_mempool_alloc0 (pool, sizeof (*enccmd));
+		cmd = &enccmd->cmd;
+	}
+	else {
+		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
+	}
+
+	cmd->cmd = c;
+	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->shingles_count = 0;
+	cmd->tag = ottery_rand_uint32 ();
+
+	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->flags = 0;
+	io->tag = cmd->tag;
+	io->cmd = cmd;
+
+	if (rule->peer_key) {
+		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
+		io->io.iov_base = enccmd;
+		io->io.iov_len = sizeof (*enccmd);
+	}
+	else {
+		io->io.iov_base = cmd;
+		io->io.iov_len = sizeof (*cmd);
+	}
+
+	return io;
+}
+
 static void *
 fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
@@ -1528,7 +1570,29 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 		while ((rep = fuzzy_process_reply (&p, &r,
 				session->commands, session->rule, &cmd)) != NULL) {
 			if (rep->prob > 0.5) {
-				fuzzy_insert_result (session, rep, cmd, rep->flag);
+				if (cmd->cmd == FUZZY_CHECK) {
+					fuzzy_insert_result (session, rep, cmd, rep->flag);
+				}
+				else if (cmd->cmd == FUZZY_STAT) {
+					/* Just set pool variable to extract it in further */
+					struct rspamd_fuzzy_stat_entry *pval;
+					GList *res;
+
+					pval = rspamd_mempool_alloc (task->task_pool, sizeof (*pval));
+					pval->fuzzy_cnt = rep->flag;
+					pval->name = session->rule->name;
+
+					res = rspamd_mempool_get_variable (task->task_pool, "fuzzy_stat");
+
+					if (res == NULL) {
+						res = g_list_append (NULL, pval);
+						rspamd_mempool_set_variable (task->task_pool, "fuzzy_stat",
+								res, (rspamd_mempool_destruct_t)g_list_free);
+					}
+					else {
+						res = g_list_append (res, pval);
+					}
+				}
 			}
 			else if (rep->value == 403) {
 				msg_info_task (
@@ -1936,6 +2000,15 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 	res = g_ptr_array_new ();
 
+	if (c == FUZZY_STAT) {
+		io = fuzzy_cmd_stat (rule, c, flag, value, task->task_pool);
+		if (io) {
+			g_ptr_array_add (res, io);
+		}
+
+		goto end;
+	}
+
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
 
@@ -2031,7 +2104,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		g_ptr_array_add (res, io);
 	}
 #endif
-
+end:
 	if (res->len == 0) {
 		g_ptr_array_free (res, FALSE);
 		return NULL;
@@ -2119,6 +2192,24 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	while (cur) {
 		rule = cur->data;
 		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0);
+		if (commands != NULL) {
+			register_fuzzy_client_call (task, rule, commands);
+		}
+		cur = g_list_next (cur);
+	}
+}
+
+void
+fuzzy_stat_command (struct rspamd_task *task)
+{
+	struct fuzzy_rule *rule;
+	GList *cur;
+	GPtrArray *commands;
+
+	cur = fuzzy_module_ctx->fuzzy_rules;
+	while (cur) {
+		rule = cur->data;
+		commands = fuzzy_generate_commands (task, rule, FUZZY_STAT, 0, 0);
 		if (commands != NULL) {
 			register_fuzzy_client_call (task, rule, commands);
 		}

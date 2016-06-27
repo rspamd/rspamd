@@ -910,10 +910,23 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 	rspamd_printf_gstring (out_str, "Oversized chunks: %L\n",
 		ucl_object_toint (ucl_object_lookup (obj, "chunks_oversized")));
 	/* Fuzzy */
-	rspamd_printf_gstring (out_str, "Fuzzy hashes stored: %L\n",
-		ucl_object_toint (ucl_object_lookup (obj, "fuzzy_stored")));
-	rspamd_printf_gstring (out_str, "Fuzzy hashes expired: %L\n",
-		ucl_object_toint (ucl_object_lookup (obj, "fuzzy_expired")));
+
+	st = ucl_object_lookup (obj, "fuzzy_hashes");
+	if (st) {
+		ucl_object_iter_t it = NULL;
+		const ucl_object_t *cur;
+		gint64 stored = 0;
+
+		while ((cur = ucl_iterate_object (st, &it, true)) != NULL) {
+			rspamd_printf_gstring (out_str, "Fuzzy hashes in storage \"%s\": %L\n",
+					ucl_object_key (cur),
+					ucl_object_toint (cur));
+			stored += ucl_object_toint (cur);
+		}
+
+		rspamd_printf_gstring (out_str, "Fuzzy hashes stored: %L\n",
+				stored);
+	}
 
 	st = ucl_object_lookup (obj, "fuzzy_checked");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {

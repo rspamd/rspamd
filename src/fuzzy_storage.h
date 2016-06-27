@@ -13,6 +13,7 @@
 #define FUZZY_CHECK 0
 #define FUZZY_WRITE 1
 #define FUZZY_DEL 2
+#define FUZZY_STAT 3
 
 
 /**
@@ -78,5 +79,10 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply) {
 };
 
 static const guchar fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
+
+struct rspamd_fuzzy_stat_entry {
+	const gchar *name;
+	guint32 fuzzy_cnt;
+};
 
 #endif
