@@ -2321,7 +2321,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	return;
 }
 
-static gboolean
+static int
 fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg, struct module_ctx *ctx, gint cmd)
 {
@@ -2337,13 +2337,51 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 			msg_info ("error converting numeric argument %T", arg);
 		}
 	}
+
 	arg = rspamd_http_message_find_header (msg, "Flag");
 	if (arg) {
 		errno = 0;
+
 		if (!rspamd_strtol (arg->begin, arg->len, &flag)) {
 			msg_info ("error converting numeric argument %T", arg);
 			flag = 0;
 		}
+	}
+	else {
+		flag = 0;
+		arg = rspamd_http_message_find_header (msg, "Symbol");
+
+		/* Search flag by symbol */
+		if (arg) {
+			struct fuzzy_rule *rule;
+			GList *cur;
+			GHashTableIter it;
+			gpointer k, v;
+			struct fuzzy_mapping *map;
+
+			for (cur = fuzzy_module_ctx->fuzzy_rules; cur != NULL && flag == 0;
+					cur = g_list_next (cur)) {
+				rule = cur->data;
+
+				g_hash_table_iter_init (&it, rule->mappings);
+
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					map = v;
+
+					if (strlen (map->symbol) == arg->len &&
+							rspamd_lc_cmp (map->symbol, arg->begin, arg->len) == 0) {
+						flag = map->fuzzy_flag;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (flag == 0) {
+		msg_err ("no flag defined to learn fuzzy");
+		rspamd_controller_send_error (conn_ent, 404, "Unknown or missing flag");
+		return 0;
 	}
 
 	fuzzy_process_handler (conn_ent, msg, cmd, value, flag,

@@ -43,6 +43,7 @@ static gchar *sort = NULL;
 static gchar **http_headers = NULL;
 static gint weight = 0;
 static gint flag = 0;
+static gchar *fuzzy_symbol = NULL;
 static gint max_requests = 8;
 static gdouble timeout = 10.0;
 static gboolean pass_all;
@@ -133,6 +134,8 @@ static GOptionEntry entries[] =
 		"Sort output in a specific order (name, weight, time)", NULL},
 	{ "empty", 'E', 0, G_OPTION_ARG_NONE, &empty_input,
 	   "Allow empty input instead of reading from stdin", NULL },
+	{ "fuzzy-symbol", 'S', 0, G_OPTION_ARG_STRING, &fuzzy_symbol,
+	   "Learn the specified fuzzy symbol", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -467,6 +470,9 @@ add_options (GQueue *opts)
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", weight);
 		ADD_CLIENT_HEADER (opts, "Weight", numbuf->str);
+	}
+	if (fuzzy_symbol != NULL) {
+		ADD_CLIENT_HEADER (opts, "Symbol", fuzzy_symbol);
 	}
 	if (flag != 0) {
 		numbuf = g_string_sized_new (8);
