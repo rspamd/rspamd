@@ -911,7 +911,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	const guchar *p;
 	gchar *src = NULL, *psrc;
 	gsize remain;
-	guint32 revision, our_rev, len, cnt = 0;
+	gint32 revision, our_rev;
+	guint32 len, cnt = 0;
 	struct fuzzy_peer_cmd cmd, *pcmd;
 	enum {
 		read_len = 0,
@@ -950,13 +951,13 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	 */
 	p = rspamd_http_message_get_body (msg, &remain);
 
-	if (remain > sizeof (guint32) * 2) {
-		memcpy (&revision, p, sizeof (guint32));
-		revision = GUINT32_TO_LE (revision);
+	if (remain > sizeof (gint32) * 2) {
+		memcpy (&revision, p, sizeof (gint32));
+		revision = GINT32_TO_LE (revision);
 		our_rev = rspamd_fuzzy_backend_version (session->ctx->backend, src);
 
 		if (revision <= our_rev) {
-			msg_err ("remote revision:d %d is older than ours: %d, refusing update",
+			msg_err ("remote revision: %d is older than ours: %d, refusing update",
 					revision, our_rev);
 			g_free (psrc);
 
@@ -968,8 +969,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 								revision, our_rev);
 		}
 
-		remain -= sizeof (guint32);
-		p += sizeof (guint32);
+		remain -= sizeof (gint32);
+		p += sizeof (gint32);
 	}
 	else {
 		msg_err ("short update message, not processing");
