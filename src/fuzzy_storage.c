@@ -258,7 +258,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 {
 	GList *cur;
 	struct fuzzy_peer_cmd *io_cmd;
-	gsize len;
+	guint32 len;
 	guint32 rev;
 	const gchar *p;
 	rspamd_fstring_t *reply;
@@ -297,6 +297,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 		}
 
 		p = (const char *)io_cmd;
+		len = GUINT32_TO_LE (len);
 		reply = rspamd_fstring_append (reply, (const char *)&len, sizeof (len));
 		reply = rspamd_fstring_append (reply, p, len);
 	}
@@ -1000,7 +1001,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 			break;
 		case read_data:
 			if (remain < len) {
-				msg_err ("short update message while reading data, not processing");
+				msg_err ("short update message while reading data, not processing"
+						" (%zd is available, %d is required)", remain, len);
 				return;
 			}
 
