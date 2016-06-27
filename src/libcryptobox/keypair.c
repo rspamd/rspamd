@@ -460,6 +460,14 @@ rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
 	g_assert (kp->type == p->type);
 	g_assert (p->type == RSPAMD_KEYPAIR_KEX);
 
+	if (p->nm == NULL) {
+		if (posix_memalign ((void **)&p->nm, 32, sizeof (*p->nm)) != 0) {
+			abort ();
+		}
+
+		REF_INIT_RETAIN (p->nm, rspamd_cryptobox_nm_dtor);
+	}
+
 	if (kp->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
 		struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
 				RSPAMD_CRYPTOBOX_PUBKEY_25519(p);

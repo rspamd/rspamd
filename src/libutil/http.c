@@ -1495,7 +1495,7 @@ rspamd_http_connection_encrypt_message (
 
 	cnt = i;
 
-	if ((nm = rspamd_pubkey_get_nm (peer_key))) {
+	if ((nm = rspamd_pubkey_get_nm (peer_key)) == NULL) {
 		nm = rspamd_pubkey_calculate_nm (peer_key, priv->local_key);
 	}
 
