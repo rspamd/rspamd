@@ -405,9 +405,13 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 				return NULL;
 			}
 			flags = fcntl (sock, F_GETFD);
+
 			if (flags != -1) {
 				(void)fcntl (sock, F_SETFD, flags | FD_CLOEXEC);
 			}
+
+			rspamd_socket_nonblocking (sock);
+
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
 		else if (num_passed <= number) {
