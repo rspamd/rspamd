@@ -423,13 +423,15 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 			cur = g_list_next (cur);
 		}
 
-		if (rspamd_fuzzy_backend_finish_update (ctx->backend, source)) {
+		if (rspamd_fuzzy_backend_finish_update (ctx->backend, source, nupdates > 0)) {
 			ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
 
-			for (i = 0; i < ctx->mirrors->len; i ++) {
-				m = g_ptr_array_index (ctx->mirrors, i);
+			if (nupdates > 0) {
+				for (i = 0; i < ctx->mirrors->len; i ++) {
+					m = g_ptr_array_index (ctx->mirrors, i);
 
-				rspamd_fuzzy_send_update_mirror (ctx, m);
+					rspamd_fuzzy_send_update_mirror (ctx, m);
+				}
 			}
 
 			/* Clear updates */

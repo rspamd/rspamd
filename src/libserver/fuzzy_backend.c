@@ -751,17 +751,19 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 
 gboolean
 rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
-		const gchar *source)
+		const gchar *source, gboolean version_bump)
 {
-	gint rc, wal_frames, wal_checkpointed, ver;
+	gint rc = SQLITE_OK, wal_frames, wal_checkpointed, ver;
 
 	/* Get and update version */
-	ver = rspamd_fuzzy_backend_version (backend, source);
-	++ver;
+	if (version_bump) {
+		ver = rspamd_fuzzy_backend_version (backend, source);
+		++ver;
 
-	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_SET_VERSION,
 				(gint64)ver, (gint64)time (NULL), source);
+	}
 
 	if (rc == SQLITE_OK) {
 		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,

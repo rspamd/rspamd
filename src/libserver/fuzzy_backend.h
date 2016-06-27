@@ -72,7 +72,7 @@ gboolean rspamd_fuzzy_backend_del (
  * Commit updates to storage
  */
 gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
-		const gchar *source);
+		const gchar *source, gboolean version_bump);
 
 /**
  * Sync storage
