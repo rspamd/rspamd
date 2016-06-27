@@ -47,6 +47,23 @@
 
 static const gchar *local_db_name = "local";
 
+#define msg_err_fuzzy_update(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        session->name, session->uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_fuzzy_update(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+		session->name, session->uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_fuzzy_update(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+		session->name, session->uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_fuzzy_update(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+		session->name, session->uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 /* Init functions */
 gpointer init_fuzzy (struct rspamd_config *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
@@ -178,6 +195,8 @@ struct fuzzy_key {
 };
 
 struct fuzzy_master_update_session {
+	const gchar *name;
+	gchar uid[16];
 	struct rspamd_http_connection *conn;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	rspamd_inet_addr_t *addr;
@@ -924,7 +943,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 
 	if (!rspamd_http_message_get_body (msg, NULL) || !msg->url
 			|| msg->url->len == 0) {
-		msg_err ("empty update message, not processing");
+		msg_err_fuzzy_update ("empty update message, not processing");
 
 		return;
 	}
@@ -958,14 +977,15 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		our_rev = rspamd_fuzzy_backend_version (session->ctx->backend, src);
 
 		if (revision <= our_rev) {
-			msg_err ("remote revision: %d is older than ours: %d, refusing update",
+			msg_err_fuzzy_update ("remote revision: %d is older than ours: %d, "
+					"refusing update",
 					revision, our_rev);
 			g_free (psrc);
 
 			return;
 		}
 		else if (revision - our_rev > 1) {
-			msg_warn ("remote revision:d %d is newer more than 1 revision "
+			msg_warn_fuzzy_update ("remote revision: %d is newer more than one revision "
 					"than ours: %d, cold sync is recommended",
 								revision, our_rev);
 		}
@@ -974,7 +994,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		p += sizeof (gint32);
 	}
 	else {
-		msg_err ("short update message, not processing");
+		msg_err_fuzzy_update ("short update message, not processing");
 		goto err;
 	}
 
@@ -982,7 +1002,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 		switch (state) {
 		case read_len:
 			if (remain < sizeof (guint32)) {
-				msg_err ("short update message while reading length, not processing");
+				msg_err_fuzzy_update ("short update message while reading "
+						"length, not processing");
 				goto err;
 			}
 
@@ -1001,7 +1022,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 			break;
 		case read_data:
 			if (remain < len) {
-				msg_err ("short update message while reading data, not processing"
+				msg_err_fuzzy_update ("short update message while reading data, "
+						"not processing"
 						" (%zd is available, %d is required)", remain, len);
 				return;
 			}
@@ -1009,7 +1031,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 			if (len < sizeof (struct rspamd_fuzzy_cmd) + sizeof (gboolean) ||
 					len > sizeof (cmd)) {
 				/* Bad size command */
-				msg_err ("incorrect element size: %d, at least %d expected", len,
+				msg_err_fuzzy_update ("incorrect element size: %d, at least "
+						"%d expected", len,
 						(gint)(sizeof (struct rspamd_fuzzy_cmd) + sizeof (gboolean)));
 				goto err;
 			}
@@ -1017,7 +1040,8 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 			memcpy (&cmd, p, sizeof (gboolean));
 			if (cmd.is_shingle && len < sizeof (cmd)) {
 				/* Short command */
-				msg_err ("incorrect element size: %d, at least %d expected", len,
+				msg_err_fuzzy_update ("incorrect element size: %d, at least "
+						"%d expected", len,
 						(gint)(sizeof (cmd)));
 				goto err;
 			}
@@ -1046,8 +1070,11 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	}
 
 	rspamd_fuzzy_process_updates_queue (session->ctx, src);
-	msg_info ("processed updates from the master, %ud operations processed,"
-			" revision: %ud", cnt, revision);
+	msg_info_fuzzy_update ("processed updates from the master %s, "
+			"%ud operations processed,"
+			" revision: %d (local revision: %d)",
+			rspamd_inet_address_to_string (session->addr),
+			cnt, revision, our_rev);
 
 err:
 	g_free (psrc);
@@ -1092,7 +1119,7 @@ rspamd_fuzzy_mirror_error_handler (struct rspamd_http_connection *conn, GError *
 {
 	struct fuzzy_master_update_session *session = conn->ud;
 
-	msg_err ("abnormally closing connection from: %s, error: %e",
+	msg_err_fuzzy_update ("abnormally closing connection from: %s, error: %e",
 		rspamd_inet_address_to_string (session->addr), err);
 	/* Terminate session immediately */
 	rspamd_fuzzy_mirror_session_destroy (session);
@@ -1107,7 +1134,7 @@ rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
 
 	/* Check key */
 	if (!rspamd_http_connection_is_encrypted (conn)) {
-		msg_err ("refuse unencrypted update from: %s",
+		msg_err_fuzzy_update ("refuse unencrypted update from: %s",
 				rspamd_inet_address_to_string (session->addr));
 		goto end;
 	}
@@ -1118,13 +1145,13 @@ rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
 			g_assert (rk != NULL);
 
 			if (!rspamd_pubkey_equal (rk, session->ctx->master_key)) {
-				msg_err ("refuse unknown pubkey update from: %s",
+				msg_err_fuzzy_update ("refuse unknown pubkey update from: %s",
 						rspamd_inet_address_to_string (session->addr));
 				goto end;
 			}
 		}
 		else {
-			msg_warn ("no trusted key specified, accept any update from %s",
+			msg_warn_fuzzy_update ("no trusted key specified, accept any update from %s",
 					rspamd_inet_address_to_string (session->addr));
 		}
 
@@ -1186,6 +1213,9 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	}
 
 	session = g_slice_alloc0 (sizeof (*session));
+	session->name = rspamd_inet_address_to_string (addr);
+	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
+	session->uid[sizeof (session->uid) - 1] = '\0';
 	http_conn = rspamd_http_connection_new (NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
