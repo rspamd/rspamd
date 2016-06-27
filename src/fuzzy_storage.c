@@ -2060,6 +2060,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
 	struct rspamd_srv_command srv_cmd;
+	struct rspamd_config *cfg = worker->srv->cfg;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",
@@ -2078,13 +2079,27 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
 
-	if (ctx->default_key && ctx->keypair_cache_size > 0) {
+	if (ctx->keypair_cache_size > 0) {
 		/* Create keypairs cache */
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
 
 	if (worker->index == 0) {
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+	}
+
+	if (ctx->mirrors && ctx->mirrors->len != 0) {
+		if (ctx->sync_keypair == NULL) {
+			GString *pk_str = NULL;
+
+			ctx->sync_keypair = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+					RSPAMD_CRYPTOBOX_MODE_25519);
+			pk_str = rspamd_keypair_print (ctx->sync_keypair,
+								RSPAMD_KEYPAIR_COMPONENT_PK|RSPAMD_KEYPAIR_BASE32);
+			msg_warn_config ("generating new temporary keypair for communicating"
+					" with slave hosts, pk is %s", pk_str->str);
+			g_string_free (pk_str, TRUE);
+		}
 	}
 
 	/* Register custom reload and stat commands for the control socket */
@@ -2094,6 +2109,7 @@ start_fuzzy (struct rspamd_worker *worker)
 			rspamd_fuzzy_storage_stat, ctx);
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_FUZZY_SYNC,
 				rspamd_fuzzy_storage_sync, ctx);
+
 	/* Create radix trees */
 	if (ctx->update_map != NULL) {
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->update_map,
