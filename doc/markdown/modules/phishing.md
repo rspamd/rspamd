@@ -81,3 +81,31 @@ phishing {
 	openphish_premium = false;
 }
 ~~~
+
+## Phishtank support
+
+There is also [phishtank](https://phishtank.com) support in rspamd since 1.3. Unlike
+openphish feed, phishtank's one is not enabled by default since it has quite a big size (about 50Mb) so
+you might want to setup some reverse proxy (e.g. nginx) to cache that data among rspamd instances:
+
+~~~nginx
+proxy_cache_path /data/nginx/cache levels=1:2 keys_zone=phish:10m;
+
+server {
+    listen 8080;
+    location / {
+        proxy_pass http://data.phishtank.com:80;
+        proxy_cache phish;
+        proxy_cache_lock on;
+    }
+}
+~~~
+
+
+To enable phishtank feed, you can edit `local.d/phishing.conf` file and add the following lines there:
+
+~~~ucl
+phishtank_enabled = true;
+# Where nginx is installed
+phishtank_map = "http://localhost:8080/data/online-valid.json";
+~~~
