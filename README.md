@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/vstakhov/rspamd.png)](https://travis-ci.org/vstakhov/rspamd)
 
 ## Introduction
+
 [Rspamd](https://rspamd.com) is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by rspamd and given a `spam score`. 
@@ -9,6 +10,10 @@ According to this spam score and the user's settings rspamd recommends an action
 the MTA to apply to the message- for example to pass, reject or add a header.
 Rspamd is designed to process hundreds of messages per second simultaneously and has a number of 
 features available.
+
+You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from the [FOSDEM-2016](http://fosdem.org) where I describe the main features of rspamd and explain why rspamd runs so fast.
+
+Rspamd is [packaged](https://rspamd.com/downloads) for the major Linux distributives and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd) and NetBSD [pkgsrc](https://pkgsrc.org).
 
 ## Spam filtering features
 
@@ -57,11 +62,9 @@ web server or applications server to run web UI - you just need to run rspamd it
 * **Integration with MTA** - rspamd can work with the most popular mail transfer systems, such as postfix, exim or sendmail. For postfix and sendmail, there is an [`rmilter` project](https://github.com/vstakhov/rmilter),
 whilst for exim there are several solutions to work with rspamd. Should you require MTA integration then please consult with the [integration guide](https://rspamd.com/doc/integration.html).
 
+* **Extensive LUA API** - rspamd ships with hundreds of [lua functions](https://rspamd.com/doc/lua) that are available to write own rules for efficient and targeted spam filtering.
 
-* **Easy configuration** - rspamd uses [`UCL` language](https://github.com/vstakhov/libucl) for configuration. UCL is a simple and intuitive language that is focused on easy to read configuration files.
-You have many choices to write your definitions, so use whatever you like (even a strict `JSON` would be OK).
-
-* **Dynamic tables** - rspamd allows to specify some data as `dynamic maps` that are checked in runtime with updating data when they are changed. Rspamd supports file and HTTP maps.
+* **Dynamic tables** - rspamd allows to specify bulk lists as `dynamic maps` that are checked in runtime with updating data when they are changed. Rspamd supports file, HTTP and HTTPS maps.
 
 ## Performance
 
@@ -82,8 +85,7 @@ expensive rules (rules with negative weights are always checked before other one
 simultaneously increasing the efficiency of shared DNS caches and other system resources. Moreover, event-driven system normally scales automatically and you won't need to do any
 tuning in the most of cases.
 
-* **Threaded expressions and statistics** - rspamd allows to perform computation for resources intensive tasks -- such as regular expressions or statistics -- in separate threads pools which
-allows to scale even more on modern multi-core systems.
+* **Hyperscan regular expressions engine** - rspamd utilizes [hyperscan](https://01.org/hyperscan) engine to match multiple regular expressions at the same time. You can watch the following [presentation](https://highsecure.ru/rspamd-hyperscan.pdf) where the main benefits of hyperscan are described.
 
 * **Clever choice of data structures** - rspamd tries to use the optimal data structure for each task. For example it uses very efficient suffix tries for fast matching of a text
 against a set of multiple patterns. Or it uses radix bit trie for storing IP addresses information that provides O(1) access time complexity.
