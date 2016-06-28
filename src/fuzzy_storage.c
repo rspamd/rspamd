@@ -745,18 +745,6 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 	enum rspamd_fuzzy_epoch ret = RSPAMD_FUZZY_EPOCH_MAX;
 
 	switch (cmd->version) {
-	case 4:
-		if (cmd->shingles_count > 0) {
-			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH11;
-			}
-		}
-		else {
-			if (r == sizeof (*cmd)) {
-				ret = RSPAMD_FUZZY_EPOCH11;
-			}
-		}
-		break;
 	case 3:
 		if (cmd->shingles_count > 0) {
 			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {

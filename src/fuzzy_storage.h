@@ -6,7 +6,7 @@
 #include "shingles.h"
 #include "cryptobox.h"
 
-#define RSPAMD_FUZZY_VERSION 4
+#define RSPAMD_FUZZY_VERSION 3
 #define RSPAMD_FUZZY_KEYLEN 8
 
 /* Commands for fuzzy storage */
@@ -24,7 +24,6 @@ enum rspamd_fuzzy_epoch {
 	RSPAMD_FUZZY_EPOCH8, /**< 0.8 till 0.9 */
 	RSPAMD_FUZZY_EPOCH9, /**< 0.9 + */
 	RSPAMD_FUZZY_EPOCH10, /**< 1.0+ encryption */
-	RSPAMD_FUZZY_EPOCH11, /**< 1.3+ multiple flags */
 	RSPAMD_FUZZY_EPOCH_MAX
 };
 

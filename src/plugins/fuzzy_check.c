@@ -54,12 +54,7 @@
 #define DEFAULT_RETRANSMITS 3
 #define DEFAULT_PORT 11335
 
-/*
- * WARNING:
- * As 1.3 is not yet stable, we want to keep compatibility here as 1.2 won't
- * recognize version 4 unless 1.2.7
- */
-#define RSPAMD_FUZZY_PLUGIN_VERSION 3
+#define RSPAMD_FUZZY_PLUGIN_VERSION RSPAMD_FUZZY_VERSION
 
 static const gint rspamd_fuzzy_hash_len = 5;
 
