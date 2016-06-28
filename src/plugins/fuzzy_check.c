@@ -2348,17 +2348,28 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			*ptask = task;
 			rspamd_lua_setclass (L, "rspamd{task}", -1);
 
-			if (lua_pcall (L, 1, 1, err_idx) != 0) {
+			if (lua_pcall (L, 1, LUA_MULTRET, err_idx) != 0) {
 				tb = lua_touserdata (L, -1);
 				msg_err_task ("call to user extraction script failed: %v", tb);
 				g_string_free (tb, TRUE);
 			}
 			else {
-				skip = !(lua_toboolean (L, -1));
+				if (lua_gettop (L) > 1) {
+					skip = !(lua_toboolean (L, -2));
+
+					if (lua_isnumber (L, -1)) {
+						msg_info_task ("learn condition changed flag from %d to "
+								"%d", flag, (guint)lua_tonumber (L, -1));
+						flag = lua_tonumber (L, -1);
+					}
+				}
+				else {
+					skip = !(lua_toboolean (L, -1));
+				}
 			}
 
 			/* Result + error function */
-			lua_pop (L, 2);
+			lua_settop (L, 0);
 
 			if (skip) {
 				msg_info_task ("skip rule %s as its condition callback returned"
