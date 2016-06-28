@@ -19,13 +19,19 @@ limitations under the License.
 --
 local symbol = 'PHISHED_URL'
 local openphish_symbol = 'PHISHED_OPENPHISH'
+local phishtank_symbol = 'PHISHED_PHISHTANK'
 local domains = nil
 local strict_domains = {}
 local redirector_domains = {}
 local openphish_map = 'https://www.openphish.com/feed.txt'
+local phishtank_map = 'http://data.phishtank.com/data/online-valid.json'
+-- Not enabled by default as their feed is quite large
+local phishtank_enabled = false
 local openphish_premium = false
 local openphish_hash
+local phishtank_hash
 local openphish_json = {}
+local phishtank_data = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
@@ -51,6 +57,14 @@ local function phishing_cb(task)
           if openphish_hash:get_key(t) then
             task:insert_result(openphish_symbol, 1.0, url:get_tld())
           end
+        end
+      end
+
+      if phishtank_hash then
+        local t = url:get_text()
+        local elt = phishtank_data[t]
+        if elt then
+          task:insert_result(phishtank_symbol, 1.0, elt)
         end
       end
 
@@ -177,6 +191,35 @@ local function openphish_json_cb(string)
   end
 end
 
+local function phishtank_json_cb(string)
+  local ucl = require "ucl"
+  local nelts = 0
+  local new_data = {}
+  local valid = true
+  local parser = ucl.parser()
+  local res,err = parser:parse_string(string)
+
+  if not res then
+    valid = false
+    rspamd_logger.warnx(rspamd_config, 'cannot parse openphish map: ' .. err)
+  else
+    local obj = parser:get_object()
+
+    for _,elt in ipairs(obj) do
+      if elt['url'] then
+        new_data[elt['url']] = elt['phish_detail_url']
+        nelts = nelts + 1
+      end
+    end
+  end
+
+  if valid then
+    phishtank_data = new_data
+    rspamd_logger.infox(phishtank_hash, "parsed %s elements from phishtank feed",
+      nelts)
+  end
+end
+
 if opts then
   if opts['symbol'] then
     symbol = opts['symbol']
@@ -188,6 +231,9 @@ if opts then
 
     if opts['openphish_map'] then
       openphish_map = opts['openphish_map']
+    end
+    if opts['openphish_url'] then
+      openphish_map = opts['openphish_url']
     end
 
     if opts['openphish_premium'] then
@@ -209,11 +255,35 @@ if opts then
         })
     end
 
+    if opts['phihtank_map'] then
+      phihtank_map = opts['openphish_map']
+    end
+    if opts['phihtank_url'] then
+      phihtank_map = opts['phihtank_url']
+    end
+
+    if opts['phishtank_enabled'] then
+      phishtank_hash = rspamd_config:add_map({
+          type = 'callback',
+          url = openphish_map,
+          callback = phishtank_json_cb,
+          description = 'Phishtank feed (see https://www.phishtank.com for details)'
+        })
+    end
+
     if openphish_hash then
       rspamd_config:register_symbol({
         type = 'virtual',
         parent = id,
         name = openphish_symbol,
+      })
+    end
+
+    if phishtank_hash then
+      rspamd_config:register_symbol({
+        type = 'virtual',
+        parent = id,
+        name = phishtank_symbol,
       })
     end
   end
