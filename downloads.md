@@ -11,7 +11,7 @@ title: Downloads
 <p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
-# Installing rspamd
+## Rspamd packages
 <!-- Tab navigation -->
 <div class="col-xs-12">
     <ul class="nav nav-tabs nav-justified" role="tablist">

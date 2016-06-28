@@ -3,7 +3,7 @@ layout: doc
 title: rspamd integration
 ---
 
-# rspamd integration
+# Rspamd integration
 
 This document describes several methods of integrating rspamd with some popular MTAs. Among them are:
 
@@ -14,26 +14,26 @@ This document describes several methods of integrating rspamd with some popular 
 
 This document also describes the rspamd LDA proxy mode that can be used for any MTA.
 
-## Using rspamd with postfix MTA
+## Using Rspamd with Postfix MTA
 
-To use rspamd with postfix it is recommended to use `rmilter`. The interactions between postfix and rspamd are depicted in the following image:
+To link rspamd with Postfix it is recommended to use a tool called `rmilter`:
 
 <img class="img-responsive" src="/img/rspamd-schemes.007.png">
 
-rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
+Rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
 
-### Configuring rmilter to work with rspamd
+### Configuring Rmilter to work with Rspamd
 
-First of all build and install rmilter from source (or use an OS package if applicable):
+First of all build and install rmilter from source (or use a binary package if applicable):
 
 	% ./configure
 	% make
 	# make install
 
-rmilter configuration is described in the [documentation](https://rspamd.com/rmilter/)
-Here is an example of configuration for rspamd:
+Rmilter configuration is described in its [documentation](https://rspamd.com/rmilter/)
+Here is a relevant example of rspamd setup within rmilter configuration file:
 
-{% highlight nginx %}
+~~~ucl
 spamd {
         # use rspamd action for greylisting
         spamd_greylist = yes;
@@ -49,7 +49,7 @@ spamd {
         # host[:port]
         # sockets are separated by ','
         # Default: empty
-        servers = r:spam1.example.com:11333, r:spam2.example.com;
+        servers = spam1.example.com:11333, spam2.example.com;
 
         # connect_timeout - timeout in miliseconds for connecting to rspamd
         # Default: 1s
@@ -81,13 +81,13 @@ spamd {
                 10.0.0.0/8;
 
 }
-{% endhighlight %}
+~~~
 
-This configuration allows rmilter to use all rspamd actions, including greylisting. (The default is to reject or allow a message depending on the rspamd reply.)
+This configuration allows rmilter to utilize all rspamd actions including greylisting.
 
-### Configuring postfix
+### Configuring Postfix
 
-Postfix configuration to use rspamd via rmilter is very simple:
+Postfix configuration to scan messages on rspamd daemon via rmilter is very simple:
 
 {% highlight make %}
 smtpd_milters = unix:/var/run/rmilter/rmilter.sock
@@ -102,9 +102,9 @@ milter_default_action = accept
 
 ## Integration with exim MTA
 
-Starting from exim 4.86, you can use rspamd directly just like SpamAssassin:
+Starting from Exim 4.86, you can use Rspamd directly just like SpamAssassin:
 
-![exim scheme](../img/rspamd_exim.png "rspamd and exim interaction")
+![exim scheme](../img/rspamd_exim.png "Rspamd and Exim interaction")
 
 For versions 4.70 through 4.84, a patch can be applied to enable integration. In the exim source directory run `patch -p1 < ../rspamd/contrib/exim/patch-exim-src_spam.c.diff`.
 
@@ -115,9 +115,9 @@ And then follow the steps above to apply the patch.
 For versions 4.86 and 4.87 it is recommended to apply a patch to disable half-closed sockets:
 `patch -p1 < ../rspamd/contrib/exim/shutdown.patch`
 
-Alternatively you can set `enable_shutdown_workaround = true` in `$LOCAL_CONFDIR/local.d/options.inc`
+Alternatively, you can set `enable_shutdown_workaround = true` in `$LOCAL_CONFDIR/local.d/options.inc`
 
-Here is an example of an exim configuration:
+Here is an example of the Exim configuration:
 
 {% highlight make %}
 # Please note the variant parameter
@@ -148,18 +148,18 @@ acl_check_spam:
   accept
 {% endhighlight %}
 
-## Using rspamd with sendmail MTA
+## Using Rspamd with Sendmail MTA
 
-sendmail can use rspamd via rmilter and configuration is just like for postfix. sendmail configuration could be like:
+Sendmail can use rspamd via rmilter and configuration is just like for postfix. sendmail configuration could be like:
 
 	MAIL_FILTER(`rmilter', `S=unix:/run/rmilter/rmilter.sock, F=T')
 	define(`confINPUT_MAIL_FILTERS', `rmilter')
 
 Then compile m4 to cf in the usual way.
 
-## Integration with haraka MTA
+## Integration with Haraka MTA
 
-Support for rspamd is available in haraka v2.7.0+. Documentation can be found [here](http://haraka.github.io/manual/plugins/rspamd.html).
+Support for rspamd is available in haraka v2.7.0+: <http://haraka.github.io/manual/plugins/rspamd.html>.
 
 To enable: add `rspamd` to the `DATA` section of your `config/plugins` file and edit `config/rspamd.ini` to suit your preferences.
 

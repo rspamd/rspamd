@@ -3,7 +3,7 @@ layout: doc_quickstart
 title: Rspamd+rmilter quick start
 ---
 
-# Rspamd and rmilter quick start
+# Rspamd and Rmilter quick start
 
 ## Introduction
 

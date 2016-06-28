@@ -24,13 +24,13 @@ Please follow [@rspamd](https://twitter.com/rspamd) for the most recent project 
 
 ## Issue tracker
 
-If you find a bug in rspamd or would like to request a feature you can use issue trackers for rspamd project:
+If you find a bug in rspamd or would like to request a feature you can use issue trackers for Rspamd project:
 
 * <https://github.com/vstakhov/rspamd/issues>
 
 ## Donations
 
-If you would like to support rspamd development, we are accepting donations via paypal.
+If you would like to support Rspamd development, we are accepting donations via paypal.
 
 <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
 <input type="hidden" name="cmd" value="_s-xclick">
@@ -41,4 +41,4 @@ If you would like to support rspamd development, we are accepting donations via 
 
 ## Commercial support
 
-If you require the additional level of support related to large or custom rspamd setup that could also require NDA signing, you might go with the commercial support option. Should you have any questions or queries about this option then please contact <support@rspamd.com> for options and quotes.
+If you require the additional level of support related to large or custom Rspamd setup that could involve NDA signing, you might go with the commercial support option. Should you have any questions or queries about this option then please contact <support@rspamd.com> for options and quotes.

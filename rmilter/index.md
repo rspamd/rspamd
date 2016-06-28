@@ -3,7 +3,7 @@ layout: rmilter
 title: Rspamd milter
 ---
 
-# Rmilter - rspamd milter
+# Rmilter - Rspamd milter
 
 ## Introduction
 

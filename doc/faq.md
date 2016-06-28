@@ -7,10 +7,10 @@ title: rspamd frequently asked questions
 This document includes some questions and practical examples that are frequently asked by rspamd users.
 
 ## General questions
-### Where to get help about rspamd
+### Where to get help about Rspamd
 The most convenient place for asking questions about rspamd is the IRC channel _#rspamd_ on [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
 
-### I have systemd and rspamd won't start
+### How to start rspamd using systemd
 
 You need to do the following:
 
@@ -198,7 +198,7 @@ rspamd supports so-called `dynamic` symbols. A metric score is multiplied by som
 Many rspamd rules, such as `PHISHING` and fuzzy checks, use dynamic scoring.
 
 ### Can I check a message with rspamd without rspamc
- 
+
 ```
 curl --data-binary @- http://localhost:11333 < file.eml
 ```
