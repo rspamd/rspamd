@@ -390,3 +390,49 @@ chown _rspamd:_rspamd /var/lib/rspamd/fuzzy.db
 После чего можно запускать rspamd вначале на слейвах, а затем на мастере.
 
 Такая же процедура используется для добавления нового слейва или же при нарушении связи между мастером и слейвом.
+
+### Конфигурирование репликации
+
+Репликация настраивается в конфигурационном файле хранилища хешей - worker-fuzzy.inc. Мастер репликации настраивается следующим образом:
+
+~~~ucl
+# Local keypair (rspamadm keypair -u)
+sync_keypair {
+    pubkey = "xxx";
+    privkey = "ppp";
+    encoding = "base32";
+    algorithm = "curve25519";
+    type = "kex";
+}
+# Remote slave
+slave {
+        name = "slave1";
+        hosts = "slave1.example.com";
+        key = "yyy";
+}
+slave {
+        name = "slave2";
+        hosts = "slave2.example.com";
+        key = "zzz";
+}
+~~~
+
+Немного остановлюсь на настройке ключей для шифрования. Обычно rspamd не требует задания ключа для обоих сторон для установки шифрованных соединений - ключ клиента генерируется автоматически. Однако в данном случае клиентом выступает мастер, поэтому на слейвах можно задать конкретный ключ (опять же публичный), с которым он будет принимать запросы на обновление. Также можно задать допустимые IP адреса мастера, но защита по ключу является чаще более надежной (кроме того, эти методы можно комбинировать).
+
+Настройка слейва выглядит похоже:
+
+~~~ucl
+# We assume it is slave1 with pubkey 'yyy'
+sync_keypair {
+    pubkey = "yyy";
+    privkey = "PPP";
+    encoding = "base32";
+    algorithm = "curve25519";
+    type = "kex";
+}
+
+# Allow update from these hosts only
+masters = "master.example.com";
+# Also limit updates to this specific public key
+master_key = "xxx";
+~~~
