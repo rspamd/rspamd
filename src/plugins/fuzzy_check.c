@@ -140,7 +140,7 @@ struct fuzzy_learn_session {
 struct fuzzy_cmd_io {
 	guint32 tag;
 	guint32 flags;
-	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_cmd cmd;
 	struct iovec io;
 };
 
@@ -1097,7 +1097,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
 	io->tag = cmd->tag;
-	io->cmd = cmd;
+	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
 	if (rule->peer_key) {
 		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
@@ -1139,7 +1139,7 @@ fuzzy_cmd_stat (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
 	io->tag = cmd->tag;
-	io->cmd = cmd;
+	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
 	if (rule->peer_key) {
 		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
@@ -1263,7 +1263,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->tag = shcmd->basic.tag;
 	io->flags = 0;
-	io->cmd = &shcmd->basic;
+	memcpy (&io->cmd, &shcmd->basic, sizeof (io->cmd));
 
 	if (rule->peer_key) {
 		/* Encrypt data */
@@ -1317,7 +1317,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
 	io->tag = cmd->tag;
-	io->cmd = cmd;
+	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
 	if (rule->peer_key) {
 		g_assert (enccmd != NULL);
@@ -1462,7 +1462,7 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 				io->flags |= FUZZY_CMD_FLAG_REPLIED;
 
 				if (pcmd) {
-					*pcmd = io->cmd;
+					*pcmd = &io->cmd;
 				}
 
 				return rep;
