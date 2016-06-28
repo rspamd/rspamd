@@ -271,21 +271,17 @@ if opts then
         })
     end
 
-    if openphish_hash then
-      rspamd_config:register_symbol({
-        type = 'virtual',
-        parent = id,
-        name = openphish_symbol,
-      })
-    end
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = openphish_symbol,
+    })
 
-    if phishtank_hash then
-      rspamd_config:register_symbol({
-        type = 'virtual',
-        parent = id,
-        name = phishtank_symbol,
-      })
-    end
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = phishtank_symbol,
+    })
   end
   if opts['domains'] and type(opt['domains']) == 'string' then
     domains = rspamd_config:add_map({
