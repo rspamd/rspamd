@@ -13,7 +13,7 @@ features available.
 
 You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from the [FOSDEM-2016](http://fosdem.org) where I describe the main features of rspamd and explain why rspamd runs so fast.
 
-Rspamd is [packaged](https://rspamd.com/downloads) for the major Linux distributives and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd) and NetBSD [pkgsrc](https://pkgsrc.org).
+Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux distributives and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd) and NetBSD [pkgsrc](https://pkgsrc.org).
 
 ## Spam filtering features
 
