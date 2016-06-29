@@ -6,9 +6,16 @@ import shutil
 import signal
 import socket
 import string
+import sys
 import tempfile
 import time
-import urllib2
+
+if sys.version_info > (3,):
+    long = int
+try:
+    from urllib.request import urlopen
+except:
+    from urllib2 import urlopen
 
 def cleanup_temporary_directory(directory):
     shutil.rmtree(directory)
@@ -41,9 +48,7 @@ def read_log_from_position(filename, offset):
     return [goo, size+offset]
 
 def scan_file(addr, port, filename):
-    req = urllib2.Request("http://%s:%s/symbols?%s" % (addr, port, filename))
-    response = urllib2.urlopen(req)
-    return response.read()
+    return str(urlopen("http://%s:%s/symbols?%s" % (addr, port, filename)).read())
 
 def Send_SIGUSR1(pid):
     pid = int(pid)
@@ -56,13 +61,15 @@ def set_directory_ownership(path, username, groupname):
 
 def spamc(addr, port, filename):
     goo = open(filename, 'rb').read()
-    length = len(goo)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((addr, port))
-    s.send("SYMBOLS SPAMC/1.0\r\nContent-length: %s\r\n\r\n%s" % (length, goo))
+    s.send(b"SYMBOLS SPAMC/1.0\r\nContent-length: ")
+    s.send(str(len(goo)).encode('utf-8'))
+    s.send(b"\r\n\r\n")
+    s.send(goo)
     s.shutdown(socket.SHUT_WR)
     r = s.recv(2048)
-    return r
+    return r.decode('utf-8')
 
 def update_dictionary(a, b):
     a.update(b)
