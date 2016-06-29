@@ -69,6 +69,7 @@
 #cmakedefine HAVE_PWD_H          1
 #cmakedefine HAVE_READPASSPHRASE_H  1
 #cmakedefine HAVE_SA_SIGINFO     1
+#cmakedefine HAVE_SANE_SHMEM     1
 #cmakedefine HAVE_SCHED_YEILD    1
 #cmakedefine HAVE_SC_NPROCESSORS_ONLN 1
 #cmakedefine HAVE_SEARCH_H       1
