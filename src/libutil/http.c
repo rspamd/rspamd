@@ -2360,34 +2360,35 @@ rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
 	union _rspamd_storage_u *storage;
 	struct stat st;
 
-	if (msg->body_buf.len != 0) {
-		if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
-			storage = &msg->body_buf.c;
+	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
+		storage = &msg->body_buf.c;
 
-			if (storage->shared.shm_fd != -1) {
-				g_assert (fstat (storage->shared.shm_fd, &st) != -1);
+		if (storage->shared.shm_fd != -1) {
+			g_assert (fstat (storage->shared.shm_fd, &st) != -1);
 
-				if (msg->body_buf.str != MAP_FAILED) {
-					munmap (msg->body_buf.str, st.st_size);
-				}
-
-				close (storage->shared.shm_fd);
+			if (msg->body_buf.str != MAP_FAILED) {
+				munmap (msg->body_buf.str, st.st_size);
 			}
 
-			if (storage->shared.name != NULL) {
-				REF_RELEASE (storage->shared.name);
-			}
-
-			storage->shared.shm_fd = -1;
-			msg->body_buf.str = MAP_FAILED;
-		}
-		else {
-			rspamd_fstring_free (msg->body_buf.c.normal);
-			msg->body_buf.c.normal = NULL;
+			close (storage->shared.shm_fd);
 		}
 
-		msg->body_buf.len = 0;
+		if (storage->shared.name != NULL) {
+			REF_RELEASE (storage->shared.name);
+		}
+
+		storage->shared.shm_fd = -1;
+		msg->body_buf.str = MAP_FAILED;
 	}
+	else {
+		if (msg->body_buf.c.normal) {
+			rspamd_fstring_free (msg->body_buf.c.normal);
+		}
+
+		msg->body_buf.c.normal = NULL;
+	}
+
+	msg->body_buf.len = 0;
 }
 
 void
