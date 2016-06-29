@@ -255,11 +255,11 @@ if opts then
         })
     end
 
-    if opts['phihtank_map'] then
-      phishtank_map = opts['phihtank_map']
+    if opts['phishtank_map'] then
+      phishtank_map = opts['phishtank_map']
     end
-    if opts['phihtank_url'] then
-      phishtank_map = opts['phihtank_url']
+    if opts['phishtank_url'] then
+      phishtank_map = opts['phishtank_url']
     end
 
     if opts['phishtank_enabled'] then
