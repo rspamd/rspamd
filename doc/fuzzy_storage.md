@@ -7,79 +7,81 @@ title: Usage of fuzzy hashes
 
 ## Introduction
 
-Fuzzy hashes are used to search for similar messages – i.e. you can find messages with the same or a slightly modified text using this method. This technology is well suited for blocking spam that is simultaneously sent to many users. Since the hash function is unidirectional, it is impossible to restore the original text using hash only. And this allows you to send requests to third-party hash storages without risk of disclosure.
+Fuzzy hashes are used to search for similar messages – i.e. you can find messages with the same or a slightly modified text using this method. This technology fits well for blocking spam that is simultaneously sent to many users. Since the hash function is unidirectional, it is impossible to restore the original text using a hash only. And this allows you to send requests to third-party hash storages without risk of disclosure.
 
-It should be emphasized that fuzzy hashes are applied not only for the text data but also for the images and other attachments in emails. However, in this case, due to missing fuzzy logic element rspamd looks for exact matches for similar objects.
+Furthermore, fuzzy hashes are used not merely for textual data but also for the images and other attachments types in email messages. However, in this case, rspamd looks for the exact matches to find similar objects.
 
-This article is intended for mail system administrators who want to create their own hash storage and maintain it themselves.
+This article is intended for mail system administrators who wish to create and maintain their own hashes storage.
 
-## Step 1: Hash sources selection
+## Step 1: Hashes sources selection
 
-The first step is to choose the sources of spam samples to learn on. The basic principle is to use spam that a lot of users receive, for learning. There are two main approaches to this task:
+It is important to choose the sources of spam samples to learn on. The basic principle is to use spam messages that are received by a lot of users. There are two main approaches to this task:
 
 - working with users complaints;
 - creating spam traps (honeypot).
 
 ### Working with users complaints
 
-Users are one of the resources for evaluation of the quality of the spam filtering system. Therefore it is preferably to provide a mechanism for improving hash storages by working with user complaints. Unfortunately, users usually complain about legitimate mailing they’ve subscribed on to by themselves: distribution stores, notification systems from tickets booking and even personal emails, which they do not like for some reason. Many users simply do not see the difference between "Delete" and "Mark as Spam" buttons. Perhaps a good idea would be to prompt the user for additional information about the complaint, for example, why he or she decided that it is a spam email, as well as to draw the user's attention to the fact that user is able to unsubscribe from receiving mailings.
+It is possible to study users' complaints for improving hash storages. Unfortunately, users sometimes complain about legitimate mailing they’ve subscribed on to by themselves: for example, stores newsletters, notifications from tickets booking and even personal emails which they do not like for some reasons. Many users simply do not see the difference between "Delete" and "Mark as Spam" buttons. Perhaps, a good idea would be to prompt a user for additional information about the complaint, for example, why he or she decided that it is a spam email, as well as to draw the user's attention to the fact that user is able to unsubscribe from receiving mailings instead of marking them as spam.
 
-Another way to solve this problem is manual processing of user spam complaints, or combination of methods: assign greater weight to the handcrafted emails, and a smaller one to all the other complaints.
+Another way to solve this problem is manual processing of user spam complaints. A combination of these methods might also work: assign greater weight to the manually processed emails, and a smaller one for all other complaints.
 
-There are also two features in rspamd allowing filtering out some false alarms:
+There are also two features in rspamd that allow to filter out some false positives:
 
 1. Hash weight.
 2. Learning filters.
 
-The first method is pretty simple: let's assign some weight to each complaint, and then we will add it to the stored value corresponding to the hash for the each next learning step. While verification we will not take into consideration hashes, which weights are less than a predetermined threshold. For instance, if the weight of complaint is w=1 and the threshold is t=20, then the beginning of the hash operation requires at least 20 user complaints. In addition, while verification for hashes, which weights are more than a predetermined threshold, rspamd assigns not the maximum score but scores size gradually increases from zero to a maximum (up to metric value) when the threshold of hash weight changes up to the twice threshold value (t .. 2 * t).
+The first method is pretty simple: let's assign some weight to each complaint, and then we add this weight to the stored hash value for the each subsequent learning step. During querying a storage we will not consider hashes with weights that are less than a defined threshold.
+
+For instance, if the weight of a complaint is `w=1` and the threshold is `t=20`, then we ignore this hash unless receiving at least 20 user complaints.
+
+In addition, rspamd does not assign the maximum score finding a threshold value - scores gradually increases from zero to a maximum (up to metric value) when the weight of hash grows up to the threshold value multiplied by two (t .. 2 * t).
 
 <center><img class="img-responsive" src="/img/rspamd-fuzzy-1.png" width="50%"></center>
 
-The second method, learning filters, allows you to write some conditions, which prohibit the learning, on Lua language, for instance, for emails from a specific domain (for example, facebook.com). The possibilities of the filters are quite extensive, however they require manual setting and configuring.
+The second method, namely learning filters, allows you to write certaint conditions that can skip learning or change a value of hash for instance, for emails from a specific domain (for example, facebook.com). Such filters are written in Lua language. The possibilities of the filters are quite extensive, however, they require manual writing and configuring.
 
 ### Configuring spam traps
 
-This method requires a mailbox that doesn't receive legitimate emails but spam emails instead. The main idea is to show the address in the databases of spammers, but not to show it to legitimate users. For example, to do so it is enough to put *iframe* element on a fairly popular website. This element is not visible to users, it has *hidden* property or no apparent size, but it contains email-bots available email addresses traps. Recently, this method has become not so effective, as spammers have learnt how to circumvent these techniques.
+This method requires a mailbox that doesn't receive legitimate emails but spam emails instead. The main idea is to show the address in the databases of spammers, but do not show it to legitimate users. For example, by puting emails in a hidden *iframe* element on a fairly popular website. This element is not visible to users due to *hidden* property or zero size but it is visible for spam bots. Recently, this method has become not very effective, as spammers have learnt how to abstain from such traps.
 
+Another possible way to create a trap is to find domains that were popular in the past but that are not functional at the moment (addresses from these domains could be found in many spam databases). In this case, learning filters are required as the legitimate emails, for instance, social networking or distribution services, will likely be blacklisted.
 
-Another possible way to create a trap is a search for domains that were previously popular, but they are not working at the moment (addresses from these domains are found in many spam databases). In this case, learning filters are required as the legitimate emails, for instance, social networking or distribution services, likely will be blacklisted.
-
-In general, setting own traps is warranted when it is only a large mail system, because it might be costly both in terms of maintenance problems, and as direct material costs to purchase domains.
+In general, setting own traps is reasonable merely for large mail systems, as it might be expensive both in terms of maintenance and as direct expenses, e.g. for purchasing domains.
 
 ## Step 2: Configuring storage
 
-This chapter specifies basic storage settings and how to optimize its performance.
+In this chapter, we describe the basic fuzzy storage settings and how to optimize its performance.
 
-**Important note:** storage does not work with emails but with ready hashes. Hence, in order to convert the email into its hash, a separate scanner or process controller is required:
+**Important note:** fuzzy storage works with hashes and not with email messages. Hence, in order to convert a email into the corresponging set of hashes you need to use a scanner (for checking) or a controller process:
 
 <center><img class="img-responsive" src="/img/rspamd-fuzzy-2.png" width="75%"></center>
 
-Storage functions:
+Fuzzy storage functions:
 
-1. Data storage and review
+1. Data storage
 2. Transport Protocol Encryption
-3. Obsolete hashes removal
-4. Access Control (read and write)
+3. Hashes expiration
+4. Access control (read and write)
 5. Replication (since v. 1.3)
-
 
 ### Storage architecture
 
-sqlite3 is used for data storage, and it imposes some restrictions on the storage architecture.
+The database engine, namely sqlite3, imposes some restrictions on the storage architecture.
 
-Firstly, sqlite quite poorly works with competing requests on write: in this case, the DBMS performance drops by several orders of magnitude. Secondly, it is quite difficult to ensure replication and scaling the database as it requires third-party tools.
+Firstly, sqlite cannot deal well with concurrent write requests: in this case, the database performance is degraded significantly. Secondly, it is quite difficult to provide replication and scale the database as it requires third-party tools.
 
-Thereby hash storage rspamd always writes to the database strictly from one process. For this purpose, one of the processes leads updates queue, and other processes simply transmit write requests from clients to this common queue. Queue is written to the disk once per minute. Thus the store is designed for the load profile with a predominance of read requests.
+Therefore, rspamd hash storage always writes to the database strictly from one process. To reach this goal, one of the processes maintains the updates queue whilst all other processes simply forward write requests from clients to the selected process. The updates queue is written to the disk once per minute (by default). Such an architecture is optimized for the load profile with prevalence of read requests.
 
-### Hash obsolete
+### Hashes expiration
 
-Another major priority of storage is the process of removing obsolete hashes from the database. As the duration of spam mailings is always limited, there is no reason to store hashes permanently. It would be better to verify the quantity of hashes coming to learn for some time, with sufficient storage size of RAM. For example, 400 thousand hashes occupy about 100 Mb and 1.5 million hashes occupy 0.5 Gb.
+Another major function of the fuzzy storage is removing of the obsolete hashes. Since the duration of spam mailings is always limited, there is no reason to store all hashes permanently. It is better to compare the quantity of hashes learned over some time, with the available RAM ammount. For example, 400 thousands hashes occupy about 100 Mb and 1.5 million hashes occupy 0.5 Gb.
 
-It is not recommended to increase storage volume up to the volume bigger than available RAM size due to a significant deterioration in performance. Furthermore, it makes no sense to store the hashes for longer than about three months. Therefore, if you have a small amount of hashes suitable for learning, it is better to establish the obsolescence of 90 days. Otherwise it is better to set a shorter period of obsolescence.
+It is not recommended to increase storage size more than the available RAM size due to a significan performance degradation. Furthermore, it makes no sense to store the hashes for longer than about three months. Therefore, if you have a small amount of hashes suitable for learning, it is better to set expiration time to 90 days. Otherwise, when RAM size is less than the learn flow over this time, it is better to set a shorter period of expiration.
 
-### Example of configuration
+### Sample configuration
 
-The rspamd process is responsible for fuzzy hashes storage called `fuzzy_storage`. To turn on and configure this process we may use the local file of rspamd configuration: `etc/rspamd/rspamd.conf.local`:
+The rspamd process that is responsible for fuzzy hashes storing is called `fuzzy_storage`. To turn on and configure this process you may use the local file of rspamd configuration: `etc/rspamd/rspamd.conf.local`:
 
 ~~~ucl
 worker "fuzzy_storage" {
@@ -100,9 +102,9 @@ worker "fuzzy_storage" {
 }
 ~~~
 
-### Configuration of access
+### Access control setup
 
-rspamd does not allow to modify the data in the repository by default. It is required to specify a list of trusted IP-addresses and/or networks to make learning possible. Practically, it is better to write from the local address only (127.0.0.1) because fuzzy storage uses UDP, which is not protected from forgery of the source IP-address. Such leak of protection is fixable by adjusting the reverse path verification on the router, but system administrators usually ignore this way):
+Rspamd does not allow to modify the data in the repository by default. It is required to specify a list of trusted IP-addresses and/or networks to make learning possible. Practically, it is better to write from the local address only (127.0.0.1) since fuzzy storage uses UDP that is not protected from source IP forgery.
 
 ~~~ucl
 worker "fuzzy_storage" {
@@ -114,13 +116,13 @@ worker "fuzzy_storage" {
 }
 ~~~
 
-Also transport encryption might be used for the access control, and we will consider further.
+Transport encryption might also be used for access control purposes.
 
 ### Transport encryption
 
-Protocol for operating with the hash storage allows to include optional (opportunistic) or mandatory encryption based on a public key. Encryption architecture is based on cryptobox design: <https://nacl.cr.yp.to/box.html> and it is similar to the algorithm for end-to-end encryption dnscurve: <https://dnscurve.org/>.
+Fuzzy hashes protocol allows to enable optional (opportunistic) or mandatory encryption based on a public keys. Encryption architecture uses cryptobox construction: <https://nacl.cr.yp.to/box.html> and it is similar to the algorithm for end-to-end encryption used in DNSCurve protocol: <https://dnscurve.org/>.
 
-To set transport encryption first of all it is necessary to create a pair of keys for storage server with the command `rspamadm keypair -u`:
+To configure transport encryption, it is necessary to create a keypair for storage server using the command `rspamadm keypair -u`:
 
 ~~~ucl
 keypair {
@@ -133,9 +135,9 @@ keypair {
 }
 ~~~
 
-This command creates a **unique** pair of keys, where **public** key might be copied manually to the customer's host (e.g. via ssh) or published in any way to guarantee the reliability (e.g. certified digital signature or HTTPS-site hosting).
+This command creates a **unique**  keypair, where **public** key should be copied manually to the customer's host (e.g. via ssh) or published in any way to guarantee the reliability (e.g. certified digital signature or HTTPS-site hosting).
 
-Each store is able to work simultaneously with any number of keys:
+Each storage can use any number of keys simultaneously:
 
 ~~~ucl
 worker "fuzzy_storage" {
@@ -155,11 +157,11 @@ worker "fuzzy_storage" {
 }
 ~~~
 
-This feature is useful for creating closed storages where access is allowed only to those customers who is aware about one of the public keys:
+This feature is useful for creating restricted storages where access is allowed merely to those customers who knows about one of the public keys of storage:
 
 <center><img class="img-responsive" src="/img/rspamd-fuzzy-3.png" width="75%"></center>
 
-To enable a mandatory encryption mode `encrypted_only` option is used:
+To enable such a mandatory encryption mode you should use `encrypted_only` option:
 
 ~~~ucl
 worker "fuzzy_storage" {
@@ -173,11 +175,11 @@ worker "fuzzy_storage" {
 }
 ~~~
 
-Clients who do not have a valid public key are not able to access the location in this mode.
+Clients who do not have a valid public key are not able to access the storage in this mode.
 
 ### Storage testing
 
-To test the storage we can use `rspamadm control fuzzystat` command:
+To test the storage you can use `rspamadm control fuzzystat` command:
 
 ```
 Statistics for storage 73ee122ac2cfe0c4f12
@@ -213,13 +215,12 @@ Primarily, a general storage statistics is shown, namely the number of stored an
 
 * `v0.6` - requests from rspamd 0.6 - 0.8 (older versions, compatibility is limited)
 * `v0.8` - requests from rspamd 0.8 - 0.9 (partially compatible)
-* `v0.9` - unencrypted requests from rspamd 0.9 - 1.3 (fully compatible)
-* `v1.1` - encrypted requests from rspamd 1.1 - 1.3 (fully compatible)
-* `v1.3` - encrypted and unencrypted requests from rspamd 1.3+
+* `v0.9` - unencrypted requests from rspamd 0.9+ (fully compatible)
+* `v1.1` - encrypted requests from rspamd 1.1+ (fully compatible)
 
 And then detailed statistics is displayed for each of the keys configured in the storage and for the latest requested client IP-addresses. In conclusion, we see the overall statistics on IP-addresses.
 
-To change the output from this command, we may use the following options: (e.g. `rspamadm control fuzzystat -n`):
+To change the output from this command, you can use the following options:
 
 * `-n`: display raw numbers without reduction
 * `--short`: do not display detailed statistics on the keys and IP-addresses
@@ -231,14 +232,20 @@ To change the output from this command, we may use the following options: (e.g. 
   + `errors`: by the number of failed requests
   + `ip`: by IP-address lexicographically
 
-## Step 3: Configuring plugin `fuzzy_check`
+e.g.
 
-Plugin `fuzzy_check` is used by scanner processes for email validation and by  controllers proceses for storage learning.
+```
+rspamadm control fuzzystat -n
+```
+
+## Step 3: Configuring `fuzzy_check` plugin
+
+`fuzzy_check` plugin is used by scanner processes for querying a storage and by controllers proceses learning fuzzy hashes.
 
 Plugin functions:
 
-1. Email processing and hashes creating of their parts
-2. Querying the repository
+1. Email processing and hashes creating from the email parts and attachements
+2. Querying and learning the storage
 3. Transport Encryption
 
 Learning is performing by `rspamc fuzzy_add` command:
@@ -247,13 +254,19 @@ Learning is performing by `rspamc fuzzy_add` command:
 $ rspamc -f 1 -w 10 fuzzy_add <message|directory|stdin>
 ```
 
-Where `-w` parameter is for setting the hash weight discussed above. `-f` parameter specifies the flag number.
+Where `-w` parameter is for setting the hash weight discussed above whilst `-f` parameter specifies the flag number.
 
-Flags are allowed to store hashes of different origin in storage. For example, the hash of spam traps, hashes of user complaints and hashes of emails from the "white" list. Each flag may be associated with its own character and have a weight while checking emails:
+Flags are allowed to store hashes of different origin in storage. For example, the hash of spam traps, hashes of user complaints and hashes of emails that come from a "white" list. Each flag may be associated with its own symbol and have a weight while checking emails:
 
 <center><img class="img-responsive" src="/img/rspamd-fuzzy-4.png" width="75%"></center>
 
-To configure compliance of symbols with flags we must go to the `rule` section.
+Symbol name could also be used instead of a numeric flag during learning, e.g.:
+
+```
+$ rspamc -S FUZZY_DENIED -w 10 fuzzy_add <message|directory|stdin>
+```
+
+To match symbols with the corresponding flags you can use the `rule` section.
 
 Example:
 
@@ -309,39 +322,41 @@ fuzzy_storage {
 }
 ~~~
 
-Let’s consider some useful options that can be set in the module.
+Let’s discuss some useful options that could be set in the module.
 
-Firstly, `max_score` is useful to specify the threshold weight of the hash:
+Firstly, `max_score` specifies the threshold for a hash weight:
 
 <center><img class="img-responsive" src="/img/rspamd-fuzzy-1.png" width="50%"></center>
 
-Another useful option is `mime_types` determining the types of attachments to check (and perform the learning) in the repository. This parameter is a list of valid types in the format `["type/subtype", "*/subtype", "type/*", "*"]`, where `*` replaces any valid type. As a rule, it is quite useful to save the hashes of all `application/*` attachments. Texts and embedded images are automatically checked by `fuzzy_check` plugin, i.e. there is no need to add `image/*` in the list of scanned attachments. It should also be considered that attachments and images are scanning for the exact match as distinct from the text, which may differ slightly.
+Another useful option is `mime_types` that specifies what attachments types are checked (or learned) using this fuzzy rule. This parameter contains a list of valid types in format: `["type/subtype", "*/subtype", "type/*", "*"]`, where `*` matches any valid type. In practice, it is quite useful to save the hashes for all `application/*` attachments. Texts and embedded images are implicitly checked by `fuzzy_check` plugin, so there is no need to add `image/*` in the list of scanned attachments. Please note that attachments and images are searched for the exact match whilst texts are matched using the aproximate algorithm (shingles).
 
-`read_only` is quite important option for storage learning. It is set to `read_only=true` by default, and it means that storage learning is restricted:
+`read_only` is quite an important option required for storage learning. It is set to `read_only=true` by default, restricting thus a storage's learning:
 
 ~~~ucl
 read_only = true; # disallow learning
 read_only = false; # allow learning
 ~~~
 
-`Encryption_key` parameter specifies the **public** storage key and enables encryption requests.
+`Encryption_key` parameter specifies the **public** key of a storage and enables encryption for all requests.
 
-`Algorithm` parameter specifies the algorithm generating hashes from text parts of emails (for attachments and images are always used [blake2b](https://blake2.net/)). Initially rspamd was using siphash algorithm. However, it has some performance issues, especially on obsolete hardware (CPU until Intel Haswell). Therefore it will be better to use other faster algorithms when we create our own storage:
+`Algorithm` parameter specifies the algorithm for generating hashes from text parts of emails (for attachments and images [blake2b](https://blake2.net/) is always used).
+
+Initially, rspamd used merely siphash algorithm. However, it has some performance issues, especially on obsolete hardware (CPU until Intel Haswell). Therefore it could be better to use another algorithms when creating a new storage:
 
 * `xxhash`
 * `mumhash`
 * `fasthash`
 
-For major tasks we would recommend to use `mumhash` or `fasthash` demonstrating excellent performance on a variety of platforms. To evaluate the performance we are able to compile a set of the tests from rspamd source code:
+For the vast majority of configurations we recommend to use `mumhash` or `fasthash` that shows an excellent performance on a wide variety of platforms. You can also evaluate the performance of different algorithms by compiling the tests set from rspamd sources:
 
 ```
 $ make rspamd-test
 ```
 
-and run the test of different variants of hashes calculation algorithms on user’s platform:
+and run the test suite of different variants of hashes algorithms on a specific platform:
 
 ```
 test/rspamd-test -p /rspamd/shingles
 ```
 
-**Important note:** it is not possible to change the parameter without losing all the data in the storage, as only one algorithm can be used simultaneously for each storage and conversion of one type of hash to another is not possible, because full initial data recovery by hash is impossible by design.
+**Important note:** it is not possible to change the parameter without losing all the data in the storage, as only one algorithm can be used simultaneously for each storage. The Conversion of one type of hash to another is impossible by design as a hash function cannot be reverted.
