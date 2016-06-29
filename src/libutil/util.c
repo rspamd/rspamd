@@ -2282,12 +2282,21 @@ rspamd_shmem_xmap (const char *fname, guint mode,
 	g_assert (fname != NULL);
 	g_assert (size != NULL);
 
+#ifdef HAVE_SANE_SHMEM
 	if (mode & PROT_WRITE) {
 		fd = shm_open (fname, O_RDWR, 0);
 	}
 	else {
 		fd = shm_open (fname, O_RDONLY, 0);
 	}
+#else
+	if (mode & PROT_WRITE) {
+		fd = open (fname, O_RDWR, 0);
+	}
+	else {
+		fd = open (fname, O_RDONLY, 0);
+	}
+#endif
 
 	if (fd == -1) {
 		return NULL;

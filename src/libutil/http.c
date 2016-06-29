@@ -1376,6 +1376,10 @@ rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
 	priv->msg = req;
 	req->flags = flags;
 
+	if (flags & RSPAMD_HTTP_FLAG_SHMEM) {
+		req->body_buf.c.shared.shm_fd = -1;
+	}
+
 	if (priv->peer_key) {
 		priv->msg->peer_key = priv->peer_key;
 		priv->peer_key = NULL;
@@ -2133,7 +2137,11 @@ rspamd_http_shname_dtor (void *p)
 {
 	struct rspamd_storage_shmem *n = p;
 
+#ifdef HAVE_SANE_SHMEM
 	shm_unlink (n->shm_name);
+#else
+	unlink (n->shm_name);
+#endif
 	g_free (n->shm_name);
 	g_slice_free1 (sizeof (*n), n);
 }
@@ -2167,8 +2175,14 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
 		storage->shared.name = g_slice_alloc (sizeof (*storage->shared.name));
 		REF_INIT_RETAIN (storage->shared.name, rspamd_http_shname_dtor);
+#ifdef HAVE_SANE_SHMEM
 		storage->shared.name->shm_name = g_strdup ("/rhm.XXXXXXXXXXXXXXXXXXXX");
 		storage->shared.shm_fd = rspamd_shmem_mkstemp (storage->shared.name->shm_name);
+#else
+		/* XXX: assume that tempdir is /tmp */
+		storage->shared.name->shm_name = g_strdup ("/tmp/rhm.XXXXXXXXXXXXXXXXXXXX");
+		storage->shared.shm_fd = mkstemp (storage->shared.name->shm_name);
+#endif
 
 		if (storage->shared.shm_fd == -1) {
 			return FALSE;
