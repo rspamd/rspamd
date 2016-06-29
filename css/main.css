@@ -33,7 +33,7 @@ body {
     margin-bottom: 50px;
 }
 .nav-tabs {
-    margin-top: 50px;
+    margin-top: 10px;
 }
 pre{
   /* code aria */
@@ -125,4 +125,7 @@ short-news p {
 }
 div.caption h2{
   margin-top: 0;
+}
+h2{
+  font-size: 32px;
 }

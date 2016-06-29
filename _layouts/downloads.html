@@ -1,9 +1,21 @@
 {% include top.html %}
+	<div class="jumbotron" id="jumbo-head">
+			<div class="container">
+					<h2>Download</h2>
+					<p>
+						  <!-- download button with tooltip -->
+							<a class="btn btn-primary" href="/downloads/rspamd-1.2.8.tar.xz" data-toggle="tooltip" data-placement="bottom" title="Download the most recent stable version as source tarball">Download rspamd-1.2.8</a>
+							<!-- github button -->
+							<iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
+							  allowtransparency="true" frameborder="0" scrolling="0" width="215" height="38"></iframe>
+					</p>
+			</div>
+	</div>
 	<div class="container">
 
-  <div class="body-content"  margin-top="50px">
-    {{ content }}
-  </div><!-- /.body-content -->
+		  <div class="body-content"  margin-top="50px">
+		    {{ content }}
+		  </div><!-- /.body-content -->
 
   </div> <!-- /container -->
 {% include bottom.html %}
