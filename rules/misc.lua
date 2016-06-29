@@ -277,18 +277,38 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
 
 rspamd_config.ENVFROM_PRVS = {
     callback = function (task)
-        -- Detect PRVS/BATV addresses to avoid FORGED_SENDER
-        -- https://en.wikipedia.org/wiki/Bounce_Address_Tag_Validation
+        --[[
+        Detect PRVS/BATV addresses to avoid FORGED_SENDER
+        https://en.wikipedia.org/wiki/Bounce_Address_Tag_Validation
+
+        Signature syntax:
+
+        prvs=TAG=USER@example.com       BATV draft (https://tools.ietf.org/html/draft-levine-smtp-batv-01)
+        prvs=USER=TAG@example.com
+        btv1==TAG==USER@example.com     Barracuda appliance
+        msprvs1=TAG=USER@example.com    Sparkpost email delivery service
+        ]]--
         if not (task:has_from(1) and task:has_from(2)) then
             return false
         end
         local envfrom = task:get_from(1)
-        local tag,ef = envfrom[1].addr:lower():match("^prvs=([^=]+)=(.+)$")
-        if not ef then return false end
+        local re_text = '^(?:(prvs|msprvs1)=([^=]+)=|btv1==[^=]+==)(.+@(.+))$'
+        local re = rspamd_regexp.create_cached(re_text)
+        local c = re:search(envfrom[1].addr:lower(), false, true)
+        if not c then return false end
+        local ef = c[1][4]
         -- See if it matches the From header
         local from = task:get_from(2)
         if ef == from[1].addr:lower() then
             return true
+        end
+        -- Check for prvs=USER=TAG@example.com
+        local t = c[1][2]
+        if t == 'prvs' then
+            local efr = c[1][3] .. '@' .. c[1][5]
+            if efr == from[1].addr:lower() then
+                return true
+            end
         end
         return false
     end,
