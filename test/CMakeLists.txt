@@ -40,14 +40,6 @@ IF (ENABLE_HYPERSCAN MATCHES "ON")
 ENDIF()
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-actrie)
 
-ADD_CUSTOM_TARGET(rspamd-func-test COMMAND 
-		"/bin/sh"
-		"${CMAKE_CURRENT_BINARY_DIR}/functional/tests.sh")
-		
-ADD_DEPENDENCIES(rspamd-func-test rspamd-test)
-ADD_DEPENDENCIES(rspamd-func-test rspamc)
-ADD_DEPENDENCIES(rspamd-func-test rspamd)
-
 IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 	# Also add dependencies for convenience
 	FILE(GLOB_RECURSE LUA_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/lua/*")
@@ -67,25 +59,5 @@ IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 			SOURCES "${_LF}"
 		)
 		ADD_DEPENDENCIES(rspamd-test "${_NM}")
-	ENDFOREACH()
-	
-	ADD_CUSTOM_TARGET(functional-dir COMMAND
-		${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/functional/cases"
-		COMMAND ${CMAKE_COMMAND} -E make_directory 
-		"${CMAKE_CURRENT_BINARY_DIR}/functional/configs" 
-		COMMAND ${CMAKE_COMMAND} -E make_directory 
-		"${CMAKE_CURRENT_BINARY_DIR}/functional/messages"
-	)
-	ADD_DEPENDENCIES(rspamd-func-test functional-dir)
-	FILE(GLOB_RECURSE BATS_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/functional/*")
-	FOREACH(_LF IN LISTS BATS_TESTS)
-		GET_FILENAME_COMPONENT(_NM "${_LF}" NAME)
-		STRING(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}"
-			_DS "${_LF}")
-		ADD_CUSTOM_TARGET("${_NM}" COMMAND
-			${CMAKE_COMMAND} -E copy_if_different ${_LF} ${_DS}
-			SOURCES "${_LF}"
-		)
-		ADD_DEPENDENCIES(rspamd-func-test "${_NM}")
 	ENDFOREACH()
 ENDIF()
