@@ -59,10 +59,6 @@ hr {
     left: 0;
     background-color: #E8E8E8;
     padding: 10px 0px 30px 0px;
-    margin-top: 10px;
-}
-.myMainPageText{
-  padding-bottom: 20px;
 }
 @media (min-width: 750px){
   .myRowEq {
@@ -83,6 +79,7 @@ hr {
   background-size: cover;
   padding-top: 10px;
   padding-bottom: 15px;
+  margin-bottom: 0;
 
 }
 @media (min-width: 768px) and (max-width: 992px){
@@ -122,6 +119,10 @@ short-news p {
   padding-bottom: 50px;
 }
 .thumbnail{
-  height: 270px;
+  height: 240px;
   padding: 8px;
+  margin: 0;
+}
+div.caption h2{
+  margin-top: 0;
 }
