@@ -380,15 +380,9 @@ http_map_finish (struct rspamd_http_connection *conn,
 			else {
 				/* Unsinged version - just open file */
 				cbd->shmem_data = rspamd_http_message_shmem_ref (msg);
-				in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &inlen);
 				cbd->data_len = msg->body_buf.len;
 
-				if (in == NULL) {
-					msg_err_map ("cannot read tempfile %s: %s",
-							cbd->shmem_data->shm_name,
-							strerror (errno));
-					goto err;
-				}
+				goto read_data;
 			}
 		}
 		else if (cbd->stage == map_load_pubkey) {
@@ -470,6 +464,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			munmap (in, dlen);
 		}
 
+read_data:
 		g_assert (cbd->shmem_data != NULL);
 
 		in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &dlen);
