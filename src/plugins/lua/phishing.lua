@@ -256,16 +256,16 @@ if opts then
     end
 
     if opts['phihtank_map'] then
-      phihtank_map = opts['openphish_map']
+      phishtank_map = opts['phihtank_map']
     end
     if opts['phihtank_url'] then
-      phihtank_map = opts['phihtank_url']
+      phishtank_map = opts['phihtank_url']
     end
 
     if opts['phishtank_enabled'] then
       phishtank_hash = rspamd_config:add_map({
           type = 'callback',
-          url = openphish_map,
+          url = phishtank_map,
           callback = phishtank_json_cb,
           description = 'Phishtank feed (see https://www.phishtank.com for details)'
         })
