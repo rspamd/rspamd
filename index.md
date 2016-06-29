@@ -53,7 +53,7 @@ title: Rspamd spam filtering system
 				<div class="thumbnail">
 						<img src="img/support.jpg" class="" height="80" width="80">
 						<div class="caption">
-								<h2><a href="/support.html">Donation & Support <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<h2><a href="/support.html">Donation&nbsp;&&nbsp;Support&nbsp;<small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
 								<p class="text-justify">Check this page if you need help or want to make a donation or contribute to rspamd</p>
 						</div>
 				</div>
