@@ -129,3 +129,11 @@ div.caption h2{
 h2{
   font-size: 32px;
 }
+#gh-btn{/*for git like counter*/
+  padding-top: 8px;
+  height:25px;
+}
+#gh-count{/*for git like counter*/
+  padding-top: 8px;
+  height:25px;
+}
