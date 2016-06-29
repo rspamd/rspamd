@@ -21,21 +21,17 @@ Statistics Setup
 Sqlite Learn - Keyed, siphash
   [Setup]  Statistics Setup  @{ALIASES}  STATS_BACKEND=sqlite3  STATS_HASH=siphash STATS_KEY=${KEY_PVT1}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Should Contain  ${result.stdout}  success = true
-  Follow Rspamd Log
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Check Rspamc  ${result}  BAYES_SPAM
   [Teardown]  Generic Teardown
 
 Sqlite Learn - Keyed, xxhash
   [Setup]  Statistics Setup  @{ALIASES}  STATS_BACKEND=sqlite3  STATS_HASH=xxh  STATS_KEY=${KEY_PVT1}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Check Rspamc  ${result}  BAYES_SPAM
   [Teardown]  Generic Teardown
 
 Sqlite Learn - Broken Stats Directory
@@ -49,51 +45,39 @@ Sqlite Learn - Empty part
   [Setup]  Statistics Setup  @{ALIASES}  STATS_BACKEND=sqlite3  STATS_HASH=xxh  STATS_KEY=${KEY_PVT1}
   Set Test Variable  ${MESSAGE}  ${TESTDIR}/messages/empty_part.eml
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Check Rspamc  ${result}  BAYES_SPAM
   [Teardown]  Generic Teardown
 
 Sqlite Relearn
   [Setup]  Statistics Setup  @{ALIASES}  STATS_BACKEND=sqlite3  STATS_HASH=xxh  STATS_KEY=${KEY_PVT1}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Check Rspamc  ${result}  BAYES_SPAM
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_ham  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_HAM
+  Check Rspamc  ${result}  BAYES_HAM
   [Teardown]  Generic Teardown
 
 Mmap Learn
   [Setup]  Statistics Setup  @{ALIASES}  STATS_BACKEND=mmap  STATS_HASH=compat  STATS_KEY=${KEY_PVT1}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Check Rspamc  ${result}  BAYES_SPAM
   [Teardown]  Generic Teardown
 
 Mmap Relearn
   [Setup]  Statistics Setup  @{ALIASES}  STATS_BACKEND=mmap  STATS_HASH=compat  STATS_KEY=${KEY_PVT1}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_SPAM
+  Check Rspamc  ${result}  BAYES_SPAM
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_ham  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  success = true
+  Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  BAYES_HAM
+  Check Rspamc  ${result}  BAYES_HAM
   [Teardown]  Generic Teardown

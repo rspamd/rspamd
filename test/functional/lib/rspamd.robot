@@ -4,6 +4,15 @@ Library  OperatingSystem
 Library  Process
 
 *** Keywords ***
+Check Rspamc
+  [Arguments]  ${result}  @{args}
+  ${arglen} =  Get Length  ${args}
+  ${expected_output} =  Set Variable If  ${arglen} < 1  success = true  @{args}[0]
+  ${expected_rc} =  Set Variable If  ${arglen} < 2  0  @{args}[1]
+  Follow Rspamd Log
+  Should Contain  ${result.stdout}  ${expected_output}
+  Should Be Equal As Integers  ${result.rc}  ${expected_rc}
+
 Export Rspamd Vars To Suite
   [Arguments]  ${TMPDIR}  ${RSPAMD_LOGPOS}  ${RSPAMD_PID}
   Set Suite Variable  ${TMPDIR}
@@ -41,7 +50,6 @@ Log Logs
 Run Rspamc
   [Arguments]                     @{args}
   ${result} =                     Run Process  ${RSPAMC}  @{args}
-  Should Be Equal As Integers     ${result.rc}  0
   [Return]                        ${result}
 
 Run Rspamd

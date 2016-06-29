@@ -26,6 +26,5 @@ Flags
 Dependencies
   [Setup]  Lua Setup  ${TESTDIR}/lua/deps.lua
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  DEP10
+  Check Rspamc  ${result}  DEP10
   [Teardown]  Generic Teardown
