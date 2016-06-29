@@ -79,19 +79,22 @@ hr {
   }
 }
 .jumbotron {
-  background:url(/img/rspamd_head_alt.png);
+  background:url(/img/rspamd_jumbotron_06_2016_3.png);
   background-size: cover;
+  padding-top: 10px;
+  padding-bottom: 15px;
+
 }
 @media (min-width: 768px) and (max-width: 992px){
     /* when navbar is thick */
-    .jumbotron {margin-top: 70px;}
+    .jumbotron {margin-top: 50px;}
 }
-@media (min-width: 992px){
-  /* usual screen */
+/*@media (min-width: 992px){
+  /* usual screen
   .jumbotron {
     margin-top: 20px;
 
-  }
+  }*/
 }
 .btn-code{
   background-color: #333333 !important;
