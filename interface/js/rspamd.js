@@ -342,7 +342,7 @@
                 }
                 else {
                     widget = '<li class="stat-box"><div class="widget"><strong>' +
-                        item + '</strong>' + i + '</div></li>';
+                        Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
                     if (i == 'scanned') {
                         stat_w[0] = widget;
                     }
