@@ -13,13 +13,11 @@ ${RSPAMD_SCOPE}     Suite
 *** Test Cases ***
 GTUBE
   ${result} =  Scan Message With Rspamc  ${GTUBE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  GTUBE (
+  Check Rspamc  ${result}  GTUBE (
 
 GTUBE - Encrypted
   ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  --key  ${KEY_PUB1}  ${GTUBE}
-  Follow Rspamd Log
-  Should Contain  ${result.stdout}  GTUBE (
+  Check Rspamc  ${result}  GTUBE (
 
 GTUBE - Scan File feature
   ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
