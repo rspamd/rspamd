@@ -902,15 +902,31 @@
                             '<td><span class="label ' + score + '">' + data.score.toFixed(2) + '/' + data.required_score.toFixed(2) + '</span></td>' +
                             '</tr></tbody>')
                             .insertAfter('#scanOutput thead');
+                        var sym_desc = {};
+                        var nsym = 0;
+
                         $.each(data, function (i, item) {
                             if (typeof item == 'object') {
-                                items.push('<div class="cell-overflow" tabindex="1">' + item.name + ': ' + item.score.toFixed(2) + '</div>');
+                                var sym_id = "sym_" + nsym;
+                                if (item.description) {
+                                    sym_desc[sym_id] = item.description;
+                                }
+                                items.push('<div class="cell-overflow" tabindex="1"><abbr id="' + sym_id +
+                                '">' + item.name + '</abbr>: ' + item.score.toFixed(2) + '</div>');
+                                    nsym ++;
                             }
                         });
                         $('<td/>', { id: 'tmpSymbols', html: items.join('') }).appendTo('#scanResult');
                         $('#tmpSymbols').insertAfter('#tmpBody td:last').removeAttr('id');
                         $('#tmpBody').removeAttr('id');
                         $('#scanResult').show();
+                        // Show tooltips
+                        $.each(sym_desc, function(k, v) {
+                            $('#' + k).tooltip({
+                                "placement": "bottom",
+                                "title": v
+                            });
+                        });
                         $('html, body').animate({
                             scrollTop: $('#scanResult').offset().top
                         }, 1000);
