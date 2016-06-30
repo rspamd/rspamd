@@ -599,7 +599,11 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	}
 
 	rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
-	g_atomic_int_set (periodic->map->locked, 0);
+
+	if (periodic->locked) {
+		g_atomic_int_set (periodic->map->locked, 0);
+	}
+
 	g_slice_free1 (sizeof (*periodic), periodic);
 }
 
@@ -895,11 +899,32 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_map_backend *bk;
 	struct map_periodic_cbdata *cbd = ud;
+	struct rspamd_map *map;
+
+	map = cbd->map;
+
+	if (!cbd->locked) {
+		if (!g_atomic_int_compare_and_exchange (cbd->map->locked, 0, 1)) {
+			msg_debug_map (
+					"don't try to reread map as it is locked by other process, "
+					"will reread it later");
+			rspamd_map_schedule_periodic (map, TRUE, FALSE, FALSE);
+			MAP_RELEASE (cbd, "periodic");
+
+			return;
+		}
+		else {
+			cbd->locked = TRUE;
+		}
+	}
 
 	if (cbd->errored) {
 		/* We should not check other backends if some backend has failed */
 		rspamd_map_schedule_periodic (cbd->map, FALSE, FALSE, TRUE);
-		g_atomic_int_set (cbd->map->locked, 0);
+
+		if (cbd->locked) {
+			g_atomic_int_set (cbd->map->locked, 0);
+		}
 		MAP_RELEASE (cbd, "periodic");
 
 		return;
@@ -951,15 +976,7 @@ rspamd_map_watch (struct rspamd_config *cfg,
 		map->ev_base = ev_base;
 		map->r = resolver;
 
-		if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-			msg_debug_map (
-					"don't try to reread map as it is locked by other process, "
-					"will reread it later");
-			rspamd_map_schedule_periodic (map, TRUE, TRUE, FALSE);
-		}
-		else {
-			rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
-		}
+		rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
 
 		cur = g_list_next (cur);
 	}

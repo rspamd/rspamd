@@ -123,6 +123,7 @@ struct map_periodic_cbdata {
 	gboolean need_modify;
 	gboolean errored;
 	guint cur_backend;
+	gboolean locked;
 	ref_entry_t ref;
 };
 
