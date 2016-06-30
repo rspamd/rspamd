@@ -271,6 +271,7 @@ free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 		rspamd_inet_address_destroy (cbd->addr);
 	}
 
+
 	MAP_RELEASE (cbd->bk, "rspamd_map_backend");
 	MAP_RELEASE (periodic, "periodic");
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
@@ -996,6 +997,10 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 		for (i = 0; i < map->backends->len; i ++) {
 			bk = g_ptr_array_index (map->backends, i);
 			MAP_RELEASE (bk, "rspamd_map_backend");
+		}
+
+		if (g_atomic_int_compare_and_exchange (&map->cache->available, 1, 0)) {
+			unlink (map->cache->shmem_name);
 		}
 
 		if (map->dtor) {
