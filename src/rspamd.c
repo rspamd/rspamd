@@ -91,7 +91,7 @@ static gboolean gen_keypair = FALSE;
 static gboolean encrypt_password = FALSE;
 static GHashTable *ucl_vars = NULL;
 
-static guint term_attempts = 0;
+static gint term_attempts = 0;
 
 /* List of unrelated forked processes */
 static GArray *other_workers = NULL;
@@ -625,21 +625,36 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	rspamd_main = w->srv;
 
 	if (waitpid (w->pid, &res, WNOHANG) <= 0) {
-		if (term_attempts == 0) {
+		if (term_attempts < 0) {
 			if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
-				msg_info_main ("terminate worker %P with SIGKILL", w->pid);
+				msg_warn_main ("terminate worker %s(%P) with SIGKILL",
+						g_quark_to_string (w->type), w->pid);
 				kill (w->pid, SIGKILL);
 			}
 			else {
-				msg_info_main ("waiting for workers to sync");
+				if (term_attempts > -(TERMINATION_ATTEMPTS * 2)) {
+					if (term_attempts % 10 == 0) {
+						msg_info_main ("waiting for worker %s(%P) to sync, "
+								"%d seconds remain",
+								g_quark_to_string (w->type), w->pid,
+								(TERMINATION_ATTEMPTS * 2 + term_attempts) / 5);
+						kill (w->pid, SIGTERM);
+					}
+				}
+				else {
+					msg_err_main ("data corruption warning: terminating "
+							"special worker %s(%P) with SIGKILL",
+							g_quark_to_string (w->type), w->pid);
+					kill (w->pid, SIGKILL);
+				}
 			}
 		}
 
 		return FALSE;
 	}
 
-	msg_info_main ("%s process %P terminated %s", g_quark_to_string (
-			w->type), w->pid,
+	msg_info_main ("%s process %P terminated %s",
+			g_quark_to_string (w->type), w->pid,
 			WTERMSIG (res) == SIGKILL ? "hardly" : "softly");
 	event_del (&w->srv_ev);
 	g_free (w->cf);
@@ -819,6 +834,7 @@ rspamd_term_handler (gint signo, short what, gpointer arg)
 	struct rspamd_main *rspamd_main = arg;
 
 	msg_info_main ("catch termination signal, waiting for children");
+	rspamd_log_nolock (rspamd_main->logger);
 	rspamd_pass_signal (rspamd_main->workers, signo);
 
 	event_base_loopexit (rspamd_main->ev_base, NULL);
@@ -945,9 +961,7 @@ rspamd_final_term_handler (gint signo, short what, gpointer arg)
 {
 	struct rspamd_main *rspamd_main = arg;
 
-	if (term_attempts) {
-		term_attempts--;
-	}
+	term_attempts--;
 
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
