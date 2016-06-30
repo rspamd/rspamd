@@ -46,6 +46,8 @@ struct rspamd_http_message {
 		const gchar *begin;
 		/* Data len */
 		gsize len;
+		/* Allocated len */
+		gsize allocated_len;
 		/* Data buffer (used to write data inside) */
 		gchar *str;
 
