@@ -170,7 +170,7 @@ local function openphish_json_cb(string)
       local res,err = parser:parse_string(cap)
       if not res then
         valid = false
-        rspamd_logger.warnx(rspamd_config, 'cannot parse openphish map: ' .. err)
+        rspamd_logger.warnx(openphish_hash, 'cannot parse openphish map: ' .. err)
       else
         local obj = parser:get_object()
 
@@ -201,7 +201,7 @@ local function phishtank_json_cb(string)
 
   if not res then
     valid = false
-    rspamd_logger.warnx(rspamd_config, 'cannot parse openphish map: ' .. err)
+    rspamd_logger.warnx(phishtank_hash, 'cannot parse openphish map: ' .. err)
   else
     local obj = parser:get_object()
 
@@ -240,19 +240,21 @@ if opts then
       openphish_premium = true
     end
 
-    if not openphish_premium then
-      openphish_hash = rspamd_config:add_map({
-        type = 'set',
-        url = openphish_map,
-        description = 'Open phishing feed map (see https://www.openphish.com for details)'
-      })
-    else
-      openphish_hash = rspamd_config:add_map({
-          type = 'callback',
+    if opts['openphish_enabled'] then
+      if not openphish_premium then
+        openphish_hash = rspamd_config:add_map({
+          type = 'set',
           url = openphish_map,
-          callback = openphish_json_cb,
-          description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
+          description = 'Open phishing feed map (see https://www.openphish.com for details)'
         })
+      else
+        openphish_hash = rspamd_config:add_map({
+            type = 'callback',
+            url = openphish_map,
+            callback = openphish_json_cb,
+            description = 'Open phishing premium feed map (see https://www.openphish.com for details)'
+          })
+      end
     end
 
     if opts['phishtank_map'] then
