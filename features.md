@@ -18,16 +18,13 @@ You can watch the following [introduction video](https://www.youtube.com/watch?v
 
 ## Unique rspamd features
 
-* **Web interface** - Rspamd is shipped with the fully functional ajax-based web interface that allows to observe rspamd statistic, to configure rules, weights and lists, to scan
-and learn messages and to view the history of scans. The interface is self-hosted, requires zero configuration and follows the recent web applications standards. You don't need a
-web server or applications server to run web UI - you just need to run rspamd itself and a web browser.
+* [**Web interface**](/webui/). Rspamd is shipped with the fully functional ajax-based web interface that allows to monitor and configure rspamd rules, scores, dynamic lists, to scan and learn messages and to view the history of scans. The web interface is self-hosted, requires zero configuration and follows the recent web applications standards. You don't need a web server or applications server to run web UI - you just need to run rspamd itself and a web browser.
 
-* **Integration with MTA** - Rspamd can work with the most popular mail transfer systems, such as postfix, exim or sendmail. For postfix and sendmail, there is an [`rmilter` project](https://github.com/vstakhov/rmilter),
-whilst for exim there are several solutions to work with rspamd. Should you require MTA integration then please consult with the [integration guide](https://rspamd.com/doc/integration.html).
+* [**Integration with MTA**](/doc/integration.html). Rspamd can work with the most popular mail transfer systems, such as postfix, exim or sendmail. For postfix and sendmail, there is an [`rmilter` project](https://github.com/vstakhov/rmilter), whilst there are several solutions for exim and OpenSMTPD to scan mail on rspamd.
 
-* **Extensive LUA API** - Rspamd ships with hundreds of [lua functions](https://rspamd.com/doc/lua) that are available to write own rules for efficient and targeted spam filtering.
+* [**Extensive LUA API**](/doc/lua). Rspamd ships with hundreds of lua functions that are help to create your own rules for efficient and targeted spam filtering.
 
-* **Dynamic tables** - Rspamd allows to specify bulk lists as `dynamic maps` that are checked in runtime with updating data when they are changed. Rspamd supports file, HTTP and HTTPS maps.
+* [**Dynamic tables**](/doc/configuration/maps.html) - it is possible to specify bulk lists as `dynamic maps` that are checked in runtime with updating data only when they are changed. Rspamd supports file, HTTP and HTTPS maps.
 
 ## Content scan features
 
