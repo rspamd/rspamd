@@ -5,6 +5,8 @@ title: Usage of fuzzy hashes
 
 # Usage of fuzzy hashes
 
+[Russian version](./fuzzy_storage.ru.html)
+
 ## Introduction
 
 Fuzzy hashes are used to search for similar messages – i.e. you can find messages with the same or a slightly modified text using this method. This technology fits well for blocking spam that is simultaneously sent to many users. Since the hash function is unidirectional, it is impossible to restore the original text using a hash only. And this allows you to send requests to third-party hash storages without risk of disclosure.
