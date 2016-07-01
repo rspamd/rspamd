@@ -30,42 +30,69 @@ local phishtank_enabled = false
 local openphish_premium = false
 local openphish_hash
 local phishtank_hash
-local openphish_json = {}
+local openphish_data = {}
 local phishtank_data = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
 
 local function phishing_cb(task)
+  local function check_phishing_map(map, url, symbol)
+    local host = url:get_host()
+
+    if host then
+      local elt = map[host]
+      local found = false
+      local data = nil
+
+      if elt then
+        local path = url:get_path()
+
+        if path then
+          for _,d in ipairs(elt) do
+            if d['path'] == path then
+              found = true
+              data = d['data']
+            end
+          end
+        end
+
+
+        if found then
+          local args = nil
+
+          if type(data) == 'table' then
+            args = {
+              data['tld'],
+              data['sector'],
+              data['brand'],
+            }
+          elseif type(data) == 'string' then
+            args = data
+          else
+            args = host
+          end
+
+          task:insert_result(symbol, 1.0, args)
+        else
+          if url:is_phished() and not url:is_redirected() then
+            task:insert_result(symbol, 0.7, host)
+          end
+        end
+      end
+    end
+  end
+
   local urls = task:get_urls()
 
   if urls then
     for _,url in ipairs(urls) do
       if openphish_hash then
-        local t = url:get_text()
-
-        if openphish_premium then
-          local elt = openphish_json[t]
-          if elt then
-            task:insert_result(openphish_symbol, 1.0, {
-              elt['tld'],
-              elt['sector'],
-              elt['brand'],
-            })
-          end
-        else
-          if openphish_hash:get_key(t) then
-            task:insert_result(openphish_symbol, 1.0, url:get_tld())
-          end
-        end
+        check_phishing_map(openphish_data, url, openphish_symbol)
       end
 
       if phishtank_hash then
-        local t = url:get_text()
-        local elt = phishtank_data[t]
-        if elt then
-          task:insert_result(phishtank_symbol, 1.0, elt)
-        end
+        check_phishing_map(phishtank_data, url, phishtank_symbol)
       end
 
       if url:is_phished() and not url:is_redirected() then
@@ -158,11 +185,40 @@ local function rspamd_str_split_fun(s, sep, func)
   return lpeg.match(p, s)
 end
 
+local function insert_url_from_string(pool, tbl, str, data)
+  local rspamd_url = require "rspamd_url"
+
+  local u = rspamd_url.create(pool, str)
+
+  if u then
+    local host = u:get_host()
+    if host then
+      local elt = {
+        data = data,
+        path = u:get_path()
+      }
+
+      if tbl[host] then
+        table.insert(tbl[host], elt)
+      else
+        tbl[host] = {elt}
+      end
+
+      return true
+    end
+  end
+
+  return false
+end
+
 local function openphish_json_cb(string)
   local ucl = require "ucl"
+  local rspamd_mempool = require "rspamd_mempool"
   local nelts = 0
   local new_json_map = {}
   local valid = true
+
+  local pool = rspamd_mempool.create()
 
   local function openphish_elt_parser(cap)
     if valid then
@@ -175,8 +231,9 @@ local function openphish_json_cb(string)
         local obj = parser:get_object()
 
         if obj['url'] then
-          new_json_map[obj['url']] = obj
-          nelts = nelts + 1
+          if insert_url_from_string(pool, new_json_map, obj['url'], obj) then
+            nelts = nelts + 1
+          end
         end
       end
     end
@@ -185,10 +242,32 @@ local function openphish_json_cb(string)
   rspamd_str_split_fun(string, '\n', openphish_elt_parser)
 
   if valid then
-    openphish_json = new_json_map
+    openphish_data = new_json_map
     rspamd_logger.infox(openphish_hash, "parsed %s elements from openphish feed",
       nelts)
   end
+
+  pool:destroy()
+end
+
+local function openphish_plain_cb(string)
+  local nelts = 0
+  local new_data = {}
+  local rspamd_mempool = require "rspamd_mempool"
+  local pool = rspamd_mempool.create()
+
+  local function openphish_elt_parser(cap)
+    if insert_url_from_string(pool, new_data, cap, nil) then
+      nelts = nelts + 1
+    end
+  end
+
+  rspamd_str_split_fun(string, '\n', openphish_elt_parser)
+
+  openphish_data = new_data
+  rspamd_logger.infox(openphish_hash, "parsed %s elements from openphish feed",
+    nelts)
+  pool:destroy()
 end
 
 local function phishtank_json_cb(string)
@@ -198,6 +277,8 @@ local function phishtank_json_cb(string)
   local valid = true
   local parser = ucl.parser()
   local res,err = parser:parse_string(string)
+  local rspamd_mempool = require "rspamd_mempool"
+  local pool = rspamd_mempool.create()
 
   if not res then
     valid = false
@@ -207,8 +288,10 @@ local function phishtank_json_cb(string)
 
     for _,elt in ipairs(obj) do
       if elt['url'] then
-        new_data[elt['url']] = elt['phish_detail_url']
-        nelts = nelts + 1
+        if insert_url_from_string(pool, new_data, elt['url'],
+          elt['phish_detail_url']) then
+          nelts = nelts + 1
+        end
       end
     end
   end
@@ -218,6 +301,9 @@ local function phishtank_json_cb(string)
     rspamd_logger.infox(phishtank_hash, "parsed %s elements from phishtank feed",
       nelts)
   end
+
+
+  pool:destroy()
 end
 
 if opts then
@@ -243,8 +329,9 @@ if opts then
     if opts['openphish_enabled'] then
       if not openphish_premium then
         openphish_hash = rspamd_config:add_map({
-          type = 'set',
+          type = 'callback',
           url = openphish_map,
+          callback = openphish_plain_cb,
           description = 'Open phishing feed map (see https://www.openphish.com for details)'
         })
       else
