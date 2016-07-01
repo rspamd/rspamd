@@ -1042,7 +1042,8 @@ rspamd_controller_handle_graph (
 	struct rspamd_controller_worker_ctx *ctx;
 	rspamd_ftok_t srch, *value;
 	struct rspamd_rrd_query_result *rrd_result;
-	gulong i, j, ts, start_row, cnt, t;
+	gulong i, j, start_row, cnt, t, ts;
+	gdouble yval, last = 0;
 	ucl_object_t *res, *elt[4], *data_elt;
 	enum {
 		rra_hourly = 0,
@@ -1126,7 +1127,6 @@ rspamd_controller_handle_graph (
 
 	for (i = start_row, cnt = 0; cnt < rrd_result->rra_rows; cnt ++) {
 		for (j = 0; j < rrd_result->ds_count; j++) {
-			gdouble yval;
 
 			data_elt = ucl_object_typed_new (UCL_OBJECT);
 			t = ts * rrd_result->pdp_per_cdp;
@@ -1141,10 +1141,11 @@ rspamd_controller_handle_graph (
 						ucl_object_fromdouble (yval),
 						"y", 1,
 						false);
+				last = yval;
 			}
 			else {
 				ucl_object_insert_key (data_elt,
-						ucl_object_typed_new (UCL_NULL),
+						ucl_object_fromdouble (last),
 						"y", 1,
 						false);
 			}
