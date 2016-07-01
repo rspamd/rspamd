@@ -515,8 +515,8 @@
             $.ajax({
                 dataType: 'json',
                 type: 'GET',
-                url: 'graph?type=',
-                data: type,
+                url: 'graph',
+                data: {"type": type},
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
