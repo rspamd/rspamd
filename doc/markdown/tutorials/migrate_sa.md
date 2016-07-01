@@ -1,4 +1,4 @@
-# Migrating from SpamAssassin to rspamd
+# Migrating from SpamAssassin to Rspamd
 
 This guide provides information for those who wants to migrate an existing system from [SpamAssassin](https://spamassassin.apache.org) to rspamd. You will find information about major differences between the spam filtering engines and how to deal with the transition process.
 
