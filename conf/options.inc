@@ -33,6 +33,9 @@ allow_raw_input = true;
 # amount of words processed will not be *LIKELY more than the twice of that limit
 words_decay = 200;
 
+# Write statistics about rspamd usage to the round-robin database
+rrd = "${DBDIR}/rspamd.rrd";
+
 # Local networks
 local_addrs = "192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, fd00::/8, 169.254.0.0/16, fe80::/10";
 hs_cache_dir = "${DBDIR}/";
