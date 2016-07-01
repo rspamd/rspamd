@@ -42,23 +42,35 @@ local function phishing_cb(task)
 
     if host then
       local elt = map[host]
-      local found = false
+      local found_path = false
+      local found_query = false
       local data = nil
 
       if elt then
         local path = url:get_path()
+        local query = url:get_query()
 
         if path then
           for _,d in ipairs(elt) do
             if d['path'] == path then
-              found = true
+              found_path = true
               data = d['data']
+
+              if query and d['query'] and query == d['query'] then
+                found_query = true
+              elseif not d['query'] then
+                found_query = true
+              end
             end
+          end
+        else
+          if not d['path'] then
+            found_path = true
+            found_query = true
           end
         end
 
-
-        if found then
+        if found_path then
           local args = nil
 
           if type(data) == 'table' then
@@ -73,10 +85,17 @@ local function phishing_cb(task)
             args = host
           end
 
-          task:insert_result(symbol, 1.0, args)
+          if found_query then
+            -- Query + path match
+            task:insert_result(symbol, 1.0, args)
+          else
+            -- Host + path match
+            task:insert_result(symbol, 0.3, args)
+          end
         else
-          if url:is_phished() and not url:is_redirected() then
-            task:insert_result(symbol, 0.7, host)
+          if url:is_phished() then
+            -- Only host matches
+            task:insert_result(symbol, 0.1, host)
           end
         end
       end
@@ -195,7 +214,8 @@ local function insert_url_from_string(pool, tbl, str, data)
     if host then
       local elt = {
         data = data,
-        path = u:get_path()
+        path = u:get_path(),
+        query = u:get_query()
       }
 
       if tbl[host] then
