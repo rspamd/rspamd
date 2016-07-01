@@ -1081,16 +1081,16 @@ rspamd_controller_handle_graph (
 		return 0;
 	}
 
-	if (strncmp (value->begin, "hourly", value->len) == 0) {
+	if (value->len == 6 && rspamd_lc_cmp (value->begin, "hourly", value->len) == 0) {
 		rra_num = rra_hourly;
 	}
-	else if (strncmp (value->begin, "daily", value->len) == 0) {
-		rra_num = rra_hourly;
+	else if (value->len == 5 && rspamd_lc_cmp (value->begin, "daily", value->len) == 0) {
+		rra_num = rra_daily;
 	}
-	else if (strncmp (value->begin, "weekly", value->len) == 0) {
-		rra_num = rra_hourly;
+	else if (value->len == 6 && rspamd_lc_cmp (value->begin, "weekly", value->len) == 0) {
+		rra_num = rra_weekly;
 	}
-	else if (strncmp (value->begin, "monthly", value->len) == 0) {
+	else if (value->len == 7 && rspamd_lc_cmp (value->begin, "monthly", value->len) == 0) {
 		rra_num = rra_monthly;
 	}
 
