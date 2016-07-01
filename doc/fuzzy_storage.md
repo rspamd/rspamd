@@ -355,10 +355,10 @@ For the vast majority of configurations we recommend to use `mumhash` or `fastha
 $ make rspamd-test
 ```
 
-and run the test suite of different variants of hashes algorithms on a specific platform:
+and run the test suite of different variants of hash algorithms on a specific platform:
 
 ```
 test/rspamd-test -p /rspamd/shingles
 ```
 
-**Important note:** it is not possible to change the parameter without losing all the data in the storage, as only one algorithm can be used simultaneously for each storage. The Conversion of one type of hash to another is impossible by design as a hash function cannot be reverted.
+**Important note:** it is not possible to change the parameter without losing all the data in the storage, as only one algorithm can be used simultaneously for each storage. Conversion of one type of hash to another is impossible by design as a hash function cannot be reversed.
