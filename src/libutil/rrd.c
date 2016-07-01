@@ -217,20 +217,30 @@ rspamd_rrd_check_file (const gchar *filename, gboolean need_data, GError **err)
 		return FALSE;
 	}
 	/* Check magic */
-	if (memcmp (head.cookie, RRD_COOKIE, sizeof (head.cookie)) != 0 ||
-		memcmp (head.version, RRD_VERSION, sizeof (head.version)) != 0 ||
-		head.float_cookie != RRD_FLOAT_COOKIE) {
+	if (memcmp (head.version, RRD_VERSION, sizeof (head.version)) != 0) {
 		g_set_error (err,
-			rrd_error_quark (), EINVAL, "rrd head cookies error: %s",
-			strerror (errno));
+				rrd_error_quark (), EINVAL, "rrd head error: bad cookie");
+		close (fd);
+		return FALSE;
+	}
+	if (memcmp (head.version, RRD_VERSION, sizeof (head.version)) != 0) {
+		g_set_error (err,
+				rrd_error_quark (), EINVAL, "rrd head error: invalid version");
+		close (fd);
+		return FALSE;
+	}
+	if (head.float_cookie != RRD_FLOAT_COOKIE) {
+		g_set_error (err,
+				rrd_error_quark (), EINVAL, "rrd head error: another architecture "
+						"(file cookie %g != our cookie %g)",
+				head.float_cookie, RRD_FLOAT_COOKIE);
 		close (fd);
 		return FALSE;
 	}
 	/* Check for other params */
 	if (head.ds_cnt <= 0 || head.rra_cnt <= 0) {
 		g_set_error (err,
-			rrd_error_quark (), EINVAL, "rrd head cookies error: %s",
-			strerror (errno));
+			rrd_error_quark (), EINVAL, "rrd head cookies error: bad rra or ds count");
 		close (fd);
 		return FALSE;
 	}

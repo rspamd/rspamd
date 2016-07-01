@@ -2619,13 +2619,23 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	/* RRD collector */
 	if (ctx->cfg->rrd_file && worker->index == 0) {
-		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, NULL);
+		GError *rrd_err = NULL;
+
+		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, &rrd_err);
 
 		if (ctx->rrd) {
 			ctx->rrd_event = g_slice_alloc0 (sizeof (*ctx->rrd_event));
 			evtimer_set (ctx->rrd_event, rspamd_controller_rrd_update, ctx);
 			event_base_set (ctx->ev_base, ctx->rrd_event);
 			event_add (ctx->rrd_event, &rrd_update_time);
+		}
+		else if (rrd_err) {
+			msg_err ("cannot load rrd from %s: %e", ctx->cfg->rrd_file,
+					rrd_err);
+			g_error_free (rrd_err);
+		}
+		else {
+			msg_err ("cannot load rrd from %s: unknown error", ctx->cfg->rrd_file);
 		}
 	}
 	else {
