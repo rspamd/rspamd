@@ -549,6 +549,12 @@
         // }
         // @get history log
         function getHistory() {
+
+            if (history) {
+                history.destroy();
+                $('#historyLog').children('tbody').remove();
+            }
+
             var items = [];
             $.ajax({
                 dataType: 'json',
@@ -671,8 +677,10 @@
         }
         // @update history log
         $('#resetHistory').on('click', function () {
-            history.destroy();
-            $('#historyLog').children('tbody').remove();
+            if (history) {
+                history.destroy();
+                $('#historyLog').children('tbody').remove();
+            }
             $.ajax({
                 dataType: 'json',
                 type: 'GET',
@@ -688,143 +696,12 @@
                 }
             });
         });
+
         // @reset history log
         $('#updateHistory').on('click', function () {
-            history.destroy();
-            $('#historyLog').children('tbody').remove();
             getHistory();
         });
-        // @spam upload form
-        function createUploaders() {
-            var spamUploader = new qq.FineUploader({
-                element: $('#uploadSpamFiles')[0],
-                request: {
-                    endpoint: 'learnspam',
-                    customHeaders: {
-                        'Password': getPassword()
-                    }
-                },
-                validation: {
-                    allowedExtensions: ['eml', 'msg', 'txt', 'html'],
-                    sizeLimit: 52428800
-                },
-                autoUpload: false,
-                text: {
-                    uploadButton: '<i class="glyphicon glyphicon-plus glyphicon-white"></i> Select Files'
-                },
-                retry: {
-                    enableAuto: false
-                },
-                template: '<div class="qq-uploader">' +
-                    '<pre class="qq-upload-drop-area span12"><span>{dragZoneText}</span></pre>' +
-                    '<div class="qq-upload-button btn btn-danger">{uploadButtonText}</div>' +
-                    '<span class="qq-drop-processing"><span>{dropProcessingText}</span><span class="qq-drop-processing-spinner"></span></span>' +
-                    '<ul class="qq-upload-list"></ul>' +
-                    '</div>',
-                classes: {
-                    success: 'alert-success',
-                    fail: 'alert-error'
-                },
-                debug: true,
-                callbacks: {
-                    onError: function () {
-                        alertMessage('alert-error', 'Cannot upload data');
-                    }
-                }
-            });
-            var hamUploader = new qq.FineUploader({
-                element: $('#uploadHamFiles')[0],
-                request: {
-                    endpoint: 'learnham',
-                    customHeaders: {
-                        'Password': getPassword()
-                    }
-                },
-                validation: {
-                    allowedExtensions: ['eml', 'msg', 'txt', 'html'],
-                    sizeLimit: 52428800
-                },
-                autoUpload: false,
-                text: {
-                    uploadButton: '<i class="glyphicon glyphicon-plus glyphicon-white"></i> Select Files'
-                },
-                retry: {
-                    enableAuto: true
-                },
-                template: '<div class="qq-uploader">' +
-                    '<pre class="qq-upload-drop-area span12"><span>{dragZoneText}</span></pre>' +
-                    '<div class="qq-upload-button btn btn-success">{uploadButtonText}</div>' +
-                    '<span class="qq-drop-processing"><span>{dropProcessingText}</span><span class="qq-drop-processing-spinner"></span></span>' +
-                    '<ul class="qq-upload-list"></ul>' +
-                    '</div>',
-                classes: {
-                    success: 'alert-success',
-                    fail: 'alert-error'
-                },
-                debug: true,
-                callbacks: {
-                    onError: function () {
-                        alertMessage('alert-error', 'Cannot upload data');
-                    }
-                }
-            });
-            var data = {
-                flag: $('#fuzzyFlagUpload').val(),
-                weight: $('#fuzzyWeightUpload').val()
-            };
-            var fuzzyUploader = new qq.FineUploader({
-                element: $('#uploadFuzzyFiles')[0],
-                request: {
-                    endpoint: 'learnfuzzy',
-                    customHeaders: {
-                        'Password': getPassword()
-                    }
-                },
-                validation: {
-                    allowedExtensions: ['eml', 'msg', 'txt', 'html', 'pdf'],
-                    sizeLimit: 52428800
-                },
-                autoUpload: false,
-                text: {
-                    uploadButton: '<i class="glyphicon glyphicon-plus glyphicon-white"></i> Select Files'
-                },
-                retry: {
-                    enableAuto: true
-                },
-                template: '<div class="qq-uploader">' +
-                    '<pre class="qq-upload-drop-area span12"><span>{dragZoneText}</span></pre>' +
-                    '<div class="qq-upload-button btn btn-success">{uploadButtonText}</div>' +
-                    '<span class="qq-drop-processing"><span>{dropProcessingText}</span><span class="qq-drop-processing-spinner"></span></span>' +
-                    '<ul class="qq-upload-list"></ul>' +
-                    '</div>',
-                classes: {
-                    success: 'alert-success',
-                    fail: 'alert-error'
-                },
-                debug: true,
-                callbacks: {
-                    onError: function () {
-                        alertMessage('alert-error', 'Cannot upload data');
-                    }
-                }
-            });
-            // @upload spam button
-            $('#uploadSpamTrigger').on('click', function () {
-                spamUploader.uploadStoredFiles();
-                return false;
-            });
-            // @upload ham button
-            $('#uploadHamTrigger').on('click', function () {
-                hamUploader.uploadStoredFiles();
-                return false;
-            });
-            // @upload fuzzy button
-            $('#uploadFuzzyTrigger').on('click', function () {
-                fuzzyUploader.uploadStoredFiles();
-                uploadText(data, 'fuzzy');
-                return false;
-            });
-        }
+
         // @upload text
         function uploadText(data, source) {
             if (source === 'spam') {
@@ -1033,10 +910,11 @@
                             min = item.value;
                         }
                     });
-                    $('<form/>', { id: 'actionsForm', class: '', html: items.join('') }).appendTo('#actionsBody');
-                    $('<br><div class="form-group">' +
+
+                    $('#actionsBody').html('<form id="actionsForm">' + items.join('') +
+                        '<br><div class="form-group">' +
                         '<button class="btn btn-primary" ' +
-                        'type="submit">Save actions</button></div>').appendTo('#actionsForm');
+                        'type="submit">Save actions</button></div></form>');
                 }
             });
         }
@@ -1194,17 +1072,21 @@
             statWidgets();
             $('#mainUI').show();
             $('#progress').show();
-            getActions();
-            getMaps();
-            createUploaders();
-            getSymbols();
-            getHistory();
+
             getChart();
             initGraph();
             $('#progress').hide();
             $(disconnect).show();
         }
+
         connectRSPAMD();
+
+        $('#configuration_nav').bind('click', function (e) {
+            getActions();
+            getMaps();
+            getSymbols();
+        });
+
         $(document).ajaxStart(function () {
             $('#navBar').addClass('loading');
         });
@@ -1216,6 +1098,9 @@
         });
         $('#throughput_nav').bind('click', function () {
             getGraphData(selected.selData);
+        });
+        $('#history_nav').bind('click', function() {
+            getHistory();
         });
     });
 })();

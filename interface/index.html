@@ -6,7 +6,6 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="description" content="">
 	<meta name="author" content="">
-	<link href="//cdnjs.cloudflare.com/ajax/libs/file-uploader/3.7.0/fineuploader.min.css" rel="stylesheet">
 	<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet">
 	<link rel="stylesheet" type="text/css" href="./css/datatables.min.css"/>
 	<link rel="stylesheet" type="text/css" href="//cdn.rawgit.com/moisseev/D3Evolution/fb6ea62c43e26e728b48a43012fb796c5ab6689c/d3evolution.css">
@@ -116,8 +115,7 @@
 					<div class="widget-title">
 						<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span><h5>Actions</h5>
 					</div>
-					<div class="widget-content actions-content" id="actionsBody">
-					</div>
+					<div class="widget-content actions-content" id="actionsBody"></div>
 				</div>
 				<div class="widget-box">
 					<div class="widget-title">
@@ -150,20 +148,6 @@
 					</div>
 					<div class="widget-content">
 						<div class="row">
-							<form class="col-md-6 upload-form" id="uploadSpamForm">
-								<h5>Upload SPAM examples:</h5>
-								<button id="uploadSpamTrigger" class="btn pull-right btn-upload-trigger"><i class="glyphicon glyphicon-upload"></i> Upload files</button>
-								<div id="uploadSpamFiles"></div>
-							</form>
-							<form class="col-md-6 upload-form" id="uploadHamForm">
-								<h5>Upload HAM examples:</h5>
-								<button id="uploadHamTrigger" class="btn pull-right btn-upload-trigger"><i class="glyphicon glyphicon-upload"></i> Upload files</button>
-								<div id="uploadHamFiles"></div>
-							</form>
-						</div>
-					</div>
-					<div class="widget-content">
-						<div class="row">
 							<form class="col-md-6">
 								<h5>Insert raw SPAM source:</h5>
 								<textarea class="col-md-5 upload-textarea" id="spamTextSource" value=""></textarea>
@@ -176,29 +160,6 @@
 							</form>
 						</div>
 						<div class="row">
-								<form class="col-md-6 upload-form" id="uploadFuzzyForm">
-									<h5>Upload Fuzzy examples:</h5>
-									<div class="row">
-										<label class="pull-left">
-											Flag
-										</label>
-										<div class="pull-right col-md-10">
-											<input id="fuzzyFlagUpload" class="slider" type="slider" value="0"/>
-										</div>
-									</div>
-									<div class="row">
-										<label class="pull-left">
-											Weight
-										</label>
-										<div class="pull-right col-md-10">
-											<input id="fuzzyWeightUpload" class="slider" type="slider" value="0"/>
-										</div>
-									</div>
-									<button id="uploadFuzzyTrigger" class="btn pull-right btn-upload-trigger"><i class="glyphicon glyphicon-upload"></i> Upload files</button>
-									<div id="uploadFuzzyFiles"></div>
-								</form>
-						</div>
-						<div class="row">
 							<form class="col-md-6">
 								<h5>Insert raw Fuzzy storage:</h5>
 								<textarea class="col-md-5 upload-textarea" id="fuzzyTextSource" value=""></textarea>
@@ -207,7 +168,7 @@
 										Flag
 								</label>
 									<div class="pull-right col-md-10">
-										<input id="fuzzyFlagText" class="slider" type="slider" value="0"/>
+										<input id="fuzzyFlagText" class="slider" type="slider" value="1"/>
 									</div>
 							</div>
 							<div class="row">
@@ -215,7 +176,7 @@
 										Weight
 								</label>
 									<div class="pull-right col-md-10">
-										<input id="fuzzyWeightText" class="slider" type="slider" value="0"/>
+										<input id="fuzzyWeightText" class="slider" type="slider" value="1"/>
 									</div>
 							</div>
 								<p><button class="btn btn-default pull-right" data-upload="fuzzy"><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
@@ -357,7 +318,6 @@
 <script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/file-uploader/3.7.0/fineuploader.min.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
 <script src="./js/d3pie.min.js"></script>
 <script src="//cdn.rawgit.com/moisseev/D3Evolution/7789381ae8108690fc9903ddbcb74cfa562a9e13/d3evolution.js"></script>
