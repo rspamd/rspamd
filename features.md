@@ -1,26 +1,26 @@
 ---
-layout: default
+layout: features
 title: Rspamd features
 ---
 
-# Rspamd features
+## About Rspamd
 
 <abbr title="Rapid Spam Daemon"><a href="https://rspamd.com">Rspamd</a></abbr> is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
-such as URL black lists. Each message is analysed by rspamd and given a `spam score`.
+such as URL black lists. Each message is analysed by Rspamd and given a `spam score`.
 
-According to this spam score and the user's settings rspamd recommends an action for
+According to this spam score and the user's settings Rspamd recommends an action for
 the MTA to apply to the message: for example, to pass, to reject or to add a header.
 Rspamd is designed to process hundreds of messages per second simultaneously and has a number of
 features available.
 
-You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from the [FOSDEM-2016](http://fosdem.org) where I describe the main features of rspamd and explain why rspamd runs so fast.
+You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from the [FOSDEM-2016](http://fosdem.org) where I describe the main features of Rspamd and explain why Rspamd runs so fast.
 
-## Unique rspamd features
+<div><h2><img src="img/features.jpg" class="" height="50" width="50" style="position: relative; bottom: 10px;"> Unique features</h2></div>
 
-* [**Web interface**](/webui/). Rspamd is shipped with the fully functional ajax-based web interface that allows to monitor and configure rspamd rules, scores, dynamic lists, to scan and learn messages and to view the history of scans. The web interface is self-hosted, requires zero configuration and follows the recent web applications standards. You don't need a web server or applications server to run web UI - you just need to run rspamd itself and a web browser.
+* [**Web interface**](/webui/). Rspamd is shipped with the fully functional ajax-based web interface that allows to monitor and configure Rspamd rules, scores, dynamic lists, to scan and learn messages and to view the history of scans. The web interface is self-hosted, requires zero configuration and follows the recent web applications standards. You don't need a web server or applications server to run web UI - you just need to run Rspamd itself and a web browser.
 
-* [**Integration with MTA**](/doc/integration.html). Rspamd can work with the most popular mail transfer systems, such as postfix, exim or sendmail. For postfix and sendmail, there is an [`rmilter` project](https://github.com/vstakhov/rmilter), whilst there are several solutions for exim and OpenSMTPD to scan mail on rspamd.
+* [**Integration with MTA**](/doc/integration.html). Rspamd can work with the most popular mail transfer systems, such as postfix, exim or sendmail. For postfix and sendmail, there is an [`rmilter` project](https://github.com/vstakhov/rmilter), whilst there are several solutions for exim and OpenSMTPD to scan mail on Rspamd.
 
 * [**Extensive LUA API**](/doc/lua). Rspamd ships with hundreds of lua functions that are help to create your own rules for efficient and targeted spam filtering.
 
@@ -32,7 +32,7 @@ Content scan features are used to find certain patterns in messages, including t
 
 * [**Regular expressions filtering**](/doc/modules/regexp.html) offers basic processing of messages, their textual parts, MIME headers and SMTP data received by MTA against a set of expressions that includes both normal regular expressions and message processing functions. Rspamd expressions are the powerful tool that allows to filter messages based on some pre-defined rules. Rspamd can also use SpamAssassin regular expressions via [plugin](/doc/modules/spamassassin.html).
 
-* [**Fuzzy hashes**](/doc/modules/fuzzy_check.html) are used by rspamd to find similar messages. Unlike normal hashes, these structures are targeted to hide small differences between text patterns allowing to find common messages quickly. Rspamd has internal storage of such hashes and allows to block mass spam mass mails  based on user's feedback that specifies messages reputation. Moreover, fuzzy storage allows to feed rspamd with data from [`honeypots`](http://en.wikipedia.org/wiki/Honeypot_(computing)#Spam_versions) without polluting the statistical module. You can read more about it in the following [document](/doc/fuzzy_storage.html).
+* [**Fuzzy hashes**](/doc/modules/fuzzy_check.html) are used by Rspamd to find similar messages. Unlike normal hashes, these structures are targeted to hide small differences between text patterns allowing to find common messages quickly. Rspamd has internal storage of such hashes and allows to block mass spam mass mails  based on user's feedback that specifies messages reputation. Moreover, fuzzy storage allows to feed Rspamd with data from [`honeypots`](http://en.wikipedia.org/wiki/Honeypot_(computing)#Spam_versions) without polluting the statistical module. You can read more about it in the following [document](/doc/fuzzy_storage.html).
 
 * [**DCC**](/doc/modules/dcc.html) is quite similar to the previous one but it uses the external service [DCC](http://www.rhyolite.com/dcc/) to check if a message is a bulk message (that is sent to many recipients simultaneously).
 
@@ -50,7 +50,7 @@ There are many resources that defines policies for different objects in email tr
 
 * [**Whitelists**](/doc/modules/whitelist.html) are used to avoid false positive hits for trusted domains that pass other checks, such as DKIM, SPF or DMARC. For example, we should not filter messages from PayPal if they are correctly signed with PayPal domain signature. On the other hand, if they are not signed and DMARC policy defines restrictive rules for DKIM, we should mark this message as spam as it is potentially phishing. Whitelist module provides different modes to perform policies matching and whitelisting or blacklisting certain combinations of verification results.
 
-* [**DNS lists**](/doc/modules/rbl.html) allows to estimate reputation of sender's IP address or network. Rspamd uses a number of DNS lists including such lists as `SORBS` or `SpamHaus`. However, rspamd doesn't trust ultimately any specific DNS list and does not reject mail based just on this factor. Rspamd also uses white and grey DNS lists to avoid false positive spam hits.
+* [**DNS lists**](/doc/modules/rbl.html) allows to estimate reputation of sender's IP address or network. Rspamd uses a number of DNS lists including such lists as `SORBS` or `SpamHaus`. However, Rspamd doesn't trust ultimately any specific DNS list and does not reject mail based just on this factor. Rspamd also uses white and grey DNS lists to avoid false positive spam hits.
 
 * [**URL lists**](/doc/modules/surbl.html) are rather similar to DNS black lists but uses URLs in a message to fight spam and phishing. Rspamd has full embedded support of the most popular SURBL lists, such as [URIBL](http://uribl.com) and [SURBL](http://surbl.org) from SpamHaus.
 
