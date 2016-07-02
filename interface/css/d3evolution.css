@@ -1,0 +1,22 @@
+.d3evolution svg {
+    background-color: white;
+}
+.d3evolution .chart-title {
+    font-size: 17px;
+}
+.d3evolution .grid .tick {
+    stroke: lightgrey;
+    shape-rendering: crispEdges;
+}
+.d3evolution .axis,
+.d3evolution .legend {
+    font-size: 13px;
+}
+.d3evolution .axis path,
+.d3evolution .axis line {
+    fill: none;
+    stroke: grey;
+}
+.d3evolution .legend circle {
+    stroke-width: 2px;
+}
