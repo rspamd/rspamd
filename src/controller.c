@@ -1170,7 +1170,8 @@ rspamd_controller_handle_graph (
 	step = (rrd_result->rra_rows / desired_points + 0.5);
 	acc = g_malloc0 (sizeof (double) * rrd_result->ds_count * step);
 
-	for (i = start_row, cnt = 0; cnt < rrd_result->rra_rows; cnt ++) {
+	for (i = start_row, cnt = 0; cnt < rrd_result->rra_rows;
+			cnt ++) {
 		for (j = 0; j < rrd_result->ds_count; j++) {
 			if (k < step) {
 				/* Just update window */
@@ -1187,7 +1188,13 @@ rspamd_controller_handle_graph (
 			}
 		}
 
-		i = start_row == 0 ? i + 1 : (i + 1) % start_row;
+		if (i == rrd_result->rra_rows - 1) {
+			i = 0;
+		}
+		else {
+			i ++;
+		}
+
 		ts ++;
 	}
 
