@@ -75,7 +75,6 @@ hr {
   }
 }
 .jumbotron {
-  background:url(/img/rspamd_jumbotron_06_2016_3.png);
   background-size: cover;
   padding-top: 10px;
   padding-bottom: 15px;
@@ -136,4 +135,10 @@ h2{
 #gh-count{/*for git like counter*/
   padding-top: 8px;
   height:25px;
+}
+#jumbo-features{
+  background: url(/img/rspamd_jumbotron_features.png);
+}
+#jumbo-head{
+  background: url(/img/rspamd_jumbotron.png);
 }
