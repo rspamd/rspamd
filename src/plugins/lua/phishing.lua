@@ -136,7 +136,7 @@ local function phishing_cb(task)
 
         if #redirector_domains > 0 then
           for _,rule in ipairs(redirector_domains) do
-            if rule['map']:get_key(url:get_tld()) then
+            if rule['map']:get_key(tld) or rule['map']:get_key(url:get_host()) then
               task:insert_result(rule['symbol'], weight, ptld .. '->' .. tld)
               found = true
             end
@@ -144,7 +144,7 @@ local function phishing_cb(task)
         end
         if not found and #strict_domains > 0 then
           for _,rule in ipairs(strict_domains) do
-            if rule['map']:get_key(ptld) then
+            if rule['map']:get_key(ptld) or rule['map']:get_key(purl:get_host()) then
               task:insert_result(rule['symbol'], 1.0, ptld .. '->' .. tld)
               found = true
             end
