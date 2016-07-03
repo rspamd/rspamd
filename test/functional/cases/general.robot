@@ -1,14 +1,14 @@
 *** Settings ***
-Library         ${TESTDIR}/lib/rspamd.py
-Resource        ${TESTDIR}/lib/rspamd.robot
 Suite Setup     Generic Setup
 Suite Teardown  Generic Teardown
+Library         ${TESTDIR}/lib/rspamd.py
+Resource        ${TESTDIR}/lib/rspamd.robot
+Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}           ${TESTDIR}/configs/trivial.conf
-${GTUBE}            ${TESTDIR}/messages/gtube.eml
-&{RSPAMD_KEYWORDS}  KEY_PUBLIC=${KEY_PUB1}  KEY_PRIVATE=${KEY_PVT1}  LOCAL_ADDR=${LOCAL_ADDR}  PORT_NORMAL=${PORT_NORMAL}  TESTDIR=${TESTDIR}
-${RSPAMD_SCOPE}     Suite
+${CONFIG}       ${TESTDIR}/configs/trivial.conf
+${GTUBE}        ${TESTDIR}/messages/gtube.eml
+${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 GTUBE
@@ -16,7 +16,8 @@ GTUBE
   Check Rspamc  ${result}  GTUBE (
 
 GTUBE - Encrypted
-  ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  --key  ${KEY_PUB1}  ${GTUBE}
+  ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  --key  ${KEY_PUB1}
+  ...  ${GTUBE}
   Check Rspamc  ${result}  GTUBE (
 
 GTUBE - Scan File feature

@@ -29,12 +29,6 @@ def get_test_directory():
 def make_temporary_directory():
     return tempfile.mkdtemp()
 
-def populate_rspamd_config(template_file, temporary_dir, **config):
-    t = string.Template(open(template_file).read())
-    f = open("%s/rspamd.conf" % temporary_dir, "w")
-    f.write(t.safe_substitute(config))
-    f.close()
-
 def process_should_exist(pid):
     pid = int(pid)
     os.kill(pid, 0)
@@ -75,7 +69,7 @@ def update_dictionary(a, b):
     a.update(b)
     return a
 
-def shutdown_rspamd(pid):
+def shutdown_process(pid):
     pid = int(pid)
     process_should_exist(pid)
     i = 0
