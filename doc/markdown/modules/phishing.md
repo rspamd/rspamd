@@ -58,7 +58,7 @@ payments system phishing.
 Finally, the default symbol is yielded- if `domains` is specified then
 only if the phished domain is found in the related map.
 
-Maps for this module can consist of effective second level domain parts (eTLD)
+Maps for this module can consist of effective second level domain parts (eSLD)
 or whole domain parts of the URLs (FQDN) as well.
 
 ## Openphish support
