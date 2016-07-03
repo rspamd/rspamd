@@ -362,3 +362,169 @@ test/rspamd-test -p /rspamd/shingles
 ```
 
 **Important note:** it is not possible to change the parameter without losing all the data in the storage, as only one algorithm can be used simultaneously for each storage. The Conversion of one type of hash to another is impossible by design as a hash function cannot be reverted.
+
+### Condition scripts for the learning
+
+As the `fuzzy_check` plugin is responsible for learning, we create the script within its configuration. This script checks if a email is suitable for learning. Script should return a Lua function with exactly one argument of [`rspamd_task`](/doc/lua/task.html) type. This function should return either a boolean value: `true` - learn, `false` - skip learning, or a pair of a boolean value and numeric value - new flag value in case it is required to modify the hash flag. Parameter `learn_condition` is used to setup learn script. The most convenient way to set the script is to write it as a multiline string supported by `UCL`:
+
+~~~ucl
+# Fuzzy check plugin configuration snippet
+learn_condition = <<EOD
+return function(task)
+  return true -- Always learn
+end
+EOD;
+~~~
+
+Here are some practical examples of useful scripts. For instance, if we want to restrict learning for messages that come from certain domains:
+
+~~~lua
+return function(task)
+  local skip_domains = {
+    'example.com',
+    'google.com',
+  }
+
+  local from = task:get_from()
+
+  if from and from[1] and from[1]['addr'] then
+    for i,d in ipairs(skip_domains) do
+      if string.find(from[1]['addr'], d) then
+        return false
+      end
+    end
+  end
+
+
+end
+~~~
+
+Also, it is useful to split hashes to various flags in accordance with their source. For example, such sources may be encoded in the `X-Source` title. For instance, we have the following match between flags and sources:
+
+* `honeypot` - "black" list: 1
+* `users_unfiltered` - "gray" list: 2
+* `users_filtered` - "black" list: 1
+* `FP` - "white" list: 3
+
+Then the script that provides this logic may be as following:
+
+~~~lua
+return function(task)
+  local skip_headers = {
+    ['X-Source'] = function(hdr)
+      local sources = {
+        honeypot = 1,
+        users_unfiltered = 2,
+        users_filtered = 1,
+        FP = 3
+      }
+      local fl = sources[hdr]
+
+      if fl then return true,fl end -- Return true + new flag
+      return false
+    end
+  }
+
+  for h,f in pairs(skip_headers) do
+    local hdr = task:get_header(h) -- Check for interesting header
+    if h then
+      return f(hdr) -- Call its handler and return result
+    end
+  end
+
+  return false -- Do not learn if specified header is missing
+end
+~~~
+
+## Step 4: Hashes replication
+
+It is often desired to have a local copy of the remote storage. Rspamd supports replication for this purposes that is implemented in the hashes storage since version 1.3:
+
+<center><img class="img-responsive" src="/img/rspamd-fuzzy-5.png" width="75%"></center>
+
+The hashes transfer is initiated by the replication **master**. It sends hash update commands, such as adding, modifying or deleting, to all specified slaves. Hence, the slaves should be able to accept such a connection from the master - it should be considered while configuring a firewall.
+
+A slave normally listens on the same port 11335 (by default) over TCP to accept a connection. The master and the slave synchronization are occurred via the HTTP protocol with HTTPCrypt transport encryption. The slave checks the update version to prevent repeated or invalid updates. If the master's version is less or equal to the local one, then the update is rejected. But if the master is ahead of the slave for  more than one version, the following message will appear in the log file of the slave:
+
+```
+rspamd_fuzzy_mirror_process_update: remote revision: XX is newer more than 1 revision than ours: YY, cold sync is recommended
+```
+
+In this case we recommend to re-create the database through a "cold" synchronization.
+
+### The "cold" synchronization
+
+This procedure is used to initialize a new slave or to recover a slave after the communications with the master is interrupted.
+
+To synchronize the master host you need to stop rspamd service and create a dump of hash database. In theory, you can skip this step, however, if a version of the master increases by more than one while database cloning, it will be required to repeat the procedure:
+
+```
+sqlite3 /var/lib/rspamd/fuzzy.db ".backup fuzzy.sql"
+```
+
+Afterwards, copy the output file `fuzzy.sql` to all the slaves (rspamd service should also be stopped on the slaves):
+
+```
+sqlite3 /var/lib/rspamd/fuzzy.db ".restore fuzzy.sql"
+```
+
+After all, you can run rspamd on the slaves and then switch on the master.
+
+### Replication setup
+
+You can set the replication in the hashes storage configuration file, namely `worker-fuzzy.inc`. Master replication is configured as follows:
+
+~~~ucl
+# Fuzzy storage worker configuration snippet
+# Local keypair (rspamadm keypair -u)
+sync_keypair {
+    pubkey = "xxx";
+    privkey = "ppp";
+    encoding = "base32";
+    algorithm = "curve25519";
+    type = "kex";
+}
+# Remote slave
+slave {
+        name = "slave1";
+        hosts = "slave1.example.com";
+        key = "yyy";
+}
+slave {
+        name = "slave2";
+        hosts = "slave2.example.com";
+        key = "zzz";
+}
+~~~
+
+Let’s focus on configuring the encryption keys. Typically, rspamd does not require dedicated setup for a client's keypair as such a keypair is generated automatically. However, in replication case, the master acts as the client, so you can set a specific (public) key on the slaves for better access control. The slaves will allow updates merely for hosts that are using this key. It is also possible to set allowed IP-addresses of the master, but public key based protection seems to be more reliable. As an option, you can combine these methods.
+
+The slave setup looks similar:
+
+~~~ucl
+# Fuzzy storage worker configuration snippet
+# We assume it is slave1 with pubkey 'yyy'
+sync_keypair {
+    pubkey = "yyy";
+    privkey = "PPP";
+    encoding = "base32";
+    algorithm = "curve25519";
+    type = "kex";
+}
+
+# Allow update from these hosts only
+masters = "master.example.com";
+# Also limit updates to this specific public key
+master_key = "xxx";
+~~~
+
+It is possible to set a flag translation from the master to the slave in order to avoid conflicts with the local hashes. For example, if we want to translate the flags `1`, `2` and `3` to the flags `10`, `20` and `30` accordingly, we can use the following configuration:
+
+~~~ucl
+# Fuzzy storage worker configuration snippet
+master_flags {
+  "1" = 10;
+  "2" = 20;
+  "3" = 30;
+};
+~~~
