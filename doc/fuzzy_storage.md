@@ -79,7 +79,7 @@ Therefore, rspamd hash storage always writes to the database strictly from one p
 
 Another major function of the fuzzy storage is removing of the obsolete hashes. Since the duration of spam mailings is always limited, there is no reason to store all hashes permanently. It is better to compare the quantity of hashes learned over some time, with the available RAM ammount. For example, 400 thousands hashes occupy about 100 Mb and 1.5 million hashes occupy 0.5 Gb.
 
-It is not recommended to increase storage size more than the available RAM size due to a significan performance degradation. Furthermore, it makes no sense to store the hashes for longer than about three months. Therefore, if you have a small amount of hashes suitable for learning, it is better to set expiration time to 90 days. Otherwise, when RAM size is less than the learn flow over this time, it is better to set a shorter period of expiration.
+It is not recommended to increase storage size more than the available RAM size due to a significant performance degradation. Furthermore, it makes no sense to store the hashes for longer than about three months. Therefore, if you have a small amount of hashes suitable for learning, it is better to set expiration time to 90 days. Otherwise, when RAM size is less than the learn flow over this time, it is better to set a shorter period of expiration.
 
 ### Sample configuration
 
@@ -106,7 +106,7 @@ worker "fuzzy_storage" {
 
 ### Access control setup
 
-Rspamd does not allow to modify the data in the repository by default. It is required to specify a list of trusted IP-addresses and/or networks to make learning possible. Practically, it is better to write from the local address only (127.0.0.1) since fuzzy storage uses UDP that is not protected from source IP forgery.
+Rspamd does not allow to modify data in the repository by default. It is required to specify a list of trusted IP-addresses and/or networks to make learning possible. Practically, it is better to write from the local address only (127.0.0.1) since fuzzy storage uses UDP that is not protected from source IP forgery.
 
 ~~~ucl
 worker "fuzzy_storage" {
@@ -122,7 +122,7 @@ Transport encryption might also be used for access control purposes.
 
 ### Transport encryption
 
-Fuzzy hashes protocol allows to enable optional (opportunistic) or mandatory encryption based on a public keys. Encryption architecture uses cryptobox construction: <https://nacl.cr.yp.to/box.html> and it is similar to the algorithm for end-to-end encryption used in DNSCurve protocol: <https://dnscurve.org/>.
+Fuzzy hashes protocol allows to enable optional (opportunistic) or mandatory encryption based on public-key cryptography. Encryption architecture uses cryptobox construction: <https://nacl.cr.yp.to/box.html> and it is similar to the algorithm for end-to-end encryption used in DNSCurve protocol: <https://dnscurve.org/>.
 
 To configure transport encryption, it is necessary to create a keypair for storage server using the command `rspamadm keypair -u`:
 
@@ -242,7 +242,7 @@ rspamadm control fuzzystat -n
 
 ## Step 3: Configuring `fuzzy_check` plugin
 
-`fuzzy_check` plugin is used by scanner processes for querying a storage and by controllers proceses learning fuzzy hashes.
+`fuzzy_check` plugin is used by scanner processes for querying a storage and by controller processes for learning fuzzy hashes.
 
 Plugin functions:
 
@@ -258,7 +258,7 @@ $ rspamc -f 1 -w 10 fuzzy_add <message|directory|stdin>
 
 Where `-w` parameter is for setting the hash weight discussed above whilst `-f` parameter specifies the flag number.
 
-Flags are allowed to store hashes of different origin in storage. For example, the hash of spam traps, hashes of user complaints and hashes of emails that come from a "white" list. Each flag may be associated with its own symbol and have a weight while checking emails:
+Flags allow to store hashes of different origin in storage. For example, the hash of spam traps, hashes of user complaints and hashes of emails that come from a "white" list. Each flag may be associated with its own symbol and have a weight while checking emails:
 
 <center><img class="img-responsive" src="/img/rspamd-fuzzy-4.png" width="75%"></center>
 
@@ -361,4 +361,4 @@ and run the test suite of different variants of hash algorithms on a specific pl
 test/rspamd-test -p /rspamd/shingles
 ```
 
-**Important note:** it is not possible to change the parameter without losing all the data in the storage, as only one algorithm can be used simultaneously for each storage. Conversion of one type of hash to another is impossible by design as a hash function cannot be reversed.
+**Important note:** it is not possible to change the parameter without losing all data in the storage, as only one algorithm can be used simultaneously for each storage. Conversion of one type of hash to another is impossible by design as a hash function cannot be reversed.
