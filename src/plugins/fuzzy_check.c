@@ -2053,14 +2053,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				fuzzy_module_ctx->min_height) {
 				if (fuzzy_module_ctx->min_width <= 0 || image->width >=
 					fuzzy_module_ctx->min_width) {
-					if (c == FUZZY_CHECK) {
-						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
-								task->task_pool,
-								image->data->data, image->data->len);
-						if (io) {
-							g_ptr_array_add (res, io);
-						}
-					}
 					io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 							task->task_pool,
 							image->data->data, image->data->len);
