@@ -325,7 +325,7 @@ rspamd_config.ENVFROM_VERP = {
         local envfrom = task:get_from(1)
         local envrcpts = task:get_recipients(1)
         -- VERP only works for single recipient messages
-        if table.getn(envrcpts) > 1 then return false end
+        if #envrcpts > 1 then return false end
         -- Get recipient and compute VERP address
         local rcpt = envrcpts[1].addr:lower()
         local verp = rcpt:gsub('@','=')

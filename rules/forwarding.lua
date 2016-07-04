@@ -24,7 +24,7 @@ rspamd_config.FWD_GOOGLE = {
         local envfrom = task:get_from(1)
         local envrcpts = task:get_recipients(1)
         -- Forwarding will only be to a single recipient
-        if table.getn(envrcpts) > 1 then return false end
+        if #envrcpts > 1 then return false end
         -- Get recipient and compute VERP address
         local rcpt = envrcpts[1].addr:lower()
         local verp = rcpt:gsub('@','=')
@@ -53,7 +53,7 @@ rspamd_config.FWD_SRS = {
         local envfrom = task:get_from(1)
         local envrcpts = task:get_recipients(1)
         -- Forwarding is only to a single recipient
-        if table.getn(envrcpts) > 1 then return false end
+        if #envrcpts > 1 then return false end
         -- Get recipient and compute rewritten SRS address
         local srs = '=' .. envrcpts[1].domain:lower() ..
                     '=' .. envrcpts[1].user:lower()
@@ -74,7 +74,7 @@ rspamd_config.FORWARDED = {
         if not task:has_recipients(1) then return false end
         local envrcpts = task:get_recipients(1)
         -- Forwarding will only be for single recipient messages
-        if table.getn(envrcpts) > 1 then return false end
+        if #envrcpts > 1 then return false end
         -- Get any other headers we might need
         local lu = task:get_header('List-Unsubscribe')
         local to = task:get_recipients(2)
