@@ -356,7 +356,7 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 	gint rc, err_idx;
 	guint i;
 	const gchar *language = NULL;
-	struct mime_text_part *tp;
+	struct rspamd_mime_text_part *tp;
 	struct rspamd_task **ptask;
 	lua_State *L = db->L;
 	GString *tb;

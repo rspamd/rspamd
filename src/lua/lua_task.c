@@ -1135,14 +1135,14 @@ lua_task_get_text_parts (lua_State * L)
 {
 	guint i;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct mime_text_part *part, **ppart;
+	struct rspamd_mime_text_part *part, **ppart;
 
 	if (task != NULL) {
 		lua_newtable (L);
 
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
-			ppart = lua_newuserdata (L, sizeof (struct mime_text_part *));
+			ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_text_part *));
 			*ppart = part;
 			rspamd_lua_setclass (L, "rspamd{textpart}", -1);
 			/* Make it array */
@@ -1161,14 +1161,14 @@ lua_task_get_parts (lua_State * L)
 {
 	guint i;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct mime_part *part, **ppart;
+	struct rspamd_mime_part *part, **ppart;
 
 	if (task != NULL) {
 		lua_newtable (L);
 
 		for (i = 0; i < task->parts->len; i ++) {
 			part = g_ptr_array_index (task->parts, i);
-			ppart = lua_newuserdata (L, sizeof (struct mime_part *));
+			ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
 			*ppart = part;
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
 			/* Make it array */

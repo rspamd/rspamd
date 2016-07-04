@@ -251,7 +251,7 @@ lua_trie_search_mime (lua_State *L)
 {
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
-	struct mime_text_part *part;
+	struct rspamd_mime_text_part *part;
 	const gchar *text;
 	gsize len, i;
 	gboolean found = FALSE;

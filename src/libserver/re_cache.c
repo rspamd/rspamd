@@ -727,7 +727,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	const guchar **scvec;
 	guint *lenvec;
 	gboolean raw = FALSE;
-	struct mime_text_part *part;
+	struct rspamd_mime_text_part *part;
 	struct rspamd_url *url;
 	struct rspamd_re_cache *cache = rt->cache;
 	gpointer k, v;

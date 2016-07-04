@@ -1229,7 +1229,7 @@ gboolean
 rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 	void *unused)
 {
-	struct mime_text_part *p;
+	struct rspamd_mime_text_part *p;
 	gboolean res = FALSE;
 
 	if (task->text_parts->len == 1) {
@@ -1395,7 +1395,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 gboolean
 rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 {
-	struct mime_text_part *p;
+	struct rspamd_mime_text_part *p;
 	guint i;
 	gboolean res = TRUE;
 
@@ -1403,7 +1403,7 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 
 		p = g_ptr_array_index (task->text_parts, i);
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p)) {
-			if (p->flags & RSPAMD_MIME_PART_FLAG_BALANCED) {
+			if (p->flags & RSPAMD_MIME_TEXT_PART_FLAG_BALANCED) {
 				res = TRUE;
 			}
 			else {
@@ -1420,7 +1420,7 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 gboolean
 rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 {
-	struct mime_text_part *p;
+	struct rspamd_mime_text_part *p;
 	struct expression_argument *arg;
 	guint i;
 	gboolean res = FALSE;
@@ -1455,7 +1455,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 gboolean
 rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 {
-	struct mime_text_part *p;
+	struct rspamd_mime_text_part *p;
 	guint i;
 	gboolean res = FALSE;
 
@@ -1650,7 +1650,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	gint r;
 	guint i;
 	gboolean recursive = FALSE;
-	struct mime_part *cur_part;
+	struct rspamd_mime_part *cur_part;
 
 	if (args == NULL || args->len < 2) {
 		msg_warn_task ("no parameters to function");
@@ -1727,7 +1727,7 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	GMimeContentType *ct;
 	gboolean recursive = FALSE, result = FALSE;
 	guint i;
-	struct mime_part *cur_part;
+	struct rspamd_mime_part *cur_part;
 
 	if (args == NULL || args->len < 1) {
 		msg_warn_task ("no parameters to function");
@@ -1790,7 +1790,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 	gint r;
 	guint i;
 	gboolean recursive = FALSE;
-	struct mime_part *cur_part;
+	struct rspamd_mime_part *cur_part;
 
 	if (args == NULL || args->len < 1) {
 		msg_warn_task ("no parameters to function");
@@ -1899,7 +1899,7 @@ compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
 }
 
 static gboolean
-compare_len (struct mime_part *part, guint min, guint max)
+compare_len (struct rspamd_mime_part *part, guint min, guint max)
 {
 	if (min == 0 && max == 0) {
 		return TRUE;
@@ -1924,7 +1924,7 @@ common_has_content_part (struct rspamd_task * task,
 	gint max_len)
 {
 	rspamd_regexp_t *re;
-	struct mime_part *part;
+	struct rspamd_mime_part *part;
 	GMimeContentType *ct;
 	gint r;
 	guint i;

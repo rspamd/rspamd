@@ -170,8 +170,8 @@ rspamd_task_restore (void *arg)
 void
 rspamd_task_free (struct rspamd_task *task)
 {
-	struct mime_part *p;
-	struct mime_text_part *tp;
+	struct rspamd_mime_part *p;
+	struct rspamd_mime_text_part *tp;
 	struct rspamd_email_address *addr;
 	guint i;
 

@@ -37,8 +37,8 @@
 #define UTF8_CHARSET "UTF-8"
 #define GTUBE_SYMBOL "GTUBE"
 
-#define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_PART_FLAG_UTF)
-#define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_PART_FLAG_UTF)
+#define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
+#define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 
 static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
@@ -432,7 +432,7 @@ static GByteArray *
 convert_text_to_utf (struct rspamd_task *task,
 	GByteArray * part_content,
 	GMimeContentType * type,
-	struct mime_text_part *text_part)
+	struct rspamd_mime_text_part *text_part)
 {
 	GError *err = NULL;
 	gsize write_bytes;
@@ -519,7 +519,7 @@ language_elts_cmp (const void *a, const void *b)
 }
 
 static void
-detect_text_language (struct mime_text_part *part)
+detect_text_language (struct rspamd_mime_text_part *part)
 {
 	/* Keep sorted */
 	static const struct language_match language_codes[] = {
@@ -649,7 +649,7 @@ detect_text_language (struct mime_text_part *part)
 
 static void
 rspamd_normalize_text_part (struct rspamd_task *task,
-		struct mime_text_part *part)
+		struct rspamd_mime_text_part *part)
 {
 #ifdef WITH_SNOWBALL
 	struct sb_stemmer *stem = NULL;
@@ -840,7 +840,7 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 }
 
 static gboolean
-rspamd_check_gtube (struct rspamd_task *task, struct mime_text_part *part)
+rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part)
 {
 	static const gsize max_check_size = 4 * 1024;
 	g_assert (part != NULL);
@@ -866,16 +866,16 @@ static void
 process_text_part (struct rspamd_task *task,
 	GByteArray *part_content,
 	GMimeContentType *type,
-	struct mime_part *mime_part,
+	struct rspamd_mime_part *mime_part,
 	GMimeObject *parent,
 	gboolean is_empty)
 {
-	struct mime_text_part *text_part;
+	struct rspamd_mime_text_part *text_part;
 	const gchar *cd;
 
 	/* Skip attachments */
 #ifndef GMIME24
-	cd = g_mime_part_get_content_disposition (GMIME_PART (mime_part->mime));
+	cd = g_mime_part_get_content_disposition (GMIME_PART (rspamd_mime_part->mime));
 	if (cd &&
 		g_ascii_strcasecmp (cd,
 		"attachment") == 0 && (task->cfg && !task->cfg->check_text_attachements)) {
@@ -898,10 +898,10 @@ process_text_part (struct rspamd_task *task,
 
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct mime_text_part));
-		text_part->flags |= RSPAMD_MIME_PART_FLAG_HTML;
+				sizeof (struct rspamd_mime_text_part));
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
 		if (is_empty) {
-			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
+			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
 			text_part->content = NULL;
 			g_ptr_array_add (task->text_parts, text_part);
@@ -917,7 +917,7 @@ process_text_part (struct rspamd_task *task,
 		text_part->parent = parent;
 		text_part->mime_part = mime_part;
 
-		text_part->flags |= RSPAMD_MIME_PART_FLAG_BALANCED;
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
 		text_part->content = rspamd_html_process_part_full (
 				task->task_pool,
 				text_part->html,
@@ -927,7 +927,7 @@ process_text_part (struct rspamd_task *task,
 				task->emails);
 
 		if (text_part->content->len == 0) {
-			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
+			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 		}
 
 		/* Handle offsets of this part */
@@ -946,12 +946,12 @@ process_text_part (struct rspamd_task *task,
 
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct mime_text_part));
+				sizeof (struct rspamd_mime_text_part));
 		text_part->parent = parent;
 		text_part->mime_part = mime_part;
 
 		if (is_empty) {
-			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
+			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
 			text_part->content = NULL;
 			g_ptr_array_add (task->text_parts, text_part);
@@ -1013,7 +1013,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 {
 	struct mime_foreach_data *md = user_data;
 	struct rspamd_task *task;
-	struct mime_part *mime_part;
+	struct rspamd_mime_part *mime_part;
 	GMimeContentType *type;
 	GMimeDataWrapper *wrapper;
 	GMimeStream *part_stream;
@@ -1077,7 +1077,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
 				part));
 		mime_part = rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct mime_part));
+				sizeof (struct rspamd_mime_part));
 
 		hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
 		mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
@@ -1142,7 +1142,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				g_object_unref (part_stream);
 				mime_part =
 					rspamd_mempool_alloc0 (task->task_pool,
-						sizeof (struct mime_part));
+						sizeof (struct rspamd_mime_part));
 
 				hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
 				mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
@@ -1304,7 +1304,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	GMimeObject *parent;
 	const GMimeContentType *ct;
 	struct raw_header *rh;
-	struct mime_text_part *p1, *p2;
+	struct rspamd_mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
 	struct received_header *recv, *trecv;
 	const gchar *p;
@@ -1746,7 +1746,7 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 	GPtrArray *ret;
 	struct raw_header *rh, *cur;
 	guint nelems = 0, i;
-	struct mime_part *mp;
+	struct rspamd_mime_part *mp;
 
 	for (i = 0; i < task->parts->len; i ++) {
 		mp = g_ptr_array_index (task->parts, i);

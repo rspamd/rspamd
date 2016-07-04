@@ -225,7 +225,7 @@ struct rspamd_config;
 struct tokenizer;
 struct rspamd_stat_classifier;
 struct rspamd_classifier_config;
-struct mime_part;
+struct rspamd_mime_part;
 struct rspamd_dns_resolver;
 struct rspamd_task;
 struct rspamd_cryptobox_library_ctx;

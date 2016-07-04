@@ -7,7 +7,7 @@
 #include "fstring.h"
 
 struct rspamd_task;
-struct mime_text_part;
+struct rspamd_mime_text_part;
 
 enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_PHISHED = 1 << 0,
@@ -79,7 +79,7 @@ void rspamd_url_init (const gchar *tld_file);
  */
 void rspamd_url_text_extract (rspamd_mempool_t *pool,
 	struct rspamd_task *task,
-	struct mime_text_part *part,
+	struct rspamd_mime_text_part *part,
 	gboolean is_html);
 
 /*

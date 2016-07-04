@@ -118,7 +118,7 @@ chartable_module_reconfig (struct rspamd_config *cfg)
 }
 
 static gboolean
-check_part (struct mime_text_part *part, gboolean raw_mode)
+check_part (struct rspamd_mime_text_part *part, gboolean raw_mode)
 {
 	guchar *p, *p1;
 	gunichar c, t;
@@ -205,7 +205,7 @@ static void
 chartable_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	guint i;
-	struct mime_text_part *part;
+	struct rspamd_mime_text_part *part;
 
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);

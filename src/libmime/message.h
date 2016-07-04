@@ -15,7 +15,14 @@ struct rspamd_task;
 struct controller_session;
 struct html_content;
 
-struct mime_part {
+enum rspamd_mime_part_flags {
+	RSPAMD_MIME_PART_TEXT = (1 << 0),
+	RSPAMD_MIME_PART_ATTACHEMENT = (1 << 1),
+	RSPAMD_MIME_PART_IMAGE = (1 << 2),
+	RSPAMD_MIME_PART_ARCHIVE = (1 << 3)
+};
+
+struct rspamd_mime_part {
 	GMimeContentType *type;
 	GByteArray *content;
 	GMimeObject *parent;
@@ -25,19 +32,21 @@ struct mime_part {
 	gchar *checksum;
 	const gchar *filename;
 	const gchar *boundary;
+	enum rspamd_mime_part_flags flags;
+	gpointer specific_data;
 };
 
-#define RSPAMD_MIME_PART_FLAG_UTF (1 << 0)
-#define RSPAMD_MIME_PART_FLAG_BALANCED (1 << 1)
-#define RSPAMD_MIME_PART_FLAG_EMPTY (1 << 2)
-#define RSPAMD_MIME_PART_FLAG_HTML (1 << 3)
+#define RSPAMD_MIME_TEXT_PART_FLAG_UTF (1 << 0)
+#define RSPAMD_MIME_TEXT_PART_FLAG_BALANCED (1 << 1)
+#define RSPAMD_MIME_TEXT_PART_FLAG_EMPTY (1 << 2)
+#define RSPAMD_MIME_TEXT_PART_FLAG_HTML (1 << 3)
 
-#define IS_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_PART_FLAG_EMPTY)
-#define IS_PART_UTF(part) ((part)->flags & RSPAMD_MIME_PART_FLAG_UTF)
-#define IS_PART_RAW(part) (!((part)->flags & RSPAMD_MIME_PART_FLAG_UTF))
-#define IS_PART_HTML(part) ((part)->flags & RSPAMD_MIME_PART_FLAG_HTML)
+#define IS_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
+#define IS_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
+#define IS_PART_RAW(part) (!((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF))
+#define IS_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
 
-struct mime_text_part {
+struct rspamd_mime_text_part {
 	guint flags;
 	GUnicodeScript script;
 	const gchar *lang_code;
@@ -50,7 +59,7 @@ struct mime_text_part {
 	struct html_content *html;
 	GList *urls_offset;	/**< list of offsets of urls						*/
 	GMimeObject *parent;
-	struct mime_part *mime_part;
+	struct rspamd_mime_part *mime_part;
 	GArray *normalized_words;
 	GArray *normalized_hashes;
 	guint nlines;

@@ -68,8 +68,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
 	struct rspamd_image *img;
-	struct mime_part *part;
-	struct mime_text_part *tp;
+	struct rspamd_mime_part *part;
+	struct rspamd_mime_text_part *tp;
 	GList *cur;
 	GArray *ar;
 	rspamd_ftok_t elt;
@@ -169,7 +169,7 @@ static void
 rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
-	struct mime_text_part *part;
+	struct rspamd_mime_text_part *part;
 	GArray *words;
 	gchar *sub;
 	guint i, reserved_len = 0;

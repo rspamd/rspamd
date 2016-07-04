@@ -110,14 +110,14 @@ static void
 free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 {
 	GList *part;
-	struct mime_part *p;
+	struct rspamd_mime_part *p;
 	struct rspamd_task *task = lmtp->task;
 
 	if (lmtp) {
 		debug_task ("free pointer %p", lmtp->task);
 		while ((part = g_list_first (lmtp->task->parts))) {
 			lmtp->task->parts = g_list_remove_link (lmtp->task->parts, part);
-			p = (struct mime_part *)part->data;
+			p = (struct rspamd_mime_part *)part->data;
 			g_byte_array_free (p->content, FALSE);
 			g_list_free_1 (part);
 		}

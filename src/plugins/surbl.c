@@ -1429,7 +1429,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	struct redirector_param param;
 	struct suffix_item *suffix = user_data;
 	guint i, j;
-	struct mime_text_part *part;
+	struct rspamd_mime_text_part *part;
 	struct html_image *img;
 	struct rspamd_url *url;
 

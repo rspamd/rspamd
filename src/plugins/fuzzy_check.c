@@ -991,7 +991,7 @@ fuzzy_io_fin (void *ud)
 }
 
 static GArray *
-fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
+fuzzy_preprocess_words (struct rspamd_mime_text_part *part, rspamd_mempool_t *pool)
 {
 	return part->normalized_words;
 }
@@ -1157,7 +1157,7 @@ fuzzy_cmd_stat (struct fuzzy_rule *rule,
 static void *
 fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
-		struct mime_text_part *part)
+		struct rspamd_mime_text_part *part)
 {
 	gchar key[32];
 	gint key_part;
@@ -1172,7 +1172,7 @@ fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 static void
 fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
-		struct mime_text_part *part,
+		struct rspamd_mime_text_part *part,
 		struct rspamd_fuzzy_encrypted_shingle_cmd *data)
 {
 	gchar key[32];
@@ -1194,7 +1194,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		gint flag,
 		guint32 weight,
 		rspamd_mempool_t *pool,
-		struct mime_text_part *part)
+		struct rspamd_mime_text_part *part)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd;
 	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
@@ -1986,8 +1986,8 @@ static GPtrArray *
 fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		gint c, gint flag, guint32 value)
 {
-	struct mime_text_part *part;
-	struct mime_part *mime_part;
+	struct rspamd_mime_text_part *part;
+	struct rspamd_mime_part *mime_part;
 	struct rspamd_image *image;
 	struct fuzzy_cmd_io *io;
 	guint i;

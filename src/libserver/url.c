@@ -2286,7 +2286,7 @@ rspamd_url_trie_generic_callback_single (struct rspamd_multipattern *mp,
 
 struct rspamd_url_mimepart_cbdata {
 	struct rspamd_task *task;
-	struct mime_text_part *part;
+	struct rspamd_mime_text_part *part;
 };
 
 static void
@@ -2358,7 +2358,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 void
 rspamd_url_text_extract (rspamd_mempool_t *pool,
 		struct rspamd_task *task,
-		struct mime_text_part *part,
+		struct rspamd_mime_text_part *part,
 		gboolean is_html)
 {
 	struct rspamd_url_mimepart_cbdata mcbd;

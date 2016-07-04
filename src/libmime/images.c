@@ -26,14 +26,14 @@ static const guint8 jpg_sig_exif[] = {0xff, 0xe1};
 static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
-static void process_image (struct rspamd_task *task, struct mime_part *part);
+static void process_image (struct rspamd_task *task, struct rspamd_mime_part *part);
 
 
 void
 rspamd_images_process (struct rspamd_task *task)
 {
 	guint i;
-	struct mime_part *part;
+	struct rspamd_mime_part *part;
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
@@ -190,12 +190,12 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 }
 
 static void
-process_image (struct rspamd_task *task, struct mime_part *part)
+process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	enum rspamd_image_type type;
 	struct rspamd_image *img = NULL;
 	struct raw_header *rh;
-	struct mime_text_part *tp;
+	struct rspamd_mime_text_part *tp;
 	struct html_image *himg;
 	const gchar *cid, *html_cid;
 	guint cid_len, i, j;
