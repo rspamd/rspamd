@@ -20,13 +20,18 @@
 
 enum rspamd_archive_type {
 	RSPAMD_ARCHIVE_ZIP,
+	RSPAMD_ARCHIVE_RAR,
 };
 
+enum rspamd_archive_flags {
+	RSPAMD_ARCHIVE_ENCRYPTED = (1 << 0),
+};
 
 struct rspamd_archive {
 	enum rspamd_archive_type type;
 	const gchar *archive_name;
 	gsize size;
+	enum rspamd_archive_flags flags;
 	GPtrArray *files; /* Array of GStrings */
 };
 
