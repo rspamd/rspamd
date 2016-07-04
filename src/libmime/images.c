@@ -15,7 +15,7 @@
  */
 #include "config.h"
 #include "images.h"
-#include "rspamd.h"
+#include "task.h"
 #include "message.h"
 #include "html.h"
 
@@ -37,8 +37,8 @@ rspamd_images_process (struct rspamd_task *task)
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
-		if (g_mime_content_type_is_type (part->type, "image",
-			"*") && part->content->len > 0) {
+		if (g_mime_content_type_is_type (part->type, "image", "*") &&
+				part->content->len > 0) {
 			process_image (task, part);
 		}
 	}
@@ -226,7 +226,8 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 			img->width, img->height,
 			task->message_id);
 		img->filename = part->filename;
-		task->images = g_list_prepend (task->images, img);
+		part->flags |= RSPAMD_MIME_PART_IMAGE;
+		part->specific_data = img;
 
 		/* Check Content-Id */
 		rh = g_hash_table_lookup (part->raw_headers, "Content-Id");

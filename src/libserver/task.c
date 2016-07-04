@@ -213,10 +213,6 @@ rspamd_task_free (struct rspamd_task *task)
 			rspamd_email_address_unref (task->from_envelope);
 		}
 
-		if (task->images) {
-			g_list_free (task->images);
-		}
-
 		if (task->messages) {
 			g_list_free (task->messages);
 		}

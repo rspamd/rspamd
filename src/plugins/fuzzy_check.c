@@ -2042,32 +2042,28 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		}
 	}
 
-	/* Process images */
-	GList *cur;
+	/* Process other parts and images */
+	for (i = 0; i < task->parts->len; i ++) {
+		mime_part = g_ptr_array_index (task->parts, i);
 
-	cur = task->images;
-	while (cur) {
-		image = cur->data;
-		if (image->data->len > 0) {
-			if (fuzzy_module_ctx->min_height <= 0 || image->height >=
-				fuzzy_module_ctx->min_height) {
-				if (fuzzy_module_ctx->min_width <= 0 || image->width >=
-					fuzzy_module_ctx->min_width) {
-					io = fuzzy_cmd_from_data_part (rule, c, flag, value,
-							task->task_pool,
-							image->data->data, image->data->len);
-					if (io) {
-						g_ptr_array_add (res, io);
+		if (mime_part->flags & RSPAMD_MIME_PART_IMAGE) {
+			image = mime_part->specific_data;
+
+			if (image->data->len > 0) {
+				if (fuzzy_module_ctx->min_height <= 0 || image->height >=
+						fuzzy_module_ctx->min_height) {
+					if (fuzzy_module_ctx->min_width <= 0 || image->width >=
+							fuzzy_module_ctx->min_width) {
+						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+								task->task_pool,
+								image->data->data, image->data->len);
+						if (io) {
+							g_ptr_array_add (res, io);
+						}
 					}
 				}
 			}
 		}
-		cur = g_list_next (cur);
-	}
-
-	/* Process other parts */
-	for (i = 0; i < task->parts->len; i ++) {
-		mime_part = g_ptr_array_index (task->parts, i);
 
 		if (mime_part->content->len > 0 &&
 			fuzzy_check_content_type (rule, mime_part->type)) {

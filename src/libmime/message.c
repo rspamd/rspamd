@@ -969,6 +969,9 @@ process_text_part (struct rspamd_task *task,
 		return;
 	}
 
+	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
+	mime_part->specific_data = text_part;
+
 	if (rspamd_check_gtube (task, text_part)) {
 		struct metric_result *mres;
 

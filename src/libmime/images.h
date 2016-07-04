@@ -2,9 +2,9 @@
 #define IMAGES_H_
 
 #include "config.h"
-#include "rspamd.h"
 
 struct html_image;
+struct rspamd_task;
 
 enum rspamd_image_type {
 	IMAGE_TYPE_PNG = 0,

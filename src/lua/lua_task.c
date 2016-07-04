@@ -2111,27 +2111,22 @@ static gint
 lua_task_get_images (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint i = 1;
-	GList *cur;
+	guint nelt = 0, i;
+	struct rspamd_mime_part *part;
 	struct rspamd_image **pimg;
 
 	if (task) {
-		cur = task->images;
+		lua_newtable (L);
 
-		if (cur) {
-			lua_newtable (L);
+		for (i = 0; i < task->parts->len; i ++) {
+			part = g_ptr_array_index (task->parts, i);
 
-			while (cur) {
+			if (part->flags & RSPAMD_MIME_PART_IMAGE) {
 				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
 				rspamd_lua_setclass (L, "rspamd{image}", -1);
-				*pimg = cur->data;
-				lua_rawseti (L, -2, i++);
-				cur = g_list_next (cur);
+				*pimg = part->specific_data;
+				lua_rawseti (L, -2, ++nelt);
 			}
-		}
-		else {
-			/* Return nil if there are no images to preserve compatibility */
-			lua_pushnil (L);
 		}
 	}
 	else {
