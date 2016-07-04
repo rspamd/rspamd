@@ -21,6 +21,7 @@
 #include "libutil/regexp.h"
 #include "html.h"
 #include "images.h"
+#include "archives.h"
 #include "email_addr.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
@@ -1459,6 +1460,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	rspamd_images_process (task);
+	rspamd_archives_process (task);
 
 	/* Parse received headers */
 	first = rspamd_message_get_header (task, "Received", FALSE);
