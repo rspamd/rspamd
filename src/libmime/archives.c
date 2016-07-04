@@ -145,6 +145,37 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	arch->size = part->content->len;
 }
 
+static gboolean
+rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str)
+{
+	GMimeContentType *ct;
+	const gchar *fname, *p;
+
+	ct = part->type;
+
+	if (ct && ct->type && ct->subtype && strcmp (ct->type,
+			"application") == 0) {
+		if (rspamd_substring_search_caseless (ct->subtype, strlen (ct->subtype),
+				str, strlen (str)) != -1) {
+			return TRUE;
+		}
+	}
+
+	fname = part->filename;
+
+	if (fname && strlen (fname) > strlen (str)) {
+		p = fname + strlen (fname) - strlen (str);
+
+		if (rspamd_lc_cmp (p, str, strlen (str)) == 0) {
+			if (*(p - 1) == '.') {
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
 void
 rspamd_archives_process (struct rspamd_task *task)
 {
@@ -153,9 +184,11 @@ rspamd_archives_process (struct rspamd_task *task)
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
-		if (g_mime_content_type_is_type (part->type, "application", "zip") &&
-				part->content->len > 0) {
-			rspamd_archive_process_zip (task, part);
+
+		if (part->content->len > 0) {
+			if (rspamd_archive_cheat_detect (part, "zip")) {
+				rspamd_archive_process_zip (task, part);
+			}
 		}
 	}
 }
