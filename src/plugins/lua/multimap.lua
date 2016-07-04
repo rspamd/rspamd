@@ -361,11 +361,11 @@ local function multimap_callback(task, pre_filter)
       for ii,fn in ipairs(fnames) do
         check_file(fn)
       end
-    else
-      local fn = p:get_filename()
-      if fn then
-        check_file(fn)
-      end
+    end
+
+    local fn = p:get_filename()
+    if fn then
+      check_file(fn)
     end
   end
   -- RBL rules
