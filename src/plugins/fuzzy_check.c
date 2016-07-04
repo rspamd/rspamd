@@ -1993,7 +1993,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	guint i;
 	GPtrArray *res;
 
-	res = g_ptr_array_new ();
+	res = g_ptr_array_sized_new (task->parts->len + 1);
 
 	if (c == FUZZY_STAT) {
 		io = fuzzy_cmd_stat (rule, c, flag, value, task->task_pool);
