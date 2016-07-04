@@ -141,6 +141,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 
 	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
 	part->specific_data = arch;
+	arch->archive_name = part->filename;
+	arch->size = part->content->len;
 }
 
 void

@@ -25,6 +25,8 @@ enum rspamd_archive_type {
 
 struct rspamd_archive {
 	enum rspamd_archive_type type;
+	const gchar *archive_name;
+	gsize size;
 	GPtrArray *files; /* Array of GStrings */
 };
 
