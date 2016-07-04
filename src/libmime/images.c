@@ -21,7 +21,8 @@
 
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
 static const guint8 jpg_sig1[] = {0xff, 0xd8};
-static const guint8 jpg_sig2[] = {'J', 'F', 'I', 'F'};
+static const guint8 jpg_sig_jfif[] = {0xff, 0xe0};
+static const guint8 jpg_sig_exif[] = {0xff, 0xe1};
 static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
@@ -54,7 +55,8 @@ detect_image_type (GByteArray *data)
 	}
 	if (data->len > 10) {
 		if (memcmp (data->data, jpg_sig1, sizeof (jpg_sig1)) == 0) {
-			if (memcmp (data->data + 6, jpg_sig2, sizeof (jpg_sig2)) == 0) {
+			if (memcmp (data->data + 2, jpg_sig_jfif, sizeof (jpg_sig_jfif)) == 0 ||
+					memcmp (data->data + 2, jpg_sig_exif, sizeof (jpg_sig_exif)) == 0) {
 				return IMAGE_TYPE_JPG;
 			}
 		}
