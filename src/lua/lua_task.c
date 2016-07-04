@@ -20,6 +20,7 @@
 #include "dns.h"
 #include "util.h"
 #include "images.h"
+#include "archives.h"
 #include "cfg_file.h"
 #include "email_addr.h"
 #include "utlist.h"
@@ -378,9 +379,28 @@ LUA_FUNCTION_DEF (task, set_hostname);
 /***
  * @method task:get_images()
  * Returns list of all images found in a task as a table of `rspamd_image`.
+ * Each image has the following methods:
+ *
+ * * `get_width` - return width of an image in pixels
+ * * `get_height` - return height of an image in pixels
+ * * `get_type` - return string representation of image's type (e.g. 'jpeg')
+ * * `get_filename` - return string with image's file name
+ * * `get_size` - return size in bytes
  * @return {list of rspamd_image} images found in a message
  */
 LUA_FUNCTION_DEF (task, get_images);
+/***
+ * @method task:get_archives()
+ * Returns list of all archives found in a task as a table of `rspamd_archive`.
+ * Each archive has the following methods available:
+ *
+ * * `get_files` - return list of strings with filenames inside archive
+ * * `get_type` - return string representation of image's type (e.g. 'zip')
+ * * `get_filename` - return string with archive's file name
+ * * `get_size` - return size in bytes
+ * @return {list of rspamd_archive} archives found in a message
+ */
+LUA_FUNCTION_DEF (task, get_archives);
 /***
  * @method task:get_symbol(name)
  * Searches for a symbol `name` in all metrics results and returns a list of tables
@@ -651,6 +671,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_hostname),
 	LUA_INTERFACE_DEF (task, set_hostname),
 	LUA_INTERFACE_DEF (task, get_images),
+	LUA_INTERFACE_DEF (task, get_archives),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_symbols),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
@@ -694,6 +715,21 @@ static const struct luaL_reg imagelib_m[] = {
 	{NULL, NULL}
 };
 
+/* Archive methods */
+LUA_FUNCTION_DEF (archive, get_type);
+LUA_FUNCTION_DEF (archive, get_files);
+LUA_FUNCTION_DEF (archive, get_filename);
+LUA_FUNCTION_DEF (archive, get_size);
+
+static const struct luaL_reg archivelib_m[] = {
+	LUA_INTERFACE_DEF (archive, get_type),
+	LUA_INTERFACE_DEF (archive, get_files),
+	LUA_INTERFACE_DEF (archive, get_filename),
+	LUA_INTERFACE_DEF (archive, get_size),
+	{"__tostring", rspamd_lua_class_tostring},
+	{NULL, NULL}
+};
+
 /* Blob methods */
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
@@ -725,6 +761,14 @@ lua_check_image (lua_State * L)
 	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{image}");
 	luaL_argcheck (L, ud != NULL, 1, "'image' expected");
 	return ud ? *((struct rspamd_image **)ud) : NULL;
+}
+
+static struct rspamd_archive *
+lua_check_archive (lua_State * L)
+{
+	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{archive}");
+	luaL_argcheck (L, ud != NULL, 1, "'archive' expected");
+	return ud ? *((struct rspamd_archive **)ud) : NULL;
 }
 
 struct rspamd_lua_text *
@@ -2136,6 +2180,35 @@ lua_task_get_images (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_task_get_archives (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint nelt = 0, i;
+	struct rspamd_mime_part *part;
+	struct rspamd_archive **parch;
+
+	if (task) {
+		lua_newtable (L);
+
+		for (i = 0; i < task->parts->len; i ++) {
+			part = g_ptr_array_index (task->parts, i);
+
+			if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
+				parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
+				rspamd_lua_setclass (L, "rspamd{archive}", -1);
+				*parch = part->specific_data;
+				lua_rawseti (L, -2, ++nelt);
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 static inline gboolean
 lua_push_symbol_result (lua_State *L,
 	struct rspamd_task *task,
@@ -3081,6 +3154,76 @@ lua_image_get_filename (lua_State *L)
 	return 1;
 }
 
+/* Arvhive methods */
+static gint
+lua_archive_get_type (lua_State *L)
+{
+	struct rspamd_archive *arch = lua_check_archive (L);
+
+	if (arch != NULL) {
+		lua_pushstring (L, rspamd_archive_type_str (arch->type));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_archive_get_files (lua_State *L)
+{
+	struct rspamd_archive *arch = lua_check_archive (L);
+	guint i;
+	GString *s;
+
+	if (arch != NULL) {
+		lua_createtable (L, arch->files->len, 0);
+
+		for (i = 0; i < arch->files->len; i ++) {
+			s = g_ptr_array_index (arch->files, i);
+
+			lua_pushlstring (L, s->str, s->len);
+			lua_rawseti (L, -2, i + 1);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_archive_get_size (lua_State *L)
+{
+	struct rspamd_archive *arch = lua_check_archive (L);
+
+	if (arch != NULL) {
+		lua_pushinteger (L, arch->size);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_archive_get_filename (lua_State *L)
+{
+	struct rspamd_archive *arch = lua_check_archive (L);
+
+	if (arch != NULL) {
+		lua_pushstring (L, arch->archive_name);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 /* Text methods */
 static gint
 lua_text_len (lua_State *L)
@@ -3153,20 +3296,29 @@ lua_load_task (lua_State * L)
 	return 1;
 }
 
+static void
+luaopen_archive (lua_State * L)
+{
+	rspamd_lua_new_class (L, "rspamd{archive}", archivelib_m);
+	lua_pop (L, 1);
+}
+
 void
 luaopen_task (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{task}", tasklib_m);
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);
 
 	rspamd_lua_add_preload (L, "rspamd_task", lua_load_task);
+
+	luaopen_archive (L);
 }
 
 void
 luaopen_image (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{image}", imagelib_m);
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);
 }
 
 void
