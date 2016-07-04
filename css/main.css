@@ -139,6 +139,9 @@ h2{
 #jumbo-features{
   background: url(/img/rspamd_jumbotron_features.png);
 }
+#jumbo-performance{
+  background: url(/img/rspamd_jumbotron_performance.png);
+}
 #jumbo-head{
   background: url(/img/rspamd_jumbotron.png);
 }

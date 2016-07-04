@@ -7,7 +7,7 @@ title: Rspamd spam filtering system
 		    <div class="thumbnail">
 				    <img src="img/performance.jpg" class="" height="80" width="80">
 						<div class="caption">
-								<h2><a href="/about.html#performance">Performance <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<h2><a href="/performance.html">Performance <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
 								<p class="text-justify">Rspamd is designed to be fast and can process up to 100 emails per second
 								using a single CPU core</p>
 						</div>
