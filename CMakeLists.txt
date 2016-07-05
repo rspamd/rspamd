@@ -1051,47 +1051,53 @@ ELSE()
 	MESSAGE(STATUS "atomic builtins are supported")
 ENDIF()
 
-CHECK_C_SOURCE_RUNS("
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <unistd.h>
-#define TEST_NAME \"/test-shmem-work\"
-int
-main (int argc, char **argv)
-{
-  int fd;
-
-  fd = shm_open (TEST_NAME, O_RDWR | O_CREAT | O_EXCL, 00600);
-  if (fd == -1) {
-    return -1;
-  }
-  if (ftruncate (fd, 100) == -1) {
-    shm_unlink (TEST_NAME);
-    close (fd);
-    return -1;
-  }
-
-  if (ftruncate (fd, 200) == -1) {
-    shm_unlink (TEST_NAME);
-    close (fd);
-    return -1;
-  }
-  if (ftruncate (fd, 300) == -1) {
-    shm_unlink (TEST_NAME);
-    close (fd);
-    return -1;
-  }
-
-  close (fd);
-  shm_unlink (TEST_NAME);
-  return 0;
-}
-" HAVE_SANE_SHMEM)
-
-IF(NOT HAVE_SANE_SHMEM)
-	MESSAGE(STATUS "shmem support is NOT compatible with POSIX")
+IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	# In linux, we need to mount /run/shm to test which could be unavailable
+	# on a build system. On the other hand, we know that linux has stupid
+	# but compatible shmem support, so we assume this macro as true
+	SET(CACHE HAVE_SANE_SHMEM 1)
 ELSE()
-	MESSAGE(STATUS "shmem support is compatible with POSIX")
+	CHECK_C_SOURCE_RUNS("
+	#include <sys/mman.h>
+	#include <fcntl.h>
+	#include <unistd.h>
+	#define TEST_NAME \"/test-shmem-work\"
+	int
+	main (int argc, char **argv)
+	{
+	  int fd;
+
+	  fd = shm_open (TEST_NAME, O_RDWR | O_CREAT | O_EXCL, 00600);
+	  if (fd == -1) {
+	    return -1;
+	  }
+	  if (ftruncate (fd, 100) == -1) {
+	    shm_unlink (TEST_NAME);
+	    close (fd);
+	    return -1;
+	  }
+
+	  if (ftruncate (fd, 200) == -1) {
+	    shm_unlink (TEST_NAME);
+	    close (fd);
+	    return -1;
+	  }
+	  if (ftruncate (fd, 300) == -1) {
+	    shm_unlink (TEST_NAME);
+	    close (fd);
+	    return -1;
+	  }
+
+	  close (fd);
+	  shm_unlink (TEST_NAME);
+	  return 0;
+	}
+	" HAVE_SANE_SHMEM)
+	IF(NOT HAVE_SANE_SHMEM)
+		MESSAGE(STATUS "shmem support is NOT compatible with POSIX")
+	ELSE()
+		MESSAGE(STATUS "shmem support is compatible with POSIX")
+	ENDIF()
 ENDIF()
 
 # Check queue.h compatibility
