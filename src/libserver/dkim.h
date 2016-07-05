@@ -84,11 +84,20 @@
 #define DKIM_NOTFOUND   3   /* requested record not found */
 #define DKIM_RECORD_ERROR   4   /* error requesting record */
 
+#define DKIM_CANON_SIMPLE   0   /* as specified in DKIM spec */
+#define DKIM_CANON_RELAXED  1   /* as specified in DKIM spec */
+
 struct rspamd_dkim_context_s;
 typedef struct rspamd_dkim_context_s rspamd_dkim_context_t;
 
+struct rspamd_dkim_sign_context_s;
+typedef struct rspamd_dkim_sign_context_s rspamd_dkim_sign_context_t;
+
 struct rspamd_dkim_key_s;
 typedef struct rspamd_dkim_key_s rspamd_dkim_key_t;
+
+struct rspamd_dkim_sign_key_s;
+typedef struct rspamd_dkim_sign_key_s rspamd_dkim_sign_key_t;
 
 struct rspamd_task;
 
@@ -108,6 +117,28 @@ rspamd_dkim_context_t * rspamd_create_dkim_context (const gchar *sig,
 	rspamd_mempool_t *pool,
 	guint time_jitter,
 	GError **err);
+
+/**
+ * Create new dkim context for making a signature
+ * @param task
+ * @param priv_key
+ * @param err
+ * @return
+ */
+rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task *task,
+		rspamd_dkim_sign_key_t *priv_key,
+		gint headers_canon,
+		gint body_canon,
+		const gchar *dkim_headers,
+		GError **err);
+
+/**
+ * Load dkim key from a file
+ * @param path
+ * @param err
+ * @return
+ */
+rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *path, GError **err);
 
 /**
  * Make DNS request for specified context and obtain and parse key
@@ -132,8 +163,15 @@ gint rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task);
 
+GString* rspamd_dkim_sign (struct rspamd_task *task,
+		const gchar *selector, const gchar *domain,
+		time_t expire, gsize len,
+		rspamd_dkim_sign_context_t *ctx);
+
 rspamd_dkim_key_t * rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
 void rspamd_dkim_key_unref (rspamd_dkim_key_t *k);
+rspamd_dkim_sign_key_t * rspamd_dkim_sign_key_ref (rspamd_dkim_sign_key_t *k);
+void rspamd_dkim_sign_key_unref (rspamd_dkim_sign_key_t *k);
 const gchar* rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx);
 const gchar* rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
 guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
