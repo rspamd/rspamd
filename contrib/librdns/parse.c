@@ -209,6 +209,11 @@ rdns_parse_labels (struct rdns_resolver *resolver,
 		else if (llen & DNS_COMPRESSION_BITS) {
 			llen = UNCOMPRESS_DNS_OFFSET(p);
 			l = rdns_decompress_label (in, &llen, end - in);
+
+			if (l == NULL) {
+				goto end;
+			}
+
 			begin = l;
 			length = end - begin;
 			p = l + *l + 1;
