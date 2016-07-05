@@ -1165,6 +1165,8 @@ rspamd_controller_handle_graph (
 
 	start_row = rrd_result->cur_row == rrd_result->rra_rows - 1 ?
 				0 : rrd_result->cur_row;
+	t = ts * rrd_result->pdp_per_cdp;
+	k = 0;
 
 	/* Create window */
 	step = (rrd_result->rra_rows / desired_points + 0.5);

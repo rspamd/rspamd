@@ -514,7 +514,7 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 	}
 #else
 	if (mp->cnt > 0) {
-		mp->t = acism_create (mp->pats->data, mp->cnt);
+		mp->t = acism_create ((const ac_trie_pat_t *)mp->pats->data, mp->cnt);
 	}
 #endif
 	mp->compiled = TRUE;

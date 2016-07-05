@@ -712,28 +712,30 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	}
 
 reply:
-	result.tag = cmd->tag;
+	if (cmd) {
+		result.tag = cmd->tag;
 
-	memcpy (&session->reply.rep, &result, sizeof (result));
+		memcpy (&session->reply.rep, &result, sizeof (result));
 
-	rspamd_fuzzy_update_stats (session->ctx,
-			session->epoch,
-			result.prob > 0.5,
-			is_shingle,
-			session->key_stat,
-			ip_stat, cmd->cmd,
-			result.value);
+		rspamd_fuzzy_update_stats (session->ctx,
+				session->epoch,
+				result.prob > 0.5,
+				is_shingle,
+				session->key_stat,
+				ip_stat, cmd->cmd,
+				result.value);
 
-	if (encrypted) {
-		/* We need also to encrypt reply */
-		ottery_rand_bytes (session->reply.hdr.nonce,
-				sizeof (session->reply.hdr.nonce));
-		rspamd_cryptobox_encrypt_nm_inplace ((guchar *)&session->reply.rep,
-				sizeof (session->reply.rep),
-				session->reply.hdr.nonce,
-				session->nm,
-				session->reply.hdr.mac,
-				RSPAMD_CRYPTOBOX_MODE_25519);
+		if (encrypted) {
+			/* We need also to encrypt reply */
+			ottery_rand_bytes (session->reply.hdr.nonce,
+					sizeof (session->reply.hdr.nonce));
+			rspamd_cryptobox_encrypt_nm_inplace ((guchar *)&session->reply.rep,
+					sizeof (session->reply.rep),
+					session->reply.hdr.nonce,
+					session->nm,
+					session->reply.hdr.mac,
+					RSPAMD_CRYPTOBOX_MODE_25519);
+		}
 	}
 
 	rspamd_fuzzy_write_reply (session);
@@ -926,7 +928,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	gchar *src = NULL, *psrc;
 	gsize remain;
 	gint32 revision, our_rev;
-	guint32 len, cnt = 0;
+	guint32 len = 0, cnt = 0;
 	struct fuzzy_peer_cmd cmd, *pcmd;
 	enum {
 		read_len = 0,

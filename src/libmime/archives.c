@@ -252,7 +252,7 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 	const guchar *p = start, *start_section;
 	guint8 type;
 	guint flags;
-	guint64 sz, comp_sz, uncomp_sz;
+	guint64 sz, comp_sz = 0, uncomp_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 

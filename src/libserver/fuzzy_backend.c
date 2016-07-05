@@ -803,7 +803,6 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
 	int rc = -1;
-	guint32 flag;
 
 	if (backend == NULL) {
 		return FALSE;
@@ -814,10 +813,6 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 			cmd->digest);
 
 	if (rc == SQLITE_OK) {
-		/* Check flag */
-		flag = sqlite3_column_int64 (
-				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt,
-				2);
 		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 
 		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,

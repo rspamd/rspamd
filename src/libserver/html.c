@@ -1128,7 +1128,6 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	gchar *decoded;
 	gint rc;
 	gsize decoded_len;
-	gboolean has_spaces = FALSE;
 	const gchar *p;
 	gchar *t, *h;
 
@@ -1140,7 +1139,6 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		p ++;
 		start ++;
 		len --;
-		has_spaces = TRUE;
 	}
 
 	if (comp) {
@@ -1158,7 +1156,6 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		if (comp) {
 			comp->len --;
 		}
-		has_spaces = TRUE;
 	}
 
 	/* Also we need to perform url decode */

@@ -1576,7 +1576,7 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 struct rspamd_rcl_section *
 rspamd_rcl_config_init (struct rspamd_config *cfg)
 {
-	struct rspamd_rcl_section *new = NULL, *sub, *ssub, *sssub;
+	struct rspamd_rcl_section *new = NULL, *sub, *ssub;
 
 	/*
 	 * Important notice:
@@ -2089,7 +2089,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Maximum score that could be reached by this symbols group");
 
 	/* Grouped symbols */
-	sssub = rspamd_rcl_add_section_doc (&ssub->subsections,
+	rspamd_rcl_add_section_doc (&ssub->subsections,
 			"symbol", "name",
 			rspamd_rcl_symbol_handler,
 			UCL_OBJECT,

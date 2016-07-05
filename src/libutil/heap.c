@@ -193,7 +193,7 @@ struct rspamd_min_heap_elt*
 rspamd_min_heap_index (struct rspamd_min_heap *heap, guint idx)
 {
 	g_assert (heap != NULL);
-	g_assert (idx >= 0 && idx < heap->ar->len);
+	g_assert (idx < heap->ar->len);
 
 	return g_ptr_array_index (heap->ar, idx);
 }

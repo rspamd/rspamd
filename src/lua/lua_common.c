@@ -479,7 +479,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 		read_semicolon
 	} state = read_key;
 	gsize keylen = 0, *valuelen, clslen;
-	gint idx, t;
+	gint idx = 0, t;
 
 	g_assert (extraction_pattern != NULL);
 

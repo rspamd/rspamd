@@ -1420,7 +1420,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 				g_ptr_array_add (map->backends, bk);
 
 				if (!map->name) {
-					map->name = g_strdup (ucl_object_tostring (cur));
+					map->name = g_strdup (ucl_object_tostring (elt));
 				}
 			}
 		}

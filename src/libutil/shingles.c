@@ -99,7 +99,7 @@ rspamd_shingles_generate (GArray *input,
 		}
 	}
 	else {
-		guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE];
+		guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
 
 		switch (alg) {
 		case RSPAMD_SHINGLES_XXHASH:
@@ -127,13 +127,15 @@ rspamd_shingles_generate (GArray *input,
 
 					word = &g_array_index (input, rspamd_ftok_t, beg);
 					/* Insert the last element to the pipe */
+					memcpy (&seed, keys[j], sizeof (seed));
 					res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
 							rspamd_cryptobox_fast_hash_specific (ht,
 									word->begin, word->len,
-									*(guint64 *)keys[j]);
+									seed);
 					val = 0;
 					for (k = 0; k < SHINGLES_WINDOW; k ++) {
-						val ^= res[j * SHINGLES_WINDOW + k] >> (8 * (SHINGLES_WINDOW - k - 1));
+						val ^= res[j * SHINGLES_WINDOW + k] >>
+								(8 * (SHINGLES_WINDOW - k - 1));
 					}
 
 					g_assert (hlen > beg);
