@@ -69,7 +69,7 @@ local function replies_check(task)
     false, -- is write
     redis_get_cb, --callback
     'GET', -- command
-    key -- arguments
+    {key} -- arguments
   )
 
   if not ret then
