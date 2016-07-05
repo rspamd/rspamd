@@ -1928,7 +1928,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 	peer_key = msg->peer_key;
 
-	priv->wr_total = bodylen + buf->len + 2;
+	priv->wr_total = bodylen + 2;
 	hdrcount = 0;
 
 	HASH_ITER (hh, msg->headers, hdr, htmp) {
@@ -1947,6 +1947,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			repbuf, sizeof (repbuf), bodylen, enclen,
 			host, conn, msg,
 			&buf, priv, peer_key);
+	priv->wr_total += buf->len;
 
 	/* Setup external request body */
 	priv->out[0].iov_base = buf->str;
