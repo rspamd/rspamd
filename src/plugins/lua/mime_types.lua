@@ -37,10 +37,10 @@ local settings = {
 
   bad_extensions = {
     scr = 4,
-    exe = 2,
+    exe = 1,
     jar = 2,
-    com = 4,
-    bat = 4,
+    com = 2,
+    bat = 2,
     -- Have you ever seen that in legit email?
     ace = 4,
     arj = 4,
