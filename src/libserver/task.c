@@ -287,6 +287,13 @@ rspamd_task_load_message (struct rspamd_task *task,
 	gpointer map;
 	struct stat st;
 	struct rspamd_task_map *m;
+	const gchar *ft;
+
+#ifdef HAVE_SANE_SHMEM
+	ft = "shm";
+#else
+	ft = "file";
+#endif
 
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
@@ -312,18 +319,20 @@ rspamd_task_load_message (struct rspamd_task *task,
 		else {
 			fp = &filepath[0];
 		}
-
+#ifdef HAVE_SANE_SHMEM
 		fd = shm_open (fp, O_RDONLY, 00600);
-
+#else
+		fd = open (fp, O_RDONLY, 00600);
+#endif
 		if (fd == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot open shm segment (%s): %s", fp, strerror (errno));
+					"Cannot open %s segment (%s): %s", ft, fp, strerror (errno));
 			return FALSE;
 		}
 
 		if (fstat (fd, &st) == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot stat shm segment (%s): %s", fp, strerror (errno));
+					"Cannot stat %s segment (%s): %s", ft, fp, strerror (errno));
 			close (fd);
 
 			return FALSE;
@@ -334,7 +343,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		if (map == MAP_FAILED) {
 			close (fd);
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot mmap file (%s): %s", fp, strerror (errno));
+					"Cannot mmap %s (%s): %s", ft, fp, strerror (errno));
 			return FALSE;
 		}
 
@@ -365,8 +374,8 @@ rspamd_task_load_message (struct rspamd_task *task,
 			rspamd_strtoul (tok->begin, tok->len, &shmem_size);
 
 			if (shmem_size > (gulong)st.st_size) {
-				msg_err_task ("invalid length %ul (%ul available) for shm "
-						"segment %s", shmem_size, st.st_size, fp);
+				msg_err_task ("invalid length %ul (%ul available) for %s "
+						"segment %s", shmem_size, st.st_size, ft, fp);
 				munmap (map, st.st_size);
 
 				return FALSE;
