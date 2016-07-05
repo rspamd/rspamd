@@ -49,10 +49,10 @@ local settings = {
 
   -- Something that should not be in archive
   bad_archive_extensions = {
-    pptx = 1,
-    docx = 1,
-    xlsx = 1,
-    pdf = 1,
+    pptx = 0.1,
+    docx = 0.1,
+    xlsx = 0.1,
+    pdf = 0.1,
     jar = 3,
     js = 3,
     vbs = 4,
