@@ -27,12 +27,23 @@ enum rspamd_archive_flags {
 	RSPAMD_ARCHIVE_ENCRYPTED = (1 << 0),
 };
 
+enum rspamd_archive_file_flags {
+	RSPAMD_ARCHIVE_FILE_ENCRYPTED = (1 << 0),
+};
+
+struct rspamd_archive_file {
+	GString *fname;
+	gsize compressed_size;
+	gsize uncompressed_size;
+	enum rspamd_archive_file_flags flags;
+};
+
 struct rspamd_archive {
 	enum rspamd_archive_type type;
 	const gchar *archive_name;
 	gsize size;
 	enum rspamd_archive_flags flags;
-	GPtrArray *files; /* Array of GStrings */
+	GPtrArray *files; /* Array of struct rspamd_archive_file */
 };
 
 /**

@@ -395,6 +395,8 @@ LUA_FUNCTION_DEF (task, get_images);
  * Each archive has the following methods available:
  *
  * * `get_files` - return list of strings with filenames inside archive
+ * * `get_files_full` - return list of tables with all information about files
+ * * `is_encrypted` - return true if an archive is encrypted
  * * `get_type` - return string representation of image's type (e.g. 'zip')
  * * `get_filename` - return string with archive's file name
  * * `get_size` - return size in bytes
@@ -718,12 +720,16 @@ static const struct luaL_reg imagelib_m[] = {
 /* Archive methods */
 LUA_FUNCTION_DEF (archive, get_type);
 LUA_FUNCTION_DEF (archive, get_files);
+LUA_FUNCTION_DEF (archive, get_files_full);
+LUA_FUNCTION_DEF (archive, is_encrypted);
 LUA_FUNCTION_DEF (archive, get_filename);
 LUA_FUNCTION_DEF (archive, get_size);
 
 static const struct luaL_reg archivelib_m[] = {
 	LUA_INTERFACE_DEF (archive, get_type),
 	LUA_INTERFACE_DEF (archive, get_files),
+	LUA_INTERFACE_DEF (archive, get_files_full),
+	LUA_INTERFACE_DEF (archive, is_encrypted),
 	LUA_INTERFACE_DEF (archive, get_filename),
 	LUA_INTERFACE_DEF (archive, get_size),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -3175,17 +3181,73 @@ lua_archive_get_files (lua_State *L)
 {
 	struct rspamd_archive *arch = lua_check_archive (L);
 	guint i;
-	GString *s;
+	struct rspamd_archive_file *f;
 
 	if (arch != NULL) {
 		lua_createtable (L, arch->files->len, 0);
 
 		for (i = 0; i < arch->files->len; i ++) {
-			s = g_ptr_array_index (arch->files, i);
+			f = g_ptr_array_index (arch->files, i);
 
-			lua_pushlstring (L, s->str, s->len);
+			lua_pushlstring (L, f->fname->str, f->fname->len);
 			lua_rawseti (L, -2, i + 1);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_archive_get_files_full (lua_State *L)
+{
+	struct rspamd_archive *arch = lua_check_archive (L);
+	guint i;
+	struct rspamd_archive_file *f;
+
+	if (arch != NULL) {
+		lua_createtable (L, arch->files->len, 0);
+
+		for (i = 0; i < arch->files->len; i ++) {
+			f = g_ptr_array_index (arch->files, i);
+
+			lua_createtable (L, 0, 4);
+
+			lua_pushstring (L, "name");
+			lua_pushlstring (L, f->fname->str, f->fname->len);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "compressed_size");
+			lua_pushnumber (L, f->compressed_size);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "uncompressed_size");
+			lua_pushnumber (L, f->uncompressed_size);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "encrypted");
+			lua_pushboolean (L, (f->flags & RSPAMD_ARCHIVE_FILE_ENCRYPTED) ? true : false);
+			lua_settable (L, -3);
+
+			lua_rawseti (L, -2, i + 1);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_archive_is_encrypted (lua_State *L)
+{
+	struct rspamd_archive *arch = lua_check_archive (L);
+
+	if (arch != NULL) {
+		lua_pushboolean (L, (arch->flags & RSPAMD_ARCHIVE_ENCRYPTED) ? true : false);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

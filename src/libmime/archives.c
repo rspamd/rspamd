@@ -23,13 +23,16 @@ static void
 rspamd_archive_dtor (gpointer p)
 {
 	struct rspamd_archive *arch = p;
-	GString *s;
+	struct rspamd_archive_file *f;
 	guint i;
 
 	for (i = 0; i < arch->files->len; i ++) {
-		s = g_ptr_array_index (arch->files, i);
+		f = g_ptr_array_index (arch->files, i);
 
-		g_string_free (s, TRUE);
+		if (f->fname) {
+			g_string_free (f->fname, TRUE);
+		}
+		g_slice_free1 (sizeof (*f), f);
 	}
 
 	g_ptr_array_free (arch->files, TRUE);
@@ -42,10 +45,10 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	const guchar *p, *start, *end, *eocd = NULL, *cd;
 	const guint32 eocd_magic = 0x06054b50, cd_basic_len = 46;
 	const guchar cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
-	guint32 cd_offset, cd_size;
+	guint32 cd_offset, cd_size, comp_size, uncomp_size;
 	guint16 extra_len, fname_len, comment_len;
 	struct rspamd_archive *arch;
-	GString *fname;
+	struct rspamd_archive_file *f;
 
 	/* Zip files have interesting data at the end of archive */
 	p = part->content->data + part->content->len - 1;
@@ -118,6 +121,10 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 			return;
 		}
 
+		memcpy (&comp_size, cd + 20, sizeof (guint32));
+		comp_size = GUINT32_FROM_LE (comp_size);
+		memcpy (&uncomp_size, cd + 24, sizeof (guint32));
+		uncomp_size = GUINT32_FROM_LE (uncomp_size);
 		memcpy (&fname_len, cd + 28, sizeof (fname_len));
 		fname_len = GUINT16_FROM_LE (fname_len);
 		memcpy (&extra_len, cd + 30, sizeof (extra_len));
@@ -132,9 +139,12 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 			return;
 		}
 
-		fname = g_string_new_len (cd + cd_basic_len, fname_len);
-		g_ptr_array_add (arch->files, fname);
-		msg_debug_task ("found file in zip archive: %v", fname);
+		f = g_slice_alloc0 (sizeof (*f));
+		f->fname = g_string_new_len (cd + cd_basic_len, fname_len);
+		f->compressed_size = comp_size;
+		f->uncompressed_size = uncomp_size;
+		g_ptr_array_add (arch->files, f);
+		msg_debug_task ("found file in zip archive: %v", f->fname);
 
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
 	}
@@ -242,8 +252,9 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 	const guchar *p = start, *start_section;
 	guint8 type;
 	guint flags;
-	guint64 sz;
+	guint64 sz, comp_sz, uncomp_sz;
 	struct rspamd_archive *arch;
+	struct rspamd_archive_file *f;
 
 	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
 	arch->files = g_ptr_array_new ();
@@ -275,6 +286,8 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 			RAR_READ_UINT32 (tmp);
 			sz += tmp;
+			/* This is also used as PACK_SIZE */
+			comp_sz = tmp;
 		}
 
 		if (sz == 0) {
@@ -287,11 +300,12 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 		if (type == 0x74) {
 			guint fname_len;
-			GString *s;
 
 			/* File header */
+			/* Uncompressed size */
+			RAR_READ_UINT32 (uncomp_sz);
 			/* Skip to NAME_SIZE element */
-			RAR_SKIP_BYTES (15);
+			RAR_SKIP_BYTES (11);
 			RAR_READ_UINT16 (fname_len);
 
 			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
@@ -309,9 +323,13 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 				RAR_READ_UINT32 (tmp);
 				sz += tmp;
+				comp_sz += tmp;
 				/* HIGH_UNP_SIZE  */
-				RAR_SKIP_BYTES (4);
+				RAR_READ_UINT32 (tmp);
+				uncomp_sz += tmp;
 			}
+
+			f = g_slice_alloc0 (sizeof (*f));
 
 			if (flags & 0x200) {
 				/* We have unicode + normal version */
@@ -321,18 +339,25 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 				if (tmp != NULL) {
 					/* Just use ASCII version */
-					s = g_string_new_len (p, tmp - p);
+					f->fname = g_string_new_len (p, tmp - p);
 				}
 				else {
 					/* We have UTF8 filename, use it as is */
-					s = g_string_new_len (p, fname_len);
+					f->fname = g_string_new_len (p, fname_len);
 				}
 			}
 			else {
-				s = g_string_new_len (p, fname_len);
+				f->fname = g_string_new_len (p, fname_len);
 			}
 
-			g_ptr_array_add (arch->files, s);
+			f->compressed_size = comp_sz;
+			f->uncompressed_size = uncomp_sz;
+
+			if (flags & 0x4) {
+				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+			}
+
+			g_ptr_array_add (arch->files, f);
 		}
 
 		p = start_section;
@@ -355,8 +380,9 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const guint rar_encrypted_header = 4, rar_main_header = 1,
 			rar_file_header = 2;
-	guint64 vint, sz;
+	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0;
 	struct rspamd_archive *arch;
+	struct rspamd_archive_file *f;
 	gint r;
 
 	p = part->content->data;
@@ -383,6 +409,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		return;
 	}
 
+	/* Rar v5 format */
 	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
 	arch->files = g_ptr_array_new ();
 	arch->type = RSPAMD_ARCHIVE_RAR;
@@ -438,7 +465,6 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			/* We have a file header, go forward */
 			const guchar *section_type_start = p;
 			guint64 flags, fname_len;
-			GString *s;
 
 			p += r; /* Remain from type */
 			/* Header flags */
@@ -451,8 +477,9 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 				RAR_READ_VINT_SKIP ();
 			}
 			if (flags & 0x2) {
-				/* Data size */
+				/* Data size - compressed size */
 				RAR_READ_VINT_SKIP ();
+				comp_sz = vint;
 			}
 
 			/* File flags */
@@ -462,6 +489,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 
 			/* Unpacked size */
 			RAR_READ_VINT_SKIP ();
+			uncomp_sz = vint;
 			/* Attributes */
 			RAR_READ_VINT_SKIP ();
 
@@ -488,8 +516,11 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 				return;
 			}
 
-			s = g_string_new_len (p, fname_len);
-			g_ptr_array_add (arch->files, s);
+			f = g_slice_alloc0 (sizeof (*f));
+			f->uncompressed_size = uncomp_sz;
+			f->compressed_size = comp_sz;
+			f->fname = g_string_new_len (p, fname_len);
+			g_ptr_array_add (arch->files, f);
 			/* Restore p to the beginning of the header */
 			p = section_type_start;
 			RAR_SKIP_BYTES (sz);

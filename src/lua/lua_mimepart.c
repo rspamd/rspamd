@@ -240,7 +240,9 @@ LUA_FUNCTION_DEF (mimepart, is_archive);
  * the following methods:
  *
  * * `get_files` - return list of strings with filenames inside archive
- * * `get_type` - return string representation of archive's type (e.g. 'zip')
+ * * `get_files_full` - return list of tables with all information about files
+ * * `is_encrypted` - return true if an archive is encrypted
+ * * `get_type` - return string representation of image's type (e.g. 'zip')
  * * `get_filename` - return string with archive's file name
  * * `get_size` - return size in bytes
  * @return {rspamd_archive} archive structure or nil if a part is not an archive
