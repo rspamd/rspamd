@@ -452,7 +452,7 @@ local function gen_eval_rule(arg)
         local rcpt = task:get_recipients('mime')
         if rcpt then
           for i,r in ipairs(rcpt) do
-            if sa_lists['from_blacklist'][string.lower(r['addr'])] then
+            if sa_lists['to_blacklist'][string.lower(r['addr'])] then
               return 1
             end
           end
@@ -467,7 +467,7 @@ local function gen_eval_rule(arg)
         local rcpt = task:get_recipients('mime')
         if rcpt then
           for i,r in ipairs(rcpt) do
-            if sa_lists['from_whitelist'][string.lower(r['addr'])] then
+            if sa_lists['to_whitelist'][string.lower(r['addr'])] then
               return 1
             end
           end
