@@ -99,8 +99,11 @@ local function check_mime_type(task)
         badness_mult =  settings['bad_archive_extensions'][ext]
         if badness_mult then
           if #parts > 2 then
-            -- Double extension + bad extension == VERY bad
-            task:insert_result(settings['symbol_double_extension'], badness_mult, fname)
+            -- We need to ensure that it is an extension, so we check for its length
+            if #parts[#parts - 1] <= 4 then
+              -- Double extension + bad extension == VERY bad
+              task:insert_result(settings['symbol_double_extension'], badness_mult, fname)
+            end
           else
             -- Just bad extension
             task:insert_result(settings['symbol_bad_extension'], badness_mult, fname)
@@ -150,6 +153,7 @@ local function check_mime_type(task)
         local ct = string.format('%s/%s', mtype, subtype)
 
         if filename then
+          filename = filename:gsub('[^%s%g]', '?')
           check_filename(filename, ct, false)
         end
 
@@ -163,11 +167,18 @@ local function check_mime_type(task)
           local fl = arch:get_files_full()
 
           for _,f in ipairs(fl) do
+            -- Strip bad characters
+            if f['name'] then
+              f['name'] = f['name']:gsub('[^%s%g]', '?')
+            end
+
             if f['encrypted'] then
               task:insert_result(settings['symbol_encrypted_archive'], 1.0, f['name'])
             end
 
-            check_filename(f['name'], nil, true)
+            if f['name'] then
+              check_filename(f['name'], nil, true)
+            end
           end
         end
 
