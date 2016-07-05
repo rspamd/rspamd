@@ -24,17 +24,118 @@ local settings = {
   symbol_bad = 'MIME_BAD',
   symbol_good = 'MIME_GOOD',
   symbol_attachment = 'MIME_BAD_ATTACHMENT',
+  symbol_encrypted_archive = 'MIME_ENCRYPTED_ARCHIVE',
+  symbol_archive_in_archive = 'MIME_ARCHIVE_IN_ARCHIVE',
+  symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
+  symbol_bad_extension = 'MIME_BAD_EXTENSION',
   regexp = false,
   extension_map = { -- extension -> mime_type
     html = 'text/html',
     txt = 'text/plain',
     pdf = 'application/pdf'
   },
+
+  bad_extensions = {
+    scr = 4,
+    exe = 2,
+    jar = 2,
+    com = 4,
+    bat = 4,
+    -- Have you ever seen that in legit email?
+    ace = 4,
+    arj = 4,
+    cab = 3,
+  },
+
+  -- Something that should not be in archive
+  bad_archive_extensions = {
+    pptx = 1,
+    docx = 1,
+    xlsx = 1,
+    pdf = 1,
+    jar = 3,
+    js = 3,
+    vbs = 4,
+  },
+
+  archive_extensions = {
+    zip = 1,
+    arj = 1,
+    rar = 1,
+    ace = 1,
+    ['7z'] = 1,
+    cab = 1,
+  }
 }
 
 local map = nil
 
 local function check_mime_type(task)
+  local function check_filename(fname, ct, is_archive)
+    local parts = rspamd_str_split(fname, '.')
+
+    local ext
+    if #parts > 1 then
+      ext = parts[#parts]
+    end
+
+    if ext then
+      local badness_mult = settings['bad_extensions'][ext]
+      if badness_mult then
+        if #parts > 2 then
+          -- Double extension + bad extension == VERY bad
+          task:insert_result(settings['symbol_double_extension'], badness_mult, {
+            parts[#parts - 1],
+            parts[#parts]
+          })
+        else
+          -- Just bad extension
+          task:insert_result(settings['symbol_bad_extension'], badness_mult, fname)
+        end
+      end
+
+      -- Also check for archive bad extension
+      if is_archive then
+        badness_mult =  settings['bad_archive_extensions'][ext]
+        if badness_mult then
+          if #parts > 2 then
+            -- Double extension + bad extension == VERY bad
+            task:insert_result(settings['symbol_double_extension'], badness_mult, fname)
+          else
+            -- Just bad extension
+            task:insert_result(settings['symbol_bad_extension'], badness_mult, fname)
+          end
+        end
+
+        if settings['archive_extensions'][ext] then
+          -- Archive in archive
+          task:insert_result(settings['symbol_archive_in_archive'], 1.0, fname)
+        end
+      end
+
+      local mt = settings['extension_map'][ext]
+      if mt and ct then
+        local found = nil
+        if (type(mt) == "table") then
+          for _,v in pairs(mt) do
+            if ct == v then
+              found = true
+              break
+            end
+          end
+        else
+          if ct == mt then
+            found = true
+          end
+        end
+
+        if not found  then
+          task:insert_result(settings['symbol_attachment'], 1.0, fname)
+        end
+      end
+    end
+  end
+
   local parts = task:get_parts()
 
   if parts then
@@ -49,29 +150,24 @@ local function check_mime_type(task)
         local ct = string.format('%s/%s', mtype, subtype)
 
         if filename then
-          local ext = string.match(filename, '%.([^.]+)$')
+          check_filename(filename, ct, false)
+        end
 
-          if ext then
-            local mt = settings['extension_map'][ext]
-            if mt then
-              local found = nil
-              if (type(mt) == "table") then
-                for _,v in pairs(mt) do
-                  if ct == v then
-                    found = true
-                    break
-                  end
-                end
-              else
-                if ct == mt then
-                  found = true
-                end
-              end
+        if p:is_archive() then
+          local arch = p:get_archive()
 
-              if not found  then
-                task:insert_result(settings['symbol_attachment'], 1.0, ext)
-              end
+          if arch:is_encrypted() then
+            task:insert_result(settings['symbol_encrypted_archive'], 1.0, filename)
+          end
+
+          local fl = arch:get_files_full()
+
+          for _,f in ipairs(fl) do
+            if f['encrypted'] then
+              task:insert_result(settings['symbol_encrypted_archive'], 1.0, f['name'])
             end
+
+            check_filename(f['name'], nil, true)
           end
         end
 
@@ -139,6 +235,26 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_attachment'],
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_encrypted_archive'],
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_archive_in_archive'],
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_double_extension'],
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_bad_extension'],
       parent = id
     })
   end
