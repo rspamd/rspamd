@@ -217,6 +217,135 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 	p += r; \
 } while (0)
 
+#define RAR_READ_UINT16(n) do { \
+	if (end - p < (glong)sizeof (guint16)) { \
+		msg_debug_task ("rar archive is invalid (bad int16): %s", part->filename); \
+		return; \
+	} \
+	n = p[0] + (p[1] << 8); \
+	p += sizeof (guint16); \
+} while (0)
+
+#define RAR_READ_UINT32(n) do { \
+	if (end - p < (glong)sizeof (guint32)) { \
+		msg_debug_task ("rar archive is invalid (bad int32): %s", part->filename); \
+		return; \
+	} \
+	n = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); \
+	p += sizeof (guint32); \
+} while (0)
+
+static void
+rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
+		const guchar *end, struct rspamd_mime_part *part)
+{
+	const guchar *p = start, *start_section;
+	guint8 type;
+	guint flags;
+	guint64 sz;
+	struct rspamd_archive *arch;
+
+	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
+	arch->files = g_ptr_array_new ();
+	arch->type = RSPAMD_ARCHIVE_RAR;
+	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
+			arch);
+
+	while (p < end) {
+		/* Crc16 */
+		start_section = p;
+		RAR_SKIP_BYTES (sizeof (guint16));
+		type = *p;
+		p ++;
+		RAR_READ_UINT16 (flags);
+
+		if (type == 0x73) {
+			/* Main header, check for encryption */
+			if (flags & 0x80) {
+				arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+				goto end;
+			}
+		}
+
+		RAR_READ_UINT16 (sz);
+
+		if (flags & 0x8000) {
+			/* We also need to read ADD_SIZE element */
+			guint32 tmp;
+
+			RAR_READ_UINT32 (tmp);
+			sz += tmp;
+		}
+
+		if (sz == 0) {
+			/* Zero sized block - error */
+			msg_debug_task ("rar archive is invalid (zero size block): %s",
+					part->filename);
+
+			return;
+		}
+
+		if (type == 0x74) {
+			guint fname_len;
+			GString *s;
+
+			/* File header */
+			/* Skip to NAME_SIZE element */
+			RAR_SKIP_BYTES (15);
+			RAR_READ_UINT16 (fname_len);
+
+			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
+				msg_debug_task ("rar archive is invalid (bad fileame size): %s", part->filename);
+
+				return;
+			}
+
+			/* Attrs */
+			RAR_SKIP_BYTES (4);
+
+			if (flags & 0x100) {
+				/* We also need to read HIGH_PACK_SIZE */
+				guint32 tmp;
+
+				RAR_READ_UINT32 (tmp);
+				sz += tmp;
+				/* HIGH_UNP_SIZE  */
+				RAR_SKIP_BYTES (4);
+			}
+
+			if (flags & 0x200) {
+				/* We have unicode + normal version */
+				guchar *tmp;
+
+				tmp = memchr (p, '\0', fname_len);
+
+				if (tmp != NULL) {
+					/* Just use ASCII version */
+					s = g_string_new_len (p, tmp - p);
+				}
+				else {
+					/* We have UTF8 filename, use it as is */
+					s = g_string_new_len (p, fname_len);
+				}
+			}
+			else {
+				s = g_string_new_len (p, fname_len);
+			}
+
+			g_ptr_array_add (arch->files, s);
+		}
+
+		p = start_section;
+		RAR_SKIP_BYTES (sz);
+	}
+
+end:
+	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->specific_data = arch;
+	arch->archive_name = part->filename;
+	arch->size = part->content->len;
+}
+
 static void
 rspamd_archive_process_rar (struct rspamd_task *task,
 		struct rspamd_mime_part *part)
@@ -244,6 +373,9 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	}
 	else if (memcmp (p, rar_v4_magic, sizeof (rar_v4_magic)) == 0) {
 		p += sizeof (rar_v4_magic);
+
+		rspamd_archive_process_rar_v4 (task, p, end, part);
+		return;
 	}
 	else {
 		msg_debug_task ("rar archive is invalid (no rar magic): %s", part->filename);
@@ -272,7 +404,8 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		goto end;
 	}
 	else if (vint != rar_main_header) {
-		msg_debug_task ("rar archive is invalid (bad main header): %s", part->filename);
+		msg_debug_task ("rar archive is invalid (bad main header): %s",
+				part->filename);
 
 		return;
 	}
@@ -286,7 +419,15 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		RAR_SKIP_BYTES (sizeof (guint32));
 		/* Size */
 		RAR_READ_VINT_SKIP ();
+
 		sz = vint;
+		if (sz == 0) {
+			/* Zero sized block - error */
+			msg_debug_task ("rar archive is invalid (zero size block): %s",
+					part->filename);
+
+			return;
+		}
 		/* Type (not skip) */
 		RAR_READ_VINT ();
 
@@ -355,7 +496,6 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		}
 	}
 
-	return;
 end:
 	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
 	part->specific_data = arch;
