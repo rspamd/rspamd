@@ -82,7 +82,8 @@ local function check_mime_type(task)
     if ext then
       local badness_mult = settings['bad_extensions'][ext]
       if badness_mult then
-        if #parts > 2 then
+        -- Check if next-to-last extension is not a number
+        if #parts > 2 and not string.match(parts[#parts - 1], '^%d+$') then
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult, {
             parts[#parts - 1],
@@ -98,7 +99,8 @@ local function check_mime_type(task)
       if is_archive then
         badness_mult =  settings['bad_archive_extensions'][ext]
         if badness_mult then
-          if #parts > 2 then
+          -- Check if next-to-last extension is not a number
+          if #parts > 2 and not string.match(parts[#parts - 1], '^%d+$') then
             -- We need to ensure that it is an extension, so we check for its length
             if #parts[#parts - 1] <= 4 then
               -- Double extension + bad extension == VERY bad
