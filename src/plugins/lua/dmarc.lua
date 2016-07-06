@@ -1,6 +1,6 @@
 --[[
-Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
-Copyright (c) 2015, Andrew Lewis <nerf@judo.za.org>
+Copyright (c) 2011-2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2015-2016, Andrew Lewis <nerf@judo.za.org>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@ local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 
---local dumper = require 'pl.pretty'.dump
-
 local symbols = {
   spf_allow_symbol = 'R_SPF_ALLOW',
   spf_deny_symbol = 'R_SPF_FAIL',
@@ -39,14 +37,16 @@ local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
 local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
+local dmarc_reporting = false
 
-local function dmarc_report(task, spf_ok, dkim_ok)
+local function dmarc_report(task, spf_ok, dkim_ok, disposition)
   local ip = task:get_from_ip()
   if not ip:is_valid() then
     return nil
   end
-  local res = string.format('%d,%s,%s,%s', task:get_date(0),
-    ip:to_string(), tostring(spf_ok), tostring(dkim_ok))
+  local res = string.format('%d,%s,%s,%s,%s', task:get_date(0),
+    ip:to_string(), tostring(spf_ok), tostring(dkim_ok),
+    disposition)
 
   return res
 end
@@ -226,16 +226,19 @@ local function dmarc_callback(task)
       end
     end
 
+    disposition = "none"
     local res = 0.5
     if not (spf_ok or dkim_ok) then
       res = 1.0
       if quarantine_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
           task:insert_result('DMARC_POLICY_QUARANTINE', res, lookup_domain)
+          disposition = "quarantine"
         end
       elseif strict_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
           task:insert_result('DMARC_POLICY_REJECT', res, lookup_domain)
+          disposition = "reject"
         end
       else
         task:insert_result('DMARC_POLICY_SOFTFAIL', res, lookup_domain)
@@ -244,10 +247,10 @@ local function dmarc_callback(task)
       task:insert_result('DMARC_POLICY_ALLOW', res, lookup_domain)
     end
 
-    if rua and not(spf_ok or dkim_ok) and redis_params then
+    if rua and redis_params and dmarc_reporting then
       -- Prepare and send redis report element
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
-      local report_data = dmarc_report(task, spf_ok, dkim_ok)
+      local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition)
 
       if report_data then
         rspamd_redis_make_request(task,
@@ -276,6 +279,10 @@ end
 local opts = rspamd_config:get_all_opt('dmarc')
 if not opts or type(opts) ~= 'table' then
   return
+end
+
+if opts['reporting'] == true then
+  dmarc_reporting = true
 end
 
 redis_params = rspamd_parse_redis_server('dmarc')
