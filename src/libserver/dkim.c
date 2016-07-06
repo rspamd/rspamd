@@ -1907,6 +1907,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	body_end = task->msg.begin + task->msg.len;
 	headers_end = task->msg.begin + task->raw_headers_content.len;
 
+	while ((*headers_end == '\r' || *headers_end == '\n') &&
+			headers_end < body_end) {
+		headers_end ++;
+	}
+
 	/* Start canonization of body part */
 	if (!rspamd_dkim_canonize_body (&ctx->common, headers_end, body_end)) {
 		return DKIM_RECORD_ERROR;
@@ -2186,11 +2191,14 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	/* Now canonize headers */
 	for (i = 0; i < ctx->common.hlist->len; i++) {
 		dh = g_ptr_array_index (ctx->common.hlist, i);
-		rspamd_dkim_canonize_header (&ctx->common, task, dh->name, dh->count,
-				NULL, NULL);
 
-		for (j = 0; j < dh->count; j++) {
-			rspamd_printf_gstring (hdr, "%s:", dh->name);
+		if (g_hash_table_lookup (task->raw_headers, dh->name)) {
+			rspamd_dkim_canonize_header (&ctx->common, task, dh->name, dh->count,
+					NULL, NULL);
+
+			for (j = 0; j < dh->count; j++) {
+				rspamd_printf_gstring (hdr, "%s:", dh->name);
+			}
 		}
 	}
 
