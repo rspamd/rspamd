@@ -75,7 +75,6 @@ hr {
   }
 }
 .jumbotron {
-  background-size: cover;
   padding-top: 10px;
   padding-bottom: 15px;
   margin-bottom: 0;
@@ -138,12 +137,16 @@ h2{
 }
 #jumbo-features{
   background: url(/img/rspamd_jumbotron_features.png);
+  background-size: cover;
 }
 #jumbo-performance{
   background: url(/img/rspamd_jumbotron_performance.png);
+  background-size: cover;
 }
 #jumbo-head{
   background: url(/img/rspamd_jumbotron.png);
+  background-size: cover;
+
 }
 .support-block {
   border-radius: 5px;
