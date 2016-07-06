@@ -638,6 +638,10 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 				}
 			}
 		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "dkim-signature") == 0) {
+			rspamd_fprintf (out, "DKIM-Signature: %s\n", ucl_object_tostring (
+					cur));
+		}
 		else if (cur->type == UCL_OBJECT) {
 			/* Parse metric */
 			rspamc_metric_output (out, cur);
