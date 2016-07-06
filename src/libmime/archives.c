@@ -177,6 +177,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 		}
 		else {
 			t |= (*p & 0x7f) << shift;
+			p ++;
 			break;
 		}
 
@@ -375,12 +376,12 @@ static void
 rspamd_archive_process_rar (struct rspamd_task *task,
 		struct rspamd_mime_part *part)
 {
-	const guchar *p, *end;
+	const guchar *p, *end, *section_start;
 	const guchar rar_v5_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00},
 			rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const guint rar_encrypted_header = 4, rar_main_header = 1,
 			rar_file_header = 2;
-	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0;
+	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 	gint r;
@@ -422,15 +423,30 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	/* Size */
 	RAR_READ_VINT_SKIP ();
 	sz = vint;
-	/* Type (not skip) */
-	RAR_READ_VINT ();
+	/* Type */
+	section_start = p;
+	RAR_READ_VINT_SKIP ();
+	type = vint;
+	/* Header flags */
+	RAR_READ_VINT_SKIP ();
+	flags = vint;
 
-	if (vint == rar_encrypted_header) {
+	if (flags & 0x1) {
+		/* Have extra zone */
+		RAR_READ_VINT_SKIP ();
+	}
+	if (flags & 0x2) {
+		/* Data zone is presented */
+		RAR_READ_VINT_SKIP ();
+		sz += vint;
+	}
+
+	if (type == rar_encrypted_header) {
 		/* We can't read any further information as archive is encrypted */
 		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
 		goto end;
 	}
-	else if (vint != rar_main_header) {
+	else if (type != rar_main_header) {
 		msg_debug_task ("rar archive is invalid (bad main header): %s",
 				part->filename);
 
@@ -438,6 +454,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	}
 
 	/* Nothing useful in main header */
+	p = section_start;
 	RAR_SKIP_BYTES (sz);
 
 	while (p < end) {
@@ -455,36 +472,36 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 
 			return;
 		}
-		/* Type (not skip) */
-		RAR_READ_VINT ();
 
-		if (vint != rar_file_header) {
+		section_start = p;
+		/* Type */
+		RAR_READ_VINT_SKIP ();
+		type = vint;
+		/* Header flags */
+		RAR_READ_VINT_SKIP ();
+		flags = vint;
+
+		if (flags & 0x1) {
+			/* Have extra zone */
+			RAR_READ_VINT_SKIP ();
+		}
+		if (flags & 0x2) {
+			/* Data zone is presented */
+			RAR_READ_VINT_SKIP ();
+			sz += vint;
+			comp_sz = vint;
+		}
+
+		if (type != rar_file_header) {
+			p = section_start;
 			RAR_SKIP_BYTES (sz);
 		}
 		else {
 			/* We have a file header, go forward */
-			const guchar *section_type_start = p;
-			guint64 flags, fname_len;
+			guint64 fname_len;
 
-			p += r; /* Remain from type */
-			/* Header flags */
+			/* File header specific flags */
 			RAR_READ_VINT_SKIP ();
-			flags = vint;
-
-			/* Now we have two optional fields (fuck rar!) */
-			if (flags & 0x1) {
-				/* Extra flag */
-				RAR_READ_VINT_SKIP ();
-			}
-			if (flags & 0x2) {
-				/* Data size - compressed size */
-				RAR_READ_VINT_SKIP ();
-				comp_sz = vint;
-			}
-
-			/* File flags */
-			RAR_READ_VINT_SKIP ();
-
 			flags = vint;
 
 			/* Unpacked size */
@@ -521,8 +538,9 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			f->compressed_size = comp_sz;
 			f->fname = g_string_new_len (p, fname_len);
 			g_ptr_array_add (arch->files, f);
+
 			/* Restore p to the beginning of the header */
-			p = section_type_start;
+			p = section_start;
 			RAR_SKIP_BYTES (sz);
 		}
 	}
