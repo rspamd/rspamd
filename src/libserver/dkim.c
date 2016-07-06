@@ -2174,7 +2174,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	}
 
 	hdr = g_string_sized_new (255);
-	rspamd_printf_gstring (hdr, "v=1; a=rsa-sha256; c=%s/%s; d=%s; s=%s;",
+	rspamd_printf_gstring (hdr, "v=1;a=rsa-sha256;c=%s/%s;d=%s;s=%s;",
 			ctx->common.header_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 			ctx->common.body_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 			domain, selector);
