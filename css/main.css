@@ -145,3 +145,16 @@ h2{
 #jumbo-head{
   background: url(/img/rspamd_jumbotron.png);
 }
+.support-block {
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  padding: 20px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+.btn-social{
+  height: 40px;
+}
+.support-block p{
+  vertical-align: middle;
+}
