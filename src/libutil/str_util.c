@@ -1413,7 +1413,7 @@ rspamd_substring_search_twoway (const gchar *in, gint inlen,
 
 
 goffset
-rspamd_string_find_eoh (GString *input)
+rspamd_string_find_eoh (GString *input, goffset *body_start)
 {
 	const gchar *p, *c = NULL, *end;
 	enum {
@@ -1459,6 +1459,10 @@ rspamd_string_find_eoh (GString *input)
 				}
 				else {
 					/* We have \r\r[^\n] */
+					if (body_start) {
+						*body_start = p - input->str + 1;
+					}
+
 					return p - input->str;
 				}
 			}
@@ -1474,6 +1478,9 @@ rspamd_string_find_eoh (GString *input)
 		case got_lf:
 			if (*p == '\n') {
 				/* We have \n\n, which is obviously end of headers */
+				if (body_start) {
+					*body_start = p - input->str + 1;
+				}
 				return p - input->str;
 			}
 			else if (*p == '\r') {
@@ -1517,11 +1524,21 @@ rspamd_string_find_eoh (GString *input)
 			break;
 		case got_linebreak_lf:
 			g_assert (c != NULL);
+			if (body_start) {
+				/* \r\n\r\n */
+				*body_start = p - input->str;
+			}
+
 			return c - input->str;
 		}
 	}
 
 	if (state == got_linebreak_lf) {
+		if (body_start) {
+			/* \r\n\r\n */
+			*body_start = p - input->str;
+		}
+
 		return c - input->str;
 	}
 

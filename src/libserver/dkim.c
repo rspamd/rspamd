@@ -1793,7 +1793,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	/* First of all find place of body */
 	p = task->msg.begin;
 	body_end = task->msg.begin + task->msg.len;
-	body_start = task->msg.begin + task->raw_headers_content.len;
+	body_start = task->raw_headers_content.body_start;
+
+	if (!body_start) {
+		return DKIM_RECORD_ERROR;
+	}
 
 	/* Start canonization of body part */
 	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
@@ -2049,10 +2053,14 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	/* First of all find place of body */
 	p = task->msg.begin;
 	body_end = task->msg.begin + task->msg.len;
-	body_start = task->msg.begin + task->raw_headers_content.len;
+	body_start = task->raw_headers_content.body_start;
 
 	if (len > 0) {
 		ctx->common.len = len;
+	}
+
+	if (!body_start) {
+		return NULL;
 	}
 
 	/* Start canonization of body part */

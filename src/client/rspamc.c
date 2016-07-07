@@ -1045,7 +1045,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 	gboolean is_spam = FALSE;
 	gchar *json_header, *json_header_encoded, *sc;
 
-	headers_pos = rspamd_string_find_eoh (input);
+	headers_pos = rspamd_string_find_eoh (input, NULL);
 
 	if (headers_pos == -1) {
 		rspamd_fprintf (stderr,"cannot find end of headers position");

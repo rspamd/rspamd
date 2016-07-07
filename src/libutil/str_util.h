@@ -269,7 +269,7 @@ goffset rspamd_substring_search_twoway (const gchar *in, gint inlen,
  * Hence, to obtain the real EOH position, it is also required to skip
  * space characters
  */
-goffset rspamd_string_find_eoh (GString *input);
+goffset rspamd_string_find_eoh (GString *input, goffset *body_start);
 
 
 #define rspamd_ucl_emit_gstring(o, t, target) \

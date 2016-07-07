@@ -142,7 +142,11 @@ struct rspamd_task {
 	GMimeMessage *message;							/**< message, parsed with GMime						*/
 	GPtrArray *parts;								/**< list of parsed parts							*/
 	GPtrArray *text_parts;							/**< list of text parts								*/
-	rspamd_ftok_t raw_headers_content;				/**< list of raw headers							*/
+	struct {
+		const gchar *begin;
+		gsize len;
+		const gchar *body_start;
+	} raw_headers_content;				/**< list of raw headers							*/
 	GPtrArray *received;							/**< list of received headers						*/
 	GHashTable *urls;								/**< list of parsed urls							*/
 	GHashTable *emails;								/**< list of parsed emails							*/

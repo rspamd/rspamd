@@ -218,8 +218,14 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 				tmp ++;
 			}
 
+			if (p + 1 == end) {
+				new->raw_len = end - new->raw_value;
+			}
+			else {
+				new->raw_len = p - new->raw_value;
+			}
+
 			new->value = tmp;
-			new->raw_len = p - new->raw_value;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
 
 			if (new->decoded != NULL) {
@@ -1300,44 +1306,6 @@ rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
 	}
 }
 
-static inline const gchar *
-rspamd_message_find_body_start (const gchar *headers_end, const gchar *body_end)
-{
-	const gchar *p = headers_end;
-	enum {
-		st_start = 0,
-		st_cr,
-		st_lf,
-	} state = st_start;
-
-	if (headers_end + 1 >= body_end) {
-		return headers_end;
-	}
-
-	switch (state) {
-	case st_start:
-		if (*p == '\r') {
-			p ++;
-			state = st_cr;
-		}
-		else if (*p == '\n') {
-			p ++;
-			state = st_lf;
-		}
-		break;
-	case st_cr:
-		if (*p == '\n' && p < body_end) {
-			/* CRLF */
-			p ++;
-		}
-		break;
-	case st_lf:
-		break;
-	}
-
-	return p;
-}
-
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
@@ -1354,7 +1322,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	struct received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
-	goffset hdr_pos;
+	goffset hdr_pos, body_pos;
 	gint i;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
@@ -1450,15 +1418,12 @@ rspamd_message_parse (struct rspamd_task *task)
 			str.str = tmp->data;
 			str.len = tmp->len;
 
-			hdr_pos = rspamd_string_find_eoh (&str);
+			hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 
 			if (hdr_pos > 0 && hdr_pos < tmp->len) {
-				static const gchar *body_start;
-
-				body_start = rspamd_message_find_body_start (p + hdr_pos,
-						p + len);
 				task->raw_headers_content.begin = (gchar *) (p);
-				task->raw_headers_content.len = body_start - p;
+				task->raw_headers_content.len = hdr_pos;
+				task->raw_headers_content.body_start = p + body_pos;
 
 				if (task->raw_headers_content.len > 0) {
 					process_raw_headers (task, task->raw_headers,
