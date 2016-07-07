@@ -4,6 +4,9 @@
 .d3evolution .chart-title {
     font-size: 17px;
 }
+.d3evolution .y.label {
+    font-weight: normal;
+}
 .d3evolution .grid .tick {
     stroke: lightgrey;
     shape-rendering: crispEdges;

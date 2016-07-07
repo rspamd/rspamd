@@ -37,6 +37,9 @@
             selected.selData = this.value;
             getGraphData(this.value);
         });
+        $("#selConvert").change(function () {
+            graph.convert(this.value);
+        });
         $("#selType").change(function () {
             graph.type(this.value);
         });
@@ -485,7 +488,7 @@
 
         function initGraph() {
             // Get selectors' current state
-            var selIds = ["selData", "selType", "selInterpolate"];
+            var selIds = ["selData", "selConvert", "selType", "selInterpolate"];
             selIds.forEach(function (id) {
                 var e = document.getElementById(id);
                 selected[id] = e.options[e.selectedIndex].value;
@@ -495,6 +498,7 @@
                 title: "Rspamd throughput",
                 width: 1060,
                 height: 370,
+                yAxisLabel: "Message rate, msg/s",
 
                 type: selected.selType,
                 interpolate: selected.selInterpolate,
