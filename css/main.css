@@ -170,3 +170,7 @@ h2{
 .push {/*add a wite space before footer*/
     height: 78px;
 }
+.breadcrumb{
+  background-color: transparent;
+  padding-left: 0;
+}
