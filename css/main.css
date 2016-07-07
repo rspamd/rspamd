@@ -75,7 +75,6 @@ hr {
   }
 }
 .jumbotron {
-  background-size: cover;
   padding-top: 10px;
   padding-bottom: 15px;
   margin-bottom: 0;
@@ -138,10 +137,27 @@ h2{
 }
 #jumbo-features{
   background: url(/img/rspamd_jumbotron_features.png);
+  background-size: cover;
 }
 #jumbo-performance{
   background: url(/img/rspamd_jumbotron_performance.png);
+  background-size: cover;
 }
 #jumbo-head{
   background: url(/img/rspamd_jumbotron.png);
+  background-size: cover;
+
+}
+.support-block {
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  padding: 20px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+.btn-social{
+  height: 40px;
+}
+.support-block p{
+  vertical-align: middle;
 }
