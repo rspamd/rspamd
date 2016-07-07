@@ -1878,6 +1878,44 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	return FALSE;
 }
 
+static inline const gchar *
+rspamd_dkim_body_start (const gchar *headers_end, const gchar *body_end)
+{
+	const gchar *p = headers_end;
+	enum {
+		st_start = 0,
+		st_cr,
+		st_lf,
+	} state = st_start;
+
+	if (headers_end + 1 >= body_end) {
+		return headers_end;
+	}
+
+	switch (state) {
+	case st_start:
+		if (*p == '\r') {
+			p ++;
+			state = st_cr;
+		}
+		else if (*p == '\n') {
+			p ++;
+			state = st_lf;
+		}
+		break;
+	case st_cr:
+		if (*p == '\n' && p < body_end) {
+			/* CRLF */
+			p ++;
+		}
+		break;
+	case st_lf:
+		break;
+	}
+
+	return p;
+}
+
 /**
  * Check task for dkim context using dkim key
  * @param ctx dkim verify context
@@ -1890,7 +1928,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task)
 {
-	const gchar *p, *headers_end = NULL, *body_end;
+	const gchar *p, *headers_end = NULL, *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
 	gsize dlen;
 	gint res = DKIM_CONTINUE;
@@ -1907,13 +1945,10 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	body_end = task->msg.begin + task->msg.len;
 	headers_end = task->msg.begin + task->raw_headers_content.len;
 
-	while ((*headers_end == '\r' || *headers_end == '\n') &&
-			headers_end < body_end) {
-		headers_end ++;
-	}
+	body_start = rspamd_dkim_body_start (headers_end, body_end);
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (&ctx->common, headers_end, body_end)) {
+	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
 		return DKIM_RECORD_ERROR;
 	}
 	/* Now canonize headers */
@@ -2153,7 +2188,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 {
 	GString *hdr;
 	struct rspamd_dkim_header *dh;
-	const gchar *p, *headers_end = NULL, *body_end;
+	const gchar *p, *headers_end = NULL, *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
 	gsize dlen;
 	guint i, j;
@@ -2167,13 +2202,14 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	p = task->msg.begin;
 	body_end = task->msg.begin + task->msg.len;
 	headers_end = task->msg.begin + task->raw_headers_content.len;
+	body_start = rspamd_dkim_body_start (headers_end, body_end);
 
 	if (len > 0) {
 		ctx->common.len = len;
 	}
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (&ctx->common, headers_end, body_end)) {
+	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
 		return NULL;
 	}
 
