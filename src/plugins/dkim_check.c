@@ -782,10 +782,10 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 
 				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, ctx);
 
-				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
-						hdr, rspamd_gstring_free_hard);
-
-				rspamd_dkim_sign_key_unref (dkim_key);
+				if (hdr) {
+					rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+							hdr, rspamd_gstring_free_hard);
+				}
 			}
 			else {
 				sign = FALSE;
