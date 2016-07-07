@@ -9,7 +9,7 @@ title: Rspamd Support
             <a class="btn btn-social btn-primary btn-block" href="https://groups.google.com/forum/#!forum/rspamd"><i class="fa fa-envelope-o"></i> Mailing list</a>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>You can use the following mailing list hosted at Google groups to ask technical and general questions related to Rspamd. Please mention that you need to join the mailing list before posting your questions.</p>
+            <p>You can use the following mailing list hosted at Google Groups to ask technical and general questions related to Rspamd. Please mention that you need to join the mailing list before posting your questions.</p>
         </div>
     </div>
     <div class="row support-block">
@@ -17,7 +17,7 @@ title: Rspamd Support
             <a class="btn btn-social btn-reddit btn-block" href="https://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd"><i class="fa fa-comments-o"></i>IRC channel</a>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read more about IRC <a href="irc.html">here.</a></p>
+            <p>If you need immediate help or you would like to discuss something about Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read more about IRC <a href="irc.html">here.</a></p>
         </div>
     </div>
     <div class="row support-block">
@@ -25,7 +25,7 @@ title: Rspamd Support
             <a class="btn btn-social btn-twitter btn-block" href="https://twitter.com/rspamd"><i class="fa fa-twitter"></i> Twitter</a>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>Follow Rspamd on Twitter to receive the most recent news about the project, including releases announces.</p>
+            <p>Follow Rspamd on Twitter to receive the most recent news about the project, including release announces.</p>
         </div>
     </div>
     <div class="row support-block">
@@ -46,7 +46,7 @@ title: Rspamd Support
             </form>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>If you would like to support Rspamd development, we are accepting donations via paypal.</p>
+            <p>If you would like to support Rspamd development, we are accepting donations via PayPal.</p>
         </div>
     </div>
 </div>
