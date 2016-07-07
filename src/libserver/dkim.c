@@ -1819,7 +1819,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 	/* Check bh field */
 	if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-		msg_debug_dkim ("bh value missmatch: %*xs versus %*xs", dlen, ctx->bh,
+		msg_debug_dkim ("bh value mismatch: %*xs versus %*xs", dlen, ctx->bh,
 				dlen, raw_digest);
 		return DKIM_REJECT;
 	}
