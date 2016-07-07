@@ -91,6 +91,8 @@ struct received_header {
 struct raw_header {
 	gchar *name;
 	gchar *value;
+	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
+	gsize raw_len;
 	gboolean tab_separated;
 	gboolean empty_separator;
 	gchar *separator;

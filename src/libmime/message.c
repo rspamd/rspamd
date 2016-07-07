@@ -112,6 +112,8 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 				rspamd_strlcpy (tmp, c, l + 1);
 				new->name = tmp;
 				new->empty_separator = TRUE;
+				new->raw_value = c;
+				new->raw_len = p - c; /* Including trailing ':' */
 				p++;
 				state = 2;
 				c = p;
@@ -217,6 +219,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			}
 
 			new->value = tmp;
+			new->raw_len = p - new->raw_value;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
 
 			if (new->decoded != NULL) {
