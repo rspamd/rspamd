@@ -88,11 +88,11 @@ local function check_mime_type(task)
           and not string.match(parts[#parts - 1], '^%d+$') then
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult, {
-            parts[#parts - 1], parts[#parts]
+            parts[#parts - 1], ext
           })
         else
           -- Just bad extension
-          task:insert_result(settings['symbol_bad_extension'], badness_mult, fname)
+          task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
         end
       end
 
@@ -107,7 +107,7 @@ local function check_mime_type(task)
 
         if settings['archive_extensions'][ext] then
           -- Archive in archive
-          task:insert_result(settings['symbol_archive_in_archive'], 1.0, fname)
+          task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
         end
       end
 
@@ -128,7 +128,7 @@ local function check_mime_type(task)
         end
 
         if not found  then
-          task:insert_result(settings['symbol_attachment'], 1.0, fname)
+          task:insert_result(settings['symbol_attachment'], 1.0, ext)
         end
       end
     end
