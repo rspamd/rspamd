@@ -79,42 +79,35 @@ local function check_mime_type(task)
       ext = parts[#parts]
     end
 
-    if ext then
-      local badness_mult = settings['bad_extensions'][ext]
+    local function check_extension(badness_mult)
       if badness_mult then
-        -- Check if next-to-last extension is not a number
-        if #parts > 2 and not string.match(parts[#parts - 1], '^%d+$') then
+        if #parts > 2
+          -- We need to ensure that it is an extension, so we check for its length
+          and #parts[#parts - 1] <= 4
+          -- Check if next-to-last extension is not a number
+          and not string.match(parts[#parts - 1], '^%d+$') then
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult, {
-            parts[#parts - 1],
-            parts[#parts]
+            parts[#parts - 1], ext
           })
         else
           -- Just bad extension
-          task:insert_result(settings['symbol_bad_extension'], badness_mult, fname)
+          task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
         end
       end
 
+    end
+
+    if ext then
+      check_extension(settings['bad_extensions'][ext])
+
       -- Also check for archive bad extension
       if is_archive then
-        badness_mult =  settings['bad_archive_extensions'][ext]
-        if badness_mult then
-          -- Check if next-to-last extension is not a number
-          if #parts > 2 and not string.match(parts[#parts - 1], '^%d+$') then
-            -- We need to ensure that it is an extension, so we check for its length
-            if #parts[#parts - 1] <= 4 then
-              -- Double extension + bad extension == VERY bad
-              task:insert_result(settings['symbol_double_extension'], badness_mult, fname)
-            end
-          else
-            -- Just bad extension
-            task:insert_result(settings['symbol_bad_extension'], badness_mult, fname)
-          end
-        end
+        check_extension(settings['bad_archive_extensions'][ext])
 
         if settings['archive_extensions'][ext] then
           -- Archive in archive
-          task:insert_result(settings['symbol_archive_in_archive'], 1.0, fname)
+          task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
         end
       end
 
@@ -135,7 +128,7 @@ local function check_mime_type(task)
         end
 
         if not found  then
-          task:insert_result(settings['symbol_attachment'], 1.0, fname)
+          task:insert_result(settings['symbol_attachment'], 1.0, ext)
         end
       end
     end
