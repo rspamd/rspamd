@@ -146,3 +146,7 @@ h2{
   background-color: transparent;
   padding-left: 0;
 }
+ul.affix li a{
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
