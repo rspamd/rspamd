@@ -17,7 +17,43 @@ title: Rspamd Support
             <a class="btn btn-social btn-reddit btn-block" href="https://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd"><i class="fa fa-comments-o"></i>IRC channel</a>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read more about IRC <a href="irc.html">here.</a></p>
+            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read more about IRC <a role="button" data-toggle="collapse" data-target="#add_irc">here <i class="fa fa-caret-square-o-down"></i></a>.</p>
+            <div id="add_irc" class="collapse collapse-link">
+<div markdown="1">
+
+### Rspamd IRC channel
+
+The vast majority of technical discussion topics are held within the dedicated [IRC](https://en.wikipedia.org/wiki/IRC) channel.
+
+For those who are familiar with IRC, here are settings for IRC channel access:
+
+* server: `irc.freenode.net` (port 6666)
+* channel: `#rspamd`
+
+### IRC quick tutorial
+
+To access IRC, you can use a set of clients for your favourite platform, for instance:
+
+* [Xchat](http://www.xchat.org) - cross-platform GUI client
+* [Irssi](http://www.irssi.org) - console client
+* [Androirc](https://play.google.com/store/apps/details?id=com.androirc) - android IRC client
+
+Alternatively, you could use some web interface to access IRC:
+
+* [Freenode webchat](https://webchat.freenode.net/) - a simple web interface
+* [Irccloud](https://irccloud.com) - advanced platform with tonns of features
+
+### IRC rules
+
+There are no strict rules in rspamd discussion channel, just some generic ones:
+
+* no spam
+* no flood
+* no abuse
+
+Please do not expect the immediate reply: we all have different task ongoing and different timezones.
+</div>
+            </div>
         </div>
     </div>
     <div class="row support-block">
