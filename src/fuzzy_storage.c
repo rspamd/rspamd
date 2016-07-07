@@ -201,6 +201,8 @@ struct fuzzy_master_update_session {
 	struct rspamd_http_connection *conn;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	rspamd_inet_addr_t *addr;
+	gboolean replied;
+	gint sock;
 };
 
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
@@ -1121,8 +1123,10 @@ static void
 rspamd_fuzzy_mirror_session_destroy (struct fuzzy_master_update_session *session)
 {
 	if (session) {
+		rspamd_http_connection_reset (session->conn);
 		rspamd_http_connection_unref (session->conn);
 		rspamd_inet_address_destroy (session->addr);
+		close (session->sock);
 		g_slice_free1 (sizeof (*session), session);
 	}
 }
@@ -1138,17 +1142,42 @@ rspamd_fuzzy_mirror_error_handler (struct rspamd_http_connection *conn, GError *
 	rspamd_fuzzy_mirror_session_destroy (session);
 }
 
+static void
+rspamd_fuzzy_mirror_send_reply (struct fuzzy_master_update_session *session,
+		guint code, const gchar *str)
+{
+	struct rspamd_http_message *msg;
+
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->url = rspamd_fstring_new_init (str, strlen (str));
+	msg->code = code;
+	session->replied = TRUE;
+
+	rspamd_http_connection_reset (session->conn);
+	rspamd_http_connection_write_message (session->conn, msg, NULL, "text/plain",
+			session, session->sock, &session->ctx->master_io_tv,
+			session->ctx->ev_base);
+}
+
 static gint
 rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
 	struct fuzzy_master_update_session *session = conn->ud;
 	const struct rspamd_cryptobox_pubkey *rk;
+	const gchar *err_str = NULL;
+
+	if (session->replied) {
+		rspamd_fuzzy_mirror_session_destroy (session);
+
+		return 0;
+	}
 
 	/* Check key */
 	if (!rspamd_http_connection_is_encrypted (conn)) {
 		msg_err_fuzzy_update ("refuse unencrypted update from: %s",
 				rspamd_inet_address_to_string (session->addr));
+		err_str = "Unencrypted update is not allowed";
 		goto end;
 	}
 	else {
@@ -1160,6 +1189,7 @@ rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
 			if (!rspamd_pubkey_equal (rk, session->ctx->master_key)) {
 				msg_err_fuzzy_update ("refuse unknown pubkey update from: %s",
 						rspamd_inet_address_to_string (session->addr));
+				err_str = "Unknown pubkey";
 				goto end;
 			}
 		}
@@ -1169,10 +1199,13 @@ rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		rspamd_fuzzy_mirror_process_update (session, msg);
+		rspamd_fuzzy_mirror_send_reply (session, 200, "OK");
+
+		return 0;
 	}
 
 end:
-	rspamd_fuzzy_mirror_session_destroy (session);
+	rspamd_fuzzy_mirror_send_reply (session, 403, err_str);
 
 	return 0;
 }
@@ -1241,6 +1274,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	session->ctx = ctx;
 	session->conn = http_conn;
 	session->addr = addr;
+	session->sock = nfd;
 
 	rspamd_http_connection_read_message (http_conn,
 			session,
