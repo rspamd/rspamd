@@ -1,9 +1,9 @@
---- rspamd.service.orig	2016-03-21 17:21:25.316909188 +0200
-+++ rspamd.service	2016-03-21 17:21:45.377034896 +0200
-@@ -3,8 +3,7 @@
- After=nss-lookup.target
- 
+--- rspamd.service.orig	2016-07-06 22:35:44.164819553 +0200
++++ rspamd.service	2016-07-06 22:36:16.665047224 +0200
+@@ -5,8 +5,7 @@
  [Service]
+ Type=forking
+ NonBlocking=true
 -ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f
 -User=_rspamd
 +ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f -u _rspamd -g _rspamd

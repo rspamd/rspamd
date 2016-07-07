@@ -23,7 +23,7 @@ License:        BSD2c
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel
-BuildRequires:  cmake,gmime,file-devel,perl-Digest-MD5
+BuildRequires:  cmake,gmime-devel,file-devel,perl-Digest-MD5
 %if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
 BuildRequires:  systemd
 Requires(pre):  systemd
@@ -181,6 +181,8 @@ fi
 %if 0%{?el6}
 %{_initrddir}/%{name}
 %dir %{_localstatedir}/run/rspamd
+%config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
+%dir %{rspamd_logdir}
 %endif
 %{_mandir}/man8/%{name}.*
 %{_mandir}/man1/rspamc.*
@@ -200,15 +202,10 @@ fi
 %config(noreplace) %{rspamd_confdir}/options.inc
 %config(noreplace) %{rspamd_confdir}/redirectors.inc
 %config(noreplace) %{rspamd_confdir}/worker-controller.inc
+%config(noreplace) %{rspamd_confdir}/worker-fuzzy.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
 %config(noreplace) %{rspamd_confdir}/modules.d/*
 %config(noreplace) %{rspamd_confdir}/rspamd.systemd.conf
-%if 0%{?el6}
-%config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
-%endif
-%if 0%{?el6}
-%dir %{rspamd_logdir}
-%endif
 %attr(-, _rspamd, _rspamd) %dir %{rspamd_home}
 %dir %{rspamd_rulesdir}/regexp
 %dir %{rspamd_rulesdir}
