@@ -2,6 +2,7 @@
 layout: support
 title: Rspamd Support
 ---
+
 <div>
     <div class="row support-block">
         <div class="col-sm-3 col-xs-12">
@@ -13,10 +14,10 @@ title: Rspamd Support
     </div>
     <div class="row support-block">
         <div class="col-sm-3 col-xs-12">
-            <a class="btn btn-social btn-reddit btn-block" href="http://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd"><i class="fa fa-comments-o"></i>IRC channel</a>
+            <a class="btn btn-social btn-reddit btn-block" href="https://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd"><i class="fa fa-comments-o"></i>IRC channel</a>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at [Freenode](http://freenode.net) network. You can read more about IRC <a href="irc.html">here.</a></p>
+            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read more about IRC <a href="irc.html">here.</a></p>
         </div>
     </div>
     <div class="row support-block">
