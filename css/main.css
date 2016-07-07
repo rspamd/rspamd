@@ -161,3 +161,12 @@ h2{
 .support-block p{
   vertical-align: middle;
 }
+#wrapper {/*for removing wite space after footer*/
+    min-height: 100%;
+    height: auto !important;
+    height: 100%;
+    margin: 0 auto -78px;
+}
+.push {/*add a wite space before footer*/
+    height: 78px;
+}
