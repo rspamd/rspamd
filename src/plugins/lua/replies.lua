@@ -99,8 +99,8 @@ local function replies_set(task)
     key, -- hash key
     true, -- is write
     redis_set_cb, --callback
-    'SET', -- command
-    {key, 1, "ex", settings['expire']} -- arguments
+    'SETEX', -- command
+    {key, tostring(settings['expire']), "1"} -- arguments
   )
   if not ret then
     rspamd_logger.errx("redis request wasn't scheduled")
