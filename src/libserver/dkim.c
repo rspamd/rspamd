@@ -2036,6 +2036,10 @@ rspamd_dkim_sign_key_load (const gchar *path, GError **err)
 	}
 
 	nkey = g_slice_alloc0 (sizeof (*nkey));
+#ifdef MADV_ZERO_WIRED_PAGES
+	madvise (map, len, MADV_ZERO_WIRED_PAGES);
+#endif
+	(void)mlock (map, len);
 	nkey->keydata = map;
 	nkey->keylen = len;
 

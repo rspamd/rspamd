@@ -764,7 +764,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					}
 
 					rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-							g_strdup (key), rspamd_dkim_sign_key_ref (dkim_key),
+							g_strdup (key), dkim_key,
 							time (NULL), 0);
 				}
 
@@ -775,7 +775,6 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 				if (ctx == NULL) {
 					msg_err_task ("cannot create sign context: %e",
 							key, err);
-					rspamd_dkim_sign_key_unref (dkim_key);
 					g_error_free (err);
 
 					return;
