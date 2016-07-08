@@ -58,6 +58,13 @@
       $(".collapse-block").on("show.bs.collapse", function(){
         $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-up fa-pull-right"></i>');
       });
+      //change icon inside collapse link
+      $(".collapse-link").on("hide.bs.collapse", function(){
+          $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-down"></i>');
+        });
+      $(".collapse-link").on("show.bs.collapse", function(){
+        $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-up"></i>');
+      });
 		}
 		);
 	</script>
