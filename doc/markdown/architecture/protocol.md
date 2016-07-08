@@ -1,10 +1,10 @@
-# rspamd protocol
+# Rspamd protocol
 
 ## Protocol basics
 
-rspamd uses the HTTP protocol, either version 1.0 or 1.1. (There is also a compatibility layer described further in this document.) rspamd defines some headers which allow the passing of extra information about a scanned message, such as envelope data, IP address or SMTP sasl authentication data, etc. rspamd supports normal and chunked encoded HTTP requests.
+rspamd uses the HTTP protocol, either version 1.0 or 1.1. (There is also a compatibility layer described further in this document.) Rspamd defines some headers which allow the passing of extra information about a scanned message, such as envelope data, IP address or SMTP sasl authentication data, etc. Rspamd supports normal and chunked encoded HTTP requests.
 
-## rspamd HTTP request
+## Rspamd HTTP request
 
 rspamd encourages the use of the HTTP protocol since it is standard and can be used by every programming language without the use of exotic libraries. A typical HTTP request looks like the following:
 
@@ -28,7 +28,7 @@ Normally, you should just use '/check' here. However, if you want to communicate
 
 ### HTTP headers
 
-To avoid unnecessary work, rspamd allows an MTA to pass pre-processed data about the message by using either HTTP headers or a JSON control block (described further in this document). rspamd supports the following non-standard HTTP headers:
+To avoid unnecessary work, Rspamd allows an MTA to pass pre-processed data about the message by using either HTTP headers or a JSON control block (described further in this document). Rspamd supports the following non-standard HTTP headers:
 
 | Header          | Description                       |
 | :-------------- | :-------------------------------- |
@@ -50,13 +50,13 @@ Controller also defines certain headers:
 
 Standard HTTP headers, such as `Content-Length`, are also supported.
 
-## rspamd HTTP reply
+## Rspamd HTTP reply
 
 rspamd reply is encoded in `JSON`. Here is a typical HTTP reply:
 
 	HTTP/1.1 200 OK
 	Connection: close
-	Server: rspamd/0.9.0
+	Server: Rspamd/0.9.0
 	Date: Mon, 30 Mar 2015 16:19:35 GMT
 	Content-Length: 825
 	Content-Type: application/json
@@ -131,13 +131,13 @@ Additional keys which may be in the reply include:
 * `urls` - a list of urls found in a message (only hostnames)
 * `emails` - a list of emails found in a message
 * `message-id` - ID of message (useful for logging)
-* `messages` - array of optional messages added by rspamd filters (such as `SPF`)
+* `messages` - array of optional messages added by Rspamd filters (such as `SPF`)
 
-## rspamd JSON control block
+## Rspamd JSON control block
 
-Since rspamd version 0.9 it is also possible to pass additional data by prepending a JSON control block to a message. So you can use either headers or a JSON block to pass data from the MTA to rspamd.
+Since Rspamd version 0.9 it is also possible to pass additional data by prepending a JSON control block to a message. So you can use either headers or a JSON block to pass data from the MTA to Rspamd.
 
-To use a JSON control block, you need to pass an extra header called `Message-Length` to rspamd. This header should be equal to the size of the message **excluding** the JSON control block. Therefore, the size of the control block is equal to `Content-Length - Message-Length`. rspamd assumes that a message starts immediately after the control block (with no extra CRLF). This method is equally compatible with streaming transfer, however even if you are not specifying `Content-Length` you are still required to specify `Message-Length`.
+To use a JSON control block, you need to pass an extra header called `Message-Length` to Rspamd. This header should be equal to the size of the message **excluding** the JSON control block. Therefore, the size of the control block is equal to `Content-Length - Message-Length`. Rspamd assumes that a message starts immediately after the control block (with no extra CRLF). This method is equally compatible with streaming transfer, however even if you are not specifying `Content-Length` you are still required to specify `Message-Length`.
 
 Here is an example of a JSON control block:
 

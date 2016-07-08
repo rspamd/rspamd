@@ -1,4 +1,4 @@
-# rspamd composite symbols
+# Rspamd composite symbols
 
 ## Introduction
 
@@ -45,7 +45,7 @@ composite {
 }
 ~~~
 
-Composites should not be recursive; this is normally detected by rspamd.
+Composites should not be recursive; this is normally detected by Rspamd.
 
 ## Composite weight rules
 

@@ -1,17 +1,17 @@
-# Writing rspamd rules
+# Writing Rspamd rules
 
-In this tutorial, I describe how to create new rules for rspamd - both Lua and regexp rules.
+In this tutorial, I describe how to create new rules for Rspamd - both Lua and regexp rules.
 
 ## Introduction
 
-Rules are the essential part of a spam filtering system and rspamd ships with some prepared rules by default. However, if you run your own system you might want to have your own rules for better spam filtering or a better false positives rate. Rules are usually written in `Lua`, where you can specify both custom logic and generic regular expressions.
+Rules are the essential part of a spam filtering system and Rspamd ships with some prepared rules by default. However, if you run your own system you might want to have your own rules for better spam filtering or a better false positives rate. Rules are usually written in `Lua`, where you can specify both custom logic and generic regular expressions.
 
 ## Configuration files
 
-Since rspamd ships with its own rules it is a good idea to store your custom rules and configuration in separate files to avoid clashing with the default rules which might change from version to version. There are some possibilities to achieve this:
+Since Rspamd ships with its own rules it is a good idea to store your custom rules and configuration in separate files to avoid clashing with the default rules which might change from version to version. There are some possibilities to achieve this:
 
 - Local rules in Lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd`, or `/usr/local/etc/rspamd` for some systems)
-- Local configuration that **adds** options to rspamd should be placed in `${CONFDIR}/rspamd.conf.local`
+- Local configuration that **adds** options to Rspamd should be placed in `${CONFDIR}/rspamd.conf.local`
 - Local configuration that **overrides** the default settings should be placed in `${CONFDIR}/rspamd.conf.override`
 
 Lua local configuration can be used to both override and extend:
@@ -99,14 +99,14 @@ section "name" {
 }
 ~~~
 
-For each individual configuration file shipped with rspamd, there are two special includes:
+For each individual configuration file shipped with Rspamd, there are two special includes:
 
     .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
     .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
 
-Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the rspamd configuration.
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the Rspamd configuration.
 
-For example, let's override some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
+For example, let's override some default symbols shipped with Rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
 
     symbol "BLAH" {
         score = 20.0;
@@ -130,12 +130,12 @@ as this will set the other actions (`add_header` and `greylist`) as undefined.
 
 ## Writing rules
 
-There are two types of rules that are normally defined by rspamd:
+There are two types of rules that are normally defined by Rspamd:
 
 - `Lua` rules: code in written in Lua
 - `Regexp` rules: regular expressions and combinations of regular expressions to match specific patterns
 
-Lua rules are useful for some complex tasks: check DNS, query redis or HTTP, examine some task-specific details. Regexp rules are useful since they are heavily optimized by rspamd (especially when `hyperscan` is enabled) and allow matching custom patterns in headers, urls, text parts and even the entire message body.
+Lua rules are useful for some complex tasks: check DNS, query redis or HTTP, examine some task-specific details. Regexp rules are useful since they are heavily optimized by Rspamd (especially when `hyperscan` is enabled) and allow matching custom patterns in headers, urls, text parts and even the entire message body.
 
 ### Rule weights
 
@@ -187,7 +187,7 @@ rspamd_config.MY_LUA_SYMBOL = {
 
 ## Regexp rules
 
-Regexp rules are executed by the `regexp` module of rspamd. You can find a detailed description of the syntax in [the regexp module documentation](../modules/regexp.md)
+Regexp rules are executed by the `regexp` module of Rspamd. You can find a detailed description of the syntax in [the regexp module documentation](../modules/regexp.md)
 
 Here are some hints to maximise performance of your regexp rules:
 
@@ -196,7 +196,7 @@ Here are some hints to maximise performance of your regexp rules:
 * If you **really** need to match the whole messages, then you might consider using the [trie](../modules/trie.md) module as it is significantly faster
 * Avoid complex regexps, avoid backtracing, avoid negative groups `(?!)`, avoid capturing patterns (replace with `(?:)`), avoid potentially empty patterns, e.g. `/^.*$/`
 
-Following these rules allows you to create fast but efficient rules. To add regexp rules you should use the `config` global table that is defined in any Lua file used by rspamd:
+Following these rules allows you to create fast but efficient rules. To add regexp rules you should use the `config` global table that is defined in any Lua file used by Rspamd:
 
 ~~~lua
 config['regexp'] = {} -- Remove all regexp rules (including internal ones)
@@ -330,7 +330,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 }
 ~~~
 
-You can also access HTTP headers, urls and other useful properties of rspamd tasks. Moreover, you can use global convenience modules exported by rspamd, such as [rspamd_util](../lua/util.md) or [rspamd_logger](../lua/logger.md) by requiring them in your rules:
+You can also access HTTP headers, urls and other useful properties of Rspamd tasks. Moreover, you can use global convenience modules exported by Rspamd, such as [rspamd_util](../lua/util.md) or [rspamd_logger](../lua/logger.md) by requiring them in your rules:
 
 ~~~lua
 rspamd_config.SUBJ_ALL_CAPS = {
@@ -342,7 +342,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 }
 ~~~
 
-## rspamd symbols
+## Rspamd symbols
 
 rspamd rules fall under three categories:
 
@@ -350,7 +350,7 @@ rspamd rules fall under three categories:
 2. Filters - run normally
 3. Post-filters - run after all checks
 
-The most common type of rules are generic filters. Each filter is basically a callback that is executed by rspamd at some time, along with an optional symbol name associated with this callback. In general, there are three options to register symbols:
+The most common type of rules are generic filters. Each filter is basically a callback that is executed by Rspamd at some time, along with an optional symbol name associated with this callback. In general, there are three options to register symbols:
 
 * register callback and associated symbol
 * register just a plain callback
@@ -365,7 +365,7 @@ The last option is useful when you have a single callback but with different pos
 `nominal_weight` is used to define priority and the initial score multiplier. It should usually be `1.0` for normal symbols and `-1.0` for symbols with negative scores that should be executed before other symbols. Here is an example of registering one callback and a couple of virtual symbols used in the [dmarc](../modules/dmarc.md) module:
 
 ~~~lua
-local id = rspamd_config:register_callback_symbol('DMARC_CALLBACK', 1.0,
+local id = Rspamd_config:register_callback_symbol('DMARC_CALLBACK', 1.0,
   dmarc_callback)
 rspamd_config:register_virtual_symbol('DMARC_POLICY_ALLOW', -1, id)
 rspamd_config:register_virtual_symbol('DMARC_POLICY_REJECT', 1, id)
@@ -418,13 +418,13 @@ if rule['score'] then
     rule['group'] = 'whitelist'
   end
   rule['name'] = symbol
-  rspamd_config:set_metric_symbol(rule)
+  Rspamd_config:set_metric_symbol(rule)
 end
 ~~~
 
 ## Difference between `config` and `rspamd_config`
 
-It might be confusing that there are two variables with a common meaning. (This is a legacy of older versions of rspamd). However, currently `rspamd_config` represents an object that can have many purposes:
+It might be confusing that there are two variables with a common meaning. (This is a legacy of older versions of Rspamd). However, currently `rspamd_config` represents an object that can have many purposes:
 
 * Get configuration options:
 
@@ -435,7 +435,7 @@ rspamd_config:get_all_opts('section')
 * Add maps:
 
 ~~~lua
-rule['map'] = rspamd_config:add_kv_map(rule['domains'],
+rule['map'] = Rspamd_config:add_kv_map(rule['domains'],
             "Whitelist map for " .. symbol)
 ~~~
 
@@ -475,7 +475,7 @@ There is a strict order of configuration application:
 
 ## Rules check order
 
-Rules in rspamd are checked in the following order:
+Rules in Rspamd are checked in the following order:
 
 1. **Pre-filters**: checked every time and can stop all further processing by calling `task:set_pre_result()`
 2. **All symbols***: can depend on each other by calling `rspamd_config:add_dependency(from, to)`

@@ -1,8 +1,8 @@
-# rspamd architecture
+# Rspamd architecture
 
 ## Introduction
 
-rspamd is a universal spam filtering system based on an event-driven processing model, which means that rspamd is not intended to block anywhere in the code. To process messages rspamd uses a set of `rules`. Each `rule` is a symbolic name associated with a message property. For example, we can define the following rules:
+rspamd is a universal spam filtering system based on an event-driven processing model, which means that Rspamd is not intended to block anywhere in the code. To process messages Rspamd uses a set of `rules`. Each `rule` is a symbolic name associated with a message property. For example, we can define the following rules:
 
 - `SPF_ALLOW` - means that a message is validated by SPF;
 - `BAYES_SPAM` - means that a message is statistically considered as spam;
@@ -29,7 +29,7 @@ rspamd uses the HTTP protocol for all operations. This protocol is described in 
 
 ## Metrics
 
-Rules in rspamd define a logic of checks, but it is required to set up weights for each rule. (For rspamd, weight means `significance`.) Rules with a greater absolute value of weight are considered more important. The weight of rules is defined in `metrics`. Each metric is a set of grouped rules with specific weights. For example, we may define the following weights for our SPF rules:
+Rules in Rspamd define a logic of checks, but it is required to set up weights for each rule. (For Rspamd, weight means `significance`.) Rules with a greater absolute value of weight are considered more important. The weight of rules is defined in `metrics`. Each metric is a set of grouped rules with specific weights. For example, we may define the following weights for our SPF rules:
 
 - `SPF_ALLOW`: -1
 - `SPF_DENY`: 2
@@ -39,7 +39,7 @@ Positive weights mean that this rule increases a messages 'spammyness', while ne
 
 ### Rules scheduler
 
-To avoid unnecessary checks rspamd uses a scheduler of rules for each message. If a message is considered as definite spam then further checks are not performed. This scheduler is rather naive and it performs the following logic:
+To avoid unnecessary checks Rspamd uses a scheduler of rules for each message. If a message is considered as definite spam then further checks are not performed. This scheduler is rather naive and it performs the following logic:
 
 - select negative rules *before* positive ones to prevent false positives;
 - prefer rules with the following characteristics:
@@ -49,11 +49,11 @@ To avoid unnecessary checks rspamd uses a scheduler of rules for each message. I
 
 These optimizations can filter definite spam more quickly than a generic queue.
 
-Since rspamd-0.9 there are further optimizations for rules and expressions that are described generally in the [following presentation](http://highsecure.ru/ast-rspamd.pdf).
+Since Rspamd-0.9 there are further optimizations for rules and expressions that are described generally in the [following presentation](http://highsecure.ru/ast-rspamd.pdf).
 
 ## Actions
 
-Another important property of metrics is their actions set. This set defines recommended actions for a message if it reaches a certain score defined by all rules which have been triggered. rspamd defines the following actions:
+Another important property of metrics is their actions set. This set defines recommended actions for a message if it reaches a certain score defined by all rules which have been triggered. Rspamd defines the following actions:
 
 - `No action`: a message is likely to be ham;
 - `Greylist`: greylist a message if it is not certainly ham;
@@ -65,21 +65,21 @@ These actions are just recommendations for the MTA and are not to be strictly fo
 
 ## Rules weight
 
-The weight of rules is not necessarily constant. For example, for statistics rules we have no certain confidence if a message is spam or not; instead we have a measure of probability. To allow fuzzy rules weight, rspamd supports `dynamic weights`. Generally, it means that a rule may add a dynamic range from 0 to a defined weight in the metric. So if we define the symbol `BAYES_SPAM` with a weight of 5.0, then this rule can add a resulting symbol with a weight from 0 to 5.0. To distribute values, rspamd uses a form of Sigma function to provide a fair distribution curve. The majority of rspamd rules, with the exception of fuzzy rules, use static weights.
+The weight of rules is not necessarily constant. For example, for statistics rules we have no certain confidence if a message is spam or not; instead we have a measure of probability. To allow fuzzy rules weight, Rspamd supports `dynamic weights`. Generally, it means that a rule may add a dynamic range from 0 to a defined weight in the metric. So if we define the symbol `BAYES_SPAM` with a weight of 5.0, then this rule can add a resulting symbol with a weight from 0 to 5.0. To distribute values, Rspamd uses a form of Sigma function to provide a fair distribution curve. The majority of Rspamd rules, with the exception of fuzzy rules, use static weights.
 
 ## Statistics
 
-rspamd uses statistic algorithms to precisely calculate the final score of a message. Currently, the only algorithm defined is OSB-Bayes. You can find details of this algorithm in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf). rspamd uses a window size of 5 words in its classification. During the classification procedure, rspamd splits a message into a set of tokens. Tokens are separated by punctuation or whitespace characters. Short tokens (less than 3 symbols) are ignored. For each token, rspamd calculates two non-cryptographic hashes used subsequently as indices. All these tokens are stored in different statistics backends (mmapped files, sqlite3 database or redis server). Currently, the recommended backend for statistics is `redis`.
+rspamd uses statistic algorithms to precisely calculate the final score of a message. Currently, the only algorithm defined is OSB-Bayes. You can find details of this algorithm in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf). Rspamd uses a window size of 5 words in its classification. During the classification procedure, Rspamd splits a message into a set of tokens. Tokens are separated by punctuation or whitespace characters. Short tokens (less than 3 symbols) are ignored. For each token, Rspamd calculates two non-cryptographic hashes used subsequently as indices. All these tokens are stored in different statistics backends (mmapped files, sqlite3 database or redis server). Currently, the recommended backend for statistics is `redis`.
 
-## Running rspamd
+## Running Rspamd
 
-There are several command-line options that can be passed to rspamd. All of them can be displayed by passing the `--help` argument.
+There are several command-line options that can be passed to Rspamd. All of them can be displayed by passing the `--help` argument.
 
-All options are optional: by default rspamd will try to read the `etc/rspamd.conf` config file and run as a daemon. Also there is a test mode that can be turned on by passing the `-t` argument. In test mode, rspamd reads the config file and checks its syntax. If a configuration file is OK, the exit code is zero. Test mode is useful for testing new config files without restarting rspamd.
+All options are optional: by default Rspamd will try to read the `etc/rspamd.conf` config file and run as a daemon. Also there is a test mode that can be turned on by passing the `-t` argument. In test mode, Rspamd reads the config file and checks its syntax. If a configuration file is OK, the exit code is zero. Test mode is useful for testing new config files without restarting Rspamd.
 
-## Managing rspamd using signals
+## Managing Rspamd using signals
 
-It is important to note that all user signals should be sent to the rspamd main process and not to its children (as for child processes these signals can have other meanings). You can identify the main process:
+It is important to note that all user signals should be sent to the Rspamd main process and not to its children (as for child processes these signals can have other meanings). You can identify the main process:
 
 - by reading the pidfile:
 
@@ -87,20 +87,20 @@ It is important to note that all user signals should be sent to the rspamd main 
 
 - by getting process info:
 
-		$ ps auxwww | grep rspamd
-		nobody 28378  0.0  0.2 49744  9424   rspamd: main process
-		nobody 64082  0.0  0.2 50784  9520   rspamd: worker process
-		nobody 64083  0.0  0.3 51792 11036   rspamd: worker process
-		nobody 64084  0.0  2.7 158288 114200 rspamd: controller process
-		nobody 64085  0.0  1.8 116304 75228  rspamd: fuzzy storage
+		$ ps auxwww | grep Rspamd
+		nobody 28378  0.0  0.2 49744  9424   Rspamd: main process
+		nobody 64082  0.0  0.2 50784  9520   Rspamd: worker process
+		nobody 64083  0.0  0.3 51792 11036   Rspamd: worker process
+		nobody 64084  0.0  2.7 158288 114200 Rspamd: controller process
+		nobody 64085  0.0  1.8 116304 75228  Rspamd: fuzzy storage
 
-		$ ps auxwww | grep rspamd | grep main
-		nobody 28378  0.0  0.2 49744  9424   rspamd: main process
+		$ ps auxwww | grep Rspamd | grep main
+		nobody 28378  0.0  0.2 49744  9424   Rspamd: main process
 
-After getting the pid of the main process it is possible to manage rspamd with signals, as follows:
+After getting the pid of the main process it is possible to manage Rspamd with signals, as follows:
 
-- `SIGHUP` - restart rspamd: reread config file, start new workers (as well as controller and other processes), stop accepting connections by old workers, reopen all log files. Note that old workers would be terminated after one minute which should allow processing of all pending requests. All new requests to rspamd will be processed by the newly started workers.
-- `SIGTERM` - terminate rspamd.
+- `SIGHUP` - restart Rspamd: reread config file, start new workers (as well as controller and other processes), stop accepting connections by old workers, reopen all log files. Note that old workers would be terminated after one minute which should allow processing of all pending requests. All new requests to Rspamd will be processed by the newly started workers.
+- `SIGTERM` - terminate Rspamd.
 - `SIGUSR1` - reopen log files (useful for log file rotation).
 
-These signals may be used in rc-style scripts. Restarting of rspamd is performed softly: no connections are dropped and if a new config is incorrect then the old config is used.
+These signals may be used in rc-style scripts. Restarting of Rspamd is performed softly: no connections are dropped and if a new config is incorrect then the old config is used.

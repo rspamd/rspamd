@@ -3,11 +3,11 @@
 Rspamd defines several types of worker processes. Each type is designed for its specific
 purpose, for example to scan mail messages, to perform control actions, such as learning or
 statistic grabbing. There is also flexible worker type named `lua` worker that allows
-to run any lua script as rspamd worker providing proxy from rspamd lua API.
+to run any lua script as Rspamd worker providing proxy from Rspamd lua API.
 
 ## Worker types
 
-Currently rspamd defines the following worker types:
+Currently Rspamd defines the following worker types:
 
 - [normal](normal.md): this worker is designed to scan mail messages
 - [controller](controller.md): this worker performs configuration actions, such as
@@ -63,7 +63,7 @@ bind_socket = "*v4:11333"; # any ipv4 address
 bind_socket = "*v6:11333"; # any ipv6 address
 ~~~
 
-Moreover, you can specify systemd sockets if rspamd is invoked by systemd:
+Moreover, you can specify systemd sockets if Rspamd is invoked by systemd:
 
 ~~~ucl
 bind_socket = "systemd:1"; # the first socket passed by systemd throught environment
@@ -75,7 +75,7 @@ For unix sockets, it is also possible to specify owner and mode using this synta
 bind_socket = "/tmp/rspamd.sock mode=0666 owner=user";
 ~~~
 
-Without owner and mode, rspamd uses the active user as owner (e.g. if started by root,
+Without owner and mode, Rspamd uses the active user as owner (e.g. if started by root,
 then `root` is used) and `0644` as access mask. Please mention that you need to specify
 **octal** number for mode, namely prefixed by a zero. Otherwise, modes like `666` will produce
 a weird result.

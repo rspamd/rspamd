@@ -1,4 +1,4 @@
-# rspamd logging settings
+# Rspamd logging settings
 
 ## Introduction
 rspamd has a number of logging options. Firstly, there are three types of log output that are supported: console logging (just output log messages to console), file logging (output log messages to file) and logging via syslog. It is also possible to restrict logging to a specific level:
@@ -8,17 +8,17 @@ rspamd has a number of logging options. Firstly, there are three types of log ou
 * `info` - log all non-debug messages
 * `debug` - log all including debug messages (huge amount of logging)
 
-It is possible to turn on debug messages for specific ip addresses. This can be useful for testing. For each logging type there are special mandatory parameters: log facility for syslog (read `syslog(3)` man page for details about facilities), log file for file logging. Also, file logging may be buffered for performance. To reduce logging noise, rspamd detects sequential matching log messages and replaces them with a total number of repeats:
+It is possible to turn on debug messages for specific ip addresses. This can be useful for testing. For each logging type there are special mandatory parameters: log facility for syslog (read `syslog(3)` man page for details about facilities), log file for file logging. Also, file logging may be buffered for performance. To reduce logging noise, Rspamd detects sequential matching log messages and replaces them with a total number of repeats:
 
-	#81123(fuzzy): May 11 19:41:54 rspamd file_log_function: Last message repeated 155 times
-	#81123(fuzzy): May 11 19:41:54 rspamd process_write_command: fuzzy hash was successfully added
+	#81123(fuzzy): May 11 19:41:54 Rspamd file_log_function: Last message repeated 155 times
+	#81123(fuzzy): May 11 19:41:54 Rspamd process_write_command: fuzzy hash was successfully added
 
 ## Unique id
 
-From version 1.0, rspamd logs contain a unique id for each logging message. This allows finding relevant messages quickly. Moreover, there is now a `module` definition: for example, `task` or `cfg` modules. Here is a quick example of how it works: imagine that we have an incoming task for some message. Then you'd see something like this in the logs:
+From version 1.0, Rspamd logs contain a unique id for each logging message. This allows finding relevant messages quickly. Moreover, there is now a `module` definition: for example, `task` or `cfg` modules. Here is a quick example of how it works: imagine that we have an incoming task for some message. Then you'd see something like this in the logs:
 
     2015-09-02 16:41:59 #45015(normal) <ed2abb>; task; accept_socket: accepted connection from ::1 port 52895
-    2015-09-02 16:41:59 #45015(normal) <ed2abb>; task; rspamd_message_parse: loaded message; id: <F66099EE-BCAB-4D4F-A4FC-7C15A6686397@FreeBSD.org>; queue-id: <undef>
+    2015-09-02 16:41:59 #45015(normal) <ed2abb>; task; Rspamd_message_parse: loaded message; id: <F66099EE-BCAB-4D4F-A4FC-7C15A6686397@FreeBSD.org>; queue-id: <undef>
 
 So the tag is `ed2abb` in this case. All subsequent processing related to this task will have the same tag. It is enabled not only on the `task` module, but also others, such as the `spf` or `lua` modules. For other modules, such as `cfg`, the tag is generated statically using a specific characteristic, for example the configuration file checksum.
 
@@ -44,7 +44,7 @@ Here is summary of logging parameters:
     + `dkim` - messages from dkim module
     + `main` - messages from the main process
     + `dns` - messages from DNS resolver
-    + `map` - messages from maps in rspamd
+    + `map` - messages from maps in Rspamd
     + `logger` - messages from the logger itself
 
 ### Log format
