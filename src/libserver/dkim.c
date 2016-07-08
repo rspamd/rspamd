@@ -2104,6 +2104,24 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	rspamd_printf_gstring (hdr, "bh=%s;b=", b64_data);
 	g_free (b64_data);
 
+	if (ctx->common.header_canon_type == DKIM_CANON_RELAXED) {
+		if (!rspamd_dkim_canonize_header_relaxed (&ctx->common,
+				hdr->str,
+				DKIM_SIGNHEADER,
+				TRUE)) {
+
+			g_string_free (hdr, TRUE);
+			return NULL;
+		}
+	}
+	else {
+		/* Will likely have issues with folding */
+		rspamd_dkim_hash_update (ctx->common.headers_hash, hdr->str,
+				hdr->len);
+		msg_debug_task ("update signature with header: %*s",
+				(gint)hdr->len, hdr->str);
+	}
+
 	dlen = EVP_MD_CTX_size (ctx->common.headers_hash);
 	EVP_DigestFinal_ex (ctx->common.headers_hash, raw_digest, NULL);
 	rsa_len = RSA_size (ctx->key->key_rsa);
