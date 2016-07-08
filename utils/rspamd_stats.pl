@@ -2,26 +2,30 @@
 
 use Data::Dumper;
 use Getopt::Long;
+use Time::Piece;
+use Pod::Usage;
 use warnings;
 use strict;
-use Time::Piece;
 
 my @symbols_search;
-my $start = "";
-my $end = "";
-my $reject_score = 30.0;
-my $junk_score = 7.5;
-my $log_file = "/var/log/rspamd/rspamd.log";
-my $dateformat = "%Y-%m-%d %H:%M:%S";
+my $reject_score = 15.0;
+my $junk_score = 6.0;
+my $log_file = "";
+my $man = 0;
+my $help = 0;
 
 GetOptions(
   "reject-score=f" => \$reject_score,
   "junk-score=f" => \$junk_score,
-  "start=s" => \$start,
-  "end=s" => \$end,
   "symbol=s@" => \@symbols_search,
   "log=s" => \$log_file,
-  "dateformat=s" => \$dateformat);
+  "help|?" => \$help,
+  "man" => \$man
+) or pod2usage(2);
+
+pod2usage(1) if $help;
+pod2usage(-exitval => 0, -verbose => 2) if $man;
+
 
 # Global vars
 my $total = 0;
@@ -34,21 +38,9 @@ my $ham_spam_change = 0;
 my $ham_junk_change = 0;
 my $diff_alpha = 0.1;
 my %sym_res;
-
-my $st = 0;
-my $ed = 0;
-
-if ($start ne "") {
-  $st = Time::Piece->strptime($start, $dateformat);
-}
-
-if ($end ne "") {
-  $ed = Time::Piece->strptime($end, $dateformat);
-}
-
 my $rspamd_log;
 
-if ($log_file eq '-') {
+if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
 }
 else {
@@ -59,19 +51,6 @@ while(<$rspamd_log>) {
   if (/^.*rspamd_task_write_log.*$/) {
     my @elts = split /\s+/;
     my $ts = $elts[0] . ' ' . $elts[1];
-
-    if ($st or $ed) {
-      my $dt = Time::Piece->strptime($ts, $dateformat) or die "cannot parse $ts";
-
-      if ($dt) {
-        if ($st != 0 && $dt < $st) {
-          next;
-        }
-        if ($ed != 0 && $dt > $ed) {
-          next;
-        }
-      }
-    }
 
     if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
       #print "BAD\n";
@@ -200,3 +179,118 @@ if ($total > 0) {
     print '*' x 20 . "\n";
   }
 }
+
+__END__
+
+=head1 NAME
+
+rspamd_stats - analyze Rspamd rules by parsing log files
+
+=head1 SYNOPSIS
+
+rspamd_stats [options] --symbol=SYM1 [--symbol=SYM2...] [--log file]
+
+ Options:
+   --log=file             log file to read (stdin by default)
+   --reject-score=score   set reject threshold (15 by default)
+   --junk-score=score     set junk score (6.0 by default)
+   --symbol=sym           check specified symbol (perl regexps are supported)
+   --help                 brief help message
+   --man                  full documentation
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--log>
+
+Specifies log file to read data from.
+
+=item B<--reject-score>
+
+Specifies the reject (spam) threshold.
+
+=item B<--junk-score>
+
+Specifies the junk (add header or rewrite subject) threshold.
+
+=item B<--symbol>
+
+Add symbol or pattern (pcre format) to analyze.
+
+=item B<--help>
+
+Print a brief help message and exits.
+
+=item B<--man>
+
+Prints the manual page and exits.
+
+=back
+
+=head1 DESCRIPTION
+
+B<rspamd_stats> will read the given log file (or standard input) and provide statistics for the specified symbols:
+
+    Symbol: BAYES_SPAM (weight 3.763) (381985 hits, 26.827%)
+    Ham hits: 184557 (48.315%), total ham: 1095487 (ham with BAYES_SPAM: 16.847%)
+    Spam hits: 15134 (3.962%), total spam: 16688 (spam with BAYES_SPAM: 90.688%)
+    Junk hits: 182294 (47.723%), total junk: 311699 (junk with BAYES_SPAM: 58.484%)
+    Spam changes (ham/junk -> spam): 7026 (1.839%), total percentage (changes / spam hits): 42.102%
+    Junk changes (ham -> junk): 95192 (24.920%), total percentage (changes / junk hits): 30.540%
+
+Where there are the following attributes:
+
+=over 4
+
+=item *
+
+B<Weight>: average score for a symbols
+
+=item *
+
+B<Total hits>: total number of hits and percentage of symbol hits divided by total number of messages
+
+=item *
+
+B<HAM hits>: [rovides the following information about B<HAM> messages with the specified symbol (from left to right):
+
+=over 4
+
+=item 1.
+
+B<total symbol hits>: number of messages that has this symbol and are B<HAM>
+
+=item 2.
+
+B<ham percentage>: number of symbol hits divided by overall B<HAM> messages count
+
+=item 3.
+
+B<total ham hits>: overall number of B<HAM> messages
+
+=item 4.
+
+B<ham with symbol percentage>: percentage of number of hits with specified symbol in B<HAM> messages divided by total number of B<HAM> messages.
+
+=back
+
+=item *
+
+B<SPAM hits>: provides the following information about B<SPAM> messages - same as previous but for B<SPAM> class.
+
+=item *
+
+B<Junk hits>: provides the following information about B<Junk> messages - same as previous but for B<JUNK> class.
+
+=item *
+
+B<Spam changes>: displays data about how much messages switched their class because of the specific symbol weight.
+
+=item *
+
+B<Junk changes>: displays data about how much messages switched their class because of the specific symbol weight.
+
+=back
+
+=cut
