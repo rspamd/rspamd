@@ -75,11 +75,11 @@ while(<$rspamd_log>) {
 
       if (scalar(@selected) > 0) {
         foreach my $sym (@selected) {
-          $sym =~ /^([^\(]+)(?:\(([^\)]+)\))?.*$/;
+          $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
           my $sym_name = $1;
           my $sym_score = 0;
           if ($2) {
-            my $sym_score = $2 * 1.0;
+            $sym_score = $3 * 1.0;
 
             if (abs($sym_score) < $diff_alpha) {
               next;
