@@ -55,17 +55,6 @@ else {
   open($rspamd_log, '<', $log_file) or die "cannot open $log_file";
 }
 
-foreach my $s (@symbols_search) {
-  $sym_res{$s} = {
-    hits => 0,
-    spam_hits => 0,
-    junk_hits => 0,
-    spam_change => 0,
-    junk_change => 0,
-    weight => 0,
-  };
-}
-
 while(<$rspamd_log>) {
   if (/^.*rspamd_task_write_log.*$/) {
     my @elts = split /\s+/;
@@ -106,35 +95,60 @@ while(<$rspamd_log>) {
       my @selected = grep /$s/, @symbols;
 
       if (scalar(@selected) > 0) {
-        $selected[0] =~ /^[^\(]+\(([^\)]+)\).*$/;
-        my $sym_score = $1;
+        foreach my $sym (@selected) {
+          $sym =~ /^([^\(]+)\(([^\)]+)\).*$/;
+          my $sym_name = $1;
+          my $sym_score = $2 * 1.0;
 
-        if ($sym_score < $diff_alpha) {
-          next;
-        }
+          if (abs($sym_score) < $diff_alpha) {
+            next;
+          }
 
-        my $r = $sym_res{$s};
-        $r->{hits} ++;
-        $r->{weight} += $sym_score;
-        my $is_spam = 0;
-        my $is_junk = 0;
+          if (!$sym_res{$sym_name}) {
+            $sym_res{$sym_name} = {
+              hits => 0,
+              spam_hits => 0,
+              junk_hits => 0,
+              spam_change => 0,
+              junk_change => 0,
+              weight => 0,
+            };
+          }
 
-        if ($score >= $reject_score) {
-          $is_spam = 1;
-          $r->{spam_hits} ++;
-        }
-        elsif ($score >= $junk_score) {
-          $is_junk = 1;
-          $r->{junk_hits} ++;
-        }
+          my $r = $sym_res{$sym_name};
 
-        my $score_without = $score - $sym_score;
+          $r->{hits} ++;
+          $r->{weight} += $sym_score;
+          my $is_spam = 0;
+          my $is_junk = 0;
 
-        if ($is_spam && $score_without < $reject_score) {
-          $r->{spam_change} ++;
-        }
-        if ($is_junk && $score_without < $junk_score) {
-          $r->{junk_change} ++;
+          if ($score >= $reject_score) {
+            $is_spam = 1;
+            $r->{spam_hits} ++;
+          }
+          elsif ($score >= $junk_score) {
+            $is_junk = 1;
+            $r->{junk_hits} ++;
+          }
+
+          my $score_without = $score - $sym_score;
+
+          if ($sym_score > 0) {
+            if ($is_spam && $score_without < $reject_score) {
+              $r->{spam_change} ++;
+            }
+            if ($is_junk && $score_without < $junk_score) {
+              $r->{junk_change} ++;
+            }
+          }
+          else {
+            if (!$is_spam && $score_without >= $reject_score) {
+              $r->{spam_change} ++;
+            }
+            if (!$is_junk && $score_without >= $junk_score) {
+              $r->{junk_change} ++;
+            }
+          }
         }
       }
     }
@@ -160,9 +174,17 @@ if ($total > 0) {
           $jh, ($jh / $th * 100.0), $total_junk, ($jtp or 0);
       my $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
       my $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
-      printf "Spam changes (ham/junk -> spam): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (ham -> junk): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
+
+      if ($r->{weight} > 0) {
+        printf "Spam changes (ham/junk -> spam): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (ham -> junk): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
           $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
           $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+      }
+      else {
+        printf "Spam changes (spam -> junk/ham): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (junk -> ham): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
+          $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
+          $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+      }
     }
     else {
       print "Symbol $s has not been met\n";
