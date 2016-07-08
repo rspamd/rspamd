@@ -96,12 +96,15 @@ while(<$rspamd_log>) {
 
       if (scalar(@selected) > 0) {
         foreach my $sym (@selected) {
-          $sym =~ /^([^\(]+)\(([^\)]+)\).*$/;
+          $sym =~ /^([^\(]+)(?:\(([^\)]+)\))?.*$/;
           my $sym_name = $1;
-          my $sym_score = $2 * 1.0;
+          my $sym_score = 0;
+          if ($2) {
+            my $sym_score = $2 * 1.0;
 
-          if (abs($sym_score) < $diff_alpha) {
-            next;
+            if (abs($sym_score) < $diff_alpha) {
+              next;
+            }
           }
 
           if (!$sym_res{$sym_name}) {
@@ -131,22 +134,24 @@ while(<$rspamd_log>) {
             $r->{junk_hits} ++;
           }
 
-          my $score_without = $score - $sym_score;
+          if ($sym_score != 0) {
+            my $score_without = $score - $sym_score;
 
-          if ($sym_score > 0) {
-            if ($is_spam && $score_without < $reject_score) {
-              $r->{spam_change} ++;
+            if ($sym_score > 0) {
+              if ($is_spam && $score_without < $reject_score) {
+                $r->{spam_change} ++;
+              }
+              if ($is_junk && $score_without < $junk_score) {
+                $r->{junk_change} ++;
+              }
             }
-            if ($is_junk && $score_without < $junk_score) {
-              $r->{junk_change} ++;
-            }
-          }
-          else {
-            if (!$is_spam && $score_without >= $reject_score) {
-              $r->{spam_change} ++;
-            }
-            if (!$is_junk && $score_without >= $junk_score) {
-              $r->{junk_change} ++;
+            else {
+              if (!$is_spam && $score_without >= $reject_score) {
+                $r->{spam_change} ++;
+              }
+              if (!$is_junk && $score_without >= $junk_score) {
+                $r->{junk_change} ++;
+              }
             }
           }
         }
@@ -175,15 +180,17 @@ if ($total > 0) {
       my $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
       my $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
 
-      if ($r->{weight} > 0) {
-        printf "Spam changes (ham/junk -> spam): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (ham -> junk): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
-          $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
-          $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
-      }
-      else {
-        printf "Spam changes (spam -> junk/ham): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (junk -> ham): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
-          $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
-          $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+      if ($r->{weight} != 0) {
+        if ($r->{weight} > 0) {
+          printf "Spam changes (ham/junk -> spam): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (ham -> junk): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
+            $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
+            $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+        }
+        else {
+          printf "Spam changes (spam -> junk/ham): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (junk -> ham): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
+            $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
+            $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+        }
       }
     }
     else {
