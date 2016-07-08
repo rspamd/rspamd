@@ -2,7 +2,7 @@
 
 ## Introduction
 
-rspamd is a universal spam filtering system based on an event-driven processing model, which means that Rspamd is not intended to block anywhere in the code. To process messages Rspamd uses a set of `rules`. Each `rule` is a symbolic name associated with a message property. For example, we can define the following rules:
+Rspamd is a universal spam filtering system based on an event-driven processing model, which means that Rspamd is not intended to block anywhere in the code. To process messages Rspamd uses a set of `rules`. Each `rule` is a symbolic name associated with a message property. For example, we can define the following rules:
 
 - `SPF_ALLOW` - means that a message is validated by SPF;
 - `BAYES_SPAM` - means that a message is statistically considered as spam;
@@ -14,7 +14,7 @@ Rules are defined by [modules](../modules/). If there is a module, for example, 
 - `SPF_DENY` - a sender is denied by SPF policy;
 - `SPF_SOFTFAIL` - there is no affinity defined by SPF policy.
 
-rspamd supports two main types of modules: internal modules written in C and external modules written in lua. There is no real difference between the two types with the exception that C modules are embedded and can be enabled in a `filters` attribute in the `options` section of the config:
+Rspamd supports two main types of modules: internal modules written in C and external modules written in Lua. There is no real difference between the two types with the exception that C modules are embedded and can be enabled in a `filters` attribute in the `options` section of the config:
 
 ~~~ucl
 options {
@@ -25,7 +25,7 @@ options {
 
 ## Protocol
 
-rspamd uses the HTTP protocol for all operations. This protocol is described in the [protocol section](protocol.md).
+Rspamd uses the HTTP protocol for all operations. This protocol is described in the [protocol section](protocol.md).
 
 ## Metrics
 
@@ -69,17 +69,17 @@ The weight of rules is not necessarily constant. For example, for statistics rul
 
 ## Statistics
 
-rspamd uses statistic algorithms to precisely calculate the final score of a message. Currently, the only algorithm defined is OSB-Bayes. You can find details of this algorithm in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf). Rspamd uses a window size of 5 words in its classification. During the classification procedure, Rspamd splits a message into a set of tokens. Tokens are separated by punctuation or whitespace characters. Short tokens (less than 3 symbols) are ignored. For each token, Rspamd calculates two non-cryptographic hashes used subsequently as indices. All these tokens are stored in different statistics backends (mmapped files, sqlite3 database or redis server). Currently, the recommended backend for statistics is `redis`.
+Rspamd uses statistic algorithms to precisely calculate the final score of a message. Currently, the only algorithm defined is OSB-Bayes. You can find details of this algorithm in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf). Rspamd uses a window size of 5 words in its classification. During the classification procedure, Rspamd splits a message into a set of tokens. Tokens are separated by punctuation or whitespace characters. Short tokens (less than 3 symbols) are ignored. For each token, Rspamd calculates two non-cryptographic hashes used subsequently as indices. All these tokens are stored in different statistics backends (mmapped files, SQLite3 database or Redis server). Currently, the recommended backend for statistics is `Redis`.
 
-## Running Rspamd
+## Running rspamd
 
-There are several command-line options that can be passed to Rspamd. All of them can be displayed by passing the `--help` argument.
+There are several command-line options that can be passed to rspamd. All of them can be displayed by passing the `--help` argument.
 
-All options are optional: by default Rspamd will try to read the `etc/rspamd.conf` config file and run as a daemon. Also there is a test mode that can be turned on by passing the `-t` argument. In test mode, Rspamd reads the config file and checks its syntax. If a configuration file is OK, the exit code is zero. Test mode is useful for testing new config files without restarting Rspamd.
+All options are optional: by default rspamd will try to read the `etc/rspamd.conf` config file and run as a daemon. Also there is a test mode that can be turned on by passing the `-t` argument. In test mode, rspamd reads the config file and checks its syntax. If a configuration file is OK, the exit code is zero. Test mode is useful for testing new config files without restarting rspamd.
 
-## Managing Rspamd using signals
+## Managing rspamd using signals
 
-It is important to note that all user signals should be sent to the Rspamd main process and not to its children (as for child processes these signals can have other meanings). You can identify the main process:
+It is important to note that all user signals should be sent to the rspamd main process and not to its children (as for child processes these signals can have other meanings). You can identify the main process:
 
 - by reading the pidfile:
 
@@ -87,20 +87,20 @@ It is important to note that all user signals should be sent to the Rspamd main 
 
 - by getting process info:
 
-		$ ps auxwww | grep Rspamd
-		nobody 28378  0.0  0.2 49744  9424   Rspamd: main process
-		nobody 64082  0.0  0.2 50784  9520   Rspamd: worker process
-		nobody 64083  0.0  0.3 51792 11036   Rspamd: worker process
-		nobody 64084  0.0  2.7 158288 114200 Rspamd: controller process
-		nobody 64085  0.0  1.8 116304 75228  Rspamd: fuzzy storage
+		$ ps auxwww | grep rspamd
+		nobody 28378  0.0  0.2 49744  9424   rspamd: main process
+		nobody 64082  0.0  0.2 50784  9520   rspamd: worker process
+		nobody 64083  0.0  0.3 51792 11036   rspamd: worker process
+		nobody 64084  0.0  2.7 158288 114200 rspamd: controller process
+		nobody 64085  0.0  1.8 116304 75228  rspamd: fuzzy storage
 
-		$ ps auxwww | grep Rspamd | grep main
-		nobody 28378  0.0  0.2 49744  9424   Rspamd: main process
+		$ ps auxwww | grep rspamd | grep main
+		nobody 28378  0.0  0.2 49744  9424   rspamd: main process
 
-After getting the pid of the main process it is possible to manage Rspamd with signals, as follows:
+After getting the pid of the main process it is possible to manage rspamd with signals, as follows:
 
-- `SIGHUP` - restart Rspamd: reread config file, start new workers (as well as controller and other processes), stop accepting connections by old workers, reopen all log files. Note that old workers would be terminated after one minute which should allow processing of all pending requests. All new requests to Rspamd will be processed by the newly started workers.
-- `SIGTERM` - terminate Rspamd.
+- `SIGHUP` - restart rspamd: reread config file, start new workers (as well as controller and other processes), stop accepting connections by old workers, reopen all log files. Note that old workers would be terminated after one minute which should allow processing of all pending requests. All new requests to rspamd will be processed by the newly started workers.
+- `SIGTERM` - terminate rspamd.
 - `SIGUSR1` - reopen log files (useful for log file rotation).
 
-These signals may be used in rc-style scripts. Restarting of Rspamd is performed softly: no connections are dropped and if a new config is incorrect then the old config is used.
+These signals may be used in rc-style scripts. Restarting of rspamd is performed softly: no connections are dropped and if a new config is incorrect then the old config is used.
