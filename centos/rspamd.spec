@@ -53,7 +53,6 @@ Source2:        %{name}.logrotate
 %endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
-Patch0:         %{name}.service.patch
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -62,9 +61,6 @@ lua.
 
 %prep
 %setup -q
-%if 0%{?el7}
-%patch0 -p0
-%endif
 
 %build
 %{__cmake} \
