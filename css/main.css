@@ -3,7 +3,6 @@
   padding-left: 15px;
   padding-right: 15px;
 }
-
 body {
   position: relative;
   padding-top: 50px;
@@ -60,20 +59,6 @@ hr {
     background-color: #E8E8E8;
     padding: 10px 0px 30px 0px;
 }
-@media (min-width: 750px){
-  .myRowEq {
-      /* for equal columns inside the row */
-      display:flex;
-      align-items:stretch;
-  }
-  .myMainPageText{
-      /* for text inside equal columns */
-      display:flex;
-      align-items:stretch;
-      flex-wrap: wrap;
-      align-content:space-between;
-  }
-}
 .jumbotron {
   padding-top: 10px;
   padding-bottom: 15px;
@@ -83,13 +68,6 @@ hr {
 @media (min-width: 768px) and (max-width: 992px){
     /* when navbar is thick */
     .jumbotron {margin-top: 50px;}
-}
-/*@media (min-width: 992px){
-  /* usual screen
-  .jumbotron {
-    margin-top: 20px;
-
-  }*/
 }
 .btn-code{
   background-color: #333333 !important;
@@ -155,12 +133,6 @@ h2{
   margin-top: 20px;
   margin-bottom: 20px;
 }
-.btn-social{
-  height: 40px;
-}
-.support-block p{
-  vertical-align: middle;
-}
 #wrapper {/*for removing wite space after footer*/
     min-height: 100%;
     height: auto !important;
@@ -169,4 +141,12 @@ h2{
 }
 .push {/*add a wite space before footer*/
     height: 78px;
+}
+.breadcrumb{
+  background-color: transparent;
+  padding-left: 0;
+}
+ul.affix li a, ul.affix-top li a{
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
