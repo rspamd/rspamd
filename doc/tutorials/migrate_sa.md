@@ -1,6 +1,6 @@
 ---
-layout: doc_tutorials
-title: Rspamd Tutorials
+layout: doc
+title: Migrating from SA
 ---
 # Migrating from SpamAssassin to Rspamd
 

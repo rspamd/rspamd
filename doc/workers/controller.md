@@ -1,6 +1,6 @@
 ---
-layout: doc
-title: Rspamd Documentation
+layout: doc_worker_add
+title: Controller worker
 ---
 # Controller worker
 

@@ -1,9 +1,9 @@
 ---
 layout: doc_quickstart
-title: Rspamd+rmilter quick start
+title: Quick start
 ---
 
-# Rspamd and Rmilter quick start
+<div><h1 style="margin-top:0">Rspamd and Rmilter quick start</h1></div>
 
 ## Introduction
 

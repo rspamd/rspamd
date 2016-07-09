@@ -1,35 +1,32 @@
 {% include top.html %}
-	 <div class="container">
-
-	 <div class="row">
-	 <div class="col-sm-3" id="navbar-spy">
-	 <!-- Docs navigation -->
-	 	<ul data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation">
-			<li class="nav-header"><h4>Rspamd documentation</h4></li>
-			<li><a  href="/doc/index.html">Documentation index</a></li>
-			<li class="divider"></li>
-			<li class ="nav-header"><h4>Rspamd quick start</h4></li>
-			<li><a href="#introduction">Introduction</a></li>
-			<li class="divider"></li>
-			<li><a href="#preparation-steps">Preparation</a></li>
-			<li><a href="#tls-setup">TLS setup</a></li>
-			<li><a href="#caching-setup">Caching setup</a></li>
-			<li><a href="#rmilter-setup">Rmilter setup</a></li>
-			<li class="divider"></li>
-			<li><a href="#rspamd-installation">Installing Rspamd</a></li>
-			<li><a href="#running-rspamd">Running Rspamd</a></li>
-			<li><a href="#configuring-rspamd">Configuring Rspamd</a></li>
-			<li><a href="#using-rspamd">Using Rspamd</a></li>
-		</ul>
-	 </div>
-
-	 <div class="col-sm-9">
-     <div class="body-content">
-                {{ content }}
-      </div>
-	 </div>
-
-	 </div> <!-- row -->
-
-   </div> <!-- /container -->
+		<div class="container">
+				<ol class="breadcrumb">
+						<li><a href="/">Home</a></li>
+						<li><a href="/doc/index.html">Documentation</a></li>
+						<li class="active">{{ page.title }}</li>
+				</ol>
+				<div class="row">
+						<div class="col-sm-3" id="navbar-spy">
+						<!-- Docs navigation -->
+								<ul  data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation">
+										<li><a href="#introduction">Introduction</a></li>
+										<li class="divider"></li>
+										<li><a href="#preparation-steps">Preparation</a></li>
+										<li><a href="#tls-setup">TLS setup</a></li>
+										<li><a href="#caching-setup">Caching setup</a></li>
+										<li><a href="#rmilter-setup">Rmilter setup</a></li>
+										<li class="divider"></li>
+										<li><a href="#rspamd-installation">Installing Rspamd</a></li>
+										<li><a href="#running-rspamd">Running Rspamd</a></li>
+										<li><a href="#configuring-rspamd">Configuring Rspamd</a></li>
+										<li><a href="#using-rspamd">Using Rspamd</a></li>
+								</ul>
+						</div>
+						<div class="col-sm-9">
+								<div class="body-content">
+								          {{ content }}
+								</div>
+						</div>
+				</div> <!-- row -->
+		</div> <!-- /container -->
 {% include bottom.html %}

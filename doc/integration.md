@@ -1,9 +1,9 @@
 ---
 layout: doc
-title: rspamd integration
+title: MTA integration
 ---
 
-# Rspamd integration
+# MTA integration
 
 This document describes several methods of integrating rspamd with some popular MTAs. Among them are:
 
