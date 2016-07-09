@@ -6,7 +6,7 @@ Statistics is used by Rspamd to define the `class` of message: either spam or ha
 that defines probabilities combination. In general, it defines the probability of that a message belongs to the specified class (namely, `spam` or `ham`)
 base on the following factors:
 
-- the probability of a specific token to be spam or ham (which means efficiently count of a token's occurences in spam and ham messages)
+- the probability of a specific token to be spam or ham (which means efficiently count of a token's occurrences in spam and ham messages)
 - the probability of a specific token to appear in a message (which efficiently means frequency of a token divided by a number of tokens in a message)
 
 ## Statistics Architecture
@@ -30,7 +30,7 @@ Starting from Rspamd 1.0, we propose to use `sqlite3` as backed and `osb` as tok
 metainformation in statistics. The following configuration demonstrates the recommended statistics configuration:
 
 ~~~ucl
-# Classifier's algorith is BAYES
+# Classifier's algorithm is BAYES
 classifier "bayes" {
     tokenizer {
         name = "osb";
@@ -63,16 +63,16 @@ classifier "bayes" {
 }
 ~~~
 
-It is also possible to organize per-user statistics using sqlite3 backend. However, you should ensure that Rspamd is called at the
+It is also possible to organize per-user statistics using SQLite3 backend. However, you should ensure that Rspamd is called at the
 finally delivery stage (e.g. LDA mode) to avoid multi-recipients messages. In case of a multi-recipient message, Rspamd would just use the
-first recipient for user-based statistics which might be inappropriate for your configuration (however, Rspamd preferes SMTP recipients over MIME ones and prioritize
+first recipient for user-based statistics which might be inappropriate for your configuration (however, Rspamd prefers SMTP recipients over MIME ones and prioritize
 the special LDA header called `Deliver-To` that can be appended by `-d` options for `rspamc`). To enable per-user statistics, just add `users_enabled = true` property
-to the **classifier** configuration. You can use per-user and per-language statistics simulataneously. For both types of spearation, Rspamd also
+to the **classifier** configuration. You can use per-user and per-language statistics simultaneously. For both types of statistics, Rspamd also
 looks to the default language and default user's statistics allowing to have the common set of tokens shared for all users/languages.
 
-## Using lua scripts for `per_user` classifier
+## Using Lua scripts for `per_user` classifier
 
-It is also possible to create custom lua scripts to use customized user or language for a specific task. Here is an example
+It is also possible to create custom Lua scripts to use customized user or language for a specific task. Here is an example
 of such a script for extracting domain names from recipients organizing thus per-domain statistics:
 
 ~~~ucl
@@ -178,7 +178,7 @@ To learn specific classifier, you can use `-c` option for `rspamc` (or `Classifi
 
 ## Redis statistics
 
-From version 1.1, it is also possible to specify redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
+From version 1.1, it is also possible to specify Redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup Redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
 
 ~~~ucl
     classifier "bayes" {
@@ -205,7 +205,7 @@ From version 1.1, it is also possible to specify redis as a backend for statisti
     }
 ~~~
 
-`per_languages` is not supported by redis - it just stores everything in the same place. `write_servers` are used in the
+`per_languages` is not supported by Redis - it just stores everything in the same place. `write_servers` are used in the
 `master-slave` rotation by default and used for learning, whilst `servers` are selected randomly each time:
 
 	write_servers = "master.example.com:6379:10, slave.example.com:6379:1"
@@ -221,6 +221,6 @@ There are 3 possibilities to specify autolearning:
 
 * `autolearn = true`: autolearning is performing as spam if a message has `reject` action and as ham if a message has **negative** score
 * `autolearn = [1, 10]`: autolearn as ham if score is less than minimum of 2 numbers (< `1` here) and as spam if score is more than maximum of 2 numbers (> `10` in this case)
-* `autolearn = "return function(task) ... end"`: use the following lua function to detect if autolearn is needed (function should return 'ham' if learn as ham is needed and string 'spam' if learn as spam is needed, if no learn is needed then a function can return anything including `nil`)
+* `autolearn = "return function(task) ... end"`: use the following Lua function to detect if autolearn is needed (function should return 'ham' if learn as ham is needed and string 'spam' if learn as spam is needed, if no learn is needed then a function can return anything including `nil`)
 
 Redis backend is highly recommended for autolearning purposes since it's the only backend with high concurrency level when multiple writers are properly synchronized.
