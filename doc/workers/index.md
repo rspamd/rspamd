@@ -7,7 +7,7 @@ title: Rspamd Documentation
 Rspamd defines several types of worker processes. Each type is designed for its specific
 purpose, for example to scan mail messages, to perform control actions, such as learning or
 statistic grabbing. There is also flexible worker type named `lua` worker that allows
-to run any lua script as Rspamd worker providing proxy from Rspamd lua API.
+to run any Lua script as Rspamd worker providing proxy from Rspamd Lua API.
 
 ## Worker types
 
@@ -17,7 +17,7 @@ Currently Rspamd defines the following worker types:
 - [controller](controller.html): this worker performs configuration actions, such as
 learning, adding fuzzy hashes and serving web interface requests
 - [fuzzy_storage](fuzzy_storage.html): stores fuzzy hashes
-- [lua](lua_worker.html): runs custom lua scripts
+- [lua](lua_worker.html): runs custom Lua scripts
 
 ## Workers connections
 
@@ -34,7 +34,7 @@ listens on an UDP port and does not save any state information.
 
 ## Common workers options
 
-All workers shares a set of common options. Here is a typical example of a normal
+All workers share a set of common options. Here is a typical example of a normal
 worker configuration that uses merely common worker options:
 
 ~~~ucl
@@ -67,19 +67,19 @@ bind_socket = "*v4:11333"; # any ipv4 address
 bind_socket = "*v6:11333"; # any ipv6 address
 ~~~
 
-Moreover, you can specify systemd sockets if Rspamd is invoked by systemd:
+Moreover, you can specify systemd sockets if rspamd is invoked by systemd:
 
 ~~~ucl
-bind_socket = "systemd:1"; # the first socket passed by systemd throught environment
+bind_socket = "systemd:1"; # the first socket passed by systemd through environment
 ~~~
 
-For unix sockets, it is also possible to specify owner and mode using this syntax:
+For UNIX sockets, it is also possible to specify owner and mode using this syntax:
 
 ~~~ucl
 bind_socket = "/tmp/rspamd.sock mode=0666 owner=user";
 ~~~
 
-Without owner and mode, Rspamd uses the active user as owner (e.g. if started by root,
+Without owner and mode, rspamd uses the active user as owner (e.g. if started by root,
 then `root` is used) and `0644` as access mask. Please mention that you need to specify
 **octal** number for mode, namely prefixed by a zero. Otherwise, modes like `666` will produce
 a weird result.
