@@ -205,6 +205,10 @@ Many Rspamd rules, such as `PHISHING` and fuzzy checks, use dynamic scoring.
 curl --data-binary @- http://localhost:11333 < file.eml
 ```
 
+### How is Rspamd spelled and capitalized?
+
+Rspamd as a spam-filtering system or as a project is spelled with a capital `R` followed by a lower-case `spamd`, but when referring to the process or application it is not capitalized.
+
 ## Configuration questions
 
 ### What are Rspamd actions
