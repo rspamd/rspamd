@@ -2,7 +2,7 @@
 
 ## Introduction
 
-rspamd composites are used to combine rules and create more complex rules. Composite rules are defined by `composite` keys. The value of the key should be an object that defines the composite's name and value, which is the combination of rules in a joint expression.
+Rspamd composites are used to combine rules and create more complex rules. Composite rules are defined by `composite` keys. The value of the key should be an object that defines the composite's name and value, which is the combination of rules in a joint expression.
 
 For example, you can define a composite that is added when two specific symbols are found:
 
