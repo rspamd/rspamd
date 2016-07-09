@@ -8,13 +8,13 @@ This guide provides information for those who wants to migrate an existing syste
 
 ## Why migrate to Rspamd
 
-rspamd runs **significantly faster** than SpamAssassin while providing approximately the same quality of filtering. However, if you don't care about the performance and resource consumption of your spam filtering engine you might still find Rspamd useful because it has a simple but powerful web management system (WebUI).
+Rspamd runs **significantly faster** than SpamAssassin while providing approximately the same quality of filtering. However, if you don't care about the performance and resource consumption of your spam filtering engine you might still find Rspamd useful because it has a simple but powerful web management system (WebUI).
 
 On the other hand, if you have a lot of custom rules, or you use Pyzor/Razor/DCC, or you have some commercial 3rd party products that depend on SpamAssassin then you may not want to migrate.
 
 In short: Rspamd is for **speed**!
 
-## What about dspam/spamoracle...?
+## What about DSPAM/SpamOracle…?
 
 You could also move from these projects to Rspamd. You should bear in mind, however, that Rspamd and SA are multi-factor spam filtering systems that use three main approaches to filter messages:
 
@@ -22,7 +22,7 @@ You could also move from these projects to Rspamd. You should bear in mind, howe
 * Dynamic lists - DNS or reputation lists that are used to filter known bad content, such as abused IP addresses or URL domains
 * Statistical filters - which learn to distinguish spam and ham messages
 
-`dspam`, `spamoracle` and others usually implement the third approach, only providing statistical filtering. This method is quite powerful but it can cause false-positives and is not very suitable for multi-user environments. Rspamd and SA, in contrast, are designed for systems with many users. Rspamd, in particular, was written for a very large system with more than 40 million users and about 10 million emails per hour.
+`DSPAM`, `SpamOracle` and others usually implement the third approach, only providing statistical filtering. This method is quite powerful but it can cause false-positives and is not very suitable for multi-user environments. Rspamd and SA, in contrast, are designed for systems with many users. Rspamd, in particular, was written for a very large system with more than 40 million users and about 10 million emails per hour.
 
 ## Before you start
 
@@ -69,7 +69,7 @@ If you have your SA up and running it is usually possible to switch the system t
 
 ## Statistics
 
-rspamd statistics are not compatible with SA as Rspamd uses a more advanced statistics algorithm, described in the following [article](http://osbf-lua.luaforge.net/papers/trec2006_osbf_lua.pdf), so please bear in mind that you need to **relearn** your statistics. This can be done, for example, by using the `rspamc` command: assuming that you have your messages in separate files (e.g. `maildir` format), placed in directories `spam` and `ham`:
+Rspamd statistics are not compatible with SA as Rspamd uses a more advanced statistics algorithm, described in the following [article](http://osbf-lua.luaforge.net/papers/trec2006_osbf_lua.pdf), so please bear in mind that you need to **relearn** your statistics. This can be done, for example, by using the `rspamc` command: assuming that you have your messages in separate files (e.g. `maildir` format), placed in directories `spam` and `ham`:
 
 	rspamc learn_spam spam/
 	rspamd learn_ham ham/
@@ -78,7 +78,7 @@ rspamd statistics are not compatible with SA as Rspamd uses a more advanced stat
 
 ### Learning using mail interface
 
-You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend using `/etc/aliases` for this purpose and a `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `thunderbird` MUA). The desired aliases could be the following:
+You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend using `/etc/aliases` for this purpose and a `mail-redirect` command (e.g. provided by [Mail Redirect add-on](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `Thunderbird` MUA). The desired aliases could be the following:
 
 	learn-spam123: "| rspamc learn_spam"
 	learn-ham123: "| rspamc learn_ham"
