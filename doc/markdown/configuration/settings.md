@@ -2,7 +2,7 @@
 
 ## Introduction
 
-rspamd allows exceptional control over the settings which will apply to incoming messages. Each setting can define a set of custom metric weights, symbols or actions. An administrator can also skip spam checks for certain messages completely, if required. Rspamd settings can be loaded as dynamic maps and updated automatically if a corresponding file or URL has changed since its last update.
+Rspamd allows exceptional control over the settings which will apply to incoming messages. Each setting can define a set of custom metric weights, symbols or actions. An administrator can also skip spam checks for certain messages completely, if required. Rspamd settings can be loaded as dynamic maps and updated automatically if a corresponding file or URL has changed since its last update.
 
 To load settings as a dynamic map, you can set 'settings' to a map string:
 
