@@ -139,7 +139,7 @@ There are two types of rules that are normally defined by Rspamd:
 - `Lua` rules: code in written in Lua
 - `Regexp` rules: regular expressions and combinations of regular expressions to match specific patterns
 
-Lua rules are useful for some complex tasks: check DNS, query redis or HTTP, examine some task-specific details. Regexp rules are useful since they are heavily optimized by Rspamd (especially when `hyperscan` is enabled) and allow matching custom patterns in headers, urls, text parts and even the entire message body.
+Lua rules are useful for some complex tasks: check DNS, query Redis or HTTP, examine some task-specific details. Regexp rules are useful since they are heavily optimized by Rspamd (especially when `Hyperscan` is enabled) and allow matching custom patterns in headers, URLs, text parts and even the entire message body.
 
 ### Rule weights
 
@@ -195,7 +195,7 @@ Regexp rules are executed by the `regexp` module of Rspamd. You can find a detai
 
 Here are some hints to maximise performance of your regexp rules:
 
-* Prefer lightweight regexps, such as header or url, to heavy ones, such as mime or body regexps
+* Prefer lightweight regexps, such as header or URL, to heavy ones, such as mime or body regexps
 * If you need to match text in a message's content, prefer `mime` regexps as they are executed on text content only
 * If you **really** need to match the whole messages, then you might consider using the [trie](../modules/trie.html) module as it is significantly faster
 * Avoid complex regexps, avoid backtracing, avoid negative groups `(?!)`, avoid capturing patterns (replace with `(?:)`), avoid potentially empty patterns, e.g. `/^.*$/`
@@ -334,7 +334,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 }
 ~~~
 
-You can also access HTTP headers, urls and other useful properties of Rspamd tasks. Moreover, you can use global convenience modules exported by Rspamd, such as [rspamd_util](../lua/util.html) or [rspamd_logger](../lua/logger.html) by requiring them in your rules:
+You can also access HTTP headers, URLs and other useful properties of Rspamd tasks. Moreover, you can use global convenience modules exported by Rspamd, such as [rspamd_util](../lua/util.html) or [rspamd_logger](../lua/logger.html) by requiring them in your rules:
 
 ~~~lua
 rspamd_config.SUBJ_ALL_CAPS = {
@@ -348,7 +348,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 
 ## Rspamd symbols
 
-rspamd rules fall under three categories:
+Rspamd rules fall under three categories:
 
 1. Pre-filters - run before other rules
 2. Filters - run normally
@@ -366,7 +366,7 @@ The last option is useful when you have a single callback but with different pos
 * `rspamd_config:register_callback_symbol(nominal_weight, callback)` - registers callback only symbol
 * `rspamd_config:register_virtual_symbol('SYMBOL', nominal_weight, id)` - registers normal symbol
 
-`nominal_weight` is used to define priority and the initial score multiplier. It should usually be `1.0` for normal symbols and `-1.0` for symbols with negative scores that should be executed before other symbols. Here is an example of registering one callback and a couple of virtual symbols used in the [dmarc](../modules/dmarc.html) module:
+`nominal_weight` is used to define priority and the initial score multiplier. It should usually be `1.0` for normal symbols and `-1.0` for symbols with negative scores that should be executed before other symbols. Here is an example of registering one callback and a couple of virtual symbols used in the [DMARC](../modules/dmarc.html) module:
 
 ~~~lua
 local id = Rspamd_config:register_callback_symbol('DMARC_CALLBACK', 1.0,
@@ -388,7 +388,7 @@ Numeric `id` is returned by a registration function with callbacks (`register_sy
 
 ### Asynchronous actions
 
-For asynchronous actions, such as redis access or DNS checks it is recommended to use
+For asynchronous actions, such as Redis access or DNS checks it is recommended to use
 dedicated callbacks, called symbol handlers. The difference to generic Lua rules is that
 dedicated callbacks are not obliged to return value but they use the method `task:insert_result(symbol, weight)` to indicate a match. All Lua plugins are implemented as symbol handlers. Here is a simple example of a symbol handler that checks DNS:
 
@@ -439,7 +439,7 @@ rspamd_config:get_all_opts('section')
 * Add maps:
 
 ~~~lua
-rule['map'] = Rspamd_config:add_kv_map(rule['domains'],
+rule['map'] = rspamd_config:add_kv_map(rule['domains'],
             "Whitelist map for " .. symbol)
 ~~~
 
