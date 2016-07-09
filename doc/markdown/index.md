@@ -13,8 +13,8 @@ Here are the main introduction documents that are recommended for reading if you
 
 ### Rspamd and Dovecot Antispam integration
 
-* [Training Rspamd with dovecot antispam plugin, part 1](https://kaworu.ch/blog/2014/03/25/dovecot-antispam-with-Rspamd/) - this tutorial describes how to train Rspamd automatically using the `antispam` pluging of the `dovecot` IMAP server
-* [Training Rspamd with dovecot antispam plugin, part 2](https://kaworu.ch/blog/2015/10/12/dovecot-antispam-with-Rspamd-part2/) - continuation of the previous tutorial
+* [Training Rspamd with Dovecot antispam plugin, part 1](https://kaworu.ch/blog/2014/03/25/dovecot-antispam-with-rspamd/) - this tutorial describes how to train Rspamd automatically using the `antispam` plugin of the `Dovecot` IMAP server
+* [Training Rspamd with Dovecot antispam plugin, part 2](https://kaworu.ch/blog/2015/10/12/dovecot-antispam-with-rspamd-part2/) - continuation of the previous tutorial
 
 ## Configuration
 
@@ -38,4 +38,4 @@ These documents are useful if you need to know details about Rspamd internals.
 This section contains documents about writing new rules for Rspamd and, in particular, Rspamd Lua API.
 
 * **[Writing Rspamd rules](./tutorials/writing_rules.md)** is a step-by-step guide that describes how to write rules for Rspamd
-* **[LUA API reference](./lua/)** provides the extensive information about all LUA modules available in Rspamd
+* **[Lua API reference](./lua/)** provides the extensive information about all Lua modules available in Rspamd

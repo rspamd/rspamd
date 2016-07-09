@@ -2,11 +2,11 @@
 
 ## Protocol basics
 
-rspamd uses the HTTP protocol, either version 1.0 or 1.1. (There is also a compatibility layer described further in this document.) Rspamd defines some headers which allow the passing of extra information about a scanned message, such as envelope data, IP address or SMTP sasl authentication data, etc. Rspamd supports normal and chunked encoded HTTP requests.
+Rspamd uses the HTTP protocol, either version 1.0 or 1.1. (There is also a compatibility layer described further in this document.) Rspamd defines some headers which allow the passing of extra information about a scanned message, such as envelope data, IP address or SMTP SASL authentication data, etc. Rspamd supports normal and chunked encoded HTTP requests.
 
 ## Rspamd HTTP request
 
-rspamd encourages the use of the HTTP protocol since it is standard and can be used by every programming language without the use of exotic libraries. A typical HTTP request looks like the following:
+Rspamd encourages the use of the HTTP protocol since it is standard and can be used by every programming language without the use of exotic libraries. A typical HTTP request looks like the following:
 
 	POST /check HTTP/1.0
 	Content-Length: 26969
@@ -52,11 +52,11 @@ Standard HTTP headers, such as `Content-Length`, are also supported.
 
 ## Rspamd HTTP reply
 
-rspamd reply is encoded in `JSON`. Here is a typical HTTP reply:
+Rspamd reply is encoded in `JSON`. Here is a typical HTTP reply:
 
 	HTTP/1.1 200 OK
 	Connection: close
-	Server: Rspamd/0.9.0
+	Server: rspamd/0.9.0
 	Date: Mon, 30 Mar 2015 16:19:35 GMT
 	Content-Length: 825
 	Content-Type: application/json
@@ -105,7 +105,7 @@ rspamd reply is encoded in `JSON`. Here is a typical HTTP reply:
 }
 ~~~
 
-For convenience, the reply is LINTed using [jsonlint](http://jsonlint.com). The actual reply is compressed for speed.
+For convenience, the reply is LINTed using [JSONLint](http://jsonlint.com). The actual reply is compressed for speed.
 
 The reply can be treated as a JSON object where keys are metric names (namely `default`) and values are objects that represent metrics.
 
@@ -114,7 +114,7 @@ Each metric has the following fields:
 * `is_spam` - boolean value that indicates whether a message is spam
 * `is_skipped` - boolean flag that is `true` if a message has been skipped due to settings
 * `score` - floating point value representing the effective score of message
-* `required_score` - floating point value meaning the treshold value for the metric
+* `required_score` - floating point value meaning the threshold value for the metric
 * `action` - recommended action for a message:
 	- `no action` - message is likely ham;
 	- `greylist` - message should be greylisted;
@@ -128,7 +128,7 @@ Additionally, metric contains all symbols added during a message's processing, i
 Additional keys which may be in the reply include:
 
 * `subject` - if action is `rewrite subject` this value defines the desired subject for a message
-* `urls` - a list of urls found in a message (only hostnames)
+* `urls` - a list of URLs found in a message (only hostnames)
 * `emails` - a list of emails found in a message
 * `message-id` - ID of message (useful for logging)
 * `messages` - array of optional messages added by Rspamd filters (such as `SPF`)
@@ -151,4 +151,4 @@ Here is an example of a JSON control block:
 }
 ~~~
 
-Moreover, [UCL](https://github.com/vstakhov/libucl) json extensions and syntax conventions are also supported inside the control block.
+Moreover, [UCL](https://github.com/vstakhov/libucl) JSON extensions and syntax conventions are also supported inside the control block.

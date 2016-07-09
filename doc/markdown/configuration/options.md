@@ -40,17 +40,17 @@ control_socket = "$DBDIR/rspamd.sock mode=0600";
 * `history_file`: this file is automatically created and refreshed on shutdown to preserve the rolling history of operations displayed by the WebUI across restarts
 * `temp_dir`: a directory for temporary files (can also be set via the environment variable `TMPDIR`).
 * `url_tld`: path to file with top level domain suffixes used by Rspamd to find URLs in messages; by default this file is shipped with Rspamd and should not be touched manually
-* `pid_file`: file used to store pid of the Rspamd main process (not used with systemd)
+* `pid_file`: file used to store PID of the Rspamd main process (not used with systemd)
 * `min_word_len`: minimum size in letters (valid for utf-8 as well) for a sequence of characters to be treated as a word; normally Rspamd skips sequences if they are shorter or equal to three symbols
 * `control_socket`: path/bind for the control socket
 * `classify_headers`: list of headers that are processed by statistics
 * `history_rows`: number of rows in the recent history table
 * `explicit_modules`: always load modules from the list even if they have no configuration section in the file
-* `disable_hyperscan`: disable hyperscan optimizations (if enabled at compile time)
+* `disable_hyperscan`: disable Hyperscan optimizations (if enabled at compile time)
 * `cores_dir`: directory where Rspamd should drop core files
 * `max_cores_size`: maximum total size of core files that are placed in `cores_dir`
 * `max_cores_count`: maximum number of files in `cores_dir`
-* `local_addrs` or `local_networks`: map or list of ip networks used as local, so certain checks are skipped for them (e.g. SPF checks)
+* `local_addrs` or `local_networks`: map or list of IP networks used as local, so certain checks are skipped for them (e.g. SPF checks)
 
 ## DNS options
 

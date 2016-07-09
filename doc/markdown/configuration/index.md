@@ -1,15 +1,15 @@
 # Rspamd configuration
 
-rspamd uses the Universal Configuration Language (UCL) for its configuration. The UCL format is described in detail in this [document](ucl.md). Rspamd defines several variables and macros to extend
+Rspamd uses the Universal Configuration Language (UCL) for its configuration. The UCL format is described in detail in this [document](ucl.md). Rspamd defines several variables and macros to extend
 UCL functionality.
 
 ## Rspamd variables
 
 - *CONFDIR*: configuration directory for Rspamd, found in `$PREFIX/etc/rspamd/`
-- *RUNDIR*: runtime directory to store pidfiles or unix sockets
+- *RUNDIR*: runtime directory to store pidfiles or UNIX sockets
 - *DBDIR*: persistent databases directory (used for statistics or symbols cache).
 - *LOGDIR*: a directory to store log files
-- *PLUGINSDIR*: plugins directory for lua plugins
+- *PLUGINSDIR*: plugins directory for Lua plugins
 - *PREFIX*: basic installation prefix
 - *VERSION*: Rspamd version string (e.g. "0.6.6")
 
@@ -39,7 +39,7 @@ modules {
 }
 ~~~
 
-In this file, we read a lua script placed in `$CONFDIR/lua/rspamd.lua` and load lua rules from it. Then we include a global [options](options.md) section followed by [logging](logging.md) logging configuration. The [metrics](metrics.md) section defines metric settings, including rule weights and Rspamd actions. The [workers](../workers/index.md) section specifies Rspamd workers settings. [Composites](composites.md) is a utility section that describes composite symbols. Statistical filters are defined in the [statistic](statistic.md) section. Rspamd stores module configurations (for both lua and internal modules) in the [modules](../modules/index.md) section while modules themselves are loaded from the following portion of the configuration:
+In this file, we read a Lua script placed in `$CONFDIR/lua/rspamd.lua` and load Lua rules from it. Then we include a global [options](options.md) section followed by [logging](logging.md) logging configuration. The [metrics](metrics.md) section defines metric settings, including rule weights and Rspamd actions. The [workers](../workers/index.md) section specifies Rspamd workers settings. [Composites](composites.md) is a utility section that describes composite symbols. Statistical filters are defined in the [statistic](statistic.md) section. Rspamd stores module configurations (for both Lua and internal modules) in the [modules](../modules/index.md) section while modules themselves are loaded from the following portion of the configuration:
 
 ~~~ucl
 modules {
