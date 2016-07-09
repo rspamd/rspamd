@@ -1,7 +1,3 @@
----
-layout: doc_lua
-title: Rspamd Lua Documentation
----
 # Rspamd Lua API {#top}
 
 Lua api is a core part of Rspamd functionality. [Lua language](http://www.lua.org) is used for writing rules and plugins.
@@ -199,12 +195,12 @@ end
 -- Reading configuration
 
 -- Get all options for this plugin
-local opts =  Rspamd_config:get_all_opt('sample')
+local opts =  rspamd_config:get_all_opt('sample')
 if opts then
     if opts['config'] then
         config_param = opts['config']
         -- Register callback
-        Rspamd_config:register_symbol('some_symbol', sample_callback)
+        rspamd_config:register_symbol('some_symbol', sample_callback)
     end
 end
 ~~~
@@ -235,25 +231,25 @@ end
 
 ### Using maps from Lua plugin
 
-Maps hold dynamically loaded data like lists or ip trees. It is possible to use 3 types of maps:
+Maps hold dynamically loaded data like lists or IP trees. It is possible to use 3 types of maps:
 
-* **radix_tree** stores ip addresses
+* **radix_tree** stores IP addresses
 * **hash_map** stores plain strings (domains usually)
 * **callback** call for a specified Lua callback when a map is loaded or changed, map's content is passed to that callback as a parameter
 
 Here is a sample of using maps from Lua API:
 
 ~~~lua
-local Rspamd_logger = require "rspamd_logger"
+local rspamd_logger = require "rspamd_logger"
 
 -- Add two maps in configuration section
-local hash_map = Rspamd_config:add_hash_map('file:///path/to/file', 'sample map')
-local radix_tree = Rspamd_config:add_radix_map('http://somehost.com/test.dat', 'sample ip map')
-local generic_map = Rspamd_config:add_map('file:///path/to/file', 'sample generic map',
+local hash_map = rspamd_config:add_hash_map('file:///path/to/file', 'sample map')
+local radix_tree = rspamd_config:add_radix_map('http://somehost.com/test.dat', 'sample ip map')
+local generic_map = rspamd_config:add_map('file:///path/to/file', 'sample generic map',
     function(str)
         -- This callback is called when a map is loaded or changed
         -- Str contains map content
-        Rspamd_logger.info('Got generic map content: ' .. str)
+        rspamd_logger.info('Got generic map content: ' .. str)
     end)
 
 local function sample_symbol_cb(task)
