@@ -1,13 +1,13 @@
 ---
 layout: doc_modules
-title: Rspamd Modules
+title: Modules documentation
 ---
 # Rspamd modules
 
 Rspamd ships with a set of modules. Some modules are written in C to speedup
 complex procedures while others are written in lua to reduce code size.
 Actually, new modules are encouraged to be written in lua and add the essential
-support to the Lua API itself. Truly speaking, lua modules are very close to 
+support to the Lua API itself. Truly speaking, lua modules are very close to
 C modules in terms of performance. However, lua modules can be written and loaded
 dynamically.
 
@@ -37,7 +37,7 @@ public DNS black lists to filter messages with malicious URLs.
 ## Lua modules
 
 Lua modules are dynamically loaded on rspamd startup and are reloaded on rspamd
-reconfiguration. Should you want to write a lua module consult with the 
+reconfiguration. Should you want to write a lua module consult with the
 [Lua API documentation](../lua/). To define path to lua modules there is a special section
 named `modules` in rspamd:
 

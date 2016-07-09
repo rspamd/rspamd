@@ -1,6 +1,6 @@
 ---
-layout: doc
-title: Rspamd Documentation
+layout: doc_worker_add
+title: Rspamd normal worker
 ---
 # Rspamd normal worker
 

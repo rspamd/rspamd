@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: Rspamd Documentation
+title: Workers documentation
 ---
 # Rspamd workers
 

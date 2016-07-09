@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: Rspamd Documentation
+title: Upgrading
 ---
 # Migrating between rspamd versions
 
@@ -134,7 +134,7 @@ the only global remaining is `rspamd_config`. This affects the following modules
 	- `rspamd_cdb`
 	- `rspamd_regexp`
 	- `rspamd_trie`
-	
+
 ~~~lua
 local rspamd_logger = require "rspamd_logger"
 local rspamd_trie = require "rspamd_trie"
@@ -168,7 +168,7 @@ end
 local dm = task:get_date{format = 'message'} -- MIME message date
 local dt = task:get_date{format = 'connect'} -- check date
 ~~~
-	
+
 * `get_header` - this function is totally reworked. Now `get_header` version returns just a decoded string, `get_header_raw` returns an undecoded string and `get_header_full` returns the full list of tables. Please consult the corresponding [documentation](https://rspamd.com/doc/lua/task.html) for details. You also might want to update the old invocation of task:get_header to the new one.
 Old version:
 
@@ -185,7 +185,7 @@ function kmail_msgid (task)
 	return false
 end
 ~~~
-	
+
 new one:
 
 ~~~lua
@@ -200,7 +200,7 @@ end
 ~~~
 
 or with the full version:
-	
+
 ~~~lua
 rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
 	local headers_recv = task:get_header_full('Received')
@@ -223,8 +223,8 @@ end
 local smtp_from = task:get_from(1)
 if smtp_from then
 	local mime_from = task:get_from(2)
-	if not mime_from or 
-			not (string.lower(mime_from[1]['addr']) == 
+	if not mime_from or
+			not (string.lower(mime_from[1]['addr']) ==
 			string.lower(smtp_from[1]['addr'])) then
 		task:insert_result(symbol_sender, 1)
 	end

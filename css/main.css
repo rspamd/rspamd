@@ -8,10 +8,8 @@ body {
   padding-top: 50px;
 }
 .affix {
-  top: 20px;
   width: auto;
   position: static;
-  margin-top: 50px;
 }
 /* Responsive: Portrait tablets and up */
 @media screen and (min-width: 1024px) {
@@ -20,9 +18,9 @@ body {
     padding: 0;
   }
   .affix {
-    top: 20px;
-    width: auto;
     position: fixed;
+    top: 50px;
+    width: auto;
 	  margin-top: 50px;
   }
 }
@@ -146,7 +144,7 @@ h2{
   background-color: transparent;
   padding-left: 0;
 }
-ul.affix li a, ul.affix-top li a{
+ul.nav-stacked li a{
   padding-top: 5px;
   padding-bottom: 5px;
 }

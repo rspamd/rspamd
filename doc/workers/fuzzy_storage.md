@@ -1,6 +1,6 @@
 ---
-layout: doc
-title: Rspamd Documentation
+layout: doc_worker_add
+title: Fuzzy storage worker
 ---
 # Fuzzy storage worker
 
@@ -33,7 +33,7 @@ Fuzzy storage accepts the following commands:
 - `FUZZY_DEL` - remove a hash
 
 `flag` field is used to store different hashes in a single storage. For example,
-it allows to store blacklists and whitelists in the same fuzzy storage worker. 
+it allows to store blacklists and whitelists in the same fuzzy storage worker.
 A client should set the `flag` field when adding or deleting hashes and check it
 when querying for a hash.
 
@@ -55,7 +55,7 @@ an array of int64_t values. Please note, that rspamd rejects commands that have 
 shingles count or their size is not equal to the desired one:
 
 	sizeof(fuzzy_.html) + shingles_count * sizeof(int64_t)
-	
+
 Reply format of fuzzy storage is also presented as a structure:
 
 ~~~C
@@ -85,7 +85,7 @@ CREATE TABLE digests(id INTEGER PRIMARY KEY,
 	digest TEXT NOT NULL,
 	value INTEGER,
 	time INTEGER);
-	
+
 CREATE TABLE shingles(value INTEGER NOT NULL,
 	number INTEGER NOT NULL,
 	digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE ON UPDATE CASCADE);
