@@ -1,4 +1,9 @@
-# Rspamd Lua API {#top}
+---
+layout: doc_lua
+title: Lua API documentation
+---
+
+# Lua API documentation {#top}
 
 Lua api is a core part of Rspamd functionality. [Lua language](http://www.lua.org) is used for writing rules and plugins.
 
