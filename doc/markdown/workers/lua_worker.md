@@ -1,3 +1,0 @@
-# Lua worker
-
-TODO
