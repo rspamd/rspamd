@@ -231,7 +231,7 @@ gint
 dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
-	gint res = TRUE, cb_id;
+	gint res = TRUE, cb_id = -1, check_id = -1;
 	guint cache_size;
 	gboolean got_trusted = FALSE;
 
@@ -389,7 +389,7 @@ dkim_module_config (struct rspamd_config *cfg)
 									128,
 									g_free, /* Keys are just C-strings */
 									(GDestroyNotify)rspamd_dkim_sign_key_unref);
-					cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
+					check_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 							"DKIM_SIGN",
 							0,
 							dkim_sign_callback,
@@ -397,6 +397,14 @@ dkim_module_config (struct rspamd_config *cfg)
 							SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_FINE,
 							-1);
 					msg_info_config ("init condition script for DKIM signing");
+
+					/*
+					 * Allow dkim signing to be executed only after dkim check
+					 */
+					if (cb_id > 0) {
+						rspamd_symbols_cache_add_delayed_dependency (cfg->cache,
+								"DKIM_SIGN", dkim_module_ctx->symbol_reject);
+					}
 
 				}
 				else {
