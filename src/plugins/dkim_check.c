@@ -43,6 +43,7 @@
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
 #define DEFAULT_TIME_JITTER 60
+#define DEFAULT_MAX_SIGS 5
 
 struct dkim_ctx {
 	struct module_ctx ctx;
@@ -59,6 +60,7 @@ struct dkim_ctx {
 	rspamd_lru_hash_t *dkim_sign_hash;
 	const gchar *sign_headers;
 	gint sign_condition_ref;
+	guint max_sigs;
 	gboolean trusted_only;
 	gboolean skip_multi;
 };
@@ -112,6 +114,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
 			"list-subscribe:list-post";
 	dkim_module_ctx->sign_condition_ref = -1;
+	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 
@@ -223,6 +226,24 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"dkim",
+			"Lua script that tells if a message should be signed and with what params",
+			"sign_condition",
+			UCL_STRING,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"dkim",
+			"Maximum number of DKIM signatures to check",
+			"max_sigs",
+			UCL_INT,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	return 0;
 }
@@ -279,12 +300,19 @@ dkim_module_config (struct rspamd_config *cfg)
 	else {
 		dkim_module_ctx->time_jitter = DEFAULT_TIME_JITTER;
 	}
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "dkim", "max_sigs")) != NULL) {
+		dkim_module_ctx->max_sigs = ucl_object_toint (value);
+	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
 
 		rspamd_config_radix_from_ucl (cfg, value, "DKIM whitelist",
 				&dkim_module_ctx->whitelist_ip, NULL);
 	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "domains")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
@@ -297,6 +325,7 @@ dkim_module_config (struct rspamd_config *cfg)
 			got_trusted = TRUE;
 		}
 	}
+
 	if (!got_trusted && (value =
 			rspamd_config_get_module_opt (cfg, "dkim", "trusted_domains")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
@@ -309,6 +338,7 @@ dkim_module_config (struct rspamd_config *cfg)
 			got_trusted = TRUE;
 		}
 	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"strict_multiplier")) != NULL) {
@@ -317,6 +347,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	else {
 		dkim_module_ctx->strict_multiplier = 1;
 	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "trusted_only")) != NULL) {
 		dkim_module_ctx->trusted_only = ucl_obj_toboolean (value);
@@ -324,6 +355,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	else {
 		dkim_module_ctx->trusted_only = FALSE;
 	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
 		dkim_module_ctx->skip_multi = ucl_obj_toboolean (value);
@@ -602,6 +634,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	GError *err = NULL;
 	struct raw_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
+	guint checked = 0;
 	/* First check if a message has its signature */
 
 	hlist = rspamd_message_get_header (task,
@@ -697,6 +730,24 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 
 				if (res != cur) {
 					DL_APPEND (res, cur);
+				}
+
+				if (dkim_module_ctx->skip_multi) {
+					if (hlist->next) {
+						msg_info_task ("message has multiple signatures but we"
+								" check only one as 'skip_multi' is set");
+					}
+
+					break;
+				}
+
+				checked ++;
+
+				if (checked > dkim_module_ctx->max_sigs) {
+					msg_info_task ("message has multiple signatures but we"
+							" stopped after %d checked signatures as limit"
+							" is reached", checked);
+					break;
 				}
 
 				hlist = g_list_next (hlist);
