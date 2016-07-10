@@ -18,9 +18,7 @@ ${STATS_PATH_SPAM}  path = "\${TMPDIR}/bayes-spam.sqlite";
 *** Keywords ***
 Broken Learn Test
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Follow Rspamd Log
-  Should Not Contain  ${result.stdout}  success = true
-  Should Not Equal As Integers  ${result.rc}  0
+  Check Rspamc  ${result}  inverse=1
 
 Empty Part Test
   Set Test Variable  ${MESSAGE}  ${TESTDIR}/messages/empty_part.eml
