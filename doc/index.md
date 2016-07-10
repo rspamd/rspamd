@@ -2,7 +2,7 @@
 layout: doc_main
 title: Rspamd Documentation
 ---
-## Instalation and Administation
+## Installation and Administration
 
 Here are the main introduction documents that are recommended for reading if you are going to use Rspamd in your mail system.
 
