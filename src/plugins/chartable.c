@@ -187,17 +187,17 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w,
 		uc = g_utf8_get_char (p);
 
 		if (g_unichar_isalpha (uc)) {
+			sc = g_unichar_get_script (uc);
 
 			if (state == got_digit) {
 				/* Penalize digit -> alpha translations */
-				if (!is_url) {
+				if (!is_url && sc != G_UNICODE_SCRIPT_COMMON &&
+						sc != G_UNICODE_SCRIPT_LATIN) {
 					badness += 1.0;
 				}
 			}
 			else if (state == got_alpha) {
 				/* Check script */
-				sc = g_unichar_get_script (uc);
-
 				if (same_script_count > 0) {
 					if (sc != last_sc) {
 						badness += 1.0 / (gdouble)same_script_count;
@@ -279,7 +279,7 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task, rspamd_ftok_t *w,
 
 			if (state == got_digit) {
 				/* Penalize digit -> alpha translations */
-				if (!is_url) {
+				if (!is_url && !g_ascii_isxdigit (*p)) {
 					badness += 1.0;
 				}
 			}
