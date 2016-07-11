@@ -1139,6 +1139,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 			reply = rspamd_fstring_new ();
 			rspamd_ucl_torspamc_output (bk_conn->results, &reply);
 			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+			msg->method = HTTP_SYMBOLS;
 		}
 		else {
 			msg_warn_session ("cannot parse results from the master backend, "
