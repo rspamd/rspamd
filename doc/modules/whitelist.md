@@ -1,6 +1,6 @@
 ---
 layout: doc_modules
-title: Rspamd Modules
+title: Whitelist module
 ---
 # Whitelist module
 

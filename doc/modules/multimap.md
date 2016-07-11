@@ -1,6 +1,6 @@
 ---
 layout: doc_modules
-title: Rspamd Modules
+title: Multimap module
 ---
 # Multimap module
 

@@ -1,6 +1,6 @@
 ---
 layout: doc_modules
-title: Rspamd Modules
+title: Ratelimit module
 ---
 # Ratelimit plugin
 

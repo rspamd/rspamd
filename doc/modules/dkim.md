@@ -1,6 +1,6 @@
 ---
 layout: doc_modules
-title: Rspamd Modules
+title: DKIM module
 ---
 # DKIM module
 

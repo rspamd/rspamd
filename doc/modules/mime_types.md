@@ -1,6 +1,6 @@
 ---
 layout: doc_modules
-title: Rspamd Modules
+title: Mime types modules
 ---
 # Rspamd mime types module
 

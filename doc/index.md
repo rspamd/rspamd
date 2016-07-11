@@ -19,7 +19,7 @@ This section contains documents about various configuration details.
 
 * **[Configuration structure](./configuration/index.html)** explain the basic principles of Rspamd configuration files
   + **[Users settings description](./configuration/settings.html)** could be useful if you need to setup per-user configuration or want process mail in different ways, for example, for inbound and outbound messages.
-  + **[Top-level options](/doc/configuration/options.html)]** are used to set the global options for Rspamd, such as DNS resolver setup and so on
+  + **[Top-level options](/doc/configuration/options.html)** are used to set the global options for Rspamd, such as DNS resolver setup and so on
   + **[Logging setup](/doc/configuration/logging.html)** is required if you need customized logging
   + **[Metrics, actions and symbols](/doc/configuration/metrics.html)** are very important as they allow to set custom rules scores and thresholds for different actions
   + **[Composite symbols](/doc/configuration/composites.html)** are useful to combine rules into meta-rules
