@@ -2,15 +2,19 @@
 layout: doc
 title: Upgrading
 ---
-# Migrating between rspamd versions
+# Updating Rspamd
 
-This document describes incompatible changes introduced in recent rspamd versions and details how to update your rules and configuration accordingly.
+This document describes incompatible changes introduced in recent Rspamd versions and details how to update your rules and configuration accordingly.
 
-## Migrating from rspamd 1.0 to rspamd 1.1
+## Migrating from Rspamd 1.1 to Rspamd 1.2
 
-The only change here affects users with per-user statistics enabled. There is an incompatible change in sqlite3 and per-user behaviour:
+There are no incompatible changes introduced in Rspamd 1.2 version.
 
-Now both redis and sqlite3 follow common principles for per-user statistics:
+## Migrating from Rspamd 1.0 to Rspamd 1.1
+
+The only change here affects users with per-user statistics enabled. There is an incompatible change in `sqlite3` and per-user behaviour:
+
+Now both `redis` and `sqlite3` follow common principles for per-user statistics:
 
 * If per-user statistics is enabled check per-user tokens **ONLY**
 * If per-user statistics is not enabled then check common tokens **ONLY**
@@ -55,9 +59,9 @@ If you need the old behaviour, then you need to use a separate classifier for pe
     }
 ~~~
 
-## Migrating from rspamd 0.9 to rspamd 1.0
+## Migrating from Rspamd 0.9 to Rspamd 1.0
 
-In rspamd 1.0 the default settings for statistics tokenization have been changed to `modern`, meaning that tokens are now generated from normalized words and there are various improvements which are incompatible with the statistics model used in pre-1.0 versions. To use these new features you should either **relearn** your statistics or continue using your old statistics **without** new features by adding a `compat` parameter:
+In Rspamd 1.0 the default settings for statistics tokenization have been changed to `modern`, meaning that tokens are now generated from normalized words and there are various improvements which are incompatible with the statistics model used in pre-1.0 versions. To use these new features you should either **relearn** your statistics or continue using your old statistics **without** new features by adding a `compat` parameter:
 
 ~~~ucl
 classifier {
@@ -96,15 +100,15 @@ classifier {
 }
 ~~~
 
-## Migrating from rspamd 0.6 to rspamd 0.7
+## Migrating from Rspamd 0.6 to Rspamd 0.7
 
 ### WebUI changes
 
-The rspamd web interface is now a part of the rspamd distribution. Moreover, all static files are now served by rspamd itself so you won't need to set up a separate web server to distribute static files. At the same time, the WebUI worker has been removed and the controller acts as WebUI+old_controller which allows it to work with both a web browser and the rspamc client. However, you might still want to set up a full-featured HTTP server in front of rspamd to enable, for example, TLS and access controls.
+The Rspamd web interface is now a part of the Rspamd distribution. Moreover, all static files are now served by Rspamd itself so you won't need to set up a separate web server to distribute static files. At the same time, the WebUI worker has been removed and the controller acts as WebUI+old_controller which allows it to work with both a web browser and the rspamc client. However, you might still want to set up a full-featured HTTP server in front of Rspamd to enable, for example, TLS and access controls.
 
-Now there are two password levels for rspamd: `password` for read-only commands and `enable_password` for data changing commands. If `enable_password` is not specified then `password` is used for both commands.
+Now there are two password levels for Rspamd: `password` for read-only commands and `enable_password` for data changing commands. If `enable_password` is not specified then `password` is used for both commands.
 
-Here is an example of the full configuration of the rspamd controller worker to serve the WebUI:
+Here is an example of the full configuration of the Rspamd controller worker to serve the WebUI:
 
 ~~~ucl
 worker {
@@ -120,13 +124,13 @@ worker {
 
 ### Settings changes
 
-The settings system has been completely reworked. It is now a lua plugin that registers pre-filters and assigns settings according to dynamic maps or a static configuration. Should you want to use the new settings system then please check the recent [documentation](https://rspamd.com/doc/configuration/settings.html). The old settings have been completely removed from rspamd.
+The settings system has been completely reworked. It is now a lua plugin that registers pre-filters and assigns settings according to dynamic maps or a static configuration. Should you want to use the new settings system then please check the recent [documentation](https://rspamd.com/doc/configuration/settings.html). The old settings have been completely removed from Rspamd.
 
 ### Lua changes
 
 There are many changes in the lua API and some of them are, unfortunately, breaking ones.
 
-* many superglobals are removed: now rspamd modules need to be loaded explicitly,
+* many superglobals are removed: now Rspamd modules need to be loaded explicitly,
 the only global remaining is `rspamd_config`. This affects the following modules:
 	- `rspamd_logger`
 	- `rspamd_ip`
@@ -233,4 +237,4 @@ end
 
 ### Protocol changes
 
-rspamd now uses `HTTP` protocols for all operations, therefore an additional client library is unlikely to be needed. The fallback to the old `spamc` protocol has also been implemented to be automatically compatible with `rmilter` and other software that uses the `rspamc` protocol.
+Rspamd now uses `HTTP` protocols for all operations, therefore an additional client library is unlikely to be needed. The fallback to the old `spamc` protocol has also been implemented to be automatically compatible with `rmilter` and other software that uses the `rspamc` protocol.

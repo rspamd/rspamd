@@ -1,5 +1,5 @@
 ---
-layout: doc_tutorials
+layout: doc
 title: Rspamd Tutorials
 ---
 # Rspamd tutorials

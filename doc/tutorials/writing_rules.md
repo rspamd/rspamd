@@ -1,6 +1,6 @@
 ---
-layout: doc_tutorials
-title: Rspamd Tutorials
+layout: doc
+title: Writing rules for Rspamd
 ---
 # Writing Rspamd rules
 
