@@ -336,7 +336,8 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	guint i;
 	gdouble cur_score = 0.0;
 
-	if (part->normalized_words->len == 0) {
+	if (part == NULL || part->normalized_words == NULL ||
+			part->normalized_words->len == 0) {
 		return;
 	}
 
