@@ -1675,7 +1675,10 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 		else {
 			/* Legacy spamd reply */
 			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
-				rspamd_printf_fstring (buf, "SPAMD/1.1 0 EX_OK\r\n");
+				rspamd_printf_fstring (buf, "SPAMD/1.1 0 EX_OK\r\n"
+						"Content-length: %z\r\n"
+						"\r\n",
+						bodylen);
 			}
 			else {
 				rspamd_printf_fstring (buf, "RSPAMD/1.3 0 EX_OK\r\n");
@@ -1929,14 +1932,17 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	peer_key = msg->peer_key;
 
 	priv->wr_total = bodylen + 2;
+
 	hdrcount = 0;
 
-	HASH_ITER (hh, msg->headers, hdr, htmp) {
-		/* <name: value\r\n> */
-		priv->wr_total += hdr->combined->len;
-		enclen += hdr->combined->len;
-		priv->outlen ++;
-		hdrcount ++;
+	if (msg->method < HTTP_SYMBOLS) {
+		HASH_ITER (hh, msg->headers, hdr, htmp) {
+			/* <name: value\r\n> */
+			priv->wr_total += hdr->combined->len;
+			enclen += hdr->combined->len;
+			priv->outlen ++;
+			hdrcount ++;
+		}
 	}
 
 	/* Allocate iov */
@@ -2005,11 +2011,12 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	}
 	else {
 		i = 1;
-		HASH_ITER (hh, msg->headers, hdr, htmp) {
-			priv->out[i].iov_base = hdr->combined->str;
-			priv->out[i++].iov_len = hdr->combined->len;
-		}
 		if (msg->method < HTTP_SYMBOLS) {
+			HASH_ITER (hh, msg->headers, hdr, htmp) {
+				priv->out[i].iov_base = hdr->combined->str;
+				priv->out[i++].iov_len = hdr->combined->len;
+			}
+
 			priv->out[i].iov_base = "\r\n";
 			priv->out[i++].iov_len = 2;
 		}
