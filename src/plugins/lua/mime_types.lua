@@ -54,7 +54,7 @@ local settings = {
     xlsx = 0.1,
     pdf = 0.1,
     jar = 3,
-    js = 3,
+    js = 0.5,
     vbs = 4,
   },
 
