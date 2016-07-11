@@ -10,6 +10,7 @@ SET(RSPAMADMSRC rspamadm.c
         stat_convert.c
         signtool.c
         lua_repl.c
+        dkim_keygen.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
