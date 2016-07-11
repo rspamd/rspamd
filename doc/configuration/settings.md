@@ -6,7 +6,7 @@ title: Users settings description
 
 ## Introduction
 
-Rspamd allows exceptional control over the settings which will apply to incoming messages. Each setting can define a set of custom metric weights, symbols or actions. An administrator can also skip spam checks for certain messages completely, if required. Rspamd settings can be loaded as dynamic maps and updated automatically if a corresponding file or URL has changed since its last update.
+Rspamd can apply different settings for messages scanned. Each setting can define a set of custom metric weights, symbols or actions scores and enable or disable certain checks. Rspamd settings can be loaded as dynamic maps and updated automatically if a corresponding file or URL has changed since its last update.
 
 To load settings as a dynamic map, you can set 'settings' to a map string:
 
@@ -27,6 +27,45 @@ settings {
 }
 ~~~
 
+Alternatively, settings could be passed to Rspamd by a client by query parameter:
+
+~~~
+GET /symbols?settings="{symbol1 = 10.0}" HTTP/1.0
+~~~
+
+or HTTP header
+
+~~~
+GET /symbols HTTP/1.0
+Settings: {symbol1 = 10.0}
+~~~
+
+Settings could also be indexed by ID, allowing to select a specific setting without checking for its conditions. For example, this feature could be used to split inbound and outbound mail flows by specifying different rules set from the MTA side. Another use case of settings id option is to create a dedicated lightweight checks for certain conditions, for example DKIM checks.
+
+Let's assume that we have the following settings in the configuration that have id `dkim`:
+
+~~~ucl
+settings {
+	id = "dkim";
+	dkim {
+		enable_groups = ["dkim"];
+	}
+}
+~~~
+
+Afterwards, if we send a request with this settings id using HTTP protocol:
+
+~~~
+GET /symbols HTTP/1.0
+Settings-ID: dkim
+~~~
+
+then Rspamd won't check all rules but DKIM ones. Alternatively, you could check this setup using `rspamc` command:
+
+~~~
+rspamc --header="settings-id=dkim" message.eml
+~~~
+
 ## Settings structure
 
 The settings file should contain a single section called "settings":
@@ -34,6 +73,7 @@ The settings file should contain a single section called "settings":
 ~~~ucl
 settings {
 	some_users {
+		id = "some_users";
 		priority = high;
 		from = "@example.com";
 		rcpt = "admin";
@@ -74,7 +114,21 @@ So each setting has the following attributes:
 - `apply` - list of applied rules, identified by metric name (e.g. `default`)
 	+ `symbol` - modify weight of a symbol
 	+ `actions` - defines actions
+	+ `symbols_enabled` - array of symbols that should be checked (all other rules are disabled)
+	+ `groups_enabled` - array of rules groups that should be checked (all other rules are disabled)
+	+ `symbols_disabled` - array of disabled checks by symbol name (all other rules are enabled)
+	+ `groups_disabled` - array of disabled checks by group name (all other rules are enabled)
 - `symbols` - add symbols from the list if a rule has matched
+
+If `symbols_enabled` or `groups_enabled` are found in `apply` element, then Rspamd disables all checks with the exception of the enabled ones. When `enabled` and `disabled` options are both presented, then the precedence of operations is the following:
+
+1. Disable all symbols
+2. Enable symbols from `symbols_enabled` and `groups_enabled`
+3. Disable symbols from `symbols_disabled` and `groups_disabled`
+
+Currently, you cannot mix several settings for a single message.
+
+### Settings match
 
 The match section performs `AND` operation on different matches: for example, if you have `from` and `rcpt` in the same rule, then the rule matches only when `from` `AND` `rcpt` match. For similar matches, the `OR` rule applies: if you have multiple `rcpt` matches, then *any* of these will trigger the rule. If a rule is triggered then no more rules are matched.
 
