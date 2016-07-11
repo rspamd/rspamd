@@ -23,3 +23,7 @@
 .d3evolution .legend circle {
     stroke-width: 2px;
 }
+.d3evolution .path-null{
+    fill: steelblue;
+    fill-opacity: .1;
+}
