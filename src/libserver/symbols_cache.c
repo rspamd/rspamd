@@ -1325,6 +1325,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 
 	if (def && enabled) {
 		it = NULL;
+		rspamd_symbols_cache_disable_all_symbols (task, cache);
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
 			if (ucl_object_type (cur) == UCL_STRING) {
