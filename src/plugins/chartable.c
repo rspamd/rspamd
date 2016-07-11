@@ -29,6 +29,23 @@
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1
 
+#define msg_err_chartable(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "chartable", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_chartable(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "chartable", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_chartable(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "chartable", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_chartable(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "chartable", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 /* Initialization */
 gint chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
 gint chartable_module_config (struct rspamd_config *cfg);
@@ -47,6 +64,7 @@ struct chartable_ctx {
 	struct module_ctx ctx;
 	const gchar *symbol;
 	double threshold;
+	guint max_word_len;
 
 	rspamd_mempool_t *chartable_pool;
 };
@@ -60,6 +78,7 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
 	chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	chartable_module_ctx->max_word_len = 10;
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
 
@@ -94,6 +113,13 @@ chartable_module_config (struct rspamd_config *cfg)
 	else {
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "chartable", "max_word_len")) != NULL) {
+		chartable_module_ctx->max_word_len = ucl_object_toint (value);
+	}
+	else {
+		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
+	}
 
 	rspamd_symbols_cache_add_symbol (cfg->cache,
 		chartable_module_ctx->symbol,
@@ -117,88 +143,205 @@ chartable_module_reconfig (struct rspamd_config *cfg)
 	return chartable_module_config (cfg);
 }
 
-static gboolean
-check_part (struct rspamd_mime_text_part *part, gboolean raw_mode)
+static gdouble
+rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w)
 {
-	guchar *p, *p1;
-	gunichar c, t;
-	GUnicodeScript scc, sct;
-	guint32 mark = 0, total = 0, max = 0, i;
-	guint32 remain = part->content->len;
-	guint32 scripts[G_UNICODE_SCRIPT_NKO];
-	GUnicodeScript sel = 0;
+	const gchar *p, *end, *c;
+	gdouble badness = 0.0;
+	gunichar uc;
+	gint sc, last_sc;
+	guint same_script_count = 0, nsym = 0;
+	enum {
+		start_process = 0,
+		got_alpha,
+		got_digit,
+		got_unknown,
+	} state = start_process;
 
-	p = part->content->data;
+	p = w->begin;
+	end = p + w->len;
+	c = p;
+	last_sc = 0;
 
-	if (IS_PART_UTF (part) || raw_mode) {
-		while (remain > 1) {
-			if ((g_ascii_isalpha (*p) &&
-				(*(p + 1) & 0x80)) ||
-				((*p & 0x80) && g_ascii_isalpha (*(p + 1)))) {
-				mark++;
-				total++;
+	/* We assume that w is normalized */
+
+	while (p < end) {
+		uc = g_utf8_get_char (p);
+
+		if (g_unichar_isalpha (uc)) {
+
+			if (state == got_digit) {
+				/* Penalize digit -> alpha translations */
+				badness += 1.0;
 			}
-			/* Current and next symbols are of one class */
-			else if (((*p & 0x80) &&
-				(*(p + 1) & 0x80)) ||
-				(g_ascii_isalpha (*p) && g_ascii_isalpha (*(p + 1)))) {
-				total++;
+			else if (state == got_alpha) {
+				/* Check script */
+				sc = g_unichar_get_script (uc);
+
+				if (same_script_count > 0) {
+					if (sc != last_sc) {
+						badness += 1.0 / (gdouble)same_script_count;
+						last_sc = sc;
+						same_script_count = 1;
+					}
+					else {
+						same_script_count ++;
+					}
+				}
+				else {
+					last_sc = sc;
+					same_script_count = 1;
+				}
 			}
-			p++;
-			remain--;
+
+			state = got_alpha;
+
 		}
+		else if (g_unichar_isdigit (uc)) {
+			state = got_digit;
+			same_script_count = 0;
+		}
+		else {
+			/* We don't care about unknown characters here */
+			state = got_unknown;
+			same_script_count = 0;
+		}
+
+		nsym ++;
+		p = g_utf8_next_char (p);
+	}
+
+	/* Try to avoid FP for long words */
+	if (nsym > chartable_module_ctx->max_word_len) {
+		badness = 0;
 	}
 	else {
-		memset (&scripts, 0, sizeof (scripts));
-		while (remain > 0) {
-			c = g_utf8_get_char_validated (p, remain);
-			if (c == (gunichar) - 2 || c == (gunichar) - 1) {
-				/* Invalid characters detected, stop processing */
-				return FALSE;
-			}
+		if (badness > 4.0) {
+			badness = 4.0;
+		}
+	}
 
-			scc = g_unichar_get_script (c);
-			if (scc < (gint)G_N_ELEMENTS (scripts)) {
-				scripts[scc]++;
-			}
-			p1 = g_utf8_next_char (p);
-			remain -= p1 - p;
-			p = p1;
+	msg_debug_chartable ("word %T, badness: %.2f", w, badness);
 
-			if (remain > 0) {
-				t = g_utf8_get_char_validated (p, remain);
-				if (t == (gunichar) - 2 || t == (gunichar) - 1) {
-					/* Invalid characters detected, stop processing */
-					return FALSE;
-				}
-				sct = g_unichar_get_script (t);
-				if (g_unichar_isalpha (c) && g_unichar_isalpha (t)) {
-					/* We have two unicode alphanumeric characters, so we can check its script */
-					if (sct != scc) {
-						mark++;
+	return badness;
+}
+
+static gdouble
+rspamd_chartable_process_word_ascii (struct rspamd_task *task, rspamd_ftok_t *w)
+{
+	const gchar *p, *end, *c;
+	gdouble badness = 0.0;
+	enum {
+		ascii = 1,
+		non_ascii
+	} sc, last_sc;
+	gint same_script_count = 0;
+	enum {
+		start_process = 0,
+		got_alpha,
+		got_digit,
+		got_unknown,
+	} state = start_process;
+
+	p = w->begin;
+	end = p + w->len;
+	c = p;
+	last_sc = 0;
+
+	if (w->len > chartable_module_ctx->max_word_len) {
+		return 0.0;
+	}
+
+	/* We assume that w is normalized */
+	while (p < end) {
+		if (g_ascii_isalpha (*p) || *p > 0x7f) {
+
+			if (state == got_digit) {
+				/* Penalize digit -> alpha translations */
+				badness += 2.0;
+			}
+			else if (state == got_alpha) {
+				/* Check script */
+				sc = (*p > 0x7f) ? ascii : non_ascii;
+
+				if (same_script_count > 0) {
+					if (sc != last_sc) {
+						badness += 1.0 / (gdouble)same_script_count;
+						last_sc = sc;
+						same_script_count = 1;
 					}
-					total++;
+					else {
+						same_script_count ++;
+					}
 				}
-				p1 = g_utf8_next_char (p);
-				remain -= p1 - p;
-				p = p1;
+				else {
+					last_sc = sc;
+					same_script_count = 1;
+				}
 			}
+
+			state = got_alpha;
+
 		}
-		/* Detect the mostly charset of this part */
-		for (i = 0; i < G_N_ELEMENTS (scripts); i++) {
-			if (scripts[i] > max) {
-				max = scripts[i];
-				sel = i;
-			}
+		else if (g_ascii_isdigit (*p)) {
+			state = got_digit;
+			same_script_count = 0;
 		}
-		part->script = sel;
+		else {
+			/* We don't care about unknown characters here */
+			state = got_unknown;
+			same_script_count = 0;
+		}
+
+		p ++;
 	}
 
-	if (total == 0) {
-		return 0;
+	if (badness > 4.0) {
+		badness = 4.0;
 	}
 
-	return ((double)mark / (double)total) > chartable_module_ctx->threshold;
+	msg_debug_chartable ("word %T, badness: %.2f", w, badness);
+
+	return badness;
+}
+
+static void
+rspamd_chartable_process_part (struct rspamd_task *task,
+		struct rspamd_mime_text_part *part)
+{
+	rspamd_ftok_t *w;
+	guint i;
+	gdouble cur_score = 0.0;
+
+	if (part->normalized_words->len == 0) {
+		return;
+	}
+
+	for (i = 0; i < part->normalized_words->len; i++) {
+		w = &g_array_index (part->normalized_words, rspamd_ftok_t, i);
+
+		if (w->len > 0) {
+
+			if (IS_PART_UTF (part)) {
+				cur_score += rspamd_chartable_process_word_utf (task, w);
+			}
+			else {
+				cur_score += rspamd_chartable_process_word_ascii (task, w);
+			}
+		}
+	}
+
+	cur_score /= (gdouble)part->normalized_words->len;
+
+	if (cur_score > 2.0) {
+		cur_score = 2.0;
+	}
+
+	if (cur_score > chartable_module_ctx->threshold) {
+		rspamd_task_insert_result (task, chartable_module_ctx->symbol,
+				cur_score, NULL);
+
+	}
 }
 
 static void
@@ -209,10 +352,7 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
-
-		if (!IS_PART_EMPTY (part) && check_part (part, task->cfg->raw_mode)) {
-			rspamd_task_insert_result (task, chartable_module_ctx->symbol, 1, NULL);
-		}
+		rspamd_chartable_process_part (task, part);
 	}
 
 }
