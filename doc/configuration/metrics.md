@@ -1,6 +1,6 @@
 ---
 layout: doc_conf
-title: Rspamd Configuration
+title: Rspamd Metrics
 ---
 # Rspamd metrics settings
 

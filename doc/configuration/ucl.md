@@ -1,6 +1,6 @@
 ---
 layout: doc_conf
-title: Rspamd Configuration
+title: UCL language
 ---
 # UCL configuration language
 

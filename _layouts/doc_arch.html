@@ -1,27 +1,17 @@
-{% include top.html %}
-	 <div class="container">
+<div id="wrapper">
+	{% include top.html %}
+	<div class="container">
 
-	 <div class="row">
-	 <div class="col-sm-3">
-	 <!-- Docs navigation -->
-	 	<ul data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation">
-			<li class="nav-header"><h4>Rspamd documentation</h4></li>
-			<li><a  href="/doc/index.html">Documentation index</a></li>
-			<li class="divider"></li>
-			<li class="nav-header">Rspamd architecture</li>
-			<li><a  href="/doc/architecture/index.html">Architecture overview</a></li>
-			<li><a  href="/doc/architecture/protocol.html">Protocol description</a></li>
-		<!--	<li><a  href="/doc/lua/classifier.html">Lua classifier module</a></li> -->
-		</ul>
-	 </div>
+		<div class="row">
+			<div class="body-content">
+				{{ content }}
+			</div>
+		</div>
+		<!-- row -->
 
-	 <div class="col-sm-9">
-     <div class="body-content">
-                {{ content }}
-      </div>
-	 </div>
-
-	 </div> <!-- row -->
-
-   </div> <!-- /container -->
+	</div>
+	<!-- /container -->
+</div>
+<div class="push"></div>
+</div>
 {% include bottom.html %}
