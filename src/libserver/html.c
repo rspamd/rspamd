@@ -612,7 +612,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 			}
 			break;
 		case 1:
-			if (*h == ';') {
+			if (*h == ';' && h > e) {
 				/* Determine base */
 				/* First find in entities table */
 
@@ -621,14 +621,18 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 				if (*(e + 1) != '#' &&
 					(found =
 					bsearch (&key, entities_defs, G_N_ELEMENTS (entities_defs),
-					sizeof (entity), entity_cmp)) != NULL) {
+							sizeof (entity), entity_cmp)) != NULL) {
 					if (found->replacement) {
 						rep_len = strlen (found->replacement);
 						memcpy (t, found->replacement, rep_len);
 						t += rep_len;
 					}
+					else {
+						memcpy (t, e, h - e);
+						t += h - e;
+					}
 				}
-				else {
+				else if (e + 2 < h) {
 					if (*(e + 2) == 'x' || *(e + 2) == 'X') {
 						base = 16;
 					}
@@ -646,7 +650,8 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 					}
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						t = h;
+						memcpy (t, e, h - e);
+						t += h - e;
 					}
 					else {
 						/* Search for a replacement */
@@ -662,12 +667,24 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 								t += rep_len;
 							}
 						}
+						else {
+							/* Unicode point */
+							if (g_unichar_isgraph (val)) {
+								t += g_unichar_to_utf8 (val, t);
+							}
+							else {
+								memcpy (t, e, h - e);
+								t += h - e;
+							}
+						}
 					}
 				}
+
 				*h = ';';
 				state = 0;
 			}
 			h++;
+
 			break;
 		}
 	}
