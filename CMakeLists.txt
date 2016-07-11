@@ -1055,7 +1055,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	# In linux, we need to mount /run/shm to test which could be unavailable
 	# on a build system. On the other hand, we know that linux has stupid
 	# but compatible shmem support, so we assume this macro as true
-	SET(CACHE HAVE_SANE_SHMEM 1)
+	SET(HAVE_SANE_SHMEM 1)
 ELSE()
 	CHECK_C_SOURCE_RUNS("
 	#include <sys/mman.h>
