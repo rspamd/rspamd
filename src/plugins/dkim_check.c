@@ -849,6 +849,8 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
 							hdr, rspamd_gstring_free_hard);
 				}
+
+				sign = TRUE;
 			}
 			else {
 				sign = FALSE;
