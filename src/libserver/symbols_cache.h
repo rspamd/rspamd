@@ -36,7 +36,9 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_COMPOSITE = (1 << 5),
 	SYMBOL_TYPE_CLASSIFIER = (1 << 6),
 	SYMBOL_TYPE_FINE = (1 << 7),
-	SYMBOL_TYPE_EMPTY = (1 << 8) /* Allow execution on empty tasks */
+	SYMBOL_TYPE_EMPTY = (1 << 8), /* Allow execution on empty tasks */
+	SYMBOL_TYPE_PREFILTER = (1 << 9),
+	SYMBOL_TYPE_POSTFILTER = (1 << 10),
 };
 
 /**

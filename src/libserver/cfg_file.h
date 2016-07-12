@@ -343,8 +343,6 @@ struct rspamd_config {
 	GList *statfiles;                               /**< list of all statfiles in config file order         */
 	GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
 	GHashTable * cfg_params;                        /**< all cfg params indexed by its name in this structure */
-	GList *pre_filters;                             /**< list of pre-processing lua filters					*/
-	GList *post_filters;                            /**< list of post-processing lua filters				*/
 	gchar *dynamic_conf;                            /**< path to dynamic configuration						*/
 	ucl_object_t *current_dynamic_conf;             /**< currently loaded dynamic configuration				*/
 	GHashTable * domain_settings;                   /**< settings per-domains                               */

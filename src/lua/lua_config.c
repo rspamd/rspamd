@@ -664,212 +664,6 @@ rspamd_compare_order_func (gconstpointer a, gconstpointer b)
 	return cb2->order - cb1->order;
 }
 
-void
-rspamd_lua_call_post_filters (struct rspamd_task *task)
-{
-	struct lua_callback_data *cd;
-	struct rspamd_task **ptask;
-	GList *cur;
-	lua_State *L = task->cfg->lua_state;
-	gint err_idx;
-	GString *tb;
-
-	if (task->checkpoint == NULL) {
-		task->checkpoint = GUINT_TO_POINTER (0x1);
-	}
-	else {
-		/* Do not process if done */
-		return;
-	}
-
-	cur = task->cfg->post_filters;
-	while (cur) {
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
-
-		cd = cur->data;
-		if (cd->cb_is_ref) {
-			lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
-		}
-		else {
-			lua_getglobal (cd->L, cd->callback.name);
-		}
-		ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-		rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
-		*ptask = task;
-
-		if (lua_pcall (cd->L, 1, 0, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_task ("call to post-filter failed: %v", tb);
-			g_string_free (tb, TRUE);
-			lua_pop (L, 1);
-		}
-
-		lua_pop (L, 1); /* Error function */
-
-		cur = g_list_next (cur);
-	}
-}
-
-static gint
-lua_config_register_post_filter (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	struct lua_callback_data *cd;
-	gint order = 0;
-
-	if (cfg) {
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		cd->magic = rspamd_lua_callback_magic;
-
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			order = lua_tonumber (L, 3);
-		}
-
-		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 2));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 2);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-
-		cd->L = L;
-		cd->order = order;
-		cfg->post_filters = g_list_insert_sorted (cfg->post_filters, cd,
-				rspamd_compare_order_func);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
-	}
-
-	return 0;
-}
-
-void
-rspamd_lua_call_pre_filters (struct rspamd_task *task)
-{
-	struct lua_callback_data *cd;
-	struct rspamd_task **ptask;
-	GList *cur;
-	lua_State *L = task->cfg->lua_state;
-	gint err_idx;
-	GString *tb;
-
-	if (task->checkpoint == NULL) {
-		task->checkpoint = GUINT_TO_POINTER (0x1);
-	}
-	else {
-		/* Do not process if done */
-		return;
-	}
-
-	cur = task->cfg->pre_filters;
-	while (cur) {
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
-
-		cd = cur->data;
-		if (cd->cb_is_ref) {
-			lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
-		}
-		else {
-			lua_getglobal (cd->L, cd->callback.name);
-		}
-		ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-		rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
-		*ptask = task;
-
-		if (lua_pcall (cd->L, 1, 0, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_task ("call to pre-filter failed: %v", tb);
-			g_string_free (tb, TRUE);
-			lua_pop (L, 1);
-		}
-
-		lua_pop (L, 1); /* Error function */
-
-		if (task->pre_result.action != METRIC_ACTION_MAX) {
-			/* Stop processing on reaching some pre-result */
-			break;
-		}
-
-		cur = g_list_next (cur);
-	}
-}
-
-static gint
-lua_config_register_pre_filter (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	struct lua_callback_data *cd;
-	gint order = 0;
-
-	if (cfg) {
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		cd->magic = rspamd_lua_callback_magic;
-
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			order = lua_tonumber (L, 3);
-		}
-
-		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 2));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 2);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-
-		cd->L = L;
-		cd->order = order;
-		cfg->pre_filters = g_list_insert_sorted (cfg->pre_filters, cd,
-				rspamd_compare_order_func);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
-	}
-
-	return 0;
-}
-
-static gint
-lua_config_get_key (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *name;
-	size_t namelen;
-	const ucl_object_t *val;
-
-	name = luaL_checklstring(L, 2, &namelen);
-	if (name && cfg) {
-		val = ucl_object_lookup_len(cfg->rcl_obj, name, namelen);
-		if (val != NULL) {
-			ucl_object_push_lua (L, val, val->type != UCL_ARRAY);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
 static void
 lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
@@ -1004,6 +798,117 @@ rspamd_register_symbol_fromlua (lua_State *L,
 }
 
 static gint
+lua_config_register_post_filter (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	gint order = 0, cbref, ret;
+
+	if (cfg) {
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			order = lua_tonumber (L, 3);
+		}
+
+		if (lua_type (L, 2) == LUA_TFUNCTION) {
+			lua_pushvalue (L, 2);
+			/* Get a reference */
+			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		}
+		else {
+			return luaL_error (L, "invalid type for callback: %s",
+					lua_typename (L, lua_type (L, 2)));
+		}
+
+		msg_warn_config ("register_post_filter function is deprecated, "
+				"use register_symbol instead");
+
+		ret = rspamd_register_symbol_fromlua (L,
+				cfg,
+				NULL,
+				cbref,
+				1.0,
+				order,
+				SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_CALLBACK,
+				-1,
+				FALSE);
+
+		lua_pushboolean (L, ret);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_register_pre_filter (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	gint order = 0, cbref, ret;
+
+	if (cfg) {
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			order = lua_tonumber (L, 3);
+		}
+
+		if (lua_type (L, 2) == LUA_TFUNCTION) {
+			lua_pushvalue (L, 2);
+			/* Get a reference */
+			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		}
+		else {
+			return luaL_error (L, "invalid type for callback: %s",
+					lua_typename (L, lua_type (L, 2)));
+		}
+
+		msg_warn_config ("register_pre_filter function is deprecated, "
+				"use register_symbol instead");
+
+		ret = rspamd_register_symbol_fromlua (L,
+				cfg,
+				NULL,
+				cbref,
+				1.0,
+				order,
+				SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_CALLBACK,
+				-1,
+				FALSE);
+
+		lua_pushboolean (L, ret);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_get_key (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *name;
+	size_t namelen;
+	const ucl_object_t *val;
+
+	name = luaL_checklstring(L, 2, &namelen);
+	if (name && cfg) {
+		val = ucl_object_lookup_len(cfg->rcl_obj, name, namelen);
+		if (val != NULL) {
+			ucl_object_push_lua (L, val, val->type != UCL_ARRAY);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_parse_symbol_type (const gchar *str)
 {
 	gint ret = SYMBOL_TYPE_NORMAL;
@@ -1017,6 +922,12 @@ lua_parse_symbol_type (const gchar *str)
 		}
 		else if (strcmp (str, "normal") == 0) {
 			ret = SYMBOL_TYPE_NORMAL;
+		}
+		else if (strcmp (str, "prefilter") == 0) {
+			ret = SYMBOL_TYPE_PREFILTER;
+		}
+		else if (strcmp (str, "postfilter") == 0) {
+			ret = SYMBOL_TYPE_POSTFILTER;
 		}
 		else {
 			msg_warn ("bad type: %s", str);

@@ -62,6 +62,9 @@ struct symbols_cache {
 	GHashTable *items_by_symbol;
 	struct symbols_cache_order *items_by_order;
 	GPtrArray *items_by_id;
+	GPtrArray *prefilters;
+	GPtrArray *postfilters;
+	GPtrArray *composites;
 	GList *delayed_deps;
 	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
@@ -128,7 +131,16 @@ struct delayed_cache_condition {
 
 struct cache_savepoint {
 	guchar *processed_bits;
-	guint pass;
+	enum {
+		RSPAMD_CACHE_PASS_INIT = 0,
+		RSPAMD_CACHE_PASS_PREFILTERS,
+		RSPAMD_CACHE_PASS_WAIT_PREFILTERS,
+		RSPAMD_CACHE_PASS_FILTERS,
+		RSPAMD_CACHE_PASS_WAIT_FILTERS,
+		RSPAMD_CACHE_PASS_POSTFILTERS,
+		RSPAMD_CACHE_PASS_WAIT_POSTFILTERS,
+		RSPAMD_CACHE_PASS_DONE,
+	} pass;
 	guint version;
 	struct metric_result *rs;
 	gdouble lim;
@@ -278,13 +290,16 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 {
 	struct symbols_cache_order *ord;
 	guint i;
-	gpointer p;
+	struct cache_item *it;
 
 	ord = rspamd_symbols_cache_order_new (cache->used_items);
 
 	for (i = 0; i < cache->used_items; i ++) {
-		p = g_ptr_array_index (cache->items_by_id, i);
-		g_ptr_array_add (ord->d, p);
+		it = g_ptr_array_index (cache->items_by_id, i);
+
+		if (!(it->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_COMPOSITE))) {
+			g_ptr_array_add (ord->d, it);
+		}
 	}
 
 	g_ptr_array_sort_with_data (ord->d, cache_logic_cmp, cache);
@@ -386,6 +401,9 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 			}
 		}
 	}
+
+	g_ptr_array_sort_with_data (cache->prefilters, cache_logic_cmp, cache);
+	g_ptr_array_sort_with_data (cache->postfilters, cache_logic_cmp, cache);
 }
 
 static gboolean
@@ -660,6 +678,16 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
 	}
 
+	if (item->type & SYMBOL_TYPE_PREFILTER) {
+		g_ptr_array_add (cache->prefilters, item);
+	}
+	else if (item->type & SYMBOL_TYPE_POSTFILTER) {
+		g_ptr_array_add (cache->postfilters, item);
+	}
+	else if (item->type & SYMBOL_TYPE_COMPOSITE) {
+		g_ptr_array_add (cache->composites, item);
+	}
+
 	return item->id;
 }
 
@@ -676,6 +704,13 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 	}
 
 	item = g_ptr_array_index (cache->items_by_id, id);
+
+	if (item->type & (SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_PREFILTER)) {
+		msg_err_cache ("conditions are not supported for prefilters and "
+				"postfilters %s", item->symbol);
+
+		return FALSE;
+	}
 
 	if (item->condition_cb != -1) {
 		/* We already have a condition, so we need to remove old cbref first */
@@ -767,6 +802,9 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 		g_hash_table_destroy (cache->items_by_symbol);
 		rspamd_mempool_delete (cache->static_pool);
 		g_ptr_array_free (cache->items_by_id, TRUE);
+		g_ptr_array_free (cache->prefilters, TRUE);
+		g_ptr_array_free (cache->postfilters, TRUE);
+		g_ptr_array_free (cache->composites, TRUE);
 		REF_RELEASE (cache->items_by_order);
 		g_slice_free1 (sizeof (*cache), cache);
 	}
@@ -783,6 +821,9 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_id = g_ptr_array_new ();
+	cache->prefilters = g_ptr_array_new ();
+	cache->postfilters = g_ptr_array_new ();
+	cache->composites = g_ptr_array_new ();
 	cache->mtx = rspamd_mempool_get_mutex (cache->static_pool);
 	cache->reload_time = CACHE_RELOAD_TIME;
 	cache->total_freq = 1;
@@ -1256,14 +1297,18 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
 	struct cache_savepoint *checkpoint;
+	guint nitems;
 
-	if (cache->items_by_id->len != cache->items_by_order->d->len) {
+	nitems = cache->items_by_id->len - cache->postfilters->len -
+			cache->prefilters->len - cache->composites->len;
+
+	if (nitems != cache->items_by_order->d->len) {
 		/*
 		 * Cache has been modified, need to resort it
 		 */
 		msg_info_cache ("symbols cache has been modified since last check:"
 				" old items: %ud, new items: %ud",
-				cache->items_by_order->d->len, cache->items_by_id->len);
+				cache->items_by_order->d->len, nitems);
 		rspamd_symbols_cache_resort (cache);
 	}
 
@@ -1280,6 +1325,7 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 			rspamd_symbols_cache_order_unref, checkpoint->order);
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_ptr_array_free_hard, checkpoint->waitq);
+	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
 	rspamd_create_metric_result (task, DEFAULT_METRIC);
@@ -1388,6 +1434,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct cache_savepoint *checkpoint;
 	gint i;
 	gdouble total_microseconds = 0;
+	gboolean all_done;
 	const gdouble max_microseconds = 3e5;
 	guint start_events_pending;
 
@@ -1410,8 +1457,40 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);
 	start_events_pending = rspamd_session_events_pending (task->s);
 
-	if (checkpoint->pass == 0) {
+	switch (checkpoint->pass) {
+	case RSPAMD_CACHE_PASS_INIT:
+		/* Check for prefilters */
+		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
+			item = g_ptr_array_index (cache->prefilters, i);
 
+			if (!isset (checkpoint->processed_bits, item->id * 2)) {
+				rspamd_symbols_cache_check_symbol (task, cache, item,
+						checkpoint, &total_microseconds);
+			}
+		}
+		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_PREFILTERS;
+		break;
+
+	case RSPAMD_CACHE_PASS_PREFILTERS:
+	case RSPAMD_CACHE_PASS_WAIT_PREFILTERS:
+		all_done = TRUE;
+
+		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
+			item = g_ptr_array_index (cache->prefilters, i);
+
+			if (!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+				all_done = FALSE;
+				break;
+			}
+		}
+
+		if (all_done) {
+			checkpoint->pass = RSPAMD_CACHE_PASS_FILTERS;
+
+			return rspamd_symbols_cache_process_symbols (task, cache);
+		}
+		break;
+	case RSPAMD_CACHE_PASS_FILTERS:
 		/*
 		 * On the first pass we check symbols that do not have dependencies
 		 * If we figure out symbol that has no dependencies satisfied, then
@@ -1470,9 +1549,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			}
 		}
 
-		checkpoint->pass ++;
-	}
-	else {
+		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_FILTERS;
+		break;
+
+	case RSPAMD_CACHE_PASS_WAIT_FILTERS:
 		/* We just go through the blocked symbols and check if they are ready */
 		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
 			item = g_ptr_array_index (checkpoint->waitq, i);
@@ -1502,9 +1582,52 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 			}
 		}
+
+		if (checkpoint->waitq->len == 0) {
+			checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
+
+			return rspamd_symbols_cache_process_symbols (task, cache);
+		}
+		break;
+
+	case RSPAMD_CACHE_PASS_POSTFILTERS:
+		/* Check for prefilters */
+		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
+			item = g_ptr_array_index (cache->postfilters, i);
+
+			if (!isset (checkpoint->processed_bits, item->id * 2)) {
+				rspamd_symbols_cache_check_symbol (task, cache, item,
+						checkpoint, &total_microseconds);
+			}
+		}
+		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_POSTFILTERS;
+		break;
+
+	case RSPAMD_CACHE_PASS_WAIT_POSTFILTERS:
+		all_done = TRUE;
+
+		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
+			item = g_ptr_array_index (cache->postfilters, i);
+
+			if (!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+				all_done = FALSE;
+				break;
+			}
+		}
+
+		if (all_done) {
+			checkpoint->pass = RSPAMD_CACHE_PASS_DONE;
+
+			return TRUE;
+		}
+		break;
+
+	case RSPAMD_CACHE_PASS_DONE:
+		return TRUE;
+		break;
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 struct counters_cbdata {

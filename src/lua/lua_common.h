@@ -256,8 +256,6 @@ void luaopen_fann (lua_State *L);
 void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
 
-void rspamd_lua_call_post_filters (struct rspamd_task *task);
-void rspamd_lua_call_pre_filters (struct rspamd_task *task);
 void rspamd_lua_dostring (const gchar *line);
 
 /* Classify functions */
