@@ -269,6 +269,38 @@ local function multimap_callback(task, pre_filter)
     return fn
   end
 
+  local function apply_content_filter(filter, r)
+    if filter == 'body' then
+      return {task:get_rawbody()}
+    elseif filter == 'full' then
+      return {task:get_content()}
+    elseif filter == 'headers' then
+      return {task:get_raw_headers()}
+    elseif filter == 'text' then
+      local ret = {}
+      for i,p in ipairs(task:get_text_parts()) do
+        table.insert(ret, p:get_content())
+      end
+      return ret
+    elseif filter == 'rawtext' then
+      local ret = {}
+      for i,p in ipairs(task:get_text_parts()) do
+        table.insert(ret, p:get_raw_content())
+      end
+      return ret
+    elseif filter == 'oneline' then
+      local ret = {}
+      for i,p in ipairs(task:get_text_parts()) do
+        table.insert(ret, p:get_content_oneline())
+      end
+      return ret
+    else
+      rspamd_logger.errx(task, 'bad search filter: %s', filter)
+    end
+
+    return {}
+  end
+
   local function match_filename(r, fn)
     local value
     local ret = false
@@ -286,6 +318,28 @@ local function multimap_callback(task, pre_filter)
 
       if pre_filter then
         task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+      end
+    end
+  end
+
+  local function match_content(r)
+    local data = {}
+
+    if r['filter'] then
+      data = apply_content_filter(r['filter'], r)
+    else
+      data = {task:get_content()}
+    end
+
+    for i,v in ipairs(data) do
+      ret = match_element(r, v)
+
+      if ret then
+        task:insert_result(r['symbol'], 1)
+
+        if pre_filter then
+          task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+        end
       end
     end
   end
@@ -352,6 +406,13 @@ local function multimap_callback(task, pre_filter)
           return pre_filter == r['prefilter'] and r['type'] == 'filename'
         end, rules))
   end
+  -- Body rules
+  _.each(function(r)
+    match_content(r)
+  end,
+  _.filter(function(r)
+    return pre_filter == r['prefilter'] and r['type'] == 'content'
+  end, rules))
 
   local parts = task:get_parts()
   for i,p in ipairs(parts) do
@@ -439,7 +500,8 @@ local function add_multimap_rule(key, newrule)
         or newrule['type'] == 'rcpt'
         or newrule['type'] == 'from'
         or newrule['type'] == 'filename'
-        or newrule['type'] == 'url' then
+        or newrule['type'] == 'url'
+        or newrule['type'] == 'content' then
       if newrule['regexp'] then
         newrule['hash'] = rspamd_config:add_map ({
           url = newrule['map'],
