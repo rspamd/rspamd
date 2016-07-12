@@ -2003,3 +2003,28 @@ rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_symbols_cache_is_checked (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol)
+{
+	gint id;
+	struct cache_savepoint *checkpoint;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+
+	if (id < 0) {
+		return FALSE;
+	}
+
+	checkpoint = task->checkpoint;
+
+	if (checkpoint) {
+		return isset (checkpoint->processed_bits, id * 2);
+	}
+
+	return FALSE;
+}

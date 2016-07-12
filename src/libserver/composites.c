@@ -258,18 +258,28 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 
 	cd->composite = comp;
 
-	rc = rspamd_process_expression (comp->expr, RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
+	if (!isset (cd->checked, cd->composite->id * 2)) {
+		if (rspamd_symbols_cache_is_checked (cd->task, cd->task->cfg->cache,
+				key)) {
+			setbit (cd->checked, comp->id * 2);
+			clrbit (cd->checked, comp->id * 2 + 1);
+		}
+		else {
+			rc = rspamd_process_expression (comp->expr,
+					RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
 
-	/* Checked bit */
-	setbit (cd->checked, comp->id * 2);
+			/* Checked bit */
+			setbit (cd->checked, comp->id * 2);
 
-	/* Result bit */
-	if (rc) {
-		setbit (cd->checked, comp->id * 2 + 1);
-		rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
-	}
-	else {
-		clrbit (cd->checked, comp->id * 2 + 1);
+			/* Result bit */
+			if (rc) {
+				setbit (cd->checked, comp->id * 2 + 1);
+				rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
+			}
+			else {
+				clrbit (cd->checked, comp->id * 2 + 1);
+			}
+		}
 	}
 }
 

@@ -231,4 +231,14 @@ gboolean rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
 gboolean rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 		struct symbols_cache *cache);
 
+
+/**
+ * Checks if a symbol specified has been checked (or disabled)
+ * @param task
+ * @param cache
+ * @param symbol
+ * @return
+ */
+gboolean rspamd_symbols_cache_is_checked (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol);
 #endif
