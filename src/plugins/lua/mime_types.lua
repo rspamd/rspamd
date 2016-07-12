@@ -88,7 +88,7 @@ local function check_mime_type(task)
           and not string.match(parts[#parts - 1], '^%d+$') then
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult, {
-            parts[#parts - 1], ext
+            '.' .. parts[#parts - 1] .. '.' .. ext
           })
         else
           -- Just bad extension
