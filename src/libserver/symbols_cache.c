@@ -1125,7 +1125,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	gboolean check = TRUE;
 	const gdouble slow_diff_limit = 1e5;
 
-	if (item->type & (SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_CALLBACK)) {
+	if (item->func) {
 
 		g_assert (item->func != NULL);
 		/* Check has been started */

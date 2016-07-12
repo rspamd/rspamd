@@ -783,13 +783,24 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		}
 	}
 
-	ret = rspamd_symbols_cache_add_symbol (cfg->cache,
-			name,
-			priority,
-			lua_metric_symbol_callback,
-			cd,
-			type,
-			parent);
+	if (ref != -1) {
+		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+				name,
+				priority,
+				lua_metric_symbol_callback,
+				cd,
+				type,
+				parent);
+	}
+	else {
+		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+				name,
+				priority,
+				NULL,
+				cd,
+				type,
+				parent);
+	}
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 			cd);
@@ -924,10 +935,10 @@ lua_parse_symbol_type (const gchar *str)
 			ret = SYMBOL_TYPE_NORMAL;
 		}
 		else if (strcmp (str, "prefilter") == 0) {
-			ret = SYMBOL_TYPE_PREFILTER;
+			ret = SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_GHOST;
 		}
 		else if (strcmp (str, "postfilter") == 0) {
-			ret = SYMBOL_TYPE_POSTFILTER;
+			ret = SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_GHOST;
 		}
 		else {
 			msg_warn ("bad type: %s", str);
