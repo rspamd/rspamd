@@ -47,10 +47,22 @@ end
 LUA_FUNCTION_DEF (textpart, is_utf);
 /***
  * @method text_part:get_content()
- * Get the text of the part
+ * Get the text of the part (html tags stripped)
  * @return {text} `UTF8` encoded content of the part (zero-copy if not converted to a lua string)
  */
 LUA_FUNCTION_DEF (textpart, get_content);
+/***
+ * @method text_part:get_raw_content()
+ * Get the original text of the part
+ * @return {text} `UTF8` encoded content of the part (zero-copy if not converted to a lua string)
+ */
+LUA_FUNCTION_DEF (textpart, get_raw_content);
+/***
+ * @method text_part:get_content_oneline()
+ *Get the text of the part (html tags and newlines stripped)
+ * @return {text} `UTF8` encoded content of the part (zero-copy if not converted to a lua string)
+ */
+LUA_FUNCTION_DEF (textpart, get_content_oneline);
 /***
  * @method text_part:get_length()
  * Get length of the text of the part
@@ -109,6 +121,8 @@ LUA_FUNCTION_DEF (textpart, get_mimepart);
 static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_utf),
 	LUA_INTERFACE_DEF (textpart, get_content),
+	LUA_INTERFACE_DEF (textpart, get_raw_content),
+	LUA_INTERFACE_DEF (textpart, get_content_oneline),
 	LUA_INTERFACE_DEF (textpart, get_length),
 	LUA_INTERFACE_DEF (textpart, get_raw_length),
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
@@ -328,6 +342,46 @@ lua_textpart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->content->data;
 	t->len = part->content->len;
+	t->own = FALSE;
+
+	return 1;
+}
+
+static gint
+lua_textpart_get_raw_content (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	struct rspamd_lua_text *t;
+
+	if (part == NULL || IS_PART_EMPTY (part)) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	t = lua_newuserdata (L, sizeof (*t));
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+	t->start = part->orig->data;
+	t->len = part->orig->len;
+	t->own = FALSE;
+
+	return 1;
+}
+
+static gint
+lua_textpart_get_content_oneline (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	struct rspamd_lua_text *t;
+
+	if (part == NULL || IS_PART_EMPTY (part)) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	t = lua_newuserdata (L, sizeof (*t));
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+	t->start = part->stripped_content->data;
+	t->len = part->stripped_content->len;
 	t->own = FALSE;
 
 	return 1;
