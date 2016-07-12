@@ -1333,7 +1333,7 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	return checkpoint;
 }
 
-static gboolean
+gboolean
 rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
@@ -1446,12 +1446,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	}
 	else {
 		checkpoint = task->checkpoint;
-	}
-
-	if (task->settings) {
-		if (rspamd_symbols_cache_process_settings (task, cache)) {
-			return TRUE;
-		}
 	}
 
 	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);

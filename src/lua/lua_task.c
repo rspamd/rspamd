@@ -2811,6 +2811,8 @@ lua_task_set_settings (lua_State *L)
 				}
 			}
 		}
+
+		rspamd_symbols_cache_process_settings (task, task->cfg->cache);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

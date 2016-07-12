@@ -222,4 +222,13 @@ struct rspamd_abstract_callback_data* rspamd_symbols_cache_get_cbdata (
 gboolean rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
 		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata);
 
+/**
+ * Process settings for task
+ * @param task
+ * @param cache
+ * @return
+ */
+gboolean rspamd_symbols_cache_process_settings (struct rspamd_task *task,
+		struct symbols_cache *cache);
+
 #endif
