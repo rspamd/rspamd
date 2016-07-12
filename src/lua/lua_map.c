@@ -481,6 +481,26 @@ lua_config_add_map (lua_State *L)
 	return 1;
 }
 
+static const gchar *
+lua_map_process_string_key (lua_State *L, gint pos, gsize *len)
+{
+	struct rspamd_lua_text *t;
+
+	if (lua_type (L, pos) == LUA_TSTRING) {
+		return lua_tolstring (L, pos, len);
+	}
+	else if (lua_type (L, pos) == LUA_TUSERDATA) {
+		t = lua_check_text (L, pos);
+
+		if (t) {
+			*len = t->len;
+			return t->start;
+		}
+	}
+
+	return NULL;
+}
+
 /* Radix and hash table functions */
 static gint
 lua_map_get_key (lua_State * L)
@@ -530,14 +550,14 @@ lua_map_get_key (lua_State * L)
 			}
 		}
 		else if (map->type == RSPAMD_LUA_MAP_SET) {
-			key = lua_tostring (L, 2);
+			key = lua_map_process_string_key (L, 2, &len);
 
 			if (key) {
 				ret = g_hash_table_lookup (map->data.hash, key) != NULL;
 			}
 		}
 		else if (map->type == RSPAMD_LUA_MAP_REGEXP) {
-			key = lua_tolstring (L, 2, &len);
+			key = lua_map_process_string_key (L, 2, &len);
 
 			if (key) {
 				value = rspamd_match_regexp_map (map->data.re_map, key, len);
@@ -550,7 +570,7 @@ lua_map_get_key (lua_State * L)
 		}
 		else if (map->type == RSPAMD_LUA_MAP_HASH) {
 			/* key-value map */
-			key = lua_tostring (L, 2);
+			key = lua_map_process_string_key (L, 2, &len);
 
 			if (key) {
 				value = g_hash_table_lookup (map->data.hash, key);
