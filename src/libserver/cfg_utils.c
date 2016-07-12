@@ -876,7 +876,7 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
 		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		c->groups = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		c->groups = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			c->actions[i].score = NAN;
