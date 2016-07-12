@@ -26,7 +26,7 @@ You can watch the following [introduction video](https://www.youtube.com/watch?v
 
 * [**Dynamic tables**](/doc/configuration/maps.html) - it is possible to specify bulk lists as `dynamic maps` that are checked in runtime with updating data only when they are changed. Rspamd supports file, HTTP and HTTPS maps.
 
-## Content scan features
+<div><h2><img src="img/envelope_loupe.jpg" class="" height="50" width="50" style="position: relative; bottom: 10px;"> Content scan features</h2></div>
 
 Content scan features are used to find certain patterns in messages, including text parts, headers and raw content. Content scan technologies are intended to filter the most common cases of spam messages and offer the static part of spam filtering. Rspamd supports various types of content scanning checks, such as:
 
@@ -38,7 +38,7 @@ Content scan features are used to find certain patterns in messages, including t
 
 * [**Chartable**](/doc/modules/chartable.html) module helps to find specially crafted messages that are intended to cheat spam filtering systems by switching the language of text and replacing letters with their analogues. Rspamd uses `UTF-8` normalization to detect and filter such techniques commonly used by many spammers.
 
-## Policies checks features
+<div><h2><img src="img/cloud.jpg" class="" height="50" width="50" style="position: relative; bottom: 10px;"> Policies checks features</h2></div>
 
 There are many resources that defines policies for different objects in email transfer: for sender's IP address, for URLs in a message and even for a message itself. For example, a message could be signed by sender using <abbr title="Domain Key Identified Mail">DKIM</abbr> technology. Another example could be URL filtering: [phishing checks](/doc/modules/phishing.html) or URL DNS blacklists - [SURBL](/doc/modules/surbl.html). Rspamd supports various policies checks:
 
@@ -64,7 +64,7 @@ There are many resources that defines policies for different objects in email tr
 
 * [**Maps module**](/doc/modules/multimap.html) provides a swiss-knife alike tool that could filter messages based on different attributes: headers, envelope data, sender's IP and so on. This module is very useful for building custom rules.
 
-## Statistical tools
+<div><h2><img src="img/graf.jpg" class="" height="50" width="50" style="position: relative; bottom: 10px;"> Statistical tools</h2></div>
 
 Statistical approach includes many useful spam recognition techniques that can **learn** dynamically from messages being scanned. Rspamd provides different tools that could be learned either manually or automatically and adopt for the actual mail flow.
 
