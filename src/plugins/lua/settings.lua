@@ -493,4 +493,9 @@ elseif set_section and type(set_section) == "table" then
   process_settings_table(set_section)
 end
 
-rspamd_config:register_pre_filter(check_settings)
+rspamd_config:register_symbol({
+  name = 'SETTINGS_CHECK',
+  type = 'prefilter',
+  callback = check_settings,
+  priority = 10
+})

@@ -365,11 +365,19 @@ configure_ip_score_module()
 if redis_params then
   -- Register ip_score module
   if options['asn_provider'] then
-    rspamd_config:register_pre_filter(asn_check)
+    rspamd_config:register_symbol({
+      name = 'ASN_CHECK',
+      type = 'prefilter',
+      callback = asn_check,
+    })
   end
+  rspamd_config:register_symbol({
+    name = 'IPSCORE_SAVE',
+    type = 'postfilter',
+    callback = ip_score_set,
+  })
   rspamd_config:register_symbol({
     name = options['symbol'],
     callback = ip_score_check
   })
-  rspamd_config:register_post_filter(ip_score_set)
 end

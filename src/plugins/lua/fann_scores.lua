@@ -255,8 +255,11 @@ else
     fann_file = opts['fann_file']
     use_settings = opts['use_settings']
     rspamd_config:set_metric_symbol(fann_symbol, 3.0, 'Experimental FANN adjustment')
-    rspamd_config:register_post_filter(fann_scores_filter)
-
+    rspamd_config:register_symbol({
+      name = fann_symbol,
+      type = 'postfilter',
+      callback = fann_scores_filter
+    })
     if opts['train'] then
       rspamd_config:add_on_load(function(cfg)
         if opts['train']['max_train'] then

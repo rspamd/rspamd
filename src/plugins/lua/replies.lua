@@ -113,8 +113,17 @@ if opts then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     else
-      rspamd_config:register_pre_filter(replies_check)
-      rspamd_config:register_post_filter(replies_set, 10)
+      rspamd_config:register_symbol({
+        name = 'REPLIES_SET',
+        type = 'postfilter',
+        callback = replies_set,
+        priority = 10
+      })
+      rspamd_config:register_symbol({
+        name = 'REPLIES_CHECK',
+        type = 'prefilter',
+        callback = replies_check,
+      })
     end
 
   for k,v in pairs(opts) do

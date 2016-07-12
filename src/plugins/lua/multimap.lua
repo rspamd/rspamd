@@ -572,6 +572,10 @@ if opts and type(opts) == 'table' then
   end
 
   if _.any(function(r) return r['prefilter'] end, rules) then
-    rspamd_config:register_pre_filter(multimap_prefilter_callback)
+    rspamd_config:register_symbol({
+      type = 'prefilter',
+      name = 'MULTIMAP_PREFILTERS',
+      callback = multimap_prefilter_callback
+    })
   end
 end

@@ -323,8 +323,17 @@ if opts then
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
-    rspamd_config:register_pre_filter(greylist_check)
-    rspamd_config:register_post_filter(greylist_set, 10)
+    rspamd_config:register_symbol({
+      name = 'GREYLIST_SAVE',
+      type = 'postfilter',
+      callback = greylist_set,
+      priority = 10
+    })
+    rspamd_config:register_symbol({
+      name = 'GREYLIST_SAVE',
+      type = 'prefilter',
+      callback = greylist_check,
+    })
   end
 
   for k,v in pairs(opts) do

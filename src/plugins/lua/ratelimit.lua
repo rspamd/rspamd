@@ -415,7 +415,11 @@ if opts then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
     if not ratelimit_symbol then
-      rspamd_config:register_pre_filter(rate_test)
+       rspamd_config:register_symbol({
+        name = 'RATELIMIT_CHECK',
+        type = 'prefilter',
+        callback = rate_test,
+      })
     else
       rspamd_config:register_symbol({
         name = ratelimit_symbol,
@@ -424,7 +428,11 @@ if opts then
       })
     end
 
-    rspamd_config:register_post_filter(rate_set)
+    rspamd_config:register_symbol({
+      name = 'RATELIMIT_SET',
+      type = 'postfilter',
+      callback = rate_set,
+    })
   end
 end
 
