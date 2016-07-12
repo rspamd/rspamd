@@ -1446,6 +1446,7 @@ text/vnd.wap.sl 0
 text/vnd.wap.wmlscript 0
 text/xml 0
 text/xml-external-parsed-entity 0
+text/x-vcard 0
 video/1d-interleaved-parityfec 0
 video/3gpp 0
 video/3gpp-tt 0
