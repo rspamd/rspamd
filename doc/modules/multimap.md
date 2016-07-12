@@ -52,6 +52,7 @@ Type attribute means what is matched with this map. The following types are supp
 * `dnsbl` - matches source IP against some DNS blacklist (consider using [RBL](rbl.html) module for this)
 * `url` - matches URLs in messages against maps
 * `filename` - matches attachment filename against map
+* `content` - matches specific content of a message (e.g. headers, body or even a full message) against some map, usually regular expressions map
 
 DNS maps are legacy and are not encouraged to use in new projects (use [rbl](rbl.html) for that).
 
@@ -127,6 +128,15 @@ Filename maps support this filters set:
 * `extension` - matches file extension
 * `regexp:/re/` - extract data from filename according to some regular expression
 
+Content maps support the following filters:
+
+* `body` - raw undecoded body content (with the exceptions of headers)
+* `full` - raw undecoded content of a message (including headers)
+* `headers` - undecoded headers
+* `text` - decoded and converted text parts (without HTML tags but with newlines)
+* `rawtext` - decoded but not converted text parts (with HTML tags and newlines)
+* `oneline` - decoded and stripped text content (without HTML tags and newlines)
+
 Here are some examples of pre-filter configurations:
 
 ~~~ucl
@@ -162,5 +172,12 @@ filename_blacklist {
   map = "/${LOCAL_CONFDIR}/filename.map";
   symbol = "FILENAME_BLACKLISTED";
   action = "reject";
+}
+content_blacklist {
+  type = "content";
+  filter = "body"; # can be headers, full, oneline, text, rawtext
+  map = "/${LOCAL_CONFDIR}/content.map";
+  symbol = "CONTENT_BLACKLISTED";
+  regexp = true;
 }
 ~~~
