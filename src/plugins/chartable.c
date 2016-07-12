@@ -26,8 +26,8 @@
 #include "libmime/message.h"
 #include "rspamd.h"
 
-#define DEFAULT_SYMBOL "R_CHARSET_MIXED"
-#define DEFAULT_URL_SYMBOL "R_CHARSET_MIXED_URL"
+#define DEFAULT_SYMBOL "R_MIXED_CHARSET"
+#define DEFAULT_URL_SYMBOL "R_MIXED_CHARSET_URL"
 #define DEFAULT_THRESHOLD 0.1
 
 #define msg_err_chartable(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
