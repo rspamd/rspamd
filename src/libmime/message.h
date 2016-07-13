@@ -57,7 +57,7 @@ struct rspamd_mime_text_part {
 	GByteArray *stripped_content; /**< no newlines or html tags 			*/
 	GPtrArray *newlines;	/**< positions of newlines in text					*/
 	struct html_content *html;
-	GList *urls_offset;	/**< list of offsets of urls						*/
+	GList *exceptions;	/**< list of offsets of urls						*/
 	GMimeObject *parent;
 	struct rspamd_mime_part *mime_part;
 	GArray *normalized_words;

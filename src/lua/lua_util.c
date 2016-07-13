@@ -733,7 +733,7 @@ lua_util_tokenize_text (lua_State *L)
 	gsize len, pos, ex_len, i;
 	GList *exceptions = NULL, *cur;
 	struct rspamd_lua_text *t;
-	struct process_exception *ex;
+	struct rspamd_process_exception *ex;
 	GArray *res;
 	rspamd_ftok_t *w;
 	gboolean compat = FALSE;

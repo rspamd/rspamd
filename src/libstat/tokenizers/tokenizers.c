@@ -75,7 +75,7 @@ rspamd_tokenizer_get_word_compat (rspamd_ftok_t * buf,
 {
 	gsize remain, pos;
 	const gchar *p;
-	struct process_exception *ex = NULL;
+	struct rspamd_process_exception *ex = NULL;
 
 	if (buf == NULL) {
 		return FALSE;
@@ -166,11 +166,12 @@ rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
 		GList **exceptions, gboolean is_utf, gsize *rl,
 		gboolean check_signature)
 {
-	gsize remain, pos, siglen = 0;
+	gsize remain, siglen = 0;
+	goffset pos;
 	const gchar *p, *next_p, *sig = NULL;
 	gunichar uc;
 	guint processed = 0;
-	struct process_exception *ex = NULL;
+	struct rspamd_process_exception *ex = NULL;
 	enum {
 		skip_delimiters = 0,
 		feed_token,
@@ -214,10 +215,12 @@ rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
 
 		switch (state) {
 		case skip_delimiters:
-			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
-				token->begin = "!!EX!!";
-				token->len = sizeof ("!!EX!!") - 1;
-				processed = token->len;
+			if (ex != NULL && p - buf->begin == ex->pos) {
+				if (ex->type == RSPAMD_EXCEPTION_URL) {
+					token->begin = "!!EX!!";
+					token->len = sizeof ("!!EX!!") - 1;
+					processed = token->len;
+				}
 				state = skip_exception;
 				continue;
 			}
@@ -270,11 +273,12 @@ set_token:
 		*rl = processed;
 	}
 
-	if (token->len == 0) {
+	if (token->len == 0 && processed > 0) {
 		token->len = p - token->begin;
 		g_assert (token->len > 0);
-		*cur = p;
 	}
+
+	*cur = p;
 
 	return TRUE;
 }

@@ -658,15 +658,15 @@ detect_text_language (struct rspamd_mime_text_part *part)
 }
 
 static void
-rspamd_normalize_text_part (struct rspamd_task *task,
+rspamd_extract_words (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 #ifdef WITH_SNOWBALL
 	struct sb_stemmer *stem = NULL;
 #endif
 	rspamd_ftok_t *w;
-	const guchar *r, *p, *c, *end;
 	gchar *temp_word;
+	const guchar *r;
 	guint i, nlen;
 
 #ifdef WITH_SNOWBALL
@@ -674,71 +674,14 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		stem = sb_stemmer_new (part->language, "UTF_8");
 		if (stem == NULL) {
 			msg_info_task ("<%s> cannot create lemmatizer for %s language",
-				task->message_id, part->language);
+					task->message_id, part->language);
 		}
 	}
 #endif
-	/* Strip newlines */
-	part->stripped_content = g_byte_array_sized_new (part->content->len);
-	part->newlines = g_ptr_array_sized_new (128);
-	p = part->content->data;
-	c = p;
-	end = p + part->content->len;
-
-	while (p < end) {
-		p = memchr (c, '\n', end - c);
-
-		if (p) {
-			if (*(p - 1) == '\r') {
-				p --;
-			}
-
-			if (p > c) {
-				g_byte_array_append (part->stripped_content, c, p - c);
-			}
-
-			/* As it could cause reallocation, we initially store offsets */
-			g_ptr_array_add (part->newlines,
-					GUINT_TO_POINTER (part->stripped_content->len));
-			part->nlines ++;
-			p ++;
-
-			while (p < end && (*p == '\r' || *p == '\n')) {
-				if (*p == '\n') {
-					part->nlines ++;
-				}
-
-				p ++;
-			}
-			c = p;
-		}
-		else {
-			p = end;
-			break;
-		}
-	}
-
-	if (p > c) {
-		g_byte_array_append (part->stripped_content, c, p - c);
-	}
-
-	/* Now convert offsets to real pointers for convenience */
-	for (i = 0; i < part->newlines->len; i ++) {
-		guint off = GPOINTER_TO_UINT (g_ptr_array_index (part->newlines, i));
-		g_ptr_array_index (part->newlines, i) = part->stripped_content->data + off;
-	}
-
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) free_byte_array_callback,
-			part->stripped_content);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
-			part->newlines);
-
 	/* Ugly workaround */
 	part->normalized_words = rspamd_tokenize_text (part->content->data,
 			part->content->len, IS_PART_UTF (part), task->cfg,
-			part->urls_offset, FALSE,
+			part->exceptions, FALSE,
 			NULL);
 
 	if (part->normalized_words) {
@@ -796,6 +739,78 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		sb_stemmer_delete (stem);
 	}
 #endif
+}
+
+static void
+rspamd_normalize_text_part (struct rspamd_task *task,
+		struct rspamd_mime_text_part *part)
+{
+
+	const guchar *p, *c, *end;
+	guint i;
+	struct rspamd_process_exception *ex;
+
+	/* Strip newlines */
+	part->stripped_content = g_byte_array_sized_new (part->content->len);
+	part->newlines = g_ptr_array_sized_new (128);
+	p = part->content->data;
+	c = p;
+	end = p + part->content->len;
+
+	while (p < end) {
+		p = memchr (c, '\n', end - c);
+
+		if (p) {
+			if (*(p - 1) == '\r') {
+				p --;
+			}
+
+			if (p > c) {
+				g_byte_array_append (part->stripped_content, c, p - c);
+			}
+
+			/* As it could cause reallocation, we initially store offsets */
+			g_ptr_array_add (part->newlines,
+					GUINT_TO_POINTER (part->stripped_content->len));
+			ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
+			ex->pos = part->stripped_content->len;
+			ex->len = 0;
+			ex->type = RSPAMD_EXCEPTION_NEWLINE;
+			part->exceptions = g_list_prepend (part->exceptions, ex);
+			part->nlines ++;
+			p ++;
+
+			while (p < end && (*p == '\r' || *p == '\n')) {
+				if (*p == '\n') {
+					part->nlines ++;
+				}
+
+				p ++;
+			}
+			c = p;
+		}
+		else {
+			p = end;
+			break;
+		}
+	}
+
+	if (p > c) {
+		g_byte_array_append (part->stripped_content, c, p - c);
+	}
+
+	/* Now convert offsets to real pointers for convenience */
+	for (i = 0; i < part->newlines->len; i ++) {
+		guint off = GPOINTER_TO_UINT (g_ptr_array_index (part->newlines, i));
+		g_ptr_array_index (part->newlines, i) = part->stripped_content->data + off;
+	}
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) free_byte_array_callback,
+			part->stripped_content);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+			part->newlines);
 }
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
@@ -872,6 +887,14 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 	return FALSE;
 }
 
+static gint
+exceptions_compare_func (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_process_exception *ea = a, *eb = b;
+
+	return ea->pos - eb->pos;
+}
+
 static void
 process_text_part (struct rspamd_task *task,
 	GByteArray *part_content,
@@ -932,7 +955,7 @@ process_text_part (struct rspamd_task *task,
 				task->task_pool,
 				text_part->html,
 				part_content,
-				&text_part->urls_offset,
+				&text_part->exceptions,
 				task->urls,
 				task->emails);
 
@@ -941,10 +964,10 @@ process_text_part (struct rspamd_task *task,
 		}
 
 		/* Handle offsets of this part */
-		if (text_part->urls_offset != NULL) {
-			text_part->urls_offset = g_list_reverse (text_part->urls_offset);
+		if (text_part->exceptions != NULL) {
+			text_part->exceptions = g_list_reverse (text_part->exceptions);
 			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) g_list_free, text_part->urls_offset);
+					(rspamd_mempool_destruct_t) g_list_free, text_part->exceptions);
 		}
 
 		rspamd_mempool_add_destructor (task->task_pool,
@@ -1006,6 +1029,11 @@ process_text_part (struct rspamd_task *task,
 	if (!IS_PART_HTML (text_part)) {
 		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 	}
+
+	text_part->exceptions = g_list_sort (text_part->exceptions,
+			exceptions_compare_func);
+
+	rspamd_extract_words (task, text_part);
 }
 
 struct mime_foreach_data {

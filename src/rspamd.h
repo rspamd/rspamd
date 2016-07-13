@@ -265,12 +265,17 @@ struct rspamd_main {
 	struct event_base *ev_base;
 };
 
+enum rspamd_exception_type {
+	RSPAMD_EXCEPTION_NEWLINE = 0,
+	RSPAMD_EXCEPTION_URL,
+};
 /**
  * Structure to point exception in text from processing
  */
-struct process_exception {
-	gsize pos;
-	gsize len;
+struct rspamd_process_exception {
+	goffset pos;
+	guint len;
+	enum rspamd_exception_type type;
 };
 
 /**

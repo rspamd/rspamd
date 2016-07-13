@@ -1601,7 +1601,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	gint substate = 0, len, href_offset = -1;
 	struct html_tag *cur_tag = NULL;
 	struct rspamd_url *url = NULL, *turl;
-	struct process_exception *ex;
+	struct rspamd_process_exception *ex;
 	enum {
 		parse_start = 0,
 		tag_begin,
@@ -1977,6 +1977,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 								ex = rspamd_mempool_alloc (pool, sizeof (*ex));
 								ex->pos = href_offset;
 								ex->len = dest->len - href_offset;
+								ex->type = RSPAMD_EXCEPTION_URL;
 
 								*exceptions = g_list_prepend (*exceptions, ex);
 							}

@@ -2294,17 +2294,18 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud)
 {
 	struct rspamd_url_mimepart_cbdata *cbd = ud;
-	struct process_exception *ex;
+	struct rspamd_process_exception *ex;
 	struct rspamd_task *task;
 	gchar *url_str = NULL;
 	struct rspamd_url *query_url;
 	gint rc;
 
 	task = cbd->task;
-	ex = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct process_exception));
+	ex = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_process_exception));
 
 	ex->pos = start_offset;
 	ex->len = end_offset - start_offset;
+	ex->type = RSPAMD_EXCEPTION_URL;
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
@@ -2320,8 +2321,8 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 		}
 	}
 
-	cbd->part->urls_offset = g_list_prepend (
-			cbd->part->urls_offset,
+	cbd->part->exceptions = g_list_prepend (
+			cbd->part->exceptions,
 			ex);
 
 	/* We also search the query for additional url inside */
@@ -2376,10 +2377,10 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 			rspamd_url_text_part_callback, &mcbd);
 
 	/* Handle offsets of this part */
-	if (part->urls_offset != NULL) {
-		part->urls_offset = g_list_reverse (part->urls_offset);
+	if (part->exceptions != NULL) {
+		part->exceptions = g_list_reverse (part->exceptions);
 		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_list_free, part->urls_offset);
+				(rspamd_mempool_destruct_t) g_list_free, part->exceptions);
 	}
 }
 
