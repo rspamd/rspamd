@@ -26,7 +26,7 @@ title: Rspamd spam filtering system
 				<div class="thumbnail">
 						<img src="img/compare.jpg" class="" height="80" width="80">
 						<div class="caption">
-								<h2><a href="#">Compare <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
+								<h2><a href="/comparison.html">Compare <small><i class="fa fa-chevron-right" style="color: #dd4814"></i></small></a></h2>
 								<p class="text-justify">Compare rspamd with other spam filtering systems</p>
 						</div>
 				</div>
