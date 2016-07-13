@@ -44,6 +44,7 @@ struct rspamd_redis_cache_runtime {
 	struct upstream *selected;
 	struct event timeout_event;
 	redisAsyncContext *redis;
+	gboolean has_event;
 };
 
 static GQuark
@@ -69,9 +70,19 @@ static void
 rspamd_redis_cache_fin (gpointer data)
 {
 	struct rspamd_redis_cache_runtime *rt = data;
+	redisAsyncContext *redis;
 
-	event_del (&rt->timeout_event);
-	redisAsyncFree (rt->redis);
+	rt->has_event = FALSE;
+	if (event_get_base (&rt->timeout_event)) {
+		event_del (&rt->timeout_event);
+	}
+
+	if (rt->redis) {
+		redis = rt->redis;
+		rt->redis = NULL;
+		/* This calls for all callbacks pending */
+		redisAsyncFree (redis);
+	}
 }
 
 static void
@@ -85,7 +96,10 @@ rspamd_redis_cache_timeout (gint fd, short what, gpointer d)
 	msg_err_task ("connection to redis server %s timed out",
 			rspamd_upstream_name (rt->selected));
 	rspamd_upstream_fail (rt->selected);
-	rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, d);
+
+	if (rt->has_event) {
+		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, d);
+	}
 }
 
 /* Called when we have checked the specified message id */
@@ -100,19 +114,21 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 	task = rt->task;
 
 	if (c->err == 0) {
-		if (G_LIKELY (reply->type == REDIS_REPLY_INTEGER)) {
-			val = reply->integer;
-		}
-		else if (reply->type == REDIS_REPLY_STRING) {
-			rspamd_strtol (reply->str, reply->len, &val);
-		}
-		else {
-			if (reply->type != REDIS_REPLY_NIL) {
-				msg_err_task ("bad learned type for %s: %d",
-					rt->ctx->stcf->symbol, reply->type);
+		if (reply) {
+			if (G_LIKELY (reply->type == REDIS_REPLY_INTEGER)) {
+				val = reply->integer;
 			}
+			else if (reply->type == REDIS_REPLY_STRING) {
+				rspamd_strtol (reply->str, reply->len, &val);
+			}
+			else {
+				if (reply->type != REDIS_REPLY_NIL) {
+					msg_err_task ("bad learned type for %s: %d",
+							rt->ctx->stcf->symbol, reply->type);
+				}
 
-			val = 0;
+				val = 0;
+			}
 		}
 
 		if ((val > 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM)) ||
@@ -134,7 +150,9 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 		rspamd_upstream_fail (rt->selected);
 	}
 
-	rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
+	if (rt->has_event) {
+		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
+	}
 }
 
 /* Called when we have learned the specified message id */
@@ -154,7 +172,9 @@ rspamd_stat_cache_redis_set (redisAsyncContext *c, gpointer r, gpointer priv)
 		rspamd_upstream_fail (rt->selected);
 	}
 
-	rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
+	if (rt->has_event) {
+		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
+	}
 }
 
 static void
@@ -398,6 +418,7 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 		rspamd_session_add_event (task->s, rspamd_redis_cache_fin, rt,
 				rspamd_stat_cache_redis_quark ());
 		event_add (&rt->timeout_event, &tv);
+		rt->has_event = TRUE;
 	}
 
 	/* We need to return OK every time */
@@ -426,6 +447,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 		rspamd_session_add_event (task->s, rspamd_redis_cache_fin, rt,
 				rspamd_stat_cache_redis_quark ());
 		event_add (&rt->timeout_event, &tv);
+		rt->has_event = TRUE;
 	}
 
 	/* We need to return OK every time */
