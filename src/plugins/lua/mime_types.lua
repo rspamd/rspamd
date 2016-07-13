@@ -37,6 +37,7 @@ local settings = {
 
   bad_extensions = {
     scr = 4,
+    lnk = 4,
     exe = 1,
     jar = 2,
     com = 2,
