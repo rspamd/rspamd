@@ -8,6 +8,7 @@ title: Compare Rspamd with other spam filters
     <table class="table table-striped">
       <thead>
         <tr>
+          <th></th>
           <th>Rspamd</th>
           <th>SpamAssassin</th>
           <th>DSpam</th>
