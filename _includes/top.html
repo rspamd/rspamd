@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="">
@@ -9,90 +10,93 @@
     <title>{{ page.title }}</title>
 
     <!-- Bootstrap core CSS -->
-	<!--
+    <!--
 	<link href="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/css/bootstrap.min.css" rel="stylesheet">
 	-->
 
-	<link href="/css/bootstrap.min.css" rel="stylesheet">
-  <!-- for glyphicons -->
-  <link href="/css/bootstrap-social.css" rel="stylesheet">
-  <link href="/css/font-awesome.min.css" rel="stylesheet">
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <!-- for glyphicons -->
+    <link href="/css/bootstrap-social.css" rel="stylesheet">
+    <link href="/css/font-awesome.min.css" rel="stylesheet">
+    <!-- syntax highlighting CSS -->
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/syntax.css">
+    <!-- Ubuntu fonts from google -->
+    <link href='https://fonts.googleapis.com/css?family=Ubuntu:400,400italic,700' rel='stylesheet' type='text/css'>
+    <link rel="icon" type="image/png" href="//rspamd.com/favicon.png">
+    <link rel="alternate" type="application/rss+xml" title="Rspamd news" href="/feed.xml">
+    <script>
+        (function(i, s, o, g, r, a, m) {
+            i['GoogleAnalyticsObject'] = r;
+            i[r] = i[r] || function() {
+                (i[r].q = i[r].q || []).push(arguments)
+            }, i[r].l = 1 * new Date();
+            a = s.createElement(o),
+                m = s.getElementsByTagName(o)[0];
+            a.async = 1;
+            a.src = g;
+            m.parentNode.insertBefore(a, m)
+        })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
 
-  <link href="//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
-	<!-- syntax highlighting CSS -->
-	<link rel="stylesheet" href="/css/main.css">
-	<link rel="stylesheet" href="/css/syntax.css">
-  <!-- Ubuntu fonts from google -->
-  <link href='https://fonts.googleapis.com/css?family=Ubuntu:400,400italic,700' rel='stylesheet' type='text/css'>
-	<link rel="icon" type="image/png" href="//rspamd.com/favicon.png">
-	<link rel="alternate" type="application/rss+xml"
-	            title="Rspamd news" href="/feed.xml">
-	<script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+        ga('create', 'UA-5492966-5', 'auto');
+        ga('send', 'pageview');
+    </script>
+</head>
 
-  ga('create', 'UA-5492966-5', 'auto');
-  ga('send', 'pageview');
+<!--body style="padding-top: 50px" data-offset="50"-->
 
-	</script>
-  </head>
-
-  <!--body style="padding-top: 50px" data-offset="50"-->
-  <body>
-  <!-- Navigation -->
-  <nav class="navbar navbar-default navbar-fixed-top" role="navigation">
-          <div class="container">
-              <div class="navbar-header">
-                  <!--toggle button for xs-size-->
-                  <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+        <div class="container">
+            <div class="navbar-header">
+                <!--toggle button for xs-size-->
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
                       <span class="sr-only">Toggle navigation</span>
                       <span class="icon-bar"></span>
                       <span class="icon-bar"></span>
                       <span class="icon-bar"></span>
                   </button>
-                  <a class="navbar-brand" href="/"><img src="/img/rspamd_logo_navbar.png" style="width: 67px; margin-top: -13px;"></a>
-              </div>
-              <div id="navbar" class="navbar-collapse collapse">
-                  <ul class="nav navbar-nav">
-                      <li>
-                          <a href="/downloads.html">Downloads <i class="fa fa-download"></i></a></a>
-                      </li>
-                      <li class="dropdown">
-                          <a href="#" class="dropdown-toggle" data-toggle="dropdown"
-                           role="button" aria-haspopup="true" aria-expanded="false">Documentation
+                <a class="navbar-brand" href="/"><img src="/img/rspamd_logo_navbar.png" style="width: 67px; margin-top: -13px;"></a>
+            </div>
+            <div id="navbar" class="navbar-collapse collapse">
+                <ul class="nav navbar-nav">
+                    <li>
+                        <a href="/downloads.html">Downloads <i class="fa fa-download"></i></a></a>
+                    </li>
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Documentation
                            <span class="caret"></span></a>
-                          <ul class="dropdown-menu">
-                              <li><a  href="/doc/index.html">Documentation index</a></li>
-                              <li role="separator" class="divider"></li>
-                              <li><a  href="/doc/quickstart.html">Quick start</a></li>
-                              <li><a  href="/doc/faq.html">FAQ</a></li>
-                              <li><a  href="/doc/tutorials/">Tutorials</a></li>
-                              <!--<li><a  href="/doc/features.html">Rspamd features</a></li>-->
-                              <li><a  href="/doc/integration.html">Integration to MTA</a></li>
-                              <li><a  href="/doc/migration.html">Migration between releases</a></li>
-                              <li role="separator" class="divider"></li>
-                              <li><a  href="/doc/architecture/">Architecture</a></li>
-                              <li><a  href="/doc/configuration/">Configuration guide</a></li>
-                              <li><a  href="/doc/modules/">Rspamd modules</a></li>
-                              <li><a  href="/doc/workers/">Rspamd workers</a></li>
-                              <li><a  href="/doc/lua/">Lua API guide</a></li>
-                          </ul>
-                      </li>
-                      <li>
-                          <a href="/blog/">News</a>
-                      </li>
-                      <li>
-                          <a href="/support.html">Support</a>
-                      </li>
-                  </ul>
-                  <!-- Login link -->
-                  <ul class="nav navbar-nav navbar-right">
-                      <li><a href="/rmilter/">Rmilter</a></li>
-                      <li><a href="/webui/">WebUI</a></li>
-                      <li><a href="https://github.com/vstakhov/rspamd" target="_blank">Fork me on <i class="fa fa-github-square"></i></a></li>
-                  </ul>
-              </div>
-          </div>
-      </nav>
+                        <ul class="dropdown-menu">
+                            <li><a href="/doc/index.html">Documentation index</a></li>
+                            <li role="separator" class="divider"></li>
+                            <li><a href="/doc/quickstart.html">Quick start</a></li>
+                            <li><a href="/doc/faq.html">FAQ</a></li>
+                            <li><a href="/doc/tutorials/">Tutorials</a></li>
+                            <!--<li><a  href="/doc/features.html">Rspamd features</a></li>-->
+                            <li><a href="/doc/integration.html">Integration to MTA</a></li>
+                            <li><a href="/doc/migration.html">Migration between releases</a></li>
+                            <li role="separator" class="divider"></li>
+                            <li><a href="/doc/architecture/">Architecture</a></li>
+                            <li><a href="/doc/configuration/">Configuration guide</a></li>
+                            <li><a href="/doc/modules/">Rspamd modules</a></li>
+                            <li><a href="/doc/workers/">Rspamd workers</a></li>
+                            <li><a href="/doc/lua/">Lua API guide</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/blog/">News</a>
+                    </li>
+                    <li>
+                        <a href="/support.html">Support</a>
+                    </li>
+                </ul>
+                <!-- Login link -->
+                <ul class="nav navbar-nav navbar-right">
+                    <li><a href="/rmilter/">Rmilter</a></li>
+                    <li><a href="/webui/">WebUI</a></li>
+                    <li><a href="https://github.com/vstakhov/rspamd" target="_blank">Fork me on <i class="fa fa-github-square"></i></a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
