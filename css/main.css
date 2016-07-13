@@ -155,3 +155,19 @@ ul.nav-stacked li a{
 .compare-table span.icon-green {
     color: #00E025;
 }
+.table-responsive{
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+tr.info th{
+  padding-left: 30px !important;
+  background-color: #E8E8E8 !important;
+}
+thead tr th{
+  border-bottom: 0 !important;
+}
+table.table{
+  margin-bottom: 0 !important;
+}
