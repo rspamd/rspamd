@@ -30,7 +30,7 @@ title: Compare Rspamd with other spam filters
           <td>Process model</td>
           <td>Event driven</td>
           <td>Pre-forked pool</td>
-          <td>Fork on each message</td>
+          <td>LDA and pre-forked</td>
         </tr>
         <tr>
           <td>MTA integration</td>
@@ -57,7 +57,7 @@ title: Compare Rspamd with other spam filters
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
         </tr>
         <tr>
-          <td>License</td>
+          <td>Licence</td>
           <td>Apache 2</td>
           <td>Apache 2</td>
           <td>GPL</td>
@@ -86,7 +86,7 @@ title: Compare Rspamd with other spam filters
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
         </tr>
         <tr>
-          <td>Replies wxhitelisting</td>
+          <td>Replies whitelisting</td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
@@ -207,7 +207,7 @@ title: Compare Rspamd with other spam filters
           <td>Bayes window</td>
           <td>5 words</td>
           <td>1 words</td>
-          <td>2 words</td>
+          <td>2 words (5 words in SBPH/OSB mode)</td>
         </tr>
         <tr>
           <td>Plain files backend</td>
