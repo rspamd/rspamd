@@ -327,10 +327,12 @@ charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
 		begin ++;
 		changed = TRUE;
 	}
-	if (!g_ascii_islower(*begin)) {
+
+	if (g_ascii_islower (*begin)) {
 		changed = TRUE;
 		to_uppercase = TRUE;
 	}
+
 	end = begin + strlen (begin) - 1;
 	while (!g_ascii_isalnum (*end)) {
 		end --;
@@ -363,6 +365,34 @@ charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
 	return TRUE;
 }
 
+static const gchar *
+charset_heuristic_detection (const gchar *in, rspamd_mempool_t *pool)
+{
+	gchar *ret = NULL, *h, *t;
+
+	if (strchr (in, '-') != NULL) {
+		/* Try to remove '-' chars from encoding: e.g. CP-100 to CP100 */
+		ret = rspamd_mempool_strdup (pool, in);
+
+		h = ret;
+		t = ret;
+
+		while (*h != '\0') {
+			if (*h != '-') {
+				*t++ = *h;
+			}
+
+			h ++;
+		}
+
+		*t = '\0';
+
+		return ret;
+	}
+
+	return in;
+}
+
 static GQuark
 converter_error_quark (void)
 {
@@ -383,9 +413,16 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 	ic = iconv_open (UTF8_CHARSET, in_enc);
 
 	if (ic == (iconv_t)-1) {
-		g_set_error (err, converter_error_quark(), EINVAL,
-				"cannot open iconv for: %s", in_enc);
-		return NULL;
+		in_enc = charset_heuristic_detection (in_enc, task->task_pool);
+
+		ic = iconv_open (UTF8_CHARSET, in_enc);
+
+		if (ic == (iconv_t)-1) {
+			g_set_error (err, converter_error_quark(), EINVAL,
+					"cannot open iconv for: %s", in_enc);
+
+			return NULL;
+		}
 	}
 
 	/* Preallocate for half of characters to be converted */
