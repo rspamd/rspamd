@@ -5,19 +5,19 @@ title: Compare Rspamd with other spam filters
 
 <div class="compare-table">
   <div class="table-responsive">
-    <table class="table table-striped">
+    <table class="table">
       <thead>
         <tr>
-          <th></th>
-          <th>Rspamd</th>
-          <th>SpamAssassin</th>
-          <th>DSpam</th>
+          <th class="col-xs-3"></th>
+          <th class="col-xs-3"><img src="img/rspamd_logo_small_black_simple.jpg" class="img-responsive"></th>
+          <th class="col-xs-3"><img src="img/spamassassin_logo.jpg" class="img-responsive"></th>
+          <th class="col-xs-3"><img src="img/dspam_logo.jpg" class="img-responsive"></th>
         </tr>
       </thead>
       <tbody>
         <tr class="info">
           <th colspan="4">
-            <center>General</center>
+            General
           </th>
         </tr>
         <tr>
@@ -29,15 +29,13 @@ title: Compare Rspamd with other spam filters
         <tr>
           <td>Process model</td>
           <td>Event driven</td>
-          <td>Pre-forked pool</span>
-          </td>
+          <td>Pre-forked pool</td>
           <td>Fork on each message</td>
         </tr>
         <tr>
           <td>MTA integration</td>
           <td>Milter, LDA, Custom</td>
-          <td>Milter, Custom (amavis)</span>
-          </td>
+          <td>Milter, Custom (amavis)</td>
           <td>LDA</td>
         </tr>
         <tr>
@@ -72,7 +70,7 @@ title: Compare Rspamd with other spam filters
         </tr>
         <tr class="info">
           <th colspan="4">
-            <center>Mail filtering features</center>
+            Mail filtering features
           </th>
         </tr>
         <tr>
@@ -101,7 +99,7 @@ title: Compare Rspamd with other spam filters
         </tr>
         <tr class="info">
           <th colspan="4">
-            <center>Filtering methods</center>
+            Filtering methods
           </th>
         </tr>
         <tr>
@@ -190,7 +188,7 @@ title: Compare Rspamd with other spam filters
         </tr>
         <tr class="info">
           <th colspan="4">
-            <center>Statistical methods</center>
+            Statistical methods
           </th>
         </tr>
         <tr>
@@ -241,7 +239,19 @@ title: Compare Rspamd with other spam filters
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
         </tr>
+        <tr class="info">
+          <th colspan="4">&nbsp;
+          </th>
+        </tr>
       </tbody>
+      <thead>
+        <tr>
+          <th></th>
+          <th><img src="img/rspamd_logo_small_black_simple.jpg" class="img-responsive"></th>
+          <th><img src="img/spamassassin_logo.jpg" class="img-responsive"></th>
+          <th><img src="img/dspam_logo.jpg" class="img-responsive"></th>
+        </tr>
+      </thead>
     </table>
   </div>
 </div>
