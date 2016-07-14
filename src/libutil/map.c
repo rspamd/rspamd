@@ -1128,13 +1128,17 @@ static void
 rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 {
 	if (bk->protocol == MAP_PROTO_FILE) {
-		g_free (bk->data.fd->filename);
-		g_slice_free1 (sizeof (*bk->data.fd), bk->data.fd);
+		if (bk->data.fd) {
+			g_free (bk->data.fd->filename);
+			g_slice_free1 (sizeof (*bk->data.fd), bk->data.fd);
+		}
 	}
 	else {
-		g_free (bk->data.hd->host);
-		g_free (bk->data.hd->path);
-		g_slice_free1 (sizeof (*bk->data.hd), bk->data.hd);
+		if (bk->data.hd) {
+			g_free (bk->data.hd->host);
+			g_free (bk->data.hd->path);
+			g_slice_free1 (sizeof (*bk->data.hd), bk->data.hd);
+		}
 	}
 
 	g_slice_free1 (sizeof (*bk), bk);
