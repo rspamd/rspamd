@@ -1563,15 +1563,17 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		}
 	}
 
-	/* Now we check symbols group */
-	gr = g_hash_table_lookup (metric->groups, module_name);
+	if (metric) {
+		/* Now we check symbols group */
+		gr = g_hash_table_lookup (metric->groups, module_name);
 
-	if (gr) {
-		if (gr->disabled) {
-			msg_info_config ("%s module %s is disabled in the configuration as "
-					"its group has been disabled",
-					is_c ? "internal" : "lua", module_name);
-			return FALSE;
+		if (gr) {
+			if (gr->disabled) {
+				msg_info_config ("%s module %s is disabled in the configuration as "
+						"its group has been disabled",
+						is_c ? "internal" : "lua", module_name);
+				return FALSE;
+			}
 		}
 	}
 
