@@ -112,6 +112,7 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 	guint nchars = 0;
 	const gchar *p;
 	rspamd_ftok_t tok;
+	gboolean has_obrace = FALSE;
 
 	g_assert (in != NULL);
 	g_assert (in->len > 0);
@@ -119,6 +120,10 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 	p = in->str;
 
 	while ((g_ascii_isspace (*p) || *p == '<') && nchars < in->len) {
+		if (*p == '<') {
+			has_obrace = TRUE;
+		}
+
 		p++;
 		nchars ++;
 	}
@@ -128,9 +133,12 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 	p = in->str + in->len - 1;
 	tok.len = in->len - nchars;
 
-	while ((!g_ascii_isspace (*p) && *p !=
-		'>') && tok.len > 0) {
+	while (g_ascii_isspace (*p) && tok.len > 0) {
 		p--;
+		tok.len --;
+	}
+
+	if (has_obrace && *p == '>') {
 		tok.len --;
 	}
 
