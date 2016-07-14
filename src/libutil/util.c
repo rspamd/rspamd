@@ -2069,7 +2069,6 @@ rspamd_init_libs (void)
 #endif
 	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
 			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
-	magic_load (ctx->libmagic, NULL);
 	ctx->local_addrs = rspamd_inet_library_init ();
 	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 
@@ -2112,6 +2111,10 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 				/* Default settings */
 				SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
 			}
+		}
+
+		if (ctx->libmagic) {
+			magic_load (ctx->libmagic, cfg->magic_file);
 		}
 	}
 }

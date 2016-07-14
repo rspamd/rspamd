@@ -93,7 +93,7 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	GError **err)
 {
 	const ucl_object_t *val;
-	const gchar *facility, *log_type, *log_level;
+	const gchar *facility = NULL, *log_type = NULL, *log_level = NULL;
 	struct rspamd_config *cfg = ud;
 
 	val = ucl_object_lookup (obj, "type");
@@ -1940,6 +1940,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, ssl_ciphers),
 			0,
 			"List of ssl ciphers (e.g. HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4)");
+	rspamd_rcl_add_default_handler (sub,
+			"magic_file",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, magic_file),
+			0,
+			"Path to a custom libmagic file");
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE,

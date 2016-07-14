@@ -1194,7 +1194,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 }
 
 guchar*
-rspamd_inet_address_get_radix_key (const rspamd_inet_addr_t *addr, guint *klen)
+rspamd_inet_address_get_hash_key (const rspamd_inet_addr_t *addr, guint *klen)
 {
 	guchar *res = NULL;
 	static struct in_addr local = {INADDR_LOOPBACK};
@@ -1213,6 +1213,10 @@ rspamd_inet_address_get_radix_key (const rspamd_inet_addr_t *addr, guint *klen)
 	else if (addr->af == AF_UNIX) {
 		*klen = sizeof (struct in_addr);
 		res = (guchar *)&local;
+	}
+	else {
+		*klen = 0;
+		res = NULL;
 	}
 
 	return res;

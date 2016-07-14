@@ -224,7 +224,7 @@ lua_ip_to_table (lua_State *L)
 
 	if (ip != NULL && ip->addr) {
 		lua_newtable (L);
-		ptr = rspamd_inet_address_get_radix_key (ip->addr, &max);
+		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
 
 		for (i = 1; i <= max; i++, ptr++) {
 			lua_pushnumber (L, *ptr);
@@ -250,7 +250,7 @@ lua_ip_str_octets (lua_State *L)
 	if (ip != NULL && ip->addr) {
 		lua_newtable (L);
 		af = rspamd_inet_address_get_af (ip->addr);
-		ptr = rspamd_inet_address_get_radix_key (ip->addr, &max);
+		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
 
 		for (i = 1; i <= max; i++, ptr++) {
 			if (af == AF_INET) {
@@ -289,7 +289,7 @@ lua_ip_inversed_str_octets (lua_State *L)
 
 	if (ip != NULL && ip->addr) {
 		lua_newtable (L);
-		ptr = rspamd_inet_address_get_radix_key (ip->addr, &max);
+		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
 		af = rspamd_inet_address_get_af (ip->addr);
 
 		ptr += max - 1;
@@ -379,7 +379,7 @@ lua_ip_to_number (lua_State *L)
 	guchar *ptr;
 
 	if (ip != NULL && ip->addr) {
-		ptr = rspamd_inet_address_get_radix_key (ip->addr, &max);
+		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
 
 		for (i = 0; i < max / sizeof (c); i ++) {
 			memcpy (&c, ptr + i * sizeof (c), sizeof (c));

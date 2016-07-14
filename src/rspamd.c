@@ -432,7 +432,7 @@ static inline uintptr_t
 make_listen_key (struct rspamd_worker_bind_conf *cf)
 {
 	rspamd_cryptobox_fast_hash_state_t st;
-	guint i, keylen;
+	guint i, keylen = 0;
 	guint8 *key;
 	rspamd_inet_addr_t *addr;
 	guint16 port;
@@ -446,7 +446,7 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 		rspamd_cryptobox_fast_hash_update (&st, cf->name, strlen (cf->name));
 		for (i = 0; i < cf->cnt; i ++) {
 			addr = g_ptr_array_index (cf->addrs, i);
-			key = rspamd_inet_address_get_radix_key (
+			key = rspamd_inet_address_get_hash_key (
 					addr, &keylen);
 			rspamd_cryptobox_fast_hash_update (&st, key, keylen);
 			port = rspamd_inet_address_get_port (addr);

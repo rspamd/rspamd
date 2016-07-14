@@ -129,7 +129,7 @@ radix_find_compressed_addr (radix_compressed_t *tree,
 		return RADIX_NO_VALUE;
 	}
 
-	key = rspamd_inet_address_get_radix_key (addr, &klen);
+	key = rspamd_inet_address_get_hash_key (addr, &klen);
 
 	if (key && klen) {
 		return radix_find_compressed (tree, key, klen);

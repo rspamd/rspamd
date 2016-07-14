@@ -2046,6 +2046,7 @@ rspamd_controller_handle_stat_common (
 	struct rspamd_task *task;
 	struct rspamd_stat_cbdata *cbdata;
 
+	memset (&mem_st, 0, sizeof (mem_st));
 	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;

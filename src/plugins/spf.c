@@ -279,7 +279,7 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 	/* Basic comparing algorithm */
 	if (((addr->flags & RSPAMD_SPF_FLAG_IPV6) && af == AF_INET6) ||
 		((addr->flags & RSPAMD_SPF_FLAG_IPV4) && af == AF_INET)) {
-		d = rspamd_inet_address_get_radix_key (task->from_addr, &addrlen);
+		d = rspamd_inet_address_get_hash_key (task->from_addr, &addrlen);
 
 		if (af == AF_INET6) {
 			s = (const guint8 *)addr->addr6;

@@ -370,6 +370,8 @@ struct rspamd_config {
 
 	gchar * hs_cache_dir;                           /**< directory to save hyperscan databases				*/
 
+	gchar * magic_file;                             /**< file to initialize libmagic						*/
+
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/
 	guint32 dns_throttling_errors;                  /**< maximum errors for starting resolver throttling	*/

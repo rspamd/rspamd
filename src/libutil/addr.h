@@ -136,7 +136,7 @@ gint rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr);
  * @param klen
  * @return
  */
-guchar * rspamd_inet_address_get_radix_key (const rspamd_inet_addr_t *addr, guint *klen);
+guchar * rspamd_inet_address_get_hash_key (const rspamd_inet_addr_t *addr, guint *klen);
 
 /**
  * Receive data from an unconnected socket and fill the inet_addr structure if needed
