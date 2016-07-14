@@ -28,27 +28,27 @@ title: Compare Rspamd with other spam filters
         </tr>
         <tr>
           <td>Process model</td>
-          <td>Event driven</td>
-          <td>Pre-forked pool</td>
+          <td>event driven</td>
+          <td>pre-forked pool</td>
           <td>LDA and pre-forked</td>
         </tr>
         <tr>
           <td>MTA integration</td>
-          <td>Milter, LDA, Custom</td>
-          <td>Milter, Custom (amavis)</td>
+          <td>milter, LDA, custom</td>
+          <td>milter, custom (Amavis)</td>
           <td>LDA</td>
         </tr>
         <tr>
           <td>Web interface</td>
-          <td><span class="glyphicon glyphicon-ok icon-green"></span> Embedded</td>
+          <td><span class="glyphicon glyphicon-ok icon-green"></span> embedded</td>
           <td><span class="fa fa-lg fa-question-circle"></span> 3rd party</td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
         </tr>
         <tr>
           <td>Languages support</td>
-          <td><span class="glyphicon glyphicon-ok icon-green"></span> Full, UTF8 conversion, lemmatization</td>
-          <td><span class="glyphicon glyphicon-remove icon-red"></span> Naive (ASCII lowercase)</td>
-          <td><span class="glyphicon glyphicon-remove icon-red"></span> Naive</td>
+          <td><span class="glyphicon glyphicon-ok icon-green"></span> full, UTF-8 conversion, lemmatization</td>
+          <td><span class="glyphicon glyphicon-remove icon-red"></span> naïve (ASCII lowercase)</td>
+          <td><span class="glyphicon glyphicon-remove icon-red"></span> naïve</td>
         </tr>
         <tr>
           <td>Scripting support</td>
@@ -92,7 +92,7 @@ title: Compare Rspamd with other spam filters
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
         </tr>
         <tr>
-          <td>Rules compostion</td>
+          <td>Rules composition</td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
@@ -194,19 +194,19 @@ title: Compare Rspamd with other spam filters
         <tr>
           <td>Bayes classifier</td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span> hidden Markov</td>
-          <td><span class="glyphicon glyphicon-ok icon-green"></span> naive</td>
+          <td><span class="glyphicon glyphicon-ok icon-green"></span> naïve</td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span> hidden Markov</td>
         </tr>
         <tr>
           <td>Bayes autolearn</td>
-          <td><span class="glyphicon glyphicon-ok icon-green"></span> with custom lua rules</td>
+          <td><span class="glyphicon glyphicon-ok icon-green"></span> with custom Lua rules</td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span> by threshold</td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
         </tr>
         <tr>
           <td>Bayes window</td>
           <td>5 words</td>
-          <td>1 words</td>
+          <td>1 word</td>
           <td>2 words (5 words in SBPH/OSB mode)</td>
         </tr>
         <tr>
@@ -216,13 +216,13 @@ title: Compare Rspamd with other spam filters
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
         </tr>
         <tr>
-          <td>Sqlite3 backend</td>
+          <td>SQLite3 backend</td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
         </tr>
         <tr>
-          <td>Mysql backend</td>
+          <td>MySQL backend</td>
           <td><span class="glyphicon glyphicon-remove icon-red"></span></td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
           <td><span class="glyphicon glyphicon-ok icon-green"></span></td>
