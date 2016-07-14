@@ -315,7 +315,7 @@ rspamadm_configdump (gint argc, gchar **argv)
 						rspamadm_dump_section_obj (cfg, cur, doc_obj);
 
 						if (!json && !compact) {
-							rspamd_printf ("*** End of section %s ***\n",  argv[i]);
+							rspamd_printf ("\n*** End of section %s ***\n",  argv[i]);
 						}
 						else {
 							rspamd_printf ("\n");
