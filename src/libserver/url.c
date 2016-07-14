@@ -2245,7 +2245,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 			}
 		}
 		else if (rc != URI_ERRNO_OK) {
-			msg_info_pool_check ("extract of url '%s' failed: %s",
+			msg_debug_pool_check ("extract of url '%s' failed: %s",
 					cb->url_str,
 					rspamd_url_strerror (rc));
 		}
