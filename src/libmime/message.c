@@ -1698,12 +1698,12 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	if (task->queue_id) {
-		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>",
-				task->message_id, task->queue_id);
+		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z",
+				task->message_id, task->queue_id, task->msg.len);
 	}
 	else {
-		msg_info_task ("loaded message; id: <%s>",
-				task->message_id);
+		msg_info_task ("loaded message; id: <%s>; size: %z",
+				task->message_id, task->msg.len);
 	}
 
 	return TRUE;

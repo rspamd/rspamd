@@ -2200,7 +2200,7 @@ fuzzy_stat_command (struct rspamd_task *task)
 	}
 }
 
-static inline gboolean
+static inline gint
 register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	struct fuzzy_rule *rule,
 	struct rspamd_task *task,
@@ -2213,7 +2213,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	rspamd_inet_addr_t *addr;
 	struct rspamd_controller_session *session = entry->ud;
 	gint sock;
-	gboolean ret = FALSE;
+	gint ret = -1;
 
 	/* Get upstream */
 
@@ -2254,7 +2254,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 			event_add (&s->timev, &s->tv);
 
 			(*saved)++;
-			ret = TRUE;
+			ret = 1;
 		}
 	}
 
