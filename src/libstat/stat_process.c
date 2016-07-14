@@ -389,7 +389,7 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 		 GError **err)
 {
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
-	struct rspamd_classifier *cl;
+	struct rspamd_classifier *cl, *sel = NULL;
 	gpointer rt;
 	guint i;
 
@@ -403,8 +403,10 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
-		if (cl->cache && cl->cachecf) {
-			rt = cl->cache->runtime (task, cl->cachecf, FALSE);
+		sel = cl;
+
+		if (sel->cache && sel->cachecf) {
+			rt = cl->cache->runtime (task, sel->cachecf, FALSE);
 			learn_res = cl->cache->check (task, spam, rt);
 		}
 
@@ -423,6 +425,18 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 		}
 	}
 
+	if (sel == NULL) {
+		if (classifier) {
+			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
+					"with name %s", classifier);
+		}
+		else {
+			g_set_error (err, rspamd_stat_quark (), 404, "no classifiers defined");
+		}
+
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
@@ -433,7 +447,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 		 gboolean spam,
 		 GError **err)
 {
-	struct rspamd_classifier *cl;
+	struct rspamd_classifier *cl, *sel = NULL;
 	guint i;
 	gboolean learned = FALSE, too_small = FALSE, too_large = FALSE,
 			conditionally_skipped = FALSE;
@@ -452,6 +466,8 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 				g_ascii_strcasecmp (classifier, cl->cfg->name) != 0)) {
 			continue;
 		}
+
+		sel = cl;
 
 		/* Now check max and min tokens */
 		if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {
@@ -529,6 +545,18 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 		}
 	}
 
+	if (sel == NULL) {
+		if (classifier) {
+			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
+					"with name %s", classifier);
+		}
+		else {
+			g_set_error (err, rspamd_stat_quark (), 404, "no classifiers defined");
+		}
+
+		return FALSE;
+	}
+
 	if (!learned && err && *err == NULL) {
 		if (too_large) {
 			g_set_error (err, rspamd_stat_quark (), 400,
@@ -568,7 +596,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 		 gboolean spam,
 		 GError **err)
 {
-	struct rspamd_classifier *cl;
+	struct rspamd_classifier *cl, *sel = NULL;
 	struct rspamd_statfile *st;
 	gpointer bk_run;
 	guint i, j;
@@ -583,6 +611,8 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				g_ascii_strcasecmp (classifier, cl->cfg->name) != 0)) {
 			continue;
 		}
+
+		sel = cl;
 
 		for (j = 0; j < cl->statfiles_ids->len; j ++) {
 			id = g_array_index (cl->statfiles_ids, gint, j);
@@ -620,6 +650,18 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				}
 			}
 		}
+	}
+
+	if (sel == NULL) {
+		if (classifier) {
+			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
+					"with name %s", classifier);
+		}
+		else {
+			g_set_error (err, rspamd_stat_quark (), 404, "no classifiers defined");
+		}
+
+		return FALSE;
 	}
 
 	return res;
