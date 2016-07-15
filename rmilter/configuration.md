@@ -3,7 +3,11 @@ layout: rmilter
 title: Rmilter configuration
 ---
 
-## Rmilter configuration
+# Rmilter configuration
+
+This document describes Rmilter configuration options.
+
+## Configuration format
 
 The configuration file has format:
 
