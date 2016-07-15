@@ -24,12 +24,22 @@ struct rspamd_task;
  * Subr for composite expressions
  */
 extern const struct rspamd_atom_subr composite_expr_subr;
+
+enum rspamd_composite_policy {
+	RSPAMD_COMPOSITE_POLICY_REMOVE_ALL = 0,
+	RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL,
+	RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT,
+	RSPAMD_COMPOSITE_POLICY_LEAVE,
+	RSPAMD_COMPOSITE_POLICY_UNKNOWN
+};
+
 /**
  * Composite structure
  */
 struct rspamd_composite {
 	struct rspamd_expression *expr;
 	gint id;
+	enum rspamd_composite_policy policy;
 };
 
 /**
@@ -37,5 +47,7 @@ struct rspamd_composite {
  * @param task worker's task that present message from user
  */
 void rspamd_make_composites (struct rspamd_task *task);
+
+enum rspamd_composite_policy rspamd_composite_policy_from_str (const gchar *string);
 
 #endif /* SRC_LIBSERVER_COMPOSITES_H_ */

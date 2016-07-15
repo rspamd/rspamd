@@ -194,7 +194,21 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		nrd->ms = ms;
 
 		/* By default remove symbols */
-		nrd->action = (RSPAMD_COMPOSITE_REMOVE_SYMBOL|RSPAMD_COMPOSITE_REMOVE_WEIGHT);
+		switch (cd->composite->policy) {
+		case RSPAMD_COMPOSITE_POLICY_REMOVE_ALL:
+		default:
+			nrd->action = (RSPAMD_COMPOSITE_REMOVE_SYMBOL|RSPAMD_COMPOSITE_REMOVE_WEIGHT);
+			break;
+		case RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL:
+			nrd->action = RSPAMD_COMPOSITE_REMOVE_SYMBOL;
+			break;
+		case RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT:
+			nrd->action = RSPAMD_COMPOSITE_REMOVE_WEIGHT;
+			break;
+		case RSPAMD_COMPOSITE_POLICY_LEAVE:
+			nrd->action = 0;
+			break;
+		}
 
 		for (;;) {
 			t = *beg;
@@ -380,4 +394,27 @@ void
 rspamd_make_composites (struct rspamd_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
+}
+
+
+enum rspamd_composite_policy
+rspamd_composite_policy_from_str (const gchar *string)
+{
+	enum rspamd_composite_policy ret = RSPAMD_COMPOSITE_POLICY_UNKNOWN;
+
+	if (strcmp (string, "remove") == 0 || strcmp (string, "remove_all") == 0 ||
+			strcmp (string, "default") == 0) {
+		ret = RSPAMD_COMPOSITE_POLICY_REMOVE_ALL;
+	}
+	else if (strcmp (string, "remove_symbol") == 0) {
+		ret = RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL;
+	}
+	else if (strcmp (string, "remove_weight") == 0) {
+		ret = RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT;
+	}
+	else if (strcmp (string, "leave") == 0 || strcmp (string, "remove_none") == 0) {
+		ret = RSPAMD_COMPOSITE_POLICY_LEAVE;
+	}
+
+	return ret;
 }
