@@ -142,7 +142,7 @@ guint rspamd_symbols_cache_symbols_count (struct symbols_cache *cache);
  * @param saved_item pointer to currently saved item
  */
 gboolean rspamd_symbols_cache_process_symbols (struct rspamd_task *task,
-	struct symbols_cache *cache);
+	struct symbols_cache *cache, gint stage);
 
 /**
  * Validate cache items agains theirs weights defined in metrics

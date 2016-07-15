@@ -574,11 +574,13 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache);
+		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+				RSPAMD_TASK_STAGE_PRE_FILTERS);
 		break;
 
 	case RSPAMD_TASK_STAGE_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache);
+		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+				RSPAMD_TASK_STAGE_FILTERS);
 		break;
 
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
@@ -598,7 +600,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache);
+		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+				RSPAMD_TASK_STAGE_POST_FILTERS);
 
 		if ((task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
 				!RSPAMD_TASK_IS_EMPTY (task) &&

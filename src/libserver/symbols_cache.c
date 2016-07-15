@@ -1428,7 +1428,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 
 gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
-	struct symbols_cache *cache)
+	struct symbols_cache *cache, gint stage)
 {
 	struct cache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
@@ -1478,10 +1478,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			}
 		}
 
-		if (all_done) {
+		if (all_done || stage == RSPAMD_TASK_STAGE_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_FILTERS;
 
-			return rspamd_symbols_cache_process_symbols (task, cache);
+			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 		break;
 	case RSPAMD_CACHE_PASS_FILTERS:
@@ -1577,10 +1577,11 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			}
 		}
 
-		if (checkpoint->waitq->len == 0) {
+		if (checkpoint->waitq->len == 0 ||
+				stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
 
-			return rspamd_symbols_cache_process_symbols (task, cache);
+			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 		break;
 
