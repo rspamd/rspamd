@@ -37,12 +37,12 @@ definition looks like:
 ## Common sections
 
 -   clamav - clamav definitions
--   spamd - rspamd definitions
+-   spamd - Rspamd definitions
 -   limits - limits definitions
 -   greylisting - greylisting definitions
 -   rule - regexp rule definition (a section per rule)
 
-Directives that can be defined in config file:
+Directives that can be defined in configuration file:
 
 ## Global section
 
@@ -50,7 +50,7 @@ Defines global options.
 
 - `pidfile`: specify path to pidfile
 	+ Default: `/var/run/rmilter.pid`
-- `tempdir`: specify path to temporary directory. For maximum performance it is recommended to put it on memory file system.
+- `tempdir`: specify path to temporary directory. For maximum performance, it is recommended to put it on memory file system.
 	+ Default: `$TMPDIR`
 - `bind_socket`: socket credits for local bind:
 	+ Default: `bind_socket = unix:/var/tmp/rmilter.sock`
@@ -58,10 +58,8 @@ Defines global options.
 	2.  `inet:[port@host]` - bind to inet socket
 - `max_size`: maximum size of scanned message for clamav, spamd and dcc.
 	+ Default: `0 (no limit)`
-- `strict_auth`: strict checks for mails from authenticated senders
+- `strict_auth`: strict checks for mails from authenticated senders (if it is `no` then messages for authenticated users are **NOT** checked - that's a **default** value)
 	+ Default: `no`
-- `spf_domains`: list of domains that would be checked with spf
-	+ Default: `empty (spf disabled)`
 - `use_dcc`: flag that specify whether we should use dcc checks for mail
 	+ Default: `no`
 - `whitelist`: global recipients whitelist
@@ -99,9 +97,9 @@ Back to [top](#).
 
 ## Spamd section
 
-Specifies rspamd scanners.
+Specifies Rspamd scanners.
 
-- `servers`: rspamd socket definitions in format:
+- `servers`: Rspamd socket definitions in format:
 	1.  `/path/to/file`
 	2.  `host[:port]`
 - `connect_timeout`: timeout in milliseconds for connecting to spamd
@@ -122,7 +120,7 @@ Specifies rspamd scanners.
 	+ Default: `true`
 - `spam_header`: add specified header if action is add_header and spamd_soft_fail os turned on
 	+ Default: `X-Spam`
-- `rspamd_metric`: rspamd metric that would define whether we reject message as spam or not (quoted string)
+- `rspamd_metric`: Rspamd metric that would define whether we reject message as spam or not (quoted string)
 	+ Default: `default`
 - `whitelist`: list of ips or nets that should be not checked with spamd
 	+ Default: `empty`
@@ -132,7 +130,7 @@ Specifies rspamd scanners.
 	+ Default: `false`
 - `spamd_temp_fail`: return temporary failure if spam servers could not be reached (ignore otherwise) (flag)
 	+ Default: `false`
-- `spamd_settings_id`: pass additional settings id for rspamd (e.g. to distinguish inbound and outbound messages)
+- `spamd_settings_id`: pass additional settings id for Rspamd (e.g. to distinguish inbound and outbound messages)
   + Default: `empty`
 
 Back to [top](#).
@@ -145,8 +143,16 @@ Defines redis servers for grey/whitelisting and ratelimits.
 	+ Default: `empty`
 - `servers_white`: redis servers for whitelisting in format similar to that is used in *servers_grey*
 	+ Default: `empty`
-- `servers_limits`: redis servers used for limits storing, can not be mirrored
+- `servers_limits`: redis servers used for limits storing
 	+ Default: `empty`
+- `servers_id`: redis servers used for storing messages IDs (used in replies checks)
+	+ Default: `empty`
+- `servers_spam`: redis servers used to broadcast messages that are rejected as spam
+    + Default: `empty`
+- `servers_copy`: redis servers used to broadcast copies of messages (amount is defined by `copy_probability`)
+    + Default: `empty`
+- `copy_probability`: a number that defines average amount of messages being copied to `servers_copy`, should be in range from 0.0 to 1.0 (e.g. 0.5 means that half of messages are copied in average)
+    + Default: `1.0` - copy all if `servers_copy` is set
 - `connect_timeout`: timeout in miliseconds for connecting to redis
 	+ Default: `1s`
 - `error_time`: time in seconds during which we are counting errors
@@ -155,6 +161,22 @@ Defines redis servers for grey/whitelisting and ratelimits.
 	+ Default: `300`
 - `maxerrors`: maximum number of errors that can occur during error_time to make rmilter thinking that this upstream is dead
 	+ Default: `10`
+
+It is also possible to set DB number and password for Redis:
+
+- `dbname`: number of Redis database (see Redis [documentation](https://redis.io) for details)
+- `password`: password to access Redis
+
+Rmilter can also set custom prefixes for the keys pushed into Redis:
+
+- `grey_prefix`: used for greylisting records
+- `white_prefix`: used to whitelist records after greylisting
+- `id_prefix`: used to store message ids
+
+Copying messages to [pub/sub](http://redis.io/topics/pubsub) channels also requires to setup channels in Redis:
+
+- `spam_channel`: channel for spam messages
+- `copy_channel`: channel for copies
 
 Back to [top](#).
 
