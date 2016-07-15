@@ -31,6 +31,7 @@ local settings = {
   regexp = false,
   extension_map = { -- extension -> mime_type
     html = 'text/html',
+    htm = 'text/html',
     txt = 'text/plain',
     pdf = 'application/pdf'
   },
