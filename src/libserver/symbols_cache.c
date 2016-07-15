@@ -1448,6 +1448,11 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		checkpoint = task->checkpoint;
 	}
 
+	if (stage == RSPAMD_TASK_STAGE_POST_FILTERS && checkpoint->pass <
+			RSPAMD_CACHE_PASS_POSTFILTERS) {
+		checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
+	}
+
 	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);
 	start_events_pending = rspamd_session_events_pending (task->s);
 
