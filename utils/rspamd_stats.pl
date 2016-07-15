@@ -10,6 +10,7 @@ use strict;
 my @symbols_search;
 my $reject_score = 15.0;
 my $junk_score = 6.0;
+my $diff_alpha = 0.1;
 my $log_file = "";
 my $man = 0;
 my $help = 0;
@@ -19,6 +20,7 @@ GetOptions(
   "junk-score=f" => \$junk_score,
   "symbol=s@" => \@symbols_search,
   "log=s" => \$log_file,
+  "alpha=f" => \$diff_alpha,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -36,7 +38,6 @@ my $spam_symbols = 0;
 my $ham_symbols = 0;
 my $ham_spam_change = 0;
 my $ham_junk_change = 0;
-my $diff_alpha = 0.1;
 my %sym_res;
 my $rspamd_log;
 
@@ -85,6 +86,7 @@ while(<$rspamd_log>) {
               next;
             }
           }
+          next if $sym_name !~ /^$s/;
 
           if (!$sym_res{$sym_name}) {
             $sym_res{$sym_name} = {
@@ -195,6 +197,7 @@ rspamd_stats [options] --symbol=SYM1 [--symbol=SYM2...] [--log file]
    --reject-score=score   set reject threshold (15 by default)
    --junk-score=score     set junk score (6.0 by default)
    --symbol=sym           check specified symbol (perl regexps are supported)
+   --alpha=value          set ignore score for symbols (0.1 by default)
    --help                 brief help message
    --man                  full documentation
 
@@ -213,6 +216,10 @@ Specifies the reject (spam) threshold.
 =item B<--junk-score>
 
 Specifies the junk (add header or rewrite subject) threshold.
+
+=item B<--alpha-score>
+
+Specifies the minimum score for a symbol to be considered by this script.
 
 =item B<--symbol>
 
