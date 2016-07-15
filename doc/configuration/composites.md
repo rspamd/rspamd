@@ -8,12 +8,13 @@ title: Rspamd Composites
 
 Rspamd composites are used to combine rules and create more complex rules. Composite rules are defined by `composite` keys. The value of the key should be an object that defines the composite's name and value, which is the combination of rules in a joint expression.
 
-For example, you can define a composite that is added when two specific symbols are found:
+For example, you can define a composite that fires when two specific symbols are found and **replaces** these symbols weights with its score:
 
 ~~~ucl
 composite {
-	name = "TEST_COMPOSITE";
-	expression = "SYMBOL1 and SYMBOL2";
+    name = "TEST_COMPOSITE";
+    expression = "SYMBOL1 and SYMBOL2";
+    score = 5.0;
 }
 ~~~
 
@@ -33,6 +34,8 @@ You also can use braces to define priorities. Otherwise operators are evaluated 
 composite {
     name = "TEST";
     expression = "SYMBOL1 and SYMBOL2 and ( not SYMBOL3 | not SYMBOL4 | not SYMBOL5 )";
+    score = 10.0;
+    group = "Some group";
 }
 ~~~
 
@@ -49,7 +52,34 @@ composite {
 }
 ~~~
 
-Composites should not be recursive; this is normally detected by Rspamd.
+Composites should not be recursive; but this is normally detected and avoided by Rspamd automatically.
+
+It is also possible to setup policies for composites regarding symbols enclosed within a composite expression. By default Rspamd **removes** symbols and weights that trigger composite with the composite itself. However, it is possible to change this setting by 2 ways.
+
+1. Set up removal policy for each symbol:
+    * `-`: remove weigth of symbol
+    * `~`: do not remove anything
+    * `^`: force removing of symbol and weight (by default, Rspamd prefers to leave symbols when some composite wants to remove and another composite wants to leave any of score/name pair)
+2. Set the default policy for all elements in the expression using `policy` option:
+    * `default`: default policy - remove weigth and symbol
+    * `remove_weight`: remove weight only
+    * `remove_symbol`: remove symbol only
+    * `leave`: leave both symbol and score
+
+E.g.
+
+~~~ucl
+composite {
+    name = "TEST_COMPOSITE";
+    expression = "SYMBOL1 and SYMBOL2";
+    policy = "leave";
+}
+composite {
+    name = "TEST_COMPOSITE2";
+    expression = "SYMBOL3 and SYMBOL4";
+    policy = "remove_weight";
+}
+~~~
 
 ## Composite weight rules
 
