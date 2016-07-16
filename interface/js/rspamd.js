@@ -707,7 +707,7 @@
         });
 
         // @upload text
-        function uploadText(data, source) {
+        function uploadText(data, source, headers) {
             if (source === 'spam') {
                 var url = 'learnspam';
             }
@@ -715,7 +715,7 @@
                 var url = 'learnham';
             }
             else if (source == 'fuzzy') {
-                var url = 'learnfuzzy';
+                var url = 'fuzzyadd';
             }
             else if (source === 'scan') {
                 var url = 'scan';
@@ -727,6 +727,9 @@
                 url: url,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
+                    $.each(headers, function (name, value) {
+                        xhr.setRequestHeader(name, value);
+                    });
                 },
                 success: function (data) {
                     cleanTextUpload(source);
@@ -842,12 +845,12 @@
         $('[data-upload]').on('click', function () {
             var source = $(this).data('upload');
             var data;
+            var headers = {};
+            data = $('#' + source + 'TextSource').val();
             if (source == 'fuzzy') {
                 //To access the proper
-                data = new String($('#' + source + 'TextSource').val());
-                data.flag = $('#fuzzyFlagText').val();
-                data.weigth = $('#fuzzyWeightText').val();
-                data.string = data.toString();
+                headers.flag = $('#fuzzyFlagText').val();
+                headers.weigth = $('#fuzzyWeightText').val();
             }
             else {
                 data = $('#' + source + 'TextSource').val();
@@ -857,7 +860,7 @@
                     scanText(data);
                 }
                 else {
-                    uploadText(data, source);
+                    uploadText(data, source, headers);
                 }
             }
             return false;
