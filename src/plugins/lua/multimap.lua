@@ -473,6 +473,10 @@ local function add_multimap_rule(key, newrule)
     rspamd_logger.errx(rspamd_config, 'incomplete rule, missing symbol')
     return nil
   end
+  if not newrule['description'] then
+    newrule['description'] = string.format('multimap, type %s: %s', newrule['type'],
+      newrule['symbol'])
+  end
   -- Check cdb flag
   if string.find(newrule['map'], '^cdb://.*$') then
     local test = cdb.create(newrule['map'])
