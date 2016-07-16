@@ -122,7 +122,10 @@ h2{
 #jumbo-head{
   background: url(/img/rspamd_jumbotron.png);
   background-size: cover;
-
+}
+#jumbo-rmilter{
+  background: url(/img/rmilter_jumbotron.png);
+  background-size: cover;
 }
 .support-block {
   border-radius: 5px;
