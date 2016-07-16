@@ -256,17 +256,6 @@ input::-webkit-inner-spin-button {
 		-o-text-overflow:ellipsis;
 		text-overflow:ellipsis;
 		}
-	.table-log .cell-overflow:focus {
-		margin:-3px -8px;
-		padding:2px 7px 3px;
-		position:absolute;
-		overflow:visible;
-		background:#fff;
-		border:1px solid #ccc;
-		-moz-box-shadow:0 2px 2px -2px #CCCCCC inset;
-		box-shadow:0 2px 2px -2px #CCCCCC inset;
-		cursor:text;
-		}
 	.table-log th {
 		background-color:#efefef;
 		border-left:1px solid #CDCDCD;
