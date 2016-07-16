@@ -210,13 +210,13 @@ if opts then
       map = rspamd_config:add_map ({
         url = settings['file'],
         type = 'regexp',
-        description = 'mime types map'
+        description = 'mime types map (regexps)'
       })
     else
       map = rspamd_config:add_map ({
         url = settings['file'],
         type = 'map',
-        description = 'mime types map'
+        description = 'mime types map (plain)'
       })
     end
     local id = rspamd_config:register_symbol({

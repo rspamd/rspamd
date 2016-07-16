@@ -1318,7 +1318,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 
 	if (ucl_object_type (obj) == UCL_STRING) {
 		/* Just a plain string */
-		return rspamd_map_add (cfg, ucl_object_tostring (obj), NULL,
+		return rspamd_map_add (cfg, ucl_object_tostring (obj), description,
 				read_callback, fin_callback, user_data);
 	}
 
