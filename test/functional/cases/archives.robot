@@ -16,7 +16,7 @@ Zip
 
 Zip Double Bad Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/zip-doublebad.eml
-  Check Rspamc  ${result}  MIME_DOUBLE_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[pdf, exe\\]\\n  re=1
+  Check Rspamc  ${result}  MIME_DOUBLE_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[\\.pdf\\.exe\\]\\n  re=1
 
 Rar4
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rar4.eml
