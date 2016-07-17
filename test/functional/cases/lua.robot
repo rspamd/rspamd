@@ -22,6 +22,12 @@ Dependencies
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  DEP10
 
+Pre and Post Filters
+  [Setup]  Lua Setup  ${TESTDIR}/lua/prepostfilters.lua
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  TEST_PRE
+  Check Rspamc  ${result}  TEST_POST  rc_nocheck=1
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
