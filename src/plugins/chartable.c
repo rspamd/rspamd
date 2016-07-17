@@ -174,7 +174,7 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w,
 		got_alpha,
 		got_digit,
 		got_unknown,
-	} state = start_process;
+	} state = start_process, prev_state = start_process;
 
 	p = w->begin;
 	end = p + w->len;
@@ -192,7 +192,7 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w,
 			if (state == got_digit) {
 				/* Penalize digit -> alpha translations */
 				if (!is_url && sc != G_UNICODE_SCRIPT_COMMON &&
-						sc != G_UNICODE_SCRIPT_LATIN) {
+						sc != G_UNICODE_SCRIPT_LATIN && prev_state != start_process) {
 					badness += 1.0;
 				}
 			}
@@ -214,15 +214,24 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w,
 				}
 			}
 
+			prev_state = state;
 			state = got_alpha;
 
 		}
 		else if (g_unichar_isdigit (uc)) {
+			if (state != got_digit) {
+				prev_state = state;
+			}
+
 			state = got_digit;
 			same_script_count = 0;
 		}
 		else {
 			/* We don't care about unknown characters here */
+			if (state != got_unknown) {
+				prev_state = state;
+			}
+
 			state = got_unknown;
 			same_script_count = 0;
 		}
