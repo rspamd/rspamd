@@ -224,7 +224,7 @@ From version 1.1, Rspamd supports autolearning for statfiles. Autolearning is ap
 There are 3 possibilities to specify autolearning:
 
 * `autolearn = true`: autolearning is performing as spam if a message has `reject` action and as ham if a message has **negative** score
-* `autolearn = [1, 10]`: autolearn as ham if score is less than minimum of 2 numbers (< `1` here) and as spam if score is more than maximum of 2 numbers (> `10` in this case)
+* `autolearn = [-5, 5]`: autolearn as ham if score is less `-5` and as spam if score is more than `5`
 * `autolearn = "return function(task) ... end"`: use the following Lua function to detect if autolearn is needed (function should return 'ham' if learn as ham is needed and string 'spam' if learn as spam is needed, if no learn is needed then a function can return anything including `nil`)
 
 Redis backend is highly recommended for autolearning purposes since it's the only backend with high concurrency level when multiple writers are properly synchronized.
