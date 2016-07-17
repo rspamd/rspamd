@@ -42,7 +42,7 @@ def read_log_from_position(filename, offset):
     return [goo, size+offset]
 
 def scan_file(addr, port, filename):
-    return str(urlopen("http://%s:%s/symbols?%s" % (addr, port, filename)).read())
+    return str(urlopen("http://%s:%s/symbols?file=%s" % (addr, port, filename)).read())
 
 def Send_SIGUSR1(pid):
     pid = int(pid)
