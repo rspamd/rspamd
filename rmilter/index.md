@@ -1,13 +1,11 @@
 ---
-layout: default
+layout: rmilter_main
 title: About rmilter
 ---
 
-# About Rmilter
-
 ## Introduction
 
-Rmilter is used to integrate rspamd and `milter` compatible MTA, for example [Postfix](http://postfix.org) or [Sendmail](http://sendmail.org). It also performs other useful functions for email filtering including:
+Rmilter is used to integrate rspamd and `milter` compatible MTA, for example Postfix or Sendmail. It also performs other useful functions for email filtering including:
 
 - Virus scanning using [Clamav](http://clamav.net)
 - Spam scanning using Rspamd
@@ -17,11 +15,24 @@ Rmilter is used to integrate rspamd and `milter` compatible MTA, for example [Po
 - Passing certain messages to redis pub/sub channels
 - DKIM signing
 
-Rmilter project page can be found on GitHub: <http://github.com/vstakhov/rmilter>.
-
-## Rmilter configuration
-
-Rmilter configuration format is described in the **[following page](https://rspamd.com/rmilter/configuration.html)**.
+<div>
+    <div class="row" style="margin-top: 20px; margin-bottom: 20px;">
+        <div class="col-sm-3 col-xs-12">
+            <a class="btn btn-social btn-github btn-block" href="http://github.com/vstakhov/rmilter"><i class="fa fa-github"></i> Rmilter project</a>
+        </div>
+        <div class="col-sm-9 col-xs-12">
+            <p>Rmilter project page can be found on GitHub.</p>
+        </div>
+    </div>
+    <div class="row" style="margin-top: 20px; margin-bottom: 20px;">
+        <div class="col-sm-3 col-xs-12">
+            <a class="btn btn-social btn-primary btn-block" href="/rmilter/configuration.html"><i class="fa fa-file-text-o"></i> Rmilter configuration</a>
+        </div>
+        <div class="col-sm-9 col-xs-12">
+            <p>Rmilter configuration format is described in here.</p>
+        </div>
+    </div>
+</div>
 
 ## Postfix settings
 
@@ -35,11 +46,10 @@ There are several useful settings for postfix to work with this milter:
     milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
     milter_protocol = 6
 
-Back to [top](#).
-
 ## Useful rmilter recipies
 
 This section contains a number of useful configuration recipes and best practices for Rmilter.
+
 
 ### Setup DKIM signing of outcoming email for authenticated users
 
