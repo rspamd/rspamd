@@ -75,11 +75,15 @@ Run Redis
   ${template} =  Get File  ${TESTDIR}/configs/redis-server.conf
   ${config} =  Replace Variables  ${template}
   Create File  ${TMPDIR}/redis-server.conf  ${config}
+  Log  ${config}
   ${result} =  Run Process  redis-server  ${TMPDIR}/redis-server.conf
+  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
   ${REDIS_PID} =  Get File  ${TMPDIR}/redis.pid
   Run Keyword If  '${REDIS_SCOPE}' == 'Test'  Set Test Variable  ${REDIS_PID}
   ...  ELSE IF  '${REDIS_SCOPE}' == 'Suite'  Set Suite Variable  ${REDIS_PID}
+  ${redis_log} =  Get File  ${TMPDIR}/redis.log
+  Log  ${redis_log}
 
 Run Rspamc
   [Arguments]  @{args}
