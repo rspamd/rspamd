@@ -925,7 +925,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!rspamd_http_message_set_body_from_fd (reply, fd)) {
 		close (fd);
-		rspamd_http_message_free (reply);
+		rspamd_http_message_unref (reply);
 		msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
 		return 0;

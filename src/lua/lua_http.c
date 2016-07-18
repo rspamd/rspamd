@@ -96,7 +96,7 @@ lua_http_fin (gpointer arg)
 	}
 	else if (cbd->msg != NULL) {
 		/* We need to free message */
-		rspamd_http_message_free (cbd->msg);
+		rspamd_http_message_unref (cbd->msg);
 	}
 
 	if (cbd->fd != -1) {
