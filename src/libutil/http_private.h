@@ -69,6 +69,7 @@ struct rspamd_http_message {
 	gint code;
 	enum http_method method;
 	gint flags;
+	ref_entry_t ref;
 };
 
 

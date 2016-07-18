@@ -1243,7 +1243,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 			priv->peer_key = msg->peer_key;
 			msg->peer_key = NULL;
 		}
-		rspamd_http_message_free (msg);
+		rspamd_http_message_unref (msg);
 		priv->msg = NULL;
 	}
 
@@ -1290,18 +1290,14 @@ rspamd_http_connection_steal_msg (struct rspamd_http_connection *conn)
 }
 
 struct rspamd_http_message *
-rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
+rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 {
-	struct rspamd_http_connection_private *priv;
-	struct rspamd_http_message *new_msg, *msg;
+	struct rspamd_http_message *new_msg;
 	struct rspamd_http_header *hdr, *nhdr, *thdr;
 	const gchar *old_body;
 	gsize old_len;
 	struct stat st;
 	union _rspamd_storage_u *storage;
-
-	priv = conn->priv;
-	msg = priv->msg;
 
 	new_msg = rspamd_http_new_message (msg->type);
 	new_msg->flags = msg->flags;
@@ -1316,12 +1312,12 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 			storage->shared.shm_fd = dup (msg->body_buf.c.shared.shm_fd);
 
 			if (storage->shared.shm_fd == -1) {
-				rspamd_http_message_free (new_msg);
+				rspamd_http_message_unref (new_msg);
 				return NULL;
 			}
 
 			if (fstat (storage->shared.shm_fd, &st) == -1) {
-				rspamd_http_message_free (new_msg);
+				rspamd_http_message_unref (new_msg);
 				return NULL;
 			}
 
@@ -1337,7 +1333,7 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 					storage->shared.shm_fd, 0);
 
 			if (new_msg->body_buf.str == MAP_FAILED) {
-				rspamd_http_message_free (new_msg);
+				rspamd_http_message_unref (new_msg);
 				return NULL;
 			}
 
@@ -1350,7 +1346,7 @@ rspamd_http_connection_copy_msg (struct rspamd_http_connection *conn)
 			old_body = rspamd_http_message_get_body (msg, &old_len);
 
 			if (!rspamd_http_message_set_body (new_msg, old_body, old_len)) {
-				rspamd_http_message_free (new_msg);
+				rspamd_http_message_unref (new_msg);
 				return NULL;
 			}
 		}
@@ -2120,6 +2116,8 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->type = type;
 	new->method = HTTP_GET;
 
+	REF_INIT_RETAIN (new, rspamd_http_message_free);
+
 	return new;
 }
 
@@ -2183,6 +2181,8 @@ rspamd_http_message_from_url (const gchar *url)
 
 	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
 	msg->url = rspamd_fstring_append (msg->url, path, pathlen);
+
+	REF_INIT_RETAIN (msg, rspamd_http_message_free);
 
 	return msg;
 }
@@ -3165,4 +3165,18 @@ rspamd_http_date_format (gchar *buf, gsize len, time_t time)
 			http_week[tms.tm_wday], tms.tm_mday,
 			http_month[tms.tm_mon], tms.tm_year + 1900,
 			tms.tm_hour, tms.tm_min, tms.tm_sec);
+}
+
+struct rspamd_http_message *
+rspamd_http_message_ref (struct rspamd_http_message *msg)
+{
+	REF_RETAIN (msg);
+
+	return msg;
+}
+
+void
+rspamd_http_message_unref (struct rspamd_http_message *msg)
+{
+	REF_RELEASE (msg);
 }

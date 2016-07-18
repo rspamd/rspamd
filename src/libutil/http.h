@@ -268,7 +268,7 @@ struct rspamd_http_message * rspamd_http_connection_steal_msg (
  * @return
  */
 struct rspamd_http_message * rspamd_http_connection_copy_msg (
-		struct rspamd_http_connection *conn);
+		struct rspamd_http_message *msg);
 
 /**
  * Create new HTTP message
@@ -277,6 +277,17 @@ struct rspamd_http_message * rspamd_http_connection_copy_msg (
  */
 struct rspamd_http_message * rspamd_http_new_message (enum http_parser_type type);
 
+/**
+ * Increase refcount number for an HTTP message
+ * @param msg message to use
+ * @return
+ */
+struct rspamd_http_message * rspamd_http_message_ref (struct rspamd_http_message *msg);
+/**
+ * Decrease number of refcounts for http message
+ * @param msg
+ */
+void rspamd_http_message_unref (struct rspamd_http_message *msg);
 /**
  * Create HTTP message from URL
  * @param url
