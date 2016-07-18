@@ -458,7 +458,7 @@ rspamd_fuzzy_mirror_process_update: remote revision: XX is newer more than 1 rev
 sqlite3 /var/lib/rspamd/fuzzy.db ".backup fuzzy.sql"
 ```
 
-далее полученный файл `fuzzy.sql` копируется на все слейвы (rspamd на слейвах **должен быть остановлен**):
+далее полученный файл `fuzzy.sql` копируется на все слейвы (rspamd на слейвах можно не останавливать):
 
 ```
 sqlite3 /var/lib/rspamd/fuzzy.db ".restore fuzzy.sql"
