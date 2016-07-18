@@ -1601,8 +1601,6 @@ rspamd_http_detach_shared (struct rspamd_http_message *msg)
 		msg->body_buf.c.shared.shm_fd = -1;
 	}
 
-	REF_RELEASE (msg->body_buf.c.shared.name);
-
 	cpy_str = rspamd_fstring_new_init (msg->body_buf.begin, msg->body_buf.len);
 	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
 }
