@@ -7,20 +7,24 @@ language: c
 #  - linux
 #  - osx
 
+python:
+  - "3.4"
+
 before_script:
   - sudo apt-get update -qq
-  - sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libpcre3-dev libsqlite3-dev libmagic-dev ragel make libssl-dev
+  - sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev make ragel redis-server
 #  - echo $TRAVIS_OS_NAME
 #  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get update -qq ; fi
 #  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev libpcre3-dev libsqlite3-dev libhiredis-dev ; fi
 #  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew update ; fi
 #  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install cmake gmime glib luajit pcre hiredis sqlite libevent ; fi
 
-script: 
-  - mkdir _build
-  - cd _build
-  - cmake .. -DCMAKE_INSTALL_PREFIX=../_install -DCMAKE_C_COMPILER=$CC
+script:
+  - chmod a+rx /home/travis
+  - cmake . -DCMAKE_INSTALL_PREFIX=./_install -DCMAKE_C_COMPILER=$CC
   - cmake --build . --target install
+  - sudo pip install robotframework
+  - sudo robot test/functional/cases
 
 compiler:
   - clang
