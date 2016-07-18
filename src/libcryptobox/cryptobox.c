@@ -1449,6 +1449,7 @@ rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
 		len -= n;
 		rst->h = mum_hash_step (rst->h, rst->buf);
 		rst->buf = 0;
+		rst->pos = 0;
 	}
 
 	while (len > 8) {
@@ -1482,7 +1483,7 @@ rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 		rst->h = mum_hash_step (rst->h, rst->buf);
 	}
 
-	return rst->h;
+	return mum_hash_finish (rst->h);
 }
 
 /**
