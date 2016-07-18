@@ -1055,8 +1055,6 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			continue;
 		}
 
-		rspamd_http_message_remove_header (msg, "Content-Length");
-		rspamd_http_message_remove_header (msg, "Key");
 		msg->method = HTTP_GET;
 
 		if (msg->url->len == 0) {
@@ -1121,9 +1119,11 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	struct rspamd_proxy_session *session;
 
 	session = bk_conn->s;
-	msg_info_session ("abnormally closing connection from backend: %s, error: %s",
+	msg_info_session ("abnormally closing connection from backend: %s, error: %s,"
+			" retries left: %d",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
-		err->message);
+		err->message,
+		session->ctx->max_retries - session->retries);
 	session->retries ++;
 	proxy_backend_close_connection (session->master_conn);
 
@@ -1137,6 +1137,12 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	else {
 		if (!proxy_send_master_message (session)) {
 			proxy_client_write_error (session, err->code, err->message);
+		}
+		else {
+			msg_info_session ("retry connection to: %s"
+					" retries left: %d",
+					rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
+					session->ctx->max_retries - session->retries);
 		}
 	}
 }
@@ -1211,7 +1217,7 @@ proxy_send_master_message (struct rspamd_proxy_session *session)
 		goto err;
 	}
 	else {
-		retry:
+retry:
 		if (session->ctx->max_retries &&
 				session->retries > session->ctx->max_retries) {
 			msg_err_session ("cannot connect to upstream, maximum retries "
@@ -1328,12 +1334,12 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 		session->client_message = rspamd_http_connection_steal_msg (
 				session->client_conn);
+		session->shmem_ref = rspamd_http_message_shmem_ref (session->client_message);
 		rspamd_http_message_remove_header (msg, "Content-Length");
 		rspamd_http_message_remove_header (msg, "Key");
 
 		proxy_open_mirror_connections (session);
 		rspamd_http_connection_reset (session->client_conn);
-		session->shmem_ref = rspamd_http_message_shmem_ref (session->client_message);
 
 		proxy_send_master_message (session);
 	}
