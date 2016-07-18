@@ -67,7 +67,6 @@ Defines global options.
 - `our_networks`: treat mail from these networks as mail from authenticated users (see also `strict_auth`)
 	+ Default: `empty`
 
-Back to [top](#).
 
 ## Clamav section
 
@@ -93,7 +92,6 @@ Specifies clamav antivirus scanners.
 - `whitelist`: list of ips or nets that should be not checked with spamd
 	+ Default: `empty`
 
-Back to [top](#).
 
 ## Spamd section
 
@@ -133,7 +131,6 @@ Specifies Rspamd scanners.
 - `spamd_settings_id`: pass additional settings id for Rspamd (e.g. to distinguish inbound and outbound messages)
   + Default: `empty`
 
-Back to [top](#).
 
 ## Redis section
 
@@ -178,7 +175,6 @@ Copying messages to [pub/sub](http://redis.io/topics/pubsub) channels also requi
 - `spam_channel`: channel for spam messages
 - `copy_channel`: channel for copies
 
-Back to [top](#).
 
 ## Greylisting section
 
@@ -191,7 +187,6 @@ Greylisting related options.
 - `whitelist`: list of ip addresses or networks that should be whitelisted from greylisting
 	+ Default: `empty`
 
-Back to [top](#).
 
 ## Limits section
 
@@ -201,7 +196,7 @@ it bucket is counted as overflowed and new messages are rejected),
 second value is rate (how much messages can be removed from bucket
 each second). It can be schematically displayed as following:
 
-![Leaked bucket scheme](https://rspamd.com/img/rspamd-schemes.006.jpg "Leaking bucket")
+<div><img src="https://rspamd.com/img/rspamd-schemes.006.jpg" alt="Leaking bucket" class="img-responsive" style="padding-bottom:20px; max-height: 200px;"></div>
 
 - `limit_whitelist_ip`: don't check limits for specified ips
 	+ Default: `empty`
@@ -220,7 +215,6 @@ each second). It can be schematically displayed as following:
 - `limit_to_ip_from`: limits bucket for non-bounce messages (msg from, rcpt to per one source ip)
 	+ Default: `100:0.033333333`
 
-Back to [top](#).
 
 ## DKIM section
 
@@ -242,7 +236,6 @@ provided by opendkim library.
 - `sign_networks` - specify internal network to perform signing as well
 	+ Default: `empty`
 
-Back to [top](#).
 
 ## The order of checks
 
@@ -258,7 +251,6 @@ Back to [top](#).
 9.  Clamav (EOM)
 12. DKIM add signature (EOM)
 
-Back to [top](#).
 
 ## Keys used in redis
 
@@ -268,5 +260,3 @@ Back to [top](#).
 -   *rcpt:* - bucket for bounce_rcpt filter
 -   *rcpt:ip:* - bucket for bounce_rcpt_ip filter
 -   *hash(from . ip . to)* - key for greylisting triplet (hexed string of hash value)
-
-Back to [top](#).

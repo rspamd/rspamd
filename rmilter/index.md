@@ -38,13 +38,15 @@ Rmilter is used to integrate rspamd and `milter` compatible MTA, for example Pos
 
 Here is a scheme that demonstrates Rspamd and Rmilter integration using Postfix MTA:
 
-<img class="img-responsive" src="/img/rspamd-schemes.007.png">
+<img class="img-responsive" src="/img/rspamd-schemes.007_2.png">
 
 There are several useful settings for postfix to work with this milter:
 
     smtpd_milters = unix:/var/run/rmilter/rmilter.sock
     milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
     milter_protocol = 6
+
+<div style="padding-top:20px;"></div>
 
 ## Useful rmilter recipies
 
