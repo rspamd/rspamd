@@ -7,19 +7,18 @@ title: Quick start
 
 ## Introduction
 
-This guide describes the main procedures to get and start working with rspamd. Furthermore, we describe the following setup:
+This guide describes the main steps to get and start working with rspamd. In particular, we describe the following setup:
 
-- postfix MTA setup
-- rmilter setup
-- redis cache setup
-- webui setup with nginx proxy and letsencrypt certificates
-- dovecot with sieve plugin to sort mail and learn by moving messages to `Junk` folder
+- Postfix MTA
+- Rmilter
+- Redis cache
+- Dovecot with sieve plugin to sort mail and learn by moving messages to `Junk` folder
 
-For those who are planning migration from their SpamAssassin setups, it might be useful to check this [document](/doc/tutorials/migrate_sa.html)
+For those who are planning migration from SpamAssassin, it might be useful to check the [SA migration guide](/doc/tutorials/migrate_sa.html)
 
 ## Preparation steps
 
-First of all, you need a working MTA (Mail Transfer Agent) which is able to serve the SMTP protocol for your domain. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
+First of all, you need a working <abbr title="Mail Transfer Agent>MTA</abbr> that can send and receive email for your domain using <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> protocol. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
 
 We assume that you are installing Postfix with your OSs package manager (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
@@ -117,46 +116,47 @@ Then you will need to install dovecot. For APT based systems you might want to i
 
 Configuration of dovecot is a bit out of the scope for this guide but you can find many good guides at the [dovecot main site](http://dovecot.org).
 
-To setup TLS for your mail system, we recommend using certificates issued by [letsencrypt](https://letsencrypt.org) as they are free to use and convenient to manage. To get such a certificate for your domain you need to allow letsencrypt to check your domain. Unfortunately, the most common case is to have `HTTP` port opened for your domain. For example, if you want to get a certificate for your MTA named `mail.example.com` then you need `mail.example.com` to control port 80 on the host associated with this domain.
-
+To setup TLS for your mail system, we recommend using certificates issued by [letsencrypt](https://letsencrypt.org) as they are free to use and convenient to manage. To get such a certificate for your domain you need to allow letsencrypt to check your domain. There are many tools available for these purposes, including the official client and couple of alternative clients, for example (acme)[https://github.com/hlandau/acme].
 
 ## TLS Setup
 
-In this guide, we assume that all services have the same certificate which might not be desired if you want greater levels of security. However, for most purposes it is sufficient. First of all, install the `letsencrypt` tool and obtain the certificate for your domain. There is a good [guide here](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-14-04) which describes the overall procedure for nginx web server. Since we suggest using nginx to proxy webui requests, then you might use that guide for your setup. You might also want to use the same certificate and private key in postfix and dovecot (as described above).
+In this guide, we assume that all services have the same certificate which might not be desired if you want greater levels of security. First of all, install the `letsencrypt` tool and obtain the certificate for your domain. There is a good [guide here](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-14-04) which describes the overall procedure for nginx web server. Since we suggest using nginx to proxy webui requests, then you might use that guide for your setup. You might also want to use the same certificate and private key in postfix and dovecot (as described above).
 
 ## Caching setup
 
-Both rspamd and rmilter can use [redis](https://redis.io) for caching. Rmilter uses redis for the following features:
+Both rspamd and rmilter can use [redis](https://redis.io) for caching. Rmilter uses Redis for the following features:
 
 - greylisting (delaying of suspicious emails)
 - rate limits
 - storing reply message IDs to avoid certain checks for replies to our own messages
 
-Rspamd uses redis as well:
+Rspamd uses Redis as well:
 
 - for statistic tokens (BAYES classifier)
 - for storing learned messages IDs
 - for storing DMARC stats (optionally)
 
-Installation of redis is quite straightforward: install it using packages, start it with the default settings (it should listen on local interface using port 6379) and you are done. You might also want to limit memory used by redis at some sane value.
+Installation of Redis is quite straightforward: install it using packages, start it with the default settings (it should listen on local interface using port 6379) and you are done. You might also want to limit memory used by Redis at some sane value:
 
-Note that for the moment by default stable releases of redis listen for connections from all network interfaces. This is potentially dangerous and in most cases should be limited to the loopback interfaces, with the following configuration directive:
+    maxmemory 500mb
+
+Note that for the moment by default stable releases of Redis listen for connections from all network interfaces. This is potentially dangerous and in most cases should be limited to the loopback interfaces, with the following configuration directive:
 
 	bind 127.0.0.1 ::1
 
 ## Rmilter setup
 
-When you are done with postfix/dovecot/redis initial setup, it might be a good idea to setup rmilter. Rmilter is used to link postfix (or sendmail) with rspamd. It can alter messages, change topic, reject spam, perform greylisting, check rate limits and even sign messages for authorized users/networks with DKIM signatures.
+When you are done with postfix/dovecot/redis initial setup, it might be a good idea to setup Rmilter. Rmilter is used to connect postfix (or sendmail) with rspamd. It can alter messages, change subject, reject spam, perform greylisting, check rate limits and even sign messages for authorized users/networks with DKIM signatures.
 
-To install rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of rspamd. With the default configuration, rmilter will use redis and rspamd on the local machine. You might want to change the bind settings as the default settings the use of unix sockets which might not work in some circumstances. To use TCP sockets for rmilter, you might want to change your `/etc/rmilter.conf` altering `bind_socket` option according to your postfix setup:
+To install Rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of `rspamd`. With the default configuration, Rmilter will use Redis and Rspamd on the local machine. You might want to change the bind settings as the default settings the use of unix sockets which might not work in some circumstances. To use TCP sockets for rmilter, you can set the `bind_socket` option according to your postfix setup:
 
 	bind_socket = inet:9900@127.0.0.1
 
-For advanced setup, please check the [rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have a systemd-less system, then you can check rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
+For advanced setup, please check the [Rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have a systemd-less system, then you can check rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
 
 ## Rspamd installation
 
-The download process is described in the [downloads page](/downloads.html) where you can find how to obtain rspamd, how to install it in your system, and, alternatively, how to build rspamd from source.
+The download process is described in the [downloads page](/downloads.html) where you can find how to get Rspamd, how to install it in your system, and, alternatively, how to build Rspamd from the sources.
 
 ## Running Rspamd
 
@@ -212,7 +212,7 @@ There are some different approaches you can take to this:
 3. For each individual configuration file shipped with rspamd, there are two special includes (available from **rspamd version 1.2 onwards**):
 
     .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
-    .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
+    .include(try=true,priority=10) "$CONFDIR/override.d/config.conf"
 
 Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the configuration.
 
