@@ -23,7 +23,7 @@ First of all, you need a working <abbr title="Mail Transfer Agent">MTA</abbr> th
 
 ### TLS Setup
 
-It is strongly recommended to setup TLS for your mail system. We suggest to use certificates issued by [Let’s` ` Encrypt](https://letsencrypt.org) as they are free to use and are convenient to manage. To get such a certificate for your domain you need to allow Let’s` `Encrypt to check your domain. There are many tools available for these purposes, including the official client and couple of alternative clients, for example [acmetool](https://github.com/hlandau/acme). The setup is fairly simple: just type
+It is strongly recommended to setup TLS for your mail system. We suggest to use certificates issued by [Let’s&nbsp; Encrypt](https://letsencrypt.org) as they are free to use and are convenient to manage. To get such a certificate for your domain you need to allow Let’s&nbsp;Encrypt to check your domain. There are many tools available for these purposes, including the official client and couple of alternative clients, for example [acmetool](https://github.com/hlandau/acme). The setup is fairly simple: just type
 
     apt-get install acmetool
     acmetool quickstart
