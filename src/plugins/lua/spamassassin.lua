@@ -25,8 +25,6 @@ local rspamd_trie = require "rspamd_trie"
 local util = require "rspamd_util"
 require "fun" ()
 
---local dumper = require 'pl.pretty'.dump
-
 -- Known plugins
 local known_plugins = {
   'Mail::SpamAssassin::Plugin::FreeMail',
@@ -1290,7 +1288,6 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
   filter(function(k, r)
@@ -1313,7 +1310,6 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
     filter(function(k, r)
@@ -1340,7 +1336,6 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
   filter(function(k, r)
@@ -1366,7 +1361,6 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
   filter(function(k, r)
@@ -1389,7 +1383,6 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
     filter(function(k, r)
