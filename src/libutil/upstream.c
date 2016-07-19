@@ -36,6 +36,7 @@ struct upstream {
 	guint weight;
 	guint cur_weight;
 	guint errors;
+	guint checked;
 	guint dns_requests;
 	gint active_idx;
 	gchar *name;
@@ -744,35 +745,44 @@ rspamd_upstream_get_random (struct upstream_list *ups)
 static struct upstream*
 rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
 {
-	guint max_weight = 0;
-	struct upstream *up, *selected = NULL;
+	guint max_weight = 0, min_checked = G_MAXUINT;
+	struct upstream *up, *selected = NULL, *min_checked_sel = NULL;
 	guint i;
 
 	/* Select upstream with the maximum cur_weight */
 	RSPAMD_UPSTREAM_LOCK (ups->lock);
+
 	for (i = 0; i < ups->alive->len; i ++) {
 		up = g_ptr_array_index (ups->alive, i);
 		if (use_cur) {
-			if (up->cur_weight >= max_weight) {
+			if (up->cur_weight > max_weight) {
 				selected = up;
 				max_weight = up->cur_weight;
 			}
 		}
 		else {
-			if (up->weight >= max_weight) {
+			if (up->weight > max_weight) {
 				selected = up;
 				max_weight = up->weight;
 			}
 		}
+
+		if (up->checked * (up->errors + 1) < min_checked) {
+			min_checked_sel = up;
+			min_checked = up->checked;
+		}
 	}
 
 	if (max_weight == 0) {
-		/*
-		 * We actually don't have any weight information, so we could use
-		 * random selection here
-		 */
-		selected = g_ptr_array_index (ups->alive,
-				ottery_rand_range (ups->alive->len - 1));
+		if (min_checked > G_MAXUINT / 2) {
+			/* Reset all checked counters to avoid overflow */
+			for (i = 0; i < ups->alive->len; i ++) {
+				up = g_ptr_array_index (ups->alive, i);
+				up->checked = 0;
+			}
+		}
+
+		selected = min_checked_sel;
 	}
 
 	if (use_cur && selected) {
@@ -833,6 +843,7 @@ rspamd_upstream_get_common (struct upstream_list *ups,
 		const guchar *key, gsize keylen, gboolean forced)
 {
 	enum rspamd_upstream_rotation type;
+	struct upstream *up = NULL;
 
 	RSPAMD_UPSTREAM_LOCK (ups->lock);
 	if (ups->alive->len == 0) {
@@ -856,24 +867,32 @@ rspamd_upstream_get_common (struct upstream_list *ups,
 	switch (type) {
 	default:
 	case RSPAMD_UPSTREAM_RANDOM:
-		return rspamd_upstream_get_random (ups);
+		up = rspamd_upstream_get_random (ups);
+		break;
 	case RSPAMD_UPSTREAM_HASHED:
-		return rspamd_upstream_get_hashed (ups, key, keylen);
+		up = rspamd_upstream_get_hashed (ups, key, keylen);
+		break;
 	case RSPAMD_UPSTREAM_ROUND_ROBIN:
-		return rspamd_upstream_get_round_robin (ups, TRUE);
+		up = rspamd_upstream_get_round_robin (ups, TRUE);
+		break;
 	case RSPAMD_UPSTREAM_MASTER_SLAVE:
-		return rspamd_upstream_get_round_robin (ups, FALSE);
+		up = rspamd_upstream_get_round_robin (ups, FALSE);
+		break;
 	case RSPAMD_UPSTREAM_SEQUENTIAL:
 		if (ups->cur_elt >= ups->alive->len) {
 			ups->cur_elt = 0;
 			return NULL;
 		}
 
-		return g_ptr_array_index (ups->alive, ups->cur_elt ++);
+		up = g_ptr_array_index (ups->alive, ups->cur_elt ++);
+		break;
 	}
 
-	/* Silent stupid compilers */
-	return NULL;
+	if (up) {
+		up->checked ++;
+	}
+
+	return up;
 }
 
 struct upstream*
