@@ -1,73 +1,108 @@
 <!-- Site footer -->
 <footer class="row-footer">
-      <div class="container">
-          <div class="body-content">
-              <div class="pull-left">
-                  <!-- Social buttons -->
-                  <div class="nav navbar-nav" style="margin-top: 10px;">
-                      <a class="btn btn-xs btn-social-icon btn-primary" href="https://groups.google.com/forum/#!forum/rspamd"><i class="fa fa-envelope-o"></i></a>&nbsp;
-                      <a class="btn btn-xs btn-social-icon btn-reddit" href="http://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd"><p style="font-size:80%">IRC</p></a>&nbsp;
-                      <a class="btn btn-xs btn-social-icon btn-twitter" href="https://twitter.com/rspamd"><i class="fa fa-twitter"></i></a>&nbsp;
-                      <a class="btn btn-xs btn-social-icon btn-github" href="https://github.com/vstakhov/rspamd"><i class="fa fa-github"></i></a>
-                 </div>
-              </div>
-              <div class="pull-right">
-                <!-- Back to top -->
-                <a class="btn btn-link" href="#top"><i class="fa fa-arrow-up"></i> Back to top</a>
-              </div>
-          </div>
+  <div class="container">
+    <div class="body-content">
+      <div class="pull-left">
+        <!-- Social buttons -->
+        <div class="nav navbar-nav" style="margin-top: 10px;">
+          <a class="btn btn-xs btn-social-icon btn-primary" href="https://groups.google.com/forum/#!forum/rspamd"><i class="fa fa-envelope-o"></i></a>&nbsp;
+          <a class="btn btn-xs btn-social-icon btn-reddit" href="http://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd">
+            <p style="font-size:80%">IRC</p>
+          </a>&nbsp;
+          <a class="btn btn-xs btn-social-icon btn-twitter" href="https://twitter.com/rspamd"><i class="fa fa-twitter"></i></a>&nbsp;
+          <a class="btn btn-xs btn-social-icon btn-github" href="https://github.com/vstakhov/rspamd"><i class="fa fa-github"></i></a>
+        </div>
       </div>
-  </footer>
+      <div class="pull-right">
+        <!-- Back to top -->
+        <a class="btn btn-link" href="#top"><i class="fa fa-arrow-up"></i> Back to top</a>
+      </div>
+    </div>
+  </div>
+</footer>
 
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.js"></script>
-	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
-	<script type="text/javascript"
-	   src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
-	<script>
-		// Fix for offsets in links
-		$(document).ready(
-		function() {
-			var offset = 150;
+<script>
+  var anchorForId = function(id) {
+    var anchor = document.createElement("a");
+    anchor.className = "header-link";
+    anchor.href = "#" + id;
+    anchor.innerHTML = "<i class=\"fa fa-link\"></i>";
+    return anchor;
+  };
 
-			$('body').scrollspy({ target: '#navbar-spy', offset: offset + 10 });
+  var linkifyAnchors = function(level, containingElement) {
+    var headers = containingElement.getElementsByTagName("h" + level);
+    for (var h = 0; h < headers.length; h++) {
+      var header = headers[h];
 
-			$('[data-toggle="tooltip"]').tooltip();// tooltips for buttons
-			$('.nav-stacked li a').click(function(event) {
+      if (typeof header.id !== "undefined" && header.id !== "") {
+        header.appendChild(anchorForId(header.id));
+      }
+    }
+  };
+
+  document.onreadystatechange = function() {
+    if (this.readyState === "complete") {
+      var contentBlock = document.getElementsByClassName("doc-content")[0] || document.getElementsByClassName("news")[0];
+      if (!contentBlock) {
+        return;
+      }
+      for (var level = 1; level <= 6; level++) {
+        linkifyAnchors(level, contentBlock);
+      }
+    }
+  };
+  // Fix for offsets in links
+  $(document).ready(
+    function() {
+      var offset = 150;
+
+      $('body').scrollspy({
+        target: '#navbar-spy',
+        offset: offset + 10
+      });
+
+      $('[data-toggle="tooltip"]').tooltip(); // tooltips for buttons
+      $('.nav-stacked li a').click(function(event) {
         var href = $(this).attr('href');
-				if (href && href != "#top" && href[0] == '#') {
-					event.preventDefault();
-					window.location.hash = $(this).attr('href')
-					$(href)[0].scrollIntoView();
-					scrollBy(0, -offset);
-				}
-			});
+        if (href && href != "#top" && href[0] == '#') {
+          event.preventDefault();
+          window.location.hash = $(this).attr('href')
+          $(href)[0].scrollIntoView();
+          scrollBy(0, -offset);
+        }
+      });
       $('.body-content a').click(function(event) {
         var href = $(this).attr('href');
-				if (href && href != "#top" && href[0] == '#') {
-					event.preventDefault();
-					window.location.hash = $(this).attr('href')
-					$(href)[0].scrollIntoView();
-					scrollBy(0, -offset);
-				}
-			});
+        if (href && href != "#top" && href[0] == '#') {
+          event.preventDefault();
+          window.location.hash = $(this).attr('href')
+          $(href)[0].scrollIntoView();
+          scrollBy(0, -offset);
+        }
+      });
       //change icon inside collapse btn
-      $(".collapse-block").on("hide.bs.collapse", function(){
-          $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
-        });
-      $(".collapse-block").on("show.bs.collapse", function(){
+      $(".collapse-block").on("hide.bs.collapse", function() {
+        $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
+      });
+      $(".collapse-block").on("show.bs.collapse", function() {
         $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-up fa-pull-right"></i>');
       });
       //change icon inside collapse link
-      $(".collapse-link").on("hide.bs.collapse", function(){
-          $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-down"></i>');
-        });
-      $(".collapse-link").on("show.bs.collapse", function(){
+      $(".collapse-link").on("hide.bs.collapse", function() {
+        $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-down"></i>');
+      });
+      $(".collapse-link").on("show.bs.collapse", function() {
         $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-up"></i>');
       });
-		}
-		);
-	</script>
+    }
+  );
+</script>
 
-  </body>
+</body>
+
 </html>

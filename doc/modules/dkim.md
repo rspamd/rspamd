@@ -10,12 +10,12 @@ relay. For example, if a message comes from `gmail.com` then a valid DKIM signat
 means that this message was definitely signed by `gmail.com` (unless gmail.com private
 key has been compromised, which is not a likewise case).
 
-## Principles of work
+## Supported features
 
 Rspamd can deal with many types of DKIM signatures and messages canonicalisation.
 The major difficulty with DKIM are line endings: many MTA treat them differently which
 leads to broken signatures. Basically, rspamd treats all line endings as `CR+LF` that
-is compatible with the most of DKIM implementations.
+is compatible with the most of DKIM implementations. From the version 1.3, Rspamd DKIM module also supports signing of messages.
 
 ## Configuration
 
