@@ -23,9 +23,7 @@ local rspamd_expression = require "rspamd_expression"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_trie = require "rspamd_trie"
 local util = require "rspamd_util"
-local _ = require "fun"
-
---local dumper = require 'pl.pretty'.dump
+require "fun" ()
 
 -- Known plugins
 local known_plugins = {
@@ -137,6 +135,14 @@ local function split(str, delim)
   return result
 end
 
+local function replace_symbol(s)
+  local rspamd_symbol = symbols_replacements[s]
+  if not rspamd_symbol then
+    return s, false
+  end
+  return rspamd_symbol, true
+end
+
 local function trim(s)
   return s:match "^%s*(.-)%s*$"
 end
@@ -172,7 +178,7 @@ local function handle_header_def(hline, cur_rule)
       })
       cur_rule['function'] = function(task)
         if not re then
-          rspamd_logger.errx(task, 're is missing for rule %s', h)
+          rspamd_logger.errx(task, 're is missing for rule %1', h)
           return 0
         end
 
@@ -189,7 +195,7 @@ local function handle_header_def(hline, cur_rule)
         ordinary = false
       end
 
-      _.each(function(func)
+      each(function(func)
           if func == 'addr' then
             cur_param['function'] = function(str)
               local addr_parsed = util.parse_addr(str)
@@ -226,7 +232,7 @@ local function handle_header_def(hline, cur_rule)
             rspamd_logger.warnx(rspamd_config, 'Function %1 is not supported in %2',
               func, cur_rule['symbol'])
           end
-        end, _.tail(args))
+        end, tail(args))
 
         local function split_hdr_param(param, headers)
           for i,h in ipairs(headers) do
@@ -553,11 +559,11 @@ local function maybe_parse_sa_function(line)
 end
 
 local function words_to_re(words, start)
-  return table.concat(_.totable(_.drop_n(start, words)), " ");
+  return table.concat(totable(drop_n(start, words)), " ");
 end
 
 local function process_tflags(rule, flags)
-  _.each(function(flag)
+  each(function(flag)
     if flag == 'publish' then
       rule['publish'] = true
     elseif flag == 'multiple' then
@@ -567,7 +573,7 @@ local function process_tflags(rule, flags)
     elseif flag == 'nice' then
       rule['nice'] = true
     end
-  end, _.drop_n(1, flags))
+  end, drop_n(1, flags))
 
   if rule['re'] then
     if rule['maxhits'] then
@@ -615,15 +621,15 @@ local function process_sa_conf(f)
   local function parse_score(words)
     if #words == 3 then
       -- score rule <x>
-      rspamd_logger.debugx(rspamd_config, 'found score for %s: %s', words[2], words[3])
+      rspamd_logger.debugx(rspamd_config, 'found score for %1: %2', words[2], words[3])
       return tonumber(words[3])
     elseif #words == 6 then
       -- score rule <x1> <x2> <x3> <x4>
       -- we assume here that bayes and network are enabled and select <x4>
-      rspamd_logger.debugx(rspamd_config, 'found score for %s: %s', words[2], words[6])
+      rspamd_logger.debugx(rspamd_config, 'found score for %1: %2', words[2], words[6])
       return tonumber(words[6])
     else
-      rspamd_logger.errx(rspamd_config, 'invalid score for %s', words[2])
+      rspamd_logger.errx(rspamd_config, 'invalid score for %1', words[2])
     end
 
     return 0
@@ -654,7 +660,7 @@ local function process_sa_conf(f)
       if string.match(l, '^ifplugin') then
         local ls = split(l)
 
-        if not _.any(function(pl)
+        if not any(function(pl)
             if pl == ls[2] then return true end
             return false
             end, known_plugins) then
@@ -663,7 +669,7 @@ local function process_sa_conf(f)
         end
       elseif string.match(l, '^if !plugin%(') then
          local pname = string.match(l, '^if !plugin%(([A-Za-z:]+)%)')
-         if _.any(function(pl)
+         if any(function(pl)
            if pl == pname then return true end
            return false
          end, known_plugins) then
@@ -680,11 +686,11 @@ local function process_sa_conf(f)
     local slash = string.find(l, '/')
 
     -- Skip comments
-    words = _.totable(_.take_while(
+    words = totable(take_while(
       function(w) return string.sub(w, 1, 1) ~= '#' end,
-      _.filter(function(w)
+      filter(function(w)
           return w ~= "" end,
-      _.iter(split(l)))))
+      iter(split(l)))))
 
     if words[1] == "header" or words[1] == 'mimeheader' then
       -- header SYMBOL Header ~= /regexp/
@@ -939,9 +945,9 @@ local function process_sa_conf(f)
     elseif words[1] == "score" then
       scores[words[2]] = parse_score(words)
     elseif words[1] == 'freemail_domains' then
-      _.each(function(dom)
+      each(function(dom)
           table.insert(freemail_domains, '@' .. dom)
-        end, _.drop_n(1, words))
+        end, drop_n(1, words))
     elseif words[1] == 'blacklist_from' then
       sa_lists['from_blacklist'][words[2]] = 1
       sa_lists['elts'] = sa_lists['elts'] + 1
@@ -965,8 +971,8 @@ local function process_sa_conf(f)
     elseif words[1] == 'replace_post' then
       process_replace(words, replace['post'])
     elseif words[1] == 'replace_rules' then
-      _.each(function(r) table.insert(replace['rules'], r) end,
-        _.drop_n(1, words))
+      each(function(r) table.insert(replace['rules'], r) end,
+        drop_n(1, words))
     end
     end)()
   end
@@ -978,7 +984,7 @@ end
 -- Now check all valid rules and add the according rspamd rules
 
 local function calculate_score(sym, rule)
-  if _.all(function(c) return c == '_' end, _.take_n(2, _.iter(sym))) then
+  if all(function(c) return c == '_' end, take_n(2, iter(sym))) then
     return 0.0
   end
 
@@ -1025,7 +1031,7 @@ local function apply_replacements(str)
   local function check_specific_tag(prefix, s, tbl)
     local replacement = nil
     local ret = s
-    _.each(function(n, t)
+    each(function(n, t)
       local ns,matches = string.gsub(s, string.format("<%s%s>", prefix, n), "")
       if matches > 0 then
         replacement = t
@@ -1058,7 +1064,7 @@ local function apply_replacements(str)
   local function replace_all_tags(s)
     local str, matches
     str = s
-    _.each(function(n, t)
+    each(function(n, t)
         str,matches = string.gsub(str, string.format("<%s>", n),
           string.format("%s%s%s", pre, t, post))
     end, replace['tags'])
@@ -1077,12 +1083,12 @@ local function apply_replacements(str)
 end
 
 local function parse_atom(str)
-  local atom = table.concat(_.totable(_.take_while(function(c)
+  local atom = table.concat(totable(take_while(function(c)
     if string.find(', \t()><+!|&\n', c) then
       return false
     end
     return true
-  end, _.iter(str))), '')
+  end, iter(str))), '')
 
   return atom
 end
@@ -1130,7 +1136,7 @@ local function post_process()
   local ntags = {}
   local function rec_replace_tags(tag, tagv)
     if ntags[tag] then return ntags[tag] end
-    _.each(function(n, t)
+    each(function(n, t)
       if n ~= tag then
         local s, matches = string.gsub(tagv, string.format("<%s>", n), t)
         if matches > 0 then
@@ -1143,14 +1149,14 @@ local function post_process()
     return ntags[tag]
   end
 
-  _.each(function(n, t)
+  each(function(n, t)
     rec_replace_tags(n, t)
   end, replace['tags'])
-  _.each(function(n, t)
+  each(function(n, t)
     replace['tags'][n] = t
   end, ntags)
 
-  _.each(function(r)
+  each(function(r)
     local rule = rules[r]
 
     if rule['re_expr'] and rule['re'] then
@@ -1176,14 +1182,14 @@ local function post_process()
     end
   end, replace['rules'])
 
-  _.each(function(key, score)
+  each(function(key, score)
     if rules[key] then
       rules[key]['score'] = score
     end
   end, scores)
 
   -- Header rules
-  _.each(function(k, r)
+  each(function(k, r)
     local f = function(task)
 
       local raw = false
@@ -1198,7 +1204,7 @@ local function post_process()
         end
 
         if not r['re'] then
-          rspamd_logger.errx(task, 're is missing for rule %s (%s header)', k,
+          rspamd_logger.errx(task, 're is missing for rule %1 (%2 header)', k,
             h['header'])
           return 0
         end
@@ -1217,7 +1223,7 @@ local function post_process()
       end
 
       -- Slow path
-      _.each(function(h)
+      each(function(h)
         local headers = {}
         local hname = h['header']
 
@@ -1290,16 +1296,15 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-  _.filter(function(k, r)
+  filter(function(k, r)
       return r['type'] == 'header' and r['header']
   end,
   rules))
 
   -- Custom function rules
-  _.each(function(k, r)
+  each(function(k, r)
     local f = function(task)
       local res = r['function'](task)
       if res and res > 0 then
@@ -1313,19 +1318,18 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-    _.filter(function(k, r)
+    filter(function(k, r)
       return r['type'] == 'function' and r['function']
     end,
       rules))
 
   -- Parts rules
-  _.each(function(k, r)
+  each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        rspamd_logger.errx(task, 're is missing for rule %1', k)
         return 0
       end
 
@@ -1340,18 +1344,17 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-  _.filter(function(k, r)
+  filter(function(k, r)
       return r['type'] == 'part'
   end, rules))
 
   -- SA body rules
-  _.each(function(k, r)
+  each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        rspamd_logger.errx(task, 're is missing for rule %1', k)
         return 0
       end
 
@@ -1366,18 +1369,17 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-  _.filter(function(k, r)
+  filter(function(k, r)
       return r['type'] == 'sabody' or r['type'] == 'message' or r['type'] == 'sarawbody'
   end, rules))
 
   -- URL rules
-  _.each(function(k, r)
+  each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        rspamd_logger.errx(task, 're is missing for rule %1', k)
         return 0
       end
 
@@ -1389,15 +1391,14 @@ local function post_process()
         add_sole_meta(k, r)
       end
     end
-    --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-    _.filter(function(k, r)
+    filter(function(k, r)
       return r['type'] == 'uri'
     end,
       rules))
   -- Meta rules
-  _.each(function(k, r)
+  each(function(k, r)
       local expression = nil
       -- Meta function callback
       local meta_cb = function(task)
@@ -1443,51 +1444,68 @@ local function post_process()
         end
       end
     end,
-    _.filter(function(k, r)
+    filter(function(k, r)
         return r['type'] == 'meta'
       end,
       rules))
 
   -- Check meta rules for foreign symbols and register dependencies
-  _.each(function(k, r)
+  -- First direct dependencies:
+  each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
 
         for i,a in ipairs(expr_atoms) do
           if not atoms[a] then
-
-            local rspamd_symbol = symbols_replacements[a]
-
-            if rspamd_symbol then
-              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register' ..
-                'dependency for %2 on %3',
-                 a, k, rspamd_symbol);
-              rspamd_config:register_dependency(k, rspamd_symbol)
+            local rspamd_symbol, replaced_symbol = replace_symbol(a)
+            rspamd_logger.debugx('atom %1 is a direct foreign dependency, ' ..
+              'register dependency for %2 on %3',
+              a, k, rspamd_symbol)
+            rspamd_config:register_dependency(k, rspamd_symbol)
+            if not external_deps[k] then
+              external_deps[k] = {rspamd_symbol}
             else
-              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register' ..
-                'dependency for %2 on %3',
-                 a, k, a);
-              rspamd_config:register_dependency(k, a)
-            end
-
-            if not external_deps[a] then
-              if rspamd_symbol then
-                external_deps[a] = rspamd_symbol
-              else
-                external_deps[a] = 1
-              end
+              table.insert(external_deps[k], rspamd_symbol)
             end
           end
         end
       end
     end,
-    _.filter(function(k, r)
+    filter(function(k, r)
+      return r['type'] == 'meta'
+    end,
+    rules))
+
+  -- ... And then indirect ones ...
+  each(function(k, r)
+      if r['expression'] then
+        local expr_atoms = r['expression']:atoms()
+        for i,a in ipairs(expr_atoms) do
+          if type(external_deps[a]) == 'table' then
+            for _,dep in ipairs(external_deps[a]) do
+              rspamd_logger.debugx('atom %1 holds a foreign dependency, ' ..
+                'register dependency for %2 on %3',
+                a, k, dep);
+                rspamd_config:register_dependency(k, dep)
+            end
+          else
+            local rspamd_symbol, replaced_symbol = replace_symbol(a)
+            if replaced_symbol then
+              external_deps[a] = rspamd_symbol
+            else
+              external_deps[a] = 1
+            end
+          end
+        end
+      end
+    end,
+    filter(function(k, r)
       return r['type'] == 'meta'
     end,
     rules))
 
   -- Set missing symbols
-  _.each(function(key, score)
+  each(function(key, score)
     if not scores_added[key] then
       rspamd_config:set_metric_symbol({
             name = key, score = score,
@@ -1528,7 +1546,7 @@ if type(section) == "table" then
               process_sa_conf(f)
               has_rules = true
             else
-              rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
+              rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
             end
           end
         end
@@ -1542,7 +1560,7 @@ if type(section) == "table" then
             process_sa_conf(f)
             has_rules = true
           else
-            rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
+            rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
           end
         end
       end
