@@ -23,7 +23,6 @@
 
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.js"></script>
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
-<script type="text/javascript" src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
 <script>
   var anchorForId = function(id) {
@@ -45,8 +44,11 @@
     }
   };
 
-  document.onreadystatechange = function() {
-    if (this.readyState === "complete") {
+  // Fix for offsets in links
+  $(document).ready(
+    function() {
+      var offset = 50;
+
       var contentBlock = document.getElementsByClassName("doc-content")[0] || document.getElementsByClassName("news")[0];
       if (!contentBlock) {
         return;
@@ -54,12 +56,6 @@
       for (var level = 1; level <= 6; level++) {
         linkifyAnchors(level, contentBlock);
       }
-    }
-  };
-  // Fix for offsets in links
-  $(document).ready(
-    function() {
-      var offset = 150;
 
       $('body').scrollspy({
         target: '#navbar-spy',
@@ -76,7 +72,7 @@
           scrollBy(0, -offset);
         }
       });
-      $('.body-content a').click(function(event) {
+      $('.container a').click(function(event) {
         var href = $(this).attr('href');
         if (href && href != "#top" && href[0] == '#') {
           event.preventDefault();
