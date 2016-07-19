@@ -172,7 +172,7 @@ local function handle_header_def(hline, cur_rule)
       })
       cur_rule['function'] = function(task)
         if not re then
-          rspamd_logger.errx(task, 're is missing for rule %s', h)
+          rspamd_logger.errx(task, 're is missing for rule %1', h)
           return 0
         end
 
@@ -615,15 +615,15 @@ local function process_sa_conf(f)
   local function parse_score(words)
     if #words == 3 then
       -- score rule <x>
-      rspamd_logger.debugx(rspamd_config, 'found score for %s: %s', words[2], words[3])
+      rspamd_logger.debugx(rspamd_config, 'found score for %1: %2', words[2], words[3])
       return tonumber(words[3])
     elseif #words == 6 then
       -- score rule <x1> <x2> <x3> <x4>
       -- we assume here that bayes and network are enabled and select <x4>
-      rspamd_logger.debugx(rspamd_config, 'found score for %s: %s', words[2], words[6])
+      rspamd_logger.debugx(rspamd_config, 'found score for %1: %2', words[2], words[6])
       return tonumber(words[6])
     else
-      rspamd_logger.errx(rspamd_config, 'invalid score for %s', words[2])
+      rspamd_logger.errx(rspamd_config, 'invalid score for %1', words[2])
     end
 
     return 0
@@ -1198,7 +1198,7 @@ local function post_process()
         end
 
         if not r['re'] then
-          rspamd_logger.errx(task, 're is missing for rule %s (%s header)', k,
+          rspamd_logger.errx(task, 're is missing for rule %1 (%2 header)', k,
             h['header'])
           return 0
         end
@@ -1325,7 +1325,7 @@ local function post_process()
   each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        rspamd_logger.errx(task, 're is missing for rule %1', k)
         return 0
       end
 
@@ -1351,7 +1351,7 @@ local function post_process()
   each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        rspamd_logger.errx(task, 're is missing for rule %1', k)
         return 0
       end
 
@@ -1377,7 +1377,7 @@ local function post_process()
   each(function(k, r)
     local f = function(task)
       if not r['re'] then
-        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        rspamd_logger.errx(task, 're is missing for rule %1', k)
         return 0
       end
 
@@ -1459,12 +1459,12 @@ local function post_process()
             local rspamd_symbol = symbols_replacements[a]
 
             if rspamd_symbol then
-              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register' ..
+              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register ' ..
                 'dependency for %2 on %3',
                  a, k, rspamd_symbol);
               rspamd_config:register_dependency(k, rspamd_symbol)
             else
-              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register' ..
+              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register ' ..
                 'dependency for %2 on %3',
                  a, k, a);
               rspamd_config:register_dependency(k, a)
@@ -1528,7 +1528,7 @@ if type(section) == "table" then
               process_sa_conf(f)
               has_rules = true
             else
-              rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
+              rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
             end
           end
         end
@@ -1542,7 +1542,7 @@ if type(section) == "table" then
             process_sa_conf(f)
             has_rules = true
           else
-            rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
+            rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
           end
         end
       end
