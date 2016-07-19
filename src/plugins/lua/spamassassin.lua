@@ -135,6 +135,14 @@ local function split(str, delim)
   return result
 end
 
+local function replace_symbol(s)
+  local rspamd_symbol = symbols_replacements[s]
+  if not rspamd_symbol then
+    return s, false
+  end
+  return rspamd_symbol, true
+end
+
 local function trim(s)
   return s:match "^%s*(.-)%s*$"
 end
@@ -1442,33 +1450,50 @@ local function post_process()
       rules))
 
   -- Check meta rules for foreign symbols and register dependencies
+  -- First direct dependencies:
   each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
 
         for i,a in ipairs(expr_atoms) do
           if not atoms[a] then
-
-            local rspamd_symbol = symbols_replacements[a]
-
-            if rspamd_symbol then
-              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register ' ..
-                'dependency for %2 on %3',
-                 a, k, rspamd_symbol);
-              rspamd_config:register_dependency(k, rspamd_symbol)
+            local rspamd_symbol, replaced_symbol = replace_symbol(a)
+            rspamd_logger.debugx('atom %1 is a direct foreign dependency, ' ..
+              'register dependency for %2 on %3',
+              a, k, rspamd_symbol)
+            rspamd_config:register_dependency(k, rspamd_symbol)
+            if not external_deps[k] then
+              external_deps[k] = {rspamd_symbol}
             else
-              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register ' ..
-                'dependency for %2 on %3',
-                 a, k, a);
-              rspamd_config:register_dependency(k, a)
+              table.insert(external_deps[k], rspamd_symbol)
             end
+          end
+        end
+      end
+    end,
+    filter(function(k, r)
+      return r['type'] == 'meta'
+    end,
+    rules))
 
-            if not external_deps[a] then
-              if rspamd_symbol then
-                external_deps[a] = rspamd_symbol
-              else
-                external_deps[a] = 1
-              end
+  -- ... And then indirect ones ...
+  each(function(k, r)
+      if r['expression'] then
+        local expr_atoms = r['expression']:atoms()
+        for i,a in ipairs(expr_atoms) do
+          if type(external_deps[a]) == 'table' then
+            for _,dep in ipairs(external_deps[a]) do
+              rspamd_logger.debugx('atom %1 holds a foreign dependency, ' ..
+                'register dependency for %2 on %3',
+                a, k, dep);
+                rspamd_config:register_dependency(k, dep)
+            end
+          else
+            local rspamd_symbol, replaced_symbol = replace_symbol(a)
+            if replaced_symbol then
+              external_deps[a] = rspamd_symbol
+            else
+              external_deps[a] = 1
             end
           end
         end
