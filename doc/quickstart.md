@@ -19,15 +19,15 @@ For those who are planning migration from SpamAssassin, it might be useful to ch
 
 ## Preparation steps
 
-First of all, you need a working <abbr title="Mail Transfer Agent>MTA</abbr> that can send and receive email for your domain using <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> protocol. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
+First of all, you need a working <abbr title="Mail Transfer Agent">MTA</abbr> that can send and receive email for your domain using <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> protocol. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
 
 ### TLS Setup
 
 It is strogly recommended to setup TLS for your mail system. We suggest to use certificates issued by [letsencrypt](https://letsencrypt.org) as they are free to use and are convenient to manage. To get such a certificate for your domain you need to allow letsencrypt to check your domain. There are many tools available for these purposes, including the official client and couple of alternative clients, for example (acme)[https://github.com/hlandau/acme]. The setup is fairly simple: just type
 
     apt-get install acmetool
-    acme quickstart
-    acme want mail.example.com
+    acmetool quickstart
+    acmetool want mail.example.com
 
 In this guide, we assume that all services have the same certificate which might not be desired if you want greater levels of security.
 
@@ -130,7 +130,26 @@ For <abbr title="Internet Mail Access Protocol">IMAP</abbr> we recommend to inst
 
 	apt-get install dovecot-imapd dovecot-sieve
 
-Configuration of dovecot is a bit out of the scope for this guide but you can find many good guides at the [dovecot main site](http://dovecot.org).
+Configuration of dovecot (especially its authentication mechanisms) is a bit out of the scope for this guide but you can find many good guides at the [dovecot main site](http://dovecot.org). By default, dovecot uses Unix users in system and place mail into the standard mailbox `/var/mail/username`.
+
+However, you should setup postfix authentication. This lives in `/etc/dovecot/conf.d/10-master.conf`: make sure that you have uncommented the following lines in this file:
+
+~~~
+  # Postfix smtp-auth
+  unix_listener /var/spool/postfix/private/auth {
+    mode = 0666
+  }
+~~~
+
+Furthermore, it might be useful to setup TLS to avoid passwords and other sensible information to be passed throughout insecure connections.
+
+~~~
+# /etc/dovecot/conf.d/10-ssl.conf
+
+ssl = required
+ssl_cert = </var/lib/acme/live/mail.example.com/fullchain
+ssl_key = </var/lib/acme/live/mail.example.com/privkey
+~~~
 
 ## Caching setup
 
@@ -221,57 +240,80 @@ There are some different approaches you can take to this:
 
 3. For each individual configuration file shipped with rspamd, there are two special includes (available from **rspamd version 1.2 onwards**):
 
-    .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
-    .include(try=true,priority=10) "$CONFDIR/override.d/config.conf"
+~~~ucl
+.include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
+.include(try=true,priority=10) "$CONFDIR/override.d/config.conf"
+~~~
 
 Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the configuration.
 
 For example, let's change some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
 
-    symbol "BLAH" {
+~~~ucl
+# /etc/rspamd/override.d/metrics.conf
+symbol "BLAH" {
+    score = 20.0;
+}
+
+group "Some group" {
+    symbol "FOO" {
         score = 20.0;
     }
+}
+~~~
 
 We can also use an override file. For example, let's redefine actions and set a more restrictive `reject` score. To do this, we create `etc/rspamd/override.d/metrics.conf` with the following content:
 
-    actions {
-      reject = 150;
-      add_header = 6;
-      greylist = 4;
-    }
+~~~ucl
+# /etc/rspamd/override.d/metrics.conf
+actions {
+    reject = 150;
+    add_header = 6;
+    greylist = 4;
+}
+~~~
 
 You need to define complete objects to override existing ones. For example, you **cannot** write something like
 
-    actions {
-      reject = 150;
-    }
+~~~ucl
+# /etc/rspamd/override.d/metrics.conf
+actions {
+    reject = 150;
+}
+~~~
 
-as this will set the other actions to be undefined.
+as this will set the other actions to be undefined. Also, you should notice that individual files are included **within** section:
+
+    section { .include "..."; }
+
+Hence, you don't need to repeat `section { ... }` inside the file included.
 
 ### Setting listening interface
 
-Rspamd's normal worker will, by default, listen on all interfaces on port 11333. If you're running Rspamd on the same machine as your mailer (or whatever will be querying it) you might want to set this to 'localhost' instead.
+Rspamd's normal worker will, by default, listen on all interfaces on port 11333. If you're running Rspamd on the same machine as your mailer (or whatever will be querying it) you might want to set this to 'localhost' instead. This option should be overrided in `/etc/rspamd/override.d/worker-normal.inc` file:
 
-This is configured in `rspamd.conf` or `rspamd.sysvinit.conf` on Debian Wheezy & Ubuntu. The config to be modified is shown below (`*` should be replaced with whatever address you would prefer to listen on).
-
-{% highlight ucl %}
-worker {
-    bind_socket = "*:11333";
-    .include "$CONFDIR/worker-normal.inc"
-}
-{% endhighlight %}
+~~~ucl
+# /etc/rspamd/override.d/worker-normal.inc
+bind_socket = "*:11333";
+~~~
 
 If you plan to leave this as is you may wish to use a firewall to restrict access to your machine.
 
 ### Setting the controller password
 
-Rspamd requires a password when queried from non-trusted IPs, except for scanning messages which is unrestricted (the default config trusts the loopback interface). This is configured in the file `worker-controller.inc`. The config to be modified is shown below (replace 'q1' with your chosen password):
+Rspamd requires a password when queried from non-trusted IPs, except for scanning messages which is unrestricted (the default config trusts the loopback interface). This is configured in the file `/etc/rspamd/local.d/worker-controller.inc`. The config to be modified is shown below (replace 'q1' with your chosen password):
 
-`password = "q1";`
+~~~ucl
+# /etc/rspamd/local.d/worker-controller.inc
+password = "q1";
+~~~
 
 Optionally you may set `enable_password` - if set, data-changing operations (such as Bayes training or fuzzy storage) will require this password. For example:
 
-`enable_password = "q2";`
+~~~ucl
+# /etc/rspamd/local.d/worker-controller.inc
+enable_password = "q2";
+~~~
 
 Moreover, you can store an encrypted password for better security. To generate such a password just type
 
@@ -279,7 +321,7 @@ Moreover, you can store an encrypted password for better security. To generate s
 	Enter passphrase:
 	$1$4mqeynj3st9pb7cgbj6uoyhnyu3cp8d3$59y6xa4mrihaqdw3tf5mtpzg4k7u69ypebc3yba8jdssoh39x16y
 
-Then you can copy this string and store it in the configuration file. Rspamd uses the [PBKDF2](http://en.wikipedia.org/wiki/PBKDF2) algorithm that makes it very hard to brute-force this password even if it has been compromised.
+Then you can copy this string and store it in the configuration file. Rspamd uses the [PBKDF2](http://en.wikipedia.org/wiki/PBKDF2) algorithm that makes it very hard to brute-force this password even if it has been compromised. From the version 1.3, Rspamd also support `
 
 ### Setting up the webui
 
