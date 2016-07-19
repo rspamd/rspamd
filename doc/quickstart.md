@@ -7,8 +7,9 @@ title: Quick start
 
 ## Introduction
 
-This guide describes the main steps to get and start working with rspamd. In particular, we describe the following setup:
+This guide describes the main steps to get and start working with Rspamd. In particular, we describe the following setup:
 
+- Debian Jessie (or another OS with systemd)
 - Postfix MTA
 - Rmilter
 - Redis cache
@@ -20,6 +21,18 @@ For those who are planning migration from SpamAssassin, it might be useful to ch
 
 First of all, you need a working <abbr title="Mail Transfer Agent>MTA</abbr> that can send and receive email for your domain using <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> protocol. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
 
+### TLS Setup
+
+It is strogly recommended to setup TLS for your mail system. We suggest to use certificates issued by [letsencrypt](https://letsencrypt.org) as they are free to use and are convenient to manage. To get such a certificate for your domain you need to allow letsencrypt to check your domain. There are many tools available for these purposes, including the official client and couple of alternative clients, for example (acme)[https://github.com/hlandau/acme]. The setup is fairly simple: just type
+
+    apt-get install acmetool
+    acme quickstart
+    acme want mail.example.com
+
+In this guide, we assume that all services have the same certificate which might not be desired if you want greater levels of security.
+
+### Postfix setup
+
 We assume that you are installing Postfix with your OSs package manager (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
 <div><!-- Do not change the DOM structure -->
@@ -30,8 +43,8 @@ We assume that you are installing Postfix with your OSs package manager (e.g. `a
 <div id="main_cf" class="collapse collapse-block">
 <pre><code>
 # SSL setup (we assume the same certs for IMAP and SMTP here)
-smtpd_tls_cert_file = /etc/dovecot/dovecot.pem
-smtpd_tls_key_file = /etc/dovecot/private/dovecot.pem
+smtpd_tls_cert_file = /var/lib/acme/live/mail.example.com/fullchain
+smtpd_tls_key_file = /var/lib/acme/live/mail.example.com/privkey
 smtpd_use_tls = yes
 smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
 smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
@@ -42,7 +55,6 @@ smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3
 smtp_tls_mandatory_ciphers = high
 smtp_tls_mandatory_exclude_ciphers = RC4, MD5, DES
 smtp_tls_exclude_ciphers = aNULL, RC4, MD5, DES, 3DES
-
 # Change this for your domain
 myhostname = mail.example.com
 alias_maps = hash:/etc/aliases
@@ -58,7 +70,7 @@ inet_interfaces = all
 home_mailbox = Maildir/
 smtpd_sasl_auth_enable = yes
 smtpd_sasl_type = dovecot
-smtpd_sasl_path = private/dovecot-auth
+smtpd_sasl_path = private/auth # Need to be enabled for dovecot as well
 smtpd_sasl_authenticated_header = yes
 smtpd_sasl_security_options = noanonymous
 smtpd_sasl_local_domain = $myhostname
@@ -74,16 +86,11 @@ message_size_limit = 52428800
 smtpd_soft_error_limit = 2
 smtpd_error_sleep_time = ${stress?0}${stress:10s}
 smtpd_hard_error_limit = ${stress?3}${stress:20}
-
 smtpd_recipient_limit = 100
-
 smtpd_timeout = ${stress?30}${stress:300}
-
 smtpd_delay_reject = no
-
 smtpd_helo_required = yes
 strict_rfc821_envelopes = yes
-
 # Greeting delay of 7 seconds
 smtpd_client_restrictions =
         check_client_access hash:/etc/postfix/access,
@@ -110,17 +117,20 @@ milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
 </code></pre>
 </div></div>
 
-Then you will need to install dovecot. For APT based systems you might want to install the following packages:
+You also need to create maps for access control and virtual aliases:
 
-	apt-get install dovecot-imapd dovecot-postfix dovecot-sieve
+    touch /etc/postfix/virtual
+    touch /etc/postfix/access
+    postmap hash:/etc/postfix/virtual
+    postmap hash:/etc/postfix/access
+
+### Dovecot setup
+
+For <abbr title="Internet Mail Access Protocol">IMAP</abbr> we recommend to install dovecot. For Debian based systems you can use the following packages:
+
+	apt-get install dovecot-imapd dovecot-sieve
 
 Configuration of dovecot is a bit out of the scope for this guide but you can find many good guides at the [dovecot main site](http://dovecot.org).
-
-To setup TLS for your mail system, we recommend using certificates issued by [letsencrypt](https://letsencrypt.org) as they are free to use and convenient to manage. To get such a certificate for your domain you need to allow letsencrypt to check your domain. There are many tools available for these purposes, including the official client and couple of alternative clients, for example (acme)[https://github.com/hlandau/acme].
-
-## TLS Setup
-
-In this guide, we assume that all services have the same certificate which might not be desired if you want greater levels of security. First of all, install the `letsencrypt` tool and obtain the certificate for your domain. There is a good [guide here](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-14-04) which describes the overall procedure for nginx web server. Since we suggest using nginx to proxy webui requests, then you might use that guide for your setup. You might also want to use the same certificate and private key in postfix and dovecot (as described above).
 
 ## Caching setup
 
@@ -150,7 +160,7 @@ When you are done with postfix/dovecot/redis initial setup, it might be a good i
 
 To install Rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of `rspamd`. With the default configuration, Rmilter will use Redis and Rspamd on the local machine. You might want to change the bind settings as the default settings the use of unix sockets which might not work in some circumstances. To use TCP sockets for rmilter, you can set the `bind_socket` option according to your postfix setup:
 
-	bind_socket = inet:9900@127.0.0.1
+	bind_socket = inet:9900@127.0.0.1;
 
 For advanced setup, please check the [Rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have a systemd-less system, then you can check rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
 
@@ -306,9 +316,9 @@ http {
         add_header X-XSS-Protection "1; mode=block";
 
         include ssl.conf;
-        ssl_certificate /etc/ssl/certs/letsencrypt.pem;
-        ssl_trusted_certificate /etc/ssl/certs/letsencrypt.pem;
-        ssl_certificate_key /etc/ssl/private/letsencrypt.key;
+        ssl_certificate /var/lib/acme/live/mail.example.com/fullchain;
+        ssl_trusted_certificate /var/lib/acme/live/mail.example.com/fullchain;
+        ssl_certificate_key /var/lib/acme/live/mail.example.com/privkey;
 
         server_name example.com;
 
@@ -415,31 +425,6 @@ metric "default" {
     symbol "MY_SYMBOL" {
         score = 2.1;
         description = "My new symbol";
-    }
-}
-{% endhighlight %}
-
-Please note that this addition/rewriting logic is only for the `metric` section; for other sections you should use `rspamd.conf.override` file and redefine those sections completely.
-
-Note also, the legacy syntax that you might find in some default configuration files:
-
-{% highlight ucl %}
-metric {
-    name = "default";
-
-    symbol {
-        name = "EXAMPLE";
-        score = 1.0;
-    }
-}
-{% endhighlight %}
-
-is equivalent to the modern syntax:
-
-{% highlight ucl %}
-metric "default" {
-    symbol "EXAMPLE" {
-        score = 1.0;
     }
 }
 {% endhighlight %}
