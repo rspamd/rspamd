@@ -1052,6 +1052,7 @@ rspamd_rrd_write_rra (struct rspamd_rrd_file *file, gulong *rra_steps)
 			/* Iterate over DS */
 			for (j = 0; j < ds_cnt; j++) {
 				cur_row[j] = cdp[j].scratch[CDP_primary_val].dv;
+				msg_debug_rrd ("write cdp %d: %.3f", j, cur_row[j]);
 			}
 		}
 
@@ -1180,9 +1181,11 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 				rra_steps,
 				i,
 				pdp_temp);
-			/* Write RRA */
-			rspamd_rrd_write_rra (file, rra_steps);
+
 		}
+
+		/* Write RRA */
+		rspamd_rrd_write_rra (file, rra_steps);
 	}
 	file->live_head->last_up = seconds;
 	file->live_head->last_up_usec = microseconds;
