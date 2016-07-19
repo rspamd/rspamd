@@ -430,6 +430,19 @@ gdouble rspamd_time_jitter (gdouble in, gdouble jitter);
 gdouble rspamd_random_double (void);
 
 /**
+ * Return random double in range [0..1) using xoroshiro128+ algorithm (not crypto secure)
+ * @return
+ */
+gdouble rspamd_random_double_fast (void);
+
+guint64 rspamd_random_uint64_fast (void);
+
+/**
+ * Seed fast rng
+ */
+void rspamd_random_seed_fast (void);
+
+/**
  * Constant time version of memcmp
  */
 gboolean rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len);

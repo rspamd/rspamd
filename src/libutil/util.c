@@ -2055,6 +2055,7 @@ rspamd_init_libs (void)
 	SSL_CTX_set_options (ctx->ssl_ctx, ssl_options);
 #endif
 	g_random_set_seed (ottery_rand_uint32 ());
+	rspamd_random_seed_fast ();
 
 	/* Set stack size for pcre */
 	getrlimit (RLIMIT_STACK, &rlim);
@@ -2152,18 +2153,69 @@ rspamd_hash_seed (void)
 	return seed;
 }
 
+static inline gdouble
+rspamd_double_from_int64 (guint64 rnd_int)
+{
+	double res;
+	const double transform_bias = 2.2204460492503130808472633361816e-16;
+
+	res = rnd_int >> 12;
+	res *= transform_bias;
+
+	return res;
+}
+
 gdouble
 rspamd_random_double (void)
 {
 	guint64 rnd_int;
-	double res;
-	const double transform_bias = 2.2204460492503130808472633361816e-16;
 
-	rnd_int = ottery_rand_uint64 () >> 12;
-	res = rnd_int;
-	res *= transform_bias;
+	rnd_int = ottery_rand_uint64 ();
 
-	return res;
+	return rspamd_double_from_int64 (rnd_int);
+}
+
+
+static guint64 xorshifto_seed[2];
+
+static inline guint64
+xoroshiro_rotl (const guint64 x, int k) {
+	return (x << k) | (x >> (64 - k));
+}
+
+
+gdouble
+rspamd_random_double_fast (void)
+{
+	const guint64 s0 = xorshifto_seed[0];
+	guint64 s1 = xorshifto_seed[1];
+	const guint64 result = s0 + s1;
+
+	s1 ^= s0;
+	xorshifto_seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
+	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
+
+	return rspamd_double_from_int64 (result);
+}
+
+guint64
+rspamd_random_uint64_fast (void)
+{
+	const guint64 s0 = xorshifto_seed[0];
+	guint64 s1 = xorshifto_seed[1];
+	const guint64 result = s0 + s1;
+
+	s1 ^= s0;
+	xorshifto_seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
+	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
+
+	return result;
+}
+
+void
+rspamd_random_seed_fast (void)
+{
+	ottery_rand_bytes (xorshifto_seed, sizeof (xorshifto_seed));
 }
 
 gdouble
