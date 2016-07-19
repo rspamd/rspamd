@@ -109,6 +109,7 @@ struct rspamd_re_runtime {
 	guchar *results;
 	struct rspamd_re_cache *cache;
 	struct rspamd_re_cache_stat stat;
+	gboolean has_hs;
 };
 
 static GQuark
@@ -441,6 +442,9 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	rt->checked = g_slice_alloc0 (NBYTES (cache->nre));
 	rt->results = g_slice_alloc0 (cache->nre);
 	rt->stat.regexp_total = cache->nre;
+#ifdef WITH_HYPERSCAN
+	rt->has_hs = cache->hyperscan_loaded;
+#endif
 
 	return rt;
 }
@@ -626,7 +630,8 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	elt = g_ptr_array_index (rt->cache->re, re_id);
 	re_class = rspamd_regexp_get_class (re);
 
-	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE) {
+	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE ||
+			!rt->has_hs) {
 		for (i = 0; i < count; i++) {
 			ret = rspamd_re_cache_process_pcre (rt,
 					re,
@@ -1023,7 +1028,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	}
 
 #if WITH_HYPERSCAN
-	if (!rt->cache->disable_hyperscan) {
+	if (!rt->cache->disable_hyperscan && rt->has_hs) {
 		rspamd_re_cache_finish_class (rt, re_class);
 	}
 #endif
