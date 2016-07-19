@@ -1886,7 +1886,7 @@ url_web_end (struct url_callback_data *cb,
 		return FALSE;
 	}
 
-	if (last < cb->end && *last == '>') {
+	if (last < cb->end && (*last == '>' && last != match->newline_pos)) {
 		/* We need to ensure that url also starts with '>' */
 		if (match->st != '<') {
 			return FALSE;
