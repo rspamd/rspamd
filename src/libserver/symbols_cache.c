@@ -162,7 +162,8 @@ static gboolean rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
 		struct cache_savepoint *checkpoint,
-		gdouble *total_diff);
+		gdouble *total_diff,
+		gdouble pr);
 static gboolean rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
@@ -1083,6 +1084,7 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 	struct cache_savepoint *checkpoint;
 	struct symbols_cache *cache;
 	gint i, remain = 0;
+	gdouble pr = rspamd_random_double_fast ();
 
 	checkpoint = task->checkpoint;
 	cache = task->cfg->cache;
@@ -1102,7 +1104,7 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, it, checkpoint,
-						NULL);
+						NULL, pr);
 			}
 		}
 	}
@@ -1115,7 +1117,8 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
 		struct cache_savepoint *checkpoint,
-		gdouble *total_diff)
+		gdouble *total_diff,
+		gdouble pr)
 {
 	guint pending_before, pending_after;
 	double t1, t2;
@@ -1154,7 +1157,10 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		}
 
 		if (check) {
-			t1 = rspamd_get_ticks ();
+			if (pr > 0.9) {
+				t1 = rspamd_get_ticks ();
+			}
+
 			pending_before = rspamd_session_events_pending (task->s);
 			/* Watch for events appeared */
 			rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
@@ -1163,19 +1169,21 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
 			item->func (task, item->user_data);
 
-			t2 = rspamd_get_ticks ();
-			diff = (t2 - t1) * 1e6;
+			if (pr > 0.9) {
+				t2 = rspamd_get_ticks ();
+				diff = (t2 - t1) * 1e6;
 
-			if (total_diff) {
-				*total_diff += diff;
+				if (total_diff) {
+					*total_diff += diff;
+				}
+
+				if (diff > slow_diff_limit) {
+					msg_info_task ("slow rule: %s: %d ms", item->symbol,
+							(gint)(diff / 1000.));
+				}
+
+				rspamd_set_counter (item, diff);
 			}
-
-			if (diff > slow_diff_limit) {
-				msg_info_task ("slow rule: %s: %d ms", item->symbol,
-						(gint)(diff / 1000.));
-			}
-
-			rspamd_set_counter (item, diff);
 			rspamd_session_watch_stop (task->s);
 			pending_after = rspamd_session_events_pending (task->s);
 
@@ -1213,6 +1221,7 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 	struct cache_dependency *dep;
 	guint i;
 	gboolean ret = TRUE;
+	gdouble pr = rspamd_random_double_fast ();
 
 	if (item->deps != NULL && item->deps->len > 0) {
 		for (i = 0; i < item->deps->len; i ++) {
@@ -1246,7 +1255,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 					else if (!rspamd_symbols_cache_check_symbol (task, cache,
 							dep->item,
 							checkpoint,
-							NULL)) {
+							NULL,
+							pr)) {
 						/* Now started, but has events pending */
 						ret = FALSE;
 						msg_debug_task ("started check of %d symbol as dep for "
@@ -1437,6 +1447,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	gboolean all_done;
 	const gdouble max_microseconds = 3e5;
 	guint start_events_pending;
+	gdouble pr = rspamd_random_double_fast ();
 
 	g_assert (cache != NULL);
 
@@ -1464,7 +1475,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_microseconds, pr);
 			}
 		}
 		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_PREFILTERS;
@@ -1517,7 +1528,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_microseconds, pr);
 			}
 
 			if (total_microseconds > max_microseconds) {
@@ -1567,7 +1578,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_microseconds, pr);
 			}
 
 			if (total_microseconds > max_microseconds) {
@@ -1597,7 +1608,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_microseconds, pr);
 			}
 		}
 		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_POSTFILTERS;

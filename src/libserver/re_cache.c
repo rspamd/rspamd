@@ -463,7 +463,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	const gchar *start = NULL, *end = NULL;
 	guint max_hits = rspamd_regexp_get_maxhits (re);
 	guint64 id = rspamd_regexp_get_cache_id (re);
-	gdouble t1, t2;
+	gdouble t1, t2, pr;
 	const gdouble slow_time = 0.1;
 
 	if (in == NULL) {
@@ -481,7 +481,11 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	r = rt->results[id];
 
 	if (max_hits == 0 || r < max_hits) {
-		t1 = rspamd_get_ticks ();
+		pr = rspamd_random_double_fast ();
+
+		if (pr > 0.9) {
+			t1 = rspamd_get_ticks ();
+		}
 
 		while (rspamd_regexp_search (re,
 				in,
@@ -505,11 +509,13 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			rt->stat.regexp_matched += r;
 		}
 
-		t2 = rspamd_get_ticks ();
+		if (pr > 0.9) {
+			t2 = rspamd_get_ticks ();
 
-		if (t2 - t1 > slow_time) {
-			msg_info_pool ("regexp '%16s' took %.2f seconds to execute",
-					rspamd_regexp_get_pattern (re), t2 - t1);
+			if (t2 - t1 > slow_time) {
+				msg_info_pool ("regexp '%16s' took %.2f seconds to execute",
+						rspamd_regexp_get_pattern (re), t2 - t1);
+			}
 		}
 	}
 
