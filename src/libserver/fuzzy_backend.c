@@ -601,6 +601,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 						/* Expire element */
 						msg_debug_fuzzy_backend (
 								"requested hash has been expired");
+						rep.prob = 0.0;
 					}
 					else {
 						rep.value = sqlite3_column_int64 (
