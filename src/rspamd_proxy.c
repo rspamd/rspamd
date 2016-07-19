@@ -973,6 +973,8 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 		bk_conn->err = rspamd_mempool_strdup (session->pool, err->message);
 	}
 
+	rspamd_upstream_fail (bk_conn->up);
+
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
 }
@@ -995,6 +997,7 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 	}
 
 	msg_info_session ("finished mirror connection to %s", bk_conn->name);
+	rspamd_upstream_ok (bk_conn->up);
 
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
@@ -1125,6 +1128,7 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 		err->message,
 		session->ctx->max_retries - session->retries);
 	session->retries ++;
+	rspamd_upstream_fail (bk_conn->up);
 	proxy_backend_close_connection (session->master_conn);
 
 	if (session->ctx->max_retries &&
@@ -1181,6 +1185,8 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 					"return them as is");
 		}
 	}
+
+	rspamd_upstream_ok (bk_conn->up);
 
 	rspamd_http_connection_write_message (session->client_conn,
 			msg, NULL, NULL, session, session->client_sock,
