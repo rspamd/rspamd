@@ -7,6 +7,7 @@ Resource        lib.robot
 ${STATS_BACKEND}  mmap
 ${STATS_HASH}   hash = "compat";
 ${STATS_KEY}    key = "${KEY_PVT1}";
+${STATS_PATH_CACHE}  name = "sqlite3"; path = "\${TMPDIR}/learn_cache.db";
 
 *** Test Cases ***
 Learn
