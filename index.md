@@ -59,3 +59,56 @@ title: Rspamd spam filtering system
 				</div>
 		</div>
 </div>
+<div class="row who-uses">
+		<div id="text-carousel" class="carousel slide" data-ride="carousel">
+				<!-- Controls carousel-->
+				<a class="left carousel-control" href="#text-carousel" data-slide="prev">
+						<span class="glyphicon glyphicon-chevron-left"></span>
+				</a>
+				<a class="right carousel-control" href="#text-carousel" data-slide="next">
+						<span class="glyphicon glyphicon-chevron-right"></span>
+				</a>
+		    <!-- Wrapper for slides -->
+		            <div class="carousel-inner">
+										<div class="item active">
+												<div class="carousel-content">
+																<div class="col-sm-2 col-xs-12 col-sm-offset-1">
+																		<a href="https://www.adix.nl/"><img src="img/adix_logo.png" class="img-responsive"></a>
+																</div>
+																<div class="col-sm-9 col-xs-12">
+																		<blockquote>
+																				<p>Rspamd offers a plethora of filtering options and great performance. Per user settings enable us to provide spam filtering for multiple tenants. Furthermore Rspamd makes it very easy to write custom rules, which allows us to quickly react to spam outbreaks.</p>
+																				<!--footer>Someone famous in <cite title="Source Title">Source Title</cite></footer-->
+																		</blockquote>
+																</div>
+												</div>
+										</div>
+		                <!--div class="item">
+		                    <div class="carousel-content">
+																<div class="col-sm-3 col-xs-12">
+																		<img src="img/mimecast-logo.png" class="img-responsive">
+																</div>
+																<div class="col-sm-9 col-xs-12">
+																		<blockquote>
+																				<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>
+																				<footer>Someone famous in <cite title="Source Title">Source Title</cite></footer>
+																		</blockquote>
+																</div>
+		                    </div>
+		                </div-->
+		                <!--div class="item">
+		                    <div class="carousel-content">
+														<div class="col-sm-3 col-xs-12">
+																<img src="img/Rambler_logo.png" class="img-responsive">
+														</div>
+														<div class="col-sm-9 col-xs-12">
+																<blockquote>
+																		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.Integer posuere erat a ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>
+																		<footer>Someone famous in <cite title="Source Title">Source Title</cite></footer>
+																</blockquote>
+														</div>
+		                    </div>
+		                </div-->
+		            </div>
+		</div>
+</div>
