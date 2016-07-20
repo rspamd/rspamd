@@ -824,7 +824,34 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx,
 
 	if (mf != NULL) {
 		mf->pool = cfg->cfg_pool;
-	}
+	} else {
+		/* Create file here */
+
+		filenameo = ucl_object_find_key (stf->opts, "filename");
+		if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+			filenameo = ucl_object_find_key (stf->opts, "path");
+			if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+				msg_err_config ("statfile %s has no filename defined", stf->symbol);
+				return NULL;
+			}
+		}
+
+		filename = ucl_object_tostring (filenameo);
+
+		sizeo = ucl_object_find_key (stf->opts, "size");
+		if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
+			msg_err_config ("statfile %s has no size defined", stf->symbol);
+			return NULL;
+		}
+
+		size = ucl_object_toint (sizeo);
+
+		if (rspamd_mmaped_file_create (filename, size, stf, cfg->cfg_pool) != 0) {
+			msg_err_config ("cannot create new file");
+		}
+
+		mf = rspamd_mmaped_file_open (cfg->cfg_pool, filename, size, stf);
+        }
 
 	return (gpointer)mf;
 }
