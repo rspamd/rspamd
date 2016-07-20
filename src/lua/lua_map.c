@@ -536,30 +536,32 @@ lua_map_get_key (lua_State * L)
 				}
 			}
 
-			if (addr != NULL) {
-				if (radix_find_compressed_addr (radix, addr->addr)
-						!=  RADIX_NO_VALUE) {
-					ret = TRUE;
+			if (radix) {
+				if (addr != NULL) {
+					if (radix_find_compressed_addr (radix, addr->addr)
+							!=  RADIX_NO_VALUE) {
+						ret = TRUE;
+					}
 				}
-			}
-			else if (key_num != 0) {
-				if (radix_find_compressed (radix, (guint8 *)&key_num, sizeof (key_num))
-						!= RADIX_NO_VALUE) {
-					ret = TRUE;
+				else if (key_num != 0) {
+					if (radix_find_compressed (radix, (guint8 *)&key_num, sizeof (key_num))
+							!= RADIX_NO_VALUE) {
+						ret = TRUE;
+					}
 				}
 			}
 		}
 		else if (map->type == RSPAMD_LUA_MAP_SET) {
 			key = lua_map_process_string_key (L, 2, &len);
 
-			if (key) {
+			if (key && map->data.hash) {
 				ret = g_hash_table_lookup (map->data.hash, key) != NULL;
 			}
 		}
 		else if (map->type == RSPAMD_LUA_MAP_REGEXP) {
 			key = lua_map_process_string_key (L, 2, &len);
 
-			if (key) {
+			if (key && map->data.re_map) {
 				value = rspamd_match_regexp_map (map->data.re_map, key, len);
 
 				if (value) {
@@ -572,7 +574,7 @@ lua_map_get_key (lua_State * L)
 			/* key-value map */
 			key = lua_map_process_string_key (L, 2, &len);
 
-			if (key) {
+			if (key && map->data.hash) {
 				value = g_hash_table_lookup (map->data.hash, key);
 			}
 
