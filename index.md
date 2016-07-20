@@ -78,7 +78,7 @@ title: Rspamd spam filtering system
 																<div class="col-sm-9 col-xs-12">
 																		<blockquote>
 																				<p>Rspamd offers a plethora of filtering options and great performance. Per user settings enable us to provide spam filtering for multiple tenants. Furthermore Rspamd makes it very easy to write custom rules, which allows us to quickly react to spam outbreaks.</p>
-																				<!--footer>Someone famous in <cite title="Source Title">Source Title</cite></footer-->
+																				<footer>Arthur van Kleef <cite title="Source Title">System Engineer</cite></footer>
 																		</blockquote>
 																</div>
 												</div>
