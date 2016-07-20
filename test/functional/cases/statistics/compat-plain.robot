@@ -6,6 +6,7 @@ Resource        lib.robot
 *** Variables ***
 ${STATS_BACKEND}  mmap
 ${STATS_HASH}   hash = "compat";
+${STATS_PATH_CACHE}  name = "sqlite3"; path = "\${TMPDIR}/learn_cache.db";
 
 *** Test Cases ***
 Learn
