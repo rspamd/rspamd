@@ -34,3 +34,76 @@ this option could be useful to reduce false positives rate as rspamd deals with
 multiple signatures poorly: it just uses the first one to check. On the other hand,
 the proper support of multiple DKIM signatures is planned to be implemented in rspamd 
 in the next releases, which will make this option meaningless.
+
+## DKIM signatures
+
+Since version 1.3, Rspamd can also add DKIM signatures to messages. This could be used, for example, to sign outbound messages with some key. To use this ability, there is an option called `sign_condition` which defines Lua script that is intended to analyze a task object and return signing params if a signature is desired:
+
+- `key`: path to private key for the domain
+- `selector`: DKIM selector value
+- `domain`: domain used for signing
+
+If no signature is required, then this function should return `nil` or `false`. Here is an example of `learn_condition` script that is intended to sign messages that come from `example.com` domains:
+
+~~~ucl
+# local.d/dkim.conf
+sign_condition =<<EOD
+return function(task)
+  local from = task:get_from('smtp')
+
+  if from and from[1]['addr'] then
+    if string.find(from[1]['addr'], '@example.com$') then
+      return {
+        key = "/etc/dkim/example.com",
+        domain = "example.com",
+        selector = "test"
+      }
+    end
+  end
+
+  return false
+end
+EOD;
+~~~
+
+Alternatively, you can use maps in this code, for example, to limit signing policy to some network:
+
+~~~ucl
+# local.d/dkim.conf
+sign_condition =<<EOD
+-- Closure
+local dkim_ip_map = rspamd_config:add_map({
+  url = '/etc/rspamd/dkim_ip.map', 
+  type = 'radix', 
+  description = 'dkim sign map'
+})
+-- Callback function
+return function(task)
+  local ip = task:get_ip()
+
+  if ip and dkim_ip_map and dkim_ip_map:get_key(ip) then
+    return {
+      key = "/etc/dkim/example.com",
+      domain = "example.com",
+      selector = "test"
+    }
+  end
+end
+EOD;
+~~~
+
+Rspamd always use `relaxed/relaxed` encoding with `rsa-sha256` signature algorithm. This selection seems to be the most appropriate for all cases. Rspamd adds a special element called `DKIM-Signature` to the output when signing has been done. [Rmilter](/rmilter/) can use this header out of the box. Other integration methods cannot recognize this header so far.
+
+You can also generate DKIM keys for your domain using `rspamadm dkim_keygen` utility:
+
+~~~
+rspamadm dkim_keygen -s 'test' -d example.com
+
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+test._domainkey IN TXT ( "v=DKIM1; k=rsa; "
+  "p=MIGJAoGBALBrq9K6yxAXHwircsTnDTsd2Kg426z02AnoKTvyYNqwYT5Dxa02lyOiAXloXVIJsyfuGOOoSx543D7DGWw0plgElHXKStXy1TZ7fJfbEtuc5RASIKqOAT1iHGfGB1SZzjt3a3vJBhoStjvLulw4h8NC2jep96/QGuK8G/3b/SJNAgMBAAE=" ) ;
+~~~
+
+The first part is DKIM private key (that should be saved to some file) and the second part is DNS record for the public part that you should place in your zone's file. This command can also save both private and public parts to files.
