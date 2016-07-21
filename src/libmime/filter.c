@@ -330,6 +330,29 @@ rspamd_action_to_str (enum rspamd_metric_action action)
 	return "unknown action";
 }
 
+const gchar *
+rspamd_action_to_str_alt (enum rspamd_metric_action action)
+{
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		return "reject";
+	case METRIC_ACTION_SOFT_REJECT:
+		return "soft_reject";
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		return "rewrite_subject";
+	case METRIC_ACTION_ADD_HEADER:
+		return "add_header";
+	case METRIC_ACTION_GREYLIST:
+		return "greylist";
+	case METRIC_ACTION_NOACTION:
+		return "no action";
+	case METRIC_ACTION_MAX:
+		return "invalid max action";
+	}
+
+	return "unknown action";
+}
+
 enum rspamd_metric_action
 rspamd_check_action_metric (struct rspamd_task *task, struct metric_result *mres)
 {

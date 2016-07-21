@@ -2822,7 +2822,8 @@ lua_task_set_settings (lua_State *L)
 			}
 
 			for (i = 0; i < METRIC_ACTION_MAX; i++) {
-				elt = ucl_object_lookup (act, rspamd_action_to_str (i));
+				elt = ucl_object_lookup_any (act, rspamd_action_to_str (i),
+						rspamd_action_to_str_alt (i), NULL);
 
 				if (elt) {
 					mres->actions_limits[i] = ucl_object_todouble (elt);
