@@ -60,6 +60,7 @@ struct spf_record {
 	gchar *local_part;
 	struct rspamd_task *task;
 	spf_cb_t callback;
+	gpointer cbdata;
 	gboolean done;
 };
 
@@ -356,7 +357,7 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 
 	if (rec->requests_inflight == 0 && !rec->done) {
 		flat = rspamd_spf_record_flatten (rec);
-		rec->callback (flat, rec->task);
+		rec->callback (flat, rec->task, rec->cbdata);
 		REF_RELEASE (flat);
 		rec->done = TRUE;
 	}
@@ -1821,7 +1822,8 @@ rspamd_spf_get_domain (struct rspamd_task *task)
 }
 
 gboolean
-resolve_spf (struct rspamd_task *task, spf_cb_t callback)
+rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
+		gpointer cbdata)
 {
 	struct spf_record *rec;
 	struct rspamd_spf_cred *cred;
@@ -1839,6 +1841,7 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 	rec = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;
 	rec->callback = callback;
+	rec->cbdata = cbdata;
 
 	rec->resolved = g_ptr_array_sized_new (8);
 

@@ -8,7 +8,8 @@
 struct rspamd_task;
 struct spf_resolved;
 
-typedef void (*spf_cb_t)(struct spf_resolved *record, struct rspamd_task *task);
+typedef void (*spf_cb_t)(struct spf_resolved *record,
+		struct rspamd_task *task, gpointer cbdata);
 
 typedef enum spf_mech_e {
 	SPF_FAIL,
@@ -66,7 +67,8 @@ struct spf_resolved {
 /*
  * Resolve spf record for specified task and call a callback after resolution fails/succeed
  */
-gboolean resolve_spf (struct rspamd_task *task, spf_cb_t callback);
+gboolean rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
+		gpointer cbdata);
 
 /*
  * Get a domain for spf for specified task

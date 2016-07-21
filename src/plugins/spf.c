@@ -68,18 +68,6 @@ module_t spf_module = {
 	RSPAMD_MODULE_VER
 };
 
-static GQuark
-spf_plugin_quark (void)
-{
-	return g_quark_from_static_string ("spf-plugin");
-}
-
-static void
-spf_plugin_fin (gpointer ud)
-{
-
-}
-
 gint
 spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
@@ -373,9 +361,11 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task)
 }
 
 static void
-spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task)
+spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
+		gpointer ud)
 {
 	struct spf_resolved *l;
+	struct rspamd_async_watcher *w = ud;
 
 	if (record && record->elts->len > 0 && record->domain) {
 
@@ -394,7 +384,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task)
 		spf_record_unref (l);
 	}
 
-	rspamd_session_remove_event (task->s, spf_plugin_fin, NULL);
+	rspamd_session_watcher_pop (task->s, w);
 }
 
 
@@ -403,6 +393,7 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	const gchar *domain;
 	struct spf_resolved *l;
+	struct rspamd_async_watcher *w;
 
 	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
 			task->from_addr) != RADIX_NO_VALUE) {
@@ -424,13 +415,13 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			spf_record_unref (l);
 		}
 		else {
-			if (!resolve_spf (task, spf_plugin_callback)) {
+			w = rspamd_session_get_watcher (task->s);
+			if (!rspamd_spf_resolve (task, spf_plugin_callback, w)) {
 				msg_info_task ("cannot make spf request for [%s]",
 						task->message_id);
 			}
 			else {
-				rspamd_session_add_event (task->s, spf_plugin_fin, NULL,
-						spf_plugin_quark ());
+				rspamd_session_watcher_push (task->s);
 			}
 		}
 	}
