@@ -86,7 +86,7 @@ It is not recommended to increase storage size more than the available RAM size 
 The rspamd process that is responsible for fuzzy hashes storing is called `fuzzy_storage`. To turn on and configure this process you may use the local file of rspamd configuration: `etc/rspamd/rspamd.conf.local`:
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Socket to listen on (UDP and TCP from rspamd 1.3)
   bind_socket = "*:11335";
 
@@ -109,7 +109,7 @@ worker "fuzzy_storage" {
 Rspamd does not allow to modify data in the repository by default. It is required to specify a list of trusted IP-addresses and/or networks to make learning possible. Practically, it is better to write from the local address only (127.0.0.1) since fuzzy storage uses UDP that is not protected from source IP forgery.
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Same options as before ...
 
   allow_update = ["127.0.0.1"];
@@ -142,7 +142,7 @@ This command creates a **unique**  keypair, where **public** key should be copie
 Each storage can use any number of keys simultaneously:
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Same options as before ...
   keypair {
     pubkey = ...
@@ -166,7 +166,7 @@ This feature is useful for creating restricted storages where access is allowed 
 To enable such a mandatory encryption mode you should use `encrypted_only` option:
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Same options as before ...
   encrypted_only = true;
 
@@ -273,7 +273,7 @@ To match symbols with the corresponding flags you can use the `rule` section.
 Example:
 
 ~~~ucl
-fuzzy_storage {
+fuzzy_check {
   # Global options
 
   # Rule definition
