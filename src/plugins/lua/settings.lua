@@ -406,6 +406,13 @@ local function process_settings_table(tbl)
         out['ip'] = check_table(elt['ip'], ip)
       end
     end
+    if elt['client_ip'] then
+      local ip = process_ip(elt['client_ip'])
+
+      if ip then
+        out['client_ip'] = check_table(elt['client_ip'], ip)
+      end
+    end
     if elt['from'] then
       local from = process_addr(elt['from'])
 
