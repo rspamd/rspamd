@@ -14,3 +14,5 @@ test:
     - cmake . -DCMAKE_INSTALL_PREFIX=./_install
     - cmake --build . --target install
     - sudo robot test/functional/cases
+  post:
+    - for i in output.xml log.html report.html; do mv $i $CIRCLE_ARTIFACTS; done
