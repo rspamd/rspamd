@@ -139,7 +139,7 @@ local function check_settings(task)
     return false
   end
 
-  local function check_specific_setting(name, rule, ip, from, rcpt, user)
+  local function check_specific_setting(name, rule, ip, client_ip, from, rcpt, user)
     local res = false
 
     if rule['ip'] then
@@ -148,6 +148,21 @@ local function check_settings(task)
       end
       for _, i in ipairs(rule['ip']) do
         res = check_ip_setting(i, ip)
+        if res then
+          break
+        end
+      end
+      if not res then
+        return nil
+      end
+    end
+
+    if rule['client_ip'] then
+      if not client_ip or not client_ip:is_valid() then
+        return nil
+      end
+      for _, i in ipairs(rule['client_ip']) do
+        res = check_ip_setting(i, client_ip)
         if res then
           break
         end
@@ -225,6 +240,7 @@ local function check_settings(task)
 
   rspamd_logger.infox(task, "check for settings")
   local ip = task:get_from_ip()
+  local client_ip = task:get_client_ip()
   local from = task:get_from()
   local rcpt = task:get_recipients()
   local uname = task:get_user()
@@ -246,7 +262,7 @@ local function check_settings(task)
   for pri = max_pri,1,-1 do
     if settings[pri] then
       for name, r in pairs(settings[pri]) do
-        local rule = check_specific_setting(name, r, ip, from, rcpt, user)
+        local rule = check_specific_setting(name, r, ip, client_ip, from, rcpt, user)
         if rule then
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
             task:get_message_id(), name)
