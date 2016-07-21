@@ -534,9 +534,21 @@ LUA_FUNCTION_DEF (task, get_settings);
 /***
  * @method task:get_settings_id()
  * Get numeric hash of settings id if specified for this task. 0 is returned otherwise.
- * @param {any} obj any lua object that corresponds to the settings format
+ * @return {number} settings-id hash
  */
 LUA_FUNCTION_DEF (task, get_settings_id);
+
+/***
+ * @method task:set_rmilter_reply(obj)
+ * Set special reply for rmilter
+ * @param {any} obj any lua object that corresponds to the settings format
+ * @example
+task:set_rmilter_reply({
+	add_headers = {{'X-Lua', 'test'}},
+	remove_headers = {'DKIM-Signature},
+})
+ */
+LUA_FUNCTION_DEF (task, set_rmilter_reply);
 
 /***
  * @method task:process_re(params)
@@ -716,6 +728,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_flag),
 	LUA_INTERFACE_DEF (task, get_flags),
 	LUA_INTERFACE_DEF (task, has_flag),
+	LUA_INTERFACE_DEF (task, set_rmilter_reply),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -2834,6 +2847,25 @@ lua_task_set_settings (lua_State *L)
 		}
 
 		rspamd_symbols_cache_process_settings (task, task->cfg->cache);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_task_set_rmilter_reply (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	ucl_object_t *reply;
+
+	reply = ucl_object_lua_import (L, 2);
+
+	if (reply != NULL && task != NULL) {
+		rspamd_mempool_set_variable (task->task_pool, "rmilter-reply",
+				reply, (rspamd_mempool_destruct_t)ucl_object_unref);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

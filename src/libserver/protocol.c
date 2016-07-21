@@ -984,6 +984,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 	ucl_object_t *top = NULL, *obj;
 	GHashTableIter hiter;
 	GString *dkim_sig;
+	const ucl_object_t *rmilter_reply;
 	gpointer h, v;
 
 	g_hash_table_iter_init (&hiter, task->results);
@@ -1019,6 +1020,13 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 	if (dkim_sig) {
 		ucl_object_insert_key (top, ucl_object_fromstring (dkim_sig->str),
 					"dkim-signature", 0, false);
+	}
+
+	rmilter_reply = rspamd_mempool_get_variable (task->task_pool, "rmilter-reply");
+
+	if (rmilter_reply) {
+		ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
+				"rmilter", 0, false);
 	}
 
 	return top;
