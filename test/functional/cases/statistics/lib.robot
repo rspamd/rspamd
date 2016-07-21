@@ -18,7 +18,7 @@ ${STATS_PATH_SPAM}  path = "\${TMPDIR}/bayes-spam.sqlite";
 *** Keywords ***
 Broken Learn Test
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_spam  ${MESSAGE}
-  Check Rspamc  ${result}  inverse=1
+  Check Rspamc  ${result}  cannot find statfile backend
 
 Empty Part Test
   Set Test Variable  ${MESSAGE}  ${TESTDIR}/messages/empty_part.eml
