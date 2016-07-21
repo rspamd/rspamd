@@ -73,16 +73,11 @@ def shutdown_process(pid):
     pid = int(pid)
     process_should_exist(pid)
     i = 0
-    while i < 5:
+    while i < 100:
         try:
             os.kill(pid, signal.SIGTERM)
-            time.sleep(0.1)
-        except:
+        except OSError as e:
+            assert e.errno == 3
             break
-    if i >= 5:
-        while True:
-            try:
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(0.1)
-            except:
-                break
+        i += 1
+        time.sleep(0.1)
