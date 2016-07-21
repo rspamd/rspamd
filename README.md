@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/vstakhov/rspamd.png)](https://travis-ci.org/vstakhov/rspamd)
+[![CircleCI](https://circleci.com/gh/vstakhov/rspamd/tree/master.svg?style=svg)](https://circleci.com/gh/vstakhov/rspamd/tree/master)
 
 ## Introduction
 
