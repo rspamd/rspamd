@@ -101,19 +101,19 @@ local function check_mime_type(task)
     end
 
     if ext then
-      check_extension(settings['bad_extensions'][ext])
+      check_extension(settings['bad_extensions'][ext:lower()])
 
       -- Also check for archive bad extension
       if is_archive then
-        check_extension(settings['bad_archive_extensions'][ext])
+        check_extension(settings['bad_archive_extensions'][ext:lower()])
 
-        if settings['archive_extensions'][ext] then
+        if settings['archive_extensions'][ext:lower()] then
           -- Archive in archive
           task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
         end
       end
 
-      local mt = settings['extension_map'][ext]
+      local mt = settings['extension_map'][ext:lower()]
       if mt and ct then
         local found = nil
         if (type(mt) == "table") then
