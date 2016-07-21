@@ -79,6 +79,7 @@ Run Redis
   ${result} =  Run Process  redis-server  ${TMPDIR}/redis-server.conf
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
+  Wait Until Created  ${TMPDIR}/redis.pid
   ${REDIS_PID} =  Get File  ${TMPDIR}/redis.pid
   Run Keyword If  '${REDIS_SCOPE}' == 'Test'  Set Test Variable  ${REDIS_PID}
   ...  ELSE IF  '${REDIS_SCOPE}' == 'Suite'  Set Suite Variable  ${REDIS_PID}
@@ -109,6 +110,7 @@ Run Rspamd
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   ${rspamd_logpos} =  Log Logs  ${TMPDIR}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0
+  Wait Until Created  ${TMPDIR}/rspamd.pid
   ${rspamd_pid} =  Get File  ${TMPDIR}/rspamd.pid
   [Return]  ${TMPDIR}  ${rspamd_pid}  ${rspamd_logpos}
 
