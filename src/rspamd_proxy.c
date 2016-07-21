@@ -1263,6 +1263,7 @@ retry:
 				RSPAMD_HTTP_CLIENT,
 				session->ctx->keys_cache,
 				NULL);
+		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
 
