@@ -1,6 +1,4 @@
 sudo: required
-dist: trusty
-
 language: c
 
 #os:
@@ -20,7 +18,6 @@ before_script:
 #  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install cmake gmime glib luajit pcre hiredis sqlite libevent ; fi
 
 script:
-  - chmod a+rx /home/travis
   - cmake . -DCMAKE_INSTALL_PREFIX=./_install -DCMAKE_C_COMPILER=$CC
   - cmake --build . --target install
   - sudo pip install robotframework
