@@ -1,7 +1,3 @@
-machine:
-    services:
-      - redis
-
 dependencies:
     pre:
       - sudo apt-get update -qq
