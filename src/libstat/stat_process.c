@@ -601,7 +601,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 	gpointer bk_run;
 	guint i, j;
 	gint id;
-	gboolean res = TRUE;
+	gboolean res = FALSE;
 
 	for (i = 0; i < st_ctx->classifiers->len; i ++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
@@ -640,6 +640,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				}
 
 				res = FALSE;
+				goto end;
 			}
 			else {
 				if (!!spam == !!st->stcf->is_spam) {
@@ -648,10 +649,13 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				else if (task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
 					st->backend->dec_learns (task, bk_run, st_ctx);
 				}
+
+				res = TRUE;
 			}
 		}
 	}
 
+end:
 	if (sel == NULL) {
 		if (classifier) {
 			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
@@ -662,6 +666,12 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		return FALSE;
+	}
+
+	if (!res) {
+		g_set_error (err, rspamd_stat_quark (), 404, "cannot find statfile "
+				"backend to learn %s in %s", spam ? "spam" : "ham",
+				classifier ? classifier : "default classifier");
 	}
 
 	return res;
