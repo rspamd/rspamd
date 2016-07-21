@@ -553,7 +553,8 @@ end:
 }
 
 static gboolean
-rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str)
+rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
+		const guchar *magic_start, gsize magic_len)
 {
 	GMimeContentType *ct;
 	const gchar *fname, *p;
@@ -580,6 +581,13 @@ rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str)
 		}
 	}
 
+	if (magic_start != NULL) {
+		if (part->content->len > magic_len && memcmp (part->content->data,
+				magic_start, magic_len) == 0) {
+			return TRUE;
+		}
+	}
+
 	return FALSE;
 }
 
@@ -588,15 +596,19 @@ rspamd_archives_process (struct rspamd_task *task)
 {
 	guint i;
 	struct rspamd_mime_part *part;
+	const guchar rar_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07};
+	const guchar zip_magic[] = {0x50, 0x4b, 0x03, 0x04};
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
 
 		if (part->content->len > 0) {
-			if (rspamd_archive_cheat_detect (part, "zip")) {
+			if (rspamd_archive_cheat_detect (part, "zip",
+					zip_magic, sizeof (zip_magic))) {
 				rspamd_archive_process_zip (task, part);
 			}
-			else if (rspamd_archive_cheat_detect (part, "rar")) {
+			else if (rspamd_archive_cheat_detect (part, "rar",
+					rar_magic, sizeof (rar_magic))) {
 				rspamd_archive_process_rar (task, part);
 			}
 		}
