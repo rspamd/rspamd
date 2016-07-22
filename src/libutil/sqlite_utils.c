@@ -476,9 +476,21 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		}
 	}
 
-	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
+	while ((rc = sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL)) != SQLITE_OK) {
+		if (rc == SQLITE_BUSY) {
+			struct timespec sleep_ts = {
+					.tv_sec = 0,
+					.tv_nsec = 1000000
+			};
+
+			nanosleep (&sleep_ts, NULL);
+
+			continue;
+		}
+
 		msg_warn_pool_check ("WAL mode is not supported (%s), locking issues might occur",
 				sqlite3_errmsg (sqlite));
+		break;
 	}
 
 	if (sqlite3_exec (sqlite, fsync_sql, NULL, NULL, NULL) != SQLITE_OK) {
