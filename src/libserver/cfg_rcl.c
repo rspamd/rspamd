@@ -265,7 +265,8 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			section, cfg->cfg_pool, obj,
 			cfg, err)) {
 		/* We need to init this early */
-		rspamd_multipattern_library_init (cfg->hs_cache_dir);
+		rspamd_multipattern_library_init (cfg->hs_cache_dir,
+				cfg->libs_ctx->crypto_ctx);
 
 		return TRUE;
 	}

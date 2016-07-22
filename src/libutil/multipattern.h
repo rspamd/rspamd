@@ -37,6 +37,7 @@ enum rspamd_multipattern_flags {
 };
 
 struct rspamd_multipattern;
+struct rspamd_cryptobox_library_ctx;
 
 /**
  * Called on pattern match
@@ -60,7 +61,8 @@ typedef gint (*rspamd_multipattern_cb_t) (struct rspamd_multipattern *mp,
  * Init multipart library and set the appropriate cache dir
  * @param cache_dir
  */
-void rspamd_multipattern_library_init (const gchar *cache_dir);
+void rspamd_multipattern_library_init (const gchar *cache_dir,
+		struct rspamd_cryptobox_library_ctx *crypto_ctx);
 
 /**
  * Creates empty multipattern structure

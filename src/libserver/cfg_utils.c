@@ -644,7 +644,18 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 #endif
 
 	rspamd_regexp_library_init ();
-	rspamd_multipattern_library_init (cfg->hs_cache_dir);
+	rspamd_multipattern_library_init (cfg->hs_cache_dir,
+			cfg->libs_ctx->crypto_ctx);
+
+#ifdef WITH_HYPERSCAN
+	if (!cfg->disable_hyperscan) {
+		if (!(cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
+			msg_warn_config ("CPU doesn't have SSSE3 instructions set "
+					"required for hyperscan, disable it");
+			cfg->disable_hyperscan = TRUE;
+		}
+	}
+#endif
 
 	if ((def_metric =
 		g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
