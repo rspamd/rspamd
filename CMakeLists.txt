@@ -160,6 +160,7 @@ SET(RSPAMD_DEFAULT_LIBRARY_PATHS "/usr/local;/usr/pkg;/usr;/Library/Frameworks;/
 IF(ENABLE_STATIC MATCHES "ON")
 	MESSAGE(STATUS "Static build of rspamd implies that the target binary will be *GPL* licensed")
 	SET(GPL_RSPAMD_BINARY 1)
+	SET(CMAKE_SKIP_INSTALL_RPATH ON)
 	SET(BUILD_STATIC 1)
 	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 	SET(BUILD_SHARED_LIBRARIES OFF)
