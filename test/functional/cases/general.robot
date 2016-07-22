@@ -35,3 +35,8 @@ GTUBE - SPAMC
   ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
   Follow Rspamd Log
   Should Contain  ${result}  GTUBE
+
+GTUBE - RSPAMC
+  ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
+  Follow Rspamd Log
+  Should Contain  ${result}  GTUBE
