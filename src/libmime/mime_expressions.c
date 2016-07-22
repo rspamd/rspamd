@@ -373,6 +373,8 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			/* Long definition */
 			if ((brace = strchr (p + 1, '}')) != NULL) {
 				if (!rspamd_parse_long_option (p + 1, brace - (p + 1), result)) {
+					msg_warn_pool ("invalid long regexp type: %*s in '%s'",
+							(int)(brace - (p + 1)), p + 1, src);
 					p = NULL;
 				}
 				else {
@@ -586,6 +588,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 		got_backslash,
 		got_second_slash,
 		in_flags,
+		in_flags_brace,
 		got_obrace,
 		in_function,
 		got_ebrace,
@@ -638,12 +641,22 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 			state = in_flags;
 			break;
 		case in_flags:
-			if (!g_ascii_isalpha (t)) {
+			if (t == '{') {
+				state = in_flags_brace;
+				p ++;
+			}
+			else if (!g_ascii_isalpha (t)) {
 				state = end_atom;
 			}
 			else {
 				p ++;
 			}
+			break;
+		case in_flags_brace:
+			if (t == '}') {
+				state = in_flags;
+			}
+			p ++;
 			break;
 		case got_backslash:
 			state = prev_state;
