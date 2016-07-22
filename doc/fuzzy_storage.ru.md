@@ -97,7 +97,7 @@ worker "fuzzy_storage" {
   expire = 90d;
 
   # Synchronize updates to the storage each minute
-  sync = 1m;
+  sync = 1min;
 }
 ~~~
 
