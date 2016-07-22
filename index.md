@@ -72,8 +72,21 @@ title: Rspamd spam filtering system
 		            <div class="carousel-inner">
 										<div class="item active">
 												<div class="carousel-content">
+														<div class="col-sm-3 col-xs-12">
+																<a href="http://www.rambler.ru/" target="_blank"><img src="img/Rambler_logo.png" class="img-responsive"></a>
+														</div>
+														<div class="col-sm-9 col-xs-12">
+																<blockquote>
+																		<p>We use both Rspamd and Rmilter to filter spam for our users processing about 100M of messages per day on a couple of scanners. Rspamd provides an excellent opportunities to build custom rules for better spam and phishing protection.</p>
+																		<footer>Alexander Rayushkin <cite title="Source Title">Manager of the Email department</cite></footer>
+																</blockquote>
+														</div>
+												</div>
+										</div>
+										<div class="item">
+												<div class="carousel-content">
 																<div class="col-sm-2 col-xs-12 col-sm-offset-1">
-																		<a href="https://www.adix.nl/"><img src="img/adix_logo.png" class="img-responsive"></a>
+																		<a href="https://www.adix.nl/" target="_blank"><img src="img/adix_logo.png" class="img-responsive"></a>
 																</div>
 																<div class="col-sm-9 col-xs-12">
 																		<blockquote>
@@ -94,19 +107,6 @@ title: Rspamd spam filtering system
 																				<footer>Someone famous in <cite title="Source Title">Source Title</cite></footer>
 																		</blockquote>
 																</div>
-		                    </div>
-		                </div-->
-		                <!--div class="item">
-		                    <div class="carousel-content">
-														<div class="col-sm-3 col-xs-12">
-																<img src="img/Rambler_logo.png" class="img-responsive">
-														</div>
-														<div class="col-sm-9 col-xs-12">
-																<blockquote>
-																		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.Integer posuere erat a ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>
-																		<footer>Someone famous in <cite title="Source Title">Source Title</cite></footer>
-																</blockquote>
-														</div>
 		                    </div>
 		                </div-->
 		            </div>
