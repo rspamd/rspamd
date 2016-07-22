@@ -806,6 +806,22 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				g_byte_array_append (part->stripped_content, c, p - c);
 			}
 
+			/*
+			 * Now we need to decide, maybe we have the following cases:
+			 * 1. Multiple newlines must be replaced by one newline
+			 * 2. If a line is finished with punctuation character, then insert
+			 * one newline
+			 * 3. In HTML parts we have to insert newlines as well
+			 */
+
+			if (p > part->content->data &&
+					(IS_PART_HTML (part) ||
+					*(p - 1) == '\n' ||
+					g_ascii_ispunct (*(p - 1))
+					)) {
+				g_byte_array_append (part->stripped_content, "\n", 1);
+			}
+
 			/* As it could cause reallocation, we initially store offsets */
 			g_ptr_array_add (part->newlines,
 					GUINT_TO_POINTER (part->stripped_content->len));
