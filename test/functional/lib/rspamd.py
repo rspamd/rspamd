@@ -41,6 +41,19 @@ def read_log_from_position(filename, offset):
     size = len(goo)
     return [goo, size+offset]
 
+def rspamc(addr, port, filename):
+    mboxgoo = b"From MAILER-DAEMON Fri May 13 19:17:40 2016\r\n"
+    goo = open(filename, 'rb').read()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((addr, port))
+    s.send(b"CHECK RSPAMC/1.0\r\nContent-length: ")
+    s.send(str(len(goo+mboxgoo)).encode('utf-8'))
+    s.send(b"\r\n\r\n")
+    s.send(mboxgoo)
+    s.send(goo)
+    r = s.recv(2048)
+    return r.decode('utf-8')
+
 def scan_file(addr, port, filename):
     return str(urlopen("http://%s:%s/symbols?file=%s" % (addr, port, filename)).read())
 
