@@ -81,6 +81,17 @@ function rspamd_parse_redis_server(module_name)
     else
       ret = try_load_redis_servers(opts)
 
+      if opts['disabled_modules'] then
+        for _,v in ipairs(opts['disabled_modules']) do
+          if v == module_name then
+            logger.infox(rspamd_config, "NOT using default redis server for module %s: it is disabled",
+              module_name)
+
+              return nil
+          end
+        end
+      end
+
       if ret then
         logger.infox(rspamd_config, "using default redis server for module %s",
           module_name)
