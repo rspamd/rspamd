@@ -136,4 +136,4 @@ Regexp rules can be slow and should not be used extensively.
 
 The picture below describes the architecture of settings matching.
 
-![Settings match procedure](settings.png "Settings match procedure")
+<img class="img-responsive" width="50%" src="/img/settings.png">
