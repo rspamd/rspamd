@@ -26,6 +26,7 @@ This section contains documents about various configuration details.
   + **[Statistical module](/doc/configuration/statistic.html)** describes the Bayes classifier and its backends
 * **[Modules documentation](./modules/)** gives the detailed description of each Rspamd module
 * **[Workers documentation](./workers/)** contains information about different Rspamd worker processes: scanners, controller, fuzzy storage and so on
+* **[Redis options](/doc/configuration/redis.html)** describes how to configure Redis cache for Rspamd
 
 ## Developers documentation
 
