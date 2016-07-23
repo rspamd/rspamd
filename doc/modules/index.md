@@ -72,3 +72,7 @@ uses `redis` to store data.
 - [spamassassin](spamassassin.html) - load spamassassin rules
 - [dmarc](dmarc.html) - performs DMARC policy checks
 - [dcc](dcc.html) - performs [DCC](http://www.dcc-servers.net/dcc/) lookups to determine message bulkiness
+- [replies](replies.html) - checks if an incoming message is a reply for our own message
+- [greylisting](greylisting.html) - allows to delay suspicious messages
+- [whitelist](whitelist.html) - provides a flexible way to whitelist (or blacklist) messages based on SPF/DKIM/DMARC combinations
+- [neural networks](fann.html) - allows to post-process messages using neural network classification
