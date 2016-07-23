@@ -26,4 +26,8 @@ int rspamd_smtp_recieved_parse (struct rspamd_task *task,
 int rspamd_smtp_addr_parse (const char *data, size_t len,
 		struct rspamd_email_address *addr);
 
+void rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
+		GByteArray *data, gboolean is_html, guint *newlines_count,
+		GPtrArray *newlines);
+
 #endif /* SRC_LIBMIME_SMTP_PARSERS_H_ */

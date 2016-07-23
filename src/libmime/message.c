@@ -794,68 +794,16 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	c = p;
 	end = p + part->content->len;
 
-	while (p < end) {
-		p = memchr (c, '\n', end - c);
+	rspamd_strip_newlines_parse (p, end, part->stripped_content,
+			IS_PART_HTML (part), &part->nlines, part->newlines);
 
-		if (p) {
-			if (*(p - 1) == '\r') {
-				p --;
-			}
-
-			if (p > c) {
-				g_byte_array_append (part->stripped_content, c, p - c);
-			}
-
-			/*
-			 * Now we need to decide, maybe we have the following cases:
-			 * 1. Multiple newlines must be replaced by one newline
-			 * 2. If a line is finished with punctuation character, then insert
-			 * one newline
-			 * 3. In HTML parts we have to insert newlines as well
-			 */
-
-			if (p > part->content->data &&
-					(IS_PART_HTML (part) ||
-					*(p - 1) == '\n' ||
-					g_ascii_ispunct (*(p - 1))
-					)) {
-				g_byte_array_append (part->stripped_content, "\n", 1);
-			}
-
-			/* As it could cause reallocation, we initially store offsets */
-			g_ptr_array_add (part->newlines,
-					GUINT_TO_POINTER (part->stripped_content->len));
-			ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
-			ex->pos = part->stripped_content->len;
-			ex->len = 0;
-			ex->type = RSPAMD_EXCEPTION_NEWLINE;
-			part->exceptions = g_list_prepend (part->exceptions, ex);
-			part->nlines ++;
-			p ++;
-
-			while (p < end && (*p == '\r' || *p == '\n')) {
-				if (*p == '\n') {
-					part->nlines ++;
-				}
-
-				p ++;
-			}
-			c = p;
-		}
-		else {
-			p = end;
-			break;
-		}
-	}
-
-	if (p > c) {
-		g_byte_array_append (part->stripped_content, c, p - c);
-	}
-
-	/* Now convert offsets to real pointers for convenience */
 	for (i = 0; i < part->newlines->len; i ++) {
-		guint off = GPOINTER_TO_UINT (g_ptr_array_index (part->newlines, i));
-		g_ptr_array_index (part->newlines, i) = part->stripped_content->data + off;
+		ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
+		p = g_ptr_array_index (part->newlines, i);
+		ex->pos = p - c;
+		ex->len = 0;
+		ex->type = RSPAMD_EXCEPTION_NEWLINE;
+		part->exceptions = g_list_prepend (part->exceptions, ex);
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
