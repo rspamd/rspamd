@@ -63,10 +63,6 @@ hr {
   margin-bottom: 0;
 
 }
-@media (min-width: 768px) and (max-width: 992px){
-    /* when navbar is thick */
-    .jumbotron {margin-top: 50px;}
-}
 .btn-code{
   background-color: #333333 !important;
   color: #eeeeee;
