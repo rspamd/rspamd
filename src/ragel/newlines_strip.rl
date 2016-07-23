@@ -2,7 +2,8 @@
   machine newlines_strip;
 
   action Double_CRLF {
-    if (!crlf_added) {
+    if (!crlf_added && p > c) {
+      (*newlines_count)++;
       g_byte_array_append (data, (const guint8 *)"\n", 1);
       c = p;
     }
@@ -48,9 +49,8 @@
   CRLF  = ("\r" . "\n") | ( "\r" ) | ("\n");
   DOUBLE_CRLF = (CRLF <: (WSP* CRLF)+) %Double_CRLF;
   ANY_CRLF = CRLF | DOUBLE_CRLF;
-  LINE_ELT = ((WSP+ %WSP)** :> ((^space)+) >Text_Start %Text_End <: (WSP+ %WSP)**);
-  LINE = LINE_ELT+;
-  TEXT  = ANY_CRLF** . (LINE <: ANY_CRLF %Line_CRLF)+ | LINE | ANY_CRLF %Line_CRLF;
+  LINE = (([^\r\n]+) >Text_Start %Text_End);
+  TEXT  = ANY_CRLF* . (LINE <: ANY_CRLF %Line_CRLF)+ | LINE | ANY_CRLF %Line_CRLF;
 
   main := TEXT;
 }%%
