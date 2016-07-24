@@ -27,12 +27,12 @@ This module produces `soft reject` action on greylisting which **SHOULD** be tre
 
 ## Module configuration
 
-First of all, you need to setup Redis server for storing hashes. This procedure is described in details in the [following document](/doc/configuration/redis.html). Thereafter, you can modify couple of options specific for greylisting module. It is recommended to define these options in `local.d/greylisting.conf`:
+First of all, you need to setup Redis server for storing hashes. This procedure is described in detail in the [following document](/doc/configuration/redis.html). Thereafter, you can modify a couple of options specific for greylisting module. It is recommended to define these options in `local.d/greylisting.conf`:
 
 * **`expire`**: setup hashes expire time (1 day by default)
 * **`timeout`**: defines greylisting timeout (5 min by default)
 * **`key_prefix`**: prefix for hashes to store in Redis (`rg` by default)
-* **`max_data_len`**: maximum length of data to be used for body hash (10kb by default)
+* **`max_data_len`**: maximum length of data to be used for body hash (10kB by default)
 * **`message`**: a message for temporary rejection reason (`Try again later` by default)
 * **`ipv4_mask`**: mask to apply for IPv4 addresses (19 by default)
 * **`ipv6_mask`**: mask to apply for IPv6 addresses (64 by default)
