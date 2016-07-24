@@ -4,7 +4,7 @@
   action Double_CRLF {
     if (!crlf_added && p > c) {
       (*newlines_count)++;
-      g_byte_array_append (data, (const guint8 *)"\n", 1);
+      g_byte_array_append (data, (const guint8 *)" ", 1);
       c = p;
     }
 
@@ -34,7 +34,7 @@
   action Line_CRLF {
     if (!crlf_added) {
       if (is_html || g_ascii_ispunct (last_c)) {
-         g_byte_array_append (data, (const guint8 *)"\n", 1);
+         g_byte_array_append (data, (const guint8 *)" ", 1);
          crlf_added = TRUE;
       }
     }
