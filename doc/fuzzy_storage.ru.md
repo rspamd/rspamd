@@ -83,7 +83,7 @@ title: Использование fuzzy хешей
 За хранение нечетких хешей отвечает процесс rspamd под названием `fuzzy_storage`. Для включения и настройки этого процесса можно использовать локальный файл конфигурации rspamd: `etc/rspamd/rspamd.conf.local`:
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Socket to listen on (UDP and TCP from rspamd 1.3)
   bind_socket = "*:11335";
 
@@ -106,7 +106,7 @@ worker "fuzzy_storage" {
 По умолчанию rspamd не разрешает модифицировать данные в хранилище. Для того чтобы обучение было возможно, необходимо задать список доверенных IP-адресов и/или сетей. Как правило, лучше всего разрешить запись только с локальных адресов (127.0.0.1 и ::1), так как fuzzy storage использует портокол UDP, который не имеет защиты от подделки IP-адреса источника (что можно исправить путем настройки верификации обратного маршрута на маршрутизаторе, но это зачастую игнорируется системными администраторами):
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Same options as before ...
 
   allow_update = ["127.0.0.1", "::1"];
@@ -141,7 +141,7 @@ keypair {
 Каждое хранилище может работать одновременно с произвольным числом ключей:
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Same options as before ...
   keypair {
     pubkey = ...
@@ -165,7 +165,7 @@ worker "fuzzy_storage" {
 Для включения режима обязательного шифрования используется опция `encrypted_only`:
 
 ~~~ucl
-worker "fuzzy_storage" {
+worker "fuzzy" {
   # Same options as before ...
   encrypted_only = true;
 
@@ -271,7 +271,7 @@ $ rspamc -S FUZZY_DENIED -w 10 fuzzy_add <message|directory|stdin>
 Пример настройки:
 
 ~~~ucl
-fuzzy_storage {
+fuzzy_check {
   # Global options
 
   # Rule definition
