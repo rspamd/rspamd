@@ -1,19 +1,17 @@
-<div id="wrapper">
-	<!-- remove the white space after footer-->
+<!-- remove the white space after footer-->
 {% include top.html %}
-	<div class="container">
-		<ol class="breadcrumb">
-			<li><a href="/">Home</a></li>
-			<li><a href="/doc/index.html">Documentation</a></li>
-			<li class="active">{{ page.title }}</li>
-		</ol>
-		<div class="row">
-			<div class="body-content doc-content">
-				{{ content }}
-			</div>
+<div class="container">
+	<ol class="breadcrumb">
+		<li><a href="/">Home</a></li>
+		<li><a href="/doc/index.html">Documentation</a></li>
+		<li class="active">{{ page.title }}</li>
+	</ol>
+	<div class="row">
+		<div class="body-content doc-content">
+			{{ content }}
 		</div>
-		<!-- row -->
 	</div>
-	<div class="push"></div>
+	<!-- row -->
 </div>
+<div class="push"></div>
 {% include bottom.html %}

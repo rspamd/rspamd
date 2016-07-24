@@ -1,53 +1,52 @@
-<div id="wrapper"><!-- remove the white space after footer-->
 {% include top.html %}
 <div class="container">
-		<ol class="breadcrumb">
-				<li><a href="/">Home</a></li>
-				<li><a href="/doc/index.html">Documentation</a></li>
-				<li><a href="/doc/modules/index.html">Modules index</a></li>
-				<li class="active">{{ page.title }}</li>
-		</ol>
-		<div class="row">
-				<div class="col-sm-3">
-						<!-- Docs navigation -->
-						<ul class="nav nav-pills nav-stacked" role="navigation">
-								<li class="nav-header">Rspamd modules</li>
-								<li><a  href="/doc/modules/index.html">Overview</a></li>
-								<li class="divider"></li>
-								<li class="nav-header">C (internal) modules</li>
-								<li><a  href="/doc/modules/regexp.html">Regexp</a></li>
-								<li><a  href="/doc/modules/surbl.html">Surbl</a></li>
-								<li><a  href="/doc/modules/dkim.html">DKIM</a></li>
-								<li><a  href="/doc/modules/spf.html">SPF</a></li>
-								<li><a  href="/doc/modules/fuzzy_check.html">Fuzzy check</a></li>
-								<li><a  href="/doc/modules/chartable.html">Chartable</a></li>
-								<li class="divider"></li>
-								<li class="nav-header">Lua modules</li>
-								<li><a  href="/doc/modules/multimap.html">Multimap</a></li>
-								<li><a  href="/doc/modules/rbl.html">RBL</a></li>
-								<li><a  href="/doc/modules/emails.html">Emails scan</a></li>
-								<li><a  href="/doc/modules/spamassassin.html">Spamassassin rules</a></li>
-								<li><a  href="/doc/modules/phishing.html">Phishing check</a></li>
-								<li><a  href="/doc/modules/trie.html">Trie matcher</a></li>
-								<li><a  href="/doc/modules/ratelimit.html">Ratelimit</a></li>
-								<li><a  href="/doc/modules/maillist.html">Mailing list</a></li>
-								<li><a  href="/doc/modules/once_received.html">Received policy</a></li>
-								<li><a  href="/doc/modules/dmarc.html">DMARC</a></li>
-								<li><a  href="/doc/modules/whitelist.html">Whitelist</a></li>
-								<li><a  href="/doc/modules/mime_types.html">Mime types</a></li>
-								<li><a  href="/doc/modules/rspamd_update.html">Rspamd updates</a></li>
-								<li><a  href="/doc/modules/dcc.html">DCC module</a></li>
-								<li><a  href="/doc/modules/fann.html">Neural network module</a></li>
-								<li><a  href="/doc/modules/greylisting.html">Greylisting module</a></li>
-								<li><a  href="/doc/modules/replies.html">Replies module</a></li>
-						</ul>
-				</div>
-				<div class="col-sm-9">
-						<div class="body-content doc-content">
-								{{ content }}
-						</div>
-				</div>
-		 	</div> <!-- row -->
-    <div class="push"></div>
-</div>
-{% include bottom.html %}
+	<ol class="breadcrumb">
+		<li><a href="/">Home</a></li>
+		<li><a href="/doc/index.html">Documentation</a></li>
+		<li><a href="/doc/modules/index.html">Modules index</a></li>
+		<li class="active">{{ page.title }}</li>
+	</ol>
+	<div class="row">
+		<div class="col-sm-3">
+			<!-- Docs navigation -->
+			<ul class="nav nav-pills nav-stacked" role="navigation">
+				<li class="nav-header">Rspamd modules</li>
+				<li><a href="/doc/modules/index.html">Overview</a></li>
+				<li class="divider"></li>
+				<li class="nav-header">C (internal) modules</li>
+				<li><a href="/doc/modules/regexp.html">Regexp</a></li>
+				<li><a href="/doc/modules/surbl.html">Surbl</a></li>
+				<li><a href="/doc/modules/dkim.html">DKIM</a></li>
+				<li><a href="/doc/modules/spf.html">SPF</a></li>
+				<li><a href="/doc/modules/fuzzy_check.html">Fuzzy check</a></li>
+				<li><a href="/doc/modules/chartable.html">Chartable</a></li>
+				<li class="divider"></li>
+				<li class="nav-header">Lua modules</li>
+				<li><a href="/doc/modules/multimap.html">Multimap</a></li>
+				<li><a href="/doc/modules/rbl.html">RBL</a></li>
+				<li><a href="/doc/modules/emails.html">Emails scan</a></li>
+				<li><a href="/doc/modules/spamassassin.html">Spamassassin rules</a></li>
+				<li><a href="/doc/modules/phishing.html">Phishing check</a></li>
+				<li><a href="/doc/modules/trie.html">Trie matcher</a></li>
+				<li><a href="/doc/modules/ratelimit.html">Ratelimit</a></li>
+				<li><a href="/doc/modules/maillist.html">Mailing list</a></li>
+				<li><a href="/doc/modules/once_received.html">Received policy</a></li>
+				<li><a href="/doc/modules/dmarc.html">DMARC</a></li>
+				<li><a href="/doc/modules/whitelist.html">Whitelist</a></li>
+				<li><a href="/doc/modules/mime_types.html">Mime types</a></li>
+				<li><a href="/doc/modules/rspamd_update.html">Rspamd updates</a></li>
+				<li><a href="/doc/modules/dcc.html">DCC module</a></li>
+				<li><a href="/doc/modules/fann.html">Neural network module</a></li>
+				<li><a href="/doc/modules/greylisting.html">Greylisting module</a></li>
+				<li><a href="/doc/modules/replies.html">Replies module</a></li>
+			</ul>
+		</div>
+		<div class="col-sm-9">
+			<div class="body-content doc-content">
+				{{ content }}
+			</div>
+		</div>
+	</div>
+	<!-- row -->
+	<div class="push"></div>
+	{% include bottom.html %}
