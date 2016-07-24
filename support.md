@@ -17,7 +17,7 @@ title: Rspamd Support
             <a class="btn btn-social btn-reddit btn-block" href="https://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd"><i class="fa fa-comments-o"></i>IRC channel</a>
         </div>
         <div class="col-sm-9 col-xs-12">
-            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read more about IRC <a role="button" data-toggle="collapse" data-target="#add_irc">here <i class="fa fa-caret-square-o-down"></i></a>.</p>
+            <p>If you need immediate help or you would like to discuss something abour Rspamd you can use the IRC channel <i>#rspamd</i> at <a href="https://freenode.net">Freenode</a> network. You can read <a role="button" data-toggle="collapse" data-target="#add_irc">more about IRC&nbsp;<i class="fa fa-caret-square-o-down"></i></a></p>
             <div id="add_irc" class="collapse collapse-link">
 <div markdown="1">
 
@@ -77,7 +77,8 @@ Please do not expect the immediate reply: we all have different task ongoing and
             <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
                 <input type="hidden" name="cmd" value="_s-xclick">
                 <input type="hidden" name="hosted_button_id" value="32NL9H6JS6K9C">
-                <input type="image" src="https://www.paypalobjects.com/en_US/GB/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal – The safer, easier way to pay online!">
+                <input type="submit" value="Donate" name="submit" title="PayPal - The safer, easier way to pay online!" class="btn btn-social btn-pp btn-block">
+                <!--input type="image" src="https://www.paypalobjects.com/en_US/GB/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal – The safer, easier way to pay online!"-->
                 <img alt="" border="0" src="https://www.paypalobjects.com/en_GB/i/scr/pixel.gif" width="1" height="1">
             </form>
         </div>

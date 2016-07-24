@@ -126,9 +126,14 @@ h2{
 .support-block {
   border-radius: 5px;
   border: 1px solid #ddd;
-  padding: 20px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  padding-right: 5px;
+  padding-left: 5px;
   margin-top: 20px;
   margin-bottom: 20px;
+  margin-right: 0px;
+  margin-left: 0px;
 }
 #wrapper {/*for removing wite space after footer*/
     min-height: 100%;
@@ -210,4 +215,21 @@ blockquote {
 }
 .carousel-content img{
   margin-bottom: 2px;
+}
+.btn-pp{
+  background-color: #ffcc66;
+  border: 1px solid #ff9933;
+  color: #003366;
+}
+.btn-pp:hover{
+  background-color:#feb74b;
+  color: #003366;
+}
+.support-block p{
+  margin-bottom: 0px;
+}
+@media (max-width: 768px) {
+  .support-block p{
+    margin-top: 10px;
+  }
 }
