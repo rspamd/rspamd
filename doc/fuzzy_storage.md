@@ -462,7 +462,7 @@ To synchronize the master host you need to stop rspamd service and create a dump
 sqlite3 /var/lib/rspamd/fuzzy.db ".backup fuzzy.sql"
 ```
 
-Afterwards, copy the output file `fuzzy.sql` to all the slaves (rspamd service should also be stopped on the slaves):
+Afterwards, copy the output file `fuzzy.sql` to all the slaves (it can be done without stopping rspamd service on the slaves):
 
 ```
 sqlite3 /var/lib/rspamd/fuzzy.db ".restore fuzzy.sql"
