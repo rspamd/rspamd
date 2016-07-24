@@ -7,14 +7,20 @@ title: Media
         <ul class="nav nav-pills nav-stacked" role="tablist">
             <li role="presentation" class="active">
                 <a href="#video1" aria-controls="video1" role="tab" data-toggle="tab" id="video_tab1" onclick="stop_video()">
-                  Video1
-                  <p><small>Additional info</small></p>
+                  FOSDEM-2016 talk
+                  <p><small>Introduction to Rspamd</small></p>
                 </a>
             </li>
             <li role="presentation">
                 <a href="#video2" aria-controls="video2" role="tab" data-toggle="tab" id="video_tab2" onclick="stop_video()">
-                  Video2
-                  <p><small>Additional info</small></p>
+                  Symbols and composites
+                  <p><small>Describes how rules and symbols work in Rspamd</small></p>
+                </a>
+            </li>
+            <li role="presentation">
+                <a href="#video3" aria-controls="video3" role="tab" data-toggle="tab" id="video_tab3" onclick="stop_video()">
+                  Rspamd Testing
+                  <p><small>Describes how to test Rspamd using Rspamd proxy</small></p>
                 </a>
             </li>
         </ul>
@@ -22,18 +28,25 @@ title: Media
     <div class="col-xs-12 col-sm-9">
         <div class="tab-content" style="border: none;">
             <div role="tabpanel" class="tab-pane fade in active" id="video1">
-                <h2>Video header</h2>
+                <h2>FOSDEM-2016</h2>
                 <div class="embed-responsive embed-responsive-16by9">
                     <iframe class="embed-responsive-item" src="https://youtube.com/embed/_fl9i-az_Q0" id="youtube1"></iframe>
                 </div>
-                <p>Video text</p>
+                <p>The introductionary talk from the <a href="http://fosdem.org">FOSDEM</a> conference about Rspamd. Slides are available <a href="http://www.slideshare.net/VsevolodStakhov/rspamdfosdem-57772063">here</a></p>
             </div>
             <div role="tabpanel" class="tab-pane fade" id="video2">
-                <h2>Video header</h2>
+                <h2>Rules and symbols in Rspamd</h2>
                 <div class="embed-responsive embed-responsive-16by9">
-                    <iframe class="embed-responsive-item" src="https://youtube.com/embed/aMJcry0u_HQ"  id="youtube2"></iframe>
+                    <iframe class="embed-responsive-item" src="https://youtube.com/embed/WqyIRPxAsC4"  id="youtube2"></iframe>
                 </div>
-                <p>Video text</p>
+                <p>In this video, I explain the definitions of rules and symbols. Then I describe how to create simple composite and regexp rules.</p>
+            </div>
+            <div role="tabpanel" class="tab-pane fade" id="video3">
+                <h2>Rspamd testing</h2>
+                <div class="embed-responsive embed-responsive-16by9">
+                    <iframe class="embed-responsive-item" src="https://youtube.com/embed/aMJcry0u_HQ"  id="youtube3"></iframe>
+                </div>
+                <p>In this video, I describe how to build testing environments using Rspamd proxy.</p>
             </div>
         </div>
     </div>
