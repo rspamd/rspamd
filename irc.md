@@ -22,8 +22,8 @@ To access IRC, you can use a set of clients for your favourite platform, for ins
 
 Alternatively, you could use some web interface to access IRC:
 
-* [Freenode webchat](https://webchat.freenode.net/) - a simple web interface
-* [Irccloud](https://irccloud.com) - advanced platform with tonns of features
+* [Freenode webchat](https://webchat.freenode.net/?channels=%23rspamd) - a simple web interface
+* [Irccloud](https://irccloud.com) - advanced platform with tons of features
 
 ## IRC rules
 
@@ -33,4 +33,4 @@ There are no strict rules in rspamd discussion channel, just some generic ones:
 * no flood
 * no abuse
 
-Please do not expect the immediate reply: we all have different task ongoing and different timezones.
+Please do not expect an immediate reply: we all have different ongoing tasks and timezones.
