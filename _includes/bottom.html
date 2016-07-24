@@ -49,12 +49,15 @@
   //For stop video in closed pills
   var youtube1_url = $('#youtube1').attr('src');
   var youtube2_url = $('#youtube2').attr('src');
+  var youtube3_url = $('#youtube3').attr('src');
   var stop_video = function(){
     $('#youtube1').attr('src', '');
     $('#youtube2').attr('src', '');
+    $('#youtube3').attr('src', '');
 
     $('#youtube1').attr('src', youtube1_url);
     $('#youtube2').attr('src', youtube2_url);
+    $('#youtube3').attr('src', youtube3_url);
   };
 
   // Fix for offsets in links
