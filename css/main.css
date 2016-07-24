@@ -63,10 +63,6 @@ hr {
   margin-bottom: 0;
 
 }
-@media (min-width: 768px) and (max-width: 992px){
-    /* when navbar is thick */
-    .jumbotron {margin-top: 50px;}
-}
 .btn-code{
   background-color: #333333 !important;
   color: #eeeeee;
@@ -90,7 +86,7 @@ short-news p {
 }
 .main-small-text-block{
   padding-top: 10px;
-  padding-bottom: 50px;
+  padding-bottom: 20px;
 }
 .thumbnail{
   height: 240px;
@@ -191,4 +187,27 @@ h4:hover .header-link,
 h5:hover .header-link,
 h6:hover .header-link {
   opacity: 1;
+}
+#text-carousel {
+  width: 100%;
+  height: auto;
+  padding: 50px;
+  margin-bottom: 50px;
+}
+.carousel-control {
+  width: 10%;
+  border-radius: 4px;
+}
+.who-uses{
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.carousel-control.right{background-image: linear-gradient(to right, white 0%, #E8E8E8 60%); opacity: 1;;}
+.carousel-control.left{background-image: linear-gradient(to left, white 0%, #E8E8E8 60%); opacity: 1;}
+blockquote {
+  font-size: 14px;
+  border-left: solid #E8E8E8 3px;
+}
+.carousel-content img{
+  margin-bottom: 2px;
 }
