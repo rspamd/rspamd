@@ -1298,6 +1298,9 @@ INSTALL(FILES "doc/rspamd.8" DESTINATION ${MANDIR}/man8)
 INSTALL(FILES "doc/rspamc.1" DESTINATION ${MANDIR}/man1)
 INSTALL(FILES "doc/rspamadm.1" DESTINATION ${MANDIR}/man1)
 
+# Utils
+INSTALL(FILES "utils/rspamd_stats.pl" RENAME rspamd_stats DESTINATION bin)
+
 # Install webui
 IF(INSTALL_WEBUI MATCHES "ON")
 	INSTALL(DIRECTORY "interface/" DESTINATION ${WWWDIR} PATTERN ".git" EXCLUDE)
