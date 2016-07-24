@@ -96,6 +96,19 @@ title: Rspamd spam filtering system
 																</div>
 												</div>
 										</div>
+										<div class="item">
+												<div class="carousel-content">
+																<div class="col-sm-2 col-xs-12 col-sm-offset-1">
+																		<a href="http://www.ozon.ru/" target="_blank"><img src="img/ozon_logo.png" class="img-responsive"></a>
+																</div>
+																<div class="col-sm-9 col-xs-12">
+																		<blockquote>
+																				<p>We started to use the product with the first public versions and for us Rspamd is a natural choice, which is providing speed, flexibility and has rich set of features. </p>
+																				<footer>Andrey Zverev <cite title="Source Title">Lead Engineer</cite></footer>
+																		</blockquote>
+																</div>
+												</div>
+										</div>
 		                <!--div class="item">
 		                    <div class="carousel-content">
 																<div class="col-sm-3 col-xs-12">
