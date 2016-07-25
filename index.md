@@ -88,9 +88,9 @@ title: Rspamd spam filtering system
 														</div>
 														<div class="col-sm-9 col-xs-12">
 																<blockquote>
-																		<p>Locaweb is the largest provider of web hosting and infrastructure services in South America and it is the clear leader in Brazil. The company has more than 265,000 customers, hosts more than 300,000 sites and operates 20,000 servers. Besides that, the company’s business also includes a full suite of Internet services such as e-commerce, search marketing, software as a service (SaaS), cloud infrastructure as a service (IaaS), platform as a service (PaaS) and email platforms. Being a large email provider, Locaweb supports more than 10 million inbound email addresses and processes more than 200 million email messages a day.</p>
-																		<p>In order to cover all necessities and considering the amount of processed messages, all technologies involved in Locaweb’s email system must be precisely chosen. Rspamd is one of them and it is currently supporting its whole operation with an incredible performance and low cost in terms of infrastructure. Beyond the Rspamd’s performance can be only compared with some extremely expensive brands available on the market, it has a bunch of powerful features and it implements complex mathematic algorithms that constitute an amazing tool against Spam and other email abuses.</p>
-																		<p>Although the process of migration from the previous solution to Rspamd had been extremely smooth and almost imperceptible by Locaweb’s customers, the greatest benefit seen was its assertiveness. Indeed Rspamd is broadly customizable and allows multiple strategies to avoid Spam and false positives, that in some cases is worse than Spam itself. In conclusion, Rspamd team is not only giving an incredible support for Locaweb but it has also been a great partner.</p>
+																		<p>Locaweb is the largest email provider in Brazil, Locaweb supports more than 10 million inbound email addresses and processes more than 200 million email messages a day.</p>
+																		<p>Beyond the Rspamd’s performance can be only compared with some extremely expensive brands available on the market, it has a bunch of powerful features and algorithms that constitute an amazing tool against Spam and other email abuses.</p>
+																		<p>Rspamd is broadly customizable and allows multiple strategies to avoid Spam and false positives. In conclusion, Rspamd team is not only giving an incredible support for Locaweb but it has also been a great partner.</p>
 																		<footer>Rafael Abdo <cite title="Source Title">Computer Security Incident Coordinator</cite></footer>
 																</blockquote>
 														</div>
@@ -105,6 +105,7 @@ title: Rspamd spam filtering system
 																<blockquote>
 																		<p>We use both Rspamd and Rmilter to filter spam for our users processing about 100M of messages per day on a couple of scanners. Rspamd provides an excellent opportunities to build custom rules for better spam and phishing protection.</p>
 																		<footer>Alexander Rayushkin <cite title="Source Title">Manager of the Email department</cite></footer>
+																		<div class="placeholder"></div>
 																</blockquote>
 														</div>
 												</div>
@@ -118,6 +119,7 @@ title: Rspamd spam filtering system
 																		<blockquote>
 																				<p>Rspamd offers a plethora of filtering options and great performance. Per user settings enable us to provide spam filtering for multiple tenants. Furthermore Rspamd makes it very easy to write custom rules, which allows us to quickly react to spam outbreaks.</p>
 																				<footer>Arthur van Kleef <cite title="Source Title">System Engineer</cite></footer>
+																				<div class="placeholder"></div>
 																		</blockquote>
 																</div>
 												</div>
@@ -131,6 +133,7 @@ title: Rspamd spam filtering system
 																		<blockquote>
 																				<p>We started to use the product with the first public versions and for us Rspamd is a natural choice, which is providing speed, flexibility and has rich set of features. </p>
 																				<footer>Andrey Zverev <cite title="Source Title">Lead Engineer</cite></footer>
+																				<div class="placeholder"></div>
 																		</blockquote>
 																</div>
 												</div>
