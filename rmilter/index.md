@@ -53,6 +53,46 @@ There are several useful settings for postfix to work with this milter:
 This section contains a number of useful configuration recipes and best practices for Rmilter.
 
 
+### Adding local changes to Rmilter configuration
+
+Since version 1.9, Rmilter supports macros `.try_include` that can be used to conditionally include some user specific file. There is also globbing support in all `include` macros, so you can use `*` or `?` in yor patterns. By default, Rmilter tries to include `/etc/rmilter.conf.local` and then all files that match the pattern `/etc/rmilter.conf.d/*.conf` (there could be a different prefix for your system). The settings are natively overridden by files inside files included. Hence, settings that are defined **later** will override settings that are defined earlier:
+
+~~~ucl
+# /etc/rmilter.conf
+spamd {
+    servers = localhost:11333; # overridden
+}
+
+# Includes are after the main definition
+.try_include /etc/rmilter.conf.local
+.try_include /etc/rmilter.conf.d/*.conf
+~~~
+
+~~~ucl
+# /etc/rmilter.conf.local
+spamd {
+    servers = example.com:11333; # overridden
+    timeout = 5s; # added
+}
+~~~
+
+~~~ucl
+# /etc/rmilter.conf.d/spamd.conf
+spamd {
+    servers = other.com:11333;
+}
+~~~
+
+will produce the following configuration:
+
+~~~ucl
+# resulting configuration
+spamd {
+    servers = other.com:11333;
+    timeout = 5s;
+}
+~~~
+
 ### Setup DKIM signing of outcoming email for authenticated users
 
 With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
