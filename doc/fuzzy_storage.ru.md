@@ -308,6 +308,30 @@ rule "local" {
 }
 ~~~
 
+Пример local.d/metrics.conf:
+
+~~~ucl
+group "fuzzy" {
+    max_score = 12.0;
+    symbol "LOCAL_FUZZY_UNKNOWN" {
+        weight = 5.0;
+        description = "Generic fuzzy hash match";
+    }
+    symbol "LOCAL_FUZZY_DENIED" {
+        weight = 12.0;
+        description = "Denied fuzzy hash";
+    }
+    symbol "LOCAL_FUZZY_PROB" {
+        weight = 5.0;
+        description = "Probable fuzzy hash";
+    }
+    symbol "LOCAL_FUZZY_WHITE" {
+        weight = -2.1;
+        description = "Whitelisted fuzzy hash";
+    }
+}
+~~~
+
 Рассмотрим некоторые полезные опции, которые можно настраивать в модуле.
 
 Во-первых, `max_score` полезен для задания веса порога срабатывания данного хеша:
