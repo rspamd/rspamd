@@ -1,6 +1,7 @@
 import grp
 import os
 import os.path
+import psutil
 import pwd
 import shutil
 import signal
@@ -23,15 +24,23 @@ def cleanup_temporary_directory(directory):
 def encode_filename(filename):
     return "".join(['%%%0X' % ord(b) for b in filename])
 
+def get_process_children(pid):
+    children = []
+    for p in psutil.process_iter():
+        # ppid could be int or function depending on library version
+        if callable(p.ppid):
+            ppid = p.ppid()
+        else:
+            ppid = p.ppid
+        if ppid == pid:
+            children.append(p.pid)
+    return children
+
 def get_test_directory():
     return os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "../..")
 
 def make_temporary_directory():
     return tempfile.mkdtemp()
-
-def process_should_exist(pid):
-    pid = int(pid)
-    os.kill(pid, 0)
 
 def read_log_from_position(filename, offset):
     offset = long(offset)
@@ -83,14 +92,28 @@ def update_dictionary(a, b):
     return a
 
 def shutdown_process(pid):
-    pid = int(pid)
-    process_should_exist(pid)
     i = 0
     while i < 100:
         try:
             os.kill(pid, signal.SIGTERM)
         except OSError as e:
             assert e.errno == 3
-            break
+            return
         i += 1
         time.sleep(0.1)
+    while i < 200:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError as e:
+            assert e.errno == 3
+            return
+        i += 1
+        time.sleep(0.1)
+    assert False, "Failed to shutdown process %s" % pid
+
+def shutdown_process_with_children(pid):
+    pid = int(pid)
+    children = get_process_children(pid)
+    shutdown_process(pid)
+    for child in children:
+        shutdown_process(child)

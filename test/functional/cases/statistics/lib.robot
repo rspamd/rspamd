@@ -48,7 +48,7 @@ Redis Statistics Setup
 
 Redis Statistics Teardown
   Generic Teardown
-  Shutdown Process  ${REDIS_PID}
+  Shutdown Process With Children  ${REDIS_PID}
 
 Statistics Setup
   Generic Setup  STATS_PATH_CACHE  STATS_PATH_HAM  STATS_PATH_SPAM

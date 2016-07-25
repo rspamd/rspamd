@@ -62,7 +62,7 @@ Generic Setup
   ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
 
 Generic Teardown
-  Shutdown Process  ${RSPAMD_PID}
+  Shutdown Process With Children  ${RSPAMD_PID}
   Cleanup Temporary Directory  ${TMPDIR}
 
 Log Logs
