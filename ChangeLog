@@ -1,3 +1,542 @@
+1.3.0:
+	* [CritFix] Fix SA rawbody processing - exclude top part
+	* [CritFix] Fix decoding of UTF HTML entitles
+	* [CritFix] Fix encrypted fuzzy requests
+	* [CritFix] Fix leak of shared memory fds and files
+	* [CritFix] Fix levenshtein distance calculations
+	* [CritFix] Fix mime headers processing
+	* [CritFix] Fix parsing of URLs in texts
+	* [CritFix] Fix parsing of missing classes
+	* [CritFix] Fix redis structure by adding {NULL, NULL} member
+	* [CritFix] Fix some more URL detector issues
+	* [CritFix] Fix systemd sockets activation
+	* [CritFix] Fix unencrypted passwords processing in the controller
+	* [CritFix] Fix writing CDPs to the database
+	* [CritFix] Fix writing of encrypted HTTP requests
+	* [CritFix] Plug memory leak in dkim module
+	* [CritFix] Plug memory leak in headers getting code
+	* [CritFix] Pre-filters and post-filters were completely broken
+	* [CritFix] Properly support SA body regexps
+	* [CritFix] Really skip filters in case of pre-result set
+	* [CritFix] Restore the intended pre-filters behaviour
+	* [Rework] Adopt new maps code
+	* [Rework] Compile ragel sources when building rspamd
+	* [Rework] Finish rework for the rest of places that use HTTP
+	* [Rework] Fix DKIM headers canonicalization
+	* [Rework] Fix lua maps API
+	* [Rework] Import linenoise for line editing
+	* [Rework] Include config structure to all rcl handlers
+	* [Rework] Make chartable module useful
+	* [Rework] Move http internal structures to a private header
+	* [Rework] Partly fix controller
+	* [Rework] Remove dedicated images list
+	* [Rework] Rename http proxy to rspamd proxy
+	* [Rework] Rename mime parts structures
+	* [Rework] Rework HTTP code
+	* [Rework] Rework exceptions and newlines processing
+	* [Rework] Rework pre and postfilters system
+	* [Rework] Separate method to close backend connections
+	* [Rework] Start the complete maps rework
+	* [Rework] Use dynamically generated ragel C sources
+	* [Feature] Add 'blacklist' and 'strict' modes for whitelists
+	* [Feature] Add 'symbols_enabled' and 'groups_enabled' to settings
+	* [Feature] Add ESMTPSA received type
+	* [Feature] Add a simple script to evaluate rspamd rules in the logs
+	* [Feature] Add a simple tool to generate DKIM keys
+	* [Feature] Add a trivial heuristic for codepages
+	* [Feature] Add and use mumhash for non-crypto hashing
+	* [Feature] Add better method to check lua userdata types
+	* [Feature] Add better zip files search algorithm
+	* [Feature] Add catena PBKDF function
+	* [Feature] Add configuration knobs for in and out parser scripts
+	* [Feature] Add content filtering support to multimap
+	* [Feature] Add different timeouts for proxy connections
+	* [Feature] Add dot commands for lua REPL:
+	* [Feature] Add execution of lua global functions script
+	* [Feature] Add function for pretty printing of inet addresses
+	* [Feature] Add function to convert fstring_t to c string
+	* [Feature] Add function to create temporary shared memory mapping
+	* [Feature] Add function to generate random hex string
+	* [Feature] Add generic fucnction to parse IP maps
+	* [Feature] Add initial version of HTTP lua repl
+	* [Feature] Add learn condition to the default configuration
+	* [Feature] Add learn conditions for classifiers
+	* [Feature] Add limit for dkim signatures to be checked
+	* [Feature] Add locking routines for lua_util
+	* [Feature] Add lua API for getting info from archives
+	* [Feature] Add lua utility to decode URL encoding
+	* [Feature] Add method to copy message from http connection
+	* [Feature] Add mirrors feature
+	* [Feature] Add more algorithms for shingles generation
+	* [Feature] Add more domains to redirectors list
+	* [Feature] Add more encodingsto cryptobox hash API
+	* [Feature] Add more file utilities to lua_util
+	* [Feature] Add more functions to extract data from text parts
+	* [Feature] Add more methods to get headers from a task
+	* [Feature] Add more methods to init http message body
+	* [Feature] Add more options for redis config parsing function
+	* [Feature] Add new representation of email address
+	* [Feature] Add new symbols to filter bad extensions in messages
+	* [Feature] Add new utility methods to mimepart object
+	* [Feature] Add openphish support to rspamd phishing module
+	* [Feature] Add parsers for SMTP address in ragel
+	* [Feature] Add parsing of mirror hosts for fuzzy storage
+	* [Feature] Add parsing scripts for master connection as well
+	* [Feature] Add preliminary greylist plugin
+	* [Feature] Add preliminary phishtank support
+	* [Feature] Add preliminary rarv5 support
+	* [Feature] Add preliminary version of ssl toolbox
+	* [Feature] Add protection against open files limit and accepting sockets
+	* [Feature] Add rar v4 support
+	* [Feature] Add reading scripts for master connection
+	* [Feature] Add replies plugin
+	* [Feature] Add results parsing code
+	* [Feature] Add routines to compare and check pubkeys
+	* [Feature] Add simplier versions of refcounts
+	* [Feature] Add some time manipulation functions for lua APi
+	* [Feature] Add support for non-standard BATV signatures
+	* [Feature] Add support of address with at-domain list
+	* [Feature] Add support to search archives by magic
+	* [Feature] Add task:get_rawbody method
+	* [Feature] Add test to check shared memory support sanity
+	* [Feature] Add the initial version of LUA repl to rspamadm
+	* [Feature] Add throughput graph for RRD backend to WebUI
+	* [Feature] Add universal function to make a proper redis request
+	* [Feature] Add universal function to parse redis servers for plugins
+	* [Feature] Add util.unlink function
+	* [Feature] Add utility function to return random number from 0 to 1
+	* [Feature] Add utility method to convert ftok to C string
+	* [Feature] Add utility to map shared memory segments
+	* [Feature] Add versions to fuzzy storage
+	* [Feature] Add workaround for legacy clients in rspamd proxy
+	* [Feature] Add workaround for systems without sane shmem support
+	* [Feature] Add xoroshiro+ fast rng for non-crypto purposes
+	* [Feature] Adopt plugins for new maps API
+	* [Feature] Allow SPF to be checked for empty tasks
+	* [Feature] Allow binary patterns in lua_trie
+	* [Feature] Allow catena encrypted passwords in controller
+	* [Feature] Allow client ip match in the settings
+	* [Feature] Allow easy adding and overriding of fuzzy rules
+	* [Feature] Allow empty tasks to be processed
+	* [Feature] Allow hostnames in IP maps
+	* [Feature] Allow https maps
+	* [Feature] Allow multiple PBKDF types in `rspamadm pw`
+	* [Feature] Allow named fuzzy rules
+	* [Feature] Allow non zero terminated patterns in multipattern
+	* [Feature] Allow partial hash updates
+	* [Feature] Allow pipelining for redis.make_request
+	* [Feature] Allow sending empty requests using client
+	* [Feature] Allow setting fuzzy flag by symbol not by value
+	* [Feature] Allow setting scores and actions from lua
+	* [Feature] Allow shared memory simple http client
+	* [Feature] Allow static lua files in any parts of rspamd sources
+	* [Feature] Allow to change flag from fuzzy learn condition
+	* [Feature] Allow to check rspamd_text using maps
+	* [Feature] Allow to disable composite rules from settings
+	* [Feature] Allow to disable some modules from common redis setup
+	* [Feature] Allow to extract ucl_object from lua using common API
+	* [Feature] Allow to get settings and settings id hash from lua_task
+	* [Feature] Allow to have specific settings for mirrored traffic
+	* [Feature] Allow to open message from a shared memory segment
+	* [Feature] Allow to parse pubkeys from the rcl config
+	* [Feature] Allow to pass extradata from rspamd to rmilter
+	* [Feature] Allow to query storage about number of fuzzy hashes stored
+	* [Feature] Allow to read logs without symbols scores
+	* [Feature] Allow to read password from console for rspamc
+	* [Feature] Allow to set ciphers and CA paths in config
+	* [Feature] Allow to skip some initialization phases to speed up rspamadm
+	* [Feature] Allow underscore separated names in settings
+	* [Feature] Allow versioning for sqlite databases
+	* [Feature] Always allow to terminate rspamd
+	* [Feature] Better deal with backend errors
+	* [Feature] Better lua_redis logging
+	* [Feature] Configure CA path and ciphers
+	* [Feature] Create a dedicated parser to strip newlines
+	* [Feature] Deduplicate the same urls in multimap module
+	* [Feature] Distinguish luajit from lua
+	* [Feature] Do not print garbadge in --compact output
+	* [Feature] Dynamically detect if a CPU is incompatible with hyperscan
+	* [Feature] Enable forced resolving for some lua plugins
+	* [Feature] Enable rrd by default
+	* [Feature] Enable workaround for exim
+	* [Feature] Fix task functions to work without rspamd_config
+	* [Feature] Further improvements to chartable module
+	* [Feature] Further micro-optimizations for hashing and shingles
+	* [Feature] Further relax parser
+	* [Feature] Humanize numbers in stats widgets
+	* [Feature] Implement HTTPS client
+	* [Feature] Implement SSL support in http client
+	* [Feature] Implement body rules for the trie plugin
+	* [Feature] Implement braced regexp quantifiers
+	* [Feature] Implement compare scripts for mirrors results
+	* [Feature] Implement compare scripts setup
+	* [Feature] Implement composites policies
+	* [Feature] Implement conditional learning for classifiers
+	* [Feature] Implement constructing of map from UCL
+	* [Feature] Implement dkim signing in dkim check plugin
+	* [Feature] Implement fuzzy storage updates
+	* [Feature] Implement fuzzy updates push protocol
+	* [Feature] Implement https maps
+	* [Feature] Implement inter-process maps caching
+	* [Feature] Implement mapping of remote flags to local flags
+	* [Feature] Implement mirroring in rspamd proxy
+	* [Feature] Implement multi-flags fuzzy replies
+	* [Feature] Implement multiple-sources fuzzy storage
+	* [Feature] Implement order of pre/post filters
+	* [Feature] Implement partial deleting for multi-flags
+	* [Feature] Implement pipelining for redis async interface
+	* [Feature] Implement ragel parser for received headers
+	* [Feature] Implement reading of messages to shared memory
+	* [Feature] Implement refcount for messages
+	* [Feature] Implement retransmits for master connection
+	* [Feature] Implement zero-copy mode for HTTP reading
+	* [Feature] Improve SPF domain detection logic
+	* [Feature] Improve config:register_symbol function
+	* [Feature] Improve error report for type missmatch in lua
+	* [Feature] Improve fstrings API
+	* [Feature] Improve getting SMTP data from lua_task
+	* [Feature] Improve levenshtein distance function
+	* [Feature] Improve logging in proxy and add refcounts
+	* [Feature] Improve logging lua types
+	* [Feature] Improve master/slave logging
+	* [Feature] Improve phishing plugin
+	* [Feature] Improve phishtank and openphish support
+	* [Feature] Improve ragel build target
+	* [Feature] Improve statistics script
+	* [Feature] Initialize ssl library to use SSL connections
+	* [Feature] Interpolate points sent to webui
+	* [Feature] Limit logging of elements that could have too many items
+	* [Feature] Lock ANN file when loading
+	* [Feature] New abstract hashing API in cryptobox
+	* [Feature] Normalize quoted addresses
+	* [Feature] Now cryptobox lua API accepts rspamd text as input
+	* [Feature] Optimize alignment to speed up hashing
+	* [Feature] Parse received date and ESMTPA proto
+	* [Feature] Parse received timestamp
+	* [Feature] Pass settings id to log helper
+	* [Feature] Pass settings id to lua script from log helper
+	* [Feature] Perform files expansion on proxying
+	* [Feature] Preliminary implementation of fuzzy master/slave updates
+	* [Feature] Print userdata using tostring if possible
+	* [Feature] Propagate HTTP result string when using proxy
+	* [Feature] Properly implement unweighted round-robin algorithm
+	* [Feature] Reduce number of timers queries
+	* [Feature] Rework and improve fuzzy storage
+	* [Feature] Rework dns resolving API for lua, add 'forced' option
+	* [Feature] Rework fann module to understand settings
+	* [Feature] Rework listening system to allow multiple socket types per worker
+	* [Feature] Rework ratelimit module to set expiration
+	* [Feature] Save bayes probability in memory pool var
+	* [Feature] Save settings id hash for convenience
+	* [Feature] Search for SSL_set_tlsext_host_name support
+	* [Feature] Send DKIM signature to protocol reply
+	* [Feature] Show DKIM signature in rspamc client
+	* [Feature] Show symbols description in scan output
+	* [Feature] Sign message merely after DKIM check
+	* [Feature] Simplify machines by assuming that headers are unfolded
+	* [Feature] Sort symbols when displaying them in log
+	* [Feature] Split main connection from mirrored connections
+	* [Feature] Start moving to the new email address structure
+	* [Feature] Store HTTP headers in a hash table
+	* [Feature] Store more information about compressed files
+	* [Feature] Store raw headers value to use them in DKIM
+	* [Feature] Store text parts content with newlines stripped
+	* [Feature] Support DKIM signing
+	* [Feature] Support EXIF jpeg images
+	* [Feature] Support archive files list extraction
+	* [Feature] Support archives when matching patterns in multimap
+	* [Feature] Support premium/academic feed for openphish
+	* [Feature] Support rspamd_updates via https
+	* [Feature] Supprort FQDNs in phishing module maps
+	* [Feature] Try to read on fuzzy timeout to avoid fake timeouts
+	* [Feature] Try to select the optimal possible function for input
+	* [Feature] Unescape and unquote smtp addresses
+	* [Feature] Update fuzzy timestamp when adding value
+	* [Feature] Update mumhash
+	* [Feature] Use -flto if possible when optimizations are enabled
+	* [Feature] Use extended map types in lua map, unify code
+	* [Feature] Use file lock in logger to avoid deadlocks
+	* [Feature] Use generic global string split function
+	* [Feature] Use metrohash as well
+	* [Feature] Use mumhash by default for incremental hashing
+	* [Feature] Use mumhash for words hashing
+	* [Feature] Use new ip parsing API
+	* [Feature] Use new maps API for local addrs
+	* [Feature] Use new ragel parser in message parsing code
+	* [Feature] Use new received parser instead of old one
+	* [Feature] Use new redis API in DMARC plugin
+	* [Feature] Use new redis API in greylist plugin
+	* [Feature] Use new redis API in ip_score plugin
+	* [Feature] Use new redis API in ratelimit plugin
+	* [Feature] Use new redis API in replies plugin
+	* [Feature] Use new version of register_symbol in rspamd plugins
+	* [Feature] Use offset when passing shm to deal with encrypted requests
+	* [Feature] Use one pass to remove newlines and store their positions
+	* [Feature] Use rspamd specific type checks for userdata
+	* [Feature] Use shared memory storage for http maps
+	* [Feature] Use universal redis definitions in rspamd plugins
+	* [Feature] Various improvements in greylist module
+	* [Feature] Wait for sqlite if locked when switching to WAL mode
+	* [Fix] Add filenames sanity filtering for mime types
+	* [Fix] Add guards for empty parts
+	* [Fix] Add missing types
+	* [Fix] Add more priority for config file symbols registered from UCL
+	* [Fix] Add sanity checks when compiling regexp maps
+	* [Fix] Add spaces instead of newlines to the normalized content
+	* [Fix] Add workaround for ancient openssl
+	* [Fix] Add workaround for gmime CTE stupidity
+	* [Fix] Add workaround for hex digits
+	* [Fix] Adjust MISSING_MIMEOLE score
+	* [Fix] Adjust body/body_buf when stealing encrypted message
+	* [Fix] Adopt lua task API for the new email addresses structure
+	* [Fix] Allow for disabling DMARC reporting when Redis is configured
+	* [Fix] Always register openphish and phishtank virtual symbols
+	* [Fix] Always use shmem on linux
+	* [Fix] Another change of newlines policy
+	* [Fix] Another d3evolution update
+	* [Fix] Another fix for exim workaround
+	* [Fix] Another fix for legacy clients
+	* [Fix] Another fix for maps scheduling
+	* [Fix] Another fix for marking upstreams inactive
+	* [Fix] Another fix for postfilters
+	* [Fix] Another fix for redis timeouts
+	* [Fix] Avoid `table.getn` method as it has been removed in lua 5.3
+	* [Fix] Avoid double hashing for images
+	* [Fix] Avoid linking with actrie if hyperscan is enabled
+	* [Fix] Check copy result when sending message to mirrors
+	* [Fix] Cleanup message when assiging body
+	* [Fix] Cleanup stack from global vars
+	* [Fix] Correctly parse query type
+	* [Fix] Disable all symbols if enable_groups is found in settings
+	* [Fix] Disable fts as it is completely broken in bloody linux
+	* [Fix] Disable multiple autolearn checks
+	* [Fix] Disallow updates by default
+	* [Fix] Do not abort when cannot load a map
+	* [Fix] Do not check recursion for non-DNS SPF record types
+	* [Fix] Do not delete uninitialized events
+	* [Fix] Do not die if shmem_mkstemp fails
+	* [Fix] Do not die when no metrics defined
+	* [Fix] Do not even try pcre in case of regexp maps
+	* [Fix] Do not greylist messages if redis has failed somehow
+	* [Fix] Do not greylist on rejection
+	* [Fix] Do not leave temporary maps cached
+	* [Fix] Do not output meaningless errors
+	* [Fix] Do not send NaN in json
+	* [Fix] Don't mix hyperscan and pcre processing within a same task
+	* [Fix] Finally rework and simplify redis backend for statistics
+	* [Fix] Fix Exim shutdown patch
+	* [Fix] Fix JIT compilation for PCRE2 expressions
+	* [Fix] Fix JIT usage for PCRE2
+	* [Fix] Fix REPL output
+	* [Fix] Fix SMTP address parsing machine
+	* [Fix] Fix UTF8 mode in PCRE2
+	* [Fix] Fix a stupid misprint in word 'phishing'
+	* [Fix] Fix accepting the first update when local idx is -1
+	* [Fix] Fix adding maps from ucl
+	* [Fix] Fix adding upstream to an active queue
+	* [Fix] Fix and rescore R_PARTS_DIFFER logic
+	* [Fix] Fix body rules in SA plugin
+	* [Fix] Fix body start position
+	* [Fix] Fix border case in urls detector
+	* [Fix] Fix border cases for incremental hashing
+	* [Fix] Fix caseless uthash application
+	* [Fix] Fix chartable issue with starting digits
+	* [Fix] Fix client_ip in users settings
+	* [Fix] Fix compilation issue
+	* [Fix] Fix conditional learning
+	* [Fix] Fix crash on empty maps
+	* [Fix] Fix creating of URLs from LUA
+	* [Fix] Fix creating of temporary shmem segment
+	* [Fix] Fix creation of mmapped statfiles
+	* [Fix] Fix descriptors leak on shmem detaching
+	* [Fix] Fix detaching of shared memory segments
+	* [Fix] Fix detection of URLs in text parts
+	* [Fix] Fix directories processing for rspamc
+	* [Fix] Fix displaying of rewrite subject in WebUI
+	* [Fix] Fix dkim private keys operations
+	* [Fix] Fix dkim signing
+	* [Fix] Fix dynamic scoring of subject symbols
+	* [Fix] Fix email address build
+	* [Fix] Fix encrypted proxy requests
+	* [Fix] Fix errors counting in upstreams
+	* [Fix] Fix errors handling in the proxy
+	* [Fix] Fix event bases for IO events
+	* [Fix] Fix events handling when scheduling map wacth
+	* [Fix] Fix fann rewrite
+	* [Fix] Fix files fallback for shmem transfer
+	* [Fix] Fix fuzzy adding in webui
+	* [Fix] Fix fuzzy storage encrypted mirroring
+	* [Fix] Fix fuzzy storage sync replies
+	* [Fix] Fix handling of the same words
+	* [Fix] Fix inserting values to the sources list
+	* [Fix] Fix ipv6 mask application
+	* [Fix] Fix issue with missing recipients
+	* [Fix] Fix issues with multiple returns from lua
+	* [Fix] Fix learning for non-existent backend
+	* [Fix] Fix legacy clients support in proxy
+	* [Fix] Fix length calculations for shared memory segments
+	* [Fix] Fix listening on UDP sockets
+	* [Fix] Fix loading of file maps
+	* [Fix] Fix long regexp flags (e.g. {sa_body})
+	* [Fix] Fix lua compare function init
+	* [Fix] Fix maps descriptions
+	* [Fix] Fix maps locking
+	* [Fix] Fix max_train setup in ANN module
+	* [Fix] Fix memory corruption
+	* [Fix] Fix memory leak in unsigned maps reading
+	* [Fix] Fix misprints for lto usage
+	* [Fix] Fix more issues with scripts processing
+	* [Fix] Fix next-to-last extension length check
+	* [Fix] Fix openssl initialization
+	* [Fix] Fix order of arguments
+	* [Fix] Fix order of initialization
+	* [Fix] Fix parser
+	* [Fix] Fix parsing of binary tries
+	* [Fix] Fix parsing of braced IPv6 addresses
+	* [Fix] Fix parsing of nested braces in SMTP comments
+	* [Fix] Fix parsing of rarv5 archives
+	* [Fix] Fix periodic scheduling when a map is not modified
+	* [Fix] Fix possible FP in TRACKER_ID rule
+	* [Fix] Fix post-filters processing
+	* [Fix] Fix potential NULL dereference
+	* [Fix] Fix processing of <br> and <hr> tags
+	* [Fix] Fix processing of addresses in protocol
+	* [Fix] Fix processing of messages without received headers
+	* [Fix] Fix proxying issue for unconnected sessions
+	* [Fix] Fix proxying of the encrypted messages
+	* [Fix] Fix race condition with shared memory by refcounts
+	* [Fix] Fix ratelimit initialization
+	* [Fix] Fix redis set request in replies plugin
+	* [Fix] Fix redis timeout events handling
+	* [Fix] Fix redis timeouts processing logic
+	* [Fix] Fix refcounts in lua_redis
+	* [Fix] Fix results checking if no master connection is active
+	* [Fix] Fix return value for couple of lua functions
+	* [Fix] Fix round-robin selection when upstreams have no weight
+	* [Fix] Fix rows calculation in graph
+	* [Fix] Fix rspamd_redis_make_request syntax in replies plugin
+	* [Fix] Fix scheduling of locked map events
+	* [Fix] Fix scores detection
+	* [Fix] Fix searching for newline positions
+	* [Fix] Fix secure_ip setting in controller
+	* [Fix] Fix sending data to graph command
+	* [Fix] Fix setting of score for parts differ
+	* [Fix] Fix setting of the lua top
+	* [Fix] Fix setting path for lua
+	* [Fix] Fix setting path for phishtank
+	* [Fix] Fix settings application
+	* [Fix] Fix shm_open call as described in POSIX
+	* [Fix] Fix size of length in fuzzy mirror wire protocol
+	* [Fix] Fix smtp grammar issues
+	* [Fix] Fix some issues with redis API
+	* [Fix] Fix some issues with retries in the proxy
+	* [Fix] Fix stack growing
+	* [Fix] Fix start of body detection in DKIM
+	* [Fix] Fix state on timeout
+	* [Fix] Fix stats script
+	* [Fix] Fix substring search when there are '\0' in strings
+	* [Fix] Fix symbol name for spf soft fail
+	* [Fix] Fix symbol type's check
+	* [Fix] Fix symbols registration and execution
+	* [Fix] Fix the case of multiple values keys
+	* [Fix] Fix the default symbol names according to metric
+	* [Fix] Fix timeout setup on learning
+	* [Fix] Fix timeouts in redis cache processing
+	* [Fix] Fix timeouts processing in lua_redis
+	* [Fix] Fix upstreams interaction for rspamd proxy
+	* [Fix] Fix usage of rdns reply structure
+	* [Fix] Fix varargs loop
+	* [Fix] Fix whitelists and blacklists in SA rules
+	* [Fix] Fix write servers setup for redis
+	* [Fix] Fix writing of HTTP messages
+	* [Fix] Force rspamd to upgrade fuzzy db on opening
+	* [Fix] Free the correct pointer
+	* [Fix] Further fixes for lto and static linking
+	* [Fix] Further fixes for surbl extensions map
+	* [Fix] Further fixes in maps code
+	* [Fix] Further improvements to error messages in fuzzy check
+	* [Fix] Further tweaks to redis garbadge collection
+	* [Fix] Groups are now case insensitive
+	* [Fix] Handle log pipe read errors
+	* [Fix] Handle nested dependencies in SpamAssassin plugin
+	* [Fix] Implement new automata to skip empty lines for dkim signing
+	* [Fix] Improve error messages on fuzzy add
+	* [Fix] Improve lua redis handling
+	* [Fix] Improve phishing module logging
+	* [Fix] Improve printing of fuzzy errors
+	* [Fix] Improve rrd diagnostic errors
+	* [Fix] Improve strcase hash used in uthash
+	* [Fix] Include fuzzy key to distinguish storages with different keys
+	* [Fix] Include slave cluster name into http request
+	* [Fix] Include some more information about archives
+	* [Fix] Indicate upstream error on timeout
+	* [Fix] Initialize hash tables array to avoid crashes
+	* [Fix] Initialize parser scripts properly
+	* [Fix] Initialize vars to avoid warnings
+	* [Fix] Inverse logic for saving ANN
+	* [Fix] Link lpeg to rspamd lua library
+	* [Fix] Make extension checks case-insensitive
+	* [Fix] Mark expired hashes as not found and not as zero flag
+	* [Fix] Match archive name as well
+	* [Fix] More and more fixes to redis states
+	* [Fix] More fixes about shared memory in proxy
+	* [Fix] More fixes for redis refcounts
+	* [Fix] More fixes to end of headers detection
+	* [Fix] More fixes to events logic
+	* [Fix] More fixes to multi-flag fuzzy storage
+	* [Fix] More fixes to parts distance calculations
+	* [Fix] More guards for redis free
+	* [Fix] One more fix in redis destructor
+	* [Fix] One more try to fix redis
+	* [Fix] PIE is required for static build
+	* [Fix] Partial fix for mmap'd statistics tests
+	* [Fix] Plug memory leak in proxy
+	* [Fix] Properly detect end of headers position
+	* [Fix] Properly init and free session structures
+	* [Fix] Reduce PRECEDENCE_BULK rule weight
+	* [Fix] Reduce the default thresholds for learning
+	* [Fix] Remove Type=forking from systemd unit file (#709)
+	* [Fix] Remove bad FANN file to save computational resources
+	* [Fix] Remove event before closing of fd to avoid race conditions
+	* [Fix] Remove parsing of 'from' variable in redis backend
+	* [Fix] Remove some bad domains from whitelists
+	* [Fix] Repair optional dependencies
+	* [Fix] Reset master connection when retransmitting scan request
+	* [Fix] Restore ONCE_RECEIVED symbol
+	* [Fix] Restore compatibility with old lua API behaviour
+	* [Fix] Restore redis runtime state
+	* [Fix] Reverse options when received
+	* [Fix] Send updates to mirrors only if we have some changes
+	* [Fix] Set host attribute properly when making HTTP request from lua
+	* [Fix] Set terminated state before calling of async free
+	* [Fix] Simplify MISSING_MIMEOLE rule
+	* [Fix] Simplify state machine by ignoring multiple spaces
+	* [Fix] Skip setting RPATH for static builds
+	* [Fix] Slightly reduce weights of rules with high FP rate
+	* [Fix] Some fixes to libmagic initialization
+	* [Fix] Some more fixes to ratelimit plugin
+	* [Fix] Strip '\r\n' properly
+	* [Fix] Switch hashes to mumhash
+	* [Fix] Treat NaN values properly in graph command
+	* [Fix] Try to avoid FP when checking for phished URLs
+	* [Fix] Try to avoid recursive events deletions
+	* [Fix] Try to fix false positive URL detections in text parts
+	* [Fix] Try to fix issue in redis stats backend when task is closed
+	* [Fix] Try to fix proxying of stupid spamc protocol to HTTP mirrors
+	* [Fix] Try to fix redis crashes
+	* [Fix] Try to fix upstreams with one element
+	* [Fix] Try to handle multiline history in a more sane way
+	* [Fix] Unbreak build on gcc < 4.9
+	* [Fix] Update RPM spec/sources (#700)
+	* [Fix] Update d3evolution version
+	* [Fix] Update mumhash implementation
+	* [Fix] Use custom error function for pre and post filters
+	* [Fix] Use new postfilters and prefilters API in the plugins
+	* [Fix] Use non-blocking mode for systemd sockets
+	* [Fix] Use shared memory merely for local backends in the proxy
+	* [Fix] Use watchers for spf plugin
+	* [Fix] Varioud fixes to the maps code
+
 1.2.8:
 	* Another fix for exim workaround (#637)
 	* Fix unencrypted passwords processing in the controller
