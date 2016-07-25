@@ -236,3 +236,18 @@ blockquote {
     font-size: 10px;
   }
 }
+.news_row{
+  background-image: linear-gradient(to right, #E8E8E8 0%, white 10%, white 90%, #E8E8E8 100%);
+  border-radius: 4px;
+  margin-right: -5px;
+  margin-left: -5px;
+  margin-top: 20px;
+  padding: 10px;
+}
+@media (min-width: 768px) {
+  .bottom-right {
+    position: absolute;
+    bottom: 15px;
+    right: 10px;
+  }
+}

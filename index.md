@@ -2,7 +2,17 @@
 layout: default
 title: Rspamd spam filtering system
 ---
-<div></div>
+
+<div class="row news_row" style="position: relative;">
+		<div class="col-xs-12 col-sm-10">
+				<h3 style="margin: 0px;"><a href="/performance.html">News: Rspamd 1.2 has been released</a></h3>
+				<span class="date"><small>2016-03-21 00:00:00 +0000</small></span>
+				<p style="margin-bottom: 0px; margin-top: 5px">Dynamic rule updates, regular expressions maps support, better performance, improved stability</p>
+   </div>
+	 <div class="col-xs-12 col-sm-2 bottom-right">
+				<a class="btn btn-primary pull-right" href="/blog/" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
+	 </div>
+</div>
 <div class="row main-small-text-block">
 		<div class="col-xs-12 col-sm-6 col-md-4 main-small-text">
 		    <div class="thumbnail">
