@@ -1,2 +1,4 @@
 var/lib/rspamd
 var/log/rspamd
+etc/rspamd/local.d
+etc/rspamd/override.d

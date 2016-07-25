@@ -108,6 +108,8 @@ lua.
 %endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
+%{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/%{name}/local.d/
+%{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/%{name}/override.d/
 
 %clean
 rm -rf %{buildroot}
@@ -208,6 +210,8 @@ fi
 %dir %{rspamd_rulesdir}
 %dir %{rspamd_confdir}
 %dir %{rspamd_confdir}/modules.d
+%dir %{rspamd_confdir}/local.d
+%dir %{rspamd_confdir}/override.d
 %dir %{rspamd_pluginsdir}/lua
 %dir %{rspamd_pluginsdir}
 %dir %{rspamd_wwwdir}
