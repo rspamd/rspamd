@@ -135,19 +135,6 @@ title: Rspamd spam filtering system
 																</div>
 												</div>
 										</div>
-		                <!--div class="item">
-		                    <div class="carousel-content">
-																<div class="col-sm-3 col-xs-12">
-																		<img src="img/mimecast-logo.png" class="img-responsive">
-																</div>
-																<div class="col-sm-9 col-xs-12">
-																		<blockquote>
-																				<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante.</p>
-																				<footer>Someone famous in <cite title="Source Title">Source Title</cite></footer>
-																		</blockquote>
-																</div>
-		                    </div>
-		                </div-->
 		            </div>
 		</div>
 </div>
