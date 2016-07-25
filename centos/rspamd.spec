@@ -184,6 +184,7 @@ fi
 %{_mandir}/man1/rspamc.*
 %{_mandir}/man1/rspamadm.*
 %{_bindir}/rspamd
+%{_bindir}/rspamd_stats
 %{_bindir}/rspamc
 %{_bindir}/rspamadm
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
