@@ -122,18 +122,22 @@ Please **DO NOT** use those packages, as they are no longer supported.
 <div markdown="1">
 Rspamd is also supported on the following Linux distributions:
 
-- **Gentoo Linux**
+- **Alpine Linux**
 - **Arch Linux**
-- **Scientific Linux**
-- **SUSE Linux Enterprise**
-- **OpenSUSE Linux**
+- **Gentoo Linux**
+- **Void Linux**
+
+### Alpine Linux
+Rspamd is available in the [testing repository](https://pkgs.alpinelinux.org/package/edge/testing/x86_64/rspamd)
+
+### Arch Linux
+Rspamd is available in the [AUR](https://aur.archlinux.org/packages/rspamd)
 
 ### Gentoo Linux
-Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
+Ebuilds for Gentoo Linux users are available in the main [Gentoo Portage repository](https://packages.gentoo.org/packages/mail-filter/rspamd).
 
-### Other Linux distributions
-
-For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd).
+### Void Linux
+Packages for Void Linux are available in the main [package repository](https://github.com/voidlinux/void-packages/tree/master/srcpkgs/rspamd).
 
 </div>
         </div>
