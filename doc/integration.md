@@ -142,6 +142,10 @@ acl_check_spam:
         add_header = X-Spam-Score: $spam_score ($spam_bar)
         add_header = X-Spam-Report: $spam_report
 
+  # use greylisting available in rspamd v1.3+
+  defer message    = Please try again later
+        condition  = ${if eq{$spam_action}{soft reject}}
+
   deny  message    = Message discarded as high-probability spam
         condition  = ${if eq{$spam_action}{reject}}
 
