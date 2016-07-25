@@ -16,21 +16,21 @@ For those who are familiar with IRC, here are settings for IRC channel access:
 
 To access IRC, you can use a set of clients for your favourite platform, for instance:
 
-* [Xchat](http://www.xchat.org) - cross-platform GUI client
+* [XChat](http://www.xchat.org) - cross-platform GUI client
 * [Irssi](http://www.irssi.org) - console client
-* [Androirc](https://play.google.com/store/apps/details?id=com.androirc) - android IRC client
+* [AndroIRC](https://play.google.com/store/apps/details?id=com.androirc) - Android IRC client
 
 Alternatively, you could use some web interface to access IRC:
 
-* [Freenode webchat](https://webchat.freenode.net/?channels=%23rspamd) - a simple web interface
+* [freenode webchat](https://webchat.freenode.net/?channels=%23rspamd) - a simple web interface
 * [Irccloud](https://irccloud.com) - advanced platform with tons of features
 
 ## IRC rules
 
-There are no strict rules in rspamd discussion channel, just some generic ones:
+There are no strict rules in Rspamd discussion channel, just some generic ones:
 
 * no spam
 * no flood
 * no abuse
 
-Please do not expect an immediate reply: we all have different ongoing tasks and timezones.
+Please do not expect an immediate reply: we all have different ongoing tasks and time zones.
