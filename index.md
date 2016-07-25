@@ -5,7 +5,7 @@ title: Rspamd spam filtering system
 
 <div class="row news_row" style="position: relative;">
 		<div class="col-xs-12 col-sm-10">
-				<h3 style="margin: 0px;"><a href="/performance.html">News: Rspamd 1.2 has been released</a></h3>
+				<h3 style="margin: 0px;"><a href="/blog/">News: Rspamd 1.2 has been released</a></h3>
 				<span class="date"><small>2016-03-21 00:00:00 +0000</small></span>
 				<p style="margin-bottom: 0px; margin-top: 5px">Dynamic rule updates, regular expressions maps support, better performance, improved stability</p>
    </div>
