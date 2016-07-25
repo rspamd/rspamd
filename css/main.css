@@ -232,4 +232,7 @@ blockquote {
   .support-block p{
     margin-top: 10px;
   }
+  .who-uses blockquote{
+    font-size: 10px;
+  }
 }
