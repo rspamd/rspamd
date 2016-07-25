@@ -270,57 +270,42 @@ $ rspamc -S FUZZY_DENIED -w 10 fuzzy_add <message|directory|stdin>
 
 To match symbols with the corresponding flags you can use the `rule` section.
 
-Example:
+local.d/fuzzy_check.conf example:
 
 ~~~ucl
-fuzzy_check {
-  # Global options
-
-  # Rule definition
-  rule "rspamd.com" {
-    # Fuzzy storage servers list
-    servers = "rspamd.com:11335";
-
-    # Public key for transport encryption
-    encryption_key = "icy63itbhhni8bq15ntp5n5symuixf73s1kpjh6skaq4e7nx5fiy";
-
-    # Symbol for unknown flags
-    symbol = "FUZZY_UNKNOWN";
-
-    # Additional mime types to store within fuzzy storage
+rule "local" {
+    # Fuzzy storage server list
+    servers = "localhost:11335";
+    # Default symbol for unknown flags
+    symbol = "LOCAL_FUZZY_UNKNOWN";
+    # Additional mime types to store/check
     mime_types = ["application/*"];
-
-    # Hash weight threshold
+    # Hash weight threshold for all maps
     max_score = 20.0;
-
-    # Whether we can learn this fuzzy
-    read_only = yes;
-
+    # Whether we can learn this storage
+    read_only = no;
     # Ignore unknown flags
     skip_unknown = yes;
-
-    # Hashes generation algorithm
+    # Hash generation algorithm
     algorithm = "siphash";
 
     # Map flags to symbols
     fuzzy_map = {
-        # Key is symbol name
-        FUZZY_DENIED {
+        LOCAL_FUZZY_DENIED {
             # Local threshold
             max_score = 20.0;
             # Flag to match
-            flag = 1;
+            flag = 11;
         }
-        FUZZY_PROB {
+        LOCAL_FUZZY_PROB {
             max_score = 10.0;
-            flag = 2;
+            flag = 12;
         }
-        FUZZY_WHITE {
+        LOCAL_FUZZY_WHITE {
             max_score = 2.0;
-            flag = 3;
+            flag = 13;
         }
     }
-  }
 }
 ~~~
 
