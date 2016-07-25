@@ -6,6 +6,21 @@ title: Upgrading
 
 This document describes incompatible changes introduced in recent Rspamd versions and details how to update your rules and configuration accordingly.
 
+## Migrating from Rmilter 1.8 to Rmilter 1.9
+
+There are couple of things that are no longer supported:
+
+* beanstalk support has been removed from Rmilter in honor of Redis [pub/sub](http://redis.io/topics/pubsub), you must remove the whole `beanstalk` section from the configuration file
+* auto whitelist for greylisting is no longer supported as it has been broken from the very beginning, you must remove all `awl` options from the greylisting section
+
+If you have used beanstalk for some purposes then you could move to Redis [pub/sub](http://redis.io/topics/pubsub). There are settings for sending spam (`spam_servers` and `spam_channel`) and for sending messages copies (`copy_servers`, `copy_prob` and `copy_channel`) in the `redis` section that allow you to reproduce beanstalk functions using Redis.
+
+Rmilter now supports configuration override from `rmilter.conf.local` and from `rmilter.conf.d/*.conf` files. You should consider using these methods for your local configuration options.
+
+## Migrating from Rspamd 1.2 to Rspamd 1.3
+
+There are no incompatible changes introduced in Rspamd 1.3 version.
+
 ## Migrating from Rspamd 1.1 to Rspamd 1.2
 
 There are no incompatible changes introduced in Rspamd 1.2 version.
