@@ -189,7 +189,7 @@ The download process is described in the [downloads page](/downloads.html) where
 
 ## Running Rspamd
 
-### Platforms with systemd (Arch, CentOS 7, Debian Jessie, Fedora, openSUSE, SLE)
+### Platforms with systemd (Arch, CentOS 7, Debian Jessie, Fedora)
 
 To enable run on startup:
 
