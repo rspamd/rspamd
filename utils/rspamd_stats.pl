@@ -153,24 +153,44 @@ if ($total > 0) {
       my $htp = $hh * 100.0 / $total_ham if $total_ham != 0;
       my $stp = $sh * 100.0 / $total_spam if $total_spam != 0;
       my $jtp = $jh * 100.0 / $total_junk if $total_junk != 0;
-      printf "Symbol: %s (weight %.3f) (%d hits, %.3f%%)\nHam hits: %d (%.3f%%), total ham: %d (ham with $s: %.3f%%)\nSpam hits: %d (%.3f%%), total spam: %d (spam with $s: %.3f%%)\nJunk hits: %d (%.3f%%), total junk: %d (junk with $s: %.3f%%)\n",
-          $s, $r->{weight} / $r->{hits}, $th, ($th / $total * 100.0),
-          $hh, ($hh / $th * 100.0), $total_ham, ($htp or 0),
-          $sh, ($sh / $th * 100.0), $total_spam, ($stp or 0),
-          $jh, ($jh / $th * 100.0), $total_junk, ($jtp or 0);
+
+      printf "%s   avg. weight %.3f, hits %d(%.3f%%):
+  Ham  %7.3f%%, %6d/%-6d (%7.3f%%)
+  Spam %7.3f%%, %6d/%-6d (%7.3f%%)
+  Junk %7.3f%%, %6d/%-6d (%7.3f%%)
+",
+        $s, $r->{weight} / $r->{hits}, $th, ( $th / $total * 100 ),
+        ( $hh / $th * 100 ), $hh, $total_ham,  ( $htp or 0 ),
+        ( $sh / $th * 100 ), $sh, $total_spam, ( $stp or 0 ),
+        ( $jh / $th * 100 ), $jh, $total_junk, ( $jtp or 0 );
+
       my $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
       my $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
 
       if ($r->{weight} != 0) {
         if ($r->{weight} > 0) {
-          printf "Spam changes (ham/junk -> spam): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (ham -> junk): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
-            $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
-            $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+          printf "
+Spam changes (ham/junk -> spam): %6d/%-6d (%7.3f%%)
+Spam  changes / total spam hits: %6d/%-6d (%7.3f%%)
+Junk changes      (ham -> junk): %6d/%-6d (%7.3f%%)
+Junk  changes / total junk hits: %6d/%-6d (%7.3f%%)
+",
+            $r->{spam_change}, $th, ( $r->{spam_change} / $th * 100 ),
+            $r->{spam_change}, $total_spam, ( $schp or 0 ),
+            $r->{junk_change}, $th, ( $r->{junk_change} / $th * 100 ),
+            $r->{junk_change}, $total_junk, ( $jchp or 0 );
         }
         else {
-          printf "Spam changes (spam -> junk/ham): %d (%.3f%%), total percentage (changes / spam hits): %.3f%%\nJunk changes (junk -> ham): %d (%.3f%%), total percentage (changes / junk hits): %.3f%%\n",
-            $r->{spam_change}, ($r->{spam_change} / $th * 100.0), ($schp or 0),
-            $r->{junk_change}, ($r->{junk_change} / $th * 100.0), ($jchp or 0);
+          printf "
+Spam changes (spam -> junk/ham): %6d/%-6d (%7.3f%%)
+Spam changes / total spam hits : %6d/%-6d (%7.3f%%)
+Junk changes (junk -> ham)     : %6d/%-6d (%7.3f%%)
+Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
+",
+            $r->{spam_change}, $th, ( $r->{spam_change} / $th * 100 ),
+            $r->{spam_change}, $total_spam, ( $schp or 0 ),
+            $r->{junk_change}, $th, ( $r->{junk_change} / $th * 100 ),
+            $r->{junk_change}, $total_junk, ( $jchp or 0 );
         }
       }
     }
@@ -178,7 +198,7 @@ if ($total > 0) {
       print "Symbol $s has not been met\n";
     }
 
-    print '*' x 20 . "\n";
+    print '-' x 80 . "\n";
   }
 }
 
