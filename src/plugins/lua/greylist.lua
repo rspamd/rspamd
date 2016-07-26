@@ -216,19 +216,17 @@ local function greylist_check(task)
     end
   end
 
-  if addr then
-    local ret
-    ret,_,upstream = rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      hash_key, -- hash key
-      false, -- is write
-      redis_get_cb, --callback
-      'MGET', -- command
-      {body_key, meta_key} -- arguments
-    )
-    if not ret then
-      rspamd_logger.errx(task, 'cannot make redis request to check results')
-    end
+  local ret
+  ret,_,upstream = rspamd_redis_make_request(task,
+    redis_params, -- connect params
+    hash_key, -- hash key
+    false, -- is write
+    redis_get_cb, --callback
+    'MGET', -- command
+    {body_key, meta_key} -- arguments
+  )
+  if not ret then
+    rspamd_logger.errx(task, 'cannot make redis request to check results')
   end
 end
 
@@ -330,7 +328,7 @@ if opts then
       priority = 10
     })
     rspamd_config:register_symbol({
-      name = 'GREYLIST_SAVE',
+      name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
     })
