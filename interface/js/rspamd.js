@@ -737,16 +737,14 @@
                         alertMessage('alert-success', 'Data successfully uploaded');
                     }
                 },
-                // error: function() {
-                // alertMessage('alert-error', 'Cannot upload data');
-                // },
-                statusCode: {
-                    404: function () {
-                        alertMessage('alert-error', 'Cannot upload data, no server found');
-                    },
-                    503: function () {
-                        alertMessage('alert-error', 'Cannot tokenize message, no text data');
+                error: function (xhr, textStatus, errorThrown) {
+                    try {
+                        var json = $.parseJSON(xhr.responseText);
+                        var errorMsg = $('<a>').text(json.error).html();
+                    } catch(err) {
+                        var errorMsg = $('<a>').text("Error: [" + textStatus + "] " + errorThrown).html();
                     }
+                    alertMessage('alert-error', errorMsg);
                 }
             });
         }
