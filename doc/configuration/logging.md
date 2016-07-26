@@ -31,8 +31,8 @@ So the tag is `ed2abb` in this case. All subsequent processing related to this t
 Here is summary of logging parameters:
 
 - `type` - Defines logging type (file, console or syslog). For some types mandatory attributes may be required:
-    + `filename` - path to log file for file logging
-    + `facility` - logging facility for syslog
+- `filename` - path to log file for file logging
+- `facility` - logging facility for syslog
 - `level` - Defines logging level (error, warning, info or debug).
 - `log_buffer` - For file and console logging defines buffer size that will be used for logging output.
 - `log_urls` - Flag that defines whether all URLs in message should be logged. Useful for testing.
