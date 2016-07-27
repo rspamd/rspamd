@@ -145,7 +145,6 @@ local function greylist_check(task)
     local greylisted_body = false
     local ret_meta = false
     local greylisted_meta = false
-    local time
     local greylist_type
 
     if data then
@@ -202,7 +201,8 @@ local function greylist_check(task)
           upstream:fail()
         end
       elseif greylisted_body and greylisted_meta then
-        local end_time = rspamd_util.time_to_string(time + settings['timeout'])
+        local end_time = rspamd_util.time_to_string(rspamd_util.get_time() +
+          settings['timeout'])
         rspamd_logger.infox(task, 'greylisted till "%s" using %s key',
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
