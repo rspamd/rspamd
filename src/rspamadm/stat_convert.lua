@@ -2,7 +2,7 @@ local sqlite3 = require "rspamd_sqlite3"
 local redis = require "rspamd_redis"
 local util = require "rspamd_util"
 
-local function send_redis(server, symbol, tokens, password, db)
+local function send_redis(server, symbol, tokens, password, db, cmd)
   local ret = true
   local conn,err = redis.connect_sync({
     host = server,
@@ -21,7 +21,7 @@ local function send_redis(server, symbol, tokens, password, db)
   end
 
   for _,t in ipairs(tokens) do
-    if not conn:add_cmd('HINCRBY', {symbol .. t[3], t[1], t[2]}) then
+    if not conn:add_cmd(cmd, {symbol .. t[3], t[1], t[2]}) then
       ret = false
     end
   end
@@ -106,6 +106,11 @@ return function (args, res)
   local redis_password = res['redis_password']
   local redis_db = res['redis_db']
   local ret = false
+  local cmd = 'HINCRBY'
+
+  if res['reset_previous'] then
+    cmd = 'HSET'
+  end
 
   if res['cache_db'] then
     if not convert_learned(res['cache_db'], res['redis_host']) then
@@ -153,7 +158,7 @@ return function (args, res)
     total = total + 1
     if num > lim then
       if not send_redis(res['redis_host'], res['symbol'],
-        tokens, redis_password, redis_db) then
+        tokens, redis_password, redis_db, cmd) then
 
         print('Cannot send tokens to the redis server')
         return
@@ -165,7 +170,7 @@ return function (args, res)
   end
   if #tokens > 0 and
     not send_redis(res['redis_host'], res['symbol'], tokens,
-      redis_password, redis_db) then
+      redis_password, redis_db, cmd) then
 
     print('Cannot send tokens to the redis server')
     return
@@ -189,7 +194,7 @@ return function (args, res)
 
   for id,learned in pairs(learns) do
     local user = users_map[id]
-    if not conn:add_cmd('HINCRBY', {res['symbol'] .. user, 'learns', learned}) then
+    if not conn:add_cmd(cmd, {res['symbol'] .. user, 'learns', learned}) then
       print('Cannot update learns for user: ' .. user)
     end
   end

@@ -24,6 +24,7 @@ static gchar *symbol = NULL;
 static gchar *cache_db = NULL;
 static gchar *redis_db = NULL;
 static gchar *redis_password = NULL;
+static gboolean reset_previous = FALSE;
 
 static void rspamadm_statconvert (gint argc, gchar **argv);
 static const char *rspamadm_statconvert_help (gboolean full_help);
@@ -48,6 +49,8 @@ static GOptionEntry entries[] = {
 				"Database in redis (should be numeric)", NULL},
 		{"password", 'p', 0, G_OPTION_ARG_STRING, &redis_password,
 				"Password to connect to redis", NULL},
+		{"reset", 'r', 0, G_OPTION_ARG_NONE, &reset_previous,
+				"Reset previous data instead of appending values", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -66,7 +69,8 @@ rspamadm_statconvert_help (gboolean full_help)
 				"-s: symbol in redis (e.g. BAYES_SPAM)\n"
 				"-c: also convert data from the learn cache\n"
 				"-D: output redis database\n"
-				"-p: redis password\n";
+				"-p: redis password\n"
+				"-r: reset previous data instead of increasing values\n";
 	}
 	else {
 		help_str = "Convert statistics from sqlite3 to redis";
@@ -121,6 +125,8 @@ rspamadm_statconvert (gint argc, gchar **argv)
 			"redis_host", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromstring (symbol),
 			"symbol", 0, false);
+	ucl_object_insert_key (obj, ucl_object_frombool (reset_previous),
+			"reset_previous", 0, false);
 
 	if (cache_db != NULL) {
 		ucl_object_insert_key (obj, ucl_object_fromstring (cache_db),
