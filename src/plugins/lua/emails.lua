@@ -92,7 +92,11 @@ if opts and type(opts) == 'table' then
 
       if rule['map'] then
         rule['name'] = rule['map']
-        rule['map'] = rspamd_config:add_hash_map (rule['name'])
+        rule['map'] = rspamd_config:add_map({
+           url = rule['name'],
+           description = string.format('Emails rule %s', rule['symbol']),
+           type = 'regexp'
+        })
       end
       if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
         logger.errx(rspamd_config, 'incomplete rule')
