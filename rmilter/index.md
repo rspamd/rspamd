@@ -93,6 +93,20 @@ spamd {
 }
 ~~~
 
+### How to disable greylisting and ratelimit in Rmilter
+
+From version `1.9.1` it is possible to specify `enable` option in `greylisting` and `ratelimit` sections. These options are `true` by default. Here is an example of configuration where greylisting and ratelimit are disabled:
+
+~~~ucl
+# /etc/rmilter.conf.local
+limits {
+    enable = false;
+}
+greylisting {
+    enable = false;
+}
+~~~
+
 ### Setup DKIM signing of outcoming email for authenticated users
 
 With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`

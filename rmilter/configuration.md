@@ -186,6 +186,8 @@ Greylisting related options.
 	+ Default: `empty (greylisting disabled)`
 - `whitelist`: list of ip addresses or networks that should be whitelisted from greylisting
 	+ Default: `empty`
+- `enable`: enable or disable greylisting (from 1.9.1)
+	+ Default: `true`
 
 
 ## Limits section
@@ -214,6 +216,8 @@ each second). It can be schematically displayed as following:
 	+ Default: `30:0.025`
 - `limit_to_ip_from`: limits bucket for non-bounce messages (msg from, rcpt to per one source ip)
 	+ Default: `100:0.033333333`
+- `enable`: enable or disable rate limits (from 1.9.1)
+	+ Default: `true`
 
 
 ## DKIM section
