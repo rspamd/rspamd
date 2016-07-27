@@ -161,8 +161,8 @@ Defines redis servers for grey/whitelisting and ratelimits.
 
 It is also possible to set DB number and password for Redis:
 
-- `dbname`: number of Redis database (see Redis [documentation](https://redis.io) for details)
-- `password`: password to access Redis
+- `dbname`: number of Redis database (see Redis [documentation](https://redis.io) for details), should be quoted string (e.g. `dbname = "3";`)
+- `password`: password to access Redis, quoted string
 
 Rmilter can also set custom prefixes for the keys pushed into Redis:
 
@@ -186,7 +186,7 @@ Greylisting related options.
 	+ Default: `empty (greylisting disabled)`
 - `whitelist`: list of ip addresses or networks that should be whitelisted from greylisting
 	+ Default: `empty`
-- `enable`: enable or disable greylisting (from 1.9.1)
+- `enable`: enable or disable greylisting (from 1.9.1), binary flag
 	+ Default: `true`
 
 
@@ -216,7 +216,7 @@ each second). It can be schematically displayed as following:
 	+ Default: `30:0.025`
 - `limit_to_ip_from`: limits bucket for non-bounce messages (msg from, rcpt to per one source ip)
 	+ Default: `100:0.033333333`
-- `enable`: enable or disable rate limits (from 1.9.1)
+- `enable`: enable or disable rate limits (from 1.9.1), binary flag
 	+ Default: `true`
 
 
@@ -225,9 +225,9 @@ each second). It can be schematically displayed as following:
 Dkim can be used to sign messages by. Dkim support must be
 provided by opendkim library.
 
-- `header_canon`: canonization of headers (simple or relaxed)
+- `header_canon`: canonization of headers (`simple` or `relaxed`)
     + Default: `simple`
-- `body_canon`: canonization of body (simple or relaxed)
+- `body_canon`: canonization of body (`simple` or `relaxed`)
     + Default: `simple`
 - `sign_alg`: signature algorithm (`sha1` and `sha256`)
     + Default: `sha1`
