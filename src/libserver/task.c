@@ -900,7 +900,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			break;
 		case RSPAMD_LOG_SCORES:
 			res.len = rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.2f/%.2f",
-					mres->score, mres->actions_limits[METRIC_ACTION_REJECT]);
+					mres->score, rspamd_task_get_required_score (task, mres));
 			res.begin = scorebuf;
 			break;
 		case RSPAMD_LOG_SYMBOLS:
@@ -1290,4 +1290,26 @@ rspamd_task_write_log (struct rspamd_task *task)
 	msg_info_task ("%V", logbuf);
 
 	rspamd_fstring_free (logbuf);
+}
+
+gdouble
+rspamd_task_get_required_score (struct rspamd_task *task, struct metric_result *m)
+{
+	guint i;
+
+	if (m == NULL) {
+		m = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+		if (m == NULL) {
+			return NAN;
+		}
+	}
+
+	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		if (!isnan (m->actions_limits[i])) {
+			return m->actions_limits[i];
+		}
+	}
+
+	return NAN;
 }

@@ -853,22 +853,25 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	is_spam = (action < METRIC_ACTION_GREYLIST);
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (obj,	  ucl_object_frombool (is_spam),
-		"is_spam", 0, false);
-	ucl_object_insert_key (obj,	  ucl_object_frombool (RSPAMD_TASK_IS_SKIPPED (task)),
-		"is_skipped", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
-		"score", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->actions_limits[METRIC_ACTION_REJECT]),
-		"required_score", 0, false);
 	ucl_object_insert_key (obj,
-		ucl_object_fromstring (rspamd_action_to_str (action)),
-		"action", 0, false);
+			ucl_object_frombool (is_spam),
+			"is_spam", 0, false);
+	ucl_object_insert_key (obj,
+			ucl_object_frombool (RSPAMD_TASK_IS_SKIPPED (task)),
+			"is_skipped", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
+			"score", 0, false);
+	ucl_object_insert_key (obj,
+			ucl_object_fromdouble (rspamd_task_get_required_score (task, mres)),
+			"required_score", 0, false);
+	ucl_object_insert_key (obj,
+			ucl_object_fromstring (rspamd_action_to_str (action)),
+			"action", 0, false);
 
 	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
 		subject = make_rewritten_subject (m, task);
 		ucl_object_insert_key (obj, ucl_object_fromstring (subject),
-			"subject", 0, false);
+				"subject", 0, false);
 	}
 	/* Now handle symbols */
 	g_hash_table_iter_init (&hiter, mres->symbols);
@@ -1162,7 +1165,8 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 					}
 
 					ls->score = mres->score;
-					ls->required_score = mres->actions_limits[METRIC_ACTION_REJECT];
+					ls->required_score = rspamd_task_get_required_score (task,
+							mres);
 					ls->nresults = g_hash_table_size (mres->symbols);
 
 					g_hash_table_iter_init (&it, mres->symbols);

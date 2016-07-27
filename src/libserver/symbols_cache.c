@@ -1049,8 +1049,7 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 			res = g_hash_table_lookup (task->results, metric->name);
 
 			if (res) {
-
-				ms = res->actions_limits[METRIC_ACTION_REJECT];
+				ms = rspamd_task_get_required_score (task, res);
 
 				if (!isnan (ms) && cp->lim < ms) {
 					cp->rs = res;

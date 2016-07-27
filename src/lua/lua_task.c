@@ -3009,6 +3009,7 @@ lua_task_get_metric_score (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *metric_name;
+	gdouble rs;
 	struct metric_result *metric_res;
 
 	metric_name = luaL_checkstring (L, 2);
@@ -3018,12 +3019,11 @@ lua_task_get_metric_score (lua_State *L)
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
 			lua_newtable (L);
 			lua_pushnumber (L, metric_res->score);
+			rs = rspamd_task_get_required_score (task, metric_res);
 			lua_rawseti (L, -2, 1);
-			lua_pushnumber (L,
-				metric_res->metric->actions[METRIC_ACTION_REJECT].score);
+			lua_pushnumber (L, rs);
 			lua_rawseti (L, -2, 2);
-			lua_pushnumber (L,
-				metric_res->metric->actions[METRIC_ACTION_REJECT].score);
+			lua_pushnumber (L, rs);
 			lua_rawseti (L, -2, 3);
 		}
 		else {

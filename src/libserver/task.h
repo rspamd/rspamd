@@ -267,6 +267,16 @@ gboolean rspamd_learn_task_spam (struct rspamd_task *task,
 	GError **err);
 
 /**
+ * Returns required score for a message (usually reject score)
+ * @param task
+ * @param m
+ * @return
+ */
+struct metric_result;
+gdouble rspamd_task_get_required_score (struct rspamd_task *task,
+		struct metric_result *m);
+
+/**
  * Write log line about the specified task if needed
  */
 void rspamd_task_write_log (struct rspamd_task *task);
