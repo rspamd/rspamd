@@ -4,7 +4,11 @@ title: Chartable module
 ---
 # Chartable module
 
-This module allows to find number of characters from the different [unicode scripts](http://www.unicode.org/reports/tr24/). Finally, it evaluates number of scrips changes, e.g. 'a網絡a' is treated as 2 script changes - from latin to chineese and from chineese back to latin, divided by total number of unicode characters. If the product of this division is higher than threshold then a symbol is inserted. By default threshold is `0.1` meaning that script changes occurrs approximantely for 10% of characters.
+This module allows to find number of characters from the different [unicode scripts](http://www.unicode.org/reports/tr24/) in messages textual parts. If a message cannot be converted to UTF-8 (for example, when it contains unrecognized charset definition) then this module just checks number of transitions between ASCII and non ASCII characters.
+
+Then `chartable` module evaluates number of scrips changes in words, e.g. 'a網絡a' is treated as 2 script changes - from latin to Chinese and from Chinese back to latin. Afterwards, this value is normalized: for example, short sequences of different charsets are penalized more than longer ones, and digits are treated specially when they are at the beginning or at the end of a word. It is important to mention that this module examines words, so if you have one word completely in Latin and another completely in Cyrillic, then there will be no penalty added by `chartable` module.
+
+After normalization procedure, Rspamd compares the `badness` value with the threshold, which is `0.1` by default. This value means that about 10% of words have different charsets within a single word.
 
 ~~~ucl
 chartable {
