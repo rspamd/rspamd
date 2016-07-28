@@ -106,7 +106,7 @@ Run Rspamd
   Log  ${config}
   Create File  ${TMPDIR}/rspamd.conf  ${config}
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${TMPDIR}/rspamd.conf  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  -c  ${TMPDIR}/rspamd.conf  DBDIR\=${TMPDIR}  env:TMPDIR=${TMPDIR}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   ${rspamd_logpos} =  Log Logs  ${TMPDIR}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0
