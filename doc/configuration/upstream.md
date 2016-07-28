@@ -7,7 +7,7 @@ title: Upstreams configuration
 
 This document describes **upstreams**: list of servers that are selected by Rspamd using specific algorithm to establish a connection.
 
-## Inctoduction
+## Introduction
 
 List of upstreams is a common structure used in various Rspamd configuration options when you need to setup some remote servers. For example, upstreams are used to connect to a Redis server, to select a DNS server and to establish a connection by Rspamd proxy. Servers in upstream list can be defined by IP addresses (IPv6 addresses should be enclosed in brackets):
 
@@ -21,7 +21,7 @@ You can also specify custom ports if they differ from the default ones (e.g. `53
 
     serv1.example.com:8080,serv2.example.com
 
-It is also possible to define upstreams priorities (described later), but in this case yous must also specify port number:
+It is also possible to define upstreams priorities (described later), but in this case you must also specify a port number:
 
     127.0.0.1:53:10,8.8.8.8:53:1
 
@@ -37,7 +37,7 @@ There are several algorithms available in Rspamd so far:
 * `sequential`
 * `hash`
 
-### Master slave algorithm
+### Master-slave algorithm
 
 This algorithm always select the upstream with highest weight unless it is not alive. For example, `master-slave:127.0.0.1:53:10,8.8.8.8:53:1`, line specifies that `127.0.0.1` will be always used if possible. You can skip priorities, then the first element is treated as master and the subsequent ones are used as slaves: `master-slave:127.0.0.1,8.8.8.8` is the equialent of the previous definition.
 
