@@ -17,7 +17,9 @@ Check Rspamc
   \  ...  ELSE  Check Rspamc Match String  ${result.stdout}  ${i}  ${inverse}
   Run Keyword If  @{args} == @{EMPTY}  Check Rspamc Match Default  ${result.stdout}  ${inverse}
   ${rc_nocheck} =  Evaluate  'rc_nocheck' in $kwargs
+  ${rc_noinverse} =  Evaluate  'rc_noinverse' in $kwargs
   Run Keyword If  ${rc_nocheck} == True  Return From Keyword
+  ${inverse} =  Set Variable If  ${rc_noinverse} == True  False  ${inverse}
   Run Keyword If  ${inverse} == False  Should Be Equal As Integers  ${result.rc}  ${rc}
   ...  ELSE  Should Not Be Equal As Integers  ${result.rc}  ${rc}
 
