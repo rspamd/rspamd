@@ -37,7 +37,29 @@ def get_process_children(pid):
     return children
 
 def get_test_directory():
-    return os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "../..")
+    return os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "../../")
+
+def get_top_dir():
+    if os.environ.get('RSPAMD_TOPDIR'):
+        return os.environ['RSPAMD_TOPDIR']
+
+    return get_test_directory() + "../../"
+
+def get_rspamd():
+    if os.environ.get('RSPAMD'):
+        return os.environ['RSPAMD']
+    dname = get_top_dir()
+    return dname + "src/rspamd"
+def get_rspamc():
+    if os.environ.get('RSPAMC'):
+        return os.environ['RSPAMC']
+    dname = get_top_dir()
+    return dname + "src/client/rspamc"
+def get_rspamadm():
+    if os.environ.get('RSPAMADM'):
+        return environ['RSPAMADM']
+    dname = get_top_dir()
+    return dname + "src/rspamadm/rspamadm"
 
 def make_temporary_directory():
     return tempfile.mkdtemp()
@@ -71,9 +93,10 @@ def Send_SIGUSR1(pid):
     os.kill(pid, signal.SIGUSR1)
 
 def set_directory_ownership(path, username, groupname):
-    uid=pwd.getpwnam(username).pw_uid
-    gid=grp.getgrnam(groupname).gr_gid
-    os.chown(path, uid, gid)
+    if os.getuid() == 0:
+        uid=pwd.getpwnam(username).pw_uid
+        gid=grp.getgrnam(groupname).gr_gid
+        os.chown(path, uid, gid)
 
 def spamc(addr, port, filename):
     goo = open(filename, 'rb').read()
