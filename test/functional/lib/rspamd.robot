@@ -115,8 +115,8 @@ Run Rspamd
   [Return]  ${TMPDIR}  ${rspamd_pid}  ${rspamd_logpos}
 
 Scan Message With Rspamc
-  [Arguments]  ${msg_file}
-  ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  ${msg_file}
+  [Arguments]  ${msg_file}  @{vargs}
+  ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  @{vargs}  ${msg_file}
   [Return]  ${result}
 
 Sync Fuzzy Storage
