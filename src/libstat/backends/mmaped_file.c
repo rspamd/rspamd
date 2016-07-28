@@ -494,14 +494,17 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 	}
 
 	pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
-	while (old_size - (pos - map) >= sizeof (struct stat_file_block)) {
-		block = (struct stat_file_block *)pos;
-		if (block->hash1 != 0 && block->value != 0) {
-			rspamd_mmaped_file_set_block_common (pool,
-					new, block->hash1,
-					block->hash2, block->value);
+
+	if (pos - map < (gssize)old_size) {
+		while ((gssize)old_size - (pos - map) >= (gssize)sizeof (struct stat_file_block)) {
+			block = (struct stat_file_block *)pos;
+			if (block->hash1 != 0 && block->value != 0) {
+				rspamd_mmaped_file_set_block_common (pool,
+						new, block->hash1,
+						block->hash2, block->value);
+			}
+			pos += sizeof (block);
 		}
-		pos += sizeof (block);
 	}
 
 	header = (struct stat_file_header *)map;
