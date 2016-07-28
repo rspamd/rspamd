@@ -180,10 +180,10 @@ Copying messages to [pub/sub](http://redis.io/topics/pubsub) channels also requi
 
 Greylisting related options.
 
-- `timeout (required)`: time during which we mark message greylisted
+- `timeout`: time during which we mark message greylisted
 	+ Default: `300s`
-- `expire (required)`: time during which we save a greylisting record
-	+ Default: `empty (greylisting disabled)`
+- `expire`: time during which we save a greylisting record
+	+ Default: `1d`
 - `whitelist`: list of ip addresses or networks that should be whitelisted from greylisting
 	+ Default: `empty`
 - `enable`: enable or disable greylisting (from 1.9.1), binary flag
