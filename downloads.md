@@ -84,7 +84,7 @@ Rspamd supports the following .deb based distributives:
 
 To install the rspamd <a class="undecor" href="#stableSys2">stable<sup>1</sup></a> apt repository, please use the following commands:
 
-    apt-get install -y lsb-release # optional
+    apt-get install -y lsb-release wget # optional
     CODENAME=`lsb_release -c -s`
     wget -O- https://rspamd.com/apt-stable/gpg.key | apt-key add -
     echo "deb http://rspamd.com/apt-stable/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
@@ -96,7 +96,7 @@ To obtain your distributive's codename, you could use the command `lsb_release -
 
 For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> branch replace `apt-stable` with just `apt`:
 
-    apt-get install -y lsb-release # optional
+    apt-get install -y lsb-release wget # optional
     CODENAME=`lsb_release -c -s`
     wget -O- https://rspamd.com/apt/gpg.key | apt-key add -
     echo "deb http://rspamd.com/apt/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
