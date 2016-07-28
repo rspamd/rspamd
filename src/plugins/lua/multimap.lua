@@ -29,7 +29,9 @@ local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
-local function multimap_callback(task, pre_filter)
+local function multimap_callback(task, rule)
+  local pre_filter = rule['prefilter']
+
   -- Applies specific filter for input
   local function apply_filter(filter, input, rule)
     if filter == 'email:addr' or filter == 'email' then
@@ -345,97 +347,16 @@ local function multimap_callback(task, pre_filter)
     end
   end
 
-  -- IP rules
-  local ip = task:get_from_ip()
-  if ip:is_valid() then
-    each(function(r) match_rule(r, ip) end,
-      filter(function(r)
-        return pre_filter == r['prefilter'] and r['type'] == 'ip'
-      end, rules))
-  end
-
-  -- Header rules
-  each(function(r)
-    local hv = task:get_header_full(r['header'])
-    match_list(r, hv, {'decoded'})
-  end,
-  filter(function(r)
-    return pre_filter == r['prefilter'] and r['type'] == 'header'
-  end, rules))
-
-  -- Rcpt rules
-  if task:has_recipients() then
-    local rcpts = task:get_recipients()
-    each(function(r)
-      match_addr(r, rcpts)
-    end,
-    filter(function(r)
-      return pre_filter == r['prefilter'] and r['type'] == 'rcpt'
-    end, rules))
-  end
-
-  -- From rules
-  if task:has_from() then
-    local from = task:get_from()
-    if from then
-      each(function(r)
-        match_addr(r, from)
-      end,
-      filter(function(r)
-        return pre_filter == r['prefilter'] and r['type'] == 'from'
-      end, rules))
-    end
-  end
-  -- URL rules
-  if task:has_urls() then
-    local urls = task:get_urls()
-    for i,url in ipairs(urls) do
-      each(function(r)
-        match_url(r, url)
-      end,
-      filter(function(r)
-        return pre_filter == r['prefilter'] and r['type'] == 'url'
-      end, rules))
-    end
-  end
-  -- Filename rules
-  local function check_file(fn)
-    each(function(r)
-          match_filename(r, fn)
-        end,
-        filter(function(r)
-          return pre_filter == r['prefilter'] and r['type'] == 'filename'
-        end, rules))
-  end
-  -- Body rules
-  each(function(r)
-    match_content(r)
-  end,
-  filter(function(r)
-    return pre_filter == r['prefilter'] and r['type'] == 'content'
-  end, rules))
-
-  local parts = task:get_parts()
-  for i,p in ipairs(parts) do
-    if p:is_archive() then
-      local fnames = p:get_archive():get_files()
-
-      for ii,fn in ipairs(fnames) do
-        check_file(fn)
-      end
-    end
-
-    local fn = p:get_filename()
-    if fn then
-      check_file(fn)
-    end
-  end
-  -- RBL rules
-  if ip:is_valid() then
-    each(function(r)
+  local rt = rule['type']
+  if rt == 'ip' or rt == 'dnsbl' then
+    local ip = task:get_from_ip()
+    if ip:is_valid() then
+      if rt == 'ip' then
+        match_rule(rule, ip)
+      else
         local cb = function (resolver, to_resolve, results, err, rbl)
           if results then
-            task:insert_result(r['symbol'], 1, r['map'])
+            task:insert_result(rule['symbol'], 1, r['map'])
 
             if pre_filter then
               task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
@@ -444,22 +365,56 @@ local function multimap_callback(task, pre_filter)
         end
 
         task:get_resolver():resolve_a({task = task,
-          name = ip_to_rbl(ip, r['map']),
+          name = ip_to_rbl(ip, rule['map']),
           callback = cb,
-          })
-      end,
-    filter(function(r)
-      return pre_filter == r['prefilter'] and r['type'] == 'dnsbl'
-    end, rules))
+        })
+      end
+    end
+  elseif rt == 'header' then
+    local hv = task:get_header_full(r['header'])
+    match_list(rule, hv, {'decoded'})
+  elseif rt == 'rcpt' then
+    if task:has_recipients('smtp') then
+      local rcpts = task:get_recipients('smtp')
+      match_addr(rule, rcpts)
+    end
+  elseif rt == 'from' then
+    if task:has_from('smtp') then
+      local from = task:get_from('smtp')
+      match_addr(rule, from)
+    end
+  elseif rt == 'url' then
+    if task:has_urls() then
+      local urls = task:get_urls()
+      for i,url in ipairs(urls) do
+        match_url(rule, url)
+      end
+    end
+  elseif rt == 'filename' then
+    local parts = task:get_parts()
+    for i,p in ipairs(parts) do
+      if p:is_archive() then
+        local fnames = p:get_archive():get_files()
+
+        for ii,fn in ipairs(fnames) do
+          match_filename(rule, fn)
+        end
+      end
+
+      local fn = p:get_filename()
+      if fn then
+        match_filename(rule, fn)
+      end
+    end
+  elseif rt == 'content' then
+    match_content(rule)
   end
 end
 
-local function multimap_filter_callback(task)
-  multimap_callback(task, false)
-end
-
-local function multimap_prefilter_callback(task)
-  multimap_callback(task, true)
+local function gen_multimap_callback(rule)
+  return function(task)
+    multimap_callback(task, rule)
+  end
 end
 
 local function add_multimap_rule(key, newrule)
@@ -587,17 +542,11 @@ if opts and type(opts) == 'table' then
   end
   -- add fake symbol to check all maps inside a single callback
   if any(function(r) return not r['prefilter'] end, rules) then
-    local id = rspamd_config:register_symbol({
-      type = 'callback',
-      priority = -1,
-      callback = multimap_filter_callback,
-      flags = 'empty'
-    })
     for i,rule in ipairs(rules) do
       rspamd_config:register_symbol({
-        type = 'virtual',
+        type = 'normal',
         name = rule['symbol'],
-        parent = id,
+        callback = gen_multimap_callback(rule),
       })
     end
   end
@@ -605,8 +554,8 @@ if opts and type(opts) == 'table' then
   if any(function(r) return r['prefilter'] end, rules) then
     rspamd_config:register_symbol({
       type = 'prefilter',
-      name = 'MULTIMAP_PREFILTERS',
-      callback = multimap_prefilter_callback
+      name = rule['symbol'],
+      callback = gen_multimap_callback(rule),
     })
   end
 end
