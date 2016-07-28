@@ -372,7 +372,18 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		}
 
 		if (create_sql) {
-			if (sqlite3_exec (sqlite, create_sql, NULL, NULL, NULL) != SQLITE_OK) {
+			while ((rc = sqlite3_exec (sqlite, create_sql, NULL, NULL, NULL)) != SQLITE_OK) {
+				if (rc == SQLITE_BUSY) {
+					struct timespec sleep_ts = {
+							.tv_sec = 0,
+							.tv_nsec = 1000000
+					};
+
+					nanosleep (&sleep_ts, NULL);
+
+					continue;
+				}
+
 				g_set_error (err, rspamd_sqlite3_quark (),
 						-1, "cannot execute create sql `%s`: %s",
 						create_sql, sqlite3_errmsg (sqlite));
