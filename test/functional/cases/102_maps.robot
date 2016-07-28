@@ -60,3 +60,7 @@ MAP - FROM REGEXP
 MAP - FROM REGEXP MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.org
   Check Rspamc  ${result}  REGEXP_MAP  inverse=1  rc_nocheck=1
+
+MAP - DEPENDS HIT
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  147.243.1.47  --from  user123@microsoft.com
+  Check Rspamc  ${result}  DEPS_MAP

@@ -21,6 +21,7 @@ local rspamd_logger = require "rspamd_logger"
 local cdb = require "rspamd_cdb"
 local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
+local rspamd_expression = require "rspamd_expression"
 require "fun" ()
 
 local urls = {}
@@ -347,6 +348,17 @@ local function multimap_callback(task, rule)
     end
   end
 
+  if rule['expression'] then
+    local res,trace = rule['expression']:process_traced(task)
+
+    if not res then
+      rspamd_logger.debugx(task, 'condition is false for %s', rule['symbol'])
+    else
+      rspamd_logger.debugx(task, 'condition is true for %s: %s', rule['symbol'],
+        trace)
+    end
+  end
+
   local rt = rule['type']
   if rt == 'ip' or rt == 'dnsbl' then
     local ip = task:get_from_ip()
@@ -519,6 +531,37 @@ local function add_multimap_rule(key, newrule)
   end
 
   if ret then
+    if newrule['require_symbols'] and not newrule['prefilter'] then
+      local atoms = {}
+
+      local function parse_atom(str)
+        local atom = table.concat(totable(take_while(function(c)
+          if string.find(', \t()><+!|&\n', c) then
+            return false
+          end
+          return true
+        end, iter(str))), '')
+        table.insert(atoms, atom)
+
+        return atom
+      end
+
+      local function process_atom(atom, task)
+        if task:has_symbol(atom) then
+          return 1
+        end
+
+        return 0
+      end
+
+      local expression = rspamd_expression.create(newrule['require_symbols'],
+        {parse_atom, process_atom}, rspamd_config:get_mempool())
+      if expression then
+        newrule['expression'] = expression
+        each(function(v) rspamd_config:register_dependency(newrule['symbol'], v) end,
+          atoms)
+      end
+    end
     return newrule
   end
 
