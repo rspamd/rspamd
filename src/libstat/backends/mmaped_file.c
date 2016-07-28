@@ -96,6 +96,8 @@ rspamd_mmaped_file_t * rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 gint rspamd_mmaped_file_create (const gchar *filename, size_t size,
 		struct rspamd_statfile_config *stcf,
 		rspamd_mempool_t *pool);
+gint rspamd_mmaped_file_close_file (rspamd_mempool_t *pool,
+		rspamd_mmaped_file_t * file);
 
 double
 rspamd_mmaped_file_get_block (rspamd_mmaped_file_t * file,
@@ -394,7 +396,7 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 {
 	gchar *backup, *lock;
 	gint fd, lock_fd;
-	rspamd_mmaped_file_t *new;
+	rspamd_mmaped_file_t *new, *old = NULL;
 	u_char *map, *pos;
 	struct stat_file_block *block;
 	struct stat_file_header *header, *nh;
@@ -415,7 +417,7 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 		/* Wait for lock */
 		lock_fd = open (lock, O_RDONLY, 00600);
 		if (lock_fd != -1) {
-			if (!rspamd_file_lock (lock_fd, FALSE)) {
+			if (!rspamd_file_lock (lock_fd, TRUE)) {
 				close (lock_fd);
 				g_free (lock);
 
@@ -427,7 +429,7 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 		}
 	}
 
-	if (!rspamd_file_lock (lock_fd, FALSE)) {
+	if (!rspamd_file_lock (lock_fd, TRUE)) {
 		close (lock_fd);
 		unlink (lock);
 		g_free (lock);
@@ -435,6 +437,12 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 		return rspamd_mmaped_file_open (pool, filename, size, stcf);
 	}
 
+	old = rspamd_mmaped_file_open (pool, filename, old_size, stcf);
+
+	if (old == NULL) {
+		msg_warn_pool ("old file %s is invalid mmapped file, just move it",
+				filename);
+	}
 
 	backup = g_strconcat (filename, ".old", NULL);
 	if (rename (filename, backup) == -1) {
@@ -460,63 +468,68 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 
 		return NULL;
 	}
-	/* Now open new file and start copying */
-	fd = open (backup, O_RDONLY);
+
 	new = rspamd_mmaped_file_open (pool, filename, size, stcf);
 
-	if (fd == -1 || new == NULL) {
-		if (fd != -1) {
-			close (fd);
-		}
-
-		msg_err_pool ("cannot open file: %s", strerror (errno));
-		unlink (lock);
-		g_free (lock);
-		rspamd_file_unlock (lock_fd, FALSE);
-		close (lock_fd);
-		g_free (backup);
-		return NULL;
-	}
-
-
-
-	/* Now start reading blocks from old statfile */
-	if ((map =
-		mmap (NULL, old_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err_pool ("cannot mmap file: %s", strerror (errno));
-		close (fd);
-		unlink (lock);
-		g_free (lock);
-		rspamd_file_unlock (lock_fd, FALSE);
-		close (lock_fd);
-		g_free (backup);
-		return NULL;
-	}
-
-	pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
-
-	if (pos - map < (gssize)old_size) {
-		while ((gssize)old_size - (pos - map) >= (gssize)sizeof (struct stat_file_block)) {
-			block = (struct stat_file_block *)pos;
-			if (block->hash1 != 0 && block->value != 0) {
-				rspamd_mmaped_file_set_block_common (pool,
-						new, block->hash1,
-						block->hash2, block->value);
+	if (old) {
+		/* Now open new file and start copying */
+		fd = open (backup, O_RDONLY);
+		if (fd == -1 || new == NULL) {
+			if (fd != -1) {
+				close (fd);
 			}
-			pos += sizeof (block);
+
+			msg_err_pool ("cannot open file: %s", strerror (errno));
+			unlink (lock);
+			g_free (lock);
+			rspamd_file_unlock (lock_fd, FALSE);
+			close (lock_fd);
+			g_free (backup);
+			return NULL;
 		}
+
+
+
+		/* Now start reading blocks from old statfile */
+		if ((map =
+				mmap (NULL, old_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+			msg_err_pool ("cannot mmap file: %s", strerror (errno));
+			close (fd);
+			unlink (lock);
+			g_free (lock);
+			rspamd_file_unlock (lock_fd, FALSE);
+			close (lock_fd);
+			g_free (backup);
+			return NULL;
+		}
+
+		pos = map + (sizeof (struct stat_file) - sizeof (struct stat_file_block));
+
+		if (pos - map < (gssize)old_size) {
+			while ((gssize)old_size - (pos - map) >= (gssize)sizeof (struct stat_file_block)) {
+				block = (struct stat_file_block *)pos;
+				if (block->hash1 != 0 && block->value != 0) {
+					rspamd_mmaped_file_set_block_common (pool,
+							new, block->hash1,
+							block->hash2, block->value);
+				}
+				pos += sizeof (block);
+			}
+		}
+
+		header = (struct stat_file_header *)map;
+		rspamd_mmaped_file_set_revision (new, header->revision, header->rev_time);
+		nh = new->map;
+		/* Copy tokenizer configuration */
+		memcpy (nh->unused, header->unused, sizeof (header->unused));
+		nh->tokenizer_conf_len = header->tokenizer_conf_len;
+
+		munmap (map, old_size);
+		close (fd);
+		unlink (backup);
+		rspamd_mmaped_file_close_file (pool, old);
 	}
 
-	header = (struct stat_file_header *)map;
-	rspamd_mmaped_file_set_revision (new, header->revision, header->rev_time);
-	nh = new->map;
-	/* Copy tokenizer configuration */
-	memcpy (nh->unused, header->unused, sizeof (header->unused));
-	nh->tokenizer_conf_len = header->tokenizer_conf_len;
-
-	munmap (map, old_size);
-	close (fd);
-	unlink (backup);
 	g_free (backup);
 	unlink (lock);
 	g_free (lock);
