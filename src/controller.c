@@ -205,7 +205,7 @@ rspamd_is_encrypted_password (const gchar *password,
 					if (p->id == id) {
 						ret = TRUE;
 						if (pbkdf != NULL) {
-							*pbkdf = &pbkdf_list[0];
+							*pbkdf = &pbkdf_list[i];
 						}
 
 						break;
