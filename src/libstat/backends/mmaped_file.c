@@ -631,9 +631,8 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 	}
 
 	rspamd_file_unlock (new_file->fd, FALSE);
-
 	new_file->cf = stcf;
-
+	new_file->pool = pool;
 	rspamd_mmaped_file_preload (new_file);
 
 	g_assert (stcf->clcf != NULL);
