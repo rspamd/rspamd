@@ -356,10 +356,10 @@ local function multimap_callback(task, rule)
       else
         local cb = function (resolver, to_resolve, results, err, rbl)
           if results then
-            task:insert_result(rule['symbol'], 1, r['map'])
+            task:insert_result(rule['symbol'], 1, rule['map'])
 
             if pre_filter then
-              task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+              task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
             end
           end
         end
@@ -371,7 +371,7 @@ local function multimap_callback(task, rule)
       end
     end
   elseif rt == 'header' then
-    local hv = task:get_header_full(r['header'])
+    local hv = task:get_header_full(rule['header'])
     match_list(rule, hv, {'decoded'})
   elseif rt == 'rcpt' then
     if task:has_recipients('smtp') then
