@@ -12,7 +12,7 @@ Rmilter is used to integrate Rspamd and `milter` compatible MTA, for example Pos
 - Greylisting using Redis storage
 - Ratelimit using Redis storage
 - Replies check (whitelisting replies to sent messages)
-- Passing certain messages to Redis pub/sub channels
+- Passing certain messages to Redis Pub/Sub channels
 - DKIM signing
 
 <div>
