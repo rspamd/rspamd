@@ -189,24 +189,15 @@ The download process is described in the [downloads page](/downloads.html) where
 
 ## Running Rspamd
 
-### Platforms with systemd (Arch, CentOS 7, Debian Jessie, Fedora)
+### Platforms with systemd (Arch, CentOS 7, Debian Jessie, Fedora, Ubuntu Xenial)
 
-To enable run on startup:
+Packaging should start rspamd and configure it to run on startup on installation.
+
+You can verify it's running as follows:
 
 ```
-systemctl enable rspamd.socket
-systemctl start rspamd.socket
+systemctl status rspamd
 ```
-
-For Rmilter, you might also want to do the same:
-```
-systemctl enable rmilter.socket
-systemctl start rmilter.socket
-```
-
-Rspamd will be started on-demand, so to simulate this you could run:
-
-	rspamc stat
 
 ### Ubuntu, Debian Wheezy
 
