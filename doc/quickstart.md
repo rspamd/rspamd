@@ -444,7 +444,7 @@ classifier {
 }
 {% endhighlight %}
 
-For other possibilities please read the full [documentation](/doc/statistic.html). The more specific Redis related documentation can be found [here](/doc/configuration/redis.html).
+For other possibilities please read the full [documentation](/doc/configuration/statistic.html). The more specific Redis related documentation can be found [here](/doc/configuration/redis.html).
 
 ## Adjusting scores and actions
 
