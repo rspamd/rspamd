@@ -127,11 +127,11 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 	}
 
 	globbuf.gl_offs = 0;
-	len = strlen (ctx->hs_dir) + 1 + sizeof ("*.hs");
+	len = strlen (ctx->hs_dir) + 1 + sizeof ("*.hs.new") + 2;
 	pattern = g_malloc (len);
 	rspamd_snprintf (pattern, len, "%s%c%s", ctx->hs_dir, G_DIR_SEPARATOR, "*.hs");
 
-	if ((rc = glob (pattern, GLOB_DOOFFS, NULL, &globbuf)) == 0) {
+	if ((rc = glob (pattern, 0, NULL, &globbuf)) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
 			if (forced ||
 					!rspamd_re_cache_is_valid_hyperscan_file (ctx->cfg->re_cache,
@@ -141,6 +141,24 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 							strerror (errno));
 					ret = FALSE;
 				}
+			}
+		}
+	}
+	else if (rc != GLOB_NOMATCH) {
+		msg_err ("glob %s failed: %s", pattern, strerror (errno));
+		ret = FALSE;
+	}
+
+	globfree (&globbuf);
+
+	memset (&globbuf, 0, sizeof (globbuf));
+	rspamd_snprintf (pattern, len, "%s%c%s", ctx->hs_dir, G_DIR_SEPARATOR, "*.hs.new");
+	if ((rc = glob (pattern, 0, NULL, &globbuf)) == 0) {
+		for (i = 0; i < globbuf.gl_pathc; i++) {
+			if (unlink (globbuf.gl_pathv[i]) == -1) {
+				msg_err ("cannot unlink %s: %s", globbuf.gl_pathv[i],
+						strerror (errno));
+				ret = FALSE;
 			}
 		}
 	}
