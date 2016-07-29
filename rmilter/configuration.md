@@ -64,7 +64,7 @@ Defines global options.
 	+ Default: `no`
 - `whitelist`: global recipients whitelist
 	+ Default: `no`
-- `our_networks`: treat mail from these networks as mail from authenticated users (see also `strict_auth`)
+- `our_networks`: treat mail from these networks as mail from authenticated users (has no effect if `strict_auth` = `yes`)
 	+ Default: `empty`
 
 
