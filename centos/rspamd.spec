@@ -53,6 +53,7 @@ Source2:        %{name}.logrotate
 %endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
+Source3:	80-rspamd.preset
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -99,6 +100,7 @@ lua.
 
 %install
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
+%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{_presetdir}/80-rspamd.preset
 
 %if 0%{?el6}
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
@@ -120,7 +122,6 @@ rm -rf %{buildroot}
 
 %if 0%{?suse_version}
 %service_add_pre %{name}.service
-%service_add_pre %{name}.socket
 %endif
 
 %post
@@ -128,11 +129,11 @@ rm -rf %{buildroot}
 %{__chown} -R %{rspamd_user}:%{rspamd_group} %{rspamd_home}
 %if 0%{?suse_version}
 %service_add_post %{name}.service
-%service_add_post %{name}.socket
 %endif
 %if 0%{?fedora} || 0%{?el7}
-%systemd_post %{name}.service
-%systemd_post %{name}.socket
+#Macro is not used as we want to do this on upgrade
+#%systemd_post %{name}.service
+systemctl --no-reload preset %{name}.service >/dev/null 2>&1 || :
 %endif
 %if 0%{?el6}
 /sbin/chkconfig --add %{name}
@@ -141,11 +142,9 @@ rm -rf %{buildroot}
 %preun
 %if 0%{?suse_version}
 %service_del_preun %{name}.service
-%service_del_preun %{name}.socket
 %endif
 %if 0%{?fedora} || 0%{?el7}
 %systemd_preun %{name}.service
-%systemd_preun %{name}.socket
 %endif
 %if 0%{?el6}
 if [ $1 = 0 ]; then
@@ -157,11 +156,9 @@ fi
 %postun
 %if 0%{?suse_version}
 %service_del_postun %{name}.service
-%service_del_postun %{name}.socket
 %endif
 %if 0%{?fedora} || 0%{?el7}
 %systemd_postun_with_restart %{name}.service
-%systemd_postun %{name}.socket
 %endif
 %if 0%{?el6}
 if [ $1 -ge 1 ]; then
@@ -174,7 +171,7 @@ fi
 %defattr(-,root,root,-)
 %if 0%{?suse_version} || 0%{?fedora} || 0%{?el7}
 %{_unitdir}/%{name}.service
-%{_unitdir}/%{name}.socket
+%{_presetdir}/80-rspamd.preset
 %endif
 %if 0%{?el6}
 %{_initrddir}/%{name}
