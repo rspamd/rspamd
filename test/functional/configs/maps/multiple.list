@@ -1,0 +1,10 @@
+#empty string
+user1@example.com
+#just score
+user2@example.com 10
+#just symbol
+user3@example.com SYM1
+#unknown symbol
+user4@example.com SYM2
+#symbol + score
+user5@example.com SYM1:-10.1

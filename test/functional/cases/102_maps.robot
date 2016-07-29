@@ -64,3 +64,27 @@ MAP - FROM REGEXP MISS
 MAP - DEPENDS HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  147.243.1.47  --from  user123@microsoft.com
   Check Rspamc  ${result}  DEPS_MAP
+
+MAP - DEPENDS MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.1  --from  user123@microsoft.com
+  Check Rspamc  ${result}  DEPS_MAP  inverse=1  rc_nocheck=1
+
+MAP - MULSYM PLAIN
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user1@example.com
+  Check Rspamc  ${result}  RCPT_MAP
+
+MAP - MULSYM SCORE
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user2@example.com
+  Check Rspamc  ${result}  RCPT_MAP (10.0
+
+MAP - MULSYM SYMBOL
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user3@example.com
+  Check Rspamc  ${result}  SYM1 (1.0
+
+MAP - MULSYM SYMBOL MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user4@example.com
+  Check Rspamc  ${result}  RCPT_MAP (1.0
+
+MAP - MULSYM SYMBOL + SCORE
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user5@example.com
+  Check Rspamc  ${result}  SYM1 (-10.0
