@@ -171,44 +171,17 @@ local function greylist_check(task)
       upstream:ok()
 
       if not ret_body and not ret_meta then
-        local t = tostring(math.floor(rspamd_util.get_time()))
-        local end_time = rspamd_util.time_to_string(t + settings['timeout'])
-        rspamd_logger.infox(task, 'greylisted till "%s", new record', end_time)
-        task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
-          'new record')
-        task:set_pre_result('soft reject', settings['message'])
-        -- Create new record
-        local ret, conn
-        ret,conn,upstream = rspamd_redis_make_request(task,
-          redis_params, -- connect params
-          hash_key, -- hash key
-          true, -- is write
-          redis_set_cb, --callback
-          'SETEX', -- command
-          {body_key, tostring(settings['expire']), t} -- arguments
-        )
-
-        if conn then
-          conn:add_cmd('SETEX', {
-            meta_key, tostring(settings['expire']), t
-          })
-          local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
-             + settings['timeout'])
-          task:get_mempool():set_variable("grey_greylisted", end_time)
-        else
-          rspamd_logger.infox(task, 'got error while connecting to redis: %s',
-            upstream:get_addr())
-          upstream:fail()
-        end
+        local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
+          + settings['timeout'])
+        task:get_mempool():set_variable("grey_greylisted", end_time)
       elseif greylisted_body and greylisted_meta then
         local end_time = rspamd_util.time_to_string(rspamd_util.get_time() +
           settings['timeout'])
-        rspamd_logger.infox(task, 'greylisted till "%s" using %s key',
+        rspamd_logger.infox(task, 'greylisted until "%s" using %s key',
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
           greylist_type)
         task:set_pre_result('soft reject', settings['message'])
-        task:get_mempool():set_variable("grey_greylisted", end_time)
       end
     elseif err then
       rspamd_logger.infox(task, 'got error while getting greylisting keys: %1', err)
@@ -232,8 +205,10 @@ end
 
 local function greylist_set(task)
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
+  local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
 
   local action = task:get_metric_action('default')
+  if action == 'no action' or action == 'reject' then return end
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
   local upstream, ret, conn
@@ -255,7 +230,7 @@ local function greylist_set(task)
     end
 
     task:insert_result(settings['symbol'], 0.0, 'pass', is_whitelisted)
-    rspamd_logger.infox(task, 'greylisting pass (%s) till %s',
+    rspamd_logger.infox(task, 'greylisting pass (%s) until %s',
       is_whitelisted,
       rspamd_util.time_to_string(rspamd_util.get_time() + settings['expire']))
 
@@ -276,6 +251,35 @@ local function greylist_set(task)
      rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
      upstream:fail()
     end
+  elseif do_greylisting then
+    local t = tostring(math.floor(rspamd_util.get_time()))
+    local end_time = rspamd_util.time_to_string(t + settings['timeout'])
+    rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
+    task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
+      'new record')
+    task:set_pre_result('soft reject', settings['message'])
+    -- Create new record
+    local ret, conn
+    ret,conn,upstream = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      hash_key, -- hash key
+      true, -- is write
+      redis_set_cb, --callback
+      'SETEX', -- command
+      {body_key, tostring(settings['expire']), t} -- arguments
+    )
+
+    if conn then
+      conn:add_cmd('SETEX', {
+        meta_key, tostring(settings['expire']), t
+      })
+      local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
+        + settings['timeout'])
+    else
+      rspamd_logger.infox(task, 'got error while connecting to redis: %s',
+      upstream:get_addr())
+      upstream:fail()
+    end
   else
     if action ~= 'no action' and action ~= 'reject' then
       local grey_res = task:get_mempool():get_variable("grey_greylisted_body")
@@ -283,20 +287,13 @@ local function greylist_set(task)
       if grey_res then
         -- We need to delay message, hence set a temporary result
         task:insert_result(settings['symbol'], 0.0, grey_res, 'body')
-        rspamd_logger.infox(task, 'greylisting delayed till "%s": body', grey_res)
+        rspamd_logger.infox(task, 'greylisting delayed until "%s": body', grey_res)
       else
         grey_res = task:get_mempool():get_variable("grey_greylisted_meta")
 
         if grey_res then
           task:insert_result(settings['symbol'], 0.0, grey_res, 'meta')
-          rspamd_logger.infox(task, 'greylisting delayed till "%s": meta', grey_res)
-        --[[
-        -- We got some redis error, but we don't know what, so we just ignore it
-        -- for now
-        else
-          task:insert_result(settings['symbol'], 0.0, 'unknown')
-          rspamd_logger.infox(task, 'greylisting delayed: unknown, internal error')
-        --]]
+          rspamd_logger.infox(task, 'greylisting delayed until "%s": meta', grey_res)
         else
           task:insert_result(settings['symbol'], 0.0, 'greylisted', 'redis fail')
           return
