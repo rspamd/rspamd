@@ -412,7 +412,7 @@ lua_config_add_map (lua_State *L)
 				return 1;
 			}
 		}
-		else if (strcmp (type, "map") == 0) {
+		else if (strcmp (type, "map") == 0 || strcmp (type, "hash") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
 			map->data.hash = g_hash_table_new (rspamd_strcase_hash,
 					rspamd_strcase_equal);
@@ -537,18 +537,33 @@ lua_map_get_key (lua_State * L)
 			}
 
 			if (radix) {
+				guintptr p = 0;
+
 				if (addr != NULL) {
-					if (radix_find_compressed_addr (radix, addr->addr)
+					if ((p = radix_find_compressed_addr (radix, addr->addr))
 							!=  RADIX_NO_VALUE) {
 						ret = TRUE;
 					}
-				}
-				else if (key_num != 0) {
-					if (radix_find_compressed (radix, (guint8 *)&key_num, sizeof (key_num))
-							!= RADIX_NO_VALUE) {
-						ret = TRUE;
+					else {
+						p = 0;
 					}
 				}
+				else if (key_num != 0) {
+					if ((p = radix_find_compressed (radix,
+							(guint8 *)&key_num, sizeof (key_num))) != RADIX_NO_VALUE) {
+						ret = TRUE;
+					}
+					else {
+						p = 0;
+					}
+				}
+
+				value = (const char *)p;
+			}
+
+			if (ret) {
+				lua_pushstring (L, value);
+				return 1;
 			}
 		}
 		else if (map->type == RSPAMD_LUA_MAP_SET) {
