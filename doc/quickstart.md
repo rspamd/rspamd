@@ -317,7 +317,7 @@ enable_password = "q2";
 
 Moreover, you can store an encrypted password for better security. To generate such a password just type
 
-	$ rspamd --encrypt-password
+	$ rspamdadm pw
 	Enter passphrase:
 	$1$4mqeynj3st9pb7cgbj6uoyhnyu3cp8d3$59y6xa4mrihaqdw3tf5mtpzg4k7u69ypebc3yba8jdssoh39x16y
 
