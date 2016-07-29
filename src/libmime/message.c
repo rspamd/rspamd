@@ -1522,7 +1522,7 @@ rspamd_message_parse (struct rspamd_task *task)
 				need_recv_correction = TRUE;
 			}
 			else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
-				if (raddr) {
+				if (!raddr) {
 					need_recv_correction = TRUE;
 				}
 				else {
