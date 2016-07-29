@@ -692,11 +692,12 @@ if opts and type(opts) == 'table' then
     end
   end
 
-  if any(function(r) return r['prefilter'] end, rules) then
+  each(function(r)
     rspamd_config:register_symbol({
       type = 'prefilter',
-      name = rule['symbol'],
-      callback = gen_multimap_callback(rule),
+      name = r['symbol'],
+      callback = gen_multimap_callback(r),
     })
-  end
+  end,
+  filter(function(r) return r['prefilter'] end, rules))
 end
