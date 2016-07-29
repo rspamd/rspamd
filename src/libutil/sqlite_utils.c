@@ -212,21 +212,13 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 		.tv_nsec = 1000000
 	};
 
-	fd = open (lock, O_RDONLY);
+	while ((fd = open (lock, O_WRONLY|O_CREAT|O_EXCL, 00600)) == -1) {
+		if (errno != EBUSY && errno != EEXIST) {
+			msg_err_pool_check ("cannot open lock file %s: %s", lock,
+					strerror (errno));
 
-	if (fd == -1) {
-
-		if (errno == ENOENT) {
-			/* Lock is already released, so we can continue */
-			return TRUE;
+			return FALSE;
 		}
-
-		msg_err_pool_check ("cannot open lock file %s: %s", lock, strerror (errno));
-
-		return FALSE;
-	}
-
-	while (!rspamd_file_lock (fd, TRUE)) {
 		if (nanosleep (&sleep_ts, NULL) == -1 && errno != EINTR) {
 			close (fd);
 			msg_err_pool_check ("cannot sleep open lock file %s: %s", lock,
@@ -236,7 +228,6 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 		}
 	}
 
-	rspamd_file_unlock (fd, FALSE);
 	unlink (lock);
 	close (fd);
 
