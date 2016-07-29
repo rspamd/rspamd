@@ -1573,9 +1573,24 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		}
 
 		fsync (fd);
-		close (fd);
 
 		/* Now rename temporary file to the new .hs file */
+		rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cache_dir,
+				G_DIR_SEPARATOR, re_class->hash);
+
+		if (rename (path, npath) == -1) {
+			g_set_error (err,
+					rspamd_re_cache_quark (),
+					errno,
+					"cannot rename %s to %s: %s",
+					path, npath, strerror (errno));
+			unlink (path);
+			close (fd);
+
+			return -1;
+		}
+
+		close (fd);
 	}
 
 	return total;
