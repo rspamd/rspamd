@@ -1275,8 +1275,15 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 			ucl_object_insert_key (obj,
 				ucl_object_fromstring (rspamd_action_to_str (
 					row->action)), "action", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (
-					row->score),		  "score",			0, false);
+
+			if (!isnan (row->score)) {
+				ucl_object_insert_key (obj, ucl_object_fromdouble (
+						row->score),		  "score",			0, false);
+			}
+			else {
+				ucl_object_insert_key (obj,
+						ucl_object_fromdouble (0.0), "score", 0, false);
+			}
 
 			if (!isnan (row->required_score)) {
 				ucl_object_insert_key (obj,
