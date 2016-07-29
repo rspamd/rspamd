@@ -21,6 +21,7 @@
 #include "libutil/printf.h"
 #include "libcryptobox/cryptobox.h"
 #include "unix-std.h"
+#include "libutil/logger.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -471,7 +472,7 @@ static void
 rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 		const guchar *hash)
 {
-	gchar fp[PATH_MAX];
+	gchar fp[PATH_MAX], np[PATH_MAX];
 	char *bytes = NULL;
 	gsize len;
 	gint fd;
@@ -480,14 +481,37 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 		return;
 	}
 
-	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp", hs_cache_dir,
+	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp.tmp", hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
 
 	if ((fd = rspamd_file_xopen (fp, O_WRONLY|O_CREAT|O_EXCL, 00644)) != -1) {
 		if (hs_serialize_database (mp->db, &bytes, &len) == HS_SUCCESS) {
-			(void)write (fd, bytes, len);
-			free (bytes);
+			if (write (fd, bytes, len) == -1) {
+				msg_warn ("cannot write hyperscan cache to %s: %s",
+						fp, strerror (errno));
+				unlink (fp);
+				free (bytes);
+			}
+			else {
+				free (bytes);
+				fsync (fd);
+
+				rspamd_snprintf (np, sizeof (np), "%s/%*xs.hsmp", hs_cache_dir,
+						(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
+
+				if (rename (fp, np) == -1) {
+					msg_warn ("cannot rename hyperscan cache from %s to %s: %s",
+							fp, np, strerror (errno));
+					unlink (fp);
+				}
+			}
 		}
+		else {
+			msg_warn ("cannot serialize hyperscan cache to %s: %s",
+					fp, strerror (errno));
+			unlink (fp);
+		}
+
 
 		close (fd);
 	}
