@@ -98,6 +98,61 @@ local function multimap_callback(task, rule)
     return ret
   end
 
+  -- Parse result in form: <symbol>:<score>|<symbol>|<score>
+  local function parse_ret(ret)
+    if ret and type(ret) == 'string' then
+      local lpeg = require "lpeg"
+      local number = {}
+
+      local digit = lpeg.R("09")
+      number.integer =
+        (lpeg.S("+-") ^ -1) *
+        (digit   ^  1)
+
+      -- Matches: .6, .899, .9999873
+      number.fractional =
+        (lpeg.P(".")   ) *
+        (digit ^ 1)
+
+      -- Matches: 55.97, -90.8, .9
+      number.decimal =
+        (number.integer *              -- Integer
+        (number.fractional ^ -1)) +    -- Fractional
+        (lpeg.S("+-") * number.fractional)  -- Completely fractional number
+
+      local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
+      local sym_elt = sym_start + lpeg.R("09")
+      local symbol = sym_start * sym_elt ^0
+      local symbol_cap = lpeg.Cg(symbol, 'symbol')
+      local score_cap = lpeg.Cg(number.decimal, 'score')
+      local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
+      local grammar = symscore_cap + symbol_cap + score_cap
+      local parser = lpeg.Ct(grammar)
+      local tbl = parser:match(ret)
+
+      if tbl then
+        local sym = nil
+        local score = 1.0
+
+        if tbl['symbol'] then
+          sym = tbl['symbol']
+        end
+        if tbl['score'] then
+          score = tbl['score']
+        end
+
+        return true,sym,score
+      else
+        rspamd_logger.infox(task, 'cannot parse %s', ret)
+        return true,nil,1.0
+      end
+    elseif type(ret) == 'boolean' then
+      return ret,nil,0.0
+    end
+
+    return false,nil,0.0
+  end
+
   -- Match a single value for against a single rule
   local function match_rule(r, value)
     local ret = false
@@ -109,7 +164,17 @@ local function multimap_callback(task, rule)
     ret = match_element(r, value)
 
     if ret then
-      task:insert_result(r['symbol'], 1)
+      local res,symbol,score = parse_ret(ret)
+      if symbol then
+        if not r['symbols_set'][symbol] then
+          rspamd_logger.infox(task, 'symbol %s is not registered for map %s, replace it with just %s',
+            symbol, r['symbol'], r['symbol'])
+          symbol = r['symbol']
+        end
+      else
+        symbol = r['symbol']
+      end
+      task:insert_result(symbol, score)
 
       if pre_filter then
         task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
@@ -351,8 +416,9 @@ local function multimap_callback(task, rule)
   if rule['expression'] then
     local res,trace = rule['expression']:process_traced(task)
 
-    if not res then
+    if not res or res == 0 then
       rspamd_logger.debugx(task, 'condition is false for %s', rule['symbol'])
+      return
     else
       rspamd_logger.debugx(task, 'condition is true for %s: %s', rule['symbol'],
         trace)
@@ -504,7 +570,7 @@ local function add_multimap_rule(key, newrule)
           newrule['hash'] = rspamd_config:add_map ({
             url = newrule['map'],
             description = newrule['description'],
-            type = 'set'
+            type = 'hash'
           })
         end
         if newrule['hash'] then
@@ -547,7 +613,10 @@ local function add_multimap_rule(key, newrule)
       end
 
       local function process_atom(atom, task)
-        if task:has_symbol(atom) then
+        local ret = task:has_symbol(atom)
+        rspamd_logger.debugx('check for symbol %s: %s', atom, ret)
+
+        if ret then
           return 1
         end
 
