@@ -1962,6 +1962,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, magic_file),
 			0,
 			"Path to a custom libmagic file");
+	rspamd_rcl_add_default_handler (sub,
+			"max_message",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_message),
+			RSPAMD_CL_FLAG_INT_SIZE,
+			"Maximum size of the message to be scanned");
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE,

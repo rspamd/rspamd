@@ -37,6 +37,7 @@
 #define DEFAULT_MIN_WORD 4
 #define DEFAULT_MAX_WORD 40
 #define DEFAULT_WORDS_DECAY 200
+#define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -162,6 +163,7 @@ rspamd_config_new (void)
 	cfg->enable_shutdown_workaround = TRUE;
 
 	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+	cfg->max_message = DEFAULT_MAX_MESSAGE;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 

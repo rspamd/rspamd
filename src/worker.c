@@ -34,6 +34,7 @@
 #include "libserver/rspamd_control.h"
 #include "worker_private.h"
 #include "utlist.h"
+#include "libutil/http_private.h"
 
 #include "lua/lua_common.h"
 
@@ -218,11 +219,45 @@ static void
 rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
+	struct rspamd_http_message *msg;
+	rspamd_fstring_t *reply;
 
 	msg_info_task ("abnormally closing connection from: %s, error: %e",
 		rspamd_inet_address_to_string (task->client_addr), err);
-	/* Terminate session immediately */
-	rspamd_session_destroy (task->s);
+	if (task->processed_stages & RSPAMD_TASK_STAGE_REPLIED) {
+		/* Terminate session immediately */
+		rspamd_session_destroy (task->s);
+	}
+	else {
+		task->processed_stages |= RSPAMD_TASK_STAGE_REPLIED;
+		msg = rspamd_http_new_message (HTTP_RESPONSE);
+
+		if (err) {
+			msg->status = rspamd_fstring_new_init (err->message,
+					strlen (err->message));
+			msg->code = err->code;
+		}
+		else {
+			msg->status = rspamd_fstring_new_init ("Internal error",
+					strlen ("Internal error"));
+			msg->code = 500;
+		}
+
+		msg->date = time (NULL);
+
+		reply = rspamd_fstring_sized_new (msg->status->len + 16);
+		rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
+		rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+		rspamd_http_connection_reset (task->http_conn);
+		rspamd_http_connection_write_message (task->http_conn,
+				msg,
+				NULL,
+				"application/json",
+				task,
+				task->http_conn->fd,
+				&task->tv,
+				task->ev_base);
+	}
 }
 
 static gint

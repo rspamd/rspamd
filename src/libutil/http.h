@@ -386,6 +386,12 @@ gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 void rspamd_http_message_free (struct rspamd_http_message *msg);
 
 /**
+ * Sets global maximum size for HTTP message being processed
+ * @param sz
+ */
+void rspamd_http_message_set_max_size (gsize sz);
+
+/**
  * Increase refcount for shared file (if any) to prevent early memory unlinking
  * @param msg
  */
