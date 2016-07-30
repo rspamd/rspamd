@@ -4,14 +4,14 @@ title: Multimap module
 ---
 # Multimap module
 
-Multimap module is designed to handle rules that are based on different types of lists that are dynamically updated by Rspamd and called `maps`. This module is useful for whitelists, blacklists and other lists to be organized via files. It can also load remote lists using `HTTP` and `HTTPS` protocols. This article explains in details all configuration options and features of this module.
+Multimap module is designed to handle rules that are based on different types of lists that are dynamically updated by Rspamd and called `maps`. This module is useful for whitelists, blacklists and other lists to be organized via files. It can also load remote lists using `HTTP` and `HTTPS` protocols. This article explains in detail all configuration options and features of this module.
 
 * TOC
 {:toc}
 
 ## Principles of work
 
-Maps in rspamd are the files or HTTP links that are automatically monitored and reloaded
+Maps in Rspamd are files or HTTP links that are automatically monitored and reloaded
 if changed. For example, maps can be defined as following:
 
 	"http://example.com/file"
@@ -19,7 +19,7 @@ if changed. For example, maps can be defined as following:
 	"/etc/rspamd/file.map"
 
 Rspamd respects `304 Not Modified` reply from HTTP server allowing to save traffic
-when a map has not been actually changed since last load. For file maps, rspamd uses normal
+when a map has not been actually changed since last load. For file maps, Rspamd uses normal
 `mtime` file attribute (time modified). The global map watching settings are defined in the
 `options` section of the configuration file:
 
@@ -81,17 +81,17 @@ key1
 key2 # Embedded comment
 ~~~
 
-The last line of map **must** have a newline symbol at the end.
+The last line of a map **must** have a newline symbol at the end.
 
 Optional map configuration attributes:
 
-* `prefilter` - defines if a map is used in [prefilter mode](#pre-filter-maps)
+* `prefilter` - defines if the map is used in [prefilter mode](#pre-filter-maps)
 * `action` - for prefilter maps defines action set by map match
 * `regexp` - set to `true` if your map contain [regular expressions](#regexp-maps)
 * `symbols` - array of symbols that this map can insert (for key-value pairs), [learn more](#multiple-symbols-maps)
-* `score` - score of symbol (can be redefined in the `metric` section)
+* `score` - score of the symbol (can be redefined in the `metric` section)
 * `description` - map description
-* `group` - group for symbol (can be redefined in `metric`)
+* `group` - group for the symbol (can be redefined in `metric`)
 * `require_symbols` - expression of symbols that have to match for a specific message: [learn more](#conditional-maps)
 * `filter` - match specific part of the input (for example, email domain): [here](#map-filters) is the complete definition of maps filters
 
@@ -131,7 +131,7 @@ All maps with the exception of `ip` and `dnsbl` maps support `regexp` mode. In t
 # Comments are still enabled
 ```
 
-For performance considerations, use only expressions supported by [hyperscan](http://01org.github.io/hyperscan/dev-reference/compilation.html#pattern-support) as this engine provides blazing performance at no additional cost. Currently, there is no way to distinguish what particular regexp was matched in case if multiple regexp were matched.
+For performance considerations, use only expressions supported by [Hyperscan](http://01org.github.io/hyperscan/dev-reference/compilation.html#pattern-support) as this engine provides blazing performance at no additional cost. Currently, there is no way to distinguish what particular regexp was matched in case if multiple regexp were matched.
 
 To enable regexp mode, you should set `regexp` option to `true`:
 
@@ -153,16 +153,16 @@ for `header` rules. Filters are specified with `filter` option. Rspamd supports 
 
 * `email` or `email:addr` - parse header value and extract email address from it (`Somebody <user@example.com>` -> `user@example.com`)
 * `email:user` - parse header value as email address and extract user name from it (`Somebody <user@example.com>` -> `user`)
-*  `email:domain` - parse header value as email address and extract user name from it (`Somebody <user@example.com>` -> `example.com`)
+*  `email:domain` - parse header value as email address and extract domain part from it (`Somebody <user@example.com>` -> `example.com`)
 *  `email:name` - parse header value as email address and extract displayed name from it (`Somebody <user@example.com>` -> `Somebody`)
 * `regexp:/re/` - extracts generic information using the specified regular expression
 
 ### URL filters
 
-URL maps allows another set of filters (by default, url maps are matched using hostname part):
+URL maps allows another set of filters (by default, `url` maps are matched using hostname part):
 
-* `tld` - matches TLD (top level domain) part of urls
-* `full` - matches the complete URL not the hostname
+* `tld` - matches TLD (top level domain) part of the URL
+* `full` - matches the complete URL (not the hostname)
 * `is_phished` - matches hostname but if and only if the URL is phished (e.g. pretended to be from another domain)
 * `regexp:/re/` - extracts generic information using the specified regular expression from the hostname
 * `tld:regexp:/re/` - extracts generic information using the specified regular expression from the TLD part
@@ -191,11 +191,11 @@ Content maps support the following filters:
 To enable pre-filter support, you should specify `action` parameter which can take one of the
 following values:
 
-* `accept` - accept a message (no action)
-* `add header` or `add_header` - adds a header to message
-* `rewrite subject` or `rewrite_subject` - change subject
-* `greylist` - greylist message
-* `reject` - drop message
+* `accept` - accept the message (no action)
+* `add header` or `add_header` - add a header to the message
+* `rewrite subject` or `rewrite_subject` - change the subject
+* `greylist` - greylist the message
+* `reject` - drop the message
 
 No filters will be processed for a message if such a map matches. Multiple symbols or symbol conditions are not supported for prefilter maps by design.
 
@@ -217,7 +217,7 @@ SPAMHAUS_PBL_BLACKLIST {
 }
 ~~~
 
-## Multiple symbols maps
+## Multiple symbol maps
 
 From the version 1.3.1, it is possible to define multiple symbols and scores using multimap module. To do that, you should define all possible symbols using `symbols` option in multimap:
 
@@ -238,7 +238,7 @@ In this example, you can use 3 symbols:
 * CONTENT_BLACKLISTED1
 * CONTENT_BLACKLISTED2
 
-in map:
+the map:
 
 ~~~
 # Symbol + score
@@ -249,7 +249,7 @@ in map:
 /re3/
 ~~~
 
-Symbols that are not defined in the `symbols` attribute but are used in the map are ignored and replaced by the default map symbol. If value is missing, then Rspamd just inserts the default symbol with dynamic weight equal to `1.0` (which is multiplied by metric score afterwards).
+Symbols that are not defined in the `symbols` attribute but used in the map are ignored and replaced by the default map symbol. If the value of a key-value pair is missing, then Rspamd just inserts the default symbol with dynamic weight equal to `1.0` (which is multiplied by metric score afterwards).
 
 ## Conditional maps
 
@@ -264,7 +264,7 @@ FROM_WHITELISTED {
 }
 ~~~
 
-You can use any logic expression of other symbols within `require_symbols` definition. Rspamd automatically insert dependency for a multimap rule on all symbols that are required by this particular rule. You cannot use symbols added by post filters here, however, pre-filters and normal filters symbols are allowed.
+You can use any logic expression of other symbols within `require_symbols` definition. Rspamd automatically inserts dependency for a multimap rule on all symbols that are required by this particular rule. You cannot use symbols added by post-filters here, however, pre-filter and normal filter symbols are allowed.
 
 ## Examples
 
