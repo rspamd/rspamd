@@ -63,6 +63,10 @@ struct rspamd_storage_shmem {
  * Use tls for this message
  */
 #define RSPAMD_HTTP_FLAG_SSL (1 << 4)
+/**
+ * Body has been set for a message
+ */
+#define RSPAMD_HTTP_FLAG_HAS_BODY (1 << 5)
 
 /**
  * Options for HTTP connection
@@ -104,6 +108,7 @@ struct rspamd_http_connection {
 	rspamd_http_finish_handler_t finish_handler;
 	struct rspamd_keypair_cache *cache;
 	gpointer ud;
+	gsize max_size;
 	unsigned opts;
 	enum rspamd_http_connection_type type;
 	gboolean finished;
@@ -389,7 +394,8 @@ void rspamd_http_message_free (struct rspamd_http_message *msg);
  * Sets global maximum size for HTTP message being processed
  * @param sz
  */
-void rspamd_http_message_set_max_size (gsize sz);
+void rspamd_http_connection_set_max_size (struct rspamd_http_connection *conn,
+		gsize sz);
 
 /**
  * Increase refcount for shared file (if any) to prevent early memory unlinking

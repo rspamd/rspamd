@@ -102,7 +102,6 @@ static const rspamd_ftok_t last_modified_header = {
 		.begin = "Last-Modified",
 		.len = 13
 };
-static gsize rspamd_http_global_max_size = 0;
 
 static void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
 static gboolean rspamd_http_message_grow_body (struct rspamd_http_message *msg,
@@ -617,16 +616,23 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 	}
 
-	if (conn->type == RSPAMD_HTTP_SERVER &&
-			rspamd_http_global_max_size > 0 &&
-			parser->content_length > rspamd_http_global_max_size) {
-		/* Too large message */
-		priv->flags |= RSPAMD_HTTP_CONN_FLAG_TOO_LARGE;
-		return -1;
-	}
+	/*
+	 * HTTP parser sets content length to (-1) when it doesn't know the real
+	 * length, for example, in case of chunked encoding.
+	 *
+	 * Hence, we skip body setup here
+	 */
+	if (parser->content_length != ULLONG_MAX) {
+		if (conn->max_size > 0 &&
+				parser->content_length > conn->max_size) {
+			/* Too large message */
+			priv->flags |= RSPAMD_HTTP_CONN_FLAG_TOO_LARGE;
+			return -1;
+		}
 
-	if (!rspamd_http_message_set_body (msg, NULL, parser->content_length)) {
-		return -1;
+		if (!rspamd_http_message_set_body (msg, NULL, parser->content_length)) {
+			return -1;
+		}
 	}
 
 	if (parser->flags & F_SPAMC) {
@@ -663,9 +669,14 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 	pbuf = priv->buf;
 	p = at;
 
-	if (conn->type == RSPAMD_HTTP_SERVER &&
-			rspamd_http_global_max_size > 0 &&
-			msg->body_buf.len + length > rspamd_http_global_max_size) {
+	if (!(msg->flags & RSPAMD_HTTP_FLAG_HAS_BODY)) {
+		if (!rspamd_http_message_set_body (msg, NULL, parser->content_length)) {
+			return -1;
+		}
+	}
+
+	if (conn->max_size > 0 &&
+			msg->body_buf.len + length > conn->max_size) {
 		/* Body length overflow */
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_TOO_LARGE;
 		return -1;
@@ -1097,7 +1108,8 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 					d, r) != (size_t)r || priv->parser.http_errno != 0) {
 				if (priv->flags & RSPAMD_HTTP_CONN_FLAG_TOO_LARGE) {
 					err = g_error_new (HTTP_ERROR, 413,
-							"Request entity too large");
+							"Request entity too large: %zu",
+							(size_t)priv->parser.content_length);
 				}
 				else {
 					err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
@@ -2331,6 +2343,8 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 		msg->body_buf.allocated_len = storage->normal->allocated;
 	}
 
+	msg->flags |= RSPAMD_HTTP_FLAG_HAS_BODY;
+
 	return TRUE;
 }
 
@@ -2536,9 +2550,10 @@ rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
 }
 
 void
-rspamd_http_message_set_max_size (gsize sz)
+rspamd_http_connection_set_max_size (struct rspamd_http_connection *conn,
+		gsize sz)
 {
-	rspamd_http_global_max_size = sz;
+	conn->max_size = sz;
 }
 
 void

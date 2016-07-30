@@ -340,6 +340,7 @@ accept_socket (gint fd, short what, void *arg)
 			RSPAMD_HTTP_SERVER,
 			ctx->keys_cache,
 			NULL);
+	rspamd_http_connection_set_max_size (task->http_conn, task->cfg->max_message);
 	task->ev_base = ctx->ev_base;
 	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,

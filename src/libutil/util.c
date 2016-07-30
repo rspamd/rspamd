@@ -2118,8 +2118,6 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			magic_load (ctx->libmagic, cfg->magic_file);
 		}
 	}
-
-	rspamd_http_message_set_max_size (cfg->max_message);
 }
 
 void
