@@ -26,7 +26,7 @@ Pre and Post Filters
   [Setup]  Lua Setup  ${TESTDIR}/lua/prepostfilters.lua
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  TEST_PRE
-  Check Rspamc  ${result}  TEST_POST  rc_nocheck=1
+  Should Contain  ${result.stdout}  TEST_POST
 
 *** Keywords ***
 Lua Setup
