@@ -8,6 +8,7 @@ Variables       ${TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/maps.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${UTF_MESSAGE}      ${TESTDIR}/messages/utf.eml
 ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
@@ -88,3 +89,11 @@ MAP - MULSYM SYMBOL MISS
 MAP - MULSYM SYMBOL + SCORE
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user5@example.com
   Check Rspamc  ${result}  SYM1 (-10.0
+
+MAP - UTF
+  ${result} =  Scan Message With Rspamc  ${UTF_MESSAGE}
+  Check Rspamc  ${result}  HEADER_MAP
+
+MAP - UTF MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  HEADER_MAP  inverse=1  rc_nocheck=1
