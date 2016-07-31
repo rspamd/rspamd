@@ -99,14 +99,16 @@ Optional map configuration attributes:
 
 Type attribute means what is matched with this map. The following types are supported:
 
-* `ip` - matches source IP of message (radix map)
+* `content` - matches specific content of a message (e.g. headers, body or even a full message) against some map, usually regular expressions map
+* `dnsbl` - matches IP of the host that performed message handoff against some DNS blacklist (consider using [RBL](rbl.html) module for this)
+* `from` - matches envelope from (or header `From` if envelope from is absent)
+* `header` - matches any header specified (must have `header = "Header-Name"` configuration attribute)
+* `hostname` - matches reverse DNS name of the host that performed message handoff
+* `ip` - matches IP of the host that performed message handoff (against radix map)
+* `filename` - matches attachment filename against map
 * `from` - matches envelope from (or header `From` if envelope from is absent)
 * `rcpt` - matches any of envelope rcpt or header `To` if envelope info is missing
-* `header` - matches any header specified (must have `header = "Header-Name"` configuration attribute)
-* `dnsbl` - matches source IP against some DNS blacklist (consider using [RBL](rbl.html) module for this)
 * `url` - matches URLs in messages against maps
-* `filename` - matches attachment filename against map
-* `content` - matches specific content of a message (e.g. headers, body or even a full message) against some map, usually regular expressions map
 
 DNS maps are legacy and are not encouraged to use in new projects (use [rbl](rbl.html) for that).
 
@@ -149,6 +151,24 @@ SENDER_FROM_WHITELIST {
 It is also possible to apply a filtering expression before checking value against some map. This is mainly useful
 for `header` rules. Filters are specified with `filter` option. Rspamd supports the following filters so far:
 
+### Content filters
+
+Content maps support the following filters:
+
+* `body` - raw undecoded body content (with the exceptions of headers)
+* `full` - raw undecoded content of a message (including headers)
+* `headers` - undecoded headers
+* `text` - decoded and converted text parts (without HTML tags but with newlines)
+* `rawtext` - decoded but not converted text parts (with HTML tags and newlines)
+* `oneline` - decoded and stripped text content (without HTML tags and newlines)
+
+### Filename filters
+
+Filename maps support this filters set:
+
+* `extension` - matches file extension
+* `regexp:/re/` - extract data from filename according to some regular expression
+
 ### From, rcpt and header filters
 
 * `email` or `email:addr` - parse header value and extract email address from it (`Somebody <user@example.com>` -> `user@example.com`)
@@ -156,6 +176,11 @@ for `header` rules. Filters are specified with `filter` option. Rspamd supports 
 *  `email:domain` - parse header value as email address and extract domain part from it (`Somebody <user@example.com>` -> `example.com`)
 *  `email:name` - parse header value as email address and extract displayed name from it (`Somebody <user@example.com>` -> `Somebody`)
 * `regexp:/re/` - extracts generic information using the specified regular expression
+
+### Hostname filters
+
+* `tld` - matches TLD (top level domain) part of the hostname
+* `tld:regexp:/re/` - extracts generic information using the specified regular expression from the TLD part
 
 ### URL filters
 
@@ -167,24 +192,6 @@ URL maps allows another set of filters (by default, `url` maps are matched using
 * `regexp:/re/` - extracts generic information using the specified regular expression from the hostname
 * `tld:regexp:/re/` - extracts generic information using the specified regular expression from the TLD part
 * `full:regexp:/re/` - extracts generic information using the specified regular expression from the full URL text
-
-### Filename filters
-
-Filename maps support this filters set:
-
-* `extension` - matches file extension
-* `regexp:/re/` - extract data from filename according to some regular expression
-
-### Content filters
-
-Content maps support the following filters:
-
-* `body` - raw undecoded body content (with the exceptions of headers)
-* `full` - raw undecoded content of a message (including headers)
-* `headers` - undecoded headers
-* `text` - decoded and converted text parts (without HTML tags but with newlines)
-* `rawtext` - decoded but not converted text parts (with HTML tags and newlines)
-* `oneline` - decoded and stripped text content (without HTML tags and newlines)
 
 ## Pre-filter maps
 
