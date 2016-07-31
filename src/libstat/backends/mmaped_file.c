@@ -400,6 +400,10 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 	u_char *map, *pos;
 	struct stat_file_block *block;
 	struct stat_file_header *header, *nh;
+	struct timespec sleep_ts = {
+			.tv_sec = 0,
+			.tv_nsec = 1000000
+	};
 
 	if (size <
 		sizeof (struct stat_file_header) + sizeof (struct stat_file_section) +
@@ -415,26 +419,17 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 
 	if (lock_fd == -1) {
 		/* Wait for lock */
-		lock_fd = open (lock, O_RDONLY, 00600);
+		lock_fd = open (lock, O_WRONLY|O_CREAT|O_EXCL, 00600);
 		if (lock_fd != -1) {
-			if (!rspamd_file_lock (lock_fd, TRUE)) {
-				close (lock_fd);
-				g_free (lock);
+			unlink (lock);
+			close (lock_fd);
+			g_free (lock);
 
-				return rspamd_mmaped_file_open (pool, filename, size, stcf);
-			}
-		}
-		else {
 			return rspamd_mmaped_file_open (pool, filename, size, stcf);
 		}
-	}
-
-	if (!rspamd_file_lock (lock_fd, TRUE)) {
-		close (lock_fd);
-		unlink (lock);
-		g_free (lock);
-
-		return rspamd_mmaped_file_open (pool, filename, size, stcf);
+		else {
+			nanosleep (&sleep_ts, NULL);
+		}
 	}
 
 	old = rspamd_mmaped_file_open (pool, filename, old_size, stcf);
@@ -451,7 +446,6 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 		g_free (backup);
 		unlink (lock);
 		g_free (lock);
-		rspamd_file_unlock (lock_fd, FALSE);
 		close (lock_fd);
 
 		return NULL;
@@ -463,7 +457,6 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 		g_free (backup);
 		unlink (lock);
 		g_free (lock);
-		rspamd_file_unlock (lock_fd, FALSE);
 		close (lock_fd);
 
 		return NULL;
@@ -482,7 +475,6 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 			msg_err_pool ("cannot open file: %s", strerror (errno));
 			unlink (lock);
 			g_free (lock);
-			rspamd_file_unlock (lock_fd, FALSE);
 			close (lock_fd);
 			g_free (backup);
 			return NULL;
@@ -497,7 +489,6 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 			close (fd);
 			unlink (lock);
 			g_free (lock);
-			rspamd_file_unlock (lock_fd, FALSE);
 			close (lock_fd);
 			g_free (backup);
 			return NULL;
@@ -533,10 +524,7 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 	g_free (backup);
 	unlink (lock);
 	g_free (lock);
-	rspamd_file_unlock (lock_fd, FALSE);
 	close (lock_fd);
-
-	rspamd_file_unlock (new->fd, FALSE);
 
 	return new;
 
@@ -693,11 +681,15 @@ rspamd_mmaped_file_create (const gchar *filename,
 	};
 	struct stat_file_block block = { 0, 0, 0 };
 	struct rspamd_stat_tokenizer *tokenizer;
-	gint fd;
+	gint fd, lock_fd;
 	guint buflen = 0, nblocks;
-	gchar *buf = NULL;
+	gchar *buf = NULL, *lock;
 	gpointer tok_conf;
 	gsize tok_conf_len;
+	struct timespec sleep_ts = {
+			.tv_sec = 0,
+			.tv_nsec = 1000000
+	};
 
 	if (size <
 		sizeof (struct stat_file_header) + sizeof (struct stat_file_section) +
@@ -706,6 +698,24 @@ rspamd_mmaped_file_create (const gchar *filename,
 			filename,
 			size);
 		return -1;
+	}
+
+	lock = g_strconcat (filename, ".lock", NULL);
+	lock_fd = open (lock, O_WRONLY|O_CREAT|O_EXCL, 00600);
+
+	if (lock_fd == -1) {
+		/* Wait for lock */
+		lock_fd = open (lock, O_WRONLY|O_CREAT|O_EXCL, 00600);
+		if (lock_fd != -1) {
+			unlink (lock);
+			close (lock_fd);
+			g_free (lock);
+
+			return 0;
+		}
+		else {
+			nanosleep (&sleep_ts, NULL);
+		}
 	}
 
 	nblocks =
@@ -719,6 +729,10 @@ rspamd_mmaped_file_create (const gchar *filename,
 			filename,
 			errno,
 			strerror (errno));
+		unlink (lock);
+		close (lock_fd);
+		g_free (lock);
+
 		return -1;
 	}
 
@@ -742,6 +756,9 @@ rspamd_mmaped_file_create (const gchar *filename,
 			errno,
 			strerror (errno));
 		close (fd);
+		unlink (lock);
+		close (lock_fd);
+		g_free (lock);
 
 		return -1;
 	}
@@ -753,6 +770,9 @@ rspamd_mmaped_file_create (const gchar *filename,
 			errno,
 			strerror (errno));
 		close (fd);
+		unlink (lock);
+		close (lock_fd);
+		g_free (lock);
 
 		return -1;
 	}
@@ -773,6 +793,9 @@ rspamd_mmaped_file_create (const gchar *filename,
 					strerror (errno));
 				close (fd);
 				g_free (buf);
+				unlink (lock);
+				close (lock_fd);
+				g_free (lock);
 
 				return -1;
 			}
@@ -789,6 +812,10 @@ rspamd_mmaped_file_create (const gchar *filename,
 					g_free (buf);
 				}
 
+				unlink (lock);
+				close (lock_fd);
+				g_free (lock);
+
 				return -1;
 			}
 			nblocks--;
@@ -800,6 +827,10 @@ rspamd_mmaped_file_create (const gchar *filename,
 	if (buf) {
 		g_free (buf);
 	}
+
+	unlink (lock);
+	close (lock_fd);
+	g_free (lock);
 
 	return 0;
 }
@@ -866,7 +897,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx,
 		}
 
 		mf = rspamd_mmaped_file_open (cfg->cfg_pool, filename, size, stf);
-        }
+	}
 
 	return (gpointer)mf;
 }
