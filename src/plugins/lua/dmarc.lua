@@ -38,6 +38,7 @@ local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
 local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
 local dmarc_reporting = false
+local dmarc_actions = {}
 
 local function dmarc_report(task, spf_ok, dkim_ok, disposition)
   local ip = task:get_from_ip()
@@ -267,6 +268,11 @@ local function dmarc_callback(task)
       end
     end
 
+    local force_action = dmarc_actions[disposition]
+    if force_action then
+      task:set_pre_result(force_action, 'Action set by DMARC')
+    end
+
   end
 
   -- Do initial request
@@ -285,6 +291,9 @@ end
 
 if opts['reporting'] == true then
   dmarc_reporting = true
+end
+if type(opts['actions']) == 'table' then
+  dmarc_actions = opts['actions']
 end
 
 redis_params = rspamd_parse_redis_server('dmarc')
