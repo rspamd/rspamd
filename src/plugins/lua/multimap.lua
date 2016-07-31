@@ -486,6 +486,9 @@ local function multimap_callback(task, rule)
     end
   elseif rt == 'content' then
     match_content(rule)
+  elseif rt == 'hostname' then
+    local hostname = task:get_hostname()
+    match_rule(rule, hostname)
   end
 end
 
@@ -559,7 +562,8 @@ local function add_multimap_rule(key, newrule)
         or newrule['type'] == 'from'
         or newrule['type'] == 'filename'
         or newrule['type'] == 'url'
-        or newrule['type'] == 'content' then
+        or newrule['type'] == 'content'
+        or newrule['type'] == 'hostname' then
         if newrule['regexp'] then
           newrule['hash'] = rspamd_config:add_map ({
             url = newrule['map'],
