@@ -38,6 +38,7 @@ local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
 local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
 local dmarc_reporting = false
+local dmarc_actions = {}
 
 local function dmarc_report(task, spf_ok, dkim_ok, disposition)
   local ip = task:get_from_ip()
@@ -93,7 +94,7 @@ local function dmarc_callback(task)
     local strict_policy = false
     local quarantine_policy = false
     local found_policy = false
-    local failed_policy = false
+    local failed_policy
     local rua
 
     for _,r in ipairs(results) do
@@ -103,7 +104,7 @@ local function dmarc_callback(task)
           return
         else
           if found_policy then
-            failed_policy = true
+            failed_policy = 'Multiple policies defined in DNS'
             return
           else
             found_policy = true
@@ -118,7 +119,7 @@ local function dmarc_callback(task)
               if dkim_pol == 's' then
                 strict_dkim = true
               elseif dkim_pol ~= 'r' then
-                failed_policy = true
+                failed_policy = 'adkim tag has invalid value'
                 return
               end
             end
@@ -127,7 +128,7 @@ local function dmarc_callback(task)
               if spf_pol == 's' then
                 strict_spf = true
               elseif spf_pol ~= 'r' then
-                failed_policy = true
+                failed_policy = 'aspf tag has invalid value'
                 return
               end
             end
@@ -139,7 +140,7 @@ local function dmarc_callback(task)
                 strict_policy = true
                 quarantine_policy = true
               elseif (policy ~= 'none') then
-                failed_policy = true
+                failed_policy = 'p tag has invalid value'
                 return
               end
             end
@@ -160,7 +161,7 @@ local function dmarc_callback(task)
                   quarantine_policy = false
                 end
               else
-                failed_policy = true
+                failed_policy = 'sp tag has invalid value'
                 return
               end
             end
@@ -192,7 +193,10 @@ local function dmarc_callback(task)
       end
     end
 
-    if failed_policy then return end
+    if failed_policy then
+      task:insert_result('DMARC_BAD_POLICY', res, lookup_domain .. ' : ' .. failed_policy)
+      return
+    end
 
     -- Check dkim and spf symbols
     local spf_ok = false
@@ -264,7 +268,11 @@ local function dmarc_callback(task)
       end
     end
 
-    -- XXX: handle rua and push data to redis
+    local force_action = dmarc_actions[disposition]
+    if force_action then
+      task:set_pre_result(force_action, 'Action set by DMARC')
+    end
+
   end
 
   -- Do initial request
@@ -283,6 +291,9 @@ end
 
 if opts['reporting'] == true then
   dmarc_reporting = true
+end
+if type(opts['actions']) == 'table' then
+  dmarc_actions = opts['actions']
 end
 
 redis_params = rspamd_parse_redis_server('dmarc')
