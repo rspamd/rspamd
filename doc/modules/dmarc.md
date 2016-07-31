@@ -22,6 +22,7 @@ This is enough to enable the module and check/apply DMARC policies.
 
 Symbols added by the module are as follows:
 
+- `DMARC_BAD_POLICY`: Policy was invalid or multiple policies found in DNS
 - `DMARC_POLICY_ALLOW`: Message was authenticated & allowed by DMARC policy
 - `DMARC_POLICY_REJECT`: Authentication failed- rejection suggested by DMARC policy
 - `DMARC_POLICY_QUARANTINE`: Authentication failed- quarantine suggested by DMARC policy
@@ -39,6 +40,8 @@ Keys are inserted to redis servers when a server is selected by hash value from 
 
 To enable storing of report information, `reporting` must be set to `true`.
 
+Actions can be forced for messages based on DMARC disposition as demonstrated in example config below.
+
 ~~~ucl
 dmarc {
 	# Enables storing reporting information to redis
@@ -48,5 +51,10 @@ dmarc {
 	# Alternatively set read_servers / write_servers to split reads and writes
 	# To set custom prefix for redis keys:
 	#key_prefix = "dmarc_";
+	# Actions to enforce based on DMARC disposition (empty by default)
+	actions = {
+		quarantine = "add_header";
+		reject = "reject";
+	}
 }
 ~~~
