@@ -5,9 +5,9 @@ title: Rspamd spam filtering system
 
 <div class="row news_row" style="position: relative;">
 		<div class="col-xs-12 col-sm-10">
-				<h3 style="margin: 0px;"><a href="/blog/">News: Rspamd 1.3 has been released</a></h3>
+				<h3 style="margin: 0px;"><a href="/blog/">News: Rspamd 1.3.1 has been released</a></h3>
 				<span class="date"><small>2016-07-25</small></span>
-				<p style="margin-bottom: 0px; margin-top: 5px">Proxy support, fuzzy storage replication, archives support, greylisting and replies plugins</p>
+				<p style="margin-bottom: 0px; margin-top: 5px">Multimap improvements, bugs fixes, new features, better tests</p>
    </div>
 	 <div class="col-xs-12 col-sm-2 bottom-right">
 				<a class="btn btn-primary pull-right" href="/blog/" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
