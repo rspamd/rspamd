@@ -28,6 +28,8 @@ GetOptions(
 pod2usage(1) if $help;
 pod2usage(-exitval => 0, -verbose => 2) if $man;
 
+@symbols_search = '.*'
+  unless defined @symbols_search;
 
 # Global vars
 my $total = 0;
@@ -210,13 +212,13 @@ rspamd_stats - analyze Rspamd rules by parsing log files
 
 =head1 SYNOPSIS
 
-rspamd_stats [options] --symbol=SYM1 [--symbol=SYM2...] [--log file]
+rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
 
  Options:
    --log=file             log file to read (stdin by default)
    --reject-score=score   set reject threshold (15 by default)
    --junk-score=score     set junk score (6.0 by default)
-   --symbol=sym           check specified symbol (perl regexps are supported)
+   --symbol=sym           check specified symbol (perl regexps, '.*' by default)
    --alpha=value          set ignore score for symbols (0.1 by default)
    --help                 brief help message
    --man                  full documentation
