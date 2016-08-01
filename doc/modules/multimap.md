@@ -233,7 +233,7 @@ From the version 1.3.1, it is possible to define multiple symbols and scores usi
 CONTENT_BLACKLISTED {
   type = "content";
   filter = "body"; # can be headers, full, oneline, text, rawtext
-  map = "/${LOCAL_CONFDIR}/content.map";
+  map = "${LOCAL_CONFDIR}/content.map";
   symbols = ["CONTENT_BLACKLISTED1", "CONTENT_BLACKLISTED2"];
   regexp = true;
 }
@@ -304,13 +304,13 @@ URL_MAP_RE {
 FILENAME_BLACKLISTED {
   type = "filename";
   filter = "extension";
-  map = "/${LOCAL_CONFDIR}/filename.map";
+  map = "${LOCAL_CONFDIR}/filename.map";
   action = "reject";
 }
 CONTENT_BLACKLISTED {
   type = "content";
   filter = "body"; # can be headers, full, oneline, text, rawtext
-  map = "/${LOCAL_CONFDIR}/content.map";
+  map = "${LOCAL_CONFDIR}/content.map";
   symbols = ["CONTENT_BLACKLISTED1", "CONTENT_BLACKLISTED2"];
   regexp = true;
 }
