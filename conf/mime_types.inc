@@ -1288,11 +1288,14 @@ audio/vnd.sealedmedia.softseal-mpeg 0
 audio/vnd.vmx.cvsd 0
 audio/vorbis 0
 audio/vorbis-config 0
+image/bmp 0
 image/cgm 0
 image/example 0
 image/fits 0
 image/g3fax 0
+image/gif 0
 image/jp2 0
+image/jpeg 0
 image/jpm 0
 image/jpx 0
 image/naplps 0
