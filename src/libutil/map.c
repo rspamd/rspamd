@@ -1927,6 +1927,7 @@ struct rspamd_regexp_map {
 	struct rspamd_map *map;
 	GPtrArray *regexps;
 	GPtrArray *values;
+	gboolean has_utf;
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
 	hs_scratch_t *hs_scratch;
@@ -1996,6 +1997,7 @@ rspamd_re_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value
 	struct rspamd_map *map;
 	rspamd_regexp_t *re;
 	GError *err = NULL;
+	gint pcre_flags;
 
 	map = re_map->map;
 	re = rspamd_regexp_new (key, NULL, &err);
@@ -2009,6 +2011,18 @@ rspamd_re_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value
 
 		return;
 	}
+
+	pcre_flags = rspamd_regexp_get_pcre_flags (re);
+
+#ifndef WITH_PCRE2
+	if (pcre_flags & PCRE_FLAG(UTF8)) {
+		re_map->has_utf = TRUE;
+	}
+#else
+	if (pcre_flags & PCRE_FLAG(UTF)) {
+		re_map->has_utf = TRUE;
+	}
+#endif
 
 	g_ptr_array_add (re_map->regexps, re);
 	g_ptr_array_add (re_map->values, g_strdup (value));
@@ -2160,6 +2174,7 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 	rspamd_regexp_t *re;
 	gint res = 0;
 	gpointer ret = NULL;
+	gboolean validated = FALSE;
 
 	g_assert (in != NULL && len > 0);
 
@@ -2167,17 +2182,31 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 		return NULL;
 	}
 
+
+	if (map->has_utf) {
+		if (g_utf8_validate (in, len, NULL)) {
+			validated = TRUE;
+		}
+	}
+	else {
+		validated = TRUE;
+	}
+
 #ifdef WITH_HYPERSCAN
 	if (map->hs_db && map->hs_scratch) {
-		res = hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
-				rspamd_match_hs_single_handler, (void *)&i);
 
-		if (res == HS_SCAN_TERMINATED) {
-			res = 1;
-			ret = g_ptr_array_index (map->values, i);
+		if (validated) {
+
+			res = hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
+					rspamd_match_hs_single_handler, (void *)&i);
+
+			if (res == HS_SCAN_TERMINATED) {
+				res = 1;
+				ret = g_ptr_array_index (map->values, i);
+			}
+
+			return ret;
 		}
-
-		return ret;
 	}
 #endif
 
@@ -2186,7 +2215,7 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 		for (i = 0; i < map->regexps->len; i ++) {
 			re = g_ptr_array_index (map->regexps, i);
 
-			if (rspamd_regexp_search (re, in, len, NULL, NULL, FALSE, NULL)) {
+			if (rspamd_regexp_search (re, in, len, NULL, NULL, !validated, NULL)) {
 				ret = g_ptr_array_index (map->values, i);
 				break;
 			}
