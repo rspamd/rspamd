@@ -1052,6 +1052,7 @@
             $(document).on('submit', '#connectForm', function (e) {
                 e.preventDefault();
                 var password = $('#connectPassword').val();
+                document.getElementById('connectPassword').value = '';
                 $.ajax({
                     global: false,
                     dataType: 'json',
