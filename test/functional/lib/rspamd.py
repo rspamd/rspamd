@@ -24,18 +24,6 @@ def cleanup_temporary_directory(directory):
 def encode_filename(filename):
     return "".join(['%%%0X' % ord(b) for b in filename])
 
-def get_process_children(pid):
-    children = []
-    for p in psutil.process_iter():
-        # ppid could be int or function depending on library version
-        if callable(p.ppid):
-            ppid = p.ppid()
-        else:
-            ppid = p.ppid
-        if ppid == pid:
-            children.append(p.pid)
-    return children
-
 def get_test_directory():
     return os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "../../")
 
@@ -136,7 +124,7 @@ def shutdown_process(pid):
 
 def shutdown_process_with_children(pid):
     pid = int(pid)
-    children = get_process_children(pid)
+    children = psutil.Process(pid=pid).children(recursive=False)
     shutdown_process(pid)
     for child in children:
-        shutdown_process(child)
+        shutdown_process(child.pid)
