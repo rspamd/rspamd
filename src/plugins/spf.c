@@ -35,6 +35,7 @@
 #define DEFAULT_SYMBOL_SOFTFAIL "R_SPF_SOFTFAIL"
 #define DEFAULT_SYMBOL_NEUTRAL "R_SPF_NEUTRAL"
 #define DEFAULT_SYMBOL_ALLOW "R_SPF_ALLOW"
+#define DEFAULT_SYMBOL_DNSFAIL "R_SPF_DNSFAIL"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
 
@@ -44,6 +45,7 @@ struct spf_ctx {
 	const gchar *symbol_softfail;
 	const gchar *symbol_neutral;
 	const gchar *symbol_allow;
+	const gchar *symbol_dnsfail;
 
 	rspamd_mempool_t *spf_pool;
 	radix_compressed_t *whitelist_ip;
@@ -134,6 +136,15 @@ spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"spf",
+			"Symbol that is added if SPF policy is failed due to DNS failure",
+			"symbol_dnsfail",
+			UCL_STRING,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"spf",
 			"Size of SPF parsed records cache",
 			"spf_cache_size",
 			UCL_INT,
@@ -188,6 +199,13 @@ spf_module_config (struct rspamd_config *cfg)
 		spf_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
 	if ((value =
+		rspamd_config_get_module_opt (cfg, "spf", "symbol_dnsfail")) != NULL) {
+		spf_module_ctx->symbol_dnsfail = ucl_obj_tostring (value);
+	}
+	else {
+		spf_module_ctx->symbol_dnsfail = DEFAULT_SYMBOL_DNSFAIL;
+	}
+	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "spf_cache_size")) != NULL) {
 		cache_size = ucl_obj_toint (value);
 	}
@@ -223,6 +241,11 @@ spf_module_config (struct rspamd_config *cfg)
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
+	rspamd_symbols_cache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_dnsfail, 0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL,
+			cb_id);
 
 	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
 			cache_size,
@@ -250,7 +273,8 @@ spf_module_reconfig (struct rspamd_config *cfg)
 }
 
 static gboolean
-spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
+spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
+		struct rspamd_task *task)
 {
 	gboolean res = FALSE;
 	const guint8 *s, *d;
@@ -260,6 +284,11 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 	GList *opts = NULL;
 
 	if (task->from_addr == NULL) {
+		return FALSE;
+	}
+
+	if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
+		/* Ignore failed addresses */
 		return FALSE;
 	}
 
@@ -311,14 +340,32 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 	if (res) {
 		spf_result = rspamd_mempool_strdup (task->task_pool, addr->spf_string);
 		opts = g_list_prepend (opts, spf_result);
+
 		switch (addr->mech) {
 		case SPF_FAIL:
 			spf_symbol = spf_module_ctx->symbol_fail;
 			spf_message = "(SPF): spf fail";
+			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+				if (rec->failed) {
+					msg_info_task ("do not apply SPF failed policy, as we have "
+							"some addresses unresolved");
+					spf_symbol = spf_module_ctx->symbol_dnsfail;
+					spf_message = "(SPF): spf DNS fail";
+				}
+			}
 			break;
 		case SPF_SOFT_FAIL:
 			spf_symbol = spf_module_ctx->symbol_softfail;
 			spf_message = "(SPF): spf softfail";
+
+			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+				if (rec->failed) {
+					msg_info_task ("do not apply SPF failed policy, as we have "
+							"some addresses unresolved");
+					spf_symbol = spf_module_ctx->symbol_dnsfail;
+					spf_message = "(SPF): spf DNS fail";
+				}
+			}
 			break;
 		case SPF_NEUTRAL:
 			spf_symbol = spf_module_ctx->symbol_neutral;
@@ -329,6 +376,7 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 			spf_message = "(SPF): spf allow";
 			break;
 		}
+
 		rspamd_task_insert_result (task,
 				spf_symbol,
 				1,
@@ -346,17 +394,11 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task)
 	guint i;
 	struct spf_addr *addr;
 
-	if (!rec->failed) {
-		for (i = 0; i < rec->elts->len; i ++) {
-			addr = &g_array_index (rec->elts, struct spf_addr, i);
-			if (spf_check_element (addr, task)) {
-				break;
-			}
+	for (i = 0; i < rec->elts->len; i ++) {
+		addr = &g_array_index (rec->elts, struct spf_addr, i);
+		if (spf_check_element (rec, addr, task)) {
+			break;
 		}
-	}
-	else {
-		msg_info_task ("<%s>: ignore spf results due to DNS failure",
-						task->message_id);
 	}
 }
 
