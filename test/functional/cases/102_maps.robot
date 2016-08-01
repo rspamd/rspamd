@@ -68,7 +68,7 @@ MAP - DEPENDS HIT
 
 MAP - DEPENDS MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.1  --from  user123@microsoft.com
-  Check Rspamc  ${result}  DEPS_MAP  inverse=1  rc_nocheck=1
+  Check Rspamc  ${result}  DEPS_MAP  inverse=1  rc_noinverse=1
 
 MAP - MULSYM PLAIN
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user1@example.com
@@ -96,4 +96,12 @@ MAP - UTF
 
 MAP - UTF MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  HEADER_MAP  inverse=1  rc_nocheck=1
+  Check Rspamc  ${result}  HEADER_MAP  inverse=1  rc_noinverse=1
+
+MAP - HOSTNAME
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com
+  Check Rspamc  ${result}  HOSTNAME_MAP
+
+MAP - HOSTNAME MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
+  Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1  rc_noinverse=1

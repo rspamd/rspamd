@@ -221,6 +221,33 @@ local function multimap_callback(task, rule)
     return ret
   end
 
+  local function apply_hostname_filter(filter, hostname, r)
+    if filter == 'tld' then
+      local tld = util.get_tld(hostname)
+      return tld
+    else
+      if not r['re_filter'] then
+        local pat = string.match(filter, 'tld:regexp:(.+)')
+        if not pat then
+          rspamd_logger.errx(task, 'bad search filter: %s', filter)
+          return
+        end
+        r['re_filter'] = regexp.create(pat)
+        if not r['re_filter'] then
+          rspamd_logger.errx(task, 'couldnt create regex: %s', pat)
+          return
+        end
+      end
+      local tld = util.get_tld(hostname)
+      local res = r['re_filter']:search(tld)
+      if res then
+        return res[1]
+      else
+        return nil
+      end
+    end
+  end
+
   local function apply_url_filter(filter, url, r)
     if filter == 'tld' then
       return url:get_tld()
@@ -299,6 +326,27 @@ local function multimap_callback(task, rule)
       value = apply_url_filter(r['filter'], url, r)
     else
       value = url:get_host()
+    end
+
+    ret = match_element(r, value)
+
+    if ret then
+      task:insert_result(r['symbol'], 1)
+
+      if pre_filter then
+        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+      end
+    end
+  end
+
+  local function match_hostname(r, hostname)
+    local value
+    local ret = false
+
+    if r['filter'] then
+      value = apply_hostname_filter(r['filter'], hostname, r)
+    else
+      value = hostname
     end
 
     ret = match_element(r, value)
@@ -486,6 +534,11 @@ local function multimap_callback(task, rule)
     end
   elseif rt == 'content' then
     match_content(rule)
+  elseif rt == 'hostname' then
+    local hostname = task:get_hostname()
+    if hostname ~= 'unknown' then
+      match_hostname(rule, hostname)
+    end
   end
 end
 
@@ -559,7 +612,8 @@ local function add_multimap_rule(key, newrule)
         or newrule['type'] == 'from'
         or newrule['type'] == 'filename'
         or newrule['type'] == 'url'
-        or newrule['type'] == 'content' then
+        or newrule['type'] == 'content'
+        or newrule['type'] == 'hostname' then
         if newrule['regexp'] then
           newrule['hash'] = rspamd_config:add_map ({
             url = newrule['map'],
