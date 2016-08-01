@@ -169,6 +169,7 @@
             $('#listMaps').empty();
             $('#historyLog tbody').remove();
             $('#modalBody').empty();
+            password = '';
         }
         function isLogged() {
             if (!supportsSessionStorage()) {
