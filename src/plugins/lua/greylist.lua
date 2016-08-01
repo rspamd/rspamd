@@ -126,6 +126,10 @@ local function check_time(task, tm, type)
 end
 
 local function greylist_check(task)
+  if task:get_user() ~= nil then
+    return
+  end
+
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
   local hash_key = body_key .. meta_key
@@ -204,6 +208,10 @@ local function greylist_check(task)
 end
 
 local function greylist_set(task)
+  if task:get_user() ~= nil then
+    return
+  end
+
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
   local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
 
