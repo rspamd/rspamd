@@ -1,3 +1,42 @@
+1.3.1:
+	* [CritFix] Fix catena passwords validation
+	* [CritFix] Fix crash when the first received is faked
+	* [Feature] Add DMARC_BAD_POLICY symbol when DMARC policy was invalid
+	* [Feature] Allow for matching hostnames in multimap (#773)
+	* [Feature] Allow for setting action based on DMARC disposition
+	* [Feature] Allow limiting of the inbound message size
+	* [Feature] Allow maps with multiple symbols and scores
+	* [Feature] Allow regexps in the emails maps
+	* [Feature] Allow to register metric symbols from multimap
+	* [Feature] Allow to reset redis tokens instead of appendig values
+	* [Feature] Allow to store strings in radix maps
+	* [Feature] Check UTF validity when there are utf regexps in a map
+	* [Feature] Correctly work when there is no hard reject action
+	* [Feature] Implement dependencies for maps
+	* [Fix] Another effort to unbreak sqlite locking
+	* [Fix] Avoid crash when closing mmapped file
+	* [Fix] Do not break history on NaN in required score
+	* [Fix] Ensure that hyperscan cache written is written properly
+	* [Fix] Filter NaN from scores in history
+	* [Fix] Fix DNSBL maps
+	* [Fix] Fix another locking issue in sqlite
+	* [Fix] Fix another locking issue with mapped files
+	* [Fix] Fix deadlock in mmaped file stats
+	* [Fix] Fix dependencies in multimap plugin
+	* [Fix] Fix emails module configuration
+	* [Fix] Fix greylist plugin (#755)
+	* [Fix] Fix greylisting plugin variable usage
+	* [Fix] Fix installed permissions for rspamd_stats
+	* [Fix] Fix locking in mmapped statistics
+	* [Fix] Fix paths in tests
+	* [Fix] Fix prefilter mode for multimap
+	* [Fix] Forgot to commit leftover changes
+	* [Fix] Really fix local.d includes
+	* [Fix] Restore selective greylisting behaviour
+	* [Fix] Set max size on per connection basis
+	* [Fix] Use temporary storage for hyperscan cache
+	* [Rework] Remove systemd socket activation
+
 1.3.0:
 	* [CritFix] Fix SA rawbody processing - exclude top part
 	* [CritFix] Fix decoding of UTF HTML entitles
