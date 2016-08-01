@@ -109,7 +109,7 @@ struct spf_dns_cb {
 	struct spf_record *rec;
 	struct spf_addr *addr;
 	struct spf_resolved_element *resolved;
-	gchar *ptr_host;
+	const gchar *ptr_host;
 	spf_action_t cur_action;
 	gboolean in_include;
 };
@@ -150,6 +150,41 @@ check_spf_mech (const gchar *elt, gboolean *need_shift)
 			*need_shift = FALSE;
 			return SPF_PASS;
 	}
+}
+
+static const gchar *
+rspamd_spf_dns_action_to_str (spf_action_t act)
+{
+	const char *ret = "unknown";
+
+	switch (act) {
+	case SPF_RESOLVE_MX:
+		ret = "MX";
+		break;
+	case SPF_RESOLVE_A:
+		ret = "A";
+		break;
+	case SPF_RESOLVE_PTR:
+		ret = "PTR";
+		break;
+	case SPF_RESOLVE_AAA:
+		ret = "AAAA";
+		break;
+	case SPF_RESOLVE_REDIRECT:
+		ret = "REDIRECT";
+		break;
+	case SPF_RESOLVE_INCLUDE:
+		ret = "INCLUDE";
+		break;
+	case SPF_RESOLVE_EXISTS:
+		ret = "EXISTS";
+		break;
+	case SPF_RESOLVE_EXP:
+		ret = "EXP";
+		break;
+	}
+
+	return ret;
 }
 
 static struct spf_addr *
@@ -707,11 +742,12 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			reply->code == RDNS_RC_TIMEOUT) {
 		cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		msg_info_spf (
-				"<%s>: spf error for domain %s: cannot resolve DNS record for"
+				"<%s>: spf error for domain %s: cannot resolve %s DNS record for"
 				" %s: %s",
 				task->message_id,
 				cb->rec->sender_domain,
-				cb->resolved->cur_domain,
+				rspamd_spf_dns_action_to_str (cb->cur_action),
+				cb->ptr_host,
 				rdns_strerror (reply->code));
 	}
 
@@ -877,6 +913,7 @@ parse_spf_a (struct spf_record *rec,
 	rec->dns_requests++;
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
+	cb->ptr_host = host;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_A;
 	cb->resolved = resolved;
@@ -959,6 +996,7 @@ parse_spf_mx (struct spf_record *rec,
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_MX;
+	cb->ptr_host = host;
 	cb->resolved = resolved;
 
 	msg_debug_spf ("resolve mx for %s", host);
@@ -1107,6 +1145,7 @@ parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 	cb->cur_action = SPF_RESOLVE_INCLUDE;
 	addr->m.idx = rec->resolved->len;
 	cb->resolved = rspamd_spf_new_addr_list (rec, domain);
+	cb->ptr_host = domain;
 	/* Set reference */
 	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE;
 	msg_debug_spf ("resolve include %s", domain);
@@ -1159,6 +1198,7 @@ parse_spf_redirect (struct spf_record *rec,
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_REDIRECT;
 	cb->resolved = rspamd_spf_new_addr_list (rec, domain);
+	cb->ptr_host = domain;
 	msg_debug_spf ("resolve redirect %s", domain);
 
 	if (make_dns_request_task_forced (task,
@@ -1196,6 +1236,7 @@ parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_EXISTS;
 	cb->resolved = resolved;
+	cb->ptr_host = host;
 
 	msg_debug_spf ("resolve exists %s", host);
 	if (make_dns_request_task_forced (task,
