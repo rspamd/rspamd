@@ -147,7 +147,7 @@ local function check_mime_type(task)
       else
         -- Check for attachment
         local filename = p:get_filename()
-        local ct = string.format('%s/%s', mtype, subtype)
+        local ct = string.format('%s/%s', mtype, subtype):lower()
 
         if filename then
           filename = filename:gsub('[^%s%g]', '?')
