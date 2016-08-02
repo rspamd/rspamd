@@ -139,8 +139,15 @@ local function check_settings(task)
     return false
   end
 
-  local function check_specific_setting(name, rule, ip, client_ip, from, rcpt, user)
+  local function check_specific_setting(name, rule, ip, client_ip, from, rcpt,
+      user, auth_user)
     local res = false
+
+    if rule['authenticated'] then
+      if auth_user then
+        res = true
+      end
+    end
 
     if rule['ip'] then
       if not ip then
@@ -262,7 +269,7 @@ local function check_settings(task)
   for pri = max_pri,1,-1 do
     if settings[pri] then
       for name, r in pairs(settings[pri]) do
-        local rule = check_specific_setting(name, r, ip, client_ip, from, rcpt, user)
+        local rule = check_specific_setting(name, r, ip, client_ip, from, rcpt, user, uname)
         if rule then
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
             task:get_message_id(), name)
