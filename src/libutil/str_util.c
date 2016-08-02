@@ -1054,8 +1054,8 @@ rspamd_header_value_fold (const gchar *name,
 					next_state = read_token;
 				}
 				else {
-					g_string_append_len (res, c, p - c);
-					c = p;
+					g_string_append_len (res, c, p - c + 1);
+					c = p + 1;
 					first_token = FALSE;
 				}
 				p ++;
