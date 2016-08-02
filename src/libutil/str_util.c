@@ -1152,6 +1152,9 @@ rspamd_header_value_fold (const gchar *name,
 	switch (state) {
 	case read_token:
 		if (cur_len > fold_max && !first_token) {
+			if (g_ascii_isspace (*c)) {
+				c ++;
+			}
 			g_string_append_len (res, "\r\n\t", 3);
 			g_string_append_len (res, c, p - c);
 		}
