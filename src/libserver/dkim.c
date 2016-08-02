@@ -2066,19 +2066,19 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	}
 
 	hdr = g_string_sized_new (255);
-	rspamd_printf_gstring (hdr, "v=1;a=rsa-sha256;c=%s/%s;d=%s;s=%s;",
+	rspamd_printf_gstring (hdr, "v=1; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
 			ctx->common.header_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 			ctx->common.body_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
 			domain, selector);
 
 	if (expire > 0) {
-		rspamd_printf_gstring (hdr, "x=%t;", expire);
+		rspamd_printf_gstring (hdr, "x=%t; ", expire);
 	}
 	if (len > 0) {
-		rspamd_printf_gstring (hdr, "l=%z;", len);
+		rspamd_printf_gstring (hdr, "l=%z; ", len);
 	}
 
-	rspamd_printf_gstring (hdr, "t=%t;h=", time (NULL));
+	rspamd_printf_gstring (hdr, "t=%t; h=", time (NULL));
 
 	/* Now canonize headers */
 	for (i = 0; i < ctx->common.hlist->len; i++) {
@@ -2101,7 +2101,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	EVP_DigestFinal_ex (ctx->common.body_hash, raw_digest, NULL);
 
 	b64_data = rspamd_encode_base64 (raw_digest, dlen, 0, NULL);
-	rspamd_printf_gstring (hdr, "bh=%s;b=", b64_data);
+	rspamd_printf_gstring (hdr, " bh=%s; b=", b64_data);
 	g_free (b64_data);
 
 	if (ctx->common.header_canon_type == DKIM_CANON_RELAXED) {
