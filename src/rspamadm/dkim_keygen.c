@@ -40,7 +40,7 @@ static GOptionEntry entries[] = {
 				"Use the specified domain", NULL},
 		{"selector",  's', 0, G_OPTION_ARG_STRING, &selector,
 				"Use the specified selector", NULL},
-		{"privkey",  'k', 0, G_OPTION_ARG_STRING, &selector,
+		{"privkey",  'k', 0, G_OPTION_ARG_STRING, &privkey_file,
 				"Save private key in the specified file", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
