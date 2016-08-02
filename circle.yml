@@ -1,7 +1,8 @@
 dependencies:
     pre:
       - sudo apt-get update -qq
-      - sudo apt-get install -qq cmake gcc libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev make python-psutil ragel redis-server
+      - sudo apt-get install -qq cmake gcc libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev make python-dev ragel redis-server
+      - sudo pip install psutil
       - sudo pip install robotframework
 
 test:
