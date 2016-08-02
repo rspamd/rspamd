@@ -661,7 +661,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 	/* Get keys in redis that match our symbol */
 	rspamd_redis_maybe_auth (ctx, cbdata->redis);
 	redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, cbdata,
-			"KEYS %s*",
+			"SMEMBERS %s_keys",
 			ctx->stcf->symbol);
 }
 
@@ -1251,6 +1251,12 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 	redisLibeventAttach (rt->redis, task->ev_base);
 	rspamd_redis_maybe_auth (rt->ctx, rt->redis);
+
+	/*
+	 * Add the current key to the set of learned keys
+	 */
+	redisAsyncCommand (rt->redis, NULL, NULL, "SADD %s_keys %s",
+			rt->stcf->symbol, rt->redis_object_expanded);
 
 	if (rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER) {
 		redis_cmd = "HINCRBY";
