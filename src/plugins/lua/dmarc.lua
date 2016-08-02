@@ -193,6 +193,7 @@ local function dmarc_callback(task)
       end
     end
 
+    local res = 0.5
     if failed_policy then
       task:insert_result('DMARC_BAD_POLICY', res, lookup_domain .. ' : ' .. failed_policy)
       return
@@ -231,7 +232,6 @@ local function dmarc_callback(task)
     end
 
     disposition = "none"
-    local res = 0.5
     if not (spf_ok or dkim_ok) then
       res = 1.0
       if quarantine_policy then
