@@ -61,6 +61,7 @@ OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default
 OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: OFF]" OFF)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
+OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -822,6 +823,12 @@ IF(NOT CMAKE_C_OPT_FLAGS)
 		ENDIF(DEBUG_MODE MATCHES "ON")
 	ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 ENDIF(NOT CMAKE_C_OPT_FLAGS)
+
+IF(ENABLE_COVERAGE)
+	SET(CMAKE_C_OPT_FLAGS "-g -O0 -fno-strict-aliasing")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -fprofile-arcs -ftest-coverage")
+	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -fprofile-arcs -ftest-coverage")
+ENDIF(ENABLE_COVERAGE)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
 
