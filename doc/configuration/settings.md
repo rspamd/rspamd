@@ -99,6 +99,14 @@ settings {
 		rcpt = "postmaster@example.com";
 		want_spam = yes;
 	}
+	# Disable some checks for authenticated users
+	authenticated {
+		priority = high;
+		authenticated = yes;
+		apply "default" {
+			disable_groups = ["rbl", "spf"];
+		}
+	}
 }
 ~~~
 
@@ -111,6 +119,7 @@ So each setting has the following attributes:
 	+ `rcpt` - match RCPT
 	+ `ip` - match source IP address
 	+ `user` - matches authenticated user ID of message sender if any
+	+ `authenticated` - matches any authenticated user
 - `apply` - list of applied rules, identified by metric name (e.g. `default`)
 	+ `symbol` - modify weight of a symbol
 	+ `actions` - defines actions
