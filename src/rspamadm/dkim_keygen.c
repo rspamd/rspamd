@@ -127,7 +127,7 @@ rspamadm_dkim_keygen (gint argc, gchar **argv)
 
 	pubout = BIO_new (BIO_s_mem());
 
-	rc = i2d_RSAPublicKey_bio (pubout, r);
+	rc = i2d_RSA_PUBKEY_bio (pubout, r);
 	publen = BIO_get_mem_data (pubout, &pubdata);
 
 	g_assert (publen > 0);
