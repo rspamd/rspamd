@@ -1,14 +1,18 @@
 dependencies:
     pre:
       - sudo apt-get update -qq
-      - sudo apt-get install -qq cmake gcc libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev make python-dev ragel redis-server
+      - sudo apt-get install -qq cmake gcc lcov libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev make python-dev ragel redis-server
+      - gem install coveralls-lcov
       - sudo pip install psutil
       - sudo pip install robotframework
 
 test:
   override:
-    - cmake . -DCMAKE_INSTALL_PREFIX=./_install
+    - cmake . -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=./_install
     - cmake --build . --target install
     - sudo robot test/functional/cases
+    - lcov -b . -d . -c --output-file coverage.info
+    - ln -s src/ragel .
+    - coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info
   post:
     - for i in output.xml log.html report.html; do mv $i $CIRCLE_ARTIFACTS; done
