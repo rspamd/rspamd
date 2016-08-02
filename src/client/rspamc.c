@@ -1124,8 +1124,18 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 				0);
 		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v\r\n",
 				folded_symbuf);
+
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
+
+		if (ucl_object_lookup (result, "dkim-signature")) {
+			folded_symbuf = rspamd_header_value_fold ("DKIM-Signature",
+					ucl_object_tostring (ucl_object_lookup (result, "dkim-signature")),
+					0);
+			rspamd_printf_gstring (added_headers, "DKIM-Signature: %v\r\n",
+					folded_symbuf);
+			g_string_free (folded_symbuf, TRUE);
+		}
 
 		if (json || raw || compact) {
 			/* We also append json data as a specific header */
