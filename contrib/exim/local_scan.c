@@ -485,7 +485,7 @@ repeat_read:
 int WaitForScanResult (uschar **resStr)
 {
     int Len, i;
-    int rej, result = LOCAL_SCAN_ACCEPT, answer_size, spm = 0, code = 0, ns = 0, smb = 0, urf = 0;
+    int rej = 0, result = LOCAL_SCAN_ACCEPT, answer_size, spm = 0, code = 0, ns = 0, smb = 0, urf = 0;
     char *strP, *tok, *tmp;
     char *hdr = NULL, *hdrv = NULL, *spmStr = NULL, *symbols=NULL, *urls=NULL;
     char answ [4096], state[6], metric[128], back;
