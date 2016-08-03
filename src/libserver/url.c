@@ -1147,12 +1147,13 @@ rspamd_tld_trie_callback (struct rspamd_multipattern *mp,
 		p--;
 	}
 
-	if (ndots == 0 || p == start - 1) {
+	if ((ndots == 0 || p == start - 1) &&
+			url->tldlen < url->host + url->hostlen - pos) {
 		url->tld = (gchar *) pos;
 		url->tldlen = url->host + url->hostlen - pos;
 	}
 
-	return 1;
+	return 0;
 }
 
 static gboolean
@@ -1576,9 +1577,11 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	}
 
 	/* Find TLD part */
-	if (rspamd_multipattern_lookup (url_scanner->search_trie,
-			uri->host, uri->hostlen,
-			rspamd_tld_trie_callback, uri, NULL) == 0) {
+	rspamd_multipattern_lookup (url_scanner->search_trie,
+				uri->host, uri->hostlen,
+				rspamd_tld_trie_callback, uri, NULL);
+
+	if (uri->tldlen == 0) {
 		/* Ignore URL's without TLD if it is not a numeric URL */
 		if (!rspamd_url_is_ip (uri, pool)) {
 			return URI_ERRNO_TLD_MISSING;
