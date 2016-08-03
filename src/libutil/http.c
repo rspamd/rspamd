@@ -1677,7 +1677,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 								"Date: %s\r\n"
 								"Content-Length: %z\r\n"
 								"Content-Type: %s", /* NO \r\n at the end ! */
-								msg->code, msg->status, "rspamd/1.3.0", datebuf,
+								msg->code, msg->status, "rspamd/" RVERSION, datebuf,
 								bodylen, mime_type);
 				enclen += meth_len;
 				/* External reply */
@@ -1699,7 +1699,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 								"Date: %s\r\n"
 								"Content-Length: %z\r\n"
 								"Content-Type: %s\r\n",
-								msg->code, msg->status, "rspamd/1.3.0", datebuf,
+								msg->code, msg->status, "rspamd/" RVERSION, datebuf,
 								bodylen, mime_type);
 			}
 		}
