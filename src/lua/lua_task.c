@@ -480,7 +480,7 @@ LUA_FUNCTION_DEF (task, get_timeval);
  * @method task:get_metric_score(name)
  * Get the current score of metric `name`. Should be used in post-filters only.
  * @param {string} name name of a metric
- * @return {number} the current score of the metric
+ * @return {table} table containing the current score and required score of the metric
  */
 LUA_FUNCTION_DEF (task, get_metric_score);
 /***
@@ -3023,8 +3023,6 @@ lua_task_get_metric_score (lua_State *L)
 			lua_rawseti (L, -2, 1);
 			lua_pushnumber (L, rs);
 			lua_rawseti (L, -2, 2);
-			lua_pushnumber (L, rs);
-			lua_rawseti (L, -2, 3);
 		}
 		else {
 			lua_pushnil (L);
