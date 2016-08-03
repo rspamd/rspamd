@@ -29,6 +29,10 @@ GetOptions(
 pod2usage(1) if $help;
 pod2usage(-exitval => 0, -verbose => 2) if $man;
 
+my $scanned = 0;
+# Turn off bufferization as required by CGP
+$| = 1;
+
 sub cgp_string {
   my ($in) = @_;
 
@@ -47,6 +51,7 @@ sub rspamd_scan {
 
     if ($hdr->{Status} =~ /^2/) {
       my $js = decode_json($body);
+      $scanned ++;
 
       if (!$js) {
         print "* Rspamd: Bad response for $file: invalid JSON: parse error\n";
@@ -125,6 +130,11 @@ my $w = AnyEvent->io(
         my $file = $4;
         print "* Scanning file $file\n";
         rspamd_scan $tag, $file;
+      }
+      elsif ($cmd eq "QUIT") {
+        print "* Terminating after scanning of $scanned files\n";
+        print "$tag OK\n";
+        exit 0;
       }
     }
   }
