@@ -859,8 +859,13 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	ucl_object_insert_key (obj,
 			ucl_object_frombool (RSPAMD_TASK_IS_SKIPPED (task)),
 			"is_skipped", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
+	if (!isnan (mres->score)) {
+		ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
 			"score", 0, false);
+	} else {
+		ucl_object_insert_key (obj,
+			ucl_object_fromdouble (0.0), "score", 0, false);
+	}
 	ucl_object_insert_key (obj,
 			ucl_object_fromdouble (rspamd_task_get_required_score (task, mres)),
 			"required_score", 0, false);
