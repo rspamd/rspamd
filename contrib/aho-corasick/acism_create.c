@@ -323,9 +323,15 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
             if (last_trans < last) {
                 last_trans = last;
                 if (last + nsyms >= usev_size) {
-                    usev = realloc(usev, usev_size << 1);
-                    memset(usev + usev_size, 0, usev_size);
-                    usev_size <<= 1;
+                    char *tmp = realloc(usev, usev_size << 1);
+                    if (tmp != NULL) {
+                        usev = tmp;
+                        memset(usev + usev_size, 0, usev_size);
+                        usev_size <<= 1;
+                    } else {
+                        free(usev);
+                        /* And handle error */
+                    }
                 }
             }
         }
