@@ -2176,12 +2176,11 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 	gpointer ret = NULL;
 	gboolean validated = FALSE;
 
-	g_assert (in != NULL && len > 0);
+	g_assert (in != NULL);
 
-	if (map == NULL) {
+	if (map == NULL || len == 0) {
 		return NULL;
 	}
-
 
 	if (map->has_utf) {
 		if (g_utf8_validate (in, len, NULL)) {
