@@ -1074,6 +1074,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
 				comp->start = *savep;
+				comp->len = rspamd_html_decode_entitles_inplace ((gchar *)*savep,
+						comp->len);
 				*savep = NULL;
 			}
 		}
@@ -1091,6 +1093,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
 				comp->start = *savep;
+				comp->len = rspamd_html_decode_entitles_inplace ((gchar *)*savep,
+						comp->len);
 				*savep = NULL;
 			}
 		}
@@ -1111,6 +1115,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
 				comp->start = *savep;
+				comp->len = rspamd_html_decode_entitles_inplace ((gchar *)*savep,
+						comp->len);
 				*savep = NULL;
 			}
 		}
