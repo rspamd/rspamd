@@ -29,7 +29,7 @@ pod2usage(1) if $help;
 pod2usage(-exitval => 0, -verbose => 2) if $man;
 
 @symbols_search = '.*'
-  unless defined @symbols_search;
+  unless @symbols_search;
 
 # Global vars
 my $total = 0;
