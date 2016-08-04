@@ -1,12 +1,12 @@
 *** Settings ***
-Suite Setup     Generic Setup
+Suite Setup     Multimap Setup
 Suite Teardown  Generic Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/maps.conf
+${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${UTF_MESSAGE}      ${TESTDIR}/messages/utf.eml
 ${RSPAMD_SCOPE}  Suite
@@ -105,3 +105,9 @@ MAP - HOSTNAME
 MAP - HOSTNAME MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
   Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1  rc_noinverse=1
+
+*** Keywords ***
+Multimap Setup
+  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
+  Set Suite Variable  ${PLUGIN_CONFIG}
+  Generic Setup  PLUGIN_CONFIG
