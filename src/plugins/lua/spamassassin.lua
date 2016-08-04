@@ -307,7 +307,13 @@ local function gen_eval_rule(arg)
         end
 
         if arg then
-          local h = task:get_header(arg)
+          local h
+          if arg == 'EnvelopeFrom' then
+            h = task:get_from('smtp')
+            if h then h = h[1]['addr'] end
+          else
+            h = task:get_header(arg)
+          end
           if h then
             local hdr_freemail = freemail_search(string.lower(h))
 
