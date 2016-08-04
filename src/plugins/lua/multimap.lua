@@ -662,7 +662,6 @@ local function add_multimap_rule(key, newrule)
           return true
         end, iter(str))), '')
         table.insert(atoms, atom)
-
         return atom
       end
 
@@ -681,8 +680,12 @@ local function add_multimap_rule(key, newrule)
         {parse_atom, process_atom}, rspamd_config:get_mempool())
       if expression then
         newrule['expression'] = expression
-        each(function(v) rspamd_config:register_dependency(newrule['symbol'], v) end,
-          atoms)
+
+        each(function(v)
+          rspamd_logger.debugx(rspamd_config, 'add dependency %s -> %s',
+            newrule['symbol'], v)
+          rspamd_config:register_dependency(newrule['symbol'], v)
+        end, atoms)
       end
     end
     return newrule
