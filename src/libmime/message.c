@@ -1271,9 +1271,7 @@ rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
 		}
 	}
 
-	srch.begin = "Content-Type";
-	srch.len = sizeof ("Content-Type") - 1;
-	tok = g_hash_table_lookup (task->request_headers, &srch);
+	tok = rspamd_task_get_request_header (task, "Content-Type");
 
 	if (tok) {
 		/* We have Content-Type defined */

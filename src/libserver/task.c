@@ -37,6 +37,23 @@ rspamd_task_quark (void)
 	return g_quark_from_static_string ("task-error");
 }
 
+static void
+rspamd_request_header_dtor (gpointer p)
+{
+	GPtrArray *ar = p;
+	guint i;
+	rspamd_ftok_t *tok;
+
+	if (ar) {
+		for (i = 0; i < ar->len; i ++) {
+			tok = g_ptr_array_index (ar, i);
+			rspamd_fstring_mapped_ftok_free (tok);
+		}
+
+		g_ptr_array_free (ar, TRUE);
+	}
+}
+
 /*
  * Create new task
  */
@@ -74,7 +91,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 			rspamd_strcase_equal);
 	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
-			rspamd_fstring_mapped_ftok_free);
+			rspamd_request_header_dtor);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->request_headers);
@@ -283,7 +300,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 	gchar filepath[PATH_MAX], *fp;
 	gint fd, flen;
 	gulong offset = 0, shmem_size = 0;
-	rspamd_ftok_t srch, *tok;
+	rspamd_ftok_t *tok;
 	gpointer map;
 	struct stat st;
 	struct rspamd_task_map *m;
@@ -299,9 +316,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		rspamd_protocol_handle_headers (task, msg);
 	}
 
-	srch.begin = "shm";
-	srch.len = 3;
-	tok = g_hash_table_lookup (task->request_headers, &srch);
+	tok = rspamd_task_get_request_header (task, "shm");
 
 	if (tok) {
 		/* Shared memory part */
@@ -349,9 +364,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 		close (fd);
 
-		srch.begin = "shm-offset";
-		srch.len = 10;
-		tok = g_hash_table_lookup (task->request_headers, &srch);
+		tok = rspamd_task_get_request_header (task, "shm-offset");
 
 		if (tok) {
 			rspamd_strtoul (tok->begin, tok->len, &offset);
@@ -365,10 +378,9 @@ rspamd_task_load_message (struct rspamd_task *task,
 			}
 		}
 
-		srch.begin = "shm-length";
-		srch.len = 10;
-		tok = g_hash_table_lookup (task->request_headers, &srch);
+		tok = rspamd_task_get_request_header (task, "shm-length");
 		shmem_size = st.st_size;
+
 
 		if (tok) {
 			rspamd_strtoul (tok->begin, tok->len, &shmem_size);
@@ -397,14 +409,10 @@ rspamd_task_load_message (struct rspamd_task *task,
 		return TRUE;
 	}
 
-	srch.begin = "file";
-	srch.len = 4;
-	tok = g_hash_table_lookup (task->request_headers, &srch);
+	tok = rspamd_task_get_request_header (task, "file");
 
 	if (tok == NULL) {
-		srch.begin = "path";
-		srch.len = 4;
-		tok = g_hash_table_lookup (task->request_headers, &srch);
+		tok = rspamd_task_get_request_header (task, "path");
 	}
 
 	if (tok) {
@@ -1312,4 +1320,60 @@ rspamd_task_get_required_score (struct rspamd_task *task, struct metric_result *
 	}
 
 	return NAN;
+}
+
+rspamd_ftok_t *
+rspamd_task_get_request_header (struct rspamd_task *task,
+		const gchar *name)
+{
+	GPtrArray *ret;
+	rspamd_ftok_t srch;
+
+	srch.begin = (gchar *)name;
+	srch.len = strlen (name);
+
+	ret = g_hash_table_lookup (task->request_headers, &srch);
+
+	if (ret) {
+		return (rspamd_ftok_t *)g_ptr_array_index (ret, 0);
+	}
+
+	return NULL;
+}
+
+GPtrArray*
+rspamd_task_get_request_header_multiple (struct rspamd_task *task,
+		const gchar *name)
+{
+	GPtrArray *ret;
+	rspamd_ftok_t srch;
+
+	srch.begin = (gchar *)name;
+	srch.len = strlen (name);
+
+	ret = g_hash_table_lookup (task->request_headers, &srch);
+
+	return ret;
+}
+
+
+void
+rspamd_task_add_request_header (struct rspamd_task *task,
+		rspamd_ftok_t *name, rspamd_ftok_t *value)
+{
+	GPtrArray *ret;
+
+	ret = g_hash_table_lookup (task->request_headers, name);
+
+	if (ret) {
+		g_ptr_array_add (ret, value);
+
+		/* We need to free name token */
+		rspamd_fstring_mapped_ftok_free (name);
+	}
+	else {
+		ret = g_ptr_array_sized_new (2);
+		g_ptr_array_add (ret, value);
+		g_hash_table_replace (task->request_headers, name, ret);
+	}
 }

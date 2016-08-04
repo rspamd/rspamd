@@ -277,6 +277,33 @@ gdouble rspamd_task_get_required_score (struct rspamd_task *task,
 		struct metric_result *m);
 
 /**
+ * Returns the first header as value for a header
+ * @param task
+ * @param name
+ * @return
+ */
+rspamd_ftok_t * rspamd_task_get_request_header (struct rspamd_task *task,
+		const gchar *name);
+
+/**
+ * Returns all headers with the specific name
+ * @param task
+ * @param name
+ * @return
+ */
+GPtrArray* rspamd_task_get_request_header_multiple (struct rspamd_task *task,
+		const gchar *name);
+
+/**
+ * Adds a new request header to task (name and value should be mapped to fstring)
+ * @param task
+ * @param name
+ * @param value
+ */
+void rspamd_task_add_request_header (struct rspamd_task *task,
+		rspamd_ftok_t *name, rspamd_ftok_t *value);
+
+/**
  * Write log line about the specified task if needed
  */
 void rspamd_task_write_log (struct rspamd_task *task);

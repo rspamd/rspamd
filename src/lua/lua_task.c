@@ -1268,19 +1268,15 @@ lua_task_get_parts (lua_State * L)
 static gint
 lua_task_get_request_header (lua_State *L)
 {
-	rspamd_ftok_t *hdr, srch;
+	rspamd_ftok_t *hdr;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *s;
 	struct rspamd_lua_text *t;
-	gsize len;
 
-	s = luaL_checklstring (L, 2, &len);
+	s = luaL_checkstring (L, 2);
 
 	if (s && task) {
-		srch.begin = (gchar *)s;
-		srch.len = len;
-
-		hdr = g_hash_table_lookup (task->request_headers, &srch);
+		hdr = rspamd_task_get_request_header (task, s);
 
 		if (hdr) {
 			t = lua_newuserdata (L, sizeof (*t));
@@ -1309,7 +1305,7 @@ lua_task_set_request_header (lua_State *L)
 	const gchar *s, *v = NULL;
 	rspamd_fstring_t *buf;
 	struct rspamd_lua_text *t;
-	rspamd_ftok_t *hdr, srch, *new_name;
+	rspamd_ftok_t *hdr, *new_name;
 	gsize len, vlen;
 
 	s = luaL_checklstring (L, 2, &len);
@@ -1328,25 +1324,12 @@ lua_task_set_request_header (lua_State *L)
 		}
 
 		if (v != NULL) {
-			srch.begin = (gchar *)s;
-			srch.len = len;
-
-			hdr = g_hash_table_lookup (task->request_headers, &srch);
-
-			if (!hdr) {
-				new_name = &srch;
-			}
-			else {
-				/* Not found, need to allocate */
-				buf = rspamd_fstring_new_init (srch.begin, srch.len);
-				new_name = rspamd_ftok_map (buf);
-			}
-
 			buf = rspamd_fstring_new_init (v, vlen);
 			hdr = rspamd_ftok_map (buf);
+			buf = rspamd_fstring_new_init (s, len);
+			new_name = rspamd_ftok_map (buf);
 
-			/* This does not destroy key if it exists */
-			g_hash_table_insert (task->request_headers, new_name, hdr);
+			rspamd_task_add_request_header (task, new_name, hdr);
 		}
 
 	}
