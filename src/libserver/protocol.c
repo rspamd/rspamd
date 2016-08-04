@@ -25,6 +25,7 @@
 #include "email_addr.h"
 #include "worker_private.h"
 #include "cryptobox.h"
+#include <math.h>
 
 /* Max line size */
 #define OUTBUFSIZ BUFSIZ
