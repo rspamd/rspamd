@@ -1497,18 +1497,7 @@ lua_config_newindex (lua_State *L)
 
 			if (lua_type (L, -1) == LUA_TSTRING) {
 				type_str = lua_tostring (L, -1);
-				if (strcmp (type_str, "normal") == 0) {
-					type = SYMBOL_TYPE_NORMAL;
-				}
-				else if (strcmp (type_str, "virtual") == 0) {
-					type = SYMBOL_TYPE_VIRTUAL;
-				}
-				else if (strcmp (type_str, "callback") == 0) {
-					type = SYMBOL_TYPE_CALLBACK;
-				}
-				else {
-					msg_info_config ("unknown type: %s", type_str);
-				}
+				type = lua_parse_symbol_type (type_str);
 
 			}
 			lua_pop (L, 1);
