@@ -32,7 +32,7 @@ Recipient Parsing Sanity
   [Setup]  Lua Setup  ${TESTDIR}/lua/recipients.lua
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -r  rcpt1@foobar  -r  rcpt2@foobar
   ...  -r  rcpt3@foobar  -r  rcpt4@foobar
-  Check Rspamc  ${result}  TEST_RCPT[rcpt1@foobar,rcpt2@foobar,rcpt3@foobar,rcpt4@foobar]
+  Check Rspamc  ${result}  TEST_RCPT (1.00)[rcpt1@foobar,rcpt2@foobar,rcpt3@foobar,rcpt4@foobar]
 
 *** Keywords ***
 Lua Setup
