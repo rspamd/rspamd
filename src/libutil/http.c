@@ -534,13 +534,12 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 	HASH_FIND (hh, priv->msg->headers, priv->header->name->begin,
 			priv->header->name->len, hdr);
 
-	if (hdr) {
-		DL_APPEND (priv->msg->headers, priv->header);
-	}
-	else {
+	if (hdr == NULL) {
 		HASH_ADD_KEYPTR (hh, priv->msg->headers, priv->header->name->begin,
 				priv->header->name->len, priv->header);
 	}
+
+	DL_APPEND (hdr, priv->header);
 
 
 	rspamd_http_check_special_header (conn, priv);
@@ -549,7 +548,7 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 static void
 rspamd_http_init_header (struct rspamd_http_connection_private *priv)
 {
-	priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
+	priv->header = g_slice_alloc0 (sizeof (struct rspamd_http_header));
 	priv->header->name = g_slice_alloc0 (sizeof (*priv->header->name));
 	priv->header->value = g_slice_alloc0 (sizeof (*priv->header->value));
 	priv->header->combined = rspamd_fstring_new ();
@@ -2571,15 +2570,18 @@ rspamd_http_connection_set_max_size (struct rspamd_http_connection *conn,
 void
 rspamd_http_message_free (struct rspamd_http_message *msg)
 {
-	struct rspamd_http_header *hdr, *htmp;
+	struct rspamd_http_header *hdr, *htmp, *hcur, *hcurtmp;
 
 
 	HASH_ITER (hh, msg->headers, hdr, htmp) {
 		HASH_DEL (msg->headers, hdr);
-		rspamd_fstring_free (hdr->combined);
-		g_slice_free1 (sizeof (*hdr->name), hdr->name);
-		g_slice_free1 (sizeof (*hdr->value), hdr->value);
-		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
+
+		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
+			rspamd_fstring_free (hcur->combined);
+			g_slice_free1 (sizeof (*hcur->name), hcur->name);
+			g_slice_free1 (sizeof (*hcur->value), hcur->value);
+			g_slice_free1 (sizeof (struct rspamd_http_header), hcur);
+		}
 	}
 
 
