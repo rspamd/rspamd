@@ -105,3 +105,11 @@ MAP - HOSTNAME
 MAP - HOSTNAME MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
   Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1  rc_noinverse=1
+
+MAP - CDB - HOSTNAME
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com
+  Check Rspamc  ${result}  HOSTNAME_MAP
+
+MAP - CDB - HOSTNAME MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
+  Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1  rc_noinverse=1
