@@ -11,16 +11,18 @@ my @symbols_search;
 my $reject_score = 15.0;
 my $junk_score = 6.0;
 my $diff_alpha = 0.1;
+my $correlations = 0;
 my $log_file = "";
 my $man = 0;
 my $help = 0;
 
 GetOptions(
-  "reject-score=f" => \$reject_score,
-  "junk-score=f" => \$junk_score,
-  "symbol=s@" => \@symbols_search,
-  "log=s" => \$log_file,
-  "alpha=f" => \$diff_alpha,
+  "reject-score|r=f" => \$reject_score,
+  "junk-score|j=f" => \$junk_score,
+  "symbol|s=s@" => \@symbols_search,
+  "log|l=s" => \$log_file,
+  "alpha|a=f" => \$diff_alpha,
+  "correlations|c" => \$correlations,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -56,7 +58,7 @@ while(<$rspamd_log>) {
     my $ts = $elts[0] . ' ' . $elts[1];
 
     if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
-      #print "BAD\n";
+      #print "BAD: $_\n";
       next;
     }
 
@@ -72,11 +74,13 @@ while(<$rspamd_log>) {
 
     # Symbols
     my @symbols = split /,/, $3;
+    my @sym_names;
 
     foreach my $s (@symbols_search) {
       my @selected = grep /$s/, @symbols;
 
       if (scalar(@selected) > 0) {
+
         foreach my $sym (@selected) {
           $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
           my $sym_name = $1;
@@ -90,6 +94,8 @@ while(<$rspamd_log>) {
           }
           next if $sym_name !~ /^$s/;
 
+          push @sym_names, $sym_name;
+
           if (!$sym_res{$sym_name}) {
             $sym_res{$sym_name} = {
               hits => 0,
@@ -98,6 +104,7 @@ while(<$rspamd_log>) {
               spam_change => 0,
               junk_change => 0,
               weight => 0,
+              corr => {},
             };
           }
 
@@ -137,8 +144,25 @@ while(<$rspamd_log>) {
               }
             }
           }
-        }
+        } # End foreach symbols selected
       }
+    }
+
+    if ($correlations) {
+      foreach my $sym (@sym_names) {
+        my $r = $sym_res{$sym};
+
+        foreach my $corr_sym (@sym_names) {
+          if ($corr_sym ne $sym) {
+            if ($r->{'corr'}->{$corr_sym}) {
+              $r->{'corr'}->{$corr_sym} ++;
+            }
+            else {
+              $r->{'corr'}->{$corr_sym} = 1;
+            }
+          }
+        }
+      } # End of correlations check
     }
   }
 }
@@ -195,6 +219,17 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
             $r->{junk_change}, $total_junk, ( $jchp or 0 );
         }
       }
+
+      if ($correlations) {
+        print "Correlations report:\n";
+
+        while (my ($cs,$hits) = each %{$r->{corr}}) {
+          my $corr_prob = $hits / $total;
+          my $sym_prob = $r->{hits} / $total;
+          printf "Probability of %s when %s fires: %.3f\n", $s, $cs, ($corr_prob / $sym_prob);
+        }
+      }
+
     }
     else {
       print "Symbol $s has not been met\n";
