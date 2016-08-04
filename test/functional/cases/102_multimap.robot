@@ -8,7 +8,7 @@ Variables       ${TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${UTF_MESSAGE}      ${TESTDIR}/messages/utf.eml
+${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
 ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
@@ -116,6 +116,6 @@ MAP - CDB - HOSTNAME MISS
 
 *** Keywords ***
 Multimap Setup
-    ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
-    Set Suite Variable  ${PLUGIN_CONFIG}
-    Generic Setup  PLUGIN_CONFIG
+  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
+  Set Suite Variable  ${PLUGIN_CONFIG}
+  Generic Setup  PLUGIN_CONFIG

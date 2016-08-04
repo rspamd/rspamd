@@ -24,6 +24,6 @@ Rar4
 
 *** Keywords ***
 MIMETypes Setup
-    ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/mime_types.conf
-    Set Suite Variable  ${PLUGIN_CONFIG}
-    Generic Setup  PLUGIN_CONFIG
+  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/mime_types.conf
+  Set Suite Variable  ${PLUGIN_CONFIG}
+  Generic Setup  PLUGIN_CONFIG

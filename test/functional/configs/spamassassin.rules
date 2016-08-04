@@ -1,0 +1,34 @@
+# These rules are from SpamAssasin project! (but might be modified)
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ifplugin Mail::SpamAssassin::Plugin::FreeMail
+
+freemail_domains	qq.com yahoo.com outlook.com
+freemail_domains	lycosmail.com hotmail.com
+
+header   FREEMAIL_FROM  eval:check_freemail_from()
+describe FREEMAIL_FROM  Sender email is commonly abused enduser mail provider
+score    FREEMAIL_FROM  1.0
+
+header   FREEMAIL_ENVFROM_END_DIGIT  eval:check_freemail_header('EnvelopeFrom', '\d@')
+describe FREEMAIL_ENVFROM_END_DIGIT  Envelope-from freemail username ends in digit
+score    FREEMAIL_ENVFROM_END_DIGIT  1.0
+
+header   FREEMAIL_SUBJECT  eval:check_freemail_header('Subject')
+describe FREEMAIL_SUBJECT  Subject contains freemail
+score    FREEMAIL_SUBJECT  1.0
+
+endif
