@@ -30,6 +30,7 @@ struct rspamd_http_header {
 	rspamd_ftok_t *value;
 	rspamd_fstring_t *combined;
 	UT_hash_handle hh;
+	struct rspamd_http_header *prev, *next;
 };
 
 /**

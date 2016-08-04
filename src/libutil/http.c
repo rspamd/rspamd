@@ -521,6 +521,8 @@ static void
 rspamd_http_finish_header (struct rspamd_http_connection *conn,
 		struct rspamd_http_connection_private *priv)
 {
+	struct rspamd_http_header *hdr;
+
 	priv->header->combined = rspamd_fstring_append (priv->header->combined,
 			"\r\n", 2);
 	priv->header->value->len = priv->header->combined->len -
@@ -528,8 +530,18 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 	priv->header->value->begin = priv->header->combined->str +
 			priv->header->name->len + 2;
 	priv->header->name->begin = priv->header->combined->str;
-	HASH_ADD_KEYPTR (hh, priv->msg->headers, priv->header->name->begin,
-			priv->header->name->len, priv->header);
+
+	HASH_FIND (hh, priv->msg->headers, priv->header->name->begin,
+			priv->header->name->len, hdr);
+
+	if (hdr) {
+		DL_APPEND (priv->msg->headers, priv->header);
+	}
+	else {
+		HASH_ADD_KEYPTR (hh, priv->msg->headers, priv->header->name->begin,
+				priv->header->name->len, priv->header);
+	}
+
 
 	rspamd_http_check_special_header (conn, priv);
 }
@@ -2631,6 +2643,33 @@ rspamd_http_message_find_header (struct rspamd_http_message *msg,
 
 	return res;
 }
+
+GPtrArray*
+rspamd_http_message_find_header_multiple (
+		struct rspamd_http_message *msg,
+		const gchar *name)
+{
+	GPtrArray *res = NULL;
+	struct rspamd_http_header *hdr, *cur;
+
+	guint slen = strlen (name);
+
+	if (msg != NULL) {
+		HASH_FIND (hh, msg->headers, name, slen, hdr);
+
+		if (hdr) {
+			res = g_ptr_array_sized_new (4);
+
+			LL_FOREACH (hdr, cur) {
+				g_ptr_array_add (res, cur->value);
+			}
+		}
+	}
+
+
+	return res;
+}
+
 
 gboolean
 rspamd_http_message_remove_header (struct rspamd_http_message *msg,

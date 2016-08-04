@@ -376,6 +376,16 @@ const rspamd_ftok_t * rspamd_http_message_find_header (
 		const gchar *name);
 
 /**
+ * Search for a header that has multiple values
+ * @param msg
+ * @param name
+ * @return list of rspamd_ftok_t * with values
+ */
+GPtrArray* rspamd_http_message_find_header_multiple (
+		struct rspamd_http_message *msg,
+		const gchar *name);
+
+/**
  * Remove specific header from a message
  * @param msg
  * @param name
