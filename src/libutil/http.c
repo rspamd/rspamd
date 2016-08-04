@@ -786,7 +786,7 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	const guchar *nm;
 	gsize dec_len;
 	struct rspamd_http_message *msg = priv->msg;
-	struct rspamd_http_header *hdr, *hdrtmp;
+	struct rspamd_http_header *hdr, *hdrtmp, *hcur, *hcurtmp;
 	struct http_parser decrypted_parser;
 	struct http_parser_settings decrypted_cb;
 	enum rspamd_cryptobox_mode mode;
@@ -811,10 +811,13 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	/* Cleanup message */
 	HASH_ITER (hh, msg->headers, hdr, hdrtmp) {
 		HASH_DELETE (hh, msg->headers, hdr);
-		rspamd_fstring_free (hdr->combined);
-		g_slice_free1 (sizeof (*hdr->name), hdr->name);
-		g_slice_free1 (sizeof (*hdr->value), hdr->value);
-		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
+
+		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
+			rspamd_fstring_free (hcur->combined);
+			g_slice_free1 (sizeof (*hcur->name), hcur->name);
+			g_slice_free1 (sizeof (*hcur->value), hcur->value);
+			g_slice_free1 (sizeof (struct rspamd_http_header), hcur);
+		}
 	}
 
 	msg->headers = NULL;
@@ -1341,7 +1344,7 @@ struct rspamd_http_message *
 rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 {
 	struct rspamd_http_message *new_msg;
-	struct rspamd_http_header *hdr, *nhdr, *thdr;
+	struct rspamd_http_header *hdr, *nhdr, *nhdrs, *thdr, *hcur;
 	const gchar *old_body;
 	gsize old_len;
 	struct stat st;
@@ -1422,20 +1425,25 @@ rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 	new_msg->last_modified = msg->last_modified;
 
 	HASH_ITER (hh, msg->headers, hdr, thdr) {
-		nhdr = g_slice_alloc (sizeof (struct rspamd_http_header));
-		nhdr->name = g_slice_alloc (sizeof (*nhdr->name));
-		nhdr->value = g_slice_alloc (sizeof (*nhdr->value));
-		nhdr->combined = rspamd_fstring_new_init (hdr->combined->str,
-				hdr->combined->len);
-		nhdr->name->begin = nhdr->combined->str +
-				(hdr->name->begin - hdr->combined->str);
-		nhdr->name->len = hdr->name->len;
-		nhdr->value->begin = nhdr->combined->str +
-				(hdr->value->begin - hdr->combined->str);
-		nhdr->value->len = hdr->value->len;
+		nhdrs = NULL;
 
-		HASH_ADD_KEYPTR (hh, new_msg->headers, nhdr->name->begin,
-				nhdr->name->len, nhdr);
+		DL_FOREACH (hdr, hcur) {
+			nhdr = g_slice_alloc (sizeof (struct rspamd_http_header));
+			nhdr->name = g_slice_alloc (sizeof (*hcur->name));
+			nhdr->value = g_slice_alloc (sizeof (*hcur->value));
+			nhdr->combined = rspamd_fstring_new_init (hcur->combined->str,
+					hcur->combined->len);
+			nhdr->name->begin = nhdr->combined->str +
+					(hcur->name->begin - hcur->combined->str);
+			nhdr->name->len = hcur->name->len;
+			nhdr->value->begin = nhdr->combined->str +
+					(hcur->value->begin - hcur->combined->str);
+			nhdr->value->len = hcur->value->len;
+			DL_APPEND (nhdrs, nhdr);
+		}
+
+		HASH_ADD_KEYPTR (hh, new_msg->headers, nhdrs->name->begin,
+				nhdrs->name->len, nhdrs);
 	}
 
 	return new_msg;
@@ -1556,7 +1564,7 @@ rspamd_http_connection_encrypt_message (
 	const guchar *nm;
 	gint i, cnt;
 	guint outlen;
-	struct rspamd_http_header *hdr, *htmp;
+	struct rspamd_http_header *hdr, *htmp, *hcur;
 	enum rspamd_cryptobox_mode mode;
 
 	mode = rspamd_keypair_alg (priv->local_key);
@@ -1592,8 +1600,10 @@ rspamd_http_connection_encrypt_message (
 
 
 	HASH_ITER (hh, msg->headers, hdr, htmp) {
-		segments[i].data = hdr->combined->str;
-		segments[i++].len = hdr->combined->len;
+		DL_FOREACH (hdr, hcur) {
+			segments[i].data = hcur->combined->str;
+			segments[i++].len = hcur->combined->len;
+		}
 	}
 
 	/* crlfp should point now at the second crlf */
@@ -1805,7 +1815,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		gboolean allow_shared)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
-	struct rspamd_http_header *hdr, *htmp;
+	struct rspamd_http_header *hdr, *htmp, *hcur;
 	gchar repbuf[512], *pbody;
 	gint i, hdrcount, meth_len = 0, preludelen = 0;
 	gsize bodylen, enclen = 0;
@@ -1979,11 +1989,13 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 	if (msg->method < HTTP_SYMBOLS) {
 		HASH_ITER (hh, msg->headers, hdr, htmp) {
-			/* <name: value\r\n> */
-			priv->wr_total += hdr->combined->len;
-			enclen += hdr->combined->len;
-			priv->outlen ++;
-			hdrcount ++;
+			DL_FOREACH (hdr, hcur) {
+				/* <name: value\r\n> */
+				priv->wr_total += hcur->combined->len;
+				enclen += hcur->combined->len;
+				priv->outlen ++;
+				hdrcount ++;
+			}
 		}
 	}
 
@@ -2055,8 +2067,10 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		i = 1;
 		if (msg->method < HTTP_SYMBOLS) {
 			HASH_ITER (hh, msg->headers, hdr, htmp) {
-				priv->out[i].iov_base = hdr->combined->str;
-				priv->out[i++].iov_len = hdr->combined->len;
+				DL_FOREACH (hdr, hcur) {
+					priv->out[i].iov_base = hcur->combined->str;
+					priv->out[i++].iov_len = hcur->combined->len;
+				}
 			}
 
 			priv->out[i].iov_base = "\r\n";
@@ -2608,7 +2622,7 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	const gchar *name,
 	const gchar *value)
 {
-	struct rspamd_http_header *hdr;
+	struct rspamd_http_header *hdr, *found = NULL;
 	guint nlen, vlen;
 
 	if (msg != NULL && name != NULL && value != NULL) {
@@ -2623,7 +2637,16 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 		hdr->name->len = nlen;
 		hdr->value->begin = hdr->combined->str + nlen + 2;
 		hdr->value->len = vlen;
-		HASH_ADD_KEYPTR (hh, msg->headers, hdr->name->begin, hdr->name->len, hdr);
+
+		HASH_FIND (hh, msg->headers, hdr->name->begin,
+				hdr->name->len, found);
+
+		if (found == NULL) {
+			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name->begin,
+					hdr->name->len, hdr);
+		}
+
+		DL_APPEND (found, hdr);
 	}
 }
 
@@ -2677,7 +2700,7 @@ gboolean
 rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 	const gchar *name)
 {
-	struct rspamd_http_header *hdr;
+	struct rspamd_http_header *hdr, *hcur, *hcurtmp;
 	gboolean res = FALSE;
 	guint slen = strlen (name);
 
@@ -2687,10 +2710,13 @@ rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 		if (hdr) {
 			HASH_DEL (msg->headers, hdr);
 			res = TRUE;
-			rspamd_fstring_free (hdr->combined);
-			g_slice_free1 (sizeof (*hdr->value), hdr->value);
-			g_slice_free1 (sizeof (*hdr->name), hdr->name);
-			g_slice_free1 (sizeof (*hdr), hdr);
+
+			DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
+				rspamd_fstring_free (hcur->combined);
+				g_slice_free1 (sizeof (*hcur->value), hcur->value);
+				g_slice_free1 (sizeof (*hcur->name), hcur->name);
+				g_slice_free1 (sizeof (*hcur), hcur);
+			}
 		}
 	}
 
