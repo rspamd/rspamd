@@ -675,6 +675,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_task *task = cb->task;
 	const gchar *user_field = "unknown";
 	gboolean has_user = FALSE;
+	guint len = 0;
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
 		obj = ucl_object_fromlstring (url->string, url->urllen);
@@ -688,16 +689,18 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	if (cb->task->cfg->log_urls) {
 		if (task->user) {
 			user_field = task->user;
+			len = strlen (task->user);
 			has_user = TRUE;
 		}
 		else if (task->from_envelope) {
 			user_field = task->from_envelope->addr;
+			len = task->from_envelope->addr_len;
 		}
 
-		msg_info_task ("<%s> %s: %s; ip: %s; URL: %*s",
+		msg_info_task ("<%s> %s: %*s; ip: %s; URL: %*s",
 			task->message_id,
 			has_user ? "user" : "from",
-			user_field,
+			len, user_field,
 			rspamd_inet_address_to_string (task->from_addr),
 			url->urllen, url->string);
 	}
