@@ -1649,6 +1649,15 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		}
 	}
 
+	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
+	if (!bl->font_color.valid) {
+		bl->font_color.d.val = 0xffffffff;
+		bl->font_color.valid = TRUE;
+	}
+	if (!bl->background_color.valid) {
+		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
+	}
+
 	if (hc->blocks == NULL) {
 		hc->blocks = g_ptr_array_sized_new (64);
 		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
