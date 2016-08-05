@@ -21,6 +21,54 @@ If you have used beanstalk for some purposes then you could move to Redis [pub/s
 
 Rmilter now supports configuration override from `rmilter.conf.local` and from `rmilter.conf.d/*.conf` files. You should consider using these methods for your local configuration options.
 
+Rmilter no longer adds several SpamAssassin-compatible headers: namely `X-Spam-Status`, `X-Spam-Level` and `X-Spamd-Bar`. Support has been added for adding/removing custom headers under instruction of Rspamd (Requires Rspamd 1.3.0+). Example script which restores the removed headers is shown below (to be added to `/etc/rspamd/lua/rspamd.local.lua`):
+
+~~~lua
+rspamd_config:register_symbol({
+  name = 'RMILTER_HEADERS',
+  type = 'postfilter',
+  callback = function(task)
+    local metric_score = task:get_metric_score('default')
+    local score = metric_score[1]
+    local required_score = metric_score[2]
+    -- X-Spamd-Bar & X-Spam-Level
+    local spambar
+    local spamlevel = ''
+    if score < 0 then
+      spambar = string.rep('-', score*-1)
+    elseif score > 0 then
+      spambar = string.rep('+', score*1)
+      spamlevel = string.rep('*', score*1)
+    else
+      spambar = '/'
+    end
+    -- X-Spam-Status
+    local is_spam
+    local spamstatus
+    local action = task:get_metric_action('default')
+    if action ~= 'no action' and action ~= 'greylist' then
+      is_spam = 'Yes'
+    else
+      is_spam = 'No'
+    end
+    spamstatus = is_spam .. ', score=' .. string.format('%.2f', score)
+    -- Add headers
+    task:set_rmilter_reply({
+      add_headers = {
+        {'X-Spamd-Bar', spambar},
+        {'X-Spam-Level', spamlevel},
+        {'X-Spam-Status', spamstatus}
+      },
+      remove_headers = {
+        {'X-Spamd-Bar'},
+        {'X-Spam-Level'},
+        {'X-Spam-Status'}
+      }
+    })
+  end
+})
+~~~
+
 ## Migrating from Rspamd 1.2 to Rspamd 1.3
 
 There are no incompatible changes introduced in Rspamd 1.3 version.
