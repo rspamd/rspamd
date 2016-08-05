@@ -536,7 +536,7 @@ local function multimap_callback(task, rule)
     match_content(rule)
   elseif rt == 'hostname' then
     local hostname = task:get_hostname()
-    if hostname ~= 'unknown' then
+    if hostname and hostname ~= 'unknown' then
       match_hostname(rule, hostname)
     end
   end
