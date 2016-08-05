@@ -76,6 +76,12 @@ LUA_FUNCTION_DEF (textpart, get_length);
  */
 LUA_FUNCTION_DEF (textpart, get_raw_length);
 /***
+ * @method mime_part:get_urls_length()
+ * Get length of the urls within the part
+ * @return {integer} length of urls in **bytes**
+ */
+LUA_FUNCTION_DEF (textpart, get_urls_length);
+/***
  * @method mime_part:get_lines_count()
  * Get lines number in the part
  * @return {integer} number of lines in the part
@@ -125,6 +131,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_content_oneline),
 	LUA_INTERFACE_DEF (textpart, get_length),
 	LUA_INTERFACE_DEF (textpart, get_raw_length),
+	LUA_INTERFACE_DEF (textpart, get_urls_length),
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
 	LUA_INTERFACE_DEF (textpart, get_words_count),
 	LUA_INTERFACE_DEF (textpart, is_empty),
@@ -423,6 +430,32 @@ lua_textpart_get_raw_length (lua_State * L)
 	else {
 		lua_pushnumber (L, part->orig->len);
 	}
+
+	return 1;
+}
+
+static gint
+lua_textpart_get_urls_length (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	GList *cur;
+	guint total = 0;
+	struct rspamd_process_exception *ex;
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	for (cur = part->exceptions; cur != NULL; cur = g_list_next (cur)) {
+		ex = cur->data;
+
+		if (ex->type == RSPAMD_EXCEPTION_URL) {
+			total += ex->len;
+		}
+	}
+
+	lua_pushnumber (L, total);
 
 	return 1;
 }
