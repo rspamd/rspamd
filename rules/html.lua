@@ -39,7 +39,7 @@ local function check_html_image(task, min, max)
               if parent then
                 if parent:get_type() == 'a' then
                   -- do not trigger on small and unknown size images
-                  if i['height'] + i['width'] >= 210 then
+                  if i['height'] + i['width'] >= 210 or not i['embedded'] then
                     return true
                   end
                 end
