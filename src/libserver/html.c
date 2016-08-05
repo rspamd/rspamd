@@ -1833,6 +1833,13 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						}
 
 						g_byte_array_append (dest, c, len);
+						if (content_tag) {
+							if (content_tag->content == NULL) {
+								content_tag->content = c;
+							}
+
+							content_tag->content_length += p - c + 1;
+						}
 					}
 
 					c = p;
@@ -1863,11 +1870,15 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					g_byte_array_append (dest, c, len);
 
 					if (content_tag) {
-						content_tag->content_length = len;
-						content_tag->content = c;
-						content_tag = NULL;
+						if (content_tag->content == NULL) {
+							content_tag->content = c;
+						}
+
+						content_tag->content_length += p - c;
 					}
 				}
+
+				content_tag = NULL;
 
 				state = tag_begin;
 				continue;
@@ -1881,6 +1892,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				c = p;
 				state = content_write;
 				continue;
+			}
+
+			if (content_tag) {
+				content_tag->content_length ++;
 			}
 
 			p ++;
