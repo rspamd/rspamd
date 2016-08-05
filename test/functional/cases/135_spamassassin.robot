@@ -26,6 +26,9 @@ Freemail From Enddigit
 Freemail Subject
   Should Contain  ${FREEMAIL_RESULT}  FREEMAIL_SUBJECT
 
+Metas
+  Should Contain  ${FREEMAIL_RESULT}  TEST_META3
+
 *** Keywords ***
 SpamAssassin Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/spamassassin.conf

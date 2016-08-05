@@ -32,3 +32,13 @@ describe FREEMAIL_SUBJECT  Subject contains freemail
 score    FREEMAIL_SUBJECT  1.0
 
 endif
+
+# These rules are /not/ from SpamAssassin project
+
+header	TEST_XFOO	X-Foo =~ /.{1,50}/
+score	TEST_XFOO	1
+header	TEST_XBAR	X-Bar =~ /.{1,50}/
+score	TEST_XBAR	1
+meta	TEST_META1	TEST_XFOO && TEST_XBAR
+meta	TEST_META2	TEST_META1 && SIMPLE_TEST
+meta	TEST_META3	TEST_META1 && TEST_META2
