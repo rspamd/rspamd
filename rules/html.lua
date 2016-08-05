@@ -164,3 +164,50 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
   group = 'html',
   description = 'Message contains many suspicious messages'
 }
+
+rspamd_config.R_WHITE_ON_WHITE = {
+  callback = function(task)
+    local tp = task:get_text_parts() -- get text parts in a message
+    local ret = false
+    local diff = 0.0
+
+    for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+      if p:is_html() then -- if the current part is html part
+        local hc = p:get_html() -- we get HTML context
+
+        hc:foreach_tag('font', function(tag, len)
+          local bl = tag:get_extra()
+          if bl then
+            if bl['bgcolor'] and bl['color'] then
+              local color = bl['color']
+              local bgcolor = bl['bgcolor']
+              -- Should use visual approach here some day
+              local diff_r = math.abs(color[1] - bgcolor[1]) / 255.0
+              local diff_g = math.abs(color[2] - bgcolor[2]) / 255.0
+              local diff_b = math.abs(color[3] - bgcolor[3]) / 255.0
+              diff = (diff_r + diff_g + diff_b) / 3.0
+
+              if diff < 0.2 then
+                ret = true
+                return true
+              end
+            end
+          end
+
+          return false -- Continue search
+        end)
+
+      end
+    end
+
+    if ret then
+      return true,(0.2 - diff) * 5.0,tostring(diff * 100.0)
+    end
+
+    return false
+  end,
+
+  score = 6.0,
+  group = 'html',
+  description = 'Message contains low contrast text'
+}
