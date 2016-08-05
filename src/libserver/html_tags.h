@@ -195,14 +195,6 @@ typedef enum
 #define CM_OMITST       (1 << 21)
 /* Unique elements */
 #define CM_UNIQUE       (1 << 22)
-/* XML tag */
-#define FL_XML          (1 << 23)
-/* Closing tag */
-#define FL_CLOSING      (1 << 24)
-/* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 25)
-#define FL_BROKEN       (1 << 26)
-#define FL_IGNORE       (1 << 27)
-#define FL_BLOCK        (1 << 28)
+
 
 #endif /* SRC_LIBSERVER_HTML_TAGS_H_ */

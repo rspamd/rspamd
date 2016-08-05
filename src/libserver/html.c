@@ -539,23 +539,37 @@ rspamd_html_check_balance (GNode * node, GNode ** cur_level)
 	return FALSE;
 }
 
-gboolean
-rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname)
+gint
+rspamd_html_tag_by_name (const gchar *name)
 {
 	struct html_tag tag;
 	struct html_tag_def *found;
 
-	g_assert (hc != NULL);
-	g_assert (hc->tags_seen != NULL);
-
-	tag.name.start = tagname;
-	tag.name.len = strlen (tagname);
+	tag.name.start = name;
+	tag.name.len = strlen (name);
 
 	found = bsearch (&tag, tag_defs, G_N_ELEMENTS (tag_defs),
 			sizeof (tag_defs[0]), tag_find);
 
 	if (found) {
-		return isset (hc->tags_seen, found->id);
+		return found->id;
+	}
+
+	return -1;
+}
+
+gboolean
+rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname)
+{
+	gint id;
+
+	g_assert (hc != NULL);
+	g_assert (hc->tags_seen != NULL);
+
+	id = rspamd_html_tag_by_name (tagname);
+
+	if (id != -1) {
+		return isset (hc->tags_seen, id);
 	}
 
 	return FALSE;
@@ -775,8 +789,12 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		else {
 			parent = (*cur_level)->data;
 
-			if (parent && (parent->flags & FL_IGNORE)) {
-				tag->flags |= FL_IGNORE;
+			if (parent) {
+				if ((parent->flags & FL_IGNORE)) {
+					tag->flags |= FL_IGNORE;
+				}
+
+				parent->content_length += tag->content_length;
 			}
 
 			g_node_append (*cur_level, nnode);
@@ -1605,7 +1623,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	guint obrace = 0, ebrace = 0;
 	GNode *cur_level = NULL;
 	gint substate = 0, len, href_offset = -1;
-	struct html_tag *cur_tag = NULL;
+	struct html_tag *cur_tag = NULL, *content_tag = NULL;
 	struct rspamd_url *url = NULL, *turl;
 	struct rspamd_process_exception *ex;
 	enum {
@@ -1830,10 +1848,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						save_space = FALSE;
 					}
 				}
-
-				if (cur_tag) {
-					cur_tag->content_length ++;
-				}
 			}
 			else {
 				if (c != p) {
@@ -1847,6 +1861,12 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 
 					g_byte_array_append (dest, c, len);
+
+					if (content_tag) {
+						content_tag->content_length = len;
+						content_tag->content = c;
+						content_tag = NULL;
+					}
 				}
 
 				state = tag_begin;
@@ -1920,6 +1940,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						}
 					}
 					setbit (hc->tags_seen, cur_tag->id);
+				}
+
+				if (!(cur_tag->flags & (FL_CLOSED|FL_CLOSING))) {
+					content_tag = cur_tag;
 				}
 
 				/* Handle newlines */

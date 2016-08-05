@@ -77,10 +77,22 @@ struct html_block {
 	gchar *class;
 };
 
+/* Public tags flags */
+/* XML tag */
+#define FL_XML          (1 << 23)
+/* Closing tag */
+#define FL_CLOSING      (1 << 24)
+/* Fully closed tag (e.g. <a attrs />) */
+#define FL_CLOSED       (1 << 25)
+#define FL_BROKEN       (1 << 26)
+#define FL_IGNORE       (1 << 27)
+#define FL_BLOCK        (1 << 28)
+
 struct html_tag {
 	gint id;
 	gint flags;
 	gsize content_length;
+	const gchar *content;
 	struct html_tag_component name;
 	GQueue *params;
 	gpointer extra; /** Additional data associated with tag (e.g. image) */
@@ -122,6 +134,13 @@ gboolean rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname);
  * @return
  */
 const gchar* rspamd_html_tag_by_id (gint id);
+
+/**
+ * Returns HTML tag id by name
+ * @param name
+ * @return
+ */
+gint rspamd_html_tag_by_name (const gchar *name);
 
 /**
  * Extract URL from HTML tag component and sets component elements if needed
