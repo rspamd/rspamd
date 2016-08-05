@@ -1830,6 +1830,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						save_space = FALSE;
 					}
 				}
+
+				if (cur_tag) {
+					cur_tag->content_length ++;
+				}
 			}
 			else {
 				if (c != p) {

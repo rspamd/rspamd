@@ -80,6 +80,7 @@ struct html_block {
 struct html_tag {
 	gint id;
 	gint flags;
+	gsize content_length;
 	struct html_tag_component name;
 	GQueue *params;
 	gpointer extra; /** Additional data associated with tag (e.g. image) */
