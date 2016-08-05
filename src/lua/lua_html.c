@@ -411,16 +411,17 @@ lua_html_node_foreach_cb (GNode *n, gpointer d)
 		lua_pushnumber (ud->L, tag->content_length);
 
 		if (lua_pcall (ud->L, 2, 1, 0) != 0) {
-			lua_settop (ud->L, 0);
+			msg_err ("error in foreach_tag callback: %s", lua_tostring (ud->L, -1));
+			lua_pop (ud->L, 1);
 			return TRUE;
 		}
 
 		if (lua_toboolean (ud->L, -1)) {
-			lua_settop (ud->L, 0);
+			lua_pop (ud->L, 1);
 			return TRUE;
 		}
 
-		lua_settop (ud->L, 0);
+		lua_pop (ud->L, 1);
 	}
 
 	return FALSE;
