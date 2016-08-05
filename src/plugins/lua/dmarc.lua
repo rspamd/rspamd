@@ -37,6 +37,7 @@ local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
 local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
+local trim_re = rspamd_regexp.create_cached("(.+)\\\\{0,1};$")
 local dmarc_reporting = false
 local dmarc_actions = {}
 
@@ -113,13 +114,17 @@ local function dmarc_callback(task)
         local elts = elts_re:split(r)
 
         if elts then
+          local trimmed = trim_re:search(elts[#elts], true, true)
+          if trimmed then
+            elts[#elts] = trimmed[1][2]
+          end
           for _,e in ipairs(elts) do
             dkim_pol = string.match(e, '^adkim=(.)$')
             if dkim_pol then
               if dkim_pol == 's' then
                 strict_dkim = true
               elseif dkim_pol ~= 'r' then
-                failed_policy = 'adkim tag has invalid value'
+                failed_policy = 'adkim tag has invalid value: ' .. dkim_pol
                 return
               end
             end
@@ -128,7 +133,7 @@ local function dmarc_callback(task)
               if spf_pol == 's' then
                 strict_spf = true
               elseif spf_pol ~= 'r' then
-                failed_policy = 'aspf tag has invalid value'
+                failed_policy = 'aspf tag has invalid value: ' .. spf_pol
                 return
               end
             end
@@ -140,7 +145,7 @@ local function dmarc_callback(task)
                 strict_policy = true
                 quarantine_policy = true
               elseif (policy ~= 'none') then
-                failed_policy = 'p tag has invalid value'
+                failed_policy = 'p tag has invalid value: ' .. policy
                 return
               end
             end
@@ -161,7 +166,7 @@ local function dmarc_callback(task)
                   quarantine_policy = false
                 end
               else
-                failed_policy = 'sp tag has invalid value'
+                failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
                 return
               end
             end
