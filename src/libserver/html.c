@@ -1572,9 +1572,11 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		struct html_content *hc)
 {
 	struct html_tag_component *comp;
-	struct html_block *bl;
+	struct html_block *bl, *bl_parent;
 	rspamd_ftok_t fstr;
 	GList *cur;
+	GNode *parent;
+	struct html_tag *parent_tag;
 
 	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
@@ -1614,6 +1616,37 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		}
 
 		cur = g_list_next (cur);
+	}
+
+	if (!bl->background_color.valid) {
+		/* Try to propagate background color from parent nodes */
+		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
+			parent_tag = parent->data;
+
+			if (parent && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
+				bl_parent = parent_tag->extra;
+
+				if (bl_parent->background_color.valid) {
+					memcpy (&bl->background_color, &bl_parent->background_color,
+							sizeof (bl->background_color));
+				}
+			}
+		}
+	}
+	if (!bl->font_color.valid) {
+		/* Try to propagate background color from parent nodes */
+		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
+			parent_tag = parent->data;
+
+			if (parent && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
+				bl_parent = parent_tag->extra;
+
+				if (bl_parent->font_color.valid) {
+					memcpy (&bl->font_color, &bl_parent->font_color,
+							sizeof (bl->font_color));
+				}
+			}
+		}
 	}
 
 	if (hc->blocks == NULL) {
@@ -1687,6 +1720,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	hc->bgcolor.d.comp.r = 255;
 	hc->bgcolor.d.comp.g = 255;
 	hc->bgcolor.d.comp.b = 255;
+	hc->bgcolor.valid = TRUE;
 
 	dest = g_byte_array_sized_new (in->len / 3 * 2);
 
