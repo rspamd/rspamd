@@ -216,7 +216,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   end
 
   if check_fqdn(host) then
-    if eq_host == '' or eq_host ~= 'unknown' or eq_host ~= host then
+    if eq_host == '' or eq_host ~= host then
       task:get_resolver():resolve('a', {
         task=task,
         name = host,

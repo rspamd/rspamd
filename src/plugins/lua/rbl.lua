@@ -238,7 +238,7 @@ local function rbl_cb (task)
 	  end
 	  if not havegot['rdns'] then
 	    havegot['rdns'] = task:get_hostname()
-	    if havegot['rdns'] == nil or havegot['rdns'] == 'unknown' then
+	    if not havegot['rdns'] then
 	      notgot['rdns'] = true
 	      return
 	    end
