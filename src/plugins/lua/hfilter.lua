@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2011-2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
 Copyright (c) 2013-2015, Alexey Savelyev <info@homeweb.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -342,8 +342,6 @@ local function hfilter(task)
           end
         end
       end
-    else
-      task:insert_result('HFILTER_HELO_UNKNOWN', 1.0)
     end
   end
 
@@ -363,8 +361,6 @@ local function hfilter(task)
           end
         end
       end
-    else
-      task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
     end
   end
 
@@ -430,7 +426,6 @@ local symbols_enabled = {}
 local symbols_helo = {
   "HFILTER_HELO_BAREIP",
   "HFILTER_HELO_BADIP",
-  "HFILTER_HELO_UNKNOWN",
   "HFILTER_HELO_1",
   "HFILTER_HELO_2",
   "HFILTER_HELO_3",
