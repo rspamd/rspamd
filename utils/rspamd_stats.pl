@@ -2,7 +2,6 @@
 
 use Data::Dumper;
 use Getopt::Long;
-use Time::Piece;
 use Pod::Usage;
 use warnings;
 use strict;
