@@ -10,7 +10,7 @@ test:
     - cmake . -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=./_install
     - cmake --build . --target install
     - sudo robot test/functional/cases
-    - lcov -b . -d . -c --output-file coverage.info
+    - lcov --no-external -b . -d . -c --output-file coverage.info
     - ln -s src/ragel .
     - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info; fi
   post:
