@@ -28,6 +28,7 @@ enum html_component_type {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
 	RSPAMD_HTML_COMPONENT_HREF,
 	RSPAMD_HTML_COMPONENT_COLOR,
+	RSPAMD_HTML_COMPONENT_BGCOLOR,
 	RSPAMD_HTML_COMPONENT_STYLE,
 	RSPAMD_HTML_COMPONENT_CLASS,
 	RSPAMD_HTML_COMPONENT_WIDTH,
@@ -105,6 +106,7 @@ struct rspamd_task;
 struct html_content {
 	GNode *html_tags;
 	gint flags;
+	struct html_color bgcolor;
 	guchar *tags_seen;
 	GPtrArray *images;
 	GPtrArray *blocks;

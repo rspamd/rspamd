@@ -346,7 +346,7 @@ lua_html_get_blocks (lua_State *L)
 					lua_settable (L, -3);
 				}
 				if (bl->background_color.valid) {
-					lua_pushstring (L, "color");
+					lua_pushstring (L, "bgcolor");
 					lua_newtable (L);
 					lua_pushnumber (L, bl->background_color.d.comp.r);
 					lua_rawseti (L, -2, 1);

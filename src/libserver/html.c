@@ -880,6 +880,11 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_CLASS);
 			}
 		}
+		else if (len == 7) {
+			if (g_ascii_strncasecmp (begin, "bgcolor", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_BGCOLOR);
+			}
+		}
 	}
 
 	return ret;
@@ -1584,6 +1589,17 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			rspamd_html_process_color (comp->start, comp->len, &bl->font_color);
 			msg_debug_pool ("got color: %xd", bl->font_color.d.val);
 		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_BGCOLOR && comp->len > 0) {
+			fstr.begin = (gchar *)comp->start;
+			fstr.len = comp->len;
+			rspamd_html_process_color (comp->start, comp->len, &bl->background_color);
+			msg_debug_pool ("got color: %xd", bl->font_color.d.val);
+
+			if (tag->id == Tag_BODY) {
+				/* Set global background color */
+				memcpy (&hc->bgcolor, &bl->background_color, sizeof (hc->bgcolor));
+			}
+		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
 			bl->style.len = comp->len;
 			bl->style.start =  comp->start;
@@ -1665,6 +1681,12 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	}
 
 	hc->tags_seen = rspamd_mempool_alloc0 (pool, NBYTES (G_N_ELEMENTS (tag_defs)));
+
+	/* Set white background color by default */
+	hc->bgcolor.d.comp.alpha = 0;
+	hc->bgcolor.d.comp.r = 255;
+	hc->bgcolor.d.comp.g = 255;
+	hc->bgcolor.d.comp.b = 255;
 
 	dest = g_byte_array_sized_new (in->len / 3 * 2);
 
