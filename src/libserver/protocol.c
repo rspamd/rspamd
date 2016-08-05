@@ -472,11 +472,6 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		}
 	}
 
-	if (task->hostname == NULL || task->hostname[0] == '\0') {
-		/* We assume that hostname is either "unknown" or existing */
-		task->hostname = rspamd_mempool_strdup (task->task_pool, "unknown");
-	}
-
 	if (!has_ip) {
 		task->flags |= RSPAMD_TASK_FLAG_NO_IP;
 	}
