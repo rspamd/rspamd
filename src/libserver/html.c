@@ -43,7 +43,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_BDO, "bdo", (CM_INLINE)},
 	{Tag_BIG, "big", (CM_INLINE)},
 	{Tag_BLOCKQUOTE, "blockquote", (CM_BLOCK)},
-	{Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
+	{Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE | FL_BLOCK)},
 	{Tag_BR, "br", (CM_INLINE | CM_EMPTY)},
 	{Tag_BUTTON, "button", (CM_INLINE|FL_BLOCK)},
 	{Tag_CAPTION, "caption", (CM_TABLE)},
@@ -61,7 +61,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_DT, "dt", (CM_DEFLIST | CM_OPT | CM_NO_INDENT)},
 	{Tag_EM, "em", (CM_INLINE)},
 	{Tag_FIELDSET, "fieldset", (CM_BLOCK)},
-	{Tag_FONT, "font", (CM_INLINE|FL_BLOCK)},
+	{Tag_FONT, "font", (FL_BLOCK)},
 	{Tag_FORM, "form", (CM_BLOCK)},
 	{Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY)},
 	{Tag_FRAMESET, "frameset", (CM_HTML | CM_FRAMES)},
@@ -118,12 +118,12 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_STYLE, "style", (CM_HEAD)},
 	{Tag_SUB, "sub", (CM_INLINE)},
 	{Tag_SUP, "sup", (CM_INLINE)},
-	{Tag_TABLE, "table", (CM_BLOCK)},
-	{Tag_TBODY, "tbody", (CM_TABLE | CM_ROWGRP | CM_OPT)},
+	{Tag_TABLE, "table", (CM_BLOCK | FL_BLOCK)},
+	{Tag_TBODY, "tbody", (CM_TABLE | CM_ROWGRP | CM_OPT| FL_BLOCK)},
 	{Tag_TD, "td", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
 	{Tag_TEXTAREA, "textarea", (CM_INLINE | CM_FIELD)},
 	{Tag_TFOOT, "tfoot", (CM_TABLE | CM_ROWGRP | CM_OPT)},
-	{Tag_TH, "th", (CM_ROW | CM_OPT | CM_NO_INDENT)},
+	{Tag_TH, "th", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
 	{Tag_THEAD, "thead", (CM_TABLE | CM_ROWGRP | CM_OPT)},
 	{Tag_TITLE, "title", (CM_HEAD | CM_UNIQUE)},
 	{Tag_TR, "tr", (CM_TABLE | CM_OPT| FL_BLOCK)},
@@ -1623,7 +1623,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
 			parent_tag = parent->data;
 
-			if (parent && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
+			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
 				bl_parent = parent_tag->extra;
 
 				if (bl_parent->background_color.valid) {
@@ -1638,7 +1638,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
 			parent_tag = parent->data;
 
-			if (parent && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
+			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
 				bl_parent = parent_tag->extra;
 
 				if (bl_parent->font_color.valid) {
@@ -1651,7 +1651,8 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 
 	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
 	if (!bl->font_color.valid) {
-		bl->font_color.d.val = 0xffffffff;
+		bl->font_color.d.val = 0;
+		bl->font_color.d.comp.alpha = 255;
 		bl->font_color.valid = TRUE;
 	}
 	if (!bl->background_color.valid) {
