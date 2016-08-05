@@ -25,12 +25,6 @@ local reconf = config['regexp']
 -- Uncategorized rules
 local subject_re = rspamd_regexp.create('/^(?:(?:Re|Fwd|Fw|Aw|Antwort|Sv):\\s*)+(.+)$/i')
 
--- Local rules
-local r_bgcolor = '/BGCOLOR=/iP'
-local r_font_color = '/font color=[\\"\']?\\#FFFFFF[\\"\']?/iP'
-reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_color)
-reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
-
 -- Local functions
 
 
