@@ -19,9 +19,11 @@
 #include "message.h"
 #include "html.h"
 #include "html_tags.h"
+#include "html_colors.h"
 #include "url.h"
 
 static sig_atomic_t tags_sorted = 0;
+static sig_atomic_t entities_sorted = 0;
 
 struct html_tag_def {
 	gint id;
@@ -155,7 +157,6 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)},
 };
 
-static sig_atomic_t entities_sorted = 0;
 struct _entity;
 typedef struct _entity entity;
 
@@ -437,6 +438,8 @@ static entity entities_defs[] = {
 	{"euro", 8364, "E"},
 };
 
+static GHashTable *html_colors_hash = NULL;
+
 static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
 static struct html_tag_def tag_defs_num[ (G_N_ELEMENTS (tag_defs)) ];
 
@@ -507,6 +510,52 @@ entity_cmp_num (const void *m1, const void *m2)
 	const entity *p2 = m2;
 
 	return p1->code - p2->code;
+}
+
+static void
+rspamd_html_library_init (void)
+{
+	if (!tags_sorted) {
+		qsort (tag_defs, G_N_ELEMENTS (
+				tag_defs), sizeof (struct html_tag_def), tag_cmp);
+		memcpy (tag_defs_num, tag_defs, sizeof (tag_defs));
+		qsort (tag_defs_num, G_N_ELEMENTS (tag_defs_num),
+				sizeof (struct html_tag_def), tag_cmp_id);
+		tags_sorted = 1;
+	}
+
+	if (!entities_sorted) {
+		qsort (entities_defs, G_N_ELEMENTS (
+				entities_defs), sizeof (entity), entity_cmp);
+		memcpy (entities_defs_num, entities_defs, sizeof (entities_defs));
+		qsort (entities_defs_num, G_N_ELEMENTS (
+				entities_defs), sizeof (entity), entity_cmp_num);
+		entities_sorted = 1;
+	}
+
+	if (html_colors_hash == NULL) {
+		guint i;
+
+		html_colors_hash = g_hash_table_new_full (rspamd_ftok_icase_hash,
+				rspamd_ftok_icase_equal, g_free, g_free);
+
+		for (i = 0; i < G_N_ELEMENTS (html_colornames); i ++) {
+			struct html_color *color;
+			rspamd_ftok_t *key;
+
+			color = g_malloc0 (sizeof (*color));
+			color->d.comp.alpha = 255;
+			color->d.comp.r = html_colornames[i].rgb.r;
+			color->d.comp.g = html_colornames[i].rgb.g;
+			color->d.comp.b = html_colornames[i].rgb.b;
+			color->valid = TRUE;
+			key = g_malloc0 (sizeof (*key));
+			key->begin = html_colornames[i].name;
+			key->len = strlen (html_colornames[i].name);
+
+			g_hash_table_insert (html_colors_hash, key, color);
+		}
+	}
 }
 
 static gboolean
@@ -1412,49 +1461,13 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	tag->extra = img;
 }
 
-/* Keep sorted by name */
-struct html_color_match {
-	const char *name;
-	guint8 r;
-	guint8 g;
-	guint8 b;
-} html_colors[] = {
-	{"black", 0x00, 0x00, 0x00},
-	{"blue", 0x00, 0x00, 0xFF},
-	{"brown", 0xA5, 0x2A, 0x2A},
-	{"cyan", 0x00, 0xFF, 0xFF},
-	{"darkblue", 0x00, 0x0, 0x0A0},
-	{"gray", 0x80, 0x80, 0x80},
-	{"green", 0x00, 0x80, 0x00},
-	{"lightblue", 0xAD, 0xD8, 0xE6},
-	{"lime", 0x00, 0xFF, 0x00},
-	{"magenta", 0xFF, 0x00, 0xFF},
-	{"maroon", 0x80, 0x00, 0x00},
-	{"olive", 0x80, 0x80, 0x00},
-	{"orange", 0xFF, 0xA5, 0x00},
-	{"purple", 0x80, 0x00, 0x80},
-	{"red",0xFF, 0x00, 0x00},
-	{"silver", 0xC0, 0xC0, 0xC0},
-	{"white", 0xFF, 0xFF, 0xFF},
-	{"yellow", 0xFF, 0xFF, 0x00},
-};
-
-static gint
-rspamd_html_color_cmp (const void *key, const void *elt)
-{
-	const rspamd_ftok_t *fk = key;
-	const struct html_color_match *el = elt;
-
-	return g_ascii_strncasecmp (fk->begin, el->name, fk->len);
-}
-
 static void
 rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 {
 	const gchar *p = line, *end = line + len;
 	char hexbuf[7];
 	rspamd_ftok_t search;
-	struct html_color_match *el;
+	struct html_color *el;
 
 	memset (cl, 0, sizeof (*cl));
 
@@ -1470,14 +1483,10 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		search.begin = line;
 		search.len = len;
 
-		el = bsearch (&search, html_colors, G_N_ELEMENTS (html_colors),
-				sizeof (html_colors[0]), rspamd_html_color_cmp);
+		el = g_hash_table_lookup (html_colors_hash, &search);
 
 		if (el != NULL) {
-			cl->d.comp.r = el->r;
-			cl->d.comp.g = el->g;
-			cl->d.comp.b = el->b;
-			cl->valid = TRUE;
+			memcpy (cl, el, sizeof (*cl));
 		}
 	}
 }
@@ -1708,23 +1717,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	g_assert (hc != NULL);
 	g_assert (pool != NULL);
 
-	if (!tags_sorted) {
-		qsort (tag_defs, G_N_ELEMENTS (
-				tag_defs), sizeof (struct html_tag_def), tag_cmp);
-		memcpy (tag_defs_num, tag_defs, sizeof (tag_defs));
-		qsort (tag_defs_num, G_N_ELEMENTS (tag_defs_num),
-				sizeof (struct html_tag_def), tag_cmp_id);
-		tags_sorted = 1;
-	}
-	if (!entities_sorted) {
-		qsort (entities_defs, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp);
-		memcpy (entities_defs_num, entities_defs, sizeof (entities_defs));
-		qsort (entities_defs_num, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp_num);
-		entities_sorted = 1;
-	}
-
+	rspamd_html_library_init ();
 	hc->tags_seen = rspamd_mempool_alloc0 (pool, NBYTES (G_N_ELEMENTS (tag_defs)));
 
 	/* Set white background color by default */
