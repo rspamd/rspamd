@@ -37,6 +37,8 @@ Symbol yielded on messages identified as replies.
 
 ## Example
 
+Configuration should be defined in `rspamd.conf.local`:
+
 ~~~ucl
 replies {
     # This setting is non-default & is required to be set
