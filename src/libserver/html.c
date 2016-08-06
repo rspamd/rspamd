@@ -1629,6 +1629,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				if (bl_parent->background_color.valid) {
 					memcpy (&bl->background_color, &bl_parent->background_color,
 							sizeof (bl->background_color));
+					break;
 				}
 			}
 		}
@@ -1644,6 +1645,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				if (bl_parent->font_color.valid) {
 					memcpy (&bl->font_color, &bl_parent->font_color,
 							sizeof (bl->font_color));
+					break;
 				}
 			}
 		}
