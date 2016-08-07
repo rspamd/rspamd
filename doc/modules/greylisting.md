@@ -27,7 +27,7 @@ This module produces `soft reject` action on greylisting which **SHOULD** be tre
 
 ## Module configuration
 
-First of all, you need to setup Redis server for storing hashes. This procedure is described in detail in the [following document](/doc/configuration/redis.html). Thereafter, you can modify a couple of options specific for greylisting module. It is recommended to define these options in `local.d/greylisting.conf`:
+First of all, you need to setup Redis server for storing hashes. This procedure is described in detail in the [following document](/doc/configuration/redis.html). Thereafter, you can modify a couple of options specific for greylisting module. It is recommended to define these options in `rspamd.conf.local`:
 
 * **`expire`**: setup hashes expire time (1 day by default)
 * **`timeout`**: defines greylisting timeout (5 min by default)
@@ -36,3 +36,10 @@ First of all, you need to setup Redis server for storing hashes. This procedure 
 * **`message`**: a message for temporary rejection reason (`Try again later` by default)
 * **`ipv4_mask`**: mask to apply for IPv4 addresses (19 by default)
 * **`ipv6_mask`**: mask to apply for IPv6 addresses (64 by default)
+
+To enable the module with default settings you could define an empty configuration as shown below:
+
+~~~ucl
+greylist {
+}
+~~~
