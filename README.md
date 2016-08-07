@@ -92,12 +92,17 @@ against a set of multiple patterns. Or it uses radix bit trie for storing IP add
 
 ## Extensions
 
-Besides its `C` core, rspamd provides an extensive [Lua](http://lua.org) API to access almost all the features available directly from `C`. Lua is an extremely easy
-to learn programming language though it is powerful enough to implement complex mail filters. In fact rspamd has a significant amount of code written completely in Lua such as
-DNS blacklists checks, user's settings or different maps implementation. You can also write your own filters and rules in Lua adopting rspamd functionality to your needs.
-Furthermore, Lua programs are very fast and their performance is rather [close](http://attractivechaos.github.io/plb/) to pure `C`. However, you should mention that for the most
-of performance critical tasks you usually use the rspamd core functionality than Lua code. Anyway, you can also use `LuaJIT` with rspamd if your goal is maximum performance.
-From the Lua API you can do the following tasks:
+Besides its `C` core, rspamd provides an extensive [Lua](http://lua.org) API
+to access almost all the features available directly from `C`. Lua is an
+extremely easy to learn programming language though it is powerful enough to
+implement complex mail filters. In fact rspamd has a significant amount of
+code written completely in Lua such as DNS blacklists checks, user's settings
+or different maps implementation. You can also write your own filters and
+rules in Lua adopting rspamd functionality to your needs.  However, you should
+mention that for the most of performance critical tasks you usually use the
+rspamd core functionality than Lua code. Anyway, you can also use `LuaJIT`
+with rspamd if your goal is maximum performance.  From the Lua API you can do
+the following tasks:
 
 * **Reading the configuration parameters** - Lua code has the full access to the parsed configuration knobs and you can easily modify your plugins behaviour by means of the main
 rspamd configuration
