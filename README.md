@@ -7,7 +7,7 @@ rules including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by Rspamd and given a `spam score`. 
 
 According to this spam score and the user's settings Rspamd recommends an action for
-the MTA to apply to the message- for example to pass, reject or add a header.
+the MTA to apply to the message, for example, to pass, reject or add a header.
 Rspamd is designed to process hundreds of messages per second simultaneously and has a number of 
 features available.
 
@@ -22,7 +22,7 @@ Rspamd distribution contains a number of mail processing features, including suc
 * **Regular expressions filtering** - allows basic processing of messages, their textual parts, MIME headers and
 SMTP data received by MTA against a set of expressions that includes both normal regular expressions and 
 message processing functions. Rspamd expressions are the powerful tool that allows to filter messages based on
-some pre-defined rules. This feature is similar to regular expressions in spamassassin spam filter.
+some pre-defined rules. This feature is similar to regular expressions in SpamAssassin spam filter.
 
 
 * **SPF module** that allows to validate a message's sender against the policy defined in the DNS record of sender's domain. You can read
@@ -44,7 +44,7 @@ This technique is very useful for finding malicious or phished domains and filte
 
 * **Statistics** - Rspamd uses Bayesian classifier based on five-grams of input. This means that the input is estimated not based on individual
 words, but all input is organized in chains that are further estimated by Bayesian classifier. This approach allows to achieve better results than
-traditionally used monogramms (or words literally speaking), that is described in details in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf).
+traditionally used monograms (or words literally speaking), that is described in details in the following [paper](http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf).
 
 
 * **Fuzzy hashes** - for checking of malicious mail patterns Rspamd uses so called `fuzzy hashes`. Unlike normal hashes, these structures are targeted to hide
@@ -59,7 +59,7 @@ false positives (e.g. when a innocent message is badly classified as a spam one)
 and learn messages and to view the history of scans. The interface is self-hosted, requires zero configuration and follows the recent web applications standards. You don't need a
 web server or applications server to run WebUI - you just need to run Rspamd itself and a web browser.
 
-* **Integration with MTA** - Rspamd can work with the most popular mail transfer systems, such as Postfix, Exim or Sendmail. For Postfix and Sendmail, there is an [`rmilter` project](https://github.com/vstakhov/rmilter),
+* **Integration with MTA** - Rspamd can work with the most popular mail transfer systems, such as Postfix, Exim or Sendmail. For Postfix and Sendmail, there is an [`Rmilter` project](https://github.com/vstakhov/rmilter),
 whilst for Exim there are several solutions to work with Rspamd. Should you require MTA integration then please consult with the [integration guide](https://rspamd.com/doc/integration.html).
 
 * **Extensive Lua API** - Rspamd ships with hundreds of [Lua functions](https://rspamd.com/doc/lua) that are available to write own rules for efficient and targeted spam filtering.
@@ -87,7 +87,7 @@ tuning in the most of cases.
 
 * **Hyperscan regular expressions engine** - Rspamd utilizes [Hyperscan](https://01.org/hyperscan) engine to match multiple regular expressions at the same time. You can watch the following [presentation](https://highsecure.ru/rspamd-hyperscan.pdf) where the main benefits of Hyperscan are described.
 
-* **Clever choice of data structures** - Rspamd tries to use the optimal data structure for each task. For example it uses very efficient suffix tries for fast matching of a text
+* **Clever choice of data structures** - Rspamd tries to use the optimal data structure for each task. For example, it uses very efficient suffix tries for fast matching of a text
 against a set of multiple patterns. Or it uses radix bit trie for storing IP addresses information that provides O(1) access time complexity.
 
 ## Extensions
@@ -115,7 +115,7 @@ end
 
 
 * **Pre- and post- filters** - you can register callbacks that are called before or after messages processing to make results more precise or to make some early decision,
-for example to implement a rate limit.
+for example, to implement a rate limit.
 
 * **Registering functions for Rspamd** - you can write your own functions in Lua to extend Rspamd internal expression functions.
 
