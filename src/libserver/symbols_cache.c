@@ -1238,15 +1238,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 
 			if (dep->item == NULL) {
 				/* Assume invalid deps as done */
-				continue;
-			}
-
-			if (dep->id >= (gint)checkpoint->version) {
-				/*
-				 * This is dependency on some symbol that is currently
-				 * not in this checkpoint. So we just pretend that the
-				 * corresponding symbold does not exist
-				 */
+				msg_warn_task ("symbol %s has invalid dependencies from %s",
+						item->symbol, dep->sym);
 				continue;
 			}
 
@@ -1576,10 +1569,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		/* We just go through the blocked symbols and check if they are ready */
 		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
 			item = g_ptr_array_index (checkpoint->waitq, i);
-
-			if (item->id >= (gint)checkpoint->version) {
-				continue;
-			}
 
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
