@@ -182,7 +182,7 @@ Many Rspamd rules, such as `PHISHING` and fuzzy checks, use dynamic scoring.
 ### Can I check a message with Rspamd without rspamc
 
 ```
-curl --data-binary @- http://localhost:11333 < file.eml
+curl --data-binary @- http://localhost:11333/symbols < file.eml
 ```
 
 ### How is Rspamd spelled and capitalized?
@@ -282,6 +282,69 @@ example {
   option2 = false; # From local.d
   option3 = 2.0; # Local is overrided by override
   option4 = ["something"]; # From override.d
+}
+```
+
+Here is another example with more complicated structures inside. Here is the original configuration:
+
+```ucl
+# orig.conf
+rule "something" {
+  key1 = value1;
+  key2 = {
+    subkey1 = "subvalue1";
+  }
+}
+rule "other" {
+  key3 = value3;
+}
+```
+
+and there is some `local.d/orig.conf` that looks like this:
+
+```ucl
+# local.d/orig.conf
+rule "something" {
+  key1 = other_value; # overwrite "value1"
+  key2 = {
+    subkey2 = "subvalue2"; # append new value
+  }
+}
+rule "local" { # add new rule
+  key_local = "value_local";
+}
+```
+
+then we will have the following merged configuration:
+
+```ucl
+# config with local.d/orig.conf
+rule "something" {
+  key1 = other_value; # from local
+  key2 = {
+    subkey1 = "subvalue1";
+    subkey2 = "subvalue2"; # from local
+  }
+}
+rule "other" {
+  key3 = value3;
+}
+rule "local" { # from local
+  key_local = "value_local";
+}
+```
+
+If you have the same config but in `override.d` directory, then it will **completely** override all rules defined in the original file:
+
+```ucl
+# config with override.d/orig.conf
+rule "something" {
+  key1 = other_value;
+  key2 = {
+    subkey2 = "subvalue2";
+}
+rule "local" {
+  key_local = "value_local";
 }
 ```
 
