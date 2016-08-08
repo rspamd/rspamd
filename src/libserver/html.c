@@ -1545,8 +1545,10 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 						rspamd_html_process_color (c, p - c, &bl->font_color);
 						msg_debug_pool ("got color: %xd", bl->font_color.d.val);
 					}
-					if (klen == 16 && g_ascii_strncasecmp (key,
-							"background-color", 16) == 0) {
+					else if ((klen == 16 && g_ascii_strncasecmp (key,
+							"background-color", 16) == 0) ||
+							(klen == 10 && g_ascii_strncasecmp (key,
+									"background", 10) == 0)) {
 
 						rspamd_html_process_color (c, p - c, &bl->background_color);
 						msg_debug_pool ("got bgcolor: %xd", bl->background_color.d.val);

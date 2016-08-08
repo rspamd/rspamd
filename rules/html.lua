@@ -175,7 +175,7 @@ rspamd_config.R_WHITE_ON_WHITE = {
     local arg
 
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
-      if p:is_html() then -- if the current part is html part
+      if p:is_html() and p:get_html() then -- if the current part is html part
         normal_len = p:get_length()
         local hc = p:get_html() -- we get HTML context
 
