@@ -1,3 +1,60 @@
+1.3.2:
+	* [Feature] Add a special symbol for SPF DNS errors: R_SPF_DNSFAIL
+	* [Feature] Add correlations report in fuzzy stats
+	* [Feature] Add experimental CGP integration
+	* [Feature] Add method to get urls length in a text part
+	* [Feature] Add new methods to lua_html to access HTML tags
+	* [Feature] Allow all types of symbols to be added via __newindex method
+	* [Feature] Allow to create settings for authenticated users
+	* [Feature] Allow to get block content for HTML tags
+	* [Feature] Improve DNS failures when dealing with SPF
+	* [Feature] Properly implement R_WHITE_ON_WHITE rule
+	* [Feature] Remove old ugly rules
+	* [Feature] Rspamc can now add dkim signature in mime mode
+	* [Feature] Store content length for HTML tags
+	* [Feature] Support reacher set of HTML colors
+	* [Feature] Try to avoid FP for low contrast fonts detection
+	* [Fix] Add missing HTML colors
+	* [Fix] Add spaces to dkim signature to allow folding
+	* [Fix] Avoid returning NaN as score on scan
+	* [Fix] Decode entitles in href parts
+	* [Fix] Do not cache SPF records with DNS errors
+	* [Fix] Do not crash on cyclic depends
+	* [Fix] Do not insert HELO/HOSTNAME unknown when they are not passed
+	* [Fix] Do not set absent hostname to "unknown"
+	* [Fix] Do not stress redis with KEYS command (#791)
+	* [Fix] Fix DMARC_BAD_POLICY symbol
+	* [Fix] Fix HFILTER_URL module
+	* [Fix] Fix HFILTER_URL_ONELINE rule
+	* [Fix] Fix buffering in CGP integration
+	* [Fix] Fix colors propagation from parent nodes
+	* [Fix] Fix confusing OpenSSL API usage of i2d_RSAPublicKey
+	* [Fix] Fix dependencies id sanity check
+	* [Fix] Fix folding for semicolon separated tokens
+	* [Fix] Fix largest possible TLD behaviour
+	* [Fix] Fix last token folding
+	* [Fix] Fix length calculations in white on white rule
+	* [Fix] Fix multiple request headers structure
+	* [Fix] Fix multiple values headers freeing
+	* [Fix] Fix parsing of background color
+	* [Fix] Fix printing from field in log_urls
+	* [Fix] Fix processing of last element of DMARC policies
+	* [Fix] Further fixes for HTML colors
+	* [Fix] Further fixes for multiple values headers
+	* [Fix] Further fixes for white on white rule
+	* [Fix] Further fixes in HTML tags parsing
+	* [Fix] Ignore content type/subtype case
+	* [Fix] Increase score of R_WHITE_ON_WHITE
+	* [Fix] Parse CGP envelope data
+	* [Fix] Propagate colors in HTML
+	* [Fix] Restore multiple values headers in protocol
+	* [Fix] Restore multiple values in headers processing
+	* [Fix] Some more changes to tag's content length calculations
+	* [Fix] Some more fixes for low contrast fonts detector
+	* [Fix] SpamAssassin plugin: support check_freemail_header('EnvelopeFrom', [..])
+	* [Fix] Trigger HTML_SHORT_LINK_IMG on any external image
+	* [Fix] rspamd_stats: remove deprecated defined(@array)
+
 1.3.1:
 	* [CritFix] Fix catena passwords validation
 	* [CritFix] Fix crash when the first received is faked
