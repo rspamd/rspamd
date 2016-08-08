@@ -100,7 +100,6 @@ Run Rspamd
   ${template} =  Get File  ${CONFIG}
   : FOR  ${i}  IN  @{vargs}
   \  ${newvalue} =  Replace Variables  ${${i}}
-  \  Set Suite Variable  ${${i}}  ${newvalue}
   \  Run Keyword If  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  ${newvalue}
   \  ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  ${newvalue}
   \  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
