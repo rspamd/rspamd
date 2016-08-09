@@ -38,18 +38,6 @@ Check Rspamc Match String
   Run Keyword If  ${inverse} == False  Should Contain  ${subject}  ${str}
   ...  ELSE  Should Not Contain  ${subject}  ${str}
 
-Export Rspamd Vars To Suite
-  [Arguments]  ${TMPDIR}  ${RSPAMD_LOGPOS}  ${RSPAMD_PID}
-  Set Suite Variable  ${TMPDIR}
-  Set Suite Variable  ${RSPAMD_LOGPOS}
-  Set Suite Variable  ${RSPAMD_PID}
-
-Export Rspamd Vars To Test
-  [Arguments]  ${TMPDIR}  ${RSPAMD_LOGPOS}  ${RSPAMD_PID}
-  Set Test Variable  ${TMPDIR}
-  Set Test Variable  ${RSPAMD_LOGPOS}
-  Set Test Variable  ${RSPAMD_PID}
-
 Follow Rspamd Log
   ${RSPAMD_LOGPOS} =  Log Logs  ${TMPDIR}/rspamd.log  ${RSPAMD_LOGPOS}
   Run Keyword If  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${RSPAMD_LOGPOS}
@@ -58,10 +46,12 @@ Follow Rspamd Log
 
 Generic Setup
   [Arguments]  @{vargs}
-  ${TMPDIR}  ${RSPAMD_PID}  ${RSPAMD_LOGPOS} =  Run Rspamd  @{vargs}
-  Run Keyword If  '${RSPAMD_SCOPE}' == 'Test'  Export Rspamd Vars To Test  ${TMPDIR}  ${RSPAMD_LOGPOS}  ${RSPAMD_PID}
-  ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Suite'  Export Rspamd Vars To Suite  ${TMPDIR}  ${RSPAMD_LOGPOS}  ${RSPAMD_PID}
-  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
+  &{d} =  Run Rspamd  @{vargs}
+  ${keys} =  Get Dictionary Keys  ${d}
+  : FOR  ${i}  IN  @{keys}
+  \  Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  &{d}[${i}]
+  \  ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  &{d}[${i}]
+  \  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
 
 Generic Teardown
   Shutdown Process With Children  ${RSPAMD_PID}
@@ -94,26 +84,29 @@ Run Rspamc
   [Return]  ${result}
 
 Run Rspamd
-  [Arguments]  @{vargs}
-  ${TMPDIR} =  Make Temporary Directory
-  Set Directory Ownership  ${TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
+  [Arguments]  @{vargs}  &{kwargs}
+  ${has_CONFIG} =  Evaluate  'CONFIG' in $kwargs
+  ${CONFIG} =  Set Variable If  ${has_CONFIG} == True  &{kwargs}[CONFIG]  ${CONFIG}
+  &{d} =  Create Dictionary
+  ${tmpdir} =  Make Temporary Directory
+  Set Directory Ownership  ${tmpdir}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
   ${template} =  Get File  ${CONFIG}
   : FOR  ${i}  IN  @{vargs}
   \  ${newvalue} =  Replace Variables  ${${i}}
-  \  Run Keyword If  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  ${newvalue}
-  \  ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  ${newvalue}
-  \  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
+  \  Set To Dictionary  ${d}  ${i}=${newvalue}
   ${config} =  Replace Variables  ${template}
+  ${config} =  Replace Variables  ${config}
   Log  ${config}
-  Create File  ${TMPDIR}/rspamd.conf  ${config}
+  Create File  ${tmpdir}/rspamd.conf  ${config}
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${TMPDIR}/rspamd.conf  DBDIR\=${TMPDIR}  env:TMPDIR=${TMPDIR}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  -c  ${tmpdir}/rspamd.conf  DBDIR\=${tmpdir}  env:TMPDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
-  ${rspamd_logpos} =  Log Logs  ${TMPDIR}/rspamd.log  0
+  ${rspamd_logpos} =  Log Logs  ${tmpdir}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Created  ${TMPDIR}/rspamd.pid
-  ${rspamd_pid} =  Get File  ${TMPDIR}/rspamd.pid
-  [Return]  ${TMPDIR}  ${rspamd_pid}  ${rspamd_logpos}
+  Wait Until Created  ${tmpdir}/rspamd.pid
+  ${rspamd_pid} =  Get File  ${tmpdir}/rspamd.pid
+  Set To Dictionary  ${d}  RSPAMD_LOGPOS=${rspamd_logpos}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
+  [Return]  &{d}
 
 Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
