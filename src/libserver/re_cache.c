@@ -1321,6 +1321,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	gchar path[PATH_MAX], npath[PATH_MAX];
 	hs_database_t *test_db;
 	gint fd, i, n, *hs_ids = NULL, pcre_flags, re_flags;
+	rspamd_cryptobox_fast_hash_state_t crc_st;
 	guint64 crc;
 	rspamd_regexp_t *re;
 	hs_compile_error_t *hs_errors;
@@ -1509,8 +1510,15 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			 * crc - 8 bytes checksum
 			 * <hyperscan blob>
 			 */
-			crc = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-					hs_serialized, serialized_len, 0xdeadbabe);
+			rspamd_cryptobox_fast_hash_init (&crc_st, 0xdeadbabe);
+			/* IDs -> Flags -> Hs blob */
+			rspamd_cryptobox_fast_hash_update (&crc_st,
+					hs_ids, sizeof (*hs_ids) * n);
+			rspamd_cryptobox_fast_hash_update (&crc_st,
+					hs_flags, sizeof (*hs_flags) * n);
+			rspamd_cryptobox_fast_hash_update (&crc_st,
+					hs_serialized, serialized_len);
+			crc = rspamd_cryptobox_fast_hash_final (&crc_st);
 
 			if (cache->vectorized_hyperscan) {
 				iov[0].iov_base = (void *) rspamd_hs_magic_vector;
@@ -1618,6 +1626,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 	hs_platform_info_t test_plt;
 	hs_database_t *test_db = NULL;
 	guchar *map, *p, *end;
+	rspamd_cryptobox_fast_hash_state_t crc_st;
+	guint64 crc, valid_crc;
 
 	len = strlen (path);
 
@@ -1715,7 +1725,35 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 					return FALSE;
 				}
 
+				/*
+				 * Magic - 8 bytes
+				 * Platform - sizeof (platform)
+				 * n - number of regexps
+				 * n * <regexp ids>
+				 * n * <regexp flags>
+				 * crc - 8 bytes checksum
+				 * <hyperscan blob>
+				 */
+
+				memcpy (&crc, p + n * 2 * sizeof (gint), sizeof (crc));
+				rspamd_cryptobox_fast_hash_init (&crc_st, 0xdeadbabe);
+				/* IDs */
+				rspamd_cryptobox_fast_hash_update (&crc_st, p, n * sizeof (gint));
+				/* Flags */
+				rspamd_cryptobox_fast_hash_update (&crc_st, p + n * sizeof (gint),
+						n * sizeof (gint));
+				/* HS database */
 				p += n * sizeof (gint) * 2 + sizeof (guint64);
+				rspamd_cryptobox_fast_hash_update (&crc_st, p, end - p);
+				valid_crc = rspamd_cryptobox_fast_hash_final (&crc_st);
+
+				if (crc != valid_crc) {
+					msg_warn_re_cache ("outdated or invalid hs database in %s: "
+							"crc read %xL, crc expected %xL", path, crc, valid_crc);
+					munmap (map, len);
+
+					return FALSE;
+				}
 
 				if ((ret = hs_deserialize_database (p, end - p, &test_db))
 						!= HS_SUCCESS) {
