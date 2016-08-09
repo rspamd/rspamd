@@ -38,6 +38,13 @@ Check Rspamc Match String
   Run Keyword If  ${inverse} == False  Should Contain  ${subject}  ${str}
   ...  ELSE  Should Not Contain  ${subject}  ${str}
 
+Custom Follow Rspamd Log
+  [Arguments]  ${logfile}  ${logpos}  ${logpos_var}  ${scope}
+  ${logpos} =  Log Logs  ${logfile}  ${logpos}
+  Run Keyword If  '${scope}' == 'Test'  Set Test Variable  ${${logpos_var}}  ${logpos}
+  ...  ELSE IF  '${scope}' == 'Suite'  Set Suite Variable  ${${logpos_var}}  ${logpos}
+  ...  ELSE  Fail  'scope must be Test or Suite'
+
 Follow Rspamd Log
   ${RSPAMD_LOGPOS} =  Log Logs  ${TMPDIR}/rspamd.log  ${RSPAMD_LOGPOS}
   Run Keyword If  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${RSPAMD_LOGPOS}

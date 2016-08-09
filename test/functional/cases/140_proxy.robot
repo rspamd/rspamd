@@ -12,10 +12,8 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 *** Test Cases ***
 Scan Message
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_PROXY}  -p  ${MESSAGE}
-  ${PROXY_LOGPOS} =  Log Logs  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}
-  Set Suite Variable  ${PROXY_LOGPOS}
-  ${SLAVE_LOGPOS} =  Log Logs  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}
-  Set Suite Variable  ${SLAVE_LOGPOS}
+  Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
+  Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Contain  ${result.stdout}  SIMPLE_TEST
   Should Be Equal As Integers  ${result.rc}  0
