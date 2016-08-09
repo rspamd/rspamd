@@ -1025,7 +1025,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	InternetAddressMailbox *iamb;
 	InternetAddress *ia = NULL;
-	gint i;
+	gint i, nchars = 0, cur_chars;
 
 	if (lim <= 0) {
 		lim = internet_address_list_length (ialist);
@@ -1039,8 +1039,10 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 
 		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
 			iamb = INTERNET_ADDRESS_MAILBOX (ia);
+			cur_chars = strlen (iamb->addr);
 			varbuf = rspamd_fstring_append (varbuf, iamb->addr,
-					strlen (iamb->addr));
+					cur_chars);
+			nchars += cur_chars;
 		}
 
 		if (varbuf->len > 0) {
@@ -1049,7 +1051,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 			}
 		}
 
-		if (i >= max_log_elts) {
+		if (i >= max_log_elts || nchars >= max_log_elts * 10) {
 			varbuf = rspamd_fstring_append (varbuf, "...", 3);
 			break;
 		}
