@@ -12,6 +12,7 @@ my $junk_score = 6.0;
 my $diff_alpha = 0.1;
 my $correlations = 0;
 my $log_file = "";
+my $search_pattern = "";
 my $man = 0;
 my $help = 0;
 
@@ -22,6 +23,7 @@ GetOptions(
   "log|l=s" => \$log_file,
   "alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
+  "search-pattern=s" => \$search_pattern,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -43,6 +45,7 @@ my $ham_spam_change = 0;
 my $ham_junk_change = 0;
 my %sym_res;
 my $rspamd_log;
+my $enabled = 0;
 
 if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
@@ -52,6 +55,12 @@ else {
 }
 
 while(<$rspamd_log>) {
+  if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
+    $enabled = 1;
+  }
+
+  next if !$enabled;
+
   if (/^.*rspamd_task_write_log.*$/) {
     my @elts = split /\s+/;
     my $ts = $elts[0] . ' ' . $elts[1];
@@ -254,6 +263,8 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
    --junk-score=score     set junk score (6.0 by default)
    --symbol=sym           check specified symbol (perl regexps, '.*' by default)
    --alpha=value          set ignore score for symbols (0.1 by default)
+   --correlations         enable correlations report
+   --search-pattern       do not process input unless the desired pattern is found
    --help                 brief help message
    --man                  full documentation
 
@@ -280,6 +291,14 @@ Specifies the minimum score for a symbol to be considered by this script.
 =item B<--symbol>
 
 Add symbol or pattern (pcre format) to analyze.
+
+=item B<--correlations>
+
+Additionaly print correlation rate for each symbol displayed. This routine calculates merely paired correlations between symbols.
+
+=item B<--search-pattern>
+
+Do not process input unless finding the specified regular expression. Useful to skip logs to certain date, for example, --search-pattern="2016-08-09 10:00:0[0-9]"
 
 =item B<--help>
 
