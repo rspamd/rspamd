@@ -556,6 +556,12 @@
         function getHistory() {
 
             if (history) {
+                var history_length = document.getElementsByName('historyLog_length')[0];
+                if (history_length !== undefined) {
+                  history_length = parseInt(history_length.value);
+                } else {
+                  history_length = 10;
+                }
                 history.destroy();
                 $('#historyLog').children('tbody').remove();
             }
@@ -608,7 +614,8 @@
                     });
                     $('<tbody/>', { html: items.join('') }).insertAfter('#historyLog thead');
                     history = $('#historyLog').DataTable({
-                        "order": [[ 0, "desc" ]]
+                        "order": [[ 0, "desc" ]],
+                        "pageLength": history_length
                     });
                 }
             });
