@@ -544,8 +544,9 @@ LUA_FUNCTION_DEF (task, get_settings_id);
  * @param {any} obj any lua object that corresponds to the settings format
  * @example
 task:set_rmilter_reply({
-	add_headers = {{'X-Lua', 'test'}},
-	remove_headers = {'DKIM-Signature},
+	add_headers = {['X-Lua'] = 'test'},
+	-- 1 is the position of header to remove
+	remove_headers = {['DKIM-Signature'] = 1},
 })
  */
 LUA_FUNCTION_DEF (task, set_rmilter_reply);
