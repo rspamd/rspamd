@@ -379,91 +379,94 @@ local id = rspamd_config:register_symbol({
 })
 
 for key,rbl in pairs(opts['rbls']) do
-  for default, default_v in pairs(default_defaults) do
-    if(rbl[default_v[2]] == nil) then
-      rbl[default_v[2]] = opts[default]
+  (function()
+    if rbl['disabled'] then return end
+    for default, default_v in pairs(default_defaults) do
+      if(rbl[default_v[2]] == nil) then
+        rbl[default_v[2]] = opts[default]
+      end
     end
-  end
-  if type(rbl['returncodes']) == 'table' then
-    for s,_ in pairs(rbl['returncodes']) do
-      if type(rspamd_config.get_api_version) ~= 'nil' then
-        rspamd_config:register_symbol({
-          name = s,
-          parent = id,
-          type = 'virtual'
-        })
+    if type(rbl['returncodes']) == 'table' then
+      for s,_ in pairs(rbl['returncodes']) do
+        if type(rspamd_config.get_api_version) ~= 'nil' then
+          rspamd_config:register_symbol({
+            name = s,
+            parent = id,
+            type = 'virtual'
+          })
 
-        if rbl['dkim'] then
-          need_dkim = true
-        end
-        if(rbl['is_whitelist']) then
-          if type(rbl['whitelist_exception']) == 'string' then
-            if (rbl['whitelist_exception'] ~= s) then
-              table.insert(white_symbols, s)
-            end
-          elseif type(rbl['whitelist_exception']) == 'table' then
-            local foundException = false
-            for _, e in pairs(rbl['whitelist_exception']) do
-              if e == s then
-                foundException = true
-                break
+          if rbl['dkim'] then
+            need_dkim = true
+          end
+          if(rbl['is_whitelist']) then
+            if type(rbl['whitelist_exception']) == 'string' then
+              if (rbl['whitelist_exception'] ~= s) then
+                table.insert(white_symbols, s)
               end
-            end
-            if not foundException then
-              table.insert(white_symbols, s)
+            elseif type(rbl['whitelist_exception']) == 'table' then
+              local foundException = false
+              for _, e in pairs(rbl['whitelist_exception']) do
+                if e == s then
+                  foundException = true
+                  break
+                end
+              end
+              if not foundException then
+                table.insert(white_symbols, s)
+              end
+            else
+                table.insert(white_symbols, s)
             end
           else
-              table.insert(white_symbols, s)
-          end
-        else
-          if rbl['ignore_whitelists'] == false then
-            table.insert(black_symbols, s)
+            if rbl['ignore_whitelists'] == false then
+              table.insert(black_symbols, s)
+            end
           end
         end
       end
     end
-  end
-  if not rbl['symbol'] and
-    ((rbl['returncodes'] and rbl['unknown']) or
-    (not rbl['returncodes'])) then
-      rbl['symbol'] = key
-  end
-  if type(rspamd_config.get_api_version) ~= 'nil' and rbl['symbol'] then
-    rspamd_config:register_symbol({
-      name = rbl['symbol'],
-      parent = id,
-      type = 'virtual'
-    })
-
-    if rbl['dkim'] then
-      need_dkim = true
+    if not rbl['symbol'] and
+      ((rbl['returncodes'] and rbl['unknown']) or
+      (not rbl['returncodes'])) then
+        rbl['symbol'] = key
     end
-    if(rbl['is_whitelist']) then
-          if type(rbl['whitelist_exception']) == 'string' then
-            if (rbl['whitelist_exception'] ~= rbl['symbol']) then
-              table.insert(white_symbols, rbl['symbol'])
-            end
-          elseif type(rbl['whitelist_exception']) == 'table' then
-            local foundException = false
-            for _, e in pairs(rbl['whitelist_exception']) do
-              if e == s then
-                foundException = true
-                break
+    if type(rspamd_config.get_api_version) ~= 'nil' and rbl['symbol'] then
+      rspamd_config:register_symbol({
+        name = rbl['symbol'],
+        parent = id,
+        type = 'virtual'
+      })
+
+      if rbl['dkim'] then
+        need_dkim = true
+      end
+      if(rbl['is_whitelist']) then
+            if type(rbl['whitelist_exception']) == 'string' then
+              if (rbl['whitelist_exception'] ~= rbl['symbol']) then
+                table.insert(white_symbols, rbl['symbol'])
               end
-            end
-            if not foundException then
+            elseif type(rbl['whitelist_exception']) == 'table' then
+              local foundException = false
+              for _, e in pairs(rbl['whitelist_exception']) do
+                if e == s then
+                  foundException = true
+                  break
+                end
+              end
+              if not foundException then
+                table.insert(white_symbols, rbl['symbol'])
+              end
+            else
               table.insert(white_symbols, rbl['symbol'])
             end
-          else
-            table.insert(white_symbols, rbl['symbol'])
-          end
-    else
-      if rbl['ignore_whitelists'] == false then
-        table.insert(black_symbols, rbl['symbol'])
+      else
+        if rbl['ignore_whitelists'] == false then
+          table.insert(black_symbols, rbl['symbol'])
+        end
       end
     end
-  end
-  rbls[key] = rbl
+    rbls[key] = rbl
+  end)()
 end
 for _, w in pairs(white_symbols) do
   for _, b in pairs(black_symbols) do
