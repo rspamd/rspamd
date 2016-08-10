@@ -55,14 +55,14 @@ rspamd_config:register_symbol({
     -- Add headers
     task:set_rmilter_reply({
       add_headers = {
-        {'X-Spamd-Bar', spambar},
-        {'X-Spam-Level', spamlevel},
-        {'X-Spam-Status', spamstatus}
+        ['X-Spamd-Bar'] = spambar,
+        ['X-Spam-Level'] = spamlevel,
+        ['X-Spam-Status'] = spamstatus
       },
       remove_headers = {
-        {'X-Spamd-Bar'},
-        {'X-Spam-Level'},
-        {'X-Spam-Status'}
+        ['X-Spamd-Bar'] = 1,
+        ['X-Spam-Level'] = 1,
+        ['X-Spam-Status'] = 1
       }
     })
   end
