@@ -400,6 +400,7 @@ lua_http_request (lua_State *L)
 
 		msg = rspamd_http_message_from_url (url);
 		if (msg == NULL) {
+			msg_err ("cannot create HTTP message from url %s", url);
 			lua_pushboolean (L, FALSE);
 			return 1;
 		}
@@ -500,7 +501,7 @@ lua_http_request (lua_State *L)
 		else {
 			to_resolve = rspamd_mempool_fstrdup (task->task_pool, msg->host);
 
-			if (!make_dns_request_task (task, lua_http_dns_handler, cbd,
+			if (!make_dns_request_task_forced (task, lua_http_dns_handler, cbd,
 					RDNS_REQUEST_A, to_resolve)) {
 				lua_http_maybe_free (cbd);
 				lua_pushboolean (L, FALSE);
