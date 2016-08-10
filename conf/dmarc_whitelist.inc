@@ -5,6 +5,9 @@
 adp.com
 airbnb.com
 airtel.in
+alibaba.com
+aliexpress.com
+alipay.com
 americanexpress.com
 avg.com
 battle.net
