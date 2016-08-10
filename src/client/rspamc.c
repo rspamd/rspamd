@@ -642,7 +642,8 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 			rspamd_fprintf (out, "DKIM-Signature: %s\n", ucl_object_tostring (
 					cur));
 		}
-		else if (cur->type == UCL_OBJECT) {
+		else if (cur->type == UCL_OBJECT &&
+				g_ascii_strcasecmp (ucl_object_key (cur), "rmilter") != 0) {
 			/* Parse metric */
 			rspamc_metric_output (out, cur);
 		}
