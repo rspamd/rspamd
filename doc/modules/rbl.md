@@ -115,6 +115,20 @@ an_rbl {
 
 The following extra settings are valid in the RBL subsection:
 
+- disabled
+
+If set, the RBL is not used. Use this to disable specific RBLs in `local.d/rbl.conf`. For example:
+
+~~~ucl
+rbl {
+	rbls {
+		spamhaus {
+			disabled = true;
+		}
+	}
+}
+~~~
+
 - whitelist_exception
 
 (For whitelists) - Symbols named as parameters for this setting will not be used for neutralising blacklists (set this multiple times to add multiple exceptions).
