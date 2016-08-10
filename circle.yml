@@ -11,6 +11,7 @@ test:
     - cmake --build . --target install
     - sudo robot test/functional/cases
     - lcov --no-external -b . -d . -c --output-file coverage.info
+    - lcov -r coverage.info *.rl
     - ln -s src/ragel .
     - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info; fi
   post:
