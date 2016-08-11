@@ -1213,7 +1213,7 @@ lua_util_strequal_caseless (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, (ret == 0));
+	lua_pushboolean (L, (ret == 0) ? true : false);
 	return 1;
 }
 
