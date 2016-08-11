@@ -106,7 +106,6 @@ Type attribute means what is matched with this map. The following types are supp
 * `hostname` - matches reverse DNS name of the host that performed message handoff
 * `ip` - matches IP of the host that performed message handoff (against radix map)
 * `filename` - matches attachment filename against map
-* `from` - matches envelope from (or header `From` if envelope from is absent)
 * `rcpt` - matches any of envelope rcpt or header `To` if envelope info is missing
 * `url` - matches URLs in messages against maps
 
