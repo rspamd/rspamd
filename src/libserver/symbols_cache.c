@@ -210,6 +210,46 @@ rspamd_symbols_cache_order_new (gsize nelts)
 }
 
 static gint
+postfilters_cmp (const void *p1, const void *p2, gpointer ud)
+{
+	const struct cache_item *i1 = *(struct cache_item **)p1,
+			*i2 = *(struct cache_item **)p2;
+	double w1, w2;
+
+	w1 = i1->priority;
+	w2 = i2->priority;
+
+	if (w1 > w2) {
+		return 1;
+	}
+	else if (w1 < w2) {
+		return -1;
+	}
+
+	return 0;
+}
+
+static gint
+prefilters_cmp (const void *p1, const void *p2, gpointer ud)
+{
+	const struct cache_item *i1 = *(struct cache_item **)p1,
+			*i2 = *(struct cache_item **)p2;
+	double w1, w2;
+
+	w1 = i1->priority;
+	w2 = i2->priority;
+
+	if (w1 < w2) {
+		return 1;
+	}
+	else if (w1 > w2) {
+		return -1;
+	}
+
+	return 0;
+}
+
+static gint
 cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
 	const struct cache_item *i1 = *(struct cache_item **)p1,
@@ -404,8 +444,8 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 		}
 	}
 
-	g_ptr_array_sort_with_data (cache->prefilters, cache_logic_cmp, cache);
-	g_ptr_array_sort_with_data (cache->postfilters, cache_logic_cmp, cache);
+	g_ptr_array_sort_with_data (cache->prefilters, prefilters_cmp, cache);
+	g_ptr_array_sort_with_data (cache->postfilters, postfilters_cmp, cache);
 }
 
 static gboolean
