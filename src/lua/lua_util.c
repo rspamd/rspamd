@@ -1198,7 +1198,7 @@ lua_util_strequal_caseless (lua_State *L)
 	gint ret = -1;
 
 	str1 = lua_tolstring (L, 1, &len1);
-	str2 = lua_tolstring (L, 1, &len2);
+	str2 = lua_tolstring (L, 2, &len2);
 
 	if (str1 && str2) {
 
