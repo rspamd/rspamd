@@ -13,8 +13,17 @@ my $diff_alpha = 0.1;
 my $correlations = 0;
 my $log_file = "";
 my $search_pattern = "";
+my $num_logs;
+my $exclude_logs = 0;
 my $man = 0;
 my $help = 0;
+
+# Associate file extensions with decompressors
+my %decompressor = (
+    'bz2' => 'bzcat',
+    'gz'  => 'zcat',
+    'xz'  => 'xzcat',
+);
 
 GetOptions(
   "reject-score|r=f" => \$reject_score,
@@ -24,6 +33,8 @@ GetOptions(
   "alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
   "search-pattern=s" => \$search_pattern,
+  "num-logs|n=i" => \$num_logs,
+  "exclude-logs|x=i" => \$exclude_logs,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -49,130 +60,30 @@ my $enabled = 0;
 
 if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
+  &ProcessLog();
+}
+elsif ( -d "$log_file" ) {
+    my $log_dir = "$log_file";
+
+    my @logs = &GetLogfilesList($log_dir);
+
+    # Process logs
+    foreach (@logs) {
+        my $ext = (/[^.]+\.?([^.]*?)$/)[0];
+        my $dc = $decompressor{$ext} || 'cat';
+
+        open( $rspamd_log, "-|", "$dc $log_dir/$_" )
+          or die "cannot execute $dc $log_dir/$_ : $!";
+
+        &ProcessLog;
+
+        close($rspamd_log)
+          or warn "cannot close $dc $log_dir/$_: $!";
+    }
 }
 else {
   open($rspamd_log, '<', $log_file) or die "cannot open $log_file";
-}
-
-while(<$rspamd_log>) {
-  if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
-    $enabled = 1;
-  }
-
-  next if !$enabled;
-
-  if (/^.*rspamd_task_write_log.*$/) {
-    my @elts = split /\s+/;
-    my $ts = $elts[0] . ' ' . $elts[1];
-
-    if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
-      #print "BAD: $_\n";
-      next;
-    }
-
-    $total ++;
-    my $score = $1 * 1.0;
-
-    if ($score >= $reject_score) {
-      $total_spam ++;
-    }
-    elsif ($score >= $junk_score) {
-      $total_junk ++;
-    }
-
-    # Symbols
-    my @symbols = split /,/, $3;
-    my @sym_names;
-
-    foreach my $s (@symbols_search) {
-      my @selected = grep /$s/, @symbols;
-
-      if (scalar(@selected) > 0) {
-
-        foreach my $sym (@selected) {
-          $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
-          my $sym_name = $1;
-          my $sym_score = 0;
-          if ($2) {
-            $sym_score = $3 * 1.0;
-
-            if (abs($sym_score) < $diff_alpha) {
-              next;
-            }
-          }
-          next if $sym_name !~ /^$s/;
-
-          push @sym_names, $sym_name;
-
-          if (!$sym_res{$sym_name}) {
-            $sym_res{$sym_name} = {
-              hits => 0,
-              spam_hits => 0,
-              junk_hits => 0,
-              spam_change => 0,
-              junk_change => 0,
-              weight => 0,
-              corr => {},
-            };
-          }
-
-          my $r = $sym_res{$sym_name};
-
-          $r->{hits} ++;
-          $r->{weight} += $sym_score;
-          my $is_spam = 0;
-          my $is_junk = 0;
-
-          if ($score >= $reject_score) {
-            $is_spam = 1;
-            $r->{spam_hits} ++;
-          }
-          elsif ($score >= $junk_score) {
-            $is_junk = 1;
-            $r->{junk_hits} ++;
-          }
-
-          if ($sym_score != 0) {
-            my $score_without = $score - $sym_score;
-
-            if ($sym_score > 0) {
-              if ($is_spam && $score_without < $reject_score) {
-                $r->{spam_change} ++;
-              }
-              if ($is_junk && $score_without < $junk_score) {
-                $r->{junk_change} ++;
-              }
-            }
-            else {
-              if (!$is_spam && $score_without >= $reject_score) {
-                $r->{spam_change} ++;
-              }
-              if (!$is_junk && $score_without >= $junk_score) {
-                $r->{junk_change} ++;
-              }
-            }
-          }
-        } # End foreach symbols selected
-      }
-    }
-
-    if ($correlations) {
-      foreach my $sym (@sym_names) {
-        my $r = $sym_res{$sym};
-
-        foreach my $corr_sym (@sym_names) {
-          if ($corr_sym ne $sym) {
-            if ($r->{'corr'}->{$corr_sym}) {
-              $r->{'corr'}->{$corr_sym} ++;
-            }
-            else {
-              $r->{'corr'}->{$corr_sym} = 1;
-            }
-          }
-        }
-      } # End of correlations check
-    }
-  }
+  &ProcessLog();
 }
 
 my $total_ham = $total - ($total_spam + $total_junk);
@@ -247,6 +158,173 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
   }
 }
 
+exit;
+
+sub ProcessLog {
+  while(<$rspamd_log>) {
+    if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
+      $enabled = 1;
+    }
+
+    next if !$enabled;
+
+    if (/^.*rspamd_task_write_log.*$/) {
+      my @elts = split /\s+/;
+      my $ts = $elts[0] . ' ' . $elts[1];
+
+      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
+        #print "BAD: $_\n";
+        next;
+      }
+
+      $total ++;
+      my $score = $1 * 1.0;
+
+      if ($score >= $reject_score) {
+        $total_spam ++;
+      }
+      elsif ($score >= $junk_score) {
+        $total_junk ++;
+      }
+
+      # Symbols
+      my @symbols = split /,/, $3;
+      my @sym_names;
+
+      foreach my $s (@symbols_search) {
+        my @selected = grep /$s/, @symbols;
+
+        if (scalar(@selected) > 0) {
+
+          foreach my $sym (@selected) {
+            $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
+            my $sym_name = $1;
+            my $sym_score = 0;
+            if ($2) {
+              $sym_score = $3 * 1.0;
+
+              if (abs($sym_score) < $diff_alpha) {
+                next;
+              }
+            }
+            next if $sym_name !~ /^$s/;
+
+            push @sym_names, $sym_name;
+
+            if (!$sym_res{$sym_name}) {
+              $sym_res{$sym_name} = {
+                hits => 0,
+                spam_hits => 0,
+                junk_hits => 0,
+                spam_change => 0,
+                junk_change => 0,
+                weight => 0,
+                corr => {},
+              };
+            }
+
+            my $r = $sym_res{$sym_name};
+
+            $r->{hits} ++;
+            $r->{weight} += $sym_score;
+            my $is_spam = 0;
+            my $is_junk = 0;
+
+            if ($score >= $reject_score) {
+              $is_spam = 1;
+              $r->{spam_hits} ++;
+            }
+            elsif ($score >= $junk_score) {
+              $is_junk = 1;
+              $r->{junk_hits} ++;
+            }
+
+            if ($sym_score != 0) {
+              my $score_without = $score - $sym_score;
+
+              if ($sym_score > 0) {
+                if ($is_spam && $score_without < $reject_score) {
+                  $r->{spam_change} ++;
+                }
+                if ($is_junk && $score_without < $junk_score) {
+                  $r->{junk_change} ++;
+                }
+              }
+              else {
+                if (!$is_spam && $score_without >= $reject_score) {
+                  $r->{spam_change} ++;
+                }
+                if (!$is_junk && $score_without >= $junk_score) {
+                  $r->{junk_change} ++;
+                }
+              }
+            }
+          } # End foreach symbols selected
+        }
+      }
+
+      if ($correlations) {
+        foreach my $sym (@sym_names) {
+          my $r = $sym_res{$sym};
+
+          foreach my $corr_sym (@sym_names) {
+            if ($corr_sym ne $sym) {
+              if ($r->{'corr'}->{$corr_sym}) {
+                $r->{'corr'}->{$corr_sym} ++;
+              }
+              else {
+                $r->{'corr'}->{$corr_sym} = 1;
+              }
+            }
+          }
+        } # End of correlations check
+      }
+    }
+  }
+}
+
+sub GetLogfilesList {
+    my ($dir) = @_;
+    opendir( DIR, $dir ) or die $!;
+
+    my $pattern = join( '|', keys %decompressor );
+    my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
+
+    # Add unnumbered logs first
+    my @logs =
+      grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
+
+    # Add numbered logs
+    rewinddir(DIR);
+    push( @logs,
+        ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
+
+    closedir(DIR);
+
+    # Select required logs and revers their order
+    @logs =
+      reverse
+      splice( @logs, $exclude_logs, $num_logs ||= @logs - $exclude_logs );
+
+    # Loop through array printing out filenames
+    print "\nParsing log files:\n";
+    foreach my $file (@logs) {
+        print "  $file\n";
+    }
+    print "\n";
+
+    return @logs;
+}
+
+sub numeric {
+    $a =~ /\.(\d+)\./;
+    my $a_num = $1;
+    $b =~ /\.(\d+)\./;
+    my $b_num = $1;
+
+    $a_num <=> $b_num;
+}
+
 __END__
 
 =head1 NAME
@@ -258,13 +336,15 @@ rspamd_stats - analyze Rspamd rules by parsing log files
 rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
 
  Options:
-   --log=file             log file to read (stdin by default)
+   --log=file             log file or directory to read (stdin by default)
    --reject-score=score   set reject threshold (15 by default)
    --junk-score=score     set junk score (6.0 by default)
    --symbol=sym           check specified symbol (perl regexps, '.*' by default)
    --alpha=value          set ignore score for symbols (0.1 by default)
    --correlations         enable correlations report
    --search-pattern       do not process input unless the desired pattern is found
+   --num-logs=integer     number of recent logfiles to analyze (all files in the directory by default)
+   --exclude-logs=integer number of latest logs to exclude (0 by default)
    --help                 brief help message
    --man                  full documentation
 
@@ -274,7 +354,13 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
 
 =item B<--log>
 
-Specifies log file to read data from.
+Specifies log file or directory to read data from.
+If a directory is specified B<rspamd_stats> analyses files in the directory
+including known compressed file types. Number of log files can be limited using
+B<--num-logs> and B<--exclude-logs> options. This assumes that files in the log
+directory have B<newsyslog(8)>- or B<logrotate(8)>-like name format with numeric
+indexes. Files without indexes (generally it is merely one file) are considered
+the most recent and files with lower indexes are considered newer.
 
 =item B<--reject-score>
 
@@ -291,6 +377,14 @@ Specifies the minimum score for a symbol to be considered by this script.
 =item B<--symbol>
 
 Add symbol or pattern (pcre format) to analyze.
+
+=item B<--num-logs>
+
+If set, limits number of analyzed logfiles in the directory to the specified value.
+
+=item B<--exclude-logs>
+
+Number of latest logs to exclude (0 by default).
 
 =item B<--correlations>
 
@@ -335,7 +429,7 @@ B<Total hits>: total number of hits and percentage of symbol hits divided by tot
 
 =item *
 
-B<HAM hits>: [rovides the following information about B<HAM> messages with the specified symbol (from left to right):
+B<HAM hits>: provides the following information about B<HAM> messages with the specified symbol (from left to right):
 
 =over 4
 
