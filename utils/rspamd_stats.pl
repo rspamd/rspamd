@@ -13,8 +13,17 @@ my $diff_alpha = 0.1;
 my $correlations = 0;
 my $log_file = "";
 my $search_pattern = "";
+my $num_logs;
+my $exclude_logs = 0;
 my $man = 0;
 my $help = 0;
+
+# Associate file extensions with decompressors
+my %decompressor = (
+    'bz2' => 'bzcat',
+    'gz'  => 'zcat',
+    'xz'  => 'xzcat',
+);
 
 GetOptions(
   "reject-score|r=f" => \$reject_score,
@@ -24,6 +33,8 @@ GetOptions(
   "alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
   "search-pattern=s" => \$search_pattern,
+  "num-logs|n=i" => \$num_logs,
+  "exclude-logs|x=i" => \$exclude_logs,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -50,6 +61,25 @@ my $enabled = 0;
 if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
   &ProcessLog();
+}
+elsif ( -d "$log_file" ) {
+    my $log_dir = "$log_file";
+
+    my @logs = &GetLogfilesList($log_dir);
+
+    # Process logs
+    foreach (@logs) {
+        my $ext = (/[^.]+\.?([^.]*?)$/)[0];
+        my $dc = $decompressor{$ext} || 'cat';
+
+        open( $rspamd_log, "-|", "$dc $log_dir/$_" )
+          or die "cannot execute $dc $log_dir/$_ : $!";
+
+        &ProcessLog;
+
+        close($rspamd_log)
+          or warn "cannot close $dc $log_dir/$_: $!";
+    }
 }
 else {
   open($rspamd_log, '<', $log_file) or die "cannot open $log_file";
@@ -127,6 +157,8 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
     print '-' x 80 . "\n";
   }
 }
+
+exit;
 
 sub ProcessLog {
   while(<$rspamd_log>) {
@@ -251,6 +283,48 @@ sub ProcessLog {
   }
 }
 
+sub GetLogfilesList {
+    my ($dir) = @_;
+    opendir( DIR, $dir ) or die $!;
+
+    my $pattern = join( '|', keys %decompressor );
+    my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
+
+    # Add unnumbered logs first
+    my @logs =
+      grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
+
+    # Add numbered logs
+    rewinddir(DIR);
+    push( @logs,
+        ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
+
+    closedir(DIR);
+
+    # Select required logs and revers their order
+    @logs =
+      reverse
+      splice( @logs, $exclude_logs, $num_logs ||= @logs - $exclude_logs );
+
+    # Loop through array printing out filenames
+    print "\nParsing log files:\n";
+    foreach my $file (@logs) {
+        print "  $file\n";
+    }
+    print "\n";
+
+    return @logs;
+}
+
+sub numeric {
+    $a =~ /\.(\d+)\./;
+    my $a_num = $1;
+    $b =~ /\.(\d+)\./;
+    my $b_num = $1;
+
+    $a_num <=> $b_num;
+}
+
 __END__
 
 =head1 NAME
@@ -262,13 +336,15 @@ rspamd_stats - analyze Rspamd rules by parsing log files
 rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
 
  Options:
-   --log=file             log file to read (stdin by default)
+   --log=file             log file or directory to read (stdin by default)
    --reject-score=score   set reject threshold (15 by default)
    --junk-score=score     set junk score (6.0 by default)
    --symbol=sym           check specified symbol (perl regexps, '.*' by default)
    --alpha=value          set ignore score for symbols (0.1 by default)
    --correlations         enable correlations report
    --search-pattern       do not process input unless the desired pattern is found
+   --num-logs=integer     number of recent logfiles to analyze (all files in the directory by default)
+   --exclude-logs=integer number of latest logs to exclude (0 by default)
    --help                 brief help message
    --man                  full documentation
 
@@ -278,7 +354,13 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
 
 =item B<--log>
 
-Specifies log file to read data from.
+Specifies log file or directory to read data from.
+If a directory is specified B<rspamd_stats> analyses files in the directory
+including known compressed file types. Number of log files can be limited using
+B<--num-logs> and B<--exclude-logs> options. This assumes that files in the log
+directory have B<newsyslog(8)>- or B<logrotate(8)>-like name format with numeric
+indexes. Files without indexes (generally it is merely one file) are considered
+the most recent and files with lower indexes are considered newer.
 
 =item B<--reject-score>
 
@@ -295,6 +377,14 @@ Specifies the minimum score for a symbol to be considered by this script.
 =item B<--symbol>
 
 Add symbol or pattern (pcre format) to analyze.
+
+=item B<--num-logs>
+
+If set, limits number of analyzed logfiles in the directory to the specified value.
+
+=item B<--exclude-logs>
+
+Number of latest logs to exclude (0 by default).
 
 =item B<--correlations>
 
