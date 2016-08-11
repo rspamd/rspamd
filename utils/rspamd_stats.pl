@@ -49,130 +49,11 @@ my $enabled = 0;
 
 if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
+  &ProcessLog();
 }
 else {
   open($rspamd_log, '<', $log_file) or die "cannot open $log_file";
-}
-
-while(<$rspamd_log>) {
-  if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
-    $enabled = 1;
-  }
-
-  next if !$enabled;
-
-  if (/^.*rspamd_task_write_log.*$/) {
-    my @elts = split /\s+/;
-    my $ts = $elts[0] . ' ' . $elts[1];
-
-    if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
-      #print "BAD: $_\n";
-      next;
-    }
-
-    $total ++;
-    my $score = $1 * 1.0;
-
-    if ($score >= $reject_score) {
-      $total_spam ++;
-    }
-    elsif ($score >= $junk_score) {
-      $total_junk ++;
-    }
-
-    # Symbols
-    my @symbols = split /,/, $3;
-    my @sym_names;
-
-    foreach my $s (@symbols_search) {
-      my @selected = grep /$s/, @symbols;
-
-      if (scalar(@selected) > 0) {
-
-        foreach my $sym (@selected) {
-          $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
-          my $sym_name = $1;
-          my $sym_score = 0;
-          if ($2) {
-            $sym_score = $3 * 1.0;
-
-            if (abs($sym_score) < $diff_alpha) {
-              next;
-            }
-          }
-          next if $sym_name !~ /^$s/;
-
-          push @sym_names, $sym_name;
-
-          if (!$sym_res{$sym_name}) {
-            $sym_res{$sym_name} = {
-              hits => 0,
-              spam_hits => 0,
-              junk_hits => 0,
-              spam_change => 0,
-              junk_change => 0,
-              weight => 0,
-              corr => {},
-            };
-          }
-
-          my $r = $sym_res{$sym_name};
-
-          $r->{hits} ++;
-          $r->{weight} += $sym_score;
-          my $is_spam = 0;
-          my $is_junk = 0;
-
-          if ($score >= $reject_score) {
-            $is_spam = 1;
-            $r->{spam_hits} ++;
-          }
-          elsif ($score >= $junk_score) {
-            $is_junk = 1;
-            $r->{junk_hits} ++;
-          }
-
-          if ($sym_score != 0) {
-            my $score_without = $score - $sym_score;
-
-            if ($sym_score > 0) {
-              if ($is_spam && $score_without < $reject_score) {
-                $r->{spam_change} ++;
-              }
-              if ($is_junk && $score_without < $junk_score) {
-                $r->{junk_change} ++;
-              }
-            }
-            else {
-              if (!$is_spam && $score_without >= $reject_score) {
-                $r->{spam_change} ++;
-              }
-              if (!$is_junk && $score_without >= $junk_score) {
-                $r->{junk_change} ++;
-              }
-            }
-          }
-        } # End foreach symbols selected
-      }
-    }
-
-    if ($correlations) {
-      foreach my $sym (@sym_names) {
-        my $r = $sym_res{$sym};
-
-        foreach my $corr_sym (@sym_names) {
-          if ($corr_sym ne $sym) {
-            if ($r->{'corr'}->{$corr_sym}) {
-              $r->{'corr'}->{$corr_sym} ++;
-            }
-            else {
-              $r->{'corr'}->{$corr_sym} = 1;
-            }
-          }
-        }
-      } # End of correlations check
-    }
-  }
+  &ProcessLog();
 }
 
 my $total_ham = $total - ($total_spam + $total_junk);
@@ -244,6 +125,129 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
     }
 
     print '-' x 80 . "\n";
+  }
+}
+
+sub ProcessLog {
+  while(<$rspamd_log>) {
+    if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
+      $enabled = 1;
+    }
+
+    next if !$enabled;
+
+    if (/^.*rspamd_task_write_log.*$/) {
+      my @elts = split /\s+/;
+      my $ts = $elts[0] . ' ' . $elts[1];
+
+      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
+        #print "BAD: $_\n";
+        next;
+      }
+
+      $total ++;
+      my $score = $1 * 1.0;
+
+      if ($score >= $reject_score) {
+        $total_spam ++;
+      }
+      elsif ($score >= $junk_score) {
+        $total_junk ++;
+      }
+
+      # Symbols
+      my @symbols = split /,/, $3;
+      my @sym_names;
+
+      foreach my $s (@symbols_search) {
+        my @selected = grep /$s/, @symbols;
+
+        if (scalar(@selected) > 0) {
+
+          foreach my $sym (@selected) {
+            $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
+            my $sym_name = $1;
+            my $sym_score = 0;
+            if ($2) {
+              $sym_score = $3 * 1.0;
+
+              if (abs($sym_score) < $diff_alpha) {
+                next;
+              }
+            }
+            next if $sym_name !~ /^$s/;
+
+            push @sym_names, $sym_name;
+
+            if (!$sym_res{$sym_name}) {
+              $sym_res{$sym_name} = {
+                hits => 0,
+                spam_hits => 0,
+                junk_hits => 0,
+                spam_change => 0,
+                junk_change => 0,
+                weight => 0,
+                corr => {},
+              };
+            }
+
+            my $r = $sym_res{$sym_name};
+
+            $r->{hits} ++;
+            $r->{weight} += $sym_score;
+            my $is_spam = 0;
+            my $is_junk = 0;
+
+            if ($score >= $reject_score) {
+              $is_spam = 1;
+              $r->{spam_hits} ++;
+            }
+            elsif ($score >= $junk_score) {
+              $is_junk = 1;
+              $r->{junk_hits} ++;
+            }
+
+            if ($sym_score != 0) {
+              my $score_without = $score - $sym_score;
+
+              if ($sym_score > 0) {
+                if ($is_spam && $score_without < $reject_score) {
+                  $r->{spam_change} ++;
+                }
+                if ($is_junk && $score_without < $junk_score) {
+                  $r->{junk_change} ++;
+                }
+              }
+              else {
+                if (!$is_spam && $score_without >= $reject_score) {
+                  $r->{spam_change} ++;
+                }
+                if (!$is_junk && $score_without >= $junk_score) {
+                  $r->{junk_change} ++;
+                }
+              }
+            }
+          } # End foreach symbols selected
+        }
+      }
+
+      if ($correlations) {
+        foreach my $sym (@sym_names) {
+          my $r = $sym_res{$sym};
+
+          foreach my $corr_sym (@sym_names) {
+            if ($corr_sym ne $sym) {
+              if ($r->{'corr'}->{$corr_sym}) {
+                $r->{'corr'}->{$corr_sym} ++;
+              }
+              else {
+                $r->{'corr'}->{$corr_sym} = 1;
+              }
+            }
+          }
+        } # End of correlations check
+      }
+    }
   }
 }
 
