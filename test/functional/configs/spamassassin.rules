@@ -33,6 +33,58 @@ score    FREEMAIL_SUBJECT  1.0
 
 endif
 
+ifplugin Mail::SpamAssassin::Plugin::WLBLEval
+
+header	USER_IN_BLACKLIST       eval:check_from_in_blacklist()
+describe USER_IN_BLACKLIST      From: address is in the user's black-list
+tflags USER_IN_BLACKLIST        userconf noautolearn
+score USER_IN_BLACKLIST         10.0
+
+header USER_IN_WHITELIST	eval:check_from_in_whitelist()
+describe USER_IN_WHITELIST	From: address is in the user's white-list
+tflags USER_IN_WHITELIST	userconf nice noautolearn
+score USER_IN_WHITELIST         -10.0
+
+header USER_IN_BLACKLIST_TO     eval:check_to_in_blacklist()
+describe USER_IN_BLACKLIST_TO   User is listed in 'blacklist_to'
+tflags USER_IN_BLACKLIST_TO     userconf noautolearn
+score USER_IN_BLACKLIST_TO      10.0
+
+header USER_IN_WHITELIST_TO     eval:check_to_in_whitelist()
+describe USER_IN_WHITELIST_TO   User is listed in 'whitelist_to'
+tflags USER_IN_WHITELIST_TO     userconf nice noautolearn
+score USER_IN_WHITELIST_TO      -10.0
+
+# not implemented
+#header USER_IN_DEF_WHITELIST	eval:check_from_in_default_whitelist()
+#describe USER_IN_DEF_WHITELIST	From: address is in the default white-list
+#tflags USER_IN_DEF_WHITELIST	userconf nice noautolearn
+#score USER_IN_DEF_WHITELIST     -10.0
+
+# not implemented
+#header USER_IN_MORE_SPAM_TO     eval:check_to_in_more_spam()
+#describe USER_IN_MORE_SPAM_TO   User is listed in 'more_spam_to'
+#tflags USER_IN_MORE_SPAM_TO     userconf nice noautolearn
+
+# not implemented
+#header USER_IN_ALL_SPAM_TO      eval:check_to_in_all_spam()
+#describe USER_IN_ALL_SPAM_TO    User is listed in 'all_spam_to'
+#tflags USER_IN_ALL_SPAM_TO      userconf nice noautolearn
+
+blacklist_to xxx@example.com
+blacklist_from yy@example.com
+whitelist_from nasutkadqw@esumare.ru
+whitelist_to zelen@megafonkavkaz.ru
+# not implemented
+#whitelist_from example@example.net yy@example.com
+# not implemented
+#whitelist_from *@example.com
+# not implemented
+#whitelist_from_rcvd *@example.org
+# not implemented
+#def_whitelist_from  rspamd.com
+endif
+
 # These rules are /not/ from SpamAssassin project
 
 header	TEST_XFOO	X-Foo =~ /.{1,50}/
