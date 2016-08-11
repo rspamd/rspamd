@@ -11,23 +11,38 @@ ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 Freemail Scan
-  Set Suite Variable  ${FREEMAIL_RESULT}  ${EMPTY}
   ${FREEMAIL_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/freemail.eml
   ...  --from  faked.asdfjisiwosp372@outlook.com
+  Set Suite Variable  ${FREEMAIL_RESULT}  ${FREEMAIL_RESULT}
   Check Rspamc  ${FREEMAIL_RESULT}  ${EMPTY}
-  Set Suite Variable  ${FREEMAIL_RESULT}  ${FREEMAIL_RESULT.stdout}
 
 Freemail From
-  Should Contain  ${FREEMAIL_RESULT}  FREEMAIL_FROM
+  Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_FROM
 
 Freemail From Enddigit
-  Should Contain  ${FREEMAIL_RESULT}  FREEMAIL_ENVFROM_END_DIGIT
+  Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_ENVFROM_END_DIGIT
 
 Freemail Subject
-  Should Contain  ${FREEMAIL_RESULT}  FREEMAIL_SUBJECT
+  Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_SUBJECT
 
 Metas
-  Should Contain  ${FREEMAIL_RESULT}  TEST_META3
+  Should Contain  ${FREEMAIL_RESULT.stdout}  TEST_META3
+
+WLBL From Whitelist
+  ${BAD_MESSAGE_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/bad_message.eml
+  Set Suite Variable  ${BAD_MESSAGE_RESULT}  ${BAD_MESSAGE_RESULT}
+  Check Rspamc  ${BAD_MESSAGE_RESULT}  USER_IN_WHITELIST (
+
+WLBL To Whitelist
+  Should Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_WHITELIST_TO
+
+WLBL From Blacklist
+  ${UTF_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
+  Set Suite Variable  ${UTF_RESULT}  ${UTF_RESULT}
+  Check Rspamc  ${UTF_RESULT}  USER_IN_BLACKLIST (
+
+WLBL To Blacklist
+  Should Contain  ${UTF_RESULT.stdout}  USER_IN_BLACKLIST_TO
 
 *** Keywords ***
 SpamAssassin Setup
