@@ -4,7 +4,7 @@ title: Multimap module
 ---
 # Multimap module
 
-Multimap module is designed to handle rules that are based on different types of lists that are dynamically updated by Rspamd and called `maps`. This module is useful for whitelists, blacklists and other lists to be organized via files. It can also load remote lists using `HTTP` and `HTTPS` protocols. This article explains in detail all configuration options and features of this module.
+Multimap module is designed to handle rules that are based on different types of lists that are dynamically updated by Rspamd and called `maps`. This module is useful for whitelists, blacklists and other lists to be organized via files. It can also load remote lists using `HTTP` and `HTTPS` protocols or `RESP` (REdis Serialization Protocol). This article explains in detail all configuration options and features of this module.
 
 * TOC
 {:toc}
@@ -24,6 +24,7 @@ when a map has not been actually changed since last load. For file maps, Rspamd 
 `options` section of the configuration file:
 
 * `map_watch_interval`: defines time when all maps are rescanned; the actual check interval is jittered to avoid simultaneous checking (hence, the real interval is from this value up to the this interval doubled).
+
 
 ## Configuration
 
@@ -55,6 +56,7 @@ Mandatory attributes are:
   + `file:///path/to/list` - file map, reloaded on change, can be signed
   + `/path/to/list` - shorter form of a file map
   + `cdb://path/to/list.cdb` - [CDB](http://www.corpit.ru/mjt/tinycdb.html) map in file, cannot be signed
+  + `redis://<hashkey>` - Redis map, read field in the hash stored at key
 
 For header maps, you also need to specify the exact header using `header` option.
 
@@ -272,6 +274,10 @@ FROM_WHITELISTED {
 
 You can use any logic expression of other symbols within `require_symbols` definition. Rspamd automatically inserts dependency for a multimap rule on all symbols that are required by this particular rule. You cannot use symbols added by post-filters here, however, pre-filter and normal filter symbols are allowed.
 
+## Redis for maps
+
+From version 1.3.2, it is possible to work with maps which are stored in Redis backend. You can use any external application to put data into Redis database using HSET command (e.g HSET hashkey test@example.org 1). After you can define map as protocol `redis://` and specify hash key to read. Redis settings can be defined inside `multimap` module also.
+
 ## Examples
 
 Here are some examples of multimap configurations:
@@ -284,6 +290,13 @@ SENDER_FROM_WHITELIST_USER {
   map = "file:///tmp/from.map";
   action = "accept"; # Prefilter mode
 }
+
+# With Redis backend, also you need specify servers for Redis.
+SENDER_FROM_WHITELIST_USER {
+  type = "from";
+  map = "redis://hashkey";
+}
+
 SENDER_FROM_REGEXP {
   type = "header";
   header = "from";
