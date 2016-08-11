@@ -339,7 +339,7 @@ B<Total hits>: total number of hits and percentage of symbol hits divided by tot
 
 =item *
 
-B<HAM hits>: [rovides the following information about B<HAM> messages with the specified symbol (from left to right):
+B<HAM hits>: provides the following information about B<HAM> messages with the specified symbol (from left to right):
 
 =over 4
 
