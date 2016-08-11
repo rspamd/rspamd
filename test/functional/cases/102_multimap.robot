@@ -108,11 +108,11 @@ MAP - HOSTNAME MISS
 
 MAP - CDB - HOSTNAME
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com
-  Check Rspamc  ${result}  HOSTNAME_MAP
+  Check Rspamc  ${result}  CDB_HOSTNAME
 
 MAP - CDB - HOSTNAME MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
-  Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1  rc_noinverse=1
+  Check Rspamc  ${result}  CDB_HOSTNAME  inverse=1  rc_noinverse=1
 
 *** Keywords ***
 Multimap Setup
