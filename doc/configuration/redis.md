@@ -16,6 +16,7 @@ This document describes how to setup Redis cache in Rspamd.
 * [DMARC module](/doc/modules/dmarc.html) can save DMARC reports inside Redis keys
 * [Replies plugin](/doc/modules/replies.html) requires Redis to save message ids hashes for outgoing messages
 * [IP score plugin](/doc/modules/ip_score.html) uses Redis to store data about AS, countries and networks reputation
+* [Multimap module](doc/modules/multimap.html) can use Redis as readonly database for maps
 
 Furthermore, Redis is used to store Bayes tokens in the [statistics](/doc/configuration/statistic.html) module. Rspamd provides several ways to configure Redis storage. There is also support for Redis [replication](http://redis.io/topics/replication), so Rspamd can **write** values to one set of Redis servers and **read** data from another set.
 
