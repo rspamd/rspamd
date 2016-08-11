@@ -20,9 +20,9 @@ my $help = 0;
 
 # Associate file extensions with decompressors
 my %decompressor = (
-    'bz2' => 'bzcat',
-    'gz'  => 'zcat',
-    'xz'  => 'xzcat',
+    'bz2' => 'bzip2 -cd',
+    'gz'  => 'gzip -cd',
+    'xz'  => 'xz -cd',
 );
 
 GetOptions(
