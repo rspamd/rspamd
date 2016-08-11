@@ -1238,7 +1238,7 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 
 			if (dep->item == NULL) {
 				/* Assume invalid deps as done */
-				msg_warn_task ("symbol %s has invalid dependencies from %s",
+				msg_debug_task ("symbol %s has invalid dependencies from %s",
 						item->symbol, dep->sym);
 				continue;
 			}
