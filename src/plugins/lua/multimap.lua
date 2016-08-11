@@ -22,6 +22,8 @@ local cdb = require "rspamd_cdb"
 local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
+local rspamd_redis = require "rspamd_redis"
+local redis_params
 require "fun" ()
 
 local urls = {}
@@ -30,71 +32,258 @@ local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
+local function apply_hostname_filter(task, filter, hostname, r)
+  if filter == 'tld' then
+    local tld = util.get_tld(hostname)
+    return tld
+  else
+    if not r['re_filter'] then
+      local pat = string.match(filter, 'tld:regexp:(.+)')
+      if not pat then
+        rspamd_logger.errx(task, 'bad search filter: %s', filter)
+        return
+      end
+      r['re_filter'] = regexp.create(pat)
+      if not r['re_filter'] then
+        rspamd_logger.errx(task, 'couldnt create regex: %s', pat)
+        return
+      end
+    end
+    local tld = util.get_tld(hostname)
+    local res = r['re_filter']:search(tld)
+    if res then
+      return res[1]
+    else
+      return nil
+    end
+  end
+end
+
+local function apply_url_filter(task, filter, url, r)
+  if filter == 'tld' then
+    return url:get_tld()
+  elseif filter == 'full' then
+    return url:get_text()
+  elseif filter == 'is_phished' then
+    if url:is_phished() then
+      return url:get_host()
+    else
+      return nil
+    end
+  elseif string.find(filter, 'tld:regexp:') then
+    if not r['re_filter'] then
+      local type,pat = string.match(filter, '(regexp:)(.+)')
+      if type and pat then
+        r['re_filter'] = regexp.create(pat)
+      end
+    end
+
+    if not r['re_filter'] then
+      rspamd_logger.errx(task, 'bad search filter: %s', filter)
+    else
+      local results = r['re_filter']:search(url:get_tld())
+      if results then
+        return results[1]
+      else
+        return nil
+      end
+    end
+  elseif string.find(filter, 'full:regexp:') then
+    if not r['re_filter'] then
+      local type,pat = string.match(filter, '(regexp:)(.+)')
+      if type and pat then
+        r['re_filter'] = regexp.create(pat)
+      end
+    end
+
+    if not r['re_filter'] then
+      rspamd_logger.errx(task, 'bad search filter: %s', filter)
+    else
+      local results = r['re_filter']:search(url:get_text())
+      if results then
+        return results[1]
+      else
+        return nil
+      end
+    end
+  elseif string.find(filter, 'regexp:') then
+    if not r['re_filter'] then
+      local type,pat = string.match(filter, '(regexp:)(.+)')
+      if type and pat then
+        r['re_filter'] = regexp.create(pat)
+      end
+    end
+
+    if not r['re_filter'] then
+      rspamd_logger.errx(task, 'bad search filter: %s', filter)
+    else
+      local results = r['re_filter']:search(url:get_host())
+      if results then
+        return results[1]
+      else
+        return nil
+      end
+    end
+  end
+
+  return url:get_host()
+end
+
+local function apply_addr_filter(task, filter, input, rule)
+  if filter == 'email:addr' or filter == 'email' then
+    local addr = util.parse_mail_address(input)
+    if addr and addr[1] then
+      return addr[1]['addr']
+    end
+  elseif filter == 'email:user' then
+    local addr = util.parse_mail_address(input)
+    if addr and addr[1] then
+      return addr[1]['user']
+    end
+  elseif filter == 'email:domain' then
+    local addr = util.parse_mail_address(input)
+    if addr and addr[1] then
+      return addr[1]['domain']
+    end
+  elseif filter == 'email:name' then
+    local addr = util.parse_mail_address(input)
+    if addr and addr[1] then
+      return addr[1]['name']
+    end
+  else
+    -- regexp case
+    if not rule['re_filter'] then
+      local type,pat = string.match(filter, '(regexp:)(.+)')
+      if type and pat then
+        rule['re_filter'] = regexp.create(pat)
+      end
+    end
+
+    if not rule['re_filter'] then
+      rspamd_logger.errx(task, 'bad search filter: %s', filter)
+    else
+      local results = rule['re_filter']:search(input)
+      if results then
+        return results[1]
+      end
+    end
+  end
+
+  return input
+end
+local function apply_filename_filter(filter, fn, r)
+  if filter == 'extension' or filter == 'ext' then
+    return string.match(fn, '%.([^.]+)$')
+  elseif string.find(filter, 'regexp:') then
+    if not r['re_filter'] then
+      local type,pat = string.match(filter, '(regexp:)(.+)')
+      if type and pat then
+        r['re_filter'] = regexp.create(pat)
+      end
+    end
+
+    if not r['re_filter'] then
+      rspamd_logger.errx(task, 'bad search filter: %s', filter)
+    else
+      local results = r['re_filter']:search(fn)
+      if results then
+        return results[1]
+      else
+        return nil
+      end
+    end
+  end
+
+  return fn
+end
+
+local function apply_content_filter(filter, r)
+  if filter == 'body' then
+    return {task:get_rawbody()}
+  elseif filter == 'full' then
+    return {task:get_content()}
+  elseif filter == 'headers' then
+    return {task:get_raw_headers()}
+  elseif filter == 'text' then
+    local ret = {}
+    for i,p in ipairs(task:get_text_parts()) do
+      table.insert(ret, p:get_content())
+    end
+    return ret
+  elseif filter == 'rawtext' then
+    local ret = {}
+    for i,p in ipairs(task:get_text_parts()) do
+      table.insert(ret, p:get_raw_content())
+    end
+    return ret
+  elseif filter == 'oneline' then
+    local ret = {}
+    for i,p in ipairs(task:get_text_parts()) do
+      table.insert(ret, p:get_content_oneline())
+    end
+    return ret
+  else
+    rspamd_logger.errx(task, 'bad search filter: %s', filter)
+  end
+
+  return {}
+end
+
+local multimap_filters = {
+  from = apply_addr_filter,
+  to = apply_addr_filter,
+  header = apply_addr_filter,
+  url = apply_url_filter,
+  filename = apply_filename_filter,
+  --content = apply_content_filter, -- Content filters are special :(
+}
+
 local function multimap_callback(task, rule)
   local pre_filter = rule['prefilter']
 
-  -- Applies specific filter for input
-  local function apply_filter(filter, input, rule)
-    if filter == 'email:addr' or filter == 'email' then
-      local addr = util.parse_mail_address(input)
-      if addr and addr[1] then
-        return addr[1]['addr']
-      end
-    elseif filter == 'email:user' then
-      local addr = util.parse_mail_address(input)
-      if addr and addr[1] then
-        return addr[1]['user']
-      end
-    elseif filter == 'email:domain' then
-      local addr = util.parse_mail_address(input)
-      if addr and addr[1] then
-        return addr[1]['domain']
-      end
-    elseif filter == 'email:name' then
-      local addr = util.parse_mail_address(input)
-      if addr and addr[1] then
-        return addr[1]['name']
-      end
-    else
-      -- regexp case
-      if not rule['re_filter'] then
-        local type,pat = string.match(filter, '(regexp:)(.+)')
-        if type and pat then
-          rule['re_filter'] = regexp.create(pat)
-        end
-      end
-
-      if not rule['re_filter'] then
-        rspamd_logger.errx(task, 'bad search filter: %s', filter)
-      else
-        local results = rule['re_filter']:search(input)
-        if results then
-          return results[1]
-        end
-      end
-    end
-
-    return input
-  end
-
-  local function match_element(r, value)
+  local function match_element(r, value, callback)
    if not value then
       return false
     end
+
+    local function redis_map_cb(task, err, data)
+      if not err and data then
+        callback(data)
+      end
+    end
+
+    local ret = false
 
     if r['cdb'] then
       local srch = value
       if r['type'] == 'ip' then
         srch = value:to_string()
       end
-
       ret = r['cdb']:lookup(srch)
+    elseif r['redis_key'] then
+      local srch = value
+      if r['type'] == 'ip' then
+        srch = value:to_string()
+      end
+      ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        r['redis_key'], -- hash key
+        false, -- is write
+        redis_map_cb, --callback
+        'HGET', -- command
+        {r['redis_key'], srch} -- arguments
+      )
+
+      return ret
     elseif r['radix'] then
       ret = r['radix']:get_key(value)
     elseif r['hash'] then
       ret = r['hash']:get_key(value)
     end
 
+    if ret then
+      callback(ret)
+    end
     return ret
   end
 
@@ -155,38 +344,40 @@ local function multimap_callback(task, rule)
 
   -- Match a single value for against a single rule
   local function match_rule(r, value)
-    local ret = false
-
-    if r['filter'] then
-      value = apply_filter(r['filter'], value, r)
-    end
-
-    ret = match_element(r, value)
-
-    if ret then
-      local res,symbol,score = parse_ret(ret)
-      if symbol then
-        if not r['symbols_set'][symbol] then
-          rspamd_logger.infox(task, 'symbol %s is not registered for map %s, replace it with just %s',
-            symbol, r['symbol'], r['symbol'])
+    local function rule_callback(result)
+      if result then
+        local res,symbol,score = parse_ret(result)
+        if symbol then
+          if not r['symbols_set'][symbol] then
+            rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
+              'replace it with just %s',
+              symbol, r['symbol'], r['symbol'])
+            symbol = r['symbol']
+          end
+        else
           symbol = r['symbol']
         end
-      else
-        symbol = r['symbol']
-      end
-      task:insert_result(symbol, score)
+        task:insert_result(symbol, score)
 
-      if pre_filter then
-        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+        if pre_filter then
+          task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+        end
       end
     end
 
-    return ret
+    if r['filter'] then
+      local fn = multimap_filters[r['type']]
+
+      if fn then
+        value = fn(task, r['filter'], value, r)
+      end
+    end
+
+    match_element(r, value, rule_callback)
   end
 
   -- Match list of values according to the field
   local function match_list(r, ls, fields)
-    local ret = false
     if ls then
       if fields then
         each(function(e)
@@ -195,248 +386,31 @@ local function multimap_callback(task, rule)
             if fields[2] then
               match = fields[2](match)
             end
-            ret = match_rule(r, match)
+            match_rule(r, match)
           end
         end, ls)
       else
-        each(function(e) ret = match_rule(r, e) end, ls)
+        each(function(e) match_rule(r, e) end, ls)
       end
     end
-
-    return ret
   end
 
   local function match_addr(r, addr)
-    local ret = match_list(r, addr, {'addr'})
-
-    if not ret then
-      -- Try domain
-      ret = match_list(r, addr, {'domain', function(d) return '@' .. d end})
-    end
-    if not ret then
-      -- Try user
-      ret =  match_list(r, addr, {'user', function(d) return d .. '@' end})
-    end
-
-    return ret
-  end
-
-  local function apply_hostname_filter(filter, hostname, r)
-    if filter == 'tld' then
-      local tld = util.get_tld(hostname)
-      return tld
-    else
-      if not r['re_filter'] then
-        local pat = string.match(filter, 'tld:regexp:(.+)')
-        if not pat then
-          rspamd_logger.errx(task, 'bad search filter: %s', filter)
-          return
-        end
-        r['re_filter'] = regexp.create(pat)
-        if not r['re_filter'] then
-          rspamd_logger.errx(task, 'couldnt create regex: %s', pat)
-          return
-        end
-      end
-      local tld = util.get_tld(hostname)
-      local res = r['re_filter']:search(tld)
-      if res then
-        return res[1]
-      else
-        return nil
-      end
-    end
-  end
-
-  local function apply_url_filter(filter, url, r)
-    if filter == 'tld' then
-      return url:get_tld()
-    elseif filter == 'full' then
-      return url:get_text()
-    elseif filter == 'is_phished' then
-      if url:is_phished() then
-        return url:get_host()
-      else
-        return nil
-      end
-    elseif string.find(filter, 'tld:regexp:') then
-      if not r['re_filter'] then
-        local type,pat = string.match(filter, '(regexp:)(.+)')
-        if type and pat then
-          r['re_filter'] = regexp.create(pat)
-        end
-      end
-
-      if not r['re_filter'] then
-        rspamd_logger.errx(task, 'bad search filter: %s', filter)
-      else
-        local results = r['re_filter']:search(url:get_tld())
-        if results then
-          return results[1]
-        else
-          return nil
-        end
-      end
-    elseif string.find(filter, 'full:regexp:') then
-      if not r['re_filter'] then
-        local type,pat = string.match(filter, '(regexp:)(.+)')
-        if type and pat then
-          r['re_filter'] = regexp.create(pat)
-        end
-      end
-
-      if not r['re_filter'] then
-        rspamd_logger.errx(task, 'bad search filter: %s', filter)
-      else
-        local results = r['re_filter']:search(url:get_text())
-        if results then
-          return results[1]
-        else
-          return nil
-        end
-      end
-    elseif string.find(filter, 'regexp:') then
-      if not r['re_filter'] then
-        local type,pat = string.match(filter, '(regexp:)(.+)')
-        if type and pat then
-          r['re_filter'] = regexp.create(pat)
-        end
-      end
-
-      if not r['re_filter'] then
-        rspamd_logger.errx(task, 'bad search filter: %s', filter)
-      else
-        local results = r['re_filter']:search(url:get_host())
-        if results then
-          return results[1]
-        else
-          return nil
-        end
-      end
-    end
-
-    return url:get_host()
+    match_list(r, addr, {'addr'})
+    match_list(r, addr, {'domain', function(d) return '@' .. d end})
+    match_list(r, addr, {'user', function(d) return d .. '@' end})
   end
 
   local function match_url(r, url)
-    local value
-    local ret = false
-
-    if r['filter'] then
-      value = apply_url_filter(r['filter'], url, r)
-    else
-      value = url:get_host()
-    end
-
-    ret = match_element(r, value)
-
-    if ret then
-      task:insert_result(r['symbol'], 1)
-
-      if pre_filter then
-        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
-      end
-    end
+    match_rule(r, url)
   end
 
   local function match_hostname(r, hostname)
-    local value
-    local ret = false
-
-    if r['filter'] then
-      value = apply_hostname_filter(r['filter'], hostname, r)
-    else
-      value = hostname
-    end
-
-    ret = match_element(r, value)
-
-    if ret then
-      task:insert_result(r['symbol'], 1)
-
-      if pre_filter then
-        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
-      end
-    end
-  end
-
-  local function apply_filename_filter(filter, fn, r)
-    if filter == 'extension' or filter == 'ext' then
-      return string.match(fn, '%.([^.]+)$')
-    elseif string.find(filter, 'regexp:') then
-      if not r['re_filter'] then
-        local type,pat = string.match(filter, '(regexp:)(.+)')
-        if type and pat then
-          r['re_filter'] = regexp.create(pat)
-        end
-      end
-
-      if not r['re_filter'] then
-        rspamd_logger.errx(task, 'bad search filter: %s', filter)
-      else
-        local results = r['re_filter']:search(fn)
-        if results then
-          return results[1]
-        else
-          return nil
-        end
-      end
-    end
-
-    return fn
-  end
-
-  local function apply_content_filter(filter, r)
-    if filter == 'body' then
-      return {task:get_rawbody()}
-    elseif filter == 'full' then
-      return {task:get_content()}
-    elseif filter == 'headers' then
-      return {task:get_raw_headers()}
-    elseif filter == 'text' then
-      local ret = {}
-      for i,p in ipairs(task:get_text_parts()) do
-        table.insert(ret, p:get_content())
-      end
-      return ret
-    elseif filter == 'rawtext' then
-      local ret = {}
-      for i,p in ipairs(task:get_text_parts()) do
-        table.insert(ret, p:get_raw_content())
-      end
-      return ret
-    elseif filter == 'oneline' then
-      local ret = {}
-      for i,p in ipairs(task:get_text_parts()) do
-        table.insert(ret, p:get_content_oneline())
-      end
-      return ret
-    else
-      rspamd_logger.errx(task, 'bad search filter: %s', filter)
-    end
-
-    return {}
+     match_rule(r, hostname)
   end
 
   local function match_filename(r, fn)
-    local value
-    local ret = false
-
-    if r['filter'] then
-      value = apply_filename_filter(r['filter'], fn, r)
-    else
-      value = fn
-    end
-
-    ret = match_element(r, value)
-
-    if ret then
-      task:insert_result(r['symbol'], 1)
-
-      if pre_filter then
-        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
-      end
-    end
+    match_rule(r, fn)
   end
 
   local function match_content(r)
@@ -449,15 +423,7 @@ local function multimap_callback(task, rule)
     end
 
     for i,v in ipairs(data) do
-      ret = match_element(r, v)
-
-      if ret then
-        task:insert_result(r['symbol'], 1)
-
-        if pre_filter then
-          task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
-        end
-      end
+      match_rule(r, v)
     end
   end
 
@@ -572,10 +538,22 @@ local function add_multimap_rule(key, newrule)
     local test = cdb.create(newrule['map'])
     newrule['cdb'] = cdb.create(newrule['map'])
     if newrule['cdb'] then
-      return newrule
+      ret = true
     else
       rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
           newrule['map'])
+    end
+  elseif string.find(newrule['map'], '^redis://.*$') then
+    if not redis_params then
+      rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
+        'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
+      return nil
+    end
+
+    newrule['redis_key'] = string.match(newrule['map'], '^redis://(.*$)')
+
+    if newrule['redis_key'] then
+      ret = true
     end
   else
     local map = urls[newrule['map']]
@@ -697,8 +675,9 @@ end
 -- Registration
 local opts =  rspamd_config:get_all_opt('multimap')
 if opts and type(opts) == 'table' then
+  redis_params = rspamd_parse_redis_server('multimap')
   for k,m in pairs(opts) do
-    if type(m) == 'table' then
+    if type(m) == 'table' and m['type'] then
       local rule = add_multimap_rule(k, m)
       if not rule then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "'..k..'"')
