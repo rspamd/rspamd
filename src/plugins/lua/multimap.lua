@@ -550,7 +550,7 @@ local function add_multimap_rule(key, newrule)
       return nil
     end
 
-    newrule['redis_key'] = string.match(newrule['map'], '^redis://(.*$)')
+    newrule['redis_key'] = string.match(newrule['map'], '^redis://(.*)$')
 
     if newrule['redis_key'] then
       ret = true
@@ -684,8 +684,6 @@ if opts and type(opts) == 'table' then
       else
         table.insert(rules, rule)
       end
-    else
-      rspamd_logger.errx(rspamd_config, 'parameter ' .. k .. ' is invalid, must be an object')
     end
   end
   -- add fake symbol to check all maps inside a single callback
