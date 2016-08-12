@@ -67,6 +67,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 {
 	guint keybits = keylen * NBBY;
 	uintptr_t old;
+	gchar ip_str[INET6_ADDRSTRLEN + 1];
 	int ret;
 
 	g_assert (tree != NULL);
@@ -81,8 +82,24 @@ radix_insert_compressed (radix_compressed_t * tree,
 			(gconstpointer)value);
 
 	if (ret != BTRIE_OKAY) {
-		msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",
+		memset (ip_str, 0, sizeof (ip_str));
+
+		if (keybits == 32) {
+			msg_err_radix ("cannot insert %p, key: %s/%d, duplicate value",
+					(gpointer)value,
+					inet_ntop (AF_INET, key, ip_str, sizeof (ip_str) - 1),
+					keybits - masklen);
+		}
+		else if (keybits == 128) {
+			msg_err_radix ("cannot insert %p, key: [%s]/%d, duplicate value",
+					(gpointer)value,
+					inet_ntop (AF_INET6, key, ip_str, sizeof (ip_str) - 1),
+					keybits - masklen);
+		}
+		else {
+			msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",
 				(gpointer)value, keybits - masklen, (int)keylen, key);
+		}
 	}
 	else {
 		tree->size ++;
