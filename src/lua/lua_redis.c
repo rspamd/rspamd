@@ -271,8 +271,7 @@ lua_redis_push_reply (lua_State *L, const redisReply *r)
 		lua_pushnumber (L, r->integer);
 		break;
 	case REDIS_REPLY_NIL:
-		/* XXX: not the best approach */
-		lua_newuserdata (L, sizeof (gpointer));
+		lua_pushnil (L);
 		break;
 	case REDIS_REPLY_STRING:
 	case REDIS_REPLY_STATUS:
