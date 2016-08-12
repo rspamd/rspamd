@@ -70,6 +70,14 @@ Log Logs
   Log  ${the_log}
   [Return]  ${position}
 
+Redis HSET
+  [Arguments]  ${hash}  ${key}  ${value}
+  ${result} =  Run Process  redis-cli  -h  ${REDIS_ADDR}  -p  ${REDIS_PORT}
+  ...  HSET  ${hash}  ${key}  ${value}
+  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  Log  ${result.stdout}
+  Should Be Equal As Integers  ${result.rc}  0
+
 Run Redis
   ${template} =  Get File  ${TESTDIR}/configs/redis-server.conf
   ${config} =  Replace Variables  ${template}

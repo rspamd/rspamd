@@ -1,6 +1,6 @@
 *** Settings ***
 Suite Setup     Multimap Setup
-Suite Teardown  Generic Teardown
+Suite Teardown  Multimap Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
@@ -9,6 +9,7 @@ Variables       ${TESTDIR}/lib/vars.py
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
+${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
@@ -114,8 +115,40 @@ MAP - CDB - HOSTNAME MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
   Check Rspamc  ${result}  CDB_HOSTNAME  inverse=1  rc_noinverse=1
 
+MAP - REDIS - HOSTNAME
+  Redis HSET  hostname  redistest.example.net  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  redistest.example.net
+  Check Rspamc  ${result}  REDIS_HOSTNAME
+
+MAP - REDIS - HOSTNAME MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
+  Check Rspamc  ${result}  REDIS_HOSTNAME  inverse=1  rc_noinverse=1
+
+MAP - REDIS - IP
+  Redis HSET  ipaddr  127.0.0.1  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1
+  Check Rspamc  ${result}  REDIS_IPADDR
+
+MAP - REDIS - IP - MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  8.8.8.8
+  Check Rspamc  ${result}  REDIS_IPADDR  inverse=1  rc_noinverse=1
+
+MAP - REDIS - FROM
+  Redis HSET  emailaddr  from@rspamd.tk  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  from@rspamd.tk
+  Check Rspamc  ${result}  REDIS_FROMADDR
+
+MAP - REDIS - FROM MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.com
+  Check Rspamc  ${result}  REDIS_FROMADDR  inverse=1  rc_noinverse=1
+
 *** Keywords ***
 Multimap Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
   Generic Setup  PLUGIN_CONFIG
+  Run Redis
+
+Multimap Teardown
+  Shutdown Process With Children  ${REDIS_PID}
+  Generic Teardown
