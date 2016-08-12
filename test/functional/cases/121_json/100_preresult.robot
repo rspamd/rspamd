@@ -2,6 +2,7 @@
 Suite Setup     Generic Setup
 Suite Teardown  Generic Teardown
 Library         ${TESTDIR}/lib/rspamd.py
+Resource        lib.robot
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
@@ -13,16 +14,10 @@ ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 Stat
-  @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /stat
-  Check JSON  @{result}[1]
+  Stat Test
 
 History
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  soft reject
-  @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /history
-  Check JSON  @{result}[1]
+  History Test  soft reject
 
 Scan
-  ${content} =  Get File  ${MESSAGE}
-  @{result} =  HTTP  POST  ${LOCAL_ADDR}  ${PORT_NORMAL}  /check  ${content}
-  Check JSON  @{result}[1]
+  Scan Test

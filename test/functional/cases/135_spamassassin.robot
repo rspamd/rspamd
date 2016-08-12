@@ -36,6 +36,12 @@ WLBL From Whitelist
 WLBL To Whitelist
   Should Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_WHITELIST_TO
 
+WLBL To Blacklist Miss
+  Should Not Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_BLACKLIST_TO
+
+WLBL From Blacklist Miss
+  Should Not Contain  ${BAD_MESSAGE_RESULT.stdout}  USER_IN_BLACKLIST (
+
 WLBL From Blacklist
   ${UTF_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
   Set Suite Variable  ${UTF_RESULT}  ${UTF_RESULT}
@@ -43,6 +49,12 @@ WLBL From Blacklist
 
 WLBL To Blacklist
   Should Contain  ${UTF_RESULT.stdout}  USER_IN_BLACKLIST_TO
+
+WLBL To Whitelist Miss
+  Should Not Contain  ${UTF_RESULT.stdout}  USER_IN_WHITELIST_TO
+
+WLBL From Whitelist Miss
+  Should Not Contain  ${UTF_RESULT.stdout}  USER_IN_WHITELIST (
 
 *** Keywords ***
 SpamAssassin Setup
