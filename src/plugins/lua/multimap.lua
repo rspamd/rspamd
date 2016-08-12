@@ -197,7 +197,7 @@ local function apply_filename_filter(filter, fn, r)
   return fn
 end
 
-local function apply_content_filter(filter, r)
+local function apply_content_filter(task, filter, r)
   if filter == 'body' then
     return {task:get_rawbody()}
   elseif filter == 'full' then
@@ -347,7 +347,7 @@ local function multimap_callback(task, rule)
     local function rule_callback(result)
       if result then
         local res,symbol,score = parse_ret(result)
-        if symbol then
+        if symbol and r['symbols_set'] then
           if not r['symbols_set'][symbol] then
             rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
               'replace it with just %s',
@@ -417,7 +417,7 @@ local function multimap_callback(task, rule)
     local data = {}
 
     if r['filter'] then
-      data = apply_content_filter(r['filter'], r)
+      data = apply_content_filter(task, r['filter'], r)
     else
       data = {task:get_content()}
     end
