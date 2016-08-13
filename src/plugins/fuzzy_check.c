@@ -532,6 +532,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 	}
 
+	k = NULL;
 	if ((value = ucl_object_lookup (obj, "fuzzy_key")) != NULL) {
 		/* Create key from user's input */
 		k = ucl_object_tostring (value);
@@ -547,6 +548,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	rspamd_cryptobox_hash (rule->hash_key->str, k, strlen (k), NULL, 0);
 	rule->hash_key->len = rspamd_cryptobox_HASHKEYBYTES;
 
+	k = NULL;
 	if ((value = ucl_object_lookup (obj, "fuzzy_shingles_key")) != NULL) {
 		k = ucl_object_tostring (value);
 	}
