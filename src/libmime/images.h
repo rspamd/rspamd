@@ -5,6 +5,7 @@
 
 struct html_image;
 struct rspamd_task;
+struct rspamd_mime_part;
 
 enum rspamd_image_type {
 	IMAGE_TYPE_PNG = 0,
@@ -15,12 +16,13 @@ enum rspamd_image_type {
 };
 
 struct rspamd_image {
-	enum rspamd_image_type type;
+	struct rspamd_mime_part *parent;
 	GByteArray *data;
-	guint32 width;
-	guint32 height;
 	const gchar *filename;
 	struct html_image *html_image;
+	enum rspamd_image_type type;
+	guint32 width;
+	guint32 height;
 };
 
 /*

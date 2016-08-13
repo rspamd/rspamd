@@ -1061,6 +1061,17 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	GMimeStream *part_stream;
 	GByteArray *part_content;
 	gchar *hdrs;
+	/* Blake2b applied to string 'rspamd' */
+	static const guchar hash_key[] = {
+			0x78,0x6a,0x02,0xf7,0x42,0x01,0x59,0x03,
+			0xc6,0xc6,0xfd,0x85,0x25,0x52,0xd2,0x72,
+			0x91,0x2f,0x47,0x40,0xe1,0x58,0x47,0x61,
+			0x8a,0x86,0xe2,0x17,0xf7,0x1f,0x54,0x19,
+			0xd2,0x5e,0x10,0x31,0xaf,0xee,0x58,0x53,
+			0x13,0x89,0x64,0x44,0x93,0x4e,0xb0,0x4b,
+			0x90,0x3a,0x68,0x5b,0x14,0x48,0xb7,0x55,
+			0xd5,0x6f,0x70,0x1a,0xfe,0x9b,0xe2,0xce
+	};
 
 	task = md->task;
 	/* 'part' points to the current part node that g_mime_message_foreach_part() is iterating over */
@@ -1139,6 +1150,11 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		mime_part->mime = part;
 		mime_part->boundary = g_mime_multipart_get_boundary (GMIME_MULTIPART (part));
 
+		if (mime_part->boundary) {
+			rspamd_cryptobox_hash (mime_part->digest, mime_part->boundary,
+					strlen (mime_part->boundary), hash_key, sizeof (hash_key));
+		}
+
 		debug_task ("found part with content-type: %s/%s",
 				type->type,
 				type->subtype);
@@ -1202,6 +1218,12 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part->filename = g_mime_part_get_filename (GMIME_PART (
 							part));
 				mime_part->mime = part;
+
+				if (mime_part->content->len > 0) {
+					rspamd_cryptobox_hash (mime_part->digest,
+							mime_part->content->data, mime_part->content->len,
+							hash_key, sizeof (hash_key));
+				}
 
 				debug_task ("found part with content-type: %s/%s",
 					type->type,

@@ -1288,13 +1288,11 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 		gint flag,
 		guint32 weight,
 		rspamd_mempool_t *pool,
-		const guchar *data,
-		gsize datalen)
+		guchar digest[rspamd_cryptobox_HASHBYTES])
 {
 	struct rspamd_fuzzy_cmd *cmd;
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
-	rspamd_cryptobox_hash_state_t st;
 
 	if (rule->peer_key) {
 		enccmd = rspamd_mempool_alloc0 (pool, sizeof (*enccmd));
@@ -1312,10 +1310,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	}
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32 ();
-	/* Use blake2b for digest */
-	rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
-	rspamd_cryptobox_hash_update (&st, data, datalen);
-	rspamd_cryptobox_hash_final (&st, cmd->digest);
+	memcpy (cmd->digest, digest, sizeof (cmd->digest));
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
@@ -2059,7 +2054,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							fuzzy_module_ctx->min_width) {
 						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 								task->task_pool,
-								image->data->data, image->data->len);
+								image->parent->digest);
 						if (io) {
 							g_ptr_array_add (res, io);
 						}
@@ -2074,7 +2069,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				fuzzy_module_ctx->min_bytes) {
 				io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 						task->task_pool,
-						mime_part->content->data, mime_part->content->len);
+						mime_part->digest);
 				if (io) {
 					g_ptr_array_add (res, io);
 				}

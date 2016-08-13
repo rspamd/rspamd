@@ -226,6 +226,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 			img->width, img->height,
 			task->message_id);
 		img->filename = part->filename;
+		img->parent = part;
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
 		part->specific_data = img;
 

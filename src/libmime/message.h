@@ -9,6 +9,7 @@
 #include "config.h"
 #include "email_addr.h"
 #include "addr.h"
+#include "cryptobox.h"
 #include <gmime/gmime.h>
 
 struct rspamd_task;
@@ -29,11 +30,11 @@ struct rspamd_mime_part {
 	GMimeObject *mime;
 	GHashTable *raw_headers;
 	gchar *raw_headers_str;
-	gchar *checksum;
+	guchar digest[rspamd_cryptobox_HASHBYTES];
 	const gchar *filename;
 	const gchar *boundary;
-	enum rspamd_mime_part_flags flags;
 	gpointer specific_data;
+	enum rspamd_mime_part_flags flags;
 };
 
 #define RSPAMD_MIME_TEXT_PART_FLAG_UTF (1 << 0)
