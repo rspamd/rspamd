@@ -8,6 +8,7 @@ Variables       ${TESTDIR}/lib/vars.py
 *** Variables ***
 ${LUA_SCRIPT}   ${TESTDIR}/lua/simple.lua
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Scan Message

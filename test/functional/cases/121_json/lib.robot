@@ -1,3 +1,6 @@
+*** Variables ***
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+
 *** Keywords ***
 Stat Test
   @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /stat
