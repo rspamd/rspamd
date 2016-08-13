@@ -171,7 +171,7 @@ local function apply_addr_filter(task, filter, input, rule)
 
   return input
 end
-local function apply_filename_filter(filter, fn, r)
+local function apply_filename_filter(task, filter, fn, r)
   if filter == 'extension' or filter == 'ext' then
     return string.match(fn, '%.([^.]+)$')
   elseif string.find(filter, 'regexp:') then
