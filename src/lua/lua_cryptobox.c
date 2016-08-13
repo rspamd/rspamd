@@ -591,7 +591,7 @@ lua_cryptobox_signature_gc (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox_hash.create()
+ * @function rspamd_cryptobox_hash.create([string])
  * Creates new hash context
  * @param {string} data raw signature data
  * @return {cryptobox_hash} hash object
@@ -600,6 +600,8 @@ static gint
 lua_cryptobox_hash_create (lua_State *L)
 {
 	rspamd_cryptobox_hash_state_t *h, **ph;
+	const gchar *s;
+	gsize len;
 
 	h = g_slice_alloc (sizeof (*h));
 	rspamd_cryptobox_hash_init (h, NULL, 0);
@@ -607,11 +609,19 @@ lua_cryptobox_hash_create (lua_State *L)
 	*ph = h;
 	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = lua_tolstring (L, 1, &len);
+
+		if (s) {
+			rspamd_cryptobox_hash_update (h, s, len);
+		}
+	}
+
 	return 1;
 }
 
 /***
- * @function rspamd_cryptobox_hash.create_keyed(key)
+ * @function rspamd_cryptobox_hash.create_keyed(key, [string])
  * Creates new hash context with specified key
  * @param {string} key key
  * @return {cryptobox_hash} hash object
@@ -620,7 +630,8 @@ static gint
 lua_cryptobox_hash_create_keyed (lua_State *L)
 {
 	rspamd_cryptobox_hash_state_t *h, **ph;
-	const gchar *key;
+	const gchar *key, *s;
+	gsize len;
 	gsize keylen;
 
 	key = luaL_checklstring (L, 1, &keylen);
@@ -631,6 +642,14 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 		ph = lua_newuserdata (L, sizeof (void *));
 		*ph = h;
 		rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			s = lua_tolstring (L, 2, &len);
+
+			if (s) {
+				rspamd_cryptobox_hash_update (h, s, len);
+			}
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
