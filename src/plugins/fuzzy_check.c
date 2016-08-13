@@ -364,7 +364,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
 	ucl_object_iter_t it = NULL;
-	const char *k = NULL, *lua_script;
+	const char *k = NULL, *key_str = NULL, *shingles_key_str = NULL, *lua_script;
 
 	if (obj->type != UCL_OBJECT) {
 		msg_err_config ("invalid rule definition");
@@ -532,32 +532,33 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 	}
 
-	k = NULL;
+	key_str = NULL;
 	if ((value = ucl_object_lookup (obj, "fuzzy_key")) != NULL) {
 		/* Create key from user's input */
-		k = ucl_object_tostring (value);
+		key_str = ucl_object_tostring (value);
 	}
 
 	/* Setup keys */
-	if (k == NULL) {
+	if (key_str == NULL) {
 		/* Use some default key for all ops */
-		k = "rspamd";
+		key_str = "rspamd";
 	}
 
 	rule->hash_key = g_string_sized_new (rspamd_cryptobox_HASHBYTES);
-	rspamd_cryptobox_hash (rule->hash_key->str, k, strlen (k), NULL, 0);
+	rspamd_cryptobox_hash (rule->hash_key->str, key_str, strlen (key_str), NULL, 0);
 	rule->hash_key->len = rspamd_cryptobox_HASHKEYBYTES;
 
-	k = NULL;
+	shingles_key_str = NULL;
 	if ((value = ucl_object_lookup (obj, "fuzzy_shingles_key")) != NULL) {
-		k = ucl_object_tostring (value);
+		shingles_key_str = ucl_object_tostring (value);
 	}
-	if (k == NULL) {
-		k = "rspamd";
+	if (shingles_key_str == NULL) {
+		shingles_key_str = "rspamd";
 	}
 
 	rule->shingles_key = g_string_sized_new (rspamd_cryptobox_HASHBYTES);
-	rspamd_cryptobox_hash (rule->shingles_key->str, k, strlen (k), NULL, 0);
+	rspamd_cryptobox_hash (rule->shingles_key->str, shingles_key_str,
+			strlen (shingles_key_str), NULL, 0);
 	rule->shingles_key->len = 16;
 
 	if (rspamd_upstreams_count (rule->servers) == 0) {
@@ -576,6 +577,11 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 					SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 					cb_id);
 		}
+
+		msg_info_config ("added fuzzy rule %s, key: %6xs, "
+				"shingles_key: %6xs, algorithm: %s",
+				rule->symbol, rule->hash_key->str, rule->shingles_key->str,
+				rule->algorithm_str);
 	}
 
 	rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool, fuzzy_free_rule,
