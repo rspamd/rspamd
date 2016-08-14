@@ -53,6 +53,7 @@ LUA_FUNCTION_DEF (url, is_redirected);
 LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, create);
+LUA_FUNCTION_DEF (url, init);
 LUA_FUNCTION_DEF (url, all);
 
 static const struct luaL_reg urllib_m[] = {
@@ -76,6 +77,7 @@ static const struct luaL_reg urllib_m[] = {
 };
 
 static const struct luaL_reg urllib_f[] = {
+	LUA_INTERFACE_DEF (url, init),
 	LUA_INTERFACE_DEF (url, create),
 	LUA_INTERFACE_DEF (url, all),
 	{NULL, NULL}
@@ -468,7 +470,7 @@ lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
 
 
 /***
- * @function url.create(mempool, str)
+ * @function url.create([mempool,] str)
  * @param {rspamd_mempool} memory pool for URL, e.g. `task:get_mempool()`
  * @param {string} text that contains URL (can also contain other stuff)
  * @return {url} new url object that exists as long as the corresponding mempool exists
@@ -476,32 +478,61 @@ lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
 static gint
 lua_url_create (lua_State *L)
 {
-	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
+	rspamd_mempool_t *pool;
 	const gchar *text;
 	size_t length;
+	gboolean own_pool = FALSE;
 
-	if (pool == NULL) {
-		lua_pushnil (L);
+	if (lua_type (L, 1) == LUA_TUSERDATA) {
+		pool = rspamd_lua_check_mempool (L, 1);
+		text = luaL_checklstring (L, 2, &length);
 	}
 	else {
-		text = luaL_checklstring (L, 2, &length);
+		own_pool = TRUE;
+		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "url");
+		text = luaL_checklstring (L, 1, &length);
+	}
 
-		if (text != NULL) {
-			rspamd_url_find_single (pool, text, length, FALSE,
-					lua_url_single_inserter, L);
-
-			if (lua_type (L, -1) != LUA_TUSERDATA) {
-				/* URL is actually not found */
-				lua_pushnil (L);
-			}
-
+	if (pool == NULL || text == NULL) {
+		if (own_pool && pool) {
+			rspamd_mempool_delete (pool);
 		}
-		else {
+
+		return luaL_error (L, "invalid arguments");
+	}
+	else {
+		rspamd_url_find_single (pool, text, length, FALSE,
+				lua_url_single_inserter, L);
+
+		if (lua_type (L, -1) != LUA_TUSERDATA) {
+			/* URL is actually not found */
 			lua_pushnil (L);
 		}
 	}
 
+	if (own_pool && pool) {
+		rspamd_mempool_delete (pool);
+	}
+
 	return 1;
+}
+
+/***
+ * @function url.create(tld_file)
+ * Initialize url library if not initialized yet by Rspamd
+ * @param {string} tld_file for url library
+ * @return nothing
+ */
+static gint
+lua_url_init (lua_State *L)
+{
+	const gchar *tld_path;
+
+	tld_path = luaL_checkstring (L, 1);
+
+	rspamd_url_init (tld_path);
+
+	return 0;
 }
 
 static void
