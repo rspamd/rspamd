@@ -127,4 +127,4 @@ Sync Fuzzy Storage
   ${result} =  Run Process  ${RSPAMADM}  control  -s  ${TMPDIR}/rspamd.sock  fuzzy_sync
   Log  ${result.stdout}
   Follow Rspamd Log
-  Sleep  1s  Try give fuzzy storage time to sync
+  Sleep  0.005s  Try give fuzzy storage time to sync

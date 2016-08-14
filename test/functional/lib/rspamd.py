@@ -72,6 +72,11 @@ def HTTP(method, host, port, path, data=None, headers={}):
 def make_temporary_directory():
     return tempfile.mkdtemp()
 
+def path_splitter(path):
+    dirname = os.path.dirname(path)
+    basename = os.path.basename(path)
+    return [dirname, basename]
+
 def read_log_from_position(filename, offset):
     offset = long(offset)
     f = open(filename, 'rb')
