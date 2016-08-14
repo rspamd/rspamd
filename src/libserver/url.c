@@ -1648,11 +1648,13 @@ rspamd_tld_trie_find_callback (struct rspamd_multipattern *mp,
 	}
 
 	if (ndots == 0 || p == start - 1) {
-		cbdata->out->begin = pos;
-		cbdata->out->len = cbdata->begin + cbdata->len - pos;
+		if (cbdata->begin + cbdata->len - pos > cbdata->out->len) {
+			cbdata->out->begin = pos;
+			cbdata->out->len = cbdata->begin + cbdata->len - pos;
+		}
 	}
 
-	return 1;
+	return 0;
 }
 
 gboolean
@@ -1667,13 +1669,16 @@ rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out)
 	cbdata.begin = in;
 	cbdata.len = inlen;
 	cbdata.out = out;
+	out->len = 0;
 
-	if (rspamd_multipattern_lookup (url_scanner->search_trie, in, inlen,
-			rspamd_tld_trie_find_callback, &cbdata, NULL) == 0) {
-		return FALSE;
+	rspamd_multipattern_lookup (url_scanner->search_trie, in, inlen,
+			rspamd_tld_trie_find_callback, &cbdata, NULL);
+
+	if (out->len > 0) {
+		return TRUE;
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 static const gchar url_braces[] = {
