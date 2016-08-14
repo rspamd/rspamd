@@ -8,6 +8,7 @@ Variables       ${TESTDIR}/lib/vars.py
 ${CONFIG}       ${TESTDIR}/configs/lua_test.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${RSPAMD_SCOPE}  Test
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Flags
@@ -34,8 +35,18 @@ Recipient Parsing Sanity
   ...  -r  rcpt3@foobar  -r  rcpt4@foobar
   Check Rspamc  ${result}  TEST_RCPT (1.00)[rcpt1@foobar,rcpt2@foobar,rcpt3@foobar,rcpt4@foobar]
 
+TLD parts
+  [Setup]  TLD Setup  ${TESTDIR}/lua/tlds.lua
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  TEST_TLD (1.00)[no worry]
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
   Set Test Variable  ${LUA_SCRIPT}
   Generic Setup
+
+TLD Setup
+  [Arguments]  ${LUA_SCRIPT}
+  Set Test Variable  ${URL_TLD}  ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
+  Lua Setup  ${LUA_SCRIPT}
