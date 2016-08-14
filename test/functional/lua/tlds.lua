@@ -10,7 +10,6 @@ rspamd_config:register_symbol({
       'example.ac',
       'example.b.br',
       'example.co',
-      'example.city.kawasaki.jp',
       'example.com',
       'example.co.za',
       'example.in.net',
