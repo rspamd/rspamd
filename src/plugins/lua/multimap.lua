@@ -365,7 +365,7 @@ local function multimap_callback(task, rule)
       end
     end
 
-    if r['filter'] then
+    if r['filter'] or r['type'] == 'url' then
       local fn = multimap_filters[r['type']]
 
       if fn then
