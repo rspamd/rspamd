@@ -84,6 +84,7 @@ Rspamd supports the following variables:
 - `time_real` - real time of task processing
 - `time_virtual` - CPU time of task processing
 - `dns_req` - number of DNS requests
+- `digest` - cryptographic digest of a message's content (stripped to 16 bytes or 32 hex symbols)
 - `lua` - custom Lua script, e.g:
 
 ~~~lua
