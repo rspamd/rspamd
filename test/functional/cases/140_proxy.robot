@@ -11,13 +11,25 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
-Scan Message
+Rspamc Client
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_PROXY}  -p  ${MESSAGE}
   Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
   Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Contain  ${result.stdout}  SIMPLE_TEST
   Should Be Equal As Integers  ${result.rc}  0
+
+SPAMC
+  ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}
+  Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
+  Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
+  Should Contain  ${result}  SIMPLE_TEST
+
+RSPAMC Legacy Protocol
+  ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}
+  Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
+  Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
+  Should Contain  ${result}  SIMPLE_TEST
 
 *** Keywords ***
 Proxy Setup
