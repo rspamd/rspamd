@@ -1375,6 +1375,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	gint i;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
+	rspamd_cryptobox_hash_state_t st;
+	guchar digest_out[rspamd_cryptobox_HASHBYTES];
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
@@ -1430,6 +1432,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	 * pool allocator
 	 */
 	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
+	rspamd_cryptobox_hash_init (&st, NULL, 0);
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 
@@ -1473,6 +1476,10 @@ rspamd_message_parse (struct rspamd_task *task)
 				task->raw_headers_content.begin = (gchar *) (p);
 				task->raw_headers_content.len = hdr_pos;
 				task->raw_headers_content.body_start = p + body_pos;
+
+				rspamd_cryptobox_hash_update (&st,
+						task->raw_headers_content.begin,
+						task->raw_headers_content.len);
 
 				if (task->raw_headers_content.len > 0) {
 					process_raw_headers (task, task->raw_headers,
@@ -1718,13 +1725,27 @@ rspamd_message_parse (struct rspamd_task *task)
 				"them with each other");
 	}
 
+	for (i = 0; i < task->parts->len; i ++) {
+		struct rspamd_mime_part *part;
+
+		part = g_ptr_array_index (task->parts, i);
+		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
+	}
+
+	rspamd_cryptobox_hash_final (&st, digest_out);
+	memcpy (task->digest, digest_out, sizeof (task->digest));
+
 	if (task->queue_id) {
-		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z",
-				task->message_id, task->queue_id, task->msg.len);
+		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
+				"checksum: <%*xs>",
+				task->message_id, task->queue_id, task->msg.len,
+				(gint)sizeof (task->digest), task->digest);
 	}
 	else {
-		msg_info_task ("loaded message; id: <%s>; size: %z",
-				task->message_id, task->msg.len);
+		msg_info_task ("loaded message; id: <%s>; size: %z; "
+				"checksum: <%*xs>",
+				task->message_id, task->msg.len,
+				(gint)sizeof (task->digest), task->digest);
 	}
 
 	return TRUE;

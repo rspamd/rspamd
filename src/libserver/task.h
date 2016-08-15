@@ -188,6 +188,7 @@ struct rspamd_task {
 	ucl_object_t *settings;							/**< Settings applied to task						*/
 
 	const gchar *classifier;						/**< Classifier to learn (if needed)				*/
+	guchar digest[16];
 };
 
 /**
