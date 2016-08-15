@@ -282,6 +282,13 @@ LUA_FUNCTION_DEF (mimepart, is_text);
  */
 LUA_FUNCTION_DEF (mimepart, get_text);
 
+/***
+ * @method mime_part:get_digest()
+ * Returns the unique digest for this mime part
+ * @return {string} 128 characters hex string with digest of the part
+ */
+LUA_FUNCTION_DEF (mimepart, get_digest);
+
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
 	LUA_INTERFACE_DEF (mimepart, get_length),
@@ -296,6 +303,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_archive),
 	LUA_INTERFACE_DEF (mimepart, is_text),
 	LUA_INTERFACE_DEF (mimepart, get_text),
+	LUA_INTERFACE_DEF (mimepart, get_digest),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -798,6 +806,24 @@ lua_mimepart_get_text (lua_State * L)
 		*ppart = part->specific_data;
 		rspamd_lua_setclass (L, "rspamd{textpart}", -1);
 	}
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_digest (lua_State * L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	gchar digestbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	memset (digestbuf, 0, sizeof (digestbuf));
+	rspamd_encode_hex_buf (part->digest, sizeof (part->digest),
+			digestbuf, sizeof (digestbuf));
+	lua_pushstring (L, digestbuf);
 
 	return 1;
 }
