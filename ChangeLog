@@ -1,3 +1,32 @@
+1.3.3:
+	* [CritFix] Check hyperscan cache sanity before loading
+	* [CritFix] Fix setting of fuzzy keys (completely breaks fuzzy storage)
+	* [Feature] Add SARBL (sarbl.org) uribl
+	* [Feature] Add `--search-pattern` option to rspamd_stats
+	* [Feature] Add some sanity check for very long from/to log elements
+	* [Feature] Allow to create hashes from string in a single step
+	* [Feature] Fix order of pre and postfilters
+	* [Feature] Improve lua URLs API
+	* [Feature] Improve message about fuzzy rules
+	* [Feature] Pre-calculate blake2 digest for all parts
+	* [Feature] Print radix duplicate keys as IP addresses
+	* [Feature] Simple mechanism for disabling RBLs in local.d/rbl.conf
+	* [Feature] Use faster hash function for fuzzy storage
+	* [Feature] rspamd_stats: support log directory reading
+	* [Fix] Add sanity check for url filters
+	* [Fix] Do not show rmilter section as a fake metric in rspamc
+	* [Fix] Fix URL filters
+	* [Fix] Fix a stupid mistake in util.strequal_caseless
+	* [Fix] Fix blake2b hash of the string "rspamd"
+	* [Fix] Fix filename maps filter
+	* [Fix] Fix finding tld in util.get_tld
+	* [Fix] Fix multimap content filters
+	* [Fix] Fix returning boolean from Lua
+	* [Fix] Fix returning of REDIS_NIL
+	* [Fix] Try to deal with multiple workers terminated
+	* [Fix] Use forced DNS request when calling for lua_http
+	* [Rework] Rework multimap filters, add redis maps
+
 1.3.2:
 	* [Feature] Add a special symbol for SPF DNS errors: R_SPF_DNSFAIL
 	* [Feature] Add correlations report in fuzzy stats
