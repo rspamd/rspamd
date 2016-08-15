@@ -211,7 +211,8 @@ enum rspamd_log_format_type {
 	RSPAMD_LOG_MIME_RCPTS,
 	RSPAMD_LOG_TIME_REAL,
 	RSPAMD_LOG_TIME_VIRTUAL,
-	RSPAMD_LOG_LUA
+	RSPAMD_LOG_LUA,
+	RSPAMD_LOG_DIGEST,
 };
 
 enum rspamd_log_format_flags {

@@ -393,6 +393,10 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	else if (rspamd_ftok_cstr_equal (&tok, "lua", TRUE)) {
 		type = RSPAMD_LOG_LUA;
 	}
+	else if (rspamd_ftok_cstr_equal (&tok, "digest", TRUE) ||
+			rspamd_ftok_cstr_equal (&tok, "checksum", TRUE)) {
+		type = RSPAMD_LOG_DIGEST;
+	}
 	else {
 		msg_err_config ("unknown log variable: %T", &tok);
 		return FALSE;

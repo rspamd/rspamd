@@ -1123,7 +1123,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 {
 	rspamd_fstring_t *res = logbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
-	static gchar numbuf[32];
+	static gchar numbuf[64];
 
 	switch (lf->type) {
 	/* String vars */
@@ -1225,6 +1225,11 @@ rspamd_task_log_variable (struct rspamd_task *task,
 			return rspamd_task_write_ialist (task, task->rcpt_mime, -1, lf,
 					logbuf);
 		}
+		break;
+	case RSPAMD_LOG_DIGEST:
+		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%*xs",
+				(gint)sizeof (task->digest), task->digest);
+		var.begin = numbuf;
 		break;
 	default:
 		var = rspamd_task_log_metric_res (task, lf);
