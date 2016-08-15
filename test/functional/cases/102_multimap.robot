@@ -11,6 +11,11 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
+${URL1}         ${TESTDIR}/messages/url1.eml
+${URL2}         ${TESTDIR}/messages/url2.eml
+${URL3}         ${TESTDIR}/messages/url3.eml
+${URL4}         ${TESTDIR}/messages/url4.eml
+${URL5}         ${TESTDIR}/messages/url5.eml
 
 *** Test Cases ***
 MAP - DNSBL HIT
@@ -141,6 +146,60 @@ MAP - REDIS - FROM
 MAP - REDIS - FROM MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.com
   Check Rspamc  ${result}  REDIS_FROMADDR  inverse=1
+
+MAP - REDIS - URL TLD - HIT
+  Redis HSET  hostname  example.com  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL1}
+  Check Rspamc  ${result}  REDIS_URL_TLD
+
+MAP - REDIS - URL TLD - MISS
+  ${result} =  Scan Message With Rspamc  ${URL2}
+  Check Rspamc  ${result}  REDIS_URL_TLD  inverse=1
+
+MAP - REDIS - URL RE FULL - HIT
+  Redis HSET  fullurlre  html  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL2}
+  Check Rspamc  ${result}  REDIS_URL_RE_FULL
+
+MAP - REDIS - URL RE FULL - MISS
+  ${result} =  Scan Message With Rspamc  ${URL1}
+  Check Rspamc  ${result}  REDIS_URL_RE_FULL  inverse=1
+
+MAP - REDIS - URL FULL - HIT
+  Redis HSET  fullurl  https://www.example.com/foo?a=b  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL1}
+  Check Rspamc  ${result}  REDIS_URL_FULL
+
+MAP - REDIS - URL FULL - MISS
+  ${result} =  Scan Message With Rspamc  ${URL2}
+  Check Rspamc  ${result}  REDIS_URL_FULL  inverse=1
+
+MAP - REDIS - URL PHISHED - HIT
+  Redis HSET  phishedurl  www.rspamd.com  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL3}
+  Check Rspamc  ${result}  REDIS_URL_PHISHED
+
+MAP - REDIS - URL PHISHED - MISS
+  ${result} =  Scan Message With Rspamc  ${URL4}
+  Check Rspamc  ${result}  REDIS_URL_PHISHED  inverse=1
+
+MAP - REDIS - URL PLAIN REGEX - HIT
+  Redis HSET  urlre  www  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL3}
+  Check Rspamc  ${result}  REDIS_URL_RE_PLAIN
+
+MAP - REDIS - URL PLAIN REGEX - MISS
+  ${result} =  Scan Message With Rspamc  ${URL4}
+  Check Rspamc  ${result}  REDIS_URL_RE_PLAIN  inverse=1
+
+MAP - REDIS - URL TLD REGEX - HIT
+  Redis HSET  tldre  net  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL5}
+  Check Rspamc  ${result}  REDIS_URL_RE_TLD
+
+MAP - REDIS - URL TLD REGEX - MISS
+  ${result} =  Scan Message With Rspamc  ${URL4}
+  Check Rspamc  ${result}  REDIS_URL_RE_TLD  inverse=1
 
 *** Keywords ***
 Multimap Setup
