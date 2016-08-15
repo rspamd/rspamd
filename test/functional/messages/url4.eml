@@ -1,0 +1,4 @@
+Content-Type: text/html
+
+hello <a href="https://example.com/">https://rspamd.tk</a> hello
+hello <a href="https://rspamd.com/doc/modules/multimap.html">https://rspamd.com</a> hello
