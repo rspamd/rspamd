@@ -201,6 +201,15 @@ MAP - REDIS - URL TLD REGEX - MISS
   ${result} =  Scan Message With Rspamc  ${URL4}
   Check Rspamc  ${result}  REDIS_URL_RE_TLD  inverse=1
 
+MAP - REDIS - URL NOFILTER - HIT
+  Redis HSET  urlnofilter  www.example.net  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${URL5}
+  Check Rspamc  ${result}  REDIS_URL_NOFILTER
+
+MAP - REDIS - URL NOFILTER - MISS
+  ${result} =  Scan Message With Rspamc  ${URL4}
+  Check Rspamc  ${result}  REDIS_URL_NOFILTER  inverse=1
+
 *** Keywords ***
 Multimap Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
