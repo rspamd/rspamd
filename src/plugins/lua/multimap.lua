@@ -60,6 +60,10 @@ local function apply_hostname_filter(task, filter, hostname, r)
 end
 
 local function apply_url_filter(task, filter, url, r)
+  if not filter then
+    return url:get_host()
+  end
+
   if filter == 'tld' then
     return url:get_tld()
   elseif filter == 'full' then
