@@ -1,5 +1,5 @@
 *** Settings ***
-Suite Setup     Fuzzy Setup Encrypted Siphash
+Suite Setup     Fuzzy Setup Plain Siphash
 Suite Teardown  Generic Teardown
 Resource        lib.robot
 
