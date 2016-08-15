@@ -1027,8 +1027,13 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 	dkim_sig = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
 
 	if (dkim_sig) {
-		ucl_object_insert_key (top, ucl_object_fromstring (dkim_sig->str),
-					"dkim-signature", 0, false);
+		GString *folded_header = rspamd_header_value_fold ("DKIM-Signature",
+				dkim_sig->str, 80);
+		ucl_object_insert_key (top,
+				ucl_object_fromstring_common (folded_header->str,
+						folded_header->len, UCL_STRING_RAW),
+				"dkim-signature", 0, false);
+		g_string_free (folded_header, TRUE);
 	}
 
 	rmilter_reply = rspamd_mempool_get_variable (task->task_pool, "rmilter-reply");
