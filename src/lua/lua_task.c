@@ -655,6 +655,13 @@ LUA_FUNCTION_DEF (task, has_flag);
  */
 LUA_FUNCTION_DEF (task, get_flags);
 
+/***
+ * @method task:get_digest()
+ * Returns message's unique digest (32 hex symbols)
+ * @return {string} hex digest
+ */
+LUA_FUNCTION_DEF (task, get_digest);
+
 static const struct luaL_reg tasklib_f[] = {
 	{NULL, NULL}
 };
@@ -730,6 +737,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_flags),
 	LUA_INTERFACE_DEF (task, has_flag),
 	LUA_INTERFACE_DEF (task, set_rmilter_reply),
+	LUA_INTERFACE_DEF (task, get_digest),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -2745,6 +2753,33 @@ lua_task_get_flags (lua_State *L)
 				}
 			}
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_digest (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gchar hexbuf[33];
+	gint r;
+
+	if (task) {
+		r = rspamd_encode_hex_buf (task->digest, sizeof (task->digest),
+				hexbuf, sizeof (hexbuf) - 1);
+
+		if (r > 0) {
+			hexbuf[r] = '\0';
+			lua_pushstring (L, hexbuf);
+		}
+		else {
+			lua_pushnil (L);
+		}
+
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
