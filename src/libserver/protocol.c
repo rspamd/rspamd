@@ -692,7 +692,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			len = task->from_envelope->addr_len;
 		}
 
-		msg_info_task ("<%s> %s: %*s; ip: %s; URL: %*s",
+		msg_info_task_encrypted ("<%s> %s: %*s; ip: %s; URL: %*s",
 			task->message_id,
 			has_user ? "user" : "from",
 			len, user_field,

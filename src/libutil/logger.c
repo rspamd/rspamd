@@ -497,7 +497,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *fmt, va_list args)
 {
 	gchar logbuf[RSPAMD_LOGBUF_SIZE], *end;
-	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK|G_LOG_LEVEL_MASK);
+	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK);
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;

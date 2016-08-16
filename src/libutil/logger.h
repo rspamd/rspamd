@@ -192,6 +192,22 @@ const guint64* rspamd_log_counters (rspamd_logger_t *logger);
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_err_task_encrypted(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL|RSPAMD_LOG_ENCRYPTED, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_task_encrypted(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING|RSPAMD_LOG_ENCRYPTED, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_task_encrypted(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO|RSPAMD_LOG_ENCRYPTED, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_task_encrypted(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG|RSPAMD_LOG_ENCRYPTED, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 /* Check for NULL pointer first */
 #define msg_err_task_check(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
