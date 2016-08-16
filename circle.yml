@@ -7,12 +7,12 @@ dependencies:
 
 test:
   override:
-    - cmake . -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=./_install
-    - cmake --build . --target install
-    - sudo robot test/functional/cases
-    - lcov --no-external -b . -d . -c --output-file coverage.info
-    - lcov -r coverage.info *.rl
-    - ln -s src/ragel .
+    - mkdir ../build ; mkdir ../install ; cd ../build
+    - cmake ../rspamd -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
+    - make install
+    - RSPAMADM=../install/bin/rspamadm RSPAMC=../install/bin/rspamc RSPAMD=../install/bin/rspamd sudo -E robot ../rspamd/test/functional/cases
+    - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
+    - ln -s ../rspamd/src/ragel ../rspamd
     - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info; fi
   post:
     - for i in output.xml log.html report.html; do mv $i $CIRCLE_ARTIFACTS; done
