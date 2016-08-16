@@ -104,18 +104,22 @@ return function (args, res)
   local users_map = {}
   local learns = {}
   local redis_password = res['redis_password']
-  local redis_db = res['redis_db']
+  local redis_db = nil
   local ret = false
   local cmd = 'HINCRBY'
 
+  if res['redis_db'] then
+    redis_db = tostring(res['redis_db'])
+  end
   if res['reset_previous'] then
     cmd = 'HSET'
   end
 
   if res['cache_db'] then
-    if not convert_learned(res['cache_db'], res['redis_host']) then
-      print('Cannot convert learned cache to redis')
-      return
+    if not convert_learned(res['cache_db'], res['redis_host'],
+      redis_password, redis_db) then
+        print('Cannot convert learned cache to redis')
+        return
     end
   end
 
