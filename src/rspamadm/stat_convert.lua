@@ -33,7 +33,7 @@ local function send_redis(server, symbol, tokens, password, db, cmd)
   return ret
 end
 
-local function convert_learned(cache, server, password, db)
+local function convert_learned(cache, server, password, redis_db)
   local converted = 0
   local db = sqlite3.open(cache)
   local ret = true
@@ -57,8 +57,8 @@ local function convert_learned(cache, server, password, db)
   if password then
     conn:add_cmd('AUTH', {password})
   end
-  if db then
-    conn:add_cmd('SELECT', {db})
+  if redis_db then
+    conn:add_cmd('SELECT', {redis_db})
   end
 
   for row in db:rows('SELECT * FROM learns;') do
