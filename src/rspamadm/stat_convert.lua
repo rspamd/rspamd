@@ -104,10 +104,13 @@ return function (args, res)
   local users_map = {}
   local learns = {}
   local redis_password = res['redis_password']
-  local redis_db = res['redis_db']
+  local redis_db = nil
   local ret = false
   local cmd = 'HINCRBY'
 
+  if res['redis_db'] then
+    redis_db = tostring(res['redis_db'])
+  end
   if res['reset_previous'] then
     cmd = 'HSET'
   end
