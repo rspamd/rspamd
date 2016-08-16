@@ -19,6 +19,8 @@
 #include "rspamd.h"
 #include "map.h"
 #include "cryptobox.h"
+#include "ottery.h"
+#include "keypair.h"
 #include "unix-std.h"
 
 #ifdef HAVE_SYSLOG_H
@@ -38,6 +40,8 @@
 struct rspamd_logger_s {
 	rspamd_log_func_t log_func;
 	struct rspamd_config *cfg;
+	struct rspamd_cryptobox_pubkey *pk;
+	struct rspamd_cryptobox_keypair *keypair;
 	struct {
 		guint32 size;
 		guint32 used;
@@ -311,59 +315,80 @@ rspamd_set_logger (struct rspamd_config *cfg,
 		GQuark ptype,
 		struct rspamd_main *rspamd)
 {
+	rspamd_logger_t *logger;
+
 	if (rspamd->logger == NULL) {
 		rspamd->logger = g_slice_alloc0 (sizeof (rspamd_logger_t));
 	}
 
-	rspamd->logger->type = cfg->log_type;
-	rspamd->logger->pid = getpid ();
-	rspamd->logger->process_type = ptype;
+	logger = rspamd->logger;
+
+	logger->type = cfg->log_type;
+	logger->pid = getpid ();
+	logger->process_type = ptype;
 
 	switch (cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
-			rspamd->logger->log_func = file_log_function;
-			rspamd->logger->fd = STDERR_FILENO;
+			logger->log_func = file_log_function;
+			logger->fd = STDERR_FILENO;
 			break;
 		case RSPAMD_LOG_SYSLOG:
-			rspamd->logger->log_func = syslog_log_function;
+			logger->log_func = syslog_log_function;
 			break;
 		case RSPAMD_LOG_FILE:
-			rspamd->logger->log_func = file_log_function;
+			logger->log_func = file_log_function;
 			break;
 	}
 
-	rspamd->logger->cfg = cfg;
+	logger->cfg = cfg;
+
 	/* Set up buffer */
-	if (rspamd->cfg->log_buffered) {
-		if (rspamd->cfg->log_buf_size != 0) {
-			rspamd->logger->io_buf.size = rspamd->cfg->log_buf_size;
+	if (cfg->log_buffered) {
+		if (cfg->log_buf_size != 0) {
+			logger->io_buf.size = cfg->log_buf_size;
 		}
 		else {
-			rspamd->logger->io_buf.size = BUFSIZ;
+			logger->io_buf.size = BUFSIZ;
 		}
-		rspamd->logger->is_buffered = TRUE;
-		rspamd->logger->io_buf.buf = g_malloc (rspamd->logger->io_buf.size);
+		logger->is_buffered = TRUE;
+		logger->io_buf.buf = g_malloc (logger->io_buf.size);
 	}
 	/* Set up conditional logging */
-	if (rspamd->cfg->debug_ip_map != NULL) {
+	if (cfg->debug_ip_map != NULL) {
 		/* Try to add it as map first of all */
-		if (rspamd->logger->debug_ip) {
-			radix_destroy_compressed (rspamd->logger->debug_ip);
+		if (logger->debug_ip) {
+			radix_destroy_compressed (logger->debug_ip);
 		}
 
-		rspamd->logger->debug_ip = NULL;
-
-		rspamd_config_radix_from_ucl (rspamd->cfg,
-				rspamd->cfg->debug_ip_map,
+		logger->debug_ip = NULL;
+		rspamd_config_radix_from_ucl (cfg,
+				cfg->debug_ip_map,
 				"IP addresses for which debug logs are enabled",
-				&rspamd->logger->debug_ip, NULL);
+				&logger->debug_ip, NULL);
 	}
-	else if (rspamd->logger->debug_ip) {
-		radix_destroy_compressed (rspamd->logger->debug_ip);
-		rspamd->logger->debug_ip = NULL;
+	else if (logger->debug_ip) {
+		radix_destroy_compressed (logger->debug_ip);
+		logger->debug_ip = NULL;
 	}
 
-	default_logger = rspamd->logger;
+	if (logger->pk) {
+		rspamd_pubkey_unref (logger->pk);
+	}
+	logger->pk = NULL;
+
+	if (logger->keypair) {
+		rspamd_keypair_unref (logger->keypair);
+	}
+	logger->keypair = NULL;
+
+	if (cfg->log_encryption_key) {
+		logger->pk = rspamd_pubkey_ref (cfg->log_encryption_key);
+		logger->keypair = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+				RSPAMD_CRYPTOBOX_MODE_25519);
+		rspamd_pubkey_calculate_nm (logger->pk, logger->keypair);
+	}
+
+	default_logger = logger;
 }
 
 /**
@@ -428,12 +453,50 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 	return FALSE;
 }
 
+static gchar *
+rspamd_log_encrypt_message (const gchar *begin, const gchar *end,
+		rspamd_logger_t *rspamd_log)
+{
+	guchar *out;
+	gchar *b64;
+	guchar *p, *nonce, *mac;
+	const guchar *comp;
+	guint len, inlen;
+
+	g_assert (end > begin);
+	/* base64 (pubkey | nonce | message) */
+	inlen = rspamd_cryptobox_nonce_bytes (RSPAMD_CRYPTOBOX_MODE_25519) +
+			rspamd_cryptobox_pk_bytes (RSPAMD_CRYPTOBOX_MODE_25519) +
+			rspamd_cryptobox_mac_bytes (RSPAMD_CRYPTOBOX_MODE_25519) +
+			(end - begin);
+	out = g_malloc (inlen);
+
+	p = out;
+	comp = rspamd_pubkey_get_pk (rspamd_log->pk, &len);
+	memcpy (p, comp, len);
+	p += len;
+	ottery_rand_bytes (p, rspamd_cryptobox_nonce_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
+	nonce = p;
+	p += rspamd_cryptobox_nonce_bytes (RSPAMD_CRYPTOBOX_MODE_25519);
+	mac = p;
+	p += rspamd_cryptobox_mac_bytes (RSPAMD_CRYPTOBOX_MODE_25519);
+	memcpy (p, begin, end - begin);
+	comp = rspamd_pubkey_get_nm (rspamd_log->pk);
+	g_assert (comp != NULL);
+	rspamd_cryptobox_encrypt_nm_inplace (p, end - begin, nonce, comp, mac,
+			RSPAMD_CRYPTOBOX_MODE_25519);
+	b64 = rspamd_encode_base64 (out, inlen, 0, NULL);
+	g_free (out);
+
+	return b64;
+}
+
 void
 rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *module, const gchar *id, const gchar *function,
 		const gchar *fmt, va_list args)
 {
-	gchar logbuf[RSPAMD_LOGBUF_SIZE];
+	gchar logbuf[RSPAMD_LOGBUF_SIZE], *end;
 	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK|G_LOG_LEVEL_MASK);
 
 	if (rspamd_log == NULL) {
@@ -449,12 +512,26 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 	}
 	else {
 		if (rspamd_logger_need_log (rspamd_log, level, module)) {
-			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			rspamd_log->log_func (module, id,
-					function,
-					level_flags,
-					logbuf,
-					rspamd_log);
+			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
+
+			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
+				gchar *encrypted;
+
+				encrypted = rspamd_log_encrypt_message (logbuf, end, rspamd_log);
+				rspamd_log->log_func (module, id,
+						function,
+						level_flags,
+						encrypted,
+						rspamd_log);
+				g_free (encrypted);
+			}
+			else {
+				rspamd_log->log_func (module, id,
+						function,
+						level_flags,
+						logbuf,
+						rspamd_log);
+			}
 
 			switch (level) {
 			case G_LOG_LEVEL_CRITICAL:

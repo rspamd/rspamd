@@ -1680,6 +1680,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Specify format string for the task logging output "
 					"(https://rspamd.com/doc/configuration/logging.html "
 					"for details)");
+	rspamd_rcl_add_default_handler (sub,
+			"encryption_key",
+			rspamd_rcl_parse_struct_pubkey,
+			G_STRUCT_OFFSET (struct rspamd_config, log_encryption_key),
+			0,
+			"Encrypt sensitive information in logs using this pubkey");
 	/**
 	 * Options section
 	 */
