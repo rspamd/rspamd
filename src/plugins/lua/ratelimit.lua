@@ -196,27 +196,29 @@ local function set_limits(task, args)
         table.insert(values, {limit[2], max_delay, lstr})
       end, fun.zip(parse_limits(data), fun.iter(args)))
 
-      local conn
-      ret,conn,upstream = rspamd_redis_make_request(task,
-        redis_params, -- connect params
-        key, -- hash key
-        true, -- is write
-        rate_set_cb, --callback
-        'setex', -- command
-        values[1] -- arguments
-      )
+      if #values > 0 then
+        local conn
+        ret,conn,upstream = rspamd_redis_make_request(task,
+          redis_params, -- connect params
+          key, -- hash key
+          true, -- is write
+          rate_set_cb, --callback
+          'setex', -- command
+          values[1] -- arguments
+        )
 
-      if conn then
-        fun.each(function(v)
-          conn:add_cmd('setex', v)
-        end, fun.drop_n(1, values))
-      else
-        rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+        if conn then
+          fun.each(function(v)
+            conn:add_cmd('setex', v)
+          end, fun.drop_n(1, values))
+        else
+          rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+          upstream:fail()
+        end
+      elseif err then
+        rspamd_logger.infox(task, 'got error while setting limit: %1', err)
         upstream:fail()
       end
-    elseif err then
-      rspamd_logger.infox(task, 'got error while setting limit: %1', err)
-      upstream:fail()
     end
   end
 
