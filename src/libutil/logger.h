@@ -6,11 +6,19 @@
 #include "radix.h"
 #include "util.h"
 
+#ifndef G_LOG_LEVEL_USER_SHIFT
+#define G_LOG_LEVEL_USER_SHIFT 8
+#endif
 
-typedef void (*rspamd_log_func_t) (const gchar *log_domain,
-		const gchar *module, const gchar *id, const gchar *function,
-		GLogLevelFlags log_level, const gchar *message,
-		gboolean forced, gpointer arg);
+enum rspamd_log_flags {
+	RSPAMD_LOG_FORCED = (1 << G_LOG_LEVEL_USER_SHIFT),
+	RSPAMD_LOG_ENCRYPTED = (1 << (G_LOG_LEVEL_USER_SHIFT + 1)),
+	RSPAMD_LOG_LEVEL_MASK = ~(RSPAMD_LOG_FORCED|RSPAMD_LOG_ENCRYPTED)
+};
+
+typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
+		const gchar *function,
+		gint level_flags, const gchar *message, gpointer arg);
 
 typedef struct rspamd_logger_s rspamd_logger_t;
 
@@ -76,11 +84,11 @@ void rspamd_glib_printerr_function (const gchar *message);
  * Function with variable number of arguments support
  */
 void rspamd_common_log_function (rspamd_logger_t *logger,
-		GLogLevelFlags log_level,
+		gint level_flags,
 		const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...);
 
-void rspamd_common_logv (rspamd_logger_t *logger, GLogLevelFlags log_level,
+void rspamd_common_logv (rspamd_logger_t *logger, gint level_flags,
 		const gchar *module, const gchar *id, const gchar *function,
 		const gchar *fmt, va_list args);
 
@@ -94,7 +102,7 @@ void rspamd_conditional_debug (rspamd_logger_t *logger,
 /**
  * Function with variable number of arguments support that uses static default logger
  */
-void rspamd_default_log_function (GLogLevelFlags log_level,
+void rspamd_default_log_function (gint level_flags,
 		const gchar *module, const gchar *id,
 		const gchar *function,
 		const gchar *fmt,
@@ -107,7 +115,7 @@ void rspamd_default_log_function (GLogLevelFlags log_level,
  * @param fmt
  * @param args
  */
-void rspamd_default_logv (GLogLevelFlags log_level,
+void rspamd_default_logv (gint level_flags,
 		const gchar *module, const gchar *id,
 		const gchar *function,
 		const gchar *fmt,

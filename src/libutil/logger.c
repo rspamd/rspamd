@@ -68,17 +68,16 @@ static const gchar lf_chr = '\n';
 
 static rspamd_logger_t *default_logger = NULL;
 
-static void
-		syslog_log_function (const gchar *log_domain, const gchar *module,
+static void syslog_log_function (const gchar *module,
 		const gchar *id, const gchar *function,
-		GLogLevelFlags log_level, const gchar *message,
-		gboolean forced, gpointer arg);
+		gint log_level, const gchar *message,
+		gpointer arg);
 
 static void
-		file_log_function (const gchar *log_domain, const gchar *module,
+		file_log_function (const gchar *module,
 		const gchar *id, const gchar *function,
-		GLogLevelFlags log_level, const gchar *message,
-		gboolean forced, gpointer arg);
+		gint log_level, const gchar *message,
+		gpointer arg);
 
 /**
  * Calculate checksum for log line (used for repeating logic)
@@ -229,13 +228,11 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 							rspamd_log->repeats);
 					rspamd_log->repeats = 0;
 					if (rspamd_log->saved_message) {
-						file_log_function (NULL,
-								rspamd_log->saved_module,
+						file_log_function (rspamd_log->saved_module,
 								rspamd_log->saved_id,
 								rspamd_log->saved_function,
-								rspamd_log->saved_loglevel,
+								rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 								rspamd_log->saved_message,
-								TRUE,
 								rspamd_log);
 
 						g_free (rspamd_log->saved_message);
@@ -248,11 +245,10 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 						rspamd_log->saved_id = NULL;
 					}
 					/* It is safe to use temporary buffer here as it is not static */
-					file_log_function (NULL, NULL, NULL,
+					file_log_function (NULL, NULL,
 							G_STRFUNC,
-							rspamd_log->saved_loglevel,
+							rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 							tmpbuf,
-							TRUE,
 							rspamd_log);
 					return;
 				}
@@ -433,11 +429,12 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 }
 
 void
-rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
+rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *module, const gchar *id, const gchar *function,
 		const gchar *fmt, va_list args)
 {
 	gchar logbuf[RSPAMD_LOGBUF_SIZE];
+	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK|G_LOG_LEVEL_MASK);
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;
@@ -445,37 +442,36 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 
 	if (rspamd_log == NULL) {
 		/* Just fprintf message to stderr */
-		if (log_level >= G_LOG_LEVEL_INFO) {
+		if (level >= G_LOG_LEVEL_INFO) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 			fprintf (stderr, "%s\n", logbuf);
 		}
 	}
 	else {
-		if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
+		if (rspamd_logger_need_log (rspamd_log, level, module)) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			rspamd_log->log_func (NULL, module, id,
+			rspamd_log->log_func (module, id,
 					function,
-					log_level,
+					level_flags,
 					logbuf,
-					FALSE,
 					rspamd_log);
-		}
 
-		switch (log_level) {
-		case G_LOG_LEVEL_CRITICAL:
-			rspamd_log->log_cnt[0] ++;
-			break;
-		case G_LOG_LEVEL_WARNING:
-			rspamd_log->log_cnt[1]++;
-			break;
-		case G_LOG_LEVEL_INFO:
-			rspamd_log->log_cnt[2]++;
-			break;
-		case G_LOG_LEVEL_DEBUG:
-			rspamd_log->log_cnt[3]++;
-			break;
-		default:
-			break;
+			switch (level) {
+			case G_LOG_LEVEL_CRITICAL:
+				rspamd_log->log_cnt[0] ++;
+				break;
+			case G_LOG_LEVEL_WARNING:
+				rspamd_log->log_cnt[1]++;
+				break;
+			case G_LOG_LEVEL_INFO:
+				rspamd_log->log_cnt[2]++;
+				break;
+			case G_LOG_LEVEL_DEBUG:
+				rspamd_log->log_cnt[3]++;
+				break;
+			default:
+				break;
+			}
 		}
 	}
 }
@@ -485,7 +481,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
  */
 void
 rspamd_common_log_function (rspamd_logger_t *rspamd_log,
-		GLogLevelFlags log_level,
+		gint level_flags,
 		const gchar *module, const gchar *id,
 		const gchar *function,
 		const gchar *fmt,
@@ -494,20 +490,20 @@ rspamd_common_log_function (rspamd_logger_t *rspamd_log,
 	va_list vp;
 
 	va_start (vp, fmt);
-	rspamd_common_logv (rspamd_log, log_level, module, id, function, fmt, vp);
+	rspamd_common_logv (rspamd_log, level_flags, module, id, function, fmt, vp);
 	va_end (vp);
 }
 
 void
-rspamd_default_logv (GLogLevelFlags log_level, const gchar *module, const gchar *id,
+rspamd_default_logv (gint level_flags, const gchar *module, const gchar *id,
 		const gchar *function,
 		const gchar *fmt, va_list args)
 {
-	rspamd_common_logv (NULL, log_level, module, id, function, fmt, args);
+	rspamd_common_logv (NULL, level_flags, module, id, function, fmt, args);
 }
 
 void
-rspamd_default_log_function (GLogLevelFlags log_level,
+rspamd_default_log_function (gint level_flags,
 		const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...)
 {
@@ -515,7 +511,7 @@ rspamd_default_log_function (GLogLevelFlags log_level,
 	va_list vp;
 
 	va_start (vp, fmt);
-	rspamd_default_logv (log_level, module, id, function, fmt, vp);
+	rspamd_default_logv (level_flags, module, id, function, fmt, vp);
 	va_end (vp);
 }
 
@@ -579,12 +575,10 @@ file_log_helper (rspamd_logger_t *rspamd_log,
  * Syslog interface for logging
  */
 static void
-syslog_log_function (const gchar *log_domain,
-		const gchar *module, const gchar *id,
+syslog_log_function (const gchar *module, const gchar *id,
 		const gchar *function,
-		GLogLevelFlags log_level,
+		gint level_flags,
 		const gchar *message,
-		gboolean forced,
 		gpointer arg)
 {
 	rspamd_logger_t *rspamd_log = arg;
@@ -608,7 +602,7 @@ syslog_log_function (const gchar *log_domain,
 	syslog_level = LOG_DEBUG;
 
 	for (i = 0; i < G_N_ELEMENTS (levels_match); i ++) {
-		if (log_level & levels_match[i].glib_level) {
+		if (level_flags & levels_match[i].glib_level) {
 			syslog_level = levels_match[i].syslog_level;
 			break;
 		}
@@ -626,12 +620,10 @@ syslog_log_function (const gchar *log_domain,
  * Main file interface for logging
  */
 static void
-file_log_function (const gchar *log_domain,
-		const gchar *module, const gchar *id,
+file_log_function (const gchar *module, const gchar *id,
 		const gchar *function,
-		GLogLevelFlags log_level,
+		gint level_flags,
 		const gchar *message,
-		gboolean forced,
 		gpointer arg)
 {
 	gchar tmpbuf[256], timebuf[32], modulebuf[64];
@@ -683,7 +675,7 @@ file_log_function (const gchar *log_domain,
 					rspamd_log->saved_id = g_strdup (id);
 				}
 
-				rspamd_log->saved_loglevel = log_level;
+				rspamd_log->saved_loglevel = level_flags;
 			}
 
 			return;
@@ -696,13 +688,11 @@ file_log_function (const gchar *log_domain,
 			rspamd_log->repeats = 0;
 			/* It is safe to use temporary buffer here as it is not static */
 			if (rspamd_log->saved_message) {
-				file_log_function (log_domain,
-						rspamd_log->saved_module,
+				file_log_function (rspamd_log->saved_module,
 						rspamd_log->saved_id,
 						rspamd_log->saved_function,
 						rspamd_log->saved_loglevel,
 						rspamd_log->saved_message,
-						forced,
 						arg);
 
 				g_free (rspamd_log->saved_message);
@@ -714,18 +704,16 @@ file_log_function (const gchar *log_domain,
 				rspamd_log->saved_module = NULL;
 				rspamd_log->saved_id = NULL;
 			}
-			file_log_function (log_domain, "logger", NULL,
+
+			file_log_function ("logger", NULL,
 					G_STRFUNC,
 					rspamd_log->saved_loglevel,
 					tmpbuf,
-					forced,
 					arg);
-			file_log_function (log_domain,
-					module, id,
+			file_log_function (module, id,
 					function,
-					log_level,
+					level_flags,
 					message,
-					forced,
 					arg);
 			rspamd_log->repeats = REPEATS_MIN + 1;
 			return;
@@ -741,13 +729,11 @@ file_log_function (const gchar *log_domain,
 					rspamd_log->repeats);
 			rspamd_log->repeats = 0;
 			if (rspamd_log->saved_message) {
-				file_log_function (log_domain,
-						rspamd_log->saved_module,
+				file_log_function (rspamd_log->saved_module,
 						rspamd_log->saved_id,
 						rspamd_log->saved_function,
 						rspamd_log->saved_loglevel,
 						rspamd_log->saved_message,
-						forced,
 						arg);
 
 				g_free (rspamd_log->saved_message);
@@ -760,20 +746,16 @@ file_log_function (const gchar *log_domain,
 				rspamd_log->saved_id = NULL;
 			}
 
-			file_log_function (log_domain,
-					"logger", NULL,
+			file_log_function ("logger", NULL,
 					G_STRFUNC,
-					log_level,
+					level_flags,
 					tmpbuf,
-					forced,
 					arg);
 			/* It is safe to use temporary buffer here as it is not static */
-			file_log_function (log_domain,
-					module, id,
+			file_log_function (module, id,
 					function,
-					log_level,
+					level_flags,
 					message,
-					forced,
 					arg);
 			return;
 		}
@@ -797,15 +779,15 @@ file_log_function (const gchar *log_domain,
 		cptype = g_quark_to_string (rspamd_log->process_type);
 
 		if (rspamd_log->cfg->log_color) {
-			if (log_level & G_LOG_LEVEL_INFO) {
+			if (level_flags & G_LOG_LEVEL_INFO) {
 				/* White */
 				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;37m");
 			}
-			else if (log_level & G_LOG_LEVEL_WARNING) {
+			else if (level_flags & G_LOG_LEVEL_WARNING) {
 				/* Magenta */
 				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;32m");
 			}
-			else if (log_level & G_LOG_LEVEL_CRITICAL) {
+			else if (level_flags & G_LOG_LEVEL_CRITICAL) {
 				/* Red */
 				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[1;31m");
 			}
@@ -923,11 +905,10 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
 		va_end (vp);
-		rspamd_log->log_func (NULL, module, id,
+		rspamd_log->log_func (module, id,
 				function,
-				G_LOG_LEVEL_DEBUG,
+				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
 				logbuf,
-				TRUE,
 				rspamd_log);
 	}
 }
@@ -945,11 +926,10 @@ rspamd_glib_log_function (const gchar *log_domain,
 
 	if (rspamd_log->enabled &&
 			rspamd_logger_need_log (rspamd_log, log_level, NULL)) {
-		rspamd_log->log_func (log_domain, "glib", NULL,
+		rspamd_log->log_func ("glib", NULL,
 				NULL,
 				log_level,
 				message,
-				FALSE,
 				rspamd_log);
 	}
 }
