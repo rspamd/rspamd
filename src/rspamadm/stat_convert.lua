@@ -113,9 +113,10 @@ return function (args, res)
   end
 
   if res['cache_db'] then
-    if not convert_learned(res['cache_db'], res['redis_host']) then
-      print('Cannot convert learned cache to redis')
-      return
+    if not convert_learned(res['cache_db'], res['redis_host'],
+      redis_password, redis_db) then
+        print('Cannot convert learned cache to redis')
+        return
     end
   end
 
