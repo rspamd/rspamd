@@ -56,7 +56,7 @@ def get_rspamc():
     return dname + "/src/client/rspamc"
 def get_rspamadm():
     if os.environ.get('RSPAMADM'):
-        return environ['RSPAMADM']
+        return os.environ['RSPAMADM']
     dname = get_top_dir()
     return dname + "/src/rspamadm/rspamadm"
 
