@@ -5,7 +5,7 @@ title: IP Score
 
 # IP Score module
 
-IP Score module stores records in redis - [see here](https://rspamd.com/doc/configuration/redis.html) for information about configuring redis.
+IP Score module stores records in Redis - [see here](https://rspamd.com/doc/configuration/redis.html) for information about configuring Redis.
 
 ### Theory of operation
 
@@ -17,7 +17,7 @@ ip_score = action_multiplier * tanh (e * metric_score)
 
 `e` is the mathematical constant: 2.718.
 `tanh` is the hyperbolic tangent function.
-`metric_score` is the score rspamd assigned the message.
+`metric_score` is the score Rspamd assigned the message.
 `action_multiplier` is the multiplier configured for the metric action, or zero in case action is `no action` and score is positive.
 
 Default multipliers are shown below:
@@ -39,11 +39,11 @@ a message with positive score & `no action` action always gets ip score: 0.00
 a message with `add header` action & score 7 gets ip score: 0.249
 a message with `reject` action and score 15 gets ip score: 1.0
 
-For each IP address/ASN/country/subnet rspamd stores a key in a hash in redis the value of which is formatted: `total ip score|total number of messages received` - for each incoming message rspamd increments the total number of messages by one and adds the new ip score to the total.
+For each IP address/ASN/country/subnet Rspamd stores a key in a hash in Redis the value of which is formatted: `total ip score|total number of messages received` - for each incoming message Rspamd increments the total number of messages by one and adds the new ip score to the total.
 
-Once a predefined number of messages from a given IP address/subnet/ASN/country have been seen (10 in default configuration), rspamd will begin to add scores to messages, which are calculated as follows:
+Once a predefined number of messages from a given IP address/subnet/ASN/country have been seen (10 in default configuration), Rspamd will begin to add scores to messages, which are calculated as follows:
 
-First rspamd calculates a subscore for whichever things it has seen enough messages for (IP address/subnet/ASN/country) as follows:
+First Rspamd calculates a subscore for whichever things it has seen enough messages for (IP address/subnet/ASN/country) as follows:
 
 ~~~
 subscore = score_multiplier * tanh(e * total_score / total_messages)
@@ -61,11 +61,11 @@ Score multiplier is dependent on the component the subscore is being generated f
 	}
 ~~~
 
-Subscores are added to eachother to determine a total. If `min_score` or `max_score` are defined in configuration these set a lower/upper bound for the total score.
+Subscores are added to each other to determine a total. If `min_score` or `max_score` are defined in configuration these set a lower/upper bound for the total score.
 
 ### Configuration
 
-Refer to example configuration below for available settings. To use default settings, configure redis globally and add `ip_score { }` to `/etc/rspamd/rspamd.conf.local`.
+Refer to example configuration below for available settings. To use default settings, configure Redis globally and add `ip_score { }` to `/etc/rspamd/rspamd.conf.local`.
 
 ~~~ucl
 ip_score {
