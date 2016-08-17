@@ -210,6 +210,24 @@ MAP - REDIS - URL NOFILTER - MISS
   ${result} =  Scan Message With Rspamc  ${URL4}
   Check Rspamc  ${result}  REDIS_URL_NOFILTER  inverse=1
 
+MAP - REDIS - ASN - HIT
+  Redis HSET  asn  15169  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
+  Check Rspamc  ${result}  REDIS_ASN
+
+MAP - REDIS - ASN - MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
+  Check Rspamc  ${result}  REDIS_ASN  inverse=1
+
+MAP - REDIS - CC - HIT
+  Redis HSET  cc  US  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
+  Check Rspamc  ${result}  REDIS_COUNTRY
+
+MAP - REDIS - ASN - MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
+  Check Rspamc  ${result}  REDIS_COUNTRY  inverse=1
+
 *** Keywords ***
 Multimap Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
