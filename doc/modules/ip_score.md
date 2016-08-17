@@ -1,11 +1,13 @@
 ---
 layout: doc_modules
-title: IP Score
+title: IP Score module
 ---
 
-# IP Score module
+# IP Score
 
-IP Score module stores records in Redis - [see here](https://rspamd.com/doc/configuration/redis.html) for information about configuring Redis.
+IP Score stores records in Redis - [see here](/doc/configuration/redis.html) for information about configuring Redis.
+
+Since Rspamd 1.3.4, IP Score requires lookup information from [ASN module](/doc/modules/asn.html).
 
 ### Theory of operation
 
@@ -83,9 +85,10 @@ ip_score {
 		ipnet = 0.8;
 		ip = 1.0;
 	}
-	# provider for ASN data
-	asn_provider = 'origin.asn.cymru.com';
-	asn6_provider = 'origin6.asn.cymru.com';
+	# provider for ASN data - removed in 1.3.4 - use ASN module
+	# asn_provider = 'origin.asn.cymru.com';
+	# asn6_provider = 'origin6.asn.cymru.com';
+	# prefix for asn hashes
 	asn_prefix = 'a:';
 	# prefix for country hashes
 	country_prefix = 'c:';
