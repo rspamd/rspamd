@@ -1050,6 +1050,26 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 				stf->symbol);
 	}
 
+	/* Now try global redis settings */
+	if (!ret) {
+		obj = ucl_object_lookup (cfg->rcl_obj, "redis");
+
+		if (obj) {
+			const ucl_object_t *specific_obj;
+
+			specific_obj = ucl_object_lookup (obj, "statistics");
+
+			if (specific_obj) {
+				ret = rspamd_redis_try_ucl (backend, specific_obj, cfg,
+						stf->symbol);
+			}
+			else {
+				ret = rspamd_redis_try_ucl (backend, obj, cfg,
+						stf->symbol);
+			}
+		}
+	}
+
 	if (!ret) {
 		msg_err_config ("cannot init redis backend for %s", stf->symbol);
 		g_slice_free1 (sizeof (*backend), backend);
