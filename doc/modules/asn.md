@@ -9,6 +9,8 @@ ASN module looks up ASN numbers and some related information: namely country cod
 
 Currently the only supported lookup mechanism is [Team Cymru's DNSBL](http://www.team-cymru.org/IP-ASN-mapping.html).
 
+The module exports `asn`, `country` and `ipnet` as mempool variables.
+
 ### Configuration
 
 To use default settings you could add `asn { }` to `rspamd.conf.local`.

@@ -101,13 +101,16 @@ Optional map configuration attributes:
 
 Type attribute means what is matched with this map. The following types are supported:
 
+* `asn` - matches ASN number passed by [ASN module](asn.html)
 * `content` - matches specific content of a message (e.g. headers, body or even a full message) against some map, usually regular expressions map
+* `country` - matches country code of AS passed by [ASN module](asn.html)
 * `dnsbl` - matches IP of the host that performed message handoff against some DNS blacklist (consider using [RBL](rbl.html) module for this)
+* `filename` - matches attachment filename against map
 * `from` - matches envelope from (or header `From` if envelope from is absent)
 * `header` - matches any header specified (must have `header = "Header-Name"` configuration attribute)
 * `hostname` - matches reverse DNS name of the host that performed message handoff
 * `ip` - matches IP of the host that performed message handoff (against radix map)
-* `filename` - matches attachment filename against map
+* `mempool` - matches contents of a mempool variable (specified with `variable` parameter)
 * `rcpt` - matches any of envelope rcpt or header `To` if envelope info is missing
 * `url` - matches URLs in messages against maps
 
@@ -182,6 +185,10 @@ Filename maps support this filters set:
 
 * `tld` - matches TLD (top level domain) part of the hostname
 * `tld:regexp:/re/` - extracts generic information using the specified regular expression from the TLD part
+
+### Mempool filters
+
+* `regexp:/re/` - extract data from mempool variable according to some regular expression
 
 ### URL filters
 
@@ -325,5 +332,9 @@ CONTENT_BLACKLISTED {
   map = "${LOCAL_CONFDIR}/content.map";
   symbols = ["CONTENT_BLACKLISTED1", "CONTENT_BLACKLISTED2"];
   regexp = true;
+}
+ASN_BLACKLIST {
+  type = "asn";
+  map = "${LOCAL_CONFDIR}/asnlist.map";
 }
 ~~~
