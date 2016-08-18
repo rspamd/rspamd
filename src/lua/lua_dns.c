@@ -26,7 +26,7 @@
 local function symbol_callback(task)
 	local host = 'example.com'
 
-	local function dns_cb(resolver, to_resolve, results, err)
+	local function dns_cb(resolver, to_resolve, results, err, _, authenticated)
 		if not results then
 			rspamd_logger.infox('DNS resolving of %1 failed: %2', host, err)
 			return
@@ -198,7 +198,9 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		lua_pushnil (cd->L);
 	}
 
-	if (lua_pcall (cd->L, 5, 0, 0) != 0) {
+	lua_pushboolean (cd->L, reply->authenticated);
+
+	if (lua_pcall (cd->L, 6, 0, 0) != 0) {
 		msg_info ("call to dns callback failed: %s", lua_tostring (cd->L, -1));
 		lua_pop (cd->L, 1);
 	}
