@@ -224,9 +224,18 @@ MAP - REDIS - CC - HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
   Check Rspamc  ${result}  REDIS_COUNTRY
 
-MAP - REDIS - ASN - MISS
+MAP - REDIS - CC - MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
   Check Rspamc  ${result}  REDIS_COUNTRY  inverse=1
+
+MAP - REDIS - ASN FILTERED - HIT
+  Redis HSET  asn  1  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
+  Check Rspamc  ${result}  REDIS_ASN_FILTERED
+
+MAP - REDIS - ASN FILTERED - MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
+  Check Rspamc  ${result}  REDIS_ASN_FILTERED  inverse=1
 
 *** Keywords ***
 Multimap Setup
