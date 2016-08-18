@@ -853,3 +853,11 @@ rdns_resolver_async_bind (struct rdns_resolver *resolver,
 		resolver->async_binded = true;
 	}
 }
+
+void
+rdns_resolver_set_dnssec (struct rdns_resolver *resolver, bool enabled)
+{
+	if (resolver) {
+		resolver->enable_dnssec = enabled;
+	}
+}

@@ -268,7 +268,12 @@ rdns_add_edns0 (struct rdns_request *req)
 	*p16++ = 0;
 	/* Z 10000000 00000000 to allow dnssec */
 	p8 = (uint8_t *)p16;
-	*p8++ = 0x80;
+	if (req->resolver->enable_dnssec) {
+		*p8++ = 0x80;
+	}
+	else {
+		*p8++ = 0x00;
+	}
 	*p8++ = 0;
 	p16 = (uint16_t *)p8;
 	/* Length */

@@ -237,6 +237,12 @@ void rdns_resolver_async_bind (struct rdns_resolver *resolver,
 		struct rdns_async_context *ctx);
 
 /**
+ * Enable stub dnssec resolver
+ * @param resolver
+ */
+void rdns_resolver_set_dnssec (struct rdns_resolver *resolver, bool enabled);
+
+/**
  * Add new DNS server definition to the resolver
  * @param resolver resolver object
  * @param name name of DNS server (should be ipv4 or ipv6 address)

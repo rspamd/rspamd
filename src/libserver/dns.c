@@ -244,6 +244,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 	if (cfg != NULL) {
 		rdns_resolver_set_log_level (dns_resolver->r, cfg->log_level);
 		dns_resolver->cfg = cfg;
+		rdns_resolver_set_dnssec (dns_resolver->r, cfg->enable_dnssec);
 	}
 
 	rdns_resolver_set_logger (dns_resolver->r, rspamd_rnds_log_bridge, logger);

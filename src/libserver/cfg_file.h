@@ -383,6 +383,7 @@ struct rspamd_config {
 	guint32 dns_io_per_server;                      /**< number of sockets per DNS server					*/
 	const ucl_object_t *nameservers;                /**< list of nameservers or NULL to parse resolv.conf	*/
 	guint32 dns_max_requests;                       /**< limit of DNS requests per task 					*/
+	gboolean enable_dnssec;                         /**< enable dnssec stub resolver						*/
 
 	guint upstream_max_errors;						/**< upstream max errors before shutting off			*/
 	gdouble upstream_error_time;					/**< rate of upstream errors							*/

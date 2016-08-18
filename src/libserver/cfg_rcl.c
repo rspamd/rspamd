@@ -2015,6 +2015,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
 			RSPAMD_CL_FLAG_INT_32,
 			"Number of sockets per DNS server");
+	rspamd_rcl_add_default_handler (ssub,
+			"enable_dnssec",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, enable_dnssec),
+			0,
+			"Enable DNSSEC support in Rspamd");
 
 
 	/* New upstreams configuration */
