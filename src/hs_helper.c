@@ -267,6 +267,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	struct timeval tv;
 	double tim;
 
+	ctx->cfg = worker->srv->cfg;
 
 	if (ctx->hs_dir == NULL) {
 		ctx->hs_dir = ctx->cfg->hs_cache_dir;
