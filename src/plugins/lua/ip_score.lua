@@ -83,6 +83,13 @@ local function ip_score_get_task_vars(task)
   return asn, country, ipnet
 end
 
+local function normalize_score(sc, total, mult)
+  if total < options['lower_bound'] then
+    return 0
+  end
+  return mult * rspamd_util.tanh(2.718 * sc / total)
+end
+
 -- Set score based on metric's action
 local ip_score_set = function(task)
   local function new_score_set(score, old_score, old_total)
@@ -153,6 +160,45 @@ local ip_score_set = function(task)
     'HMSET', -- command
     redis_args -- arguments
   )
+
+  -- Now insert final result
+  asn_score = normalize_score(asn_score, total_asn, options['scores']['asn'])
+  country_score = normalize_score(country_score, total_country,
+      options['scores']['country'])
+  ipnet_score = normalize_score(ipnet_score, total_ipnet,
+       options['scores']['ipnet'])
+  ip_score = normalize_score(ip_score, total_ip, options['scores']['ip'])
+
+  local total_score = 0.0
+  local description_t = {}
+
+  if ip_score ~= 0 then
+    total_score = total_score + ip_score
+    table.insert(description_t, 'ip: ' .. '(' .. math.floor(ip_score * 1000) / 100 .. ')')
+  end
+  if ipnet_score ~= 0 then
+    total_score = total_score + ipnet_score
+    table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. math.floor(ipnet_score * 1000) / 100 .. ')')
+  end
+  if asn_score ~= 0 then
+    total_score = total_score + asn_score
+    table.insert(description_t, 'asn: ' .. asn .. '(' .. math.floor(asn_score * 1000) / 100 .. ')')
+  end
+  if country_score ~= 0 then
+    total_score = total_score + country_score
+    table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
+  end
+
+  if options['max_score'] and (total_score*10) > options['max_score'] then
+    total_score = options['max_score']/10
+  end
+  if options['min_score'] and (total_score*10) < options['min_score'] then
+    total_score = options['min_score']/10
+  end
+
+  if total_score ~= 0 then
+    task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
+  end
 end
 
 -- Check score for ip in keystorage
@@ -166,15 +212,6 @@ local ip_score_check = function(task)
       local total = tonumber(parts[2])
 
       return rep, total
-    end
-
-    local function normalize_score(sc, total, mult)
-      if total < options['lower_bound'] then
-        return 0
-      end
-
-      -- -mult to mult
-      return mult * rspamd_util.tanh(2.718 * sc / total)
     end
 
     if err then
@@ -203,44 +240,6 @@ local ip_score_check = function(task)
         country_score,total_country,
         ipnet_score,total_ipnet,
         ip_score, total_ip)
-
-      asn_score = normalize_score(asn_score, total_asn, options['scores']['asn'])
-      country_score = normalize_score(country_score, total_country,
-        options['scores']['country'])
-      ipnet_score = normalize_score(ipnet_score, total_ipnet,
-        options['scores']['ipnet'])
-      ip_score = normalize_score(ip_score, total_ip, options['scores']['ip'])
-
-      local total_score = 0.0
-      local description_t = {}
-
-      if ip_score ~= 0 then
-        total_score = total_score + ip_score
-        table.insert(description_t, 'ip: ' .. '(' .. math.floor(ip_score * 1000) / 100 .. ')')
-      end
-      if ipnet_score ~= 0 then
-        total_score = total_score + ipnet_score
-        table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. math.floor(ipnet_score * 1000) / 100 .. ')')
-      end
-      if asn_score ~= 0 then
-        total_score = total_score + asn_score
-        table.insert(description_t, 'asn: ' .. asn .. '(' .. math.floor(asn_score * 1000) / 100 .. ')')
-      end
-      if country_score ~= 0 then
-        total_score = total_score + country_score
-        table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
-      end
-
-      if options['max_score'] and (total_score*10) > options['max_score'] then
-        total_score = options['max_score']/10
-      end
-      if options['min_score'] and (total_score*10) < options['min_score'] then
-        total_score = options['min_score']/10
-      end
-
-      if total_score ~= 0 then
-        task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
-      end
     end
   end
 
