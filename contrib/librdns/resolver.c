@@ -119,6 +119,7 @@ rdns_make_reply (struct rdns_request *req, enum dns_rcode rcode)
 		rep->entries = NULL;
 		rep->code = rcode;
 		req->reply = rep;
+		rep->authenticated = false;
 	}
 
 	return rep;
@@ -189,6 +190,10 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 	 * Now pos is in answer section, so we should extract data and form reply
 	 */
 	rep = rdns_make_reply (req, header->rcode);
+
+	if (header->ad) {
+		rep->authenticated = true;
+	}
 
 	if (rep == NULL) {
 		rdns_warn ("Cannot allocate memory for reply");

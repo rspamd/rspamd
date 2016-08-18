@@ -133,6 +133,7 @@ struct rdns_reply {
 	struct rdns_reply_entry *entries;
 	const char *requested_name;
 	enum dns_rcode code;
+	bool authenticated;
 };
 
 typedef void (*rdns_periodic_callback)(void *user_data);

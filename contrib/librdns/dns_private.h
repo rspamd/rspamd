@@ -144,7 +144,9 @@ struct dns_header {
 	unsigned int rd:1;
 
 	unsigned int ra:1;
-	unsigned int unused:3;
+	unsigned int cd : 1;
+	unsigned int ad : 1;
+	unsigned int z : 1;
 	unsigned int rcode:4;
 #else
 	unsigned int rd :1;
@@ -154,7 +156,9 @@ struct dns_header {
 	unsigned int qr :1;
 
 	unsigned int rcode :4;
-	unsigned int unused :3;
+	unsigned int z : 1;
+	unsigned int ad : 1;
+	unsigned int cd : 1;
 	unsigned int ra :1;
 #endif
 
