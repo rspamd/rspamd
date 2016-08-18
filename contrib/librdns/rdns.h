@@ -382,6 +382,16 @@ const struct rdns_request_name* rdns_request_get_name (struct rdns_request *req,
  */
 char * rdns_generate_ptr_from_str (const char *str);
 
+/**
+ * Format DNS name of the packet punycoding if needed
+ * @param req request
+ * @param name name string
+ * @param namelen length of name
+ */
+bool rdns_format_dns_name (struct rdns_resolver *resolver,
+		const char *name, size_t namelen,
+		char **out, size_t *outlen);
+
 /*
  * Private functions used by async libraries as callbacks
  */
