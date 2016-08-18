@@ -280,7 +280,8 @@ reread_config (struct rspamd_main *rspamd_main)
 	/* Save some variables */
 	tmp_cfg->cfg_name = cfg_file;
 
-	if (!load_rspamd_config (rspamd_main, tmp_cfg, FALSE, RSPAMD_CONFIG_INIT_VALIDATE)) {
+	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
+			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE)) {
 		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
 				"main"), rspamd_main);
 		msg_err_main ("cannot parse new config file, revert to old one");
@@ -297,7 +298,6 @@ reread_config (struct rspamd_main *rspamd_main)
 			rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 		}
 
-		rspamd_init_filters (rspamd_main->cfg, TRUE);
 		msg_info_main ("config has been reread successfully");
 	}
 }

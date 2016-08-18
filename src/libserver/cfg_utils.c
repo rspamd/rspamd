@@ -1364,7 +1364,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 			if (reconfig) {
 				(void)mod->module_reconfig_func (cfg);
-				msg_debug_config ("reconfig of %s", mod->name);
+				msg_info_config ("reconfig of %s", mod->name);
 			}
 			else {
 				(void)mod->module_config_func (cfg);
