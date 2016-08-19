@@ -306,7 +306,7 @@ rspamd_config.ENVFROM_PRVS = {
         end
         return false
     end,
-    score = 0.01,
+    score = 0.0,
     description = "Envelope From is a PRVS address that matches the From address",
     group = 'prvs'
 }
@@ -334,7 +334,7 @@ rspamd_config.ENVFROM_VERP = {
         end
         return false
     end,
-    score = 0.01,
+    score = 0.0,
     description = "Envelope From is a VERP address",
     group = "mailing_list"
 }
@@ -358,7 +358,7 @@ rspamd_config.RCVD_TLS_ALL = {
             return true
         end
     end,
-    score = 0.01,
+    score = 0.0,
     description = "All hops used encrypted transports",
     group = "encryption"
 }

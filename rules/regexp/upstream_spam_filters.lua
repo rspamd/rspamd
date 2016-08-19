@@ -20,7 +20,7 @@ local reconf = config['regexp']
 
 reconf['PRECEDENCE_BULK'] = {
     re = 'Precedence=/bulk/Hi',
-    score = 0.1,
+    score = 0.0,
     description = "Message marked as bulk",
     group = 'upstream_spam_filters'
 }
