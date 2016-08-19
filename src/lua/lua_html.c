@@ -438,26 +438,28 @@ lua_html_foreach_tag (lua_State *L)
 	tagname = luaL_checkstring (L, 2);
 
 	if (hc && tagname && lua_isfunction (L, 3)) {
-		if (strcmp (tagname, "any") == 0) {
-			id = -1;
-		}
-		else {
-			id = rspamd_html_tag_by_name (tagname);
-
-			if (id == -1) {
-				return luaL_error (L, "invalid tagname: %s", tagname);
+		if (hc->html_tags) {
+			if (strcmp (tagname, "any") == 0) {
+				id = -1;
 			}
+			else {
+				id = rspamd_html_tag_by_name (tagname);
+
+				if (id == -1) {
+					return luaL_error (L, "invalid tagname: %s", tagname);
+				}
+			}
+
+			lua_pushvalue (L, 3);
+			ud.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+			ud.L = L;
+			ud.tag_id = id;
+
+			g_node_traverse (hc->html_tags, G_PRE_ORDER, G_TRAVERSE_ALL, -1,
+					lua_html_node_foreach_cb, &ud);
+
+			luaL_unref (L, LUA_REGISTRYINDEX, ud.cbref);
 		}
-
-		lua_pushvalue (L, 3);
-		ud.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-		ud.L = L;
-		ud.tag_id = id;
-
-		g_node_traverse (hc->html_tags, G_PRE_ORDER, G_TRAVERSE_ALL, -1,
-				lua_html_node_foreach_cb, &ud);
-
-		luaL_unref (L, LUA_REGISTRYINDEX, ud.cbref);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
