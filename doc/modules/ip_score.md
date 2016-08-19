@@ -14,13 +14,14 @@ Since Rspamd 1.3.4, IP Score requires lookup information from [ASN module](/doc/
 IP Score tracks the number of messages received from a given IP/subnet/ASN/country and records this alongside a total score. The scores which are added to these total scores are calculated as follows:
 
 ~~~
-ip_score = action_multiplier * tanh (e * metric_score)
+ip_score = action_multiplier * tanh (e * (metric_score/score_divisor))
 ~~~
 
 `e` is the mathematical constant: 2.718.
 `tanh` is the hyperbolic tangent function.
 `metric_score` is the score Rspamd assigned the message.
 `action_multiplier` is the multiplier configured for the metric action, or zero in case action is `no action` and score is positive.
+`score_divisor` is supplied from setting with the same name- if not supplied no divison is done (recommended value: 10-100).
 
 Default multipliers are shown below:
 
@@ -103,6 +104,8 @@ ip_score {
 	# upper and lower bounds at which to cap total score
 	max_score = null;
 	min_score = null;
+	# Amount to divide subscores by before applying tanh
+	score_divisor = 10;
 	# list of servers (or configure redis globally)
 	servers = '';
 	# symbol to be inserted
