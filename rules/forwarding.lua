@@ -40,7 +40,7 @@ rspamd_config.FWD_GOOGLE = {
         end
         return false
     end,
-    score = 0.1,
+    score = 0.0,
     description = "Message was forwarded by Google",
     group = "forwarding"
 }
@@ -64,7 +64,7 @@ rspamd_config.FWD_SRS = {
         end
         return false
     end,
-    score = 0.1,
+    score = 0.0,
     description = "Message was forwarded using SRS",
     group = "forwarding"
 }
@@ -105,7 +105,7 @@ rspamd_config.FORWARDED = {
         end
         return false
     end,
-    score = 0.1,
+    score = 0.0,
     description = "Message was forwarded",
     group = "forwarding"
 }
