@@ -18,19 +18,21 @@ limitations under the License.
 
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
-  -- Limit for all mail per recipient (burst 100, rate 2 per minute)
+  -- Limit mail per source IP (rate 6 per minute)
+  ip = {0, 0.099999999},
+  -- Limit for all mail per recipient (rate 2 per minute)
   to = {0, 0.033333333},
-  -- Limit for all mail per one source ip (burst 30, rate 1.5 per minute)
+  -- Limit for all mail to a recipient per source ip (rate 1.5 per minute)
   to_ip = {0, 0.025},
-  -- Limit for all mail per one source ip and from address (burst 20, rate 1 per minute)
+  -- Limit for all mail per recipient/sender/source ip triplet (rate 1 per minute)
   to_ip_from = {0, 0.01666666667},
 
-  -- Limit for all bounce mail (burst 10, rate 2 per hour)
+  -- Limit for all bounce mail (rate 2 per hour)
   bounce_to = {0, 0.000555556},
-  -- Limit for bounce mail per one source ip (burst 5, rate 1 per hour)
+  -- Limit for bounce mail per one source ip (rate 1 per hour)
   bounce_to_ip = {0, 0.000277778},
 
-  -- Limit for all mail per user (authuser) (burst 20, rate 1 per minute)
+  -- Limit for all mail per user (authuser) (rate 1 per minute)
   user = {0, 0.01666666667}
 }
 -- Senders that are considered as bounce
@@ -239,8 +241,10 @@ local function make_rate_key(from, to, ip)
     return string.format('%s:%s:%s', from, to, ip:to_string())
   elseif from then
     return string.format('%s:%s', from, to)
-  elseif ip and ip:is_valid() then
+  elseif to and ip and ip:is_valid() then
     return string.format('%s:%s', to, ip:to_string())
+  elseif ip and ip:is_valid() then
+    return ip:to_string()
   elseif to then
     return to
   else
@@ -314,6 +318,9 @@ local function rate_test_set(task, func)
         if settings['to_ip_from'][1] > 0 then
           table.insert(args, { settings['to_ip_from'], make_rate_key(from_addr, r['addr'], ip) })
         end
+        if settings['ip'][1] > 0 then
+          table.insert(args, { settings['ip'], make_rate_key(nil, nil, ip) })
+        end
       end
     end, rcpts)
   end
@@ -359,6 +366,8 @@ local function parse_limit(str)
     set_limit(settings['bounce_to_ip'], params[2], params[3])
   elseif params[1] == 'user' then
     set_limit(settings['user'], params[2], params[3])
+  elseif params[1] == 'ip' then
+    set_limit(settings['ip'], params[2], params[3])
   else
     rspamd_logger.errx(rspamd_config, 'invalid limit type: ' .. params[1])
   end
