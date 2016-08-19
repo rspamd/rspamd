@@ -36,8 +36,7 @@ local symbols = {
 local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
-local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
-local trim_re = rspamd_regexp.create_cached("(.+)\\\\{0,1};$")
+local elts_re = rspamd_regexp.create_cached("\\s*\\\\{0,1};\\s*")
 local dmarc_reporting = false
 local dmarc_actions = {}
 
@@ -114,10 +113,6 @@ local function dmarc_callback(task)
         local elts = elts_re:split(r)
 
         if elts then
-          local trimmed = trim_re:search(elts[#elts], true, true)
-          if trimmed then
-            elts[#elts] = trimmed[1][2]
-          end
           for _,e in ipairs(elts) do
             dkim_pol = string.match(e, '^adkim=(.)$')
             if dkim_pol then
