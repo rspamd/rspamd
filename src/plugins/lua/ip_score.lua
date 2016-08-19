@@ -49,7 +49,8 @@ local options = {
   lower_bound = 10, -- minimum number of messages to be scored
   metric = 'default',
   min_score = nil,
-  max_score = nil
+  max_score = nil,
+  score_divisor = nil
 }
 
 local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
@@ -87,7 +88,7 @@ local function normalize_score(sc, total, mult)
   if total < options['lower_bound'] then
     return 0
   end
-  return mult * rspamd_util.tanh(2.718 * sc / total)
+  return mult * rspamd_util.tanh(2.718281 * sc / total)
 end
 
 -- Set score based on metric's action
@@ -137,7 +138,11 @@ local ip_score_set = function(task)
     score_mult = 0
   end
 
-  score = score_mult * rspamd_util.tanh (2.718 * score)
+  if options['score_divisor'] then
+    score = score_mult * rspamd_util.tanh (2.718281 * (score/options['score_divisor']))
+  else
+    score = score_mult * rspamd_util.tanh (2.718281 * score)
+  end
 
   local hkey = ip_score_hash_key(asn, country, ipnet, ip)
   local upstream,ret
@@ -174,19 +179,19 @@ local ip_score_set = function(task)
 
   if ip_score ~= 0 then
     total_score = total_score + ip_score
-    table.insert(description_t, 'ip: ' .. '(' .. math.floor(ip_score * 1000) / 100 .. ')')
+    table.insert(description_t, 'ip: ' .. '(' .. math.floor(ip_score * 10) .. ')')
   end
   if ipnet_score ~= 0 then
     total_score = total_score + ipnet_score
-    table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. math.floor(ipnet_score * 1000) / 100 .. ')')
+    table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. math.floor(ipnet_score * 10) .. ')')
   end
   if asn_score ~= 0 then
     total_score = total_score + asn_score
-    table.insert(description_t, 'asn: ' .. asn .. '(' .. math.floor(asn_score * 1000) / 100 .. ')')
+    table.insert(description_t, 'asn: ' .. asn .. '(' .. math.floor(asn_score * 10) .. ')')
   end
   if country_score ~= 0 then
     total_score = total_score + country_score
-    table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
+    table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 10) .. ')')
   end
 
   if options['max_score'] and (total_score*10) > options['max_score'] then
