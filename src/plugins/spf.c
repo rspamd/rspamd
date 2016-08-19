@@ -338,12 +338,14 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 	}
 
 	if (res) {
-		spf_result = rspamd_mempool_strdup (task->task_pool, addr->spf_string);
+		spf_result = rspamd_mempool_alloc (task->task_pool,
+				strlen (addr->spf_string) + 2);
 		opts = g_list_prepend (opts, spf_result);
 
 		switch (addr->mech) {
 		case SPF_FAIL:
 			spf_symbol = spf_module_ctx->symbol_fail;
+			spf_result[0] = '-';
 			spf_message = "(SPF): spf fail";
 			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
 				if (rec->failed) {
@@ -357,6 +359,7 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 		case SPF_SOFT_FAIL:
 			spf_symbol = spf_module_ctx->symbol_softfail;
 			spf_message = "(SPF): spf softfail";
+			spf_result[0] = '~';
 
 			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
 				if (rec->failed) {
@@ -370,12 +373,17 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 		case SPF_NEUTRAL:
 			spf_symbol = spf_module_ctx->symbol_neutral;
 			spf_message = "(SPF): spf neutral";
+			spf_result[0] = '?';
 			break;
 		default:
 			spf_symbol = spf_module_ctx->symbol_allow;
 			spf_message = "(SPF): spf allow";
+			spf_result[0] = '+';
 			break;
 		}
+
+		rspamd_strlcpy (spf_result + 1, addr->spf_string,
+				strlen (addr->spf_string) + 1);
 
 		rspamd_task_insert_result (task,
 				spf_symbol,
