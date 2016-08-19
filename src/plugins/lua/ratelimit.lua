@@ -18,6 +18,8 @@ limitations under the License.
 
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
+  -- Limit mail per ASN (rate 12 per minute)
+  asn = {0, 0.199999998},
   -- Limit mail per source IP (rate 6 per minute)
   ip = {0, 0.099999999},
   -- Limit for all mail per recipient (rate 2 per minute)
@@ -236,7 +238,7 @@ local function set_limits(task, args)
 end
 
 --- Make rate key
-local function make_rate_key(from, to, ip)
+local function make_rate_key(from, to, ip, asn)
   if from and ip and ip:is_valid() then
     return string.format('%s:%s:%s', from, to, ip:to_string())
   elseif from then
@@ -247,6 +249,8 @@ local function make_rate_key(from, to, ip)
     return ip:to_string()
   elseif to then
     return to
+  elseif asn then
+    return asn
   else
     return nil
   end
@@ -295,6 +299,10 @@ local function rate_test_set(task, func)
   if auser and settings['user'][1] > 0 then
     table.insert(args, {settings['user'], make_rate_key (auser, '<auth>', nil)})
   end
+  local asn
+  if settings['asn'][1] > 0 then
+    asn = task:get_mempool():get_variable('asn')
+  end
 
   local is_bounce = check_bounce(from_user)
 
@@ -320,6 +328,9 @@ local function rate_test_set(task, func)
         end
         if settings['ip'][1] > 0 then
           table.insert(args, { settings['ip'], make_rate_key(nil, nil, ip) })
+        end
+        if asn and settings['asn'][1] > 0 then
+          table.insert(args, { settings['asn'], make_rate_key(nil, nil, nil, asn) })
         end
       end
     end, rcpts)
@@ -368,6 +379,8 @@ local function parse_limit(str)
     set_limit(settings['user'], params[2], params[3])
   elseif params[1] == 'ip' then
     set_limit(settings['ip'], params[2], params[3])
+  elseif params[1] == 'asn' then
+    set_limit(settings['asn'], params[2], params[3])
   else
     rspamd_logger.errx(rspamd_config, 'invalid limit type: ' .. params[1])
   end
