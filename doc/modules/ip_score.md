@@ -36,11 +36,11 @@ Default multipliers are shown below:
 
 So with these settings:
 
-a message with score -0.1 gets ip score: -0.265
-a message with score -1.0 gets ip score: -0.991
-a message with positive score & `no action` action always gets ip score: 0.00
-a message with `add header` action & score 7 gets ip score: 0.249
-a message with `reject` action and score 15 gets ip score: 1.0
+- a message with score -0.1 gets ip score: -0.265
+- a message with score -1.0 gets ip score: -0.991
+- a message with positive score & `no action` action always gets ip score: 0.00
+- a message with `add header` action & score 7 gets ip score: 0.249
+- a message with `reject` action and score 15 gets ip score: 1.0
 
 For each IP address/ASN/country/subnet Rspamd stores a key in a hash in Redis the value of which is formatted: `total ip score|total number of messages received` - for each incoming message Rspamd increments the total number of messages by one and adds the new ip score to the total.
 
