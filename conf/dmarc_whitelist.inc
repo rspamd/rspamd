@@ -32,13 +32,11 @@ paypal.com
 pch.com
 pinterest.com
 squarespace.com
-t.co
 twitter.com
 ups.com
 usps.com
 verizonwireless.com
 vk.com
-vk.me
 whatsapp.com
 zendesk.com
 zomato.com
