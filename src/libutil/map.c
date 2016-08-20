@@ -1658,7 +1658,7 @@ rspamd_parse_kv_list (
 			data->state = map_read_key_slashed;
 			break;
 		case map_skip_spaces_after_key:
-			if (g_ascii_isspace (*p)) {
+			if (*p == ' ' || *p == '\t') {
 				p ++;
 			}
 			else {
