@@ -28,6 +28,48 @@ require "fun" ()
 
 local urls = {}
 
+local value_types = {
+  ip = {
+    get_value = function(ip) return ip:to_string() end,
+  },
+  from = {
+    get_value = function(val) return val end,
+  },
+  header = {
+    get_value = function(val) return val end,
+  },
+  rcpt = {
+    get_value = function(val) return val end,
+  },
+  user = {
+    get_value = function(val) return val end,
+  },
+  url = {
+    get_value = function(url) return url:get_tld() end,
+  },
+  dnsbl = {
+    get_value = function(ip) return ip:to_string() end,
+  },
+  filename = {
+    get_value = function(val) return val end,
+  },
+  content = {
+    get_value = function(val) return nil end,
+  },
+  hostname = {
+    get_value = function(val) return val end,
+  },
+  asn = {
+    get_value = function(val) return val end,
+  },
+  country = {
+    get_value = function(val) return val end,
+  },
+  mempool = {
+    get_value = function(val) return val end,
+  },
+}
+
 local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
@@ -386,7 +428,13 @@ local function multimap_callback(task, rule)
         else
           symbol = r['symbol']
         end
-        task:insert_result(symbol, score)
+
+        local opt = value_types[r['type']].get_value(value)
+        if opt then
+          task:insert_result(symbol, score, opt)
+        else
+          task:insert_result(symbol, score)
+        end
 
         if pre_filter then
           task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
