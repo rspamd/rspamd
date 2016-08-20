@@ -45,7 +45,7 @@ local value_types = {
     get_value = function(val) return val end,
   },
   url = {
-    get_value = function(url) return url:get_tld() end,
+    get_value = function(val) return val end,
   },
   dnsbl = {
     get_value = function(ip) return ip:to_string() end,
