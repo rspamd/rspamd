@@ -58,7 +58,7 @@ local function dmarc_callback(task)
   local ip_addr = task:get_ip()
 
   if task:get_user() or (ip_addr and ip_addr:is_local()) then
-    rspamd_logger.infox(task, "skip SPF checks for local networks and authorized users");
+    rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
     return
   end
   if from and from[1] and from[1]['domain'] and not from[2] then
