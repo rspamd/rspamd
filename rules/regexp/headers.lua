@@ -436,8 +436,8 @@ reconf['FORGED_GENERIC_RECEIVED5'] = 'Received=/\\s*from \\[(\\d{1,3}\\.\\d{1,3}
 reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X'
 
 reconf['X_PHP_EVAL'] = {
-  re = "X-PHP-Originating-Script=/\\s:\\seval\\(\\)'d code$/X",
+  re = "X-PHP-Originating-Script=/ : eval\\(\\)'d code$/X",
   score = 4.0,
-  description = "Message sent by eval()'d php code",
+  description = "Message sent by eval()'d PHP code",
   group = 'header'
 }
