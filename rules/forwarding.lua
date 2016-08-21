@@ -78,7 +78,7 @@ rspamd_config.FWD_MAILRU = {
     end,
     score = 0.0,
     description = "Message was forwarded by Mail.ru",
-    group = "forwarding1"
+    group = "forwarding"
 }
 
 rspamd_config.FWD_SRS = {
