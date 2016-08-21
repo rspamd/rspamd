@@ -115,7 +115,6 @@ google.co.th
 google.co.uk
 google.co.ve
 google.co.za
-google.com
 google.com.ar
 google.com.au
 google.com.bd
