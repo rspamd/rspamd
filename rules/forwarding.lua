@@ -45,6 +45,19 @@ rspamd_config.FWD_GOOGLE = {
     group = "forwarding"
 }
 
+rspamd_config.FWD_YANDEX = {
+    callback = function (task)
+        local yndxfrw = task:get_header_raw('X-Yandex-Forward')
+        if yndxfrw then
+            return true
+        end
+        return false
+    end,
+    score = 0.0,
+    description = "Message was forwarded by Yandex",
+    group = "forwarding"
+}
+
 rspamd_config.FWD_SRS = {
     callback = function (task)
         if not (task:has_from(1) and task:has_recipients(1)) then
