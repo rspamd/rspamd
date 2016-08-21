@@ -55,7 +55,12 @@ end
 local function dmarc_callback(task)
   local from = task:get_from(2)
   local dmarc_domain
+  local ip_addr = task:get_ip()
 
+  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+    rspamd_logger.infox(task, "skip SPF checks for local networks and authorized users");
+    return
+  end
   if from and from[1] and from[1]['domain'] and not from[2] then
     dmarc_domain = rspamd_util.get_tld(from[1]['domain'])
   else
