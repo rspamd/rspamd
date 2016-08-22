@@ -93,6 +93,41 @@ spamd {
 }
 ~~~
 
+It is also possible to add elements to lists (from Rmilter `1.9.2`) using `+=` operator:
+
+~~~ucl
+# /etc/rmilter.conf.local
+spamd {
+    servers = example.com:11333;
+    timeout = 5s; # added
+}
+~~~
+
+~~~ucl
+# /etc/rmilter.conf.d/spamd.conf
+spamd {
+    servers += other.com:11333;
+}
+~~~
+
+will produce the following configuration:
+
+~~~ucl
+# resulting configuration
+spamd {
+    servers = example.com:11333, other.com:11333;
+    timeout = 5s;
+}
+~~~
+
+Using of empty lists can remove the default lists content:
+
+~~~ucl
+ratelimit {
+    whitelist = ; # Will remove the default whitelist
+}
+~~~
+
 ### How to disable greylisting and ratelimit in Rmilter
 
 From version `1.9.1` it is possible to specify `enable` option in `greylisting` and `ratelimit` sections. These options are `true` by default. Here is an example of configuration where greylisting and ratelimit are disabled:
@@ -116,16 +151,18 @@ This could be done, for example by using `opendkim-genkey`:
 
 That will generate `dkim.private` file with private key and `dkim.txt` with the suggested `TXT` record for your domain.
 
-    dkim {
-        domain {
-          key = /etc/dkim;
-          domain = "*";
-          selector = "dkim";
-        };
-        header_canon = relaxed;
-        body_canon = relaxed;
-        sign_alg = sha256;
+~~~ucl
+dkim {
+    domain {
+        key = /etc/dkim;
+        domain = "*";
+        selector = "dkim";
     };
+    header_canon = relaxed;
+    body_canon = relaxed;
+    sign_alg = sha256;
+};
+~~~
 
 Please note, that Rmilter will sign merely mail for the **authenticated** users, hence you should also ensure that `{auth_authen}` macro
 is passed to milter on `MAIL FROM` stage:
@@ -135,14 +172,15 @@ is passed to milter on `MAIL FROM` stage:
 ### Setup whitelisting of reply messages
 
 It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of Rmilter. To enable this
-feature, please ensure that you have Redis server running and add the following lines to `redis` section:
+feature, please ensure that you have Redis server running and add the following lines to `redis` section (or add `conf.d/redis.conf` file):
 
-    redis {
-      ...
-      # servers_id - Redis servers used for message id storing, can not be mirrored
-      servers_id = localhost;
+~~~ucl
+redis {
+    # servers_id - Redis servers used for message id storing, can not be mirrored
+    servers_id = localhost;
 
-      # id_prefix - prefix for extracting message ids from Redis
-      # Default: empty (no prefix is prepended to key)
-      id_prefix = "message_id.";
-    }
+    # id_prefix - prefix for extracting message ids from Redis
+    # Default: empty (no prefix is prepended to key)
+    id_prefix = "message_id.";
+}
+~~~

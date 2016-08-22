@@ -16,12 +16,11 @@ The configuration file has format:
 Value may be:
 
 -   String (may not contain spaces)
--   Quoted string (if string may contain spaces)
+-   Quoted string (if string can have spaces or other special characters)
 -   Numeric value
 -   Flag (`yes`/`no` or `true`/`false`)
--   IP or network (eg. `127.0.0.1`, `192.168.1.0/24`, `[::1]/128`)
+-   IP, network or hostname (eg. `127.0.0.1`, `192.168.1.0/24`, `[::1]/128`, `"example.com"`, `"example.com/24"`). Please note that hostnames must be enclosed in double quotes. If a hostname has multiple IP addresses they all will be added to the list.
 -   Socket argument (eg. `host:port` or `/path/to/socket` or `fd:3` for systemd socket)
--   Regexp (eg. `/Match\*/`)
 -   List (eg. `value1, value2, value3`)
 -   Recipients list (`user, user@domain, @domain`)
 -   Time argument (eg. `10s`, `5d`)
@@ -40,7 +39,6 @@ definition looks like:
 -   spamd - Rspamd definitions
 -   limits - limits definitions
 -   greylisting - greylisting definitions
--   rule - regexp rule definition (a section per rule)
 
 Directives that can be defined in configuration file:
 
@@ -120,7 +118,7 @@ Specifies Rspamd scanners.
 	+ Default: `X-Spam`
 - `rspamd_metric`: Rspamd metric that would define whether we reject message as spam or not (quoted string)
 	+ Default: `default`
-- `whitelist`: list of ips or nets that should be not checked with Rspamd
+- `whitelist`: list of ips, nets or hostnames that should be not checked with Rspamd
 	+ Default: `empty`
 - `extended_spam_headers`: add extended Rspamd headers to messages, is useful for debugging or private mail servers (flag)
 	+ Default: `false`
@@ -200,7 +198,7 @@ each second). It can be schematically displayed as following:
 
 <div><img src="https://rspamd.com/img/rspamd-schemes.006.jpg" alt="Leaking bucket" class="img-responsive" style="padding-bottom:20px; max-height: 200px;"></div>
 
-- `limit_whitelist_ip`: don't check limits for specified ips
+- `limit_whitelist_ip`: don't check limits for specified ips, networks or hostnames
 	+ Default: `empty`
 - `limit_whitelist_rcpt`: don't check limits for specified recipients
 	+ Default: `no`
@@ -234,27 +232,23 @@ provided by OpenDKIM library.
 - `auth_only`: sign mail for authorized users only
     + Default: `yes`
 - `domain`: domain entry must be enclosed in a separate section
-    +   `key` - path to private key
-    +   `domain` - domain to be used for signing (this matches with SMTP FROM data). If domain is `*` then Rmilter tries to search key in the `key` path as `keypath/domain.selector.key` for any domain.
-    +   `selector` - dkim DNS selector (e.g. for selector *dkim* and domain *example.com* DNS TXT record should be for `dkim._domainkey.example.com`).
-- `sign_networks` - specify internal network to perform signing as well
-	+ Default: `empty`
+    + `key` - path to private key
+    + `domain` - domain to be used for signing (this matches with SMTP FROM data). If domain is `*` then Rmilter tries to search key in the `key` path as `keypath/domain.selector.key` for any domain.
+    + `selector` - dkim DNS selector (e.g. for selector *dkim* and domain *example.com* DNS TXT record should be for `dkim._domainkey.example.com`).
+- `sign_networks` - specify internal networks to perform signing as well (hostnames could also be used)
+    + Default: `empty`
 
 
 ## The order of checks
 
-1.  DKIM test from and create signing context (MAIL FROM)
-2.  Ratelimit (RCPT TO)
-3.  Greylisting (DATA)
-4.  Ratelimit (EOM, set bucket value)
-5.  Rules (EOM)
-6.  SPF (EOM)
-7.  Message size (EOM) if failed, skip ClamAV, DCC and Rspamd checks
-8.  DCC (EOM)
-10. Rspamd (EOM)
-9.  ClamAV (EOM)
-12. DKIM add signature (EOM)
-
+1. DKIM test from and create signing context (MAIL FROM)
+2. Ratelimit (RCPT TO)
+3. Greylisting (DATA) if Rspamd greylisting is disabled
+4. Ratelimit (EOM, set bucket value)
+5. Message size (EOM) if failed, skip ClamAV, DCC and Rspamd checks
+6. Rspamd (EOM)
+7. ClamAV (EOM)
+8. DKIM add signature (EOM)
 
 ## Keys used in Redis
 

@@ -862,3 +862,22 @@ spamd {
   spamd_settings_id = "outbound";
 }
 ```
+
+### How can I restore the old SPF behaviour
+
+Previously, Rmilter could reject mail which fail SPF verification for certain domains. However, there is no SPF support in Rmilter so far. Nevertheless, this behaviour could be reproduced using Rspamd.
+
+One can create rules in rspamd to force rejection on whatever symbols (+ other conditions) they want (DMARC module, among others has built-in support for such; [multimap](https://rspamd.com/doc/modules/multimap.html) being the most generally useful)
+
+For example, add to `/etc/rspamd/lua/rspamd.local.lua`:
+~~~lua
+local myfunc = function(task)
+  if task:has_symbol('R_SPF_REJECT') then
+    task:set_pre_result('reject', 'I rejected it')
+  end
+end
+local id = rspamd_config:register_symbol('MY_REJECT', 1.0, myfunc)
+rspamd_config:register_dependency(id, 'R_SPF_REJECT')
+~~~
+
+It is also possible to use rspamd to test SPF without message data but I believe rmilter does not support that.
