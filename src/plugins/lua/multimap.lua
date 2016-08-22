@@ -786,44 +786,43 @@ if opts and type(opts) == 'table' then
     end
   end
   -- add fake symbol to check all maps inside a single callback
-  if any(function(r) return not r['prefilter'] end, rules) then
-    for i,rule in ipairs(rules) do
-      local id = rspamd_config:register_symbol({
-        type = 'normal',
-        name = rule['symbol'],
-        callback = gen_multimap_callback(rule),
-      })
-      if rule['symbols'] then
-        -- Find allowed symbols by this map
-        rule['symbols_set'] = {}
-        each(function(s)
-          rspamd_config:register_symbol({
-            type = 'virtual',
-            name = s,
-            parent = id
-          })
-          rule['symbols_set'][s] = 1
-        end, rule['symbols'])
-      end
-      if rule['score'] then
-        -- Register metric symbol
-        local description = 'multimap symbol'
-        local group = 'multimap'
-        if rule['description'] then
-          description = rule['description']
-        end
-        if rule['group'] then
-          group = rule['group']
-        end
-        rspamd_config:set_metric_symbol({
-            name = rule['symbol'],
-            score = rule['score'],
-            description = description,
-            group = group
+  each(function(rule)
+    local id = rspamd_config:register_symbol({
+      type = 'normal',
+      name = rule['symbol'],
+      callback = gen_multimap_callback(rule),
+    })
+    if rule['symbols'] then
+      -- Find allowed symbols by this map
+      rule['symbols_set'] = {}
+      each(function(s)
+        rspamd_config:register_symbol({
+          type = 'virtual',
+          name = s,
+          parent = id
         })
-      end
+        rule['symbols_set'][s] = 1
+      end, rule['symbols'])
     end
-  end
+    if rule['score'] then
+      -- Register metric symbol
+      local description = 'multimap symbol'
+      local group = 'multimap'
+      if rule['description'] then
+        description = rule['description']
+      end
+      if rule['group'] then
+        group = rule['group']
+      end
+      rspamd_config:set_metric_symbol({
+          name = rule['symbol'],
+          score = rule['score'],
+          description = description,
+          group = group
+      })
+    end
+  end,
+  filter(function(r) return not r['prefilter'] end, rules))
 
   each(function(r)
     rspamd_config:register_symbol({
