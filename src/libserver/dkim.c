@@ -1316,7 +1316,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 	} state = init;
 	guint skip = 0;
 
-	while (p >= start + 2) {
+	while (p >= start + 1) {
 		switch (state) {
 		case init:
 			if (*p == '\r') {
@@ -1353,44 +1353,60 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_cr:
-			if (*(p - 1) == '\r') {
-				p --;
-				state = got_cr;
-			}
-			else if (*(p - 1) == '\n') {
-				if ((*p - 2) == '\r') {
-					/* \r\n\r -> we know about one line */
-					p -= 1;
-					state = got_crlf;
+			if (p > start - 1) {
+				if (*(p - 1) == '\r') {
+					p --;
+					state = got_cr;
+				}
+				else if (*(p - 1) == '\n') {
+					if ((*p - 2) == '\r') {
+						/* \r\n\r -> we know about one line */
+						p -= 1;
+						state = got_crlf;
+					}
+					else {
+						/* \n\r -> we know about one line */
+						p -= 1;
+						state = got_lf;
+					}
+				}
+				else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+					skip = 1;
+					state = test_spaces;
 				}
 				else {
-					/* \n\r -> we know about one line */
-					p -= 1;
-					state = got_lf;
+					goto end;
 				}
 			}
-			else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
-				skip = 1;
-				state = test_spaces;
-			}
 			else {
+				if (type == DKIM_CANON_RELAXED) {
+					p -= 1;
+				}
 				goto end;
 			}
 			break;
 		case got_lf:
-			if (*(p - 1) == '\r') {
-				state = got_crlf;
-			}
-			else if (*(p - 1) == '\n') {
-				/* We know about one line */
-				p --;
-				state = got_lf;
-			}
-			else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
-				skip = 1;
-				state = test_spaces;
+			if (p > start - 1) {
+				if (*(p - 1) == '\r') {
+					state = got_crlf;
+				}
+				else if (*(p - 1) == '\n') {
+					/* We know about one line */
+					p --;
+					state = got_lf;
+				}
+				else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+					skip = 1;
+					state = test_spaces;
+				}
+				else {
+					goto end;
+				}
 			}
 			else {
+				if (type == DKIM_CANON_RELAXED) {
+					p -= 1;
+				}
 				goto end;
 			}
 			break;
@@ -1413,6 +1429,9 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
+				if (type == DKIM_CANON_RELAXED) {
+					p -= 2;
+				}
 				goto end;
 			}
 			break;
