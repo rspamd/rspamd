@@ -43,7 +43,7 @@ reopenlog_cmd()
    pkill -USR1 -F $rspamd_pidfile
 }
 
-extra_commands="configtest reopenlog"
+extra_commands="reload configtest reopenlog"
 sig_reload="HUP"
 
 command="$procname"

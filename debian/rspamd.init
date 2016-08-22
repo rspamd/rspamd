@@ -104,6 +104,11 @@ case "$1" in
   status)
     status_of_proc -p $PIDFILE "$DAEMON" "$NAME" || exit $?
     ;;
+  reload|force-reload)
+    log_daemon_msg "Reloading $DESC" "$NAME"
+    do_reload
+    log_end_msg $?
+    ;;
   reopenlog)
     log_daemon_msg "Reopen logs for $DESC" "$NAME"
     do_reopenlog
@@ -128,7 +133,7 @@ case "$1" in
     esac
     ;;
   *)
-    echo "Usage: $SCRIPTNAME {start|stop|restart|reopenlog}" >&2
+    echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload|reopenlog}" >&2
     exit 3
     ;;
 esac

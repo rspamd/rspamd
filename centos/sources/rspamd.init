@@ -111,6 +111,13 @@ case "$1" in
     restart|configtest)
         $1
         ;;
+    reload)
+        rh_status_q || exit 7
+        $1
+        ;;
+    force-reload)
+        force_reload
+        ;;
     status)
         rh_status
         ;;
@@ -119,6 +126,6 @@ case "$1" in
         restart
 	    ;;
     *)
-        echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|configtest}"
+        echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload|configtest}"
         exit 2
 esac
