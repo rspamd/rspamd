@@ -213,9 +213,8 @@ local function dmarc_callback(task)
         if rspamd_util.strequal_caseless(efrom[1]['domain'], from[1]['domain']) then
           spf_ok = true
         elseif not strict_spf then
-          if rspamd_util.strequal_caseless(
-              string.sub(efrom[1]['domain'], -string.len('.' .. lookup_domain)),
-              '.' .. lookup_domain) then
+          local spf_tld = rspamd_util.get_tld(efrom[1]['domain'])
+          if rspamd_util.strequal_caseless(spf_tld, dmarc_domain) then
             spf_ok = true
           end
         end
@@ -227,9 +226,8 @@ local function dmarc_callback(task)
         if rspamd_util.strequal_caseless(from[1]['domain'], dkim_domain) then
           dkim_ok = true
         elseif not strict_dkim then
-          if rspamd_util.strequal_caseless(
-              string.sub(dkim_domain, -string.len('.' .. lookup_domain)),
-              '.' .. lookup_domain) then
+          local dkim_tld = rspamd_util.get_tld(dkim_domain)
+          if rspamd_util.strequal_caseless(dkim_tld, dmarc_domain) then
             dkim_ok = true
           end
         end
