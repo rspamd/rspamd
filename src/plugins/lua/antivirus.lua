@@ -196,10 +196,13 @@ local function clamav_check(task, rule)
       stop_pattern = '\0'
     })
   end
-  if check_av_cache(task, rule, clamav_check_uncached) then
-    return
-  else
-    clamav_check_uncached()
+
+  if need_av_check(task, rule) then
+    if check_av_cache(task, rule, clamav_check_uncached) then
+      return
+    else
+      clamav_check_uncached()
+    end
   end
 end
 
