@@ -8,6 +8,7 @@ Variables       ${TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${RSPAMD_SCOPE}  Suite
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 Zip

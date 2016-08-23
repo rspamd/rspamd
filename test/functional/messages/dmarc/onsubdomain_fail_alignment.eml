@@ -1,0 +1,11 @@
+From: <koos@yo.mom.za.org>
+Subject: yo mom
+Content-type: text/plain
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=mom.za.org; s=testdkim;
+	t=1471961268; h=from:subject:content-type;
+	bh=BIB4FUu24DrAHudZNxS2O9+aq+jb0j8fPGz27CAMcyM=; b=LNrJ+02t42FSzzN0La6BSI4zN5m/pOLqjSSNHoLTfz7ewDrH9Fc27VJ4W1c+X18C40htFp
+	RuGsjH1XyirwLAd+gDCB12ehuO2uIGWtKyi1EWwivqYs6ACzRvcOMvNM3m/YfJyqZRBWDC
+	C6wcJsJ2gbRZIGVbn4VdTVm6Kbhmj/M=
+
+yo mom deserves respect
+
