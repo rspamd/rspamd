@@ -371,7 +371,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 		 */
 		comma = rspamd_memrchr (hdr->begin, ',', hdr->len);
 		if (comma != NULL) {
-			while (comma < hdr->begin + hdr->len && g_ascii_isspace (*comma)) {
+			while (comma < hdr->begin + hdr->len &&
+					(*comma == ',' || g_ascii_isspace (*comma))) {
 				comma ++;
 			}
 		}
