@@ -398,16 +398,18 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
 			}
 		}
 		else {
+			msg_err ("bad userdata argument at position %d", pos);
 			return FALSE;
 		}
 	}
 	else if (lua_type (L, pos) == LUA_TSTRING) {
 		str = luaL_checklstring (L, pos, &len);
-		vec->iov_base = rspamd_mempool_alloc (pool, len + 1);
-		rspamd_strlcpy (vec->iov_base, str, len + 1);
+		vec->iov_base = rspamd_mempool_alloc (pool, len);
+		memcpy (vec->iov_base, str, len);
 		vec->iov_len = len;
 	}
 	else {
+		msg_err ("bad argument at position %d", pos);
 		return FALSE;
 	}
 
