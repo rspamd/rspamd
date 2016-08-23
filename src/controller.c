@@ -378,8 +378,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 		else {
 			comma = hdr->begin;
 		}
-		if (rspamd_parse_inet_address (&addr, hdr->begin,
-				comma - hdr->begin)) {
+		if (rspamd_parse_inet_address (&addr, comma,
+				(hdr->begin + hdr->len) - comma)) {
 			/* We have addr now, so check if it is still trusted */
 			if (ctx->secure_map &&
 					radix_find_compressed_addr (ctx->secure_map,
