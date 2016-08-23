@@ -1,3 +1,39 @@
+1.3.4:
+	* [Feature] ASN module; support matching ASN/country in multimap
+	* [Feature] Add SPF method in spf return result
+	* [Feature] Add Yandex and Mail.ru forwarding rules
+	* [Feature] Add mempool maps in multimap
+	* [Feature] Add rule for identifying mail sent by eval()'d PHP code
+	* [Feature] Add support of stub DNSSEC resolver to rdns
+	* [Feature] Add task:get_digest method
+	* [Feature] Allow for more fine-grained scoring for ip_score
+	* [Feature] Allow to get digest of a mime part from lua
+	* [Feature] Allow to print message digest in logs
+	* [Feature] Fold DKIM-Signature header
+	* [Feature] Implement encrypted logs
+	* [Feature] Log URLs encrypted if we have log encryption pubkey
+	* [Feature] Pass authenticated bit to lua
+	* [Feature] Read redis backend statistics configuration from global section
+	* [Feature] Show the exact value matched for multima symbols
+	* [Feature] Store task checksum
+	* [Fix] Avoid setting limits when required elements are missing
+	* [Fix] DMARC: Fix alignment checking for subdomains
+	* [Fix] DMARC: deal with missing and spurious spaces
+	* [Fix] Defer insertion of results in ip_score to avoid skewing stats
+	* [Fix] Disable DMARC for local/authorized mail
+	* [Fix] Fix handling of proxied headers in controller
+	* [Fix] Fix hex printing of strings
+	* [Fix] Fix issue with spaces in maps
+	* [Fix] Fix parsing of forwarded IP
+	* [Fix] Fix reload in some plugins and workers
+	* [Fix] Fix reloading on SIGHUP
+	* [Fix] Fix some border cases for DKIM canonicalization
+	* [Fix] Fix url maps
+	* [Fix] Make dnssec configurable option disabled by default for now
+	* [Fix] rspamadm statconvert: force db to be a string
+	* [Fix] rspamadm statconvert: use db/password for learn cache
+	* [Rework] Rework flags in rspamd logger
+
 1.3.3:
 	* [CritFix] Check hyperscan cache sanity before loading
 	* [CritFix] Fix setting of fuzzy keys (completely breaks fuzzy storage)
