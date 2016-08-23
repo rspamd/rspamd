@@ -433,6 +433,7 @@ add_options (GQueue *opts)
 	GString *numbuf;
 	gchar **hdr, **rcpt;
 
+	ADD_CLIENT_HEADER (opts, "User-Agent", "rspamc");
 	if (ip != NULL) {
 		ADD_CLIENT_HEADER (opts, "Ip", ip);
 	}
