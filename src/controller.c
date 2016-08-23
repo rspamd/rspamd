@@ -369,29 +369,39 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 		 * We need to parse and update the header
 		 * X-Forwarded-For: client, proxy1, proxy2
 		 */
-		comma = memchr (hdr->begin, ',', hdr->len);
+		comma = rspamd_memrchr (hdr->begin, ',', hdr->len);
 		if (comma != NULL) {
-			if (rspamd_parse_inet_address (&addr, hdr->begin,
-					comma - hdr->begin)) {
-				/* We have addr now, so check if it is still trusted */
-				if (ctx->secure_map &&
-						radix_find_compressed_addr (ctx->secure_map,
-								addr) != RADIX_NO_VALUE) {
-					/* rspamd_inet_address_to_string is not reentrant */
-					rspamd_strlcpy (ip_buf, rspamd_inet_address_to_string (addr),
-							sizeof (ip_buf));
-					msg_info_session ("allow unauthorized proxied connection "
-							"from a trusted IP %s via %s",
-							ip_buf,
-							rspamd_inet_address_to_string (session->from_addr));
-					ret = 1;
-				}
-				else {
-					ret = -1;
-				}
-
-				rspamd_inet_address_destroy (addr);
+			while (comma < hdr->begin + hdr->len && g_ascii_isspace (*comma)) {
+				comma ++;
 			}
+		}
+		else {
+			comma = hdr->begin;
+		}
+		if (rspamd_parse_inet_address (&addr, hdr->begin,
+				comma - hdr->begin)) {
+			/* We have addr now, so check if it is still trusted */
+			if (ctx->secure_map &&
+					radix_find_compressed_addr (ctx->secure_map,
+							addr) != RADIX_NO_VALUE) {
+				/* rspamd_inet_address_to_string is not reentrant */
+				rspamd_strlcpy (ip_buf, rspamd_inet_address_to_string (addr),
+						sizeof (ip_buf));
+				msg_info_session ("allow unauthorized proxied connection "
+						"from a trusted IP %s via %s",
+						ip_buf,
+						rspamd_inet_address_to_string (session->from_addr));
+				ret = 1;
+			}
+			else {
+				ret = -1;
+			}
+
+			rspamd_inet_address_destroy (addr);
+		}
+		else {
+			msg_warn_session ("cannot parse forwarded IP: %T", hdr);
+			ret = -1;
 		}
 	}
 	else {
@@ -418,6 +428,10 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 				}
 
 				rspamd_inet_address_destroy (addr);
+			}
+			else {
+				msg_warn_session ("cannot parse real IP: %T", hdr);
+				ret = -1;
 			}
 		}
 	}
