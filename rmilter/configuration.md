@@ -237,7 +237,8 @@ provided by OpenDKIM library.
     + `selector` - dkim DNS selector (e.g. for selector *dkim* and domain *example.com* DNS TXT record should be for `dkim._domainkey.example.com`).
 - `sign_networks` - specify internal networks to perform signing as well (hostnames could also be used)
     + Default: `empty`
-
+- `enable`: enable or disable DKIM signing (from 1.9.2), binary flag
+    + Default: `true`
 
 ## The order of checks
 
