@@ -16,6 +16,7 @@ ${URL2}         ${TESTDIR}/messages/url2.eml
 ${URL3}         ${TESTDIR}/messages/url3.eml
 ${URL4}         ${TESTDIR}/messages/url4.eml
 ${URL5}         ${TESTDIR}/messages/url5.eml
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 MAP - DNSBL HIT
