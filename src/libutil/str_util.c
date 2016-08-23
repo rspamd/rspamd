@@ -1881,3 +1881,18 @@ rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 
 	return r == 0;
 }
+
+const void *
+rspamd_memrchr (const void *m, gint c, gsize len)
+{
+	const guint8 *p = m;
+	gsize i;
+
+	for (i = len; i > 0; i --) {
+		if (p[i - 1] == c) {
+			return p + i - 1;
+		}
+	}
+
+	return NULL;
+}

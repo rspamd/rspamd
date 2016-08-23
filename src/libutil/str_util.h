@@ -310,4 +310,13 @@ gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
 
 extern const guchar lc_map[256];
 
+/**
+ * Search for the last occurrence of character `c` in memory block of size `len`
+ * @param m
+ * @param c
+ * @param len
+ * @return pointer to the last occurrence or NULL
+ */
+const void *rspamd_memrchr (const void *m, gint c, gsize len);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
