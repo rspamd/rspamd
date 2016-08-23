@@ -96,6 +96,7 @@
 #define DELIVER_TO_HEADER "Deliver-To"
 #define NO_LOG_HEADER "Log"
 #define MLEN_HEADER "Message-Length"
+#define USER_AGENT_HEADER "User-Agent"
 
 
 static GQuark
@@ -436,6 +437,12 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
 						debug_task ("extended urls information");
+					}
+				}
+				IF_HEADER (USER_AGENT_HEADER) {
+					if (hv_tok->len == 6 &&
+							rspamd_lc_cmp (hv_tok->begin, "rspamc", 6) == 0) {
+						task->flags |= RSPAMD_TASK_FLAG_LOCAL_CLIENT;
 					}
 				}
 				break;

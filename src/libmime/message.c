@@ -1401,7 +1401,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	 * So we check if a task has non-http format then we check for such a line
 	 * at the beginning to avoid errors
 	 */
-	if (!(task->flags & RSPAMD_TASK_FLAG_JSON)) {
+	if (!(task->flags & RSPAMD_TASK_FLAG_JSON) || (task->flags &
+			RSPAMD_TASK_FLAG_LOCAL_CLIENT)) {
 		if (len > sizeof ("From ") - 1) {
 			if (memcmp (p, "From ", sizeof ("From ") - 1) == 0) {
 				/* Skip to CRLF */
@@ -1718,11 +1719,6 @@ rspamd_message_parse (struct rspamd_task *task)
 			debug_task (
 					"message contains two parts but they are in different multi-parts");
 		}
-	}
-	else {
-		debug_task (
-				"message has too many text parts, so do not try to compare "
-				"them with each other");
 	}
 
 	for (i = 0; i < task->parts->len; i ++) {
