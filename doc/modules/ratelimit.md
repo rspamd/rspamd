@@ -17,7 +17,7 @@ In the default configuration, there are no cache servers specified, hence, the m
 
 `Ratelimit` module supports the following configuration options:
 
-- `servers` - list of servers where ratelimit data is stored
+- `servers` - list of servers where ratelimit data is stored; [global settings](/doc/configuration/redis.html) used if not set
 - `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
 the value of this option is 'postmaster, mailer-daemon'
 - `whitelisted_ip` - a map of ip addresses or networks whitelisted
@@ -81,19 +81,19 @@ By default, ratelimit module has the following settings which disable all limits
 ~~~lua
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
-  -- Limit for all mail per recipient (burst 100, rate 2 per minute)
+  -- Limit for all mail per recipient (rate 2 per minute)
   to = {0, 0.033333333},
-  -- Limit for all mail per one source ip (burst 30, rate 1.5 per minute)
+  -- Limit for all mail per one source ip (rate 1.5 per minute)
   to_ip = {0, 0.025},
-  -- Limit for all mail per one source ip and from address (burst 20, rate 1 per minute)
+  -- Limit for all mail per one source ip and from address (rate 1 per minute)
   to_ip_from = {0, 0.01666666667},
 
-  -- Limit for all bounce mail (burst 10, rate 2 per hour)
+  -- Limit for all bounce mail (rate 2 per hour)
   bounce_to = {0, 0.000555556},
-  -- Limit for bounce mail per one source ip (burst 5, rate 1 per hour)
+  -- Limit for bounce mail per one source ip (rate 1 per hour)
   bounce_to_ip = {0, 0.000277778},
 
-  -- Limit for all mail per user (authuser) (burst 20, rate 1 per minute)
+  -- Limit for all mail per user (authuser) (rate 1 per minute)
   user = {0, 0.01666666667}
 }
 ~~~
