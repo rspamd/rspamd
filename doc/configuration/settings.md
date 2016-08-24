@@ -104,7 +104,7 @@ settings {
 		priority = high;
 		authenticated = yes;
 		apply "default" {
-			disable_groups = ["rbl", "spf"];
+			groups_disabled = ["rbl", "spf"];
 		}
 	}
 }
