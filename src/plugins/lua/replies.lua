@@ -123,6 +123,7 @@ if opts then
         name = 'REPLIES_CHECK',
         type = 'prefilter',
         callback = replies_check,
+        priority = 10
       })
     end
 
