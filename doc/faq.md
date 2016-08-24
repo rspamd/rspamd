@@ -624,10 +624,22 @@ location /rspamd/ {
 
   proxy_set_header Host      $host;
   proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For "";
 }
 ```
 
-When a connection comes from an IP listed in `secure_ip` or from a unix socket then Rspamd checks for two headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then Rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`.
+Corresponding Apache configuration:
+
+```xml
+<Location /rspamd>
+	Order allow,deny
+	Allow from all
+</Location>
+RewriteRule ^/rspamd$ /rspamd/ [R,L]
+RewriteRule ^/rspamd/(.*) http://localhost:11334/$1 [P,L]
+```
+
+When a connection comes from an IP listed in `secure_ip` or from a unix socket then Rspamd checks for two headers: `X-Forwarded-For` and, if that is not found- `X-Real-IP`. If one of those headers is found then Rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`.
 
 ### Where does the WebUI store settings
 
