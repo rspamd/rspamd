@@ -126,7 +126,9 @@ local function check_time(task, tm, type)
 end
 
 local function greylist_check(task)
-  if task:get_user() ~= nil then
+  local ip_addr = task:get_ip()
+
+  if task:get_user() or (ip_addr and ip_addr:is_local()) then
     return
   end
 
@@ -208,7 +210,9 @@ local function greylist_check(task)
 end
 
 local function greylist_set(task)
-  if task:get_user() ~= nil then
+  local ip_addr = task:get_ip()
+
+  if task:get_user() or (ip_addr and ip_addr:is_local()) then
     return
   end
 
