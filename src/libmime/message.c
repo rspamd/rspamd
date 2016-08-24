@@ -1478,10 +1478,6 @@ rspamd_message_parse (struct rspamd_task *task)
 				task->raw_headers_content.len = hdr_pos;
 				task->raw_headers_content.body_start = p + body_pos;
 
-				rspamd_cryptobox_hash_update (&st,
-						task->raw_headers_content.begin,
-						task->raw_headers_content.len);
-
 				if (task->raw_headers_content.len > 0) {
 					process_raw_headers (task, task->raw_headers,
 							task->raw_headers_content.begin,
