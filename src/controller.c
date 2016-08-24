@@ -2668,6 +2668,7 @@ rspamd_controller_on_terminate (struct rspamd_worker *worker)
 	rspamd_controller_store_saved_stats (ctx);
 
 	if (ctx->rrd) {
+		msg_info ("closing rrd file: %s", ctx->rrd->filename);
 		event_del (ctx->rrd_event);
 		rspamd_rrd_close (ctx->rrd);
 	}
