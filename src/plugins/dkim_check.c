@@ -652,6 +652,10 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			DKIM_SIGNHEADER,
 			FALSE);
 	if (hlist != NULL) {
+		if (task->user != NULL || rspamd_inet_address_is_local (task->from_addr)) {
+			msg_info_task ("skip DKIM checks for local networks and authorized users");
+			return;
+		}
 		/* Check whitelist */
 		msg_debug_task ("dkim signature found");
 		if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
