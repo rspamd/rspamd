@@ -204,6 +204,7 @@ struct rspamd_rrd_file {
 	gsize size; /* its size */
 	gboolean finalized;
 	gchar *id;
+	gint fd;
 };
 
 

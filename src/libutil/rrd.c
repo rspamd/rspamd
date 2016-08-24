@@ -350,6 +350,40 @@ rspamd_rrd_calculate_checksum (struct rspamd_rrd_file *file)
 	}
 }
 
+static int
+rspamd_rrd_open_exclusive (const gchar *filename)
+{
+	struct timespec sleep_ts = {
+			.tv_sec = 0,
+			.tv_nsec = 1000000
+	};
+	gint fd;
+
+	fd = open (filename, O_RDWR);
+
+	if (fd == -1) {
+		return -1;
+	}
+
+	for (;;) {
+		if (rspamd_file_lock (fd, TRUE) == -1) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				nanosleep (&sleep_ts, NULL);
+				continue;
+			}
+			else {
+				close (fd);
+				return -1;
+			}
+		}
+		else {
+			break;
+		}
+	}
+
+	return fd;
+};
+
 /**
  * Open completed or incompleted rrd file
  * @param filename
@@ -376,7 +410,7 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 	}
 
 	/* Open file */
-	fd = open (filename, O_RDWR);
+	fd = rspamd_rrd_open_exclusive (filename);
 	if (fd == -1) {
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd open error: %s", strerror (errno));
@@ -386,14 +420,17 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 	if (fstat (fd, &st) == -1) {
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd stat error: %s", strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		return FALSE;
 	}
 	/* Mmap file */
 	file->size = st.st_size;
 	if ((file->map =
-		mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
-		0)) == MAP_FAILED) {
+			mmap (NULL, st.st_size, PROT_READ | PROT_WRITE,
+					MAP_SHARED, fd, 0)) == MAP_FAILED) {
+
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), ENOMEM, "mmap failed: %s", strerror (errno));
@@ -401,7 +438,7 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 		return NULL;
 	}
 
-	close (fd);
+	file->fd = fd;
 
 	/* Adjust pointers */
 	rspamd_rrd_adjust_pointers (file, completed);
@@ -462,13 +499,15 @@ rspamd_rrd_create (const gchar *filename,
 	guint i, j;
 
 	/* Open file */
-	fd = open (filename, O_RDWR | O_CREAT | O_TRUNC, 0644);
+	fd = open (filename, O_RDWR | O_CREAT | O_EXCL, 0644);
 	if (fd == -1) {
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd create error: %s",
 			strerror (errno));
 		return NULL;
 	}
+
+	rspamd_file_lock (fd, FALSE);
 
 	/* Fill header */
 	memset (&head, 0, sizeof (head));
@@ -480,6 +519,7 @@ rspamd_rrd_create (const gchar *filename,
 	head.float_cookie = RRD_FLOAT_COOKIE;
 
 	if (write (fd, &head, sizeof (head)) != sizeof (head)) {
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd write error: %s", strerror (errno));
@@ -493,6 +533,7 @@ rspamd_rrd_create (const gchar *filename,
 	memset (&ds.par, 0, sizeof (ds.par));
 	for (i = 0; i < ds_count; i++) {
 		if (write (fd, &ds, sizeof (ds)) != sizeof (ds)) {
+			rspamd_file_unlock (fd, FALSE);
 			close (fd);
 			g_set_error (err,
 				rrd_error_quark (), errno, "rrd write error: %s",
@@ -508,6 +549,7 @@ rspamd_rrd_create (const gchar *filename,
 	memset (&rra.par, 0, sizeof (rra.par));
 	for (i = 0; i < rra_count; i++) {
 		if (write (fd, &rra, sizeof (rra)) != sizeof (rra)) {
+			rspamd_file_unlock (fd, FALSE);
 			close (fd);
 			g_set_error (err,
 				rrd_error_quark (), errno, "rrd write error: %s",
@@ -522,6 +564,7 @@ rspamd_rrd_create (const gchar *filename,
 	lh.last_up_usec = (glong)((initial_ticks - lh.last_up) * 1e6f);
 
 	if (write (fd, &lh, sizeof (lh)) != sizeof (lh)) {
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd write error: %s", strerror (errno));
@@ -537,6 +580,7 @@ rspamd_rrd_create (const gchar *filename,
 
 	for (i = 0; i < ds_count; i++) {
 		if (write (fd, &pdp, sizeof (pdp)) != sizeof (pdp)) {
+			rspamd_file_unlock (fd, FALSE);
 			close (fd);
 			g_set_error (err,
 				rrd_error_quark (), errno, "rrd write error: %s",
@@ -554,6 +598,7 @@ rspamd_rrd_create (const gchar *filename,
 	for (i = 0; i < rra_count; i++) {
 		for (j = 0; j < ds_count; j++) {
 			if (write (fd, &cdp, sizeof (cdp)) != sizeof (cdp)) {
+				rspamd_file_unlock (fd, FALSE);
 				close (fd);
 				g_set_error (err,
 					rrd_error_quark (), errno, "rrd write error: %s",
@@ -567,6 +612,7 @@ rspamd_rrd_create (const gchar *filename,
 	memset (&rra_ptr, 0, sizeof (rra_ptr));
 	for (i = 0; i < rra_count; i++) {
 		if (write (fd, &rra_ptr, sizeof (rra_ptr)) != sizeof (rra_ptr)) {
+			rspamd_file_unlock (fd, FALSE);
 			close (fd);
 			g_set_error (err,
 				rrd_error_quark (), errno, "rrd write error: %s",
@@ -575,7 +621,9 @@ rspamd_rrd_create (const gchar *filename,
 		}
 	}
 
+	rspamd_file_unlock (fd, FALSE);
 	close (fd);
+
 	new = rspamd_rrd_open_common (filename, FALSE, err);
 
 	return new;
@@ -643,18 +691,13 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 	gdouble vbuf[1024];
 	struct stat st;
 
-	if (file == NULL || file->filename == NULL) {
+	if (file == NULL || file->filename == NULL || file->fd == -1) {
 		g_set_error (err,
 			rrd_error_quark (), EINVAL, "rrd add rra failed: wrong arguments");
 		return FALSE;
 	}
 
-	fd = open (file->filename, O_RDWR);
-	if (fd == -1) {
-		g_set_error (err,
-			rrd_error_quark (), errno, "rrd open error: %s", strerror (errno));
-		return FALSE;
-	}
+	fd = file->fd;
 
 	if (lseek (fd, 0, SEEK_END) == -1) {
 		g_set_error (err,
@@ -710,7 +753,7 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 		g_slice_free1 (sizeof (struct rspamd_rrd_file), file);
 		return FALSE;
 	}
-	close (fd);
+
 	/* Adjust pointers */
 	rspamd_rrd_adjust_pointers (file, TRUE);
 
@@ -1214,6 +1257,7 @@ rspamd_rrd_close (struct rspamd_rrd_file * file)
 	}
 
 	munmap (file->map, file->size);
+	close (file->fd);
 	g_free (file->filename);
 	g_free (file->id);
 
