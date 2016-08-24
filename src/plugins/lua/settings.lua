@@ -147,6 +147,9 @@ local function check_settings(task)
       if auth_user then
         res = true
       end
+      if not res then
+        return nil
+      end
     end
 
     if rule['ip'] then
@@ -438,6 +441,9 @@ local function process_settings_table(tbl)
       if user then
         out['user'] = check_table(elt['user'], user)
       end
+    end
+    if elt['authenticated'] then
+      out['authenticated'] = true
     end
 
     -- Now we must process actions
