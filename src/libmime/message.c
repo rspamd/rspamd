@@ -785,6 +785,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 	const guchar *p, *c, *end;
 	guint i;
+	goffset off;
 	struct rspamd_process_exception *ex;
 
 	/* Strip newlines */
@@ -799,8 +800,10 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 	for (i = 0; i < part->newlines->len; i ++) {
 		ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
-		p = g_ptr_array_index (part->newlines, i);
-		ex->pos = p - c;
+		off = (goffset)g_ptr_array_index (part->newlines, i);
+		g_ptr_array_index (part->newlines, i) = (gpointer)(goffset)
+				(part->stripped_content->data + off);
+		ex->pos = off;
 		ex->len = 0;
 		ex->type = RSPAMD_EXCEPTION_NEWLINE;
 		part->exceptions = g_list_prepend (part->exceptions, ex);
