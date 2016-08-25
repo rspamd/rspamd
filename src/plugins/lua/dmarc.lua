@@ -28,9 +28,11 @@ local symbols = {
   spf_deny_symbol = 'R_SPF_FAIL',
   spf_softfail_symbol = 'R_SPF_SOFTFAIL',
   spf_neutral_symbol = 'R_SPF_NEUTRAL',
+  spf_tempfail_symbol = 'R_SPF_DNSFAIL',
 
   dkim_allow_symbol = 'R_DKIM_ALLOW',
   dkim_deny_symbol = 'R_DKIM_REJECT',
+  dkim_tempfail_symbol = 'R_DKIM_TEMPFAIL',
 }
 -- Default port for redis upstreams
 local redis_params = nil
@@ -80,6 +82,10 @@ local function dmarc_callback(task)
   local function dmarc_dns_cb(resolver, to_resolve, results, err, key)
 
     local lookup_domain = string.sub(to_resolve, 8)
+    if err and err ~= 'requested record is not found' then
+      task:insert_result('DMARC_DNSFAIL', 1.0, lookup_domain .. ' : ' .. err)
+      return
+    end
     if not results then
       if lookup_domain ~= dmarc_domain then
         local resolve_name = '_dmarc.' .. dmarc_domain
@@ -237,24 +243,31 @@ local function dmarc_callback(task)
     disposition = "none"
     if not (spf_ok or dkim_ok) then
       res = 1.0
-      if quarantine_policy then
-        if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_QUARANTINE', res, lookup_domain)
-          disposition = "quarantine"
-        end
-      elseif strict_policy then
-        if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_REJECT', res, lookup_domain)
-          disposition = "reject"
-        end
+      local spf_tmpfail = task:get_symbol(symbols['spf_tempfail_symbol'])
+      local dkim_tmpfail = task:get_symbol(symbols['dkim_tempfail_symbol'])
+      if (spf_tmpfail or dkim_tmpfail) then
+        task:insert_result('DMARC_DNSFAIL', 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error')
+        disposition = 'failed'
       else
-        task:insert_result('DMARC_POLICY_SOFTFAIL', res, lookup_domain)
+        if quarantine_policy then
+          if not pct or pct == 100 or (math.random(100) <= pct) then
+            task:insert_result('DMARC_POLICY_QUARANTINE', res, lookup_domain)
+            disposition = "quarantine"
+          end
+        elseif strict_policy then
+          if not pct or pct == 100 or (math.random(100) <= pct) then
+            task:insert_result('DMARC_POLICY_REJECT', res, lookup_domain)
+            disposition = "reject"
+          end
+        else
+          task:insert_result('DMARC_POLICY_SOFTFAIL', res, lookup_domain)
+        end
       end
     else
       task:insert_result('DMARC_POLICY_ALLOW', res, lookup_domain)
     end
 
-    if rua and redis_params and dmarc_reporting then
+    if rua and redis_params and dmarc_reporting and not (disposition == 'failed') then
       -- Prepare and send redis report element
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
       local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition)
