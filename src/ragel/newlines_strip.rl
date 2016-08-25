@@ -40,7 +40,7 @@
     }
 
     (*newlines_count)++;
-    g_ptr_array_add (newlines, (gpointer)p);
+    g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
     c = p;
   }
 
