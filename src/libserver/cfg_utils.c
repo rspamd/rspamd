@@ -175,6 +175,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 {
 	struct rspamd_dynamic_module *dyn_mod;
 	struct rspamd_dynamic_worker *dyn_wrk;
+	struct rspamd_config_post_load_script *sc, *sctmp;
 	GList *cur;
 
 	rspamd_map_remove_all (cfg);
@@ -219,6 +220,16 @@ rspamd_config_free (struct rspamd_config *cfg)
 		}
 
 		cur = g_list_next (cur);
+	}
+
+	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
+		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		g_slice_free1 (sizeof (*sc), sc);
+	}
+
+	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
+		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		g_slice_free1 (sizeof (*sc), sc);
 	}
 
 	g_list_free (cfg->classifiers);

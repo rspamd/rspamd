@@ -354,5 +354,15 @@ gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
  */
 void *rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname);
 
+/**
+ * Call finishing script with the specified task
+ * @param L
+ * @param sc
+ * @param task
+ */
+void lua_call_finish_script (lua_State *L, struct
+		rspamd_config_post_load_script *sc,
+		struct rspamd_task *task);
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

@@ -442,6 +442,15 @@ LUA_FUNCTION_DEF (config, get_symbol_callback);
  */
 LUA_FUNCTION_DEF (config, set_symbol_callback);
 
+/***
+ * @method register_finish_script(callback)
+ * Adds new callback that is called on worker process termination when all
+ * tasks pending are processed
+ *
+ * @param callback {function} a fucntion with one argument (rspamd_task)
+ */
+LUA_FUNCTION_DEF (config, register_finish_script);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -474,6 +483,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_count),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
+	LUA_INTERFACE_DEF (config, register_finish_script),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1766,7 +1776,7 @@ lua_config_add_on_load (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
+	sc = g_slice_alloc0 (sizeof (*sc));
 	lua_pushvalue (L, 2);
 	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 	DL_APPEND (cfg->on_load, sc);
@@ -1860,10 +1870,59 @@ lua_config_set_symbol_callback (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_config_register_finish_script (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_config_post_load_script *sc;
+
+	if (cfg != NULL && lua_type (L, 2) == LUA_TFUNCTION) {
+		sc = g_slice_alloc0 (sizeof (*sc));
+		lua_pushvalue (L, 2);
+		sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		DL_APPEND (cfg->finish_callbacks, sc);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+
 void
 luaopen_config (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{config}", configlib_m);
 
 	lua_pop (L, 1);
+}
+
+void
+lua_call_finish_script (lua_State *L, struct rspamd_config_post_load_script *sc,
+		struct rspamd_task *task)
+{
+	struct rspamd_task **ptask;
+	gint err_idx;
+	GString *tb;
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, sc->cbref);
+
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+
+	if (lua_pcall (L, 1, 0, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_task ("call to finishing script failed: %v", tb);
+		g_string_free (tb, TRUE);
+		lua_pop (L, 1);
+	}
+
+	lua_pop (L, 1); /* Error function */
+
+	return;
 }
