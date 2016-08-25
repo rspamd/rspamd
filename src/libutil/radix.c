@@ -186,7 +186,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			k = strtoul (ipnet, &err_str, 10);
 			if (errno != 0) {
 				msg_warn_radix (
-						"invalid netmask, error detected on symbol: %s, erorr: %s",
+						"invalid netmask, error detected on symbol: %s, error: %s",
 						err_str,
 						strerror (errno));
 				k = G_MAXINT;
