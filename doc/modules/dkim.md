@@ -66,6 +66,35 @@ end
 EOD;
 ~~~
 
+Multiple domains signing example:
+
+~~~ucl
+sign_condition =<<EOD
+return function(task)
+  local domains = {
+    'example.com',
+    'example1.com',
+    'example2.com'
+  }
+
+  local from = task:get_from('smtp')
+  if from and from[1]['addr'] then
+    for _,d in ipairs(domains) do
+      if string.match(from[1]['addr'], '@(.+)$') == d then
+        return {
+          key = "/usr/local/etc/dkim/" .. d .. ".dkim.key",
+          domain = d,
+          selector = "dkim"
+        }
+      end
+    end
+  end
+
+  return false
+end
+EOD;
+~~~
+
 Alternatively, you can use maps in this code, for example, to limit signing policy to some network:
 
 ~~~ucl
