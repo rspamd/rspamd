@@ -266,7 +266,9 @@ local function hfilter(task)
           if url_len > 0 and plen > 0 then
             local rel = url_len / plen
             if rel > 0.8 then
-              task:insert_result('HFILTER_URL_ONLY', (rel - 0.8) * 5.0)
+              local sc = (rel - 0.8) * 5.0
+              if sc > 1.0 then sc = 1.0 end
+              task:insert_result('HFILTER_URL_ONLY', sc)
               local lines =  html_text_part:get_lines_count()
               if lines > 0 and lines < 2 then
                 task:insert_result('HFILTER_URL_ONELINE', 1.00)
