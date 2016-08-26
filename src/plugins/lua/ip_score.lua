@@ -50,7 +50,7 @@ local options = {
   metric = 'default',
   min_score = nil,
   max_score = nil,
-  score_divisor = nil
+  score_divisor = 1,
 }
 
 local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
@@ -138,11 +138,7 @@ local ip_score_set = function(task)
     score_mult = 0
   end
 
-  if options['score_divisor'] then
-    score = score_mult * rspamd_util.tanh (2.718281 * (score/options['score_divisor']))
-  else
-    score = score_mult * rspamd_util.tanh (2.718281 * score)
-  end
+  score = score_mult * rspamd_util.tanh (2.718281 * (score/options['score_divisor']))
 
   local hkey = ip_score_hash_key(asn, country, ipnet, ip)
   local upstream,ret
@@ -341,6 +337,6 @@ if redis_params then
   })
   rspamd_config:register_symbol({
     name = options['symbol'],
-    callback = ip_score_check
+    callback = ip_score_check,
   })
 end
