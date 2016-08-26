@@ -73,6 +73,27 @@ struct rspamd_monitored *rspamd_monitored_create (
 gboolean rspamd_monitored_alive (struct rspamd_monitored *m);
 
 /**
+ * Returns the current offline time for a monitored object
+ * @param m
+ * @return
+ */
+gdouble rspamd_monitored_offline_time (struct rspamd_monitored *m);
+
+/**
+ * Returns the total offline time for a monitored object
+ * @param m
+ * @return
+ */
+gdouble rspamd_monitored_total_offline_time (struct rspamd_monitored *m);
+
+/**
+ * Returns the latency for monitored object (in seconds)
+ * @param m
+ * @return
+ */
+gdouble rspamd_monitored_latency (struct rspamd_monitored *m);
+
+/**
  * Explicitly disable monitored object
  * @param m
  */

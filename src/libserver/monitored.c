@@ -49,7 +49,10 @@ struct rspamd_monitored_ctx {
 struct rspamd_monitored {
 	gchar *url;
 	gdouble monitoring_interval;
-	gdouble dead_time;
+	gdouble offline_time;
+	gdouble total_offline_time;
+	gdouble latency;
+	guint nchecks;
 	guint max_errors;
 	guint cur_errors;
 	gboolean alive;
@@ -92,19 +95,32 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			msg_info_mon ("%s on resolving %s, disable object",
 					error, m->url);
 			m->alive = FALSE;
-			m->dead_time = rspamd_get_calendar_ticks ();
+			m->offline_time = rspamd_get_calendar_ticks ();
 		}
 	}
 }
 
 static inline void
-rspamd_monitored_propagate_success (struct rspamd_monitored *m)
+rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 {
+	gdouble t;
+
+	m->cur_errors = 0;
+
 	if (!m->alive) {
-		m->cur_errors = 0;
+		t = rspamd_get_calendar_ticks ();
+		m->total_offline_time += t - m->offline_time;
 		m->alive = TRUE;
-		msg_info_mon ("restoring %s after %.1f seconds of downtime",
-				m->url, rspamd_get_calendar_ticks () - m->dead_time);
+		msg_info_mon ("restoring %s after %.1f seconds of downtime, "
+				"total downtime: %.1f",
+				m->url, t - m->offline_time, m->total_offline_time);
+		m->offline_time = 0;
+		m->nchecks = 1;
+		m->latency = lat;
+	}
+	else {
+		m->latency = (lat + m->latency * m->nchecks) / (m->nchecks + 1);
+		m->nchecks ++;
 	}
 }
 
@@ -131,6 +147,7 @@ struct rspamd_dns_monitored_conf {
 	radix_compressed_t *expected;
 	struct rspamd_monitored *m;
 	gint expected_code;
+	gdouble check_tm;
 };
 
 static void *
@@ -212,9 +229,12 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 {
 	struct rspamd_dns_monitored_conf *conf = arg;
 	struct rspamd_monitored *m;
+	gdouble lat;
 
 	m = conf->m;
-	msg_debug_mon ("dns callback for %s: %s", m->url,
+	lat = rspamd_get_calendar_ticks () - conf->check_tm;
+	conf->check_tm = 0;
+	msg_debug_mon ("dns callback for %s in %.2f: %s", m->url, lat,
 			rdns_strerror (reply->code));
 
 	if (reply->code == RDNS_RC_TIMEOUT) {
@@ -259,13 +279,13 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					rspamd_inet_address_destroy (addr);
 				}
 				else {
-					rspamd_monitored_propagate_success (m);
+					rspamd_monitored_propagate_success (m, lat);
 					rspamd_inet_address_destroy (addr);
 				}
 			}
 		}
 		else {
-			rspamd_monitored_propagate_success (m);
+			rspamd_monitored_propagate_success (m, lat);
 		}
 	}
 }
@@ -282,10 +302,10 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 		msg_info_mon ("cannot make request to resolve %s", conf->request->str);
 
 		m->cur_errors ++;
+		rspamd_monitored_propagate_error (m, "failed to make DNS request");
 	}
-
-	if (m->cur_errors > m->max_errors) {
-		m->alive = FALSE;
+	else {
+		conf->check_tm = rspamd_get_calendar_ticks ();
 	}
 }
 
@@ -406,6 +426,39 @@ rspamd_monitored_alive (struct rspamd_monitored *m)
 	g_assert (m != NULL);
 
 	return m->alive;
+}
+
+gdouble
+rspamd_monitored_offline_time (struct rspamd_monitored *m)
+{
+	g_assert (m != NULL);
+
+	if (m->offline_time > 0) {
+		return rspamd_get_calendar_ticks () - m->offline_time;
+	}
+
+	return 0;
+}
+
+gdouble
+rspamd_monitored_total_offline_time (struct rspamd_monitored *m)
+{
+	g_assert (m != NULL);
+
+	if (m->offline_time > 0) {
+		return rspamd_get_calendar_ticks () - m->offline_time + m->total_offline_time;
+	}
+
+
+	return m->total_offline_time;
+}
+
+gdouble
+rspamd_monitored_latency (struct rspamd_monitored *m)
+{
+	g_assert (m != NULL);
+
+		return m->latency;
 }
 
 void
