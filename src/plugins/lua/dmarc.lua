@@ -42,6 +42,13 @@ local elts_re = rspamd_regexp.create_cached("\\s*\\\\{0,1};\\s*")
 local dmarc_reporting = false
 local dmarc_actions = {}
 
+local function maybe_force_action(disposition)
+  local force_action = dmarc_actions[disposition]
+  if force_action then
+    task:set_pre_result(force_action, 'Action set by DMARC')
+  end
+end
+
 local function dmarc_report(task, spf_ok, dkim_ok, disposition)
   local ip = task:get_from_ip()
   if not ip:is_valid() then
@@ -84,8 +91,13 @@ local function dmarc_callback(task)
     local lookup_domain = string.sub(to_resolve, 8)
     if err and err ~= 'requested record is not found' then
       task:insert_result('DMARC_DNSFAIL', 1.0, lookup_domain .. ' : ' .. err)
-      return
+      return maybe_force_action('dnsfail')
+    elseif err == 'requested record is not found' and
+      lookup_domain == dmarc_domain then
+      task:insert_result('DMARC_NA', 1.0, lookup_domain)
+      return maybe_force_action('na')
     end
+
     if not results then
       if lookup_domain ~= dmarc_domain then
         local resolve_name = '_dmarc.' .. dmarc_domain
@@ -97,7 +109,8 @@ local function dmarc_callback(task)
         return
       end
 
-      return
+      task:insert_result('DMARC_NA', 1.0, lookup_domain)
+      return maybe_force_action('na')
     end
 
     local strict_spf = false
@@ -200,14 +213,15 @@ local function dmarc_callback(task)
 
         return
       else
-        return
+        task:insert_result('DMARC_NA', 1.0, lookup_domain)
+        return maybe_force_action('na')
       end
     end
 
     local res = 0.5
     if failed_policy then
       task:insert_result('DMARC_BAD_POLICY', res, lookup_domain .. ' : ' .. failed_policy)
-      return
+      return maybe_force_action('badpolicy')
     end
 
     -- Check dkim and spf symbols
@@ -240,34 +254,33 @@ local function dmarc_callback(task)
       end
     end
 
-    disposition = "none"
+    local disposition = 'none'
     if not (spf_ok or dkim_ok) then
       res = 1.0
       local spf_tmpfail = task:get_symbol(symbols['spf_tempfail_symbol'])
       local dkim_tmpfail = task:get_symbol(symbols['dkim_tempfail_symbol'])
       if (spf_tmpfail or dkim_tmpfail) then
         task:insert_result('DMARC_DNSFAIL', 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error')
-        disposition = 'failed'
-      else
-        if quarantine_policy then
-          if not pct or pct == 100 or (math.random(100) <= pct) then
-            task:insert_result('DMARC_POLICY_QUARANTINE', res, lookup_domain)
-            disposition = "quarantine"
-          end
-        elseif strict_policy then
-          if not pct or pct == 100 or (math.random(100) <= pct) then
-            task:insert_result('DMARC_POLICY_REJECT', res, lookup_domain)
-            disposition = "reject"
-          end
-        else
-          task:insert_result('DMARC_POLICY_SOFTFAIL', res, lookup_domain)
+        return maybe_force_action('dnsfail')
+      end
+      if quarantine_policy then
+        if not pct or pct == 100 or (math.random(100) <= pct) then
+          task:insert_result('DMARC_POLICY_QUARANTINE', res, lookup_domain)
+          disposition = "quarantine"
         end
+      elseif strict_policy then
+        if not pct or pct == 100 or (math.random(100) <= pct) then
+          task:insert_result('DMARC_POLICY_REJECT', res, lookup_domain)
+          disposition = "reject"
+        end
+      else
+        task:insert_result('DMARC_POLICY_SOFTFAIL', res, lookup_domain)
       end
     else
       task:insert_result('DMARC_POLICY_ALLOW', res, lookup_domain)
     end
 
-    if rua and redis_params and dmarc_reporting and not (disposition == 'failed') then
+    if rua and redis_params and dmarc_reporting then
       -- Prepare and send redis report element
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
       local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition)
@@ -284,10 +297,7 @@ local function dmarc_callback(task)
       end
     end
 
-    local force_action = dmarc_actions[disposition]
-    if force_action then
-      task:set_pre_result(force_action, 'Action set by DMARC')
-    end
+    return maybe_force_action(disposition)
 
   end
 
