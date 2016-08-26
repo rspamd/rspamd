@@ -353,6 +353,13 @@ const char *rdns_strerror (enum dns_rcode rcode);
 const char *rdns_strtype (enum rdns_request_type type);
 
 /**
+ * Parse string and return request type
+ * @param str
+ * @return
+ */
+enum rdns_request_type rdns_type_fromstr (const char *str);
+
+/**
  * Increase refcount for a request
  * @param req
  * @return
