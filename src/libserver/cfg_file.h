@@ -405,6 +405,7 @@ struct rspamd_config {
 	gchar *log_format_str;							/**< raw log format string								*/
 
 	struct rspamd_external_libs_ctx *libs_ctx;		/**< context for external libraries						*/
+	struct rspamd_monitored_ctx *monitored_ctx;		/**< context for monitored resources					*/
 
 	struct rspamd_re_cache *re_cache;				/**< static regexp cache								*/
 

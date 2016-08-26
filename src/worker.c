@@ -35,6 +35,7 @@
 #include "worker_private.h"
 #include "utlist.h"
 #include "libutil/http_private.h"
+#include "monitored.h"
 
 #include "lua/lua_common.h"
 
@@ -586,6 +587,8 @@ start_worker (struct rspamd_worker *worker)
 
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
+	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
+			worker->srv->cfg, ctx->ev_base, ctx->resolver->r);
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);

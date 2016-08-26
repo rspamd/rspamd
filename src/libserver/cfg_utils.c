@@ -27,6 +27,7 @@
 #include "stat_api.h"
 #include "unix-std.h"
 #include "libutil/multipattern.h"
+#include "monitored.h"
 #include <math.h>
 
 #define DEFAULT_SCORE 10.0
@@ -164,6 +165,7 @@ rspamd_config_new (void)
 
 	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
+	cfg->monitored_ctx = rspamd_monitored_ctx_init ();
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -230,6 +232,10 @@ rspamd_config_free (struct rspamd_config *cfg)
 	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
 		g_slice_free1 (sizeof (*sc), sc);
+	}
+
+	if (cfg->monitored_ctx) {
+		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
 	}
 
 	g_list_free (cfg->classifiers);

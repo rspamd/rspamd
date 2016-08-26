@@ -197,7 +197,8 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 	struct rspamd_monitored *m;
 
 	m = conf->m;
-
+	msg_debug_mon ("dns callback for %s: %s", m->url,
+			rdns_strerror (reply->code));
 
 	if (reply->code == RDNS_RC_TIMEOUT) {
 		rspamd_monitored_propagate_error (m, "timeout");
