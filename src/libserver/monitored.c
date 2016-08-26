@@ -113,8 +113,10 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 {
 	struct rspamd_monitored *m = ud;
 	struct timeval tv;
+	gdouble jittered;
 
-	double_to_tv (m->monitoring_interval, &tv);
+	jittered = rspamd_time_jitter (m->monitoring_interval, 0.0);
+	double_to_tv (jittered, &tv);
 
 	if (m->proc.monitored_update) {
 		m->proc.monitored_update (m, m->ctx, m->proc.ud);
@@ -128,6 +130,7 @@ struct rspamd_dns_monitored_conf {
 	GString *request;
 	radix_compressed_t *expected;
 	struct rspamd_monitored *m;
+	gint expected_code;
 };
 
 static void *
@@ -143,6 +146,7 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 	conf = g_malloc0 (sizeof (*conf));
 	conf->rt = RDNS_REQUEST_A;
 	conf->m = m;
+	conf->expected_code = -1;
 
 	if (opts) {
 		elt = ucl_object_lookup (opts, "type");
@@ -182,6 +186,19 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 				}
 			}
 		}
+
+		elt = ucl_object_lookup (opts, "rcode");
+		if (elt) {
+			rt = rdns_rcode_fromstr (ucl_object_tostring (elt));
+
+			if (rt != -1) {
+				conf->expected_code = rt;
+			}
+			else {
+				msg_err_mon ("invalid resolve rcode: %s",
+						ucl_object_tostring (elt));
+			}
+		}
 	}
 
 	rspamd_printf_gstring (req, "%s", m->url);
@@ -210,7 +227,15 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 		rspamd_monitored_propagate_error (m, "refused");
 	}
 	else {
-		if (conf->expected) {
+		if (conf->expected_code != -1) {
+			if (reply->code != conf->expected_code) {
+				msg_info_mon ("DNS reply returned %s while %s is expected",
+						rdns_strerror (reply->code),
+						rdns_strerror (conf->expected_code));
+				rspamd_monitored_propagate_error (m, "invalid return");
+			}
+		}
+		else if (conf->expected) {
 			/* We also need to check IP */
 			if (reply->code != RDNS_RC_NOERROR) {
 				rspamd_monitored_propagate_error (m, "no record");
@@ -398,10 +423,12 @@ void
 rspamd_monitored_start (struct rspamd_monitored *m)
 {
 	struct timeval tv;
+	gdouble jittered;
 
 	g_assert (m != NULL);
 	msg_debug_mon ("started monitored object %s", m->url);
-	double_to_tv (m->monitoring_interval, &tv);
+	jittered = rspamd_time_jitter (m->monitoring_interval, 0.0);
+	double_to_tv (jittered, &tv);
 
 	if (event_get_base (&m->periodic)) {
 		event_del (&m->periodic);
