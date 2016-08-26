@@ -62,7 +62,8 @@ struct rspamd_monitored *rspamd_monitored_create (
 		struct rspamd_monitored_ctx *ctx,
 		const gchar *line,
 		enum rspamd_monitored_type type,
-		enum rspamd_monitored_flags flags);
+		enum rspamd_monitored_flags flags,
+		const ucl_object_t *opts);
 
 /**
  * Return TRUE if monitored object is alive

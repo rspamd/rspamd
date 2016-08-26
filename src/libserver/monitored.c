@@ -20,14 +20,18 @@
 #include "monitored.h"
 #include "cryptobox.h"
 #include "logger.h"
+#include "radix.h"
 
 static const gdouble default_monitoring_interval = 10.0;
 static const guint default_max_errors = 3;
 
 struct rspamd_monitored_methods {
 	void * (*monitored_config) (struct rspamd_monitored *m,
-			struct rspamd_monitored_ctx *ctx);
+			struct rspamd_monitored_ctx *ctx,
+			const ucl_object_t *opts);
 	void (*monitored_update) (struct rspamd_monitored *m,
+			struct rspamd_monitored_ctx *ctx, gpointer ud);
+	void (*monitored_dtor) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx, gpointer ud);
 	gpointer ud;
 };
@@ -89,16 +93,62 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 }
 
 struct rspamd_dns_monitored_conf {
-	void *unused;
+	enum rdns_request_type rt;
+	gchar *prefix;
+	radix_compressed_t *expected;
 };
 
 static void *
 rspamd_monitored_dns_conf (struct rspamd_monitored *m,
-		struct rspamd_monitored_ctx *ctx)
+		struct rspamd_monitored_ctx *ctx,
+		const ucl_object_t *opts)
 {
 	struct rspamd_dns_monitored_conf *conf;
+	const ucl_object_t *elt;
+	gint rt;
 
 	conf = g_malloc0 (sizeof (*conf));
+	conf->rt = RDNS_REQUEST_A;
+
+	if (opts) {
+		elt = ucl_object_lookup (opts, "type");
+
+		if (elt) {
+			rt = rdns_type_fromstr (ucl_object_tostring (elt));
+
+			if (rt != -1) {
+				conf->rt = rt;
+			}
+			else {
+				msg_err_mon ("invalid resolve type: %s",
+						ucl_object_tostring (elt));
+			}
+		}
+
+		elt = ucl_object_lookup (opts, "prefix");
+
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			conf->prefix = g_strdup (ucl_object_tostring (elt));
+		}
+
+		elt = ucl_object_lookup (opts, "ipnet");
+
+		if (elt) {
+			if (ucl_object_type (elt) == UCL_STRING) {
+				radix_add_generic_iplist (ucl_object_tostring (elt),
+						&conf->expected, FALSE);
+			}
+			else if (ucl_object_type (elt) == UCL_ARRAY) {
+				const ucl_object_t *cur;
+				ucl_object_iter_t it = NULL;
+
+				while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+					radix_add_generic_iplist (ucl_object_tostring (elt),
+							&conf->expected, FALSE);
+				}
+			}
+		}
+	}
 
 	return conf;
 }
@@ -108,6 +158,23 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 		struct rspamd_monitored_ctx *ctx, gpointer ud)
 {
 
+}
+
+void
+rspamd_monitored_dns_dtor (struct rspamd_monitored *m,
+		struct rspamd_monitored_ctx *ctx, gpointer ud)
+{
+	struct rspamd_dns_monitored_conf *conf = ud;
+
+	if (conf->prefix) {
+		g_free (conf->prefix);
+	}
+
+	if (conf->expected) {
+		radix_destroy_compressed (conf->expected);
+	}
+
+	g_free (conf);
 }
 
 struct rspamd_monitored_ctx *
@@ -151,7 +218,8 @@ struct rspamd_monitored *
 rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
 		const gchar *line,
 		enum rspamd_monitored_type type,
-		enum rspamd_monitored_flags flags)
+		enum rspamd_monitored_flags flags,
+		const ucl_object_t *opts)
 {
 	struct rspamd_monitored *m;
 	rspamd_cryptobox_hash_state_t st;
@@ -172,13 +240,20 @@ rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
 	if (type == RSPAMD_MONITORED_DNS) {
 		m->proc.monitored_update = rspamd_monitored_dns_mon;
 		m->proc.monitored_config = rspamd_monitored_dns_conf;
-		m->proc.ud = m->proc.monitored_config (m, ctx);
+		m->proc.monitored_dtor = rspamd_monitored_dns_dtor;
+	}
+	else {
+		g_slice_free1 (sizeof (*m), m);
 
-		if (m->proc.ud == NULL) {
-			g_slice_free1 (sizeof (*m), m);
+		return NULL;
+	}
 
-			return NULL;
-		}
+	m->proc.ud = m->proc.monitored_config (m, ctx, opts);
+
+	if (m->proc.ud == NULL) {
+		g_slice_free1 (sizeof (*m), m);
+
+		return NULL;
 	}
 
 	/* Create a persistent tag */
@@ -247,7 +322,7 @@ rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx)
 		m = g_ptr_array_index (ctx->elts, i);
 		rspamd_monitored_stop (m);
 		g_free (m->url);
-		g_free (m->proc.ud);
+		m->proc.monitored_dtor (m, m->ctx, m->proc.ud);
 		g_slice_free1 (sizeof (*m), m);
 	}
 
