@@ -18,6 +18,7 @@
 #include "libutil/expression.h"
 #include "libserver/composites.h"
 #include "lua/lua_map.h"
+#include "monitored.h"
 #include "utlist.h"
 
 /***
@@ -443,13 +444,41 @@ LUA_FUNCTION_DEF (config, get_symbol_callback);
 LUA_FUNCTION_DEF (config, set_symbol_callback);
 
 /***
- * @method register_finish_script(callback)
+ * @method rspamd_config:register_finish_script(callback)
  * Adds new callback that is called on worker process termination when all
  * tasks pending are processed
  *
  * @param callback {function} a fucntion with one argument (rspamd_task)
  */
 LUA_FUNCTION_DEF (config, register_finish_script);
+
+/***
+ * @method rspamd_config:register_monitored(url, type, [{params}])
+ * Registers monitored resource to watch its availability. Supported types:
+ *
+ * - `dns`: DNS monitored object
+ *
+ * Params are optional table specific for each type. For DNS it supports the
+ * following options:
+ *
+ * - `prefix`: prefix to add before making request
+ * - `type`: type of request (e.g. 'a' or 'txt')
+ * - `ipnet`: array of ip/networks to expect on reply
+ * - `rcode`: expected return code (e.g. `nxdomain`)
+ *
+ * Returned object has the following methods:
+ *
+ * - `alive`: returns `true` if monitored resource is alive
+ * - `offline`: returns number of seconds of the current offline period (or 0 if alive)
+ * - `total_offline`: returns number of seconds of the overall offline
+ * - `latency`: returns the current average latency in seconds (or 0 if offline)
+ *
+ * @param {string} url resource to monitor
+ * @param {string} type type of monitoring
+ * @param {table} opts optional parameters
+ * @return {rspamd_monitored} rspamd monitored object
+ */
+LUA_FUNCTION_DEF (config, register_monitored);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -484,8 +513,23 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, register_finish_script),
+	LUA_INTERFACE_DEF (config, register_monitored),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
+	{NULL, NULL}
+};
+
+LUA_FUNCTION_DEF (monitored, alive);
+LUA_FUNCTION_DEF (monitored, latency);
+LUA_FUNCTION_DEF (monitored, offline);
+LUA_FUNCTION_DEF (monitored, total_offline);
+
+static const struct luaL_reg monitoredlib_m[] = {
+	LUA_INTERFACE_DEF (monitored, alive),
+	LUA_INTERFACE_DEF (monitored, latency),
+	LUA_INTERFACE_DEF (monitored, offline),
+	LUA_INTERFACE_DEF (monitored, total_offline),
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -497,6 +541,14 @@ lua_check_config (lua_State * L, gint pos)
 	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, pos, "'config' expected");
 	return ud ? *((struct rspamd_config **)ud) : NULL;
+}
+
+static struct rspamd_monitored *
+lua_check_monitored (lua_State * L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{monitored}");
+	luaL_argcheck (L, ud != NULL, pos, "'monitored' expected");
+	return ud ? *((struct rspamd_monitored **)ud) : NULL;
 }
 
 /*** Config functions ***/
@@ -1889,11 +1941,120 @@ lua_config_register_finish_script (lua_State *L)
 	return 0;
 }
 
+static gint
+lua_config_register_monitored (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_monitored *m, **pm;
+	const gchar *url, *type;
+	ucl_object_t *params = NULL;
+
+	url = lua_tostring (L, 2);
+	type = lua_tostring (L, 3);
+
+	if (cfg != NULL && url != NULL && type != NULL) {
+		if (g_ascii_strcasecmp (type, "dns") == 0) {
+			if (lua_type (L, 4) == LUA_TTABLE) {
+				params = ucl_object_lua_import (L, 4);
+			}
+
+			m = rspamd_monitored_create (cfg->monitored_ctx, url,
+					RSPAMD_MONITORED_DNS, RSPAMD_MONITORED_DEFAULT,
+					params);
+
+			if (m) {
+				pm = lua_newuserdata (L, sizeof (*pm));
+				*pm = m;
+				rspamd_lua_setclass (L, "rspamd{monitored}", -1);
+			}
+			else {
+				lua_pushnil (L);
+			}
+
+			if (params) {
+				ucl_object_unref (params);
+			}
+		}
+		else {
+			return luaL_error (L, "invalid monitored type: %s", type);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+
+static gint
+lua_monitored_alive (lua_State *L)
+{
+	struct rspamd_monitored *m = lua_check_monitored (L, 1);
+
+	if (m) {
+		lua_pushboolean (L, rspamd_monitored_alive (m));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_monitored_offline (lua_State *L)
+{
+	struct rspamd_monitored *m = lua_check_monitored (L, 1);
+
+	if (m) {
+		lua_pushnumber (L, rspamd_monitored_offline_time (m));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_monitored_total_offline (lua_State *L)
+{
+	struct rspamd_monitored *m = lua_check_monitored (L, 1);
+
+	if (m) {
+		lua_pushnumber (L, rspamd_monitored_total_offline_time (m));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_monitored_latency (lua_State *L)
+{
+	struct rspamd_monitored *m = lua_check_monitored (L, 1);
+
+	if (m) {
+		lua_pushnumber (L, rspamd_monitored_latency (m));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
 
 void
 luaopen_config (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{config}", configlib_m);
+
+	lua_pop (L, 1);
+
+	rspamd_lua_new_class (L, "rspamd{monitored}", monitoredlib_m);
 
 	lua_pop (L, 1);
 }
