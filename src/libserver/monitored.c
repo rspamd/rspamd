@@ -49,6 +49,7 @@ struct rspamd_monitored_ctx {
 struct rspamd_monitored {
 	gchar *url;
 	gdouble monitoring_interval;
+	gdouble dead_time;
 	guint max_errors;
 	guint cur_errors;
 	gboolean alive;
@@ -77,6 +78,36 @@ struct rspamd_monitored {
         G_STRFUNC, \
         __VA_ARGS__)
 
+static inline void
+rspamd_monitored_propagate_error (struct rspamd_monitored *m,
+		const gchar *error)
+{
+	if (m->alive) {
+		if (m->cur_errors < m->max_errors) {
+			msg_info_mon ("%s on resolving %s, %d retries left",
+					error, m->url, m->cur_errors - m->max_errors);
+			m->cur_errors ++;
+		}
+		else {
+			msg_info_mon ("%s on resolving %s, disable object",
+					error, m->url);
+			m->alive = FALSE;
+			m->dead_time = rspamd_get_calendar_ticks ();
+		}
+	}
+}
+
+static inline void
+rspamd_monitored_propagate_success (struct rspamd_monitored *m)
+{
+	if (!m->alive) {
+		m->cur_errors = 0;
+		m->alive = TRUE;
+		msg_info_mon ("restoring %s after %.1f seconds of downtime",
+				m->url, rspamd_get_calendar_ticks () - m->dead_time);
+	}
+}
+
 static void
 rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 {
@@ -94,8 +125,9 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 
 struct rspamd_dns_monitored_conf {
 	enum rdns_request_type rt;
-	gchar *prefix;
+	GString *request;
 	radix_compressed_t *expected;
+	struct rspamd_monitored *m;
 };
 
 static void *
@@ -106,9 +138,11 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 	struct rspamd_dns_monitored_conf *conf;
 	const ucl_object_t *elt;
 	gint rt;
+	GString *req = g_string_sized_new (127);
 
 	conf = g_malloc0 (sizeof (*conf));
 	conf->rt = RDNS_REQUEST_A;
+	conf->m = m;
 
 	if (opts) {
 		elt = ucl_object_lookup (opts, "type");
@@ -128,7 +162,7 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 		elt = ucl_object_lookup (opts, "prefix");
 
 		if (elt && ucl_object_type (elt) == UCL_STRING) {
-			conf->prefix = g_strdup (ucl_object_tostring (elt));
+			rspamd_printf_gstring (req, "%s.", ucl_object_tostring (elt));
 		}
 
 		elt = ucl_object_lookup (opts, "ipnet");
@@ -150,14 +184,83 @@ rspamd_monitored_dns_conf (struct rspamd_monitored *m,
 		}
 	}
 
+	rspamd_printf_gstring (req, "%s", m->url);
+	conf->request = req;
+
 	return conf;
+}
+
+static void
+rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
+{
+	struct rspamd_dns_monitored_conf *conf = arg;
+	struct rspamd_monitored *m;
+
+	m = conf->m;
+
+
+	if (reply->code == RDNS_RC_TIMEOUT) {
+		rspamd_monitored_propagate_error (m, "timeout");
+	}
+	else if (reply->code == RDNS_RC_SERVFAIL) {
+		rspamd_monitored_propagate_error (m, "servfail");
+	}
+	else if (reply->code == RDNS_RC_REFUSED) {
+		rspamd_monitored_propagate_error (m, "refused");
+	}
+	else {
+		if (conf->expected) {
+			/* We also need to check IP */
+			if (reply->code != RDNS_RC_NOERROR) {
+				rspamd_monitored_propagate_error (m, "no record");
+			}
+			else {
+				rspamd_inet_addr_t *addr;
+
+				addr = rspamd_inet_address_from_rnds (reply->entries);
+
+				if (!addr) {
+					rspamd_monitored_propagate_error (m,
+							"unreadable address");
+				}
+				else if (radix_find_compressed_addr (conf->expected, addr)) {
+					msg_info_mon ("bad address %s is returned when monitoring %s",
+							rspamd_inet_address_to_string (addr),
+							conf->request->str);
+					rspamd_monitored_propagate_error (m,
+							"invalid address");
+
+					rspamd_inet_address_destroy (addr);
+				}
+				else {
+					rspamd_monitored_propagate_success (m);
+					rspamd_inet_address_destroy (addr);
+				}
+			}
+		}
+		else {
+			rspamd_monitored_propagate_success (m);
+		}
+	}
 }
 
 void
 rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 		struct rspamd_monitored_ctx *ctx, gpointer ud)
 {
+	struct rspamd_dns_monitored_conf *conf = ud;
 
+	if (!rdns_make_request_full (ctx->resolver, rspamd_monitored_dns_cb,
+			conf, ctx->cfg->dns_timeout, ctx->cfg->dns_retransmits,
+			conf->rt, conf->request->str)) {
+		msg_info_mon ("cannot make request to resolve %s", conf->request->str);
+
+		m->cur_errors ++;
+	}
+
+	if (m->cur_errors > m->max_errors) {
+		m->alive = FALSE;
+	}
 }
 
 void
@@ -166,9 +269,7 @@ rspamd_monitored_dns_dtor (struct rspamd_monitored *m,
 {
 	struct rspamd_dns_monitored_conf *conf = ud;
 
-	if (conf->prefix) {
-		g_free (conf->prefix);
-	}
+	g_string_free (conf->request, TRUE);
 
 	if (conf->expected) {
 		radix_destroy_compressed (conf->expected);
