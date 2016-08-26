@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "multipattern.h"
+#include "monitored.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
 #define DEFAULT_SURBL_WEIGHT 10
@@ -45,6 +46,7 @@ struct suffix_item {
 	guint32 options;
 	GArray *bits;
 	GHashTable *ips;
+	struct rspamd_monitored *m;
 	gint callback_id;
 };
 

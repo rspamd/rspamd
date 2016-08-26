@@ -472,10 +472,17 @@ surbl_module_config (struct rspamd_config *cfg)
 	const gchar *redir_val, *ip_val;
 	guint32 bit;
 	gint cb_id, nrules = 0;
+	ucl_object_t *monitored_opts;
 
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
 		return TRUE;
 	}
+
+	monitored_opts = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("facebook"),
+			"prefix", 0, false);
+	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("nxdomain"),
+			"rcode", 0, false);
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
@@ -743,6 +750,11 @@ surbl_module_config (struct rspamd_config *cfg)
 						cb_id);
 				nrules ++;
 			}
+
+			new_suffix->m = rspamd_monitored_create (cfg->monitored_ctx,
+					new_suffix->suffix, RSPAMD_MONITORED_DNS,
+					RSPAMD_MONITORED_DEFAULT, monitored_opts);
+
 			surbl_module_ctx->suffixes = g_list_prepend (
 				surbl_module_ctx->suffixes,
 				new_suffix);
@@ -772,6 +784,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	msg_info_config ("init internal surbls module, %d uribl rules loaded",
 			nrules);
+	ucl_object_unref (monitored_opts);
 
 	return TRUE;
 }
@@ -1432,6 +1445,12 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	struct rspamd_mime_text_part *part;
 	struct html_image *img;
 	struct rspamd_url *url;
+
+	if (!rspamd_monitored_alive (suffix->m)) {
+		msg_info_task ("disable surbl %s as it is reported to be offline",
+				suffix->suffix);
+		return;
+	}
 
 	param.task = task;
 	param.suffix = suffix;
