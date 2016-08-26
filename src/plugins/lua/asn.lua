@@ -96,5 +96,6 @@ if configure_asn_module() then
     name = 'ASN_CHECK',
     type = 'prefilter',
     callback = asn_check,
+    priority = 10,
   })
 end
