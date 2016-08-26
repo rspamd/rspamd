@@ -103,17 +103,22 @@ local function rbl_cb (task)
   local notgot = {}
 
   for k,rbl in pairs(rbls) do
-
     (function()
+      if not rbl.monitored:alive() then
+        rspamd_logger.infox('rbl %s is offline for %s seconds', rbl['rbl'],
+          string.format('%.1f', rbl.monitored:offline()))
+        return
+      end
+
       if rbl['exclude_users'] then
         if not havegot['user'] and not notgot['user'] then
-	  havegot['user'] = task:get_user()
-	  if havegot['user'] == nil then
-	    notgot['user'] = true
-	  end
+          havegot['user'] = task:get_user()
+          if havegot['user'] == nil then
+            notgot['user'] = true
+          end
         end
         if havegot['user'] ~= nil then
-	  return
+          return
         end
       end
 
@@ -132,24 +137,24 @@ local function rbl_cb (task)
       end
 
       if rbl['helo'] then
-	(function()
-	  if notgot['helo'] then
-	    return
-	  end
-	  if not havegot['helo'] then
-	    havegot['helo'] = task:get_helo()
-	    if havegot['helo'] == nil or
+        (function()
+          if notgot['helo'] then
+            return
+          end
+          if not havegot['helo'] then
+            havegot['helo'] = task:get_helo()
+            if havegot['helo'] == nil or
               not validate_dns(havegot['helo']) then
-	      notgot['helo'] = true
-	      return
-	    end
-	  end
-	  task:get_resolver():resolve_a({task = task,
-	    name = havegot['helo'] .. '.' .. rbl['rbl'],
-	    callback = rbl_dns_cb,
-	    option = k,
-	    forced = true})
-	end)()
+              notgot['helo'] = true
+              return
+            end
+          end
+          task:get_resolver():resolve_a({task = task,
+            name = havegot['helo'] .. '.' .. rbl['rbl'],
+            callback = rbl_dns_cb,
+            option = k,
+            forced = true})
+        end)()
       end
 
       if rbl['dkim'] then
@@ -232,78 +237,78 @@ local function rbl_cb (task)
       end
 
       if rbl['rdns'] then
-	(function()
-	  if notgot['rdns'] then
-	    return
-	  end
-	  if not havegot['rdns'] then
-	    havegot['rdns'] = task:get_hostname()
-	    if havegot['rdns'] == nil or havegot['rdns'] == 'unknown' then
-	      notgot['rdns'] = true
-	      return
-	    end
-	  end
-	  task:get_resolver():resolve_a({task = task,
-	    name = havegot['rdns'] .. '.' .. rbl['rbl'],
-	    callback = rbl_dns_cb,
-	    option = k,
-	    forced = true})
-	end)()
+        (function()
+          if notgot['rdns'] then
+            return
+          end
+          if not havegot['rdns'] then
+            havegot['rdns'] = task:get_hostname()
+            if havegot['rdns'] == nil or havegot['rdns'] == 'unknown' then
+              notgot['rdns'] = true
+              return
+            end
+          end
+          task:get_resolver():resolve_a({task = task,
+            name = havegot['rdns'] .. '.' .. rbl['rbl'],
+            callback = rbl_dns_cb,
+            option = k,
+            forced = true})
+        end)()
       end
 
       if rbl['from'] then
-	(function()
-	  if notgot['from'] then
-	    return
-	  end
-	  if not havegot['from'] then
-	    havegot['from'] = task:get_from_ip()
-	    if not havegot['from']:is_valid() then
-	      notgot['from'] = true
-	      return
-	    end
-	  end
-	  if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
-	    (havegot['from']:get_version() == 4 and rbl['ipv4']) then
-	    task:get_resolver():resolve_a({task = task,
-	      name = ip_to_rbl(havegot['from'], rbl['rbl']),
-	      callback = rbl_dns_cb,
-	      option = k,
-	      forced = true})
-	  end
-	end)()
+        (function()
+          if notgot['from'] then
+            return
+          end
+          if not havegot['from'] then
+            havegot['from'] = task:get_from_ip()
+            if not havegot['from']:is_valid() then
+              notgot['from'] = true
+              return
+            end
+          end
+          if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
+            (havegot['from']:get_version() == 4 and rbl['ipv4']) then
+            task:get_resolver():resolve_a({task = task,
+              name = ip_to_rbl(havegot['from'], rbl['rbl']),
+              callback = rbl_dns_cb,
+              option = k,
+              forced = true})
+          end
+        end)()
       end
 
       if rbl['received'] then
-	(function()
-	  if notgot['received'] then
-	    return
-	  end
-	  if not havegot['received'] then
-	    havegot['received'] = task:get_received_headers()
-	    if next(havegot['received']) == nil then
-	      notgot['received'] = true
-	      return
-	    end
-	  end
-	  for _,rh in ipairs(havegot['received']) do
-	    if rh['real_ip'] and rh['real_ip']:is_valid() then
+        (function()
+          if notgot['received'] then
+            return
+          end
+          if not havegot['received'] then
+            havegot['received'] = task:get_received_headers()
+            if next(havegot['received']) == nil then
+              notgot['received'] = true
+              return
+            end
+          end
+          for _,rh in ipairs(havegot['received']) do
+            if rh['real_ip'] and rh['real_ip']:is_valid() then
               if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
                 ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
                 not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
                 not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
-                  -- Disable forced for received resolving, as we have no control on
-                  -- those headers count
-                  task:get_resolver():resolve_a({task = task,
-                    name = ip_to_rbl(rh['real_ip'], rbl['rbl']),
-                    callback = rbl_dns_cb,
-                    option = k,
-                    forced = false})
+                -- Disable forced for received resolving, as we have no control on
+                -- those headers count
+                task:get_resolver():resolve_a({task = task,
+                  name = ip_to_rbl(rh['real_ip'], rbl['rbl']),
+                  callback = rbl_dns_cb,
+                  option = k,
+                  forced = false})
               end
-	    end
-	  end
-	end)()
+            end
+          end
+        end)()
       end
     end)()
   end
@@ -465,7 +470,11 @@ for key,rbl in pairs(opts['rbls']) do
         end
       end
     end
-    rbls[key] = rbl
+    if rbl['rbl'] then
+      rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
+        {rcode = 'nxdomain', prefix = '1.0.0.127'})
+      rbls[key] = rbl
+    end
   end)()
 end
 for _, w in pairs(white_symbols) do
