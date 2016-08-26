@@ -1316,7 +1316,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 	} state = init;
 	guint skip = 0;
 
-	while (p >= start + 1) {
+	while (p >= start) {
 		switch (state) {
 		case init:
 			if (*p == '\r') {
