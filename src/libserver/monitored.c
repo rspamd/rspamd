@@ -22,7 +22,7 @@
 #include "logger.h"
 #include "radix.h"
 
-static const gdouble default_monitoring_interval = 10.0;
+static const gdouble default_monitoring_interval = 60.0;
 static const guint default_max_errors = 3;
 
 struct rspamd_monitored_methods {
@@ -85,7 +85,7 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 	if (m->alive) {
 		if (m->cur_errors < m->max_errors) {
 			msg_info_mon ("%s on resolving %s, %d retries left",
-					error, m->url, m->cur_errors - m->max_errors);
+					error, m->url,  m->max_errors - m->cur_errors);
 			m->cur_errors ++;
 		}
 		else {
