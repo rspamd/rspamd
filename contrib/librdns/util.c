@@ -302,6 +302,9 @@ rdns_rcode_fromstr (const char *str)
 		else if (strcmp (str, "servfail") == 0) {
 			return RDNS_RC_SERVFAIL;
 		}
+		else if (strcmp (str, "nxdomain") == 0) {
+			return RDNS_RC_NXDOMAIN;
+		}
 		else if (strcmp (str, "notimp") == 0) {
 			return RDNS_RC_NOTIMP;
 		}
