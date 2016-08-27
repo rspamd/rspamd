@@ -249,10 +249,19 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 	else {
 		if (conf->expected_code != -1) {
 			if (reply->code != conf->expected_code) {
-				msg_info_mon ("DNS reply returned %s while %s is expected",
-						rdns_strerror (reply->code),
-						rdns_strerror (conf->expected_code));
-				rspamd_monitored_propagate_error (m, "invalid return");
+				if (reply->code == RDNS_RC_NOREC &&
+						conf->expected_code == RDNS_RC_NXDOMAIN) {
+					rspamd_monitored_propagate_success (m, lat);
+				}
+				else {
+					msg_info_mon ("DNS reply returned %s while %s is expected",
+							rdns_strerror (reply->code),
+							rdns_strerror (conf->expected_code));
+					rspamd_monitored_propagate_error (m, "invalid return");
+				}
+			}
+			else {
+				rspamd_monitored_propagate_success (m, lat);
 			}
 		}
 		else if (conf->expected) {
