@@ -152,7 +152,7 @@ LUA_FUNCTION_DEF (task, has_urls);
 LUA_FUNCTION_DEF (task, get_content);
 
 /***
- * @method task:get_content()
+ * @method task:get_rawbody()
  * Get raw body for the specified task
  * @return {text} the data contained in the task
  */
