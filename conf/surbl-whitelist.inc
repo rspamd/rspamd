@@ -8,7 +8,6 @@ google.ru
 li.ru
 list.ru
 liveinternet.ru
-msn.com
 nod32.com
 price.ru
 rambler-co.ru
@@ -16,7 +15,6 @@ rambler.ru
 subscribe.ru
 tns-counter.ru
 top4top.ru
-wordpress.com
 yandex.ru
 yandex.net
 youtube.com
@@ -215,7 +213,5 @@ rediff.com
 twitter.com
 wordpress.com
 yahoo.co.jp
-youtube.com
 fedex.com
 openoffice.org
-
