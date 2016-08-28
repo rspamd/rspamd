@@ -532,6 +532,14 @@ LUA_FUNCTION_DEF (task, set_settings);
 LUA_FUNCTION_DEF (task, get_settings);
 
 /***
+ * @method task:lookup_settings(key)
+ * Gets users settings object with the specified key for a task.
+ * @param {string} key key to lookup
+ * @return {lua object} lua object generated from UCL
+ */
+LUA_FUNCTION_DEF (task, lookup_settings);
+
+/***
  * @method task:get_settings_id()
  * Get numeric hash of settings id if specified for this task. 0 is returned otherwise.
  * @return {number} settings-id hash
@@ -728,6 +736,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
 	LUA_INTERFACE_DEF (task, get_settings),
+	LUA_INTERFACE_DEF (task, lookup_settings),
 	LUA_INTERFACE_DEF (task, get_settings_id),
 	LUA_INTERFACE_DEF (task, cache_get),
 	LUA_INTERFACE_DEF (task, cache_set),
@@ -2902,6 +2911,45 @@ lua_task_get_settings (lua_State *L)
 
 		if (task->settings) {
 			return ucl_object_push_lua (L, task->settings, true);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_lookup_settings (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *key = NULL;
+	const ucl_object_t *elt;
+
+	if (task != NULL) {
+
+		if (lua_isstring (L, 2)) {
+			key = lua_tostring (L, 2);
+		}
+
+		if (task->settings) {
+			if (key == NULL) {
+				return ucl_object_push_lua (L, task->settings, true);
+			}
+			else {
+				elt = ucl_object_lookup (task->settings, key);
+
+				if (elt) {
+					return ucl_object_push_lua (L, elt, true);
+				}
+				else {
+					lua_pushnil (L);
+				}
+			}
 		}
 		else {
 			lua_pushnil (L);
