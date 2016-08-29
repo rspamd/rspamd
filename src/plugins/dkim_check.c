@@ -20,6 +20,7 @@
  * - symbol_allow (string): symbol to insert in case of allow (default: 'R_DKIM_ALLOW')
  * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
  * - symbol_tempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
+ * - symbol_na (string): symbol to insert in case of no signing (default: 'R_DKIM_NA')
  * - whitelist (map): map of whitelisted networks
  * - domains (map): map of domains to check
  * - strict_multiplier (number): multiplier for strict domains
@@ -40,6 +41,7 @@
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"
 #define DEFAULT_SYMBOL_ALLOW "R_DKIM_ALLOW"
+#define DEFAULT_SYMBOL_NA "R_DKIM_NA"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
 #define DEFAULT_TIME_JITTER 60
@@ -50,6 +52,7 @@ struct dkim_ctx {
 	const gchar *symbol_reject;
 	const gchar *symbol_tempfail;
 	const gchar *symbol_allow;
+	const gchar *symbol_na;
 
 	rspamd_mempool_t *dkim_pool;
 	radix_compressed_t *whitelist_ip;
@@ -158,6 +161,15 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"dkim",
 			"Symbol that is added if DKIM check can't be completed (e.g. DNS failure)",
 			"symbol_tempfail",
+			UCL_STRING,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"dkim",
+			"Symbol that is added if mail is not signed",
+			"symbol_na",
 			UCL_STRING,
 			NULL,
 			0,
@@ -285,6 +297,13 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
 	if ((value =
+		rspamd_config_get_module_opt (cfg, "dkim", "symbol_na")) != NULL) {
+		dkim_module_ctx->symbol_na = ucl_obj_tostring (value);
+	}
+	else {
+		dkim_module_ctx->symbol_na = DEFAULT_SYMBOL_NA;
+	}
+	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"dkim_cache_size")) != NULL) {
 		cache_size = ucl_obj_toint (value);
@@ -376,6 +395,12 @@ dkim_module_config (struct rspamd_config *cfg)
 			NULL,
 			SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE,
 			-1);
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+			dkim_module_ctx->symbol_na,
+			0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+			cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_tempfail,
 			0,
@@ -768,6 +793,12 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 				hlist = g_list_next (hlist);
 			}
 		}
+	}
+	else {
+		rspamd_task_insert_result (task,
+				dkim_module_ctx->symbol_na,
+				1.0,
+				NULL);
 	}
 
 	if (res != NULL) {
