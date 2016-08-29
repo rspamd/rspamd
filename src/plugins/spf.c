@@ -20,6 +20,8 @@
  * - symbol_allow (string): symbol to insert (default: 'R_SPF_ALLOW')
  * - symbol_fail (string): symbol to insert (default: 'R_SPF_FAIL')
  * - symbol_softfail (string): symbol to insert (default: 'R_SPF_SOFTFAIL')
+ * - symbol_na (string): symbol to insert (default: 'R_SPF_NA')
+ * - symbol_dnsfail (string): symbol to insert (default: 'R_SPF_DNSFAIL')
  * - whitelist (map): map of whitelisted networks
  */
 
@@ -36,6 +38,7 @@
 #define DEFAULT_SYMBOL_NEUTRAL "R_SPF_NEUTRAL"
 #define DEFAULT_SYMBOL_ALLOW "R_SPF_ALLOW"
 #define DEFAULT_SYMBOL_DNSFAIL "R_SPF_DNSFAIL"
+#define DEFAULT_SYMBOL_NA "R_SPF_NA"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
 
@@ -46,6 +49,7 @@ struct spf_ctx {
 	const gchar *symbol_neutral;
 	const gchar *symbol_allow;
 	const gchar *symbol_dnsfail;
+	const gchar *symbol_na;
 
 	rspamd_mempool_t *spf_pool;
 	radix_compressed_t *whitelist_ip;
@@ -145,6 +149,15 @@ spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"spf",
+			"Symbol that is added if no SPF policy is found",
+			"symbol_na",
+			UCL_STRING,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"spf",
 			"Size of SPF parsed records cache",
 			"spf_cache_size",
 			UCL_INT,
@@ -206,6 +219,13 @@ spf_module_config (struct rspamd_config *cfg)
 		spf_module_ctx->symbol_dnsfail = DEFAULT_SYMBOL_DNSFAIL;
 	}
 	if ((value =
+		rspamd_config_get_module_opt (cfg, "spf", "symbol_na")) != NULL) {
+		spf_module_ctx->symbol_na = ucl_obj_tostring (value);
+	}
+	else {
+		spf_module_ctx->symbol_na = DEFAULT_SYMBOL_NA;
+	}
+	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "spf_cache_size")) != NULL) {
 		cache_size = ucl_obj_toint (value);
 	}
@@ -228,6 +248,11 @@ spf_module_config (struct rspamd_config *cfg)
 		SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE|SYMBOL_TYPE_EMPTY, -1);
 	rspamd_symbols_cache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_softfail, 0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL,
+			cb_id);
+	rspamd_symbols_cache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_na, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
@@ -417,7 +442,13 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 	struct spf_resolved *l;
 	struct rspamd_async_watcher *w = ud;
 
-	if (record && record->elts->len > 0 && record->domain) {
+	if (record && record->elts->len == 0) {
+		rspamd_task_insert_result (task,
+				spf_module_ctx->symbol_na,
+				1,
+				NULL);
+	}
+	else if (record && record->elts->len > 0 && record->domain) {
 
 		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash,
 					record->domain, task->tv.tv_sec)) == NULL) {
@@ -472,6 +503,10 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			if (!rspamd_spf_resolve (task, spf_plugin_callback, w)) {
 				msg_info_task ("cannot make spf request for [%s]",
 						task->message_id);
+				rspamd_task_insert_result (task,
+						spf_module_ctx->symbol_dnsfail,
+						1,
+						"(SPF): spf DNS fail");
 			}
 			else {
 				rspamd_session_watcher_push (task->s);
