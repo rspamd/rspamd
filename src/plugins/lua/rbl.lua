@@ -349,7 +349,7 @@ local function rbl_cb (task)
   end, enabled_rbls))
 
   local r = task:get_resolver()
-  for _,p in ipairs(params) do
+  for _,p in pairs(params) do
     r:resolve_a({
       task = task,
       p.to_resolve,
