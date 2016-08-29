@@ -17,9 +17,30 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local rspamd_redis = require "rspamd_redis"
+local rspamd_regexp = require "rspamd_regexp"
 local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local redis_params
+
+local function match_patterns(default_sym, found, patterns)
+  if not patterns then return default_sym end
+  for sym, pat in pairs(patterns) do
+    if pat:match(found) then
+      return sym
+    end
+  end
+  return default_sym
+end
+
+local function yield_result(task, rule, vname)
+  local symname = match_patterns(rule['symbol'], vname, rule['patterns'])
+  if rule['whitelist'] and rule['whitelist']:get_key(vname) then
+    rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vname)
+    return
+  end
+  task:insert_result(symname, 1.0, vname)
+  rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
+end
 
 local function clamav_config(opts)
   local clamav_conf = {
@@ -80,7 +101,7 @@ local function check_av_cache(task, rule, fn)
     if data and type(data) == 'string' then
       -- Cached
       if data ~= 'OK' then
-        task:insert_result(rule['symbol'], 1.0, data)
+        yield_result(task, rule, data)
       end
     else
       fn()
@@ -176,9 +197,7 @@ local function clamav_check(task, rule)
         local cached = 'OK'
         if s then
           local vname = string.match(data:sub(1, s - 1), 'stream: (.+)')
-          task:insert_result(rule['symbol'], 1.0, vname)
-          rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'],
-            vname)
+          yield_result(task, rule, vname)
           cached = vname
         end
 
@@ -233,6 +252,17 @@ local function add_antivirus_rule(sym, opts)
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
       opts['type'], opts['symbol'])
     return nil
+  end
+
+  if opts['patterns'] then
+    rule['patterns'] = {}
+    for k, v in pairs(opts['patterns']) do
+      rule['patterns'][k] = rspamd_regexp.create_cached(v)
+    end
+  end
+
+  if opts['whitelist'] then
+    rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])
   end
 
   return function(task)
