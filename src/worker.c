@@ -589,6 +589,8 @@ start_worker (struct rspamd_worker *worker)
 			ctx->ev_base, ctx->resolver->r);
 	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
 			worker->srv->cfg, ctx->ev_base, ctx->resolver->r);
+	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
+			worker->srv->cfg, ctx->ev_base);
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);

@@ -16,6 +16,8 @@
 #include "libserver/re_cache.h"
 #include "ref.h"
 #include "libutil/radix.h"
+#include "monitored.h"
+#include "redis_pool.h"
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -406,6 +408,7 @@ struct rspamd_config {
 
 	struct rspamd_external_libs_ctx *libs_ctx;		/**< context for external libraries						*/
 	struct rspamd_monitored_ctx *monitored_ctx;		/**< context for monitored resources					*/
+	struct rspamd_redis_pool *redis_pool;			/**< redis connectiosn pool								*/
 
 	struct rspamd_re_cache *re_cache;				/**< static regexp cache								*/
 

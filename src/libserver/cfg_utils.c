@@ -166,6 +166,7 @@ rspamd_config_new (void)
 	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init ();
+	cfg->redis_pool = rspamd_redis_pool_init ();
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
