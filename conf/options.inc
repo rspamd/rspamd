@@ -12,6 +12,7 @@ dns {
     timeout = 1s;
     sockets = 16;
     retransmits = 5;
+    enable_dnssec = false;
 }
 tempdir = "/tmp";
 url_tld = "${PLUGINSDIR}/effective_tld_names.dat";
