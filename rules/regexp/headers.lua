@@ -415,7 +415,7 @@ reconf['SUSPICIOUS_OPERA_10W_MSGID'] = {
 }
 -- Summary rule for forged Opera Mail Message-ID header
 reconf['FORGED_MUA_OPERA_MSGID'] = {
-  re = string.format('(%s) & !(%s) & !(%s) & !(%s)', opera1x_mua, opera1x_msgid, reconf['SUSPICIOUS_OPERA_10W_MSGID'], unusable_msgid),
+  re = string.format('(%s) & !(%s) & !(%s) & !(%s)', opera1x_mua, opera1x_msgid, reconf['SUSPICIOUS_OPERA_10W_MSGID']['re'], unusable_msgid),
   score = 4.0,
   description = 'Message pretends to be send from Opera Mail but has forged Message-ID',
   group = 'mua'
