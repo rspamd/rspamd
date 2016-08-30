@@ -65,7 +65,7 @@ struct rspamd_monitored {
 };
 
 #define msg_err_mon(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-		"map", m->tag, \
+		"monitored", m->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_mon(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
