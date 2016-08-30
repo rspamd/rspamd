@@ -501,12 +501,16 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 		else {
 			w = rspamd_session_get_watcher (task->s);
 			if (!rspamd_spf_resolve (task, spf_plugin_callback, w)) {
+				GList *opts = NULL;
+
+				opts = g_list_prepend (opts, "(SPF): spf DNS fail");
 				msg_info_task ("cannot make spf request for [%s]",
 						task->message_id);
 				rspamd_task_insert_result (task,
 						spf_module_ctx->symbol_dnsfail,
 						1,
-						"(SPF): spf DNS fail");
+						opts);
+				g_list_free (opts);
 			}
 			else {
 				rspamd_session_watcher_push (task->s);
