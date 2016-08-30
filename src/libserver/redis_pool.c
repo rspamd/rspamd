@@ -18,11 +18,12 @@
 #include <event.h>
 #include "redis_pool.h"
 #include "cfg_file.h"
-#include "hiredis/hiredis.h"
-#include "hiredis/async.h"
-#include "hiredis/adapters/libevent.h"
+#include "contrib/hiredis/hiredis.h"
+#include "contrib/hiredis/async.h"
+#include "contrib/hiredis/adapters/libevent.h"
 #include "cryptobox.h"
 #include "ref.h"
+#include "logger.h"
 
 struct rspamd_redis_pool_elt;
 

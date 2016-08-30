@@ -17,8 +17,8 @@
 #include "dns.h"
 #include "utlist.h"
 
-#include "hiredis/hiredis.h"
-#include "hiredis/async.h"
+#include "contrib/hiredis/hiredis.h"
+#include "contrib/hiredis/async.h"
 
 #define REDIS_DEFAULT_TIMEOUT 1.0
 

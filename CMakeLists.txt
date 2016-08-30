@@ -476,7 +476,8 @@ ENDMACRO()
 # Initial set
 
 # Prefer local include dirs to system ones
-INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
+INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
+		"${CMAKE_SOURCE_DIR}/src"
 		"${CMAKE_SOURCE_DIR}/src/libutil"
 		"${CMAKE_SOURCE_DIR}/src/libserver"
 		"${CMAKE_SOURCE_DIR}/src/libmime"
