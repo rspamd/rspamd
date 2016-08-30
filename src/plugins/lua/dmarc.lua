@@ -55,13 +55,6 @@ local elts_re = rspamd_regexp.create_cached("\\s*\\\\{0,1};\\s*")
 local dmarc_reporting = false
 local dmarc_actions = {}
 
-local function maybe_force_action(disposition)
-  local force_action = dmarc_actions[disposition]
-  if force_action then
-    task:set_pre_result(force_action, 'Action set by DMARC')
-  end
-end
-
 local function dmarc_report(task, spf_ok, dkim_ok, disposition)
   local ip = task:get_from_ip()
   if not ip:is_valid() then
@@ -75,6 +68,12 @@ local function dmarc_report(task, spf_ok, dkim_ok, disposition)
 end
 
 local function dmarc_callback(task)
+  local function maybe_force_action(disposition)
+    local force_action = dmarc_actions[disposition]
+    if force_action then
+      task:set_pre_result(force_action, 'Action set by DMARC')
+    end
+  end
   local from = task:get_from(2)
   local dmarc_domain
   local ip_addr = task:get_ip()
