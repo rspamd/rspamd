@@ -17,10 +17,8 @@
 #include "dns.h"
 #include "utlist.h"
 
-#ifdef WITH_HIREDIS
-#include "hiredis.h"
-#include "adapters/libevent.h"
-#endif
+#include "hiredis/hiredis.h"
+#include "hiredis/async.h"
 
 #define REDIS_DEFAULT_TIMEOUT 1.0
 
@@ -155,6 +153,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 	struct lua_redis_userdata *ud;
 	struct lua_redis_specific_userdata *cur, *tmp;
 	gboolean is_connected = FALSE;
+	struct redisAsyncContext *ac;
 
 	if (ctx->async) {
 		msg_debug ("desctructing %p", ctx);
@@ -168,7 +167,10 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 			 * still be alive here!
 			 */
 			ctx->ref.refcount = 100500;
-			redisAsyncFree (ud->ctx);
+			ac = ud->ctx;
+			ud->ctx = NULL;
+			rspamd_redis_pool_release_connection (ud->task->cfg->redis_pool,
+					ac, FALSE);
 			ctx->ref.refcount = 0;
 			is_connected = TRUE;
 		}
@@ -384,8 +386,9 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 		ac = ud->ctx;
 		ud->ctx = NULL;
 
-		if (ac != NULL) {
-			redisAsyncFree (ac);
+		if (ac) {
+			rspamd_redis_pool_release_connection (ud->task->cfg->redis_pool,
+					ac, FALSE);
 		}
 	}
 
@@ -413,7 +416,8 @@ lua_redis_timeout (int fd, short what, gpointer u)
 		 * This will call all callbacks pending so the entire context
 		 * will be destructed
 		 */
-		redisAsyncFree (ac);
+		rspamd_redis_pool_release_connection (sp_ud->c->task->cfg->redis_pool,
+				ac, TRUE);
 	}
 	REDIS_RELEASE (ctx);
 }
@@ -463,22 +467,6 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 	*pargs = args;
 	*nargs = top;
 }
-
-static void
-lua_redis_connect_cb (const struct redisAsyncContext *c, int status)
-{
-	/*
-	 * Workaround to prevent double close:
-	 * https://groups.google.com/forum/#!topic/redis-db/mQm46XkIPOY
-	 */
-#if defined(HIREDIS_MAJOR) && HIREDIS_MAJOR == 0 && HIREDIS_MINOR <= 11
-	struct redisAsyncContext *nc = (struct redisAsyncContext *)c;
-	if (status == REDIS_ERR) {
-		nc->c.fd = -1;
-	}
-#endif
-}
-
 
 
 /***
@@ -662,14 +650,15 @@ lua_redis_make_request (lua_State *L)
 	if (ret) {
 		ud->terminated = 0;
 		ud->timeout = timeout;
-		ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
+		ud->ctx = rspamd_redis_pool_connect (task->cfg->redis_pool,
+				dbname, password,
+				rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
 
 		if (ud->ctx == NULL || ud->ctx->err) {
 			if (ud->ctx) {
 				msg_err_task_check ("cannot connect to redis: %s",
 						ud->ctx->errstr);
-				redisAsyncFree (ud->ctx);
 				ud->ctx = NULL;
 			}
 			else {
@@ -681,16 +670,6 @@ lua_redis_make_request (lua_State *L)
 			lua_pushnil (L);
 
 			return 2;
-		}
-
-		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
-		redisLibeventAttach (ud->ctx, ud->task->ev_base);
-
-		if (password) {
-			redisAsyncCommand (ud->ctx, NULL, NULL, "AUTH %s", password);
-		}
-		if (dbname) {
-			redisAsyncCommand (ud->ctx, NULL, NULL, "SELECT %s", dbname);
 		}
 
 		ret = redisAsyncCommandArgv (ud->ctx,
@@ -719,7 +698,8 @@ lua_redis_make_request (lua_State *L)
 		}
 		else {
 			msg_info_task_check ("call to redis failed: %s", ud->ctx->errstr);
-			redisAsyncFree (ud->ctx);
+			rspamd_redis_pool_release_connection (task->cfg->redis_pool,
+					ud->ctx, FALSE);
 			ud->ctx = NULL;
 			REDIS_RELEASE (ctx);
 			ret = FALSE;
@@ -936,7 +916,9 @@ lua_redis_connect (lua_State *L)
 	if (ret && ctx) {
 		ud->terminated = 0;
 		ud->timeout = timeout;
-		ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
+		ud->ctx = rspamd_redis_pool_connect (task->cfg->redis_pool,
+				NULL, NULL,
+				rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
 
 		if (ud->ctx == NULL || ud->ctx->err) {
@@ -948,8 +930,6 @@ lua_redis_connect (lua_State *L)
 			return 1;
 		}
 
-		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
-		redisLibeventAttach (ud->ctx, ud->task->ev_base);
 		pctx = lua_newuserdata (L, sizeof (ctx));
 		*pctx = ctx;
 		rspamd_lua_setclass (L, "rspamd{redis}", -1);
