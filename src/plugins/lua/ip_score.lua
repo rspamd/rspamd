@@ -175,19 +175,19 @@ local ip_score_set = function(task)
 
   if ip_score ~= 0 then
     total_score = total_score + ip_score
-    table.insert(description_t, 'ip: ' .. '(' .. math.floor(ip_score * 10) .. ')')
+    table.insert(description_t, 'ip: ' .. '(' .. string.format('%.2f', ip_score * 10) .. ')')
   end
   if ipnet_score ~= 0 then
     total_score = total_score + ipnet_score
-    table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. math.floor(ipnet_score * 10) .. ')')
+    table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. string.format('%.2f', ipnet_score * 10) .. ')')
   end
   if asn_score ~= 0 then
     total_score = total_score + asn_score
-    table.insert(description_t, 'asn: ' .. asn .. '(' .. math.floor(asn_score * 10) .. ')')
+    table.insert(description_t, 'asn: ' .. asn .. '(' .. string.format('%.2f', asn_score * 10) .. ')')
   end
   if country_score ~= 0 then
     total_score = total_score + country_score
-    table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 10) .. ')')
+    table.insert(description_t, 'country: ' .. country .. '(' .. string.format('%.2f', country_score * 10) .. ')')
   end
 
   if options['max_score'] and (total_score*10) > options['max_score'] then
