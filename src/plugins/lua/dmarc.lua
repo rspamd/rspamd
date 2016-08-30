@@ -29,11 +29,24 @@ local symbols = {
   spf_softfail_symbol = 'R_SPF_SOFTFAIL',
   spf_neutral_symbol = 'R_SPF_NEUTRAL',
   spf_tempfail_symbol = 'R_SPF_DNSFAIL',
+  spf_na_symbol = 'R_SPF_NA',
 
   dkim_allow_symbol = 'R_DKIM_ALLOW',
   dkim_deny_symbol = 'R_DKIM_REJECT',
   dkim_tempfail_symbol = 'R_DKIM_TEMPFAIL',
+  dkim_na_symbol = 'R_DKIM_NA',
 }
+
+local dmarc_symbols = {
+  allow = 'DMARC_POLICY_ALLOW',
+  badpolicy = 'DMARC_BAD_POLICY',
+  dnsfail = 'DMARC_DNSFAIL',
+  na = 'DMARC_NA',
+  reject = 'DMARC_POLICY_REJECT',
+  softfail = 'DMARC_POLICY_SOFTFAIL',
+  quarantine = 'DMARC_POLICY_QUARANTINE',
+}
+
 -- Default port for redis upstreams
 local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
@@ -73,7 +86,8 @@ local function dmarc_callback(task)
   if from and from[1] and from[1]['domain'] and not from[2] then
     dmarc_domain = rspamd_util.get_tld(from[1]['domain'])
   else
-    return
+    task:insert_result(dmarc_symbols['na'], 1.0, 'No From header')
+    return maybe_force_action('na')
   end
 
   local function dmarc_report_cb(task, err, data)
@@ -90,11 +104,11 @@ local function dmarc_callback(task)
 
     local lookup_domain = string.sub(to_resolve, 8)
     if err and err ~= 'requested record is not found' then
-      task:insert_result('DMARC_DNSFAIL', 1.0, lookup_domain .. ' : ' .. err)
+      task:insert_result(dmarc_symbols['dnsfail'], 1.0, lookup_domain .. ' : ' .. err)
       return maybe_force_action('dnsfail')
     elseif err == 'requested record is not found' and
       lookup_domain == dmarc_domain then
-      task:insert_result('DMARC_NA', 1.0, lookup_domain)
+      task:insert_result(dmarc_symbols['na'], 1.0, lookup_domain)
       return maybe_force_action('na')
     end
 
@@ -109,7 +123,7 @@ local function dmarc_callback(task)
         return
       end
 
-      task:insert_result('DMARC_NA', 1.0, lookup_domain)
+      task:insert_result(dmarc_symbols['na'], 1.0, lookup_domain)
       return maybe_force_action('na')
     end
 
@@ -213,14 +227,14 @@ local function dmarc_callback(task)
 
         return
       else
-        task:insert_result('DMARC_NA', 1.0, lookup_domain)
+        task:insert_result(dmarc_symbols['na'], 1.0, lookup_domain)
         return maybe_force_action('na')
       end
     end
 
     local res = 0.5
     if failed_policy then
-      task:insert_result('DMARC_BAD_POLICY', res, lookup_domain .. ' : ' .. failed_policy)
+      task:insert_result(dmarc_symbols['badpolicy'], res, lookup_domain .. ' : ' .. failed_policy)
       return maybe_force_action('badpolicy')
     end
 
@@ -260,24 +274,24 @@ local function dmarc_callback(task)
       local spf_tmpfail = task:get_symbol(symbols['spf_tempfail_symbol'])
       local dkim_tmpfail = task:get_symbol(symbols['dkim_tempfail_symbol'])
       if (spf_tmpfail or dkim_tmpfail) then
-        task:insert_result('DMARC_DNSFAIL', 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error')
+        task:insert_result(dmarc_symbols['dnsfail'], 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error')
         return maybe_force_action('dnsfail')
       end
       if quarantine_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_QUARANTINE', res, lookup_domain)
+          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain)
           disposition = "quarantine"
         end
       elseif strict_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_REJECT', res, lookup_domain)
+          task:insert_result(dmarc_symbols['reject'], res, lookup_domain)
           disposition = "reject"
         end
       else
-        task:insert_result('DMARC_POLICY_SOFTFAIL', res, lookup_domain)
+        task:insert_result(dmarc_symbols['softfail'], res, lookup_domain)
       end
     else
-      task:insert_result('DMARC_POLICY_ALLOW', res, lookup_domain)
+      task:insert_result(dmarc_symbols['allow'], res, lookup_domain)
     end
 
     if rua and redis_params and dmarc_reporting then
@@ -315,6 +329,14 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 
+if opts['symbols'] then
+  for k,_ in pairs(dmarc_symbols) do
+    if opts['symbols'][k] then
+      dmarc_symbols[k] = opts['symbols'][k]
+    end
+  end
+end
+
 if opts['reporting'] == true then
   dmarc_reporting = true
 end
@@ -344,12 +366,16 @@ if spf_opts then
   check_mopt('spf_allow_symbol', spf_opts, 'symbol_allow')
   check_mopt('spf_softfail_symbol', spf_opts, 'symbol_softfail')
   check_mopt('spf_neutral_symbol', spf_opts, 'symbol_neutral')
+  check_mopt('spf_tempfail_symbol', spf_opts, 'symbol_dnsfail')
+  check_mopt('spf_na_symbol', spf_opts, 'symbol_na')
 end
 
 local dkim_opts = rspamd_config:get_all_opt('dkim')
 if dkim_opts then
-  check_mopt('dkim_deny_symbol', 'symbol_reject')
-  check_mopt('dkim_allow_symbol', 'symbol_allow')
+  check_mopt('dkim_deny_symbol', dkim_opts, 'symbol_reject')
+  check_mopt('dkim_allow_symbol', dkim_opts, 'symbol_allow')
+  check_mopt('dkim_tempfail_symbol', dkim_opts, 'symbol_tempfail')
+  check_mopt('dkim_na_symbol', dkim_opts, 'symbol_na')
 end
 
 local id = rspamd_config:register_symbol({
@@ -358,23 +384,33 @@ local id = rspamd_config:register_symbol({
   callback = dmarc_callback
 })
 rspamd_config:register_symbol({
-  name = 'DMARC_POLICY_ALLOW',
+  name = dmarc_symbols['allow'],
   flags = 'nice',
   parent = id,
   type = 'virtual'
 })
 rspamd_config:register_symbol({
-  name = 'DMARC_POLICY_REJECT',
+  name = dmarc_symbols['reject'],
   parent = id,
   type = 'virtual'
 })
 rspamd_config:register_symbol({
-  name = 'DMARC_POLICY_QUARANTINE',
+  name = dmarc_symbols['quarantine'],
   parent = id,
   type = 'virtual'
 })
 rspamd_config:register_symbol({
-  name = 'DMARC_POLICY_SOFTFAIL',
+  name = dmarc_symbols['softfail'],
+  parent = id,
+  type = 'virtual'
+})
+rspamd_config:register_symbol({
+  name = dmarc_symbols['dnsfail'],
+  parent = id,
+  type = 'virtual'
+})
+rspamd_config:register_symbol({
+  name = dmarc_symbols['na'],
   parent = id,
   type = 'virtual'
 })
