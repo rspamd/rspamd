@@ -68,6 +68,7 @@ local function rbl_cb (task)
       for _,rbl in ipairs(rule.rbls) do
         if rbl['returncodes'] == nil and rbl['symbol'] ~= nil then
           task:insert_result(rbl['symbol'], 1)
+          return
         end
         for _,result in pairs(results) do
           local ipstr = result:to_string()
@@ -352,7 +353,7 @@ local function rbl_cb (task)
   for _,p in pairs(params) do
     r:resolve_a({
       task = task,
-      p.to_resolve,
+      name = p.to_resolve,
       callback = p.callback,
       forced = p.forced
     })
