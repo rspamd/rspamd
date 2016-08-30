@@ -1550,15 +1550,17 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 * we just save it for another pass
 		 */
 		for (i = 0; i < (gint)checkpoint->version; i ++) {
-			if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
-				msg_info_task ("<%s> has already scored more than %.2f, so do "
-								"not "
-						"plan any more checks", task->message_id,
-						checkpoint->rs->score);
-				return TRUE;
-			}
-
 			item = g_ptr_array_index (checkpoint->order->d, i);
+
+			if (!(item->type & SYMBOL_TYPE_FINE)) {
+				if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
+					msg_info_task ("<%s> has already scored more than %.2f, so do "
+							"not "
+							"plan more checks", task->message_id,
+							checkpoint->rs->score);
+					continue;
+				}
+			}
 
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
