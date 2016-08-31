@@ -296,10 +296,6 @@ local function rate_test_set(task, func)
       table.insert(args, {settings['user'], make_rate_key ('user', {['user'] = auser}) })
     end
   end
-  local asn
-  if settings['asn'][1] > 0 then
-    asn = task:get_mempool():get_variable('asn')
-  end
 
   local is_bounce = check_bounce(from_user)
 
