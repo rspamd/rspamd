@@ -578,9 +578,11 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 					cb_id);
 		}
 
-		msg_info_config ("added fuzzy rule %s, key: %6xs, "
-				"shingles_key: %6xs, algorithm: %s",
-				rule->symbol, rule->hash_key->str, rule->shingles_key->str,
+		msg_info_config ("added fuzzy rule %s, key: %*xs, "
+				"shingles_key: %*xs, algorithm: %s",
+				rule->symbol,
+				6, rule->hash_key->str,
+				6, rule->shingles_key->str,
 				rule->algorithm_str);
 	}
 
