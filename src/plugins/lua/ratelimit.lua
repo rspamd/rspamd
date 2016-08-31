@@ -38,6 +38,7 @@ local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-da
 -- Do not check ratelimits for these senders
 local whitelisted_rcpts = {'postmaster', 'mailer-daemon'}
 local whitelisted_ip
+local whitelisted_user
 local max_rcpt = 5
 local redis_params
 local ratelimit_symbol
@@ -289,7 +290,15 @@ local function rate_test_set(task, func)
   -- Get user (authuser)
   local auser = task:get_user()
   if auser and settings['user'][1] > 0 then
-    table.insert(args, {settings['user'], make_rate_key (auser, '<auth>', nil)})
+    if whitelisted_user and whitelisted_user:get_key(auser) then
+      rspamd_logger.infox(task, 'skip ratelimit for whitelisted user')
+    else
+      table.insert(args, {settings['user'], make_rate_key ('user', {['user'] = auser}) })
+    end
+  end
+  local asn
+  if settings['asn'][1] > 0 then
+    asn = task:get_mempool():get_variable('asn')
   end
 
   local is_bounce = check_bounce(from_user)
@@ -397,6 +406,10 @@ if opts then
 
   if opts['whitelisted_ip'] then
     whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'], 'Ratelimit whitelist ip map')
+  end
+
+  if opts['whitelisted_user'] then
+    whitelisted_user = rspamd_config:add_kv_map(opts['whitelisted_user'], 'Ratelimit whitelist user map')
   end
 
   if opts['symbol'] then
