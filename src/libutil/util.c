@@ -1271,7 +1271,11 @@ rspamd_file_lock (gint fd, gboolean async)
 		if (async && errno == EAGAIN) {
 			return FALSE;
 		}
-		msg_warn ("lock on file failed: %s", strerror (errno));
+
+		if (errno != ENOTSUP) {
+			msg_warn ("lock on file failed: %s", strerror (errno));
+		}
+
 		return FALSE;
 	}
 
@@ -1294,7 +1298,11 @@ rspamd_file_unlock (gint fd, gboolean async)
 		if (async && errno == EAGAIN) {
 			return FALSE;
 		}
-		msg_warn ("lock on file failed: %s", strerror (errno));
+
+		if (errno != ENOTSUP) {
+			msg_warn ("unlock on file failed: %s", strerror (errno));
+		}
+
 		return FALSE;
 	}
 
@@ -1317,7 +1325,10 @@ rspamd_file_lock (gint fd, gboolean async)
 		if (async && (errno == EAGAIN || errno == EACCES)) {
 			return FALSE;
 		}
-		msg_warn ("lock on file failed: %s", strerror (errno));
+		if (errno != ENOTSUP) {
+			msg_warn ("lock on file failed: %s", strerror (errno));
+		}
+
 		return FALSE;
 	}
 
@@ -1338,7 +1349,10 @@ rspamd_file_unlock (gint fd, gboolean async)
 		if (async && (errno == EAGAIN || errno == EACCES)) {
 			return FALSE;
 		}
-		msg_warn ("lock on file failed: %s", strerror (errno));
+
+		if (errno != ENOTSUP) {
+			msg_warn ("unlock on file failed: %s", strerror (errno));
+		}
 		return FALSE;
 	}
 
