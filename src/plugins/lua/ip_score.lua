@@ -110,8 +110,11 @@ local ip_score_set = function(task)
     end
   end
 
-  local action = task:get_metric_action(options['metric'])
   local ip = task:get_from_ip()
+  if task:get_user() or (ip and ip:is_local()) then
+    return
+  end
+  local action = task:get_metric_action(options['metric'])
   if not ip or not ip:is_valid() then
     return
   end
@@ -274,6 +277,10 @@ local ip_score_check = function(task)
   end
 
   local ip = task:get_from_ip()
+  if task:get_user() or (ip and ip:is_local()) then
+    rspamd_logger.infox(task, "skip IP Score for local networks and authorized users")
+    return
+  end
   if ip:is_valid() then
     -- Check IP whitelist
     if whitelist then
