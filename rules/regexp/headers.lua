@@ -520,7 +520,12 @@ reconf['STOX_REPLY_TYPE'] = {
 -- Fake Verizon headers
 local fhelo_verizon = 'X-Spam-Relays-Untrusted=/^[^\\]]+ helo=[^ ]+verizon\\.net /iH'
 local fhost_verizon = 'X-Spam-Relays-Untrusted=/^[^\\]]+ rdns=[^ ]+verizon\\.net /iH'
-reconf['FM_FAKE_HELO_VERIZON'] = string.format('(%s) & !(%s)', fhelo_verizon, fhost_verizon)
+reconf['FM_FAKE_HELO_VERIZON'] = {
+  re = string.format('(%s) & !(%s)', fhelo_verizon, fhost_verizon),
+  score = 2.0,
+  description = 'Fake helo for verizon provider',
+  group = 'header'
+}
 
 -- Forged yahoo msgid
 local at_yahoo_msgid = 'Message-Id=/\\@yahoo\\.com\\b/iH'

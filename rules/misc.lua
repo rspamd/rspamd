@@ -77,70 +77,87 @@ rspamd_config.LONG_SUBJ = {
 }
 
 -- Different text parts
-rspamd_config.R_PARTS_DIFFER = function(task)
-  local distance = task:get_mempool():get_variable('parts_distance', 'double')
+rspamd_config.R_PARTS_DIFFER = {
+  callback = function(task)
+    local distance = task:get_mempool():get_variable('parts_distance', 'double')
 
-  if distance then
-    local nd = tonumber(distance)
-    -- ND is relation of different words to total words
-    if nd >= 0.5 then
-      local tw = task:get_mempool():get_variable('total_words', 'int')
+    if distance then
+      local nd = tonumber(distance)
+      -- ND is relation of different words to total words
+      if nd >= 0.5 then
+        local tw = task:get_mempool():get_variable('total_words', 'int')
 
-      if tw then
-        local score
-        if tw > 30 then
-          -- We are confident about difference
-          score = (nd - 0.5) * 2.0
-        else
-          -- We are not so confident about difference
-          score = (nd - 0.5)
+        if tw then
+          local score
+          if tw > 30 then
+            -- We are confident about difference
+            score = (nd - 0.5) * 2.0
+          else
+            -- We are not so confident about difference
+            score = (nd - 0.5)
+          end
+          task:insert_result('R_PARTS_DIFFER', score,
+            string.format('%.1f%%', tostring(100.0 * nd)))
         end
-        task:insert_result('R_PARTS_DIFFER', score,
-          string.format('%.1f%%', tostring(100.0 * nd)))
       end
     end
-  end
-
-  return false
-end
+    return false
+  end,
+  score = 1.0,
+  description = 'Text and HTML parts differ',
+  group = 'body'
+}
 
 -- Date issues
-rspamd_config.MISSING_DATE = function(task)
-	if rspamd_config:get_api_version() >= 5 then
-		local date = task:get_header_raw('Date')
-		if date == nil or date == '' then
-			return true
-		end
-	end
+rspamd_config.MISSING_DATE = {
+  callback = function(task)
+    if rspamd_config:get_api_version() >= 5 then
+      local date = task:get_header_raw('Date')
+      if date == nil or date == '' then
+        return true
+      end
+    end
+    return false
+  end,
+  score = 1.0,
+  description = 'Message date is missing',
+  group = 'date'
+}
+rspamd_config.DATE_IN_FUTURE = {
+  callback = function(task)
+    if rspamd_config:get_api_version() >= 5 then
+      local dm = task:get_date{format = 'message'}
+      local dt = task:get_date{format = 'connect'}
+      -- 2 hours
+      if dm > 0 and dm - dt > 7200 then
+        return true
+      end
+    end
+    return false
+  end,
+  score = 4.0,
+  description = 'Message date is in future',
+  group = 'date'
+}
+rspamd_config.DATE_IN_PAST = {
+  callback = function(task)
+    if rspamd_config:get_api_version() >= 5 then
+      local dm = task:get_date{format = 'message', gmt = true}
+      local dt = task:get_date{format = 'connect', gmt = true}
+      -- A day
+      if dm > 0 and dt - dm > 86400 then
+        return true
+      end
+    end
+    return false
+  end,
+  score = 1.0,
+  description = 'Message date is in past',
+  group = 'date'
+}
 
-	return false
-end
-rspamd_config.DATE_IN_FUTURE = function(task)
-	if rspamd_config:get_api_version() >= 5 then
-		local dm = task:get_date{format = 'message'}
-		local dt = task:get_date{format = 'connect'}
-		-- An 2 hour
-		if dm > 0 and dm - dt > 7200 then
-			return true
-		end
-	end
-
-	return false
-end
-rspamd_config.DATE_IN_PAST = function(task)
-	if rspamd_config:get_api_version() >= 5 then
-    local dm = task:get_date{format = 'message', gmt = true}
-    local dt = task:get_date{format = 'connect', gmt = true}
-		-- A day
-		if dm > 0 and dt - dm > 86400 then
-			return true
-		end
-	end
-
-	return false
-end
-
-rspamd_config.R_SUSPICIOUS_URL = function(task)
+rspamd_config.R_SUSPICIOUS_URL = {
+  callback = function(task)
     local urls = task:get_urls()
 
     if urls then
@@ -151,7 +168,12 @@ rspamd_config.R_SUSPICIOUS_URL = function(task)
       end
     end
     return false
-end
+  end,
+  score = 6.0,
+  one_shot = true,
+  description = 'Obfusicated or suspicious URL has been found in a message',
+  group = 'url'
+}
 
 rspamd_config.BROKEN_HEADERS = {
   callback = function(task)

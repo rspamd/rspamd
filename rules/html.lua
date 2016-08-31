@@ -18,7 +18,12 @@ local rspamd_regexp = require "rspamd_regexp"
 local rspamd_logger = require "rspamd_logger"
 
 -- Messages that have only HTML part
-reconf['MIME_HTML_ONLY'] = 'has_only_html_part()'
+reconf['MIME_HTML_ONLY'] = {
+  re = 'has_only_html_part()',
+  score = 0.2,
+  description = 'Messages that have only HTML part',
+  group = 'header'
+}
 
 local function check_html_image(task, min, max)
   local tp = task:get_text_parts()
