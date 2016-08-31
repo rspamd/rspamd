@@ -269,7 +269,7 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern, gsize len,
 	res = g_malloc (dlen + 1);
 	slen = strlen (prefix);
 	memcpy (res, prefix, slen);
-	memcpy (res + slen, p, dlen - slen);
+	rspamd_strlcpy (res + slen, p, dlen - slen + 1);
 
 	*dst_len = dlen;
 
@@ -309,9 +309,8 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 		ret = rspamd_multipattern_escape_tld_acism (pattern, len, dst_len);
 	}
 	else {
-		ret = malloc (len);
-		memcpy (ret, pattern, len);
-		*dst_len = len;
+		ret = malloc (len + 1);
+		*dst_len = rspamd_strlcpy (ret, pattern, len + 1);
 	}
 
 	return ret;
