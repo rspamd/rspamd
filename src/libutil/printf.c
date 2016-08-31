@@ -579,17 +579,18 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					p = "(NULL)";
 				}
 
-				if (slen == -1) {
-					/* NULL terminated string */
-					slen = strlen (p);
-				}
-
-				if (G_UNLIKELY (width != 0)) {
-					slen = MIN (slen, width);
-				}
-
 				if (G_UNLIKELY (b32)) {
 					gchar *b32buf;
+
+					if (G_UNLIKELY (slen == -1)) {
+						if (G_LIKELY (width != 0)) {
+							slen = width;
+						}
+						else {
+							/* NULL terminated string */
+							slen = strlen (p);
+						}
+					}
 
 					b32buf = rspamd_encode_base32 (p, slen);
 
@@ -597,9 +598,22 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 						RSPAMD_PRINTF_APPEND (b32buf, strlen (b32buf));
 						g_free (b32buf);
 					}
+					else {
+						RSPAMD_PRINTF_APPEND ("(NULL)", sizeof ("(NULL)") - 1);
+					}
 				}
 				else if (G_UNLIKELY (hex)) {
 					gchar hexbuf[2];
+
+					if (G_UNLIKELY (slen == -1)) {
+						if (G_LIKELY (width != 0)) {
+							slen = width;
+						}
+						else {
+							/* NULL terminated string */
+							slen = strlen (p);
+						}
+					}
 
 					while (slen) {
 						hexbuf[0] = hex == 2 ? _HEX[(*p >> 4) & 0xf] :
@@ -609,14 +623,23 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 						p++;
 						slen--;
 					}
+
 					fmt++;
 					buf_start = fmt;
 
 				}
 				else {
+					if (slen == -1) {
+						/* NULL terminated string */
+						slen = strlen (p);
+					}
+
+					if (G_UNLIKELY (width != 0)) {
+						slen = MIN (slen, width);
+					}
+
 					RSPAMD_PRINTF_APPEND (p, slen);
 				}
-
 
 				continue;
 
