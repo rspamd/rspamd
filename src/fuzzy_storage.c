@@ -22,7 +22,7 @@
 #include "util.h"
 #include "rspamd.h"
 #include "map.h"
-#include "fuzzy_storage.h"
+#include "fuzzy_wire.h"
 #include "fuzzy_backend.h"
 #include "ottery.h"
 #include "libserver/worker_util.h"
