@@ -414,7 +414,7 @@ local function parse_limit(str)
     limit[2] = tonumber(rate)
   end
 
-  if table.maxn(params) ~= 3 then
+  if #params ~= 3 then
     rspamd_logger.errx(rspamd_config, 'invalid limit definition: ' .. str)
     return
   end
