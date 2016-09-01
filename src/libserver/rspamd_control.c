@@ -342,7 +342,7 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 					strerror (errno));
 		}
 		else if (r >= (gssize)sizeof (elt->reply)) {
-			if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+			if (msg.msg_controllen >= CMSG_LEN (sizeof (int))) {
 				elt->attached_fd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 			}
 		}
@@ -635,7 +635,7 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
  	}
 	else if ((gint)cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
 
-		if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+		if (msg.msg_controllen >= CMSG_LEN (sizeof (int))) {
 			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 		}
 
@@ -774,7 +774,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 			rdata->rep.id = cmd.id;
 			rdata->rep.type = cmd.type;
 			rdata->fd = -1;
-			if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+			if (msg.msg_controllen >= CMSG_LEN (sizeof (int))) {
 				rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 			}
 
@@ -972,7 +972,7 @@ rspamd_srv_request_handler (gint fd, short what, gpointer ud)
 			goto cleanup;
 		}
 
-		if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+		if (msg.msg_controllen >= CMSG_LEN (sizeof (int))) {
 			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 		}
 
