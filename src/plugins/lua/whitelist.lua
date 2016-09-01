@@ -185,9 +185,16 @@ end
 local configure_whitelist_module = function()
   local opts =  rspamd_config:get_all_opt('whitelist')
   if opts then
+    if opts['enabled'] == false then
+      rspamd_logger.info('Module is disabled')
+      return
+    end
     for k,v in pairs(opts) do
       options[k] = v
     end
+  else
+    rspamd_logger.info('Module is unconfigured')
+    return
   end
 
   if options['rules'] then

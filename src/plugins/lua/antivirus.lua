@@ -273,6 +273,10 @@ end
 -- Registration
 local opts = rspamd_config:get_all_opt('antivirus')
 if opts and type(opts) == 'table' then
+  if opts['enabled'] == false then
+    rspamd_logger.info('Module is disabled')
+    return
+  end
   redis_params = rspamd_parse_redis_server('antivirus')
   for k, m in pairs(opts) do
     if type(m) == 'table' and m['type'] then

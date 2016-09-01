@@ -116,6 +116,10 @@ end
 
 -- Configuration
 if opts and opts['host'] then
+  if opts['enabled'] == false then
+    logger.info('Module is disabled')
+    return
+  end
   rspamd_config:register_symbol({
     name = symbol_bulk,
     callback = check_dcc

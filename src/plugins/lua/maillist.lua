@@ -270,7 +270,12 @@ end
 
 
 -- Configuration
-local opts =  rspamd_config:get_all_opt('maillist')if opts then
+local opts =  rspamd_config:get_all_opt('maillist')
+if opts then
+  if opts['enabled'] == false then
+    rspamd_logger.info('Module is disabled')
+    return
+  end
   if opts['symbol'] then
     symbol = opts['symbol']
     rspamd_config:register_symbol({

@@ -72,6 +72,10 @@ end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('forged_recipients')
 if opts then
+  if opts['enabled'] == false then
+    logger.info('Module is disabled')
+    return
+  end
   if opts['symbol_rcpt'] or opts['symbol_sender'] then
     local id = rspamd_config:register_symbol({
       callback = check_forged_headers,

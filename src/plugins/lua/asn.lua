@@ -74,6 +74,10 @@ end
 local configure_asn_module = function()
   local opts =  rspamd_config:get_all_opt('asn')
   if opts then
+    if opts['enabled'] == false then
+      rspamd_logger.info('Module is disabled')
+      return
+    end
     for k,v in pairs(opts) do
       options[k] = v
     end

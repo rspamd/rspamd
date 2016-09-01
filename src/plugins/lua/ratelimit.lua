@@ -442,6 +442,10 @@ end
 
 local opts = rspamd_config:get_all_opt('ratelimit')
 if opts then
+  if opts['enabled'] == false then
+    rspamd_logger.info('Module is disabled')
+    return
+  end
   local rates = opts['limit']
   if rates and type(rates) == 'table' then
     fun.each(parse_limit, rates)
