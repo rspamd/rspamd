@@ -37,7 +37,7 @@ void rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_count_cb cb, void *ud,
 		void *subr_ud);
 void rspamd_fuzzy_backend_version_sqlite (struct rspamd_fuzzy_backend *bk,
-		const gchar *version,
+		const gchar *src,
 		rspamd_fuzzy_version_cb cb, void *ud,
 		void *subr_ud);
 
@@ -56,7 +56,7 @@ struct rspamd_fuzzy_backend_subr {
 			rspamd_fuzzy_count_cb cb, void *ud,
 			void *subr_ud);
 	void (*version) (struct rspamd_fuzzy_backend *bk,
-			const gchar *version,
+			const gchar *src,
 			rspamd_fuzzy_version_cb cb, void *ud,
 			void *subr_ud);
 };
@@ -83,6 +83,122 @@ static GQuark
 rspamd_fuzzy_backend_quark (void)
 {
 	return g_quark_from_static_string ("fuzzy-backend");
+}
+
+void*
+rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
+		const ucl_object_t *obj, GError **err)
+{
+	const ucl_object_t *elt;
+
+	elt = ucl_object_lookup_any (obj, "hashfile", "hash_file", "file",
+			"database", NULL);
+
+	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
+		g_set_error (err, rspamd_fuzzy_backend_quark (),
+				EINVAL, "missing sqlite3 path");
+		return NULL;
+	}
+
+	return rspamd_fuzzy_backend_sqlite_open (ucl_object_tostring (elt),
+			FALSE, err);
+}
+
+void
+rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
+		const struct rspamd_fuzzy_cmd *cmd,
+		rspamd_fuzzy_check_cb cb, void *ud,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+	struct rspamd_fuzzy_reply rep;
+
+	rep = rspamd_fuzzy_backend_sqlite_check (sq, cmd, bk->expire);
+
+	if (cb) {
+		cb (&rep, ud);
+	}
+}
+
+void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
+		GQueue *updates, const gchar *src,
+		rspamd_fuzzy_update_cb cb, void *ud,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+	gboolean success = FALSE;
+	GList *cur;
+	struct fuzzy_peer_cmd *io_cmd;
+	struct rspamd_fuzzy_cmd *cmd;
+	gpointer ptr;
+	guint nupdates = 0;
+
+	if (rspamd_fuzzy_backend_sqlite_prepare_update (sq, src)) {
+		cur = updates->head;
+
+		while (cur) {
+			io_cmd = cur->data;
+
+			if (io_cmd->is_shingle) {
+				cmd = &io_cmd->cmd.shingle.basic;
+				ptr = &io_cmd->cmd.shingle;
+			}
+			else {
+				cmd = &io_cmd->cmd.normal;
+				ptr = &io_cmd->cmd.normal;
+			}
+
+			if (cmd->cmd == FUZZY_WRITE) {
+				rspamd_fuzzy_backend_sqlite_add (sq, ptr);
+			}
+			else {
+				rspamd_fuzzy_backend_sqlite_del (sq, ptr);
+			}
+
+			nupdates ++;
+			cur = g_list_next (cur);
+		}
+
+		if (rspamd_fuzzy_backend_sqlite_finish_update (sq, src,
+				nupdates > 0)) {
+			success = TRUE;
+		}
+	}
+
+	if (cb) {
+		cb (success, ud);
+	}
+}
+
+void
+rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
+		rspamd_fuzzy_count_cb cb, void *ud,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+	guint64 nhashes;
+
+	nhashes = rspamd_fuzzy_backend_sqlite_count (sq);
+
+	if (cb) {
+		cb (nhashes, ud);
+	}
+}
+
+void
+rspamd_fuzzy_backend_version_sqlite (struct rspamd_fuzzy_backend *bk,
+		const gchar *src,
+		rspamd_fuzzy_version_cb cb, void *ud,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+	guint64 rev;
+
+	rev = rspamd_fuzzy_backend_sqlite_version (sq, src);
+
+	if (cb) {
+		cb (rev, ud);
+	}
 }
 
 
@@ -147,8 +263,14 @@ rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
 		void *ud)
 {
 	g_assert (bk != NULL);
+	g_assert (updates != NULL);
 
-	bk->subr->update (bk, updates, src, cb, ud, bk->subr_ud);
+	if (g_queue_get_length (updates) > 0) {
+		bk->subr->update (bk, updates, src, cb, ud, bk->subr_ud);
+	}
+	else if (cb) {
+		cb (TRUE, ud);
+	}
 }
 
 

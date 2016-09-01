@@ -244,9 +244,9 @@ static struct rspamd_fuzzy_stmts {
 };
 
 static GQuark
-rspamd_fuzzy_backend_quark(void)
+rspamd_fuzzy_backend_sqlite_quark (void)
 {
-	return g_quark_from_static_string ("fuzzy-storage-backend");
+	return g_quark_from_static_string ("fuzzy-backend-sqlite");
 }
 
 static gboolean
@@ -261,7 +261,7 @@ rspamd_fuzzy_backend_sqlite_prepare_stmts (struct rspamd_fuzzy_backend_sqlite *b
 		}
 		if (sqlite3_prepare_v2 (bk->db, prepared_stmts[i].sql, -1,
 				&prepared_stmts[i].stmt, NULL) != SQLITE_OK) {
-			g_set_error (err, rspamd_fuzzy_backend_quark (),
+			g_set_error (err, rspamd_fuzzy_backend_sqlite_quark (),
 				-1, "Cannot initialize prepared sql `%s`: %s",
 				prepared_stmts[i].sql, sqlite3_errmsg (bk->db));
 
@@ -408,7 +408,7 @@ rspamd_fuzzy_backend_sqlite_run_sql (const gchar *sql, struct rspamd_fuzzy_backe
 			nanosleep (&ts, NULL) == 0);
 
 	if (ret != SQLITE_OK) {
-		g_set_error (err, rspamd_fuzzy_backend_quark (),
+		g_set_error (err, rspamd_fuzzy_backend_sqlite_quark (),
 				-1, "Cannot execute raw sql `%s`: %s",
 				sql, sqlite3_errmsg (bk->db));
 		return FALSE;
@@ -463,7 +463,7 @@ rspamd_fuzzy_backend_sqlite_open (const gchar *path,
 	struct rspamd_fuzzy_backend_sqlite *backend;
 
 	if (path == NULL) {
-		g_set_error (err, rspamd_fuzzy_backend_quark (),
+		g_set_error (err, rspamd_fuzzy_backend_sqlite_quark (),
 				ENOENT, "Path has not been specified");
 		return NULL;
 	}

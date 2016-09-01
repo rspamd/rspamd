@@ -26,7 +26,7 @@ struct rspamd_fuzzy_backend;
  * Callbacks for fuzzy methods
  */
 typedef void (*rspamd_fuzzy_check_cb) (struct rspamd_fuzzy_reply *rep, void *ud);
-typedef void (*rspamd_fuzzy_update_cb) (void *ud);
+typedef void (*rspamd_fuzzy_update_cb) (gboolean success, void *ud);
 typedef void (*rspamd_fuzzy_version_cb) (guint64 rev, void *ud);
 typedef void (*rspamd_fuzzy_count_cb) (guint64 count, void *ud);
 
