@@ -1,3 +1,28 @@
+1.3.5:
+	* [CritFix] Fix issue with finding of end of lines pointers
+	* [Feature] Add DMARC_NA symbol
+	* [Feature] Add R_DKIM_NA / R_SPF_NA / AUTH_NA symbols
+	* [Feature] Add spamhaus DROP dnsbl
+	* [Feature] Add termination callbacks for workers
+	* [Feature] Add user-agent for rspamc
+	* [Feature] Allow parsing of mailbox messages from the commandline
+	* [Feature] Support excluding selected users from ratelimits
+	* [Feature] Yield DMARC_DNSFAIL on lookup failure
+	* [Fix] Banish table.maxn from Lua parts
+	* [Fix] Do not use headers to calculate messages digests
+	* [Fix] Fix absurdic scores for HFILTER_URL_ONLY
+	* [Fix] Fix actrie patterns
+	* [Fix] Fix format string
+	* [Fix] Fix handling of '\0' in lua_tcp
+	* [Fix] Fix issue with empty messages and dkim
+	* [Fix] Fix min_learns option
+	* [Fix] Fix options for SPF dnsfail symbol
+	* [Fix] Fix processing of symbols when reject limit is reached
+	* [Fix] Settings: fix `authenticated` parameter (#886)
+	* [Fix] Try to avoid race condition when using rrd
+	* [Fix] Use the correct macro to get the size of controller
+	* [Fix] Fix build and tests on OpenBSD
+
 1.3.4:
 	* [Feature] ASN module; support matching ASN/country in multimap
 	* [Feature] Add SPF method in spf return result
