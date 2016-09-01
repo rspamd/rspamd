@@ -173,5 +173,5 @@ if opts then
     end
   end
 else
-  rspamd_logger.info("Module is disabled")
+  rspamd_logger.info("Module is unconfigured")
 end
