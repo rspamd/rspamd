@@ -328,6 +328,11 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 
+if opts['enabled'] == false then
+  rspamd_logger.info('Module is disabled')
+  return
+end
+
 if opts['symbols'] then
   for k,_ in pairs(dmarc_symbols) do
     if opts['symbols'][k] then

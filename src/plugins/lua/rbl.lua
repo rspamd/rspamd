@@ -385,7 +385,10 @@ end
 
 -- Configuration
 local opts = rspamd_config:get_all_opt('rbl')
-if not opts or type(opts) ~= 'table' then
+if not (opts and type(opts) == 'table') then
+  rspamd_logger.info('Module is unconfigured')
+elseif opts['enabled'] == false then
+  rspamd_logger.info('Module is disabled')
   return
 end
 

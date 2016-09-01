@@ -109,23 +109,30 @@ end
 
 local opts = rspamd_config:get_all_opt('replies')
 if opts then
-    redis_params = rspamd_parse_redis_server('replies')
-    if not redis_params then
-      rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
-    else
-      rspamd_config:register_symbol({
-        name = 'REPLIES_SET',
-        type = 'postfilter',
-        callback = replies_set,
-        priority = 10
-      })
-      rspamd_config:register_symbol({
-        name = 'REPLIES_CHECK',
-        type = 'prefilter',
-        callback = replies_check,
-        priority = 10
-      })
-    end
+  if not (opts and type(opts) == 'table') then
+    rspamd_logger.info('Module is unconfigured')
+    return
+  elseif opts['enabled'] == false then
+    rspamd_logger.info('Module is disabled')
+    return
+  end
+  redis_params = rspamd_parse_redis_server('replies')
+  if not redis_params then
+    rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+  else
+    rspamd_config:register_symbol({
+      name = 'REPLIES_SET',
+      type = 'postfilter',
+      callback = replies_set,
+      priority = 10
+    })
+    rspamd_config:register_symbol({
+      name = 'REPLIES_CHECK',
+      type = 'prefilter',
+      callback = replies_check,
+      priority = 10
+    })
+  end
 
   for k,v in pairs(opts) do
     settings[k] = v

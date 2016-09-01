@@ -142,6 +142,10 @@ end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('once_received')
 if opts then
+  if opts['enabled'] == false then
+    rspamd_logger.info('Module is disabled')
+    return
+  end
   if opts['symbol'] then
     local symbol = opts['symbol']
 

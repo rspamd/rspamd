@@ -18,7 +18,14 @@ limitations under the License.
 -- Settings documentation can be found here:
 -- https://rspamd.com/doc/configuration/settings.html
 
+local rspamd_logger = require "rspamd_logger"
 local set_section = rspamd_config:get_all_opt("settings")
+if not (set_section and type(set_section) == 'table') then
+  rspamd_logger.infox('Module is unconfigured')
+elseif set_section['enabled'] == false then
+  rspamd_logger.infox('Module is disabled')
+  return
+end
 
 local settings = {
   [1] = {},
@@ -28,7 +35,6 @@ local settings = {
 local settings_ids = {}
 local settings_initialized = false
 local max_pri = 0
-local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 local ucl = require "ucl"

@@ -125,6 +125,10 @@ end
 -- Configuration part
 local section = rspamd_config:get_all_opt("rspamd_update")
 if section then
+  if section['enabled'] == false then
+    rspamd_logger.info('Module is disabled')
+    return
+  end
   local trusted_key
   each(function(k, elt)
     if k == 'priority' then
@@ -153,4 +157,6 @@ if section then
       end
     end
   end, maps)
+else
+  rspamd_logger.infox('Module is unconfigured')
 end

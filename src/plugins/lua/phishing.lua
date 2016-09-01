@@ -35,6 +35,13 @@ local phishtank_data = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
+if not (opts and type(opts) == 'table') then
+  rspamd_logger.info('Module is unconfigured')
+  return
+elseif opts['enabled'] == false then
+  rspamd_logger.info('Module is disabled')
+  return
+end
 
 local function phishing_cb(task)
   local function check_phishing_map(map, url, symbol)

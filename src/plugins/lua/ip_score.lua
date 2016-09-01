@@ -317,6 +317,10 @@ end
 local configure_ip_score_module = function()
   local opts =  rspamd_config:get_all_opt('ip_score')
   if opts then
+    if opts['enabled'] == false then
+      rspamd_logger.info('Module is disabled')
+      return
+    end
     for k,v in pairs(opts) do
       options[k] = v
     end
