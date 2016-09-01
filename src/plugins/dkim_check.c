@@ -671,127 +671,128 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	struct raw_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
 	guint checked = 0;
-	/* First check if a message has its signature */
+	/* First check if plugin should be enabled */
+	if (task->user != NULL || rspamd_inet_address_is_local (task->from_addr)) {
+		msg_info_task ("skip DKIM checks for local networks and authorized users");
+		return;
+	}
+	/* Check whitelist */
+	if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
+			task->from_addr) != RADIX_NO_VALUE) {
+		msg_info_task ("skip DKIM checks for whitelisted address");
+		return;
+	}
 
+	/* Now check if a message has its signature */
 	hlist = rspamd_message_get_header (task,
 			DKIM_SIGNHEADER,
 			FALSE);
 	if (hlist != NULL) {
-		if (task->user != NULL || rspamd_inet_address_is_local (task->from_addr)) {
-			msg_info_task ("skip DKIM checks for local networks and authorized users");
-			return;
-		}
-		/* Check whitelist */
 		msg_debug_task ("dkim signature found");
-		if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
-				task->from_addr) == RADIX_NO_VALUE) {
-			/* Parse signature */
-			msg_debug_task ("create dkim signature");
 
-			while (hlist != NULL) {
-				rh = (struct raw_header *)hlist->data;
+		while (hlist != NULL) {
+			rh = (struct raw_header *)hlist->data;
 
-				if (rh->decoded == NULL || rh->decoded[0] == '\0') {
-					msg_info_task ("<%s> cannot load empty DKIM context",
-								task->message_id);
-					hlist = g_list_next (hlist);
-					continue;
-				}
+			if (rh->decoded == NULL || rh->decoded[0] == '\0') {
+				msg_info_task ("<%s> cannot load empty DKIM context",
+						task->message_id);
+				hlist = g_list_next (hlist);
+				continue;
+			}
 
-				if (res == NULL) {
-					res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-					res->prev = res;
-					res->w = rspamd_session_get_watcher (task->s);
-					cur = res;
-				}
-				else {
-					cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-				}
+			if (res == NULL) {
+				res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+				res->prev = res;
+				res->w = rspamd_session_get_watcher (task->s);
+				cur = res;
+			}
+			else {
+				cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+			}
 
-				cur->first = res;
-				cur->res = -1;
-				cur->task = task;
-				cur->mult_allow = 1.0;
-				cur->mult_deny = 1.0;
+			cur->first = res;
+			cur->res = -1;
+			cur->task = task;
+			cur->mult_allow = 1.0;
+			cur->mult_deny = 1.0;
 
-				ctx = rspamd_create_dkim_context (rh->decoded,
-						task->task_pool,
-						dkim_module_ctx->time_jitter,
-						&err);
-				if (ctx == NULL) {
-					if (err != NULL) {
-						msg_info_task ("<%s> cannot parse DKIM context: %e",
-								task->message_id, err);
-						g_error_free (err);
-						err = NULL;
-					}
-					else {
-						msg_info_task ("<%s> cannot parse DKIM context: "
-								"unknown error",
-								task->message_id);
-					}
-
-					hlist = g_list_next (hlist);
-					continue;
+			ctx = rspamd_create_dkim_context (rh->decoded,
+					task->task_pool,
+					dkim_module_ctx->time_jitter,
+					&err);
+			if (ctx == NULL) {
+				if (err != NULL) {
+					msg_info_task ("<%s> cannot parse DKIM context: %e",
+							task->message_id, err);
+					g_error_free (err);
+					err = NULL;
 				}
 				else {
-					/* Get key */
-
-					cur->ctx = ctx;
-
-					if (dkim_module_ctx->trusted_only &&
-							(dkim_module_ctx->dkim_domains == NULL ||
-									g_hash_table_lookup (dkim_module_ctx->dkim_domains,
-											rspamd_dkim_get_domain (ctx)) == NULL)) {
-						msg_debug_task ("skip dkim check for %s domain",
-								rspamd_dkim_get_domain (ctx));
-						hlist = g_list_next (hlist);
-
-						continue;
-					}
-
-					key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
-							rspamd_dkim_get_dns_key (ctx),
-							task->tv.tv_sec);
-
-					if (key != NULL) {
-						cur->key = rspamd_dkim_key_ref (key);
-						/* Release key when task is processed */
-						rspamd_mempool_add_destructor (task->task_pool,
-								dkim_module_key_dtor, cur->key);
-					}
-					else {
-						rspamd_get_dkim_key (ctx,
-								task,
-								dkim_module_key_handler,
-								cur);
-					}
-				}
-
-				if (res != cur) {
-					DL_APPEND (res, cur);
-				}
-
-				if (dkim_module_ctx->skip_multi) {
-					if (hlist->next) {
-						msg_info_task ("message has multiple signatures but we"
-								" check only one as 'skip_multi' is set");
-					}
-
-					break;
-				}
-
-				checked ++;
-
-				if (checked > dkim_module_ctx->max_sigs) {
-					msg_info_task ("message has multiple signatures but we"
-							" stopped after %d checked signatures as limit"
-							" is reached", checked);
-					break;
+					msg_info_task ("<%s> cannot parse DKIM context: "
+							"unknown error",
+							task->message_id);
 				}
 
 				hlist = g_list_next (hlist);
+				continue;
 			}
+			else {
+				/* Get key */
+
+				cur->ctx = ctx;
+
+				if (dkim_module_ctx->trusted_only &&
+						(dkim_module_ctx->dkim_domains == NULL ||
+								g_hash_table_lookup (dkim_module_ctx->dkim_domains,
+										rspamd_dkim_get_domain (ctx)) == NULL)) {
+					msg_debug_task ("skip dkim check for %s domain",
+							rspamd_dkim_get_domain (ctx));
+					hlist = g_list_next (hlist);
+
+					continue;
+				}
+
+				key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
+						rspamd_dkim_get_dns_key (ctx),
+						task->tv.tv_sec);
+
+				if (key != NULL) {
+					cur->key = rspamd_dkim_key_ref (key);
+					/* Release key when task is processed */
+					rspamd_mempool_add_destructor (task->task_pool,
+							dkim_module_key_dtor, cur->key);
+				}
+				else {
+					rspamd_get_dkim_key (ctx,
+							task,
+							dkim_module_key_handler,
+							cur);
+				}
+			}
+
+			if (res != cur) {
+				DL_APPEND (res, cur);
+			}
+
+			if (dkim_module_ctx->skip_multi) {
+				if (hlist->next) {
+					msg_info_task ("message has multiple signatures but we"
+							" check only one as 'skip_multi' is set");
+				}
+
+				break;
+			}
+
+			checked ++;
+
+			if (checked > dkim_module_ctx->max_sigs) {
+				msg_info_task ("message has multiple signatures but we"
+						" stopped after %d checked signatures as limit"
+						" is reached", checked);
+				break;
+			}
+
+			hlist = g_list_next (hlist);
 		}
 	}
 	else {
