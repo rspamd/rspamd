@@ -151,7 +151,7 @@ static const struct luaL_reg textpartlib_m[] = {
 @example
 rspamd_config.MISSING_CONTENT_TYPE = function(task)
 	local parts = task:get_parts()
-	if parts and table.maxn(parts) > 1 then
+	if parts and #parts > 1 then
 		-- We have more than one part
 		for _,p in ipairs(parts) do
 			local ct = p:get_header('Content-Type')
