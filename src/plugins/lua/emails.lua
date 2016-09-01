@@ -107,7 +107,7 @@ if opts and type(opts) == 'table' then
   end
 end
 
-if table.maxn(rules) > 0 then
+if #rules > 0 then
   -- add fake symbol to check all maps inside a single callback
   local id = rspamd_config:register_symbol({
     type = 'callback',

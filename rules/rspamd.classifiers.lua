@@ -34,8 +34,7 @@ local function get_specific_statfiles(classifier, task)
 	local st_many = classifier:get_statfile_by_label(many_recipients_label)
 	if st_many then
 		rcpt = task:get_recipients(2)
-		if rcpt and table.maxn(rcpt) > 5 then
-			print(table.maxn(rcpt))
+		if rcpt and #rcpt > 5 then
 			table.foreach(st_many, function(i,v) table.insert(spec_st,v) end)
 		end
 	end
@@ -43,7 +42,7 @@ local function get_specific_statfiles(classifier, task)
 	local st_undisc = classifier:get_statfile_by_label(undisclosed_recipients_label)
 	if st_undisc then
 		rcpt = task:get_recipients(2)
-		if rcpt and table.maxn(rcpt) == 0 then
+		if rcpt and #rcpt == 0 then
 			table.foreach(st_undisc, function(i,v) table.insert(spec_st,v) end)
 		end
 	end
@@ -64,7 +63,7 @@ local function get_specific_statfiles(classifier, task)
 		end
 	end
 	
-	if table.maxn(spec_st) > 1 then
+	if #spec_st > 1 then
 		return spec_st
 	else
 		return nil
@@ -109,7 +108,7 @@ classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
 				end
 			end
 		end
-		if table.maxn(selected) > 1 then
+		if #selected > 1 then
 			return selected
 		end
 	end
@@ -125,7 +124,7 @@ classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
 			end
 		end
 	end
-	if table.maxn(selected) > 1 then
+	if #selected > 1 then
 		return selected
 	end
 	
