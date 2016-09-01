@@ -81,4 +81,24 @@ void rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *bk,
 		const gchar *src,
 		rspamd_fuzzy_version_cb cb, void *ud);
 
+/**
+ * Returns unique id for backend
+ * @param backend
+ * @return
+ */
+const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);
+
+/**
+ * Starts expire process for the backend
+ * @param backend
+ */
+void rspamd_fuzzy_backend_start_expire (struct rspamd_fuzzy_backend *backend,
+		gdouble timeout);
+
+/**
+ * Closes backend
+ * @param backend
+ */
+void rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend);
+
 #endif /* SRC_LIBSERVER_FUZZY_BACKEND_H_ */

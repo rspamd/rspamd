@@ -18,27 +18,35 @@
 #include "fuzzy_backend.h"
 #include "fuzzy_backend_sqlite.h"
 
+#define DEFAULT_EXPIRE 172800L
+
 enum rspamd_fuzzy_backend_type {
 	RSPAMD_FUZZY_BACKEND_SQLITE = 0,
 	// RSPAMD_FUZZY_BACKEND_REDIS
 };
 
-void* rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
+static void* rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
 		const ucl_object_t *obj, GError **err);
-void rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
+static void rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 		const struct rspamd_fuzzy_cmd *cmd,
 		rspamd_fuzzy_check_cb cb, void *ud,
 		void *subr_ud);
-void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
+static void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 		GQueue *updates, const gchar *src,
 		rspamd_fuzzy_update_cb cb, void *ud,
 		void *subr_ud);
-void rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
+static void rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_count_cb cb, void *ud,
 		void *subr_ud);
-void rspamd_fuzzy_backend_version_sqlite (struct rspamd_fuzzy_backend *bk,
+static void rspamd_fuzzy_backend_version_sqlite (struct rspamd_fuzzy_backend *bk,
 		const gchar *src,
 		rspamd_fuzzy_version_cb cb, void *ud,
+		void *subr_ud);
+static const gchar* rspamd_fuzzy_backend_id_sqlite (struct rspamd_fuzzy_backend *bk,
+		void *subr_ud);
+static void rspamd_fuzzy_backend_expire_sqlite (struct rspamd_fuzzy_backend *bk,
+		void *subr_ud);
+static void rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
 		void *subr_ud);
 
 struct rspamd_fuzzy_backend_subr {
@@ -59,6 +67,9 @@ struct rspamd_fuzzy_backend_subr {
 			const gchar *src,
 			rspamd_fuzzy_version_cb cb, void *ud,
 			void *subr_ud);
+	const gchar* (*id) (struct rspamd_fuzzy_backend *bk, void *subr_ud);
+	void (*expire) (struct rspamd_fuzzy_backend *bk, void *subr_ud);
+	void (*close) (struct rspamd_fuzzy_backend *bk, void *subr_ud);
 };
 
 static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
@@ -67,16 +78,21 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.check = rspamd_fuzzy_backend_check_sqlite,
 		.update = rspamd_fuzzy_backend_update_sqlite,
 		.count = rspamd_fuzzy_backend_count_sqlite,
-		.version = rspamd_fuzzy_backend_version_sqlite
+		.version = rspamd_fuzzy_backend_version_sqlite,
+		.id = rspamd_fuzzy_backend_id_sqlite,
+		.expire = rspamd_fuzzy_backend_expire_sqlite,
+		.close = rspamd_fuzzy_backend_close_sqlite,
 	}
 };
 
 struct rspamd_fuzzy_backend {
 	enum rspamd_fuzzy_backend_type type;
 	gdouble expire;
+	gdouble sync;
 	struct event_base *ev_base;
 	const struct rspamd_fuzzy_backend_subr *subr;
 	void *subr_ud;
+	struct event expire_event;
 };
 
 static GQuark
@@ -85,7 +101,7 @@ rspamd_fuzzy_backend_quark (void)
 	return g_quark_from_static_string ("fuzzy-backend");
 }
 
-void*
+static void*
 rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
 		const ucl_object_t *obj, GError **err)
 {
@@ -104,7 +120,7 @@ rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
 			FALSE, err);
 }
 
-void
+static void
 rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 		const struct rspamd_fuzzy_cmd *cmd,
 		rspamd_fuzzy_check_cb cb, void *ud,
@@ -120,7 +136,8 @@ rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 	}
 }
 
-void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
+static void
+rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 		GQueue *updates, const gchar *src,
 		rspamd_fuzzy_update_cb cb, void *ud,
 		void *subr_ud)
@@ -170,7 +187,7 @@ void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 	}
 }
 
-void
+static void
 rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_count_cb cb, void *ud,
 		void *subr_ud)
@@ -185,7 +202,7 @@ rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
 	}
 }
 
-void
+static void
 rspamd_fuzzy_backend_version_sqlite (struct rspamd_fuzzy_backend *bk,
 		const gchar *src,
 		rspamd_fuzzy_version_cb cb, void *ud,
@@ -201,6 +218,32 @@ rspamd_fuzzy_backend_version_sqlite (struct rspamd_fuzzy_backend *bk,
 	}
 }
 
+static const gchar*
+rspamd_fuzzy_backend_id_sqlite (struct rspamd_fuzzy_backend *bk,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+
+	return rspamd_fuzzy_sqlite_backend_id (sq);
+}
+static void
+rspamd_fuzzy_backend_expire_sqlite (struct rspamd_fuzzy_backend *bk,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+
+	rspamd_fuzzy_backend_sqlite_sync (sq, bk->expire, TRUE);
+}
+
+static void
+rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
+		void *subr_ud)
+{
+	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
+
+	rspamd_fuzzy_backend_sqlite_close (sq);
+}
+
 
 struct rspamd_fuzzy_backend *
 rspamd_fuzzy_backend_create (struct event_base *ev_base,
@@ -209,7 +252,7 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 	struct rspamd_fuzzy_backend *bk;
 	enum rspamd_fuzzy_backend_type type = RSPAMD_FUZZY_BACKEND_SQLITE;
 	const ucl_object_t *elt;
-	gdouble expire = 0.0;
+	gdouble expire = DEFAULT_EXPIRE;
 
 	if (config != NULL) {
 		elt = ucl_object_lookup (config, "type");
@@ -292,4 +335,70 @@ rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *bk,
 	g_assert (bk != NULL);
 
 	bk->subr->version (bk, src, cb, ud, bk->subr_ud);
+}
+
+const gchar *
+rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *bk)
+{
+	g_assert (bk != NULL);
+
+	if (bk->subr->id) {
+		return bk->subr->id (bk, bk->subr_ud);
+	}
+
+	return NULL;
+}
+
+static void
+rspamd_fuzzy_backend_expire_cb (gint fd, short what, void *ud)
+{
+	struct rspamd_fuzzy_backend *bk = ud;
+	gdouble jittered;
+	struct timeval tv;
+
+	jittered = rspamd_time_jitter (bk->sync, bk->sync / 2.0);
+	double_to_tv (jittered, &tv);
+	event_del (&bk->expire_event);
+	bk->subr->expire (bk, bk->subr_ud);
+	event_add (&bk->expire_event, &tv);
+}
+
+void
+rspamd_fuzzy_backend_start_expire (struct rspamd_fuzzy_backend *bk,
+		gdouble timeout)
+{
+	gdouble jittered;
+	struct timeval tv;
+
+	g_assert (bk != NULL);
+
+	if (bk->subr->expire) {
+		if (bk->sync > 0.0) {
+			event_del (&bk->expire_event);
+		}
+
+		bk->subr->expire (bk, bk->subr_ud);
+		bk->sync = timeout;
+		jittered = rspamd_time_jitter (timeout, timeout / 2.0);
+		double_to_tv (jittered, &tv);
+		event_set (&bk->expire_event, -1, EV_TIMEOUT,
+				rspamd_fuzzy_backend_expire_cb, bk);
+		event_base_set (bk->ev_base, &bk->expire_event);
+		event_add (&bk->expire_event, &tv);
+	}
+}
+
+void
+rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *bk)
+{
+	g_assert (bk != NULL);
+
+	bk->subr->close (bk, bk->subr_ud);
+
+	if (bk->sync > 0.0) {
+		bk->subr->expire (bk, bk->subr_ud);
+		event_del (&bk->expire_event);
+	}
+
+	g_slice_free1 (sizeof (*bk), bk);
 }
