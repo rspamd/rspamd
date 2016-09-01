@@ -61,7 +61,7 @@ struct rspamd_fuzzy_backend_subr {
 			void *subr_ud);
 };
 
-static struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
+static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 	[RSPAMD_FUZZY_BACKEND_SQLITE] = {
 		.init = rspamd_fuzzy_backend_init_sqlite,
 		.check = rspamd_fuzzy_backend_check_sqlite,
@@ -79,30 +79,95 @@ struct rspamd_fuzzy_backend {
 	void *subr_ud;
 };
 
+static GQuark
+rspamd_fuzzy_backend_quark (void)
+{
+	return g_quark_from_static_string ("fuzzy-backend");
+}
+
+
 struct rspamd_fuzzy_backend *
 rspamd_fuzzy_backend_create (struct event_base *ev_base,
 		const ucl_object_t *config, GError **err)
 {
+	struct rspamd_fuzzy_backend *bk;
+	enum rspamd_fuzzy_backend_type type = RSPAMD_FUZZY_BACKEND_SQLITE;
+	const ucl_object_t *elt;
+	gdouble expire = 0.0;
 
+	if (config != NULL) {
+		elt = ucl_object_lookup (config, "type");
+
+		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+			if (strcmp (ucl_object_tostring (elt), "sqlite") == 0) {
+				type = RSPAMD_FUZZY_BACKEND_SQLITE;
+			}
+			else {
+				g_set_error (err, rspamd_fuzzy_backend_quark (),
+						EINVAL, "invalid backend type: %s",
+						ucl_object_tostring (elt));
+				return NULL;
+			}
+		}
+
+		elt = ucl_object_lookup (config, "expire");
+
+		if (elt != NULL) {
+			expire = ucl_object_todouble (elt);
+		}
+	}
+
+	bk = g_slice_alloc0 (sizeof (*bk));
+	bk->ev_base = ev_base;
+	bk->expire = expire;
+	bk->type = type;
+	bk->subr = &fuzzy_subrs[type];
+
+	if ((bk->subr_ud = bk->subr->init (bk, config, err)) == NULL) {
+		g_slice_free1 (sizeof (*bk), bk);
+	}
+
+	return bk;
 }
 
 
 void
 rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *bk,
 		const struct rspamd_fuzzy_cmd *cmd,
-		rspamd_fuzzy_check_cb cb, void *ud);
+		rspamd_fuzzy_check_cb cb, void *ud)
+{
+	g_assert (bk != NULL);
+
+	bk->subr->check (bk, cmd, cb, ud, bk->subr_ud);
+}
 
 void
 rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
 		GQueue *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
-		void *ud);
+		void *ud)
+{
+	g_assert (bk != NULL);
+
+	bk->subr->update (bk, updates, src, cb, ud, bk->subr_ud);
+}
 
 
 void
 rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *bk,
-		rspamd_fuzzy_count_cb cb, void *ud);
+		rspamd_fuzzy_count_cb cb, void *ud)
+{
+	g_assert (bk != NULL);
+
+	bk->subr->count (bk, cb, ud, bk->subr_ud);
+}
+
 
 void
 rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *bk,
 		const gchar *src,
-		rspamd_fuzzy_version_cb cb, void *ud);
+		rspamd_fuzzy_version_cb cb, void *ud)
+{
+	g_assert (bk != NULL);
+
+	bk->subr->version (bk, src, cb, ud, bk->subr_ud);
+}
