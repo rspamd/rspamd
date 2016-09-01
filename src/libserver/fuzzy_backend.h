@@ -16,6 +16,69 @@
 #ifndef SRC_LIBSERVER_FUZZY_BACKEND_H_
 #define SRC_LIBSERVER_FUZZY_BACKEND_H_
 
+#include "config.h"
+#include <event.h>
 #include "fuzzy_wire.h"
+
+struct rspamd_fuzzy_backend;
+
+/*
+ * Callbacks for fuzzy methods
+ */
+typedef void (*rspamd_fuzzy_check_cb) (struct rspamd_fuzzy_reply *rep, void *ud);
+typedef void (*rspamd_fuzzy_update_cb) (void *ud);
+typedef void (*rspamd_fuzzy_version_cb) (guint64 rev, void *ud);
+typedef void (*rspamd_fuzzy_count_cb) (guint64 count, void *ud);
+
+/**
+ * Open fuzzy backend
+ * @param ev_base
+ * @param config
+ * @param err
+ * @return
+ */
+struct rspamd_fuzzy_backend * rspamd_fuzzy_backend_create (struct event_base *ev_base,
+		const ucl_object_t *config, GError **err);
+
+
+/**
+ * Check a specific hash in storage
+ * @param cmd
+ * @param cb
+ * @param ud
+ */
+void rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *bk,
+		const struct rspamd_fuzzy_cmd *cmd,
+		rspamd_fuzzy_check_cb cb, void *ud);
+
+/**
+ * Process updates for a specific queue
+ * @param bk
+ * @param updates queue of struct fuzzy_peer_cmd
+ * @param src
+ */
+void rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
+		GQueue *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+		void *ud);
+
+/**
+ * Gets number of hashes from the backend
+ * @param bk
+ * @param cb
+ * @param ud
+ */
+void rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *bk,
+		rspamd_fuzzy_count_cb cb, void *ud);
+
+/**
+ * Returns number of revision for a specific source
+ * @param bk
+ * @param src
+ * @param cb
+ * @param ud
+ */
+void rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *bk,
+		const gchar *src,
+		rspamd_fuzzy_version_cb cb, void *ud);
 
 #endif /* SRC_LIBSERVER_FUZZY_BACKEND_H_ */

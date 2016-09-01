@@ -139,7 +139,7 @@ struct rspamd_fuzzy_storage_ctx {
 	gboolean encrypted_only;
 	struct rspamd_keypair_cache *keypair_cache;
 	rspamd_lru_hash_t *errors_ips;
-	struct rspamd_fuzzy_backend *backend;
+	struct rspamd_fuzzy_backend_sqlite *backend;
 	GQueue *updates_pending;
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
@@ -174,14 +174,6 @@ struct fuzzy_session {
 	ref_entry_t ref;
 	struct fuzzy_key_stat *key_stat;
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
-};
-
-struct fuzzy_peer_cmd {
-	gboolean is_shingle;
-	union {
-		struct rspamd_fuzzy_cmd normal;
-		struct rspamd_fuzzy_shingle_cmd shingle;
-	} cmd;
 };
 
 struct fuzzy_peer_request {
@@ -285,7 +277,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_storage_ctx *ctx,
 	const gchar *p;
 	rspamd_fstring_t *reply;
 
-	rev = rspamd_fuzzy_backend_version (ctx->backend, local_db_name);
+	rev = rspamd_fuzzy_backend_sqlite_version (ctx->backend, local_db_name);
 	rev = GUINT32_TO_LE (rev);
 	len = sizeof (guint32) * 2; /* revision + last chunk */
 
@@ -420,7 +412,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 
 	if (ctx->updates_pending &&
 			g_queue_get_length (ctx->updates_pending) > 0 &&
-			rspamd_fuzzy_backend_prepare_update (ctx->backend, source)) {
+			rspamd_fuzzy_backend_sqlite_prepare_update (ctx->backend, source)) {
 		cur = ctx->updates_pending->head;
 
 		while (cur) {
@@ -436,18 +428,18 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 			}
 
 			if (cmd->cmd == FUZZY_WRITE) {
-				rspamd_fuzzy_backend_add (ctx->backend, ptr);
+				rspamd_fuzzy_backend_sqlite_add (ctx->backend, ptr);
 			}
 			else {
-				rspamd_fuzzy_backend_del (ctx->backend, ptr);
+				rspamd_fuzzy_backend_sqlite_del (ctx->backend, ptr);
 			}
 
 			nupdates++;
 			cur = g_list_next (cur);
 		}
 
-		if (rspamd_fuzzy_backend_finish_update (ctx->backend, source, nupdates > 0)) {
-			ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
+		if (rspamd_fuzzy_backend_sqlite_finish_update (ctx->backend, source, nupdates > 0)) {
+			ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_sqlite_count (ctx->backend);
 
 			if (nupdates > 0) {
 				for (i = 0; i < ctx->mirrors->len; i ++) {
@@ -468,7 +460,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 
 			g_queue_clear (ctx->updates_pending);
 			msg_info ("updated fuzzy storage: %ud updates processed, version: %d",
-					nupdates, rspamd_fuzzy_backend_version (ctx->backend, source));
+					nupdates, rspamd_fuzzy_backend_sqlite_version (ctx->backend, source));
 		}
 		else {
 			msg_err ("cannot commit update transaction to fuzzy backend, "
@@ -669,13 +661,13 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 	result.flag = cmd->flag;
 	if (cmd->cmd == FUZZY_CHECK) {
-		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
+		result = rspamd_fuzzy_backend_sqlite_check (session->ctx->backend, cmd,
 				session->ctx->expire);
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
 		result.prob = 1.0;
 		result.value = 0;
-		result.flag = rspamd_fuzzy_backend_count (session->ctx->backend);
+		result.flag = rspamd_fuzzy_backend_sqlite_count (session->ctx->backend);
 	}
 	else {
 		if (rspamd_fuzzy_check_client (session)) {
@@ -973,7 +965,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	if (remain > sizeof (gint32) * 2) {
 		memcpy (&revision, p, sizeof (gint32));
 		revision = GINT32_TO_LE (revision);
-		our_rev = rspamd_fuzzy_backend_version (session->ctx->backend, src);
+		our_rev = rspamd_fuzzy_backend_sqlite_version (session->ctx->backend, src);
 
 		if (revision <= our_rev) {
 			msg_err_fuzzy_update ("remote revision: %d is older than ours: %d, "
@@ -1373,9 +1365,9 @@ sync_callback (gint fd, short what, void *arg)
 	if (ctx->backend) {
 		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		/* Call backend sync */
-		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
-		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
-		new_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+		old_expired = rspamd_fuzzy_backend_sqlite_expired (ctx->backend);
+		rspamd_fuzzy_backend_sqlite_sync (ctx->backend, ctx->expire, TRUE);
+		new_expired = rspamd_fuzzy_backend_sqlite_expired (ctx->backend);
 
 		if (old_expired < new_expired) {
 			ctx->stat.fuzzy_hashes_expired += new_expired - old_expired;
@@ -1407,9 +1399,9 @@ rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 	if (ctx->backend) {
 		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
 		/* Call backend sync */
-		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
-		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
-		new_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+		old_expired = rspamd_fuzzy_backend_sqlite_expired (ctx->backend);
+		rspamd_fuzzy_backend_sqlite_sync (ctx->backend, ctx->expire, TRUE);
+		new_expired = rspamd_fuzzy_backend_sqlite_expired (ctx->backend);
 
 		if (old_expired < new_expired) {
 			ctx->stat.fuzzy_hashes_expired += new_expired - old_expired;
@@ -1447,13 +1439,13 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 
 	if (ctx->backend) {
 		/* Close backend and reopen it one more time */
-		rspamd_fuzzy_backend_close (ctx->backend);
+		rspamd_fuzzy_backend_sqlite_close (ctx->backend);
 	}
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = RSPAMD_CONTROL_RELOAD;
 
-	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile,
+	if ((ctx->backend = rspamd_fuzzy_backend_sqlite_open (ctx->hashfile,
 			TRUE,
 			&err)) == NULL) {
 		msg_err ("cannot open backend after reload: %e", err);
@@ -1652,7 +1644,7 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 		rep.reply.fuzzy_stat.status = 0;
 
 		memcpy (rep.reply.fuzzy_stat.storage_id,
-				rspamd_fuzzy_backend_id (ctx->backend),
+				rspamd_fuzzy_sqlite_backend_id (ctx->backend),
 				sizeof (rep.reply.fuzzy_stat.storage_id));
 
 		obj = rspamd_fuzzy_stat_to_ucl (ctx, TRUE);
@@ -2196,13 +2188,13 @@ start_fuzzy (struct rspamd_worker *worker)
 	/*
 	 * Open DB and perform VACUUM
 	 */
-	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile, TRUE, &err)) == NULL) {
+	if ((ctx->backend = rspamd_fuzzy_backend_sqlite_open (ctx->hashfile, TRUE, &err)) == NULL) {
 		msg_err ("cannot open backend: %e", err);
 		g_error_free (err);
 		exit (EXIT_SUCCESS);
 	}
 
-	ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
+	ctx->stat.fuzzy_hashes = rspamd_fuzzy_backend_sqlite_count (ctx->backend);
 
 	if (ctx->keypair_cache_size > 0) {
 		/* Create keypairs cache */
@@ -2210,7 +2202,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	if (worker->index == 0) {
-		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+		rspamd_fuzzy_backend_sqlite_sync (ctx->backend, ctx->expire, TRUE);
 	}
 
 	if (ctx->mirrors && ctx->mirrors->len != 0) {
@@ -2270,10 +2262,10 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	if (worker->index == 0) {
 		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
-		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+		rspamd_fuzzy_backend_sqlite_sync (ctx->backend, ctx->expire, TRUE);
 	}
 
-	rspamd_fuzzy_backend_close (ctx->backend);
+	rspamd_fuzzy_backend_sqlite_close (ctx->backend);
 	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->peer_fd != -1) {

@@ -20,7 +20,7 @@
 #include "fuzzy_wire.h"
 
 
-struct rspamd_fuzzy_backend;
+struct rspamd_fuzzy_backend_sqlite;
 
 /**
  * Open fuzzy backend
@@ -28,7 +28,7 @@ struct rspamd_fuzzy_backend;
  * @param err error pointer
  * @return backend structure or NULL
  */
-struct rspamd_fuzzy_backend *rspamd_fuzzy_backend_open (const gchar *path,
+struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open (const gchar *path,
 		gboolean vacuum,
 		GError **err);
 
@@ -38,15 +38,15 @@ struct rspamd_fuzzy_backend *rspamd_fuzzy_backend_open (const gchar *path,
  * @param cmd
  * @return reply with probability and weight
  */
-struct rspamd_fuzzy_reply rspamd_fuzzy_backend_check (
-		struct rspamd_fuzzy_backend *backend,
+struct rspamd_fuzzy_reply rspamd_fuzzy_backend_sqlite_check (
+		struct rspamd_fuzzy_backend_sqlite *backend,
 		const struct rspamd_fuzzy_cmd *cmd,
 		gint64 expire);
 
 /**
  * Prepare storage for updates (by starting transaction)
  */
-gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend,
+gboolean rspamd_fuzzy_backend_sqlite_prepare_update (struct rspamd_fuzzy_backend_sqlite *backend,
 		const gchar *source);
 
 /**
@@ -55,7 +55,7 @@ gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backe
  * @param cmd
  * @return
  */
-gboolean rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
+gboolean rspamd_fuzzy_backend_sqlite_add (struct rspamd_fuzzy_backend_sqlite *backend,
 		const struct rspamd_fuzzy_cmd *cmd);
 
 /**
@@ -64,14 +64,14 @@ gboolean rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
  * @param cmd
  * @return
  */
-gboolean rspamd_fuzzy_backend_del (
-		struct rspamd_fuzzy_backend *backend,
+gboolean rspamd_fuzzy_backend_sqlite_del (
+		struct rspamd_fuzzy_backend_sqlite *backend,
 		const struct rspamd_fuzzy_cmd *cmd);
 
 /**
  * Commit updates to storage
  */
-gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
+gboolean rspamd_fuzzy_backend_sqlite_finish_update (struct rspamd_fuzzy_backend_sqlite *backend,
 		const gchar *source, gboolean version_bump);
 
 /**
@@ -79,7 +79,7 @@ gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backen
  * @param backend
  * @return
  */
-gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
+gboolean rspamd_fuzzy_backend_sqlite_sync (struct rspamd_fuzzy_backend_sqlite *backend,
 		gint64 expire,
 		gboolean clean_orphaned);
 
@@ -87,12 +87,12 @@ gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
  * Close storage
  * @param backend
  */
-void rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend);
+void rspamd_fuzzy_backend_sqlite_close (struct rspamd_fuzzy_backend_sqlite *backend);
 
-gsize rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend);
-gint rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend, const gchar *source);
-gsize rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend);
+gsize rspamd_fuzzy_backend_sqlite_count (struct rspamd_fuzzy_backend_sqlite *backend);
+gint rspamd_fuzzy_backend_sqlite_version (struct rspamd_fuzzy_backend_sqlite *backend, const gchar *source);
+gsize rspamd_fuzzy_backend_sqlite_expired (struct rspamd_fuzzy_backend_sqlite *backend);
 
-const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);
+const gchar * rspamd_fuzzy_sqlite_backend_id (struct rspamd_fuzzy_backend_sqlite *backend);
 
 #endif /* FUZZY_BACKEND_H_ */

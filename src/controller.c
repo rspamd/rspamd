@@ -24,7 +24,7 @@
 #include "libserver/worker_util.h"
 #include "cryptobox.h"
 #include "ottery.h"
-#include "fuzzy_storage.h"
+#include "fuzzy_wire.h"
 #include "libutil/rrd.h"
 #include "unix-std.h"
 #include "utlist.h"
