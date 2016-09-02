@@ -101,6 +101,8 @@ void rspamd_fuzzy_backend_start_update (struct rspamd_fuzzy_backend *backend,
 		rspamd_fuzzy_periodic_cb cb,
 		void *ud);
 
+struct event_base* rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend);
+
 /**
  * Closes backend
  * @param backend

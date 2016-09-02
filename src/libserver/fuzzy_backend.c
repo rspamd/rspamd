@@ -436,3 +436,9 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *bk)
 
 	g_slice_free1 (sizeof (*bk), bk);
 }
+
+struct event_base*
+rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend)
+{
+	return backend->ev_base;
+}
