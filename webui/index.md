@@ -7,7 +7,7 @@ title: Rspamd web interface
 
 ## Overview.
 
-This is a simple control interface for rspamd spam filtering system.
+This is a simple control interface for Rspamd spam filtering system.
 It provides basic functions for setting metric actions, scores,
 viewing statistic and learning.
 
@@ -15,36 +15,16 @@ viewing statistic and learning.
 
 ## Rspamd setup.
 
-It is required to configure dynamic settings to store configured values.
-Basically this can be done by providing the following line in options settings:
+Default configuration is expected to work but it's strongly recommended to [change
+the default controller password](/doc/quickstart.html#setting-the-controller-password)
+(whether you plan on using webui or not).
 
-~~~ucl
-options {
- dynamic_conf = "/var/lib/rspamd/rspamd_dynamic";
-}
-~~~
-
-Please note that this path must have write access for rspamd user.
-
-Then controller worker should be configured:
-
-~~~ucl
-worker {
-	type = "controller";
-	bind_socket = "localhost:11334";
-	count = 1;
-	# Password for normal commands
-	password = "q1";
-	# Password for privilleged commands
-	enable_password = "q2";
-	# Path to webiu static files
-	static_dir = "${WWWDIR}";
-}
-~~~
-
-Password option should be changed for sure for your specific configuration. Encrypted password using is encouraged (`rspamadm pw --encrypt`).
+Furthermore, if you intend to expose the webui via a proxy running on the same
+machine (or some other machine which has been added to `secure_ip` setting) then
+it is important that this is configured correctly, see the [FAQ](/doc/faq.html#how-to-use-the-webui-behind-a-proxy-server)
+for details & example configurations.
 
 ## Interface setup.
 
 Interface itself is written in pure HTML5/js and, hence, it requires zero setup.
-Just enter a password for webui access and you are ready.
+Just point your web browser at http://localhost:11334 ; enter a password for webui access and you are ready.

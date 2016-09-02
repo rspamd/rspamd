@@ -225,7 +225,7 @@ Though Rspamd's default config aims to be useful for most purposes you may wish 
 
 There are some different approaches you can take to this:
 
-1. Modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade - and may prompt you to merge changes or install these files with an added extension depending on your platform.
+1. **Not recommended**: Modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade - and may prompt you to merge changes or install these files with an added extension depending on your platform.
 
 2. Create, instead, an `rspamd.conf.local` and/or `rspamd.conf.local.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter the configuration - `rspamd.conf.local` adds or _merges_ config elements (and is useful, for example, for setting custom metrics) while `rspamd.conf.local.override` adds or _replaces_ config elements (and is useful, for example, for configuring workers or RBLs).
 

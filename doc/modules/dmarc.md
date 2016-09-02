@@ -23,6 +23,7 @@ This is enough to enable the module and check/apply DMARC policies.
 Symbols added by the module are as follows:
 
 - `DMARC_BAD_POLICY`: Policy was invalid or multiple policies found in DNS
+- `DMARC_NA`: Domain in From header has no DMARC policy or From header is missing
 - `DMARC_POLICY_ALLOW`: Message was authenticated & allowed by DMARC policy
 - `DMARC_POLICY_REJECT`: Authentication failed- rejection suggested by DMARC policy
 - `DMARC_POLICY_QUARANTINE`: Authentication failed- quarantine suggested by DMARC policy
