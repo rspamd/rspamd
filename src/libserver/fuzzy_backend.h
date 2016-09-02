@@ -13,86 +13,92 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef FUZZY_BACKEND_H_
-#define FUZZY_BACKEND_H_
+#ifndef SRC_LIBSERVER_FUZZY_BACKEND_H_
+#define SRC_LIBSERVER_FUZZY_BACKEND_H_
 
 #include "config.h"
-#include "fuzzy_storage.h"
-
+#include <event.h>
+#include "fuzzy_wire.h"
 
 struct rspamd_fuzzy_backend;
 
+/*
+ * Callbacks for fuzzy methods
+ */
+typedef void (*rspamd_fuzzy_check_cb) (struct rspamd_fuzzy_reply *rep, void *ud);
+typedef void (*rspamd_fuzzy_update_cb) (gboolean success, void *ud);
+typedef void (*rspamd_fuzzy_version_cb) (guint64 rev, void *ud);
+typedef void (*rspamd_fuzzy_count_cb) (guint64 count, void *ud);
+
 /**
  * Open fuzzy backend
- * @param path file to open (legacy file will be converted automatically)
- * @param err error pointer
- * @return backend structure or NULL
+ * @param ev_base
+ * @param config
+ * @param err
+ * @return
  */
-struct rspamd_fuzzy_backend *rspamd_fuzzy_backend_open (const gchar *path,
-		gboolean vacuum,
-		GError **err);
+struct rspamd_fuzzy_backend * rspamd_fuzzy_backend_create (struct event_base *ev_base,
+		const ucl_object_t *config, GError **err);
+
 
 /**
- * Check specified fuzzy in the backend
- * @param backend
+ * Check a specific hash in storage
  * @param cmd
- * @return reply with probability and weight
+ * @param cb
+ * @param ud
  */
-struct rspamd_fuzzy_reply rspamd_fuzzy_backend_check (
-		struct rspamd_fuzzy_backend *backend,
+void rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *bk,
 		const struct rspamd_fuzzy_cmd *cmd,
-		gint64 expire);
+		rspamd_fuzzy_check_cb cb, void *ud);
 
 /**
- * Prepare storage for updates (by starting transaction)
+ * Process updates for a specific queue
+ * @param bk
+ * @param updates queue of struct fuzzy_peer_cmd
+ * @param src
  */
-gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend,
-		const gchar *source);
+void rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
+		GQueue *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+		void *ud);
 
 /**
- * Add digest to the database
+ * Gets number of hashes from the backend
+ * @param bk
+ * @param cb
+ * @param ud
+ */
+void rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *bk,
+		rspamd_fuzzy_count_cb cb, void *ud);
+
+/**
+ * Returns number of revision for a specific source
+ * @param bk
+ * @param src
+ * @param cb
+ * @param ud
+ */
+void rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *bk,
+		const gchar *src,
+		rspamd_fuzzy_version_cb cb, void *ud);
+
+/**
+ * Returns unique id for backend
  * @param backend
- * @param cmd
  * @return
  */
-gboolean rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd);
+const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);
 
 /**
- * Delete digest from the database
+ * Starts expire process for the backend
  * @param backend
- * @param cmd
- * @return
  */
-gboolean rspamd_fuzzy_backend_del (
-		struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd);
+void rspamd_fuzzy_backend_start_expire (struct rspamd_fuzzy_backend *backend,
+		gdouble timeout);
 
 /**
- * Commit updates to storage
- */
-gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend,
-		const gchar *source, gboolean version_bump);
-
-/**
- * Sync storage
- * @param backend
- * @return
- */
-gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
-		gint64 expire,
-		gboolean clean_orphaned);
-
-/**
- * Close storage
+ * Closes backend
  * @param backend
  */
 void rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend);
 
-gsize rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend);
-gint rspamd_fuzzy_backend_version (struct rspamd_fuzzy_backend *backend, const gchar *source);
-gsize rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend);
-
-const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);
-
-#endif /* FUZZY_BACKEND_H_ */
+#endif /* SRC_LIBSERVER_FUZZY_BACKEND_H_ */

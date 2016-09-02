@@ -35,7 +35,7 @@
 #include "libutil/map.h"
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
-#include "fuzzy_storage.h"
+#include "fuzzy_wire.h"
 #include "utlist.h"
 #include "cryptobox.h"
 #include "ottery.h"

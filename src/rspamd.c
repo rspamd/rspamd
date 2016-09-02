@@ -16,7 +16,6 @@
 #include "config.h"
 #include "rspamd.h"
 #include "libutil/map.h"
-#include "fuzzy_storage.h"
 #include "lua/lua_common.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
