@@ -1520,7 +1520,7 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 	rep.type = RSPAMD_CONTROL_RELOAD;
 
 	if ((ctx->backend = rspamd_fuzzy_backend_create (ctx->ev_base,
-			worker->cf->options,
+			worker->cf->options, rspamd_main->cfg,
 			&err)) == NULL) {
 		msg_err ("cannot open backend after reload: %e", err);
 		g_error_free (err);
@@ -2258,7 +2258,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	 * Open DB and perform VACUUM
 	 */
 	if ((ctx->backend = rspamd_fuzzy_backend_create (ctx->ev_base,
-			worker->cf->options, &err)) == NULL) {
+			worker->cf->options, cfg, &err)) == NULL) {
 		msg_err ("cannot open backend: %e", err);
 		g_error_free (err);
 		exit (EXIT_SUCCESS);

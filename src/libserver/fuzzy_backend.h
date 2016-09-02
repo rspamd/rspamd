@@ -21,6 +21,7 @@
 #include "fuzzy_wire.h"
 
 struct rspamd_fuzzy_backend;
+struct rspamd_config;
 
 /*
  * Callbacks for fuzzy methods
@@ -39,7 +40,9 @@ typedef gboolean (*rspamd_fuzzy_periodic_cb) (void *ud);
  * @return
  */
 struct rspamd_fuzzy_backend * rspamd_fuzzy_backend_create (struct event_base *ev_base,
-		const ucl_object_t *config, GError **err);
+		const ucl_object_t *config,
+		struct rspamd_config *cfg,
+		GError **err);
 
 
 /**

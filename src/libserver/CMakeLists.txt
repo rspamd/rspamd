@@ -9,6 +9,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/dynamic_cfg.c
 				${CMAKE_CURRENT_SOURCE_DIR}/events.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend.c
+				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend_redis.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend_sqlite.c
 				${CMAKE_CURRENT_SOURCE_DIR}/html.c
 				${CMAKE_CURRENT_SOURCE_DIR}/monitored.c

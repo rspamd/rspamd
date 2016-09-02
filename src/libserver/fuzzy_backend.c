@@ -17,16 +17,18 @@
 #include "config.h"
 #include "fuzzy_backend.h"
 #include "fuzzy_backend_sqlite.h"
+#include "fuzzy_backend_redis.h"
+#include "cfg_file.h"
 
 #define DEFAULT_EXPIRE 172800L
 
 enum rspamd_fuzzy_backend_type {
 	RSPAMD_FUZZY_BACKEND_SQLITE = 0,
-	// RSPAMD_FUZZY_BACKEND_REDIS
+	RSPAMD_FUZZY_BACKEND_REDIS = 1,
 };
 
 static void* rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
-		const ucl_object_t *obj, GError **err);
+		const ucl_object_t *obj, struct rspamd_config *cfg, GError **err);
 static void rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 		const struct rspamd_fuzzy_cmd *cmd,
 		rspamd_fuzzy_check_cb cb, void *ud,
@@ -51,6 +53,7 @@ static void rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
 
 struct rspamd_fuzzy_backend_subr {
 	void* (*init) (struct rspamd_fuzzy_backend *bk, const ucl_object_t *obj,
+			struct rspamd_config *cfg,
 			GError **err);
 	void (*check) (struct rspamd_fuzzy_backend *bk,
 			const struct rspamd_fuzzy_cmd *cmd,
@@ -105,7 +108,7 @@ rspamd_fuzzy_backend_quark (void)
 
 static void*
 rspamd_fuzzy_backend_init_sqlite (struct rspamd_fuzzy_backend *bk,
-		const ucl_object_t *obj, GError **err)
+		const ucl_object_t *obj, struct rspamd_config *cfg, GError **err)
 {
 	const ucl_object_t *elt;
 
@@ -249,7 +252,9 @@ rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
 
 struct rspamd_fuzzy_backend *
 rspamd_fuzzy_backend_create (struct event_base *ev_base,
-		const ucl_object_t *config, GError **err)
+		const ucl_object_t *config,
+		struct rspamd_config *cfg,
+		GError **err)
 {
 	struct rspamd_fuzzy_backend *bk;
 	enum rspamd_fuzzy_backend_type type = RSPAMD_FUZZY_BACKEND_SQLITE;
@@ -262,6 +267,9 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 			if (strcmp (ucl_object_tostring (elt), "sqlite") == 0) {
 				type = RSPAMD_FUZZY_BACKEND_SQLITE;
+			}
+			else if (strcmp (ucl_object_tostring (elt), "redis") == 0) {
+				type = RSPAMD_FUZZY_BACKEND_REDIS;
 			}
 			else {
 				g_set_error (err, rspamd_fuzzy_backend_quark (),
@@ -284,7 +292,7 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 	bk->type = type;
 	bk->subr = &fuzzy_subrs[type];
 
-	if ((bk->subr_ud = bk->subr->init (bk, config, err)) == NULL) {
+	if ((bk->subr_ud = bk->subr->init (bk, config, cfg, err)) == NULL) {
 		g_slice_free1 (sizeof (*bk), bk);
 	}
 
