@@ -29,6 +29,7 @@ typedef void (*rspamd_fuzzy_check_cb) (struct rspamd_fuzzy_reply *rep, void *ud)
 typedef void (*rspamd_fuzzy_update_cb) (gboolean success, void *ud);
 typedef void (*rspamd_fuzzy_version_cb) (guint64 rev, void *ud);
 typedef void (*rspamd_fuzzy_count_cb) (guint64 count, void *ud);
+typedef gboolean (*rspamd_fuzzy_periodic_cb) (void *ud);
 
 /**
  * Open fuzzy backend
@@ -92,8 +93,10 @@ const gchar * rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend);
  * Starts expire process for the backend
  * @param backend
  */
-void rspamd_fuzzy_backend_start_expire (struct rspamd_fuzzy_backend *backend,
-		gdouble timeout);
+void rspamd_fuzzy_backend_start_update (struct rspamd_fuzzy_backend *backend,
+		gdouble timeout,
+		rspamd_fuzzy_periodic_cb cb,
+		void *ud);
 
 /**
  * Closes backend

@@ -451,7 +451,7 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 {
 	struct rspamd_updates_cbdata *cbdata = ud;
 	struct rspamd_fuzzy_mirror *m;
-	guint nupdates = 0, i;
+	guint i;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	const gchar *source;
 	GList *cur;
@@ -463,7 +463,7 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 	if (success) {
 		rspamd_fuzzy_backend_count (ctx->backend, fuzzy_count_callback, ctx);
 
-		if (nupdates > 0) {
+		if (g_queue_get_length (ctx->updates_pending) > 0) {
 			for (i = 0; i < ctx->mirrors->len; i ++) {
 				m = g_ptr_array_index (ctx->mirrors, i);
 
@@ -1459,6 +1459,20 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 }
 
 static gboolean
+rspamd_fuzzy_storage_periodic_callback (void *ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+
+	if (g_queue_get_length (ctx->updates_pending) > 0) {
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
 rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
 		gint attached_fd,
@@ -1471,7 +1485,9 @@ rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 	rep.reply.fuzzy_sync.status = 0;
 
 	if (ctx->backend && worker->index == 0) {
-		rspamd_fuzzy_backend_start_expire (ctx->backend, ctx->sync_timeout);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
+		rspamd_fuzzy_backend_start_update (ctx->backend, ctx->sync_timeout,
+				rspamd_fuzzy_storage_periodic_callback, ctx);
 	}
 
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
@@ -1515,7 +1531,8 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 	}
 
 	if (ctx->backend && worker->index == 0) {
-		rspamd_fuzzy_backend_start_expire (ctx->backend, ctx->sync_timeout);
+		rspamd_fuzzy_backend_start_update (ctx->backend, ctx->sync_timeout,
+				rspamd_fuzzy_storage_periodic_callback, ctx);
 	}
 
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
@@ -2255,7 +2272,8 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	if (worker->index == 0) {
-		rspamd_fuzzy_backend_start_expire (ctx->backend, ctx->sync_timeout);
+		rspamd_fuzzy_backend_start_update (ctx->backend, ctx->sync_timeout,
+				rspamd_fuzzy_storage_periodic_callback, ctx);
 	}
 
 	if (ctx->mirrors && ctx->mirrors->len != 0) {
