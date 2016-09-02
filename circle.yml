@@ -8,7 +8,7 @@ dependencies:
 test:
   override:
     - mkdir ../build ; mkdir ../install ; cd ../build
-    - cmake ../rspamd -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
+    - cmake ../rspamd -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
     - make install
     - RSPAMADM=../install/bin/rspamadm RSPAMC=../install/bin/rspamc RSPAMD=../install/bin/rspamd sudo -E robot ../rspamd/test/functional/cases
     - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
