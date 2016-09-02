@@ -17,13 +17,9 @@ In the default configuration, there are no cache servers specified, hence, the m
 
 `Ratelimit` module supports the following configuration options:
 
-- `servers` - list of servers where ratelimit data is stored; [global settings](/doc/configuration/redis.html) used if not set
-- `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
-the value of this option is 'postmaster, mailer-daemon'
-- `whitelisted_ip` - a map of ip addresses or networks whitelisted
+- `max_delay` - maximum lifetime for any limit bucket (1 day by default)
 - `max_rcpts` - do not apply ratelimit if it contains more than this value of recipients (5 by default). This
 option allows to avoid too many work for setting buckets if there are a lot of recipients in a message).
-- `max_delay` - maximum lifetime for any limit bucket (1 day by default)
 - `rates` - a table of allowed rates in form:
 
     type = [burst,leak];
@@ -39,7 +35,12 @@ Where `type` is one of:
 `burst` is a capacity of a bucket and `leak` is a rate in messages per second.
 Both these attributes are floating point values.
 
+- `servers` - list of servers where ratelimit data is stored; [global settings](/doc/configuration/redis.html) used if not set
 - `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
+- `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
+the value of this option is 'postmaster, mailer-daemon'
+- `whitelisted_ip` - a map of ip addresses or networks whitelisted
+- `whitelisted_user` - a map of usernames which are excluded from user ratelimits
 
 ## Principles of work
 
