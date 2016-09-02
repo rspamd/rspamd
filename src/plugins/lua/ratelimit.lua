@@ -480,7 +480,7 @@ if opts then
   end
 
   if opts['whitelisted_user'] then
-    whitelisted_user = rspamd_config:add_kv_map(opts['whitelisted_user'], 'Ratelimit whitelist user map')
+    whitelisted_user = rspamd_config:add_map(opts['whitelisted_user'], 'Ratelimit whitelist user map')
   end
 
   if opts['symbol'] then
