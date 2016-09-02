@@ -257,7 +257,7 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 	gdouble expire = DEFAULT_EXPIRE;
 
 	if (config != NULL) {
-		elt = ucl_object_lookup (config, "type");
+		elt = ucl_object_lookup (config, "backend");
 
 		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 			if (strcmp (ucl_object_tostring (elt), "sqlite") == 0) {
