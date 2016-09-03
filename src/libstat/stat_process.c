@@ -22,7 +22,8 @@
 #include "libmime/images.h"
 #include "libserver/html.h"
 #include "lua/lua_common.h"
-#include <utlist.h>
+#include "utlist.h"
+#include <math.h>
 
 #define RSPAMD_CLASSIFY_OP 0
 #define RSPAMD_LEARN_OP 1
@@ -74,6 +75,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	GArray *ar;
 	rspamd_ftok_t elt;
 	guint i;
+	gchar tmpbuf[128];
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 4);
 
@@ -123,6 +125,14 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 				msg_debug_task ("added stat tokens for mime boundary '%s'", elt.begin);
 				g_array_append_val (ar, elt);
 			}
+
+			if (part->content && part->content->len > 1) {
+				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "mime%d:%dlog",
+						(gint)log2 (part->content->len));
+				elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
+				elt.len = strlen (elt.begin);
+				g_array_append_val (ar, elt);
+			}
 		}
 	}
 
@@ -150,6 +160,23 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		rspamd_stat_tokenize_header (task, cur->data, "UA:", ar);
 
 		cur = g_list_next (cur);
+	}
+
+	/* Size meta-token */
+	if (task->msg.len > 1) {
+		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "size%dlog",
+				(gint)log2 (task->msg.len));
+		elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
+		elt.len = strlen (elt.begin);
+		g_array_append_val (ar, elt);
+	}
+	/* Number recipients */
+	if (task->rcpt_envelope && task->rcpt_envelope->len > 0) {
+		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "recipients%d",
+				task->rcpt_envelope->len);
+		elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
+		elt.len = strlen (elt.begin);
+		g_array_append_val (ar, elt);
 	}
 
 	st_ctx->tokenizer->tokenize_func (st_ctx,
