@@ -1,12 +1,10 @@
 #include "platform_config.h"
 
-#define IS_MACH (defined(__MACH__))
-
 #if !defined(HAVE_SLASHMACRO) && !defined(HAVE_DOLLARMACRO)
 	#error Unknown gnu as macro parameter convention! Run ./configure
 #endif
 
-#if (IS_MACH)
+#if defined(__MACH__)
 	.macro FN name
 	#if defined(HAVE_SLASHMACRO)
 		\name:
@@ -66,7 +64,7 @@
 	/* set NX for stack */
 	.section .note.GNU-stack,"",@progbits
 #endif
-#if (IS_MACH)
+#if defined(__MACH__)
 	.macro SECTION_TEXT
 		.section __TEXT,__text,regular
 	.endm
