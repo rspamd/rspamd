@@ -71,6 +71,8 @@ Multiple domains signing example:
 ~~~ucl
 sign_condition =<<EOD
 return function(task)
+  local rspamd_logger = require "rspamd_logger"
+
   local domains = {
     'example.com',
     'example1.com',
@@ -81,6 +83,13 @@ return function(task)
   if from and from[1]['addr'] then
     for _,d in ipairs(domains) do
       if string.match(from[1]['addr'], '@(.+)$') == d then
+
+        local ip = task:get_ip()
+        if not task:get_user() and not (ip and ip:is_local()) then
+          rspamd_logger.infox(task, "skip DKIM signing for unauthorized user from non-local network")
+          return false
+        end
+
         return {
           key = "/usr/local/etc/dkim/" .. d .. ".dkim.key",
           domain = d,
