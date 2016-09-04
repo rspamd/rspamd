@@ -334,6 +334,9 @@ local function phishtank_json_cb(string)
 end
 
 if opts then
+  if opts['enabled'] == false then
+    rspamd_logger.infox(rspamd_config, 'module is disabled')
+  end
   if opts['symbol'] then
     symbol = opts['symbol']
     -- Register symbol's callback

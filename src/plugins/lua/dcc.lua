@@ -117,7 +117,7 @@ end
 -- Configuration
 if opts and opts['host'] then
   if opts['enabled'] == false then
-    logger.info('Module is disabled')
+    logger.infox(rspamd_config, 'module is disabled')
     return
   end
   rspamd_config:register_symbol({

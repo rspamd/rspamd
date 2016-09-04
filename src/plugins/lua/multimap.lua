@@ -775,7 +775,7 @@ end
 local opts =  rspamd_config:get_all_opt('multimap')
 if opts and type(opts) == 'table' then
   if opts['enabled'] == false then
-    rspamd_logger.info('Module is disabled')
+    rspamd_logger.infox(rspamd_config, 'module is disabled')
     return
   end
   redis_params = rspamd_parse_redis_server('multimap')

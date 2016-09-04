@@ -329,7 +329,7 @@ if not opts or type(opts) ~= 'table' then
 end
 
 if opts['enabled'] == false then
-  rspamd_logger.info('Module is disabled')
+  rspamd_logger.infox(rspamd_config, 'module is disabled')
   return
 end
 

@@ -126,7 +126,7 @@ end
 local section = rspamd_config:get_all_opt("rspamd_update")
 if section then
   if section['enabled'] == false then
-    rspamd_logger.info('Module is disabled')
+    rspamd_logger.infox(rspamd_config, 'module is disabled')
     return
   end
   local trusted_key
