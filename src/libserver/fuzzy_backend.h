@@ -102,6 +102,7 @@ void rspamd_fuzzy_backend_start_update (struct rspamd_fuzzy_backend *backend,
 		void *ud);
 
 struct event_base* rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend);
+gdouble rspamd_fuzzy_backend_get_expire (struct rspamd_fuzzy_backend *backend);
 
 /**
  * Closes backend

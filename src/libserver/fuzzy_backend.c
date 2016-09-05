@@ -442,3 +442,9 @@ rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend)
 {
 	return backend->ev_base;
 }
+
+gdouble
+rspamd_fuzzy_backend_get_expire (struct rspamd_fuzzy_backend *backend)
+{
+	return backend->expire;
+}
