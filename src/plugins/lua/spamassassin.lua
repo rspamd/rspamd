@@ -115,10 +115,7 @@ local sa_lists = {
 local func_cache = {}
 local section = rspamd_config:get_all_opt("spamassassin")
 if not (section and type(section) == 'table') then
-  rspamd_logger.info('Module is unconfigured')
-elseif section['enabled'] == false then
-  rspamd_logger.info('Module is disabled')
-  return
+  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
 end
 
 -- Minimum score to treat symbols as meta

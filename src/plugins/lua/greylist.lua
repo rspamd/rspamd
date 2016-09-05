@@ -321,10 +321,6 @@ end
 
 local opts =  rspamd_config:get_all_opt('greylist')
 if opts then
-  if opts['enabled'] == false then
-    rspamd_logger.infox(rspamd_config, 'module is disabled')
-    return
-  end
   if opts['whitelisted_ip'] then
     whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'],
       'Greylist whitelist ip map')

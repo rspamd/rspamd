@@ -130,10 +130,6 @@ end
 
 local opts =  rspamd_config:get_all_opt("trie")
 if opts then
-  if opts['enabled'] == false then
-    rspamd_logger.infox(rspamd_config, 'module is disabled')
-    return
-  end
   for sym, opt in pairs(opts) do
      process_trie_conf(sym, opt)
   end
@@ -173,5 +169,5 @@ if opts then
     end
   end
 else
-  rspamd_logger.info("Module is unconfigured")
+  rspamd_logger.infox(rspamd_config, "Module is unconfigured")
 end

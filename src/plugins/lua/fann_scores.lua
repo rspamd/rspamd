@@ -40,10 +40,7 @@ local max_epoch = 100
 local use_settings = false
 local opts = rspamd_config:get_all_opt("fann_scores")
 if not (opts and type(opts) == 'table') then
-  rspamd_logger.infox('Module is unconfigured')
-  return
-elseif opts['enabled'] == false then
-  rspamd_logger.info('Module is disabled')
+  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
 end
 

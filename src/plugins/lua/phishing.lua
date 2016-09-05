@@ -36,10 +36,7 @@ local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
 if not (opts and type(opts) == 'table') then
-  rspamd_logger.info('Module is unconfigured')
-  return
-elseif opts['enabled'] == false then
-  rspamd_logger.info('Module is disabled')
+  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
 end
 
@@ -334,9 +331,6 @@ local function phishtank_json_cb(string)
 end
 
 if opts then
-  if opts['enabled'] == false then
-    rspamd_logger.infox(rspamd_config, 'module is disabled')
-  end
   if opts['symbol'] then
     symbol = opts['symbol']
     -- Register symbol's callback

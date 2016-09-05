@@ -481,10 +481,6 @@ local symbols_from = {
 
 local opts = rspamd_config:get_all_opt('hfilter')
 if opts then
-  if opts['enabled'] == false then
-    rspamd_logger.infox(rspamd_config, 'module is disabled')
-    return
-  end
   for k,v in pairs(opts) do
     config[k] = v
   end
