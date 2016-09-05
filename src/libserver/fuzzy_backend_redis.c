@@ -193,7 +193,7 @@ rspamd_fuzzy_backend_redis_dtor (struct rspamd_fuzzy_backend_redis *backend)
 		rspamd_upstreams_destroy (backend->read_servers);
 	}
 	if (backend->write_servers) {
-		rspamd_upstreams_destroy (backend->read_servers);
+		rspamd_upstreams_destroy (backend->write_servers);
 	}
 
 	if (backend->id) {
@@ -893,6 +893,7 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 {
 	GString *key, *value;
 	guint cur_shift = *shift;
+	guint i;
 	struct rspamd_fuzzy_cmd *cmd;
 
 	if (io_cmd->is_shingle) {
@@ -933,7 +934,7 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		g_string_free (value, FALSE);
 
 		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
-				3,
+				4,
 				(const gchar **)&session->argv[cur_shift - 4],
 				&session->argv_lens[cur_shift - 4]) != REDIS_OK) {
 
@@ -957,7 +958,7 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		g_string_free (value, FALSE);
 
 		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
-				3,
+				4,
 				(const gchar **)&session->argv[cur_shift - 4],
 				&session->argv_lens[cur_shift - 4]) != REDIS_OK) {
 
@@ -985,6 +986,121 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 				&session->argv_lens[cur_shift - 3]) != REDIS_OK) {
 
 			return FALSE;
+		}
+
+		/* INCR */
+		key = g_string_new (session->backend->redis_object);
+		g_string_append (key, "_count");
+		session->argv[cur_shift] = g_strdup ("INCR");
+		session->argv_lens[cur_shift++] = sizeof ("INCR") - 1;
+		session->argv[cur_shift] = key->str;
+		session->argv_lens[cur_shift++] = key->len;
+		g_string_free (key, FALSE);
+
+		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+				2,
+				(const gchar **)&session->argv[cur_shift - 2],
+				&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
+
+			return FALSE;
+		}
+	}
+	else if (cmd->cmd == FUZZY_DEL) {
+		/* DEL */
+		key = g_string_new (session->backend->redis_object);
+		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
+		session->argv[cur_shift] = g_strdup ("DEL");
+		session->argv_lens[cur_shift++] = sizeof ("DEL") - 1;
+		session->argv[cur_shift] = key->str;
+		session->argv_lens[cur_shift++] = key->len;
+		g_string_free (key, FALSE);
+
+		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+				2,
+				(const gchar **)&session->argv[cur_shift - 2],
+				&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
+
+			return FALSE;
+		}
+
+		/* DECR */
+		key = g_string_new (session->backend->redis_object);
+		g_string_append (key, "_count");
+		session->argv[cur_shift] = g_strdup ("DECR");
+		session->argv_lens[cur_shift++] = sizeof ("DECR") - 1;
+		session->argv[cur_shift] = key->str;
+		session->argv_lens[cur_shift++] = key->len;
+		g_string_free (key, FALSE);
+
+		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+				2,
+				(const gchar **)&session->argv[cur_shift - 2],
+				&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
+
+			return FALSE;
+		}
+	}
+
+	if (io_cmd->is_shingle) {
+
+
+		if (cmd->cmd == FUZZY_WRITE) {
+			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+				guchar *hval;
+				/*
+				 * For each command with shingles we additionally emit 32 commands:
+				 * SETEX <prefix>_<number>_<value> <expire> <digest>
+				 */
+
+				/* SETEX */
+				key = g_string_new (session->backend->redis_object);
+				rspamd_printf_gstring (key, "_%d_%uL", i,
+						io_cmd->cmd.shingle.sgl.hashes[i]);
+				value = g_string_sized_new (32);
+				rspamd_printf_gstring (value, "%d",
+						(gint)rspamd_fuzzy_backend_get_expire (bk));
+				hval = g_malloc (sizeof (io_cmd->cmd.shingle.basic.digest));
+				memcpy (hval, io_cmd->cmd.shingle.basic.digest,
+						sizeof (io_cmd->cmd.shingle.basic.digest));
+				session->argv[cur_shift] = g_strdup ("SETEX");
+				session->argv_lens[cur_shift++] = sizeof ("SETEX") - 1;
+				session->argv[cur_shift] = key->str;
+				session->argv_lens[cur_shift++] = key->len;
+				session->argv[cur_shift] = value->str;
+				session->argv_lens[cur_shift++] = value->len;
+				session->argv[cur_shift] = hval;
+				session->argv_lens[cur_shift++] = sizeof (io_cmd->cmd.shingle.basic.digest);
+				g_string_free (key, FALSE);
+				g_string_free (value, FALSE);
+
+				if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+						4,
+						(const gchar **)&session->argv[cur_shift - 4],
+						&session->argv_lens[cur_shift - 4]) != REDIS_OK) {
+
+					return FALSE;
+				}
+			}
+		}
+		else if (cmd->cmd == FUZZY_DEL) {
+			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+				key = g_string_new (session->backend->redis_object);
+				rspamd_printf_gstring (key, "_%d_%uL", i,
+						io_cmd->cmd.shingle.sgl.hashes[i]);
+				session->argv[cur_shift] = g_strdup ("DEL");
+				session->argv_lens[cur_shift++] = sizeof ("DEL") - 1;
+				session->argv[cur_shift] = key->str;
+				session->argv_lens[cur_shift++] = key->len;
+				g_string_free (key, FALSE);
+
+				if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+						2,
+						(const gchar **)&session->argv[cur_shift - 2],
+						&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
+
+					return FALSE;
+				}
+			}
 		}
 	}
 
@@ -1055,6 +1171,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 	 * HSET <key> F <flag>
 	 * HINCRBY <key> V <weight>
 	 * EXPIRE <key> <expire>
+	 * INCR <prefix||fuzzy_count>
 	 *
 	 * Where <key> is <prefix> || <digest>
 	 *
@@ -1066,10 +1183,11 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 	 *
 	 * For each delete command with shingles we emit also 32 commands:
 	 * DEL <prefix>_<number>_<value>
+	 * DECR <prefix||fuzzy_count>
 	 */
 
-	ncommands = 3; /* For MULTI + EXEC */
-	nargs = 5;
+	ncommands = 3; /* For MULTI + EXEC + INCR <src> */
+	nargs = 4;
 
 	for (cur = updates->head; cur != NULL; cur = g_list_next (cur)) {
 		io_cmd = cur->data;
@@ -1082,8 +1200,8 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		}
 
 		if (cmd->cmd == FUZZY_WRITE) {
-			ncommands += 3;
-			nargs += 11;
+			ncommands += 4;
+			nargs += 13;
 
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;
@@ -1092,8 +1210,8 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 
 		}
 		else if (cmd->cmd == FUZZY_DEL) {
-			ncommands += 1;
-			nargs += 2;
+			ncommands += 2;
+			nargs += 4;
 
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;
