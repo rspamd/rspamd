@@ -20,7 +20,8 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
-local fann_symbol = 'FANN_SCORE'
+local fann_symbol_spam = 'FANN_SPAM'
+local fann_symbol_ham = 'FANN_HAM'
 require "fun" ()
 local ucl = require "ucl"
 
@@ -161,7 +162,11 @@ local function fann_scores_filter(task)
     local symscore = string.format('%.3f', out[1])
     rspamd_logger.infox(task, 'fann score: %s', symscore)
 
-    task:insert_result(fann_symbol, result, symscore, id)
+    if symscore > 0 then
+      task:insert_result(fann_symbol_spam, result, symscore, id)
+    else
+      task:insert_result(fann_symbol_ham, result, -(symscore), id)
+    end
   else
     if load_fann(id) then
       fann_scores_filter(task)
@@ -262,10 +267,15 @@ else
     fann_file = opts['fann_file']
     use_settings = opts['use_settings']
     rspamd_config:set_metric_symbol(fann_symbol, 3.0, 'Experimental FANN adjustment')
-    rspamd_config:register_symbol({
-      name = fann_symbol,
+    local id = rspamd_config:register_symbol({
+      name = fann_symbol_spam,
       type = 'postfilter',
       callback = fann_scores_filter
+    })
+    rspamd_config:register_symbol({
+      name = fann_symbol_ham,
+      type = 'virtual',
+      parent = id
     })
     if opts['train'] then
       rspamd_config:add_on_load(function(cfg)
