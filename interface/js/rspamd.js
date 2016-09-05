@@ -916,7 +916,7 @@
                                 html: '<div class="form-group">' +
                                     '<label class="control-label col-sm-2">' + label + '</label>' +
                                     '<div class="controls slider-controls col-sm-10">' +
-                                    '<input class="slider" type="slider" value="' + item.value + '" id="' + item.action + '">' +
+                                    '<input class="slider" type="slider" value="' + item.value + '">' +
                                     '</div>' +
                                     '</div>'
                             });
@@ -945,9 +945,9 @@
             var url = 'saveactions';
             var values = [];
             // Rspamd order: [spam,probable_spam,greylist]
-            values[0] = parseFloat(document.getElementById('reject').value);
-            values[1] = parseFloat(document.getElementById('add header').value);
-            values[2] = parseFloat(document.getElementById('greylist').value);
+            values[0] = parseFloat(inputs[2].value);
+            values[1] = parseFloat(inputs[1].value);
+            values[2] = parseFloat(inputs[0].value);
             $.ajax({
                 data: JSON.stringify(values),
                 dataType: 'json',
