@@ -22,44 +22,51 @@ local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 
 local function check_forged_headers(task)
+  local auser = task:get_user()
   local smtp_rcpt = task:get_recipients(1)
+  local smtp_from = task:get_from(1)
   local res = false
   local score = 1.0
 
-  if smtp_rcpt then
-    local mime_rcpt = task:get_recipients(2)
-    local count = 0
-    if mime_rcpt then
-      count = #mime_rcpt
-    end
-    if count > 0 and count < #smtp_rcpt then
-      task:insert_result(symbol_rcpt, 1)
-    elseif count > 0 then
-      -- Find pair for each smtp recipient recipient in To or Cc headers
-      for _,sr in ipairs(smtp_rcpt) do
-        if mime_rcpt then
-          for _,mr in ipairs(mime_rcpt) do
-            if mr['addr'] and sr['addr'] and
-              string.lower(mr['addr']) == string.lower(sr['addr']) then
-              res = true
-              break
-            elseif mr['user'] and sr['user'] and
-              string.lower(mr['user']) == string.lower(sr['user']) then
-              -- If we have the same username but for another domain, then
-              -- lower the overall score
-              score = score / 2
-            end
-          end
-        end
-        if not res then
-          task:insert_result(symbol_rcpt, score)
-          break
-        end
+  if not smtp_rcpt then return end
+  if #smtp_rcpt == 0 then return end
+  local mime_rcpt = task:get_recipients(2)
+  if not mime_rcpt then
+    return
+  elseif #mime_rcpt == 0 then
+    task:insert_result(symbol_rcpt, score)
+    return
+  end
+  -- Find pair for each smtp recipient recipient in To or Cc headers
+  for _,sr in ipairs(smtp_rcpt) do
+    res = false
+    for _,mr in ipairs(mime_rcpt) do
+      if mr['addr'] and sr['addr'] and
+        string.lower(mr['addr']) == string.lower(sr['addr']) then
+        res = true
+        break
+      elseif auser and auser == sr['addr'] then
+        -- allow user to BCC themselves
+        res = true
+        break
+      elseif smtp_from and smtp_from[1] and smtp_from[1]['addr'] and
+          smtp_from[1]['addr'] == sr['addr'] then
+        -- allow sender to BCC themselves
+        res = true
+        break
+      elseif mr['user'] and sr['user'] and
+        string.lower(mr['user']) == string.lower(sr['user']) then
+        -- If we have the same username but for another domain, then
+        -- lower the overall score
+        score = score / 2
       end
+    end
+    if not res then
+      task:insert_result(symbol_rcpt, score)
+      break
     end
   end
   -- Check sender
-  local smtp_from = task:get_from(1)
   if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' then
     local mime_from = task:get_from(2)
     if not mime_from or not mime_from[1] or
