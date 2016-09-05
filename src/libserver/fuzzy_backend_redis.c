@@ -29,6 +29,23 @@
 #define REDIS_DEFAULT_OBJECT "fuzzy"
 #define REDIS_DEFAULT_TIMEOUT 2.0
 
+#define msg_err_redis_session(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "fuzzy_redis", session->backend->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_redis_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "fuzzy_redis", session->backend->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_redis_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "fuzzy_redis", session->backend->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_redis_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "fuzzy_redis", session->backend->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 struct rspamd_fuzzy_backend_redis {
 	struct upstream_list *read_servers;
 	struct upstream_list *write_servers;
@@ -273,11 +290,15 @@ rspamd_fuzzy_redis_timeout (gint fd, short what, gpointer priv)
 {
 	struct rspamd_fuzzy_redis_session *session = priv;
 	redisAsyncContext *ac;
+	static char errstr[128];
 
 	if (session->ctx) {
 		ac = session->ctx;
 		session->ctx = NULL;
 		ac->err = REDIS_ERR_IO;
+		/* Should be safe as in hiredis it is char[128] */
+		rspamd_snprintf (errstr, sizeof (errstr), "%s", strerror (ETIMEDOUT));
+		ac->errstr = errstr;
 
 		/* This will cause session closing */
 		rspamd_redis_pool_release_connection (session->backend->pool,
@@ -422,6 +443,10 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 			session->callback.cb_check (&rep, session->cbdata);
 		}
 
+		if (c->errstr) {
+			msg_err_redis_session ("error getting shingles: %s", c->errstr);
+		}
+
 		rspamd_upstream_fail (session->up);
 	}
 
@@ -539,6 +564,10 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 	else {
 		if (session->callback.cb_check) {
 			session->callback.cb_check (&rep, session->cbdata);
+		}
+
+		if (c->errstr) {
+			msg_err_redis_session ("error getting hashes: %s", c->errstr);
 		}
 
 		rspamd_upstream_fail (session->up);
@@ -669,6 +698,11 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 		if (session->callback.cb_count) {
 			session->callback.cb_count (0, session->cbdata);
 		}
+
+		if (c->errstr) {
+			msg_err_redis_session ("error getting count: %s", c->errstr);
+		}
+
 		rspamd_upstream_fail (session->up);
 	}
 
@@ -785,6 +819,11 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 		if (session->callback.cb_version) {
 			session->callback.cb_version (0, session->cbdata);
 		}
+
+		if (c->errstr) {
+			msg_err_redis_session ("error getting version: %s", c->errstr);
+		}
+
 		rspamd_upstream_fail (session->up);
 	}
 
@@ -1135,6 +1174,10 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 	else {
 		if (session->callback.cb_update) {
 			session->callback.cb_update (FALSE, session->cbdata);
+		}
+
+		if (c->errstr) {
+			msg_err_redis_session ("error sending update to redis: %s", c->errstr);
 		}
 
 		rspamd_upstream_fail (session->up);
