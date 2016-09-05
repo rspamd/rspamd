@@ -135,6 +135,7 @@ struct rspamd_fuzzy_storage_ctx {
 	GQueue *updates_pending;
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
+	struct rspamd_worker *worker;
 };
 
 enum fuzzy_cmd_type {
@@ -491,6 +492,16 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 				g_queue_get_length (ctx->updates_pending));
 	}
 
+	if (ctx->worker->wanna_die) {
+		/* Plan exit */
+		struct timeval tv;
+
+		tv.tv_sec = 0;
+		tv.tv_usec = 0;
+
+		event_base_loopexit (ctx->ev_base, &tv);
+	}
+
 	g_slice_free1 (sizeof (*cbdata), cbdata);
 }
 
@@ -508,14 +519,6 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 		cbdata->source = source;
 		rspamd_fuzzy_backend_process_updates (ctx->backend, ctx->updates_pending,
 				source, rspamd_fuzzy_updates_cb, cbdata);
-
-
-	}
-	else if (ctx->updates_pending &&
-			g_queue_get_length (ctx->updates_pending) > 0) {
-		msg_err ("cannot start transaction in fuzzy backend, "
-				"%ud updates are still pending",
-				g_queue_get_length (ctx->updates_pending));
 	}
 }
 
@@ -2252,7 +2255,16 @@ start_fuzzy (struct rspamd_worker *worker)
 			"fuzzy",
 			NULL);
 	ctx->peer_fd = -1;
+	ctx->worker = worker;
 	double_to_tv (ctx->master_timeout, &ctx->master_io_tv);
+
+	ctx->resolver = dns_resolver_init (worker->srv->logger,
+			ctx->ev_base,
+			worker->srv->cfg);
+	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
+			ctx->ev_base, ctx->resolver->r);
+	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
+			worker->srv->cfg, ctx->ev_base);
 
 	/*
 	 * Open DB and perform VACUUM
@@ -2330,6 +2342,11 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
+
+	if (worker->index == 0 && g_queue_get_length (ctx->updates_pending) > 0) {
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name);
+		event_base_loop (ctx->ev_base, 0);
+	}
 
 	rspamd_fuzzy_backend_close (ctx->backend);
 	rspamd_log_close (worker->srv->logger);
