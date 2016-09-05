@@ -21,10 +21,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local set_section = rspamd_config:get_all_opt("settings")
 if not (set_section and type(set_section) == 'table') then
-  rspamd_logger.infox('Module is unconfigured')
-elseif set_section['enabled'] == false then
-  rspamd_logger.infox('Module is disabled')
-  return
+  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
 end
 
 local settings = {

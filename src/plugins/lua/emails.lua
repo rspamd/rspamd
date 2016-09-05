@@ -81,10 +81,6 @@ end
 
 local opts =  rspamd_config:get_all_opt('emails', 'rule')
 if opts and type(opts) == 'table' then
-  if opts['enabled'] == false then
-    logger.infox(rspamd_config, 'module is disabled')
-    return
-  end
   local r = opts['rule']
 
   if r then
