@@ -412,6 +412,8 @@ lua_redis_timeout (int fd, short what, gpointer u)
 		ac = sp_ud->c->ctx;
 		/* Set to NULL to avoid double free in dtor */
 		sp_ud->c->ctx = NULL;
+		ac->err = REDIS_ERR_IO;
+		errno = ETIMEDOUT;
 		/*
 		 * This will call all callbacks pending so the entire context
 		 * will be destructed
