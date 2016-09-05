@@ -584,7 +584,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		g_thread_init (NULL);
 # endif
 #endif
-		msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
+		msg_info_main ("starting %s process %P (%d)", cf->worker->name,
+				getpid (), index);
 		/* Close parent part of socketpair */
 		close (wrk->control_pipe[0]);
 		close (wrk->srv_pipe[0]);
