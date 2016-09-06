@@ -159,10 +159,10 @@ local function fann_scores_filter(task)
     local symscore = string.format('%.3f', out[1])
     rspamd_logger.infox(task, 'fann score: %s', symscore)
 
-    if symscore > 0 then
+    if result > 0 then
       task:insert_result(fann_symbol_spam, result, symscore, id)
     else
-      task:insert_result(fann_symbol_ham, result, -(symscore), id)
+      task:insert_result(fann_symbol_ham, -(result), symscore, id)
     end
   else
     if load_fann(id) then
