@@ -263,11 +263,22 @@ else
   else
     fann_file = opts['fann_file']
     use_settings = opts['use_settings']
-    rspamd_config:set_metric_symbol(fann_symbol, 3.0, 'Experimental FANN adjustment')
+    rspamd_config:set_metric_symbol({
+      name = fann_symbol_spam,
+      score = 3.0,
+      description = 'Neural network SPAM',
+      group = 'fann'
+    })
     local id = rspamd_config:register_symbol({
       name = fann_symbol_spam,
       type = 'postfilter',
       callback = fann_scores_filter
+    })
+    rspamd_config:set_metric_symbol({
+      name = fann_symbol_ham,
+      score = -2.0,
+      description = 'Neural network HAM',
+      group = 'fann'
     })
     rspamd_config:register_symbol({
       name = fann_symbol_ham,
