@@ -138,5 +138,5 @@ element = element * tanh(e * new_score)
 
 ~~~
 new_score = ((1 + (old_score * -1)) * ip_score_ham_multiplier)
-element = element * x_ip_score
+element = element * new_score
 ~~~
