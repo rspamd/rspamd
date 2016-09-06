@@ -26,11 +26,14 @@ option allows to avoid too many work for setting buckets if there are a lot of r
 
 Where `type` is one of:
 
+- `asn` (from 1.4.0 - requires [asn module](/asn.html))
+- `bounce_to`
+- `bounce_to_ip`
+- `ip` (from 1.4.0)
 - `to`
 - `to_ip`
 - `to_ip_from`
-- `bounce_to`
-- `bounce_to_ip`
+- `user`
 
 `burst` is a capacity of a bucket and `leak` is a rate in messages per second.
 Both these attributes are floating point values.
@@ -79,22 +82,61 @@ will accept not more than a message per second.
 
 By default, ratelimit module has the following settings which disable all limits:
 
-~~~lua
--- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
-local settings = {
-  -- Limit for all mail per recipient (rate 2 per minute)
-  to = {0, 0.033333333},
-  -- Limit for all mail per one source ip (rate 1.5 per minute)
-  to_ip = {0, 0.025},
-  -- Limit for all mail per one source ip and from address (rate 1 per minute)
-  to_ip_from = {0, 0.01666666667},
+~~~nginx
+ratelimit {
+  # Default settings for limits, 1st member is burst, second is rate
+  rates {
+    # Limit for all mail per recipient
+    to = [0, 0.033333333];
+    # Limit for all mail per one source ip
+    to_ip = [0, 0.025];
+    # Limit for all mail per one source ip and from address (rate 1 per minute)
+    to_ip_from = [0, 0.01666666667];
 
-  -- Limit for all bounce mail (rate 2 per hour)
-  bounce_to = {0, 0.000555556},
-  -- Limit for bounce mail per one source ip (rate 1 per hour)
-  bounce_to_ip = {0, 0.000277778},
+    # Limit for all bounce mail (rate 2 per hour)
+    bounce_to = [0, 0.000555556];
+    # Limit for bounce mail per one source ip
+    bounce_to_ip = [0, 0.000277778];
 
-  -- Limit for all mail per user (authuser) (rate 1 per minute)
-  user = {0, 0.01666666667}
+    # Limit for all mail per user (authuser) (rate 1 per minute)
+    user = [0, 0.01666666667];
+  }
 }
+~~~
+
+### Adaptive ratelimits
+
+From 1.4.0 Rspamd supports adaptive ratelimits- these allow for granting trusted senders increased ratelimits while reducing limits for hosts with bad or unknown reputation. This functionality requires the [ASN](/asn.html) and [IP Score](/ip_score.html) modules to be enabled.
+
+To enable adaptive ratelimits, set the following:
+
+~~~nginx
+use_ip_score = true; # default false
+~~~
+
+Other settings which are of interest are:
+
+~~~nginx
+ip_score_ham_multiplier = 1.1; # default as shown
+ip_score_spam_divisor = 1.1; # default as shown
+~~~
+
+These affect the extent to which limits will be increased or decreased respectively.
+
+Ratelimits are recalculated as follows:
+
+1) Generate a score for the particular ratelimit/sender combination between -1 and 1. If the ratelimit is of `asn` type this is calculated based on ASN reputation; If the ratelimit is of types `ip/to_ip/to_ip_from/bounce_to_ip` this is calculated based on IP reputation or, if available data is unsufficient- based on one of IPNet/ASN/country reputation (in this order), where one of these has sufficient data. If reputation is unknown the assigned score is 1.
+
+2.1) If score is positive (reputation is bad), recalculate both size of bucket and leak rate as follows:
+
+~~~
+new_score = old_score / ip_score_spam_divisor
+element = element * tanh(e * new_score)
+~~~
+
+2.2) If score is negative (reputation is good), recalculate both size of bucket and leak rate as follows:
+
+~~~
+new_score = ((1 + (old_score * -1)) * ip_score_ham_multiplier)
+element = element * x_ip_score
 ~~~
