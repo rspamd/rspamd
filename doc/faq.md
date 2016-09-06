@@ -526,7 +526,7 @@ EOD
 
 As you can see, you can use both embedded log variables and Lua code to customize log output. More information is available in the [logger documentation](https://rspamd.com/doc/configuration/logging.html)
 
-### Which back end should I use for statistics
+### Which backend should I use for statistics
 
 Currently, I recommend using `redis` for the statistics back end. You can convert existing statistics in sqlite by using `rspamadm statconvert` routine:
 
@@ -589,6 +589,10 @@ The overall execution order in Rspamd is the following:
 ### What is the meaning of the `URIBL_BLOCKED` symbol
 
 This symbol means that you have exceeded the amount of DNS queries allowed for non-commercial usage by SURBL services. If you use some a public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or set one up, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying a [commercial subscription](http://www.surbl.org/df) or you won't be able to use the service. The `URIBL_BLOCKED` symbol has a weight of 0 and is used just to inform you about this problem.
+
+### What is faster: custom Lua rules or regular expressions
+
+Switching from C to Lua might be expensive. Hence, you should use regular expressions for simple checks where possible. If Rspamd is compiled with [Hyperscan](https://01.org/hyperscan) the cost of adding another regular expression is usually very cheap. In this case, you should avoid constructions that are not supported by Hyperscan: backtracking, lookbehind and some [others](http://01org.github.io/hyperscan/dev-reference/compilation.html#unsupported-constructs). On the other hand, Lua provides some unique functions that are not available by using of regular expressions. In this case, you should use Lua.
 
 ## WebUI questions
 
