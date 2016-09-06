@@ -103,7 +103,7 @@ local function resize_element(x_score, x_total, element)
     x_ip_score = x_score / ip_score_spam_divisor
     element = element * rspamd_util.tanh(2.718281 * x_ip_score)
   elseif x_score < 0 then
-    x_ip_score = (1 + ((x_score / x_total) * -1)) * ip_score_ham_multiplier
+    x_ip_score = ((1 + (x_score * -1)) * ip_score_ham_multiplier)
     element = element * x_ip_score
   end
   return element
@@ -518,7 +518,7 @@ if opts then
         symbol = ratelimit_symbol
       end
       local id = rspamd_config:register_symbol({
-        name = ratelimit_symbol,
+        name = symbol,
         callback = rate_test,
       })
       if use_ip_score then
