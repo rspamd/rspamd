@@ -2236,7 +2236,6 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 				rspamd_fuzzy_peer_io, ctx);
 		event_base_set (ctx->ev_base, &ctx->peer_ev);
 		event_add (&ctx->peer_ev, NULL);
-		ctx->updates_pending = g_queue_new ();
 	}
 }
 
@@ -2284,6 +2283,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	if (worker->index == 0) {
+		ctx->updates_pending = g_queue_new ();
 		rspamd_fuzzy_backend_start_update (ctx->backend, ctx->sync_timeout,
 				rspamd_fuzzy_storage_periodic_callback, ctx);
 	}
