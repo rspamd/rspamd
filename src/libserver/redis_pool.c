@@ -332,7 +332,7 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 
 	conn = g_hash_table_lookup (pool->elts_by_ctx, ctx);
 	if (conn != NULL) {
-		REF_RELEASE (conn);
+		g_assert (conn->active);
 
 		if (is_fatal || ctx->err == REDIS_ERR_IO || ctx->err == REDIS_ERR_EOF) {
 			/* We need to terminate connection forcefully */
@@ -347,6 +347,8 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 			rspamd_redis_pool_schedule_timeout (conn);
 			msg_debug_rpool ("mark connection inactive");
 		}
+
+		REF_RELEASE (conn);
 	}
 	else {
 		g_assert_not_reached ();
