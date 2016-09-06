@@ -279,6 +279,10 @@ rspamd_lua_init ()
 				lua_tostring (L, -1));
 	}
 
+	/* Add plugins global */
+	lua_newtable (L);
+	lua_setglobal (L, "rspamd_plugins");
+
 	return L;
 }
 
