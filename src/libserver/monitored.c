@@ -254,8 +254,10 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					rspamd_monitored_propagate_success (m, lat);
 				}
 				else {
-					msg_info_mon ("DNS reply returned %s while %s is expected",
+					msg_info_mon ("DNS reply returned '%s' for %s while '%s' "
+							"was expected",
 							rdns_strerror (reply->code),
+							m->url,
 							rdns_strerror (conf->expected_code));
 					rspamd_monitored_propagate_error (m, "invalid return");
 				}
