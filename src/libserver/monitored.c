@@ -307,7 +307,7 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 
 	if (!rdns_make_request_full (ctx->resolver, rspamd_monitored_dns_cb,
 			conf, ctx->cfg->dns_timeout, ctx->cfg->dns_retransmits,
-			1, conf->rt, conf->request->str)) {
+			1, conf->request->str, conf->rt)) {
 		msg_info_mon ("cannot make request to resolve %s", conf->request->str);
 
 		m->cur_errors ++;
