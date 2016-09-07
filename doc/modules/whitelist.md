@@ -11,7 +11,7 @@ properties:
 
 - `DKIM`: a message has a valid DKIM signature for this domain
 - `SPF`: a message matches SPF record for the domain
-- `DMARC`: a message also satisfies domain's DMARC policy (usually implies SPF and DMARC)
+- `DMARC`: a message satisfies domain's DMARC policy (implies SPF or DKIM)
 
 ## Whitelist setup
 

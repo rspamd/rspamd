@@ -350,6 +350,12 @@ rule "local" {
 
 This looks complicated but it allows smoother updates and simplifies automatic management. If you are unsure about your configuration, then take a look at the output of the `rspamadm configdump` command, which displays the target configuration with many options available, and the `rspamadm confighelp` command which shows help for many Rspamd options.
 
+### What are rspamd.conf.local and rspamd.conf.override
+
+While `override.d` and `local.d` replace entries inside block elements, `rspamd.conf.local` and `rspamd.conf.override` operate on whole blocks (`{}`).
+
+What distinguishes these files is the way in which they alter the configuration - `rspamd.conf.local` adds or merges config elements (and is useful, for example, for setting custom metrics) while `rspamd.conf.override` adds or replaces config elements (and is useful for redefining settings completely).
+
 ### What are maps
 Maps are files that contain lists of keys or key-value pairs that could be dynamically reloaded by Rspamd when changed. The important difference to configuration elements is that map reloading is done 'live' without and expensive restart procedure. Another important thing about maps is that Rspamd can monitor both file and HTTP maps for changes (modification time for files and HTTP `If-Modified-Since` header for HTTP maps). So far, Rspamd supports `HTTP` and `file` maps.
 
@@ -879,13 +885,15 @@ spamd {
 }
 ```
 
+Another possibility is to apply settings based merely on the sender being authenticated or having an IP address in a particular range, refer to the [documentation](https://rspamd.com/doc/configuration/settings.html) for detail.
+
 ### How can I restore the old SPF behaviour
 
-Previously, Rmilter could reject mail which fail SPF verification for certain domains. However, there is no SPF support in Rmilter so far. Nevertheless, this behaviour could be reproduced using Rspamd.
+Previously, Rmilter could reject mail which fail SPF verification for certain domains. However, this was removed. Nevertheless, this behaviour could be reproduced using Rspamd.
 
 One can create rules in rspamd to force rejection on whatever symbols (+ other conditions) they want (DMARC module, among others has built-in support for such; [multimap](https://rspamd.com/doc/modules/multimap.html) being the most generally useful)
 
-For example, add to `/etc/rspamd/lua/rspamd.local.lua`:
+For example, add to `/etc/rspamd/rspamd.local.lua`:
 ~~~lua
 local myfunc = function(task)
   if task:has_symbol('R_SPF_REJECT') then
@@ -896,4 +904,4 @@ local id = rspamd_config:register_symbol('MY_REJECT', 1.0, myfunc)
 rspamd_config:register_dependency(id, 'R_SPF_REJECT')
 ~~~
 
-It is also possible to use rspamd to test SPF without message data but I believe rmilter does not support that.
+It is also possible to use rspamd to test SPF without message data but Rmilter does not currently support that.
