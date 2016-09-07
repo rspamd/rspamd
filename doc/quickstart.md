@@ -227,7 +227,7 @@ There are some different approaches you can take to this:
 
 1. **Not recommended**: Modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade - and may prompt you to merge changes or install these files with an added extension depending on your platform.
 
-2. Create, instead, an `rspamd.conf.local` and/or `rspamd.conf.local.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter the configuration - `rspamd.conf.local` adds or _merges_ config elements (and is useful, for example, for setting custom metrics) while `rspamd.conf.local.override` adds or _replaces_ config elements (and is useful, for example, for configuring workers or RBLs).
+2. Create, instead, an `rspamd.conf.local` and/or `rspamd.conf.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter the configuration - `rspamd.conf.local` adds or _merges_ config elements (and is useful, for example, for setting custom metrics) while `rspamd.conf.override` adds or _replaces_ config elements (and is useful for redefining configuration completely)
 
 3. For each individual configuration file shipped with Rspamd, there are two special includes (available from **Rspamd version 1.2 onwards**):
 
@@ -236,7 +236,7 @@ There are some different approaches you can take to this:
 .include(try=true,priority=10) "$CONFDIR/override.d/config.conf"
 ~~~
 
-Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the configuration.
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in the configuration. Unlike `rspamd.conf.local` and `rspamd.conf.override`, `local.d` and `override.d` operate inside a given block of configuration (`{}`).
 
 For example, let's change some default symbols shipped with Rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
 

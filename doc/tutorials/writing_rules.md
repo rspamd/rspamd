@@ -14,7 +14,7 @@ Rules are the essential part of a spam filtering system and Rspamd ships with so
 
 Since Rspamd ships with its own rules it is a good idea to store your custom rules and configuration in separate files to avoid clashing with the default rules which might change from version to version. There are some possibilities to achieve this:
 
-- Local rules in Lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd`, or `/usr/local/etc/rspamd` for some systems)
+- Local rules in Lua should be stored in the file named `${CONFDIR}/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd`, or `/usr/local/etc/rspamd` for some systems)
 - Local configuration that **adds** options to Rspamd should be placed in `${CONFDIR}/rspamd.conf.local`
 - Local configuration that **overrides** the default settings should be placed in `${CONFDIR}/rspamd.conf.override`
 
