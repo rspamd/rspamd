@@ -1676,7 +1676,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					saved_priority = item->priority;
 				}
 				else {
-					if (item->priority < saved_priority &&
+					if (item->priority > saved_priority &&
 							rspamd_session_events_pending (task->s) > start_events_pending) {
 						/*
 						 * Delay further checks as we have higher
