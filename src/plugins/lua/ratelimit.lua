@@ -183,7 +183,11 @@ local function check_limits(task, args)
             end
           else
             if bucket > threshold then
-              task:set_pre_result('soft reject', 'Ratelimit exceeded')
+              rspamd_logger.infox(task,
+                'ratelimit "%s" exceeded: %s elements with %s limit',
+                rtype, bucket, threshold)
+              task:set_pre_result('soft reject',
+                string.format('Ratelimit "%s" exceeded', rtype))
             end
           end
         end
