@@ -104,6 +104,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_HAS_HAM_TOKENS (1 << 21)
 #define RSPAMD_TASK_FLAG_EMPTY (1 << 22)
 #define RSPAMD_TASK_FLAG_LOCAL_CLIENT (1 << 23)
+#define RSPAMD_TASK_FLAG_COMPRESSED (1 << 24)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))

@@ -24,6 +24,7 @@
 #include "stat_api.h"
 #include "unix-std.h"
 #include "utlist.h"
+#include "contrib/zstd/zstd.h"
 #include <math.h>
 
 /*
@@ -474,8 +475,75 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 	/* Plain data */
 	debug_task ("got input of length %z", task->msg.len);
-	task->msg.begin = start;
-	task->msg.len = len;
+
+	/* Check compression */
+	tok = rspamd_task_get_request_header (task, "compression");
+
+	if (tok) {
+		/* Need to uncompress */
+		rspamd_ftok_t t;
+
+		t.begin = "zstd";
+		t.len = 4;
+
+		if (rspamd_ftok_casecmp (tok, &t) == 0) {
+			ZSTD_DStream *zstream;
+			ZSTD_inBuffer zin;
+			ZSTD_outBuffer zout;
+			guchar *out;
+			gsize outlen, r;
+
+			zin.pos = 0;
+			zin.src = start;
+			zin.size = len;
+
+			if ((outlen = ZSTD_getDecompressedSize (start, len)) == 0) {
+				outlen = ZSTD_DStreamOutSize ();
+			}
+
+			out = g_malloc (outlen);
+			zstream = ZSTD_createDStream ();
+			g_assert (zstream != NULL);
+			g_assert (!ZSTD_isError (ZSTD_initDStream (zstream)));
+			zout.dst = out;
+			zout.pos = 0;
+			zout.size = outlen;
+
+			while (zin.pos < zin.size) {
+				r = ZSTD_decompressStream (zstream, &zout, &zin);
+
+				if (ZSTD_isError (r)) {
+					g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+							"Decompression error");
+					ZSTD_freeDStream (zstream);
+
+					return FALSE;
+				}
+
+				if (zout.pos == zout.size) {
+					/* We need to extend output buffer */
+					zout.size = zout.size * 1.5 + 1.0;
+					zout.dst = g_realloc (zout.dst, zout.size);
+				}
+			}
+
+			ZSTD_freeDStream (zstream);
+			rspamd_mempool_add_destructor (task->task_pool, g_free, zout.dst);
+			task->msg.begin = zout.dst;
+			task->msg.len = zout.pos;
+			task->flags = RSPAMD_TASK_FLAG_COMPRESSED;
+
+		}
+		else {
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Invalid compression method");
+			return FALSE;
+		}
+	}
+	else {
+		task->msg.begin = start;
+		task->msg.len = len;
+	}
 
 	if (task->msg.len == 0) {
 		task->flags |= RSPAMD_TASK_FLAG_EMPTY;
