@@ -1488,6 +1488,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	gint i;
 	gdouble total_microseconds = 0;
 	gboolean all_done;
+	gint saved_priority;
 	const gdouble max_microseconds = 3e5;
 	guint start_events_pending;
 	gdouble pr = rspamd_random_double_fast ();
@@ -1512,19 +1513,38 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 	switch (checkpoint->pass) {
 	case RSPAMD_CACHE_PASS_INIT:
+	case RSPAMD_CACHE_PASS_PREFILTERS:
 		/* Check for prefilters */
+		saved_priority = G_MININT;
+
 		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
 			item = g_ptr_array_index (cache->prefilters, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2)) {
+			if (!isset (checkpoint->processed_bits, item->id * 2) &&
+					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+				/* Check priorities */
+				if (saved_priority == G_MININT) {
+					saved_priority = item->priority;
+				}
+				else {
+					if (item->priority < saved_priority &&
+							rspamd_session_events_pending (task->s) > start_events_pending) {
+						/*
+						 * Delay further checks as we have higher
+						 * priority filters to be processed
+						 */
+						checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS;
+						return TRUE;
+					}
+				}
 				rspamd_symbols_cache_check_symbol (task, cache, item,
 						checkpoint, &total_microseconds, pr);
 			}
 		}
+
 		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_PREFILTERS;
 		break;
 
-	case RSPAMD_CACHE_PASS_PREFILTERS:
 	case RSPAMD_CACHE_PASS_WAIT_PREFILTERS:
 		all_done = TRUE;
 
@@ -1643,11 +1663,29 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		break;
 
 	case RSPAMD_CACHE_PASS_POSTFILTERS:
-		/* Check for prefilters */
+		/* Check for postfilters */
+		saved_priority = G_MININT;
+
 		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
 			item = g_ptr_array_index (cache->postfilters, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2)) {
+			if (!isset (checkpoint->processed_bits, item->id * 2) &&
+					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+				/* Check priorities */
+				if (saved_priority == G_MININT) {
+					saved_priority = item->priority;
+				}
+				else {
+					if (item->priority < saved_priority &&
+							rspamd_session_events_pending (task->s) > start_events_pending) {
+						/*
+						 * Delay further checks as we have higher
+						 * priority filters to be processed
+						 */
+						checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
+						return TRUE;
+					}
+				}
 				rspamd_symbols_cache_check_symbol (task, cache, item,
 						checkpoint, &total_microseconds, pr);
 			}
