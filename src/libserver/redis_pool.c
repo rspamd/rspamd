@@ -334,7 +334,7 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 	if (conn != NULL) {
 		g_assert (conn->active);
 
-		if (is_fatal || ctx->err == REDIS_ERR_IO || ctx->err == REDIS_ERR_EOF) {
+		if (is_fatal || ctx->err != REDIS_OK) {
 			/* We need to terminate connection forcefully */
 			msg_debug_rpool ("closed connection forcefully");
 			REF_RELEASE (conn);

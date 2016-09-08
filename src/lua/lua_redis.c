@@ -661,6 +661,8 @@ lua_redis_make_request (lua_State *L)
 			if (ud->ctx) {
 				msg_err_task_check ("cannot connect to redis: %s",
 						ud->ctx->errstr);
+				rspamd_redis_pool_release_connection (task->cfg->redis_pool,
+						ud->ctx, TRUE);
 				ud->ctx = NULL;
 			}
 			else {
@@ -701,7 +703,7 @@ lua_redis_make_request (lua_State *L)
 		else {
 			msg_info_task_check ("call to redis failed: %s", ud->ctx->errstr);
 			rspamd_redis_pool_release_connection (task->cfg->redis_pool,
-					ud->ctx, FALSE);
+					ud->ctx, TRUE);
 			ud->ctx = NULL;
 			REDIS_RELEASE (ctx);
 			ret = FALSE;
