@@ -77,6 +77,7 @@ gboolean rspamd_client_command (
 	FILE *in,
 	rspamd_client_callback cb,
 	gpointer ud,
+	gboolean compressed,
 	GError **err);
 
 /**

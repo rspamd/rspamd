@@ -18,6 +18,7 @@
 #include "libutil/http.h"
 #include "libutil/http_private.h"
 #include "unix-std.h"
+#include "contrib/zstd/zstd.h"
 
 #ifdef HAVE_FETCH_H
 #include <fetch.h>
@@ -197,9 +198,9 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 
 gboolean
 rspamd_client_command (struct rspamd_client_connection *conn,
-	const gchar *command, GQueue *attrs,
-	FILE *in, rspamd_client_callback cb,
-	gpointer ud, GError **err)
+		const gchar *command, GQueue *attrs,
+		FILE *in, rspamd_client_callback cb,
+		gpointer ud, gboolean compressed, GError **err)
 {
 	struct rspamd_client_request *req;
 	struct rspamd_http_client_header *nh;
@@ -246,7 +247,25 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			return FALSE;
 		}
 
-		body = rspamd_fstring_new_init (input->str, input->len);
+		if (!compressed) {
+			body = rspamd_fstring_new_init (input->str, input->len);
+		}
+		else {
+			body = rspamd_fstring_sized_new (ZSTD_compressBound (input->len));
+			body->len = ZSTD_compress (body->str, body->allocated, input->str,
+					input->len, 1);
+
+			if (ZSTD_isError (body->len)) {
+				g_set_error (err, RCLIENT_ERROR, ferror (
+						in), "compression error");
+				g_slice_free1 (sizeof (struct rspamd_client_request), req);
+				g_string_free (input, TRUE);
+				rspamd_fstring_free (body);
+
+				return FALSE;
+			}
+		}
+
 		rspamd_http_message_set_body_from_fstring_steal (req->msg, body);
 		req->input = input;
 	}
@@ -263,13 +282,24 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		cur = g_list_next (cur);
 	}
 
+	if (compressed) {
+		rspamd_http_message_add_header (req->msg, "Compression", "zstd");
+	}
+
 	req->msg->url = rspamd_fstring_append (req->msg->url, "/", 1);
 	req->msg->url = rspamd_fstring_append (req->msg->url, command, strlen (command));
 
 	conn->req = req;
 
-	rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-		"text/plain", req, conn->fd, &conn->timeout, conn->ev_base);
+	if (compressed) {
+		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
+				"application/x-compressed", req, conn->fd,
+				&conn->timeout, conn->ev_base);
+	}
+	else {
+		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
+				"text/plain", req, conn->fd, &conn->timeout, conn->ev_base);
+	}
 
 	return TRUE;
 }

@@ -57,6 +57,7 @@ static gboolean raw = FALSE;
 static gboolean extended_urls = FALSE;
 static gboolean mime_output = FALSE;
 static gboolean empty_input = FALSE;
+static gboolean compressed = FALSE;
 static gchar *key = NULL;
 static GList *children;
 
@@ -136,6 +137,8 @@ static GOptionEntry entries[] =
 	   "Allow empty input instead of reading from stdin", NULL },
 	{ "fuzzy-symbol", 'S', 0, G_OPTION_ARG_STRING, &fuzzy_symbol,
 	   "Learn the specified fuzzy symbol", NULL },
+	{ "compressed", 'z', 0, G_OPTION_ARG_NONE, &compressed,
+	   "Enable zstd compression", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -1383,7 +1386,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 
 		if (cmd->need_input) {
 			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,
-				cbdata, &err);
+				cbdata, compressed, &err);
 		}
 		else {
 			rspamd_client_command (conn,
@@ -1392,6 +1395,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 				NULL,
 				rspamc_client_cb,
 				cbdata,
+				compressed,
 				&err);
 		}
 	}
