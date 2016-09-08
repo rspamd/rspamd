@@ -531,7 +531,11 @@ rspamd_task_load_message (struct rspamd_task *task,
 			rspamd_mempool_add_destructor (task->task_pool, g_free, zout.dst);
 			task->msg.begin = zout.dst;
 			task->msg.len = zout.pos;
-			task->flags = RSPAMD_TASK_FLAG_COMPRESSED;
+			task->flags |= RSPAMD_TASK_FLAG_COMPRESSED;
+
+			msg_info_task ("loaded message from zstd compressed stream; "
+					"compressed: %ul; uncompressed: %ul",
+					(gulong)zin.size, (gulong)zout.pos);
 
 		}
 		else {
