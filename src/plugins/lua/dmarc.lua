@@ -126,6 +126,7 @@ local function dmarc_callback(task)
       return maybe_force_action('na')
     end
 
+    local reason = {}
     local strict_spf = false
     local strict_dkim = false
     local strict_policy = false
@@ -243,32 +244,47 @@ local function dmarc_callback(task)
     if task:has_symbol(symbols['spf_allow_symbol']) then
       efrom = task:get_from(1)
       if efrom and efrom[1] and efrom[1]['domain'] then
-        if rspamd_util.strequal_caseless(efrom[1]['domain'], from[1]['domain']) then
+        if strict_spf and rspamd_util.strequal_caseless(efrom[1]['domain'], from[1]['domain']) then
           spf_ok = true
-        elseif not strict_spf then
+        elseif strict_spf then
+          table.insert(reason, "SPF not aligned (strict)")
+        end
+        if not strict_spf then
           local spf_tld = rspamd_util.get_tld(efrom[1]['domain'])
           if rspamd_util.strequal_caseless(spf_tld, dmarc_domain) then
             spf_ok = true
+          else
+            table.insert(reason, "SPF not aligned (relaxed)")
           end
         end
       end
+    else
+      table.insert(reason, "No SPF")
     end
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
     if das and das[1] and das[1]['options'] then
       for i,dkim_domain in ipairs(das[1]['options']) do
-        if rspamd_util.strequal_caseless(from[1]['domain'], dkim_domain) then
+        if strict_dkim and rspamd_util.strequal_caseless(from[1]['domain'], dkim_domain) then
           dkim_ok = true
-        elseif not strict_dkim then
+        elseif strict_dkim then
+          table.insert(reason, "DKIM not aligned (strict)")
+        end
+        if not strict_dkim then
           local dkim_tld = rspamd_util.get_tld(dkim_domain)
           if rspamd_util.strequal_caseless(dkim_tld, dmarc_domain) then
             dkim_ok = true
+          else
+            table.insert(reason, "DKIM not aligned (relaxed)")
           end
         end
       end
+    else
+      table.insert(reason, "No DKIM")
     end
 
     local disposition = 'none'
     if not (spf_ok or dkim_ok) then
+      local reason_str = table.concat(reason, ", ")
       res = 1.0
       local spf_tmpfail = task:get_symbol(symbols['spf_tempfail_symbol'])
       local dkim_tmpfail = task:get_symbol(symbols['dkim_tempfail_symbol'])
@@ -278,16 +294,16 @@ local function dmarc_callback(task)
       end
       if quarantine_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain)
+          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str)
           disposition = "quarantine"
         end
       elseif strict_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result(dmarc_symbols['reject'], res, lookup_domain)
+          task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str)
           disposition = "reject"
         end
       else
-        task:insert_result(dmarc_symbols['softfail'], res, lookup_domain)
+        task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str)
       end
     else
       task:insert_result(dmarc_symbols['allow'], res, lookup_domain)
