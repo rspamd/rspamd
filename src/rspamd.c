@@ -714,7 +714,8 @@ rspamd_check_core_cb (const gchar *path, const struct stat *st,
 {
 	if (S_ISREG (st->st_mode)) {
 		cores_cbdata.total_count ++;
-		cores_cbdata.total_size += st->st_size;
+		/* Use physical size instead of displayed one */
+		cores_cbdata.total_size += st->st_blocks * 512;
 	}
 
 	return 0;
