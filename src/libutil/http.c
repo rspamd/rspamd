@@ -2546,7 +2546,7 @@ rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg)
 	if (msg->flags & RSPAMD_HTTP_FLAG_SHMEM) {
 		storage = &msg->body_buf.c;
 
-		if (storage->shared.shm_fd != -1) {
+		if (storage->shared.shm_fd > 0) {
 			g_assert (fstat (storage->shared.shm_fd, &st) != -1);
 
 			if (msg->body_buf.str != MAP_FAILED) {
