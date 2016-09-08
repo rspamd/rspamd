@@ -51,7 +51,11 @@ local function replies_check(task)
       -- Hash was found
       task:insert_result(settings['symbol'], 0.0)
       if settings['action'] ~= nil then
-        task:set_pre_result(settings['action'], settings['message'])
+        if task:get_user() or (ip_addr and ip_addr:is_local()) then
+          rspamd_logger.infox(task, "not forcing action for local network or authorized user");
+        else
+          task:set_pre_result(settings['action'], settings['message'])
+        end
       end
     end
   end
