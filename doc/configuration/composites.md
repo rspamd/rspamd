@@ -57,8 +57,8 @@ Composites should not be recursive; but this is normally detected and avoided by
 It is also possible to setup policies for composites regarding symbols enclosed within a composite expression. By default Rspamd **removes** symbols and weights that trigger composite with the composite itself. However, it is possible to change this setting by 2 ways.
 
 1. Set up removal policy for each symbol:
-    * `-`: remove weigth of symbol
-    * `~`: do not remove anything
+    * `~`: remove weigth of symbol
+    * `-`: do not remove anything
     * `^`: force removing of symbol and weight (by default, Rspamd prefers to leave symbols when some composite wants to remove and another composite wants to leave any of score/name pair)
 2. Set the default policy for all elements in the expression using `policy` option:
     * `default`: default policy - remove weigth and symbol
@@ -87,8 +87,8 @@ Composites can record symbols in a metric or record their weights. That could be
 
 * If `C` is `A & B` then if rule `A` and rule `B` matched then these symbols are *removed* and their weights are removed as well, leading to a single symbol `C` with weight `W_c`.
 * If `C` is `-A & B`, then rule `A` is preserved, but the symbol `C` is inserted. The weight of `A` is preserved as well, so the total weight of `-A & B` will be `W_a + W_c`.
-* If `C` is `~A & B`, then rule `A` is *removed* but its weight is *preserved*,
-  leading to a single symbol `C` with weight `W_a + W_c`
+* If `C` is `~A & B`, then rule `A` is preserved, but it's weight is removed,
+  leading to the total weight of `W_a` only
 
 When you have multiple composites which include the same symbol and a composite wants to remove the symbol and another composite wants to preserve it, then the symbol is preserved by default. Here are some more examples:
 
@@ -116,7 +116,7 @@ composite "COMP2" {
     expression = "!BLAH || DATE_IN_PAST";
 }
 composite "COMP3" {
-    expression = "!BLAH || ~DATE_IN_PAST";
+    expression = "!BLAH || -DATE_IN_PAST";
 }
 ~~~
 
