@@ -294,14 +294,14 @@ local function hfilter(task)
     end
   end
 
-  --No more checks for auth user
-  if task:get_user() ~= nil then
+  --No more checks for auth user or local network
+  local rip = task:get_from_ip()
+  if task:get_user() or (rip and rip:is_local()) then
     return false
   end
 
   --local message = task:get_message()
   local ip = false
-  local rip = task:get_from_ip()
   if rip and rip:is_valid() then
     ip = rip:to_string()
   end
