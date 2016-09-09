@@ -339,7 +339,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			/* Process reference */
 			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
 				/* Stop on redirected domain */
-				rspamd_spf_process_reference (target, cur, rec, TRUE);
+				rspamd_spf_process_reference (target, cur, rec, top);
 				break;
 			}
 			else {
