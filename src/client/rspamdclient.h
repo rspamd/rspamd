@@ -78,6 +78,7 @@ gboolean rspamd_client_command (
 	rspamd_client_callback cb,
 	gpointer ud,
 	gboolean compressed,
+	const gchar *comp_dictionary,
 	GError **err);
 
 /**

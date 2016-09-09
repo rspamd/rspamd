@@ -44,6 +44,7 @@ static gchar **http_headers = NULL;
 static gint weight = 0;
 static gint flag = 0;
 static gchar *fuzzy_symbol = NULL;
+static gchar *dictionary = NULL;
 static gint max_requests = 8;
 static gdouble timeout = 10.0;
 static gboolean pass_all;
@@ -139,6 +140,8 @@ static GOptionEntry entries[] =
 	   "Learn the specified fuzzy symbol", NULL },
 	{ "compressed", 'z', 0, G_OPTION_ARG_NONE, &compressed,
 	   "Enable zstd compression", NULL },
+	{ "dictionary", 'D', 0, G_OPTION_ARG_FILENAME, &dictionary,
+	   "Use dictionary to compress data", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -1386,7 +1389,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 
 		if (cmd->need_input) {
 			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,
-				cbdata, compressed, &err);
+				cbdata, compressed, dictionary, &err);
 		}
 		else {
 			rspamd_client_command (conn,
@@ -1396,6 +1399,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 				rspamc_client_cb,
 				cbdata,
 				compressed,
+				dictionary,
 				&err);
 		}
 	}

@@ -19,6 +19,7 @@
 #include "libutil/http_private.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
+#include "contrib/zstd/zdict.h"
 
 #ifdef HAVE_FETCH_H
 #include <fetch.h>
@@ -200,7 +201,9 @@ gboolean
 rspamd_client_command (struct rspamd_client_connection *conn,
 		const gchar *command, GQueue *attrs,
 		FILE *in, rspamd_client_callback cb,
-		gpointer ud, gboolean compressed, GError **err)
+		gpointer ud, gboolean compressed,
+		const gchar *comp_dictionary,
+		GError **err)
 {
 	struct rspamd_client_request *req;
 	struct rspamd_http_client_header *nh;
@@ -209,6 +212,10 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	GList *cur;
 	GString *input = NULL;
 	rspamd_fstring_t *body;
+	guint dict_id = 0;
+	gsize dict_len = 0;
+	void *dict = NULL;
+	ZSTD_CCtx *zctx;
 
 	req = g_slice_alloc0 (sizeof (struct rspamd_client_request));
 	req->conn = conn;
@@ -251,9 +258,43 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			body = rspamd_fstring_new_init (input->str, input->len);
 		}
 		else {
+			if (comp_dictionary) {
+				dict = rspamd_file_xmap (comp_dictionary, PROT_READ, &dict_len);
+
+				if (dict == NULL) {
+					g_set_error (err, RCLIENT_ERROR, errno,
+							"cannot open dictionary %s: %s",
+							comp_dictionary,
+							strerror (errno));
+					g_slice_free1 (sizeof (struct rspamd_client_request), req);
+					g_string_free (input, TRUE);
+
+					return FALSE;
+				}
+
+				dict_id = ZDICT_getDictID (comp_dictionary, dict_len);
+
+				if (dict_id == 0) {
+					g_set_error (err, RCLIENT_ERROR, errno,
+							"cannot open dictionary %s: %s",
+							comp_dictionary,
+							strerror (errno));
+					g_slice_free1 (sizeof (struct rspamd_client_request), req);
+					g_string_free (input, TRUE);
+					munmap (dict, dict_len);
+
+					return FALSE;
+				}
+			}
+
 			body = rspamd_fstring_sized_new (ZSTD_compressBound (input->len));
-			body->len = ZSTD_compress (body->str, body->allocated, input->str,
-					input->len, 1);
+			zctx = ZSTD_createCCtx ();
+			body->len = ZSTD_compress_usingDict (zctx, body->str, body->allocated,
+					input->str, input->len,
+					dict, dict_len,
+					1);
+
+			munmap (dict, dict_len);
 
 			if (ZSTD_isError (body->len)) {
 				g_set_error (err, RCLIENT_ERROR, ferror (
@@ -284,6 +325,13 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 	if (compressed) {
 		rspamd_http_message_add_header (req->msg, "Compression", "zstd");
+
+		if (dict_id != 0) {
+			gchar dict_str[32];
+
+			rspamd_snprintf (dict_str, sizeof (dict_str), "%ud", dict_id);
+			rspamd_http_message_add_header (req->msg, "Dictionary", dict_str);
+		}
 	}
 
 	req->msg->url = rspamd_fstring_append (req->msg->url, "/", 1);

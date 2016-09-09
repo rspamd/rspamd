@@ -521,7 +521,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 				zstream = ZSTD_createDStream ();
 				g_assert (zstream != NULL);
-				g_assert (!ZSTD_isError (ZSTD_initDStream_usingDict(zstream,
+				g_assert (!ZSTD_isError (ZSTD_initDStream_usingDict (zstream,
 						task->cfg->libs_ctx->in_dict->dict,
 						task->cfg->libs_ctx->in_dict->size)));
 			}
