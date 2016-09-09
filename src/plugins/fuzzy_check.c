@@ -124,6 +124,7 @@ struct fuzzy_learn_session {
 	gint *saved;
 	GError **err;
 	struct rspamd_http_connection_entry *http_entry;
+	struct rspamd_async_session *session;
 	struct upstream *server;
 	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
@@ -1790,6 +1791,18 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	}
 }
 
+static void
+fuzzy_lua_fin (void *ud)
+{
+	struct fuzzy_learn_session *session = ud;
+
+	(*session->saved)--;
+
+	event_del (&session->ev);
+	event_del (&session->timev);
+	close (session->fd);
+}
+
 /* Controller IO */
 static void
 fuzzy_controller_io_callback (gint fd, short what, void *arg)
@@ -1927,18 +1940,25 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	 * written
 	 * XXX: please, please, change this code some day
 	 */
-	(*session->saved)--;
 
-	if (session->http_entry) {
-		rspamd_http_connection_unref (session->http_entry->conn);
+	if (session->session == NULL) {
+		(*session->saved)--;
+
+		if (session->http_entry) {
+			rspamd_http_connection_unref (session->http_entry->conn);
+		}
+
+		event_del (&session->ev);
+		event_del (&session->timev);
+		close (session->fd);
+
+		if (*session->saved == 0) {
+			goto cleanup;
+		}
 	}
-
-	event_del (&session->ev);
-	event_del (&session->timev);
-	close (session->fd);
-
-	if (*session->saved == 0) {
-		goto cleanup;
+	else {
+		/* Lua handler */
+		rspamd_session_remove_event (session->session, fuzzy_lua_fin, session);
 	}
 
 	return;
@@ -1990,35 +2010,41 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 
 	if (session->retransmits >= fuzzy_module_ctx->retransmits) {
 		rspamd_upstream_fail (session->server);
-
-		if (session->http_entry) {
-			rspamd_controller_send_error (session->http_entry,
-					500, "IO timeout with fuzzy storage");
-		}
-
-		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
+		msg_err_task_check ("got IO timeout with server %s(%s), "
+				"after %d retransmits",
 				rspamd_upstream_name (session->server),
 				rspamd_inet_address_to_string (session->addr),
 				session->retransmits);
 
-		if (*session->saved > 0 ) {
-			(*session->saved)--;
-			if (*session->saved == 0) {
-				if (session->http_entry) {
-					rspamd_task_free (session->task);
-				}
-
-				session->task = NULL;
+		if (session->session) {
+			rspamd_session_remove_event (session->session, fuzzy_lua_fin,
+					session);
+		}
+		else {
+			if (session->http_entry) {
+				rspamd_controller_send_error (session->http_entry,
+						500, "IO timeout with fuzzy storage");
 			}
-		}
 
-		if (session->http_entry) {
-			rspamd_http_connection_unref (session->http_entry->conn);
-		}
+			if (*session->saved > 0 ) {
+				(*session->saved)--;
+				if (*session->saved == 0) {
+					if (session->http_entry) {
+						rspamd_task_free (session->task);
+					}
 
-		event_del (&session->ev);
-		event_del (&session->timev);
-		close (session->fd);
+					session->task = NULL;
+				}
+			}
+
+			if (session->http_entry) {
+				rspamd_http_connection_unref (session->http_entry->conn);
+			}
+
+			event_del (&session->ev);
+			event_del (&session->timev);
+			close (session->fd);
+		}
 	}
 	else {
 		/* Plan write event */
@@ -2464,6 +2490,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				"No fuzzy rules matched for flag %d", flag);
 		}
 		rspamd_task_free (task);
+
 		return;
 	}
 
@@ -2590,6 +2617,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 			s->fd = sock;
 			s->err = err;
 			s->rule = rule;
+			s->session = task->s;
 
 			event_set (&s->ev, sock, EV_WRITE, fuzzy_controller_io_callback, s);
 			event_base_set (task->ev_base, &s->ev);
@@ -2598,6 +2626,11 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 			evtimer_set (&s->timev, fuzzy_controller_timer_callback, s);
 			event_base_set (s->task->ev_base, &s->timev);
 			event_add (&s->timev, &s->tv);
+
+			rspamd_session_add_event (task->s,
+					fuzzy_lua_fin,
+					s,
+					g_quark_from_static_string ("fuzzy check"));
 
 			(*saved)++;
 			ret = 1;
