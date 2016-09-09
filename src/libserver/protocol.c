@@ -25,6 +25,7 @@
 #include "email_addr.h"
 #include "worker_private.h"
 #include "cryptobox.h"
+#include "contrib/zstd/zstd.h"
 #include <math.h>
 
 /* Max line size */
@@ -1111,8 +1112,68 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 
 	ucl_object_unref (top);
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 
+	if ((task->flags & RSPAMD_TASK_FLAG_COMPRESSED) &&
+			rspamd_libs_reset_compression (task->cfg->libs_ctx)) {
+		/* We can compress output */
+		ZSTD_inBuffer zin;
+		ZSTD_outBuffer zout;
+		ZSTD_CStream *zstream;
+		rspamd_fstring_t *compressed_reply;
+		gsize r;
+
+		zstream = task->cfg->libs_ctx->out_zstream;
+		compressed_reply = rspamd_fstring_sized_new (ZSTD_compressBound (reply->len));
+		zin.pos = 0;
+		zin.src = reply->str;
+		zin.size = reply->len;
+		zout.pos = 0;
+		zout.dst = compressed_reply->str;
+		zout.size = compressed_reply->allocated;
+
+		while (zin.pos < zin.size) {
+			r = ZSTD_compressStream (zstream, &zout, &zin);
+
+			if (ZSTD_isError (r)) {
+				msg_err_task ("cannot compress: %s", ZSTD_getErrorName (r));
+				rspamd_fstring_free (compressed_reply);
+				rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+
+				goto end;
+			}
+		}
+
+		r = ZSTD_endStream (zstream, &zout);
+
+		if (ZSTD_isError (r)) {
+			msg_err_task ("cannot finalize compress: %s", ZSTD_getErrorName (r));
+			rspamd_fstring_free (compressed_reply);
+			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+
+			goto end;
+		}
+
+		msg_info_task ("writing compressed results: %z bytes before "
+				"%z bytes after", zin.pos, zout.pos);
+		compressed_reply->len = zout.pos;
+		rspamd_fstring_free (reply);
+		rspamd_http_message_set_body_from_fstring_steal (msg, compressed_reply);
+		rspamd_http_message_add_header (msg, "Compression", "zstd");
+
+		if (task->cfg->libs_ctx->out_dict &&
+				task->cfg->libs_ctx->out_dict->id != 0) {
+			gchar dict_str[32];
+
+			rspamd_snprintf (dict_str, sizeof (dict_str), "%ud",
+					task->cfg->libs_ctx->out_dict->id);
+			rspamd_http_message_add_header (msg, "Dictionary", dict_str);
+		}
+	}
+	else {
+		rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	}
+
+end:
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
 		/* Update stat for default metric */
 		metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
