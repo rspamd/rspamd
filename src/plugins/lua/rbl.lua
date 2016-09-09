@@ -67,24 +67,24 @@ local function rbl_cb (task)
 
       for _,rbl in ipairs(rule.rbls) do
         if rbl['returncodes'] == nil and rbl['symbol'] ~= nil then
-          task:insert_result(rbl['symbol'], 1)
+          task:insert_result(rbl['symbol'], 1, to_resolve)
           return
         end
         for _,result in pairs(results) do
           local ipstr = result:to_string()
-          local foundrc = false
+          local foundrc
           for s,i in pairs(rbl['returncodes']) do
             if type(i) == 'string' then
               if string.find(ipstr, '^' .. i .. '$') then
-                foundrc = true
-                task:insert_result(s, 1)
+                foundrc = i
+                task:insert_result(s, 1, to_resolve .. ' : ' .. foundrc)
                 break
               end
             elseif type(i) == 'table' then
               for _,v in pairs(i) do
                 if string.find(ipstr, '^' .. v .. '$') then
-                  foundrc = true
-                  task:insert_result(s, 1)
+                  foundrc = v
+                  task:insert_result(s, 1, to_resolve .. ' : ' .. foundrc)
                   break
                 end
               end
@@ -92,7 +92,7 @@ local function rbl_cb (task)
           end
           if not foundrc then
             if rbl['unknown'] and rbl['symbol'] then
-              task:insert_result(rbl['symbol'], 1)
+              task:insert_result(rbl['symbol'], 1, to_resolve)
             else
               rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
                 rbl['rbl'], ipstr)
