@@ -417,7 +417,9 @@ struct rspamd_config {
 	struct rspamd_config_post_load_script *on_load;	/**< list of scripts executed on config load			*/
 
 	gchar *ssl_ca_path;								/**< path to CA certs									*/
-	gchar *ssl_ciphers;							/**< set of preferred ciphers							*/
+	gchar *ssl_ciphers;								/**< set of preferred ciphers							*/
+	gchar *zstd_input_dictionary;					/**< path to zstd input dictionary						*/
+	gchar *zstd_output_dictionary;					/**< path to zstd output dictionary						*/
 
 	ref_entry_t ref;								/**< reference counter									*/
 };

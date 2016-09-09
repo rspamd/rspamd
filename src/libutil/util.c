@@ -23,6 +23,7 @@
 #include "ottery.h"
 #include "cryptobox.h"
 #include "libutil/map.h"
+#include "contrib/zstd/zdict.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
@@ -2090,6 +2091,38 @@ rspamd_init_libs (void)
 	return ctx;
 }
 
+static struct zstd_dictionary *
+rspamd_open_zstd_dictionary (const char *path)
+{
+	struct zstd_dictionary *dict;
+
+	dict = g_slice_alloc0 (sizeof (*dict));
+	dict->dict = rspamd_file_xmap (path, PROT_READ, &dict->size);
+
+	if (dict->dict == NULL) {
+		g_slice_free1 (sizeof (*dict), dict);
+		return NULL;
+	}
+
+	dict->id = ZDICT_getDictID (dict->dict, dict->size);
+
+	if (dict->id == 0) {
+		g_slice_free1 (sizeof (*dict), dict);
+		return NULL;
+	}
+
+	return dict;
+}
+
+static void
+rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
+{
+	if (dict) {
+		munmap (dict->dict, dict->size);
+		g_slice_free1 (sizeof (*dict), dict);
+	}
+}
+
 void
 rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		struct rspamd_config *cfg)
@@ -2131,6 +2164,23 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		if (ctx->libmagic) {
 			magic_load (ctx->libmagic, cfg->magic_file);
 		}
+
+		if (cfg->zstd_input_dictionary) {
+			ctx->in_dict = rspamd_open_zstd_dictionary (cfg->zstd_input_dictionary);
+
+			if (ctx->in_dict == NULL) {
+				msg_err_config ("cannot open zstd dictionary in %s",
+						cfg->zstd_input_dictionary);
+			}
+		}
+		if (cfg->zstd_output_dictionary) {
+			ctx->out_dict = rspamd_open_zstd_dictionary (cfg->zstd_output_dictionary);
+
+			if (ctx->out_dict == NULL) {
+				msg_err_config ("cannot open zstd dictionary in %s",
+						cfg->zstd_output_dictionary);
+			}
+		}
 	}
 }
 
@@ -2151,6 +2201,8 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		SSL_CTX_free (ctx->ssl_ctx);
 #endif
 		rspamd_inet_library_destroy ();
+		rspamd_free_zstd_dictionary (ctx->in_dict);
+		rspamd_free_zstd_dictionary (ctx->out_dict);
 		g_slice_free1 (sizeof (*ctx), ctx);
 	}
 }

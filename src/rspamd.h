@@ -299,12 +299,20 @@ struct controller_session {
 	struct event_base *ev_base;                                 /**< Event base										*/
 };
 
+struct zstd_dictionary {
+	const void *dict;
+	gsize size;
+	guint id;
+};
+
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
 	radix_compressed_t **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
 	SSL_CTX *ssl_ctx;
+	struct zstd_dictionary *in_dict;
+	struct zstd_dictionary *out_dict;
 	ref_entry_t ref;
 };
 

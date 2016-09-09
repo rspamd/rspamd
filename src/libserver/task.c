@@ -492,6 +492,44 @@ rspamd_task_load_message (struct rspamd_task *task,
 			ZSTD_outBuffer zout;
 			guchar *out;
 			gsize outlen, r;
+			gulong dict_id;
+
+			tok = rspamd_task_get_request_header (task, "dictionary");
+
+			if (tok != NULL) {
+				/* We need to use custom dictionary */
+				if (!rspamd_strtoul (tok->begin, tok->len, &dict_id)) {
+					g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+							"Non numeric dictionary");
+
+					return FALSE;
+				}
+
+				if (!task->cfg->libs_ctx->in_dict) {
+					g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+							"Unknown dictionary, undefined locally");
+
+					return FALSE;
+				}
+
+				if (task->cfg->libs_ctx->in_dict->id != dict_id) {
+					g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+							"Unknown dictionary, invalid dictionary id");
+
+					return FALSE;
+				}
+
+				zstream = ZSTD_createDStream ();
+				g_assert (zstream != NULL);
+				g_assert (!ZSTD_isError (ZSTD_initDStream_usingDict(zstream,
+						task->cfg->libs_ctx->in_dict->dict,
+						task->cfg->libs_ctx->in_dict->size)));
+			}
+			else {
+				zstream = ZSTD_createDStream ();
+				g_assert (zstream != NULL);
+				g_assert (!ZSTD_isError (ZSTD_initDStream (zstream)));
+			}
 
 			zin.pos = 0;
 			zin.src = start;
@@ -502,9 +540,6 @@ rspamd_task_load_message (struct rspamd_task *task,
 			}
 
 			out = g_malloc (outlen);
-			zstream = ZSTD_createDStream ();
-			g_assert (zstream != NULL);
-			g_assert (!ZSTD_isError (ZSTD_initDStream (zstream)));
 			zout.dst = out;
 			zout.pos = 0;
 			zout.size = outlen;

@@ -1974,6 +1974,19 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, max_message),
 			RSPAMD_CL_FLAG_INT_SIZE,
 			"Maximum size of the message to be scanned");
+	rspamd_rcl_add_default_handler (sub,
+			"zstd_input_dictionary",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, zstd_input_dictionary),
+			RSPAMD_CL_FLAG_STRING_PATH,
+			"Dictionary for zstd inbound protocol compression");
+	rspamd_rcl_add_default_handler (sub,
+			"zstd_output_dictionary",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, zstd_output_dictionary),
+			RSPAMD_CL_FLAG_STRING_PATH,
+			"Dictionary for outbound zstd compression");
+
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE,
