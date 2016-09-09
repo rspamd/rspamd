@@ -338,29 +338,39 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		}
 
 		/* Update hashes */
+		/* Id of re class */
 		rspamd_cryptobox_hash_update (re_class->st, (gpointer) &re_class->id,
 				sizeof (re_class->id));
 		rspamd_cryptobox_hash_update (&st_global, (gpointer) &re_class->id,
 				sizeof (re_class->id));
+		/* Id of re expression */
 		rspamd_cryptobox_hash_update (re_class->st, rspamd_regexp_get_id (re),
 				rspamd_cryptobox_HASHBYTES);
 		rspamd_cryptobox_hash_update (&st_global, rspamd_regexp_get_id (re),
 				rspamd_cryptobox_HASHBYTES);
+		/* PCRE flags */
 		fl = rspamd_regexp_get_pcre_flags (re);
 		rspamd_cryptobox_hash_update (re_class->st, (const guchar *)&fl,
 				sizeof (fl));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
 				sizeof (fl));
+		/* Rspamd flags */
 		fl = rspamd_regexp_get_flags (re);
 		rspamd_cryptobox_hash_update (re_class->st, (const guchar *) &fl,
 				sizeof (fl));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
 				sizeof (fl));
+		/* Limit of hits */
 		fl = rspamd_regexp_get_maxhits (re);
 		rspamd_cryptobox_hash_update (re_class->st, (const guchar *) &fl,
 				sizeof (fl));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
 				sizeof (fl));
+		/* Numberic order */
+		rspamd_cryptobox_hash_update (re_class->st, (const guchar *)&i,
+				sizeof (i));
+		rspamd_cryptobox_hash_update (&st_global, (const guchar *)&i,
+				sizeof (i));
 	}
 
 	rspamd_cryptobox_hash_final (&st_global, hash_out);
