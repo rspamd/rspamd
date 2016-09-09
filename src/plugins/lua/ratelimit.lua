@@ -305,6 +305,8 @@ local function make_rate_key(rtype, args)
     return string.format('%s:%s:%s', rl_prefix, rtype, args['asn'])
   elseif rtype == 'user' and args['user'] then
     return string.format('%s:%s:%s', rl_prefix, rtype, args['user'])
+  elseif rtype == 'ip' and args['ip'] and args['ip']:is_valid() then
+    return string.format('%s:%s', rl_prefix, args['ip']:to_string())
   else
     return nil
   end
