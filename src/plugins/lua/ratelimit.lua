@@ -94,6 +94,7 @@ end
 
 local function resize_element(x_score, x_total, element)
   local x_ip_score
+  if not x_total then x_total = 0 end
   if x_total < ip_score_lower_bound or x_total <= 0 then
     x_score = 1
   else
@@ -149,16 +150,16 @@ local function check_limits(task, args)
           rate = resize_element(asn_score, total_asn, rate)
         elseif rtype == 'ip' or rtype == 'to_ip' or rtype == 'to_ip_from'
           or rtype == 'bounce_to_ip' then
-          if total_ip > ip_score_lower_bound then
+          if total_ip and total_ip > ip_score_lower_bound then
             bucket = resize_element(ip_score, total_ip, bucket)
             rate = resize_element(ip_score, total_ip, rate)
-          elseif total_ipnet > ip_score_lower_bound then
+          elseif total_ipnet and total_ipnet > ip_score_lower_bound then
             bucket = resize_element(ipnet_score, total_ipnet, bucket)
             rate = resize_element(ipnet_score, total_ipnet, rate)
-          elseif total_asn > ip_score_lower_bound then
+          elseif total_asn and total_asn > ip_score_lower_bound then
             bucket = resize_element(asn_score, total_asn, bucket)
             rate = resize_element(asn_score, total_asn, rate)
-          elseif total_country > ip_score_lower_bound then
+          elseif total_country and total_country > ip_score_lower_bound then
             bucket = resize_element(country_score, total_country, bucket)
             rate = resize_element(country_score, total_country, rate)
           else
@@ -306,7 +307,7 @@ local function make_rate_key(rtype, args)
   elseif rtype == 'user' and args['user'] then
     return string.format('%s:%s:%s', rl_prefix, rtype, args['user'])
   elseif rtype == 'ip' and args['ip'] and args['ip']:is_valid() then
-    return string.format('%s:%s', rl_prefix, args['ip']:to_string())
+    return string.format('%s:%s:%s', rl_prefix, rtype, args['ip']:to_string())
   else
     return nil
   end
@@ -352,11 +353,15 @@ local function rate_test_set(task, func)
   end
   -- Get user (authuser)
   local auser = task:get_user()
+  local rate_key
   if auser and settings['user'][1] > 0 then
     if whitelisted_user and whitelisted_user:get_key(auser) then
       rspamd_logger.infox(task, 'skip ratelimit for whitelisted user')
     else
-      table.insert(args, {settings['user'], make_rate_key ('user', {['user'] = auser}) })
+      rate_key = make_rate_key ('user', {['user'] = auser})
+      if rate_key then
+        table.insert(args, {settings['user'], rate_key})
+      end
     end
   end
   local asn
@@ -370,27 +375,48 @@ local function rate_test_set(task, func)
     fun.each(function(r)
       if is_bounce then
         if settings['bounce_to'][1] > 0 then
-          table.insert(args, { settings['bounce_to'], make_rate_key('bounce_to', {['to'] = r['addr']}) })
+          rate_key = make_rate_key('bounce_to', {['to'] = r['addr']})
+          if rate_key then
+            table.insert(args, {settings['bounce_to'], rate_key})
+          end
         end
         if ip and settings['bounce_to_ip'][1] > 0 then
-          table.insert(args, { settings['bounce_to_ip'], make_rate_key('bounce_to_ip', {['to'] = r['addr'], ['ip'] = ip}) })
+          rate_key = make_rate_key('bounce_to_ip', {['to'] = r['addr'], ['ip'] = ip})
+          if rate_key then
+            table.insert(args, {settings['bounce_to_ip'], rate_key})
+          end
         end
       end
       if settings['to'][1] > 0 then
-        table.insert(args, { settings['to'], make_rate_key('to', {['to'] = r['addr']}) })
+        rate_key = make_rate_key('to', {['to'] = r['addr']})
+        if rate_key then
+          table.insert(args, {settings['to'], rate_key})
+        end
       end
       if ip then
         if settings['to_ip'][1] > 0 then
-          table.insert(args, { settings['to_ip'], make_rate_key('to_ip', {['to'] = r['addr'], ['ip'] = ip}) })
+          rate_key = make_rate_key('to_ip', {['to'] = r['addr'], ['ip'] = ip})
+          if rate_key then
+            table.insert(args, {settings['to_ip'], rate_key})
+          end
         end
         if settings['to_ip_from'][1] > 0 then
-          table.insert(args, { settings['to_ip_from'], make_rate_key('to_ip_from', {['from'] = from_addr, ['to'] = r['addr'], ['ip'] = ip}) })
+          rate_key = make_rate_key('to_ip_from', {['from'] = from_addr, ['to'] = r['addr'], ['ip'] = ip})
+          if rate_key then
+            table.insert(args, {settings['to_ip_from'], rate_key})
+          end
         end
         if settings['ip'][1] > 0 then
-          table.insert(args, { settings['ip'], make_rate_key('ip', {['ip'] = ip}) })
+          rate_key = make_rate_key('ip', {['ip'] = ip})
+          if rate_key then
+            table.insert(args, {settings['ip'], rate_key})
+          end
         end
         if asn and settings['asn'][1] > 0 then
-          table.insert(args, { settings['asn'], make_rate_key('asn', {['asn'] = asn}) })
+          rate_key = make_rate_key('asn', {['asn'] = asn})
+          if rate_key then
+            table.insert(args, {settings['asn'], rate_key})
+          end
         end
       end
     end, rcpts)
