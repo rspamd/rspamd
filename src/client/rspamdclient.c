@@ -104,6 +104,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_client_connection *c;
 	struct ucl_parser *parser;
 	GError *err;
+	const rspamd_ftok_t *tok;
 
 	c = req->conn;
 
@@ -128,15 +129,98 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			return 0;
 		}
 
-		parser = ucl_parser_new (0);
-		if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
-			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
-					ucl_parser_get_error (parser));
-			ucl_parser_free (parser);
-			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
-			g_error_free (err);
+		tok = rspamd_http_message_find_header (msg, "compression");
 
-			return 0;
+		if (tok) {
+			/* Need to uncompress */
+			rspamd_ftok_t t;
+
+			t.begin = "zstd";
+			t.len = 4;
+
+			if (rspamd_ftok_casecmp (tok, &t) == 0) {
+				ZSTD_DStream *zstream;
+				ZSTD_inBuffer zin;
+				ZSTD_outBuffer zout;
+				guchar *out;
+				gsize outlen, r;
+
+				zstream = ZSTD_createDStream ();
+				ZSTD_initDStream (zstream);
+
+				zin.pos = 0;
+				zin.src = msg->body_buf.begin;
+				zin.size = msg->body_buf.len;
+
+				if ((outlen = ZSTD_getDecompressedSize (zin.src, zin.size)) == 0) {
+					outlen = ZSTD_DStreamOutSize ();
+				}
+
+				out = g_malloc (outlen);
+				zout.dst = out;
+				zout.pos = 0;
+				zout.size = outlen;
+
+				while (zin.pos < zin.size) {
+					r = ZSTD_decompressStream (zstream, &zout, &zin);
+
+					if (ZSTD_isError (r)) {
+						err = g_error_new (RCLIENT_ERROR, 500,
+								"Decompression error: %s",
+								ZSTD_getErrorName (r));
+						req->cb (c, msg, c->server_name->str, NULL,
+								req->input, req->ud, err);
+						g_error_free (err);
+						ZSTD_freeDStream (zstream);
+						g_free (out);
+
+						return 0;
+					}
+
+					if (zout.pos == zout.size) {
+						/* We need to extend output buffer */
+						zout.size = zout.size * 1.5 + 1.0;
+						zout.dst = g_realloc (zout.dst, zout.size);
+					}
+				}
+
+				ZSTD_freeDStream (zstream);
+
+				parser = ucl_parser_new (0);
+				if (!ucl_parser_add_chunk (parser, zout.dst, zout.pos)) {
+					err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
+							ucl_parser_get_error (parser));
+					ucl_parser_free (parser);
+					req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
+					g_error_free (err);
+					g_free (out);
+
+					return 0;
+				}
+
+				g_free (out);
+			}
+			else {
+				err = g_error_new (RCLIENT_ERROR, 500,
+						"Invalid compression method");
+				req->cb (c, msg, c->server_name->str, NULL,
+						req->input, req->ud, err);
+				g_error_free (err);
+
+				return 0;
+			}
+		}
+		else {
+			parser = ucl_parser_new (0);
+			if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
+				err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
+						ucl_parser_get_error (parser));
+				ucl_parser_free (parser);
+				req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
+				g_error_free (err);
+
+				return 0;
+			}
 		}
 
 		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
