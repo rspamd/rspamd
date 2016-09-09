@@ -23,6 +23,7 @@
 #include "ottery.h"
 #include "cryptobox.h"
 #include "libutil/map.h"
+#include "contrib/zstd/zstd.h"
 #include "contrib/zstd/zdict.h"
 
 #ifdef HAVE_OPENSSL
@@ -2181,7 +2182,78 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 						cfg->zstd_output_dictionary);
 			}
 		}
+
+		/* Init decompression */
+		ctx->in_zstream = ZSTD_createDStream ();
+		rspamd_libs_reset_decompression (ctx);
+
+		/* Init compression */
+		ctx->out_zstream = ZSTD_createCStream ();
+		rspamd_libs_reset_compression (ctx);
 	}
+}
+
+gboolean
+rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx)
+{
+	gsize r;
+
+	if (ctx->in_zstream == NULL) {
+		msg_err ("cannot create decompression stream");
+		return FALSE;
+	}
+	else {
+		if (ctx->in_dict) {
+			r = ZSTD_initDStream_usingDict (ctx->in_zstream,
+					ctx->in_dict->dict, ctx->in_dict->size);
+		}
+		else {
+			r = ZSTD_initDStream (ctx->in_zstream);
+		}
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init decompression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
+{
+	gsize r;
+
+	if (ctx->out_zstream == NULL) {
+		msg_err ("cannot create compression stream");
+
+		return FALSE;
+	}
+	else {
+		if (ctx->out_dict) {
+			r = ZSTD_initCStream_usingDict (ctx->out_zstream,
+					ctx->out_dict->dict, ctx->out_dict->size, 1);
+		}
+		else {
+			r = ZSTD_initCStream (ctx->out_zstream, 1);
+		}
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init compression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
 }
 
 void
@@ -2203,6 +2275,8 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		rspamd_inet_library_destroy ();
 		rspamd_free_zstd_dictionary (ctx->in_dict);
 		rspamd_free_zstd_dictionary (ctx->out_dict);
+		ZSTD_freeCStream (ctx->out_zstream);
+		ZSTD_freeDStream (ctx->in_zstream);
 		g_slice_free1 (sizeof (*ctx), ctx);
 	}
 }

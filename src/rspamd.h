@@ -300,10 +300,14 @@ struct controller_session {
 };
 
 struct zstd_dictionary {
-	const void *dict;
+	void *dict;
 	gsize size;
 	guint id;
 };
+
+
+struct ZSTD_CStream_s;
+struct ZSTD_DStream_s;
 
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
@@ -313,6 +317,8 @@ struct rspamd_external_libs_ctx {
 	SSL_CTX *ssl_ctx;
 	struct zstd_dictionary *in_dict;
 	struct zstd_dictionary *out_dict;
+	struct ZSTD_CStream_s *out_zstream;
+	struct ZSTD_DStream_s *in_zstream;
 	ref_entry_t ref;
 };
 

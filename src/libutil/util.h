@@ -394,6 +394,17 @@ void rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		struct rspamd_config *cfg);
 
 /**
+ * Reset and initialize decompressor
+ * @param ctx
+ */
+gboolean rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx);
+/**
+ * Reset and initialize compressor
+ * @param ctx
+ */
+gboolean rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx);
+
+/**
  * Destroy external libraries context
  */
 void rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx);

@@ -494,6 +494,14 @@ rspamd_task_load_message (struct rspamd_task *task,
 			gsize outlen, r;
 			gulong dict_id;
 
+			if (!rspamd_libs_reset_decompression (task->cfg->libs_ctx)) {
+				g_set_error (&task->err, rspamd_task_quark(),
+						RSPAMD_PROTOCOL_ERROR,
+						"Cannot decompress, decompressor init failed");
+
+				return FALSE;
+			}
+
 			tok = rspamd_task_get_request_header (task, "dictionary");
 
 			if (tok != NULL) {
@@ -518,18 +526,9 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 					return FALSE;
 				}
+			}
 
-				zstream = ZSTD_createDStream ();
-				g_assert (zstream != NULL);
-				g_assert (!ZSTD_isError (ZSTD_initDStream_usingDict (zstream,
-						task->cfg->libs_ctx->in_dict->dict,
-						task->cfg->libs_ctx->in_dict->size)));
-			}
-			else {
-				zstream = ZSTD_createDStream ();
-				g_assert (zstream != NULL);
-				g_assert (!ZSTD_isError (ZSTD_initDStream (zstream)));
-			}
+			zstream = task->cfg->libs_ctx->in_zstream;
 
 			zin.pos = 0;
 			zin.src = start;
@@ -548,9 +547,9 @@ rspamd_task_load_message (struct rspamd_task *task,
 				r = ZSTD_decompressStream (zstream, &zout, &zin);
 
 				if (ZSTD_isError (r)) {
-					g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-							"Decompression error");
-					ZSTD_freeDStream (zstream);
+					g_set_error (&task->err, rspamd_task_quark(),
+							RSPAMD_PROTOCOL_ERROR,
+							"Decompression error: %s", ZSTD_getErrorName (r));
 
 					return FALSE;
 				}
@@ -562,7 +561,6 @@ rspamd_task_load_message (struct rspamd_task *task,
 				}
 			}
 
-			ZSTD_freeDStream (zstream);
 			rspamd_mempool_add_destructor (task->task_pool, g_free, zout.dst);
 			task->msg.begin = zout.dst;
 			task->msg.len = zout.pos;
