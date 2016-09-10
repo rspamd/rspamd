@@ -13,7 +13,7 @@ shared cache between different scanners.
 
 ## Module configuration
 
-In the default configuration, there are no cache servers specified, hence, the module won't work unless you add this option to the configuration.
+In the default configuration, there are no cache servers specified, hence, **the module won't work** unless you add this option to the configuration.
 
 `Ratelimit` module supports the following configuration options:
 
