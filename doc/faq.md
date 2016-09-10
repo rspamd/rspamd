@@ -201,7 +201,7 @@ Unlike SpamAssassin, Rspamd **suggests** the desired action for a specific messa
 - `greylist`: delay message for a while
 - `no action`: pass message
 
-Rspamd itself **does not** alter a message, that is a task for the MTA or any shim agent (e.g. [rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for the user.
+Rspamd itself **does not** alter a message, that is a task for the MTA or any shim agent (e.g. [Rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for the user.
 
 ### What are local and override config files
 Historically, Rspamd provided user-editable configuration files. However, as the project developed, it became clear that this idea had drawbacks: Rspamd configuration influences the overall filtering quality, performance and other important metrics and it was difficult to maintain local configurations with new releases of Rspamd. Hence, I decided to add two possibilities:
@@ -495,11 +495,11 @@ Additionally you can dynamically selectively enable/disable symbols with [settin
 
 ### Can I scan outgoing mail with Rspamd
 
-Yes, rspamd should be safe for outbound scanning by default, [see here for detail](https://rspamd.com/doc/tutorials/scanning_outbound.html).
+Yes, Rspamd should be safe for outbound scanning by default, [see here for detail](https://rspamd.com/doc/tutorials/scanning_outbound.html).
 
 ## Administration questions
 
-### How to read rspamd logs
+### How to read Rspamd logs
 Rspamd logs are augmented, meaning that each log line normally includes a `tag` which can help to figure out log lines that are related to, for example, a specific task:
 
 ```
@@ -549,12 +549,12 @@ rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379  -s BAYES_SPAM
 The only limitation of the redis plugin is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
 
 
-### What redis keys are used by Rspamd
+### What Redis keys are used by Rspamd
 
-The statistics module uses <SYMBOL><username> as keys. Statistical tokens are recorded within a hash table with the corresponding name. The `ratelimit` module uses a key for each value stored in redis: <https://rspamd.com/doc/modules/ratelimit.html>
+The statistics module uses <SYMBOL><username> as keys. Statistical tokens are recorded within a hash table with the corresponding name. The `ratelimit` module uses a key for each value stored in Redis: <https://rspamd.com/doc/modules/ratelimit.html>
 The DMARC module also uses multiple keys to store cumulative reports: a separate key for each domain.
 
-It is recommended to set a limit for dynamic Rspamd data stored in redis ratelimits, ip reputation, and dmarc reports. You could use a separate redis instance for statistical tokens and set different limits or use separate databases (by specifying `dbname` when setting up the redis backend).
+It is recommended to set a limit for dynamic Rspamd data stored in Redis ratelimits, ip reputation, and DMARC reports. You could use a separate Redis instance for statistical tokens and set different limits or use separate databases (by specifying `dbname` when setting up the redis backend).
 
 ## Plugin questions
 
@@ -736,9 +736,9 @@ Yes: always use `local` variables unless it is unavoidable. Too many global vari
 
 ### Can Rspamd run without Rmilter
 
-Rspamd can be integrated with an MTA using different methods described in the [integration](integration.html) document. For Postfix and Sendmail MTA `rmilter` is the most appropriate tool. Moreover, rmilter adds some features to Rspamd, such as conditional greylisting and message alteration. That's why I would recommend using rmilter with Rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
+Rspamd can be integrated with an MTA using different methods described in the [integration](integration.html) document. For Postfix and Sendmail MTA `Rmilter` is the most appropriate tool. Moreover, Rmilter adds some features to Rspamd, such as conditional greylisting and message alteration. That's why I would recommend using Rmilter with Rspamd if possible (e.g. Exim doesn't support milter interface and qmail doesn't support anything but LDA mode).
 
-### How to set up dkim signing in rmilter
+### How to set up DKIM signing in Rmilter
 
 With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
 This can be done using `opendkim-genkey`:
@@ -760,7 +760,7 @@ dkim {
 };
 ```
 
-Please note that rmilter will sign mail only for **authenticated** users, hence you should also ensure that `{auth_authen}` macro is passed to the milter at the `MAIL FROM` stage:
+Please note that Rmilter will sign mail only for **authenticated** users, hence you should also ensure that `{auth_authen}` macro is passed to the milter at the `MAIL FROM` stage:
 
     milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
 
@@ -782,7 +782,7 @@ dkim {
 
 ### Setup whitelisting of reply messages
 
-It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages using rmilter. To enable this feature, please ensure that you have a `redis` server running and add the following lines to the redis section:
+It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages using Rmilter. To enable this feature, please ensure that you have a `Redis` server running and add the following lines to the redis section:
 
 ```ucl
 redis {
@@ -798,7 +798,7 @@ redis {
 
 ### Mirror some messages to evaluate Rspamd filtering quality
 
-Sometimes it might be useful to monitor how messages are processed by Rspamd. For this purpose, rmilter can mirror a percentage of messages to a [beanstalk](http://kr.github.io/beanstalkd/) instance and check them using rspamc.
+Sometimes it might be useful to monitor how messages are processed by Rspamd. For this purpose, Rmilter can mirror a percentage of messages to a [beanstalk](http://kr.github.io/beanstalkd/) instance and check them using rspamc.
 
 First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine will get messages from beanstalk and feed them to rspamc. Here is an example configuration file:
 
@@ -818,7 +818,7 @@ port = 11300
 command = [ "/usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user1'", "/usr/bin/rspamc -h other_host:11333 --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user2'" ]
 ```
 
-Then setup rmilter to mirror some traffic:
+Then setup Rmilter to mirror some traffic:
 
 ```ucl
 beanstalk {
@@ -859,7 +859,7 @@ This script sort messages according to their spam action and also copies message
 
 ### How to distinguish inbound and outbound traffic for Rspamd instance
 
-From version 1.8.0 onwards, rmilter can pass a special header to Rspamd called `settings-id`. This header allows Rspamd to apply specific settings for a message. You can set custom scores for a message or disable some rules or even a group of rules when scanning. For example, if we want to disable some rules for outbound scanning we could create an entry in the [settings](https://rspamd.com/doc/configuration/settings.html) module:
+From version 1.8.0 onwards, Rmilter can pass a special header to Rspamd called `settings-id`. This header allows Rspamd to apply specific settings for a message. You can set custom scores for a message or disable some rules or even a group of rules when scanning. For example, if we want to disable some rules for outbound scanning we could create an entry in the [settings](https://rspamd.com/doc/configuration/settings.html) module:
 
 ```ucl
 settings {
@@ -882,7 +882,7 @@ settings {
 }
 ```
 
-Then, we can apply this setting ID on the outbound MTA using the rmilter configuration:
+Then, we can apply this setting ID on the outbound MTA using the Rmilter configuration:
 
 ```ucl
 spamd {
