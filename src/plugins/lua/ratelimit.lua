@@ -293,7 +293,7 @@ local function rate_test_set(task, func)
     if whitelisted_user and whitelisted_user:get_key(auser) then
       rspamd_logger.infox(task, 'skip ratelimit for whitelisted user')
     else
-      table.insert(args, {settings['user'], make_rate_key ('user', {['user'] = auser}) })
+      table.insert(args, {settings['user'], make_rate_key (auser, '<auth>', nil) })
     end
   end
 
