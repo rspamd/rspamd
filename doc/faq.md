@@ -491,6 +491,12 @@ rspamd_config:add_condition('SOME_SYMBOL', function(task) return false end)
 
 You can add more complex conditions but this one is the easiest in terms of rules management and upgrades.
 
+Additionally you can dynamically selectively enable/disable symbols with [settings module](https://rspamd.com/doc/configuration/settings.html).
+
+### Can I scan outgoing mail with Rspamd
+
+Yes, rspamd should be safe for outbound scanning by default, [see here for detail](https://rspamd.com/doc/tutorials/scanning_outbound.html).
+
 ## Administration questions
 
 ### How to read rspamd logs
