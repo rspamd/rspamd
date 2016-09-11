@@ -8,7 +8,7 @@ Ratelimit plugin is designed to limit messages coming from certain senders, to
 certain recipients from certain IP addresses combining these parameters into
 a separate limits.
 
-All limits are stored in [redis](http://redis.io) server (or servers cluster) to enable
+All limits are stored in [Redis](http://redis.io) server (or servers cluster) to enable
 shared cache between different scanners.
 
 ## Module configuration
@@ -47,7 +47,7 @@ the value of this option is 'postmaster, mailer-daemon'
 
 ## Principles of work
 
-The basic principle of ratelimiting in rspamd is called `leaked bucket`. It could
+The basic principle of ratelimiting in Rspamd is called `leaked bucket`. It could
 be visually represented as a bucket that has some capacity, and a small hole in a bottom.
 Messages comes to this bucket and leak through the hole over time (it doesn't delay messages, just count them). If the capacity of
 a bucket is exhausted, then a temporary reject is sent. This happens unless the capacity
@@ -125,7 +125,7 @@ These affect the extent to which limits will be increased or decreased respectiv
 
 Ratelimits are recalculated as follows:
 
-1) Generate a score for the particular ratelimit/sender combination between -1 and 1. If the ratelimit is of `asn` type this is calculated based on ASN reputation; If the ratelimit is of types `ip/to_ip/to_ip_from/bounce_to_ip` this is calculated based on IP reputation or, if available data is unsufficient- based on one of IPNet/ASN/country reputation (in this order), where one of these has sufficient data. If reputation is unknown the assigned score is 1.
+1) Generate a score for the particular ratelimit/sender combination between -1 and 1. If the ratelimit is of `asn` type this is calculated based on ASN reputation; If the ratelimit is of types `ip/to_ip/to_ip_from/bounce_to_ip` this is calculated based on IP reputation or, if available data is unsufficient - based on one of IPNet/ASN/country reputation (in this order), where one of these has sufficient data. If reputation is unknown the assigned score is 1.
 
 2.1) If score is positive (reputation is bad), recalculate both size of bucket and leak rate as follows:
 
