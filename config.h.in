@@ -39,6 +39,7 @@
 #cmakedefine HAVE_INTTYPES_H     1
 #cmakedefine HAVE_IPV6_V6ONLY    1
 #cmakedefine HAVE_LIBAIO_H       1
+#cmakedefine HAVE_LIBEVENT2      1
 #cmakedefine HAVE_LIBGEN_H       1
 #cmakedefine HAVE_LIBUTIL_H      1
 #cmakedefine HAVE_LOCALE_H       1
@@ -135,6 +136,10 @@
 #cmakedefine WITH_SYSTEM_HIREDIS 1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
+
+#ifdef HAVE_LIBEVENT2
+#define HAVE_EVUTIL_RNG_INIT 1
+#endif
 
 /* Detect endiannes */
 

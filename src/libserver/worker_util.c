@@ -544,19 +544,24 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	case 0:
 		/* Update pid for logging */
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
-		/* Remove the inherited event base */
-		event_reinit (rspamd_main->ev_base);
-		event_base_free (rspamd_main->ev_base);
-		/* Lock statfile pool if possible XXX */
+
 		/* Init PRNG after fork */
 		rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);
-		rspamd_random_seed_fast ();
 		if (rc != OTTERY_ERR_NONE) {
 			msg_err_main ("cannot initialize PRNG: %d", rc);
 			g_assert (0);
 		}
 
+		rspamd_random_seed_fast ();
 		g_random_set_seed (ottery_rand_uint32 ());
+#ifdef HAVE_EVUTIL_RNG_INIT
+		evutil_secure_rng_init ();
+#endif
+
+		/* Remove the inherited event base */
+		event_reinit (rspamd_main->ev_base);
+		event_base_free (rspamd_main->ev_base);
+
 		/* Drop privilleges */
 		rspamd_worker_drop_priv (rspamd_main);
 		/* Set limits */
