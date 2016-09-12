@@ -311,7 +311,7 @@ end
 
 local function check_fann(id)
   if data[id].fann then
-    local n = rspamd_config:get_symbols_count() + count_metatokens
+    local n = rspamd_config:get_symbols_count() + count_metatokens()
 
     if n ~= data[id].fann:get_inputs() then
       rspamd_logger.infox(rspamd_config, 'fann has incorrect number of inputs: %s, %s symbols' ..
