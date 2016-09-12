@@ -18,24 +18,6 @@ limitations under the License.
 
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
-  -- Limit mail per ASN (rate 12 per minute)
-  asn = {0, 0.199999998},
-  -- Limit mail per source IP (rate 6 per minute)
-  ip = {0, 0.099999999},
-  -- Limit for all mail per recipient (rate 2 per minute)
-  to = {0, 0.033333333},
-  -- Limit for all mail to a recipient per source ip (rate 1.5 per minute)
-  to_ip = {0, 0.025},
-  -- Limit for all mail per recipient/sender/source ip triplet (rate 1 per minute)
-  to_ip_from = {0, 0.01666666667},
-
-  -- Limit for all bounce mail (rate 2 per hour)
-  bounce_to = {0, 0.000555556},
-  -- Limit for bounce mail per one source ip (rate 1 per hour)
-  bounce_to_ip = {0, 0.000277778},
-
-  -- Limit for all mail per user (authuser) (rate 1 per minute)
-  user = {0, 0.01666666667}
 }
 -- Senders that are considered as bounce
 local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-daemon', 'mdaemon'}
@@ -53,6 +35,7 @@ local rl_prefix = 'rl'
 local ip_score_lower_bound = 10
 local ip_score_ham_multiplier = 1.1
 local ip_score_spam_divisor = 1.1
+local user_data = {}
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
@@ -108,6 +91,117 @@ local function resize_element(x_score, x_total, element)
     element = element * x_ip_score
   end
   return element
+end
+
+--- Check whether this addr is bounce
+local function check_bounce(from)
+  return fun.any(function(b) return b == from end, bounce_senders)
+end
+
+local custom_keywords = {}
+
+local keywords = {
+  ['ip'] = {
+    ['get_value'] = function(task)
+      local ip = task:get_ip()
+      if ip and ip:is_valid() then return ip end
+      return nil
+    end,
+  },
+  ['from'] = {
+    ['get_value'] = function(task)
+      local from = task:get_from(0)
+      if from and from[1] and from[1]['addr'] then
+        return from[1]['addr']
+      end
+      return nil
+    end,
+  },
+  ['bounce'] = {
+    ['get_value'] = function(task)
+      local from = task:get_from(0)
+      if not from and from[1] and from[1]['user'] then
+        return '_'
+      end
+      if check_bounce(from[1]['user']) then return '_' else return nil end
+    end,
+  },
+  ['asn'] = {
+    ['get_value'] = function(task)
+      local asn = task:get_mempool():get_variable('asn')
+      if not asn then
+        return nil
+      else
+        return asn
+      end
+    end,
+  },
+  ['user'] = {
+    ['get_value'] = function(task)
+      local auser = task:get_user()
+      if not auser then
+        return nil
+      else
+        return auser
+      end
+    end,
+  },
+  ['to'] = {
+    ['get_value'] = function(task)
+      return '%s' -- 'to' is special
+    end,
+  },
+}
+
+local function dynamic_rate_key(task, rtype)
+  local key_t = {rl_prefix, rtype}
+  local key_keywords = rspamd_str_split(rtype, '_')
+  local have_to = false
+  for _, v in ipairs(key_keywords) do
+    if (custom_keywords[v] and type(custom_keywords[v]['condition']) == 'function') then
+      if not custom_keywords[v]['condition']() then return nil end
+    elseif (keywords[v] and type(keywords[v]['condition']) == 'function') then
+      if not keywords[v]['condition']() then return nil end
+    end
+    local ret
+    if custom_keywords[v] and custom_keywords[v]['value'] then
+      ret = custom_keywords[v]['value']
+    elseif keywords[v] and keywords[v]['value'] then
+      ret = keywords[v]['value']
+    end
+    if not ret then
+      if custom_keywords[v] and type(custom_keywords[v]['get_value']) == 'function' then
+        ret = custom_keywords[v]['get_value'](task)
+        if ret then custom_keywords[v]['value'] = ret end
+      elseif keywords[v] and type(keywords[v]['get_value']) == 'function' then
+        ret = keywords[v]['get_value'](task)
+        if ret then keywords[v]['value'] = ret end
+      end
+    end
+    if not ret then return nil end
+    if v == 'to' then have_to = true end
+    if type(ret) ~= 'string' then ret = tostring(ret) end
+    table.insert(key_t, ret)
+  end
+  if not have_to then
+    return table.concat(key_t, ":")
+  else
+    rate_keys = {}
+    rcpts = task:get_recipients(0)
+    if not rcpts and rcpts[1] and rcpts[1]['addr'] then
+      return nil
+    end
+    local key_s = table.concat(key_t, ":")
+    local total_rcpt = 0
+    for _, r in ipairs(rcpts) do
+      if r['addr'] and total_rcpt < max_rcpt then
+        key_f = string.format(key_s, r['addr'])
+        table.insert(rate_keys, key_f)
+        total_rcpt = total_rcpt + 1
+      end
+    end
+    return rate_keys
+  end
 end
 
 --- Check specific limit inside redis
@@ -180,7 +274,7 @@ local function check_limits(task, args)
 
             if mult > 0.5 then
               task:insert_result(ratelimit_symbol, mult,
-                tostring(mult))
+                rtype .. ':' .. tostring(mult))
             end
           else
             if bucket > threshold then
@@ -290,34 +384,6 @@ local function set_limits(task, args)
   )
 end
 
---- Make rate key
-local function make_rate_key(rtype, args)
-  if rtype == 'to_ip_from' and args['from'] and args['to'] and args['ip'] and args['ip']:is_valid() then
-    return string.format('%s:%s:%s:%s:%s', rl_prefix, rtype, args['from'], args['to'], args['ip']:to_string())
-  elseif rtype == 'to_ip' and args['to'] and args['ip'] and args['ip']:is_valid() then
-    return string.format('%s:%s:%s:%s', rl_prefix, rtype, args['to'], args['ip']:to_string())
-  elseif rtype == 'to' and args['to'] then
-    return string.format('%s:%s:%s', rl_prefix, rtype, args['to'])
-  elseif rtype == 'bounce_to' and args['to'] then
-    return string.format('%s:%s:%s', rl_prefix, rtype, args['to'])
-  elseif rtype == 'bounce_to_ip' and args['to'] and args['ip'] and args['ip']:is_valid() then
-    return string.format('%s:%s:%s:%s', rl_prefix, rtype, args['to'], args['ip']:to_string())
-  elseif rtype == 'asn' and args['asn'] then
-    return string.format('%s:%s:%s', rl_prefix, rtype, args['asn'])
-  elseif rtype == 'user' and args['user'] then
-    return string.format('%s:%s:%s', rl_prefix, rtype, args['user'])
-  elseif rtype == 'ip' and args['ip'] and args['ip']:is_valid() then
-    return string.format('%s:%s:%s', rl_prefix, rtype, args['ip']:to_string())
-  else
-    return nil
-  end
-end
-
---- Check whether this addr is bounce
-local function check_bounce(from)
-  return fun.any(function(b) return b == from end, bounce_senders)
-end
-
 --- Check or update ratelimit
 local function rate_test_set(task, func)
   local args = {}
@@ -343,83 +409,27 @@ local function rate_test_set(task, func)
       return
     end
   end
-  -- Parse from
-  local from = task:get_from()
-  local from_user = '<>'
-  local from_addr = '<>'
-  if from and from[1] and from[1]['addr'] then
-    from_user = from[1]['user']
-    from_addr = from[1]['addr']
-  end
   -- Get user (authuser)
-  local auser = task:get_user()
-  local rate_key
-  if auser and settings['user'][1] > 0 then
-    if whitelisted_user and whitelisted_user:get_key(auser) then
+  if whitelisted_user then
+    local auser = task:get_user()
+    if whitelisted_user:get_key(auser) then
       rspamd_logger.infox(task, 'skip ratelimit for whitelisted user')
-    else
-      rate_key = make_rate_key ('user', {['user'] = auser})
-      if rate_key then
-        table.insert(args, {settings['user'], rate_key})
-      end
+      return
     end
   end
-  local asn
-  if settings['asn'][1] > 0 then
-    asn = task:get_mempool():get_variable('asn')
-  end
 
-  local is_bounce = check_bounce(from_user)
-
-  if rcpts and not auser then
-    fun.each(function(r)
-      if is_bounce then
-        if settings['bounce_to'][1] > 0 then
-          rate_key = make_rate_key('bounce_to', {['to'] = r['addr']})
-          if rate_key then
-            table.insert(args, {settings['bounce_to'], rate_key})
-          end
+  local rate_key
+  for k, v in pairs(settings) do
+    rate_key = dynamic_rate_key(task, k)
+    if rate_key then
+      if type(rate_key) == 'table' then
+        for _, rk in ipairs(rate_key) do
+          table.insert(args, {settings[k], rk})
         end
-        if ip and settings['bounce_to_ip'][1] > 0 then
-          rate_key = make_rate_key('bounce_to_ip', {['to'] = r['addr'], ['ip'] = ip})
-          if rate_key then
-            table.insert(args, {settings['bounce_to_ip'], rate_key})
-          end
-        end
+      else
+        table.insert(args, {settings[k], rate_key})
       end
-      if settings['to'][1] > 0 then
-        rate_key = make_rate_key('to', {['to'] = r['addr']})
-        if rate_key then
-          table.insert(args, {settings['to'], rate_key})
-        end
-      end
-      if ip then
-        if settings['to_ip'][1] > 0 then
-          rate_key = make_rate_key('to_ip', {['to'] = r['addr'], ['ip'] = ip})
-          if rate_key then
-            table.insert(args, {settings['to_ip'], rate_key})
-          end
-        end
-        if settings['to_ip_from'][1] > 0 then
-          rate_key = make_rate_key('to_ip_from', {['from'] = from_addr, ['to'] = r['addr'], ['ip'] = ip})
-          if rate_key then
-            table.insert(args, {settings['to_ip_from'], rate_key})
-          end
-        end
-        if settings['ip'][1] > 0 then
-          rate_key = make_rate_key('ip', {['ip'] = ip})
-          if rate_key then
-            table.insert(args, {settings['ip'], rate_key})
-          end
-        end
-        if asn and settings['asn'][1] > 0 then
-          rate_key = make_rate_key('asn', {['asn'] = asn})
-          if rate_key then
-            table.insert(args, {settings['asn'], rate_key})
-          end
-        end
-      end
-    end, rcpts)
+    end
   end
 
   if #args > 0 then
@@ -451,24 +461,14 @@ local function parse_limit(str)
     return
   end
 
-  if params[1] == 'to' then
-    set_limit(settings['to'], params[2], params[3])
-  elseif params[1] == 'to_ip' then
-    set_limit(settings['to_ip'], params[2], params[3])
-  elseif params[1] == 'to_ip_from' then
-    set_limit(settings['to_ip_from'], params[2], params[3])
-  elseif params[1] == 'bounce_to' then
-    set_limit(settings['bounce_to'], params[2], params[3])
-  elseif params[1] == 'bounce_to_ip' then
-    set_limit(settings['bounce_to_ip'], params[2], params[3])
-  elseif params[1] == 'user' then
-    set_limit(settings['user'], params[2], params[3])
-  elseif params[1] == 'ip' then
-    set_limit(settings['ip'], params[2], params[3])
-  elseif params[1] == 'asn' then
-    set_limit(settings['asn'], params[2], params[3])
-  else
-    rspamd_logger.errx(rspamd_config, 'invalid limit type: ' .. params[1])
+  local key_keywords = rspamd_str_split(params[1], '_')
+  for _, k in ipairs(key_keywords) do
+    if (custom_keywords[v] and type(custom_keywords[v]['get_value']) == 'function') or
+        (keywords[v] and type(keywords[v]['get_value']) == 'function') then
+      set_limit(settings[params[1]], params[2], params[3])
+    else
+      rspamd_logger.errx(rspamd_config, 'invalid limit type: ' .. params[1])
+    end
   end
 end
 
@@ -484,10 +484,8 @@ if opts then
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
-      if type(lim) == 'table' and settings[t] then
+      if type(lim) == 'table' then
         settings[t] = lim
-      else
-        rspamd_logger.errx(rspamd_config, 'bad rate: %s: %s', t, lim)
       end
     end, opts['rates'])
   end
@@ -532,6 +530,10 @@ if opts then
     end
   end
 
+  if opts['custom_keywords'] then
+    custom_keywords = dofile(opts['custom_keywords'])
+  end
+
   redis_params = rspamd_parse_redis_server('ratelimit')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
@@ -562,6 +564,16 @@ if opts then
       type = 'postfilter',
       callback = rate_set,
     })
+    for _, v in pairs(keywords) do
+      if type(v) == 'table' and type(v['init']) == 'function' then
+        v['init']()
+      end
+    end
+    for _, v in pairs(custom_keywords) do
+      if type(v) == 'table' and type(v['init']) == 'function' then
+        v['init']()
+      end
+    end
   end
 end
 
