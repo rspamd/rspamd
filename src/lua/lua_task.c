@@ -422,14 +422,14 @@ LUA_FUNCTION_DEF (task, get_symbol);
 /***
  * @method task:get_symbols()
  * Returns array of all symbols matched for this task
- * @return {table|strings} table of strings with symbols names
+ * @return {table, table} table of strings with symbols names + table of theirs scores
  */
 LUA_FUNCTION_DEF (task, get_symbols);
 
 /***
  * @method task:get_symbols_numeric()
  * Returns array of all symbols matched for this task
- * @return {table|number} table of numbers with symbols ids
+ * @return {table|number, table|number} table of numbers with symbols ids + table of theirs scores
  */
 LUA_FUNCTION_DEF (task, get_symbols_numeric);
 
@@ -2386,20 +2386,27 @@ lua_task_get_symbols (lua_State *L)
 	gint i = 1;
 	GHashTableIter it;
 	gpointer k, v;
+	struct symbol *s;
 
 	if (task) {
 		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
 		if (mres) {
 			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
+			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
 			g_hash_table_iter_init (&it, mres->symbols);
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
+				s = v;
 				lua_pushstring (L, k);
-				lua_rawseti (L, -2, i ++);
+				lua_rawseti (L, -3, i);
+				lua_pushnumber (L, s->score);
+				lua_rawseti (L, -2, i);
+				i ++;
 			}
 		}
 		else {
+			lua_createtable (L, 0, 0);
 			lua_createtable (L, 0, 0);
 		}
 	}
@@ -2407,7 +2414,7 @@ lua_task_get_symbols (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return 2;
 }
 
 static gint
@@ -2418,22 +2425,30 @@ lua_task_get_symbols_numeric (lua_State *L)
 	gint i = 1, id;
 	GHashTableIter it;
 	gpointer k, v;
+	struct symbol *s;
 
 	if (task) {
 		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
 		if (mres) {
 			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
+			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
+
 			g_hash_table_iter_init (&it, mres->symbols);
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
 						k);
+				s = v;
 				lua_pushnumber (L, id);
-				lua_rawseti (L, -2, i++);
+				lua_rawseti (L, -3, i);
+				lua_pushnumber (L, s->score);
+				lua_rawseti (L, -2, i);
+				i ++;
 			}
 		}
 		else {
+			lua_createtable (L, 0, 0);
 			lua_createtable (L, 0, 0);
 		}
 	}
@@ -2441,7 +2456,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return 2;
 }
 
 enum lua_date_type {
