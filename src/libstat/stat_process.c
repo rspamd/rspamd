@@ -370,6 +370,27 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
 		g_assert (cl != NULL);
 
+		if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {
+			msg_debug_task (
+					"<%s> contains less tokens than required for %s classifier: "
+					"%ud < %ud",
+					task->message_id,
+					cl->cfg->name,
+					task->tokens->len,
+					cl->cfg->min_tokens);
+			continue;
+		}
+		else if (cl->cfg->max_tokens > 0 && task->tokens->len > cl->cfg->max_tokens) {
+			msg_debug_task (
+					"<%s> contains more tokens than allowed for %s classifier: "
+					"%ud > %ud",
+					task->message_id,
+					cl->cfg->name,
+					task->tokens->len,
+					cl->cfg->max_tokens);
+			continue;
+		}
+
 		cl->subrs->classify_func (cl, task->tokens, task);
 	}
 }
