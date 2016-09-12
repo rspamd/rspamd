@@ -228,8 +228,6 @@ local function gen_metatokens(task)
     end
   end
 
-  rspamd_logger.errx(task, "tokens: %s", metatokens)
-
   return metatokens
 end
 
