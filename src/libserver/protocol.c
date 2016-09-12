@@ -26,6 +26,7 @@
 #include "worker_private.h"
 #include "cryptobox.h"
 #include "contrib/zstd/zstd.h"
+#include "lua/lua_common.h"
 #include <math.h>
 
 /* Max line size */
@@ -1212,13 +1213,146 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 {
 	struct rspamd_worker_log_pipe *lp;
 	struct rspamd_protocol_log_message_sum *ls;
+	lua_State *L = task->cfg->lua_state;
 	struct metric_result *mres;
 	GHashTableIter it;
 	gpointer k, v;
 	struct symbol *sym;
 	gint id, i;
-	guint32 *sid;
+	guint32 *sid, n = 0, nextra = 0;
 	gsize sz;
+	GArray *extra;
+	struct rspamd_protocol_log_symbol_result er;
+	struct rspamd_task **ptask;
+
+	/* Get extra results from lua plugins */
+	extra = g_array_new (FALSE, FALSE, sizeof (er));
+
+	lua_getglobal (L, "rspamd_plugins");
+	if (lua_istable (L, -1)) {
+		lua_pushnil (L);
+
+		while (lua_next (L, -2)) {
+			if (lua_istable (L, -1)) {
+				lua_pushvalue (L, -2);
+				/* stack:
+				 * -1: copy of key
+				 * -2: value (module table)
+				 * -3: key (module name)
+				 * -4: global
+				 */
+				lua_pushstring (L, "log_callback");
+				lua_gettable (L, -3);
+				/* stack:
+				 * -1: func
+				 * -2: copy of key
+				 * -3: value (module table)
+				 * -3: key (module name)
+				 * -4: global
+				 */
+				if (lua_isfunction (L, -1)) {
+					ptask = lua_newuserdata (L, sizeof (*ptask));
+					*ptask = task;
+					rspamd_lua_setclass (L, "rspamd{task}", -1);
+					/* stack:
+					 * -1: task
+					 * -2: func
+					 * -3: key copy
+					 * -4: value (module table)
+					 * -5: key (module name)
+					 * -6: global
+					 */
+					msg_info_task ("calling for %s", lua_tostring (L, -3));
+					if (lua_pcall (L, 1, 1, 0) != 0) {
+						msg_info_task ("call to log callback %s failed: %s",
+								lua_tostring (L, -2), lua_tostring (L, -1));
+						lua_pop (L, 1);
+						/* stack:
+						 * -1: key copy
+						 * -2: value
+						 * -3: key
+						 */
+					}
+					else {
+						/* stack:
+						 * -1: result
+						 * -2: key copy
+						 * -3: value
+						 * -4: key
+						 */
+						if (lua_istable (L, -1)) {
+							/* Another iteration */
+							lua_pushnil (L);
+
+							while (lua_next (L, -2)) {
+								/* stack:
+								 * -1: value
+								 * -2: key
+								 * -3: result table (pcall)
+								 * -4: key copy (parent)
+								 * -5: value (parent)
+								 * -6: key (parent)
+								 */
+								if (lua_istable (L, -1)) {
+									er.id = 0;
+									er.score = 0.0;
+
+									lua_rawgeti (L, -1, 1);
+									if (lua_isnumber (L, -1)) {
+										er.id = lua_tonumber (L, -1);
+									}
+									lua_rawgeti (L, -2, 2);
+									if (lua_isnumber (L, -1)) {
+										er.score = lua_tonumber (L, -1);
+									}
+									/* stack:
+									 * -1: value[2]
+									 * -2: value[1]
+									 * -3: values
+									 * -4: key
+									 * -5: result table (pcall)
+									 * -6: key copy (parent)
+									 * -7: value (parent)
+									 * -8: key (parent)
+									 */
+									lua_pop (L, 2); /* Values */
+									g_array_append_val (extra, er);
+								}
+
+								lua_pop (L, 1); /* Value for lua_next */
+							}
+
+							lua_pop (L, 1); /* Table result of pcall */
+						}
+						else {
+							msg_info_task ("call to log callback %s returned "
+									"wrong type: %s",
+									lua_tostring (L, -2),
+									lua_typename (L, lua_type (L, -1)));
+							lua_pop (L, 1); /* Returned error */
+						}
+					}
+				}
+				else {
+					lua_pop (L, 1);
+					/* stack:
+					 * -1: key copy
+					 * -2: value
+					 * -3: key
+					 */
+				}
+			}
+
+			lua_pop (L, 2); /* Top table + key copy */
+		}
+
+		lua_pop (L, 1); /* rspamd_plugins global */
+	}
+	else {
+		lua_pop (L, 1);
+	}
+
+	nextra = extra->len;
 
 	LL_FOREACH (ctx->log_pipes, lp) {
 		if (lp->fd != -1) {
@@ -1227,9 +1361,10 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 				mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
 				if (mres) {
+					n = g_hash_table_size (mres->symbols);
 					sz = sizeof (*ls) +
 							sizeof (struct rspamd_protocol_log_symbol_result) *
-							g_hash_table_size (mres->symbols);
+							(n + nextra);
 					ls = g_slice_alloc (sz);
 
 					/* Handle settings id */
@@ -1246,7 +1381,8 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 					ls->score = mres->score;
 					ls->required_score = rspamd_task_get_required_score (task,
 							mres);
-					ls->nresults = g_hash_table_size (mres->symbols);
+					ls->nresults = n;
+					ls->nextra = nextra;
 
 					g_hash_table_iter_init (&it, mres->symbols);
 					i = 0;
@@ -1267,6 +1403,8 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 
 						i ++;
 					}
+
+					memcpy (&ls->results[n], extra->data, nextra * sizeof (er));
 				}
 				else {
 					sz = sizeof (*ls);
@@ -1288,6 +1426,8 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 			}
 		}
 	}
+
+	g_array_free (extra, TRUE);
 }
 
 void

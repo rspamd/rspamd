@@ -24,6 +24,7 @@ struct rspamd_protocol_log_symbol_result {
 };
 struct rspamd_protocol_log_message_sum {
 	guint32 nresults;
+	guint32 nextra;
 	guint32 settings_id;
 	gdouble score;
 	gdouble required_score;
