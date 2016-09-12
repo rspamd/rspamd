@@ -113,7 +113,10 @@ lua_fann_create (lua_State *L)
 			layers[i] = luaL_checknumber (L, i + 2);
 		}
 
-		f = fann_create_standard_array (nlayers, layers);
+		f = fann_create_shortcut_array (nlayers, layers);
+		fann_set_activation_function_hidden (f, FANN_SIGMOID_SYMMETRIC);
+		fann_set_activation_function_output (f, FANN_SIGMOID_SYMMETRIC);
+		fann_randomize_weights (f, -0.1, 0.1);
 
 		if (f != NULL) {
 			pfann = lua_newuserdata (L, sizeof (gpointer));
