@@ -164,19 +164,10 @@ local function dynamic_rate_key(task, rtype)
       if not keywords[v]['condition']() then return nil end
     end
     local ret
-    if custom_keywords[v] and custom_keywords[v]['value'] then
-      ret = custom_keywords[v]['value']
-    elseif keywords[v] and keywords[v]['value'] then
-      ret = keywords[v]['value']
-    end
-    if not ret then
-      if custom_keywords[v] and type(custom_keywords[v]['get_value']) == 'function' then
-        ret = custom_keywords[v]['get_value'](task)
-        if ret then custom_keywords[v]['value'] = ret end
-      elseif keywords[v] and type(keywords[v]['get_value']) == 'function' then
-        ret = keywords[v]['get_value'](task)
-        if ret then keywords[v]['value'] = ret end
-      end
+    if custom_keywords[v] and type(custom_keywords[v]['get_value']) == 'function' then
+      ret = custom_keywords[v]['get_value'](task)
+    elseif keywords[v] and type(keywords[v]['get_value']) == 'function' then
+      ret = keywords[v]['get_value'](task)
     end
     if not ret then return nil end
     if v == 'to' then have_to = true end
