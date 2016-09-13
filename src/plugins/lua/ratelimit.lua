@@ -162,8 +162,6 @@ local function dynamic_rate_key(task, rtype)
   for _, v in ipairs(key_keywords) do
     if (custom_keywords[v] and type(custom_keywords[v]['condition']) == 'function') then
       if not custom_keywords[v]['condition']() then return nil end
-    elseif (keywords[v] and type(keywords[v]['condition']) == 'function') then
-      if not keywords[v]['condition']() then return nil end
     end
     local ret
     if custom_keywords[v] and type(custom_keywords[v]['get_value']) == 'function' then
