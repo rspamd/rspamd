@@ -35,13 +35,15 @@ local rl_prefix = 'rl'
 local ip_score_lower_bound = 10
 local ip_score_ham_multiplier = 1.1
 local ip_score_spam_divisor = 1.1
-local user_data = {}
+local user_data
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
+
+local user_keywords = {'user'}
 
 --- Parse atime and bucket of limit
 local function parse_limits(data)
@@ -156,7 +158,7 @@ local keywords = {
 local function dynamic_rate_key(task, rtype)
   local key_t = {rl_prefix, rtype}
   local key_keywords = rspamd_str_split(rtype, '_')
-  local have_to = false
+  local have_to, have_user = false, false
   for _, v in ipairs(key_keywords) do
     if (custom_keywords[v] and type(custom_keywords[v]['condition']) == 'function') then
       if not custom_keywords[v]['condition']() then return nil end
@@ -170,9 +172,16 @@ local function dynamic_rate_key(task, rtype)
       ret = keywords[v]['get_value'](task)
     end
     if not ret then return nil end
+    for _, uk in ipairs(user_keywords) do
+      if v == uk then have_user = true end
+      if have_user then break end
+    end
     if v == 'to' then have_to = true end
     if type(ret) ~= 'string' then ret = tostring(ret) end
     table.insert(key_t, ret)
+  end
+  if (not have_user) and task:get_user() then
+    return nil
   end
   if not have_to then
     return table.concat(key_t, ":")
@@ -230,11 +239,17 @@ local function check_limits(task, args)
       if atime == 0 then return end
 
       if use_ip_score then
-        if rtype == 'asn' then
+        local key_keywords = rspamd_str_split(rtype, '_')
+        local has_asn, has_ip = false, false
+        for _, v in ipairs(key_keywords) do
+          if v == "asn" then has_asn = true end
+          if v == "ip" then has_ip = true end
+          if has_ip and has_asn then break end
+        end
+        if has_asn and not has_ip then
           bucket = resize_element(asn_score, total_asn, bucket)
           rate = resize_element(asn_score, total_asn, rate)
-        elseif rtype == 'ip' or rtype == 'to_ip' or rtype == 'to_ip_from'
-          or rtype == 'bounce_to_ip' then
+        elseif has_ip then
           if total_ip and total_ip > ip_score_lower_bound then
             bucket = resize_element(ip_score, total_ip, bucket)
             rate = resize_element(ip_score, total_ip, rate)
@@ -522,7 +537,11 @@ if opts then
   end
 
   if opts['custom_keywords'] then
-    custom_keywords = dofile(opts['custom_keywords'])
+    custom_keywords, user_data = dofile(opts['custom_keywords'])
+  end
+
+  if opts['user_keywords'] then
+    user_keywords = opts['user_keywords']
   end
 
   redis_params = rspamd_parse_redis_server('ratelimit')
@@ -555,11 +574,6 @@ if opts then
       type = 'postfilter',
       callback = rate_set,
     })
-    for _, v in pairs(keywords) do
-      if type(v) == 'table' and type(v['init']) == 'function' then
-        v['init']()
-      end
-    end
     for _, v in pairs(custom_keywords) do
       if type(v) == 'table' and type(v['init']) == 'function' then
         v['init']()
