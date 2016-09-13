@@ -744,7 +744,7 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 {
 	struct http_map_data *data;
 	struct http_callback_data *cbd;
-
+	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_SHARED;
 
 	data = bk->data.hd;
 
@@ -788,7 +788,34 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 	msg_debug_map ("%s map data from %s", check ? "checking" : "reading",
 			data->host);
 	/* Send both A and AAAA requests */
-	if (map->r->r) {
+	if (rspamd_parse_inet_address (&cbd->addr, data->host, strlen (data->host))) {
+		rspamd_inet_address_set_port (cbd->addr, cbd->data->port);
+		cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM,
+				TRUE);
+
+		if (cbd->fd != -1) {
+			cbd->stage = map_load_file;
+			cbd->conn = rspamd_http_connection_new (NULL,
+					http_map_error,
+					http_map_finish,
+					flags,
+					RSPAMD_HTTP_CLIENT,
+					NULL,
+					cbd->map->cfg->libs_ctx->ssl_ctx);
+
+			write_http_request (cbd);
+		}
+		else {
+			msg_warn_map ("cannot load map: cannot connect to %s: %s",
+					data->host, strerror (errno));
+			rspamd_inet_address_destroy (cbd->addr);
+			cbd->addr = NULL;
+			MAP_RELEASE (cbd, "http_callback_data");
+		}
+
+		return;
+	}
+	else if (map->r->r) {
 		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
 				data->host, RDNS_REQUEST_A)) {
