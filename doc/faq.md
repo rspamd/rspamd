@@ -602,7 +602,7 @@ The overall execution order in Rspamd is the following:
 
 This symbol means that you have exceeded the amount of DNS queries allowed for non-commercial usage by SURBL services. If you use some a public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or set one up, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying a [commercial subscription](http://www.surbl.org/df) or you won't be able to use the service. The `URIBL_BLOCKED` symbol has a weight of 0 and is used just to inform you about this problem.
 
-### What is faster: custom Lua rules or regular expressions
+### What is faster between custom Lua rules and regular expressions
 
 Switching from C to Lua might be expensive. Hence, you should use regular expressions for simple checks where possible. If Rspamd is compiled with [Hyperscan](https://01.org/hyperscan) the cost of adding another regular expression is usually very cheap. In this case, you should avoid constructions that are not supported by Hyperscan: backtracking, lookbehind and some [others](http://01org.github.io/hyperscan/dev-reference/compilation.html#unsupported-constructs). On the other hand, Lua provides some unique functions that are not available by using of regular expressions. In this case, you should use Lua.
 
@@ -740,122 +740,11 @@ Rspamd can be integrated with an MTA using different methods described in the [i
 
 ### How to set up DKIM signing in Rmilter
 
-With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
-This can be done using `opendkim-genkey`:
-
-    opendkim-genkey --domain=example.com --selector=dkim
-
-That will generate `dkim.private` file with private key and `dkim.txt` with the suggested `TXT` record for your domain.
-
-```ucl
-dkim {
-    domain {
-      key = /etc/dkim;
-      domain = "*";
-      selector = "dkim";
-    };
-    header_canon = relaxed;
-    body_canon = relaxed;
-    sign_alg = sha256;
-};
-```
-
-Please note that Rmilter will sign mail only for **authenticated** users, hence you should also ensure that `{auth_authen}` macro is passed to the milter at the `MAIL FROM` stage:
-
-    milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
-
-It is also possible to sign mail for unauthenticated users from the local network. To implement that, you could add the following option to your configuration:
-
-~~~ucl
-dkim {
-    domain {
-      key = /etc/dkim;
-      domain = "*";
-      selector = "dkim";
-    };
-    header_canon = relaxed;
-    body_canon = relaxed;
-    sign_alg = sha256;
-    dkim_sign_networks = 10.0.0.0/8, 127.0.0.1/32;
-};
-~~~
+Please use [dkim module](/doc/modules/replies.html) in Rspamd.
 
 ### Setup whitelisting of reply messages
 
-It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages using Rmilter. To enable this feature, please ensure that you have a `Redis` server running and add the following lines to the redis section:
-
-```ucl
-redis {
-  ...
-  # servers_id - redis servers used for message id storing, can not be mirrored
-  servers_id = localhost;
-
-  # id_prefix - prefix for extracting message ids from redis
-  # Default: empty (no prefix is prepended to key)
-  id_prefix = "message_id.";
-}
-```
-
-### Mirror some messages to evaluate Rspamd filtering quality
-
-Sometimes it might be useful to monitor how messages are processed by Rspamd. For this purpose, Rmilter can mirror a percentage of messages to a [beanstalk](http://kr.github.io/beanstalkd/) instance and check them using rspamc.
-
-First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine will get messages from beanstalk and feed them to rspamc. Here is an example configuration file:
-
-```ini
-[instance1]
-host = 127.0.0.1
-port = 11300
-command = /usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user'
-```
-
-It is also possible, for example, to compare output for different Rspamd versions or rules sets:
-
-```ini
-[instance1]
-host = 127.0.0.1
-port = 11300
-command = [ "/usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user1'", "/usr/bin/rspamc -h other_host:11333 --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user2'" ]
-```
-
-Then setup Rmilter to mirror some traffic:
-
-```ucl
-beanstalk {
-  copy_server = localhost:11300;
-  send_beanstalk_copy = yes;
-  # Please note that copy probability is floating point number from 0.0 to 1.0
-  copy_probability = 0.1;
-}
-```
-
-Afterwards, it might be useful also to setup dovecot-sieve for sorting messages between folders by their spam scores:
-
-```
-require ["copy", "fileinto"];
-
-if header :contains "X-Spam-Symbols" "BAYES_SPAM" {
-        fileinto :copy "bayes_spam";
-}
-if header :contains "X-Spam-Symbols" "BAYES_HAM" {
-        fileinto :copy "bayes_ham";
-}
-
-if header :is "X-Spam-Action" "reject" {
-        fileinto "Spam";
-}
-if header :is "X-Spam-Action" "add header" {
-        fileinto "Probable";
-}
-if header :is "X-Spam-Action" "no action" {
-        fileinto "Ham";
-}
-if header :is "X-Spam-Action" "greylist" {
-        fileinto "Greylist";
-}
-```
-
-This script sort messages according to their spam action and also copies messages with the symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
+Please use [replies module](/doc/modules/replies.html) in Rspamd.
 
 ### How to distinguish inbound and outbound traffic for Rspamd instance
 
@@ -900,6 +789,7 @@ Previously, Rmilter could reject mail which fail SPF verification for certain do
 One can create rules in rspamd to force rejection on whatever symbols (+ other conditions) they want (DMARC module, among others has built-in support for such; [multimap](https://rspamd.com/doc/modules/multimap.html) being the most generally useful)
 
 For example, add to `/etc/rspamd/rspamd.local.lua`:
+
 ~~~lua
 local myfunc = function(task)
   if task:has_symbol('R_SPF_REJECT') then
