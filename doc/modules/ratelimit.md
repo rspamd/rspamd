@@ -115,7 +115,7 @@ ratelimit {
    custom_keywords = "/etc/rspamd/custom_ratelimit.lua";
    # other settings ...
 }
-~~~nginx
+~~~
 
 The file should return a table containing our custom function(s) and optionally a table containing some data we want to store. For example, here is a keyword which applies ratelimits to users only when the user is found in a map:
 
@@ -147,7 +147,7 @@ ratelimit {
    user_keywords = ["user", "customuser"];
    # other settings ...
 }
-~~~nginx
+~~~
 
 ### Adaptive ratelimits
 
