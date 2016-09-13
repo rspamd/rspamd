@@ -104,6 +104,51 @@ ratelimit {
 }
 ~~~
 
+### User-defined ratelimits
+
+From 1.4.0 bucket names can be dynamically constructed- `to`, `ip`, `from`, `asn`, `user` and `bounce` are all keywords that can be rearranged freely joined by underscores to form new buckets, eg. `from_ip`. Furthermore the user can define their own keywords to use in construction of these buckets. Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
+
+To create a custom keyword, we add `custom_keywords` setting to config pointing at a Lua script which we will create:
+
+~~~nginx
+ratelimit {
+   custom_keywords = "/etc/rspamd/custom_ratelimit.lua";
+   # other settings ...
+}
+~~~nginx
+
+The file should return a table containing our custom function(s) and optionally a table containing some data we want to store. For example, here is a keyword which applies ratelimits to users only when the user is found in a map:
+
+~~~lua
+local user_data = {}
+local custom_keywords = {
+  ['customuser'] = {
+  }
+}
+function custom_keywords.customuser.init()
+  -- create map
+  user_data['badusers'] = rspamd_config:add_map({['url']= '/etc/rspamd/badusers.map', ['type'] = 'set', ['description'] = 'Bad users'})
+end
+function custom_keywords.customuser.get_value(task)
+  local user = task:get_user()
+  if not user then return end -- no user, return nil
+  if user_data['badusers']:get_key(user) then return user end -- user is in map, return user
+  return -- user is not in map, return nil
+end
+return custom_keywords, user_data
+~~~
+
+Each keyword should define a `get_value` function which is passed the [task object](https://rspamd.com/doc/lua/task.html) and should return either a value to use in the ratelimit key or `nil` to indicate that the ratelimit should not be applied. Optionally we could also define an `init` function to perform some initialization on startup and a `condition` function which could determine wether the ratelimit is to be checked or not (typically it would make more sense to add conditions into the `get_value` function directly).
+
+Since we want to apply the keyword to authenticated users we must add this to the `user_keywords` setting:
+
+~~~nginx
+ratelimit {
+   user_keywords = ["user", "customuser"];
+   # other settings ...
+}
+~~~nginx
+
 ### Adaptive ratelimits
 
 From 1.4.0 Rspamd supports adaptive ratelimits- these allow for granting trusted senders increased ratelimits while reducing limits for hosts with bad or unknown reputation. This functionality requires the [ASN](/asn.html) and [IP Score](/ip_score.html) modules to be enabled.
