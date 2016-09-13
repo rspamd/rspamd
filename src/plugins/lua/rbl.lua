@@ -77,14 +77,14 @@ local function rbl_cb (task)
             if type(i) == 'string' then
               if string.find(ipstr, '^' .. i .. '$') then
                 foundrc = i
-                task:insert_result(s, 1, to_resolve .. ' : ' .. foundrc)
+                task:insert_result(s, 1, to_resolve .. ' : ' .. ipstr)
                 break
               end
             elseif type(i) == 'table' then
               for _,v in pairs(i) do
                 if string.find(ipstr, '^' .. v .. '$') then
                   foundrc = v
-                  task:insert_result(s, 1, to_resolve .. ' : ' .. foundrc)
+                  task:insert_result(s, 1, to_resolve .. ' : ' .. ipstr)
                   break
                 end
               end
