@@ -35,7 +35,6 @@ local rl_prefix = 'rl'
 local ip_score_lower_bound = 10
 local ip_score_ham_multiplier = 1.1
 local ip_score_spam_divisor = 1.1
-local user_data
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
@@ -510,7 +509,11 @@ if opts then
   end
 
   if opts['whitelisted_user'] then
-    whitelisted_user = rspamd_config:add_map(opts['whitelisted_user'], 'Ratelimit whitelist user map')
+    whitelisted_user = rspamd_config:add_map({
+      ['url'] = opts['whitelisted_user'],
+      ['description'] = 'Ratelimit whitelist user map',
+      ['type'] = 'set'
+    })
   end
 
   if opts['symbol'] then
@@ -535,7 +538,7 @@ if opts then
   end
 
   if opts['custom_keywords'] then
-    custom_keywords, user_data = dofile(opts['custom_keywords'])
+    custom_keywords = dofile(opts['custom_keywords'])
   end
 
   if opts['user_keywords'] then
