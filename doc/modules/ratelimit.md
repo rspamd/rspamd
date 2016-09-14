@@ -26,10 +26,8 @@ option allows to avoid too many work for setting buckets if there are a lot of r
 
 Where `type` is one of:
 
-- `asn` (from 1.4.0 - requires [asn module](/asn.html))
 - `bounce_to`
 - `bounce_to_ip`
-- `ip` (from 1.4.0)
 - `to`
 - `to_ip`
 - `to_ip_from`
@@ -106,7 +104,7 @@ ratelimit {
 
 ### User-defined ratelimits
 
-From 1.4.0 bucket names can be dynamically constructed- `to`, `ip`, `from`, `asn`, `user` and `bounce` are all keywords that can be rearranged freely joined by underscores to form new buckets, eg. `from_ip`. Furthermore the user can define their own keywords to use in construction of these buckets. Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
+From 1.4.0 bucket names can be dynamically constructed - `to`, `ip`, `from`, `user`, `bounce` and `asn` (new in 1.4- requires [asn module](/asn.html)) - are all keywords that can be rearranged freely joined by underscores to form new buckets, eg. `from_ip`. Furthermore the user can define their own keywords to use in construction of these buckets. Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
 
 To create a custom keyword, we add `custom_keywords` setting to config pointing at a Lua script which we will create:
 
@@ -117,25 +115,28 @@ ratelimit {
 }
 ~~~
 
-The file should return a table containing our custom function(s) and optionally a table containing some data we want to store. For example, here is a keyword which applies ratelimits to users only when the user is found in a map:
+The file should return a table containing our custom function(s). For example, here is a keyword which applies ratelimits to users only when the user is found in a map:
 
 ~~~lua
-local user_data = {}
+local d = {}
 local custom_keywords = {
-  ['customuser'] = {
-  }
+  ['customuser'] = {},
 }
 function custom_keywords.customuser.init()
   -- create map
-  user_data['badusers'] = rspamd_config:add_map({['url']= '/etc/rspamd/badusers.map', ['type'] = 'set', ['description'] = 'Bad users'})
+  d['badusers'] = rspamd_config:add_map({
+    ['url']= '/etc/rspamd/badusers.map',
+    ['type'] = 'set',
+    ['description'] = 'Bad users'
+  })
 end
 function custom_keywords.customuser.get_value(task)
   local user = task:get_user()
   if not user then return end -- no user, return nil
-  if user_data['badusers']:get_key(user) then return user end -- user is in map, return user
+  if d['badusers']:get_key(user) then return user end -- user is in map, return user
   return -- user is not in map, return nil
 end
-return custom_keywords, user_data
+return custom_keywords
 ~~~
 
 Each keyword should define a `get_value` function which is passed the [task object](https://rspamd.com/doc/lua/task.html) and should return either a value to use in the ratelimit key or `nil` to indicate that the ratelimit should not be applied. Optionally we could also define an `init` function to perform some initialization on startup and a `condition` function which could determine wether the ratelimit is to be checked or not (typically it would make more sense to add conditions into the `get_value` function directly).
