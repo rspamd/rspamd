@@ -2372,7 +2372,8 @@ gboolean
 rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
 {
 	gsize lena, lenb, i;
-	gint acc = 0;
+	guint16 d, r = 0, m;
+	guint16 v;
 
 	if (len == 0) {
 		lena = strlen (a);
@@ -2386,10 +2387,13 @@ rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
 	}
 
 	for (i = 0; i < len; i++) {
-		acc |= a[i] ^ b[i];
+		v = ((guint16)(guint8)r) + 255;
+		m = v / 256 - 1;
+		d = (guint16)((int)a[i] - (int)b[i]);
+		r |= (d & m);
 	}
 
-	return acc == 0;
+	return (((gint32)(guint16)((guint32)r + 0x8000) - 0x8000) == 0);
 }
 
 #if !defined(LIBEVENT_VERSION_NUMBER) || LIBEVENT_VERSION_NUMBER < 0x02000000UL
