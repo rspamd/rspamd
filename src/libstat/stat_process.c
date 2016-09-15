@@ -77,7 +77,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	guint i;
 	gchar tmpbuf[128];
 
-	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 4);
+	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
 
 	/* Insert images */
 	for (i = 0; i < task->parts->len; i ++) {
@@ -109,6 +109,11 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 				msg_debug_task ("added stat tokens for image '%s'", img->html_image->src);
 			}
+		}
+		else if (part->filename) {
+			elt.begin = (gchar *)part->filename;
+			elt.len = strlen (elt->begin);
+			g_array_append_val (ar, elt);
 		}
 	}
 
