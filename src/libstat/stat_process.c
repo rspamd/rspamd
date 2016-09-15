@@ -112,7 +112,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		}
 		else if (part->filename) {
 			elt.begin = (gchar *)part->filename;
-			elt.len = strlen (elt->begin);
+			elt.len = strlen (elt.begin);
 			g_array_append_val (ar, elt);
 		}
 	}
