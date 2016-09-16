@@ -1262,7 +1262,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 					 * -5: key (module name)
 					 * -6: global
 					 */
-					msg_info_task ("calling for %s", lua_tostring (L, -3));
+					msg_debug_task ("calling for %s", lua_tostring (L, -3));
 					if (lua_pcall (L, 1, 1, 0) != 0) {
 						msg_info_task ("call to log callback %s failed: %s",
 								lua_tostring (L, -2), lua_tostring (L, -1));
