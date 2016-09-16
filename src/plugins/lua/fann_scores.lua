@@ -432,8 +432,21 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
     if not res then
       rspamd_logger.errx(cf, 'cannot save fann in %s', fname)
     else
+      data[id].exist = true
       data[id].ntrains = 0
       data[id].epoch = data[id].epoch + 1
+    end
+  else
+    if not data[id].checked then
+      data[id].checked = true
+      local err,st = rspamd_util.stat(fname)
+      if err then
+        data[id].exist = false
+      end
+    end
+    if not data[id].exist then
+      rspamd_logger.infox(cf, 'not enough trains for fann %s, %s left', fname,
+        max_trains - data[id].ntrains)
     end
   end
 
