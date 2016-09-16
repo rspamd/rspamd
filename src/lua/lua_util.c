@@ -341,6 +341,7 @@ LUA_FUNCTION_DEF (util, random_hex);
  * serialized in binary form) according to the format string `fmt`
  * A format string is a sequence of conversion options. The conversion
  * options are as follows:
+ *
  *    * <: sets little endian
  *    * >: sets big endian
  *    * =: sets native endian

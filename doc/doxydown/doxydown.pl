@@ -16,7 +16,7 @@ my %languages = (
     c => {
         start  => qr/^\s*\/\*\*\*(?:\s*|(\s+\S.+\s*))$/,
         end    => qr/^\s*\*+\/\s*$/,
-        filter => qr/^(?:\s*\*+\s?)?(\s*[^*].+)\s*$/,
+        filter => qr/^(?:\s*\*+\s*)?(\s*\S.+)\s*$/,
     },
     lua => {
         start  => qr/^\s*\--\[\[\[\s*$/,
