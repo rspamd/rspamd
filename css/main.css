@@ -34,8 +34,8 @@ body {
 }
 pre{
   /* code aria */
-  background-color: #333333;
-  color: #eeeeee;
+  background-color: #ffffff;
+  color: #000000;
 }
 a.undecor {
   text-decoration: none;
