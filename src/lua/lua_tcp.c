@@ -57,23 +57,23 @@ LUA_FUNCTION_DEF (tcp, request);
  */
 LUA_FUNCTION_DEF (tcp, close);
 /***
- * @method tcp:set_timeout(milliseconds)
+ * @method tcp:set_timeout(seconds)
  *
- * Sets new timeout for a TCP connection in **milliseconds**
- * @param {number} milliseconds floating point value that specifies new timeout
+ * Sets new timeout for a TCP connection in **seconds**
+ * @param {number} seconds floating point value that specifies new timeout
  */
 LUA_FUNCTION_DEF (tcp, set_timeout);
-LUA_FUNCTION_DEF (tcp, gc);
 
 static const struct luaL_reg tcp_libf[] = {
 	LUA_INTERFACE_DEF (tcp, request),
+	{"new", lua_tcp_request},
+	{"connect", lua_tcp_request},
 	{NULL, NULL}
 };
 
 static const struct luaL_reg tcp_libm[] = {
 	LUA_INTERFACE_DEF (tcp, close),
 	LUA_INTERFACE_DEF (tcp, set_timeout),
-	{"__gc", lua_tcp_gc},
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -174,13 +174,15 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, const char *err, ...)
 	/* Connection */
 	pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
 	*pcbd = cbd;
-	REF_RETAIN (cbd);
 	rspamd_lua_setclass (cbd->L, "rspamd{tcp}", -1);
+	REF_RETAIN (cbd);
 
 	if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
 		lua_pop (cbd->L, 1);
 	}
+
+	REF_RELEASE (cbd);
 }
 
 static void
@@ -202,12 +204,15 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 	pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
 	*pcbd = cbd;
 	rspamd_lua_setclass (cbd->L, "rspamd{tcp}", -1);
+
 	REF_RETAIN (cbd);
 
 	if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
 		lua_pop (cbd->L, 1);
 	}
+
+	REF_RELEASE (cbd);
 }
 
 static void
@@ -373,6 +378,8 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 					msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
 					lua_pop (cbd->L, 1);
 				}
+
+				REF_RELEASE (cbd);
 			}
 		}
 
@@ -502,7 +509,7 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
  * - `data`: a table of strings or `rspamd_text` objects that contains data pieces
  * - `callback`: continuation function (required)
  * - `on_connect`: callback called on connection success
- * - `timeout`: floating point value that specifies timeout for IO operations in **milliseconds**
+ * - `timeout`: floating point value that specifies timeout for IO operations in **seconds**
  * - `partial`: boolean flag that specifies that callback should be called on any data portion received
  * - `stop_pattern`: stop reading on finding a certain pattern (e.g. \r\n.\r\n for smtp)
  * @return {boolean} true if request has been sent
@@ -784,16 +791,6 @@ lua_tcp_set_timeout (lua_State *L)
 
 	ms *= 1000.0;
 	double_to_tv (ms, &cbd->tv);
-
-	return 0;
-}
-
-static gint
-lua_tcp_gc (lua_State *L)
-{
-	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
-
-	REF_RELEASE (cbd);
 
 	return 0;
 }
