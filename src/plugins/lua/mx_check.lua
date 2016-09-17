@@ -139,10 +139,20 @@ local function mx_check(task)
   end
 
   local function mx_callback(resolver, to_resolve, results, err, _, authenticated)
+    local mxes = {}
     if err or not results then
+      local r = task:get_resolver()
+      -- XXX: maybe add ipv6?
+      -- fallback to implicit mx
+      mxes[mx_domain] = {checked = false, working = false, ips = {}}
+      r:resolve('a', {
+        name = mx_domain,
+        callback = gen_mx_a_callback(mx_domain, mxes),
+        task = task,
+        forced = true
+      })
       task:insert_result(settings.symbol_no_mx, 1.0)
     else
-      local mxes = {}
       table.sort(results, function(r1, r2)
         return r1['priority'] < r2['priority']
       end)
