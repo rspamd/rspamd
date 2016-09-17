@@ -37,6 +37,12 @@ local function mx_check(task)
 
   if from and from[1] and from[1]['domain'] and not from[2] then
     mx_domain = rspamd_util.get_tld(from[1]['domain'])
+  else
+    mx_domain = task:get_helo()
+
+    if mx_domain then
+      mx_domain = rspamd_util.get_tld(mx_domain)
+    end
   end
 
   if not mx_domain then
