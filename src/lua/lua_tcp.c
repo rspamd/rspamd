@@ -56,6 +56,13 @@ LUA_FUNCTION_DEF (tcp, request);
  * Closes TCP connection
  */
 LUA_FUNCTION_DEF (tcp, close);
+/***
+ * @method tcp:set_timeout(milliseconds)
+ *
+ * Sets new timeout for a TCP connection in **milliseconds**
+ * @param {number} milliseconds floating point value that specifies new timeout
+ */
+LUA_FUNCTION_DEF (tcp, set_timeout);
 LUA_FUNCTION_DEF (tcp, gc);
 
 static const struct luaL_reg tcp_libf[] = {
@@ -65,6 +72,7 @@ static const struct luaL_reg tcp_libf[] = {
 
 static const struct luaL_reg tcp_libm[] = {
 	LUA_INTERFACE_DEF (tcp, close),
+	LUA_INTERFACE_DEF (tcp, set_timeout),
 	{"__gc", lua_tcp_gc},
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -270,12 +278,6 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	return;
 
 call_finish_handler:
-
-	if (!cbd->partial) {
-		cbd->in = g_byte_array_new ();
-		rspamd_mempool_add_destructor (cbd->pool, rspamd_gstring_free_hard,
-				cbd->in);
-	}
 
 	if (cbd->do_shutdown) {
 		/* Half close the connection */
@@ -709,6 +711,10 @@ lua_tcp_request (lua_State *L)
 	cbd->port = port;
 	cbd->stop_pattern = stop_pattern;
 	cbd->connect_cb = conn_cbref;
+	cbd->in = g_byte_array_new ();
+	rspamd_mempool_add_destructor (cbd->pool,
+			(rspamd_mempool_destruct_t)g_byte_array_unref,
+			cbd->in);
 	REF_INIT_RETAIN (cbd, lua_tcp_maybe_free);
 
 	if (session) {
@@ -762,6 +768,22 @@ lua_tcp_close (lua_State *L)
 	}
 
 	REF_RELEASE (cbd);
+
+	return 0;
+}
+
+static gint
+lua_tcp_set_timeout (lua_State *L)
+{
+	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
+	gdouble ms = lua_tonumber (L, 2);
+
+	if (cbd == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	ms *= 1000.0;
+	double_to_tv (ms, &cbd->tv);
 
 	return 0;
 }
