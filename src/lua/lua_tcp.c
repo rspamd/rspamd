@@ -78,7 +78,7 @@ struct lua_tcp_cbdata {
 	rspamd_inet_addr_t *addr;
 	rspamd_mempool_t *pool;
 	struct iovec *iov;
-	GString *in;
+	GByteArray *in;
 	gchar *stop_pattern;
 	struct rspamd_async_watcher *w;
 	struct event ev;
@@ -176,7 +176,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, const char *err, ...)
 }
 
 static void
-lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const gchar *str, gsize len)
+lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 {
 	struct rspamd_lua_text *t;
 	struct lua_tcp_cbdata **pcbd;
@@ -187,7 +187,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const gchar *str, gsize len)
 	/* Body */
 	t = lua_newuserdata (cbd->L, sizeof (*t));
 	rspamd_lua_setclass (cbd->L, "rspamd{text}", -1);
-	t->start = str;
+	t->start = (const gchar *)str;
 	t->len = len;
 	t->own = FALSE;
 	/* Connection */
@@ -272,7 +272,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 call_finish_handler:
 
 	if (!cbd->partial) {
-		cbd->in = g_string_sized_new (BUFSIZ);
+		cbd->in = g_byte_array_new ();
 		rspamd_mempool_add_destructor (cbd->pool, rspamd_gstring_free_hard,
 				cbd->in);
 	}
@@ -297,7 +297,7 @@ static void
 lua_tcp_handler (int fd, short what, gpointer ud)
 {
 	struct lua_tcp_cbdata *cbd = ud;
-	gchar inbuf[BUFSIZ];
+	gchar inbuf[8192];
 	gssize r;
 	guint slen;
 
@@ -322,7 +322,7 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 			}
 			else {
 				if (cbd->in->len > 0) {
-					lua_tcp_push_data (cbd, cbd->in->str, cbd->in->len);
+					lua_tcp_push_data (cbd, cbd->in->data, cbd->in->len);
 				}
 				else {
 					lua_tcp_push_error (cbd, "IO read error while trying to write %d "
@@ -338,15 +338,15 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 				lua_tcp_push_data (cbd, inbuf, r);
 			}
 			else {
-				g_string_append_len (cbd->in, inbuf, r);
+				g_byte_array_append (cbd->in, inbuf, r);
 
 				if (cbd->stop_pattern) {
 					slen = strlen (cbd->stop_pattern);
 
 					if (cbd->in->len >= slen) {
-						if (memcmp (cbd->stop_pattern, cbd->in->str +
+						if (memcmp (cbd->stop_pattern, cbd->in->data +
 								(cbd->in->len - slen), slen) == 0) {
-							lua_tcp_push_data (cbd, cbd->in->str, cbd->in->len);
+							lua_tcp_push_data (cbd, cbd->in->data, cbd->in->len);
 							REF_RELEASE (cbd);
 						}
 					}
@@ -499,7 +499,8 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
  * - `port`: remote port to use (required)
  * - `data`: a table of strings or `rspamd_text` objects that contains data pieces
  * - `callback`: continuation function (required)
- * - `timeout`: floating point value that specifies timeout for IO operations in seconds
+ * - `on_connect`: callback called on connection success
+ * - `timeout`: floating point value that specifies timeout for IO operations in **milliseconds**
  * - `partial`: boolean flag that specifies that callback should be called on any data portion received
  * - `stop_pattern`: stop reading on finding a certain pattern (e.g. \r\n.\r\n for smtp)
  * @return {boolean} true if request has been sent
