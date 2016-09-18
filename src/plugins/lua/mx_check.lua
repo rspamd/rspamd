@@ -32,6 +32,11 @@ local settings = {
 local redis_params
 
 local function mx_check(task)
+  local ip_addr = task:get_ip()
+  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+    return
+  end
+
   local from = task:get_from('smtp')
   local mx_domain
 
