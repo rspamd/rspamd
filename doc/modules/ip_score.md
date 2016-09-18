@@ -27,10 +27,10 @@ Default multipliers are shown below:
 
 ~~~ucl
 	actions {
-		reject = 1.0,
-		'add header' = 0.25,
-		'rewrite subject' = 0.25,
-		'no action' = 1.0
+		reject = 1.0;
+		"add header" = 0.25;
+		"rewrite subject" = 0.25;
+		"no action" = 1.0;
 	}
 ~~~
 
@@ -74,10 +74,10 @@ Refer to example configuration below for available settings. To use default sett
 ip_score {
 	# how each action is treated in scoring
 	actions {
-		reject = 1.0,
-		'add header' = 0.25,
-		'rewrite subject' = 0.25,
-		'no action' = 1.0
+		reject = 1.0;
+		"add header" = 0.25;
+		"rewrite subject" = 0.25;
+		"no action" = 1.0;
 	}
 	# how each component is evaluated
 	scores {
@@ -87,28 +87,37 @@ ip_score {
 		ip = 1.0;
 	}
 	# provider for ASN data - removed in 1.3.4 - use ASN module
-	# asn_provider = 'origin.asn.cymru.com';
-	# asn6_provider = 'origin6.asn.cymru.com';
+	# asn_provider = "origin.asn.cymru.com";
+	# asn6_provider = "origin6.asn.cymru.com";
 	# prefix for asn hashes
-	asn_prefix = 'a:';
+	asn_prefix = "a:";
 	# prefix for country hashes
-	country_prefix = 'c:';
+	country_prefix = "c:";
 	# hash table in redis used for storing scores
-	hash = 'ip_score';
+	hash = "ip_score";
 	# prefix for subnet hashes
-	ipnet_prefix = 'n:';
+	ipnet_prefix = "n:";
 	# minimum number of messages to be scored
 	lower_bound = 10;
-	# the metric to score (usually 'default')
-	metric = 'default';
+	# the metric to score (usually "default")
+	metric = "default";
 	# upper and lower bounds at which to cap total score
 	max_score = null;
 	min_score = null;
 	# Amount to divide subscores by before applying tanh
 	score_divisor = 10;
 	# list of servers (or configure redis globally)
-	servers = '';
+	#servers = "localhost";
 	# symbol to be inserted
-	symbol = 'IP_SCORE';
+	symbol = "IP_SCORE";
+}
+~~~
+
+You will also have to register some weight for the symbol in metric. For example you could add the following to `local.d/metrics.conf`:
+
+~~~ucl
+symbol "IP_SCORE" {
+	weight = 2.0;
+	description = "IP reputation";
 }
 ~~~
