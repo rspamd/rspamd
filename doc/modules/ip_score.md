@@ -68,7 +68,7 @@ Subscores are added to each other to determine a total. If `min_score` or `max_s
 
 ### Configuration
 
-Refer to example configuration below for available settings. To use default settings, configure Redis globally and add `ip_score { }` to `/etc/rspamd/rspamd.conf.local`.
+Refer to example configuration below for available settings. To use default settings, [configure Redis](/doc/configuration/redis.html) globally and add `ip_score { }` to `/etc/rspamd/rspamd.conf.local`.
 
 ~~~ucl
 ip_score {
