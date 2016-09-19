@@ -63,9 +63,9 @@ local function asn_check(task)
       asn_set(parts[1], parts[2], parts[3])
 
       if redis_params then
-        local redis_key = options.key_prefix .. ip
+        local redis_key = options.key_prefix .. ip:to_string()
         local ret,conn,upstream
-        local function redis_set_cb(task, err, data)
+        local function redis_asn_set_cb(task, err, data)
           if not err then
             upstream:ok()
           else
@@ -99,10 +99,10 @@ local function asn_check(task)
   end
 
   local function asn_check_cache(ip, continuation_func)
-    local key = options.key_prefix .. ip
+    local key = options.key_prefix .. ip:to_string()
 
     local function redis_asn_get_cb(task, err, data)
-      if err or not data then
+      if err or not data or type(data[1]) ~= 'string' then
         continuation_func(ip)
       else
         asn_set(data[1], data[2], data[3])
