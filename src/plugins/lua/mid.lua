@@ -33,7 +33,7 @@ local settings = {
   csymbol_missing_mid_allowed = 'MISSING_MID_ALLOWED',
 }
 
-local maps = {}
+local map = {}
 
 local function known_mid_cb(task)
   local re = {}
@@ -41,21 +41,19 @@ local function known_mid_cb(task)
   local das = task:get_symbol(settings['symbol_dkim_allow'])
   if das and das[1] and das[1]['options'] then
     for _,dkim_domain in ipairs(das[1]['options']) do
-      for _,map in ipairs(maps) do
-        local v = map:get_key(dkim_domain)
-        if v then
-          if v == '' then
-            if not header then
-              task:insert_result(settings['symbol_known_no_mid'], 1, dkim_domain)
+      local v = map:get_key(dkim_domain)
+      if v then
+        if v == '' then
+          if not header then
+            task:insert_result(settings['symbol_known_no_mid'], 1, dkim_domain)
+            return
+          end
+        else
+          re[dkim_domain] = rspamd_regexp.create_cached(v)
+          if header then
+            if re[dkim_domain]:match(header) then
+              task:insert_result(settings['symbol_known_mid'], 1, dkim_domain)
               return
-            end
-          else
-            re[dkim_domain] = rspamd_regexp.create_cached(v)
-            if header then
-              if re[dkim_domain]:match(header) then
-                task:insert_result(settings['symbol_known_mid'], 1, dkim_domain)
-                return
-              end
             end
           end
         end
@@ -71,19 +69,11 @@ if opts then
   end
 
   if settings['url'] and #settings['url'] > 0 then
-    local urls = {}
-    if type(settings['url']) == 'table' then
-      urls = settings['url']
-    else
-      urls[1] = settings['url']
-    end
-    for i,u in ipairs(urls) do
-      maps[i] = rspamd_config:add_map ({
-        url = u,
-        type = 'map',
-        description = 'Message-IDs map'
-      })
-    end
+    map = rspamd_config:add_map ({
+      url = settings['url'],
+      type = 'map',
+      description = 'Message-IDs map'
+    })
 
     local id = rspamd_config:register_symbol({
       name = 'KNOWN_MID_CALLBACK',
