@@ -1111,9 +1111,16 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 	gsize keylen = 0;
 
 	if (reply->code != RDNS_RC_NOERROR) {
+		gint err_code = DKIM_SIGERROR_NOKEY;
+		if (reply->code == RDNS_RC_NOREC) {
+			err_code = DKIM_SIGERROR_NOREC;
+		}
+		else if (reply->code == RDNS_RC_NXDOMAIN) {
+			err_code = DKIM_SIGERROR_NOREC;
+		}
 		g_set_error (&err,
 			DKIM_ERROR,
-			DKIM_SIGERROR_NOKEY,
+			err_code,
 			"dns request to %s failed: %s",
 			cbdata->ctx->dns_key,
 			rdns_strerror (reply->code));
