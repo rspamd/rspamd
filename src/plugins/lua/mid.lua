@@ -50,11 +50,9 @@ local function known_mid_cb(task)
           end
         else
           re[dkim_domain] = rspamd_regexp.create_cached(v)
-          if header then
-            if re[dkim_domain]:match(header) then
+          if header and re[dkim_domain] and re[dkim_domain]:match(header) then
               task:insert_result(settings['symbol_known_mid'], 1, dkim_domain)
               return
-            end
           end
         end
       end
