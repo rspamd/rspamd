@@ -20,6 +20,7 @@
  * - symbol_allow (string): symbol to insert in case of allow (default: 'R_DKIM_ALLOW')
  * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
  * - symbol_tempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
+ * - symbol_permfail (string): symbol to insert in case of permanent failure (default: 'R_DKIM_PERMFAIL')
  * - symbol_na (string): symbol to insert in case of no signing (default: 'R_DKIM_NA')
  * - whitelist (map): map of whitelisted networks
  * - domains (map): map of domains to check
@@ -42,6 +43,7 @@
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"
 #define DEFAULT_SYMBOL_ALLOW "R_DKIM_ALLOW"
 #define DEFAULT_SYMBOL_NA "R_DKIM_NA"
+#define DEFAULT_SYMBOL_PERMFAIL "R_DKIM_PERMFAIL"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
 #define DEFAULT_TIME_JITTER 60
@@ -53,6 +55,7 @@ struct dkim_ctx {
 	const gchar *symbol_tempfail;
 	const gchar *symbol_allow;
 	const gchar *symbol_na;
+	const gchar *symbol_permfail;
 
 	rspamd_mempool_t *dkim_pool;
 	radix_compressed_t *whitelist_ip;
@@ -170,6 +173,15 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"dkim",
 			"Symbol that is added if mail is not signed",
 			"symbol_na",
+			UCL_STRING,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"dkim",
+			"Symbol that is added if permanent failure encountered",
+			"symbol_permfail",
 			UCL_STRING,
 			NULL,
 			0,
@@ -304,6 +316,13 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->symbol_na = DEFAULT_SYMBOL_NA;
 	}
 	if ((value =
+		rspamd_config_get_module_opt (cfg, "dkim", "symbol_permfail")) != NULL) {
+		dkim_module_ctx->symbol_permfail = ucl_obj_tostring (value);
+	}
+	else {
+		dkim_module_ctx->symbol_permfail = DEFAULT_SYMBOL_PERMFAIL;
+	}
+	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"dkim_cache_size")) != NULL) {
 		cache_size = ucl_obj_toint (value);
@@ -397,6 +416,12 @@ dkim_module_config (struct rspamd_config *cfg)
 			-1);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_na,
+			0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+			cb_id);
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+			dkim_module_ctx->symbol_permfail,
 			0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
@@ -533,9 +558,9 @@ dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
 static void
 dkim_module_check (struct dkim_check_result *res)
 {
-	gboolean all_done = TRUE, got_allow = FALSE;
+	gboolean all_done = TRUE;
 	const gchar *strict_value;
-	struct dkim_check_result *first, *cur, *sel = NULL;
+	struct dkim_check_result *first, *cur = NULL;
 
 	first = res->first;
 
@@ -560,8 +585,13 @@ dkim_module_check (struct dkim_check_result *res)
 				}
 			}
 		}
+	}
 
-		if (cur->res == -1 || cur->key == NULL) {
+	DL_FOREACH (first, cur) {
+		if (cur->ctx == NULL) {
+			continue;
+		}
+		if (cur->res == -1) {
 			/* Still need a key */
 			all_done = FALSE;
 		}
@@ -569,51 +599,36 @@ dkim_module_check (struct dkim_check_result *res)
 
 	if (all_done) {
 		DL_FOREACH (first, cur) {
+			const gchar *symbol = NULL;
+			GList *messages = NULL;
+			int symbol_weight = 1;
 			if (cur->ctx == NULL) {
 				continue;
 			}
-
-			if (cur->res == DKIM_CONTINUE) {
+			if (cur->res == DKIM_REJECT) {
+				symbol = dkim_module_ctx->symbol_reject;
+				symbol_weight = cur->mult_deny * 1.0;
+			}
+			else if (cur->res == DKIM_CONTINUE) {
+				symbol = dkim_module_ctx->symbol_allow;
+				symbol_weight = cur->mult_allow * 1.0;
+			}
+			else if (cur->res == DKIM_PERM_ERROR) {
+				symbol = dkim_module_ctx->symbol_permfail;
+			}
+			else if (cur->res == DKIM_TRYAGAIN) {
+				symbol = dkim_module_ctx->symbol_tempfail;
+			}
+			if (symbol != NULL) {
+				messages = g_list_prepend (messages,
+						rspamd_mempool_strdup (cur->task->task_pool,
+						rspamd_dkim_get_domain (cur->ctx)));
 				rspamd_task_insert_result (cur->task,
-						dkim_module_ctx->symbol_allow,
-						cur->mult_allow * 1.0,
-						g_list_prepend (NULL,
-								rspamd_mempool_strdup (cur->task->task_pool,
-										rspamd_dkim_get_domain (cur->ctx))));
-				got_allow = TRUE;
-				sel = NULL;
-			}
-			else if (!got_allow) {
-				if (sel == NULL) {
-					sel = cur;
-				}
-				else if (sel->res == DKIM_TRYAGAIN && cur->res != DKIM_TRYAGAIN) {
-					sel = cur;
-				}
+						symbol,
+						1.0,
+						messages);
 			}
 		}
-	}
-
-	if (sel != NULL) {
-		if (sel->res == DKIM_REJECT) {
-			rspamd_task_insert_result (sel->task,
-					dkim_module_ctx->symbol_reject,
-					sel->mult_deny * 1.0,
-					g_list_prepend (NULL,
-							rspamd_mempool_strdup (sel->task->task_pool,
-									rspamd_dkim_get_domain (sel->ctx))));
-		}
-		else {
-			rspamd_task_insert_result (sel->task,
-					dkim_module_ctx->symbol_tempfail,
-					1.0,
-					g_list_prepend (NULL,
-							rspamd_mempool_strdup (sel->task->task_pool,
-									rspamd_dkim_get_domain (sel->ctx))));
-		}
-	}
-
-	if (all_done) {
 		rspamd_session_watcher_pop (res->task->s, res->w);
 	}
 }
@@ -650,7 +665,12 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 				rspamd_dkim_get_dns_key (ctx), err);
 
 		if (err != NULL) {
-			res->res = DKIM_TRYAGAIN;
+			if (err->code == DKIM_SIGERROR_NOKEY) {
+				res->res = DKIM_TRYAGAIN;
+			}
+			else {
+				res->res = DKIM_PERM_ERROR;
+			}
 		}
 	}
 

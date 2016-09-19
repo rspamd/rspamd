@@ -67,6 +67,16 @@ DMARC SUBDOMAIN PASS SPF RELAXED ALIGNMENT
   ...  -i  37.48.67.26  --from  foo@mom.za.org
   Check Rspamc  ${result}  DMARC_POLICY_ALLOW
 
+DKIM PERMFAIL NXDOMAIN
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim2.eml
+  ...  -i  37.48.67.26
+  Check Rspamc  ${result}  R_DKIM_PERMFAIL
+
+DKIM PERMFAIL BAD RECORD
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  37.48.67.26
+  Check Rspamc  ${result}  R_DKIM_PERMFAIL
+
 *** Keywords ***
 DMARC Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf

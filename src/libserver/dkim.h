@@ -36,7 +36,7 @@
 #define DKIM_SIGERROR_EXPIRED       3   /* signature expired */
 #define DKIM_SIGERROR_FUTURE        4   /* signature in the future */
 #define DKIM_SIGERROR_TIMESTAMPS    5   /* x= < t= */
-#define DKIM_SIGERROR_UNUSED        6   /* OBSOLETE */
+#define DKIM_SIGERROR_NOREC         6   /* No record */
 #define DKIM_SIGERROR_INVALID_HC    7   /* c= invalid (header) */
 #define DKIM_SIGERROR_INVALID_BC    8   /* c= invalid (body) */
 #define DKIM_SIGERROR_MISSING_A     9   /* a= missing */
@@ -83,6 +83,7 @@
 #define DKIM_TRYAGAIN   2   /* try again later */
 #define DKIM_NOTFOUND   3   /* requested record not found */
 #define DKIM_RECORD_ERROR   4   /* error requesting record */
+#define DKIM_PERM_ERROR     5   /* permanent error */
 
 #define DKIM_CANON_SIMPLE   0   /* as specified in DKIM spec */
 #define DKIM_CANON_RELAXED  1   /* as specified in DKIM spec */
