@@ -59,23 +59,18 @@ local function check_quantity_received (task)
     end
   end
 
-  if task:get_user() ~= nil then
+  local task_ip = task:get_ip()
+
+  if task:get_user() or (task_ip and task_ip:is_local()) then
+    return
+  end
+  if whitelist and task_ip and whitelist:get_key(task_ip) then
+    rspamd_logger.infox(task, 'whitelisted mail from %s',
+      task_ip:to_string())
     return
   end
 
-  if whitelist then
-    local addr = task:get_from_ip()
-
-    if addr and whitelist:get_key(addr) then
-      rspamd_logger.infox(task, 'whitelisted mail from %s',
-        addr:to_string())
-      return
-    end
-  end
-
-  local task_ip = task:get_ip()
   local hn = task:get_hostname()
-
   -- Here we don't care about received
   if (not hn or hn == 'unknown') and task_ip and task_ip:is_valid() then
     task:get_resolver():resolve_ptr({task = task,
