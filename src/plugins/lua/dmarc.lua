@@ -259,7 +259,7 @@ local function dmarc_callback(task)
         end
       end
     else
-      table.insert(reason, "No SPF")
+      table.insert(reason, "No valid SPF")
     end
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
     if das and das[1] and das[1]['options'] then
@@ -279,7 +279,7 @@ local function dmarc_callback(task)
         end
       end
     else
-      table.insert(reason, "No DKIM")
+      table.insert(reason, "No valid DKIM")
     end
 
     local disposition = 'none'
