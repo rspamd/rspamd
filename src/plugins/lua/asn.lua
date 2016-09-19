@@ -17,6 +17,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_redis = require "rspamd_redis"
 
 local options = {
   provider_type = 'cymru',
@@ -25,7 +26,10 @@ local options = {
     ip6 = 'origin6.asn.cymru.com',
   },
   symbol = 'ASN',
+  expire = 86400, -- 1 day by default
+  key_prefix = 'rasn',
 }
+local redis_params
 
 local cymru_re = rspamd_regexp.create_cached("[\\|\\s]")
 
@@ -57,6 +61,35 @@ local function asn_check(task)
       local parts = cymru_re:split(results[1])
       -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
       asn_set(parts[1], parts[2], parts[3])
+
+      if redis_params then
+        local redis_key = options.key_prefix .. ip
+        local ret,conn,upstream
+        local function redis_set_cb(task, err, data)
+          if not err then
+            upstream:ok()
+          else
+            rspamd_logger.infox(task, 'got error %s when setting asn record on server %s',
+              err, upstream:get_addr())
+          end
+        end
+        ret,conn,upstream = rspamd_redis_make_request(task,
+          redis_params, -- connect params
+          redis_key, -- hash key
+          true, -- is write
+          redis_asn_set_cb, --callback
+          'HMSET', -- command
+          {redis_key, "asn", parts[1], "net", parts[2], "country", parts[3]} -- arguments
+        )
+        if conn then
+          conn:add_cmd('EXPIRE', {
+            redis_key, tostring(options['expire'])
+          })
+        else
+          rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+          upstream:fail()
+        end
+      end
     end
     local dnsbl = options['provider_info']['ip' .. ip:get_version()]
     local req_name = rspamd_logger.slog("%1.%2",
@@ -65,9 +98,51 @@ local function asn_check(task)
         req_name, cymru_dns_cb)
   end
 
+  local function asn_check_cache(ip, continuation_func)
+    local key = options.key_prefix .. ip
+
+    local function redis_asn_get_cb(task, err, data)
+      if err or not data then
+        continuation_func(ip)
+      else
+        asn_set(data[1], data[2], data[3])
+        -- Refresh key
+        local function redis_asn_expire_cb(task, err, data)
+        end
+
+        local ret,_,_ = rspamd_redis_make_request(task,
+          redis_params, -- connect params
+          key, -- hash key
+          true, -- is write
+          redis_asn_expire_cb, --callback
+          'EXPIRE', -- command
+          {key, tostring(options.expire)} -- arguments
+        )
+      end
+    end
+
+    local ret,_,_ = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      key, -- hash key
+      false, -- is write
+      redis_asn_get_cb, --callback
+      'HMGET', -- command
+      {key, "asn", "net", "country"} -- arguments
+    )
+
+    if not ret then
+      continuation_func(ip)
+    end
+  end
+
   local ip = task:get_from_ip()
   if not (ip and ip:is_valid()) then return end
-  asn_check_func[options['provider_type']](ip)
+
+  if not redis_params then
+    asn_check_func[options['provider_type']](ip)
+  else
+    asn_check_cache(ip, asn_check_func[options['provider_type']])
+  end
 end
 
 -- Configuration options
@@ -88,6 +163,7 @@ local configure_asn_module = function()
     rspamd_logger.errx("Unknown provider_type: %s", options['provider_type'])
     return false
   end
+  redis_params = rspamd_parse_redis_server('asn')
   return true
 end
 
