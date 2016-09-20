@@ -261,18 +261,21 @@ if opts then
     name = settings.symbol_bad_mx,
     score = 4.0,
     description = 'Domain has no working MX',
-    group = 'MX'
+    group = 'MX',
+    one_shot = true,
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_good_mx,
     score = -0.1,
     description = 'Domain has working MX',
-    group = 'MX'
+    group = 'MX',
+    one_shot = true,
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_no_mx,
     score = 1.5,
     description = 'Domain has no working MX',
-    group = 'MX'
+    group = 'MX',
+    one_shot = true,
   })
 end
