@@ -898,13 +898,13 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	if (idstr == NULL) {
 		msg_info_session ("absent map id");
-		rspamd_controller_send_error (conn_ent, 400, "400 id header missing");
+		rspamd_controller_send_error (conn_ent, 400, "Id header missing");
 		return 0;
 	}
 
 	if (!rspamd_strtoul (idstr->begin, idstr->len, &id)) {
 		msg_info_session ("invalid map id");
-		rspamd_controller_send_error (conn_ent, 400, "400 invalid map id");
+		rspamd_controller_send_error (conn_ent, 400, "Invalid map id");
 		return 0;
 	}
 
@@ -922,7 +922,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!found) {
 		msg_info_session ("map not found");
-		rspamd_controller_send_error (conn_ent, 404, "404 map not found");
+		rspamd_controller_send_error (conn_ent, 404, "Map not found");
 		return 0;
 	}
 
@@ -930,7 +930,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	if (stat (bk->uri, &st) == -1 || (fd = open (bk->uri, O_RDONLY)) == -1) {
 		msg_err_session ("cannot open map %s: %s", bk->uri, strerror (errno));
-		rspamd_controller_send_error (conn_ent, 500, "500 map open error");
+		rspamd_controller_send_error (conn_ent, 500, "Map open error");
 		return 0;
 	}
 
@@ -942,7 +942,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		close (fd);
 		rspamd_http_message_unref (reply);
 		msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
-		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
+		rspamd_controller_send_error (conn_ent, 500, "Map read error");
 		return 0;
 	}
 
@@ -1117,7 +1117,7 @@ rspamd_controller_handle_graph (
 
 	if (ctx->rrd == NULL) {
 		msg_err_session ("no rrd configured");
-		rspamd_controller_send_error (conn_ent, 404, "no rrd configured for graphs");
+		rspamd_controller_send_error (conn_ent, 404, "No rrd configured for graphs");
 
 		return 0;
 	}
@@ -1128,7 +1128,7 @@ rspamd_controller_handle_graph (
 
 	if (query == NULL || (value = g_hash_table_lookup (query, &srch)) == NULL) {
 		msg_err_session ("absent graph type query");
-		rspamd_controller_send_error (conn_ent, 400, "absent graph type");
+		rspamd_controller_send_error (conn_ent, 400, "Absent graph type");
 
 		if (query) {
 			g_hash_table_unref (query);
@@ -1154,7 +1154,7 @@ rspamd_controller_handle_graph (
 
 	if (rra_num == rra_invalid) {
 		msg_err_session ("invalid graph type query");
-		rspamd_controller_send_error (conn_ent, 400, "invalid graph type");
+		rspamd_controller_send_error (conn_ent, 400, "Invalid graph type");
 
 		return 0;
 	}
@@ -1163,7 +1163,7 @@ rspamd_controller_handle_graph (
 
 	if (rrd_result == NULL) {
 		msg_err_session ("cannot query rrd");
-		rspamd_controller_send_error (conn_ent, 500, "cannot query rrd");
+		rspamd_controller_send_error (conn_ent, 500, "Cannot query rrd");
 
 		return 0;
 	}
@@ -1390,7 +1390,7 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	if (task->err != NULL) {
 		msg_info_session ("cannot learn <%s>: %e", task->message_id, task->err);
-		rspamd_controller_send_error (conn_ent, task->err->code,
+		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
 				task->err->message);
 
 		return TRUE;
@@ -1410,7 +1410,7 @@ rspamd_controller_learn_fin_task (void *ud)
 		msg_info_session ("cannot learn <%s>: %e", task->message_id, task->err);
 
 		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code,
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
 					task->err->message);
 		}
 		else {
@@ -1421,7 +1421,7 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	if (RSPAMD_TASK_IS_PROCESSED (task)) {
 		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code,
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
 					task->err->message);
 		}
 		else {
@@ -1533,7 +1533,8 @@ rspamd_controller_handle_learn_common (
 	}
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
-		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
+		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+				task->err->message);
 		return 0;
 	}
 
@@ -1541,7 +1542,8 @@ rspamd_controller_handle_learn_common (
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_warn_session ("<%s> message cannot be processed", task->message_id);
-		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
+		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+				task->err->message);
 		return 0;
 	}
 
@@ -1627,14 +1629,28 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
-		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
+		if (task->err) {
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+					task->err->message);
+		}
+		else {
+			rspamd_controller_send_error (conn_ent, 500,
+					"Message load error: unknown error");
+		}
 		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
 		msg_warn_session ("message cannot be processed for %s", task->message_id);
-		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
+		if (task->err) {
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+					task->err->message);
+		}
+		else {
+			rspamd_controller_send_error (conn_ent, 500,
+					"Message process error: unknown error");
+		}
 		rspamd_session_destroy (task->s);
 		return 0;
 	}
