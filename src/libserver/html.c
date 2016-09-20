@@ -691,7 +691,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 						t += rep_len;
 					}
 					else {
-						memcpy (t, e, h - e);
+						memmove (t, e, h - e);
 						t += h - e;
 					}
 				}
@@ -713,7 +713,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 					}
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						memcpy (t, e, h - e);
+						memmove (t, e, h - e);
 						t += h - e;
 					}
 					else {
@@ -736,7 +736,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 								t += g_unichar_to_utf8 (val, t);
 							}
 							else {
-								memcpy (t, e, h - e);
+								memmove (t, e, h - e);
 								t += h - e;
 							}
 						}
