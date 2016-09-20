@@ -505,7 +505,7 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
  * - `session`: events session (no task)
  * - `pool`: memory pool (no task)
  * - `host`: IP or name of the peer (required)
- * - `port`: remote port to use (required)
+ * - `port`: remote port to use
  * - `data`: a table of strings or `rspamd_text` objects that contains data pieces
  * - `callback`: continuation function (required)
  * - `on_connect`: callback called on connection success
@@ -540,7 +540,14 @@ lua_tcp_request (lua_State *L)
 
 		lua_pushstring (L, "port");
 		lua_gettable (L, -2);
-		port = luaL_checknumber (L, -1);
+		if (lua_type (L, -1) == LUA_TNUMBER) {
+			port = luaL_checknumber (L, -1);
+		}
+		else {
+			/* We assume that it is a unix socket */
+			port = 0;
+		}
+
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "callback");
