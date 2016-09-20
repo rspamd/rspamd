@@ -239,8 +239,10 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 static void
 rdns_request_unschedule (struct rdns_request *req)
 {
-	req->async->del_timer (req->async->data,
-			req->async_event);
+	if (req->async_event) {
+		req->async->del_timer (req->async->data,
+				req->async_event);
+	}
 	/* Remove from id hashes */
 	HASH_DEL (req->io->requests, req);
 }
@@ -382,9 +384,9 @@ rdns_process_timer (void *arg)
 			UPSTREAM_FAIL (req->io->srv, time (NULL));
 		}
 
+		/* We have not scheduled timeout actually due to send error */
 		rep = rdns_make_reply (req, RDNS_RC_NETERR);
 		req->state = RDNS_REQUEST_REPLIED;
-		rdns_request_unschedule (req);
 		req->func (rep, req->arg);
 		REF_RELEASE (req);
 	}
@@ -525,6 +527,8 @@ rdns_make_request_full (
 	req->state = RDNS_REQUEST_NEW;
 	req->packet = NULL;
 	req->requested_names = calloc (queries, sizeof (struct rdns_request_name));
+	req->async_event = NULL;
+
 	if (req->requested_names == NULL) {
 		free (req);
 		return NULL;
