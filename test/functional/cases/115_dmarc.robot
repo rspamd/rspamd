@@ -77,6 +77,31 @@ DKIM PERMFAIL BAD RECORD
   ...  -i  37.48.67.26
   Check Rspamc  ${result}  R_DKIM_PERMFAIL
 
+SPF DNSFAIL UNRESOLVEABLE INCLUDE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  37.48.67.26  -F  x@openarena.za.net
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
+
+SPF ALLOW UNRESOLVEABLE INCLUDE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@openarena.za.net
+  Check Rspamc  ${result}  R_SPF_ALLOW
+
+SPF NA NA
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@za
+  Check Rspamc  ${result}  R_SPF_NA
+
+SPF NA NXDOMAIN
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@co.za
+  Check Rspamc  ${result}  R_SPF_NA
+
+SPF FAIL
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@example.net
+  Check Rspamc  ${result}  R_SPF_FAIL
+
 *** Keywords ***
 DMARC Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
