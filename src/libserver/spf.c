@@ -729,6 +729,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						cb->rec->sender_domain,
 						cb->resolved->cur_domain);
 				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 				break;
 			case SPF_RESOLVE_EXP:
 				break;
