@@ -239,6 +239,8 @@ provided by OpenDKIM library.
     + Default: `empty`
 - `enable`: enable or disable DKIM signing (from 1.9.2), binary flag
     + Default: `true`
+- `rspamd_sign`: use rspamd signing instead of the own logic (from 1.10.0)
+    + Default: `false`
 
 ## The order of checks
 
