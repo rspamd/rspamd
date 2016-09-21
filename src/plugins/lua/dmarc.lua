@@ -306,7 +306,13 @@ local function dmarc_callback(task)
         task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str)
       end
     else
-      task:insert_result(dmarc_symbols['allow'], res, lookup_domain)
+      local real_policy = 'none'
+      if strict_policy then
+        real_policy = 'reject'
+      elseif quarantine_policy then
+        real_policy = 'quarantine'
+      end
+      task:insert_result(dmarc_symbols['allow'], res, lookup_domain, real_policy)
     end
 
     if rua and redis_params and dmarc_reporting then
