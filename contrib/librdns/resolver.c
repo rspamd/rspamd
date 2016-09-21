@@ -81,6 +81,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 				HASH_ADD_INT (req->io->requests, id, req);
 				req->async_event = resolver->async->add_write (resolver->async->data,
 					fd, req);
+				req->state = RDNS_REQUEST_WAIT_SEND;
 			}
 			/*
 			 * If request is already processed then the calling function
@@ -100,7 +101,7 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		/* Fill timeout */
 		req->async_event = resolver->async->add_timer (resolver->async->data,
 				req->timeout, req);
-		req->state = RDNS_REQUEST_SENT;
+		req->state = RDNS_REQUEST_WAIT_REPLY;
 	}
 
 	return 1;
@@ -236,17 +237,6 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 	return true;
 }
 
-static void
-rdns_request_unschedule (struct rdns_request *req)
-{
-	if (req->async_event) {
-		req->async->del_timer (req->async->data,
-				req->async_event);
-	}
-	/* Remove from id hashes */
-	HASH_DEL (req->io->requests, req);
-}
-
 void
 rdns_process_read (int fd, void *arg)
 {
@@ -284,8 +274,8 @@ rdns_process_read (int fd, void *arg)
 						req->resolver->ups->data);
 			}
 
-			req->state = RDNS_REQUEST_REPLIED;
 			rdns_request_unschedule (req);
+			req->state = RDNS_REQUEST_REPLIED;
 			req->func (rep, req->arg);
 			REF_RELEASE (req);
 		}
@@ -319,8 +309,8 @@ rdns_process_timer (void *arg)
 		}
 
 		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
-		req->state = RDNS_REQUEST_REPLIED;
 		rdns_request_unschedule (req);
+		req->state = RDNS_REQUEST_REPLIED;
 		req->func (rep, req->arg);
 		REF_RELEASE (req);
 
@@ -373,7 +363,7 @@ rdns_process_timer (void *arg)
 					req->async_event);
 		req->async_event = req->async->add_write (req->async->data,
 				req->io->sock, req);
-		req->state = RDNS_REQUEST_REGISTERED;
+		req->state = RDNS_REQUEST_WAIT_SEND;
 	}
 	else if (r == -1) {
 		if (req->resolver->ups && req->io->srv->ups_elt) {
@@ -392,6 +382,7 @@ rdns_process_timer (void *arg)
 	}
 	else {
 		req->async->repeat_timer (req->async->data, req->async_event);
+		req->state = RDNS_REQUEST_WAIT_REPLY;
 	}
 }
 
@@ -466,7 +457,7 @@ rdns_process_retransmit (int fd, void *arg)
 		/* Retransmit one more time */
 		req->async_event = req->async->add_write (req->async->data,
 						fd, req);
-		req->state = RDNS_REQUEST_REGISTERED;
+		req->state = RDNS_REQUEST_WAIT_SEND;
 	}
 	else if (r == -1) {
 		if (req->resolver->ups && req->io->srv->ups_elt) {
@@ -485,7 +476,7 @@ rdns_process_retransmit (int fd, void *arg)
 	else {
 		req->async_event = req->async->add_timer (req->async->data,
 			req->timeout, req);
-		req->state = RDNS_REQUEST_SENT;
+		req->state = RDNS_REQUEST_WAIT_REPLY;
 	}
 }
 

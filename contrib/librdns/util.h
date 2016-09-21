@@ -59,4 +59,6 @@ void rdns_request_free (struct rdns_request *req);
  */
 void rdns_reply_free (struct rdns_reply *rep);
 
+void rdns_request_unschedule (struct rdns_request *req);
+
 #endif /* UTIL_H_ */

@@ -53,6 +53,7 @@ rspamd_dns_fin_cb (gpointer arg)
 	struct rspamd_dns_request_ud *reqdata = (struct rspamd_dns_request_ud *)arg;
 
 	rdns_request_release (reqdata->req);
+
 	if (reqdata->pool == NULL) {
 		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
 	}

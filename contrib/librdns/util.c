@@ -402,18 +402,19 @@ rdns_request_free (struct rdns_request *req)
 		if (req->reply != NULL) {
 			rdns_reply_free (req->reply);
 		}
-		if (req->state >= RDNS_REQUEST_SENT &&
-				req->state < RDNS_REQUEST_REPLIED) {
-			/* Remove timer */
-			req->async->del_timer (req->async->data,
-					req->async_event);
-			/* Remove from id hashes */
-			HASH_DEL (req->io->requests, req);
-		}
-		else if (req->state == RDNS_REQUEST_REGISTERED) {
-			/* Remove retransmit event */
-			req->async->del_write (req->async->data,
-					req->async_event);
+		if (req->async_event) {
+			if (req->state == RDNS_REQUEST_WAIT_REPLY) {
+				/* Remove timer */
+				req->async->del_timer (req->async->data,
+						req->async_event);
+				/* Remove from id hashes */
+				HASH_DEL (req->io->requests, req);
+			}
+			else if (req->state == RDNS_REQUEST_WAIT_SEND) {
+				/* Remove retransmit event */
+				req->async->del_write (req->async->data,
+						req->async_event);
+			}
 		}
 #ifdef TWEETNACL
 		if (req->curve_plugin_data != NULL) {
@@ -458,8 +459,30 @@ rdns_request_retain (struct rdns_request *req)
 }
 
 void
+rdns_request_unschedule (struct rdns_request *req)
+{
+	if (req->async_event) {
+		if (req->state == RDNS_REQUEST_WAIT_REPLY) {
+			req->async->del_timer (req->async->data,
+					req->async_event);
+			/* Remove from id hashes */
+			HASH_DEL (req->io->requests, req);
+			req->async_event = NULL;
+		}
+		else if (req->state == RDNS_REQUEST_WAIT_SEND) {
+			req->async->del_write (req->async->data,
+					req->async_event);
+			/* Remove from id hashes */
+			HASH_DEL (req->io->requests, req);
+			req->async_event = NULL;
+		}
+	}
+}
+
+void
 rdns_request_release (struct rdns_request *req)
 {
+	rdns_request_unschedule (req);
 	REF_RELEASE (req);
 }
 
