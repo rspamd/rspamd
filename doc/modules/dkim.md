@@ -89,7 +89,9 @@ return function(task)
           rspamd_logger.infox(task, "skip DKIM signing for unauthorized user from non-local network")
           return false
         end
-
+        -- Keys are searched in `/usr/local/etc/dkim/domain.dkim.key`
+        -- You can generate them using the following command:
+        -- rspamadm dkim_keygen -s 'dkim' -d 'example.com' -s /usr/local/etc/dkim/example.com.dkim.key
         return {
           key = "/usr/local/etc/dkim/" .. d .. ".dkim.key",
           domain = d,
@@ -129,6 +131,20 @@ return function(task)
 end
 EOD;
 ~~~
+
+You need to ensure that Rspamd can **open** signing keys, so they should be accessible for the user `_rspamd` in the most of the cases.
+
+### Rmilter support
+
+There is also convenience setting since Rmilter 1.10.0 to enable DKIM signing via Rspamd. Your `dkim` section should look like the following one in this case:
+
+~~~ucl
+dkim {
+  rspamd_sign = yes;
+}
+~~~
+
+### DKIM keys management
 
 Rspamd always use `relaxed/relaxed` encoding with `rsa-sha256` signature algorithm. This selection seems to be the most appropriate for all cases. Rspamd adds a special element called `DKIM-Signature` to the output when signing has been done. [Rmilter](/rmilter/) can use this header out of the box. Other integration methods cannot recognize this header so far.
 
