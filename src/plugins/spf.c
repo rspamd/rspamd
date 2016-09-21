@@ -442,7 +442,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 	struct spf_resolved *l;
 	struct rspamd_async_watcher *w = ud;
 
-	if (record && record->elts->len == 0) {
+	if (record && record->elts->len == 0 && !record->failed) {
 		rspamd_task_insert_result (task,
 				spf_module_ctx->symbol_na,
 				1,
