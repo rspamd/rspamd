@@ -114,7 +114,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
 
 struct rspamd_email_address;
-
+enum rspamd_newlines_type;
 
 /**
  * Worker task structure
@@ -161,6 +161,7 @@ struct rspamd_task {
 	GPtrArray *rcpt_envelope;						/**< array of rspamd_email_address					*/
 	InternetAddressList *from_mime;
 	struct rspamd_email_address *from_envelope;
+	enum rspamd_newlines_type nlines_type;			/**< type of newlines (detected on most of headers 	*/
 
 	GList *messages;								/**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/

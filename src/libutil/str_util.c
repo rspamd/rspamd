@@ -701,14 +701,17 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 
 static gchar *
 rspamd_encode_base64_common (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen, gboolean fold)
+		gsize *outlen, gboolean fold, enum rspamd_newlines_type how)
 {
+#define ADD_SPLIT do { \
+	if (how == RSPAMD_TASK_NEWLINES_CR || how == RSPAMD_TASK_NEWLINES_CRLF) *o++ = '\r'; \
+	if (how == RSPAMD_TASK_NEWLINES_LF || how == RSPAMD_TASK_NEWLINES_CRLF) *o++ = '\n'; \
+	if (fold) *o++ = '\t'; \
+} while (0)
 #define CHECK_SPLIT \
 	do { if (str_len > 0 && cols >= str_len) { \
-				*o++ = '\r'; \
-				*o++ = '\n'; \
-				if (fold) *o++ = '\t'; \
-				cols = 0; \
+		ADD_SPLIT; \
+		cols = 0; \
 	} } \
 while (0)
 
@@ -724,7 +727,28 @@ while (0)
 
 	if (str_len > 0) {
 		g_assert (str_len > 8);
-		allocated_len += (allocated_len / str_len + 1) * (fold ? 3 : 2) + 1;
+		if (fold) {
+			switch (how) {
+			case RSPAMD_TASK_NEWLINES_CR:
+			case RSPAMD_TASK_NEWLINES_LF:
+				allocated_len += (allocated_len / str_len + 1) * 2 + 1;
+				break;
+			default:
+				allocated_len += (allocated_len / str_len + 1) * 3 + 1;
+				break;
+			}
+		}
+		else {
+			switch (how) {
+			case RSPAMD_TASK_NEWLINES_CR:
+			case RSPAMD_TASK_NEWLINES_LF:
+				allocated_len += (allocated_len / str_len + 1) * 1 + 1;
+				break;
+			default:
+				allocated_len += (allocated_len / str_len + 1) * 2 + 1;
+				break;
+			}
+		}
 	}
 
 	out = g_malloc (allocated_len);
@@ -755,11 +779,7 @@ while (0)
 				cols --;
 			}
 
-			*o++ = '\r';
-			*o++ = '\n';
-			if (fold) {
-				*o ++ = '\t';
-			}
+			ADD_SPLIT;
 
 			/* Remaining bytes */
 			while (shift >= 16) {
@@ -851,14 +871,15 @@ gchar *
 rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen)
 {
-	return rspamd_encode_base64_common (in, inlen, str_len, outlen, FALSE);
+	return rspamd_encode_base64_common (in, inlen, str_len, outlen, FALSE,
+			RSPAMD_TASK_NEWLINES_CRLF);
 }
 
 gchar *
 rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen)
+		gsize *outlen, enum rspamd_newlines_type how)
 {
-	return rspamd_encode_base64_common (in, inlen, str_len, outlen, TRUE);
+	return rspamd_encode_base64_common (in, inlen, str_len, outlen, TRUE, how);
 }
 
 gsize
@@ -1004,7 +1025,8 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 GString *
 rspamd_header_value_fold (const gchar *name,
 		const gchar *value,
-		guint fold_max)
+		guint fold_max,
+		enum rspamd_newlines_type how)
 {
 	GString *res;
 	const guint default_fold_max = 76;
@@ -1066,7 +1088,7 @@ rspamd_header_value_fold (const gchar *name,
 				c = p;
 				state = read_quoted;
 			}
-			else if (*p == '\r') {
+			else if (*p == '\r' || *p == '\n') {
 				/* Reset line length */
 				cur_len = 0;
 
@@ -1105,7 +1127,19 @@ rspamd_header_value_fold (const gchar *name,
 			/* Here, we have token start at 'c' and token end at 'p' */
 			if (fold_type == fold_after) {
 				g_string_append_len (res, c, p - c);
-				g_string_append_len (res, "\r\n\t", 3);
+
+				switch (how) {
+				case RSPAMD_TASK_NEWLINES_LF:
+					g_string_append_len (res, "\n\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CR:
+					g_string_append_len (res, "\r\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CRLF:
+				default:
+					g_string_append_len (res, "\r\n\t", 3);
+					break;
+				}
 
 				/* Skip space if needed */
 				if (g_ascii_isspace (*p)) {
@@ -1118,7 +1152,19 @@ rspamd_header_value_fold (const gchar *name,
 					c ++;
 				}
 
-				g_string_append_len (res, "\r\n\t", 3);
+				switch (how) {
+				case RSPAMD_TASK_NEWLINES_LF:
+					g_string_append_len (res, "\n\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CR:
+					g_string_append_len (res, "\r\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CRLF:
+				default:
+					g_string_append_len (res, "\r\n\t", 3);
+					break;
+				}
+
 				g_string_append_len (res, c, p - c);
 			}
 
@@ -1155,7 +1201,18 @@ rspamd_header_value_fold (const gchar *name,
 			if (g_ascii_isspace (*c)) {
 				c ++;
 			}
-			g_string_append_len (res, "\r\n\t", 3);
+			switch (how) {
+			case RSPAMD_TASK_NEWLINES_LF:
+				g_string_append_len (res, "\n\t", 2);
+				break;
+			case RSPAMD_TASK_NEWLINES_CR:
+				g_string_append_len (res, "\r\t", 2);
+				break;
+			case RSPAMD_TASK_NEWLINES_CRLF:
+			default:
+				g_string_append_len (res, "\r\n\t", 3);
+				break;
+			}
 			g_string_append_len (res, c, p - c);
 		}
 		else {

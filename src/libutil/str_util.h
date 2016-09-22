@@ -20,6 +20,14 @@
 #include "ucl.h"
 #include "fstring.h"
 
+
+enum rspamd_newlines_type {
+	RSPAMD_TASK_NEWLINES_CR,
+	RSPAMD_TASK_NEWLINES_LF,
+	RSPAMD_TASK_NEWLINES_CRLF,
+	RSPAMD_TASK_NEWLINES_MAX
+};
+
 /**
  * Compare two memory regions of size `l` using case insensitive matching
  */
@@ -193,7 +201,7 @@ gchar * rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
  * @return freshly allocated base64 encoded value or NULL if input is invalid
  */
 gchar * rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen);
+		gsize *outlen, enum rspamd_newlines_type how);
 
 /**
  * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
@@ -227,7 +235,8 @@ gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
  */
 GString *rspamd_header_value_fold (const gchar *name,
 		const gchar *value,
-		guint fold_max);
+		guint fold_max,
+		enum rspamd_newlines_type how);
 
 /**
  * Search for a substring `srch` in the text `in` using Karp-Rabin algorithm

@@ -1032,7 +1032,8 @@ lua_util_fold_header (lua_State *L)
 	value = luaL_checkstring (L, 2);
 
 	if (name && value) {
-		folded = rspamd_header_value_fold (name, value, 0);
+		folded = rspamd_header_value_fold (name, value, 0,
+				RSPAMD_TASK_NEWLINES_CRLF);
 
 		if (folded) {
 			lua_pushlstring (L, folded->str, folded->len);

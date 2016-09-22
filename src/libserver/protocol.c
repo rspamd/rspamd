@@ -1037,7 +1037,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 
 	if (dkim_sig) {
 		GString *folded_header = rspamd_header_value_fold ("DKIM-Signature",
-				dkim_sig->str, 80);
+				dkim_sig->str, 80, task->nlines_type);
 		ucl_object_insert_key (top,
 				ucl_object_fromstring_common (folded_header->str,
 						folded_header->len, UCL_STRING_RAW),

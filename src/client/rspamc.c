@@ -1129,7 +1129,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 
 		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols",
 				symbuf->str,
-				0);
+				0, RSPAMD_TASK_NEWLINES_CRLF);
 		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v\r\n",
 				folded_symbuf);
 
@@ -1153,7 +1153,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			}
 
 			json_header_encoded = rspamd_encode_base64_fold (json_header,
-					strlen (json_header), 60, NULL);
+					strlen (json_header), 60, NULL, RSPAMD_TASK_NEWLINES_CRLF);
 			free (json_header);
 			rspamd_printf_gstring (added_headers,
 					"X-Spam-Result: %s\r\n",

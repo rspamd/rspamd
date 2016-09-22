@@ -80,10 +80,12 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
+	guint nlines_count[RSPAMD_TASK_NEWLINES_MAX];
 
 	p = in;
 	end = p + len;
 	c = p;
+	memset (nlines_count, 0, sizeof (nlines_count));
 
 	while (p < end) {
 		/* FSM for processing headers */
@@ -140,6 +142,17 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 				p++;
 			}
 			else if (*p == '\n' || *p == '\r') {
+
+				if (*p == '\n') {
+					nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
+				}
+				else if (*(p + 1) == '\n') {
+					nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
+				}
+				else {
+					nlines_count[RSPAMD_TASK_NEWLINES_CR] ++;
+				}
+
 				/* Process folding */
 				state = 99;
 				l = p - c;
@@ -167,6 +180,15 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 		case 3:
 			if (*p == '\r' || *p == '\n') {
 				/* Hold folding */
+				if (*p == '\n') {
+					nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
+				}
+				else if (*(p + 1) == '\n') {
+					nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
+				}
+				else {
+					nlines_count[RSPAMD_TASK_NEWLINES_CR] ++;
+				}
 				state = 99;
 				next_state = 3;
 				err_state = 4;
@@ -279,12 +301,15 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 
 			if (*p == '\r') {
 				if (*(p + 1) == '\n') {
+					nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
 					p++;
 				}
 				p++;
 				state = next_state;
 			}
 			else if (*p == '\n') {
+				nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
+
 				if (*(p + 1) == '\r') {
 					p++;
 				}
@@ -301,6 +326,18 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			break;
 		}
 	}
+
+	guint max_cnt = 0;
+	gint sel = 0;
+
+	for (gint i = 0; i < RSPAMD_TASK_NEWLINES_MAX; i ++) {
+		if (nlines_count[i] > max_cnt) {
+			max_cnt = nlines_count[i];
+			sel = i;
+		}
+	}
+
+	task->nlines_type = sel;
 }
 
 static void

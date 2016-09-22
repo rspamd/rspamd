@@ -2162,7 +2162,8 @@ rspamd_dkim_sign (struct rspamd_task *task,
 		return NULL;
 	}
 
-	b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL);
+	b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+			task->nlines_type);
 	rspamd_printf_gstring (hdr, "%s", b64_data);
 	g_free (b64_data);
 
