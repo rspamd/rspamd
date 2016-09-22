@@ -38,6 +38,7 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_REFRENCE (1 << 6)
 #define RSPAMD_SPF_FLAG_REDIRECT (1 << 7)
 #define RSPAMD_SPF_FLAG_TEMPFAIL (1 << 8)
+#define RSPAMD_SPF_FLAG_NA (1 << 9)
 
 struct spf_addr {
 	guchar addr6[sizeof (struct in6_addr)];
@@ -58,7 +59,8 @@ struct spf_addr {
 struct spf_resolved {
 	gchar *domain;
 	guint ttl;
-	gboolean failed;
+	gboolean temp_failed;
+	gboolean na;
 	GArray *elts; /* Flat list of struct spf_addr */
 	ref_entry_t ref; /* Refcounting */
 };
