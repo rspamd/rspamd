@@ -347,6 +347,8 @@ rdns_process_timer (void *arg)
 			req->state = RDNS_REQUEST_REPLIED;
 			req->func (rep, req->arg);
 			REF_RELEASE (req);
+
+			return;
 		}
 
 		/* Select random IO channel */
@@ -356,13 +358,20 @@ rdns_process_timer (void *arg)
 		renew = true;
 	}
 
+	/*
+	 * Note: when `renew` is true, then send_request deals with the
+	 * timers and events itself
+	 */
 	r = rdns_send_request (req, req->io->sock, renew);
 	if (r == 0) {
 		/* Retransmit one more time */
-		req->async->del_timer (req->async->data,
+		if (!renew) {
+			req->async->del_timer (req->async->data,
 					req->async_event);
-		req->async_event = req->async->add_write (req->async->data,
-				req->io->sock, req);
+			req->async_event = req->async->add_write (req->async->data,
+					req->io->sock, req);
+		}
+
 		req->state = RDNS_REQUEST_WAIT_SEND;
 	}
 	else if (r == -1) {
@@ -372,6 +381,11 @@ rdns_process_timer (void *arg)
 		}
 		else {
 			UPSTREAM_FAIL (req->io->srv, time (NULL));
+		}
+
+		if (!renew) {
+			req->async->del_timer (req->async->data,
+					req->async_event);
 		}
 
 		/* We have not scheduled timeout actually due to send error */
