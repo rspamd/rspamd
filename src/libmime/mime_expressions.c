@@ -806,7 +806,6 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 
 	if (re->type == RSPAMD_RE_HEADER || re->type == RSPAMD_RE_RAWHEADER) {
 		ret = rspamd_re_cache_process (task,
-				task->re_rt,
 				re->regexp,
 				re->type,
 				re->header,
@@ -815,7 +814,6 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 	}
 	else {
 		ret = rspamd_re_cache_process (task,
-				task->re_rt,
 				re->regexp,
 				re->type,
 				NULL,

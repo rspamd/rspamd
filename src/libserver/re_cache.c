@@ -22,6 +22,7 @@
 #include "libserver/cfg_file.h"
 #include "libutil/util.h"
 #include "libutil/regexp.h"
+#include "lua/lua_common.h"
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "unix-std.h"
@@ -1050,7 +1051,6 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 gint
 rspamd_re_cache_process (struct rspamd_task *task,
-		struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
 		gpointer type_data,
@@ -1060,9 +1060,11 @@ rspamd_re_cache_process (struct rspamd_task *task,
 	guint64 re_id;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache *cache;
+	struct rspamd_re_runtime *rt;
 
-	g_assert (rt != NULL);
 	g_assert (task != NULL);
+	rt = task->re_rt;
+	g_assert (rt != NULL);
 	g_assert (re != NULL);
 
 	cache = rt->cache;
@@ -1094,6 +1096,25 @@ rspamd_re_cache_process (struct rspamd_task *task,
 	}
 
 	return 0;
+}
+
+int
+rspamd_re_cache_process_ffi (void *ptask,
+		void *pre,
+		int type,
+		void *type_data,
+		int is_strong)
+{
+	struct rspamd_lua_regexp **lua_re = pre;
+	struct rspamd_task **real_task = ptask;
+	gsize typelen = 0;
+
+	if (type_data) {
+		typelen = strlen (type_data);
+	}
+
+	return rspamd_re_cache_process (*real_task, (*lua_re)->re,
+			type, type_data, typelen, is_strong);
 }
 
 void

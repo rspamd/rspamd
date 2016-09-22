@@ -3072,7 +3072,7 @@ lua_task_process_regexp (lua_State *L)
 						"header argument is mandatory for header/rawheader regexps");
 			}
 			else {
-				ret = rspamd_re_cache_process (task, task->re_rt, re->re, type,
+				ret = rspamd_re_cache_process (task, re->re, type,
 						(gpointer) header_str, header_len, strong);
 			}
 		}

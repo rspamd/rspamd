@@ -109,12 +109,17 @@ const struct rspamd_re_cache_stat *
  * @param is_strong use case sensitive match when looking for headers
  */
 gint rspamd_re_cache_process (struct rspamd_task *task,
-		struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
 		gpointer type_data,
 		gsize datalen,
 		gboolean is_strong);
+
+int rspamd_re_cache_process_ffi (void *ptask,
+		void *pre,
+		int type,
+		void *type_data,
+		int is_strong);
 
 /**
  * Destroy runtime data
