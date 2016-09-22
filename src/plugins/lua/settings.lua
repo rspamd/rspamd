@@ -19,10 +19,8 @@ limitations under the License.
 -- https://rspamd.com/doc/configuration/settings.html
 
 local rspamd_logger = require "rspamd_logger"
-local set_section = rspamd_config:get_all_opt("settings")
-if not (set_section and type(set_section) == 'table') then
-  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
-end
+local rspamd_redis = require 'rspamd_redis'
+local redis_params
 
 local settings = {
   [1] = {},
@@ -521,6 +519,85 @@ local function process_settings_map(string)
   end
 
   return res
+end
+
+local function gen_redis_callback(handler, id)
+  return function(task)
+    local key = handler(task)
+
+    local function redis_settings_cb(task, err, data)
+      if not err and type(data) == 'string' then
+        local ucl = require "ucl"
+        local parser = ucl.parser()
+        local res,err = parser:parse_string(data)
+        if not res then
+          rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
+            err)
+        else
+          local obj = parser:get_object()
+          rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
+            task:get_message_id(), id)
+          task:set_settings(obj)
+        end
+      end
+    end
+
+    if not key then
+      rspamd_logger.errx(rspamd_config, 'Cannot execute handler number %s', id)
+      return
+    end
+
+    local ret,_,_ = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      key, -- hash key
+      false, -- is write
+      redis_settings_cb, --callback
+      'GET', -- command
+      {key} -- arguments
+    )
+  end
+end
+
+local redis_section = rspamd_config:get_all_opt("settings_redis")
+local redis_key_handlers = {}
+
+if redis_section then
+  redis_params = rspamd_parse_redis_server('replies')
+  if redis_params then
+    local handlers = redis_section.handlers
+
+    for _,h in ipairs(handlers) do
+      local chunk,err = loadstring(h)
+
+      if not chunk then
+        rspamd_logger.errx(rspamd_config, 'Cannot load handler from string: %s',
+            tostring(err))
+      else
+        local res,func = pcall(chunk)
+        if not res then
+          rspamd_logger.errx(rspamd_config, 'Cannot add handler from string: %s',
+            tostring(func))
+        else
+          table.insert(redis_key_handlers, func)
+        end
+      end
+    end
+  end
+
+  each(function(id, h)
+    rspamd_config:register_symbol({
+      name = 'REDIS_SETTINGS' .. tostring(id),
+      type = 'prefilter',
+      callback = gen_redis_callback(h, id),
+      priority = 10
+    })
+  end, redis_key_handlers)
+end
+
+local set_section = rspamd_config:get_all_opt("settings")
+if not redis_params and not (set_section and type(set_section) == 'table') then
+  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
+  return
 end
 
 if set_section and set_section[1] and type(set_section[1]) == "string" then
