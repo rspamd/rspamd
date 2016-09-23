@@ -1089,15 +1089,23 @@ rspamd_header_value_fold (const gchar *name,
 				state = read_quoted;
 			}
 			else if (*p == '\r' || *p == '\n') {
-				/* Reset line length */
-				cur_len = 0;
-
-				while (g_ascii_isspace (*p)) {
-					p ++;
+				if (cur_len > fold_max && !first_token) {
+					fold_type = fold_before;
+					state = fold_token;
+					next_state = read_token;
 				}
+				else {
+					/* Reset line length */
+					cur_len = 0;
 
-				g_string_append_len (res, c, p - c);
-				c = p;
+					while (g_ascii_isspace (*p)) {
+						p ++;
+					}
+
+					g_string_append_len (res, c, p - c);
+					c = p;
+					first_token = TRUE;
+				}
 			}
 			else if (g_ascii_isspace (*p)) {
 				if (cur_len > fold_max * 0.8 && cur_len < fold_max) {
@@ -1116,6 +1124,7 @@ rspamd_header_value_fold (const gchar *name,
 					c = p;
 					first_token = FALSE;
 					p ++;
+					cur_len ++;
 				}
 			}
 			else {
@@ -1125,6 +1134,8 @@ rspamd_header_value_fold (const gchar *name,
 			break;
 		case fold_token:
 			/* Here, we have token start at 'c' and token end at 'p' */
+			g_assert (p > c);
+
 			if (fold_type == fold_after) {
 				g_string_append_len (res, c, p - c);
 
@@ -1145,10 +1156,12 @@ rspamd_header_value_fold (const gchar *name,
 				if (g_ascii_isspace (*p)) {
 					p ++;
 				}
+
+				cur_len = 0;
 			}
 			else {
 				/* Skip space if needed */
-				if (g_ascii_isspace (*c)) {
+				if (g_ascii_isspace (*c) && p > c) {
 					c ++;
 				}
 
@@ -1166,12 +1179,12 @@ rspamd_header_value_fold (const gchar *name,
 				}
 
 				g_string_append_len (res, c, p - c);
+				cur_len = p - c;
 			}
 
+			first_token = TRUE;
 			c = p;
 			state = next_state;
-			cur_len = 0;
-			first_token = TRUE;
 			break;
 
 		case read_quoted:
