@@ -1323,9 +1323,9 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 					}
 				}
 			}
+			rspamd_fprintf (out, "\n");
 		}
 
-		rspamd_fprintf (out, "\n");
 		fflush (out);
 	}
 
