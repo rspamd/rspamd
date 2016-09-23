@@ -1925,9 +1925,13 @@ url_email_start (struct url_callback_data *cb,
 			cb->last_at = NULL;
 			return FALSE;
 		}
+		else if (pos == cb->begin) {
+			/* Just @ at the start of input */
+			return FALSE;
+		}
 	}
 
-	if (pos > cb->begin - 1) {
+	if (pos >= cb->begin + 1) {
 		match->st = *(pos - 1);
 	}
 	else {
