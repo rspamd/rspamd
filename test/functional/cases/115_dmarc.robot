@@ -92,10 +92,25 @@ SPF NA NA
   ...  -i  8.8.8.8  -F  x@za
   Check Rspamc  ${result}  R_SPF_NA
 
-SPF NA NXDOMAIN
+SPF NA NOREC
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@co.za
   Check Rspamc  ${result}  R_SPF_NA
+
+SPF NA NXDOMAIN
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@zzzzaaaa
+  Check Rspamc  ${result}  R_SPF_NA
+
+SPF DNSFAIL UNRESOLVEABLE REDIRECT
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
+
+SPF PERMFAIL
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@xzghgh.za.org
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
 
 SPF FAIL
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml

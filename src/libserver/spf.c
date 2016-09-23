@@ -314,28 +314,33 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
 			/* Unresolved redirect */
 			msg_info_spf ("redirect to %s cannot be resolved", cur->spf_string);
-			return;
+			cur->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		}
-
-		g_assert (cur->flags & RSPAMD_SPF_FLAG_REFRENCE);
-		g_assert (cur->m.idx < rec->resolved->len);
-		relt = g_ptr_array_index (rec->resolved, cur->m.idx);
-		msg_debug_spf ("domain %s is redirected to %s", elt->cur_domain,
-				relt->cur_domain);
+		else {
+			g_assert (cur->flags & RSPAMD_SPF_FLAG_REFRENCE);
+			g_assert (cur->m.idx < rec->resolved->len);
+			relt = g_ptr_array_index (rec->resolved, cur->m.idx);
+			msg_debug_spf ("domain %s is redirected to %s", elt->cur_domain,
+					relt->cur_domain);
+		}
 	}
 
 	for (i = 0; i < elt->elts->len; i++) {
 		cur = g_ptr_array_index (elt->elts, i);
 
 		if (cur->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
-			target->failed = TRUE;
+			target->temp_failed = TRUE;
 			continue;
 		}
-		else if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
+		if (cur->flags & RSPAMD_SPF_FLAG_NA) {
+			target->na = TRUE;
+			continue;
+		}
+		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
 			/* Ignore unparsed addrs */
 			continue;
 		}
-		else if (cur->flags & RSPAMD_SPF_FLAG_REFRENCE) {
+		if (cur->flags & RSPAMD_SPF_FLAG_REFRENCE) {
 			/* Process reference */
 			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
 				/* Stop on redirected domain */
@@ -371,15 +376,20 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 
 	g_assert (rec != NULL);
 
-	res = g_slice_alloc0 (sizeof (*res));
-	res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
-			rec->resolved->len);
-	res->domain = g_strdup (rec->sender_domain);
-	res->ttl = rec->ttl;
-	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
+	if (rec->resolved) {
+		res = g_slice_alloc0 (sizeof (*res));
+		res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
+				rec->resolved->len);
+		res->domain = g_strdup (rec->sender_domain);
+		res->ttl = rec->ttl;
+		REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
-	if (rec->resolved->len > 0) {
-		rspamd_spf_process_reference (res, NULL, rec, TRUE);
+		if (rec->resolved->len > 0) {
+			rspamd_spf_process_reference (res, NULL, rec, TRUE);
+		}
+	}
+	else {
+		return rec;
 	}
 
 	return res;
@@ -1787,8 +1797,26 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			/* Top level resolved element */
 			rec->ttl = reply->entries->ttl;
 		}
-
-		spf_process_txt_record (rec, resolved, reply);
+	}
+	else if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
+			&& rec->dns_requests == 0) {
+		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
+		struct spf_addr *addr;
+		addr = g_slice_alloc0 (sizeof (*addr));
+		addr->flags = 0;
+		addr->flags |= RSPAMD_SPF_FLAG_NA;
+		g_ptr_array_insert(resolved->elts, 0, addr);
+	}
+ 
+	if (!spf_process_txt_record (rec, resolved, reply)) {
+		if (rec->dns_requests == 0) {
+			resolved = g_ptr_array_index (rec->resolved, 0);
+			struct spf_addr *addr;
+			addr = g_slice_alloc0 (sizeof (*addr));
+			addr->flags = 0;
+			addr->flags |= RSPAMD_SPF_FLAG_NA;
+			g_ptr_array_insert(resolved->elts, 0, addr);
+		}
 	}
 
 	rspamd_spf_maybe_return (rec);
