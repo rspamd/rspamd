@@ -1360,7 +1360,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_cr:
-			if (p > start - 1) {
+			if (p > start + 1) {
 				if (*(p - 1) == '\r') {
 					p --;
 					state = got_cr;
@@ -1393,7 +1393,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_lf:
-			if (p > start - 1) {
+			if (p > start + 1) {
 				if (*(p - 1) == '\r') {
 					state = got_crlf;
 				}
@@ -1418,7 +1418,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_crlf:
-			if (p > start - 2) {
+			if (p > start + 2) {
 				if (*(p - 3) == '\r') {
 					p -= 2;
 					state = got_cr;
@@ -1445,7 +1445,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 		case test_spaces:
 			t = p - skip;
 
-			while (t > start - 2 && *t == ' ') {
+			while (t > start + 2 && *t == ' ') {
 				t --;
 			}
 
