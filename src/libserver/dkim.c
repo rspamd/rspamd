@@ -1337,9 +1337,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				state = test_spaces;
 			}
 			else {
-				if (type == DKIM_CANON_SIMPLE) {
-					*need_crlf = TRUE;
-				}
+				*need_crlf = TRUE;
 
 				goto end;
 			}
@@ -1526,6 +1524,13 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx, ctx->body_hash,
 						&start, end - start, &remain)) ;
+				if (need_crlf) {
+					start = "\r\n";
+					end = start + 2;
+					remain = 2;
+					rspamd_dkim_relaxed_body_step (ctx, ctx->body_hash,
+							&start, end - start, &remain);
+				}
 			}
 		}
 		return TRUE;
