@@ -789,3 +789,17 @@ reconf['X_PHP_EVAL'] = {
   description = "Message sent by eval()'d PHP code",
   group = 'header'
 }
+
+reconf['GOOGLE_FORWARDING_MID_MISSING'] = {
+  re = "Message-ID=/SMTPIN_ADDED_MISSING\\@mx\\.google\\.com>$/X",
+  score = 2.5,
+  description = "Message was missing Message-ID pre-forwarding",
+  group = 'header'
+}
+
+reconf['GOOGLE_FORWARDING_MID_BROKEN'] = {
+  re = "Message-ID=/SMTPIN_ADDED_BROKEN\\@mx\\.google\\.com>$/X",
+  score = 1.7,
+  description = "Message had invalid Message-ID pre-forwarding",
+  group = 'header'
+}
