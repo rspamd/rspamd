@@ -1351,7 +1351,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			else if (*p == '\n') {
 				state = got_lf;
 			}
-			else if (type == DKIM_CANON_RELAXED && *p == ' ') {
+			else if (type == DKIM_CANON_RELAXED && (*p == ' ' || *p == '\t')) {
 				skip = 0;
 				state = test_spaces;
 			}
@@ -1377,7 +1377,8 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 						state = got_lf;
 					}
 				}
-				else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 1) == ' ' ||
+						*(p - 1) == '\t')) {
 					skip = 1;
 					state = test_spaces;
 				}
@@ -1386,8 +1387,10 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
-				if (type == DKIM_CANON_RELAXED) {
-					p -= 1;
+				if (g_ascii_isspace (*(p - 1))) {
+					if (type == DKIM_CANON_RELAXED) {
+						p -= 1;
+					}
 				}
 				goto end;
 			}
@@ -1402,7 +1405,8 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 					p --;
 					state = got_lf;
 				}
-				else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 1) == ' ' ||
+						*(p - 1) == '\t')) {
 					skip = 1;
 					state = test_spaces;
 				}
@@ -1411,8 +1415,10 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
-				if (type == DKIM_CANON_RELAXED) {
-					p -= 1;
+				if (g_ascii_isspace (*(p - 1))) {
+					if (type == DKIM_CANON_RELAXED) {
+						p -= 1;
+					}
 				}
 				goto end;
 			}
@@ -1427,7 +1433,8 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 					p -= 2;
 					state = got_lf;
 				}
-				else if (type == DKIM_CANON_RELAXED && *(p - 3) == ' ') {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 3) == ' ' ||
+						*(p - 3) == '\t')) {
 					skip = 2;
 					state = test_spaces;
 				}
@@ -1436,8 +1443,10 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
-				if (type == DKIM_CANON_RELAXED) {
-					p -= 2;
+				if (g_ascii_isspace (*(p - 2))) {
+					if (type == DKIM_CANON_RELAXED) {
+						p -= 2;
+					}
 				}
 				goto end;
 			}
@@ -1445,7 +1454,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 		case test_spaces:
 			t = p - skip;
 
-			while (t > start + 2 && *t == ' ') {
+			while (t > start + 2 && (*t == ' ' || *t == '\t')) {
 				t --;
 			}
 
