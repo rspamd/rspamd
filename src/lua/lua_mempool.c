@@ -374,6 +374,12 @@ lua_mempool_get_variable (lua_State *L)
 						lua_pushlstring (L, (const gchar *)pv, slen);
 						pv += slen + 1;
 					}
+					else if (len == sizeof ("gstring") - 1 &&
+							g_ascii_strncasecmp (pt, "gstring", len) == 0) {
+						GString *st = (GString *)pv;
+						lua_pushlstring (L, st->str, st->len);
+						pv += sizeof (GString *);
+					}
 					else {
 						msg_err ("unknown type for get_variable: %s", pt);
 						lua_pushnil (L);
