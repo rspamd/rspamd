@@ -1416,39 +1416,59 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
 {
 	DIR *d;
-	struct dirent entry, *pentry = NULL;
+	struct dirent *entry, **pentry = NULL;
 	gint cur_req = 0;
 	gchar fpath[PATH_MAX];
 	FILE *in;
 	struct stat st;
+	gboolean is_reg, is_dir;
+	gsize name_max, len;
 
-	memset (&entry, 0, sizeof (entry));
 	d = opendir (name);
 
 	if (d != NULL) {
-		while (readdir_r (d, &entry, &pentry) == 0) {
+		/* Portably allocate struct direntry */
+		name_max = pathconf (name, _PC_NAME_MAX);
+
+		if (name_max == -1) {
+			name_max = PATH_MAX + 1;
+		}
+
+		len = offsetof(struct dirent, d_name) + name_max + 1;
+		entry = g_malloc0 (len);
+
+		while (readdir_r (d, entry, pentry) == 0) {
 			if (pentry == NULL) {
 				break;
 			}
 
-			if (pentry->d_name[0] == '.') {
+			if (entry->d_name[0] == '.') {
 				continue;
 			}
 
-			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s",
-					name, G_DIR_SEPARATOR, pentry->d_name);
+			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%*s",
+					name, G_DIR_SEPARATOR,
+					(gint)entry->d_namlen, entry->d_name);
 
+			is_reg = FALSE;
+			is_dir = FALSE;
+
+#ifdef _DIRENT_HAVE_D_TYPE
+#else
 			if (lstat (fpath, &st) == -1) {
 				rspamd_fprintf (stderr, "cannot stat file %s: %s\n",
 						fpath, strerror (errno));
 				continue;
 			}
 
-			if (S_ISDIR (st.st_mode)) {
+			is_dir = S_ISDIR (st.st_mode);
+			is_reg = S_ISREG (st.st_mode);
+#endif
+			if (is_dir) {
 				rspamc_process_dir (ev_base, cmd, fpath, attrs);
 				continue;
 			}
-			else if (S_ISREG (st.st_mode)) {
+			else if (is_reg) {
 				in = fopen (fpath, "r");
 				if (in == NULL) {
 					rspamd_fprintf (stderr, "cannot open file %s: %s\n",
@@ -1467,6 +1487,8 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 				}
 			}
 		}
+
+		g_free (entry);
 	}
 	else {
 		fprintf (stderr, "cannot open directory %s: %s\n", name, strerror (errno));
