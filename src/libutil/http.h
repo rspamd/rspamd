@@ -127,6 +127,7 @@ struct rspamd_http_connection_entry {
 struct rspamd_http_connection_router {
 	struct rspamd_http_connection_entry *conns;
 	GHashTable *paths;
+	GPtrArray *regexps;
 	struct timeval tv;
 	struct timeval *ptv;
 	struct event_base *ev_base;
@@ -456,6 +457,15 @@ void rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
 void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 		const gchar *path, rspamd_http_router_handler_t handler);
 
+struct rspamd_regexp_s;
+/**
+ * Adds new pattern to router, regexp object is refcounted by this function
+ * @param router
+ * @param re
+ * @param handler
+ */
+void rspamd_http_router_add_regexp (struct rspamd_http_connection_router *router,
+		struct rspamd_regexp_s *re, rspamd_http_router_handler_t handler);
 /**
  * Handle new accepted socket
  * @param router router object

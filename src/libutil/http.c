@@ -26,6 +26,7 @@
 #include "cryptobox.h"
 #include "unix-std.h"
 #include "libutil/ssl_util.h"
+#include "libutil/regexp.h"
 
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
@@ -2906,11 +2907,15 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	GError *err;
 	rspamd_ftok_t lookup;
 	struct http_parser_url u;
+	guint i;
+	rspamd_regexp_t *re;
+	struct rspamd_http_connection_router *router;
 
 	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
 		sizeof (gpointer));
 
 	memset (&lookup, 0, sizeof (lookup));
+	router = entry->rt;
 
 	if (entry->is_reply) {
 		/* Request is finished, it is safe to free a connection */
@@ -2935,18 +2940,60 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			memcpy (&handler, &found, sizeof (found));
 			msg_debug ("requested known path: %T", &lookup);
 		}
+		else {
+			err = g_error_new (HTTP_ERROR, 404,
+					"Empty path requested");
+			if (entry->rt->error_handler != NULL) {
+				entry->rt->error_handler (entry, err);
+			}
+
+			err_msg = rspamd_http_new_message (HTTP_RESPONSE);
+			err_msg->date = time (NULL);
+			err_msg->code = err->code;
+			rspamd_http_message_set_body (err_msg, err->message,
+					strlen (err->message));
+			rspamd_http_connection_reset (entry->conn);
+			rspamd_http_connection_write_message (entry->conn,
+					err_msg,
+					NULL,
+					"text/plain",
+					entry,
+					entry->conn->fd,
+					entry->rt->ptv,
+					entry->rt->ev_base);
+			g_error_free (err);
+
+			return 0;
+		}
+
 		entry->is_reply = TRUE;
+
 		if (handler != NULL) {
 			return handler (entry, msg);
 		}
 		else {
+			/* Try regexps */
+			for (i = 0; i < router->regexps->len; i ++) {
+				re = g_ptr_array_index (router->regexps, i);
+				if (rspamd_regexp_match (re, lookup.begin, lookup.len,
+						TRUE)) {
+					found = rspamd_regexp_get_ud (re);
+					memcpy (&handler, &found, sizeof (found));
+
+					return handler (entry, msg);
+				}
+			}
+
+			/* Now try plain file */
 			if (entry->rt->default_fs_path == NULL || lookup.len == 0 ||
-				!rspamd_http_router_try_file (entry, &lookup, TRUE)) {
+					!rspamd_http_router_try_file (entry, &lookup, TRUE)) {
+
 				err = g_error_new (HTTP_ERROR, 404,
 						"Not found");
 				if (entry->rt->error_handler != NULL) {
 					entry->rt->error_handler (entry, err);
 				}
+
 				msg_info ("path: %T not found", &lookup);
 				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
 				err_msg->date = time (NULL);
@@ -2983,6 +3030,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	new = g_slice_alloc0 (sizeof (struct rspamd_http_connection_router));
 	new->paths = g_hash_table_new_full (rspamd_ftok_icase_hash,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free, NULL);
+	new->regexps = g_ptr_array_new ();
 	new->conns = NULL;
 	new->error_handler = eh;
 	new->finish_handler = fh;
@@ -3047,6 +3095,21 @@ rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 }
 
 void
+rspamd_http_router_add_regexp (struct rspamd_http_connection_router *router,
+		struct rspamd_regexp_s *re, rspamd_http_router_handler_t handler)
+{
+	gpointer ptr;
+	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
+			sizeof (gpointer));
+
+	if (re != NULL && handler != NULL && router != NULL) {
+		memcpy (&ptr, &handler, sizeof (ptr));
+		rspamd_regexp_set_ud (re, ptr);
+		g_ptr_array_add (router->regexps, rspamd_regexp_ref (re));
+	}
+}
+
+void
 rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 	gint fd, gpointer ud)
 {
@@ -3078,10 +3141,11 @@ void
 rspamd_http_router_free (struct rspamd_http_connection_router *router)
 {
 	struct rspamd_http_connection_entry *conn, *tmp;
+	rspamd_regexp_t *re;
+	guint i;
 
 	if (router) {
-		DL_FOREACH_SAFE (router->conns, conn, tmp)
-		{
+		DL_FOREACH_SAFE (router->conns, conn, tmp) {
 			rspamd_http_entry_free (conn);
 		}
 
@@ -3096,6 +3160,13 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 		if (router->default_fs_path != NULL) {
 			g_free (router->default_fs_path);
 		}
+
+		for (i = 0; i < router->regexps->len; i ++) {
+			re = g_ptr_array_index (router->regexps, i);
+			rspamd_regexp_unref (re);
+		}
+
+		g_ptr_array_free (router->regexps, TRUE);
 		g_hash_table_unref (router->paths);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_router), router);
 	}
