@@ -1431,10 +1431,10 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 		name_max = pathconf (name, _PC_NAME_MAX);
 
 		if (name_max == -1) {
-			name_max = PATH_MAX + 1;
+			name_max = PATH_MAX;
 		}
 
-		len = offsetof(struct dirent, d_name) + name_max + 1;
+		len = G_STRUCT_OFFSET (struct dirent, d_name) + name_max + 1;
 		entry = g_malloc0 (len);
 
 		while (readdir_r (d, entry, pentry) == 0) {
@@ -1446,14 +1446,33 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 				continue;
 			}
 
-			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%*s",
+			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s",
 					name, G_DIR_SEPARATOR,
-					(gint)entry->d_namlen, entry->d_name);
+					entry->d_name);
 
 			is_reg = FALSE;
 			is_dir = FALSE;
 
-#ifdef _DIRENT_HAVE_D_TYPE
+#if (defined(_DIRENT_HAVE_D_TYPE) || defined(__APPLE__)) && defined(DT_UNKNOWN)
+			if (entry->d_type == DT_UNKNOWN) {
+				/* Fallback to lstat */
+				if (lstat (fpath, &st) == -1) {
+					rspamd_fprintf (stderr, "cannot stat file %s: %s\n",
+							fpath, strerror (errno));
+					continue;
+				}
+
+				is_dir = S_ISDIR (st.st_mode);
+				is_reg = S_ISREG (st.st_mode);
+			}
+			else {
+				if (entry->d_type == DT_REG) {
+					is_reg = TRUE;
+				}
+				else if (entry->d_type == DT_DIR) {
+					is_dir = TRUE;
+				}
+			}
 #else
 			if (lstat (fpath, &st) == -1) {
 				rspamd_fprintf (stderr, "cannot stat file %s: %s\n",
