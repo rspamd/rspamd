@@ -1424,6 +1424,29 @@ g_queue_free_full (GQueue *queue, GDestroyNotify free_func)
 }
 #endif
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 40))
+void
+g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data)
+{
+	g_return_if_fail (array);
+	g_return_if_fail (index_ >= -1);
+	g_return_if_fail (index_ <= (gint )array->len);
+
+	g_ptr_array_set_size (array, array->len + 1);
+
+	if (index_ < 0) {
+		index_ = array->len;
+	}
+
+	if (index_ < array->len) {
+		memmove (&(array->pdata[index_ + 1]), &(array->pdata[index_]),
+				(array->len - index_) * sizeof(gpointer));
+	}
+
+	array->pdata[index_] = data;
+}
+#endif
+
 gint
 rspamd_fallocate (gint fd, off_t offset, off_t len)
 {

@@ -186,6 +186,9 @@ void g_queue_clear (GQueue *queue);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 32))
 void g_queue_free_full (GQueue *queue, GDestroyNotify free_func);
 #endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 40))
+void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data)
+#endif
 
 /*
  * Convert milliseconds to timeval fields
