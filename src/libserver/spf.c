@@ -389,7 +389,11 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 		}
 	}
 	else {
-		return rec;
+		res = g_slice_alloc0 (sizeof (*res));
+		res->elts = g_array_new (FALSE, FALSE, sizeof (struct spf_addr));
+		res->domain = g_strdup (rec->sender_domain);
+		res->ttl = rec->ttl;
+		REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 	}
 
 	return res;
@@ -1787,7 +1791,8 @@ static void
 spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_record *rec = arg;
-	struct spf_resolved_element *resolved;
+	struct spf_resolved_element *resolved = NULL;
+	struct spf_addr *addr;
 
 	rec->requests_inflight--;
 
@@ -1801,21 +1806,21 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
 			&& rec->dns_requests == 0) {
 		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
-		struct spf_addr *addr;
 		addr = g_slice_alloc0 (sizeof(*addr));
 		addr->flags = 0;
 		addr->flags |= RSPAMD_SPF_FLAG_NA;
 		g_ptr_array_insert (resolved->elts, 0, addr);
 	}
 
-	if (!spf_process_txt_record (rec, resolved, reply)) {
-		if (rec->dns_requests == 0) {
-			resolved = g_ptr_array_index(rec->resolved, 0);
-			struct spf_addr *addr;
-			addr = g_slice_alloc0 (sizeof(*addr));
-			addr->flags = 0;
-			addr->flags |= RSPAMD_SPF_FLAG_NA;
-			g_ptr_array_insert (resolved->elts, 0, addr);
+	if (resolved) {
+		if (!spf_process_txt_record (rec, resolved, reply)) {
+			if (rec->dns_requests == 0) {
+				resolved = g_ptr_array_index(rec->resolved, 0);
+				addr = g_slice_alloc0 (sizeof(*addr));
+				addr->flags = 0;
+				addr->flags |= RSPAMD_SPF_FLAG_NA;
+				g_ptr_array_insert (resolved->elts, 0, addr);
+			}
 		}
 	}
 
