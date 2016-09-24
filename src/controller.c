@@ -22,6 +22,7 @@
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
+#include "lua/lua_common.h"
 #include "cryptobox.h"
 #include "ottery.h"
 #include "fuzzy_wire.h"
@@ -1379,6 +1380,148 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 }
 
 static gboolean
+rspamd_controller_lua_fin_task (void *ud)
+{
+	struct rspamd_task *task = ud;
+	struct rspamd_controller_session *session;
+	struct rspamd_http_connection_entry *conn_ent;
+
+	conn_ent = task->fin_arg;
+	session = conn_ent->ud;
+
+	if (task->err != NULL) {
+		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+				task->err->message);
+	}
+
+	return TRUE;
+}
+
+static int
+rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_task *task, **ptask;
+	struct rspamd_http_connection_entry **pconn;
+	struct rspamd_controller_worker_ctx *ctx;
+	gchar filebuf[PATH_MAX], realbuf[PATH_MAX];
+	struct http_parser_url u;
+	rspamd_ftok_t lookup;
+	struct stat st;
+	lua_State *L;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	ctx = session->ctx;
+	L = ctx->cfg->lua_state;
+
+	/* Find lua script */
+	if (msg->url != NULL && msg->url->len != 0) {
+
+		http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
+
+		if (u.field_set & (1 << UF_PATH)) {
+			lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
+			lookup.len = u.field_data[UF_PATH].len;
+		}
+		else {
+			lookup.begin = msg->url->str;
+			lookup.len = msg->url->len;
+		}
+
+		rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%T",
+				ctx->static_files_dir, G_DIR_SEPARATOR, lookup);
+
+		if (realpath (filebuf, realbuf) == NULL ||
+				lstat (realbuf, &st) == -1) {
+			rspamd_controller_send_error (conn_ent, 404, "Cannot find path: %s",
+					strerror (errno));
+
+			return 0;
+		}
+
+		/* TODO: add caching here, should be trivial */
+		/* Now we load and execute the code fragment, which should return a function */
+		if (luaL_loadfile (L, realbuf) != 0) {
+			rspamd_controller_send_error (conn_ent, 500, "Cannot load path: %s",
+					lua_tostring (L, -1));
+			lua_settop (L, 0);
+
+			return 0;
+		}
+
+		if (lua_pcall (L, 0, 1, 0) != 0) {
+			rspamd_controller_send_error (conn_ent, 501, "Cannot run path: %s",
+					lua_tostring (L, -1));
+			lua_settop (L, 0);
+
+			return 0;
+		}
+
+		if (lua_type (L, -1) != LUA_TFUNCTION) {
+			rspamd_controller_send_error (conn_ent, 502, "Bad return type: %s",
+					lua_typename (L, lua_type (L, -1)));
+			lua_settop (L, 0);
+
+			return 0;
+		}
+
+	}
+	else {
+		rspamd_controller_send_error (conn_ent, 404, "Empty path is not permitted");
+
+		return 0;
+	}
+
+	task = rspamd_task_new (session->ctx->worker, session->cfg);
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	task->s = rspamd_session_create (session->pool,
+			rspamd_controller_lua_fin_task,
+			NULL,
+			(event_finalizer_t )rspamd_task_free,
+			task);
+	task->fin_arg = conn_ent;
+	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
+	task->sock = -1;
+	session->task = task;
+
+	if (msg->body_buf.len > 0) {
+		if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+					task->err->message);
+			return 0;
+		}
+	}
+
+	ptask = lua_newuserdata (L, sizeof (*ptask));
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+
+	pconn = lua_newuserdata (L, sizeof (*pconn));
+	rspamd_lua_setclass (L, "rspamd{csession}", -1);
+	*pconn = conn_ent;
+
+	if (lua_pcall (L, 2, 0, 0) != 0) {
+		rspamd_controller_send_error (conn_ent, 503, "Cannot run callback: %s",
+				lua_tostring (L, -1));
+		rspamd_session_destroy (task->s);
+		lua_settop (L, 0);
+
+		return 0;
+	}
+
+	rspamd_session_pending (task->s);
+
+	return 0;
+}
+
+static gboolean
 rspamd_controller_learn_fin_task (void *ud)
 {
 	struct rspamd_task *task = ud;
@@ -2676,6 +2819,131 @@ init_controller_worker (struct rspamd_config *cfg)
 	return ctx;
 }
 
+/* Lua bindings */
+LUA_FUNCTION_DEF (csession, get_ev_base);
+LUA_FUNCTION_DEF (csession, get_cfg);
+LUA_FUNCTION_DEF (csession, send_ucl);
+LUA_FUNCTION_DEF (csession, send_string);
+LUA_FUNCTION_DEF (csession, send_error);
+
+static const struct luaL_reg lua_csessionlib_m[] = {
+	LUA_INTERFACE_DEF (csession, get_ev_base),
+	LUA_INTERFACE_DEF (csession, get_cfg),
+	LUA_INTERFACE_DEF (csession, send_ucl),
+	LUA_INTERFACE_DEF (csession, send_string),
+	LUA_INTERFACE_DEF (csession, send_error),
+	{"__tostring", rspamd_lua_class_tostring},
+	{NULL, NULL}
+};
+
+/* Basic functions of LUA API for worker object */
+static void
+luaopen_controller (lua_State * L)
+{
+	rspamd_lua_new_class (L, "rspamd{url}", lua_csessionlib_m);
+	lua_pop (L, 1);
+}
+
+struct rspamd_http_connection_entry *
+lua_check_controller_entry (lua_State * L, gint pos)
+{
+	void *ud = luaL_checkudata (L, pos, "rspamd{csession}");
+	luaL_argcheck (L, ud != NULL, pos, "'csession' expected");
+	return ud ? *((struct rspamd_http_connection_entry **)ud) : NULL;
+}
+
+static int
+lua_csession_get_ev_base (lua_State *L)
+{
+	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
+	struct event_base **pbase;
+	struct rspamd_controller_session *s;
+
+	if (c) {
+		s = c->ud;
+		pbase = lua_newuserdata (L, sizeof (struct event_base *));
+		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
+		*pbase = s->ctx->ev_base;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_csession_get_cfg (lua_State *L)
+{
+	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
+	struct rspamd_config **pcfg;
+	struct rspamd_controller_session *s;
+
+	if (c) {
+		s = c->ud;
+		pcfg = lua_newuserdata (L, sizeof (gpointer));
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
+		*pcfg = s->ctx->cfg;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_csession_send_ucl (lua_State *L)
+{
+	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
+	ucl_object_t *obj = ucl_object_lua_import (L, 2);
+
+	if (c) {
+		rspamd_controller_send_ucl (c, obj);
+	}
+	else {
+		ucl_object_unref (obj);
+		return luaL_error (L, "invalid arguments");
+	}
+
+	ucl_object_unref (obj);
+
+	return 0;
+}
+
+static int
+lua_csession_send_error (lua_State *L)
+{
+	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
+	guint err_code = lua_tonumber (L, 2);
+	const gchar *err_str = lua_tostring (L, 3);
+
+	if (c) {
+		rspamd_controller_send_error (c, err_code, "%s", err_str);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static int
+lua_csession_send_string (lua_State *L)
+{
+	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
+	const gchar *str = lua_tostring (L, 3);
+
+	if (c) {
+		rspamd_controller_send_string (c, str);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
 static void
 rspamd_controller_on_terminate (struct rspamd_worker *worker)
 {
@@ -2824,6 +3092,12 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_COUNTERS,
 			rspamd_controller_handle_counters);
+
+	rspamd_regexp_t *lua_re = rspamd_regexp_new ("^/.*/.*\\.lua$", NULL, NULL);
+	rspamd_http_router_add_regexp (ctx->http, lua_re,
+			rspamd_controller_handle_lua);
+	rspamd_regexp_unref (lua_re);
+	luaopen_controller (ctx->cfg->lua_state);
 
 	if (ctx->key) {
 		rspamd_http_router_set_key (ctx->http, ctx->key);
