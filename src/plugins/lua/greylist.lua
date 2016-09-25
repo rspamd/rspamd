@@ -132,6 +132,14 @@ local function greylist_check(task)
     return
   end
 
+  if ip and ip:is_valid() and whitelisted_ip then
+    if whitelisted_ip:get_key(ip) then
+      -- Do not check whitelisted ip
+      rspamd_logger.infox(task, 'skip greylisting for whitelisted IP')
+      return
+    end
+  end
+
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
   local hash_key = body_key .. meta_key
@@ -214,6 +222,12 @@ local function greylist_set(task)
 
   if task:get_user() or (ip_addr and ip_addr:is_local()) then
     return
+  end
+
+  if ip and ip:is_valid() and whitelisted_ip then
+    if whitelisted_ip:get_key(ip) then
+      return
+    end
   end
 
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
