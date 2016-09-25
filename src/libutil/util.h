@@ -187,7 +187,7 @@ void g_queue_clear (GQueue *queue);
 void g_queue_free_full (GQueue *queue, GDestroyNotify free_func);
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 40))
-void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data)
+void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data);
 #endif
 
 /*
