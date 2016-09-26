@@ -625,7 +625,7 @@ dkim_module_check (struct dkim_check_result *res)
 						rspamd_dkim_get_domain (cur->ctx)));
 				rspamd_task_insert_result (cur->task,
 						symbol,
-						1.0,
+						symbol_weight,
 						messages);
 			}
 		}
