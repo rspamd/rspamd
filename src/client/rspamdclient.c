@@ -390,11 +390,12 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 				return FALSE;
 			}
+
+			ZSTD_freeCCtx (zctx);
 		}
 
 		rspamd_http_message_set_body_from_fstring_steal (req->msg, body);
 		req->input = input;
-		ZSTD_freeCCtx (zctx);
 	}
 	else {
 		req->input = NULL;
