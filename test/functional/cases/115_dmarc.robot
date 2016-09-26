@@ -102,10 +102,10 @@ SPF NA NXDOMAIN
   ...  -i  8.8.8.8  -F  x@zzzzaaaa
   Check Rspamc  ${result}  R_SPF_NA
 
-SPF DNSFAIL UNRESOLVEABLE REDIRECT
+SPF PERMFAIL UNRESOLVEABLE REDIRECT
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@cacophony.za.org
-  Check Rspamc  ${result}  R_SPF_DNSFAIL
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
 
 SPF PERMFAIL
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
