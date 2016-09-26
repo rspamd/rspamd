@@ -1134,10 +1134,11 @@ rspamd_header_value_fold (const gchar *name,
 			break;
 		case fold_token:
 			/* Here, we have token start at 'c' and token end at 'p' */
-			g_assert (p > c);
-
 			if (fold_type == fold_after) {
-				g_string_append_len (res, c, p - c);
+
+				if (p > c) {
+					g_string_append_len (res, c, p - c);
+				}
 
 				switch (how) {
 				case RSPAMD_TASK_NEWLINES_LF:
@@ -1160,6 +1161,7 @@ rspamd_header_value_fold (const gchar *name,
 				cur_len = 0;
 			}
 			else {
+				g_assert (p > c);
 				/* Skip space if needed */
 				if (g_ascii_isspace (*c) && p > c) {
 					c ++;
