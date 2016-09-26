@@ -193,12 +193,12 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 					ucl_parser_free (parser);
 					req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
 					g_error_free (err);
-					g_free (out);
+					g_free (zout.dst);
 
 					return 0;
 				}
 
-				g_free (out);
+				g_free (zout.dst);
 			}
 			else {
 				err = g_error_new (RCLIENT_ERROR, 500,
@@ -386,6 +386,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 				g_slice_free1 (sizeof (struct rspamd_client_request), req);
 				g_string_free (input, TRUE);
 				rspamd_fstring_free (body);
+				ZSTD_freeCCtx (zctx);
 
 				return FALSE;
 			}
@@ -393,6 +394,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 		rspamd_http_message_set_body_from_fstring_steal (req->msg, body);
 		req->input = input;
+		ZSTD_freeCCtx (zctx);
 	}
 	else {
 		req->input = NULL;
