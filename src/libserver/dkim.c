@@ -1423,16 +1423,16 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			break;
 		case got_crlf:
 			if (p > start + 2) {
-				if (*(p - 3) == '\r') {
+				if (*(p - 2) == '\r') {
 					p -= 2;
 					state = got_cr;
 				}
-				else if (*(p - 3) == '\n') {
+				else if (*(p - 2) == '\n') {
 					p -= 2;
 					state = got_lf;
 				}
-				else if (type == DKIM_CANON_RELAXED && (*(p - 3) == ' ' ||
-						*(p - 3) == '\t')) {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 2) == ' ' ||
+						*(p - 2) == '\t')) {
 					skip = 2;
 					state = test_spaces;
 				}
