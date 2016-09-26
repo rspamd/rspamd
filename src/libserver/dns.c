@@ -30,12 +30,14 @@ static void rspamd_dns_upstream_ok (struct rdns_upstream_elt *elt,
 		void *ups_data);
 static void rspamd_dns_upstream_fail (struct rdns_upstream_elt *elt,
 		void *ups_data);
+static unsigned int rspamd_dns_upstream_count (void *ups_data);
 
 static struct rdns_upstream_context rspamd_ups_ctx = {
 		.select = rspamd_dns_select_upstream,
 		.select_retransmit = rspamd_dns_select_upstream_retransmit,
 		.ok = rspamd_dns_upstream_ok,
 		.fail = rspamd_dns_upstream_fail,
+		.count = rspamd_dns_upstream_count,
 		.data = NULL
 };
 
@@ -339,4 +341,12 @@ rspamd_dns_upstream_fail (struct rdns_upstream_elt *elt,
 	struct upstream *up = elt->lib_data;
 
 	rspamd_upstream_fail (up);
+}
+
+static unsigned int
+rspamd_dns_upstream_count (void *ups_data)
+{
+	struct upstream_list *ups = ups_data;
+
+	return rspamd_upstreams_alive (ups);
 }

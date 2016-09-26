@@ -295,6 +295,7 @@ rdns_process_timer (void *arg)
 	bool renew = false;
 	struct rdns_resolver *resolver;
 	struct rdns_server *serv = NULL;
+	unsigned cnt;
 
 	req->retransmits --;
 	resolver = req->resolver;
@@ -318,44 +319,57 @@ rdns_process_timer (void *arg)
 	}
 
 	if (!req->io->active || req->retransmits == 1) {
-		/* Do not reschedule IO requests on inactive sockets */
-		rdns_debug ("reschedule request with id: %d", (int)req->id);
-		rdns_request_unschedule (req);
-		REF_RELEASE (req->io);
 
 		if (resolver->ups) {
-			struct rdns_upstream_elt *elt;
+			cnt = resolver->ups->count (resolver->ups->data);
+		}
+		else {
+			cnt = 0;
+			UPSTREAM_FOREACH (resolver->servers, serv) {
+				cnt ++;
+			}
+		}
 
-			elt = resolver->ups->select_retransmit (req->requested_names[0].name,
-					req->requested_names[0].len, resolver->ups->data);
+		if (!req->io->active || cnt > 1) {
+			/* Do not reschedule IO requests on inactive sockets */
+			rdns_debug ("reschedule request with id: %d", (int)req->id);
+			rdns_request_unschedule (req);
+			REF_RELEASE (req->io);
 
-			if (elt) {
-				serv = elt->server;
-				serv->ups_elt = elt;
+			if (resolver->ups) {
+				struct rdns_upstream_elt *elt;
+
+				elt = resolver->ups->select_retransmit (req->requested_names[0].name,
+						req->requested_names[0].len, resolver->ups->data);
+
+				if (elt) {
+					serv = elt->server;
+					serv->ups_elt = elt;
+				}
+				else {
+					UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+				}
 			}
 			else {
 				UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
 			}
-		}
-		else {
-			UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
-		}
 
-		if (serv == NULL) {
-			rdns_warn ("cannot find suitable server for request");
-			rep = rdns_make_reply (req, RDNS_RC_SERVFAIL);
-			req->state = RDNS_REQUEST_REPLIED;
-			req->func (rep, req->arg);
-			REF_RELEASE (req);
+			if (serv == NULL) {
+				rdns_warn ("cannot find suitable server for request");
+				rep = rdns_make_reply (req, RDNS_RC_SERVFAIL);
+				req->state = RDNS_REQUEST_REPLIED;
+				req->func (rep, req->arg);
+				REF_RELEASE (req);
 
-			return;
+				return;
+			}
+
+			/* Select random IO channel */
+			req->io = serv->io_channels[ottery_rand_uint32 () % serv->io_cnt];
+			req->io->uses ++;
+			REF_RETAIN (req->io);
+			renew = true;
 		}
-
-		/* Select random IO channel */
-		req->io = serv->io_channels[ottery_rand_uint32 () % serv->io_cnt];
-		req->io->uses ++;
-		REF_RETAIN (req->io);
-		renew = true;
 	}
 
 	/*
