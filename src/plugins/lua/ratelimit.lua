@@ -185,7 +185,7 @@ local function dynamic_rate_key(task, rtype)
   else
     rate_keys = {}
     rcpts = task:get_recipients(0)
-    if not rcpts and rcpts[1] and rcpts[1]['addr'] then
+    if not rcpts or not rcpts[1] or not rcpts[1]['addr'] then
       return nil
     end
     local key_s = table.concat(key_t, ":")
