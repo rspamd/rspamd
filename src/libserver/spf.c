@@ -314,10 +314,9 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
 			/* Unresolved redirect */
 			msg_info_spf ("redirect to %s cannot be resolved", cur->spf_string);
-			cur->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		}
 		else {
-			g_assert (cur->flags & RSPAMD_SPF_FLAG_REFRENCE);
+			g_assert (cur->flags & RSPAMD_SPF_FLAG_REFERENCE);
 			g_assert (cur->m.idx < rec->resolved->len);
 			relt = g_ptr_array_index (rec->resolved, cur->m.idx);
 			msg_debug_spf ("domain %s is redirected to %s", elt->cur_domain,
@@ -344,7 +343,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			/* Ignore unparsed addrs */
 			continue;
 		}
-		if (cur->flags & RSPAMD_SPF_FLAG_REFRENCE) {
+		if (cur->flags & RSPAMD_SPF_FLAG_REFERENCE) {
 			/* Process reference */
 			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
 				/* Stop on redirected domain */
@@ -665,11 +664,18 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_REDIRECT:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						if (spf_process_txt_record (rec, cb->resolved, reply)) {
-							cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
+						if (reply->code == RDNS_RC_NOERROR || reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
+							if (spf_process_txt_record (rec, cb->resolved, reply)) {
+								cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
+							}
+							else {
+								cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+								cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+							}
 						}
 						else {
 							cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+							cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 						}
 					}
 
@@ -759,7 +765,13 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else if ((cb->cur_action == SPF_RESOLVE_INCLUDE ||
 			cb->cur_action == SPF_RESOLVE_REDIRECT) ||
 			reply->code == RDNS_RC_TIMEOUT) {
-		cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+		if ((cb->cur_action == SPF_RESOLVE_INCLUDE || cb->cur_action == SPF_RESOLVE_REDIRECT) &&
+				(reply->code == RDNS_RC_NOREC && reply->code == RDNS_RC_NXDOMAIN)) {
+			cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+		}
+		else {
+			cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+		}
 		msg_info_spf (
 				"<%s>: spf error for domain %s: cannot resolve %s DNS record for"
 				" %s: %s",
@@ -1166,7 +1178,7 @@ parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 	cb->resolved = rspamd_spf_new_addr_list (rec, domain);
 	cb->ptr_host = domain;
 	/* Set reference */
-	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE;
+	addr->flags |= RSPAMD_SPF_FLAG_REFERENCE;
 	msg_debug_spf ("resolve include %s", domain);
 
 	if (make_dns_request_task_forced (task,
@@ -1210,7 +1222,7 @@ parse_spf_redirect (struct spf_record *rec,
 
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	/* Set reference */
-	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE | RSPAMD_SPF_FLAG_REDIRECT;
+	addr->flags |= RSPAMD_SPF_FLAG_REFERENCE | RSPAMD_SPF_FLAG_REDIRECT;
 	addr->m.idx = rec->resolved->len;
 
 	cb->rec = rec;
@@ -1818,11 +1830,26 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	if (resolved) {
 		if (!spf_process_txt_record (rec, resolved, reply)) {
-			if (rec->dns_requests == 0) {
-				resolved = g_ptr_array_index(rec->resolved, 0);
+			resolved = g_ptr_array_index(rec->resolved, 0);
+			if (rec->resolved->len > 1) {
+				addr = g_ptr_array_index(resolved->elts, 0);
+				if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
+						&& addr->flags & RSPAMD_SPF_FLAG_REDIRECT) {
+					addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+				} else {
+					addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+				}
+			}
+			else {
 				addr = g_slice_alloc0 (sizeof(*addr));
 				addr->flags = 0;
-				addr->flags |= RSPAMD_SPF_FLAG_NA;
+				if (reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN
+						|| reply->code == RDNS_RC_NOERROR) {
+					addr->flags |= RSPAMD_SPF_FLAG_NA;
+				}
+				else {
+					addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+				}
 				g_ptr_array_insert (resolved->elts, 0, addr);
 			}
 		}

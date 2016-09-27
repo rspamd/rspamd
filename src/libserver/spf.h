@@ -35,7 +35,7 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_ANY (1 << 3)
 #define RSPAMD_SPF_FLAG_PARSED (1 << 4)
 #define RSPAMD_SPF_FLAG_VALID (1 << 5)
-#define RSPAMD_SPF_FLAG_REFRENCE (1 << 6)
+#define RSPAMD_SPF_FLAG_REFERENCE (1 << 6)
 #define RSPAMD_SPF_FLAG_REDIRECT (1 << 7)
 #define RSPAMD_SPF_FLAG_TEMPFAIL (1 << 8)
 #define RSPAMD_SPF_FLAG_NA (1 << 9)
