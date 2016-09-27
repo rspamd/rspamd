@@ -332,6 +332,10 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			target->temp_failed = TRUE;
 			continue;
 		}
+		if (cur->flags & RSPAMD_SPF_FLAG_PERMFAIL) {
+			target->perm_failed = TRUE;
+			continue;
+		}
 		if (cur->flags & RSPAMD_SPF_FLAG_NA) {
 			target->na = TRUE;
 			continue;
@@ -734,7 +738,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						task->message_id,
 						cb->rec->sender_domain,
 						cb->resolved->cur_domain);
-				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				break;
 			case SPF_RESOLVE_INCLUDE:
 				msg_debug_spf (

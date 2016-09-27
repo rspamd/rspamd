@@ -478,6 +478,12 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 				1,
 				NULL);
 	}
+	else if (record && record->perm_failed) {
+		rspamd_task_insert_result (task,
+				spf_module_ctx->symbol_permfail,
+				1,
+				NULL);
+	}
 	else if (record && record->elts->len == 0) {
 		rspamd_task_insert_result (task,
 				spf_module_ctx->symbol_permfail,
