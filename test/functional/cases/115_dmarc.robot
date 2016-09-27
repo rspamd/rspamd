@@ -82,9 +82,19 @@ SPF DNSFAIL UNRESOLVEABLE INCLUDE
   ...  -i  37.48.67.26  -F  x@openarena.za.net
   Check Rspamc  ${result}  R_SPF_DNSFAIL
 
+SPF DNSFAIL FAILED INCLUDE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@fail2.org.org.za
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
+
 SPF ALLOW UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@openarena.za.net
+  Check Rspamc  ${result}  R_SPF_ALLOW
+
+SPF ALLOW FAILED INCLUDE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.4.4  -F  x@fail2.org.org.za
   Check Rspamc  ${result}  R_SPF_ALLOW
 
 SPF NA NA
@@ -106,6 +116,11 @@ SPF PERMFAIL UNRESOLVEABLE REDIRECT
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@cacophony.za.org
   Check Rspamc  ${result}  R_SPF_PERMFAIL
+
+SPF DNSFAIL FAILED REDIRECT
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@fail1.org.org.za
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
 
 SPF PERMFAIL
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
