@@ -230,7 +230,9 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 
 	if (!found && type != RDNS_REQUEST_ANY) {
 		/* We have not found the requested RR type */
-		rep->code = RDNS_RC_NOREC;
+		if (rep->code == RDNS_RC_NOERROR) {
+			rep->code = RDNS_RC_NOREC;
+		}
 	}
 
 	*_rep = rep;
