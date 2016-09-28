@@ -1836,7 +1836,7 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 {
 	GPtrArray *ret, *ar;
 	struct raw_header *cur;
-	guint nelems = 0, i;
+	guint nelems = 0, i, j;
 	struct rspamd_mime_part *mp;
 
 	for (i = 0; i < task->parts->len; i ++) {
@@ -1860,7 +1860,7 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		mp = g_ptr_array_index (task->parts, i);
 		ar = g_hash_table_lookup (mp->raw_headers, field);
 
-		PTR_ARRAY_FOREACH (ar, i, cur) {
+		PTR_ARRAY_FOREACH (ar, j, cur) {
 			if (strong) {
 				if (strcmp (cur->name, field) != 0) {
 					continue;
