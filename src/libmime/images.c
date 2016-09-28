@@ -199,6 +199,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 	struct html_image *himg;
 	const gchar *cid, *html_cid;
 	guint cid_len, i, j;
+	GPtrArray *ar;
 
 	if ((type = detect_image_type (part->content)) != IMAGE_TYPE_UNKNOWN) {
 		switch (type) {
@@ -231,13 +232,17 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 		part->specific_data = img;
 
 		/* Check Content-Id */
-		rh = g_hash_table_lookup (part->raw_headers, "Content-Id");
+		ar = rspamd_message_get_header_from_hash (part->raw_headers,
+				task->task_pool, "Content-Id", FALSE);
 
-		if (rh != NULL) {
+		if (ar != NULL && ar->len > 0) {
+			rh = g_ptr_array_index (ar, 0);
 			cid = rh->decoded;
+
 			if (*cid == '<') {
 				cid ++;
 			}
+
 			cid_len = strlen (cid);
 
 			if (cid_len > 0) {
