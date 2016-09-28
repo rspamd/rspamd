@@ -359,7 +359,7 @@ local function multimap_callback(task, rule)
   end
 
   -- Parse result in form: <symbol>:<score>|<symbol>|<score>
-  local function parse_ret(ret)
+  local function parse_ret(rule, ret)
     if ret and type(ret) == 'string' then
       local lpeg = require "lpeg"
       local number = {}
@@ -403,7 +403,11 @@ local function multimap_callback(task, rule)
 
         return true,sym,score
       else
-        rspamd_logger.infox(task, 'cannot parse %s', ret)
+        if ret ~= '' then
+          rspamd_logger.infox(task, '%s: cannot parse string "%s"',
+            rule.symbol, ret)
+        end
+
         return true,nil,1.0
       end
     elseif type(ret) == 'boolean' then
@@ -417,7 +421,7 @@ local function multimap_callback(task, rule)
   local function match_rule(r, value)
     local function rule_callback(result)
       if result then
-        local res,symbol,score = parse_ret(result)
+        local res,symbol,score = parse_ret(r, result)
         if symbol and r['symbols_set'] then
           if not r['symbols_set'][symbol] then
             rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
