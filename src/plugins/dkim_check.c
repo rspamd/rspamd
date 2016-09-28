@@ -684,13 +684,14 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 static void
 dkim_symbol_callback (struct rspamd_task *task, void *unused)
 {
-	GList *hlist;
+	GPtrArray *hlist;
 	rspamd_dkim_context_t *ctx;
 	rspamd_dkim_key_t *key;
 	GError *err = NULL;
 	struct raw_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
-	guint checked = 0;
+	guint checked = 0, i;
+
 	/* First check if plugin should be enabled */
 	if (task->user != NULL || rspamd_inet_address_is_local (task->from_addr)) {
 		msg_info_task ("skip DKIM checks for local networks and authorized users");
@@ -704,19 +705,16 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	}
 
 	/* Now check if a message has its signature */
-	hlist = rspamd_message_get_header (task,
+	hlist = rspamd_message_get_header_array (task,
 			DKIM_SIGNHEADER,
 			FALSE);
-	if (hlist != NULL) {
+	if (hlist != NULL && hlist->len > 0) {
 		msg_debug_task ("dkim signature found");
 
-		while (hlist != NULL) {
-			rh = (struct raw_header *)hlist->data;
-
+		PTR_ARRAY_FOREACH (hlist, i, rh) {
 			if (rh->decoded == NULL || rh->decoded[0] == '\0') {
 				msg_info_task ("<%s> cannot load empty DKIM context",
 						task->message_id);
-				hlist = g_list_next (hlist);
 				continue;
 			}
 
@@ -740,6 +738,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 					task->task_pool,
 					dkim_module_ctx->time_jitter,
 					&err);
+
 			if (ctx == NULL) {
 				if (err != NULL) {
 					msg_info_task ("<%s> cannot parse DKIM context: %e",
@@ -753,7 +752,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 							task->message_id);
 				}
 
-				hlist = g_list_next (hlist);
 				continue;
 			}
 			else {
@@ -767,7 +765,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 										rspamd_dkim_get_domain (ctx)) == NULL)) {
 					msg_debug_task ("skip dkim check for %s domain",
 							rspamd_dkim_get_domain (ctx));
-					hlist = g_list_next (hlist);
 
 					continue;
 				}
@@ -795,7 +792,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			}
 
 			if (dkim_module_ctx->skip_multi) {
-				if (hlist->next) {
+				if (hlist->len > 1) {
 					msg_info_task ("message has multiple signatures but we"
 							" check only one as 'skip_multi' is set");
 				}
@@ -811,8 +808,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 						" is reached", checked);
 				break;
 			}
-
-			hlist = g_list_next (hlist);
 		}
 	}
 	else {

@@ -668,19 +668,22 @@ lua_mimepart_get_filename (lua_State * L)
 static gint
 lua_mimepart_get_header_common (lua_State *L, gboolean full, gboolean raw)
 {
-	gboolean strong = FALSE;
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
 	const gchar *name;
+	GPtrArray *ar;
 
 	name = luaL_checkstring (L, 2);
 
 	if (name && part) {
-		if (lua_gettop (L) == 3) {
-			strong = lua_toboolean (L, 3);
-		}
-		return rspamd_lua_push_header (L, part->raw_headers, name, strong, full, raw);
+
+		ar = rspamd_message_get_header_from_hash (part->raw_headers, NULL,
+				name, FALSE);
+
+		return rspamd_lua_push_header (L, ar, name, FALSE, full, raw);
 	}
+
 	lua_pushnil (L);
+
 	return 1;
 }
 

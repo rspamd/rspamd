@@ -88,8 +88,8 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->results);
 
-	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
-			rspamd_strcase_equal);
+	new_task->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
+			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
 			rspamd_request_header_dtor);

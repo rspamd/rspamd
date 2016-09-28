@@ -742,7 +742,6 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 {
 	guint ret = 0, i, re_id;
 	GPtrArray *headerlist;
-	GList *slist;
 	GHashTableIter it;
 	struct raw_header *rh;
 	const gchar *in, *end;
@@ -966,10 +965,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		 * of the body content.
 		 */
 
-		slist = rspamd_message_get_header (task, "Subject", FALSE);
+		headerlist = rspamd_message_get_header_array (task, "Subject", FALSE);
 
-		if (slist) {
-			rh = slist->data;
+		if (headerlist && headerlist->len > 0) {
+			rh = g_ptr_array_index (headerlist, 0);
 
 			scvec[0] = (guchar *)rh->decoded;
 			lenvec[0] = strlen (rh->decoded);

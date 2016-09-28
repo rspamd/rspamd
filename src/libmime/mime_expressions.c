@@ -1012,7 +1012,7 @@ gboolean
 rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
-	GList *headerlist;
+	GPtrArray *headerlist;
 
 	if (args == NULL || task == NULL) {
 		return FALSE;
@@ -1025,12 +1025,14 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 	}
 
 	debug_task ("try to get header %s", (gchar *)arg->data);
-	headerlist = rspamd_message_get_header (task,
+	headerlist = rspamd_message_get_header_array (task,
 			(gchar *)arg->data,
 			FALSE);
+
 	if (headerlist) {
 		return TRUE;
 	}
+
 	return FALSE;
 }
 

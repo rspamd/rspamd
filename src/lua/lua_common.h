@@ -192,7 +192,7 @@ struct rspamd_lua_text * lua_check_text (lua_State * L, gint pos);
  * Push specific header to lua
  */
 gint rspamd_lua_push_header (lua_State * L,
-	GHashTable *hdrs,
+	GPtrArray *hdrs,
 	const gchar *name,
 	gboolean strong,
 	gboolean full,

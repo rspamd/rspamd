@@ -1709,43 +1709,25 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	const gchar *dkim_header,
 	const gchar *dkim_domain)
 {
-	struct raw_header *rh, *rh_iter;
-	guint rh_num = 0;
-	guint i;
-	GPtrArray *sign_headers;
+	struct raw_header *rh;
+	guint rh_num = 0, i;
+	GPtrArray *ar;
 
 	if (dkim_header == NULL) {
-		rh = g_hash_table_lookup (task->raw_headers, header_name);
+		ar = g_hash_table_lookup (task->raw_headers, header_name);
 
-		if (rh) {
-			LL_FOREACH (rh, rh_iter) {
-				rh_num++;
-			}
-
-			if (rh_num > count) {
+		if (ar) {
+			if (ar->len > count) {
 				/* Set skip count */
-				rh_num -= count;
+				rh_num = ar->len - count;
 			}
 			else {
 				rh_num = 0;
 			}
 
-			sign_headers = g_ptr_array_sized_new (rh_num);
-			/* Skip number of headers */
-			rh_iter = rh;
-			while (rh_num) {
-				rh_iter = rh_iter->next;
-				rh_num--;
-			}
 
-			/* Now insert required headers */
-			while (rh_iter) {
-				g_ptr_array_add (sign_headers, rh_iter);
-				rh_iter = rh_iter->next;
-			}
-
-			for (i = 0; i < sign_headers->len; i ++) {
-				rh = g_ptr_array_index (sign_headers, i);
+			for (i = rh_num; i < ar->len; i ++) {
+				rh = g_ptr_array_index (ar, i);
 
 				if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 					rspamd_dkim_hash_update (ctx->headers_hash, rh->raw_value,
@@ -1756,30 +1738,25 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				else {
 					if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
 							header_name, FALSE)) {
-
-						g_ptr_array_free (sign_headers, TRUE);
 						return FALSE;
 					}
 				}
 			}
-
-			g_ptr_array_free (sign_headers, TRUE);
 		}
 	}
 	else {
 		/* For signature check just use the saved dkim header */
 		if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 			/* We need to find our own signature and use it */
-			rh = g_hash_table_lookup (task->raw_headers, DKIM_SIGNHEADER);
+			ar = g_hash_table_lookup (task->raw_headers, DKIM_SIGNHEADER);
 
-			if (rh) {
+			if (ar) {
 				/* We need to find our own signature */
 				if (!dkim_domain) {
 					return FALSE;
 				}
 
-
-				LL_FOREACH (rh, rh_iter) {
+				PTR_ARRAY_FOREACH (ar, i, rh) {
 					if (rspamd_substring_search_twoway (rh->raw_value,
 							rh->raw_len, dkim_domain,
 							strlen (dkim_domain)) != -1) {

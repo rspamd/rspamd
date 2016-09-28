@@ -1361,57 +1361,40 @@ lua_task_set_request_header (lua_State *L)
 
 gint
 rspamd_lua_push_header (lua_State * L,
-		GHashTable *hdrs,
+		GPtrArray *ar,
 		const gchar *name,
 		gboolean strong,
 		gboolean full,
 		gboolean raw)
 {
 
-	struct raw_header *rh, *cur;
-	gint i = 1;
+	struct raw_header *rh;
+	guint i;
 	const gchar *val;
 
-	rh = g_hash_table_lookup (hdrs, name);
-
-	if (rh == NULL) {
+	if (ar == NULL || ar->len == 0) {
 		lua_pushnil (L);
 		return 1;
 	}
 
 	if (full) {
-		i = 0;
-		LL_FOREACH (rh, cur) {
-			i ++;
-		}
-
-		lua_createtable (L, i, 0);
+		lua_createtable (L, ar->len, 0);
 	}
 
-	i = 1;
-
-	while (rh) {
-		if (rh->name == NULL) {
-			rh = rh->next;
-			continue;
-		}
-		/* Check case sensivity */
-		if (strong) {
-			if (strcmp (rh->name, name) != 0) {
-				rh = rh->next;
-				continue;
-			}
-		}
+	PTR_ARRAY_FOREACH (ar, i, rh) {
 		if (full) {
 			/* Create new associated table for a header */
 			lua_createtable (L, 0, 6);
 			rspamd_lua_table_set (L, "name",	 rh->name);
+
 			if (rh->value) {
 				rspamd_lua_table_set (L, "value", rh->value);
 			}
+
 			if (rh->decoded) {
 				rspamd_lua_table_set (L, "decoded", rh->value);
 			}
+
 			lua_pushstring (L, "tab_separated");
 			lua_pushboolean (L, rh->tab_separated);
 			lua_settable (L, -3);
@@ -1419,9 +1402,7 @@ rspamd_lua_push_header (lua_State * L,
 			lua_pushboolean (L, rh->empty_separator);
 			lua_settable (L, -3);
 			rspamd_lua_table_set (L, "separator", rh->separator);
-			lua_rawseti (L, -2, i++);
-			/* Process next element */
-			rh = rh->next;
+			lua_rawseti (L, -2, i + 1);
 		}
 		else {
 			if (!raw) {
@@ -1451,6 +1432,7 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 	gboolean strong = FALSE;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *name;
+	GPtrArray *ar;
 
 	name = luaL_checkstring (L, 2);
 
@@ -1459,7 +1441,9 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 			strong = lua_toboolean (L, 3);
 		}
 
-		return rspamd_lua_push_header (L, task->raw_headers, name,
+		ar = rspamd_message_get_header_array (task, name, strong);
+
+		return rspamd_lua_push_header (L, ar, name,
 				strong, full, raw);
 	}
 	else {

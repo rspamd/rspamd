@@ -35,14 +35,16 @@ static void
 rspamd_stat_tokenize_header (struct rspamd_task *task,
 		const gchar *name, const gchar *prefix, GArray *ar)
 {
-	struct raw_header *rh, *cur;
+	struct raw_header *cur;
+	GPtrArray *hdrs;
+	guint i;
 	rspamd_ftok_t str;
 
-	rh = g_hash_table_lookup (task->raw_headers, name);
+	hdrs = g_hash_table_lookup (task->raw_headers, name);
 
-	if (rh != NULL) {
+	if (hdrs != NULL) {
 
-		LL_FOREACH (rh, cur) {
+		PTR_ARRAY_FOREACH (hdrs, i, cur) {
 			if (cur->name != NULL) {
 				str.begin = cur->name;
 				str.len = strlen (cur->name);

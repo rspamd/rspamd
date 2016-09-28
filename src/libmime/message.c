@@ -56,17 +56,17 @@ static void
 append_raw_header (struct rspamd_task *task,
 		GHashTable *target, struct raw_header *rh)
 {
-	struct raw_header *lp;
+	GPtrArray *ar;
 
-	rh->next = NULL;
-	rh->prev = rh;
-	if ((lp =
-			g_hash_table_lookup (target, rh->name)) != NULL) {
-		DL_APPEND (lp, rh);
+	if ((ar = g_hash_table_lookup (target, rh->name)) != NULL) {
+		g_ptr_array_add (ar, rh);
 	}
 	else {
-		g_hash_table_insert (target, rh->name, rh);
+		ar = g_ptr_array_sized_new (2);
+		g_ptr_array_add (ar, rh);
+		g_hash_table_insert (target, rh->name, ar);
 	}
+
 	msg_debug_task ("add raw header %s: %s", rh->name, rh->value);
 }
 
@@ -108,7 +108,6 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 				new =
 					rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct raw_header));
-				new->prev = new;
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
@@ -1173,8 +1172,8 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				sizeof (struct rspamd_mime_part));
 
 		hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
-		mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		mime_part->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
+				rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 
 		if (hdrs != NULL) {
 			process_raw_headers (task, mime_part->raw_headers,
@@ -1243,8 +1242,8 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 						sizeof (struct rspamd_mime_part));
 
 				hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
-				mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
-						rspamd_strcase_equal);
+				mime_part->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
+						rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 
 				if (hdrs != NULL) {
 					process_raw_headers (task, mime_part->raw_headers,
@@ -1402,7 +1401,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	GMimeParser *parser;
 	GMimeStream *stream;
 	GByteArray *tmp;
-	GList *first, *cur;
+	GPtrArray *hdrs;
 	GMimeObject *parent;
 	const GMimeContentType *ct;
 	struct raw_header *rh;
@@ -1493,7 +1492,6 @@ rspamd_message_parse (struct rspamd_task *task)
 						RSPAMD_FILTER_ERROR, \
 
 						"cannot parse MIME in the message");
-				/* TODO: backport to 0.9 */
 				g_object_unref (parser);
 				return FALSE;
 			}
@@ -1566,12 +1564,11 @@ rspamd_message_parse (struct rspamd_task *task)
 	rspamd_archives_process (task);
 
 	/* Parse received headers */
-	first = rspamd_message_get_header (task, "Received", FALSE);
+	hdrs = rspamd_message_get_header_array (task, "Received", FALSE);
 
-	for (cur = first, i = 0; cur != NULL; cur = g_list_next (cur), i ++) {
+	PTR_ARRAY_FOREACH (hdrs, i, rh) {
 		recv = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct received_header));
-		rh = cur->data;
 		rspamd_smtp_recieved_parse (task, rh->decoded, strlen (rh->decoded), recv);
 		/*
 		 * For the first header we must ensure that
@@ -1640,20 +1637,20 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	if (task->from_envelope == NULL) {
-		first = rspamd_message_get_header (task, "Return-Path", FALSE);
+		hdrs = rspamd_message_get_header_array (task, "Return-Path", FALSE);
 
-		if (first) {
-			rh = first->data;
+		if (hdrs && hdrs->len > 0) {
+			rh = g_ptr_array_index (hdrs, 0);
 			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
 					strlen (rh->decoded));
 		}
 	}
 
 	if (task->deliver_to == NULL) {
-		first = rspamd_message_get_header (task, "Delivered-To", FALSE);
+		hdrs = rspamd_message_get_header_array (task, "Delivered-To", FALSE);
 
-		if (first) {
-			rh = first->data;
+		if (hdrs && hdrs->len > 0) {
+			rh = g_ptr_array_index (hdrs, 0);
 			task->deliver_to = rspamd_mempool_strdup (task->task_pool, rh->decoded);
 		}
 	}
@@ -1671,10 +1668,12 @@ rspamd_message_parse (struct rspamd_task *task)
 			task->rcpt_mime);
 #endif
 	}
-	first = rspamd_message_get_header (task, "From", FALSE);
 
-	if (first) {
-		rh = first->data;
+
+	hdrs = rspamd_message_get_header_array (task, "From", FALSE);
+
+	if (hdrs && hdrs->len > 0) {
+		rh = g_ptr_array_index (hdrs, 0);
 		task->from_mime = internet_address_list_parse_string (rh->value);
 		if (task->from_mime) {
 #ifdef GMIME24
@@ -1690,10 +1689,9 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	/* Parse urls inside Subject header */
-	cur = rspamd_message_get_header (task, "Subject", FALSE);
+	hdrs = rspamd_message_get_header_array (task, "Subject", FALSE);
 
-	for (; cur != NULL; cur = g_list_next (cur)) {
-		rh = cur->data;
+	PTR_ARRAY_FOREACH (hdrs, i, rh) {
 		p = rh->decoded;
 		len = strlen (p);
 		rspamd_url_find_multiple (task->task_pool, p, len, FALSE, NULL,
@@ -1783,39 +1781,43 @@ rspamd_message_parse (struct rspamd_task *task)
 	return TRUE;
 }
 
-GList *
-rspamd_message_get_header (struct rspamd_task *task,
-	const gchar *field,
-	gboolean strong)
+
+GPtrArray *
+rspamd_message_get_header_from_hash (GHashTable *htb,
+		rspamd_mempool_t *pool,
+		const gchar *field,
+		gboolean strong)
 {
-	GList *gret = NULL;
-	struct raw_header *rh;
+	GPtrArray *ret, *ar;
+	struct raw_header *cur;
+	guint i;
 
-	rh = g_hash_table_lookup (task->raw_headers, field);
+	ar = g_hash_table_lookup (htb, field);
 
-	if (rh == NULL) {
+	if (ar == NULL) {
 		return NULL;
 	}
 
-	while (rh) {
-		if (strong) {
-			if (strcmp (rh->name, field) == 0) {
-				gret = g_list_prepend (gret, rh);
+	if (strong && pool != NULL) {
+		/* Need to filter what we have */
+		ret = g_ptr_array_sized_new (ar->len);
+
+		PTR_ARRAY_FOREACH (ar, i, cur) {
+			if (strcmp (cur->name, field) != 0) {
+				continue;
 			}
+
+			g_ptr_array_add (ret, cur);
 		}
-		else {
-			gret = g_list_prepend (gret, rh);
-		}
-		rh = rh->next;
+
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
+	}
+	else {
+		ret = ar;
 	}
 
-	if (gret != NULL) {
-		gret = g_list_reverse (gret);
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)g_list_free, gret);
-	}
-
-	return gret;
+	return ret;
 }
 
 GPtrArray *
@@ -1823,36 +1825,8 @@ rspamd_message_get_header_array (struct rspamd_task *task,
 		const gchar *field,
 		gboolean strong)
 {
-	GPtrArray *ret;
-	struct raw_header *rh, *cur;
-	guint nelems = 0;
-
-	rh = g_hash_table_lookup (task->raw_headers, field);
-
-	if (rh == NULL) {
-		return NULL;
-	}
-
-	LL_FOREACH (rh, cur) {
-		nelems ++;
-	}
-
-	ret = g_ptr_array_sized_new (nelems);
-
-	LL_FOREACH (rh, cur) {
-		if (strong) {
-			if (strcmp (rh->name, field) != 0) {
-				continue;
-			}
-		}
-
-		g_ptr_array_add (ret, cur);
-	}
-
-	rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
-
-	return ret;
+	return rspamd_message_get_header_from_hash (task->raw_headers,
+			task->task_pool, field, strong);
 }
 
 GPtrArray *
@@ -1860,22 +1834,20 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		const gchar *field,
 		gboolean strong)
 {
-	GPtrArray *ret;
-	struct raw_header *rh, *cur;
+	GPtrArray *ret, *ar;
+	struct raw_header *cur;
 	guint nelems = 0, i;
 	struct rspamd_mime_part *mp;
 
 	for (i = 0; i < task->parts->len; i ++) {
 		mp = g_ptr_array_index (task->parts, i);
-		rh = g_hash_table_lookup (mp->raw_headers, field);
+		ar = g_hash_table_lookup (mp->raw_headers, field);
 
-		if (rh == NULL) {
+		if (ar == NULL) {
 			continue;
 		}
 
-		LL_FOREACH (rh, cur) {
-			nelems ++;
-		}
+		nelems += ar->len;
 	}
 
 	if (nelems == 0) {
@@ -1886,11 +1858,11 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 
 	for (i = 0; i < task->parts->len; i ++) {
 		mp = g_ptr_array_index (task->parts, i);
-		rh = g_hash_table_lookup (mp->raw_headers, field);
+		ar = g_hash_table_lookup (mp->raw_headers, field);
 
-		LL_FOREACH (rh, cur) {
+		PTR_ARRAY_FOREACH (ar, i, cur) {
 			if (strong) {
-				if (strcmp (rh->name, field) != 0) {
+				if (strcmp (cur->name, field) != 0) {
 					continue;
 				}
 			}
@@ -1901,155 +1873,6 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
-
-	return ret;
-}
-
-GPtrArray *
-rspamd_message_get_headers_array (struct rspamd_task *task, ...)
-{
-	va_list ap;
-	GPtrArray *ret;
-	struct raw_header *rh, *cur;
-	guint nelems = 0;
-	const gchar *hname;
-
-	va_start (ap, task);
-
-	for (hname = va_arg (ap, const char *); hname != NULL;
-			hname = va_arg (ap, const char *)) {
-		rh = g_hash_table_lookup (task->raw_headers, hname);
-
-		if (rh == NULL) {
-			continue;
-		}
-		LL_FOREACH (rh, cur) {
-			nelems ++;
-		}
-	}
-
-	va_end (ap);
-
-	if (nelems == 0) {
-		return NULL;
-	}
-
-	ret = g_ptr_array_sized_new (nelems);
-
-	/* Restart varargs processing */
-	va_start (ap, task);
-
-	for (hname = va_arg (ap, const char *); hname != NULL;
-			hname = va_arg (ap, const char *)) {
-		rh = g_hash_table_lookup (task->raw_headers, hname);
-
-		if (rh == NULL) {
-			continue;
-		}
-		LL_FOREACH (rh, cur) {
-			g_ptr_array_add (ret, cur);
-		}
-	}
-
-	va_end (ap);
-
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
-
-	return ret;
-}
-
-GPtrArray *
-rspamd_message_get_header_array_str (struct rspamd_task *task,
-		const gchar *field,
-		gboolean strong)
-{
-	GPtrArray *ret;
-	struct raw_header *rh, *cur;
-	guint nelems = 0;
-
-	rh = g_hash_table_lookup (task->raw_headers, field);
-
-	if (rh == NULL) {
-		return NULL;
-	}
-
-	LL_FOREACH (rh, cur) {
-		nelems ++;
-	}
-
-	ret = g_ptr_array_sized_new (nelems);
-
-	LL_FOREACH (rh, cur) {
-		if (strong) {
-			if (strcmp (rh->name, field) != 0) {
-				continue;
-			}
-		}
-
-		if (cur->decoded) {
-			g_ptr_array_add (ret, cur->decoded);
-		}
-	}
-
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
-
-	return ret;
-}
-
-GPtrArray *
-rspamd_message_get_headers_array_str (struct rspamd_task *task, ...)
-{
-	va_list ap;
-	GPtrArray *ret;
-	struct raw_header *rh, *cur;
-	guint nelems = 0;
-	const gchar *hname;
-
-	va_start (ap, task);
-
-	for (hname = va_arg (ap, const char *); hname != NULL;
-			hname = va_arg (ap, const char *)) {
-		rh = g_hash_table_lookup (task->raw_headers, hname);
-
-		if (rh == NULL) {
-			continue;
-		}
-		LL_FOREACH (rh, cur) {
-			nelems ++;
-		}
-	}
-
-	va_end (ap);
-
-	if (nelems == 0) {
-		return NULL;
-	}
-
-	ret = g_ptr_array_sized_new (nelems);
-
-	/* Restart varargs processing */
-	va_start (ap, task);
-
-	for (hname = va_arg (ap, const char *); hname != NULL;
-			hname = va_arg (ap, const char *)) {
-		rh = g_hash_table_lookup (task->raw_headers, hname);
-
-		if (rh == NULL) {
-			continue;
-		}
-		LL_FOREACH (rh, cur) {
-			if (cur->decoded) {
-				g_ptr_array_add (ret, cur->decoded);
-			}
-		}
-	}
-
-	va_end (ap);
-
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
 
 	return ret;
 }
