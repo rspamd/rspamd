@@ -500,5 +500,5 @@ gpointer rspamd_file_xmap (const char *fname, guint mode,
 gpointer rspamd_shmem_xmap (const char *fname, guint mode,
 		gsize *size);
 
-#define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0, (cur) = g_ptr_array_index((ar), 0); (i) < (ar)->len; (cur) = g_ptr_array_index((ar), (i)), ++(i))
+#define PTR_ARRAY_FOREACH(ar, i, cur) if (ar != NULL) for ((i) = 0, (cur) = g_ptr_array_index((ar), 0); (i) < (ar)->len; (cur) = g_ptr_array_index((ar), (i)), ++(i))
 #endif
