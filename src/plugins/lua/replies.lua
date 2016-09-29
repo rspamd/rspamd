@@ -125,7 +125,7 @@ if opts then
       name = 'REPLIES_SET',
       type = 'postfilter',
       callback = replies_set,
-      priority = 10
+      priority = 5
     })
     rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',

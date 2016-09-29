@@ -514,6 +514,7 @@ else
     local id = rspamd_config:register_symbol({
       name = fann_symbol_spam,
       type = 'postfilter',
+      priority = 5,
       callback = fann_scores_filter
     })
     rspamd_config:set_metric_symbol({

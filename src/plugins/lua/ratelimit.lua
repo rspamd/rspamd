@@ -594,6 +594,7 @@ if opts then
     rspamd_config:register_symbol({
       name = 'RATELIMIT_SET',
       type = 'postfilter',
+      priority = 5,
       callback = rate_set,
     })
     for _, v in pairs(custom_keywords) do

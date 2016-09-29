@@ -340,6 +340,7 @@ if redis_params then
   rspamd_config:register_symbol({
     name = 'IPSCORE_SAVE',
     type = 'postfilter',
+    priority = 5,
     callback = ip_score_set,
   })
   rspamd_config:register_symbol({
