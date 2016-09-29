@@ -270,8 +270,10 @@ local function check_settings(task)
     end
   end
   -- Match rules according their order
+  local applied = false
+
   for pri = max_pri,1,-1 do
-    if settings[pri] then
+    if not applied and settings[pri] then
       for name, r in pairs(settings[pri]) do
         local rule = check_specific_setting(name, r, ip, client_ip, from, rcpt, user, uname)
         if rule then
@@ -279,6 +281,7 @@ local function check_settings(task)
             task:get_message_id(), name)
           if rule['apply'] then
             task:set_settings(rule['apply'])
+            applied = true
           end
           if rule['symbols'] then
             -- Add symbols, specified in the settings
