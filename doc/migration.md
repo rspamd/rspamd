@@ -27,6 +27,7 @@ Rmilter no longer adds several SpamAssassin-compatible headers: namely `X-Spam-S
 rspamd_config:register_symbol({
   name = 'RMILTER_HEADERS',
   type = 'postfilter',
+  priority = 10,
   callback = function(task)
     local metric_score = task:get_metric_score('default')
     local score = metric_score[1]
@@ -34,11 +35,11 @@ rspamd_config:register_symbol({
     -- X-Spamd-Bar & X-Spam-Level
     local spambar
     local spamlevel = ''
-    if score < 0 then
+    if score <= -1 then
       spambar = string.rep('-', score*-1)
-    elseif score > 0 then
-      spambar = string.rep('+', score*1)
-      spamlevel = string.rep('*', score*1)
+    elseif score >= 1 then
+      spambar = string.rep('+', score)
+      spamlevel = string.rep('*', score)
     else
       spambar = '/'
     end
