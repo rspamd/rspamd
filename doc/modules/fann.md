@@ -31,7 +31,7 @@ fann_scores {
   fann_file = "${DBDIR}/data.fann"; # Used to store ANN file on disk
   train {
     max_train = 10k; # Number of trains per epoch
-    max_epoch = 1k # Number of epoch while ANN data is valid
+    max_epoch = 1k; # Number of epoch while ANN data is valid
     spam_score = 8; # Score to learn spam
     ham_score = -2; # Score to learn ham
   }
