@@ -108,17 +108,17 @@ SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_whitespace.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl")
 RAGEL_TARGET(ragel_smtp_addr
-	INPUTS ragel/smtp_addr_parser.rl
+	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_addr_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -T1
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_addr_parser.rl.c)
 RAGEL_TARGET(ragel_smtp_received
-	INPUTS ragel/smtp_received_parser.rl
+	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_received_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -T1
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_received_parser.rl.c)
 RAGEL_TARGET(ragel_newlines_strip
-	INPUTS ragel/newlines_strip.rl
+	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/newlines_strip.rl
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/newlines_strip.rl.c)
