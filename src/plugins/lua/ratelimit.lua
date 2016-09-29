@@ -427,10 +427,20 @@ local function rate_test_set(task, func)
     if rate_key then
       if type(rate_key) == 'table' then
         for _, rk in ipairs(rate_key) do
-          table.insert(args, {settings[k], rk})
+          if type(settings[k]) == 'table' then
+            table.insert(args, {settings[k], rk})
+          elseif type(settings[k]) == 'string' and
+              (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
+            table.insert(args, {custom_keywords[settings[k]]['get_limit'](), rate_key})
+          end
         end
       else
-        table.insert(args, {settings[k], rate_key})
+        if type(settings[k]) == 'table' then
+          table.insert(args, {settings[k], rate_key})
+        elseif type(settings[k]) == 'string' and
+            (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
+          table.insert(args, {custom_keywords[settings[k]]['get_limit'](), rate_key})
+        end
       end
     end
   end
@@ -493,9 +503,20 @@ if opts then
     end, opts['rates'])
   end
 
+  if opts['dynamic_rates'] and type(opts['dynamic_rates']) == 'table' then
+    fun.each(function(t, lim)
+      if type(lim) == 'string' then
+        settings[t] = lim
+      end
+    end, opts['dynamic_rates'])
+  end
+
   local enabled_limits = fun.totable(fun.map(function(t, lim)
     return t
-  end, fun.filter(function(t, lim) return lim[1] > 0 end, settings)))
+  end, fun.filter(function(t, lim)
+    return type(lim) == 'string' or
+        (type(lim) == 'table' and type(lim[1]) == 'number' and lim[1] > 0)
+  end, settings)))
   rspamd_logger.infox(rspamd_config, 'enabled rate buckets: %s', enabled_limits)
 
   if opts['whitelisted_rcpts'] and type(opts['whitelisted_rcpts']) == 'string' then
