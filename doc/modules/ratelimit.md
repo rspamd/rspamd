@@ -136,6 +136,9 @@ function custom_keywords.customuser.get_value(task)
   if d['badusers']:get_key(user) then return user end -- user is in map, return user
   return -- user is not in map, return nil
 end
+function custom_keywords.customuser.get_limit(task)
+  return {10, 0.1} -- bucket size, leak rate
+end
 return custom_keywords
 ~~~
 
@@ -146,6 +149,18 @@ Since we want to apply the keyword to authenticated users we must add this to th
 ~~~nginx
 ratelimit {
    user_keywords = ["user", "customuser"];
+   # other settings ...
+}
+~~~
+
+Bucket size and leak rate can be specified dynamically by creating a keyword that defines a `get_limit` function returning those fields in a table (see example above) and defining the ratelimit in `dynamic_rates` config section as shown below:
+
+~~~nginx
+ratelimit {
+   dynamic_rates = {
+     customuser = "customuser";
+     # customuser.get_value is called for bucket name, customuser.get_limit is called for bucket size & leak rate
+   }
    # other settings ...
 }
 ~~~
