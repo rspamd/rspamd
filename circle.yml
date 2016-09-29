@@ -15,7 +15,6 @@ test:
     - make install
     - RSPAMADM=../install/bin/rspamadm RSPAMC=../install/bin/rspamc RSPAMD=../install/bin/rspamd sudo -E robot -x xunit.xml ../rspamd/test/functional/cases
     - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
-    - ln -s ../rspamd/src/ragel ../rspamd
     - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info; fi
   post:
     - for i in output.xml log.html report.html; do mv $i $CIRCLE_ARTIFACTS; done
