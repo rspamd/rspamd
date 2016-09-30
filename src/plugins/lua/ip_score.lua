@@ -26,6 +26,7 @@ local _ = require "fun"
 local redis_params = nil
 local whitelist = nil
 local asn_cc_whitelist = nil
+local check_authed = false
 
 local options = {
   actions = { -- how each action is treated in scoring
@@ -315,7 +316,13 @@ end
 
 -- Configuration options
 local configure_ip_score_module = function()
-  local opts =  rspamd_config:get_all_opt('ip_score')
+  local opts = rspamd_config:get_all_opt('options')
+  if opts and type(opts) ~= 'table' then
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+    end
+  end
+  opts = rspamd_config:get_all_opt('ip_score')
   if opts then
     for k,v in pairs(opts) do
       options[k] = v
@@ -324,6 +331,8 @@ local configure_ip_score_module = function()
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no servers are specified')
     end
+  else
+    return false
   end
   if options['whitelist'] then
     whitelist = rspamd_config:add_radix_map(opts['whitelist'])
@@ -334,7 +343,7 @@ local configure_ip_score_module = function()
 end
 
 
-configure_ip_score_module()
+if not configure_ip_score_module() then return end
 if redis_params then
   -- Register ip_score module
   rspamd_config:register_symbol({

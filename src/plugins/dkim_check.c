@@ -69,6 +69,8 @@ struct dkim_ctx {
 	guint max_sigs;
 	gboolean trusted_only;
 	gboolean skip_multi;
+	gboolean check_local;
+	gboolean check_authed;
 };
 
 struct dkim_check_result {
@@ -286,6 +288,20 @@ dkim_module_config (struct rspamd_config *cfg)
 
 	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
 
+        if ((value =
+		rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
+		dkim_module_ctx->check_local = ucl_obj_toboolean (value);
+	}
+	else {
+		dkim_module_ctx->check_local = FALSE;
+	}
+	if ((value =
+		rspamd_config_get_module_opt (cfg, "options", "check_authed")) != NULL) {
+		dkim_module_ctx->check_authed = ucl_obj_toboolean (value);
+	}
+	else {
+		dkim_module_ctx->check_authed = FALSE;
+	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "symbol_reject")) != NULL) {
 		dkim_module_ctx->symbol_reject = ucl_obj_tostring (value);
@@ -693,7 +709,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	guint checked = 0, i;
 
 	/* First check if plugin should be enabled */
-	if (task->user != NULL || rspamd_inet_address_is_local (task->from_addr)) {
+	if ((!dkim_module_ctx->check_authed && task->user != NULL)
+			|| (!dkim_module_ctx->check_local && rspamd_inet_address_is_local (task->from_addr))) {
 		msg_info_task ("skip DKIM checks for local networks and authorized users");
 		return;
 	}

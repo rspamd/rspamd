@@ -298,6 +298,8 @@ struct rspamd_config {
 	gboolean vectorized_hyperscan;                  /**< use vectorized hyperscan matching					*/
 	gboolean enable_shutdown_workaround;            /**< enable workaround for legacy SA clients (exim)		*/
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
+	gboolean check_local;				/** Don't disable any checks for local networks */
+	gboolean check_authed;				/** Don't disable any checks for authenticated users */
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
