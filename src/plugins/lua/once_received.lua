@@ -24,6 +24,8 @@ local bad_hosts = {}
 local good_hosts = {}
 local whitelist = nil
 local rspamd_logger = require "rspamd_logger"
+local check_local = false
+local check_authed = false
 
 local function check_quantity_received (task)
   local recvh = task:get_received_headers()
@@ -61,7 +63,9 @@ local function check_quantity_received (task)
 
   local task_ip = task:get_ip()
 
-  if task:get_user() or (task_ip and task_ip:is_local()) then
+  if ((not check_user and task:get_user()) or
+      (not check_local and ip_addr and ip_addr:is_local())) then
+    rspamd_logger.infox(task, 'Skipping once_received for authenticated user or local network')
     return
   end
   if whitelist and task_ip and whitelist:get_key(task_ip) then
@@ -134,6 +138,15 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
   end
 end
 
+local opts = rspamd_config:get_all_opt('options')
+if opts and type(opts) ~= 'table' then
+  if type(opts['check_local']) == 'boolean' then
+    check_local = opts['check_local']
+  end
+  if type(opts['check_authed']) == 'boolean' then
+    check_authed = opts['check_authed']
+  end
+end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('once_received')
 if opts then

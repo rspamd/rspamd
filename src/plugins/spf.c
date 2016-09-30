@@ -57,6 +57,9 @@ struct spf_ctx {
 	rspamd_mempool_t *spf_pool;
 	radix_compressed_t *whitelist_ip;
 	rspamd_lru_hash_t *spf_hash;
+
+	gboolean check_local;
+	gboolean check_authed;
 };
 
 static struct spf_ctx *spf_module_ctx = NULL;
@@ -195,6 +198,20 @@ spf_module_config (struct rspamd_config *cfg)
 
 	spf_module_ctx->whitelist_ip = radix_create_compressed ();
 
+	if ((value =
+		rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
+		spf_module_ctx->check_local = ucl_obj_toboolean (value);
+	}
+	else {
+		spf_module_ctx->check_local = FALSE;
+	}
+	if ((value =
+		rspamd_config_get_module_opt (cfg, "options", "check_authed")) != NULL) {
+		spf_module_ctx->check_authed = ucl_obj_toboolean (value);
+	}
+	else {
+		spf_module_ctx->check_authed = FALSE;
+	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
 		spf_module_ctx->symbol_fail = ucl_obj_tostring (value);
@@ -525,7 +542,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 		return;
 	}
 
-	if (task->user != NULL || rspamd_inet_address_is_local (task->from_addr)) {
+	if ((!spf_module_ctx->check_authed && task->user != NULL)
+			|| (!spf_module_ctx->check_local && rspamd_inet_address_is_local (task->from_addr))) {
 		msg_info_task ("skip SPF checks for local networks and authorized users");
 		return;
 	}

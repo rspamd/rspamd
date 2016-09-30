@@ -113,6 +113,9 @@ local config = {
   ['url_enabled'] = false
 }
 
+local check_local = false
+local check_authed = false
+
 local function check_regexp(str, regexp_text)
   if not compiled_regexp[regexp_text] then
     compiled_regexp[regexp_text] = rspamd_regexp.create(regexp_text, 'i')
@@ -296,7 +299,8 @@ local function hfilter(task)
 
   --No more checks for auth user or local network
   local rip = task:get_from_ip()
-  if task:get_user() or (rip and rip:is_local()) then
+  if ((not check_user and task:get_user()) or
+      (not check_local and rip and rip:is_local())) then
     return false
   end
 
@@ -478,6 +482,16 @@ local symbols_from = {
   "HFILTER_FROMHOST_NOT_FQDN",
   "HFILTER_FROM_BOUNCE"
 }
+
+local opts = rspamd_config:get_all_opt('options')
+if opts and type(opts) ~= 'table' then
+  if type(opts['check_local']) == 'boolean' then
+    check_local = opts['check_local']
+  end
+  if type(opts['check_authed']) == 'boolean' then
+    check_authed = opts['check_authed']
+  end
+end
 
 local opts = rspamd_config:get_all_opt('hfilter')
 if opts then

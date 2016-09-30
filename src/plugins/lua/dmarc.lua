@@ -22,6 +22,8 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
+local check_local = false
+local check_authed = false
 
 local symbols = {
   spf_allow_symbol = 'R_SPF_ALLOW',
@@ -78,7 +80,8 @@ local function dmarc_callback(task)
   local dmarc_domain
   local ip_addr = task:get_ip()
 
-  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+  if ((not check_user and task:get_user()) or
+      (not check_local and ip_addr and ip_addr:is_local())) then
     rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
     return
   end
@@ -343,6 +346,16 @@ local function dmarc_callback(task)
     name = resolve_name,
     callback = dmarc_dns_cb,
     forced = true})
+end
+
+local opts = rspamd_config:get_all_opt('options')
+if opts and type(opts) ~= 'table' then
+  if type(opts['check_local']) == 'boolean' then
+    check_local = opts['check_local']
+  end
+  if type(opts['check_authed']) == 'boolean' then
+    check_authed = opts['check_authed']
+  end
 end
 
 local opts = rspamd_config:get_all_opt('dmarc')
