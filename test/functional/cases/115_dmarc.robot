@@ -77,10 +77,10 @@ DKIM PERMFAIL BAD RECORD
   ...  -i  37.48.67.26
   Check Rspamc  ${result}  R_DKIM_PERMFAIL
 
-SPF DNSFAIL UNRESOLVEABLE INCLUDE
+SPF PERMFAIL UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  -i  37.48.67.26  -F  x@openarena.za.net
-  Check Rspamc  ${result}  R_SPF_DNSFAIL
+  ...  -i  37.48.67.26  -F  x@fail3.org.org.za
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
 
 SPF DNSFAIL FAILED INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
@@ -89,7 +89,7 @@ SPF DNSFAIL FAILED INCLUDE
 
 SPF ALLOW UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  -i  8.8.8.8  -F  x@openarena.za.net
+  ...  -i  8.8.8.8  -F  x@fail3.org.org.za
   Check Rspamc  ${result}  R_SPF_ALLOW
 
 SPF ALLOW FAILED INCLUDE
@@ -114,7 +114,7 @@ SPF NA NXDOMAIN
 
 SPF PERMFAIL UNRESOLVEABLE REDIRECT
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  -i  8.8.8.8  -F  x@cacophony.za.org
+  ...  -i  8.8.8.8  -F  x@fail4.org.org.za
   Check Rspamc  ${result}  R_SPF_PERMFAIL
 
 SPF DNSFAIL FAILED REDIRECT
@@ -122,15 +122,35 @@ SPF DNSFAIL FAILED REDIRECT
   ...  -i  8.8.8.8  -F  x@fail1.org.org.za
   Check Rspamc  ${result}  R_SPF_DNSFAIL
 
-SPF PERMFAIL
+SPF PERMFAIL NO USEABLE ELEMENTS
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
-  ...  -i  8.8.8.8  -F  x@xzghgh.za.org
+  ...  -i  8.8.8.8  -F  x@fail5.org.org.za
   Check Rspamc  ${result}  R_SPF_PERMFAIL
 
 SPF FAIL
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@example.net
   Check Rspamc  ${result}  R_SPF_FAIL
+
+SPF PERMFAIL UNRESOLVEABLE MX
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  1.2.3.4  -F  x@fail6.org.org.za
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
+
+SPF PERMFAIL UNRESOLVEABLE A
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  1.2.3.4  -F  x@fail7.org.org.za
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
+
+SPF DNSFAIL FAILED A
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  1.2.3.4  -F  x@fail8.org.org.za
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
+
+SPF DNSFAIL FAILED MX
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  1.2.3.4  -F  x@fail9.org.org.za
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
 
 *** Keywords ***
 DMARC Setup

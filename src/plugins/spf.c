@@ -397,7 +397,12 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 			spf_result[0] = '-';
 			spf_message = "(SPF): spf fail";
 			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
-				if (rec->temp_failed) {
+				if (rec->perm_failed) {
+					msg_info_task ("do not apply SPF failed policy, as we have "
+							"some addresses unresolved");
+					spf_symbol = spf_module_ctx->symbol_permfail;
+				}
+				else if (rec->temp_failed) {
 					msg_info_task ("do not apply SPF failed policy, as we have "
 							"some addresses unresolved");
 					spf_symbol = spf_module_ctx->symbol_dnsfail;
@@ -411,7 +416,12 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 			spf_result[0] = '~';
 
 			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
-				if (rec->temp_failed) {
+				if (rec->perm_failed) {
+					msg_info_task ("do not apply SPF failed policy, as we have "
+							"some addresses unresolved");
+					spf_symbol = spf_module_ctx->symbol_permfail;
+				}
+				else if (rec->temp_failed) {
 					msg_info_task ("do not apply SPF failed policy, as we have "
 							"some addresses unresolved");
 					spf_symbol = spf_module_ctx->symbol_dnsfail;
@@ -478,7 +488,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 				1,
 				NULL);
 	}
-	else if (record && record->perm_failed) {
+	else if (record && record->elts->len == 0 && record->perm_failed) {
 		rspamd_task_insert_result (task,
 				spf_module_ctx->symbol_permfail,
 				1,
