@@ -152,7 +152,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 {
 	struct lua_redis_userdata *ud;
 	struct lua_redis_specific_userdata *cur, *tmp;
-	gboolean is_connected = FALSE;
+	gboolean is_connected = FALSE, is_successfull = TRUE;
 	struct redisAsyncContext *ac;
 
 	if (ctx->async) {
@@ -160,6 +160,17 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 		ud = &ctx->d.async;
 
 		if (ud->ctx) {
+
+			LL_FOREACH_SAFE (ud->specific, cur, tmp) {
+				if (is_connected) {
+					event_del (&cur->timeout);
+				}
+
+				if (!cur->replied) {
+					is_successfull = FALSE;
+				}
+			}
+
 			ud->terminated = 1;
 			/*
 			 * On calling of redisFree, hiredis calls for callbacks pending
@@ -170,16 +181,13 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 			ac = ud->ctx;
 			ud->ctx = NULL;
 			rspamd_redis_pool_release_connection (ud->task->cfg->redis_pool,
-					ac, FALSE);
+					ac, is_successfull);
 			ctx->ref.refcount = 0;
 			is_connected = TRUE;
 		}
+
 		LL_FOREACH_SAFE (ud->specific, cur, tmp) {
 			lua_redis_free_args (cur->args, cur->nargs);
-
-			if (is_connected) {
-				event_del (&cur->timeout);
-			}
 
 			if (cur->cbref != -1) {
 				luaL_unref (ud->L, LUA_REGISTRYINDEX, cur->cbref);
@@ -218,7 +226,6 @@ lua_redis_fin (void *arg)
 	ctx = sp_ud->ctx;
 	event_del (&sp_ud->timeout);
 	msg_debug ("finished redis query %p from session %p", sp_ud, ctx);
-	sp_ud->replied = TRUE;
 	sp_ud->c->terminated = TRUE;
 
 	REDIS_RELEASE (ctx);
@@ -326,6 +333,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 
 		}
 
+		sp_ud->replied = TRUE;
 		rspamd_session_watcher_pop (ud->task->s, sp_ud->w);
 		rspamd_session_remove_event (ud->task->s, lua_redis_fin, sp_ud);
 	}
