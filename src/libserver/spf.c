@@ -708,7 +708,11 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
 		switch (cb->cur_action) {
 			case SPF_RESOLVE_MX:
-				if (rdns_request_has_type (reply->request, RDNS_REQUEST_MX)) {
+				if (!rdns_request_has_type (reply->request, RDNS_REQUEST_MX)
+						&& !rdns_request_has_type (reply->request, RDNS_REQUEST_A)
+						&& !rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
+					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot find MX record for %s",
 							task->message_id,
@@ -716,7 +720,10 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							cb->resolved->cur_domain);
 					spf_record_addr_set (addr, FALSE);
 				}
-				else {
+				else if (!rdns_request_has_type (reply->request, RDNS_REQUEST_A)
+						&& !rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
+					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve MX record for %s",
 							task->message_id,
@@ -726,25 +733,32 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				}
 				break;
 			case SPF_RESOLVE_A:
+				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				if (rdns_request_has_type (reply->request, RDNS_REQUEST_A)) {
 					spf_record_addr_set (addr, FALSE);
 				}
 				break;
 			case SPF_RESOLVE_AAA:
+				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				if (rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
 					spf_record_addr_set (addr, FALSE);
 				}
 				break;
 			case SPF_RESOLVE_PTR:
+				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				spf_record_addr_set (addr, FALSE);
 				break;
 			case SPF_RESOLVE_REDIRECT:
+				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				msg_debug_spf (
 						"<%s>: spf error for domain %s: cannot resolve TXT record for %s",
 						task->message_id,
 						cb->rec->sender_domain,
 						cb->resolved->cur_domain);
-				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				break;
 			case SPF_RESOLVE_INCLUDE:
 				msg_debug_spf (
@@ -752,8 +766,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						task->message_id,
 						cb->rec->sender_domain,
 						cb->resolved->cur_domain);
+				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-				cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 				break;
 			case SPF_RESOLVE_EXP:
 				break;
@@ -762,16 +776,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 		}
 	}
-	else if ((cb->cur_action == SPF_RESOLVE_INCLUDE ||
-			cb->cur_action == SPF_RESOLVE_REDIRECT) ||
-			reply->code == RDNS_RC_TIMEOUT) {
-		if ((cb->cur_action == SPF_RESOLVE_INCLUDE || cb->cur_action == SPF_RESOLVE_REDIRECT) &&
-				(reply->code == RDNS_RC_NOREC && reply->code == RDNS_RC_NXDOMAIN)) {
-			cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-		}
-		else {
-			cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
-		}
+	else {
+		cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		msg_info_spf (
 				"<%s>: spf error for domain %s: cannot resolve %s DNS record for"
 				" %s: %s",
