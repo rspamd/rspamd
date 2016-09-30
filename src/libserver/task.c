@@ -225,6 +225,8 @@ rspamd_task_free (struct rspamd_task *task)
 				addr = g_ptr_array_index (task->rcpt_envelope, i);
 				rspamd_email_address_unref (addr);
 			}
+
+			g_ptr_array_free (task->rcpt_envelope, TRUE);
 		}
 
 		if (task->from_envelope) {

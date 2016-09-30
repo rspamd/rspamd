@@ -363,7 +363,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 					if (addr) {
 						if (task->rcpt_envelope == NULL) {
-							task->rcpt_envelope = g_ptr_array_new ();
+							task->rcpt_envelope = g_ptr_array_sized_new (2);
 						}
 
 						g_ptr_array_add (task->rcpt_envelope, addr);
