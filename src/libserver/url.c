@@ -2387,13 +2387,6 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	rspamd_url_find_multiple (task->task_pool, part->stripped_content->data,
 			part->stripped_content->len, is_html, part->newlines,
 			rspamd_url_text_part_callback, &mcbd);
-
-	/* Handle offsets of this part */
-	if (part->exceptions != NULL) {
-		part->exceptions = g_list_reverse (part->exceptions);
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_list_free, part->exceptions);
-	}
 }
 
 void

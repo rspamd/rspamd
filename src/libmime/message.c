@@ -1003,13 +1003,6 @@ process_text_part (struct rspamd_task *task,
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 		}
 
-		/* Handle offsets of this part */
-		if (text_part->exceptions != NULL) {
-			text_part->exceptions = g_list_reverse (text_part->exceptions);
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) g_list_free, text_part->exceptions);
-		}
-
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			text_part->content);
@@ -1070,8 +1063,13 @@ process_text_part (struct rspamd_task *task,
 		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 	}
 
-	text_part->exceptions = g_list_sort (text_part->exceptions,
-			exceptions_compare_func);
+	if (text_part->exceptions) {
+		text_part->exceptions = g_list_sort (text_part->exceptions,
+				exceptions_compare_func);
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)g_list_free,
+				text_part->exceptions);
+	}
 
 	rspamd_extract_words (task, text_part);
 }
