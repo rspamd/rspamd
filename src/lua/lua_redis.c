@@ -219,6 +219,7 @@ lua_redis_fin (void *arg)
 	event_del (&sp_ud->timeout);
 	msg_debug ("finished redis query %p from session %p", sp_ud, ctx);
 	sp_ud->replied = TRUE;
+	sp_ud->c->terminated = TRUE;
 
 	REDIS_RELEASE (ctx);
 }

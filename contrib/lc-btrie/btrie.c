@@ -1380,9 +1380,10 @@ btrie_init(rspamd_mempool_t *mp)
 {
 	struct btrie *btrie;
 
-	if (!(btrie = rspamd_mempool_alloc (mp, sizeof(*btrie))))
+	if (!(btrie = rspamd_mempool_alloc0 (mp, sizeof(*btrie)))) {
 		return NULL;
-	memset(btrie, 0, sizeof(*btrie));
+	}
+
 	btrie->mp = mp;
 	btrie->alloc_total = sizeof(*btrie);
 
