@@ -635,6 +635,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_A:
 				case SPF_RESOLVE_AAA:
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
+					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
 					spf_record_process_addr (rec, addr, elt_data);
 					break;
 				case SPF_RESOLVE_PTR:
@@ -664,18 +666,12 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_REDIRECT:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						if (reply->code == RDNS_RC_NOERROR || reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
-							if (spf_process_txt_record (rec, cb->resolved, reply)) {
-								cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
-							}
-							else {
-								cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-								cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-							}
+						if (spf_process_txt_record (rec, cb->resolved, reply)) {
+							cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
 						}
 						else {
 							cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-							cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+							cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 						}
 					}
 
@@ -714,10 +710,12 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot find MX record for %s",
+							"<%s>: spf error for domain %s: cannot find MX"
+							" record for %s: %s",
 							task->message_id,
 							cb->rec->sender_domain,
-							cb->resolved->cur_domain);
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
 					spf_record_addr_set (addr, FALSE);
 				}
 				else if (!rdns_request_has_type (reply->request, RDNS_REQUEST_A)
@@ -725,54 +723,102 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve MX record for %s",
+							"<%s>: spf error for domain %s: cannot resolve MX"
+							" record for %s: %s",
 							task->message_id,
 							cb->rec->sender_domain,
-							cb->resolved->cur_domain);
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
 					spf_record_addr_set (addr, FALSE);
 				}
 				break;
 			case SPF_RESOLVE_A:
 				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+				msg_debug_spf (
+						"<%s>: spf error for domain %s: cannot resolve A"
+						" record for %s: %s",
+						task->message_id,
+						cb->rec->sender_domain,
+						cb->resolved->cur_domain,
+						rdns_strerror (reply->code));
+
 				if (rdns_request_has_type (reply->request, RDNS_REQUEST_A)) {
 					spf_record_addr_set (addr, FALSE);
 				}
 				break;
 			case SPF_RESOLVE_AAA:
-				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-				if (rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
-					spf_record_addr_set (addr, FALSE);
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+					msg_debug_spf (
+							"<%s>: spf error for domain %s: cannot resolve AAAA"
+							" record for %s: %s",
+							task->message_id,
+							cb->rec->sender_domain,
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
+					if (rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
+						spf_record_addr_set (addr, FALSE);
+					}
 				}
 				break;
 			case SPF_RESOLVE_PTR:
-				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-				spf_record_addr_set (addr, FALSE);
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+					msg_debug_spf (
+							"<%s>: spf error for domain %s: cannot resolve PTR"
+							" record for %s: %s",
+							task->message_id,
+							cb->rec->sender_domain,
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
+
+					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+
+					spf_record_addr_set (addr, FALSE);
+				}
 				break;
 			case SPF_RESOLVE_REDIRECT:
-				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-				msg_debug_spf (
-						"<%s>: spf error for domain %s: cannot resolve TXT record for %s",
-						task->message_id,
-						cb->rec->sender_domain,
-						cb->resolved->cur_domain);
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+					msg_debug_spf (
+							"<%s>: spf error for domain %s: cannot resolve REDIRECT"
+							" record for %s: %s",
+							task->message_id,
+							cb->rec->sender_domain,
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
+				}
+
 				break;
 			case SPF_RESOLVE_INCLUDE:
-				msg_debug_spf (
-						"<%s>: spf error for domain %s: cannot resolve TXT record for %s",
-						task->message_id,
-						cb->rec->sender_domain,
-						cb->resolved->cur_domain);
-				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+					msg_debug_spf (
+							"<%s>: spf error for domain %s: cannot resolve INCLUDE"
+							" record for %s: %s",
+							task->message_id,
+							cb->rec->sender_domain,
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
+
+					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
+					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				}
 				break;
 			case SPF_RESOLVE_EXP:
 				break;
 			case SPF_RESOLVE_EXISTS:
-				spf_record_addr_set (addr, FALSE);
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+					msg_debug_spf (
+							"<%s>: spf error for domain %s: cannot resolve EXISTS"
+							" record for %s: %s",
+							task->message_id,
+							cb->rec->sender_domain,
+							cb->resolved->cur_domain,
+							rdns_strerror (reply->code));
+					spf_record_addr_set (addr, FALSE);
+				}
 				break;
 		}
 	}
@@ -959,6 +1005,14 @@ parse_spf_a (struct spf_record *rec,
 	if (make_dns_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_A, host)) {
 		rec->requests_inflight++;
+
+		cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+		cb->rec = rec;
+		cb->ptr_host = host;
+		cb->addr = addr;
+		cb->cur_action = SPF_RESOLVE_AAA;
+		cb->resolved = resolved;
+		msg_debug_spf ("resolve aaa %s", host);
 
 		if (make_dns_request_task_forced (task,
 				spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
