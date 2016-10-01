@@ -311,7 +311,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		}
 
 		g_assert (cur != NULL);
-		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
+		if (!(cur->flags & (RSPAMD_SPF_FLAG_PARSED|RSPAMD_SPF_FLAG_RESOLVED))) {
 			/* Unresolved redirect */
 			msg_info_spf ("redirect to %s cannot be resolved", cur->spf_string);
 		}
@@ -339,7 +339,8 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			target->na = TRUE;
 			continue;
 		}
-		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
+		if ((cur->flags & (RSPAMD_SPF_FLAG_PARSED|RSPAMD_SPF_FLAG_RESOLVED)) !=
+				(RSPAMD_SPF_FLAG_RESOLVED|RSPAMD_SPF_FLAG_PARSED)) {
 			/* Ignore unparsed addrs */
 			continue;
 		}
@@ -630,12 +631,14 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						}
 					}
 					else {
+						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+						cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
 						spf_record_process_addr (rec, addr, elt_data);
 					}
 					break;
 				case SPF_RESOLVE_A:
 				case SPF_RESOLVE_AAA:
-					cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
+					cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
 					spf_record_process_addr (rec, addr, elt_data);
 					break;
@@ -661,16 +664,17 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						}
 					}
 					else {
+						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 						spf_record_process_addr (rec, addr, elt_data);
 					}
 					break;
 				case SPF_RESOLVE_REDIRECT:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
 						if (spf_process_txt_record (rec, cb->resolved, reply)) {
-							cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
+							cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 						}
 						else {
-							cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+							cb->addr->flags &= ~RSPAMD_SPF_FLAG_RESOLVED;
 							cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 						}
 					}
@@ -680,10 +684,10 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				case SPF_RESOLVE_INCLUDE:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
 						if (spf_process_txt_record (rec, cb->resolved, reply)) {
-							cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
+							cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 						}
 						else {
-							cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+							cb->addr->flags &= ~RSPAMD_SPF_FLAG_RESOLVED;
 						}
 					}
 					goto end;
@@ -694,7 +698,11 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				case SPF_RESOLVE_EXISTS:
 					if (elt_data->type == RDNS_REQUEST_A ||
 						elt_data->type == RDNS_REQUEST_AAAA) {
-						/* If specified address resolves, we can accept connection from every IP */
+						/*
+						 * If specified address resolves, we can accept
+						 * connection from every IP
+						 */
+						addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 						spf_record_addr_set (addr, TRUE);
 					}
 					break;
@@ -704,10 +712,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
 		switch (cb->cur_action) {
 			case SPF_RESOLVE_MX:
-				if (!rdns_request_has_type (reply->request, RDNS_REQUEST_MX)
-						&& !rdns_request_has_type (reply->request, RDNS_REQUEST_A)
-						&& !rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
-					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot find MX"
@@ -718,37 +723,25 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							rdns_strerror (reply->code));
 					spf_record_addr_set (addr, FALSE);
 				}
-				else if (!rdns_request_has_type (reply->request, RDNS_REQUEST_A)
-						&& !rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
-					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				break;
+			case SPF_RESOLVE_A:
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve MX"
+							"<%s>: spf error for domain %s: cannot resolve A"
 							" record for %s: %s",
 							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
-					spf_record_addr_set (addr, FALSE);
-				}
-				break;
-			case SPF_RESOLVE_A:
-				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-				cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-				msg_debug_spf (
-						"<%s>: spf error for domain %s: cannot resolve A"
-						" record for %s: %s",
-						task->message_id,
-						cb->rec->sender_domain,
-						cb->resolved->cur_domain,
-						rdns_strerror (reply->code));
 
-				if (rdns_request_has_type (reply->request, RDNS_REQUEST_A)) {
-					spf_record_addr_set (addr, FALSE);
+					if (rdns_request_has_type (reply->request, RDNS_REQUEST_A)) {
+						spf_record_addr_set (addr, FALSE);
+					}
 				}
 				break;
 			case SPF_RESOLVE_AAA:
-				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve AAAA"
@@ -763,7 +756,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				}
 				break;
 			case SPF_RESOLVE_PTR:
-				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve PTR"
 							" record for %s: %s",
@@ -771,16 +764,13 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
-
-					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 
 					spf_record_addr_set (addr, FALSE);
 				}
 				break;
 			case SPF_RESOLVE_REDIRECT:
-				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
-					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve REDIRECT"
@@ -793,7 +783,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 				break;
 			case SPF_RESOLVE_INCLUDE:
-				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve INCLUDE"
 							" record for %s: %s",
@@ -803,13 +793,12 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							rdns_strerror (reply->code));
 
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
-					cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 				}
 				break;
 			case SPF_RESOLVE_EXP:
 				break;
 			case SPF_RESOLVE_EXISTS:
-				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_PARSED)) {
+				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve EXISTS"
 							" record for %s: %s",
@@ -1109,7 +1098,7 @@ parse_spf_all (struct spf_record *rec, struct spf_addr *addr)
 	memset (&addr->addr6, 0, sizeof (addr->addr6));
 	/* Here we set all masks to 0 */
 	addr->m.idx = 0;
-	addr->flags |= RSPAMD_SPF_FLAG_ANY;
+	addr->flags |= RSPAMD_SPF_FLAG_ANY|RSPAMD_SPF_FLAG_RESOLVED;
 	msg_debug_spf ("parsed all elt");
 
 	return TRUE;
@@ -1157,7 +1146,7 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 		addr->m.dual.mask_v4 = 32;
 	}
 
-	addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+	addr->flags |= RSPAMD_SPF_FLAG_IPV4|RSPAMD_SPF_FLAG_RESOLVED;
 	msg_debug_spf ("parsed ipv4 record %s/%d", ipbuf, addr->m.dual.mask_v4);
 
 	return TRUE;
@@ -1205,7 +1194,7 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 		addr->m.dual.mask_v6 = 128;
 	}
 
-	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
+	addr->flags |= RSPAMD_SPF_FLAG_IPV6|RSPAMD_SPF_FLAG_RESOLVED;
 	msg_debug_spf ("parsed ipv6 record %s/%d", ipbuf, addr->m.dual.mask_v6);
 
 	return TRUE;

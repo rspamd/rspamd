@@ -40,6 +40,7 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_TEMPFAIL (1 << 8)
 #define RSPAMD_SPF_FLAG_NA (1 << 9)
 #define RSPAMD_SPF_FLAG_PERMFAIL (1 << 10)
+#define RSPAMD_SPF_FLAG_RESOLVED (1 << 11)
 
 struct spf_addr {
 	guchar addr6[sizeof (struct in6_addr)];
