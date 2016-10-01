@@ -1840,7 +1840,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			if (rec->resolved->len > 1) {
 				addr = g_ptr_array_index(resolved->elts, 0);
 				if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
-						&& addr->flags & RSPAMD_SPF_FLAG_REDIRECT) {
+						&& (addr->flags & RSPAMD_SPF_FLAG_REDIRECT)) {
 					addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 				} else {
 					addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
