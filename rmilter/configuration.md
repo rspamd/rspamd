@@ -56,13 +56,13 @@ Defines global options.
 	2.  `inet:[port@host]` - bind to inet socket
 - `max_size`: maximum size of scanned message for ClamAV, Rspamd and DCC.
 	+ Default: `0 (no limit)`
-- `strict_auth`: strict checks for mails from authenticated senders (if it is `no` then messages for authenticated users are **NOT** checked - that's a **default** value)
+- `strict_auth`: strict checks for mails from authenticated senders (if it is `no` then messages originated from authenticated users and `our_networks` are **NOT** checked - that's a **default** value)
 	+ Default: `no`
 - `use_dcc`: flag that specify whether we should use DCC checks for mail
 	+ Default: `no`
 - `whitelist`: global recipients whitelist
 	+ Default: `no`
-- `our_networks`: treat mail from these networks as mail from authenticated users (has no effect if `strict_auth` = `yes`)
+- `our_networks`: treat mail from these networks as mail from authenticated users (list of ips or nets)
 	+ Default: `empty`
 
 
@@ -120,14 +120,16 @@ Specifies Rspamd scanners.
 	+ Default: `default`
 - `whitelist`: list of ips, nets or hostnames that should be not checked with Rspamd
 	+ Default: `empty`
-- `extended_spam_headers`: add extended Rspamd headers to messages, is useful for debugging or private mail servers (flag)
+- `extended_spam_headers`: add extended Rspamd headers to messages **NOT** originated from authenticated users or `our_networks`, is useful for debugging or private mail servers (flag)
 	+ Default: `false`
+- `extended_headers_rcpt`: add extended Rspamd headers to messages if **EVERY** envelope recipient match this list (e.g. a list of domains mail server responsible for) (recipients list)
+	+ Default: `empty`
 - `spamd_never_reject`: never reject a message even if Rspamd action is `reject`, add header instead (flag)
 	+ Default: `false`
 - `spamd_temp_fail`: return temporary failure if spam servers could not be reached (ignore otherwise) (flag)
 	+ Default: `false`
 - `spamd_settings_id`: pass additional settings id for Rspamd (e.g. to distinguish inbound and outbound messages)
-  + Default: `empty`
+	+ Default: `empty`
 
 
 ## Redis section
