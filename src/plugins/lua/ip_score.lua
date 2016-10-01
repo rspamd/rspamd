@@ -323,16 +323,14 @@ local configure_ip_score_module = function()
     end
   end
   opts = rspamd_config:get_all_opt('ip_score')
-  if opts then
-    for k,v in pairs(opts) do
-      options[k] = v
-    end
-    redis_params = rspamd_parse_redis_server('ip_score')
-    if not redis_params then
-      rspamd_logger.infox(rspamd_config, 'no servers are specified')
-    end
-  else
-    return false
+  if not opts then return end
+  for k,v in pairs(opts) do
+    options[k] = v
+  end
+  redis_params = rspamd_parse_redis_server('ip_score')
+  if not redis_params then
+    rspamd_logger.infox(rspamd_config, 'no servers are specified')
+    return
   end
   if options['whitelist'] then
     whitelist = rspamd_config:add_radix_map(opts['whitelist'])
@@ -340,6 +338,7 @@ local configure_ip_score_module = function()
   if options['asn_cc_whitelist'] then
     asn_cc_whitelist = rspamd_config:add_hash_map(opts['asn_cc_whitelist'])
   end
+  return true
 end
 
 
