@@ -511,9 +511,9 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 				1,
 				NULL);
 	}
-	else if (record && record->elts->len == 0) {
+	else if (record && record->elts->len == 0 && record->temp_failed) {
 		rspamd_task_insert_result (task,
-				spf_module_ctx->symbol_permfail,
+				spf_module_ctx->symbol_dnsfail,
 				1,
 				NULL);
 	}
@@ -524,7 +524,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 
 			l = spf_record_ref (record);
 
-			if (!record->temp_failed) {
+			if (!record->temp_failed && !record->perm_failed && !record->na) {
 				rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
 						record->domain, l,
 						task->tv.tv_sec, record->ttl);
