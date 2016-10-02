@@ -4,6 +4,7 @@ action-emails.ru
 autodesk.com
 bsndsy.ru
 flane.info
+geteml.com
 ikeafamilynews.ru
 list-manage.com
 list-manage1.com
@@ -11,10 +12,13 @@ mandrillapp.com
 mlcampaignru.com
 mlsendru.com
 mobotix-news.com
+e.mail.ru
 email.mail.ostrovok.ru
+email.news.ostrovok.ru
 pechkincensor.ru
 pechkinspy.ru
 securityexpert.ru
+sendgrid.net
 sendsay.ru
 simplesite.com
 softlinemail.ru
