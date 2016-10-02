@@ -208,7 +208,7 @@
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
-                error: function () {
+                error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
                 },
                 success: function (data) {
@@ -959,7 +959,7 @@
                 success: function () {
                     alertMessage('alert-success', 'Actions successfully saved');
                 },
-                error: function () {
+                error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
                 }
             });
