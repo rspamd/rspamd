@@ -22,11 +22,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require 'rspamd_redis'
 local redis_params
 
-local settings = {
-  [1] = {},
-  [2] = {},
-  [3] = {}
-}
+local settings = {}
 local settings_ids = {}
 local settings_initialized = false
 local max_pri = 0
@@ -274,8 +270,8 @@ local function check_settings(task)
 
   for pri = max_pri,1,-1 do
     if not applied and settings[pri] then
-      for name, r in pairs(settings[pri]) do
-        local rule = check_specific_setting(name, r, ip, client_ip, from, rcpt, user, uname)
+      for _,s in ipairs(settings[pri]) do
+        local rule = check_specific_setting(s.name, s.rule, ip, client_ip, from, rcpt, user, uname)
         if rule then
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
             task:get_message_id(), name)
@@ -494,10 +490,14 @@ local function process_settings_table(tbl)
     end
     local s = process_setting_elt(k, v)
     if s then
-      settings[pri][k] = s
+      table.insert(settings[pri], {name = k, rule = s})
       nrules = nrules + 1
     end
   end, ft)
+  -- sort settings with equal priopities in alphabetical order
+  for pri,_ in pairs(settings) do
+    table.sort(settings[pri], function(a,b) return a.name < b.name end)
+  end
 
   settings_initialized = true
   rspamd_logger.infox(rspamd_config, 'loaded %1 elements of settings', nrules)
