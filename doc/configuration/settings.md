@@ -113,7 +113,7 @@ settings {
 So each setting has the following attributes:
 
 - `name` - section name that identifies this specific setting (e.g. `some_users`)
-- `priority` - `high`, `medium`, `low` or numeric `1 ... 3` (default priority is `low`):
+- `priority` - `high`, `medium`, `low` or non-zero integer value (default priority is `low`):
 
  String   | Numeric
        ---|---
@@ -121,7 +121,7 @@ So each setting has the following attributes:
  `medium` | 2
  `high`   | 3
 
- Rules with greater priorities are matched first. Once a rule matches only that rule is applied and the rest are ignored.
+ Rules with greater priorities are matched first. From version 1.4 Rspamd checks rules with equal priorities in alphabetical order. Once a rule matches only that rule is applied and the rest are ignored.
 - `match list` - list of rules which this rule matches:
 	+ `from` - match SMTP from
 	+ `rcpt` - match RCPT
