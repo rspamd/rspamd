@@ -3,7 +3,7 @@ Description=rapid spam filtering system
 After=nss-lookup.target
 
 [Service]
-LimitNOFILE=infinity
+LimitNOFILE=1048576
 NonBlocking=true
 ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f
 User=_rspamd
