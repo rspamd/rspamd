@@ -152,6 +152,11 @@ SPF DNSFAIL FAILED MX
   ...  -i  1.2.3.4  -F  x@fail9.org.org.za
   Check Rspamc  ${result}  R_SPF_DNSFAIL
 
+SPF DNSFAIL FAILED RECORD
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  1.2.3.4  -F  x@www.dnssec-failed.org
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
+
 *** Keywords ***
 DMARC Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
