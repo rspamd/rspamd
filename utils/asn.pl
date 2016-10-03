@@ -47,7 +47,7 @@ sub download_file {
 
   print "Fetching $u\n";
   my $ff = File::Fetch->new( uri => $u );
-  my $where = $ff->fetch($download_target) or die $ff->error;
+  my $where = $ff->fetch( to => $download_target ) or die $ff->error;
 
   return $where;
 }
@@ -64,12 +64,16 @@ if ($download_bgp) {
   }
 }
 
+if ( $download_asn || $download_bgp ) {
+  exit 0;
+}
+
 # Now load BGP data
 my $networks = {};
 
 foreach my $u ( @{ $config{'bgp_sources'} } ) {
   my $parsed = URI->new($u);
-  my $fname  = $download_target . basename( $parsed->path );
+  my $fname  = $download_target . '/' . basename( $parsed->path );
   open( my $fh, "<:gzip", $fname )
     or die "Cannot open $fname: $!";
 
@@ -93,7 +97,7 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
 # Now roughly detect countries
 foreach my $u ( @{ $config{'asn_sources'} } ) {
   my $parsed = URI->new($u);
-  my $fname  = $download_target . basename( $parsed->path );
+  my $fname  = $download_target . '/' . basename( $parsed->path );
   open( my $fh, "<", $fname ) or die "Cannot open $fname: $!";
 
   while (<$fh>) {
@@ -108,17 +112,18 @@ foreach my $u ( @{ $config{'asn_sources'} } ) {
       for ( my $as = $as_start ; $as < $as_end ; $as++ ) {
         if ( $networks->{"$as"} ) {
           $networks->{"$as"}->{'country'} = $elts[1];
-          $networks->{"$as"}->{'rir'} = $elts[0];
+          $networks->{"$as"}->{'rir'}     = $elts[0];
         }
       }
     }
   }
 }
 
-while ( my ( $k, $v ) = each(%{$networks}) ) {
-  foreach my $n (@{$v->{'nets'}}) {
+while ( my ( $k, $v ) = each( %{$networks} ) ) {
+  foreach my $n ( @{ $v->{'nets'} } ) {
+
     # "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
-    if ($v->{'country'}) {
+    if ( $v->{'country'} ) {
       printf "%s %s|%s|%s|%s|\n", $n, $k, $n, $v->{'country'}, $v->{'rir'};
     }
     else {
