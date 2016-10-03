@@ -31,7 +31,7 @@ local options = {
 }
 local redis_params
 
-local cymru_re = rspamd_regexp.create_cached("[\\|\\s]")
+local rspamd_re = rspamd_regexp.create_cached("[\\|\\s]")
 
 local function asn_check(task)
 
@@ -55,10 +55,10 @@ local function asn_check(task)
   end
 
   local asn_check_func = {}
-  function asn_check_func.cymru(ip)
-    local function cymru_dns_cb(resolver, to_resolve, results, err, key)
+  function asn_check_func.rspamd(ip)
+    local function rspamd_dns_cb(resolver, to_resolve, results, err, key)
       if not (results and results[1]) then return end
-      local parts = cymru_re:split(results[1])
+      local parts = rspamd_re:split(results[1])
       -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
       asn_set(parts[1], parts[2], parts[3])
 
@@ -95,7 +95,7 @@ local function asn_check(task)
     local req_name = rspamd_logger.slog("%1.%2",
         table.concat(ip:inversed_str_octets(), '.'), dnsbl)
     task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
-        req_name, cymru_dns_cb)
+        req_name, rspamd_dns_cb)
   end
 
   local function asn_check_cache(ip, continuation_func)
@@ -153,10 +153,10 @@ local configure_asn_module = function()
       options[k] = v
     end
   end
-  if options['provider_type'] == 'cymru' then
+  if options['provider_type'] == 'rspamd' then
     if not options['provider_info'] and options['provider_info']['ip4'] and
         options['provider_info']['ip6'] then
-      rspamd_logger.errx("Missing required provider_info for cymru")
+      rspamd_logger.errx("Missing required provider_info for rspamd")
       return false
     end
   else
