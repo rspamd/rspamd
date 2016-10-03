@@ -20,10 +20,10 @@ local rspamd_regexp = require "rspamd_regexp"
 local rspamd_redis = require "rspamd_redis"
 
 local options = {
-  provider_type = 'cymru',
+  provider_type = 'rspamd',
   provider_info = {
-    ip4 = 'origin.asn.cymru.com',
-    ip6 = 'origin6.asn.cymru.com',
+    ip4 = 'asn.rspamd.com',
+    ip6 = 'asn6.rspamd.com',
   },
   symbol = 'ASN',
   expire = 86400, -- 1 day by default
