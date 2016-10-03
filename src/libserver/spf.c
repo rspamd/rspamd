@@ -1876,6 +1876,14 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 		addr->flags |= RSPAMD_SPF_FLAG_NA;
 		g_ptr_array_insert (resolved->elts, 0, addr);
 	}
+	else if (reply->code != RDNS_RC_NOREC && reply->code != RDNS_RC_NXDOMAIN
+			&& rec->dns_requests == 0) {
+		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
+		addr = g_slice_alloc0 (sizeof(*addr));
+		addr->flags = 0;
+		addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+		g_ptr_array_insert (resolved->elts, 0, addr);
+	}
 
 	if (resolved) {
 		if (!spf_process_txt_record (rec, resolved, reply)) {
