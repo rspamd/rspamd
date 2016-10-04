@@ -114,6 +114,7 @@ struct lua_redis_specific_userdata {
 	struct lua_redis_specific_userdata *next;
 	struct event timeout;
 	gboolean replied;
+	gboolean finished;
 };
 
 struct lua_redis_ctx {
@@ -153,7 +154,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 {
 	struct lua_redis_userdata *ud;
 	struct lua_redis_specific_userdata *cur, *tmp;
-	gboolean is_connected = FALSE, is_successfull = TRUE;
+	gboolean is_successfull = TRUE;
 	struct redisAsyncContext *ac;
 
 	if (ctx->async) {
@@ -163,27 +164,19 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 		if (ud->ctx) {
 
 			LL_FOREACH_SAFE (ud->specific, cur, tmp) {
-				if (is_connected) {
-					event_del (&cur->timeout);
-				}
+				event_del (&cur->timeout);
 
 				if (!cur->replied) {
 					is_successfull = FALSE;
 				}
+
+				cur->finished = TRUE;
 			}
 
 			ud->terminated = 1;
-			/*
-			 * On calling of redisFree, hiredis calls for callbacks pending
-			 * Hence, to avoid double free, we ensure that the object must
-			 * still be alive here!
-			 */
-			ctx->ref.refcount = 100500;
 			ac = ud->ctx;
 			ud->ctx = NULL;
 			rspamd_redis_pool_release_connection (ud->pool, ac, is_successfull);
-			ctx->ref.refcount = 0;
-			is_connected = TRUE;
 		}
 
 		LL_FOREACH_SAFE (ud->specific, cur, tmp) {
@@ -226,8 +219,7 @@ lua_redis_fin (void *arg)
 	ctx = sp_ud->ctx;
 	event_del (&sp_ud->timeout);
 	msg_debug ("finished redis query %p from session %p", sp_ud, ctx);
-	sp_ud->c->terminated = TRUE;
-	sp_ud->c->task = NULL;
+	sp_ud->finished = TRUE;
 
 	REDIS_RELEASE (ctx);
 }
@@ -246,7 +238,7 @@ lua_redis_push_error (const gchar *err,
 	struct rspamd_task **ptask;
 	struct lua_redis_userdata *ud = sp_ud->c;
 
-	if (!sp_ud->replied) {
+	if (!sp_ud->replied && !sp_ud->finished) {
 		if (sp_ud->cbref != -1 && ud->task) {
 			/* Push error */
 			lua_rawgeti (ud->L, LUA_REGISTRYINDEX, sp_ud->cbref);
@@ -314,7 +306,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 	struct rspamd_task **ptask;
 	struct lua_redis_userdata *ud = sp_ud->c;
 
-	if (!sp_ud->replied) {
+	if (!sp_ud->replied && !sp_ud->finished) {
 		if (sp_ud->cbref != -1 && ud->task) {
 			/* Push error */
 			lua_rawgeti (ud->L, LUA_REGISTRYINDEX, sp_ud->cbref);
@@ -361,7 +353,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	ctx = sp_ud->ctx;
 	ud = sp_ud->c;
 
-	if (ud->terminated) {
+	if (ud->terminated || sp_ud->finished) {
 		/* We are already at the termination stage, just go out */
 		return;
 	}
@@ -413,6 +405,10 @@ lua_redis_timeout (int fd, short what, gpointer u)
 	struct lua_redis_specific_userdata *sp_ud = u;
 	struct lua_redis_ctx *ctx;
 	redisAsyncContext *ac;
+
+	if (sp_ud->finished) {
+		return;
+	}
 
 	ctx = sp_ud->ctx;
 
