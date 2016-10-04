@@ -360,6 +360,7 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 		}
 		if (want_remove_score || want_forced) {
 			cd->metric_res->score -= rd->ms->score;
+			rd->ms->score = 0.0;
 		}
 	}
 }
