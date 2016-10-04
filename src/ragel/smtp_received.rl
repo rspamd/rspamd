@@ -44,7 +44,7 @@
   msg_id         = "<" id_left "@" id_right ">";
   ID             = CFWS "ID"i FWS ( Atom | msg_id );
 
-  For            = CFWS "FOR"i FWS ( Path | Mailbox ) %For_End;
+  For            = CFWS "FOR"i FWS ( Path | Mailbox ) >For_Start %For_End;
   Additional_Registered_Clauses  = CFWS Atom FWS String;
   Opt_info       = Via? With? ID? For? Additional_Registered_Clauses?;
   # Here we make From part optional just because many received headers lack it

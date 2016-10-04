@@ -142,6 +142,8 @@
     reported_ip_end = NULL;
     ip_start = NULL;
     ip_end = NULL;
+    for_start = NULL;
+    for_end = NULL;
   }
 
   action By_Start {
@@ -155,6 +157,8 @@
     reported_ip_end = NULL;
     ip_start = NULL;
     ip_end = NULL;
+    for_start = NULL;
+    for_end = NULL;
   }
 
   action By_End {
@@ -210,8 +214,17 @@
     }
   }
 
-  action For_End {
+  action For_Start {
+    for_start = p;
+  }
 
+  action For_End {
+    if (for_start && p > for_start) {
+      for_end = p;
+      len = for_end - for_start;
+      rh->for_mbox = rspamd_mempool_alloc (task->task_pool, len + 1);
+      rspamd_strlcpy (rh->for_mbox, for_start, len + 1);
+    }
   }
 
   action SMTP_proto {
@@ -270,7 +283,8 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
               *real_ip_start, *real_ip_end,
               *reported_domain_start, *reported_domain_end,
               *reported_ip_start, *reported_ip_end,
-              *ip_start, *ip_end, *date_start;
+              *ip_start, *ip_end, *date_start,
+              *for_start, *for_end;
   const char *p = data, *pe = data + len, *eof;
   int cs, in_v6 = 0, *stack = NULL;
   gsize top = 0;
@@ -292,6 +306,8 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
   ip_start = NULL;
   ip_end = NULL;
   date_start = NULL;
+  for_start = NULL;
+  for_end = NULL;
   rh->type = RSPAMD_RECEIVED_UNKNOWN;
 
   memset (&for_addr, 0, sizeof (for_addr));
