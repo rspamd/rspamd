@@ -250,6 +250,9 @@ LUA_FUNCTION_DEF (task, get_raw_headers);
  * - `real_hostname` - hostname as resolved by MTA
  * - `real_ip` - string representation of IP as resolved by PTR request of MTA
  * - `by_hostname` - MTA hostname
+ * - `proto` - protocol, e.g. ESMTP or ESMTPS
+ * - `timestamp` - received timetamp
+ * - `for` - for value (unparsed mailbox)
  *
  * Please note that in some situations rspamd cannot parse all the fields of received headers.
  * In that case you should check all strings for validity.
@@ -1499,7 +1502,7 @@ lua_task_get_received_headers (lua_State * L)
 	guint i, k = 1;
 
 	if (task) {
-		lua_newtable (L);
+		lua_createtable (L, task->received->len, 0);
 
 		for (i = 0; i < task->received->len; i ++) {
 			rh = g_ptr_array_index (task->received, i);
@@ -1507,11 +1510,12 @@ lua_task_get_received_headers (lua_State * L)
 			if (G_UNLIKELY (rh->from_ip == NULL &&
 					rh->real_ip == NULL &&
 					rh->real_hostname == NULL &&
-					rh->by_hostname == NULL && rh->timestamp == 0)) {
+					rh->by_hostname == NULL && rh->timestamp == 0 &&
+					rh->for_mbox == NULL)) {
 				continue;
 			}
 
-			lua_newtable (L);
+			lua_createtable (L, 0, 8);
 			rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
 			rspamd_lua_table_set (L, "from_ip", rh->from_ip);
 			rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
@@ -1555,6 +1559,7 @@ lua_task_get_received_headers (lua_State * L)
 			lua_settable (L, -3);
 
 			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
+			rspamd_lua_table_set (L, "for", rh->for_mbox);
 			lua_rawseti (L, -2, k ++);
 		}
 	}
