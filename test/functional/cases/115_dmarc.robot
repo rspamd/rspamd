@@ -67,6 +67,16 @@ DMARC SUBDOMAIN PASS SPF RELAXED ALIGNMENT
   ...  -i  37.48.67.26  --from  foo@mom.za.org
   Check Rspamc  ${result}  DMARC_POLICY_ALLOW
 
+DMARC DNSFAIL
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/dmarc_tmpfail.eml
+  ...  -i  37.48.67.26  --from  foo@mom.za.org
+  Check Rspamc  ${result}  DMARC_DNSFAIL
+
+DMARC NA NXDOMAIN
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
+  ...  -i  37.48.67.26  --from  foo@mom.za.org
+  Check Rspamc  ${result}  DMARC_NA
+
 DKIM PERMFAIL NXDOMAIN
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim2.eml
   ...  -i  37.48.67.26
@@ -77,6 +87,17 @@ DKIM PERMFAIL BAD RECORD
   ...  -i  37.48.67.26
   Check Rspamc  ${result}  R_DKIM_PERMFAIL
 
+DKIM TEMPFAIL SERVFAIL
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim3.eml
+  ...  -i  37.48.67.26
+  Check Rspamc  ${result}  R_DKIM_TEMPFAIL
+  Should Contain  ${result.stdout}  DMARC_DNSFAIL
+
+DKIM NA NOSIG
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
+  ...  -i  37.48.67.26
+  Check Rspamc  ${result}  R_DKIM_NA
+
 SPF PERMFAIL UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  37.48.67.26  -F  x@fail3.org.org.za
@@ -86,6 +107,7 @@ SPF DNSFAIL FAILED INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@fail2.org.org.za
   Check Rspamc  ${result}  R_SPF_DNSFAIL
+  Should Contain  ${result.stdout}  DMARC_DNSFAIL
 
 SPF ALLOW UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
