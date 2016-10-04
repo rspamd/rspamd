@@ -102,6 +102,7 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'auth',
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -205,6 +206,7 @@
             $.ajax({
                 dataType: 'json',
                 url: 'maps',
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -265,6 +267,7 @@
                 $.ajax({
                     dataType: 'text',
                     url: 'getmap',
+                    jsonp: false,
                     beforeSend: function (xhr) {
                         xhr.setRequestHeader('Password', getPassword());
                         xhr.setRequestHeader('Map', item.map);
@@ -399,6 +402,7 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'pie',
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -521,6 +525,7 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'graph',
+                jsonp: false,
                 data: {"type": type},
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
@@ -570,6 +575,7 @@
             $.ajax({
                 dataType: 'json',
                 url: 'history',
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -636,6 +642,7 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'symbols',
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -696,6 +703,7 @@
             $.ajax({
                 dataType: 'json',
                 type: 'GET',
+                jsonp: false,
                 url: 'historyreset',
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
@@ -733,6 +741,8 @@
                 dataType: 'json',
                 type: 'POST',
                 url: url,
+                processData: false,
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                     $.each(headers, function (name, value) {
@@ -765,6 +775,8 @@
                 dataType: 'json',
                 type: 'POST',
                 url: url,
+                processData: false,
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -825,6 +837,10 @@
                         alertMessage('alert-error', 'Cannot scan data');
                     }
                 },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    alertMessage('alert-error', 'Cannot upload data: ' +
+                        textStatus + ", " + errorThrown);
+                },
                 statusCode: {
                     404: function () {
                         alertMessage('alert-error', 'Cannot upload data, no server found');
@@ -882,6 +898,7 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'actions',
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -953,6 +970,7 @@
                 dataType: 'json',
                 type: 'POST',
                 url: url,
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -1002,6 +1020,7 @@
                 data: data,
                 dataType: 'text',
                 type: 'POST',
+                jsonp: false,
                 url: action,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
@@ -1030,6 +1049,7 @@
                 dataType: 'json',
                 type: 'POST',
                 url: url,
+                jsonp: false,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -1051,6 +1071,7 @@
             $.ajax({
                 type: 'GET',
                 url: 'stat',
+                jsonp: false,
                 success: function () {
                     saveCredentials({}, 'nopassword');
                     $(dialog).hide();
@@ -1073,6 +1094,7 @@
                 document.getElementById('connectPassword').value = '';
                 $.ajax({
                     global: false,
+                    jsonp: false,
                     dataType: 'json',
                     type: 'GET',
                     url: 'auth',
