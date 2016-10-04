@@ -1048,6 +1048,16 @@
                 displayUI();
                 return;
             }
+            $.ajax({
+                type: 'GET',
+                url: 'stat',
+                success: function () {
+                    saveCredentials({}, 'nopassword');
+                    $(dialog).hide();
+                    $(backdrop).hide();
+                    displayUI();
+                },
+            });
             var nav = $('#navBar');
             var ui = $('#mainUI');
             var dialog = $('#connectDialog');
