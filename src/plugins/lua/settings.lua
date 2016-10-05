@@ -274,7 +274,7 @@ local function check_settings(task)
         local rule = check_specific_setting(s.name, s.rule, ip, client_ip, from, rcpt, user, uname)
         if rule then
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
-            task:get_message_id(), name)
+            task:get_message_id(), s.name)
           if rule['apply'] then
             task:set_settings(rule['apply'])
             applied = true
