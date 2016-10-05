@@ -64,7 +64,7 @@ local function check_quantity_received (task)
   local task_ip = task:get_ip()
 
   if ((not check_user and task:get_user()) or
-      (not check_local and ip_addr and ip_addr:is_local())) then
+      (not check_local and task_ip and task_ip:is_local())) then
     rspamd_logger.infox(task, 'Skipping once_received for authenticated user or local network')
     return
   end
