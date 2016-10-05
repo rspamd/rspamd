@@ -220,6 +220,7 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
 rspamd_config.HEADER_FORGED_MDN = {
   callback = function (task)
     local mdn = task:get_header('Disposition-Notification-To')
+    if not mdn then return false end
     local header_rp = nil
 
     if task:has_from('smtp') then
@@ -227,20 +228,21 @@ rspamd_config.HEADER_FORGED_MDN = {
     end
 
     -- Parse mail addr
-    local header_mdn = nil
-    if mdn then
-      local headers_mdn = util.parse_mail_address(mdn)
-      if headers_mdn then header_mdn = headers_mdn[1] end
+    local headers_mdn = util.parse_mail_address(mdn)
+
+    if headers_mdn and not header_rp  then return true end
+    if header_rp  and not headers_mdn then return false end
+    if not headers_mdn and not header_rp then return false end
+
+    local found_match = false
+    for _, h in ipairs(headers_mdn) do
+      if util.strequal_caseless(h['addr'], header_rp['addr']) then
+        found_match = true
+        break
+      end
     end
 
-    if header_mdn and not header_rp  then return true end
-    if header_rp  and not header_mdn then return false end
-
-    if header_mdn and header_mdn['addr'] ~= header_rp['addr'] then
-      return true
-    end
-
-    return false
+    return (not found_match)
   end,
 
   score = 2.0,
