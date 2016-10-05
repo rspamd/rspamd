@@ -419,7 +419,7 @@ lua_regexp_search (lua_State *L)
 					captures)) {
 
 				if (capture) {
-					lua_newtable (L);
+					lua_createtable (L, captures->len, 0);
 
 					for (capn = 0; capn < captures->len; capn ++) {
 						cap = &g_array_index (captures, struct rspamd_re_capture,

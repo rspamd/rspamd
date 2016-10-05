@@ -376,7 +376,7 @@ lua_url_to_table (lua_State *L)
 
 	if (url != NULL) {
 		u = url->url;
-		lua_newtable (L);
+		lua_createtable (L, 0, 12);
 		lua_pushstring (L, "url");
 		lua_pushlstring (L, u->string, u->urllen);
 		lua_settable (L, -3);

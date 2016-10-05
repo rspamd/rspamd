@@ -1116,13 +1116,20 @@ lua_task_get_urls (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 	gboolean need_emails = FALSE;
+	gsize sz;
 
 	if (task) {
 		if (lua_gettop (L) >= 2) {
 			need_emails = lua_toboolean (L, 2);
 		}
 
-		lua_newtable (L);
+		sz = g_hash_table_size (task->urls);
+
+		if (need_emails) {
+			sz += g_hash_table_size (task->emails);
+		}
+
+		lua_createtable (L, sz, 0);
 		cb.i = 1;
 		cb.L = L;
 		g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
@@ -1222,7 +1229,7 @@ lua_task_get_emails (lua_State * L)
 	struct lua_tree_cb_data cb;
 
 	if (task) {
-		lua_newtable (L);
+		lua_createtable (L, g_hash_table_size (task->emails), 0);
 		cb.i = 1;
 		cb.L = L;
 		g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
@@ -1242,7 +1249,7 @@ lua_task_get_text_parts (lua_State * L)
 	struct rspamd_mime_text_part *part, **ppart;
 
 	if (task != NULL) {
-		lua_newtable (L);
+		lua_createtable (L, task->text_parts->len, 0);
 
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
@@ -1268,7 +1275,7 @@ lua_task_get_parts (lua_State * L)
 	struct rspamd_mime_part *part, **ppart;
 
 	if (task != NULL) {
-		lua_newtable (L);
+		lua_createtable (L, task->parts->len, 0);
 
 		for (i = 0; i < task->parts->len; i ++) {
 			part = g_ptr_array_index (task->parts, i);
@@ -2218,7 +2225,7 @@ lua_task_get_archives (lua_State *L)
 	struct rspamd_archive **parch;
 
 	if (task) {
-		lua_newtable (L);
+		lua_createtable (L, task->parts->len, 0);
 
 		for (i = 0; i < task->parts->len; i ++) {
 			part = g_ptr_array_index (task->parts, i);
@@ -2276,11 +2283,13 @@ lua_push_symbol_result (lua_State *L,
 				opt = s->options;
 				lua_pushstring (L, "options");
 				lua_newtable (L);
+
 				while (opt) {
 					lua_pushstring (L, opt->data);
 					lua_rawseti (L, -2, j++);
 					opt = g_list_next (opt);
 				}
+
 				lua_settable (L, -3);
 			}
 
@@ -2589,7 +2598,7 @@ lua_task_get_timeval (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		lua_newtable (L);
+		lua_createtable (L, 0, 2);
 		lua_pushstring (L, "tv_sec");
 		lua_pushnumber (L, (lua_Number)task->tv.tv_sec);
 		lua_settable (L, -3);
@@ -2720,7 +2729,7 @@ lua_task_get_flags (lua_State *L)
 	guint flags, bit, i;
 
 	if (task) {
-		lua_newtable (L);
+		lua_createtable (L, 8, 0);
 
 		flags = task->flags;
 
@@ -3088,7 +3097,7 @@ lua_task_get_metric_score (lua_State *L)
 	if (task && metric_name) {
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
-			lua_newtable (L);
+			lua_createtable (L, 2, 0);
 			lua_pushnumber (L, metric_res->score);
 			rs = rspamd_task_get_required_score (task, metric_res);
 			lua_rawseti (L, -2, 1);

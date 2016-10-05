@@ -873,7 +873,7 @@ lua_util_tokenize_text (lua_State *L)
 		lua_pushnil (L);
 	}
 	else {
-		lua_newtable (L);
+		lua_createtable (L, res->len, 0);
 
 		for (i = 0; i < res->len; i ++) {
 			w = &g_array_index (res, rspamd_ftok_t, i);
@@ -992,12 +992,12 @@ lua_util_parse_addr (lua_State *L)
 		}
 		else {
 			cnt = internet_address_list_length (ia);
-			lua_newtable (L);
+			lua_createtable (L, cnt, 0);
 
 			for (i = 0; i < cnt; i ++) {
 				addr = internet_address_list_get_address (ia, i);
 
-				lua_newtable (L);
+				lua_createtable (L, 0, 2);
 				lua_pushstring (L, "name");
 				lua_pushstring (L, internet_address_get_name (addr));
 				lua_settable (L, -3);
@@ -1147,7 +1147,7 @@ lua_util_glob (lua_State *L)
 		}
 	}
 
-	lua_newtable (L);
+	lua_createtable (L, gl.gl_pathc, 0);
 	/* Push results */
 	for (i = 0; i < (gint)gl.gl_pathc; i ++) {
 		lua_pushstring (L, gl.gl_pathv[i]);

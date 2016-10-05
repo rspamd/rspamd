@@ -223,8 +223,8 @@ lua_ip_to_table (lua_State *L)
 	guint8 *ptr;
 
 	if (ip != NULL && ip->addr) {
-		lua_newtable (L);
 		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
+		lua_createtable (L, max, 0);
 
 		for (i = 1; i <= max; i++, ptr++) {
 			lua_pushnumber (L, *ptr);
@@ -248,9 +248,9 @@ lua_ip_str_octets (lua_State *L)
 	char numbuf[8];
 
 	if (ip != NULL && ip->addr) {
-		lua_newtable (L);
 		af = rspamd_inet_address_get_af (ip->addr);
 		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
+		lua_createtable (L, max * 2, 0);
 
 		for (i = 1; i <= max; i++, ptr++) {
 			if (af == AF_INET) {
@@ -288,9 +288,9 @@ lua_ip_inversed_str_octets (lua_State *L)
 	gint af;
 
 	if (ip != NULL && ip->addr) {
-		lua_newtable (L);
 		ptr = rspamd_inet_address_get_hash_key (ip->addr, &max);
 		af = rspamd_inet_address_get_af (ip->addr);
+		lua_createtable (L, max * 2, 0);
 
 		ptr += max - 1;
 		for (i = 1; i <= max; i++, ptr--) {
