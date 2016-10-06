@@ -258,17 +258,6 @@ void luaopen_cryptobox (lua_State *L);
 
 void rspamd_lua_dostring (const gchar *line);
 
-/* Classify functions */
-GList * rspamd_lua_call_cls_pre_callbacks (struct rspamd_classifier_config *ccf,
-	struct rspamd_task *task,
-	gboolean is_learn,
-	gboolean is_spam,
-	lua_State *L);
-double rspamd_lua_call_cls_post_callbacks (struct rspamd_classifier_config *ccf,
-	struct rspamd_task *task,
-	double in,
-	lua_State *L);
-
 double rspamd_lua_normalize (struct rspamd_config *cfg,
 	long double score,
 	void *params);

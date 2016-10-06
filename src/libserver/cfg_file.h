@@ -156,8 +156,6 @@ struct rspamd_classifier_config {
 	struct rspamd_tokenizer_config *tokenizer;      /**< tokenizer used for classifier						*/
 	const gchar *backend;							/**< name of statfile's backend							*/
 	ucl_object_t *opts;                             /**< other options                                      */
-	GList *pre_callbacks;                           /**< list of callbacks that are called before classification */
-	GList *post_callbacks;                          /**< list of callbacks that are called after classification */
 	GList *learn_conditions;						/**< list of learn condition callbacks					*/
 	gchar *name;									/**< unique name of classifier							*/
 	guint32 min_tokens;								/**< minimal number of tokens to process classifier 	*/

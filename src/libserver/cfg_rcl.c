@@ -874,10 +874,10 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 		lua_setglobal (L, "composites");
 	}
 
-	lua_getglobal (L, "classifiers");
+	lua_getglobal (L, "rspamd_classifiers");
 	if (lua_isnil (L, -1)) {
 		lua_newtable (L);
-		lua_setglobal (L, "classifiers");
+		lua_setglobal (L, "rspamd_classifiers");
 	}
 
 	lua_getglobal (L, "rspamd_version");
