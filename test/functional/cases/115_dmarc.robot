@@ -139,6 +139,11 @@ SPF PERMFAIL UNRESOLVEABLE REDIRECT
   ...  -i  8.8.8.8  -F  x@fail4.org.org.za
   Check Rspamc  ${result}  R_SPF_PERMFAIL
 
+SPF REDIRECT NO USEABLE ELEMENTS
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@fail10.org.org.za
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
+
 SPF DNSFAIL FAILED REDIRECT
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@fail1.org.org.za
@@ -178,6 +183,11 @@ SPF DNSFAIL FAILED RECORD
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  1.2.3.4  -F  x@www.dnssec-failed.org
   Check Rspamc  ${result}  R_SPF_DNSFAIL
+
+SPF PASS INCLUDE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
+  ...  -i  8.8.8.8  -F  x@pass1.org.org.za
+  Check Rspamc  ${result}  R_SPF_ALLOW
 
 *** Keywords ***
 DMARC Setup
