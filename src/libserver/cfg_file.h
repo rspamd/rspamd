@@ -140,6 +140,10 @@ struct rspamd_tokenizer_config {
  * (e.g. redis)
  */
 #define RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND (1 << 1)
+/*
+ * No backend required for classifier
+ */
+#define RSPAMD_FLAG_CLASSIFIER_NO_BACKEND (1 << 2)
 
 /**
  * Classifier config definition

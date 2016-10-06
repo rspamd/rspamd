@@ -16,7 +16,7 @@ struct token_node_s;
 
 struct rspamd_stat_classifier {
 	char *name;
-	void (*init_func)(rspamd_mempool_t *pool,
+	gboolean (*init_func)(rspamd_mempool_t *pool,
 			struct rspamd_classifier *cl);
 	gboolean (*classify_func)(struct rspamd_classifier * ctx,
 			GPtrArray *tokens,
@@ -30,7 +30,7 @@ struct rspamd_stat_classifier {
 };
 
 /* Bayes algorithm */
-void bayes_init (rspamd_mempool_t *pool,
+gboolean bayes_init (rspamd_mempool_t *pool,
 		struct rspamd_classifier *);
 gboolean bayes_classify (struct rspamd_classifier *ctx,
 		GPtrArray *tokens,
@@ -41,6 +41,20 @@ gboolean bayes_learn_spam (struct rspamd_classifier *ctx,
 		gboolean is_spam,
 		gboolean unlearn,
 		GError **err);
+
+/* Generic lua classifier */
+gboolean lua_classifier_init (rspamd_mempool_t *pool,
+		struct rspamd_classifier *);
+gboolean lua_classifier_classify (struct rspamd_classifier *ctx,
+		GPtrArray *tokens,
+		struct rspamd_task *task);
+gboolean lua_classifier_learn_spam (struct rspamd_classifier *ctx,
+		GPtrArray *tokens,
+		struct rspamd_task *task,
+		gboolean is_spam,
+		gboolean unlearn,
+		GError **err);
+
 
 #endif
 /*

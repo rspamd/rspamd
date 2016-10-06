@@ -185,10 +185,12 @@ bayes_normalize_prob (gdouble x)
 	return a*x4 + b*x3 + c*x2 + d*xx;
 }
 
-void
+gboolean
 bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier *cl)
 {
 	cl->cfg->flags |= RSPAMD_FLAG_CLASSIFIER_INTEGER;
+
+	return TRUE;
 }
 
 gboolean

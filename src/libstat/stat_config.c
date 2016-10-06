@@ -19,8 +19,16 @@
 #include "rspamd.h"
 #include "cfg_rcl.h"
 #include "stat_internal.h"
+#include "lua/lua_common.h"
 
 static struct rspamd_stat_ctx *stat_ctx = NULL;
+
+static struct rspamd_stat_classifier lua_classifier = {
+	.name = "lua",
+	.init_func = lua_classifier_init,
+	.classify_func = lua_classifier_classify,
+	.learn_spam_func = lua_classifier_learn_spam,
+};
 
 static struct rspamd_stat_classifier stat_classifiers[] = {
 	{
@@ -95,15 +103,55 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	struct rspamd_classifier *cl;
 	const ucl_object_t *cache_obj = NULL, *cache_name_obj;
 	const gchar *cache_name = NULL;
+	lua_State *L = cfg->lua_state;
+	guint lua_classifiers_cnt = 0, i;
 
 	if (stat_ctx == NULL) {
 		stat_ctx = g_slice_alloc0 (sizeof (*stat_ctx));
 	}
 
+	lua_getglobal (L, "rspamd_classifiers");
+
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushnil (L);
+
+		while (lua_next (L, -1) != 0) {
+			lua_classifiers_cnt ++;
+			lua_pop (L, 1);
+		}
+	}
+
+	lua_pop (L, 1);
+
+	stat_ctx->classifiers_count = G_N_ELEMENTS (stat_classifiers) +
+				lua_classifiers_cnt;
+	stat_ctx->classifiers_subrs = g_new0 (struct rspamd_stat_classifier,
+			stat_ctx->classifiers_count);
+
+	for (i = 0; i < G_N_ELEMENTS (stat_classifiers); i ++) {
+		memcpy (&stat_ctx->classifiers_subrs[i], &stat_classifiers[i],
+				sizeof (struct rspamd_stat_classifier));
+	}
+
+	lua_getglobal (L, "rspamd_classifiers");
+
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushnil (L);
+
+		while (lua_next (L, -1) != 0) {
+			lua_pushvalue (L, -2);
+			memcpy (&stat_ctx->classifiers_subrs[i], &lua_classifier,
+							sizeof (struct rspamd_stat_classifier));
+			stat_ctx->classifiers_subrs[i].name = g_strdup (lua_tostring (L, -1));
+			i ++;
+			lua_pop (L, 2);
+		}
+	}
+
+	lua_pop (L, 1);
 	stat_ctx->backends_subrs = stat_backends;
 	stat_ctx->backends_count = G_N_ELEMENTS (stat_backends);
-	stat_ctx->classifiers_subrs = stat_classifiers;
-	stat_ctx->classifiers_count = G_N_ELEMENTS (stat_classifiers);
+
 	stat_ctx->tokenizers_subrs = stat_tokenizers;
 	stat_ctx->tokenizers_count = G_N_ELEMENTS (stat_tokenizers);
 	stat_ctx->caches_subrs = stat_caches;
@@ -120,13 +168,30 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 
 	while (cur) {
 		clf = cur->data;
-		bk = rspamd_stat_get_backend (clf->backend);
+		cl = g_slice_alloc0 (sizeof (*cl));
+		cl->cfg = clf;
+		cl->ctx = stat_ctx;
+		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
+		cl->subrs = rspamd_stat_get_classifier (clf->classifier);
+		g_assert (cl->subrs != NULL);
 
-		if (bk == NULL) {
-			msg_err_config ("cannot get backend of type %s, so disable classifier"
-					" %s completely", clf->backend, clf->name);
+
+		if (!cl->subrs->init_func (cfg->cfg_pool, cl)) {
+			g_slice_free1 (sizeof (*cl), cl);
+			msg_err_config ("cannot init classifier type %s", clf->name);
 			cur = g_list_next (cur);
 			continue;
+		}
+
+		if (!(clf->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
+			bk = rspamd_stat_get_backend (clf->backend);
+
+			if (bk == NULL) {
+				msg_err_config ("cannot get backend of type %s, so disable classifier"
+						" %s completely", clf->backend, clf->name);
+				cur = g_list_next (cur);
+				continue;
+			}
 		}
 
 		/* XXX:
@@ -139,14 +204,6 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			stat_ctx->tkcf = stat_ctx->tokenizer->get_config (cfg->cfg_pool,
 					clf->tokenizer, NULL);
 		}
-
-		cl = g_slice_alloc0 (sizeof (*cl));
-		cl->cfg = clf;
-		cl->ctx = stat_ctx;
-		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
-		cl->subrs = rspamd_stat_get_classifier (clf->classifier);
-		g_assert (cl->subrs != NULL);
-		cl->subrs->init_func (cfg->cfg_pool, cl);
 
 		/* Init classifier cache */
 		cache_name = NULL;

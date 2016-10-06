@@ -667,6 +667,11 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			res = TRUE;
+			continue;
+		}
+
 		sel = cl;
 
 		for (j = 0; j < cl->statfiles_ids->len; j ++) {
@@ -757,6 +762,11 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 		if (cl->cache) {
 			cache_run = cl->cache->runtime (task, cl->cachecf, TRUE);
 			cl->cache->learn (task, spam, cache_run);
+		}
+
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			res = TRUE;
+			continue;
 		}
 
 		for (j = 0; j < cl->statfiles_ids->len; j ++) {
