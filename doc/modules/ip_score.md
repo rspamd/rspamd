@@ -86,9 +86,6 @@ ip_score {
 		ipnet = 0.8;
 		ip = 1.0;
 	}
-	# provider for ASN data - removed in 1.3.4 - use ASN module
-	# asn_provider = "origin.asn.cymru.com";
-	# asn6_provider = "origin6.asn.cymru.com";
 	# prefix for asn hashes
 	asn_prefix = "a:";
 	# prefix for country hashes
@@ -102,8 +99,8 @@ ip_score {
 	# the metric to score (usually "default")
 	metric = "default";
 	# upper and lower bounds at which to cap total score
-	max_score = null;
-	min_score = null;
+	#max_score = 10;
+	#min_score = -5;
 	# Amount to divide subscores by before applying tanh
 	score_divisor = 10;
 	# list of servers (or configure redis globally)
