@@ -234,8 +234,11 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			st = g_slice_alloc0 (sizeof (*st));
 			st->classifier = cl;
 			st->stcf = stf;
-			st->backend = bk;
-			st->bkcf = bk->init (stat_ctx, cfg, st);
+
+			if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
+				st->backend = bk;
+				st->bkcf = bk->init (stat_ctx, cfg, st);
+			}
 			msg_debug_config ("added backend %s for symbol %s",
 					bk->name, stf->symbol);
 
@@ -256,7 +259,8 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 				}
 			}
 
-			if (st->bkcf == NULL) {
+			if (st->bkcf == NULL &&
+					!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
 				msg_err_config ("cannot init backend %s for statfile %s",
 						clf->backend, stf->symbol);
 
@@ -297,7 +301,9 @@ rspamd_stat_close (void)
 		for (j = 0; j < cl->statfiles_ids->len; j ++) {
 			id = g_array_index (cl->statfiles_ids, gint, j);
 			st = g_ptr_array_index (st_ctx->statfiles, id);
-			st->backend->close (st->bkcf);
+			if (!(st->classifier->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
+				st->backend->close (st->bkcf);
+			}
 
 			g_slice_free1 (sizeof (*st), st);
 		}

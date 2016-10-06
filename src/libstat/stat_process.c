@@ -306,8 +306,13 @@ rspamd_stat_backends_process (struct rspamd_stat_ctx *st_ctx,
 
 	for (i = 0; i < st_ctx->statfiles->len; i++) {
 		st = g_ptr_array_index (st_ctx->statfiles, i);
-		bk_run = g_ptr_array_index (task->stat_runtimes, i);
 		cl = st->classifier;
+
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			continue;
+		}
+
+		bk_run = g_ptr_array_index (task->stat_runtimes, i);
 		g_assert (st != NULL);
 
 		if (bk_run != NULL) {
@@ -333,12 +338,19 @@ rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
 {
 	guint i;
 	struct rspamd_statfile *st;
+	struct rspamd_classifier *cl;
 	gpointer bk_run;
 
 	g_assert (task->stat_runtimes != NULL);
 
 	for (i = 0; i < st_ctx->statfiles->len; i++) {
 		st = g_ptr_array_index (st_ctx->statfiles, i);
+		cl = st->classifier;
+
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			continue;
+		}
+
 		bk_run = g_ptr_array_index (task->stat_runtimes, i);
 		g_assert (st != NULL);
 
