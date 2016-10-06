@@ -5,11 +5,11 @@ title: Lua API documentation
 
 # Lua API documentation {#top}
 
-Lua api is a core part of Rspamd functionality. [Lua language](http://www.lua.org) is used for writing rules and plugins.
+[Lua](http://www.lua.org) is used for writing rules and plugins in Rspamd. Rspamd exposes various core functionality through its Lua API.
 
 ## Using Lua API from rules {#luarules}
 
-Many Lua rules are shipped with Rspamd. They can be included to Rspamd by using tag **lua** in Rspamd.conf:
+Many Lua rules are shipped with Rspamd. These are included via `rspamd.lua` which is referenced using **lua** tag in `common.conf`:
 
 ~~~ucl
 lua = "$CONFDIR/lua/rspamd.lua"
@@ -17,7 +17,7 @@ lua = "$CONFDIR/lua/rspamd.lua"
 
 ### Global configuration tables {#luaglobal}
 
-While load of this file Rspamd defines two global variables:
+While loading this file Rspamd defines two global variables:
 - *config* - a global table of modules configuration. Here is a sample of usage of this table:
 
 ~~~lua
@@ -34,7 +34,7 @@ config['regexp']['RULE_NAME2'] = '/more_re/'
 
 ~~~
 
-- *metrics* - a global table of metrics definitions. This variable is a table that is indexed by metric name and provide ability to set up symbols' properties:
+- *metrics* - a global table of metrics definitions. This variable is a table that is indexed by metric name and provides the ability to set up symbols' properties:
 
 ~~~lua
 
@@ -270,9 +270,9 @@ end
 
 ## Conclusions {#luaconclusion}
 
-Lua plugins is a powerful tool for creating complex filters that can access practically all features of Rspamd. Lua plugins can be used for writing custom rules and interact with Rspamd in many ways, can use maps and make DNS requests. Rspamd is shipped with a couple of Lua plugins that can be used as examples while writing your own plugins.
+Lua plugins are a powerful tool for creating complex filters that can access practically all features of Rspamd. Lua plugins can be used for writing custom rules which could interact with Rspamd in many ways such as using maps and making DNS requests. Rspamd is shipped with a number of Lua plugins that could be used as examples while writing your own plugins.
 
 ## References {#luareference}
 
-- [Lua manual](http://www.lua.org/manual/5.2/)
+- [Lua manual](http://www.lua.org/manual/5.1/)
 - [Programming in Lua](http://www.lua.org/pil/)
