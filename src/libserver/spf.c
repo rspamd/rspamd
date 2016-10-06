@@ -670,11 +670,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_REDIRECT:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						if (spf_process_txt_record (rec, cb->resolved, reply)) {
-							cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
-						}
-						else {
-							cb->addr->flags &= ~RSPAMD_SPF_FLAG_RESOLVED;
+						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+						if (!spf_process_txt_record (rec, cb->resolved, reply)) {
 							cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 						}
 					}
@@ -683,12 +680,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_INCLUDE:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						if (spf_process_txt_record (rec, cb->resolved, reply)) {
-							cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
-						}
-						else {
-							cb->addr->flags &= ~RSPAMD_SPF_FLAG_RESOLVED;
-						}
+						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+						spf_process_txt_record (rec, cb->resolved, reply);
 					}
 					goto end;
 
