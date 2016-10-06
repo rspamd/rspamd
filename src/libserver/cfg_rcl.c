@@ -880,6 +880,12 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 		lua_setglobal (L, "rspamd_classifiers");
 	}
 
+	lua_getglobal (L, "classifiers");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "classifiers");
+	}
+
 	lua_getglobal (L, "rspamd_version");
 	if (lua_isnil (L, -1)) {
 		lua_pushcfunction (L, rspamd_rcl_lua_version);

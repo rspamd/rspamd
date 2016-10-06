@@ -115,7 +115,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	if (lua_type (L, -1) == LUA_TTABLE) {
 		lua_pushnil (L);
 
-		while (lua_next (L, -1) != 0) {
+		while (lua_next (L, -2) != 0) {
 			lua_classifiers_cnt ++;
 			lua_pop (L, 1);
 		}
@@ -138,7 +138,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	if (lua_type (L, -1) == LUA_TTABLE) {
 		lua_pushnil (L);
 
-		while (lua_next (L, -1) != 0) {
+		while (lua_next (L, -2) != 0) {
 			lua_pushvalue (L, -2);
 			memcpy (&stat_ctx->classifiers_subrs[i], &lua_classifier,
 							sizeof (struct rspamd_stat_classifier));
