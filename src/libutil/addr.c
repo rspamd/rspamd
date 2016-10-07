@@ -1321,12 +1321,21 @@ rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask)
 		}
 		else if (addr->af == AF_INET6 && mask <= 128) {
 			p = (uint32_t *)&addr->u.in.addr.s6.sin6_addr;
+			mask = 128 - mask;
 			p += 3;
-			while (mask > 0) {
-				umsk = htonl (G_MAXUINT32 << (32 - (mask > 32 ? 32 : mask)));
-				*p &= umsk;
+
+			for (;;) {
+				if (mask > 32) {
+					mask -= 32;
+					*p = 0;
+				}
+				else {
+					umsk = htonl (G_MAXUINT32 << mask);
+					*p &= umsk;
+					break;
+				}
+
 				p --;
-				mask -= 32;
 			}
 		}
 	}
