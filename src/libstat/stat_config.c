@@ -238,9 +238,13 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
 				st->backend = bk;
 				st->bkcf = bk->init (stat_ctx, cfg, st);
+				msg_debug_config ("added backend %s for symbol %s",
+						bk->name, stf->symbol);
 			}
-			msg_debug_config ("added backend %s for symbol %s",
-					bk->name, stf->symbol);
+			else {
+				msg_debug_config ("added backend-less statfile for symbol %s",
+						stf->symbol);
+			}
 
 			/* XXX: bad hack to pass statfiles configuration to cache */
 			if (cl->cache == NULL) {

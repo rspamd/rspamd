@@ -275,12 +275,18 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 
 	rspamd_stat_process_tokenize (st_ctx, task);
 	task->stat_runtimes = g_ptr_array_sized_new (st_ctx->statfiles->len);
+	g_ptr_array_set_size (task->stat_runtimes, st_ctx->statfiles->len);
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_ptr_array_free_hard, task->stat_runtimes);
 
 	for (i = 0; i < st_ctx->statfiles->len; i ++) {
 		st = g_ptr_array_index (st_ctx->statfiles, i);
 		g_assert (st != NULL);
+
+		if (st->classifier->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			g_ptr_array_index (task->stat_runtimes, i) = NULL;
+			continue;
+		}
 
 		bk_run = st->backend->runtime (task, st->stcf, learn, st->bkcf);
 
@@ -289,7 +295,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 					st->backend->name, st->stcf->symbol);
 		}
 
-		g_ptr_array_add (task->stat_runtimes, bk_run);
+		g_ptr_array_index (task->stat_runtimes, i) = bk_run;
 	}
 }
 
@@ -728,7 +734,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 	}
 
 end:
-	if (sel == NULL) {
+	if (!res && sel == NULL) {
 		if (classifier) {
 			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
 					"with name %s", classifier);
