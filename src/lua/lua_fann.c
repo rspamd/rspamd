@@ -116,8 +116,17 @@ lua_fann_create (lua_State *L)
 	if (nlayers > 0) {
 		layers = g_malloc (nlayers * sizeof (layers[0]));
 
-		for (i = 0; i < nlayers; i ++) {
-			layers[i] = luaL_checknumber (L, i + 2);
+		if (lua_type (L, 2) == LUA_TNUMBER) {
+			for (i = 0; i < nlayers; i ++) {
+				layers[i] = luaL_checknumber (L, i + 2);
+			}
+		}
+		else if (lua_type (L, 2) == LUA_TTABLE) {
+			for (i = 0; i < nlayers; i ++) {
+				lua_rawgeti (L, 2, i + 1);
+				layers[i] = luaL_checknumber (L, -1);
+				lua_pop (L, 1);
+			}
 		}
 
 		f = fann_create_standard_array (nlayers, layers);
