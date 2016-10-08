@@ -404,16 +404,16 @@ rspamd_config.FORGED_X_PHP_SCRIPT1 = {
   callback = function (task)
     local hdr = task:get_header('X-PHP-Script', true)
     if not hdr then return end
-    local re_txt = ' for (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}), (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})'
+    local re_txt = ' for (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}), (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$)'
     local re = rspamd_regexp.get_cached(re_txt)
     if not re then
       re = rspamd_regexp.create_cached(re_txt)
     end
     local m = re:search(hdr, true, true)
-    if not m and m[2] and m[3] then return end
-    return m[2] == m[3]
+    if not m then return end
+    return m[1][2] == m[1][3]
   end,
-  score = 4.0,
+  score = 1.0,
   description = 'X-PHP-Script header appears forged',
   group = 'header'
 }
