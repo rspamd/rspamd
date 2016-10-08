@@ -199,7 +199,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 	rspamd_lua_setclass (cbd->L, "rspamd{text}", -1);
 	t->start = (const gchar *)str;
 	t->len = len;
-	t->own = FALSE;
+	t->flags = 0;
 	/* Connection */
 	pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
 	*pcbd = cbd;
@@ -467,9 +467,9 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
 			vec->iov_base = (void *)t->start;
 			vec->iov_len = t->len;
 
-			if (t->own) {
+			if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
 				/* Steal ownership */
-				t->own = FALSE;
+				t->flags = 0;
 				rspamd_mempool_add_destructor (pool, g_free, (void *)t->start);
 			}
 		}

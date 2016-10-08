@@ -25,6 +25,7 @@
 #include "email_addr.h"
 #include "utlist.h"
 #include "cryptobox.h"
+#include "unix-std.h"
 
 /***
  * @module rspamd_task
@@ -1184,7 +1185,7 @@ lua_task_get_content (lua_State * L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->len = task->msg.len;
 		t->start = task->msg.begin;
-		t->own = FALSE;
+		t->flags = 0;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1213,7 +1214,7 @@ lua_task_get_rawbody (lua_State * L)
 			t->start = task->msg.begin;
 		}
 
-		t->own = FALSE;
+		t->flags = 0;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1311,7 +1312,7 @@ lua_task_get_request_header (lua_State *L)
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
 			t->start = hdr->begin;
 			t->len = hdr->len;
-			t->own = FALSE;
+			t->flags = 0;
 
 			return 1;
 		}
@@ -1490,7 +1491,7 @@ lua_task_get_raw_headers (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = task->raw_headers_content.begin;
 		t->len = task->raw_headers_content.len;
-		t->own = FALSE;
+		t->flags = 0;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3473,8 +3474,16 @@ lua_text_gc (lua_State *L)
 {
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 
-	if (t != NULL && t->own) {
-		g_free ((gpointer)t->start);
+	if (t != NULL) {
+		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			if (t->flags & RSPAMD_TEXT_FLAG_MMAPED) {
+				munmap ((gpointer)t->start, t->len);
+			}
+			else {
+				g_free ((gpointer)t->start);
+			}
+		}
+
 	}
 
 	return 0;

@@ -640,7 +640,7 @@ lua_regexp_split (lua_State *L)
 						rspamd_lua_setclass (L, "rspamd{text}", -1);
 						t->start = old_start;
 						t->len = start - old_start;
-						t->own = FALSE;
+						t->flags = 0;
 					}
 
 					lua_rawseti (L, -2, ++i);
@@ -665,7 +665,7 @@ lua_regexp_split (lua_State *L)
 					rspamd_lua_setclass (L, "rspamd{text}", -1);
 					t->start = end;
 					t->len = (data + len) - end;
-					t->own = FALSE;
+					t->flags = 0;
 				}
 
 				lua_rawseti (L, -2, ++i);

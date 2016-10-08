@@ -64,10 +64,12 @@ struct rspamd_lua_ip {
 	rspamd_inet_addr_t *addr;
 };
 
+#define RSPAMD_TEXT_FLAG_OWN (1 << 0)
+#define RSPAMD_TEXT_FLAG_MMAPED (1 << 1)
 struct rspamd_lua_text {
 	const gchar *start;
 	guint len;
-	gboolean own;
+	guint flags;
 };
 
 struct rspamd_lua_url {

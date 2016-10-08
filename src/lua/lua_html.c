@@ -355,7 +355,7 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 		t = lua_newuserdata (L, sizeof (*t));
 		t->start = bl->style.start;
 		t->len = bl->style.len;
-		t->own = FALSE;
+		t->flags = 0;
 		lua_settable (L, -3);
 	}
 }
@@ -562,7 +562,7 @@ lua_html_tag_get_content (lua_State *L)
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
 			t->start = tag->content;
 			t->len = tag->content_length;
-			t->own = FALSE;
+			t->flags = 0;
 		}
 		else {
 			lua_pushnil (L);

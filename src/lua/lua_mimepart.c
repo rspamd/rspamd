@@ -357,7 +357,7 @@ lua_textpart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->content->data;
 	t->len = part->content->len;
-	t->own = FALSE;
+	t->flags = 0;
 
 	return 1;
 }
@@ -377,7 +377,7 @@ lua_textpart_get_raw_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->orig->data;
 	t->len = part->orig->len;
-	t->own = FALSE;
+	t->flags = 0;
 
 	return 1;
 }
@@ -397,7 +397,7 @@ lua_textpart_get_content_oneline (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->stripped_content->data;
 	t->len = part->stripped_content->len;
-	t->own = FALSE;
+	t->flags = 0;
 
 	return 1;
 }
@@ -609,7 +609,7 @@ lua_mimepart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->content->data;
 	t->len = part->content->len;
-	t->own = FALSE;
+	t->flags = 0;
 
 	return 1;
 }

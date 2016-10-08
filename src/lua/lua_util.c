@@ -627,7 +627,7 @@ lua_util_encode_base64 (lua_State *L)
 			t->start = out;
 			t->len = outlen;
 			/* Need destruction */
-			t->own = TRUE;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
 		else {
 			lua_pushnil (L);
@@ -657,8 +657,8 @@ lua_util_decode_base64 (lua_State *L)
 			s = t->start;
 			inlen = t->len;
 			zero_copy = TRUE;
-			if (t->own) {
-				t->own = FALSE;
+			if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+				t->flags = 0;
 				grab_own = TRUE;
 			}
 		}
@@ -672,7 +672,13 @@ lua_util_decode_base64 (lua_State *L)
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
 			t->start = s;
 			t->len = outlen;
-			t->own = grab_own;
+
+			if (grab_own) {
+				t->flags |= RSPAMD_TEXT_FLAG_OWN;
+			}
+			else {
+				t->flags = 0;
+			}
 		}
 		else {
 			t = lua_newuserdata (L, sizeof (*t));
@@ -682,7 +688,7 @@ lua_util_decode_base64 (lua_State *L)
 			outlen = g_base64_decode_step (s, inlen, (guchar *)t->start,
 					&state, &save);
 			t->len = outlen;
-			t->own = TRUE;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
 	}
 	else {
@@ -725,7 +731,7 @@ lua_util_encode_base32 (lua_State *L)
 			t->start = out;
 			t->len = outlen;
 			/* Need destruction */
-			t->own = TRUE;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
 		else {
 			lua_pushnil (L);
@@ -759,7 +765,7 @@ lua_util_decode_base32 (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = rspamd_decode_base32 (s, inlen, &outlen);
 		t->len = outlen;
-		t->own = TRUE;
+		t->flags = RSPAMD_TEXT_FLAG_OWN;
 	}
 	else {
 		lua_pushnil (L);
@@ -793,7 +799,7 @@ lua_util_decode_url (lua_State *L)
 		t->start = g_malloc (inlen);
 		memcpy ((char *)t->start, s, inlen);
 		t->len = rspamd_decode_url ((char *)t->start, s, inlen);
-		t->own = TRUE;
+		t->flags = RSPAMD_TEXT_FLAG_OWN;
 	}
 	else {
 		lua_pushnil (L);
@@ -938,7 +944,7 @@ lua_util_parse_html (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = res->data;
 		t->len = res->len;
-		t->own = TRUE;
+		t->flags = RSPAMD_TEXT_FLAG_OWN;
 
 		g_byte_array_free (res, FALSE);
 		g_byte_array_free (in, TRUE);
