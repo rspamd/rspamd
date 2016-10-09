@@ -727,6 +727,24 @@ if redis_params then
   rspamd_classifiers['neural'] = {
     classify = function(task, classifier, tokens)
       local function classify_cb(task)
+        local min_learns = classifier:get_param('min_learns')
+
+        if min_learns then
+          min_learns = tonumber(min_learns)
+        end
+
+        if min_learns and min_learns > 0 then
+          if current_classify_ann.ham_learned < min_learns or
+            current_classify_ann.spam_learned < min_learns then
+
+             rspamd_logger.infox(task, 'fann classifier has not enough learns: (%s spam, %s ham), %s required',
+              current_classify_ann.spam_learned, current_classify_ann.ham_learned,
+              min_learns)
+            return
+          end
+        end
+
+        -- Perform classification
         local vec = tokens_to_vector(tokens)
         add_metatokens(task, vec)
         local out = current_classify_ann.ann:test(vec)
