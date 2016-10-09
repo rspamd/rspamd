@@ -19,9 +19,11 @@
 /* Classifier methods */
 LUA_FUNCTION_DEF (classifier, get_statfiles);
 LUA_FUNCTION_DEF (classifier, get_statfile_by_label);
+LUA_FUNCTION_DEF (classifier, get_param);
 
 static const struct luaL_reg classifierlib_m[] = {
 	LUA_INTERFACE_DEF (classifier, get_statfiles),
+	LUA_INTERFACE_DEF (classifier, get_param),
 	LUA_INTERFACE_DEF (classifier, get_statfile_by_label),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -80,6 +82,29 @@ lua_classifier_get_statfiles (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+static gint
+lua_classifier_get_param (lua_State *L)
+{
+	struct rspamd_classifier_config *ccf = lua_check_classifier (L);
+	const gchar *param;
+	const ucl_object_t *value;
+
+	param = luaL_checkstring (L, 2);
+
+	if (ccf != NULL && param != NULL) {
+		value = ucl_object_lookup (ccf->opts, param);
+
+		if (value != NULL) {
+			ucl_object_push_lua (L, value, true);
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
 
 	return 1;
 }
