@@ -108,6 +108,7 @@ struct lua_redis_specific_userdata {
 	gint cbref;
 	guint nargs;
 	gchar **args;
+	gsize *arglens;
 	struct rspamd_async_watcher *w;
 	struct lua_redis_userdata *c;
 	struct lua_redis_ctx *ctx;
@@ -136,16 +137,17 @@ lua_check_redis (lua_State * L, gint pos)
 }
 
 static void
-lua_redis_free_args (char **args, guint nargs)
+lua_redis_free_args (char **args, gsize *arglens, guint nargs)
 {
 	guint i;
 
 	if (args) {
 		for (i = 0; i < nargs; i ++) {
-			g_free (args[i]);
+			g_slice_free1 (arglens[i], args[i]);
 		}
 
 		g_slice_free1 (sizeof (gchar *) * nargs, args);
+		g_slice_free1 (sizeof (gsize) * nargs, arglens);
 	}
 }
 
@@ -180,7 +182,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 		}
 
 		LL_FOREACH_SAFE (ud->specific, cur, tmp) {
-			lua_redis_free_args (cur->args, cur->nargs);
+			lua_redis_free_args (cur->args, cur->arglens, cur->nargs);
 
 			if (cur->cbref != -1) {
 				luaL_unref (ud->L, LUA_REGISTRYINDEX, cur->cbref);
@@ -435,9 +437,10 @@ lua_redis_timeout (int fd, short what, gpointer u)
 
 static void
 lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
-		gchar ***pargs, guint *nargs)
+		gchar ***pargs, gsize **parglens, guint *nargs)
 {
 	gchar **args = NULL;
+	gsize *arglens;
 	gint top;
 
 	if (idx != 0 && lua_type (L, idx) == LUA_TTABLE) {
@@ -450,18 +453,42 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 			if (lua_isstring (L, -1)) {
 				top ++;
 			}
+			else if (lua_type (L, -1) == LUA_TUSERDATA) {
+				top ++;
+			}
 			lua_pop (L, 1);
 		}
 
 		args = g_slice_alloc ((top + 1) * sizeof (gchar *));
+		arglens = g_slice_alloc ((top + 1) * sizeof (gsize));
 		lua_pushnil (L);
-		args[0] = g_strdup (cmd);
+		arglens[0] = strlen (cmd);
+		args[0] = g_slice_alloc (arglens[0]);
+		memcpy (args[0], cmd, arglens[0]);
 		top = 1;
 
 		while (lua_next (L, -2) != 0) {
 			if (lua_isstring (L, -1)) {
-				args[top++] = g_strdup (lua_tostring (L, -1));
+				const gchar *s;
+
+				s = lua_tolstring (L, -1, &arglens[top]);
+				args[top] = g_slice_alloc (arglens[top]);
+				memcpy (args[top], s, arglens[top]);
+				top ++;
 			}
+			else if (lua_type (L, -1) == LUA_TUSERDATA) {
+				struct rspamd_lua_text *t;
+
+				t = lua_check_text (L, -1);
+
+				if (t && t->start) {
+					arglens[top] = t->len;
+					args[top] = g_slice_alloc (arglens[top]);
+					memcpy (args[top], t->start, arglens[top]);
+					top ++;
+				}
+			}
+
 			lua_pop (L, 1);
 		}
 
@@ -469,12 +496,18 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 	}
 	else {
 		/* Use merely cmd */
+
 		args = g_slice_alloc (sizeof (gchar *));
-		args[0] = g_strdup (cmd);
+		arglens = g_slice_alloc (sizeof (gsize));
+		lua_pushnil (L);
+		arglens[0] = strlen (cmd);
+		args[0] = g_slice_alloc (arglens[0]);
+		memcpy (args[0], cmd, arglens[0]);
 		top = 1;
 	}
 
 	*pargs = args;
+	*parglens = arglens;
 	*nargs = top;
 }
 
@@ -595,7 +628,8 @@ lua_redis_make_request (lua_State *L)
 
 			lua_pushstring (L, "args");
 			lua_gettable (L, -2);
-			lua_redis_parse_args (L, -1, cmd, &sp_ud->args, &sp_ud->nargs);
+			lua_redis_parse_args (L, -1, cmd, &sp_ud->args, &sp_ud->arglens,
+					&sp_ud->nargs);
 			lua_pop (L, 1);
 			LL_PREPEND (ud->specific, sp_ud);
 
@@ -644,10 +678,11 @@ lua_redis_make_request (lua_State *L)
 			cmd = luaL_checkstring (L, args_pos);
 			if (top > 4) {
 				lua_redis_parse_args (L, args_pos + 1, cmd, &sp_ud->args,
-						&sp_ud->nargs);
+						&sp_ud->arglens, &sp_ud->nargs);
 			}
 			else {
-				lua_redis_parse_args (L, 0, cmd, &sp_ud->args, &sp_ud->nargs);
+				lua_redis_parse_args (L, 0, cmd, &sp_ud->args,
+						&sp_ud->arglens, &sp_ud->nargs);
 			}
 
 			LL_PREPEND (ud->specific, sp_ud);
@@ -690,7 +725,7 @@ lua_redis_make_request (lua_State *L)
 					sp_ud,
 					sp_ud->nargs,
 					(const gchar **)sp_ud->args,
-					NULL);
+					sp_ud->arglens);
 
 		if (ret == REDIS_OK) {
 			rspamd_session_add_event (ud->task->s,
@@ -751,6 +786,7 @@ lua_redis_make_request_sync (lua_State *L)
 	gboolean ret = FALSE;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
 	gchar **args = NULL;
+	gsize *arglens = NULL;
 	guint nargs = 0;
 	redisContext *ctx;
 	redisReply *r;
@@ -789,7 +825,7 @@ lua_redis_make_request_sync (lua_State *L)
 
 		lua_pushstring (L, "args");
 		lua_gettable (L, -2);
-		lua_redis_parse_args (L, -1, cmd, &args, &nargs);
+		lua_redis_parse_args (L, -1, cmd, &args, &arglens, &nargs);
 		lua_pop (L, 1);
 
 		if (addr && cmd) {
@@ -808,7 +844,7 @@ lua_redis_make_request_sync (lua_State *L)
 
 		if (ctx == NULL || ctx->err) {
 			redisFree (ctx);
-			lua_redis_free_args (args, nargs);
+			lua_redis_free_args (args, arglens, nargs);
 			lua_pushboolean (L, FALSE);
 
 			return 1;
@@ -817,7 +853,7 @@ lua_redis_make_request_sync (lua_State *L)
 		r = redisCommandArgv (ctx,
 					nargs,
 					(const gchar **)args,
-					NULL);
+					arglens);
 
 		if (r != NULL) {
 			if (r->type != REDIS_REPLY_ERROR) {
@@ -828,15 +864,17 @@ lua_redis_make_request_sync (lua_State *L)
 				lua_pushboolean (L, FALSE);
 				lua_pushstring (L, r->str);
 			}
+
 			freeReplyObject (r);
 			redisFree (ctx);
+			lua_redis_free_args (args, arglens, nargs);
 
 			return 2;
 		}
 		else {
 			msg_info ("call to redis failed: %s", ctx->errstr);
 			redisFree (ctx);
-			lua_redis_free_args (args, nargs);
+			lua_redis_free_args (args, arglens, nargs);
 			lua_pushboolean (L, FALSE);
 		}
 	}
@@ -1064,6 +1102,7 @@ lua_redis_add_cmd (lua_State *L)
 	const gchar *cmd = NULL;
 	gint args_pos = 2;
 	gchar **args = NULL;
+	gsize *arglens = NULL;
 	guint nargs = 0;
 	gint cbref = -1, ret;
 	struct timeval tv;
@@ -1096,7 +1135,7 @@ lua_redis_add_cmd (lua_State *L)
 			sp_ud->ctx = ctx;
 
 			lua_redis_parse_args (L, args_pos, cmd, &sp_ud->args,
-						&sp_ud->nargs);
+						&sp_ud->arglens, &sp_ud->nargs);
 
 			LL_PREPEND (sp_ud->c->specific, sp_ud);
 
@@ -1105,7 +1144,7 @@ lua_redis_add_cmd (lua_State *L)
 					sp_ud,
 					sp_ud->nargs,
 					(const gchar **)sp_ud->args,
-					NULL);
+					sp_ud->arglens);
 
 			if (ret == REDIS_OK) {
 				rspamd_session_add_event (sp_ud->c->task->s,
@@ -1127,6 +1166,7 @@ lua_redis_add_cmd (lua_State *L)
 						sp_ud->c->ctx->errstr);
 				lua_pushboolean (L, 0);
 				lua_pushstring (L, sp_ud->c->ctx->errstr);
+
 				return 2;
 			}
 		}
@@ -1141,13 +1181,15 @@ lua_redis_add_cmd (lua_State *L)
 			}
 
 			if (ctx->d.sync) {
-				lua_redis_parse_args (L, args_pos, cmd, &args, &nargs);
+				lua_redis_parse_args (L, args_pos, cmd, &args, &arglens, &nargs);
 
 				if (nargs > 0) {
-					redisAppendCommandArgv (ctx->d.sync, nargs,
-							(const char **)args, NULL);
-					ctx->cmds_pending ++;
-					lua_redis_free_args (args, nargs);
+					if (redisAppendCommandArgv (ctx->d.sync, nargs,
+							(const char **)args, arglens) == REDIS_OK) {
+						ctx->cmds_pending ++;
+					}
+
+					lua_redis_free_args (args, arglens, nargs);
 				}
 				else {
 					lua_pushstring (L, "cannot append commands when not connected");
