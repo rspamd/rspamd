@@ -45,6 +45,7 @@ LUA_FUNCTION_DEF (fann, save);
 LUA_FUNCTION_DEF (fann, data);
 LUA_FUNCTION_DEF (fann, get_inputs);
 LUA_FUNCTION_DEF (fann, get_outputs);
+LUA_FUNCTION_DEF (fann, get_mse);
 LUA_FUNCTION_DEF (fann, dtor);
 
 static const struct luaL_reg fannlib_f[] = {
@@ -63,6 +64,7 @@ static const struct luaL_reg fannlib_m[] = {
 		LUA_INTERFACE_DEF (fann, data),
 		LUA_INTERFACE_DEF (fann, get_inputs),
 		LUA_INTERFACE_DEF (fann, get_outputs),
+		LUA_INTERFACE_DEF (fann, get_mse),
 		{"__gc", lua_fann_dtor},
 		{"__tostring", rspamd_lua_class_tostring},
 		{NULL, NULL}
@@ -483,6 +485,30 @@ lua_fann_get_outputs (lua_State *L)
 
 	if (f != NULL) {
 		lua_pushnumber (L, fann_get_num_output (f));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+#endif
+}
+
+/***
+ * @method rspamd_fann:get_mse()
+ * Returns mean square error for ANN
+ * @return {number} MSE value
+ */
+static gint
+lua_fann_get_mse (lua_State *L)
+{
+#ifndef WITH_FANN
+	return 0;
+#else
+	struct fann *f = rspamd_lua_check_fann (L, 1);
+
+	if (f != NULL) {
+		lua_pushnumber (L, fann_get_MSE (f));
 	}
 	else {
 		lua_pushnil (L);
