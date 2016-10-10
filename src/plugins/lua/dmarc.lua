@@ -132,8 +132,7 @@ local function dmarc_callback(task)
     local reason = {}
     local strict_spf = false
     local strict_dkim = false
-    local strict_policy = false
-    local quarantine_policy = false
+    local dmarc_policy = 'none'
     local found_policy = false
     local failed_policy
     local rua
@@ -176,10 +175,9 @@ local function dmarc_callback(task)
             policy = string.match(e, '^p=(.+)$')
             if policy then
               if (policy == 'reject') then
-                strict_policy = true
+                dmarc_policy = 'reject'
               elseif (policy == 'quarantine') then
-                strict_policy = true
-                quarantine_policy = true
+                dmarc_policy = 'quarantine'
               elseif (policy ~= 'none') then
                 failed_policy = 'p tag has invalid value: ' .. policy
                 return
@@ -189,19 +187,17 @@ local function dmarc_callback(task)
             if subdomain_policy and lookup_domain == dmarc_domain then
               if (subdomain_policy == 'reject') then
                 if dmarc_domain ~= from[1]['domain'] then
-                  strict_policy = true
+                  dmarc_policy = 'reject'
                 end
               elseif (subdomain_policy == 'quarantine') then
                 if dmarc_domain ~= from[1]['domain'] then
-                  strict_policy = true
-                  quarantine_policy = true
+                  dmarc_policy = 'quarantine'
                 end
               elseif (subdomain_policy == 'none') then
                 if dmarc_domain ~= from[1]['domain'] then
-                  strict_policy = false
-                  quarantine_policy = false
+                  dmarc_policy = 'none'
                 end
-              else
+              elseif (subdomain_policy ~= 'none') then
                 failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
                 return
               end
@@ -295,12 +291,12 @@ local function dmarc_callback(task)
         task:insert_result(dmarc_symbols['dnsfail'], 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error')
         return maybe_force_action('dnsfail')
       end
-      if quarantine_policy then
+      if dmarc_policy == 'quarantine' then
         if not pct or pct == 100 or (math.random(100) <= pct) then
           task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str)
           disposition = "quarantine"
         end
-      elseif strict_policy then
+      elseif dmarc_policy == 'reject' then
         if not pct or pct == 100 or (math.random(100) <= pct) then
           task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str)
           disposition = "reject"
@@ -309,13 +305,7 @@ local function dmarc_callback(task)
         task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str)
       end
     else
-      local real_policy = 'none'
-      if strict_policy then
-        real_policy = 'reject'
-      elseif quarantine_policy then
-        real_policy = 'quarantine'
-      end
-      task:insert_result(dmarc_symbols['allow'], res, lookup_domain, real_policy)
+      task:insert_result(dmarc_symbols['allow'], res, lookup_domain, dmarc_policy)
     end
 
     if rua and redis_params and dmarc_reporting then
