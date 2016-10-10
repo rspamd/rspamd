@@ -584,8 +584,14 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
     local function redis_fann_load_cb(task, err, data)
       if not err and type(data) == 'table' and type(data[2]) == 'string' then
         local version = tonumber(data[1])
-        local ann_data = data[2]
-        local ann = rspamd_fann.load_data(ann_data)
+        local err,ann_data = rspamd_util.zstd_decompress(data[2])
+        local ann
+
+        if err or not ann_data then
+          rspamd_logger.errx(task, 'cannot decompress ann: %s', err)
+        else
+          ann = rspamd_fann.load_data(ann_data)
+        end
 
         if ann then
           current_classify_ann.loaded = true
@@ -716,7 +722,7 @@ local function save_fann(task, is_spam)
     {
       key,
       'version', tostring(current_classify_ann.version),
-      'data', tostring(data),
+      'data', rspamd_util.zstd_compress(data),
       'spam', tostring(current_classify_ann.spam_learned),
       'ham', tostring(current_classify_ann.ham_learned),
     } -- arguments
