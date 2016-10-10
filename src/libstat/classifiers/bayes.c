@@ -140,6 +140,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		fw = feature_weight[tok->window_idx % G_N_ELEMENTS (feature_weight)];
 		norm_sum = (spam_freq + ham_freq) * (spam_freq + ham_freq);
 		norm_sub = (spam_freq - ham_freq) * (spam_freq - ham_freq);
+
 		w = (norm_sub) / (norm_sum) *
 				(fw * total_count) / (4.0 * (1.0 + fw * total_count));
 		bayes_spam_prob = PROB_COMBINE (spam_prob, total_count, w, 0.5);
@@ -147,8 +148,9 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		w = (norm_sub) / (norm_sum) *
 				(fw * total_count) / (4.0 * (1.0 + fw * total_count));
 		bayes_ham_prob = PROB_COMBINE (ham_prob, total_count, w, 0.5);
-		cl->spam_prob += log (bayes_spam_prob);
-		cl->ham_prob += log (bayes_ham_prob);
+
+		cl->spam_prob += log2 (bayes_spam_prob);
+		cl->ham_prob += log2 (bayes_ham_prob);
 		cl->processed_tokens ++;
 
 		msg_debug_bayes ("token: weight: %f, total_count: %L, "
