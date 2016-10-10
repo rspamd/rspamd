@@ -1647,7 +1647,7 @@ lua_util_zstd_compress (lua_State *L)
 		return 1;
 	}
 
-	t->len = r;
+	res->len = r;
 
 	return 1;
 }
