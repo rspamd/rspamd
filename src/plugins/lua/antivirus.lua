@@ -82,6 +82,46 @@ local function clamav_config(opts)
   return nil
 end
 
+local function fprot_config(opts)
+  local fprot_conf = {
+    attachments_only = true,
+    default_port = 10200,
+    timeout = 15.0,
+    retransmits = 2,
+    cache_expire = 3600, -- expire redis in one hour
+  }
+
+  for k,v in pairs(opts) do
+    fprot_conf[k] = v
+  end
+
+  if redis_params and not redis_params['prefix'] then
+    if fprot_conf.prefix then
+        redis_params['prefix'] = fprot_conf.prefix
+    else
+      redis_params['prefix'] = 'rs_fp'
+    end
+  end
+
+  if not fprot_conf['servers'] then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  fprot_conf['upstreams'] = upstream_list.create(rspamd_config,
+    fprot_conf['servers'],
+    fprot_conf.default_port)
+
+  if fprot_conf['upstreams'] then
+    return fprot_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+    fprot_conf['servers'])
+  return nil
+end
+
 local function need_av_check(task, rule)
   if rule['attachments_only'] then
     for _,p in ipairs(task:get_parts()) do
@@ -158,6 +198,70 @@ local function save_av_cache(task, rule, to_save)
   return false
 end
 
+local function fprot_check(task, rule)
+  local function fprot_check_uncached ()
+    local upstream = rule.upstreams:get_upstream_round_robin()
+    local addr = upstream:get_addr()
+    local retransmits = rule.retransmits
+    local header = string.format('SCAN STREAM 1 SIZE %d\n', task:get_size())
+    local footer = '\n'
+
+    local function fprot_callback(err, data)
+      if err then
+        if err == 'IO timeout' then
+          if retransmits > 0 then
+            retransmits = retransmits - 1
+            tcp.request({
+              task = task,
+              host = addr:to_string(),
+              port = addr:get_port(),
+              timeout = rule['timeout'],
+              callback = fprot_callback,
+              data = { header, task:get_content(), footer },
+              stop_pattern = '\n'
+            })
+          else
+            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+          end
+        else
+          rspamd_logger.errx(task, 'failed to scan: %s', err)
+          upstream:fail()
+        end
+      else
+        upstream:ok()
+
+        data = tostring(data)
+        local found = (string.sub(data, 1, 1) == '1')
+        local cached = 'OK'
+        if found then
+          local vname = string.match(data, '^1 <infected: (.+)> 1')
+          yield_result(task, rule, vname)
+          cached = vname
+        end
+
+        save_av_cache(task, rule, cached)
+      end
+    end
+
+    tcp.request({
+      task = task,
+      host = addr:to_string(),
+      port = addr:get_port(),
+      timeout = rule['timeout'],
+      callback = fprot_callback,
+      data = { header, task:get_content(), footer },
+      stop_pattern = '\n'
+    })
+  end
+
+  if need_av_check(task, rule) then
+    if check_av_cache(task, rule, fprot_check_uncached) then
+      return
+    else
+      fprot_check_uncached()
+    end
+  end
+end
 
 local function clamav_check(task, rule)
   local function clamav_check_uncached ()
@@ -229,6 +333,10 @@ local av_types = {
   clamav = {
     configure = clamav_config,
     check = clamav_check
+  },
+  fprot = {
+    configure = fprot_config,
+    check = fprot_check
   }
 }
 
