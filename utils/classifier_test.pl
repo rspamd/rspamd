@@ -7,30 +7,42 @@ use Getopt::Long;
 use Time::HiRes qw(gettimeofday tv_interval);
 use JSON::XS;
 use String::ShellQuote;
+use FileHandle;
+use IPC::Open2;
 use Data::Dumper;
 
 my $spam_dir;
 my $ham_dir;
-my $parallel       = 1;
-my $classifier     = "bayes";
-my $spam_symbol    = "BAYES_SPAM";
-my $ham_symbol     = "BAYES_HAM";
-my $timeout        = 10;
-my $rspamc         = $ENV{'RSPAMC'} || "rspamc";
-my $train_fraction = 0.5;
+my $parallel            = 1;
+my $classifier          = "bayes";
+my $spam_symbol         = "BAYES_SPAM";
+my $ham_symbol          = "BAYES_HAM";
+my $timeout             = 10;
+my $rspamc              = $ENV{'RSPAMC'} || "rspamc";
+my $bogofilter          = $ENV{'BOGOFILTER'} || "bogofilter";
+my $dspam               = $ENV{'DSPAM'} || "dspam";
+my $train_fraction      = 0.5;
+my $use_bogofilter      = 0;
+my $use_dspam           = 0;
+my $check_only          = 0;
+my $rspamc_prob_trigger = 95;
 my $man;
 my $help;
 
 GetOptions(
-  "spam|s=s"       => \$spam_dir,
-  "ham|h=s"        => \$ham_dir,
-  "spam-symbol=s"  => \$spam_symbol,
-  "ham-symbol=s"   => \$ham_symbol,
-  "classifier|c=s" => \$classifier,
-  "timeout|t=f"    => \$timeout,
-  "parallel|p=i"   => \$parallel,
-  "help|?"         => \$help,
-  "man"            => \$man
+  "spam|s=s"           => \$spam_dir,
+  "ham|h=s"            => \$ham_dir,
+  "spam-symbol=s"      => \$spam_symbol,
+  "ham-symbol=s"       => \$ham_symbol,
+  "classifier|c=s"     => \$classifier,
+  "timeout|t=f"        => \$timeout,
+  "parallel|p=i"       => \$parallel,
+  "train-fraction|t=f" => \$train_fraction,
+  "bogofilter|b"       => \$use_bogofilter,
+  "dspam|d"            => \$use_dspam,
+  "check-only"         => \$check_only,
+  "help|?"             => \$help,
+  "man"                => \$man
 ) or pod2usage(2);
 
 pod2usage(1) if $help;
@@ -78,14 +90,61 @@ sub learn_rspamc {
   return $processed;
 }
 
+sub learn_bogofilter {
+  my ( $files, $spam ) = @_;
+  my $processed = 0;
+
+  foreach my $f ( @{$files} ) {
+    my $args_quoted = shell_quote $f;
+    my $fl = $spam ? "-s" : "-n";
+    `$bogofilter  -I $args_quoted $fl`;
+    if ( $? == 0 ) {
+      $processed++;
+    }
+  }
+
+  return $processed;
+}
+
+sub learn_dspam {
+  my ( $files, $spam ) = @_;
+  my $processed = 0;
+
+  foreach my $f ( @{$files} ) {
+    my $args_quoted = shell_quote $f;
+    my $fl = $spam ? "--class=spam" : "--class=innocent";
+    open( my $p,
+      "|$dspam --user nobody --source=corpus --stdout --mode=toe $fl" )
+      or die "cannot run $dspam: $!";
+
+    open( my $inp, "< $f" );
+    while (<$inp>) {
+      print $p $_;
+    }
+  }
+
+  return $processed;
+}
+
 sub learn_samples {
   my ( $ar_ham, $ar_spam ) = @_;
   my $len;
   my $processed = 0;
   my $total     = 0;
+  my $learn_func;
 
   my @files_spam;
   my @files_ham;
+
+  if ($use_dspam) {
+    $learn_func = \&learn_dspam;
+  }
+  elsif ($use_bogofilter) {
+    $learn_func = \&learn_bogofilter;
+  }
+  else {
+    $learn_func = \&learn_rspamc;
+  }
 
   $len = int( scalar @{$ar_ham} * $train_fraction );
   my @cur_vec;
@@ -143,7 +202,10 @@ sub learn_samples {
       }
     }
 
-    $processed += learn_rspamc( $args, $spam );
+    my $r = $learn_func->( $args, $spam );
+    if ($r) {
+      $processed += $r;
+    }
   }
 
   return $processed;
@@ -153,7 +215,7 @@ sub check_rspamc {
   my ( $files, $spam, $fp_cnt, $fn_cnt, $detected_cnt ) = @_;
 
   my $args_quoted = shell_quote @{$files};
-  my $processed = 0;
+  my $processed   = 0;
 
   open(
     my $p,
@@ -167,7 +229,16 @@ sub check_rspamc {
 
       if ($spam) {
         if ( $res->{'default'}->{$ham_symbol} ) {
-          $$fp_cnt++;
+          my $m = $res->{'default'}->{$ham_symbol}->{'options'}->[0];
+          if ( $m && $m =~ /^(\d+(?:\.\d+)?)%$/ ) {
+            my $percentage = int($1);
+            if ( $percentage >= $rspamc_prob_trigger ) {
+              $$fp_cnt++;
+            }
+          }
+          else {
+            $$fp_cnt++;
+          }
         }
         elsif ( !$res->{'default'}->{$spam_symbol} ) {
           $$fn_cnt++;
@@ -178,7 +249,17 @@ sub check_rspamc {
       }
       else {
         if ( $res->{'default'}->{$spam_symbol} ) {
-          $$fp_cnt++;
+          my $m = $res->{'default'}->{$spam_symbol}->{'options'}->[0];
+          if ( $m && $m =~ /^(\d+(?:\.\d+)?)%$/ ) {
+
+            my $percentage = int($1);
+            if ( $percentage >= $rspamc_prob_trigger ) {
+              $$fp_cnt++;
+            }
+          }
+          else {
+            $$fp_cnt++;
+          }
         }
         elsif ( !$res->{'default'}->{$ham_symbol} ) {
           $$fn_cnt++;
@@ -188,6 +269,107 @@ sub check_rspamc {
         }
       }
     }
+  }
+
+  return $processed;
+}
+
+sub check_bogofilter {
+  my ( $files, $spam, $fp_cnt, $fn_cnt, $detected_cnt ) = @_;
+  my $processed = 0;
+
+  foreach my $f ( @{$files} ) {
+    my $args_quoted = shell_quote $f;
+
+    open( my $p, "$bogofilter -t -I $args_quoted |" )
+      or die "cannot spawn $bogofilter: $!";
+
+    while (<$p>) {
+      if ( $_ =~ /^([SHU])\s+.*$/ ) {
+        $processed++;
+
+        if ($spam) {
+          if ( $1 eq 'H' ) {
+            $$fp_cnt++;
+          }
+          elsif ( $1 eq 'U' ) {
+            $$fn_cnt++;
+          }
+          else {
+            $$detected_cnt++;
+          }
+        }
+        else {
+          if ( $1 eq 'S' ) {
+            $$fp_cnt++;
+          }
+          elsif ( $1 eq 'U' ) {
+            $$fn_cnt++;
+          }
+          else {
+            $$detected_cnt++;
+          }
+        }
+      }
+    }
+  }
+
+  return $processed;
+}
+
+sub check_dspam {
+  my ( $files, $spam, $fp_cnt, $fn_cnt, $detected_cnt ) = @_;
+  my $processed = 0;
+
+  foreach my $f ( @{$files} ) {
+    my $args_quoted = shell_quote $f;
+
+    my $pid = open2( *Reader, *Writer,
+      "$dspam --user nobody --classify --stdout --mode=notrain" );
+    open( my $inp, "< $f" );
+    while (<$inp>) {
+      print Writer $_;
+    }
+    close Writer;
+
+    while (<Reader>) {
+      if ( $_ =~
+qr(^X-DSPAM-Result: nobody; result="([^"]+)"; class="[^"]+"; probability=(\d+(?:\.\d+)?).*$)
+        )
+      {
+        $processed++;
+        my $percentage = int($2 * 100.0);
+
+        if ($spam) {
+          if ( $1 eq 'Innocent') {
+            if ( $percentage <= (100 - $rspamc_prob_trigger) ) {
+              $$fp_cnt++;
+            }
+          }
+          elsif ( $1 ne 'Spam' ) {
+            $$fn_cnt++;
+          }
+          else {
+            $$detected_cnt++;
+          }
+        }
+        else {
+          if ( $1 eq 'Spam' ) {
+            if ( $percentage >= $rspamc_prob_trigger ) {
+              $$fp_cnt++;
+            }
+          }
+          elsif ( $1 ne 'Innocent' ) {
+            $$fn_cnt++;
+          }
+          else {
+            $$detected_cnt++;
+          }
+        }
+      }
+    }
+    close Reader;
+    waitpid( $pid, 0 );
   }
 
   return $processed;
@@ -211,6 +393,17 @@ sub cross_validate {
   my @files_ham;
   my @cur_spam;
   my @cur_ham;
+  my $check_func;
+
+  if ($use_dspam) {
+    $check_func = \&check_dspam;
+  }
+  elsif ($use_bogofilter) {
+    $check_func = \&check_bogofilter;
+  }
+  else {
+    $check_func = \&check_rspamc;
+  }
 
   while ( my ( $fn, $spam ) = each( %{$hr} ) ) {
     if ($spam) {
@@ -238,15 +431,15 @@ sub cross_validate {
   shuffle_array( \@files_spam );
 
   foreach my $fn (@files_spam) {
-    my $r = check_rspamc($fn, 1, \$fp_spam, \$fn_spam, \$detected_spam);
+    my $r = $check_func->( $fn, 1, \$fp_ham, \$fn_ham, \$detected_spam );
     $total_spam += $r;
-    $processed += $r;
+    $processed  += $r;
   }
 
   shuffle_array( \@files_ham );
 
   foreach my $fn (@files_ham) {
-    my $r = check_rspamc($fn, 0, \$fp_ham, \$fn_ham, \$detected_ham);
+    my $r = $check_func->( $fn, 0, \$fp_spam, \$fn_spam, \$detected_ham );
     $total_ham += $r;
     $processed += $r;
   }
@@ -279,13 +472,15 @@ read_dir_files( $ham_dir,  \@ham_samples );
 shuffle_array( \@spam_samples );
 shuffle_array( \@ham_samples );
 
-my $learned = 0;
-my $t0      = [gettimeofday];
-$learned = learn_samples( \@ham_samples, \@spam_samples );
-my $t1 = [gettimeofday];
+if ( !$check_only ) {
+  my $learned = 0;
+  my $t0      = [gettimeofday];
+  $learned = learn_samples( \@ham_samples, \@spam_samples );
+  my $t1 = [gettimeofday];
 
-printf "Learned classifier, %d items processed, %.2f seconds elapsed\n",
-  $learned, tv_interval( $t0, $t1 );
+  printf "Learned classifier, %d items processed, %.2f seconds elapsed\n",
+    $learned, tv_interval( $t0, $t1 );
+}
 
 my %validation_set;
 my $len = int( scalar @spam_samples * $train_fraction );
