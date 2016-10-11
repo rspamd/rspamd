@@ -266,6 +266,11 @@ LUA_FUNCTION_DEF (task, get_received_headers);
  */
 LUA_FUNCTION_DEF (task, get_queue_id);
 /***
+ * @method task:get_uid()
+ * Returns ID of the task being processed.
+ */
+LUA_FUNCTION_DEF (task, get_uid);
+/***
  * @method task:get_resolver()
  * Returns ready to use rspamd_resolver object suitable for making asynchronous DNS requests.
  * @return {rspamd_resolver} resolver object associated with the task's session
@@ -704,6 +709,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_raw_headers),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_queue_id),
+	LUA_INTERFACE_DEF (task, get_uid),
 	LUA_INTERFACE_DEF (task, get_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
 	LUA_INTERFACE_DEF (task, get_dns_req),
@@ -1590,6 +1596,21 @@ lua_task_get_queue_id (lua_State *L)
 		else {
 			lua_pushnil (L);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_uid (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		lua_pushstring (L, task->task_pool->tag.uid);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
