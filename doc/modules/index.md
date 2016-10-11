@@ -53,6 +53,7 @@ files matched.
 
 The following Lua modules are enabled in the default configuration:
 
+- [antivirus](antivirus.html) - integrates virus scanners
 - [dmarc](dmarc.html) - performs DMARC policy checks
 - [maillist](maillist.html) - determines the common mailing list signatures in a message.
 - [mime_types](mime_types.html) - applies some rules about mime types met in messages
