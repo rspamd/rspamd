@@ -580,7 +580,7 @@ filename_blacklist {
 }
 ```
 
-Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You can specify `want_spam = yes` and Rspamd will skip messages that satisfy a particular rule's conditions.
+Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/configuration/settings.html). You can specify `want_spam = yes` and Rspamd will skip messages that satisfy a particular rule's conditions.
 
 ### What are filters, pre-filters and post-filters
 Rspamd executes different types of filters depending on the time of execution.
