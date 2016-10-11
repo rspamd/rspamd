@@ -26,24 +26,38 @@ UCL functionality.
 The basic Rspamd configuration is stored in `$CONFDIR/rspamd.conf`. By default, this file looks like this one:
 
 ~~~ucl
-lua = "$CONFDIR/lua/rspamd.lua"
+.include "$CONFDIR/common.conf"
 
-.include "$CONFDIR/options.conf"
-.include "$CONFDIR/logging.conf"
-.include "$CONFDIR/metrics.conf"
-.include "$CONFDIR/workers.conf"
-.include "$CONFDIR/composites.conf"
+options {
+    .include "$CONFDIR/options.inc"
+    .include(try=true; priority=1,duplicate=merge) "$LOCAL_CONFDIR/local.d/options.inc"
+    .include(try=true; priority=10) "$LOCAL_CONFDIR/override.d/options.inc"
+}
 
-.include "$CONFDIR/statistic.conf"
+logging {
+    type = "console";
+    systemd = true;
+    .include "$CONFDIR/logging.inc"
+    .include(try=true; priority=1,duplicate=merge) "$LOCAL_CONFDIR/local.d/logging.inc"
+    .include(try=true; priority=10) "$LOCAL_CONFDIR/override.d/logging.inc"
+}
 
-.include "$CONFDIR/modules.conf"
+worker {
+    bind_socket = "*:11333";
+    .include "$CONFDIR/worker-normal.inc"
+    .include(try=true; priority=1,duplicate=merge) "$LOCAL_CONFDIR/local.d/worker-normal.inc"
+    .include(try=true; priority=10) "$LOCAL_CONFDIR/override.d/worker-normal.inc"
+}
 
-modules {
-	path = "$PLUGINSDIR/lua/"
+worker {
+    bind_socket = "localhost:11334";
+    .include "$CONFDIR/worker-controller.inc"
+    .include(try=true; priority=1,duplicate=merge) "$LOCAL_CONFDIR/local.d/worker-controller.inc"
+    .include(try=true; priority=10) "$LOCAL_CONFDIR/override.d/worker-controller.inc"
 }
 ~~~
 
-In this file, we read a Lua script placed in `$CONFDIR/lua/rspamd.lua` and load Lua rules from it. Then we include a global [options](options.html) section followed by [logging](logging.html) logging configuration. The [metrics](metrics.html) section defines metric settings, including rule weights and Rspamd actions. The [workers](../workers/index.html) section specifies Rspamd workers settings. [Composites](composites.html) is a utility section that describes composite symbols. Statistical filters are defined in the [statistic](statistic.html) section. Rspamd stores module configurations (for both Lua and internal modules) in the [modules](../modules/index.html) section while modules themselves are loaded from the following portion of the configuration:
+In `common.conf`, we read a Lua script placed in `$RULESDIR/rspamd.lua` and load Lua rules from it. Then we include a global [options](options.html) section followed by [logging](logging.html) logging configuration. The [metrics.conf](metrics.html) file defines metric settings, including rule weights and Rspamd actions. The [workers](../workers/index.html) section specifies Rspamd workers settings. [Composites.conf](composites.html) describes composite symbols. Statistical filters are defined in [statistics.conf](statistic.html). Rspamd stores module configurations (for both Lua and internal modules) in  [modules.d](../modules/index.html) section while modules themselves are loaded from the following portion of `common.conf`:
 
 ~~~ucl
 modules {
@@ -53,4 +67,4 @@ modules {
 
 The modules section defines the path or paths of directories or specific files. If a directory is specified then all files with a `.lua` suffix are loaded as lua plugins (the directory path is treated as a `*.lua` shell pattern).
 
-This configuration is not intended to be changed by the user, rather you can include your own configuration options as `.include`s. To redefine symbol weights and actions, it is recommended to use [dynamic configuration](settings.html). Nevertheless, the Rspamd installation script will never overwrite a user's configuration if it exists already. Please read the Rspamd changelog carefully, if you upgrade Rspamd to a new version, for all incompatible configuration changes.
+This configuration is not intended to be changed by the user, rather it should be overridden in site-specific configuration files- see the [quickstart](/doc/quickstart.html#configuring-rspamd) for details. Nevertheless, packaging will generally never overwrite configuration files on upgrade if they have been touched by the user. Please read the [migration notes](/doc/migration.html) carefully if you upgrade Rspamd to a new version for all incompatible configuration changes.
