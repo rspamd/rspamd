@@ -57,6 +57,27 @@ sub shuffle_array {
   }
 }
 
+sub learn_rspamc {
+  my ( $files, $spam ) = @_;
+  my $processed = 0;
+
+  my $cmd = $spam ? "learn_spam" : "learn_ham";
+  my $args_quoted = shell_quote @{$files};
+  open(
+    my $p,
+"$rspamc -t $timeout -c $classifier --compact -j -n $parallel $cmd $args_quoted |"
+  ) or die "cannot spawn $rspamc: $!";
+
+  while (<$p>) {
+    my $res = eval('decode_json($_)');
+    if ( $res && $res->{'success'} ) {
+      $processed++;
+    }
+  }
+
+  return $processed;
+}
+
 sub learn_samples {
   my ( $ar_ham, $ar_spam ) = @_;
   my $len;
@@ -98,40 +119,73 @@ sub learn_samples {
 
   for ( my $i = 0 ; $i < $total ; $i++ ) {
     my $args;
-    my $cmd;
+    my $spam;
 
     if ( $i % 2 == 0 ) {
       $args = pop @files_spam;
 
       if ( !$args ) {
         $args = pop @files_ham;
-        $cmd  = 'learn_ham';
+        $spam = 0;
       }
       else {
-        $cmd = 'learn_spam';
+        $spam = 1;
       }
     }
     else {
       $args = pop @files_ham;
       if ( !$args ) {
         $args = pop @files_spam;
-        $cmd  = 'learn_spam';
+        $spam = 1;
       }
       else {
-        $cmd = 'learn_ham';
+        $spam = 0;
       }
     }
 
-    my $args_quoted = shell_quote @{$args};
-    open(
-      my $p,
-"$rspamc -t $timeout -c $classifier --compact -j -n $parallel $cmd $args_quoted |"
-    ) or die "cannot spawn $rspamc: $!";
+    $processed += learn_rspamc( $args, $spam );
+  }
 
-    while (<$p>) {
-      my $res = eval('decode_json($_)');
-      if ( $res && $res->{'success'} ) {
-        $processed++;
+  return $processed;
+}
+
+sub check_rspamc {
+  my ( $files, $spam, $fp_cnt, $fn_cnt, $detected_cnt ) = @_;
+
+  my $args_quoted = shell_quote @{$files};
+  my $processed = 0;
+
+  open(
+    my $p,
+"$rspamc -t $timeout -n $parallel --header=\"Settings: {symbols_enabled=[BAYES_SPAM]}\" --compact -j $args_quoted |"
+  ) or die "cannot spawn $rspamc: $!";
+
+  while (<$p>) {
+    my $res = eval('decode_json($_)');
+    if ( $res && $res->{'default'} ) {
+      $processed++;
+
+      if ($spam) {
+        if ( $res->{'default'}->{$ham_symbol} ) {
+          $$fp_cnt++;
+        }
+        elsif ( !$res->{'default'}->{$spam_symbol} ) {
+          $$fn_cnt++;
+        }
+        else {
+          $$detected_cnt++;
+        }
+      }
+      else {
+        if ( $res->{'default'}->{$spam_symbol} ) {
+          $$fp_cnt++;
+        }
+        elsif ( !$res->{'default'}->{$ham_symbol} ) {
+          $$fn_cnt++;
+        }
+        else {
+          $$detected_cnt++;
+        }
       }
     }
   }
@@ -184,93 +238,17 @@ sub cross_validate {
   shuffle_array( \@files_spam );
 
   foreach my $fn (@files_spam) {
-    my $args_quoted = shell_quote @{$fn};
-    my $spam        = 1;
-
-    open(
-      my $p,
-"$rspamc -t $timeout -n $parallel --header=\"Settings: {symbols_enabled=[BAYES_SPAM]}\" --compact -j $args_quoted |"
-    ) or die "cannot spawn $rspamc: $!";
-
-    while (<$p>) {
-      my $res = eval('decode_json($_)');
-      if ( $res && $res->{'default'} ) {
-        $processed++;
-
-        if ($spam) {
-          $total_spam++;
-
-          if ( $res->{'default'}->{$ham_symbol} ) {
-            $fp_spam++;
-          }
-          elsif ( !$res->{'default'}->{$spam_symbol} ) {
-            $fn_spam++;
-          }
-          else {
-            $detected_spam++;
-          }
-        }
-        else {
-          $total_ham++;
-
-          if ( $res->{'default'}->{$spam_symbol} ) {
-            $fp_ham++;
-          }
-          elsif ( !$res->{'default'}->{$ham_symbol} ) {
-            $fn_ham++;
-          }
-          else {
-            $detected_ham++;
-          }
-        }
-      }
-    }
+    my $r = check_rspamc($fn, 1, \$fp_spam, \$fn_spam, \$detected_spam);
+    $total_spam += $r;
+    $processed += $r;
   }
 
   shuffle_array( \@files_ham );
 
   foreach my $fn (@files_ham) {
-    my $args_quoted = shell_quote @{$fn};
-    my $spam        = 0;
-
-    open(
-      my $p,
-"$rspamc -t $timeout -n $parallel --header=\"Settings: {symbols_enabled=[BAYES_SPAM]}\" --compact -j $args_quoted |"
-    ) or die "cannot spawn $rspamc: $!";
-
-    while (<$p>) {
-      my $res = eval('decode_json($_)');
-      if ( $res && $res->{'default'} ) {
-        $processed++;
-
-        if ($spam) {
-          $total_spam++;
-
-          if ( $res->{'default'}->{$ham_symbol} ) {
-            $fp_spam++;
-          }
-          elsif ( !$res->{'default'}->{$spam_symbol} ) {
-            $fn_spam++;
-          }
-          else {
-            $detected_spam++;
-          }
-        }
-        else {
-          $total_ham++;
-
-          if ( $res->{'default'}->{$spam_symbol} ) {
-            $fp_ham++;
-          }
-          elsif ( !$res->{'default'}->{$ham_symbol} ) {
-            $fn_ham++;
-          }
-          else {
-            $detected_ham++;
-          }
-        }
-      }
-    }
+    my $r = check_rspamc($fn, 0, \$fp_ham, \$fn_ham, \$detected_ham);
+    $total_ham += $r;
+    $processed += $r;
   }
 
   printf "Scanned %d messages
