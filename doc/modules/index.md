@@ -53,7 +53,6 @@ files matched.
 
 The following Lua modules are enabled in the default configuration:
 
-- [antivirus](antivirus.html) - integrates virus scanners
 - [dmarc](dmarc.html) - performs DMARC policy checks
 - [maillist](maillist.html) - determines the common mailing list signatures in a message.
 - [mime_types](mime_types.html) - applies some rules about mime types met in messages
@@ -67,6 +66,7 @@ either SMTP FROM addresses or on information from `Received` headers.
 
 Additionally, the following Lua modules are shipped with rspamd:
 
+- [antivirus](antivirus.html) - integrates virus scanners
 - [dcc](dcc.html) - performs [DCC](http://www.dcc-servers.net/dcc/) lookups to determine message bulkiness
 - [emails](emails.html) - extract emails from a message and checks it against DNS
 blacklists.
