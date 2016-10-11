@@ -431,7 +431,7 @@ sub cross_validate {
   shuffle_array( \@files_spam );
 
   foreach my $fn (@files_spam) {
-    my $r = $check_func->( $fn, 1, \$fp_ham, \$fn_ham, \$detected_spam );
+    my $r = $check_func->( $fn, 1, \$fp_ham, \$fn_spam, \$detected_spam );
     $total_spam += $r;
     $processed  += $r;
   }
@@ -439,7 +439,7 @@ sub cross_validate {
   shuffle_array( \@files_ham );
 
   foreach my $fn (@files_ham) {
-    my $r = $check_func->( $fn, 0, \$fp_spam, \$fn_spam, \$detected_ham );
+    my $r = $check_func->( $fn, 0, \$fp_spam, \$fn_ham, \$detected_ham );
     $total_ham += $r;
     $processed += $r;
   }
