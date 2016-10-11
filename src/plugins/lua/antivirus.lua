@@ -203,7 +203,9 @@ local function fprot_check(task, rule)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local header = string.format('SCAN STREAM 1 SIZE %d\n', task:get_size())
+    local scan_id = task:get_queue_id()
+    if not scan_id then scan_id = task:get_uid() end
+    local header = string.format('SCAN STREAM %s SIZE %d\n', scan_id, task:get_size())
     local footer = '\n'
 
     local function fprot_callback(err, data)
@@ -234,7 +236,7 @@ local function fprot_check(task, rule)
         local found = (string.sub(data, 1, 1) == '1')
         local cached = 'OK'
         if found then
-          local vname = string.match(data, '^1 <infected: (.+)> 1')
+          local vname = string.match(data, '^1 <infected: (.+)>')
           yield_result(task, rule, vname)
           cached = vname
         end
