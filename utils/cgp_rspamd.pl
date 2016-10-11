@@ -11,29 +11,30 @@ use Pod::Usage;
 use Getopt::Long;
 use File::stat;
 
-my $rspamd_host = "localhost:11333";
-my $man = 0;
-my $help = 0;
-my $local = 0;
-my $header = "X-Spam: yes";
-my $max_size = 10 * 1024 * 1024; # 10 MB
-my $request_timeout = 15; # 15 seconds by default
-my $reject_message = "Spam message rejected";
+my $rspamd_host     = "localhost:11333";
+my $man             = 0;
+my $help            = 0;
+my $local           = 0;
+my $header          = "X-Spam: yes";
+my $max_size        = 10 * 1024 * 1024;          # 10 MB
+my $request_timeout = 15;                        # 15 seconds by default
+my $reject_message  = "Spam message rejected";
 
 GetOptions(
-  "host=s" => \$rspamd_host,
-  "header=s" => \$header,
+  "host=s"           => \$rspamd_host,
+  "header=s"         => \$header,
   "reject-message=s" => \$reject_message,
-  "max-size=i" => \$max_size,
-  "timeout=f" => \$request_timeout,
-  "help|?" => \$help,
-  "man" => \$man
+  "max-size=i"       => \$max_size,
+  "timeout=f"        => \$request_timeout,
+  "help|?"           => \$help,
+  "man"              => \$man
 ) or pod2usage(2);
 
 pod2usage(1) if $help;
-pod2usage(-exitval => 0, -verbose => 2) if $man;
+pod2usage( -exitval => 0, -verbose => 2 ) if $man;
 
 my $scanned = 0;
+
 # Turn off bufferization as required by CGP
 $| = 1;
 
@@ -48,47 +49,49 @@ sub cgp_string {
 }
 
 sub rspamd_scan {
-  my ($tag, $file) = @_;
+  my ( $tag, $file ) = @_;
 
   my $http_callback = sub {
-    my ($body, $hdr) = @_;
+    my ( $body, $hdr ) = @_;
 
-    if ($hdr && $hdr->{Status} =~ /^2/) {
+    if ( $hdr && $hdr->{Status} =~ /^2/ ) {
       my $js = eval('decode_json($body)');
-      $scanned ++;
+      $scanned++;
 
-      if (!$js) {
+      if ( !$js ) {
         print "* Rspamd: Bad response for $file: invalid JSON: parse error\n";
         print "$tag FAILURE\n";
       }
       else {
         my $def = $js->{'default'};
 
-        if (!$def) {
-          print "* Rspamd: Bad response for $file: invalid JSON: default is missing\n";
+        if ( !$def ) {
+          print
+"* Rspamd: Bad response for $file: invalid JSON: default is missing\n";
           print "$tag FAILURE\n";
         }
         else {
           my $action = $def->{'action'};
-          my $id = $js->{'message-id'};
+          my $id     = $js->{'message-id'};
 
           my $symbols = "";
-          while (my ($k, $s) = each(%{$def})) {
-            if (ref($s) eq "HASH" && $s->{'score'}) {
+          while ( my ( $k, $s ) = each( %{$def} ) ) {
+            if ( ref($s) eq "HASH" && $s->{'score'} ) {
               $symbols .= sprintf "%s(%.2f);", $k, $s->{'score'};
             }
           }
 
-          printf "* Rspamd: Scanned %s; id: <%s>; Score: %.2f / %.2f; Symbols: [%s]\n",
+          printf
+"* Rspamd: Scanned %s; id: <%s>; Score: %.2f / %.2f; Symbols: [%s]\n",
             $file, $id, $def->{'score'}, $def->{'required_score'}, $symbols;
 
-          if ($action eq 'reject') {
+          if ( $action eq 'reject' ) {
             print "$tag ERROR " . cgp_string($reject_message) . "\n";
           }
-          elsif ($action eq 'add header' || $action eq 'rewrite subject') {
+          elsif ( $action eq 'add header' || $action eq 'rewrite subject' ) {
             print "$tag ADDHEADER " . cgp_string($header) . " OK\n";
           }
-          elsif ($action eq 'soft reject') {
+          elsif ( $action eq 'soft reject' ) {
             print "$tag REJECT Try again later\n";
           }
           else {
@@ -96,9 +99,11 @@ sub rspamd_scan {
           }
         }
       }
-    } else {
+    }
+    else {
       if ($hdr) {
-        print "* Rspamd: Bad response for $file: HTTP error: $hdr->{Status} $hdr->{Reason}\n";
+        print
+"* Rspamd: Bad response for $file: HTTP error: $hdr->{Status} $hdr->{Reason}\n";
       }
       else {
         print "* Rspamd: Bad response for $file: IO error: $!\n";
@@ -108,67 +113,78 @@ sub rspamd_scan {
   };
 
   if ($local) {
+
     # Use file scan
     # XXX: not implemented now due to CGP queue format
-    http_get("http://$rspamd_host/symbols?file=$file",
+    http_get(
+      "http://$rspamd_host/symbols?file=$file",
       timeout => $request_timeout,
-      $http_callback);
+      $http_callback
+    );
   }
   else {
     $sb = stat($file);
 
-    if (!$sb || $sb->size > $max_size) {
-      print "* File $file is too large: ". $sb->size . "\n$tag FAILURE\n";
+    if ( !$sb || $sb->size > $max_size ) {
+      print "* File $file is too large: " . $sb->size . "\n$tag FAILURE\n";
       return;
     }
-    aio_load($file, sub {
-      my ($data) = @_;
+    aio_load(
+      $file,
+      sub {
+        my ($data) = @_;
 
-      if (!$data) {
-        print "* Cannot open $file: $!\n$tag FAILURE\n";
-        return;
-      }
-      # Parse CGP format
-      $data =~ s/^((?:[^\n]*\n)*?)\n(.*)$/$2/ms;
-      my @envelope = split /\n/, $1;
-      chomp(@envelope);
-      my $from;
-      my @rcpts;
-      my $ip;
+        if ( !$data ) {
+          print "* Cannot open $file: $!\n$tag FAILURE\n";
+          return;
+        }
 
-      foreach my $elt (@envelope) {
-        if ($elt =~ /^P\s[^<]*(<[^>]*>).*$/) {
-          $from = $1;
-        }
-        elsif ($elt =~ /^R\s[^<]*(<[^>]*>).*$/) {
-          push @rcpts, $1;
-        }
-        elsif ($elt =~ /^S .*\[(.+)\]/) {
-          $ip = $1;
-        }
-      }
+        # Parse CGP format
+        $data =~ s/^((?:[^\n]*\n)*?)\n(.*)$/$2/ms;
+        my @envelope = split /\n/, $1;
+        chomp(@envelope);
+        my $from;
+        my @rcpts;
+        my $ip;
 
-      my $headers = {};
-      if ($file =~ /\/([^\/.]+)\.msg$/) {
-        $headers->{'Queue-ID'} = $1;
-      }
-      if ($from) {
-        $headers->{From} = $from;
-      }
-      if (scalar(@rcpts) > 0) {
-        # XXX: Anyevent cannot parse headers with multiple values
-        foreach (@rcpts) {
-          $headers->{Rcpt} = $_;
+        foreach my $elt (@envelope) {
+          if ( $elt =~ /^P\s[^<]*(<[^>]*>).*$/ ) {
+            $from = $1;
+          }
+          elsif ( $elt =~ /^R\s[^<]*(<[^>]*>).*$/ ) {
+            push @rcpts, $1;
+          }
+          elsif ( $elt =~ /^S .*\[(.+)\]/ ) {
+            $ip = $1;
+          }
         }
-      }
-      if ($ip) {
-        $headers->{IP} = $ip;
-      }
 
-      http_post("http://$rspamd_host/symbols", $data,
-        timeout => $request_timeout,
-        headers => $headers, $http_callback);
-    });
+        my $headers = {};
+        if ( $file =~ /\/([^\/.]+)\.msg$/ ) {
+          $headers->{'Queue-ID'} = $1;
+        }
+        if ($from) {
+          $headers->{From} = $from;
+        }
+        if ( scalar(@rcpts) > 0 ) {
+
+          # XXX: Anyevent cannot parse headers with multiple values
+          foreach (@rcpts) {
+            $headers->{Rcpt} = $_;
+          }
+        }
+        if ($ip) {
+          $headers->{IP} = $ip;
+        }
+
+        http_post(
+          "http://$rspamd_host/symbols", $data,
+          timeout => $request_timeout,
+          headers => $headers,
+          $http_callback
+        );
+      }
+    );
   }
 }
 
@@ -176,23 +192,24 @@ sub rspamd_scan {
 print "* Rspamd CGP filter has been started\n";
 
 my $w = AnyEvent->io(
-  fh => \*STDIN,
-  poll => 'r', cb => sub {
-    chomp (my $input = <STDIN>);
+  fh   => \*STDIN,
+  poll => 'r',
+  cb   => sub {
+    chomp( my $input = <STDIN> );
 
-    if ($input =~ /^(\d+)\s+(\S+)(\s+(\S+)\s*)?$/) {
+    if ( $input =~ /^(\d+)\s+(\S+)(\s+(\S+)\s*)?$/ ) {
       my $tag = $1;
       my $cmd = $2;
 
-      if ($cmd eq "INTF") {
+      if ( $cmd eq "INTF" ) {
         print "$input\n";
       }
-      elsif ($cmd eq "FILE" && $4) {
+      elsif ( $cmd eq "FILE" && $4 ) {
         my $file = $4;
         print "* Scanning file $file\n";
         rspamd_scan $tag, $file;
       }
-      elsif ($cmd eq "QUIT") {
+      elsif ( $cmd eq "QUIT" ) {
         print "* Terminating after scanning of $scanned files\n";
         print "$tag OK\n";
         exit 0;
