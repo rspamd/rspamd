@@ -9,18 +9,23 @@ use AnyEvent::IO;
 use EV;
 use Pod::Usage;
 use Getopt::Long;
+use File::stat;
 
 my $rspamd_host = "localhost:11333";
 my $man = 0;
 my $help = 0;
 my $local = 0;
 my $header = "X-Spam: yes";
+my $max_size = 10 * 1024 * 1024; # 10 MB
+my $request_timeout = 15; # 15 seconds by default
 my $reject_message = "Spam message rejected";
 
 GetOptions(
   "host=s" => \$rspamd_host,
   "header=s" => \$header,
   "reject-message=s" => \$reject_message,
+  "max-size=i" => \$max_size,
+  "timeout=f" => \$request_timeout,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -48,8 +53,8 @@ sub rspamd_scan {
   my $http_callback = sub {
     my ($body, $hdr) = @_;
 
-    if ($hdr->{Status} =~ /^2/) {
-      my $js = decode_json($body);
+    if ($hdr && $hdr->{Status} =~ /^2/) {
+      my $js = eval('decode_json($body)');
       $scanned ++;
 
       if (!$js) {
@@ -92,7 +97,12 @@ sub rspamd_scan {
         }
       }
     } else {
-      print "* Rspamd: Bad response for $file: HTTP error: $hdr->{Status} $hdr->{Reason}\n";
+      if ($hdr) {
+        print "* Rspamd: Bad response for $file: HTTP error: $hdr->{Status} $hdr->{Reason}\n";
+      }
+      else {
+        print "* Rspamd: Bad response for $file: IO error: $!\n";
+      }
       print "$tag FAILURE\n";
     }
   };
@@ -100,12 +110,24 @@ sub rspamd_scan {
   if ($local) {
     # Use file scan
     # XXX: not implemented now due to CGP queue format
-    http_get("http://$rspamd_host/symbols?file=$file", $http_callback);
+    http_get("http://$rspamd_host/symbols?file=$file",
+      timeout => $request_timeout,
+      $http_callback);
   }
   else {
-    aio_load($file, sub {
-      my ($data) = @_ or return print "* Cannot open $file: $!\n$tag FAILURE\n";
+    $sb = stat($file);
 
+    if (!$sb || $sb->size > $max_size) {
+      print "* File $file is too large: ". $sb->size . "\n$tag FAILURE\n";
+      return;
+    }
+    aio_load($file, sub {
+      my ($data) = @_;
+
+      if (!$data) {
+        print "* Cannot open $file: $!\n$tag FAILURE\n";
+        return;
+      }
       # Parse CGP format
       $data =~ s/^((?:[^\n]*\n)*?)\n(.*)$/$2/ms;
       my @envelope = split /\n/, $1;
@@ -143,7 +165,9 @@ sub rspamd_scan {
         $headers->{IP} = $ip;
       }
 
-      http_post("http://$rspamd_host/symbols", $data, headers => $headers, $http_callback);
+      http_post("http://$rspamd_host/symbols", $data,
+        timeout => $request_timeout,
+        headers => $headers, $http_callback);
     });
   }
 }
@@ -193,6 +217,8 @@ cgp_rspamd [options]
    --host=hostport        Rspamd host to connect (localhost:11333 by default)
    --header               Add specific header for a spam message ("X-Spam: yes" by default)
    --reject-message       Rejection message for spam mail ("Spam message rejected" by default)
+   --timeout              Timeout to read response from Rspamd (15 seconds by default)
+   --max-size             Maximum size of message to scan (10 megabytes by default)
    --help                 brief help message
    --man                  full documentation
 
@@ -212,6 +238,14 @@ or B<rewrite subject>.
 =item B<--reject-message>
 
 Specifies the rejection message for spam.
+
+=item B<--timeout>
+
+Sets timeout in seconds for waiting Rspamd reply for a message.
+
+=item B<--max-size>
+
+Define the maximum messages size to be processed by Rspamd in bytes.
 
 =item B<--help>
 
