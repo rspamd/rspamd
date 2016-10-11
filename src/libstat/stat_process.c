@@ -323,17 +323,6 @@ rspamd_stat_backends_process (struct rspamd_stat_ctx *st_ctx,
 
 		if (bk_run != NULL) {
 			st->backend->process_tokens (task, task->tokens, i, bk_run);
-
-			if (st->stcf->is_spam) {
-				cl->spam_learns = st->backend->total_learns (task,
-						bk_run,
-						st_ctx);
-			}
-			else {
-				cl->ham_learns = st->backend->total_learns (task,
-						bk_run,
-						st_ctx);
-			}
 		}
 	}
 }
@@ -372,6 +361,8 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 {
 	guint i;
 	struct rspamd_classifier *cl;
+	struct rspamd_statfile *st;
+	gpointer bk_run;
 
 	if (st_ctx->classifiers->len == 0) {
 		return;
@@ -391,8 +382,34 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		return;
 	}
 
+	for (i = 0; i < st_ctx->statfiles->len; i++) {
+		st = g_ptr_array_index (st_ctx->statfiles, i);
+		cl = st->classifier;
+
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			continue;
+		}
+
+		bk_run = g_ptr_array_index (task->stat_runtimes, i);
+		g_assert (st != NULL);
+
+		if (bk_run != NULL) {
+			if (st->stcf->is_spam) {
+				cl->spam_learns += st->backend->total_learns (task,
+						bk_run,
+						st_ctx);
+			}
+			else {
+				cl->ham_learns += st->backend->total_learns (task,
+						bk_run,
+						st_ctx);
+			}
+		}
+	}
+
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
+
 		g_assert (cl != NULL);
 
 		if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {

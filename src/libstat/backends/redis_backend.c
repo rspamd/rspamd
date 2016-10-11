@@ -749,7 +749,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (c->err == 0) {
 		if (r != NULL) {
-			if (G_LIKELY (reply->type == REDIS_REPLY_INTEGER)) {
+			if (G_UNLIKELY (reply->type == REDIS_REPLY_INTEGER)) {
 				val = reply->integer;
 			}
 			else if (reply->type == REDIS_REPLY_STRING) {
@@ -807,7 +807,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 						tok = g_ptr_array_index (task->tokens, i);
 						elt = reply->element[i];
 
-						if (G_LIKELY (elt->type == REDIS_REPLY_INTEGER)) {
+						if (G_UNLIKELY (elt->type == REDIS_REPLY_INTEGER)) {
 							tok->values[rt->id] = elt->integer;
 							found ++;
 						}
