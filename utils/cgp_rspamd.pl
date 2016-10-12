@@ -123,10 +123,16 @@ sub rspamd_scan {
     );
   }
   else {
-    $sb = stat($file);
+    my $sb = stat($file);
 
     if ( !$sb || $sb->size > $max_size ) {
-      print "* File $file is too large: " . $sb->size . "\n$tag FAILURE\n";
+      if ($sb) {
+        print "* File $file is too large: " . $sb->size . "\n$tag FAILURE\n";
+
+      }
+      else {
+        print "* Cannot stat $file: $!\n$tag FAILURE\n";
+      }
       return;
     }
     aio_load(
@@ -213,6 +219,10 @@ my $w = AnyEvent->io(
         print "* Terminating after scanning of $scanned files\n";
         print "$tag OK\n";
         exit 0;
+      }
+      else {
+        print "* Unknown command $cmd\n";
+        print "$tag FAILURE\n";
       }
     }
   }
