@@ -17,6 +17,61 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local ucl = require "ucl"
 
+local spf_symbols = {
+  symbol_allow = 'R_SPF_ALLOW',
+  symbol_deny = 'R_SPF_FAIL',
+  symbol_softfail = 'R_SPF_SOFTFAIL',
+  symbol_neutral = 'R_SPF_NEUTRAL',
+  symbol_tempfail = 'R_SPF_DNSFAIL',
+  symbol_na = 'R_SPF_NA',
+  symbol_permfail = 'R_SPF_PERMFAIL',
+}
+
+local dkim_symbols = {
+  symbol_allow = 'R_DKIM_ALLOW',
+  symbol_deny = 'R_DKIM_REJECT',
+  symbol_tempfail = 'R_DKIM_TEMPFAIL',
+  symbol_na = 'R_DKIM_NA',
+  symbol_permfail = 'R_DKIM_PERMFAIL',
+}
+
+local dmarc_symbols = {
+  allow = 'DMARC_POLICY_ALLOW',
+  badpolicy = 'DMARC_BAD_POLICY',
+  dnsfail = 'DMARC_DNSFAIL',
+  na = 'DMARC_NA',
+  reject = 'DMARC_POLICY_REJECT',
+  softfail = 'DMARC_POLICY_SOFTFAIL',
+  quarantine = 'DMARC_POLICY_QUARANTINE',
+}
+
+local opts = rspamd_config:get_all_opt('dmarc')
+if opts and opts['symbols'] then
+  for k,_ in pairs(dmarc_symbols) do
+    if opts['symbols'][k] then
+      dmarc_symbols[k] = opts['symbols'][k]
+    end
+  end
+end
+
+local opts = rspamd_config:get_all_opt('dkim')
+if opts then
+  for k,_ in pairs(dkim_symbols) do
+    if opts[k] then
+      dkim_symbols[k] = opts[k]
+    end
+  end
+end
+
+local opts = rspamd_config:get_all_opt('spf')
+if opts then
+  for k,_ in pairs(spf_symbols) do
+    if opts[k] then
+      spf_symbols[k] = opts[k]
+    end
+  end
+end
+
 -- Disable DKIM checks if passed via HTTP headers
 rspamd_config:add_condition("R_DKIM_ALLOW", function(task)
   local hdr = task:get_request_header('DKIM')
@@ -33,11 +88,15 @@ rspamd_config:add_condition("R_DKIM_ALLOW", function(task)
 
     if obj['result'] then
       if obj['result'] == 'pass' or obj['result'] == 'allow' then
-        task:insert_result('R_DKIM_ALLOW', 1.0, 'http header')
+        task:insert_result(dkim_symbols['symbol_allow'], 1.0, 'http header')
       elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
-        task:insert_result('R_DKIM_REJECT', 1.0, 'http header')
+        task:insert_result(dkim_symbols['symbol_deny'], 1.0, 'http header')
       elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
-        task:insert_result('R_DKIM_TEMPFAIL', 1.0, 'http header')
+        task:insert_result(dkim_symbols['symbol_tempfail'], 1.0, 'http header')
+      elseif obj['result'] == 'permfail' then
+        task:insert_result(dkim_symbols['symbol_permfail'], 1.0, 'http header')
+      elseif obj['result'] == 'na' then
+        task:insert_result(dkim_symbols['symbol_na'], 1.0, 'http header')
       end
 
       return false
@@ -63,13 +122,17 @@ rspamd_config:add_condition("R_SPF_ALLOW", function(task)
 
     if obj['result'] then
       if obj['result'] == 'pass' or obj['result'] == 'allow' then
-        task:insert_result('R_SPF_ALLOW', 1.0, 'http header')
+        task:insert_result(spf_symbols['symbol_allow'], 1.0, 'http header')
       elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
-        task:insert_result('R_SPF_FAIL', 1.0, 'http header')
+        task:insert_result(spf_symbols['symbol_deny'], 1.0, 'http header')
       elseif obj['result'] == 'neutral' then
-        task:insert_result('R_SPF_NEUTRAL', 1.0, 'http header')
-      elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
-        task:insert_result('R_SPF_SOFTFAIL', 1.0, 'http header')
+        task:insert_result(spf_symbols['symbol_neutral'], 1.0, 'http header')
+      elseif obj['result'] == 'softfail' then
+        task:insert_result(spf_symbols['symbol_softfail'], 1.0, 'http header')
+      elseif obj['result'] == 'permfail' then
+        task:insert_result(spf_symbols['symbol_permfail'], 1.0, 'http header')
+      elseif obj['result'] == 'na' then
+        task:insert_result(spf_symbols['symbol_na'], 1.0, 'http header')
       end
 
       return false
@@ -94,13 +157,19 @@ rspamd_config:add_condition("DMARC_POLICY_ALLOW", function(task)
 
     if obj['result'] then
       if obj['result'] == 'pass' or obj['result'] == 'allow' then
-        task:insert_result('DMARC_POLICY_ALLOW', 1.0, 'http header')
+        task:insert_result(dmarc_symbols['allow'], 1.0, 'http header')
       elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
-        task:insert_result('DMARC_POLICY_REJECT', 1.0, 'http header')
+        task:insert_result(dmarc_symbols['reject'], 1.0, 'http header')
       elseif obj['result'] == 'quarantine' then
-        task:insert_result('DMARC_POLICY_QUARANTINE', 1.0, 'http header')
-      elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
-        task:insert_result('DMARC_POLICY_SOFTFAIL', 1.0, 'http header')
+        task:insert_result(dmarc_symbols['quarantine'], 1.0, 'http header')
+      elseif obj['result'] == 'tempfail' then
+        task:insert_result(dmarc_symbols['dnsfail'], 1.0, 'http header')
+      elseif obj['result'] == 'softfail' or obj['result'] == 'none' then
+        task:insert_result(dmarc_symbols['softfail'], 1.0, 'http header')
+      elseif obj['result'] == 'permfail' or obj['result'] == 'badpolicy' then
+        task:insert_result(dmarc_symbols['badpolicy'], 1.0, 'http header')
+      elseif obj['result'] == 'na' then
+        task:insert_result(dmarc_symbols['na'], 1.0, 'http header')
       end
 
       return false
