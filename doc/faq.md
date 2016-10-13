@@ -732,6 +732,55 @@ Moreover, there is an `rspamd_logger.slog` function which allows replacement of 
 
 Yes: always use `local` variables unless it is unavoidable. Too many global variables can cause significant performance degradation for Lua scripts.
 
+### How can I create regexps in Lua
+
+Regexp objects are special in case of Rspamd. Unlike other objects, they do not have garbage collection method and should be explicitly destroyed. For example, if you have this code:
+
+~~~lua
+rspamd_config.RULE = function(task)
+  local re = rspamd_regexp.create('/re/') -- Memory leak here!
+  ...
+end
+~~~
+
+Then `re` object will not be destroyed and you will have a memory leak. To resolve this situation, you should always use the global regexps cache which exists during Rspamd process lifetime:
+
+~~~lua
+rspamd_config.RULE = function(task)
+  local re = rspamd_regexp.create_cached('/re/') -- Regexp will be reused from the cache if possible
+  ...
+end
+~~~
+
+The only situation when you might have a problem with this approach is when you need to create regular expressions dependant on some external data:
+
+~~~lua
+local function blah(task)
+  -- Return something that depends on task properties
+end
+
+rspamd_config.RULE = function(task)
+  local re = rspamd_regexp.create_cached(blah(task)) -- Too many regexps could be created
+  ...
+end
+~~~
+
+If you cannot avoid this bad pattern (and it is bad since regexp creation is an expensive procedure), then you can explicitly destroy regexp object:
+
+~~~lua
+local function blah(task)
+  -- Return something that depends on task properties
+end
+
+rspamd_config.RULE = function(task)
+  local re = rspamd_regexp.create(blah(task)) -- This is expensive procedure!
+  ...
+  re:destroy() -- frees memory
+end
+~~~
+
+However, you should consider using regexp maps with [multimap module](/doc/modules/multimap.html) when you need something like this.
+
 ## Rmilter questions
 
 ### Can Rspamd run without Rmilter
