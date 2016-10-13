@@ -155,6 +155,8 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 		if (re->pattern) {
 			g_free (re->pattern);
 		}
+
+		g_slice_free1 (sizeof (*re), re);
 	}
 }
 
