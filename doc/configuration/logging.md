@@ -81,6 +81,9 @@ Rspamd supports the following variables:
 - `is_spam` - a one-letter rating of spammyness: `T` for spam, `F` for ham and `S` for skipped messages
 - `action` - default metric action
 - `symbols` - list of all symbols
+- `symbols_scores` - list of all symbols and their scores
+- `symbols_params` - list of all symbols and their options
+- `symbols_scores_params` - list of all symbols, their scores and options
 - `time_real` - real time of task processing
 - `time_virtual` - CPU time of task processing
 - `dns_req` - number of DNS requests
