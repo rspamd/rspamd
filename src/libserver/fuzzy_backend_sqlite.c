@@ -1027,7 +1027,7 @@ gint
 rspamd_fuzzy_backend_sqlite_version (struct rspamd_fuzzy_backend_sqlite *backend,
 		const gchar *source)
 {
-	gint ret = -1;
+	gint ret = 0;
 
 	if (backend) {
 		if (rspamd_fuzzy_backend_sqlite_run_stmt (backend, FALSE,
