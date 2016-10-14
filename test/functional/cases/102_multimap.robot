@@ -70,11 +70,11 @@ MAP - FROM REGEXP MISS
   Check Rspamc  ${result}  REGEXP_MAP  inverse=1
 
 MAP - DEPENDS HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  147.243.1.47  --from  user123@microsoft.com
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  5.9.155.182  --from  user123@rspamd.com
   Check Rspamc  ${result}  DEPS_MAP
 
 MAP - DEPENDS MISS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.1  --from  user123@microsoft.com
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  1.2.3.4  --from  user123@rspamd.com
   Check Rspamc  ${result}  DEPS_MAP  inverse=1
 
 MAP - MULSYM PLAIN
