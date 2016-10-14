@@ -74,6 +74,7 @@ blacklists.
 - [ip_score](ip_score.html) - dynamically scores sender reputation
 - [multimap](multimap.html) - a complex module that operates with different types
 of maps.
+- [mx_check](mx_check.html) - checks if sending domain has a connectable MX
 - [neural networks](fann.html) - allows to post-process messages using neural network classification
 - [ratelimit](ratelimit.html) - implements leaked bucket algorithm for ratelimiting and
 uses `redis` to store data.
