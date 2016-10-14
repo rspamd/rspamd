@@ -134,8 +134,7 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 		if ((val > 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM)) ||
 				(val < 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
 			/* Already learned */
-			g_set_error (&task->err, rspamd_stat_quark (), 404,
-					"<%s> has been already "
+			msg_info_task ("<%s> has been already "
 					"learned as %s, ignore it", task->message_id,
 					(task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? "spam" : "ham");
 			task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
@@ -144,6 +143,7 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 			/* Unlearn flag */
 			task->flags |= RSPAMD_TASK_FLAG_UNLEARN;
 		}
+
 		rspamd_upstream_ok (rt->selected);
 	}
 	else {

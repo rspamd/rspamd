@@ -547,6 +547,16 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 	gint cb_ref;
 	gchar *cond_str = NULL;
 
+	if ((task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) && err != NULL &&
+			*err == NULL) {
+		/* Do not learn twice */
+		g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
+				"learned as %s, ignore it", task->message_id,
+				spam ? "spam" : "ham");
+
+		return FALSE;
+	}
+
 	/* Check whether we have learned that file */
 	for (i = 0; i < st_ctx->classifiers->len; i ++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
