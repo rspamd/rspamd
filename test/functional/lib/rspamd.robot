@@ -4,6 +4,12 @@ Library         OperatingSystem
 Library         Process
 
 *** Keywords ***
+Check Pidfile
+  [Arguments]  ${pidfile}
+  Wait Until Created  ${pidfile}
+  ${size} =  Get File Size  ${pidfile}
+  Should Not Be Equal As Integers  ${size}  0
+
 Check Rspamc
   [Arguments]  ${result}  @{args}  &{kwargs}
   Follow Rspamd Log
@@ -81,7 +87,7 @@ Run Redis
   ${result} =  Run Process  redis-server  ${TMPDIR}/redis-server.conf
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Created  ${TMPDIR}/redis.pid
+  Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${TMPDIR}/redis.pid
   ${REDIS_PID} =  Get File  ${TMPDIR}/redis.pid
   Run Keyword If  '${REDIS_SCOPE}' == 'Test'  Set Test Variable  ${REDIS_PID}
   ...  ELSE IF  '${REDIS_SCOPE}' == 'Suite'  Set Suite Variable  ${REDIS_PID}
@@ -113,7 +119,7 @@ Run Rspamd
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   ${rspamd_logpos} =  Log Logs  ${tmpdir}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Created  ${tmpdir}/rspamd.pid
+  Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid
   ${rspamd_pid} =  Get File  ${tmpdir}/rspamd.pid
   Set To Dictionary  ${d}  RSPAMD_LOGPOS=${rspamd_logpos}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
   [Return]  &{d}
