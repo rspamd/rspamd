@@ -55,6 +55,7 @@ The following Lua modules are enabled in the default configuration:
 
 - [dmarc](dmarc.html) - performs DMARC policy checks
 - [maillist](maillist.html) - determines the common mailing list signatures in a message.
+- [mid](mid.html) - selectively suppresses invalid/missing message-id rules
 - [mime_types](mime_types.html) - applies some rules about mime types met in messages
 - [once_received](once_received.html) - detects messages with a single `Received` headers
 and performs some additional checks for such messages.
