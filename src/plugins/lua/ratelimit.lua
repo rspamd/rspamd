@@ -121,7 +121,7 @@ local keywords = {
   ['bounce'] = {
     ['get_value'] = function(task)
       local from = task:get_from(0)
-      if not from and from[1] and from[1]['user'] then
+      if not from or not from[1] or not from[1]['user'] then
         return '_'
       end
       if check_bounce(from[1]['user']) then return '_' else return nil end
