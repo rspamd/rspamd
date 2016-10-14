@@ -90,7 +90,7 @@ Run Redis
 
 Run Rspamc
   [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMC}  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ${result} =  Run Process  ${RSPAMC}  -t  60  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   [Return]  ${result}
 
 Run Rspamd
