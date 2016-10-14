@@ -5,12 +5,22 @@ title: Rspamd spam filtering system
 
 <div class="row news_row" style="position: relative;">
 		<div class="col-xs-12 col-sm-10">
-				<h3 style="margin: 0px;"><a href="/blog/">News: Rspamd 1.3.5 has been released</a></h3>
+				<h3 style="margin: 0px;"><a href="/misc/2016/10/14/bayes-performance.html">Benchmark: Bayes in Rspamd, Dspam and Bogofilter</a></h3>
+				<span class="date"><small>2016-10-14</small></span>
+				<p style="margin-bottom: 0px; margin-top: 5px">Benchmark of statistical engines in the popular spam filtering tools</p>
+   </div>
+	 <div class="col-xs-12 col-sm-2 bottom-right">
+				<a class="btn btn-primary pull-right" href="/misc/2016/10/14/bayes-performance.html" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
+	 </div>
+</div>
+<div class="row news_row" style="position: relative;">
+		<div class="col-xs-12 col-sm-10">
+				<h3 style="margin: 0px;"><a href="/announce/2016/09/01/rspamd-1.3.5.html">News: Rspamd 1.3.5 has been released</a></h3>
 				<span class="date"><small>2016-09-01</small></span>
 				<p style="margin-bottom: 0px; margin-top: 5px">The next stable release with minor features and bugfixes.</p>
    </div>
 	 <div class="col-xs-12 col-sm-2 bottom-right">
-				<a class="btn btn-primary pull-right" href="/blog/" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
+				<a class="btn btn-primary pull-right" href="/announce/2016/09/01/rspamd-1.3.5.html" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
 	 </div>
 </div>
 <div class="row main-small-text-block">
