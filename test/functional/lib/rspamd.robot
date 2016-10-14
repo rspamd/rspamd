@@ -124,7 +124,11 @@ Scan Message With Rspamc
   [Return]  ${result}
 
 Sync Fuzzy Storage
-  ${result} =  Run Process  ${RSPAMADM}  control  -s  ${TMPDIR}/rspamd.sock  fuzzy_sync
+  [Arguments]  @{vargs}
+  ${len} =  Get Length  ${vargs}
+  ${result} =  Run Keyword If  $len == 0  Run Process  ${RSPAMADM}  control  -s  ${TMPDIR}/rspamd.sock  fuzzy_sync
+  ...  ELSE  Run Process  ${RSPAMADM}  control  -s  @{vargs}[0]/rspamd.sock  fuzzy_sync
   Log  ${result.stdout}
-  Follow Rspamd Log
+  Run Keyword If  $len == 0  Follow Rspamd Log
+  ...  ELSE  Custom Follow Rspamd Log  @{vargs}[0]/rspamd.log  @{vargs}[1]  @{vargs}[2]  @{vargs}[3] 
   Sleep  0.005s  Try give fuzzy storage time to sync
