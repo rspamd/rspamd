@@ -1809,6 +1809,7 @@ url_tld_end (struct url_callback_data *cb,
 		url_match_t *match)
 {
 	const gchar *p;
+	gboolean ret = FALSE;
 
 	p = pos + match->m_len;
 
@@ -1822,12 +1823,12 @@ url_tld_end (struct url_callback_data *cb,
 		p = match->m_begin;
 		/* Check common prefix */
 		if (g_ascii_strncasecmp (p, "http://", sizeof ("http://") - 1) == 0) {
-			return url_web_end (cb,
+			ret = url_web_end (cb,
 					match->m_begin + sizeof ("http://") - 1,
 					match);
 		}
 		else {
-			return url_web_end (cb, match->m_begin, match);
+			ret = url_web_end (cb, match->m_begin, match);
 		}
 
 	}
@@ -1836,12 +1837,19 @@ url_tld_end (struct url_callback_data *cb,
 		if (p < cb->end) {
 			if (g_ascii_isspace (*p) || *p == '/' ||
 				*p == '?' || *p == ':') {
-				return url_web_end (cb, match->m_begin, match);
+				ret = url_web_end (cb, match->m_begin, match);
 			}
 		}
 	}
 
-	return FALSE;
+	if (ret) {
+		/* Check sanity of match found */
+		if (match->m_begin + match->m_len <= pos) {
+			return FALSE;
+		}
+	}
+
+	return ret;
 }
 
 static gboolean
