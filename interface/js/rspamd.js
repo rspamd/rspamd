@@ -696,8 +696,11 @@
                 }
             });
         }
-        // @update history log
+        // @reset history log
         $('#resetHistory').on('click', function () {
+            if (!confirm("Are you sure you want to reset history log?")) {
+                return
+            };
             if (history) {
                 history.destroy();
                 $('#historyLog').children('tbody').remove();
@@ -719,7 +722,7 @@
             });
         });
 
-        // @reset history log
+        // @update history log
         $('#updateHistory').on('click', function () {
             getHistory();
         });
