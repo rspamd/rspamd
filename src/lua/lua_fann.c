@@ -542,7 +542,7 @@ lua_fann_get_layers (lua_State *L)
 
 		for (i = 0; i < nlayers; i ++) {
 			lua_pushnumber (L, layers[i]);
-			lua_rawseti (L, -1, i + 1);
+			lua_rawseti (L, -2, i + 1);
 		}
 
 		g_free (layers);
