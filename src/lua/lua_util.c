@@ -353,6 +353,16 @@ LUA_FUNCTION_DEF (util, zstd_compress);
 LUA_FUNCTION_DEF (util, zstd_decompress);
 
 /***
+ * @function util.normalize_prob(prob, [bias = 0.5])
+ * Normalize probabilities using polynom
+ *
+ * @param {number} prob probability param
+ * @param {number} bias number to subtract for making the final sollution
+ * @return {number} normalized number
+ */
+LUA_FUNCTION_DEF (util, normalize_prob);
+
+/***
  * @function util.pack(fmt, ...)
  *
  * Backport of Lua 5.3 `string.pack` function:
@@ -463,6 +473,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, random_hex),
 	LUA_INTERFACE_DEF (util, zstd_compress),
 	LUA_INTERFACE_DEF (util, zstd_decompress),
+	LUA_INTERFACE_DEF (util, normalize_prob),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
@@ -1723,6 +1734,23 @@ lua_util_zstd_decompress (lua_State *L)
 
 	return 2;
 }
+
+static gint
+lua_util_normalize_prob (lua_State *L)
+{
+	gdouble x, bias = 0.5;
+
+	x = lua_tonumber (L, 1);
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		bias = lua_tonumber (L, 2);
+	}
+
+	lua_pushnumber (L, rspamd_normalize_probability (x, bias));
+
+	return 1;
+}
+
 
 /* Backport from Lua 5.3 */
 

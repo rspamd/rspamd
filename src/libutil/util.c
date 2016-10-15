@@ -2549,17 +2549,16 @@ rspamd_shmem_xmap (const char *fname, guint mode,
  * C = -7
  * D = 3
  * y = 32(x - 0.5)^4 - 6(x - 0.5)^3 - 7(x - 0.5)^2 + 3(x - 0.5)
+ *
+ * New approach:
+ * y = ((x - bias)*2)^8
  */
 gdouble
 rspamd_normalize_probability (gdouble x, gdouble bias)
 {
-	const gdouble a = 32, b = -6, c = -7, d = 3;
-	gdouble xx, x2, x3, x4;
+	gdouble xx;
 
-	xx = x - bias;
-	x2 = xx * xx;
-	x3 = x2 * xx;
-	x4 = x3 * xx;
+	xx = (x - bias) * 2.0;
 
-	return a*x4 + b*x3 + c*x2 + d*xx;
+	return pow (xx, 8);
 }
