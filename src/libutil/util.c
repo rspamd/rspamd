@@ -2541,3 +2541,25 @@ rspamd_shmem_xmap (const char *fname, guint mode,
 
 	return map;
 }
+
+/*
+ * A(x - 0.5)^4 + B(x - 0.5)^3 + C(x - 0.5)^2 + D(x - 0.5)
+ * A = 32,
+ * B = -6
+ * C = -7
+ * D = 3
+ * y = 32(x - 0.5)^4 - 6(x - 0.5)^3 - 7(x - 0.5)^2 + 3(x - 0.5)
+ */
+gdouble
+rspamd_normalize_probability (gdouble x, gdouble bias)
+{
+	const gdouble a = 32, b = -6, c = -7, d = 3;
+	gdouble xx, x2, x3, x4;
+
+	xx = x - bias;
+	x2 = xx * xx;
+	x3 = x2 * xx;
+	x4 = x3 * xx;
+
+	return a*x4 + b*x3 + c*x2 + d*xx;
+}

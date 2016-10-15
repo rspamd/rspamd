@@ -500,5 +500,12 @@ gpointer rspamd_file_xmap (const char *fname, guint mode,
 gpointer rspamd_shmem_xmap (const char *fname, guint mode,
 		gsize *size);
 
+/**
+ * Normalize probabilities using polynomial function
+ * @param x probability (bias .. 1)
+ * @return
+ */
+gdouble rspamd_normalize_probability (gdouble x, gdouble bias);
+
 #define PTR_ARRAY_FOREACH(ar, i, cur) if (ar != NULL) for ((i) = 0, (cur) = g_ptr_array_index((ar), 0); (i) < (ar)->len; (cur) = g_ptr_array_index((ar), (i)), ++(i))
 #endif
