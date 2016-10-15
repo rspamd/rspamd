@@ -311,8 +311,21 @@ local function load_fann(id)
           fname, err)
       end
     else
-      rspamd_logger.infox(rspamd_config, 'loaded fann from %s', fname)
-      return true
+      local layers = data[id].fann:get_layers()
+
+      if not layers or #layers ~= 5 then
+        rspamd_logger.infox(rspamd_config, 'fann has incorrect number of layers: %s, removing',
+          #layers)
+        data[id].fann = nil
+        local ret,err = rspamd_util.unlink(fname)
+        if not ret then
+          rspamd_logger.errx(rspamd_config, 'cannot remove invalid fann from %s: %s',
+            fname, err)
+        end
+      else
+        rspamd_logger.infox(rspamd_config, 'loaded fann from %s', fname)
+        return true
+      end
     end
   else
     rspamd_logger.infox(rspamd_config, 'fann is invalid: "%s"; removing', fname)
