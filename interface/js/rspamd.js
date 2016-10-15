@@ -620,6 +620,8 @@
                     });
                     $('<tbody/>', { html: items.join('') }).insertAfter('#historyLog thead');
                     history = $('#historyLog').DataTable({
+                        "aLengthMenu": [[100, 200, -1], [100, 200, "All"]],
+                        "bStateSave": true,
                         "order": [[ 0, "desc" ]],
                         "pageLength": history_length
                     });
