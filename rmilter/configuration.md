@@ -122,7 +122,7 @@ Specifies Rspamd scanners.
 	+ Default: `empty`
 - `extended_spam_headers`: add extended Rspamd headers to messages **NOT** originated from authenticated users or `our_networks`, is useful for debugging or private mail servers (flag)
 	+ Default: `false`
-- `extended_headers_rcpt`: add extended Rspamd headers to messages if **EVERY** envelope recipient match this list (e.g. a list of domains mail server responsible for) (recipients list)
+- `extended_headers_rcpt`: add extended Rspamd headers to messages if **EVERY** envelope recipient match this list (e.g. a list of domains mail server responsible for) (from 1.10.0, recipients list)
 	+ Default: `empty`
 - `spamd_never_reject`: never reject a message even if Rspamd action is `reject`, add header instead (flag)
 	+ Default: `false`
