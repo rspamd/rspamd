@@ -108,7 +108,7 @@ local function check_time(task, tm, type)
   local t = tonumber(tm)
 
   if not t then
-    rspamd_logger.infox(task, 'not a valid number: %s', tm)
+    rspamd_logger.errx(task, 'not a valid number: %s', tm)
     return false,false
   end
 
@@ -149,7 +149,7 @@ local function greylist_check(task)
     if not err then
       upstream:ok()
     else
-      rspamd_logger.infox(task, 'got error %s when setting greylisting record on server %s',
+      rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
           err, upstream:get_addr())
     end
   end
@@ -198,7 +198,7 @@ local function greylist_check(task)
         task:set_pre_result('soft reject', settings['message'])
       end
     elseif err then
-      rspamd_logger.infox(task, 'got error while getting greylisting keys: %1', err)
+      rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
       upstream:fail()
     end
   end
