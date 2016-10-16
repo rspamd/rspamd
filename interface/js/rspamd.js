@@ -620,6 +620,8 @@
                     });
                     $('<tbody/>', { html: items.join('') }).insertAfter('#historyLog thead');
                     history = $('#historyLog').DataTable({
+                        "aLengthMenu": [[100, 200, -1], [100, 200, "All"]],
+                        "bStateSave": true,
                         "order": [[ 0, "desc" ]],
                         "pageLength": history_length
                     });
@@ -694,8 +696,11 @@
                 }
             });
         }
-        // @update history log
+        // @reset history log
         $('#resetHistory').on('click', function () {
+            if (!confirm("Are you sure you want to reset history log?")) {
+                return
+            };
             if (history) {
                 history.destroy();
                 $('#historyLog').children('tbody').remove();
@@ -717,7 +722,7 @@
             });
         });
 
-        // @reset history log
+        // @update history log
         $('#updateHistory').on('click', function () {
             getHistory();
         });
