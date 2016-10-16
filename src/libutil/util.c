@@ -70,6 +70,7 @@
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
+#include <math.h> /* for pow */
 
 #include "cryptobox.h"
 
