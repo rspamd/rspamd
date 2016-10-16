@@ -1,5 +1,6 @@
 --[[
 Copyright (c) 2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2016, Alexey Savelyev <info@homeweb.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +15,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[
+Example config for whitelisting 2octet:
+greylist {
+  # Whitelisted last 2octet in hostname.
+  # "out.mail.example.com" 2octet "example.com"
+    whitelist_2octet_url = [
+    "$LOCAL_CONFDIR/local.d/whitelist-2octet.inc",
+    "${CONFDIR}/maillist.inc",
+        "${CONFDIR}/redirectors.inc",
+        "${CONFDIR}/dmarc_whitelist.inc",
+        "${CONFDIR}/spf_dkim_whitelist.inc",
+        "${CONFDIR}/surbl-whitelist.inc",
+        "${CONFDIR}/freemail.inc"    
+    ];
+}
+--]]
+
 -- A plugin that implements greylisting using redis
 
 local redis_params
 local whitelisted_ip
+local whitelist_2octet_map = nil
 local settings = {
   expire = 86400, -- 1 day by default
   timeout = 300, -- 5 minutes by default
@@ -232,6 +251,23 @@ local function greylist_set(task)
 
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
   local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
+  
+  --Check lats two octets hostname on whitelist maps
+  if not is_whitelisted and whitelist_2octet_map then
+    local hostname = task:get_hostname()
+    if hostname and hostname ~= 'unknown' then  
+      local h_split = rspamd_str_split(hostname, '.')
+      local domain = nil
+      local maxn = table.maxn(h_split)
+      if maxn >= 2 then
+        domain = h_split[maxn-1]..'.'..h_split[maxn]
+      end    
+      if domain and whitelist_2octet_map:get_key(domain) then
+        is_whitelisted = 'meta'
+		rspamd_logger.infox(task, 'skip greylisting for whitelisted domain')
+      end
+    end
+  end
 
   local action = task:get_metric_action('default')
   if action == 'no action' or action == 'reject' then return end
@@ -244,7 +280,7 @@ local function greylist_set(task)
     if not err then
       upstream:ok()
     else
-      rspamd_logger.infox(task, 'got error %s when setting greylisting record on server %s',
+      rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
           err, upstream:get_addr())
     end
   end
@@ -339,7 +375,14 @@ if opts then
     whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'],
       'Greylist whitelist ip map')
   end
-
+  if opts['whitelist_2octet_url'] and #opts['whitelist_2octet_url'] > 0 then
+    whitelist_2octet_map = rspamd_config:add_map ({
+      url = opts['whitelist_2octet_url'],
+      type = 'map',
+      description = 'Whitelisted maps url'
+    })
+  end
+  
   redis_params = rspamd_parse_redis_server('greylist')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
@@ -354,6 +397,7 @@ if opts then
       name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
+      priority = 10
     })
   end
 
