@@ -708,6 +708,7 @@ lua_redis_make_request (lua_State *L)
 		sp_ud = g_slice_alloc0 (sizeof (*sp_ud));
 		sp_ud->cbref = cbref;
 		sp_ud->c = ud;
+		sp_ud->ctx = ctx;
 
 		lua_pushstring (L, "cmd");
 		lua_gettable (L, -2);
