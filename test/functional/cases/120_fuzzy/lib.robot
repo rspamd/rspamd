@@ -143,3 +143,10 @@ Fuzzy Multimessage Delete Test
 Fuzzy Multimessage Overwrite Test
   : FOR  ${i}  IN  @{MESSAGES}
   \  Fuzzy Overwrite Test  ${i}
+
+Fuzzy Teardown
+  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
+  ${port_fuzzy} =  Create List  ${SOCK_DGRAM}  ${LOCAL_ADDR}  ${PORT_FUZZY}
+  ${port_controller} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_CONTROLLER}
+  ${ports} =  Create List  ${port_normal}  ${port_fuzzy}  ${port_controller}
+  Generic Teardown  @{ports}

@@ -246,5 +246,6 @@ Multimap Setup
   Run Redis
 
 Multimap Teardown
+  Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
-  Generic Teardown
+  Wait For Port  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${REDIS_PORT}
