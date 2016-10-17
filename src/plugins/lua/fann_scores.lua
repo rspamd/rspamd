@@ -602,7 +602,7 @@ redis_params = rspamd_parse_redis_server('fann_scores')
 
 local function maybe_load_fann(task, continue_cb, call_if_fail)
   local function load_fann()
-    local function redis_fann_load_cb(task, err, data)
+    local function redis_fann_load_cb(err, data)
       if not err and type(data) == 'table' and type(data[2]) == 'string' then
         local version = tonumber(data[1])
         local err,ann_data = rspamd_util.zstd_decompress(data[2])
@@ -653,7 +653,7 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
   end
 
   local function check_fann()
-    local function redis_fann_check_cb(task, err, data)
+    local function redis_fann_check_cb(err, data)
       if not err and type(data) == 'string' then
         local version = tonumber(data)
 
@@ -737,7 +737,7 @@ local function create_fann()
 end
 
 local function save_fann(task, is_spam)
-  local function redis_fann_save_cb(task, err, data)
+  local function redis_fann_save_cb(err, data)
     if err then
       rspamd_logger.errx(task, "cannot save neural net to redis: %s", err)
     end

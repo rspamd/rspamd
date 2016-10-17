@@ -137,7 +137,7 @@ local function need_av_check(task, rule)
 end
 
 local function check_av_cache(task, rule, fn)
-  local function redis_av_cb(task, err, data)
+  local function redis_av_cb(err, data)
     if data and type(data) == 'string' then
       -- Cached
       if data ~= 'OK' then
@@ -172,7 +172,7 @@ end
 local function save_av_cache(task, rule, to_save)
   local key = task:get_digest()
 
-  local function redis_set_cb(task, err, data)
+  local function redis_set_cb(err, data)
     -- Do nothing
     if err then
       rspamd_logger.errx(task, 'failed to save virus cache for %s -> "%s": %s',

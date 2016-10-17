@@ -317,7 +317,7 @@ local function multimap_callback(task, rule)
       return false
     end
 
-    local function redis_map_cb(task, err, data)
+    local function redis_map_cb(err, data)
       if not err and type(data) ~= 'userdata' then
         callback(data)
       end

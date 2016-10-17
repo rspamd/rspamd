@@ -207,7 +207,7 @@ local function check_limits(task, args)
   local key = fun.foldl(function(acc, k) return acc .. k[2] end, '', args)
   local ret,upstream
   --- Called when value is got from server
-  local function rate_get_cb(task, err, data)
+  local function rate_get_cb(err, data)
     if err then
       rspamd_logger.infox(task, 'got error while getting limit: %1', err)
       upstream:fail()
@@ -309,7 +309,7 @@ local function set_limits(task, args)
   local key = fun.foldl(function(acc, k) return acc .. k[2] end, '', args)
   local ret, upstream
 
-  local function rate_set_cb(task, err, data)
+  local function rate_set_cb(err, data)
     if not err then
       upstream:ok()
     else
@@ -317,7 +317,7 @@ local function set_limits(task, args)
         err, upstream:get_addr())
     end
   end
-  local function rate_get_cb(task, err, data)
+  local function rate_get_cb(err, data)
     if err then
       rspamd_logger.infox(task, 'got error while setting limit: %1', err)
       upstream:fail()

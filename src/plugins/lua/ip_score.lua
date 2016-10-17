@@ -105,7 +105,7 @@ local ip_score_set = function(task)
     return old_score + score, new_total
   end
 
-  local score_set_cb = function(task, err, data)
+  local score_set_cb = function(err, data)
     if err then
       rspamd_logger.infox(task, 'got error while IP score changing: %1', err)
     end
@@ -210,7 +210,7 @@ end
 local ip_score_check = function(task)
   local asn, country, ipnet = ip_score_get_task_vars(task)
 
-  local ip_score_redis_cb = function(task, err, data)
+  local ip_score_redis_cb = function(err, data)
     local function calculate_score(score)
       local parts = asn_re:split(score)
       local rep = tonumber(parts[1])

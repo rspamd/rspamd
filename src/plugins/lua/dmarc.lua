@@ -92,7 +92,7 @@ local function dmarc_callback(task)
     return maybe_force_action('na')
   end
 
-  local function dmarc_report_cb(task, err, data)
+  local function dmarc_report_cb(err, data)
     if not err then
       rspamd_logger.infox(task, '<%1> dmarc report saved for %2',
         task:get_message_id(), from[1]['domain'])

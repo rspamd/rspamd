@@ -42,7 +42,7 @@ local function make_key(goop)
 end
 
 local function replies_check(task)
-  local function redis_get_cb(task, err, data)
+  local function redis_get_cb(err, data)
     if err ~= nil then
       rspamd_logger.errx('redis_get_cb received error: %1', err)
       return
@@ -83,7 +83,7 @@ local function replies_check(task)
 end
 
 local function replies_set(task)
-  local function redis_set_cb(task, err, data)
+  local function redis_set_cb(err, data)
     if err ~=nil then
       rspamd_logger.errx('redis_set_cb received error: %1', err)
     end

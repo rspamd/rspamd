@@ -60,7 +60,7 @@ local function mx_check(task)
     if all(function(k, elt) return elt.checked end, mxes) then
       -- Save cache
       local key = settings.key_prefix .. mx_domain
-      local function redis_cache_cb(task, err, data)
+      local function redis_cache_cb(err, data)
         if err ~= nil then
           rspamd_logger.errx(task, 'redis_cache_cb received error: %1', err)
           return
@@ -189,7 +189,7 @@ local function mx_check(task)
       forced = true
     })
   else
-    local function redis_cache_get_cb(task, err, data)
+    local function redis_cache_get_cb(err, data)
       if err or type(data) ~= 'string' then
         local r = task:get_resolver()
         r:resolve('mx', {

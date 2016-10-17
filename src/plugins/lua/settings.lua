@@ -528,7 +528,7 @@ local function gen_redis_callback(handler, id)
   return function(task)
     local key = handler(task)
 
-    local function redis_settings_cb(task, err, data)
+    local function redis_settings_cb(err, data)
       if not err and type(data) == 'string' then
         local ucl = require "ucl"
         local parser = ucl.parser()

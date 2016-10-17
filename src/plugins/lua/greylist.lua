@@ -145,7 +145,7 @@ local function greylist_check(task)
   local hash_key = body_key .. meta_key
   local upstream
 
-  local function redis_set_cb(task, err, data)
+  local function redis_set_cb(err, data)
     if not err then
       upstream:ok()
     else
@@ -154,7 +154,7 @@ local function greylist_check(task)
     end
   end
 
-  local function redis_get_cb(task, err, data)
+  local function redis_get_cb(err, data)
     local ret_body = false
     local greylisted_body = false
     local ret_meta = false
@@ -240,7 +240,7 @@ local function greylist_set(task)
   local upstream, ret, conn
   local hash_key = body_key .. meta_key
 
-  local function redis_set_cb(task, err, data)
+  local function redis_set_cb(err, data)
     if not err then
       upstream:ok()
     else
