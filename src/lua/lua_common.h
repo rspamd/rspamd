@@ -204,6 +204,7 @@ gint rspamd_lua_push_header (lua_State * L,
  * Check for task at the specified position
  */
 struct rspamd_task *lua_check_task (lua_State * L, gint pos);
+struct rspamd_task *lua_check_task_maybe (lua_State * L, gint pos);
 
 struct rspamd_lua_map *lua_check_map (lua_State * L, gint pos);
 
@@ -243,8 +244,6 @@ void luaopen_http (lua_State * L);
 void luaopen_redis (lua_State * L);
 void luaopen_upstream (lua_State * L);
 void luaopen_mempool (lua_State * L);
-void luaopen_session (lua_State * L);
-void luaopen_io_dispatcher (lua_State * L);
 void luaopen_dns_resolver (lua_State * L);
 void luaopen_rsa (lua_State * L);
 void luaopen_ip (lua_State * L);
@@ -280,6 +279,8 @@ void rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg);
 
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
+struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
+struct event_base* lua_check_ev_base (lua_State * L, gint pos);
 
 /**
  * Extract an arguments from lua table according to format string. Supported arguments are:
@@ -344,6 +345,14 @@ gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
  * @param classname
  */
 void *rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname);
+
+/**
+ * Safely checks userdata to match specified class
+ * @param L
+ * @param pos
+ * @param classname
+ */
+void *rspamd_lua_check_udata_maybe (lua_State *L, gint pos, const gchar *classname);
 
 /**
  * Call finishing script with the specified task

@@ -822,6 +822,14 @@ lua_check_task (lua_State * L, gint pos)
 	return ud ? *((struct rspamd_task **)ud) : NULL;
 }
 
+struct rspamd_task *
+lua_check_task_maybe (lua_State * L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata_maybe (L, pos, "rspamd{task}");
+
+	return ud ? *((struct rspamd_task **)ud) : NULL;
+}
+
 static struct rspamd_image *
 lua_check_image (lua_State * L)
 {

@@ -257,8 +257,6 @@ rspamd_lua_init ()
 	luaopen_redis (L);
 	luaopen_upstream (L);
 	lua_add_actions_global (L);
-	luaopen_session (L);
-	luaopen_io_dispatcher (L);
 	luaopen_dns_resolver (L);
 	luaopen_rsa (L);
 	luaopen_ip (L);
@@ -1047,19 +1045,24 @@ lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs)
 }
 
 
-void *
-rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname)
+static void *
+rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
+		gboolean fatal)
 {
 	void *p = lua_touserdata (L, pos);
 	GString *err_msg;
 
 	if (p == NULL) {
-		err_msg = g_string_sized_new (100);
-		rspamd_printf_gstring (err_msg, "expected %s at %d, but got %s; trace: ",
-				classname, pos, lua_typename (L, lua_type (L, pos)));
-		rspamd_lua_traceback_string (L, err_msg);
-		msg_err ("lua typecheck error: %v", err_msg);
-		g_string_free (err_msg, TRUE);
+		if (fatal) {
+			err_msg = g_string_sized_new (100);
+			rspamd_printf_gstring (err_msg, "expected %s at %d, but got %s; trace: ",
+					classname, pos, lua_typename (L, lua_type (L, pos)));
+			rspamd_lua_traceback_string (L, err_msg);
+			msg_err ("lua typecheck error: %v", err_msg);
+			g_string_free (err_msg, TRUE);
+		}
+
+		return NULL;
 	}
 	else {
 		/* Match class */
@@ -1073,13 +1076,15 @@ rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname)
 				lua_pushstring (L, "class");
 				lua_gettable (L, -2);
 
-				err_msg = g_string_sized_new (100);
-				rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
-						"classname: %s; trace: ",
-						classname, pos, lua_tostring (L, -1));
-				rspamd_lua_traceback_string (L, err_msg);
-				msg_err ("lua typecheck error: %v", err_msg);
-				g_string_free (err_msg, TRUE);
+				if (fatal) {
+					err_msg = g_string_sized_new (100);
+					rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
+							"classname: %s; trace: ",
+							classname, pos, lua_tostring (L, -1));
+					rspamd_lua_traceback_string (L, err_msg);
+					msg_err ("lua typecheck error: %v", err_msg);
+					g_string_free (err_msg, TRUE);
+				}
 
 				lua_pop (L, 2); /* __index -> classname */
 			}
@@ -1088,15 +1093,46 @@ rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname)
 		}
 		else {
 			p = NULL;
-			err_msg = g_string_sized_new (100);
-			rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
-					"no metatable; trace: ",
-					classname, pos);
-			rspamd_lua_traceback_string (L, err_msg);
-			msg_err ("lua typecheck error: %v", err_msg);
-			g_string_free (err_msg, TRUE);
+
+			if (fatal) {
+				err_msg = g_string_sized_new (100);
+				rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
+						"no metatable; trace: ",
+						classname, pos);
+				rspamd_lua_traceback_string (L, err_msg);
+				msg_err ("lua typecheck error: %v", err_msg);
+				g_string_free (err_msg, TRUE);
+			}
 		}
 	}
 
 	return p;
+}
+
+void *
+rspamd_lua_check_udata (lua_State *L, gint pos, const gchar *classname)
+{
+	return rspamd_lua_check_udata_common (L, pos, classname, TRUE);
+}
+
+void *
+rspamd_lua_check_udata_maybe (lua_State *L, gint pos, const gchar *classname)
+{
+	return rspamd_lua_check_udata_common (L, pos, classname, FALSE);
+}
+
+struct rspamd_async_session*
+lua_check_session (lua_State * L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{session}");
+	luaL_argcheck (L, ud != NULL, pos, "'session' expected");
+	return ud ? *((struct rspamd_async_session **)ud) : NULL;
+}
+
+struct event_base*
+lua_check_ev_base (lua_State * L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{ev_base}");
+	luaL_argcheck (L, ud != NULL, pos, "'event_base' expected");
+	return ud ? *((struct event_base **)ud) : NULL;
 }
