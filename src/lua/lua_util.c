@@ -357,7 +357,7 @@ LUA_FUNCTION_DEF (util, zstd_decompress);
  * Normalize probabilities using polynom
  *
  * @param {number} prob probability param
- * @param {number} bias number to subtract for making the final sollution
+ * @param {number} bias number to subtract for making the final solution
  * @return {number} normalized number
  */
 LUA_FUNCTION_DEF (util, normalize_prob);
