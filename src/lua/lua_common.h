@@ -364,5 +364,14 @@ void lua_call_finish_script (lua_State *L, struct
 		rspamd_config_post_load_script *sc,
 		struct rspamd_task *task);
 
+/**
+ * Run post-load operations
+ * @param L
+ * @param cfg
+ * @param ev_base
+ */
+gboolean rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
+		struct event_base *ev_base);
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

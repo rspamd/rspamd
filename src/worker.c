@@ -576,7 +576,7 @@ start_worker (struct rspamd_worker *worker)
 	struct rspamd_worker_ctx *ctx = worker->ctx;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
-	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket, TRUE);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);
 

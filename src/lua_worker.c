@@ -350,7 +350,8 @@ start_lua_worker (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"lua_worker",
-			lua_accept_socket);
+			lua_accept_socket,
+			TRUE);
 
 	L = worker->srv->cfg->lua_state;
 	ctx->L = L;

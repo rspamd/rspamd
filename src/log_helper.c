@@ -177,7 +177,8 @@ start_log_helper (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"log_helper",
-			NULL);
+			NULL,
+			TRUE);
 	ctx->cfg = worker->srv->cfg;
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;

@@ -2252,7 +2252,8 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",
-			NULL);
+			NULL,
+			FALSE);
 	ctx->peer_fd = -1;
 	ctx->worker = worker;
 	double_to_tv (ctx->master_timeout, &ctx->master_io_tv);

@@ -278,7 +278,8 @@ start_hs_helper (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"hs_helper",
-			NULL);
+			NULL,
+			FALSE);
 
 	if (!rspamd_rs_compile (ctx, worker, FALSE)) {
 		/* Tell main not to respawn more workers */

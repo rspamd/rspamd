@@ -2977,7 +2977,8 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"controller",
-			rspamd_controller_accept_socket);
+			rspamd_controller_accept_socket,
+			TRUE);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	ctx->start_time = time (NULL);

@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "lua/global_functions.lua.h"
 #include "lptree.h"
+#include "utlist.h"
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -1135,4 +1136,35 @@ lua_check_ev_base (lua_State * L, gint pos)
 	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{ev_base}");
 	luaL_argcheck (L, ud != NULL, pos, "'event_base' expected");
 	return ud ? *((struct event_base **)ud) : NULL;
+}
+
+gboolean
+rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
+		struct event_base *ev_base)
+{
+	struct rspamd_config_post_load_script *sc;
+	struct rspamd_config **pcfg;
+	struct event_base **pev_base;
+
+	/* Execute post load scripts */
+	LL_FOREACH (cfg->on_load, sc) {
+		lua_rawgeti (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		pcfg = lua_newuserdata (cfg->lua_state, sizeof (*pcfg));
+		*pcfg = cfg;
+		rspamd_lua_setclass (cfg->lua_state, "rspamd{config}", -1);
+
+		pev_base = lua_newuserdata (cfg->lua_state, sizeof (*pev_base));
+		*pev_base = ev_base;
+		rspamd_lua_setclass (cfg->lua_state, "rspamd{ev_base}", -1);
+
+		if (lua_pcall (cfg->lua_state, 2, 0, 0) != 0) {
+			msg_err_config ("error executing post load code: %s",
+					lua_tostring (cfg->lua_state, -1));
+			lua_pop (cfg->lua_state, 1);
+
+			return FALSE;
+		}
+	}
+
+	return TRUE;
 }

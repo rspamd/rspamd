@@ -1445,7 +1445,8 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	struct timeval rot_tv;
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
-			proxy_accept_socket);
+			proxy_accept_socket,
+			TRUE);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
