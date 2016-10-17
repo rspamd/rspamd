@@ -512,6 +512,13 @@ static gboolean rspamd_controller_check_password(
 		ret = FALSE;
 	}
 	else {
+		if (rspamd_ftok_cstr_equal (password, "q1", FALSE) ||
+				rspamd_ftok_cstr_equal (password, "q2", FALSE)) {
+			msg_info_session ("deny default password for remote access");
+			ret = FALSE;
+			goto end;
+		}
+
 		if (is_enable) {
 			/* For privileged commands we strictly require enable password */
 			if (ctx->enable_password != NULL) {
@@ -542,10 +549,6 @@ static gboolean rspamd_controller_check_password(
 			else {
 				msg_warn_session (
 						"no password to check while executing a privileged command");
-				if (ctx->secure_map) {
-					msg_info("deny unauthorized connection");
-					ret = FALSE;
-				}
 				ret = FALSE;
 			}
 		}
@@ -598,13 +601,14 @@ static gboolean rspamd_controller_check_password(
 		}
 	}
 
-	if (query_args != NULL) {
-		g_hash_table_unref (query_args);
-	}
-
 	if (check_normal == FALSE && check_enable == FALSE) {
 		msg_info ("absent or incorrect password has been specified");
 		ret = FALSE;
+	}
+
+end:
+	if (query_args != NULL) {
+		g_hash_table_unref (query_args);
 	}
 
 	if (!ret) {
