@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "buffer.h"
 #include "dns.h"
 #include "http.h"
 #include "http_private.h"
