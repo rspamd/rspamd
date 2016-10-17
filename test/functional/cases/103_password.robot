@@ -7,13 +7,13 @@ Variables       ${TESTDIR}/lib/vars.py
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/password.conf
 ${RSPAMD_SCOPE}  Test
-${PBKDF_PASSWORD}  "$1$nxnwqu5t6ruqfzb4h7bs47ogmdk9sb74$c8mbmcfyd6aic1sm48qzxuzkw4nhx6te6h7owgxz63bcd7fqu1dy"
-${CATENA_PASSWORD}  "$2$9dydyukfndmi8zzp7rbdsu43y7a3iucg$1nketaa9pjqwwzzjxogcrniphw4y5fanixudpwzza85tcb56yzub"
+${PBKDF_PASSWORD}  "$1$rhzzahtm8a5homdhh7z4qiiy7j8pzp4u$k5toro136brshjjuy9t39r785td69qodmd39qzygxuyehn9tqauy"
+${CATENA_PASSWORD}  "$2$xu1581gidj5cyp4yjgo68qbj6jz1j8o3$j9yg4k58jy3fj8suijxx9d7pea6a6obtufq9kfenosyq8erm87ky"
 
 *** Test Cases ***
 PASSWORD - PBKDF
   [Setup]  Password Setup  ${PBKDF_PASSWORD}
-  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q1  stat
+  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  nq1  stat
   Check Rspamc  ${result}  Messages scanned:
 
 PASSWORD - PBKDF WRONG
@@ -23,7 +23,7 @@ PASSWORD - PBKDF WRONG
 
 PASSWORD - CATENA
   [Setup]  Password Setup  ${CATENA_PASSWORD}
-  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q1  stat
+  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  nq1  stat
   Check Rspamc  ${result}  Messages scanned:
 
 PASSWORD - CATENA WRONG
@@ -33,12 +33,12 @@ PASSWORD - CATENA WRONG
 
 PASSWORD - ENABLE
   [Setup]  Password Setup  ${CATENA_PASSWORD}
-  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q2  stat_reset
+  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  nq2  stat_reset
   Check Rspamc  ${result}  Messages scanned:
 
 PASSWORD - ENABLE WITH NORMAL
   [Setup]  Password Setup  ${CATENA_PASSWORD}
-  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q1  stat_reset
+  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  nq1  stat_reset
   Check Rspamc  ${result}  Unauthorized
 
 PASSWORD - ENABLE INCORRECT
@@ -48,7 +48,7 @@ PASSWORD - ENABLE INCORRECT
 
 *** Keywords ***
 Password Setup
-  [Arguments]  ${PASSWORD}  ${ENABLE_PASSWORD}=q2
+  [Arguments]  ${PASSWORD}  ${ENABLE_PASSWORD}=nq2
   Set Test Variable  ${PASSWORD}
   Set Test Variable  ${ENABLE_PASSWORD}
   Generic Setup
