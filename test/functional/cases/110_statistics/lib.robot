@@ -47,11 +47,12 @@ Redis Statistics Setup
   Run Redis
 
 Redis Statistics Teardown
-  Generic Teardown
+  Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
+  Wait For Port  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${REDIS_PORT}
 
 Statistics Setup
   Generic Setup  STATS_PATH_CACHE  STATS_PATH_HAM  STATS_PATH_SPAM
 
 Statistics Teardown
-  Generic Teardown
+  Normal Teardown

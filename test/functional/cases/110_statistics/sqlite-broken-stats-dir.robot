@@ -1,6 +1,6 @@
 *** Settings ***
 Suite Setup     Generic Setup
-Suite Teardown  Generic Teardown
+Suite Teardown  Normal Teardown
 Resource        ${TESTDIR}/lib/rspamd.robot
 Resource        lib.robot
 

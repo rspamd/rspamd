@@ -1,5 +1,5 @@
 *** Settings ***
-Test Teardown   Generic Teardown
+Test Teardown   Normal Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py

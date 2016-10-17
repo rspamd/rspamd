@@ -1,6 +1,6 @@
 *** Settings ***
 Suite Setup     MIMETypes Setup
-Suite Teardown  Generic Teardown
+Suite Teardown  Simple Teardown
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py

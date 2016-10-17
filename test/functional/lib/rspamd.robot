@@ -62,14 +62,23 @@ Generic Setup
   \  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
 
 Generic Teardown
+  [Arguments]  @{ports}
   Shutdown Process With Children  ${RSPAMD_PID}
   Cleanup Temporary Directory  ${TMPDIR}
+  : FOR  ${i}  IN  @{ports}
+  \  Wait For Port  @{i}[0]  @{i}[1]  @{i}[2]
 
 Log Logs
   [Arguments]  ${logfile}  ${position}
   ${the_log}  ${position} =  Read Log From Position  ${logfile}  ${position}
   Log  ${the_log}
   [Return]  ${position}
+
+Normal Teardown
+  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
+  ${port_controller} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_CONTROLLER}
+  ${ports} =  Create List  ${port_normal}  ${port_controller}
+  Generic Teardown  @{ports}
 
 Redis HSET
   [Arguments]  ${hash}  ${key}  ${value}
@@ -128,6 +137,11 @@ Scan Message With Rspamc
   [Arguments]  ${msg_file}  @{vargs}
   ${result} =  Run Rspamc  -p  -h  ${LOCAL_ADDR}:${PORT_NORMAL}  @{vargs}  ${msg_file}
   [Return]  ${result}
+
+Simple Teardown
+  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
+  ${ports} =  Create List  ${port_normal}
+  Generic Teardown  @{ports}
 
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
