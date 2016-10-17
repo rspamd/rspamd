@@ -32,7 +32,7 @@ local rspamd_logger = require "rspamd_logger"
 
 local function symbol_callback(task)
 	local redis_key = 'some_key'
-	local function redis_cb(task, err, data)
+	local function redis_cb(err, data)
 		if not err then
 			rspamd_logger.infox('redis returned %1=%2', redis_key, data)
 		end
