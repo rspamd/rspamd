@@ -1,6 +1,5 @@
 # Librspamdserver
 SET(LIBRSPAMDSERVERSRC
-				${CMAKE_CURRENT_SOURCE_DIR}/buffer.c
 				${CMAKE_CURRENT_SOURCE_DIR}/cfg_utils.c
 				${CMAKE_CURRENT_SOURCE_DIR}/cfg_rcl.c
 				${CMAKE_CURRENT_SOURCE_DIR}/composites.c
@@ -14,7 +13,6 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/html.c
 				${CMAKE_CURRENT_SOURCE_DIR}/monitored.c
 				${CMAKE_CURRENT_SOURCE_DIR}/protocol.c
-				${CMAKE_CURRENT_SOURCE_DIR}/proxy.c
 				${CMAKE_CURRENT_SOURCE_DIR}/redis_pool.c
 				${CMAKE_CURRENT_SOURCE_DIR}/re_cache.c
 				${CMAKE_CURRENT_SOURCE_DIR}/roll_history.c

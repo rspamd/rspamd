@@ -16,7 +16,6 @@
 #include "libutil/radix.h"
 #include "libserver/url.h"
 #include "libserver/protocol.h"
-#include "libserver/buffer.h"
 #include "libserver/events.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
