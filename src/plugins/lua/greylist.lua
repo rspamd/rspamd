@@ -335,8 +335,11 @@ end
 
 local opts =  rspamd_config:get_all_opt('greylist')
 if opts then
-  if opts['whitelisted_ip'] then
-    whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'],
+  for k,v in pairs(opts) do
+    settings[k] = v
+  end
+  if settings['whitelisted_ip'] then
+    whitelisted_ip = rspamd_config:add_radix_map(settings['whitelisted_ip'],
       'Greylist whitelist ip map')
   end
 
@@ -355,9 +358,5 @@ if opts then
       type = 'prefilter',
       callback = greylist_check,
     })
-  end
-
-  for k,v in pairs(opts) do
-    settings[k] = v
   end
 end
