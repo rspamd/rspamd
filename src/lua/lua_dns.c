@@ -50,6 +50,7 @@ LUA_FUNCTION_DEF (dns_resolver, resolve_a);
 LUA_FUNCTION_DEF (dns_resolver, resolve_ptr);
 LUA_FUNCTION_DEF (dns_resolver, resolve_txt);
 LUA_FUNCTION_DEF (dns_resolver, resolve_mx);
+LUA_FUNCTION_DEF (dns_resolver, resolve_ns);
 LUA_FUNCTION_DEF (dns_resolver, resolve);
 
 static const struct luaL_reg dns_resolverlib_f[] = {
@@ -62,6 +63,7 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 	LUA_INTERFACE_DEF (dns_resolver, resolve_ptr),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_txt),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_mx),
+	LUA_INTERFACE_DEF (dns_resolver, resolve_ns),
 	LUA_INTERFACE_DEF (dns_resolver, resolve),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -161,6 +163,10 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				addr = rspamd_inet_address_new (AF_INET6, &elt->content.aaa.addr);
 				rspamd_lua_ip_push (cd->L, addr);
 				rspamd_inet_address_destroy (addr);
+				lua_rawseti (cd->L, -2, ++i);
+				break;
+			case RDNS_REQUEST_NS:
+				lua_pushstring (cd->L, elt->content.ns.name);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_PTR:
@@ -471,6 +477,33 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 		return lua_dns_resolver_resolve_common (L,
 				   dns_resolver,
 				   RDNS_REQUEST_MX,
+				   2);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method resolver:resolve_ns(session, pool, host, callback)
+ * Resolve NS records for a specified host.
+ * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * @param {mempool} pool memory pool for storing intermediate data
+ * @param {string} host name to get NS records for
+ * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * @return {boolean} `true` if DNS request has been scheduled
+ */
+static int
+lua_dns_resolver_resolve_ns (lua_State *L)
+{
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+
+	if (dns_resolver) {
+		return lua_dns_resolver_resolve_common (L,
+				   dns_resolver,
+				   RDNS_REQUEST_NS,
 				   2);
 	}
 	else {
