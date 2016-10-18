@@ -1,5 +1,6 @@
 --[[
 Copyright (c) 2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2016, Alexey Savelyev <info@homeweb.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +15,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[
+Example domains whitelist config:
+greylist {
+  # Search "example.com" and "mail.example.com" for "mx.out.mail.example.com":
+  whitelist_domains_url = [
+    "$LOCAL_CONFDIR/local.d/greylist-whitelist-domains.inc",
+    "${CONFDIR}/maillist.inc",
+    "${CONFDIR}/redirectors.inc",
+    "${CONFDIR}/dmarc_whitelist.inc",
+    "${CONFDIR}/spf_dkim_whitelist.inc",
+    "${CONFDIR}/surbl-whitelist.inc",
+    "${CONFDIR}/freemail.inc"    
+  ];
+}
+Example config for exim users:
+greylist {
+  action = "greylist";
+}
+--]]
+
 -- A plugin that implements greylisting using redis
 
 local redis_params
 local whitelisted_ip
+local whitelist_domains_map = nil
 local settings = {
   expire = 86400, -- 1 day by default
   timeout = 300, -- 5 minutes by default
@@ -25,6 +47,7 @@ local settings = {
   max_data_len = 10240, -- default data limit to hash
   message = 'Try again later', -- default greylisted message
   symbol = 'GREYLIST',
+  action = 'soft reject', -- default greylisted action
   ipv4_mask = 19, -- Mask bits for ipv4
   ipv6_mask = 64, -- Mask bits for ipv6
 }
@@ -86,7 +109,7 @@ local function envelope_key(task)
     end, rcpt)
   end
 
-  local ip = task:get_from_ip()
+  local ip = task:get_ip()
 
   if ip and ip:is_valid() then
     local s
@@ -126,9 +149,9 @@ local function check_time(task, tm, type)
 end
 
 local function greylist_check(task)
-  local ip_addr = task:get_ip()
+  local ip = task:get_ip()
 
-  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+  if task:get_user() or (ip and ip:is_local()) then
     return
   end
 
@@ -218,9 +241,9 @@ local function greylist_check(task)
 end
 
 local function greylist_set(task)
-  local ip_addr = task:get_ip()
+  local ip = task:get_ip()
 
-  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+  if task:get_user() or (ip and ip:is_local()) then
     return
   end
 
@@ -232,6 +255,18 @@ local function greylist_set(task)
 
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
   local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
+  
+  -- Third and second level domains whitelist
+  if not is_whitelisted and whitelist_domains_map then
+    local hostname = task:get_hostname()
+    if hostname and hostname ~= 'unknown' then
+      local domain = rspamd_util.get_tld(hostname)
+      if whitelist_domains_map:get_key(hostname) or (domain and whitelist_domains_map:get_key(domain)) then
+        is_whitelisted = 'meta'
+        rspamd_logger.infox(task, 'skip greylisting for whitelisted domain')
+      end
+    end
+  end
 
   local action = task:get_metric_action('default')
   if action == 'no action' or action == 'reject' then return end
@@ -244,7 +279,7 @@ local function greylist_set(task)
     if not err then
       upstream:ok()
     else
-      rspamd_logger.infox(task, 'got error %s when setting greylisting record on server %s',
+      rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
           err, upstream:get_addr())
     end
   end
@@ -283,7 +318,7 @@ local function greylist_set(task)
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
     task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
       'new record')
-    task:set_pre_result('soft reject', settings['message'])
+    task:set_pre_result(settings['action'], settings['message'])
     -- Create new record
     local ret, conn
     ret,conn,upstream = rspamd_redis_make_request(task,
@@ -325,8 +360,8 @@ local function greylist_set(task)
           return
         end
       end
-      task:set_metric_action('default', 'soft reject')
-      task:set_pre_result('soft reject', settings['message'])
+      task:set_metric_action('default', settings['action'])
+      task:set_pre_result(settings['action'], settings['message'])
     else
       task:insert_result(settings['symbol'], 0.0, 'greylisted', 'passed')
     end
@@ -335,11 +370,21 @@ end
 
 local opts =  rspamd_config:get_all_opt('greylist')
 if opts then
-  if opts['whitelisted_ip'] then
-    whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'],
+  for k,v in pairs(opts) do
+    settings[k] = v
+  end
+  if settings['whitelisted_ip'] then
+    whitelisted_ip = rspamd_config:add_radix_map(settings['whitelisted_ip'],
       'Greylist whitelist ip map')
   end
-
+  if settings['whitelist_domains_url'] and #settings['whitelist_domains_url'] > 0 then
+    whitelist_domains_map = rspamd_config:add_map ({
+      url = settings['whitelist_domains_url'],
+      type = 'map',
+      description = 'Greylist whitelist domains map'
+    })
+  end
+  
   redis_params = rspamd_parse_redis_server('greylist')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
@@ -354,10 +399,7 @@ if opts then
       name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
+      priority = 10
     })
-  end
-
-  for k,v in pairs(opts) do
-    settings[k] = v
   end
 end
