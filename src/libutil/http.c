@@ -1961,13 +1961,19 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				pbody = NULL;
 				bodylen = 0;
 				priv->outlen = 2;
-				msg->method = HTTP_GET;
+
+				if (msg->method == HTTP_INVALID) {
+					msg->method = HTTP_GET;
+				}
 			}
 			else {
 				pbody = (gchar *)msg->body_buf.begin;
 				bodylen = msg->body_buf.len;
 				priv->outlen = 3;
-				msg->method = HTTP_POST;
+
+				if (msg->method == HTTP_INVALID) {
+					msg->method = HTTP_POST;
+				}
 			}
 		}
 		else if (msg->body_buf.len > 0) {
@@ -2175,7 +2181,7 @@ rspamd_http_new_message (enum http_parser_type type)
 
 	new->port = 80;
 	new->type = type;
-	new->method = HTTP_GET;
+	new->method = HTTP_INVALID;
 
 	REF_INIT_RETAIN (new, rspamd_http_message_free);
 
