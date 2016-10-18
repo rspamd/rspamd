@@ -119,6 +119,16 @@ end
  */
 LUA_FUNCTION_DEF (task, set_pre_result);
 /***
+ * @method task:append_message(message)
+ * Adds a message to scanning output.
+ * @param {string} message
+@example
+local function cb(task)
+	task:append_message('Example message')
+end
+ */
+LUA_FUNCTION_DEF (task, append_message);
+/***
  * @method task:get_urls([need_emails])
  * Get all URLs found in a message.
  * @param {boolean} need_emails if `true` then reutrn also email urls
@@ -694,6 +704,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
+	LUA_INTERFACE_DEF (task, append_message),
 	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
 	LUA_INTERFACE_DEF (task, get_content),
@@ -1100,6 +1111,24 @@ lua_task_set_pre_result (lua_State * L)
 		else {
 			return luaL_error (L, "invalid arguments");
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_task_append_message (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gchar *message;
+
+	if (task != NULL) {
+		message= rspamd_mempool_strdup (task->task_pool,
+				luaL_checkstring (L, 2));
+		task->messages = g_list_prepend (task->messages, message);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
