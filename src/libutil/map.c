@@ -477,8 +477,8 @@ read_data:
 			goto err;
 		}
 
-		map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 		msg_info_map ("read map data from %s", cbd->data->host);
+		map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 
 		/*
 		 * We know that a map is in the locked state

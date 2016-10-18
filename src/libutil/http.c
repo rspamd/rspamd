@@ -617,6 +617,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 	struct rspamd_http_message *msg;
+	int ret;
 
 	priv = conn->priv;
 	msg = priv->msg;
@@ -626,6 +627,21 @@ rspamd_http_on_headers_complete (http_parser * parser)
 
 		priv->header = NULL;
 		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
+	}
+
+	if (msg->method == HTTP_HEAD) {
+		/* We don't care about the rest */
+		if (event_pending (&priv->ev, EV_READ, NULL)) {
+			event_del (&priv->ev);
+		}
+
+		msg->code = parser->status_code;
+		rspamd_http_connection_ref (conn);
+		ret = conn->finish_handler (conn, msg);
+		conn->finished = TRUE;
+		rspamd_http_connection_unref (conn);
+
+		return ret;
 	}
 
 	/*
@@ -758,8 +774,11 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 	struct rspamd_http_connection *conn =
 			(struct rspamd_http_connection *) parser->data;
 	struct rspamd_http_connection_private *priv;
+	struct rspamd_http_message *msg;
+	int ret;
 
 	priv = conn->priv;
+	msg = priv->msg;
 
 	if (priv->header != NULL) {
 		rspamd_http_finish_header (conn, priv);
@@ -770,6 +789,21 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 
 	if (parser->flags & F_SPAMC) {
 		priv->msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
+	}
+
+	if (msg->method == HTTP_HEAD) {
+		/* We don't care about the rest */
+		if (event_pending (&priv->ev, EV_READ, NULL)) {
+			event_del (&priv->ev);
+		}
+
+		msg->code = parser->status_code;
+		rspamd_http_connection_ref (conn);
+		ret = conn->finish_handler (conn, msg);
+		conn->finished = TRUE;
+		rspamd_http_connection_unref (conn);
+
+		return ret;
 	}
 
 	priv->msg->method = parser->method;
@@ -920,11 +954,13 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 	struct event_base *base;
 	struct rspamd_http_connection_private *priv;
 	gpointer ssl;
+	gint request_method;
 
 	priv = conn->priv;
 	base = conn->priv->ev.ev_base;
 	ssl = priv->ssl;
 	priv->ssl = NULL;
+	request_method = priv->msg->method;
 	rspamd_http_connection_reset (conn);
 	priv->ssl = ssl;
 	/* Plan read message */
@@ -937,6 +973,8 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 		rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
 				conn->priv->ptv, base);
 	}
+
+	priv->msg->method = request_method;
 }
 
 static void
@@ -1148,8 +1186,6 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 						"IO read error: unexpected EOF");
 				conn->error_handler (conn, err);
 				g_error_free (err);
-
-
 			}
 			REF_RELEASE (pbuf);
 			rspamd_http_connection_unref (conn);

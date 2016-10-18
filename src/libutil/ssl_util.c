@@ -520,6 +520,11 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 
 	if (conn->state != ssl_conn_connected && conn->state != ssl_next_read) {
 		errno = EINVAL;
+		g_set_error (&err, rspamd_ssl_quark (), ECONNRESET,
+				"ssl state error: cannot read data");
+		conn->err_handler (conn->handler_data, err);
+		g_error_free (err);
+
 		return -1;
 	}
 
@@ -549,12 +554,13 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 	else {
 		ret = SSL_get_error (conn->ssl, ret);
 		conn->state = ssl_next_read;
+		what = 0;
 
 		if (ret == SSL_ERROR_WANT_READ) {
-			what = EV_READ;
+			what |= EV_READ;
 		}
 		else if (ret == SSL_ERROR_WANT_WRITE) {
-			what = EV_WRITE;
+			what |= EV_WRITE;
 		}
 		else {
 			g_set_error (&err, rspamd_ssl_quark (), ret,
@@ -603,8 +609,14 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 		ret = SSL_get_error (conn->ssl, ret);
 
 		if (ret == SSL_ERROR_ZERO_RETURN) {
+			g_set_error (&err, rspamd_ssl_quark (), ret,
+					"ssl write error: %s", ERR_error_string (ret, NULL));
+			conn->err_handler (conn->handler_data, err);
+			g_error_free (err);
+			errno = ECONNRESET;
 			conn->state = ssl_conn_reset;
-			return 0;
+
+			return -1;
 		}
 		else {
 			g_set_error (&err, rspamd_ssl_quark (), ret,
