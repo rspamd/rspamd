@@ -218,7 +218,7 @@ local function greylist_check(task)
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
           greylist_type)
-        task:set_pre_result('soft reject', settings['message'])
+        task:set_pre_result(settings['action'], settings['message'])
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
