@@ -86,7 +86,7 @@ local function envelope_key(task)
     end, rcpt)
   end
 
-  local ip = task:get_from_ip()
+  local ip = task:get_ip()
 
   if ip and ip:is_valid() then
     local s
@@ -126,9 +126,9 @@ local function check_time(task, tm, type)
 end
 
 local function greylist_check(task)
-  local ip_addr = task:get_ip()
+  local ip = task:get_ip()
 
-  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+  if task:get_user() or (ip and ip:is_local()) then
     return
   end
 
@@ -218,9 +218,9 @@ local function greylist_check(task)
 end
 
 local function greylist_set(task)
-  local ip_addr = task:get_ip()
+  local ip = task:get_ip()
 
-  if task:get_user() or (ip_addr and ip_addr:is_local()) then
+  if task:get_user() or (ip and ip:is_local()) then
     return
   end
 
