@@ -338,8 +338,8 @@ lua_url_get_phished (lua_State *L)
 
 /***
  * @method url:get_tld()
- * Get top level domain part of the url host
- * @return {string} top level part of the url host
+ * Get effective second level domain part (eSLD) of the url host
+ * @return {string} effective second level domain part (eSLD) of the url host
  */
 static gint
 lua_url_get_tld (lua_State *L)
