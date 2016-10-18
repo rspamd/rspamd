@@ -164,10 +164,10 @@ LUA_FUNCTION_DEF (util, humanize_number);
 
 /***
  * @function util.get_tld(host)
- * Returns tld for the specified host
+ * Returns effective second level domain part (eSLD) for the specified host
  *
  * @param {string} host hostname
- * @return {string} tld part of hostname or the full hostname
+ * @return {string} eSLD part of the hostname or the full hostname if eSLD was not found
  */
 LUA_FUNCTION_DEF (util, get_tld);
 
