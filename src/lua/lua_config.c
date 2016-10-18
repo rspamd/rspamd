@@ -1405,7 +1405,7 @@ static gint
 lua_config_set_metric_action (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *metric_name = DEFAULT_METRIC, *name = NULL, *flags_str = NULL;
+	const gchar *metric_name = DEFAULT_METRIC, *name = NULL;
 	double weight;
 	struct metric *metric;
 	GError *err = NULL;
@@ -1418,7 +1418,7 @@ lua_config_set_metric_action (lua_State * L)
 					"*action=S;score=N;"
 					"metric=S;priority=N",
 					&name, &weight,
-					&metric_name, &priority, &flags_str)) {
+					&metric_name, &priority)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
