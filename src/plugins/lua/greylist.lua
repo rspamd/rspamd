@@ -25,6 +25,7 @@ local settings = {
   max_data_len = 10240, -- default data limit to hash
   message = 'Try again later', -- default greylisted message
   symbol = 'GREYLIST',
+  action = 'soft reject', -- default greylisted action
   ipv4_mask = 19, -- Mask bits for ipv4
   ipv6_mask = 64, -- Mask bits for ipv6
 }
@@ -195,7 +196,7 @@ local function greylist_check(task)
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
           greylist_type)
-        task:set_pre_result('soft reject', settings['message'])
+        task:set_pre_result(settings['action'], settings['message'])
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
@@ -283,7 +284,7 @@ local function greylist_set(task)
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
     task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
       'new record')
-    task:set_pre_result('soft reject', settings['message'])
+    task:set_pre_result(settings['action'], settings['message'])
     -- Create new record
     local ret, conn
     ret,conn,upstream = rspamd_redis_make_request(task,
@@ -325,8 +326,8 @@ local function greylist_set(task)
           return
         end
       end
-      task:set_metric_action('default', 'soft reject')
-      task:set_pre_result('soft reject', settings['message'])
+      task:set_metric_action('default', settings['action'])
+      task:set_pre_result(settings['action'], settings['message'])
     else
       task:insert_result(settings['symbol'], 0.0, 'greylisted', 'passed')
     end
