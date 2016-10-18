@@ -271,6 +271,12 @@ rspamd_lua_init ()
 	luaopen_cryptobox (L);
 	luaopen_lpeg (L);
 
+	luaL_newmetatable (L, "rspamd{ev_base}");
+	lua_pushstring (L, "class");
+	lua_pushstring (L, "rspamd{ev_base}");
+	lua_rawset (L, -3);
+	lua_pop (L, 1);
+
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
 	if (luaL_dostring (L, rspamadm_script_global_functions) != 0) {

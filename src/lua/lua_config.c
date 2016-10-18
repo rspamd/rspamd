@@ -416,11 +416,37 @@ LUA_FUNCTION_DEF (config, replace_regexp);
 LUA_FUNCTION_DEF (config, register_worker_script);
 
 /***
- * @method rspamd_config:add_on_load(function(cfg) ... end)
+ * @method rspamd_config:add_on_load(function(cfg, ev_base) ... end)
  * Registers the following script to be executed when configuration is completely loaded
  * @param {function} script function to be executed
+ * @example
+rspamd_config:add_on_load(function(cfg, ev_base)
+	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
+		local logger = require "rspamd_logger"
+		logger.infox(cfg, "periodic function")
+		return true
+	end)
+end)
  */
 LUA_FUNCTION_DEF (config, add_on_load);
+
+/***
+ * @method rspamd_config:add_periodic(event_base, timeout, function(cfg, ev_base) ... end, [jitter = false])
+ * Registers function to be periodically executed by Rspamd
+ * @param {ev_base} event_base event base that is needed for async events
+ * @param {number} timeout time in seconds (could be fractional)
+ * @param {function} script function to be executed
+ * @param {boolean} jitter `true` if timeout jittering is needed
+ * @example
+rspamd_config:add_on_load(function(cfg, ev_base)
+	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
+		local logger = require "rspamd_logger"
+		logger.infox(cfg, "periodic function")
+		return true -- if return false, then the periodic event is removed
+	end)
+end)
+ */
+LUA_FUNCTION_DEF (config, add_periodic);
 
 /***
  * @method rspamd_config:get_symbols_count()
@@ -509,6 +535,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, replace_regexp),
 	LUA_INTERFACE_DEF (config, register_worker_script),
 	LUA_INTERFACE_DEF (config, add_on_load),
+	LUA_INTERFACE_DEF (config, add_periodic),
 	LUA_INTERFACE_DEF (config, get_symbols_count),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
@@ -1832,6 +1859,101 @@ lua_config_add_on_load (lua_State *L)
 	lua_pushvalue (L, 2);
 	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 	DL_APPEND (cfg->on_load, sc);
+
+	return 0;
+}
+
+struct rspamd_lua_periodic {
+	struct event_base *ev_base;
+	struct rspamd_config *cfg;
+	lua_State *L;
+	gdouble timeout;
+	struct event ev;
+	gint cbref;
+	gboolean need_jitter;
+};
+
+static void
+lua_periodic_callback (gint unused_fd, short what, gpointer ud)
+{
+	gdouble timeout;
+	struct timeval tv;
+	struct rspamd_lua_periodic *periodic = ud;
+	struct rspamd_config **pcfg;
+	struct ev_base **pev_base;
+	lua_State *L;
+	gboolean plan_more = FALSE;
+
+	L = periodic->L;
+	lua_rawgeti (L, LUA_REGISTRYINDEX, periodic->cbref);
+	pcfg = lua_newuserdata (L, sizeof (*pcfg));
+	rspamd_lua_setclass (L, "rspamd{config}", -1);
+	*pcfg = periodic->cfg;
+	pev_base = lua_newuserdata (L, sizeof (*pev_base));
+	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
+
+	if (lua_pcall (L, 2, 1, 0) != 0) {
+		msg_info ("call to periodic failed: %s", lua_tostring (L, -1));
+		lua_pop (L, 1);
+	}
+	else {
+		plan_more = lua_toboolean (L, -1);
+		lua_pop (L, 1);
+	}
+
+	event_del (&periodic->ev);
+
+	if (plan_more) {
+		timeout = periodic->timeout;
+
+		if (periodic->need_jitter) {
+			timeout = rspamd_time_jitter (timeout, 0.0);
+		}
+
+		double_to_tv (timeout, &tv);
+		event_add (&periodic->ev, &tv);
+	}
+	else {
+		luaL_unref (L, LUA_REGISTRYINDEX, periodic->cbref);
+		g_slice_free1 (sizeof (*periodic), periodic);
+	}
+}
+
+static gint
+lua_config_add_periodic (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct event_base *ev_base = lua_check_ev_base (L, 2);
+	gdouble timeout = lua_tonumber (L, 3);
+	struct timeval tv;
+	struct rspamd_lua_periodic *periodic;
+	gboolean need_jitter = FALSE;
+
+	if (cfg == NULL || timeout <= 0 || lua_type (L, 4) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 5) == LUA_TBOOLEAN) {
+		need_jitter = lua_toboolean (L, 5);
+	}
+
+	periodic = g_slice_alloc0 (sizeof (*periodic));
+	periodic->timeout = timeout;
+	periodic->L = L;
+	periodic->cfg = cfg;
+	periodic->ev_base = ev_base;
+	periodic->need_jitter = need_jitter;
+	lua_pushvalue (L, 4);
+	periodic->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	event_set (&periodic->ev, -1, EV_TIMEOUT, lua_periodic_callback, periodic);
+	event_base_set (ev_base, &periodic->ev);
+
+	if (need_jitter) {
+		timeout = rspamd_time_jitter (timeout, 0.0);
+	}
+
+	double_to_tv (timeout, &tv);
+	event_add (&periodic->ev, &tv);
 
 	return 0;
 }
