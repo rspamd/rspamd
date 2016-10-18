@@ -122,6 +122,47 @@ local function fprot_config(opts)
   return nil
 end
 
+local function sophos_config(opts)
+  local sophos_conf = {
+    attachments_only = true,
+    default_port = 4010,
+    timeout = 15.0,
+    retransmits = 2,
+    cache_expire = 3600, -- expire redis in one hour
+  }
+
+  for k,v in pairs(opts) do
+    sophos_conf[k] = v
+  end
+
+  if redis_params and not redis_params['prefix'] then
+    if sophos_conf.prefix then
+        redis_params['prefix'] = sophos_conf.prefix
+    else
+      redis_params['prefix'] = 'rs_sp'
+    end
+  end
+
+  if not sophos_conf['servers'] then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  sophos_conf['upstreams'] = upstream_list.create(rspamd_config,
+    sophos_conf['servers'],
+    sophos_conf.default_port)
+
+  if sophos_conf['upstreams'] then
+    return sophos_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+    sophos_conf['servers'])
+  return nil
+end
+
+
 local function need_av_check(task, rule)
   if rule['attachments_only'] then
     for _,p in ipairs(task:get_parts()) do
@@ -331,6 +372,71 @@ local function clamav_check(task, rule)
   end
 end
 
+local function sophos_check(task, rule)
+  local function sophos_check_uncached ()
+    local upstream = rule.upstreams:get_upstream_round_robin()
+    local addr = upstream:get_addr()
+    local retransmits = rule.retransmits
+    local protocol = 'SSSP/1.0\n'
+    local streamsize = string.format('SCANDATA %d\n', task:get_size())
+    local bye = 'BYE\n'
+
+    local function sophos_callback(err, data)
+      if err then
+        if err == 'IO timeout' then
+          if retransmits > 0 then
+            retransmits = retransmits - 1
+            tcp.request({
+              task = task,
+              host = addr:to_string(),
+              port = addr:get_port(),
+              timeout = rule['timeout'],
+              callback = sophos_callback,
+              data = { protocol, streamsize, task:get_content(), bye }
+            })
+          else
+            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+          end
+        else
+          rspamd_logger.errx(task, 'failed to scan: %s', err)
+          upstream:fail()
+        end
+      else
+        upstream:ok()
+
+        data = tostring(data)
+        local vname = string.match(data, 'VIRUS (.+)')
+        if vname then
+          yield_result(task, rule, vname)
+          save_av_cache(task, rule, vname)
+        else
+          if string.find(data, 'DONE OK') then
+            save_av_cache(task, rule, 'OK')
+          end
+        end
+      end
+    end
+
+    tcp.request({
+      task = task,
+      host = addr:to_string(),
+      port = addr:get_port(),
+      timeout = rule['timeout'],
+      callback = sophos_callback,
+      data = { protocol, streamsize, task:get_content(), bye }
+    })
+  end
+
+  if need_av_check(task, rule) then
+    if check_av_cache(task, rule, sophos_check_uncached) then
+      return
+    else
+      sophos_check_uncached()
+    end
+  end
+end
+
+
 local av_types = {
   clamav = {
     configure = clamav_config,
@@ -339,7 +445,11 @@ local av_types = {
   fprot = {
     configure = fprot_config,
     check = fprot_check
-  }
+  },
+  sophos = {
+    configure = sophos_config,
+    check = sophos_check
+  },
 }
 
 local function add_antivirus_rule(sym, opts)
