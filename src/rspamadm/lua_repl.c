@@ -35,6 +35,7 @@ static gchar **scripts = NULL;
 static gchar *histfile = NULL;
 static guint max_history = 2000;
 static gchar *serve = NULL;
+static gint batch = -1;
 
 static const char *default_history_file = ".rspamd_repl.hist";
 
@@ -67,6 +68,7 @@ struct rspamadm_lua_dot_command {
 
 static void rspamadm_lua_help_handler (lua_State *L, gint argc, gchar **argv);
 static void rspamadm_lua_load_handler (lua_State *L, gint argc, gchar **argv);
+static void rspamadm_lua_exec_handler (lua_State *L, gint argc, gchar **argv);
 static void rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv);
 
 static struct rspamadm_lua_dot_command cmds[] = {
@@ -79,6 +81,11 @@ static struct rspamadm_lua_dot_command cmds[] = {
 		.name = "load",
 		.description = "load lua file",
 		.handler = rspamadm_lua_load_handler
+	},
+	{
+		.name = "exec",
+		.description = "exec lua file",
+		.handler = rspamadm_lua_exec_handler
 	},
 	{
 		.name = "message",
@@ -100,6 +107,8 @@ static GOptionEntry entries[] = {
 				"Store this number of history entries", NULL},
 		{"serve", 'S', 0, G_OPTION_ARG_STRING, &serve,
 				"Serve http lua server", NULL},
+		{"batch", 'b', 0, G_OPTION_ARG_NONE, &batch,
+				"Batch execution mode", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -275,6 +284,37 @@ rspamadm_lua_load_handler (lua_State *L, gint argc, gchar **argv)
 	for (i = 1; argv[i] != NULL; i ++) {
 		ret = rspamadm_lua_load_script (L, argv[i]);
 		rspamd_printf ("%s: %sloaded\n", argv[i], ret ? "" : "NOT ");
+	}
+}
+
+static void
+rspamadm_lua_exec_handler (lua_State *L, gint argc, gchar **argv)
+{
+	GString *tb;
+	gint err_idx, i;
+
+	for (i = 1; argv[i] != NULL; i ++) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
+		if (luaL_loadfile (L, argv[i]) != 0) {
+			rspamd_fprintf (stderr, "cannot load script %s: %s\n",
+					argv[i], strerror (errno));
+			lua_settop (L, 0);
+
+			return;
+		}
+
+		if (lua_pcall (L, 0, 0, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			rspamd_fprintf (stderr, "call to %s failed: %v", argv[i], tb);
+			g_string_free (tb, TRUE);
+			lua_settop (L, 0);
+
+			return;
+		}
+
+		lua_settop (L, 0);
 	}
 }
 
@@ -624,6 +664,15 @@ rspamadm_lua (gint argc, gchar **argv)
 		exit (1);
 	}
 
+	if (batch == -1) {
+		if (isatty (STDIN_FILENO)) {
+			batch = 0;
+		}
+		else {
+			batch = 1;
+		}
+	}
+
 	L = rspamd_lua_init ();
 	rspamd_lua_set_path (L, NULL);
 
@@ -711,6 +760,16 @@ rspamadm_lua (gint argc, gchar **argv)
 		g_string_free (hist_path, FALSE);
 	}
 
+	if (argc > 1) {
+		for (i = 1; i < argc; i ++) {
+			if (!rspamadm_lua_load_script (L, argv[i])) {
+				exit (EXIT_FAILURE);
+			}
+		}
+
+		exit (EXIT_SUCCESS);
+	}
+
 	/* Init dot commands */
 	cmds_hash = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 
@@ -718,8 +777,13 @@ rspamadm_lua (gint argc, gchar **argv)
 		g_hash_table_insert (cmds_hash, (gpointer)cmds[i].name, &cmds[i]);
 	}
 
-	linenoiseHistorySetMaxLen (max_history);
-	linenoiseHistoryLoad (histfile);
-	rspamadm_lua_run_repl (L);
-	linenoiseHistorySave (histfile);
+	if (!batch) {
+		linenoiseHistorySetMaxLen (max_history);
+		linenoiseHistoryLoad (histfile);
+		rspamadm_lua_run_repl (L);
+		linenoiseHistorySave (histfile);
+	}
+	else {
+		rspamadm_lua_run_repl (L);
+	}
 }
