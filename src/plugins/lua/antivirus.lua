@@ -405,7 +405,7 @@ local function sophos_check(task, rule)
         upstream:ok()
 
         data = tostring(data)
-        local vname = string.match(data, 'VIRUS (.+)')
+        local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
           yield_result(task, rule, vname)
           save_av_cache(task, rule, vname)
