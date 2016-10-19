@@ -21,6 +21,7 @@
 #cmakedefine HAVE_CPUID_H        1
 #cmakedefine HAVE_CTYPE_H        1
 #cmakedefine HAVE_DIRENT_H       1
+#cmakedefine HAVE_DIRFD          1
 #cmakedefine HAVE_ENDIAN_H       1
 #cmakedefine HAVE_EXP2L          1
 #cmakedefine HAVE_EXPL           1
@@ -31,6 +32,7 @@
 #cmakedefine HAVE_FDATASYNC      1
 #cmakedefine HAVE_FETCH_H        1
 #cmakedefine HAVE_FLOCK          1
+#cmakedefine HAVE_FPATHCONF      1
 #cmakedefine HAVE_GETPAGESIZE    1
 #cmakedefine HAVE_GET_CPUID      1
 #cmakedefine HAVE_GLOB_H         1

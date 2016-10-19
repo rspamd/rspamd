@@ -1411,6 +1411,39 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	g_free (hostbuf);
 }
 
+static gsize
+rspamd_dirent_size (DIR * dirp)
+{
+	goffset name_max;
+	gsize name_end;
+
+#if defined(HAVE_FPATHCONF) && defined(HAVE_DIRFD) \
+       && defined(_PC_NAME_MAX)
+	name_max = fpathconf (dirfd (dirp), _PC_NAME_MAX);
+
+
+# if defined(NAME_MAX)
+	if (name_max == -1) {
+		name_max = (NAME_MAX > 255) ? NAME_MAX : 255;
+	}
+# else
+	if (name_max == -1) {
+		return (size_t)(-1);
+	}
+# endif
+#else
+# if defined(NAME_MAX)
+	name_max = (NAME_MAX > 255) ? NAME_MAX : 255;
+# else
+#   error "buffer size for readdir_r cannot be determined"
+# endif
+#endif
+
+	name_end = G_STRUCT_OFFSET (struct dirent, d_name) + name_max + 1;
+
+	return (name_end > sizeof (struct dirent) ? name_end : sizeof(struct dirent));
+}
+
 static void
 rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
@@ -1422,19 +1455,14 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	FILE *in;
 	struct stat st;
 	gboolean is_reg, is_dir;
-	gsize name_max, len;
+	gsize len;
 
 	d = opendir (name);
 
 	if (d != NULL) {
 		/* Portably allocate struct direntry */
-		name_max = pathconf (name, _PC_NAME_MAX);
-
-		if (name_max == -1) {
-			name_max = PATH_MAX;
-		}
-
-		len = G_STRUCT_OFFSET (struct dirent, d_name) + name_max + 1;
+		len = rspamd_dirent_size (d);
+		g_assert (len != (gsize)-1);
 		entry = g_malloc0 (len);
 
 		while (readdir_r (d, entry, pentry) == 0) {
