@@ -703,6 +703,10 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 		}
 	}
 
+	if (conn->finished) {
+		return 0;
+	}
+
 	if (conn->max_size > 0 &&
 			msg->body_buf.len + length > conn->max_size) {
 		/* Body length overflow */
@@ -754,6 +758,10 @@ rspamd_http_on_body_decrypted (http_parser * parser, const gchar *at, size_t len
 	if (priv->header != NULL) {
 		rspamd_http_finish_header (conn, priv);
 		priv->header = NULL;
+	}
+
+	if (conn->finished) {
+		return 0;
 	}
 
 	if (priv->msg->body_buf.len == 0) {
@@ -895,6 +903,10 @@ rspamd_http_on_message_complete (http_parser * parser)
 	struct rspamd_http_connection_private *priv;
 	int ret = 0;
 	enum rspamd_cryptobox_mode mode;
+
+	if (conn->finished) {
+		return 0;
+	}
 
 	priv = conn->priv;
 
