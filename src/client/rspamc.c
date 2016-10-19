@@ -1449,7 +1449,7 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
 {
 	DIR *d;
-	struct dirent *entry, **pentry = NULL;
+	struct dirent *entry, *pentry;
 	gint cur_req = 0;
 	gchar fpath[PATH_MAX];
 	FILE *in;
@@ -1465,24 +1465,24 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 		g_assert (len != (gsize)-1);
 		entry = g_malloc0 (len);
 
-		while (readdir_r (d, entry, pentry) == 0) {
+		while (readdir_r (d, entry, &pentry) == 0 && pentry != NULL) {
 			if (pentry == NULL) {
 				break;
 			}
 
-			if (entry->d_name[0] == '.') {
+			if (pentry->d_name[0] == '.') {
 				continue;
 			}
 
 			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s",
 					name, G_DIR_SEPARATOR,
-					entry->d_name);
+					pentry->d_name);
 
 			is_reg = FALSE;
 			is_dir = FALSE;
 
 #if (defined(_DIRENT_HAVE_D_TYPE) || defined(__APPLE__)) && defined(DT_UNKNOWN)
-			if (entry->d_type == DT_UNKNOWN) {
+			if (pentry->d_type == DT_UNKNOWN) {
 				/* Fallback to lstat */
 				if (lstat (fpath, &st) == -1) {
 					rspamd_fprintf (stderr, "cannot stat file %s: %s\n",
@@ -1494,10 +1494,10 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 				is_reg = S_ISREG (st.st_mode);
 			}
 			else {
-				if (entry->d_type == DT_REG) {
+				if (pentry->d_type == DT_REG) {
 					is_reg = TRUE;
 				}
-				else if (entry->d_type == DT_DIR) {
+				else if (pentry->d_type == DT_DIR) {
 					is_dir = TRUE;
 				}
 			}
