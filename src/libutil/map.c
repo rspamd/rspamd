@@ -318,9 +318,12 @@ static void
 rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 {
 	struct rspamd_http_map_cached_cbdata *cache_cbd = ud;
+	struct rspamd_map *map;
 
-	g_atomic_int_set (&cache_cbd->map->cache->available, 0);
+	map = cache_cbd->map;
+	g_atomic_int_set (&map->cache->available, 0);
 	MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
+	msg_debug_map ("cached data is now expired now for %s", map->name);
 	event_del (&cache_cbd->timeout);
 	g_slice_free1 (sizeof (*cache_cbd), cache_cbd);
 }
@@ -477,7 +480,8 @@ read_data:
 			goto err;
 		}
 
-		msg_info_map ("read map data from %s", cbd->data->host);
+		msg_info_map ("read map data from %s (%z bytes)", cbd->data->host,
+				dlen);
 		map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 
 		/*
@@ -602,6 +606,7 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	if (periodic->locked) {
 		rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
 		g_atomic_int_set (periodic->map->locked, 0);
+		msg_debug_map ("unlocked map");
 	}
 
 	g_slice_free1 (sizeof (*periodic), periodic);
@@ -720,16 +725,21 @@ rspamd_map_read_cached (struct rspamd_map *map,
 	in = rspamd_shmem_xmap (map->cache->shmem_name, PROT_READ, &len);
 
 	if (in == NULL) {
+		msg_err ("cannot map cache from %s: %s", map->cache->shmem_name,
+				strerror (errno));
 		return FALSE;
 	}
 
 	if (len < map->cache->len) {
+		msg_err ("cannot map cache from %s: bad length %z, %z expected",
+				map->cache->shmem_name,
+				len, map->cache->len);
 		munmap (in, len);
 		return FALSE;
 	}
 
 	map->read_callback (in, map->cache->len, &periodic->cbdata, TRUE);
-	msg_info_map ("read map data from %s (cached)", host);
+	msg_info_map ("read map data from %s (cached) (%z bytes)", host, len);
 	munmap (in, len);
 
 	return TRUE;
@@ -757,14 +767,19 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 				periodic->cur_backend = 0;
 				rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 			}
+			else {
+				/* Switch to the next backend */
+				periodic->cur_backend ++;
+				rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+			}
 
 			return;
 		}
 		else if (rspamd_map_read_cached (map, periodic, data->host)) {
 			/* Switch to the next backend */
 			periodic->cur_backend ++;
-			rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 			data->last_checked = map->cache->last_checked;
+			rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
 			return;
 		}
@@ -835,7 +850,6 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 		cbd->periodic->errored = TRUE;
 	}
 
-	/* We don't need own ref as it is now ref counted by DNS handlers */
 	MAP_RELEASE (cbd, "http_callback_data");
 }
 
@@ -941,6 +955,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 			return;
 		}
 		else {
+			msg_debug_map ("locked map");
 			cbd->locked = TRUE;
 		}
 	}
@@ -952,6 +967,8 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 		if (cbd->locked) {
 			g_atomic_int_set (cbd->map->locked, 0);
 		}
+
+		msg_debug_map ("unlocked map");
 		MAP_RELEASE (cbd, "periodic");
 
 		return;
@@ -960,6 +977,8 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 	/* For each backend we need to check for modifications */
 	if (cbd->cur_backend >= cbd->map->backends->len) {
 		/* Last backend */
+		msg_debug_map ("finished map: %d of %d", cbd->cur_backend,
+				cbd->map->backends->len);
 		MAP_RELEASE (cbd, "periodic");
 
 		return;
