@@ -20,6 +20,7 @@
 #include "lua/lua_map.h"
 #include "monitored.h"
 #include "utlist.h"
+#include <math.h>
 
 /***
  * This module is used to configure rspamd and is normally available as global
@@ -233,7 +234,7 @@ LUA_FUNCTION_DEF (config, register_dependency);
 
 /**
  * @method rspamd_config:set_metric_symbol({table})
- * Set the value of a specified symbol in a metric. This function accepts table with the following elements:
+ * Sets the value of a specified symbol in a metric. This function accepts table with the following elements:
  *
  * - `name`: name of symbol (string)
  * - `score`: score for symbol (number)
@@ -250,14 +251,40 @@ LUA_FUNCTION_DEF (config, set_metric_symbol);
 
 /**
  * @method rspamd_config:set_metric_action({table})
- * Set the score of a specified action in a metric. This function accepts table with the following elements:
+ * Sets the score of a specified action in a metric. This function accepts table with the following elements:
  *
  * - `action`: name of action (string)
  * - `score`: score for action (number)
  * - `metric`: name of metric (string, optional)
- * - `priority`: priority of symbol's definition
+ * - `priority`: priority of action's definition
  */
 LUA_FUNCTION_DEF (config, set_metric_action);
+
+/**
+ * @method rspamd_config:get_metric_symbol(name)
+ * Gets metric data for a specific symbol identified by `name`:
+ *
+ * - `score`: score for symbol (number)
+ * - `description`: description of symbol (string, optional)
+ * - `group`: name of group for symbol (string, optional)
+ * - `one_shot`: turn off multiple hits for a symbol (boolean, optional)
+ * - `flags`: comma separated string of flags:
+ *    + `ignore`: do not strictly check validity of symbol and corresponding rule
+ *    + `one_shot`: turn off multiple hits for a symbol
+ *
+ * @param {string} name name of symbol
+ * @return {table} symbol's definition or nil in case of undefined symbol
+ */
+LUA_FUNCTION_DEF (config, get_metric_symbol);
+
+/**
+ * @method rspamd_config:get_metric_action(name)
+ * Gets data for a specific action in a metric. This function returns number reperesenting action's score
+ *
+ * @param {string} name name of action
+ * @return {number} action's score or nil in case of undefined score or action
+ */
+LUA_FUNCTION_DEF (config, get_metric_action);
 
 /**
  * @method rspamd_config:add_composite(name, expression)
@@ -524,6 +551,8 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_dependency),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
 	LUA_INTERFACE_DEF (config, set_metric_action),
+	LUA_INTERFACE_DEF (config, get_metric_symbol),
+	LUA_INTERFACE_DEF (config, get_metric_action),
 	LUA_INTERFACE_DEF (config, add_composite),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_pre_filter),
@@ -1402,6 +1431,55 @@ lua_config_set_metric_symbol (lua_State * L)
 }
 
 static gint
+lua_config_get_metric_symbol (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym_name = luaL_checkstring (L, 2),
+			*metric_name = DEFAULT_METRIC;
+	struct rspamd_symbol_def *sym_def;
+	struct metric *metric;
+
+	if (cfg && sym_name) {
+		metric = g_hash_table_lookup (cfg->metrics, metric_name);
+
+		if (metric == NULL) {
+			msg_err_config ("metric named %s is not defined", metric_name);
+			lua_pushnil (L);
+		}
+		else {
+			sym_def = g_hash_table_lookup (metric->symbols, sym_name);
+
+			if (sym_def == NULL) {
+				lua_pushnil (L);
+			}
+			else {
+				lua_createtable (L, 0, 3);
+				lua_pushstring (L, "score");
+				lua_pushnumber (L, sym_def->score);
+				lua_settable (L, -3);
+
+				if (sym_def->description) {
+					lua_pushstring (L, "description");
+					lua_pushstring (L, sym_def->description);
+					lua_settable (L, -3);
+				}
+
+				if (sym_def->gr) {
+					lua_pushstring (L, "group");
+					lua_pushstring (L, sym_def->gr->name);
+					lua_settable (L, -3);
+				}
+			}
+		}
+	}
+	else {
+		luaL_error (L, "Invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_config_set_metric_action (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
@@ -1450,6 +1528,42 @@ lua_config_set_metric_action (lua_State * L)
 	return 0;
 }
 
+static gint
+lua_config_get_metric_action (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *metric_name = DEFAULT_METRIC,
+			*act_name = luaL_checkstring (L, 2);
+	struct metric *metric;
+	gint act = 0;
+
+	if (cfg && act_name) {
+		metric = g_hash_table_lookup (cfg->metrics, metric_name);
+
+		if (metric == NULL) {
+			msg_err_config ("metric named %s is not defined", metric_name);
+			lua_pushnil (L);
+		}
+		else {
+			if (rspamd_action_from_str (act_name, &act)) {
+				if (!isnan (metric->actions[act].score)) {
+					lua_pushnumber (L, metric->actions[act].score);
+				}
+				else {
+					lua_pushnil (L);
+				}
+			}
+			else {
+				lua_pushnil (L);
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments, rspamd_config expected");
+	}
+
+	return 1;
+}
 
 static gint
 lua_config_add_composite (lua_State * L)
