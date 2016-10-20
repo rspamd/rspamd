@@ -2263,8 +2263,6 @@ start_fuzzy (struct rspamd_worker *worker)
 			worker->srv->cfg);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
-	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
-			worker->srv->cfg, ctx->ev_base);
 
 	/*
 	 * Open DB and perform VACUUM

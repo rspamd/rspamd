@@ -1994,7 +1994,7 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	struct timeval tv;
 	struct rspamd_lua_periodic *periodic = ud;
 	struct rspamd_config **pcfg;
-	struct ev_base **pev_base;
+	struct event_base **pev_base;
 	lua_State *L;
 	gboolean plan_more = FALSE;
 
@@ -2005,6 +2005,7 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	*pcfg = periodic->cfg;
 	pev_base = lua_newuserdata (L, sizeof (*pev_base));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
+	*pev_base = periodic->ev_base;
 
 	if (lua_pcall (L, 2, 1, 0) != 0) {
 		msg_info ("call to periodic failed: %s", lua_tostring (L, -1));
