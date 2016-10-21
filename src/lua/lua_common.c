@@ -26,6 +26,19 @@ const luaL_reg null_reg[] = {
 	{NULL, NULL}
 };
 
+
+LUA_FUNCTION_DEF (worker, get_name);
+LUA_FUNCTION_DEF (worker, get_index);
+LUA_FUNCTION_DEF (worker, get_pid);
+
+const luaL_reg worker_reg[] = {
+	LUA_INTERFACE_DEF (worker, get_name),
+	LUA_INTERFACE_DEF (worker, get_index),
+	LUA_INTERFACE_DEF (worker, get_pid),
+	{"__tostring", rspamd_lua_class_tostring},
+	{NULL, NULL}
+};
+
 static GQuark
 lua_error_quark (void)
 {
@@ -277,6 +290,7 @@ rspamd_lua_init ()
 	lua_rawset (L, -3);
 	lua_pop (L, 1);
 
+	rspamd_lua_new_class (L, "rspamd{worker}", worker_reg);
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
 	if (luaL_dostring (L, rspamadm_script_global_functions) != 0) {
@@ -1146,11 +1160,12 @@ lua_check_ev_base (lua_State * L, gint pos)
 
 gboolean
 rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
-		struct event_base *ev_base)
+		struct event_base *ev_base, struct rspamd_worker *w)
 {
 	struct rspamd_config_post_load_script *sc;
 	struct rspamd_config **pcfg;
 	struct event_base **pev_base;
+	struct rspamd_worker **pw;
 
 	/* Execute post load scripts */
 	LL_FOREACH (cfg->on_load, sc) {
@@ -1163,7 +1178,11 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		*pev_base = ev_base;
 		rspamd_lua_setclass (cfg->lua_state, "rspamd{ev_base}", -1);
 
-		if (lua_pcall (cfg->lua_state, 2, 0, 0) != 0) {
+		pw = lua_newuserdata (cfg->lua_state, sizeof (*pw));
+		*pw = w;
+		rspamd_lua_setclass (cfg->lua_state, "rspamd{worker}", -1);
+
+		if (lua_pcall (cfg->lua_state, 3, 0, 0) != 0) {
 			msg_err_config ("error executing post load code: %s",
 					lua_tostring (cfg->lua_state, -1));
 			lua_pop (cfg->lua_state, 1);
@@ -1173,4 +1192,57 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 	}
 
 	return TRUE;
+}
+
+static struct rspamd_worker *
+lua_check_worker (lua_State *L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{worker}");
+	luaL_argcheck (L, ud != NULL, pos, "'worker' expected");
+	return ud ? *((struct rspamd_worker **)ud) : NULL;
+}
+
+static gint
+lua_worker_get_name (lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker (L, 1);
+
+	if (w) {
+		lua_pushstring (L, g_quark_to_string (w->type));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_worker_get_index (lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker (L, 1);
+
+	if (w) {
+		lua_pushnumber (L, w->index);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_worker_get_pid (lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker (L, 1);
+
+	if (w) {
+		lua_pushnumber (L, w->pid);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }

@@ -306,7 +306,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	if (load_lua) {
 		struct rspamd_config *cfg = worker->srv->cfg;
 
-		rspamd_lua_run_postloads (cfg->lua_state, cfg, ev_base);
+		rspamd_lua_run_postloads (cfg->lua_state, cfg, ev_base, worker);
 	}
 
 	return ev_base;
