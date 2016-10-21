@@ -819,6 +819,7 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 					cbd->map->cfg->libs_ctx->ssl_ctx);
 
 			write_http_request (cbd);
+			MAP_RELEASE (cbd, "http_callback_data");
 		}
 		else {
 			msg_warn_map ("cannot load map: cannot connect to %s: %s",
