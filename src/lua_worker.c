@@ -96,8 +96,8 @@ static const struct luaL_reg lua_workerlib_m[] = {
 static gint
 luaopen_lua_worker (lua_State * L)
 {
-	rspamd_lua_new_class (L, "rspamd{worker}", lua_workerlib_m);
-	luaL_register (L, "rspamd_worker", null_reg);
+	rspamd_lua_new_class (L, "rspamd{lua_worker}", lua_workerlib_m);
+	luaL_register (L, "rspamd_lua_worker", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -107,8 +107,8 @@ luaopen_lua_worker (lua_State * L)
 struct rspamd_lua_worker_ctx *
 lua_check_lua_worker (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{worker}");
-	luaL_argcheck (L, ud != NULL, 1, "'worker' expected");
+	void *ud = luaL_checkudata (L, 1, "rspamd{lua_worker}");
+	luaL_argcheck (L, ud != NULL, 1, "'lua_worker' expected");
 	return ud ? *((struct rspamd_lua_worker_ctx **)ud) : NULL;
 }
 
@@ -277,7 +277,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 	/* Call finalizer function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
 	pctx = lua_newuserdata (L, sizeof (gpointer));
-	rspamd_lua_setclass (L, "rspamd{worker}", -1);
+	rspamd_lua_setclass (L, "rspamd{lua_worker}", -1);
 	*pctx = ctx;
 	lua_pushinteger (L, nfd);
 	rspamd_lua_ip_push (L, addr);
@@ -375,8 +375,8 @@ start_lua_worker (struct rspamd_worker *worker)
 	}
 
 	pctx = lua_newuserdata (L, sizeof (gpointer));
-	rspamd_lua_setclass (L, "rspamd{worker}", -1);
-	lua_setglobal (L, "rspamd_worker");
+	rspamd_lua_setclass (L, "rspamd{lua_worker}", -1);
+	lua_setglobal (L, "rspamd_lua_worker");
 	*pctx = ctx;
 
 	if (luaL_dofile (L, ctx->file) != 0) {
@@ -401,7 +401,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		/* Call finalizer function */
 		lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_fin);
 		pctx = lua_newuserdata (L, sizeof (gpointer));
-		rspamd_lua_setclass (L, "rspamd{worker}", -1);
+		rspamd_lua_setclass (L, "rspamd{lua_worker}", -1);
 		*pctx = ctx;
 		if (lua_pcall (L, 1, 0, 0) != 0) {
 			msg_info ("call to worker finalizer failed: %s", lua_tostring (L,
@@ -415,8 +415,4 @@ start_lua_worker (struct rspamd_worker *worker)
 	rspamd_log_close (worker->srv->logger);
 	exit (EXIT_SUCCESS);
 }
-
-/*
- * vi:ts=4
- */
 
