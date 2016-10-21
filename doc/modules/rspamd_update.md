@@ -13,7 +13,7 @@ Rspamd update module can execute lua code which is executed with scanner's privi
 Rspamd supports digital signatures to check the validity of updates downloaded using [EdDSA](http://ed25519.cr.yp.to/) signatures scheme.
 For your own updates that are loaded from the filesystem or from some trusted network you might use unsigned files, however, signing is recommended even in this case.
 
-To sign a map you can use `rspamadm signtool` and to generate signing keypair - `rspamadm kaypair -s -u`:
+To sign a map you can use `rspamadm signtool` and to generate signing keypair - `rspamadm keypair -s -u`:
 
 ~~~ucl
 keypair {
