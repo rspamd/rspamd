@@ -61,6 +61,7 @@ struct lua_http_cbdata {
 	struct rspamd_async_watcher *w;
 	struct rspamd_http_message *msg;
 	struct event_base *ev_base;
+	struct rspamd_config *cfg;
 	struct timeval tv;
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
@@ -205,13 +206,25 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		return FALSE;
 	}
 	cbd->fd = fd;
-	cbd->conn = rspamd_http_connection_new (NULL,
-			lua_http_error_handler,
-			lua_http_finish_handler,
-			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT,
-			NULL,
-			NULL);
+
+	if (cbd->cfg) {
+		cbd->conn = rspamd_http_connection_new (NULL,
+				lua_http_error_handler,
+				lua_http_finish_handler,
+				RSPAMD_HTTP_CLIENT_SIMPLE,
+				RSPAMD_HTTP_CLIENT,
+				NULL,
+				cbd->cfg->libs_ctx->ssl_ctx);
+	}
+	else {
+		cbd->conn = rspamd_http_connection_new (NULL,
+				lua_http_error_handler,
+				lua_http_finish_handler,
+				RSPAMD_HTTP_CLIENT_SIMPLE,
+				RSPAMD_HTTP_CLIENT,
+				NULL,
+				NULL);
+	}
 
 	rspamd_http_connection_write_message (cbd->conn, cbd->msg,
 			cbd->host, cbd->mime_type, cbd, fd,
@@ -298,6 +311,7 @@ lua_http_request (lua_State *L)
 	struct rspamd_async_session *session;
 	struct rspamd_lua_text *t;
 	struct rspamd_task *task = NULL;
+	struct rspamd_config *cfg = NULL;
 	gdouble timeout = default_http_timeout;
 	gchar *mime_type = NULL;
 
@@ -362,6 +376,7 @@ lua_http_request (lua_State *L)
 			ev_base = task->ev_base;
 			resolver = task->resolver;
 			session = task->s;
+			cfg = task->cfg;
 		}
 		lua_pop (L, 1);
 
@@ -393,6 +408,16 @@ lua_http_request (lua_State *L)
 			}
 			else {
 				session = NULL;
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "config");
+			lua_gettable (L, -2);
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{config}")) {
+				cfg = *(struct rspamd_config **)lua_touserdata (L, -1);
+			}
+			else {
+				cfg = NULL;
 			}
 			lua_pop (L, 1);
 		}
@@ -456,6 +481,7 @@ lua_http_request (lua_State *L)
 	cbd->mime_type = mime_type;
 	msec_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
+	cbd->cfg = cfg;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
