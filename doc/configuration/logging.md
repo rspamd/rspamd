@@ -38,6 +38,7 @@ Here is summary of logging parameters:
 - `log_urls` - Flag that defines whether all URLs in message should be logged. Useful for testing.
 - `debug_ip` - List that contains IP addresses for which debugging should be turned on.
 - `log_color` - Turn on coloring for log messages. Default: `no`.
+- `systemd` - If `true` timestamps aren't prepended to log messages. Default: `false`.
 - `debug_modules` - A list of modules that are enabled for debugging. The following modules are available here:
     + `task` - task messages
     + `cfg` - configuration messages
