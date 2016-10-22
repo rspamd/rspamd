@@ -170,7 +170,7 @@ rspamadm_lua_load_script (lua_State *L, const gchar *path)
 
 	if (luaL_loadfile (L, path) != 0) {
 		rspamd_fprintf (stderr, "cannot load script %s: %s\n",
-				path, strerror (errno));
+				path, lua_tostring (L, -1));
 		lua_settop (L, 0);
 
 		return FALSE;
@@ -299,7 +299,7 @@ rspamadm_lua_exec_handler (lua_State *L, gint argc, gchar **argv)
 
 		if (luaL_loadfile (L, argv[i]) != 0) {
 			rspamd_fprintf (stderr, "cannot load script %s: %s\n",
-					argv[i], strerror (errno));
+					argv[i], lua_tostring (L, -1));
 			lua_settop (L, 0);
 
 			return;
