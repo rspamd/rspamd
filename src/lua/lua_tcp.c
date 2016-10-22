@@ -573,7 +573,7 @@ lua_tcp_request (lua_State *L)
 		if (task == NULL) {
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata (L, -1, "rspamd{ev_base}")) {
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
 				ev_base = *(struct event_base **)lua_touserdata (L, -1);
 			}
 			else {
@@ -593,7 +593,7 @@ lua_tcp_request (lua_State *L)
 
 			lua_pushstring (L, "resolver");
 			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata (L, -1, "rspamd{resolver}")) {
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{resolver}")) {
 				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
 			}
 			else {
@@ -603,7 +603,7 @@ lua_tcp_request (lua_State *L)
 
 			lua_pushstring (L, "session");
 			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata (L, -1, "rspamd{session}")) {
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{session}")) {
 				session = *(struct rspamd_async_session **)lua_touserdata (L, -1);
 			}
 			else {
