@@ -27,7 +27,12 @@ local settings = {
 }
 
 local cur_settings = {
-  version = 0
+  version = 0,
+  updates = {
+    symbols = {},
+    actions = {},
+    has_updates = false
+  }
 }
 
 local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
@@ -95,7 +100,7 @@ local function apply_dynamic_actions(cfg, acts)
     end
   end, filter(function(k, v)
     local act = rspamd_config:get_metric_action(k)
-    if act and act == v then
+    if (act and act == v) or cur_settings.updates.actions[k] then
       return false
     end
 
@@ -121,7 +126,7 @@ local function apply_dynamic_scores(cfg, sc)
   end, filter(function(k, v)
     -- Select elts with scores that are different from local ones
     local sym = rspamd_config:get_metric_symbol(k)
-    if sym and sym.score == v then
+    if (sym and sym.score == v) or cur_settings.updates.symbols[k] then
       return false
     end
 
@@ -152,6 +157,59 @@ local function apply_dynamic_conf(cfg, data)
   end
 end
 
+local function update_dynamic_conf(cfg, ev_base, recv)
+  local function redis_version_set_cb(err, data)
+    if err then
+      rspamd_logger.errx(cfg, "cannot save dynamic conf version to redis: %s", err)
+    else
+      rspamd_logger.info(cfg, "saved dynamic conf version: %s", data)
+    end
+  end
+  local function redis_data_set_cb(err, data)
+    if err then
+      rspamd_logger.errx(cfg, "cannot save dynamic conf to redis: %s", err)
+    else
+      redis_make_request(ev_base, cfg, settings.redis_key, true,
+        redis_version_set_cb, 'HINCRBY', {settings.redis_key, 'v', '1'})
+    end
+  end
+
+  if recv then
+    -- We need to merge two configs
+    if recv['scores'] then
+      if not cur_settings.data.scores then
+        cur_settings.data.scores = {}
+      end
+      each(function(k, v)
+        cur_settings.data.score[k] = v
+      end,
+      filter(function(k,v)
+        if cur_settings.updates.symbols[k] then
+          return false
+        end
+        return true
+      end, recv['scores']))
+    end
+    if recv['actions'] then
+      if not cur_settings.data.actions then
+        cur_settings.data.actions = {}
+      end
+      each(function(k, v)
+        cur_settings.data.actions[k] = v
+      end,
+      filter(function(k,v)
+        if cur_settings.updates.actions[k] then
+          return false
+        end
+        return true
+      end, recv['actions']))
+    end
+  end
+  local newdata = ucl.to_format(cur_settings.data, 'json-compact')
+  redis_make_request(ev_base, cfg, settings.redis_key, true,
+          redis_data_set_cb, 'HSET', {settings.redis_key, 'd', newdata})
+end
+
 local function check_dynamic_conf(cfg, ev_base)
   local function redis_load_cb(err, data)
     if data and type(data) == 'string' then
@@ -159,11 +217,16 @@ local function check_dynamic_conf(cfg, ev_base)
       local res,err = parser:parse_string(data)
 
       if err then
-        rspamd_logger.errx(cfg, "cannot parse dynamic conf from redis: %s", err)
+        rspamd_logger.errx(cfg, "cannot load dynamic conf from redis: %s", err)
       else
         apply_dynamic_conf(cfg, res)
         cur_settings.version = rversion
-        cur_settings.data = res
+        if cur_settings.updates.has_updates then
+          -- Need to send our updates to Redis
+          update_dynamic_conf(cfg, ev_base, res)
+        else
+          cur_settings.data = res
+        end
       end
     end
   end
@@ -176,6 +239,9 @@ local function check_dynamic_conf(cfg, ev_base)
           rver, cur_settings.version)
         redis_make_request(ev_base, cfg, settings.redis_key, false,
           redis_load_cb, 'HGET', {settings.redis_key, 'd'})
+      elseif cur_settings.updates.has_updates then
+        -- Need to send our updates to Redis
+        update_dynamic_conf(cfg, ev_base)
       end
     end
   end
@@ -204,3 +270,73 @@ if section then
     end, true)
   end)
 end
+
+-- Updates part
+local function add_dynamic_symbol(cfg, sym, score)
+  local add = false
+  if not cur_settings.data then
+    rspamd_logger.errx(cfg, 'cannot add symbol as no dynamic conf is loaded')
+  end
+
+  if not cur_settings.data.scores then
+    cur_settings.data.scores = {}
+    cur_settings.data.scores[sym] = score
+    add = true
+  else
+    if cur_settings.data.scores[sym] then
+      if cur_settings.data.scores[sym] ~= score then
+        add = true
+      end
+    else
+      cur_settings.data.scores[sym] = score
+      add = true
+    end
+  end
+
+  if add then
+    cur_settings.data.scores[sym] = score
+    table.insert(cur_settings.updates.symbols, sym)
+    cur_settings.updates.has_updates = true
+  end
+
+  return add
+end
+
+local function add_dynamic_action(cfg, act, score)
+  local add = false
+  if not cur_settings.data then
+    rspamd_logger.errx(cfg, 'cannot add action as no dynamic conf is loaded')
+  end
+
+  if not cur_settings.data.scores then
+    cur_settings.data.actions = {}
+    cur_settings.data.actions[act] = score
+    add = true
+  else
+    if cur_settings.data.actions[act] then
+      if cur_settings.data.actions[act] ~= score then
+        add = true
+      end
+    else
+      cur_settings.data.actions[act] = score
+      add = true
+    end
+  end
+
+  if add then
+    cur_settings.data.actions[act] = score
+    table.insert(cur_settings.updates.actions, act)
+    cur_settings.updates.has_updates = true
+  end
+
+  return add
+end
+
+rspamd_plugins["dynamic_conf"] = {
+  add_symbol = function(cfg, sym, score)
+    return add_dynamic_symbol(cfg, sym, score)
+  end,
+  add_action =  function(cfg, act, score)
+    return add_dynamic_action(cfg, act, score)
+  end,
+}
