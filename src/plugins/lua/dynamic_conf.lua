@@ -138,6 +138,18 @@ local function apply_dynamic_conf(cfg, data)
   if data['actions'] then
     apply_dynamic_actions(cfg, data['actions'])
   end
+
+  if data['symbols_enabled'] then
+    each(function(i, v)
+      cfg:enable_symbol(v)
+    end, data['symbols_enabled'])
+  end
+
+  if data['symbols_disabled'] then
+    each(function(i, v)
+      cfg:disable_symbol(v)
+    end, data['symbols_disabled'])
+  end
 end
 
 local function check_dynamic_conf(cfg, ev_base)
