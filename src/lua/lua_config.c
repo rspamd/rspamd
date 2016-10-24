@@ -356,6 +356,20 @@ end)
 LUA_FUNCTION_DEF (config, add_condition);
 
 /***
+ * @method rspamd_config:enable_symbol(symbol)
+ * Enables execution for the specified symbol
+ * @param {string} symbol symbol's name
+ */
+LUA_FUNCTION_DEF (config, enable_symbol);
+
+/***
+ * @method rspamd_config:disable_symbol(symbol)
+ * Disables execution for the specified symbol
+ * @param {string} symbol symbol's name
+ */
+LUA_FUNCTION_DEF (config, disable_symbol);
+
+/***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
  * Technically, it is the equialent of @see rspamd_config:register_symbol where `weight` is 1.0.
@@ -560,6 +574,8 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_api_version),
 	LUA_INTERFACE_DEF (config, get_key),
 	LUA_INTERFACE_DEF (config, add_condition),
+	LUA_INTERFACE_DEF (config, enable_symbol),
+	LUA_INTERFACE_DEF (config, disable_symbol),
 	LUA_INTERFACE_DEF (config, register_regexp),
 	LUA_INTERFACE_DEF (config, replace_regexp),
 	LUA_INTERFACE_DEF (config, register_worker_script),
@@ -1816,6 +1832,38 @@ lua_config_add_condition (lua_State *L)
 
 	lua_pushboolean (L, ret);
 	return 1;
+}
+
+static gint
+lua_config_enable_symbol (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2);
+
+	if (cfg && sym) {
+		rspamd_symbols_cache_enable_symbol (cfg->cache, sym);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_disable_symbol (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2);
+
+	if (cfg && sym) {
+		rspamd_symbols_cache_disable_symbol (cfg->cache, sym);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 static gint
