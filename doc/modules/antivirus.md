@@ -19,6 +19,8 @@ antivirus {
   first {
     # if `true` only messages with non-image attachments will be checked (default true)
     attachments_only = true;
+    # If `max_size` is set, messages > n bytes in size are not scanned
+    #max_size = 20000000;
     # symbol to add (add it to metric if you want non-zero weight)
     symbol = "CLAM_VIRUS";
     # type of scanner: "clamav", "fprot" or "sophos"
