@@ -28,11 +28,13 @@ const luaL_reg null_reg[] = {
 
 
 LUA_FUNCTION_DEF (worker, get_name);
+LUA_FUNCTION_DEF (worker, get_stat);
 LUA_FUNCTION_DEF (worker, get_index);
 LUA_FUNCTION_DEF (worker, get_pid);
 
 const luaL_reg worker_reg[] = {
 	LUA_INTERFACE_DEF (worker, get_name),
+	LUA_INTERFACE_DEF (worker, get_stat),
 	LUA_INTERFACE_DEF (worker, get_index),
 	LUA_INTERFACE_DEF (worker, get_pid),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -1206,6 +1208,90 @@ lua_check_worker (lua_State *L, gint pos)
 	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{worker}");
 	luaL_argcheck (L, ud != NULL, pos, "'worker' expected");
 	return ud ? *((struct rspamd_worker **)ud) : NULL;
+}
+
+static gint
+lua_worker_get_stat (lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker (L, 1);
+
+	if (w) {
+		rspamd_mempool_stat_t mem_st;
+		struct rspamd_stat *stat, stat_copy;
+		ucl_object_t *top, *sub;
+		gint i;
+		guint64 spam = 0, ham = 0;
+
+		memset (&mem_st, 0, sizeof (mem_st));
+		rspamd_mempool_stat (&mem_st);
+		memcpy (&stat_copy, w->srv->stat, sizeof (stat_copy));
+		stat = &stat_copy;
+		top = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_scanned), "scanned", 0, false);
+		ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_learned), "learned", 0, false);
+		if (stat->messages_scanned > 0) {
+			sub = ucl_object_typed_new (UCL_OBJECT);
+			for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+				ucl_object_insert_key (sub,
+					ucl_object_fromint (stat->actions_stat[i]),
+					rspamd_action_to_str (i), 0, false);
+				if (i < METRIC_ACTION_GREYLIST) {
+					spam += stat->actions_stat[i];
+				}
+				else {
+					ham += stat->actions_stat[i];
+				}
+			}
+			ucl_object_insert_key (top, sub, "actions", 0, false);
+		}
+		else {
+			sub = ucl_object_typed_new (UCL_OBJECT);
+			for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+				ucl_object_insert_key (sub,
+					0,
+					rspamd_action_to_str (i), 0, false);
+			}
+			ucl_object_insert_key (top, sub, "actions", 0, false);
+		}
+		ucl_object_insert_key (top, ucl_object_fromint (
+			spam), "spam_count", 0, false);
+		ucl_object_insert_key (top, ucl_object_fromint (
+			ham),  "ham_count",      0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (stat->connections_count), "connections", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (stat->control_connections_count),
+			"control_connections", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0,
+			false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.pools_freed), "pools_freed", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.bytes_allocated), "bytes_allocated", 0,
+			false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (
+			mem_st.chunks_allocated), "chunks_allocated", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.shared_chunks_allocated),
+			"shared_chunks_allocated", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.chunks_freed), "chunks_freed", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromint (
+				mem_st.oversized_chunks), "chunks_oversized", 0, false);
+
+		ucl_object_push_lua (L, top, true);
+		ucl_object_unref (top);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
