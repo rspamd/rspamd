@@ -813,3 +813,18 @@ zdnet.com
 zenithbank.com
 zkb.ch
 zugerkb.ch
+vistaprint.dk
+vistaprint.com
+anpdm.com
+dovecot.org
+exacttarget.com
+github.com
+isc.org
+# list-manage1.com # grey
+# list-manage2.com # grey
+# list-manage.com # grey
+lists.isc.org
+lists.roundcube.net
+svn.apache.org
+taggedmail.com
+tumblr.com
