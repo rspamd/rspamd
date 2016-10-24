@@ -162,18 +162,24 @@ local function sophos_config(opts)
   return nil
 end
 
+local function message_not_too_large(task, rule)
+  local max_size = tonumber(rule['max_size'])
+  if not max_size then return true end
+  if task:get_size() > max_size then return false end
+  return true
+end
 
 local function need_av_check(task, rule)
   if rule['attachments_only'] then
     for _,p in ipairs(task:get_parts()) do
       if p:get_filename() and not p:is_image() then
-        return true
+        return message_not_too_large(task, rule)
       end
     end
 
     return false
   else
-    return true
+    return message_not_too_large(task, rule)
   end
 end
 
