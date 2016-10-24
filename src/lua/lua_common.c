@@ -290,6 +290,12 @@ rspamd_lua_init ()
 	lua_rawset (L, -3);
 	lua_pop (L, 1);
 
+	luaL_newmetatable (L, "rspamd{session}");
+	lua_pushstring (L, "class");
+	lua_pushstring (L, "rspamd{session}");
+	lua_rawset (L, -3);
+	lua_pop (L, 1);
+
 	rspamd_lua_new_class (L, "rspamd{worker}", worker_reg);
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
