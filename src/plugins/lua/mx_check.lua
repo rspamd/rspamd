@@ -27,6 +27,7 @@ local settings = {
   symbol_no_mx = 'MX_MISSING',
   symbol_good_mx = 'MX_GOOD',
   expire = 86400, -- 1 day by default
+  expire_novalid = 7200, -- 2 hours by default for no valid mxes
   key_prefix = 'rmx'
 }
 local redis_params
@@ -74,7 +75,7 @@ local function mx_check(task)
           false, -- is write
           redis_cache_cb, --callback
           'SETEX', -- command
-          {key, tostring(settings.expire / 10.0), '0'} -- arguments
+          {key, tostring(settings.expire_novalid), '0'} -- arguments
         )
       else
         local valid_mx = {}
