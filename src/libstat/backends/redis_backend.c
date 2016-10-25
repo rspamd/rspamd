@@ -606,7 +606,12 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 		rspamd_upstream_ok (cbdata->selected);
 	}
 	else {
-		msg_err ("cannot get keys to gather stat");
+		if (c->errstr) {
+			msg_err ("cannot get keys to gather stat: %s", c->errstr);
+		}
+		else {
+			msg_err ("cannot get keys to gather stat: unknown error");
+		}
 		rspamd_upstream_fail (cbdata->selected);
 		rspamd_redis_async_cbdata_cleanup (cbdata);
 	}
