@@ -86,6 +86,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 	end = p + len;
 	c = p;
 	memset (nlines_count, 0, sizeof (nlines_count));
+	msg_debug_task ("start processing headers");
 
 	while (p < end) {
 		/* FSM for processing headers */
@@ -1169,7 +1170,13 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		mime_part = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_part));
 
-		hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
+		if (md->parent != NULL) {
+			hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
+		}
+		else {
+			hdrs = NULL;
+		}
+
 		mime_part->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
 				rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 
