@@ -87,16 +87,21 @@ rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 	return NULL;
 }
 
-static void
+static gboolean
 rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 {
 	guint i;
-	void (*cb)(struct rspamd_worker *);
+	gboolean (*cb)(struct rspamd_worker *);
+	gboolean ret = FALSE;
 
 	for (i = 0; i < w->finish_actions->len; i ++) {
 		cb = g_ptr_array_index (w->finish_actions, i);
-		cb (w);
+		if (cb (w)) {
+			ret = TRUE;
+		}
 	}
+
+	return ret;
 }
 /*
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
@@ -144,11 +149,16 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				G_STRFUNC,
 				"terminating after receiving signal %s",
 				g_strsignal (sigh->signo));
-		rspamd_worker_terminate_handlers (sigh->worker);
-		sigh->worker->wanna_die = 1;
-		tv.tv_sec = 0;
-		tv.tv_usec = 0;
 
+		tv.tv_usec = 0;
+		if (rspamd_worker_terminate_handlers (sigh->worker)) {
+			tv.tv_sec =  SOFT_SHUTDOWN_TIME;
+		}
+		else {
+			tv.tv_sec = 0;
+		}
+
+		sigh->worker->wanna_die = 1;
 		event_base_loopexit (sigh->base, &tv);
 #ifdef WITH_GPERF_TOOLS
 		ProfilerStop ();

@@ -73,7 +73,19 @@ worker_t normal_worker = {
         G_STRFUNC, \
         __VA_ARGS__)
 
-static void
+static gboolean
+rspamd_worker_finalize (gpointer user_data)
+{
+	struct rspamd_task *task = user_data;
+	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
+
+	msg_info_task ("finishing actions has been processed, terminating");
+	event_base_loopexit (task->ev_base, &tv);
+
+	return TRUE;
+}
+
+static gboolean
 rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 {
 	struct rspamd_task *task;
@@ -88,7 +100,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 		task->resolver = ctx->resolver;
 		task->ev_base = ctx->ev_base;
 		task->s = rspamd_session_create (task->task_pool,
-				NULL,
+				rspamd_worker_finalize,
 				NULL,
 				(event_finalizer_t) rspamd_task_free,
 				task);
@@ -96,8 +108,13 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 		DL_FOREACH (cfg->finish_callbacks, sc) {
 			lua_call_finish_script (cfg->lua_state, sc, task);
 		}
+
+		if (rspamd_session_pending (task->s)) {
+			return TRUE;
+		}
 	}
 
+	return FALSE;
 }
 
 /*
@@ -558,13 +575,17 @@ init_worker (struct rspamd_config *cfg)
 	return ctx;
 }
 
-static void
+static gboolean
 rspamd_worker_on_terminate (struct rspamd_worker *worker)
 {
 	if (worker->nconns == 0) {
 		msg_info ("performing finishing actions");
-		rspamd_worker_call_finish_handlers (worker);
+		if (rspamd_worker_call_finish_handlers (worker)) {
+			return TRUE;
+		}
 	}
+
+	return FALSE;
 }
 
 /*

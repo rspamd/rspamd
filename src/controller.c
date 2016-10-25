@@ -2930,7 +2930,7 @@ lua_csession_send_string (lua_State *L)
 	return 0;
 }
 
-static void
+static gboolean
 rspamd_controller_on_terminate (struct rspamd_worker *worker)
 {
 	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
@@ -2942,6 +2942,8 @@ rspamd_controller_on_terminate (struct rspamd_worker *worker)
 		event_del (ctx->rrd_event);
 		rspamd_rrd_close (ctx->rrd);
 	}
+
+	return FALSE;
 }
 
 /*
