@@ -60,14 +60,14 @@ append_raw_header (struct rspamd_task *task,
 
 	if ((ar = g_hash_table_lookup (target, rh->name)) != NULL) {
 		g_ptr_array_add (ar, rh);
+		msg_debug_task ("append raw header %s: %s", rh->name, rh->value);
 	}
 	else {
 		ar = g_ptr_array_sized_new (2);
 		g_ptr_array_add (ar, rh);
 		g_hash_table_insert (target, rh->name, ar);
+		msg_debug_task ("add new raw header %s: %s", rh->name, rh->value);
 	}
-
-	msg_debug_task ("add raw header %s: %s", rh->name, rh->value);
 }
 
 /* Convert raw headers to a list of struct raw_header * */
