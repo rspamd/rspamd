@@ -1854,15 +1854,6 @@ rspamd_controller_handle_saveactions (
 		return 0;
 	}
 
-	/* Now check for dynamic config */
-	if (!ctx->cfg->dynamic_conf) {
-		msg_err_session ("dynamic conf has not been defined");
-		rspamd_controller_send_error (conn_ent,
-			500,
-			"No dynamic_rules setting defined");
-		return 0;
-	}
-
 	parser = ucl_parser_new (0);
 	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
 
@@ -1970,15 +1961,6 @@ rspamd_controller_handle_savesymbols (
 		msg_err_session ("cannot find default metric");
 		rspamd_controller_send_error (conn_ent, 500,
 			"Default metric is absent");
-		return 0;
-	}
-
-	/* Now check for dynamic config */
-	if (!ctx->cfg->dynamic_conf) {
-		msg_err_session ("dynamic conf has not been defined");
-		rspamd_controller_send_error (conn_ent,
-			500,
-			"No dynamic_rules setting defined");
 		return 0;
 	}
 

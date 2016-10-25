@@ -332,11 +332,13 @@ local function add_dynamic_action(cfg, act, score)
   return add
 end
 
-rspamd_plugins["dynamic_conf"] = {
-  add_symbol = function(cfg, sym, score)
-    return add_dynamic_symbol(cfg, sym, score)
-  end,
-  add_action =  function(cfg, act, score)
-    return add_dynamic_action(cfg, act, score)
-  end,
-}
+if redis_params then
+  rspamd_plugins["dynamic_conf"] = {
+    add_symbol = function(cfg, sym, score)
+      return add_dynamic_symbol(cfg, sym, score)
+    end,
+    add_action =  function(cfg, act, score)
+      return add_dynamic_action(cfg, act, score)
+    end,
+  }
+end

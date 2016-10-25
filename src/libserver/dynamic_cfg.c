@@ -19,6 +19,7 @@
 #include "filter.h"
 #include "dynamic_cfg.h"
 #include "unix-std.h"
+#include "lua/lua_common.h"
 
 struct config_json_buf {
 	GString *buf;
@@ -393,6 +394,102 @@ new_dynamic_elt (ucl_object_t *arr, const gchar *name, gdouble value)
 	return n;
 }
 
+static gboolean
+rspamd_maybe_add_lua_dynsym (struct rspamd_config *cfg,
+		const gchar *sym,
+		gdouble score)
+{
+	lua_State *L = cfg->lua_state;
+	gboolean ret = FALSE;
+	struct rspamd_config **pcfg;
+
+	lua_getglobal (L, "rspamd_plugins");
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushstring (L, "dynamic_conf");
+		lua_gettable (L, -2);
+
+		if (lua_type (L, -1) == LUA_TTABLE) {
+			lua_pushstring (L, "add_symbol");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TFUNCTION) {
+				pcfg = lua_newuserdata (L, sizeof (*pcfg));
+				*pcfg = cfg;
+				rspamd_lua_setclass (L, "rspamd{config}", -1);
+				lua_pushstring (L, sym);
+				lua_pushnumber (L, score);
+
+				if (lua_pcall (L, 3, 1, 0) != 0) {
+					msg_err_config ("cannot execute add_symbol script: %s",
+							lua_tostring (L, -1));
+				}
+				else {
+					ret = lua_toboolean (L, -1);
+				}
+
+				lua_pop (L, 1);
+			}
+			else {
+				lua_pop (L, 1);
+			}
+		}
+
+		lua_pop (L, 1);
+	}
+
+	lua_pop (L, 1);
+
+	return ret;
+}
+
+static gboolean
+rspamd_maybe_add_lua_dynact (struct rspamd_config *cfg,
+		const gchar *action,
+		gdouble score)
+{
+	lua_State *L = cfg->lua_state;
+	gboolean ret = FALSE;
+	struct rspamd_config **pcfg;
+
+	lua_getglobal (L, "rspamd_plugins");
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushstring (L, "dynamic_conf");
+		lua_gettable (L, -2);
+
+		if (lua_type (L, -1) == LUA_TTABLE) {
+			lua_pushstring (L, "add_action");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TFUNCTION) {
+				pcfg = lua_newuserdata (L, sizeof (*pcfg));
+				*pcfg = cfg;
+				rspamd_lua_setclass (L, "rspamd{config}", -1);
+				lua_pushstring (L, action);
+				lua_pushnumber (L, score);
+
+				if (lua_pcall (L, 3, 1, 0) != 0) {
+					msg_err_config ("cannot execute add_action script: %s",
+							lua_tostring (L, -1));
+				}
+				else {
+					ret = lua_toboolean (L, -1);
+				}
+
+				lua_pop (L, 1);
+			}
+			else {
+				lua_pop (L, 1);
+			}
+		}
+
+		lua_pop (L, 1);
+	}
+
+	lua_pop (L, 1);
+
+	return ret;
+}
+
 /**
  * Add symbol for specified metric
  * @param cfg config file object
@@ -408,6 +505,10 @@ add_dynamic_symbol (struct rspamd_config *cfg,
 	gdouble value)
 {
 	ucl_object_t *metric, *syms;
+
+	if (rspamd_maybe_add_lua_dynsym (cfg, symbol, value)) {
+		return TRUE;
+	}
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
@@ -496,6 +597,10 @@ add_dynamic_action (struct rspamd_config *cfg,
 {
 	ucl_object_t *metric, *acts;
 	const gchar *action_name = rspamd_action_to_str (action);
+
+	if (rspamd_maybe_add_lua_dynact (cfg, action_name, value)) {
+		return TRUE;
+	}
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
