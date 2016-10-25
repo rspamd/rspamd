@@ -50,6 +50,10 @@ local function mx_check(task)
     end
   end
 
+  if not mx_domain then
+    return
+  end
+
   local valid = false
 
   local function check_results(mxes)
