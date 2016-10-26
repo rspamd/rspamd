@@ -306,6 +306,8 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	gchar inbuf[8192];
 	gssize r;
 	guint slen;
+	gint so_error = 0;
+	socklen_t so_len = sizeof (so_error);
 
 	REF_RETAIN (cbd);
 
@@ -362,23 +364,37 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	}
 	else if (what == EV_WRITE) {
 		if (!cbd->connected) {
-			cbd->connected = TRUE;
-
-			if (cbd->connect_cb != -1) {
-				struct lua_tcp_cbdata **pcbd;
-
-				lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->connect_cb);
-				pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
-				*pcbd = cbd;
-				REF_RETAIN (cbd);
-				rspamd_lua_setclass (cbd->L, "rspamd{tcp}", -1);
-
-				if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
-					msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-					lua_pop (cbd->L, 1);
-				}
-
+			if (getsockopt (fd, SOL_SOCKET, SO_ERROR, &so_error, &so_len) == -1) {
+				lua_tcp_push_error (cbd, "Cannot get socket error: %s",
+						strerror (errno));
 				REF_RELEASE (cbd);
+				goto out;
+			}
+			else if (so_error != 0) {
+				lua_tcp_push_error (cbd, "Socket error detected: %s",
+						strerror (so_error));
+				REF_RELEASE (cbd);
+				goto out;
+			}
+			else {
+				cbd->connected = TRUE;
+
+				if (cbd->connect_cb != -1) {
+					struct lua_tcp_cbdata **pcbd;
+
+					lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->connect_cb);
+					pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
+					*pcbd = cbd;
+					REF_RETAIN (cbd);
+					rspamd_lua_setclass (cbd->L, "rspamd{tcp}", -1);
+
+					if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
+						msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
+						lua_pop (cbd->L, 1);
+					}
+
+					REF_RELEASE (cbd);
+				}
 			}
 		}
 
@@ -395,6 +411,7 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 		REF_RELEASE (cbd);
 	}
 
+out:
 	REF_RELEASE (cbd);
 }
 
