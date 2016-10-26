@@ -276,10 +276,10 @@ if section then
   end
 
   rspamd_config:add_on_load(function(cfg, ev_base)
-    rspamd_config:add_periodic(ev_base, settings.redis_watch_interval,
+    rspamd_config:add_periodic(ev_base, 0.0,
     function(cfg, ev_base)
       check_dynamic_conf(cfg, ev_base)
-      return true
+      return settings.redis_watch_interval
     end, true)
   end)
 end
