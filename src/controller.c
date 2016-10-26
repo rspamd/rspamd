@@ -505,6 +505,7 @@ static gboolean rspamd_controller_check_password(
 			}
 			else if (is_enable && (ctx->password == NULL &&
 					ctx->enable_password == NULL)) {
+				session->is_enable = TRUE;
 				return TRUE;
 			}
 		}
@@ -551,6 +552,10 @@ static gboolean rspamd_controller_check_password(
 						"no password to check while executing a privileged command");
 				ret = FALSE;
 			}
+
+			if (ret) {
+				session->is_enable = TRUE;
+			}
 		}
 		else {
 			/* Accept both normal and enable passwords */
@@ -593,6 +598,10 @@ static gboolean rspamd_controller_check_password(
 					check_enable = rspamd_check_encrypted_password (ctx,
 							password,
 							check, pbkdf, TRUE);
+				}
+
+				if (check_enable) {
+					session->is_enable = TRUE;
 				}
 			}
 			else {
@@ -2246,6 +2255,8 @@ rspamd_controller_handle_stat_common (
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
 	task->sock = conn_ent->conn->fd;
 
+	ucl_object_insert_key (top, ucl_object_frombool (!session->is_enable),
+			"read_only", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_scanned), "scanned", 0, false);
 	ucl_object_insert_key (top, ucl_object_fromint (
