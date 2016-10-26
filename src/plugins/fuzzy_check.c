@@ -2698,6 +2698,8 @@ fuzzy_lua_unlearn_handler (lua_State *L)
 			gpointer k, v;
 			struct fuzzy_mapping *map;
 
+			symbol = lua_tostring (L, 2);
+
 			for (cur = fuzzy_module_ctx->fuzzy_rules; cur != NULL && flag == 0;
 					cur = g_list_next (cur)) {
 				rule = cur->data;

@@ -173,10 +173,10 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 	while (remain > 0 && shift <= 57) {
 		if (*p & 0x80) {
-			t |= (*p & 0x7f) << shift;
+			t |= ((guint64)(*p & 0x7f)) << shift;
 		}
 		else {
-			t |= (*p & 0x7f) << shift;
+			t |= ((guint64)(*p & 0x7f)) << shift;
 			p ++;
 			break;
 		}

@@ -259,7 +259,7 @@ static gdouble
 rspamd_chartable_process_word_ascii (struct rspamd_task *task, rspamd_ftok_t *w,
 		gboolean is_url)
 {
-	const gchar *p, *end, *c;
+	const guchar *p, *end, *c;
 	gdouble badness = 0.0;
 	enum {
 		ascii = 1,

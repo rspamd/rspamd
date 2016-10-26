@@ -1749,10 +1749,13 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 		msg.msg_control = fdspace;
 		msg.msg_controllen = sizeof (fdspace);
 		cmsg = CMSG_FIRSTHDR (&msg);
-		cmsg->cmsg_level = SOL_SOCKET;
-		cmsg->cmsg_type = SCM_RIGHTS;
-		cmsg->cmsg_len = CMSG_LEN (sizeof (int));
-		memcpy (CMSG_DATA (cmsg), &outfd, sizeof (int));
+
+		if (cmsg) {
+			cmsg->cmsg_level = SOL_SOCKET;
+			cmsg->cmsg_type = SCM_RIGHTS;
+			cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+			memcpy (CMSG_DATA (cmsg), &outfd, sizeof (int));
+		}
 	}
 
 	iov.iov_base = &rep;

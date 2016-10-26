@@ -1240,7 +1240,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 					 * Here we count number of octets encoded in this element
 					 */
 					for (i = 0; i < 4; i++) {
-						if ((t >> 8 * i) > 0) {
+						if ((t >> (8 * i)) > 0) {
 							nshift += 8;
 						}
 						else {

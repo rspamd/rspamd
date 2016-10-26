@@ -2435,7 +2435,6 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 	struct rspamd_controller_session *session = conn_ent->ud;
 
 	session->ctx->worker->srv->stat->control_connections_count++;
-	msg_debug_session ("destroy session %p", session);
 
 	if (session->task != NULL) {
 		rspamd_session_destroy (session->task->s);
@@ -2443,6 +2442,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 
 	if (session->pool) {
 		rspamd_mempool_delete (session->pool);
+		msg_debug_session ("destroy session %p", session);
 	}
 
 	session->wrk->nconns --;
