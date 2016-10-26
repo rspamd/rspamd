@@ -394,13 +394,13 @@ new_dynamic_elt (ucl_object_t *arr, const gchar *name, gdouble value)
 	return n;
 }
 
-static gboolean
+static gint
 rspamd_maybe_add_lua_dynsym (struct rspamd_config *cfg,
 		const gchar *sym,
 		gdouble score)
 {
 	lua_State *L = cfg->lua_state;
-	gboolean ret = FALSE;
+	gint ret = -1;
 	struct rspamd_config **pcfg;
 
 	lua_getglobal (L, "rspamd_plugins");
@@ -442,13 +442,13 @@ rspamd_maybe_add_lua_dynsym (struct rspamd_config *cfg,
 	return ret;
 }
 
-static gboolean
+static gint
 rspamd_maybe_add_lua_dynact (struct rspamd_config *cfg,
 		const gchar *action,
 		gdouble score)
 {
 	lua_State *L = cfg->lua_state;
-	gboolean ret = FALSE;
+	gint ret = -1;
 	struct rspamd_config **pcfg;
 
 	lua_getglobal (L, "rspamd_plugins");
@@ -505,9 +505,10 @@ add_dynamic_symbol (struct rspamd_config *cfg,
 	gdouble value)
 {
 	ucl_object_t *metric, *syms;
+	gint ret;
 
-	if (rspamd_maybe_add_lua_dynsym (cfg, symbol, value)) {
-		return TRUE;
+	if ((ret = rspamd_maybe_add_lua_dynsym (cfg, symbol, value)) != -1) {
+		return ret == 0 ? FALSE : TRUE;
 	}
 
 	if (cfg->dynamic_conf == NULL) {
@@ -597,9 +598,10 @@ add_dynamic_action (struct rspamd_config *cfg,
 {
 	ucl_object_t *metric, *acts;
 	const gchar *action_name = rspamd_action_to_str (action);
+	gint ret;
 
-	if (rspamd_maybe_add_lua_dynact (cfg, action_name, value)) {
-		return TRUE;
+	if ((ret = rspamd_maybe_add_lua_dynact (cfg, action_name, value)) != -1) {
+		return ret == 0 ? FALSE : TRUE;
 	}
 
 	if (cfg->dynamic_conf == NULL) {
