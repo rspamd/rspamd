@@ -1123,6 +1123,10 @@ rspamd_stat_statistics (struct rspamd_task *task,
 	for (i = 0; i < st_ctx->classifiers->len; i ++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
 
+		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+			continue;
+		}
+
 		for (j = 0; j < cl->statfiles_ids->len; j ++) {
 			id = g_array_index (cl->statfiles_ids, gint, j);
 			st = g_ptr_array_index (st_ctx->statfiles, id);
