@@ -85,15 +85,15 @@ end
 
 local function apply_dynamic_actions(cfg, acts)
   each(function(k, v)
-     if type[v] == 'table' then
-      v['action'] = k
+     if type(v) == 'table' then
+      v['name'] = k
       if not v['priority'] then
         v['priority'] = settings.priority
       end
       rspamd_config:set_metric_action(v)
     else
       rspamd_config:set_metric_symbol({
-        action = k,
+        name = k,
         score = v,
         priority = settings.priority
       })
@@ -110,7 +110,7 @@ end
 
 local function apply_dynamic_scores(cfg, sc)
   each(function(k, v)
-    if type[v] == 'table' then
+    if type(v) == 'table' then
       v['name'] = k
       if not v['priority'] then
         v['priority'] = settings.priority
@@ -219,13 +219,13 @@ local function check_dynamic_conf(cfg, ev_base)
       if err then
         rspamd_logger.errx(cfg, "cannot load dynamic conf from redis: %s", err)
       else
-        apply_dynamic_conf(cfg, res)
-        cur_settings.version = rversion
+        local d = parser:get_object()
+        apply_dynamic_conf(cfg, d)
         if cur_settings.updates.has_updates then
           -- Need to send our updates to Redis
-          update_dynamic_conf(cfg, ev_base, res)
+          update_dynamic_conf(cfg, ev_base, d)
         else
-          cur_settings.data = res
+          cur_settings.data = d
         end
       end
     end
@@ -234,15 +234,19 @@ local function check_dynamic_conf(cfg, ev_base)
     if not err and type(data) == 'string' then
       local rver = tonumber(data)
 
-      if rver and rver > cur_settings.version then
+      if not cur_settings.version or (rver and rver > cur_settings.version) then
         rspamd_logger.infox(cfg, "need to load fresh dynamic settings with version %s, local version is %s",
           rver, cur_settings.version)
+        cur_settings.version = rver
         redis_make_request(ev_base, cfg, settings.redis_key, false,
           redis_load_cb, 'HGET', {settings.redis_key, 'd'})
       elseif cur_settings.updates.has_updates then
         -- Need to send our updates to Redis
         update_dynamic_conf(cfg, ev_base)
       end
+    elseif cur_settings.updates.has_updates then
+      -- Need to send our updates to Redis
+      update_dynamic_conf(cfg, ev_base)
     end
   end
 
@@ -305,10 +309,11 @@ end
 local function add_dynamic_action(cfg, act, score)
   local add = false
   if not cur_settings.data then
-    rspamd_logger.errx(cfg, 'cannot add action as no dynamic conf is loaded')
+    cur_settings.data = {}
+    cur_settings.version = 0
   end
 
-  if not cur_settings.data.scores then
+  if not cur_settings.data.actions then
     cur_settings.data.actions = {}
     cur_settings.data.actions[act] = score
     add = true
@@ -334,11 +339,7 @@ end
 
 if redis_params then
   rspamd_plugins["dynamic_conf"] = {
-    add_symbol = function(cfg, sym, score)
-      return add_dynamic_symbol(cfg, sym, score)
-    end,
-    add_action =  function(cfg, act, score)
-      return add_dynamic_action(cfg, act, score)
-    end,
+    add_symbol = add_dynamic_symbol,
+    add_action = add_dynamic_action,
   }
 end
