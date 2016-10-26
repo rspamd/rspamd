@@ -35,6 +35,15 @@ local cur_settings = {
   }
 }
 
+local function alpha_cmp(v1, v2)
+  local math = math
+  if math.abs(v1 - v2) < 0.001 then
+    return true
+  end
+
+  return false
+end
+
 local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
   if not ev_base or not redis_params or not callback or not command then
     return false,nil,nil
@@ -100,7 +109,7 @@ local function apply_dynamic_actions(cfg, acts)
     end
   end, filter(function(k, v)
     local act = rspamd_config:get_metric_action(k)
-    if (act and act == v) or cur_settings.updates.actions[k] then
+    if (act and alpha_cmp(act, v)) or cur_settings.updates.actions[k] then
       return false
     end
 
@@ -126,7 +135,7 @@ local function apply_dynamic_scores(cfg, sc)
   end, filter(function(k, v)
     -- Select elts with scores that are different from local ones
     local sym = rspamd_config:get_metric_symbol(k)
-    if (sym and sym.score == v) or cur_settings.updates.symbols[k] then
+    if (sym and alpha_cmp(sym.score, v)) or cur_settings.updates.symbols[k] then
       return false
     end
 
@@ -181,7 +190,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
         cur_settings.data.scores = {}
       end
       each(function(k, v)
-        cur_settings.data.score[k] = v
+        cur_settings.data.scores[k] = v
       end,
       filter(function(k,v)
         if cur_settings.updates.symbols[k] then
