@@ -2060,15 +2060,21 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 		lua_pop (L, 1);
 	}
 	else {
-		plan_more = lua_toboolean (L, -1);
+		if (lua_type (L, -1) == LUA_TBOOLEAN) {
+			plan_more = lua_toboolean (L, -1);
+			timeout = periodic->timeout;
+		}
+		else if (lua_type (L, -1) == LUA_TNUMBER) {
+			timeout = lua_tonumber (L, -1);
+			plan_more = timeout > 0 ? TRUE : FALSE;
+		}
+
 		lua_pop (L, 1);
 	}
 
 	event_del (&periodic->ev);
 
 	if (plan_more) {
-		timeout = periodic->timeout;
-
 		if (periodic->need_jitter) {
 			timeout = rspamd_time_jitter (timeout, 0.0);
 		}
@@ -2092,7 +2098,7 @@ lua_config_add_periodic (lua_State *L)
 	struct rspamd_lua_periodic *periodic;
 	gboolean need_jitter = FALSE;
 
-	if (cfg == NULL || timeout <= 0 || lua_type (L, 4) != LUA_TFUNCTION) {
+	if (cfg == NULL || timeout < 0 || lua_type (L, 4) != LUA_TFUNCTION) {
 		return luaL_error (L, "invalid arguments");
 	}
 
