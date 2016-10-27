@@ -264,6 +264,7 @@ if opts then
     description = 'Domain has no working MX',
     group = 'MX',
     one_shot = true,
+    one_param = true,
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_good_mx,
@@ -271,6 +272,7 @@ if opts then
     description = 'Domain has working MX',
     group = 'MX',
     one_shot = true,
+    one_param = true,
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_no_mx,
@@ -278,5 +280,6 @@ if opts then
     description = 'Domain has no resolvable MX',
     group = 'MX',
     one_shot = true,
+    one_param = true,
   })
 end
