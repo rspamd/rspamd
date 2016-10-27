@@ -28,6 +28,7 @@ local settings = {
   symbol_good_mx = 'MX_GOOD',
   expire = 86400, -- 1 day by default
   expire_novalid = 7200, -- 2 hours by default for no valid mxes
+  greylist_invalid = false, -- Greylist first message with invalid MX (require greylist plugin)
   key_prefix = 'rmx'
 }
 local redis_params
@@ -68,6 +69,14 @@ local function mx_check(task)
       end
       if not valid then
         task:insert_result(settings.symbol_bad_mx, 1.0)
+        -- Greylist message
+        if settings.greylist_invalid then
+          local grey_is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
+          if not grey_is_whitelisted then
+            local end_time = rspamd_util.time_to_string(rspamd_util.get_time() + 3600)
+            task:get_mempool():set_variable("grey_greylisted", end_time)
+          end
+        end
         local ret,_,_ = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
