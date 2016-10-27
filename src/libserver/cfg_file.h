@@ -96,6 +96,7 @@ struct rspamd_symbols_group {
 
 #define RSPAMD_SYMBOL_FLAG_ONESHOT (1 << 0)
 #define RSPAMD_SYMBOL_FLAG_IGNORE (1 << 1)
+#define RSPAMD_SYMBOL_FLAG_ONEPARAM (1 << 2)
 
 /**
  * Symbol definition

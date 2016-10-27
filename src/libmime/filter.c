@@ -142,7 +142,8 @@ insert_metric_result (struct rspamd_task *task,
 			 */
 			single = TRUE;
 		}
-		if (s->options && opts && opts != s->options) {
+		if (s->options && opts && opts != s->options &&
+				!(sdef->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) {
 			/* Append new options */
 			s->options = g_list_concat (s->options, g_list_copy (opts));
 			/*

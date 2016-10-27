@@ -349,6 +349,12 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
+	if ((elt = ucl_object_lookup (obj, "one_param")) != NULL) {
+		if (ucl_object_toboolean (elt)) {
+			flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+		}
+	}
+
 	if ((elt = ucl_object_lookup (obj, "ignore")) != NULL) {
 		if (ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_IGNORE;

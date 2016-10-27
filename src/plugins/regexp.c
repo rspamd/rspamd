@@ -285,6 +285,14 @@ regexp_module_config (struct rspamd_config *cfg)
 					}
 				}
 
+				elt = ucl_object_lookup (value, "one_param");
+
+				if (elt) {
+					if (ucl_object_toboolean (elt)) {
+						flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+					}
+				}
+
 				elt = ucl_object_lookup (value, "priority");
 
 				if (elt) {

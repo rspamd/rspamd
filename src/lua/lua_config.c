@@ -242,9 +242,11 @@ LUA_FUNCTION_DEF (config, register_dependency);
  * - `description`: description of symbol (string, optional)
  * - `group`: name of group for symbol (string, optional)
  * - `one_shot`: turn off multiple hits for a symbol (boolean, optional)
+ * - `one_param`: turn off multiple options for a symbol (boolean, optional)
  * - `flags`: comma separated string of flags:
  *    + `ignore`: do not strictly check validity of symbol and corresponding rule
  *    + `one_shot`: turn off multiple hits for a symbol
+ *    + `one_param`: allow only one parameter for a symbol
  * - `priority`: priority of symbol's definition
  */
 LUA_FUNCTION_DEF (config, set_metric_symbol);
@@ -1376,7 +1378,7 @@ lua_config_set_metric_symbol (lua_State * L)
 			*group = NULL, *name = NULL, *flags_str = NULL;
 	double weight;
 	struct metric *metric;
-	gboolean one_shot = FALSE;
+	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
 	gdouble priority = 0.0;
 	guint flags = 0;
@@ -1386,9 +1388,10 @@ lua_config_set_metric_symbol (lua_State * L)
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*name=S;score=N;description=S;"
-					"group=S;one_shot=B;metric=S;priority=N;flags=S",
+					"group=S;one_shot=B;one_param=B;metric=S;priority=N;flags=S",
 					&name, &weight, &description,
-					&group, &one_shot, &metric_name, &priority, &flags_str)) {
+					&group, &one_shot, &one_param,
+					&metric_name, &priority, &flags_str)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
@@ -1421,13 +1424,19 @@ lua_config_set_metric_symbol (lua_State * L)
 		if (one_shot) {
 			flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
 		}
+		if (one_param) {
+			flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+		}
 
 		if (flags_str) {
 			if (strstr (flags_str, "one_shot") != NULL) {
 				flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
 			}
-			else if (strstr (flags_str, "ignore") != NULL) {
+			if (strstr (flags_str, "ignore") != NULL) {
 				flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+			}
+			if (strstr (flags_str, "one_param") != NULL) {
+				flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
 			}
 		}
 
@@ -1783,6 +1792,16 @@ lua_config_newindex (lua_State *L)
 					if (lua_type (L, -1) == LUA_TBOOLEAN) {
 						if (lua_toboolean (L, -1)) {
 							flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+						}
+					}
+					lua_pop (L, 1);
+
+					lua_pushstring (L, "one_param");
+					lua_gettable (L, -2);
+
+					if (lua_type (L, -1) == LUA_TBOOLEAN) {
+						if (lua_toboolean (L, -1)) {
+							flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
 						}
 					}
 					lua_pop (L, 1);
