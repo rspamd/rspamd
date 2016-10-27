@@ -156,7 +156,7 @@ local function mx_check(task)
         task = task,
         forced = true
       })
-      task:insert_result(settings.symbol_no_mx, 1.0)
+      task:insert_result(settings.symbol_no_mx, 1.0, err)
     else
       table.sort(results, function(r1, r2)
         return r1['priority'] < r2['priority']
@@ -202,7 +202,8 @@ local function mx_check(task)
         if data == '0' then
           task:insert_result(settings.symbol_bad_mx, 1.0, 'cached')
         else
-          task:insert_result(settings.symbol_good_mx, 1.0, {'cached', data})
+          local mxes = rspamd_str_split(data, ';')
+          task:insert_result(settings.symbol_good_mx, 1.0, 'cached: ' .. mxes[1])
         end
       end
     end
@@ -274,7 +275,7 @@ if opts then
   rspamd_config:set_metric_symbol({
     name = settings.symbol_no_mx,
     score = 1.5,
-    description = 'Domain has no working MX',
+    description = 'Domain has no resolvable MX',
     group = 'MX',
     one_shot = true,
   })
