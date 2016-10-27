@@ -99,6 +99,7 @@ struct lua_tcp_cbdata {
 	guint16 port;
 	gboolean partial;
 	gboolean do_shutdown;
+	gboolean do_read;
 	gboolean connected;
 };
 
@@ -288,15 +289,21 @@ call_finish_handler:
 		shutdown (cbd->fd, SHUT_WR);
 	}
 
-	event_del (&cbd->ev);
+	if (cbd->do_read) {
+		event_del (&cbd->ev);
 #ifdef EV_CLOSED
-	event_set (&cbd->ev, cbd->fd, EV_READ|EV_PERSIST|EV_CLOSED,
-				lua_tcp_handler, cbd);
+		event_set (&cbd->ev, cbd->fd, EV_READ|EV_PERSIST|EV_CLOSED,
+					lua_tcp_handler, cbd);
 #else
-	event_set (&cbd->ev, cbd->fd, EV_READ|EV_PERSIST, lua_tcp_handler, cbd);
+		event_set (&cbd->ev, cbd->fd, EV_READ|EV_PERSIST, lua_tcp_handler, cbd);
 #endif
-	event_base_set (cbd->ev_base, &cbd->ev);
-	event_add (&cbd->ev, &cbd->tv);
+		event_base_set (cbd->ev_base, &cbd->ev);
+		event_add (&cbd->ev, &cbd->tv);
+	}
+	else {
+		lua_tcp_push_data (cbd, cbd->in->data, cbd->in->len);
+		REF_RELEASE (cbd);
+	}
 }
 
 static void
@@ -546,7 +553,7 @@ lua_tcp_request (lua_State *L)
 	struct iovec *iov = NULL;
 	guint niov = 0, total_out;
 	gdouble timeout = default_tcp_timeout;
-	gboolean partial = FALSE, do_shutdown = FALSE;
+	gboolean partial = FALSE, do_shutdown = FALSE, do_read = TRUE;
 
 	if (lua_type (L, 1) == LUA_TTABLE) {
 		lua_pushstring (L, "host");
@@ -658,6 +665,13 @@ lua_tcp_request (lua_State *L)
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
 			do_shutdown = lua_toboolean (L, -1);
+		}
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "read");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TBOOLEAN) {
+			do_read = lua_toboolean (L, -1);
 		}
 		lua_pop (L, 1);
 
