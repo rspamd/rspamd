@@ -68,14 +68,15 @@ local function mx_check(task)
         end
       end
       if not valid then
-        task:insert_result(settings.symbol_bad_mx, 1.0)
         -- Greylist message
         if settings.greylist_invalid then
           local grey_is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
           if not grey_is_whitelisted then
-            local end_time = rspamd_util.time_to_string(rspamd_util.get_time() + 3600)
-            task:get_mempool():set_variable("grey_greylisted", end_time)
+            task:get_mempool():set_variable("grey_greylisted_required", "1")
+            task:insert_result(settings.symbol_bad_mx, 1.0, "greylisted")
           end
+        else
+          task:insert_result(settings.symbol_bad_mx, 1.0)
         end
         local ret,_,_ = rspamd_redis_make_request(task,
           redis_params, -- connect params
