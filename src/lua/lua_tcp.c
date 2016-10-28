@@ -535,6 +535,8 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
  * - `timeout`: floating point value that specifies timeout for IO operations in **seconds**
  * - `partial`: boolean flag that specifies that callback should be called on any data portion received
  * - `stop_pattern`: stop reading on finding a certain pattern (e.g. \r\n.\r\n for smtp)
+ * - `shutdown`: half-close socket after writing (boolean: default false)
+ * - `read`: read response after sending request (boolean: default true)
  * @return {boolean} true if request has been sent
  */
 static gint
