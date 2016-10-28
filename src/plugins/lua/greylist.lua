@@ -255,6 +255,7 @@ local function greylist_set(task)
 
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
   local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
+  local do_greylisting_required = task:get_mempool():get_variable("grey_greylisted_required")
   
   -- Third and second level domains whitelist
   if not is_whitelisted and whitelist_domains_map then
@@ -269,7 +270,9 @@ local function greylist_set(task)
   end
 
   local action = task:get_metric_action('default')
-  if action == 'no action' or action == 'reject' then return end
+  if action == 'no action' or action == 'reject' then 
+    if not do_greylisting_required or do_greylisting_required ~= "1" then return end
+  end
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
   local upstream, ret, conn
@@ -312,7 +315,7 @@ local function greylist_set(task)
      rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
      upstream:fail()
     end
-  elseif do_greylisting then
+  elseif do_greylisting or do_greylisting_required then
     local t = tostring(math.floor(rspamd_util.get_time()))
     local end_time = rspamd_util.time_to_string(t + settings['timeout'])
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
