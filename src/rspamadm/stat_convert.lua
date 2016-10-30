@@ -8,9 +8,11 @@ local function send_redis(server, symbol, tokens, password, db, cmd)
     host = server,
   })
 
+  local err_str
+
   if not conn then
     print('Cannot connect to ' .. server .. ' error: ' .. err)
-    return false
+    return false, err
   end
 
   if password then
@@ -23,14 +25,16 @@ local function send_redis(server, symbol, tokens, password, db, cmd)
   for _,t in ipairs(tokens) do
     if not conn:add_cmd(cmd, {symbol .. t[3], t[1], t[2]}) then
       ret = false
+      err_str = 'add command failure' .. string.format('%s %s',
+        cmd, table.concat({symbol .. t[3], t[1], t[2]}, ' '))
     end
   end
 
   if ret then
-    ret = conn:exec()
+    ret,err_str = conn:exec()
   end
 
-  return ret
+  return ret,err_str
 end
 
 local function convert_learned(cache, server, password, redis_db)
@@ -80,15 +84,16 @@ local function convert_learned(cache, server, password, redis_db)
   end
   db:sql('COMMIT;')
 
+  local err_str
   if ret then
-    ret = conn:exec()
+    ret,err_str = conn:exec()
   end
 
   if ret then
     print(string.format('Converted %d cached items from sqlite3 learned cache to redis',
       converted))
   else
-    print('Error occurred during sending data to redis')
+    print('Error occurred during sending data to redis: ' .. err_str)
   end
 
   return ret
@@ -161,10 +166,10 @@ return function (args, res)
     num = num + 1
     total = total + 1
     if num > lim then
-      if not send_redis(res['redis_host'], res['symbol'],
-        tokens, redis_password, redis_db, cmd) then
-
-        print('Cannot send tokens to the redis server')
+      local ret,err_str = send_redis(res['redis_host'], res['symbol'],
+        tokens, redis_password, redis_db, cmd)
+      if not ret then
+        print('Cannot send tokens to the redis server: ' .. err_str)
         return
       end
 
@@ -172,12 +177,14 @@ return function (args, res)
       tokens = {}
     end
   end
-  if #tokens > 0 and
-    not send_redis(res['redis_host'], res['symbol'], tokens,
-      redis_password, redis_db, cmd) then
+  if #tokens > 0 then
+    local ret, err_str = send_redis(res['redis_host'], res['symbol'], tokens,
+      redis_password, redis_db, cmd)
 
-    print('Cannot send tokens to the redis server')
-    return
+    if not ret then
+      print('Cannot send tokens to the redis server: ' .. err_str)
+      return
+    end
   end
   -- Now update all users
   local conn,err = redis.connect_sync({
@@ -199,6 +206,9 @@ return function (args, res)
   for id,learned in pairs(learns) do
     local user = users_map[id]
     if not conn:add_cmd(cmd, {res['symbol'] .. user, 'learns', learned}) then
+      print('Cannot update learns for user: ' .. user)
+    end
+    if not conn:add_cmd('SADD', {res['symbol'] .. '_keys', res['symbol'] .. user}) then
       print('Cannot update learns for user: ' .. user)
     end
   end
