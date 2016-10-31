@@ -17,6 +17,11 @@ metric_exporter {
   backend = "graphite";
   # Statefile: Path to file at which to persist last run information
   statefile = "$DBDIR/metric_exporter_last_push";
+  # Below settings are optional and values shown will be used as defaults if these are unset:
+  # Timeout in seconds for pushing stats to backend
+  timeout = 15;
+  # Interval in seconds at which stats should be pushed
+  interval = 120;
 }
 ~~~
 
