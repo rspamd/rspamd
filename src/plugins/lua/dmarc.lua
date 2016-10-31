@@ -53,9 +53,25 @@ local dmarc_symbols = {
 local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
 local dmarc_domain = nil
-local elts_re = rspamd_regexp.create_cached("\\s*\\\\{0,1};\\s*")
 local dmarc_reporting = false
 local dmarc_actions = {}
+
+local function gen_dmarc_grammar()
+  local lpeg = require "lpeg"
+  lpeg.locale(lpeg)
+  local space = lpeg.space^0
+  local name = lpeg.C(lpeg.alpha^1) * space
+  local sep = lpeg.S(";") * space
+  local value = lpeg.C(lpeg.P(lpeg.graph - sep)^1)
+  local pair = lpeg.Cg(name * "=" * space * value) * sep^-1
+  local list = lpeg.Cf(lpeg.Ct("") * pair^0, rawset)
+  local version = lpeg.P("v") * space * lpeg.P("=") * space * lpeg.P("DMARC1")
+  local record = version * space * sep * list
+
+  return record
+end
+
+local dmarc_grammar = gen_dmarc_grammar()
 
 local function dmarc_report(task, spf_ok, dkim_ok, disposition)
   local ip = task:get_from_ip()
@@ -140,7 +156,8 @@ local function dmarc_callback(task)
     for _,r in ipairs(results) do
       if failed_policy then break end
       (function()
-        if not string.match(r, '^v=DMARC1[;\\][; ]') then
+        local elts = dmarc_grammar:match(r)
+        if not elts then
           return
         else
           if found_policy then
@@ -150,66 +167,67 @@ local function dmarc_callback(task)
             found_policy = true
           end
         end
-        local elts = elts_re:split(r)
 
         if elts then
-          for _,e in ipairs(elts) do
-            dkim_pol = string.match(e, '^adkim=(.)$')
-            if dkim_pol then
-              if dkim_pol == 's' then
-                strict_dkim = true
-              elseif dkim_pol ~= 'r' then
-                failed_policy = 'adkim tag has invalid value: ' .. dkim_pol
-                return
-              end
+          local dkim_pol = elts['adkim']
+          if dkim_pol then
+            if dkim_pol == 's' then
+              strict_dkim = true
+            elseif dkim_pol ~= 'r' then
+              failed_policy = 'adkim tag has invalid value: ' .. dkim_pol
+              return
             end
-            spf_pol = string.match(e, '^aspf=(.)$')
-            if spf_pol then
-              if spf_pol == 's' then
-                strict_spf = true
-              elseif spf_pol ~= 'r' then
-                failed_policy = 'aspf tag has invalid value: ' .. spf_pol
-                return
-              end
-            end
-            policy = string.match(e, '^p=(.+)$')
-            if policy then
-              if (policy == 'reject') then
-                dmarc_policy = 'reject'
-              elseif (policy == 'quarantine') then
-                dmarc_policy = 'quarantine'
-              elseif (policy ~= 'none') then
-                failed_policy = 'p tag has invalid value: ' .. policy
-                return
-              end
-            end
-            subdomain_policy = string.match(e, '^sp=(.+)$')
-            if subdomain_policy and lookup_domain == dmarc_domain then
-              if (subdomain_policy == 'reject') then
-                if dmarc_domain ~= from[1]['domain'] then
-                  dmarc_policy = 'reject'
-                end
-              elseif (subdomain_policy == 'quarantine') then
-                if dmarc_domain ~= from[1]['domain'] then
-                  dmarc_policy = 'quarantine'
-                end
-              elseif (subdomain_policy == 'none') then
-                if dmarc_domain ~= from[1]['domain'] then
-                  dmarc_policy = 'none'
-                end
-              elseif (subdomain_policy ~= 'none') then
-                failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
-                return
-              end
-            end
-            pct = string.match(e, '^pct=(%d+)$')
-            if pct then
-              pct = tonumber(pct)
-            end
+          end
 
-            if not rua then
-              rua = string.match(e, '^rua=([^%s]+)$')
+          local spf_pol = elts['aspf']
+          if spf_pol then
+            if spf_pol == 's' then
+              strict_spf = true
+            elseif spf_pol ~= 'r' then
+              failed_policy = 'aspf tag has invalid value: ' .. spf_pol
+              return
             end
+          end
+
+          local policy = elts['p']
+          if policy then
+            if (policy == 'reject') then
+              dmarc_policy = 'reject'
+            elseif (policy == 'quarantine') then
+              dmarc_policy = 'quarantine'
+            elseif (policy ~= 'none') then
+              failed_policy = 'p tag has invalid value: ' .. policy
+              return
+            end
+          end
+
+          local subdomain_policy = elts['sp']
+          if subdomain_policy and lookup_domain == dmarc_domain then
+            if (subdomain_policy == 'reject') then
+              if dmarc_domain ~= from[1]['domain'] then
+                dmarc_policy = 'reject'
+              end
+            elseif (subdomain_policy == 'quarantine') then
+              if dmarc_domain ~= from[1]['domain'] then
+                dmarc_policy = 'quarantine'
+              end
+            elseif (subdomain_policy == 'none') then
+              if dmarc_domain ~= from[1]['domain'] then
+                dmarc_policy = 'none'
+              end
+            elseif (subdomain_policy ~= 'none') then
+              failed_policy = 'sp tag has invalid value: ' .. subdomain_policy
+              return
+            end
+          end
+
+          local pct = elts['pct']
+          if pct then
+            pct = tonumber(pct)
+          end
+
+          if not rua then
+            rua = elts['rua']
           end
         end
       end)()
@@ -241,7 +259,7 @@ local function dmarc_callback(task)
     local spf_ok = false
     local dkim_ok = false
     if task:has_symbol(symbols['spf_allow_symbol']) then
-      efrom = task:get_from(1)
+      local efrom = task:get_from(1)
       if efrom and efrom[1] and efrom[1]['domain'] then
         if strict_spf and rspamd_util.strequal_caseless(efrom[1]['domain'], from[1]['domain']) then
           spf_ok = true
