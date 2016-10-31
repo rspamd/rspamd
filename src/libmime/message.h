@@ -53,6 +53,7 @@ struct rspamd_mime_text_part {
 	const gchar *lang_code;
 	const gchar *language;
 	const gchar *real_charset;
+	GByteArray *raw; /**< undecoded mime part */
 	GByteArray *orig;
 	GByteArray *content;
 	GByteArray *stripped_content; /**< no newlines or html tags 			*/

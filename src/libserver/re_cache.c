@@ -875,8 +875,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 				/* Select data for regexp */
 				if (re_class->type == RSPAMD_RE_RAWMIME) {
-					in = part->orig->data;
-					len = part->orig->len;
+					in = part->raw->data;
+					len = part->raw->len;
 					raw = TRUE;
 				}
 				else {

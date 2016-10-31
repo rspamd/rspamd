@@ -946,6 +946,7 @@ process_text_part (struct rspamd_task *task,
 {
 	struct rspamd_mime_text_part *text_part;
 	const gchar *cd;
+	GMimeStream *st;
 
 	/* Skip attachments */
 #ifndef GMIME24
@@ -1073,6 +1074,19 @@ process_text_part (struct rspamd_task *task,
 	}
 
 	rspamd_extract_words (task, text_part);
+
+	if (!(text_part->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)) {
+		text_part->raw = g_byte_array_sized_new (part_content->len * 1.5 + 0.5);
+		st = g_mime_stream_mem_new_with_byte_array (text_part->raw);
+		g_mime_object_write_to_stream (GMIME_OBJECT (mime_part->mime), st);
+		g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (st), FALSE);
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) free_byte_array_callback,
+				text_part->raw);
+	}
+	else {
+		text_part->raw = NULL;
+	}
 }
 
 struct mime_foreach_data {
@@ -1234,13 +1248,12 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		if (wrapper != NULL) {
 #endif
 			part_stream = g_mime_stream_mem_new ();
-			if (g_mime_data_wrapper_write_to_stream (wrapper,
-				part_stream) != -1) {
+			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
 
-				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (
-						part_stream), FALSE);
+				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream),
+						FALSE);
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (
-							part_stream));
+						part_stream));
 				g_object_unref (part_stream);
 				mime_part =
 					rspamd_mempool_alloc0 (task->task_pool,
