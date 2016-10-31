@@ -1377,6 +1377,10 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		if (g_ascii_strcasecmp (p, ".zstd") == 0) {
 			bk->is_compressed = TRUE;
 		}
+		p = end - 4;
+		if (g_ascii_strcasecmp (p, ".zst") == 0) {
+			bk->is_compressed = TRUE;
+		}
 	}
 
 	/* Now check for each proto separately */
