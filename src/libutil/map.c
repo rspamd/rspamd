@@ -481,6 +481,32 @@ read_data:
 			goto err;
 		}
 
+		MAP_RETAIN (cbd->shmem_data, "shmem_data");
+
+		/*
+		 * We know that a map is in the locked state
+		 */
+		if (g_atomic_int_compare_and_exchange (&map->cache->available, 0, 1)) {
+			/* Store cached data */
+			struct rspamd_http_map_cached_cbdata *cache_cbd;
+			struct timeval tv;
+
+			rspamd_strlcpy (map->cache->shmem_name, cbd->shmem_data->shm_name,
+					sizeof (map->cache->shmem_name));
+			map->cache->len = cbd->data_len;
+			map->cache->last_checked = cbd->data->last_checked;
+			cache_cbd = g_slice_alloc0 (sizeof (*cache_cbd));
+			cache_cbd->shm = cbd->shmem_data;
+			cache_cbd->map = map;
+			MAP_RETAIN (cache_cbd->shm, "shmem_data");
+			event_set (&cache_cbd->timeout, -1, EV_TIMEOUT, rspamd_map_cache_cb,
+					cache_cbd);
+			event_base_set (cbd->ev_base, &cache_cbd->timeout);
+			double_to_tv (map->poll_timeout, &tv);
+			event_add (&cache_cbd->timeout, &tv);
+		}
+
+
 		if (cbd->bk->is_compressed) {
 			ZSTD_DStream *zstream;
 			ZSTD_inBuffer zin;
@@ -513,6 +539,7 @@ read_data:
 							ZSTD_getErrorName (r));
 					ZSTD_freeDStream (zstream);
 					g_free (out);
+					MAP_RELEASE (cbd->shmem_data, "shmem_data");
 					goto err;
 				}
 
@@ -537,28 +564,7 @@ read_data:
 			map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 		}
 
-		/*
-		 * We know that a map is in the locked state
-		 */
-		if (g_atomic_int_compare_and_exchange (&map->cache->available, 0, 1)) {
-			/* Store cached data */
-			struct rspamd_http_map_cached_cbdata *cache_cbd;
-			struct timeval tv;
-
-			rspamd_strlcpy (map->cache->shmem_name, cbd->shmem_data->shm_name,
-					sizeof (map->cache->shmem_name));
-			map->cache->len = cbd->data_len;
-			map->cache->last_checked = cbd->data->last_checked;
-			cache_cbd = g_slice_alloc0 (sizeof (*cache_cbd));
-			cache_cbd->shm = cbd->shmem_data;
-			cache_cbd->map = map;
-			MAP_RETAIN (cache_cbd->shm, "shmem_data");
-			event_set (&cache_cbd->timeout, -1, EV_TIMEOUT, rspamd_map_cache_cb,
-					cache_cbd);
-			event_base_set (cbd->ev_base, &cache_cbd->timeout);
-			double_to_tv (map->poll_timeout, &tv);
-			event_add (&cache_cbd->timeout, &tv);
-		}
+		MAP_RELEASE (cbd->shmem_data, "shmem_data");
 
 		cbd->periodic->cur_backend ++;
 		munmap (in, dlen);
@@ -705,7 +711,10 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	if (periodic->need_modify) {
 		/* We are done */
 		periodic->map->fin_callback (&periodic->cbdata);
-		*periodic->map->user_data = periodic->cbdata.cur_data;
+
+		if (periodic->cbdata.cur_data) {
+			*periodic->map->user_data = periodic->cbdata.cur_data;
+		}
 	}
 	else {
 		/* Not modified */
