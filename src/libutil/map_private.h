@@ -50,6 +50,7 @@ enum fetch_proto {
 struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
+	gboolean is_compressed;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union {
 		struct file_map_data *fd;
