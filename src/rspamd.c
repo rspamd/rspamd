@@ -692,7 +692,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 			WTERMSIG (res) == SIGKILL ? "hardly" : "softly");
 	event_del (&w->srv_ev);
 	g_ptr_array_free (w->finish_actions, TRUE);
-	g_free (w->cf);
+	REF_RELEASE (w->cf);
 	g_free (w);
 
 	return TRUE;

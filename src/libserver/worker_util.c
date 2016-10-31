@@ -550,8 +550,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 	wrk->srv = rspamd_main;
 	wrk->type = cf->type;
-	wrk->cf = g_malloc (sizeof (struct rspamd_worker_conf));
-	memcpy (wrk->cf, cf, sizeof (struct rspamd_worker_conf));
+	wrk->cf = cf;
+	REF_RETAIN (cf);
 	wrk->index = index;
 	wrk->ctx = cf->ctx;
 	wrk->finish_actions = g_ptr_array_new ();

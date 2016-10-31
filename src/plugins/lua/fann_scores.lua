@@ -559,7 +559,7 @@ else
         if opts['train']['max_epoch'] then
           max_epoch = opts['train']['max_epoch']
         end
-        cfg:register_worker_script("log_helper",
+        local ret = cfg:register_worker_script("log_helper",
           function(score, req_score, results, cf, id, extra)
             -- map (snd x) (filter (fst x == module_id) extra)
             local extra_fann = map(function(e) return e[2] end,
@@ -572,6 +572,10 @@ else
                 opts['train'], extra_fann)
             end
         end)
+
+        if not ret then
+          rspamd_logger.errx(cfg, 'cannot find worker "log_helper"')
+        end
       end)
       rspamd_plugins["fann_score"] = {
         log_callback = function(task)

@@ -2009,7 +2009,6 @@ lua_config_register_worker_script (lua_State *L)
 
 	for (cur = g_list_first (cfg->workers); cur != NULL; cur = g_list_next (cur)) {
 		cf = cur->data;
-
 		wtype = g_quark_to_string (cf->type);
 
 		if (g_ascii_strcasecmp (wtype, worker_type) == 0) {

@@ -195,6 +195,7 @@ struct rspamd_worker_conf {
 	gpointer *ctx;                                  /**< worker's context									*/
 	ucl_object_t *options;                          /**< other worker's options								*/
 	struct rspamd_worker_lua_script *scripts;       /**< registered lua scripts								*/
+	ref_entry_t ref;
 };
 
 enum rspamd_log_format_type {

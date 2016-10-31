@@ -28,6 +28,7 @@
 #include "unix-std.h"
 #include "libutil/multipattern.h"
 #include "monitored.h"
+#include "ref.h"
 #include <math.h>
 
 #define DEFAULT_SCORE 10.0
@@ -939,22 +940,32 @@ rspamd_config_new_group (struct rspamd_config *cfg, struct metric *metric,
 	return gr;
 }
 
+static void
+rspamd_worker_conf_dtor (struct rspamd_worker_conf *wcf)
+{
+	if (wcf) {
+		g_queue_free (wcf->active_workers);
+		g_hash_table_unref (wcf->params);
+		g_slice_free1 (sizeof (*wcf), wcf);
+	}
+}
+
+static void
+rspamd_worker_conf_cfg_fin (gpointer d)
+{
+	struct rspamd_worker_conf *wcf = d;
+
+	REF_RELEASE (wcf);
+}
+
 struct rspamd_worker_conf *
 rspamd_config_new_worker (struct rspamd_config *cfg,
 	struct rspamd_worker_conf *c)
 {
 	if (c == NULL) {
-		c =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_worker_conf));
+		c = g_slice_alloc0 (sizeof (struct rspamd_worker_conf));
 		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_hash_table_destroy,
-			c->params);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_queue_free,
-			c->active_workers);
 #ifdef HAVE_SC_NPROCESSORS_ONLN
 		c->count = sysconf (_SC_NPROCESSORS_ONLN);
 #else
@@ -962,6 +973,10 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 #endif
 		c->rlimit_nofile = 0;
 		c->rlimit_maxcore = 0;
+
+		REF_INIT_RETAIN (c, rspamd_worker_conf_dtor);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				rspamd_worker_conf_cfg_fin, c);
 	}
 
 	return c;

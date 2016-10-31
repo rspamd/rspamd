@@ -173,6 +173,8 @@ start_log_helper (struct rspamd_worker *worker)
 {
 	struct log_helper_ctx *ctx = worker->ctx;
 	gssize r = -1;
+	gint nscripts = 0;
+	struct rspamd_worker_lua_script *tmp;
 	static struct rspamd_srv_command srv_cmd;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
@@ -182,6 +184,9 @@ start_log_helper (struct rspamd_worker *worker)
 	ctx->cfg = worker->srv->cfg;
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;
+
+	DL_COUNT (worker->cf->scripts, tmp, nscripts);
+	msg_info ("started log_helper worker with %d scripts", nscripts);
 
 #ifdef HAVE_SOCK_SEQPACKET
 	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, ctx->pair);
