@@ -1664,9 +1664,12 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		if (checkpoint->waitq->len == 0 ||
 				stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
+		}
 
+		if (stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
+
 		break;
 
 	case RSPAMD_CACHE_PASS_POSTFILTERS:
