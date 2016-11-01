@@ -2000,11 +2000,12 @@ rspamd_controller_handle_savesymbols (
 			ucl_object_unref (obj);
 			return 0;
 		}
+
 		jname = ucl_object_lookup (cur, "name");
 		jvalue = ucl_object_lookup (cur, "value");
 		val = ucl_object_todouble (jvalue);
-		sym =
-			g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
+		sym = g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
+
 		if (sym && fabs (*sym->weight_ptr - val) > 0.01) {
 			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
 				ucl_object_tostring (jname), val)) {
@@ -2017,7 +2018,7 @@ rspamd_controller_handle_savesymbols (
 			}
 			added ++;
 		}
-		else if (sym) {
+		else if (sym && ctx->cfg->dynamic_conf) {
 			if (remove_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
 					ucl_object_tostring (jname))) {
 				added ++;
@@ -2026,15 +2027,20 @@ rspamd_controller_handle_savesymbols (
 	}
 
 	if (added > 0) {
-		if (dump_dynamic_config (ctx->cfg)) {
-			msg_info_session ("<%s> modified %d symbols",
-					rspamd_inet_address_to_string (session->from_addr),
-					added);
+		if (ctx->cfg->dynamic_conf) {
+			if (dump_dynamic_config (ctx->cfg)) {
+				msg_info_session ("<%s> modified %d symbols",
+						rspamd_inet_address_to_string (session->from_addr),
+						added);
 
-			rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+				rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+			}
+			else {
+				rspamd_controller_send_error (conn_ent, 500, "Save error");
+			}
 		}
 		else {
-			rspamd_controller_send_error (conn_ent, 500, "Save error");
+			rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 		}
 	}
 	else {
