@@ -1934,6 +1934,32 @@ rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name
 	return -1;
 }
 
+gboolean
+rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
+		const gchar *name,
+		guint *frequency,
+		gdouble *tm)
+{
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+
+	if (name == NULL) {
+		return FALSE;
+	}
+
+	item = g_hash_table_lookup (cache->items_by_symbol, name);
+
+	if (item != NULL) {
+		*frequency = item->frequency;
+		*tm = item->avg_time;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static gint
 rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
 		const gchar *name)

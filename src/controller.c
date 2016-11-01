@@ -734,6 +734,9 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 		group_symbols = ucl_object_typed_new (UCL_ARRAY);
 
 		while (g_hash_table_iter_next (&sit, &k, &v)) {
+			guint freq = 0;
+			gdouble tm = 0.0;
+
 			sym = v;
 			sym_obj = ucl_object_typed_new (UCL_OBJECT);
 
@@ -746,6 +749,16 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 				ucl_object_insert_key (sym_obj,
 					ucl_object_fromstring (sym->description),
 					"description", 0, false);
+			}
+
+			if (rspamd_symbols_cache_stat_symbol (session->ctx->cfg->cache,
+					sym->name, &freq, &tm)) {
+				ucl_object_insert_key (sym_obj,
+						ucl_object_fromint (freq),
+						"frequency", 0, false);
+				ucl_object_insert_key (sym_obj,
+						ucl_object_fromdouble (tm),
+						"time", 0, false);
 			}
 
 			ucl_array_append (group_symbols, sym_obj);
