@@ -488,7 +488,7 @@ Within maps you can use whitespace or comments. For example, here is an example 
     10.0.0.0/8
     fe80::/64
 
-There is a special module called `multimap` that allows you to define your own maps without writing lua rules. You can check the module's [documentation](/modules/multimap.html) and create your configuration in `rspamd.conf.override`.
+There is a special module called `multimap` that allows you to define your own maps without writing lua rules. You can check the module's [documentation](/doc/modules/multimap.html) and create your configuration in `rspamd.conf.override`.
 
 ## Configuring RBLs
 
