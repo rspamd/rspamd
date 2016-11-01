@@ -171,7 +171,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
     if err then
       rspamd_logger.errx(cfg, "cannot save dynamic conf version to redis: %s", err)
     else
-      rspamd_logger.info(cfg, "saved dynamic conf version: %s", data)
+      rspamd_logger.infox(cfg, "saved dynamic conf version: %s", data)
     end
   end
   local function redis_data_set_cb(err, data)
@@ -288,7 +288,7 @@ end
 local function add_dynamic_symbol(cfg, sym, score)
   local add = false
   if not cur_settings.data then
-    rspamd_logger.errx(cfg, 'cannot add symbol as no dynamic conf is loaded')
+    cur_settings.data = {}
   end
 
   if not cur_settings.data.scores then
