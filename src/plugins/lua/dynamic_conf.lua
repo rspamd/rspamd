@@ -172,6 +172,9 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       rspamd_logger.errx(cfg, "cannot save dynamic conf version to redis: %s", err)
     else
       rspamd_logger.infox(cfg, "saved dynamic conf version: %s", data)
+      cur_settings.updates.has_updates = false
+      cur_settings.updates.symbols = {}
+      cur_settings.updates.actions = {}
     end
   end
   local function redis_data_set_cb(err, data)
