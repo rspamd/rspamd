@@ -86,7 +86,7 @@ local function asn_check(task)
             redis_key, tostring(options['expire'])
           })
         else
-          rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+          rspamd_logger.infox(task, 'got error while connecting to redis: %1', upstream:get_addr())
           upstream:fail()
         end
       end

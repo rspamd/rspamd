@@ -96,7 +96,7 @@ local function dmarc_callback(task)
   local dmarc_domain
   local ip_addr = task:get_ip()
 
-  if ((not check_user and task:get_user()) or
+  if ((not check_authed and task:get_user()) or
       (not check_local and ip_addr and ip_addr:is_local())) then
     rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
     return
@@ -145,6 +145,7 @@ local function dmarc_callback(task)
       return maybe_force_action('na')
     end
 
+    local pct
     local reason = {}
     local strict_spf = false
     local strict_dkim = false
@@ -221,7 +222,7 @@ local function dmarc_callback(task)
             end
           end
 
-          local pct = elts['pct']
+          pct = elts['pct']
           if pct then
             pct = tonumber(pct)
           end

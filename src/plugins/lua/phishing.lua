@@ -49,6 +49,7 @@ local function phishing_cb(task)
       local found_path = false
       local found_query = false
       local data = nil
+      local d
 
       if elt then
         local path = url:get_path()
@@ -166,7 +167,7 @@ local function phishing_cb(task)
   end
 end
 
-local function phishing_map(mapname, phishmap)
+local function phishing_map(mapname, phishmap, id)
   if opts[mapname] then
     local xd = {}
     if type(opts[mapname]) == 'table' then
@@ -329,10 +330,11 @@ local function phishtank_json_cb(string)
 end
 
 if opts then
+  local id
   if opts['symbol'] then
     symbol = opts['symbol']
     -- Register symbol's callback
-    local id = rspamd_config:register_symbol({
+    id = rspamd_config:register_symbol({
       name = symbol,
       callback = phishing_cb
     })
@@ -394,13 +396,13 @@ if opts then
       name = phishtank_symbol,
     })
   end
-  if opts['domains'] and type(opt['domains']) == 'string' then
+  if opts['domains'] and type(opts['domains']) == 'string' then
     domains = rspamd_config:add_map({
       url = opts['domains'],
       type = 'set',
       description = 'Phishing domains'
     })
   end
-  phishing_map('strict_domains', strict_domains)
-  phishing_map('redirector_domains', redirector_domains)
+  phishing_map('strict_domains', strict_domains, id)
+  phishing_map('redirector_domains', redirector_domains, id)
 end

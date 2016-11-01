@@ -255,9 +255,9 @@ local function apply_regexp_filter(task, filter, fn, r)
     if not r['re_filter'] then
       rspamd_logger.errx(task, 'bad search filter: %s', filter)
     else
-      local results = r['re_filter']:search(fn)
+      local results = r['re_filter']:search(fn, false, true)
       if results then
-        return results[1]
+        return results[1][2]
       else
         return nil
       end
@@ -305,7 +305,7 @@ local multimap_filters = {
   header = apply_addr_filter,
   url = apply_url_filter,
   filename = apply_filename_filter,
-  mempool = apply_regex_filter,
+  mempool = apply_regexp_filter,
   --content = apply_content_filter, -- Content filters are special :(
 }
 
