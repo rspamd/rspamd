@@ -119,7 +119,6 @@ local function phishing_cb(task)
       end
 
       if url:is_phished() and not url:is_redirected() then
-        local found = false
         local purl = url:get_phished()
         local tld = url:get_tld()
         local ptld = purl:get_tld()
@@ -138,29 +137,28 @@ local function phishing_cb(task)
         end
         rspamd_logger.debugx(task, "distance: %1 -> %2: %3", tld, ptld, dist)
 
-        if #redirector_domains > 0 then
-          for _,rule in ipairs(redirector_domains) do
-            if rule['map']:get_key(tld) or rule['map']:get_key(url:get_host()) then
-              task:insert_result(rule['symbol'], weight, ptld .. '->' .. tld)
-              found = true
+        local function found_in_map(map, url, weight)
+          if #map > 0 then
+            for _,rule in ipairs(map) do
+                for _,dn in ipairs({url:get_tld(), url:get_host()}) do
+                  if rule['map']:get_key(dn) then
+                    task:insert_result(rule['symbol'], weight, ptld .. '->' .. dn)
+                    return true
+                  end
+                end
             end
           end
         end
-        if not found and #strict_domains > 0 then
-          for _,rule in ipairs(strict_domains) do
-            if rule['map']:get_key(ptld) or rule['map']:get_key(purl:get_host()) then
-              task:insert_result(rule['symbol'], 1.0, ptld .. '->' .. tld)
-              found = true
-            end
-          end
-        end
-        if not found then
-          if domains then
-            if domains:get_key(ptld) then
+
+        if not found_in_map(redirector_domains, url, weight) then
+          if not found_in_map(strict_domains, purl, 1.0) then
+            if domains then
+              if domains:get_key(ptld) then
+                task:insert_result(symbol, weight, ptld .. '->' .. tld)
+              end
+            else
               task:insert_result(symbol, weight, ptld .. '->' .. tld)
             end
-          else
-            task:insert_result(symbol, weight, ptld .. '->' .. tld)
           end
         end
       end
