@@ -75,6 +75,7 @@ struct html_block {
 	struct html_color background_color;
 	struct html_tag_component style;
 	guint font_size;
+	gboolean visible;
 	gchar *class;
 };
 

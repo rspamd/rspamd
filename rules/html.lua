@@ -187,7 +187,7 @@ rspamd_config.R_WHITE_ON_WHITE = {
         hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag, len)
           local bl = tag:get_extra()
           if bl then
-            if bl['bgcolor'] and bl['color'] then
+            if bl['bgcolor'] and bl['color'] and bl['visible'] then
 
               local color = bl['color']
               local bgcolor = bl['bgcolor']

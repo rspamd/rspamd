@@ -1558,6 +1558,13 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 						rspamd_html_process_color (c, p - c, &bl->background_color);
 						msg_debug_html ("got bgcolor: %xd", bl->background_color.d.val);
 					}
+					else if (klen == 7 && g_ascii_strncasecmp (key, "display", 7) == 0) {
+						if (p - c >= 4 && rspamd_substring_search_caseless (c, p - c,
+								"none", 4) != -1) {
+							bl->visible = FALSE;
+							msg_debug_html ("tag is not visible");
+						}
+					}
 				}
 
 				key = NULL;
@@ -1597,6 +1604,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
 	bl->tag = tag;
+	bl->visible = TRUE;
 
 	while (cur) {
 		comp = cur->data;
@@ -2111,7 +2119,14 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 				else if (!(cur_tag->flags & FL_CLOSING) &&
 						(cur_tag->flags & FL_BLOCK)) {
+					struct html_block *bl;
+
 					rspamd_html_process_block_tag (pool, cur_tag, hc);
+					bl = cur_tag->extra;
+
+					if (bl && !bl->visible) {
+						state = content_ignore;
+					}
 				}
 			}
 			else {

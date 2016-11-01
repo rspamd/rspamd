@@ -318,7 +318,7 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 	struct rspamd_lua_text *t;
 	struct html_tag **ptag;
 
-	lua_createtable (L, 0, 4);
+	lua_createtable (L, 0, 5);
 
 	if (bl->tag) {
 		lua_pushstring (L, "tag");
@@ -359,6 +359,10 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 		t->flags = 0;
 		lua_settable (L, -3);
 	}
+
+	lua_pushstring (L, "visible");
+	lua_pushboolean (L, bl->visible);
+	lua_settable (L, -3);
 }
 
 static gint
