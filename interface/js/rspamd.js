@@ -654,15 +654,7 @@
         }
         // @get symbols into modal form
         function getSymbols() {
-            var symbols_length = 50;
-
             if (symbols) {
-                var sl = document.getElementsByName('symbols_length')[0];
-                if (sl !== undefined) {
-                    symbols_length = parseInt(sl.value);
-                } else {
-                    symbols_length = 50;
-                }
                 symbols.destroy();
                 symbols = null;
                 $('#symbolsTable').children('tbody').remove();
@@ -701,7 +693,7 @@
                                 item.frequency = 0;
                             }
                             items.push('<tr>' +
-                                '<td data-order="' + item.symbol + '">' + item.symbol + '</td>' +
+                                '<td data-order="' + item.symbol + '"><strong>' + item.symbol + '</strong></td>' +
                                 '<td data-order="' + group.group + '"><div class="cell-overflow" tabindex="1" title="' + group.group + '">' + group.group + '</div></td>' +
                                 '<td data-order="' + item.description + '"><div class="cell-overflow" tabindex="1" title="' + item.description + '">' + item.description + '</div></td>' +
                                 '<td data-order="' + item.weight + '"><input class="numeric" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
@@ -720,34 +712,27 @@
                         html: items.join('')
                     }).insertAfter('#symbolsTable thead');
                     symbols = $('#symbolsTable').DataTable({
-                        "aLengthMenu": [
-                            [50, 100, 200, -1],
-                            [50, 100, 200, "All"]
-                        ],
+                        "paging": false,
                         "orderMulti": true,
                         "order": [
                             [1, "asc"],
                             [0, "asc"],
                             [3, "desc"]
                         ],
-                        "pageLength": symbols_length,
+                        "info": false,
                         "columns": [
-                            {"width": "30%", "searchable": true, "orderable": true},
+                            {"width": "25%", "searchable": true, "orderable": true},
                             {"width": "10%", "searchable": true, "orderable": true},
-                            {"width": "30%", "searchable": false, "orderable": false},
+                            {"width": "25%", "searchable": false, "orderable": false},
+                            {"width": "10%", "searchable": false, "orderable": true, "type": "num"},
                             {"searchable": false, "orderable": true, "type": "num"},
                             {"searchable": false, "orderable": true, "type": "num"},
-                            {"searchable": false, "orderable": true, "type": "num"},
-                            {"width": "10%", "searchable": false, "orderable": false, "type": "html"}
-                        ]
+                            {"width": "5%", "searchable": false, "orderable": false, "type": "html"}
+                        ],
                     });
                     symbols.columns.adjust().draw();
                     $('#symbolsTable :button').on('click',
                         function(){saveSymbols("/savesymbols", "symbolsTable")});
-                    $('#symbolsTable').on( 'page.dt', function () {
-                        $('#symbolsTable :button').on('click',
-                            function(){saveSymbols("/savesymbols", "symbolsTable")});
-                    });
                 },
                 error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
