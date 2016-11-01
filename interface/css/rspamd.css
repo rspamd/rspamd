@@ -27,7 +27,7 @@ a {
 	outline:none;
 	}
 textarea {
-	font-family:Monaco,Menlo,Consolas,"Courier New",monospace;
+	font-family:"Courier New", Courier, monospace;
 	}
 
 .login {
@@ -145,7 +145,7 @@ input::-webkit-inner-spin-button {
 		}
 	.table-log td,
 	.table-log td .label {
-		font-family:Monaco,Menlo,Consolas,"Courier New",monospace;
+		font-family:"Trebuchet MS", Helvetica, sans-serif;
 		font-size:11px;
 		}
 	.table-log th:first-child,
