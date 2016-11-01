@@ -114,7 +114,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)},
 	{Tag_SELECT, "select", (CM_INLINE | CM_FIELD)},
 	{Tag_SMALL, "small", (CM_INLINE)},
-	{Tag_SPAN, "span", (CM_INLINE|FL_BLOCK)},
+	{Tag_SPAN, "span", (CM_BLOCK|FL_BLOCK)},
 	{Tag_STRIKE, "strike", (CM_INLINE)},
 	{Tag_STRONG, "strong", (CM_INLINE)},
 	{Tag_STYLE, "style", (CM_HEAD)},
