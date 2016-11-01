@@ -1446,7 +1446,7 @@ rspamd_lua_push_header (lua_State * L,
 			}
 
 			if (rh->decoded) {
-				rspamd_lua_table_set (L, "decoded", rh->value);
+				rspamd_lua_table_set (L, "decoded", rh->decoded);
 			}
 
 			lua_pushstring (L, "tab_separated");
