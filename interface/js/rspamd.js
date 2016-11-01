@@ -29,6 +29,7 @@
         var pie;
         var history;
         var graph;
+        var symbols;
 
         var selected = []; // Keep graph selectors state
 
@@ -57,6 +58,10 @@
             }
             if (history) {
                 history.destroy();
+            }
+            if (symbols) {
+                symbols.destroy();
+                symbols = null;
             }
             cleanCredentials();
             connectRSPAMD();
@@ -168,8 +173,9 @@
             }
             $('#statWidgets').empty();
             $('#listMaps').empty();
-            $('#historyLog tbody').remove();
             $('#modalBody').empty();
+            $('#historyLog tbody').remove();
+            $('#symbolsTable tbody').remove();
             password = '';
         }
         function isLogged() {
@@ -261,7 +267,7 @@
             }
             if (mode === 'update') {
                 $('#modalBody').empty();
-                getSymbols();
+                getMaps();
             }
             $.each(data, function (i, item) {
                 $.ajax({
@@ -609,7 +615,7 @@
 
                         items.push(
                             '<tr><td data-order="' + item.unix_time + '">' + item.time + '</td>' +
-                            '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</td>' +
+                            '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</div></td>' +
                             '<td data-order="' + item.ip + '"><div class="cell-overflow" tabindex="1" title="' + item.ip + '">' + item.ip + '</div></td>' +
                             '<td data-order="' + item.action + '"><span class="label ' + action + '">' + item.action + '</span></td>' +
                             '<td data-order="' + item.score + '"><span class="label ' + score + '">' + item.score.toFixed(2) + ' / ' + item.required_score.toFixed(2) + '</span></td>' +
@@ -639,6 +645,19 @@
         }
         // @get symbols into modal form
         function getSymbols() {
+            var symbols_length = 50;
+
+            if (symbols) {
+                var sl = document.getElementsByName('symbols_length')[0];
+                if (sl !== undefined) {
+                  symbols_length = parseInt(sl.value);
+                } else {
+                  symbols_length = 50;
+                }
+                symbols.destroy();
+                symbols = null;
+                $('#symbolsTable').children('tbody').remove();
+            }
             var items = [];
             $.ajax({
                 dataType: 'json',
@@ -649,17 +668,7 @@
                     xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
-                    $('#modalBody').empty();
-                    data.sort(function(a, b) {
-                        return a.group.localeCompare(b.group);
-                    });
                     $.each(data, function (i, group) {
-                        items.push('	<div class="row row-bordered" data-slider="hover">' +
-                            '<h4>' + group.group + '</h4>' +
-                            '</div>');
-                        group.rules.sort(function(a, b) {
-                            return a.symbol.localeCompare(b.symbol);
-                        });
                         $.each(group.rules, function (i, item) {
                             var max = 20;
                             var min = -20;
@@ -669,27 +678,32 @@
                             if (item.weight < min) {
                                 min = item.weight * 2;
                             }
-                            items.push('	<div class="row row-bordered" data-slider="hover">' +
-                                '<label class="col-md-7" for="' + item.symbol + '" title="' + item.description + '">' +
-                                '<code>' + item.symbol + '</code><p class="symbol-description">' + item.description + '</p>' +
-                                '</label>' +
-                                '<div class="col-md-3 spin-cell">' +
-                                '<input class="numeric" data-role="numerictextbox" autocomplete="off" "type="number" class="input-mini" min="' +
+                            item.time = 0;
+                            item.frequency = 0;
+                            items.push('<tr>' +
+                                '<td data-order="' + item.symbol + '">' + item.symbol + '</td>' +
+                                '<td data-order="' + group.group + '"><div class="cell-overflow" tabindex="1" title="' + group.group + '">' + group.group + '</div></td>' +
+                                '<td data-order="' + item.description + '"><div class="cell-overflow" tabindex="1" title="' + item.description + '">' + item.description + '</div></td>' +
+                                '<td data-order="' + item.weight + '"><input class="numeric" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
                                 min + '" max="' +
                                 max + '" step="' + decimalStep(item.weight) +
                                 '" tabindex="1" value="' + Number(item.weight).toFixed(2) +
                                 '" id="' + item.symbol + '">' +
-                                '</div>' +
-                                '</div>');
+                                '</td>' +
+                                '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
+                                '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
+                                '<td></td>' +
+                                '</tr>');
                         });
                     });
-                    $('<form/>', {
-                        id: 'symbolsForm',
-                        method: 'post',
-                        action: '/savesymbols',
-                        'data-type': 'symbols',
-                        style: 'display:none',
-                        html: items.join('') }).appendTo('#modalBody');
+                    $('<tbody/>', { html: items.join('') }).insertAfter('#symbolsTable thead');
+                    symbols = $('#symbolsTable').DataTable({
+                        "aLengthMenu": [[100, 200, -1], [100, 200, "All"]],
+                        "bStateSave": true,
+                        "orderMulti": true,
+                        "order": [[ 1, "asc" ], [0, "asc"], [3, "desc"]],
+                        "pageLength": symbols_length
+                    });
                 },
                 error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
@@ -1143,7 +1157,6 @@
         $('#configuration_nav').bind('click', function (e) {
             getActions();
             getMaps();
-            getSymbols();
         });
 
         $(document).ajaxStart(function () {
@@ -1160,6 +1173,9 @@
         });
         $('#history_nav').bind('click', function() {
             getHistory();
+        });
+        $('#symbols_nav').bind('click', function() {
+            getSymbols();
         });
     });
 })();
