@@ -75,26 +75,24 @@
         });
         // @supports session storage
         function supportsSessionStorage() {
-            return typeof(Storage) !== "undefined";
+            return typeof (Storage) !== "undefined";
         }
         // @return password
         function getPassword() {
             if (sessionState()) {
                 if (!supportsSessionStorage()) {
                     return password = $.cookie('rspamdpasswd');
-                }
-                else {
+                } else {
                     return password = sessionStorage.getItem('Password');
                 }
             }
         }
         // @return session state
         function sessionState() {
-            if ((supportsSessionStorage() && (sessionStorage.getItem('Password') !== null))
-                || (!supportsSessionStorage() && ($.cookie('rspamdsession')) !== null)) {
+            if ((supportsSessionStorage() && (sessionStorage.getItem('Password') !== null)) ||
+                (!supportsSessionStorage() && ($.cookie('rspamdsession')) !== null)) {
                 return true;
-            }
-            else {
+            } else {
                 return false;
             }
         }
@@ -135,10 +133,17 @@
         // @save credentials
         function saveCredentials(data, password) {
             if (!supportsSessionStorage()) {
-                $.cookie('rspamdsession', data, { expires: 1 }, { path: '/' });
-                $.cookie('rspamdpasswd', password, { expires: 1 }, { path: '/' });
-            }
-            else {
+                $.cookie('rspamdsession', data, {
+                    expires: 1
+                }, {
+                    path: '/'
+                });
+                $.cookie('rspamdpasswd', password, {
+                    expires: 1
+                }, {
+                    path: '/'
+                });
+            } else {
                 sessionStorage.setItem('Password', password);
                 sessionStorage.setItem('Credentials', JSON.stringify(data));
             }
@@ -147,17 +152,19 @@
         function saveActions(data) {
             if (!supportsSessionStorage()) {
                 $.cookie('rspamdactions', data);
-            }
-            else {
+            } else {
                 sessionStorage.setItem('Actions', JSON.stringify(data));
             }
         }
         // @update credentials
         function saveMaps(data) {
             if (!supportsSessionStorage()) {
-                $.cookie('rspamdmaps', data, { expires: 1 }, { path: '/' });
-            }
-            else {
+                $.cookie('rspamdmaps', data, {
+                    expires: 1
+                }, {
+                    path: '/'
+                });
+            } else {
                 sessionStorage.setItem('Maps', JSON.stringify(data));
             }
         }
@@ -167,8 +174,7 @@
                 $.removeCookie('rspamdlogged');
                 $.removeCookie('rspamdsession');
                 $.removeCookie('rspamdpasswd');
-            }
-            else {
+            } else {
                 sessionStorage.clear();
             }
             $('#statWidgets').empty();
@@ -178,13 +184,13 @@
             $('#symbolsTable tbody').remove();
             password = '';
         }
+
         function isLogged() {
             if (!supportsSessionStorage()) {
                 if ($.cookie('rspamdpasswd') != null) {
                     return true;
                 }
-            }
-            else {
+            } else {
                 if (sessionStorage.getItem('Password') != null) {
                     return true;
                 }
@@ -197,8 +203,8 @@
                 $(alert).hide().remove();
             }
             var alert = $('<div class="alert ' + alertState + '" style="display:none">' +
-                '<button type="button" class="close" data-dismiss="alert" tutle="Dismiss">&times;</button>' +
-                '<strong>' + alertText + '</strong>')
+                    '<button type="button" class="close" data-dismiss="alert" tutle="Dismiss">&times;</button>' +
+                    '<strong>' + alertText + '</strong>')
                 .prependTo('body');
             $(alert).show();
             setTimeout(function () {
@@ -229,8 +235,7 @@
                         if ((item.editable == false)) {
                             caption = 'View';
                             label = '<span class="label label-default">Read</span>';
-                        }
-                        else {
+                        } else {
                             caption = 'Edit';
                             label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
                         }
@@ -260,9 +265,12 @@
         function getMapById(mode) {
             var data;
             if (!supportsSessionStorage()) {
-                data = $.cookie('rspamdmaps', data, { expires: 1 }, { path: '/' });
-            }
-            else {
+                data = $.cookie('rspamdmaps', data, {
+                    expires: 1
+                }, {
+                    path: '/'
+                });
+            } else {
                 data = JSON.parse(sessionStorage.getItem('Maps'));
             }
             if (mode === 'update') {
@@ -287,10 +295,10 @@
                             disabled = 'disabled="disabled"';
                         }
 
-                        $('<form class="form-horizontal form-map" method="post "action="/savemap" data-type="map" id="'
-                            + item.map + '" style="display:none">' +
-                            '<textarea class="list-textarea"' + disabled + '>' + text
-                            + '</textarea>' +
+                        $('<form class="form-horizontal form-map" method="post "action="/savemap" data-type="map" id="' +
+                            item.map + '" style="display:none">' +
+                            '<textarea class="list-textarea"' + disabled + '>' + text +
+                            '</textarea>' +
                             '</form').appendTo('#modalBody');
                     }
                 });
@@ -319,8 +327,7 @@
             seconds = seconds >= 10 ? seconds : '0' + seconds;
             if (days > 0) {
                 return days + ' days, ' + hours + ':' + minutes + ':' + seconds;
-            }
-            else {
+            } else {
                 return hours + ':' + minutes + ':' + seconds;
             }
         }
@@ -332,51 +339,41 @@
             var data;
             if (!supportsSessionStorage()) {
                 data = $.cookie('rspamdsession');
-            }
-            else {
+            } else {
                 data = JSON.parse(sessionStorage.getItem('Credentials'));
             }
             var stat_w = [];
             $.each(data, function (i, item) {
                 var widget = '';
-                if (i == 'auth') {
-                }
-                else if (i == 'error') {
-                }
-                else if (i == 'version') {
+                if (i == 'auth') {} else if (i == 'error') {} else if (i == 'version') {
                     widget = '<div class="left"><strong>' + item + '</strong>' +
                         i + '</div>';
                     $(widget).appendTo(widgets);
-                }
-                else if (i == 'uptime') {
+                } else if (i == 'uptime') {
                     widget = '<div class="right"><strong>' + msToTime(item) +
                         '</strong>' + i + '</div>';
                     $(widget).appendTo(widgets);
-                }
-                else {
+                } else {
                     widget = '<li class="stat-box"><div class="widget"><strong>' +
                         Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
                     if (i == 'scanned') {
                         stat_w[0] = widget;
-                    }
-                    else if (i == 'clean') {
+                    } else if (i == 'clean') {
                         stat_w[1] = widget;
-                    }
-                    else if (i == 'greylist') {
+                    } else if (i == 'greylist') {
                         stat_w[2] = widget;
-                    }
-                    else if (i == 'probable') {
+                    } else if (i == 'probable') {
                         stat_w[3] = widget;
-                    }
-                    else if (i == 'reject') {
+                    } else if (i == 'reject') {
                         stat_w[4] = widget;
-                    }
-                    else if (i == 'learned') {
+                    } else if (i == 'learned') {
                         stat_w[5] = widget;
                     }
                 }
             });
-            $.each(stat_w, function (i, item) { $(item).appendTo(widgets); });
+            $.each(stat_w, function (i, item) {
+                $(item).appendTo(widgets);
+            });
             $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
             $(widgets).show();
             window.setTimeout(statWidgets, 10000);
@@ -393,8 +390,7 @@
             $(target).modal(show = true, backdrop = true, keyboard = show);
             if (editable === false) {
                 $('#modalSave').hide();
-            }
-            else {
+            } else {
                 $('#modalSave').show();
             }
             return false;
@@ -403,6 +399,7 @@
         $(document).on('click', '[data-dismiss="modal"]', function (e) {
             $('#modalBody form').hide();
         });
+
         function getChart() {
             $.ajax({
                 dataType: 'json',
@@ -444,7 +441,7 @@
                         },
                         "data": {
                             //"sortOrder": "value-desc",
-                            "content": data.filter(function(elt) {
+                            "content": data.filter(function (elt) {
                                 return elt.value > 0;
                             })
                         },
@@ -515,12 +512,19 @@
                 interpolate: selected.selInterpolate,
 
                 legend: {
-                    entries: [
-                        {label: "Rejected",      color: "#FF0000"},
-                        {label: "Probable spam", color: "#FFD700"},
-                        {label: "Greylisted",    color: "#436EEE"},
-                        {label: "Clean",         color: "#66cc00"}
-                    ]
+                    entries: [{
+                        label: "Rejected",
+                        color: "#FF0000"
+                    }, {
+                        label: "Probable spam",
+                        color: "#FFD700"
+                    }, {
+                        label: "Greylisted",
+                        color: "#436EEE"
+                    }, {
+                        label: "Clean",
+                        color: "#66cc00"
+                    }]
                 }
             };
             graph = new D3Evolution("graph", options);
@@ -532,7 +536,9 @@
                 type: 'GET',
                 url: 'graph',
                 jsonp: false,
-                data: {"type": type},
+                data: {
+                    "type": type
+                },
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader('Password', getPassword());
                 },
@@ -569,9 +575,9 @@
             if (history) {
                 var history_length = document.getElementsByName('historyLog_length')[0];
                 if (history_length !== undefined) {
-                  history_length = parseInt(history_length.value);
+                    history_length = parseInt(history_length.value);
                 } else {
-                  history_length = 10;
+                    history_length = 10;
                 }
                 history.destroy();
                 $('#historyLog').children('tbody').remove();
@@ -594,22 +600,18 @@
 
                         if (item.action === 'clean' || item.action === 'no action') {
                             action = 'label-success';
-                        }
-                        else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
+                        } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
                             action = 'label-warning';
-                        }
-                        else if (item.action === 'spam' || item.action === 'reject') {
+                        } else if (item.action === 'spam' || item.action === 'reject') {
                             action = 'label-danger';
-                        }
-                        else {
+                        } else {
                             action = 'label-info';
                         }
 
                         var score;
                         if (item.score < item.required_score) {
                             score = 'label-success';
-                        }
-                        else {
+                        } else {
                             score = 'label-danger';
                         }
 
@@ -624,22 +626,29 @@
                             '<td data-order="' + item.scan_time + '">' + item.scan_time.toFixed(3) + '</td>' +
                             '<td data-order="' + item.user + '"><div class="cell-overflow" tabindex="1" "title="' + item.user + '">' + item.user + '</div></td></tr>');
                     });
-                    $('<tbody/>', { html: items.join('') }).insertAfter('#historyLog thead');
+                    $('<tbody/>', {
+                        html: items.join('')
+                    }).insertAfter('#historyLog thead');
                     history = $('#historyLog').DataTable({
-                        "aLengthMenu": [[100, 200, -1], [100, 200, "All"]],
+                        "aLengthMenu": [
+                            [100, 200, -1],
+                            [100, 200, "All"]
+                        ],
                         "bStateSave": true,
-                        "order": [[ 0, "desc" ]],
+                        "order": [
+                            [0, "desc"]
+                        ],
                         "pageLength": history_length
                     });
                 }
             });
         }
+
         function decimalStep(number) {
             var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, '').length;
             if (digits == 0 || digits > 4) {
                 return 0.1;
-            }
-            else {
+            } else {
                 return 1.0 / (Math.pow(10, digits));
             }
         }
@@ -650,9 +659,9 @@
             if (symbols) {
                 var sl = document.getElementsByName('symbols_length')[0];
                 if (sl !== undefined) {
-                  symbols_length = parseInt(sl.value);
+                    symbols_length = parseInt(sl.value);
                 } else {
-                  symbols_length = 50;
+                    symbols_length = 50;
                 }
                 symbols.destroy();
                 symbols = null;
@@ -678,8 +687,19 @@
                             if (item.weight < min) {
                                 min = item.weight * 2;
                             }
-                            item.time = 0;
-                            item.frequency = 0;
+                            var label;
+                            if (item.weight < 0) {
+                                label = 'label-success';
+                            } else {
+                                label = 'label-danger';
+                            }
+
+                            if (!item.time) {
+                                item.time = 0;
+                            }
+                            if (!item.frequency) {
+                                item.frequency = 0;
+                            }
                             items.push('<tr>' +
                                 '<td data-order="' + item.symbol + '">' + item.symbol + '</td>' +
                                 '<td data-order="' + group.group + '"><div class="cell-overflow" tabindex="1" title="' + group.group + '">' + group.group + '</div></td>' +
@@ -687,22 +707,46 @@
                                 '<td data-order="' + item.weight + '"><input class="numeric" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
                                 min + '" max="' +
                                 max + '" step="' + decimalStep(item.weight) +
-                                '" tabindex="1" value="' + Number(item.weight).toFixed(2) +
-                                '" id="' + item.symbol + '">' +
-                                '</td>' +
+                                '" tabindex="1" value="' + Number(item.weight).toFixed(3) +
+                                '" id="_sym_' + item.symbol + '"><span class="label ' + label + '">●' +
+                                '</span></td>' +
                                 '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
                                 '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
-                                '<td></td>' +
+                                '<td><button type="button" class="btn btn-primary btn-sm">Save</button></td>' +
                                 '</tr>');
                         });
                     });
-                    $('<tbody/>', { html: items.join('') }).insertAfter('#symbolsTable thead');
+                    $('<tbody/>', {
+                        html: items.join('')
+                    }).insertAfter('#symbolsTable thead');
                     symbols = $('#symbolsTable').DataTable({
-                        "aLengthMenu": [[100, 200, -1], [100, 200, "All"]],
-                        "bStateSave": true,
+                        "aLengthMenu": [
+                            [50, 100, 200, -1],
+                            [50, 100, 200, "All"]
+                        ],
                         "orderMulti": true,
-                        "order": [[ 1, "asc" ], [0, "asc"], [3, "desc"]],
-                        "pageLength": symbols_length
+                        "order": [
+                            [1, "asc"],
+                            [0, "asc"],
+                            [3, "desc"]
+                        ],
+                        "pageLength": symbols_length,
+                        "columns": [
+                            {"width": "30%", "searchable": true, "orderable": true},
+                            {"width": "10%", "searchable": true, "orderable": true},
+                            {"width": "30%", "searchable": false, "orderable": false},
+                            {"searchable": false, "orderable": true, "type": "num"},
+                            {"searchable": false, "orderable": true, "type": "num"},
+                            {"searchable": false, "orderable": true, "type": "num"},
+                            {"width": "10%", "searchable": false, "orderable": false, "type": "html"}
+                        ]
+                    });
+                    symbols.columns.adjust().draw();
+                    $('#symbolsTable :button').on('click',
+                        function(){saveSymbols("/savesymbols", "symbolsTable")});
+                    $('#symbolsTable').on( 'page.dt', function () {
+                        $('#symbolsTable :button').on('click',
+                            function(){saveSymbols("/savesymbols", "symbolsTable")});
                     });
                 },
                 error: function (data) {
@@ -741,18 +785,19 @@
             getHistory();
         });
 
+        $('#updateSymbols').on('click', function () {
+            getSymbols();
+        });
+
         // @upload text
         function uploadText(data, source, headers) {
             if (source === 'spam') {
                 var url = 'learnspam';
-            }
-            else if (source === 'ham') {
+            } else if (source === 'ham') {
                 var url = 'learnham';
-            }
-            else if (source == 'fuzzy') {
+            } else if (source == 'fuzzy') {
                 var url = 'fuzzyadd';
-            }
-            else if (source === 'scan') {
+            } else if (source === 'scan') {
                 var url = 'scan';
             }
             $.ajax({
@@ -778,7 +823,7 @@
                     try {
                         var json = $.parseJSON(xhr.responseText);
                         var errorMsg = $('<a>').text(json.error).html();
-                    } catch(err) {
+                    } catch (err) {
                         var errorMsg = $('<a>').text("Error: [" + textStatus + "] " + errorThrown).html();
                     }
                     alertMessage('alert-error', errorMsg);
@@ -819,9 +864,9 @@
                             var score = 'label-danger';
                         }
                         $('<tbody id="tmpBody"><tr>' +
-                            '<td><span class="label ' + action + '">' + data.action + '</span></td>' +
-                            '<td><span class="label ' + score + '">' + data.score.toFixed(2) + '/' + data.required_score.toFixed(2) + '</span></td>' +
-                            '</tr></tbody>')
+                                '<td><span class="label ' + action + '">' + data.action + '</span></td>' +
+                                '<td><span class="label ' + score + '">' + data.score.toFixed(2) + '/' + data.required_score.toFixed(2) + '</span></td>' +
+                                '</tr></tbody>')
                             .insertAfter('#scanOutput thead');
                         var sym_desc = {};
                         var nsym = 0;
@@ -833,16 +878,19 @@
                                     sym_desc[sym_id] = item.description;
                                 }
                                 items.push('<div class="cell-overflow" tabindex="1"><abbr id="' + sym_id +
-                                '">' + item.name + '</abbr>: ' + item.score.toFixed(2) + '</div>');
-                                    nsym ++;
+                                    '">' + item.name + '</abbr>: ' + item.score.toFixed(2) + '</div>');
+                                nsym++;
                             }
                         });
-                        $('<td/>', { id: 'tmpSymbols', html: items.join('') }).appendTo('#scanResult');
+                        $('<td/>', {
+                            id: 'tmpSymbols',
+                            html: items.join('')
+                        }).appendTo('#scanResult');
                         $('#tmpSymbols').insertAfter('#tmpBody td:last').removeAttr('id');
                         $('#tmpBody').removeAttr('id');
                         $('#scanResult').show();
                         // Show tooltips
-                        $.each(sym_desc, function(k, v) {
+                        $.each(sym_desc, function (k, v) {
                             $('#' + k).tooltip({
                                 "placement": "bottom",
                                 "title": v
@@ -851,8 +899,7 @@
                         $('html, body').animate({
                             scrollTop: $('#scanResult').offset().top
                         }, 1000);
-                    }
-                    else {
+                    } else {
                         alertMessage('alert-error', 'Cannot scan data');
                     }
                 },
@@ -892,15 +939,13 @@
                 //To access the proper
                 headers.flag = $('#fuzzyFlagText').val();
                 headers.weigth = $('#fuzzyWeightText').val();
-            }
-            else {
+            } else {
                 data = $('#' + source + 'TextSource').val();
             }
             if (data.length > 0) {
                 if (source == 'scan') {
                     scanText(data);
-                }
-                else {
+                } else {
                     uploadText(data, source, headers);
                 }
             }
@@ -934,21 +979,19 @@
                         if (item.action === 'add header') {
                             label = 'Probably Spam';
                             idx = 1;
-                        }
-                        else if (item.action === 'greylist') {
+                        } else if (item.action === 'greylist') {
                             label = 'Greylist';
                             idx = 0;
-                        }
-                        else if (item.action === 'rewrite subject') {
+                        } else if (item.action === 'rewrite subject') {
                             label = 'Rewrite subject';
                             idx = 2;
-                        }
-                        else if (item.action === 'reject') {
+                        } else if (item.action === 'reject') {
                             label = 'Spam';
                             idx = 3;
                         }
                         if (idx >= 0) {
-                            items.push({idx: idx,
+                            items.push({
+                                idx: idx,
                                 html: '<div class="form-group">' +
                                     '<label class="control-label col-sm-2">' + label + '</label>' +
                                     '<div class="controls slider-controls col-sm-10">' +
@@ -965,10 +1008,14 @@
                         }
                     });
 
-                    items.sort(function(a, b) { return a.idx - b.idx; });
+                    items.sort(function (a, b) {
+                        return a.idx - b.idx;
+                    });
 
                     $('#actionsBody').html('<form id="actionsForm">' +
-                        items.map(function(e) { return e.html; }).join('') +
+                        items.map(function (e) {
+                            return e.html;
+                        }).join('') +
                         '<br><div class="form-group">' +
                         '<button class="btn btn-primary" ' +
                         'type="submit">Save actions</button></div></form>');
@@ -1012,8 +1059,7 @@
         $('textarea').change(function () {
             if ($(this).val().length != '') {
                 $(this).closest('form').find('button').removeAttr('disabled').removeClass('disabled');
-            }
-            else {
+            } else {
                 $(this).closest('form').find('button').attr('disabled').addClass('disabled');
             }
         });
@@ -1027,8 +1073,7 @@
             var type = $(form).data('type');
             if (type === 'symbols') {
                 saveSymbols(action, id);
-            }
-            else if (type === 'map') {
+            } else if (type === 'map') {
                 saveMap(action, id);
             }
         });
@@ -1061,7 +1106,10 @@
             var url = action;
             var values = [];
             $(inputs).each(function () {
-                values.push({ name: $(this).attr('id'), value: parseFloat($(this).val()) });
+                values.push({
+                    name: $(this).attr('id').substring(5),
+                    value: parseFloat($(this).val())
+                });
             });
             $.ajax({
                 data: JSON.stringify(values),
@@ -1077,7 +1125,8 @@
                 },
                 error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
-                } });
+                }
+            });
             $('#modalDialog').modal('hide');
             return false;
         }
@@ -1125,8 +1174,7 @@
                             $(form).each(function () {
                                 $('.form-group').addClass('error');
                             });
-                        }
-                        else {
+                        } else {
                             saveCredentials(data, password);
                             $(dialog).hide();
                             $(backdrop).hide();
@@ -1139,6 +1187,7 @@
                 });
             });
         }
+
         function displayUI() {
             // @toggle auth and main
             var disconnect = $('#navBar .pull-right');
@@ -1171,10 +1220,10 @@
         $('#throughput_nav').bind('click', function () {
             getGraphData(selected.selData);
         });
-        $('#history_nav').bind('click', function() {
+        $('#history_nav').bind('click', function () {
             getHistory();
         });
-        $('#symbols_nav').bind('click', function() {
+        $('#symbols_nav').bind('click', function () {
             getSymbols();
         });
     });

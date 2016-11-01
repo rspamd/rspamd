@@ -90,12 +90,12 @@ textarea {
 input {
 	margin:0px;
 	padding:0px;
-	width:40px;
+	width:60px;
 	}
 input[type=number] {
 	padding-right:25px;	/* at least image width */
 	text-align:right;
-	width:40px;
+	width:60px;
 	}
 input.number { /* should be same as type=number for IE and overriding */
 	padding-right:25px;	/* at least image width */
@@ -107,104 +107,6 @@ input::-webkit-inner-spin-button {
 	-webkit-appearance:none;
 	margin:0; /* <-- Apparently some margin are still there even though it's hidden */
 }
-.k-numerictextbox,
-.k-numeric-wrap {
-	display:block;
-	}
-	.k-numeric-wrap {
-		position:relative;
-		}
-		input.numeric {
-			text-align:right;
-			}
-		.k-select {
-			overflow:hidden;
-			position:absolute;
-			top:5px;
-			left:52px;
-			width:11px;
-			height:22px;
-			font-size:1px;
-			line-height:1px;
-			text-indent:-999px;
-			}
-			.k-link,
-			.k-icon {
-				display:block;
-				width:11px;
-				height:10px;
-				}
-			.k-icon {
-				cursor:pointer;
-				background-image:url('../img/spinner.png');
-				}
-			.k-i-arrow-n {
-				background-position:0 0;
-				}
-			.k-i-arrow-n:hover,
-			.k-i-arrow-n:focus {
-				background-position:-11px 0;
-				}
-			.k-i-arrow-n:active {
-				background-position:-22px 0;
-				}
-			.k-i-arrow-s {
-				margin-top:-1px;
-				background-position:0 -10px;
-				}
-			.k-i-arrow-s:hover,
-			.k-i-arrow-s:focus {
-				background-position:-11px -10px;
-				}
-			.k-i-arrow-s:active {
-				background-position:-22px -10px;
-				}
-/* spinners default style */
-/* .spin-cell {
-	position:relative;
-	}
-	.spinControl {
-		position:absolute;
-		height:20px;
-		top:6px;
-		left:56px;
-		}
-	.spinControl.MOZ, .spinControl.IE6, .spinControl.IE7 {
-		}
-		.spinControl button {
-			position:absolute;
-			left:0;
-			width:11px;
-			height:10px;
-			margin:0;
-			padding:0;
-			border:0;
-			background-color:none;
-			cursor:pointer;
-			background-image:url('../img/spinner.png');
-			}
-		.spinControl button.down {
-			bottom:1px;
-			}
-		.spinControl button.up {
-			}
-		.spinControl button.up:hover,
-		.spinControl button.up:focus {
-			background-position:-11px 0;
-			}
-		.spinControl button.up:active {
-			background-position:-22px 0;
-			}
-		.spinControl button.down {
-			background-position:0 -10px;
-			}
-		.spinControl button.down:hover,
-		.spinControl button.down:focus {
-			background-position:-11px -10px;
-			}
-		.spinControl button.down:active {
-			background-position:-22px -10px;
-			} */
 
 /* history table */
 .table-log {
