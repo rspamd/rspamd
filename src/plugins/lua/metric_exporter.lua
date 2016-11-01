@@ -66,7 +66,7 @@ local function graphite_config(opts)
     return false
   end
   for _, v in ipairs(settings['metrics']) do
-    isvalid = false
+    local isvalid = false
     for _, vm in ipairs(valid_metrics) do
       if vm == v then
         isvalid = true
@@ -95,6 +95,7 @@ local function graphite_push(kwargs)
   end
   local metrics_str = ''
   for _, v in ipairs(settings['metrics']) do
+    local mvalue
     local mname = string.format('%s.%s', settings['metric_prefix'], v:gsub(' ', '_'))
     local split = rspamd_str_split(v, '.')
     if #split == 1 then
@@ -171,7 +172,7 @@ rspamd_config:add_on_load(function (cfg, ev_base, worker)
     end
   end)
   -- Push metrics to backend
-  function push_metrics(worker, time)
+  local function push_metrics(worker, time)
     logger.infox('Pushing metrics to %s backend', settings['backend'])
     local args = {
       ev_base = ev_base,
@@ -182,19 +183,19 @@ rspamd_config:add_on_load(function (cfg, ev_base, worker)
     end
     backends[settings['backend']]['push'](args)
   end
+  -- Push metrics at regular intervals
+  local function schedule_regular_push()
+    rspamd_config:add_periodic(ev_base, settings['interval'], function (cfg, ev_base)
+      push_metrics(worker)
+      return true
+    end)
+  end
   -- Push metrics to backend and reschedule check
-  function schedule_intermediate_push(when)
+  local function schedule_intermediate_push(when)
     rspamd_config:add_periodic(ev_base, when, function (cfg, ev_base)
       push_metrics(worker)
       schedule_regular_push()
       return false
-    end)
-  end
-  -- Push metrics at regular intervals
-  function schedule_regular_push()
-    rspamd_config:add_periodic(ev_base, settings['interval'], function (cfg, ev_base)
-      push_metrics(worker)
-      return true
     end)
   end
   -- Try read statefile on startup

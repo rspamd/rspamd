@@ -226,7 +226,7 @@ local function greylist_check(task)
     end
   end
 
-  local ret
+  local ret, _
   ret,_,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     hash_key, -- hash key
@@ -312,7 +312,7 @@ local function greylist_set(task)
         meta_key, tostring(settings['expire'])
       })
     else
-     rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+     rspamd_logger.infox(task, 'got error while connecting to redis: %1', upstream:get_addr())
      upstream:fail()
     end
   elseif do_greylisting or do_greylisting_required then
