@@ -184,10 +184,11 @@ rspamd_config.R_WHITE_ON_WHITE = {
         normal_len = p:get_length()
         local hc = p:get_html() -- we get HTML context
 
-        hc:foreach_tag('font', function(tag, len)
+        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag, len)
           local bl = tag:get_extra()
           if bl then
             if bl['bgcolor'] and bl['color'] then
+
               local color = bl['color']
               local bgcolor = bl['bgcolor']
               -- Should use visual approach here some day
