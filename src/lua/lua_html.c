@@ -18,6 +18,7 @@
 #include "html.h"
 #include "html_tags.h"
 #include "images.h"
+#include "contrib/mumhash/mum.h"
 
 /***
  * @module rspamd_html
@@ -392,7 +393,8 @@ lua_html_get_blocks (lua_State *L)
 struct lua_html_traverse_ud {
 	lua_State *L;
 	gint cbref;
-	gint tag_id;
+	GHashTable *tags;
+	gboolean any;
 };
 
 static gboolean
@@ -401,7 +403,8 @@ lua_html_node_foreach_cb (GNode *n, gpointer d)
 	struct lua_html_traverse_ud *ud = d;
 	struct html_tag *tag = n->data, **ptag;
 
-	if (tag && (ud->tag_id == -1 || ud->tag_id == tag->id)) {
+	if (tag && (ud->any || g_hash_table_lookup (ud->tags,
+			GSIZE_TO_POINTER (mum_hash64 (tag->id, 0))))) {
 
 		lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 
@@ -435,25 +438,54 @@ lua_html_foreach_tag (lua_State *L)
 	const gchar *tagname;
 	gint id;
 
-	tagname = luaL_checkstring (L, 2);
+	ud.tags = g_hash_table_new (g_direct_hash, g_direct_equal);
+	ud.any = FALSE;
 
-	if (hc && tagname && lua_isfunction (L, 3)) {
-		if (hc->html_tags) {
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		tagname = luaL_checkstring (L, 2);
+		if (strcmp (tagname, "any") == 0) {
+			ud.any = TRUE;
+		}
+		else {
+			id = rspamd_html_tag_by_name (tagname);
+
+			if (id == -1) {
+				g_hash_table_unref (ud.tags);
+				return luaL_error (L, "invalid tagname: %s", tagname);
+			}
+			g_hash_table_insert (ud.tags, GSIZE_TO_POINTER (mum_hash64 (id, 0)),
+					"1");
+		}
+	}
+	else if (lua_type (L, 2) == LUA_TTABLE) {
+		lua_pushvalue (L, 2);
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			tagname = luaL_checkstring (L, -1);
 			if (strcmp (tagname, "any") == 0) {
-				id = -1;
+				ud.any = TRUE;
 			}
 			else {
 				id = rspamd_html_tag_by_name (tagname);
 
 				if (id == -1) {
+					g_hash_table_unref (ud.tags);
 					return luaL_error (L, "invalid tagname: %s", tagname);
 				}
+				g_hash_table_insert (ud.tags,
+						GSIZE_TO_POINTER (mum_hash64 (id, 0)), "1");
 			}
+		}
+
+		lua_pop (L, 1);
+	}
+
+	if (hc && g_hash_table_size (ud.tags) > 0 && lua_isfunction (L, 3)) {
+		if (hc->html_tags) {
 
 			lua_pushvalue (L, 3);
 			ud.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 			ud.L = L;
-			ud.tag_id = id;
 
 			g_node_traverse (hc->html_tags, G_PRE_ORDER, G_TRAVERSE_ALL, -1,
 					lua_html_node_foreach_cb, &ud);
@@ -462,8 +494,11 @@ lua_html_foreach_tag (lua_State *L)
 		}
 	}
 	else {
+		g_hash_table_unref (ud.tags);
 		return luaL_error (L, "invalid arguments");
 	}
+
+	g_hash_table_unref (ud.tags);
 
 	return 0;
 }
