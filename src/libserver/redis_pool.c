@@ -53,7 +53,7 @@ struct rspamd_redis_pool {
 	guint max_conns;
 };
 
-static const gdouble default_timeout = 60.0;
+static const gdouble default_timeout = 10.0;
 static const guint default_max_conns = 100;
 
 #define msg_err_rpool(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
