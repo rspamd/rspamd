@@ -734,6 +734,11 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 
 		/* Adjust zero-copy buf */
 		msg->body_buf.len += length;
+
+		if (!(msg->flags & RSPAMD_HTTP_FLAG_SHMEM)) {
+			msg->body_buf.c.normal->len += length;
+		}
+
 		pbuf->zc_buf = msg->body_buf.begin + msg->body_buf.len;
 		pbuf->zc_remain = msg->body_buf.allocated_len - msg->body_buf.len;
 	}
