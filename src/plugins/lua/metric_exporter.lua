@@ -24,6 +24,7 @@ local pool = mempool.create()
 local settings = {
   interval = 120,
   timeout = 15,
+  statefile = string.format('%s/%s', rspamd_paths['DBDIR'], 'metric_exporter_last_push')
 }
 
 local VAR_NAME = 'metric_exporter_last_push'
