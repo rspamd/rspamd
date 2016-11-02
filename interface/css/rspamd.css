@@ -552,3 +552,11 @@ td.maps-cell {
     width: auto;
     border: 1px solid grey;
 }
+
+.scorebar-spam {
+	background-color: rgba(240, 0, 0, 0.1);
+}
+
+.scorebar-ham {
+	background: rgba(100, 230, 80, 0.1)
+}

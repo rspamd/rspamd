@@ -681,9 +681,9 @@
                             }
                             var label;
                             if (item.weight < 0) {
-                                label = 'label-success';
+                                label_class = 'scorebar-ham';
                             } else {
-                                label = 'label-danger';
+                                label_class = 'scorebar-spam';
                             }
 
                             if (!item.time) {
@@ -693,15 +693,15 @@
                                 item.frequency = 0;
                             }
                             items.push('<tr>' +
-                                '<td data-order="' + item.symbol + '"><strong>' + item.symbol + '</strong></td>' +
                                 '<td data-order="' + group.group + '"><div class="cell-overflow" tabindex="1" title="' + group.group + '">' + group.group + '</div></td>' +
+                                '<td data-order="' + item.symbol + '"><strong>' + item.symbol + '</strong></td>' +
                                 '<td data-order="' + item.description + '"><div class="cell-overflow" tabindex="1" title="' + item.description + '">' + item.description + '</div></td>' +
-                                '<td data-order="' + item.weight + '"><input class="numeric" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
+                                '<td data-order="' + item.weight + '"><input class="numeric ' + label_class +
+                                '" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
                                 min + '" max="' +
                                 max + '" step="' + decimalStep(item.weight) +
                                 '" tabindex="1" value="' + Number(item.weight).toFixed(3) +
-                                '" id="_sym_' + item.symbol + '"><span class="label ' + label + '">●' +
-                                '</span></td>' +
+                                '" id="_sym_' + item.symbol + '"></span></td>' +
                                 '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
                                 '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
                                 '<td><button type="button" class="btn btn-primary btn-sm">Save</button></td>' +
@@ -715,16 +715,16 @@
                         "paging": false,
                         "orderMulti": true,
                         "order": [
-                            [1, "asc"],
                             [0, "asc"],
+                            [1, "asc"],
                             [3, "desc"]
                         ],
                         "info": false,
                         "columns": [
-                            {"width": "25%", "searchable": true, "orderable": true},
-                            {"width": "10%", "searchable": true, "orderable": true},
-                            {"width": "25%", "searchable": false, "orderable": false},
-                            {"width": "10%", "searchable": false, "orderable": true, "type": "num"},
+                            {"width": "7%", "searchable": true, "orderable": true},
+                            {"width": "20%", "searchable": true, "orderable": true},
+                            {"width": "30%", "searchable": false, "orderable": false},
+                            {"width": "7%", "searchable": false, "orderable": true, "type": "num"},
                             {"searchable": false, "orderable": true, "type": "num"},
                             {"searchable": false, "orderable": true, "type": "num"},
                             {"width": "5%", "searchable": false, "orderable": false, "type": "html"}
