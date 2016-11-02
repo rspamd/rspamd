@@ -26,7 +26,7 @@ greylist {
     "${CONFDIR}/dmarc_whitelist.inc",
     "${CONFDIR}/spf_dkim_whitelist.inc",
     "${CONFDIR}/surbl-whitelist.inc",
-    "${CONFDIR}/freemail.inc"    
+    "${CONFDIR}/freemail.inc"
   ];
 }
 Example config for exim users:
@@ -46,6 +46,7 @@ local settings = {
   key_prefix = 'rg', -- default hash name
   max_data_len = 10240, -- default data limit to hash
   message = 'Try again later', -- default greylisted message
+  message_func = function(task, finish, type) return settings.message end,
   symbol = 'GREYLIST',
   action = 'soft reject', -- default greylisted action
   ipv4_mask = 19, -- Mask bits for ipv4
@@ -218,7 +219,12 @@ local function greylist_check(task)
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
           greylist_type)
-        task:set_pre_result('soft reject', settings['message'])
+        if settings.message_func then
+          task:set_pre_result('soft reject',
+            settings.message_func(task, end_time, greylist_type))
+        else
+          task:set_pre_result('soft reject', settings['message'])
+        end
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
@@ -256,7 +262,7 @@ local function greylist_set(task)
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
   local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
   local do_greylisting_required = task:get_mempool():get_variable("grey_greylisted_required")
-  
+
   -- Third and second level domains whitelist
   if not is_whitelisted and whitelist_domains_map then
     local hostname = task:get_hostname()
@@ -270,7 +276,7 @@ local function greylist_set(task)
   end
 
   local action = task:get_metric_action('default')
-  if action == 'no action' or action == 'reject' then 
+  if action == 'no action' or action == 'reject' then
     if not do_greylisting_required or do_greylisting_required ~= "1" then return end
   end
   local body_key = data_key(task)
@@ -387,7 +393,7 @@ if opts then
       description = 'Greylist whitelist domains map'
     })
   end
-  
+
   redis_params = rspamd_parse_redis_server('greylist')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
