@@ -36,6 +36,10 @@ local ip_score_lower_bound = 10
 local ip_score_ham_multiplier = 1.1
 local ip_score_spam_divisor = 1.1
 
+local message_func = function(task, limit_type, bucket, threshold)
+  return string.format('Ratelimit "%s" exceeded', limit_type)
+end
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
@@ -285,7 +289,7 @@ local function check_limits(task, args)
                 'ratelimit "%s" exceeded: %s elements with %s limit',
                 rtype, bucket, threshold)
               task:set_pre_result('soft reject',
-                string.format('Ratelimit "%s" exceeded', rtype))
+                message_func(task, rtype, bucket, threshold))
             end
           end
         end
@@ -564,6 +568,10 @@ if opts then
 
   if opts['user_keywords'] then
     user_keywords = opts['user_keywords']
+  end
+
+  if opts['message_func'] then
+    message_func = assert(loadstring(opts['message_func']))()
   end
 
   redis_params = rspamd_parse_redis_server('ratelimit')

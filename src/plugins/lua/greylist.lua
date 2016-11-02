@@ -379,8 +379,13 @@ end
 
 local opts =  rspamd_config:get_all_opt('greylist')
 if opts then
+  if opts['message_func'] then
+    settings.message_func = assert(loadstring(opts['message_func']))()
+  end
   for k,v in pairs(opts) do
-    settings[k] = v
+    if k ~= 'message_func' then
+      settings[k] = v
+    end
   end
   if settings['whitelisted_ip'] then
     whitelisted_ip = rspamd_config:add_radix_map(settings['whitelisted_ip'],
