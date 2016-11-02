@@ -51,22 +51,12 @@ local valid_metrics = {
   'spam_count',
 }
 
-local function graphite_config(opts)
-  local defaults = {
-    host = 'localhost',
-    port = 2003,
-    metric_prefix = 'rspamd'
-  }
-  for k, v in pairs(defaults) do
-    if settings[k] == nil then
-      settings[k] = v
-    end
-  end
-  if type(settings['metrics']) ~= 'table' or #settings['metrics'] == 0 then
+local function validate_metrics(settings_metrics)
+  if type(settings_metrics) ~= 'table' or #settings_metrics == 0 then
     logger.err('No metrics specified for collection')
     return false
   end
-  for _, v in ipairs(settings['metrics']) do
+  for _, v in ipairs(settings_metrics) do
     local isvalid = false
     for _, vm in ipairs(valid_metrics) do
       if vm == v then
@@ -85,6 +75,23 @@ local function graphite_config(opts)
     end
   end
   return true
+end
+
+local function load_defaults(defaults)
+  for k, v in pairs(defaults) do
+    if settings[k] == nil then
+      settings[k] = v
+    end
+  end
+end
+
+local function graphite_config(opts)
+  load_defaults({
+    host = 'localhost',
+    port = 2003,
+    metric_prefix = 'rspamd'
+  })
+  return validate_metrics(settings['metrics'])
 end
 
 local function graphite_push(kwargs)
@@ -138,10 +145,6 @@ local function configure_metric_exporter()
   local opts = rspamd_config:get_all_opt('metric_exporter')
   if not backends[opts['backend']] then
     logger.err('Backend is invalid or unspecified')
-    return false
-  end
-  if not opts['statefile'] then
-    logger.err('No statefile specified')
     return false
   end
   for k, v in pairs(opts) do
