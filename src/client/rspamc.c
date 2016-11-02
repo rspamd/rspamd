@@ -637,11 +637,11 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 					cur));
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "messages") == 0) {
-			if (cur->type == UCL_ARRAY) {
+			if (cur->type == UCL_OBJECT) {
 				mit = NULL;
 				while ((cmesg = ucl_object_iterate (cur, &mit, true)) != NULL) {
-					rspamd_fprintf (out, "Message: %s\n",
-							ucl_object_tostring (cmesg));
+					rspamd_fprintf (out, "Message - %s: %s\n",
+							ucl_object_key (cmesg), ucl_object_tostring (cmesg));
 				}
 			}
 		}
