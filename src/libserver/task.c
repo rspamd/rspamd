@@ -128,6 +128,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 	new_task->pre_result.action = METRIC_ACTION_MAX;
 
 	new_task->message_id = new_task->queue_id = "undef";
+	new_task->messages = ucl_object_typed_new (UCL_OBJECT);
 
 	return new_task;
 }
@@ -233,9 +234,7 @@ rspamd_task_free (struct rspamd_task *task)
 			rspamd_email_address_unref (task->from_envelope);
 		}
 
-		if (task->messages) {
-			g_list_free (task->messages);
-		}
+		ucl_object_unref (task->messages);
 
 		if (task->http_conn != NULL) {
 			rspamd_http_connection_reset (task->http_conn);

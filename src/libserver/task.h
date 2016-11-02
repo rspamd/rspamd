@@ -163,7 +163,7 @@ struct rspamd_task {
 	struct rspamd_email_address *from_envelope;
 	enum rspamd_newlines_type nlines_type;			/**< type of newlines (detected on most of headers 	*/
 
-	GList *messages;								/**< list of messages that would be reported		*/
+	ucl_object_t *messages;							/**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/
 	GPtrArray *stat_runtimes;						/**< backend runtime							*/
 	struct rspamd_config *cfg;						/**< pointer to config object						*/

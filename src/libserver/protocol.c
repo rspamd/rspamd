@@ -1014,10 +1014,8 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 		ucl_object_insert_key (top, obj, h, 0, false);
 	}
 
-	if (task->messages != NULL) {
-		ucl_object_insert_key (top, rspamd_str_list_ucl (
-				task->messages), "messages", 0, false);
-	}
+	ucl_object_insert_key (top, ucl_object_ref (task->messages),
+			"messages", 0, false);
 
 	if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
 		if (g_hash_table_size (task->urls) > 0) {

@@ -465,7 +465,10 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 				spf_symbol,
 				1,
 				opts);
-		task->messages = g_list_prepend (task->messages, (gpointer)spf_message);
+		ucl_object_insert_key (task->messages,
+				ucl_object_fromstring (spf_message), "spf", 0,
+				false);
+
 		return TRUE;
 	}
 

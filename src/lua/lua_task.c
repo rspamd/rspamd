@@ -1093,7 +1093,9 @@ lua_task_set_pre_result (lua_State * L)
 				action_str = rspamd_mempool_strdup (task->task_pool,
 						luaL_checkstring (L, 3));
 				task->pre_result.str = action_str;
-				task->messages = g_list_prepend (task->messages, action_str);
+				ucl_object_insert_key (task->messages,
+						ucl_object_fromstring (action_str), "smtp_message", 0,
+						false);
 			}
 			else {
 				task->pre_result.str = "unknown";
@@ -1123,12 +1125,19 @@ static gint
 lua_task_append_message (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gchar *message;
+	const gchar *message = luaL_checkstring (L, 2), *category;
 
 	if (task != NULL) {
-		message= rspamd_mempool_strdup (task->task_pool,
-				luaL_checkstring (L, 2));
-		task->messages = g_list_prepend (task->messages, message);
+		if (lua_type (L, 3) == LUA_TSTRING) {
+			category = luaL_checkstring (L, 3);
+		}
+		else {
+			category = "unknown";
+		}
+
+		ucl_object_insert_key (task->messages,
+				ucl_object_fromstring (message), category, 0,
+				true);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
