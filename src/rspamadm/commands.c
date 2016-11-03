@@ -23,6 +23,7 @@ extern struct rspamadm_command configdump_command;
 extern struct rspamadm_command control_command;
 extern struct rspamadm_command confighelp_command;
 extern struct rspamadm_command statconvert_command;
+extern struct rspamadm_command fuzzyconvert_command;
 extern struct rspamadm_command signtool_command;
 extern struct rspamadm_command lua_command;
 extern struct rspamadm_command dkim_keygen_command;
@@ -37,6 +38,7 @@ const struct rspamadm_command *commands[] = {
 	&control_command,
 	&confighelp_command,
 	&statconvert_command,
+	&fuzzyconvert_command,
 	&signtool_command,
 	&lua_command,
 	&dkim_keygen_command,
