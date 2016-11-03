@@ -469,7 +469,6 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
     if learn_spam then k = 'spam' else k = 'ham' end
 
     local function can_train_cb(err, data)
-      rspamd_logger.errx('hui')
       if not err and tonumber(data) > 0 then
         local learn_data = symbols_to_fann_vector(
           map(function(r) return r[1] end, results),
@@ -494,7 +493,6 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
       end
     end
 
-    rspamd_logger.errx('pizda: %s %s %s %s', redis_can_train_sha, fname, tostring(max_trains), k)
     redis_make_request(ev_base,
       rspamd_config,
       nil,

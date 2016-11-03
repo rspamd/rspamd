@@ -52,6 +52,7 @@ struct log_helper_ctx {
 	struct event_base *ev_base;
 	struct event log_ev;
 	struct rspamd_worker_lua_script *scripts;
+	struct rspamd_dns_resolver *resolver;
 	lua_State *L;
 	gint pair[2];
 };
@@ -189,6 +190,11 @@ start_log_helper (struct rspamd_worker *worker)
 	ctx->cfg = worker->srv->cfg;
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;
+	ctx->resolver = dns_resolver_init (worker->srv->logger,
+				ctx->ev_base,
+				worker->srv->cfg);
+	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
+			ctx->ev_base, ctx->resolver->r);
 
 	DL_COUNT (worker->cf->scripts, tmp, nscripts);
 	msg_info ("started log_helper worker with %d scripts", nscripts);
