@@ -33,7 +33,7 @@ local function get_specific_statfiles(classifier, task)
 	-- More 5 recipients
 	local st_many = classifier:get_statfile_by_label(many_recipients_label)
 	if st_many then
-		rcpt = task:get_recipients(2)
+		local rcpt = task:get_recipients(2)
 		if rcpt and #rcpt > 5 then
 			table.foreach(st_many, function(i,v) table.insert(spec_st,v) end)
 		end
@@ -41,7 +41,7 @@ local function get_specific_statfiles(classifier, task)
 	-- Undisclosed
 	local st_undisc = classifier:get_statfile_by_label(undisclosed_recipients_label)
 	if st_undisc then
-		rcpt = task:get_recipients(2)
+		local rcpt = task:get_recipients(2)
 		if rcpt and #rcpt == 0 then
 			table.foreach(st_undisc, function(i,v) table.insert(spec_st,v) end)
 		end
@@ -95,7 +95,7 @@ classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
 		end
 	end
 	-- Detect statfile by language
-	language = detect_language(task)
+	local language = detect_language(task)
 	if language then
 		-- Find statfiles with specified language
 		for _,st in ipairs(classifier:get_statfiles()) do
