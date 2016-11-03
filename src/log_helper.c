@@ -81,6 +81,7 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 	struct rspamd_protocol_log_message_sum *sm;
 	struct rspamd_worker_lua_script *sc;
 	struct rspamd_config **pcfg;
+	struct event_base **pevbase;
 
 	r = read (fd, buf, sizeof (buf));
 
@@ -131,7 +132,11 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 					lua_rawseti (ctx->L, -2, (i + 1));
 				}
 
-				if (lua_pcall (ctx->L, 6, 0, 0) != 0) {
+				pevbase = lua_newuserdata (ctx->L, sizeof (*pevbase));
+				*pevbase = ctx->ev_base;
+				rspamd_lua_setclass (ctx->L, "rspamd{ev_base}", -1);
+
+				if (lua_pcall (ctx->L, 7, 0, 0) != 0) {
 					msg_err ("error executing log handler code: %s",
 							lua_tostring (ctx->L, -1));
 					lua_pop (ctx->L, 1);
