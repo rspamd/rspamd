@@ -21,7 +21,7 @@ local symbol_bulk = "DCC_BULK"
 local opts = rspamd_config:get_all_opt('dcc')
 local logger = require "rspamd_logger"
 local tcp = require "rspamd_tcp"
-require "fun" ()
+local fun = require "fun"
 
 local function check_dcc (task)
   -- Connection
@@ -49,7 +49,7 @@ local function check_dcc (task)
   local envrcpt = 'test@example.com'
   local rcpts = task:get_recipients();
   if rcpts then
-    local r = table.concat(totable(map(function(rcpt)
+    local r = table.concat(fun.totable(map(function(rcpt)
       return rcpt['addr'] end,
     rcpts)), '\n')
     if r then

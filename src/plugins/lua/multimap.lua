@@ -24,7 +24,7 @@ local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_redis = require "rspamd_redis"
 local redis_params
-require "fun" ()
+local fun = require "fun"
 
 local urls = {}
 
@@ -461,7 +461,7 @@ local function multimap_callback(task, rule)
   local function match_list(r, ls, fields)
     if ls then
       if fields then
-        each(function(e)
+        fun.each(function(e)
           local match = e[fields[1]]
           if match then
             if fields[2] then
@@ -471,7 +471,7 @@ local function multimap_callback(task, rule)
           end
         end, ls)
       else
-        each(function(e) match_rule(r, e) end, ls)
+        fun.each(function(e) match_rule(r, e) end, ls)
       end
     end
   end
@@ -736,12 +736,12 @@ local function add_multimap_rule(key, newrule)
       local atoms = {}
 
       local function parse_atom(str)
-        local atom = table.concat(totable(take_while(function(c)
+        local atom = table.concat(fun.totable(fun.take_while(function(c)
           if string.find(', \t()><+!|&\n', c) then
             return false
           end
           return true
-        end, iter(str))), '')
+        end, fun.iter(str))), '')
         table.insert(atoms, atom)
         return atom
       end
@@ -762,7 +762,7 @@ local function add_multimap_rule(key, newrule)
       if expression then
         newrule['expression'] = expression
 
-        each(function(v)
+        fun.each(function(v)
           rspamd_logger.debugx(rspamd_config, 'add dependency %s -> %s',
             newrule['symbol'], v)
           rspamd_config:register_dependency(newrule['symbol'], v)
@@ -790,7 +790,7 @@ if opts and type(opts) == 'table' then
     end
   end
   -- add fake symbol to check all maps inside a single callback
-  each(function(rule)
+  fun.each(function(rule)
     local id = rspamd_config:register_symbol({
       type = 'normal',
       name = rule['symbol'],
@@ -799,7 +799,7 @@ if opts and type(opts) == 'table' then
     if rule['symbols'] then
       -- Find allowed symbols by this map
       rule['symbols_set'] = {}
-      each(function(s)
+      fun.each(function(s)
         rspamd_config:register_symbol({
           type = 'virtual',
           name = s,
@@ -826,14 +826,14 @@ if opts and type(opts) == 'table' then
       })
     end
   end,
-  filter(function(r) return not r['prefilter'] end, rules))
+  fun.filter(function(r) return not r['prefilter'] end, rules))
 
-  each(function(r)
+  fun.each(function(r)
     rspamd_config:register_symbol({
       type = 'prefilter',
       name = r['symbol'],
       callback = gen_multimap_callback(r),
     })
   end,
-  filter(function(r) return r['prefilter'] end, rules))
+  fun.filter(function(r) return r['prefilter'] end, rules))
 end

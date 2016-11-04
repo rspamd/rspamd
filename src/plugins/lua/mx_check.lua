@@ -19,7 +19,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_redis = require "rspamd_redis"
 local rspamd_util = require "rspamd_util"
-require "fun" ()
+local fun = require "fun"
 
 local settings = {
   timeout = 1.0, -- connect timeout
@@ -58,7 +58,7 @@ local function mx_check(task)
   local valid = false
 
   local function check_results(mxes)
-    if all(function(k, elt) return elt.checked end, mxes) then
+    if fun.all(function(k, elt) return elt.checked end, mxes) then
       -- Save cache
       local key = settings.key_prefix .. mx_domain
       local function redis_cache_cb(err, data)
@@ -88,9 +88,9 @@ local function mx_check(task)
         )
       else
         local valid_mx = {}
-        each(function(k, mx)
+        fun.each(function(k, mx)
           table.insert(valid_mx, k)
-        end, filter(function (k, elt) return elt.working end, mxes))
+        end, fun.filter(function (k, elt) return elt.working end, mxes))
         task:insert_result(settings.symbol_good_mx, 1.0, valid_mx)
         local ret,_,_ = rspamd_redis_make_request(task,
           redis_params, -- connect params

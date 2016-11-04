@@ -23,7 +23,7 @@ local rspamd_expression = require "rspamd_expression"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_trie = require "rspamd_trie"
 local util = require "rspamd_util"
-require "fun" ()
+local fun = require "fun"
 
 -- Known plugins
 local known_plugins = {
@@ -229,7 +229,7 @@ local function handle_header_def(hline, cur_rule)
         ordinary = false
       end
 
-      each(function(func)
+      fun.each(function(func)
           if func == 'addr' then
             cur_param['function'] = function(str)
               local addr_parsed = util.parse_addr(str)
@@ -266,7 +266,7 @@ local function handle_header_def(hline, cur_rule)
             rspamd_logger.warnx(rspamd_config, 'Function %1 is not supported in %2',
               func, cur_rule['symbol'])
           end
-        end, tail(args))
+        end, fun.tail(args))
 
         local function split_hdr_param(param, headers)
           for i,h in ipairs(headers) do
@@ -599,11 +599,11 @@ local function maybe_parse_sa_function(line)
 end
 
 local function words_to_re(words, start)
-  return table.concat(totable(drop_n(start, words)), " ");
+  return table.concat(fun.totable(fun.drop_n(start, words)), " ");
 end
 
 local function process_tflags(rule, flags)
-  each(function(flag)
+  fun.each(function(flag)
     if flag == 'publish' then
       rule['publish'] = true
     elseif flag == 'multiple' then
@@ -613,7 +613,7 @@ local function process_tflags(rule, flags)
     elseif flag == 'nice' then
       rule['nice'] = true
     end
-  end, drop_n(1, flags))
+  end, fun.drop_n(1, flags))
 
   if rule['re'] then
     if rule['maxhits'] then
@@ -700,7 +700,7 @@ local function process_sa_conf(f)
       if string.match(l, '^ifplugin') then
         local ls = split(l)
 
-        if not any(function(pl)
+        if not fun.any(function(pl)
             if pl == ls[2] then return true end
             return false
             end, known_plugins) then
@@ -709,7 +709,7 @@ local function process_sa_conf(f)
         end
       elseif string.match(l, '^if !plugin%(') then
          local pname = string.match(l, '^if !plugin%(([A-Za-z:]+)%)')
-         if any(function(pl)
+         if fun.any(function(pl)
            if pl == pname then return true end
            return false
          end, known_plugins) then
@@ -726,11 +726,11 @@ local function process_sa_conf(f)
     local slash = string.find(l, '/')
 
     -- Skip comments
-    words = totable(take_while(
+    local words = fun.totable(fun.take_while(
       function(w) return string.sub(w, 1, 1) ~= '#' end,
-      filter(function(w)
+      fun.filter(function(w)
           return w ~= "" end,
-      iter(split(l)))))
+      fun.iter(split(l)))))
 
     if words[1] == "header" or words[1] == 'mimeheader' then
       -- header SYMBOL Header ~= /regexp/
@@ -749,7 +749,7 @@ local function process_sa_conf(f)
         local unset_comp = string.find(cur_rule['re_expr'], '%s+%[if%-unset:')
         if unset_comp then
           -- We have optional part that needs to be processed
-          unset = string.match(string.sub(cur_rule['re_expr'], unset_comp),
+          local unset = string.match(string.sub(cur_rule['re_expr'], unset_comp),
             '%[if%-unset:%s*([^%]%s]+)]')
           cur_rule['unset'] = unset
           -- Cut it down
@@ -795,7 +795,7 @@ local function process_sa_conf(f)
                   })
                 end
               else
-                h['mime'] = cur_rule[mime]
+                h['mime'] = cur_rule['mime']
                 if cur_rule['mime'] then
                   rspamd_config:register_regexp({
                     re = cur_rule['re'],
@@ -985,9 +985,9 @@ local function process_sa_conf(f)
     elseif words[1] == "score" then
       scores[words[2]] = parse_score(words)
     elseif words[1] == 'freemail_domains' then
-      each(function(dom)
+      fun.each(function(dom)
           table.insert(freemail_domains, '@' .. dom)
-        end, drop_n(1, words))
+        end, fun.drop_n(1, words))
     elseif words[1] == 'blacklist_from' then
       sa_lists['from_blacklist'][words[2]] = 1
       sa_lists['elts'] = sa_lists['elts'] + 1
@@ -1011,8 +1011,8 @@ local function process_sa_conf(f)
     elseif words[1] == 'replace_post' then
       process_replace(words, replace['post'])
     elseif words[1] == 'replace_rules' then
-      each(function(r) table.insert(replace['rules'], r) end,
-        drop_n(1, words))
+      fun.each(function(r) table.insert(replace['rules'], r) end,
+        fun.drop_n(1, words))
     end
     end)()
   end
@@ -1024,7 +1024,7 @@ end
 -- Now check all valid rules and add the according rspamd rules
 
 local function calculate_score(sym, rule)
-  if all(function(c) return c == '_' end, take_n(2, iter(sym))) then
+  if fun.all(function(c) return c == '_' end, fun.take_n(2, fun.iter(sym))) then
     return 0.0
   end
 
@@ -1071,7 +1071,7 @@ local function apply_replacements(str)
   local function check_specific_tag(prefix, s, tbl)
     local replacement = nil
     local ret = s
-    each(function(n, t)
+    fun.each(function(n, t)
       local ns,matches = string.gsub(s, string.format("<%s%s>", prefix, n), "")
       if matches > 0 then
         replacement = t
@@ -1104,7 +1104,7 @@ local function apply_replacements(str)
   local function replace_all_tags(s)
     local str, matches
     str = s
-    each(function(n, t)
+    fun.each(function(n, t)
         str,matches = string.gsub(str, string.format("<%s>", n),
           string.format("%s%s%s", pre, t, post))
     end, replace['tags'])
@@ -1123,12 +1123,12 @@ local function apply_replacements(str)
 end
 
 local function parse_atom(str)
-  local atom = table.concat(totable(take_while(function(c)
+  local atom = table.concat(fun.totable(fun.take_while(function(c)
     if string.find(', \t()><+!|&\n', c) then
       return false
     end
     return true
-  end, iter(str))), '')
+  end, fun.iter(str))), '')
 
   return atom
 end
@@ -1176,7 +1176,7 @@ local function post_process()
   local ntags = {}
   local function rec_replace_tags(tag, tagv)
     if ntags[tag] then return ntags[tag] end
-    each(function(n, t)
+    fun.each(function(n, t)
       if n ~= tag then
         local s, matches = string.gsub(tagv, string.format("<%s>", n), t)
         if matches > 0 then
@@ -1189,14 +1189,14 @@ local function post_process()
     return ntags[tag]
   end
 
-  each(function(n, t)
+  fun.each(function(n, t)
     rec_replace_tags(n, t)
   end, replace['tags'])
-  each(function(n, t)
+  fun.each(function(n, t)
     replace['tags'][n] = t
   end, ntags)
 
-  each(function(r)
+  fun.each(function(r)
     local rule = rules[r]
 
     if rule['re_expr'] and rule['re'] then
@@ -1222,14 +1222,14 @@ local function post_process()
     end
   end, replace['rules'])
 
-  each(function(key, score)
+  fun.each(function(key, score)
     if rules[key] then
       rules[key]['score'] = score
     end
   end, scores)
 
   -- Header rules
-  each(function(k, r)
+  fun.each(function(k, r)
     local f = function(task)
 
       local raw = false
@@ -1263,7 +1263,7 @@ local function post_process()
       end
 
       -- Slow path
-      each(function(h)
+      fun.each(function(h)
         local headers = {}
         local hname = h['header']
 
@@ -1338,13 +1338,13 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  filter(function(k, r)
+  fun.filter(function(k, r)
       return r['type'] == 'header' and r['header']
   end,
   rules))
 
   -- Custom function rules
-  each(function(k, r)
+  fun.each(function(k, r)
     local f = function(task)
       local res = r['function'](task)
       if res and res > 0 then
@@ -1360,13 +1360,13 @@ local function post_process()
     end
     atoms[k] = f
   end,
-    filter(function(k, r)
+    fun.filter(function(k, r)
       return r['type'] == 'function' and r['function']
     end,
       rules))
 
   -- Parts rules
-  each(function(k, r)
+  fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
         rspamd_logger.errx(task, 're is missing for rule %1', k)
@@ -1386,12 +1386,12 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  filter(function(k, r)
+  fun.filter(function(k, r)
       return r['type'] == 'part'
   end, rules))
 
   -- SA body rules
-  each(function(k, r)
+  fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
         rspamd_logger.errx(task, 're is missing for rule %1', k)
@@ -1411,12 +1411,12 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  filter(function(k, r)
+  fun.filter(function(k, r)
       return r['type'] == 'sabody' or r['type'] == 'message' or r['type'] == 'sarawbody'
   end, rules))
 
   -- URL rules
-  each(function(k, r)
+  fun.each(function(k, r)
     local f = function(task)
       if not r['re'] then
         rspamd_logger.errx(task, 're is missing for rule %1', k)
@@ -1433,12 +1433,12 @@ local function post_process()
     end
     atoms[k] = f
   end,
-    filter(function(k, r)
+    fun.filter(function(k, r)
       return r['type'] == 'uri'
     end,
       rules))
   -- Meta rules
-  each(function(k, r)
+  fun.each(function(k, r)
       local expression = nil
       -- Meta function callback
       local meta_cb = function(task)
@@ -1484,14 +1484,14 @@ local function post_process()
         end
       end
     end,
-    filter(function(k, r)
+    fun.filter(function(k, r)
         return r['type'] == 'meta'
       end,
       rules))
 
   -- Check meta rules for foreign symbols and register dependencies
   -- First direct dependencies:
-  each(function(k, r)
+  fun.each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
 
@@ -1511,13 +1511,13 @@ local function post_process()
         end
       end
     end,
-    filter(function(k, r)
+    fun.filter(function(k, r)
       return r['type'] == 'meta'
     end,
     rules))
 
   -- ... And then indirect ones ...
-  each(function(k, r)
+  fun.each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
         for i,a in ipairs(expr_atoms) do
@@ -1539,13 +1539,13 @@ local function post_process()
         end
       end
     end,
-    filter(function(k, r)
+    fun.filter(function(k, r)
       return r['type'] == 'meta'
     end,
     rules))
 
   -- Set missing symbols
-  each(function(key, score)
+  fun.each(function(key, score)
     if not scores_added[key] then
       rspamd_config:set_metric_symbol({
             name = key, score = score,
@@ -1581,7 +1581,7 @@ if type(section) == "table" then
           local files = util.glob(elt)
 
           for i,matched in ipairs(files) do
-            f = io.open(matched, "r")
+            local f = io.open(matched, "r")
             if f then
               process_sa_conf(f)
               has_rules = true
@@ -1595,7 +1595,7 @@ if type(section) == "table" then
         local files = util.glob(fn)
 
         for i,matched in ipairs(files) do
-          f = io.open(matched, "r")
+          local f = io.open(matched, "r")
           if f then
             process_sa_conf(f)
             has_rules = true

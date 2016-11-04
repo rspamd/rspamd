@@ -18,7 +18,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require 'rspamd_redis'
 local redis_params
 local ucl = require "ucl"
-require "fun" ()
+local fun = require "fun"
 
 local settings = {
   redis_key = "dynamic_conf",
@@ -67,7 +67,7 @@ local function redis_make_request(ev_base, cfg, key, is_write, callback, command
   end
 
   if not addr then
-    logger.errx(task, 'cannot select server to make redis request')
+    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
   end
 
   local options = {
@@ -93,7 +93,7 @@ local function redis_make_request(ev_base, cfg, key, is_write, callback, command
 end
 
 local function apply_dynamic_actions(cfg, acts)
-  each(function(k, v)
+  fun.each(function(k, v)
      if type(v) == 'table' then
       v['name'] = k
       if not v['priority'] then
@@ -107,7 +107,7 @@ local function apply_dynamic_actions(cfg, acts)
         priority = settings.priority
       })
     end
-  end, filter(function(k, v)
+  end, fun.filter(function(k, v)
     local act = rspamd_config:get_metric_action(k)
     if (act and alpha_cmp(act, v)) or cur_settings.updates.actions[k] then
       return false
@@ -118,7 +118,7 @@ local function apply_dynamic_actions(cfg, acts)
 end
 
 local function apply_dynamic_scores(cfg, sc)
-  each(function(k, v)
+  fun.each(function(k, v)
     if type(v) == 'table' then
       v['name'] = k
       if not v['priority'] then
@@ -132,7 +132,7 @@ local function apply_dynamic_scores(cfg, sc)
         priority = settings.priority
       })
     end
-  end, filter(function(k, v)
+  end, fun.filter(function(k, v)
     -- Select elts with scores that are different from local ones
     local sym = rspamd_config:get_metric_symbol(k)
     if (sym and alpha_cmp(sym.score, v)) or cur_settings.updates.symbols[k] then
@@ -154,13 +154,13 @@ local function apply_dynamic_conf(cfg, data)
   end
 
   if data['symbols_enabled'] then
-    each(function(i, v)
+    fun.each(function(i, v)
       cfg:enable_symbol(v)
     end, data['symbols_enabled'])
   end
 
   if data['symbols_disabled'] then
-    each(function(i, v)
+    fun.each(function(i, v)
       cfg:disable_symbol(v)
     end, data['symbols_disabled'])
   end
@@ -192,10 +192,10 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       if not cur_settings.data.scores then
         cur_settings.data.scores = {}
       end
-      each(function(k, v)
+      fun.each(function(k, v)
         cur_settings.data.scores[k] = v
       end,
-      filter(function(k,v)
+      fun.filter(function(k,v)
         if cur_settings.updates.symbols[k] then
           return false
         end
@@ -206,10 +206,10 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       if not cur_settings.data.actions then
         cur_settings.data.actions = {}
       end
-      each(function(k, v)
+      fun.each(function(k, v)
         cur_settings.data.actions[k] = v
       end,
-      filter(function(k,v)
+      fun.filter(function(k,v)
         if cur_settings.updates.actions[k] then
           return false
         end

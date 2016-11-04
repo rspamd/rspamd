@@ -17,7 +17,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local ucl = require "ucl"
-require "fun" ()
+local fun = require "fun"
 
 local options = {
   dmarc_allow_symbol = 'DMARC_POLICY_ALLOW',
@@ -106,7 +106,7 @@ local function whitelist_cb(symbol, rule, task)
 
     local dkim_opts = sym[1]['options']
     if dkim_opts then
-      each(function(val)
+      fun.each(function(val)
         if not found then
           local tld = rspamd_util.get_tld(val)
 
@@ -194,7 +194,7 @@ local configure_whitelist_module = function()
   end
 
   if options['rules'] then
-    each(function(symbol, rule)
+    fun.each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
           rule['map'] = rspamd_config:add_kv_map(rule['domains'],
@@ -202,7 +202,7 @@ local configure_whitelist_module = function()
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
           -- {'domain1' = 1, 'domain2' = 1 ...]
-          rule['domains'] = tomap(map(function(d)
+          rule['domains'] = fun.tomap(fun.map(function(d)
             local name = d
             local value = 1
 
