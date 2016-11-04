@@ -22,7 +22,7 @@ local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
 local fann_symbol_spam = 'FANN_SPAM'
 local fann_symbol_ham = 'FANN_HAM'
-require "fun" ()
+local fun = require "fun"
 local ucl = require "ucl"
 
 local module_log_id = 0x100
@@ -130,7 +130,7 @@ local function redis_make_request(ev_base, cfg, key, is_write, callback, command
   end
 
   if not addr then
-    logger.errx(task, 'cannot select server to make redis request')
+    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
   end
 
   local options = {
@@ -378,9 +378,9 @@ local function symbols_to_fann_vector(syms, scores)
   local matched_symbols = {}
   local n = rspamd_config:get_symbols_count()
 
-  each(function(s, score)
+  fun.each(function(s, score)
      matched_symbols[s + 1] = rspamd_util.tanh(score)
-  end, zip(syms, scores))
+  end, fun.zip(syms, scores))
 
   for i=1,n do
     if matched_symbols[i] then
@@ -522,11 +522,11 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
     local function can_train_cb(err, data)
       if not err and tonumber(data) > 0 then
         local learn_data = symbols_to_fann_vector(
-          map(function(r) return r[1] end, results),
-          map(function(r) return r[2] end, results)
+          fun.map(function(r) return r[1] end, results),
+          fun.map(function(r) return r[2] end, results)
         )
         -- Add filtered meta tokens
-        each(function(e) table.insert(learn_data, e) end, extra)
+        fun.each(function(e) table.insert(learn_data, e) end, extra)
         local str = rspamd_util.zstd_compress(table.concat(learn_data, ';'))
 
         redis_make_request(ev_base,
@@ -564,7 +564,7 @@ local function maybe_train_fanns(cfg, ev_base)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot get FANNS list from redis: %s', err)
     elseif type(data) == 'table' then
-      each(function(i, elt)
+      fun.each(function(i, elt)
         local redis_len_cb = function(err, data)
           if err then
             rspamd_logger.errx(rspamd_config, 'cannot get FANN trains %s from redis: %s', elt, err)
@@ -617,7 +617,7 @@ local function check_fanns(cfg, ev_base)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot get FANNS list from redis: %s', err)
     elseif type(data) == 'table' then
-      each(function(i, elt)
+      fun.each(function(i, elt)
         local redis_update_cb = function(err, data)
           if err then
             rspamd_logger.errx(rspamd_config, 'cannot get FANN version %s from redis: %s', elt, err)
@@ -711,8 +711,8 @@ else
       local ret = cfg:register_worker_script("log_helper",
         function(score, req_score, results, cf, id, extra, ev_base)
           -- map (snd x) (filter (fst x == module_id) extra)
-          local extra_fann = map(function(e) return e[2] end,
-            filter(function(e) return e[1] == module_log_id end, extra))
+          local extra_fann = fun.map(function(e) return e[2] end,
+            fun.filter(function(e) return e[1] == module_log_id end, extra))
           if use_settings then
             fann_train_callback(score, req_score, results, cf,
               tostring(id), opts['train'], extra_fann, ev_base)
@@ -729,7 +729,7 @@ else
     -- This is needed to pass extra tokens from worker to log_helper
     rspamd_plugins["fann_score"] = {
       log_callback = function(task)
-        return totable(map(
+        return fun.totable(fun.map(
           function(tok) return {module_log_id, tok} end,
           gen_metatokens(task)))
       end

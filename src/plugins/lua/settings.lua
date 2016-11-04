@@ -29,7 +29,7 @@ local max_pri = 0
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 local ucl = require "ucl"
-require "fun" ()
+local fun = require "fun"
 
 -- Checks for overrided settings within query params and returns 'true' if
 -- settings are overrided
@@ -281,7 +281,7 @@ local function check_settings(task)
           end
           if rule['symbols'] then
             -- Add symbols, specified in the settings
-            each(function(val)
+            fun.each(function(val)
               task:insert_result(val, 1.0)
             end, rule['symbols'])
           end
@@ -482,7 +482,7 @@ local function process_settings_table(tbl)
   settings_ids = {}
   for k,v in pairs(settings) do settings[k]={} end
   -- fill new settings by priority
-  for_each(function(k, v)
+  fun.for_each(function(k, v)
     local pri = get_priority(v)
     if pri > max_pri then max_pri = pri end
     if not settings[pri] then
@@ -587,7 +587,7 @@ if redis_section then
     end
   end
 
-  each(function(id, h)
+  fun.each(function(id, h)
     rspamd_config:register_symbol({
       name = 'REDIS_SETTINGS' .. tostring(id),
       type = 'prefilter',
