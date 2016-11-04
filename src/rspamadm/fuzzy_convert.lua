@@ -148,9 +148,10 @@ return function (args, res)
     return
   end
 
+  local now = util.get_time()
   for row in db:rows('SELECT id, flag, digest, value, time FROM digests') do
 
-    local expire_in = math.floor(util:get_time() - row.time + res['expiry'])
+    local expire_in = math.floor(now - row.time + res['expiry'])
     if expire_in >= 1 then
       table.insert(digests, {row.digest, row.flag, row.value, expire_in})
       num_batch_digests = num_batch_digests + 1
