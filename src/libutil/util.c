@@ -1662,7 +1662,7 @@ rspamd_create_thread (const gchar *name,
 	td->data = data;
 
 	rspamd_snprintf (td->name, r + sizeof ("4294967296"), "%s-%d", name, id);
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 32))
 	new = g_thread_try_new (td->name, rspamd_thread_func, td, err);
 #else
 	new = g_thread_create (rspamd_thread_func, td, TRUE, err);
