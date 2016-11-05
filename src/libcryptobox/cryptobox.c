@@ -479,14 +479,15 @@ rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
 #else
 		EC_KEY *lk;
 		BIGNUM *bn_sec, *kinv = NULL, *rp = NULL;
-		EVP_MD_CTX sha_ctx;
+		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
 		guint diglen = rspamd_cryptobox_signature_bytes (mode);
 
 		/* Prehash */
-		g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-		EVP_DigestUpdate (&sha_ctx, m, mlen);
-		EVP_DigestFinal (&sha_ctx, h, NULL);
+		sha_ctx = EVP_MD_CTX_create ();
+		g_assert (EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+		EVP_DigestUpdate (sha_ctx, m, mlen);
+		EVP_DigestFinal (sha_ctx, h, NULL);
 
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
@@ -502,6 +503,7 @@ rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
 		g_assert (diglen <= sizeof (rspamd_signature_t));
 
 		EC_KEY_free (lk);
+		EVP_MD_CTX_destroy (sha_ctx);
 		BN_free (bn_sec);
 		BN_free (kinv);
 		BN_free (rp);
@@ -529,13 +531,14 @@ rspamd_cryptobox_verify (const guchar *sig,
 		EC_KEY *lk;
 		EC_POINT *ec_pub;
 		BIGNUM *bn_pub;
-		EVP_MD_CTX sha_ctx;
+		EVP_MD_CTX *sha_ctx;
 		unsigned char h[64];
 
 		/* Prehash */
-		g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-		EVP_DigestUpdate (&sha_ctx, m, mlen);
-		EVP_DigestFinal (&sha_ctx, h, NULL);
+		sha_ctx = EVP_MD_CTX_create ();
+		g_assert (EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+		EVP_DigestUpdate (sha_ctx, m, mlen);
+		EVP_DigestFinal (sha_ctx, h, NULL);
 
 		/* Key setup */
 		lk = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
@@ -551,6 +554,7 @@ rspamd_cryptobox_verify (const guchar *sig,
 				rspamd_cryptobox_signature_bytes (mode), lk) == 1;
 
 		EC_KEY_free (lk);
+		EVP_MD_CTX_destroy (sha_ctx);
 		BN_free (bn_pub);
 		EC_POINT_free (ec_pub);
 #endif
@@ -613,14 +617,15 @@ rspamd_cryptobox_encrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s;
+		EVP_CIPHER_CTX **s;
 
 		s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
 		memset (s, 0, sizeof (*s));
-		g_assert (EVP_EncryptInit_ex (s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
-		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN,
+		*s = EVP_CIPHER_CTX_new ();
+		g_assert (EVP_EncryptInit_ex (*s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
+		g_assert (EVP_CIPHER_CTX_ctrl (*s, EVP_CTRL_GCM_SET_IVLEN,
 				rspamd_cryptobox_nonce_bytes (mode), NULL) == 1);
-		g_assert (EVP_EncryptInit_ex (s, NULL, NULL, nm, nonce) == 1);
+		g_assert (EVP_EncryptInit_ex (*s, NULL, NULL, nm, nonce) == 1);
 
 		return s;
 #endif
@@ -678,11 +683,11 @@ rspamd_cryptobox_encrypt_update (void *enc_ctx, const guchar *in, gsize inlen,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = enc_ctx;
+		EVP_CIPHER_CTX **s = enc_ctx;
 		gint r;
 
 		r = inlen;
-		g_assert (EVP_EncryptUpdate (s, out, &r, in, inlen) == 1);
+		g_assert (EVP_EncryptUpdate (*s, out, &r, in, inlen) == 1);
 
 		if (outlen) {
 			*outlen = r;
@@ -726,10 +731,10 @@ rspamd_cryptobox_encrypt_final (void *enc_ctx, guchar *out, gsize remain,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = enc_ctx;
+		EVP_CIPHER_CTX **s = enc_ctx;
 		gint r = remain;
 
-		g_assert (EVP_EncryptFinal_ex (s, out, &r) == 1);
+		g_assert (EVP_EncryptFinal_ex (*s, out, &r) == 1);
 
 		return r;
 #endif
@@ -751,9 +756,9 @@ rspamd_cryptobox_auth_final (void *auth_ctx, rspamd_mac_t sig,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = auth_ctx;
+		EVP_CIPHER_CTX **s = auth_ctx;
 
-		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_GET_TAG,
+		g_assert (EVP_CIPHER_CTX_ctrl (*s, EVP_CTRL_GCM_GET_TAG,
 				sizeof (rspamd_mac_t), sig) == 1);
 
 		return TRUE;
@@ -784,14 +789,15 @@ rspamd_cryptobox_decrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s;
+		EVP_CIPHER_CTX **s;
 
 		s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
 		memset (s, 0, sizeof (*s));
-		g_assert (EVP_DecryptInit_ex(s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
-		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN,
+		*s = EVP_CIPHER_CTX_new ();
+		g_assert (EVP_DecryptInit_ex(*s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
+		g_assert (EVP_CIPHER_CTX_ctrl (*s, EVP_CTRL_GCM_SET_IVLEN,
 				rspamd_cryptobox_nonce_bytes (mode), NULL) == 1);
-		g_assert (EVP_DecryptInit_ex (s, NULL, NULL, nm, nonce) == 1);
+		g_assert (EVP_DecryptInit_ex (*s, NULL, NULL, nm, nonce) == 1);
 
 		return s;
 #endif
@@ -849,11 +855,11 @@ rspamd_cryptobox_decrypt_update (void *enc_ctx, const guchar *in, gsize inlen,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = enc_ctx;
+		EVP_CIPHER_CTX **s = enc_ctx;
 		gint r;
 
 		r = outlen ? *outlen : inlen;
-		g_assert (EVP_DecryptUpdate (s, out, &r, in, inlen) == 1);
+		g_assert (EVP_DecryptUpdate (*s, out, &r, in, inlen) == 1);
 
 		if (outlen) {
 			*outlen = r;
@@ -898,10 +904,10 @@ rspamd_cryptobox_decrypt_final (void *enc_ctx, guchar *out, gsize remain,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = enc_ctx;
+		EVP_CIPHER_CTX **s = enc_ctx;
 		gint r = remain;
 
-		if (EVP_DecryptFinal_ex (s, out, &r) < 0) {
+		if (EVP_DecryptFinal_ex (*s, out, &r) < 0) {
 			return FALSE;
 		}
 
@@ -931,9 +937,9 @@ rspamd_cryptobox_auth_verify_final (void *auth_ctx, const rspamd_mac_t sig,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = auth_ctx;
+		EVP_CIPHER_CTX **s = auth_ctx;
 
-		if (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_TAG, 16, (guchar *)sig) != 1) {
+		if (EVP_CIPHER_CTX_ctrl (*s, EVP_CTRL_GCM_SET_TAG, 16, (guchar *)sig) != 1) {
 			return FALSE;
 		}
 
@@ -956,9 +962,10 @@ rspamd_cryptobox_cleanup (void *enc_ctx, void *auth_ctx,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		EVP_CIPHER_CTX *s = enc_ctx;
+		EVP_CIPHER_CTX **s = enc_ctx;
 
-		EVP_CIPHER_CTX_cleanup (s);
+		EVP_CIPHER_CTX_cleanup (*s);
+		EVP_CIPHER_CTX_free (*s);
 #endif
 	}
 }
