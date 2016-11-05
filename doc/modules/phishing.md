@@ -104,6 +104,7 @@ server {
         proxy_pass http://data.phishtank.com:80;
         proxy_cache phish;
         proxy_cache_lock on;
+        proxy_cache_valid 200 302 10m;
     }
 }
 ~~~
@@ -116,3 +117,13 @@ phishtank_enabled = true;
 # Where nginx is installed
 phishtank_map = "http://localhost:8080/data/online-valid.json";
 ~~~
+
+Rspamd also provides local mirror of phishtank updated hourly. This mirror is compressed using `zstd` which is supported since 1.4. Compression helps to save both memory and bandwidth while it doesn't significantly affect the loading time. To use Rspamd local mirror, you can use the default configuration for 1.4:
+
+~~~ucl
+# local.d/phishing.conf
+phishtank_enabled = true;
+phishtank_map = "https://rspamd.com/phishtank/online-valid.json.zst";
+~~~
+
+Please note that compressed maps are **NOT** supported prior to Rspamd `1.4`.
