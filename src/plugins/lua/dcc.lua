@@ -49,7 +49,7 @@ local function check_dcc (task)
   local envrcpt = 'test@example.com'
   local rcpts = task:get_recipients();
   if rcpts then
-    local r = table.concat(fun.totable(map(function(rcpt)
+    local r = table.concat(fun.totable(fun.map(function(rcpt)
       return rcpt['addr'] end,
     rcpts)), '\n')
     if r then
