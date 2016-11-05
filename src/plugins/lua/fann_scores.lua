@@ -22,7 +22,7 @@ local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
 local fann_symbol_spam = 'FANN_SPAM'
 local fann_symbol_ham = 'FANN_HAM'
-require "fun" ()
+local fun = require "fun"
 local ucl = require "ucl"
 
 local module_log_id = 0x100

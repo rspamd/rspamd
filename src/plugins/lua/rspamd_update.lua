@@ -17,7 +17,7 @@ limitations under the License.
 -- This plugin implements dynamic updates for rspamd
 
 local ucl = require "ucl"
-require "fun" ()
+local fun = require "fun"
 local rspamd_logger = require "rspamd_logger"
 local updates_priority = 2
 local rspamd_config = rspamd_config
@@ -26,7 +26,7 @@ local rspamd_version = rspamd_version
 local maps = {}
 
 local function process_symbols(obj, priority)
-  each(function(sym, score)
+  fun.each(function(sym, score)
     rspamd_config:set_metric_symbol({
       name = sym,
       score = score,
@@ -36,7 +36,7 @@ local function process_symbols(obj, priority)
 end
 
 local function process_actions(obj, priority)
-  each(function(act, score)
+  fun.each(function(act, score)
     rspamd_config:set_metric_action({
       action = act,
       score = score,
@@ -46,7 +46,7 @@ local function process_actions(obj, priority)
 end
 
 local function process_rules(obj)
-  each(function(key, code)
+  fun.each(function(key, code)
     local f = loadstring(code)
     if f then
       f()
@@ -126,7 +126,7 @@ end
 local section = rspamd_config:get_all_opt("rspamd_update")
 if section then
   local trusted_key
-  each(function(k, elt)
+  fun.each(function(k, elt)
     if k == 'priority' then
       updates_priority = tonumber(elt)
     elseif k == 'key' then
@@ -142,7 +142,7 @@ if section then
     end
   end, section)
 
-  each(function(k, map)
+  fun.each(function(k, map)
     -- Check sanity for maps
     local proto = map:get_proto()
     if (proto == 'http' or proto == 'https') and not map:get_sign_key() then
