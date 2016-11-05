@@ -475,8 +475,8 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		key = g_string_new (session->backend->redis_object);
 		rspamd_printf_gstring (key, "_%d_%uL", i, shcmd->sgl.hashes[i]);
-		session->argv[i] = key->str;
-		session->argv_lens[i] = key->len;
+		session->argv[i + 1] = key->str;
+		session->argv_lens[i + 1] = key->len;
 		g_string_free (key, FALSE); /* Do not free underlying array */
 	}
 
@@ -488,6 +488,8 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 	if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_shingles_callback,
 			session, session->nargs,
 			(const gchar **)session->argv, session->argv_lens) != REDIS_OK) {
+		msg_err ("cannot execute redis command: %s", session->ctx->errstr);
+
 		if (session->callback.cb_check) {
 			memset (&rep, 0, sizeof (rep));
 			session->callback.cb_check (&rep, session->cbdata);
