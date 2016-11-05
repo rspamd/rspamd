@@ -46,7 +46,6 @@ local settings = {
   key_prefix = 'rg', -- default hash name
   max_data_len = 10240, -- default data limit to hash
   message = 'Try again later', -- default greylisted message
-  message_func = function(task, finish, type) return settings.message end,
   symbol = 'GREYLIST',
   action = 'soft reject', -- default greylisted action
   ipv4_mask = 19, -- Mask bits for ipv4
