@@ -197,9 +197,6 @@ string_to_learn_alg (const gchar *str)
 	else if (strcmp (str, "qprop") == 0) {
 		return FANN_TRAIN_QUICKPROP;
 	}
-	else if (strcmp (str, "sarprop") == 0) {
-		return FANN_TRAIN_SARPROP;
-	}
 	else if (strcmp (str, "batch") == 0) {
 		return FANN_TRAIN_BATCH;
 	}
