@@ -96,9 +96,9 @@ end
  */
 LUA_FUNCTION_DEF (task, insert_result);
 /***
- * @method task:set_pre_results(action, description)
- * Sets pre-result for a task. It is used in pre-filters to specify early results
- * of the task scanned. If a pre-filter sets  some result, then further processing
+ * @method task:set_pre_result(action, description)
+ * Sets pre-result for a task. It is used in pre-filters to specify early result
+ * of the task scanned. If a pre-filter sets some result, then further processing
  * may be skipped. For selecting action it is possible to use global table
  * `rspamd_actions` or a string value:
  *
