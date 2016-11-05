@@ -315,11 +315,9 @@ rspamd_cryptobox_init (void)
 	ctx->blake2_impl = blake2b_load ();
 	ctx->ed25519_impl = ed25519_load ();
 #ifdef HAVE_USABLE_OPENSSL
-	ERR_load_ECDSA_strings ();
 	ERR_load_EC_strings ();
 	ERR_load_RAND_strings ();
 	ERR_load_EVP_strings ();
-	ERR_load_ECDH_strings ();
 #endif
 
 	return ctx;
