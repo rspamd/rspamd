@@ -203,6 +203,46 @@ string_to_learn_alg (const gchar *str)
 
 	return FANN_TRAIN_INCREMENTAL;
 }
+/*
+ * This is needed since libfann provides no versioning macros...
+ */
+static struct fann_train_data *
+rspamd_fann_create_train (guint num_data, guint num_input, guint num_output)
+{
+	struct fann_train_data *t;
+	fann_type *inp, *outp;
+	guint i;
+
+	t = calloc (1, sizeof (*t));
+	g_assert (t != NULL);
+
+	t->num_data = num_data;
+	t->num_input = num_input;
+	t->num_output = num_output;
+
+	t->input = calloc (num_data, sizeof (fann_type *));
+	g_assert (t->input != NULL);
+
+	t->output = calloc (num_data, sizeof (fann_type *));
+	g_assert (t->output != NULL);
+
+	inp = calloc (num_data * num_input, sizeof (fann_type));
+	g_assert (inp != NULL);
+
+	outp = calloc (num_data * num_output, sizeof (fann_type));
+	g_assert (outp != NULL);
+
+	for (i = 0; i < num_data; i ++) {
+		t->input[i] = inp;
+		inp += num_input;
+		t->output[i] = outp;
+		outp += num_output;
+	}
+
+	return t;
+}
+
+
 #endif
 
 /***
@@ -662,7 +702,7 @@ lua_fann_train_threaded (lua_State *L)
 		cbdata = g_slice_alloc0 (sizeof (*cbdata));
 		cbdata->L = L;
 		cbdata->f = f;
-		cbdata->train = fann_create_train (ndata, ninputs, noutputs);
+		cbdata->train = rspamd_fann_create_train (ndata, ninputs, noutputs);
 		lua_pushvalue (L, 4);
 		cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
