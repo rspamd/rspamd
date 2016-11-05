@@ -2,9 +2,12 @@
 # 'domain' 'Message-ID regexp'
 
 alibaba.com /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}-0$/
-aliexpress.com /^(?:(?:[0-9]{14}|[a-z]{4}UTT_[0-9]{5}_)[$])?[a-f0-9]{32}$/
+aliexpress.com /^(?:(?:[0-9]{14}|[a-z]{4}UTT_[0-9]{5,6}_)[$])?[a-f0-9]{32}$/
+beeline.ru /^<[A-z0-9]{18}>$/
+noreply.esphere.ru
 is-zakupki.com
 mirtesen.ru
+fcod.nalog.ru
 sberbank-ast.ru
 wildberries.ru /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
 promo.wildberries.ru /^[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12}$/
