@@ -468,7 +468,7 @@ local function process_settings_table(tbl)
 
   settings_initialized = false
   -- filter trash in the input
-  local ft = filter(
+  local ft = fun.filter(
     function(_, elt)
       if type(elt) == "table" then
         return true
