@@ -464,18 +464,19 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 
 	rspamd_fuzzy_redis_session_free_args (session);
 	/* First of all check digest */
-	session->nargs = 2 * session->cmd->shingles_count;
+	session->nargs = session->cmd->shingles_count + 1;
 	session->argv = g_malloc (sizeof (gchar *) * session->nargs);
 	session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
 	shcmd = (const struct rspamd_fuzzy_shingle_cmd *)session->cmd;
 
+	session->argv[0] = g_strdup ("MGET");
+	session->argv_lens[0] = 4;
+
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		key = g_string_new (session->backend->redis_object);
 		rspamd_printf_gstring (key, "_%d_%uL", i, shcmd->sgl.hashes[i]);
-		session->argv[i * 2] = g_strdup ("GET");
-		session->argv_lens[i * 2] = 3;
-		session->argv[i * 2 + 1] = key->str;
-		session->argv_lens[i * 2 + 1] = key->len;
+		session->argv[i] = key->str;
+		session->argv_lens[i] = key->len;
 		g_string_free (key, FALSE); /* Do not free underlying array */
 	}
 
