@@ -752,13 +752,6 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 
 	item = g_ptr_array_index (cache->items_by_id, id);
 
-	if (item->type & (SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_PREFILTER)) {
-		msg_err_cache ("conditions are not supported for prefilters and "
-				"postfilters %s", item->symbol);
-
-		return FALSE;
-	}
-
 	if (item->condition_cb != -1) {
 		/* We already have a condition, so we need to remove old cbref first */
 		msg_warn_cache ("rewriting condition for symbol %s", item->symbol);
