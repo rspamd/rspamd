@@ -571,7 +571,7 @@ rspamd_cryptobox_encrypt_ctx_len (enum rspamd_cryptobox_mode mode)
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
-		return sizeof (EVP_CIPHER_CTX) + CRYPTOBOX_ALIGNMENT;
+		return sizeof (EVP_CIPHER_CTX *) + CRYPTOBOX_ALIGNMENT;
 #endif
 	}
 
