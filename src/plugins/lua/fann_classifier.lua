@@ -149,7 +149,7 @@ local function tokens_to_vector(tokens)
 end
 
 local function add_metatokens(task, vec)
-    local mt = gen_metatokens(task)
+    local mt = rspamd_gen_metatokens(task)
     for _,tok in ipairs(mt) do
       table.insert(vec, tok)
     end
@@ -157,7 +157,7 @@ end
 
 local function create_fann()
   local layers = {}
-  local mt_size = count_metatokens()
+  local mt_size = rspamd_count_metatokens()
   local neurons = classifier_config.neurons + mt_size
 
   for i = 1,classifier_config.layers - 1 do
