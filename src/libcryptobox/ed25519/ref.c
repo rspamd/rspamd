@@ -28,11 +28,12 @@ ed_seed_keypair_ref (unsigned char *pk, unsigned char *sk,
 		const unsigned char *seed)
 {
 	ge_p3 A;
-	EVP_MD_CTX sha_ctx;
+	EVP_MD_CTX *sha_ctx;
 
-	g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-	EVP_DigestUpdate (&sha_ctx, seed, 32);
-	EVP_DigestFinal (&sha_ctx, sk, NULL);
+	sha_ctx = EVP_MD_CTX_create ();
+	g_assert (sha_ctx && EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+	EVP_DigestUpdate (sha_ctx, seed, 32);
+	EVP_DigestFinal (sha_ctx, sk, NULL);
 
 	sk[0] &= 248;
 	sk[31] &= 63;
@@ -43,6 +44,8 @@ ed_seed_keypair_ref (unsigned char *pk, unsigned char *sk,
 
 	memmove (sk, seed, 32);
 	memmove (sk + 32, pk, 32);
+
+	EVP_MD_CTX_destroy (sha_ctx);
 
 	return 0;
 }
@@ -64,7 +67,7 @@ int
 ed_verify_ref(const unsigned char *sig, const unsigned char *m,
 		size_t mlen, const unsigned char *pk)
 {
-	EVP_MD_CTX sha_ctx;
+	EVP_MD_CTX *sha_ctx;
 	unsigned char h[64];
 	unsigned char rcheck[32];
 	unsigned int i;
@@ -85,12 +88,16 @@ ed_verify_ref(const unsigned char *sig, const unsigned char *m,
 		return -1;
 	}
 
-	g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-	EVP_DigestUpdate (&sha_ctx, sig, 32);
-	EVP_DigestUpdate (&sha_ctx, pk, 32);
-	EVP_DigestUpdate (&sha_ctx, m, mlen);
-	EVP_DigestFinal (&sha_ctx, h, NULL);
+	sha_ctx = EVP_MD_CTX_create ();
+	g_assert (sha_ctx && EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+	EVP_DigestUpdate (sha_ctx, sig, 32);
+	EVP_DigestUpdate (sha_ctx, pk, 32);
+	EVP_DigestUpdate (sha_ctx, m, mlen);
+	EVP_DigestFinal (sha_ctx, h, NULL);
+
 	sc_reduce (h);
+
+	EVP_MD_CTX_destroy (sha_ctx);
 
 	ge_double_scalarmult_vartime (&R, h, &A, sig + 32);
 	ge_tobytes (rcheck, &R);
@@ -103,23 +110,24 @@ ed_sign_ref(unsigned char *sig, size_t *siglen_p,
 		const unsigned char *m, size_t mlen,
 		const unsigned char *sk)
 {
-	EVP_MD_CTX sha_ctx;
+	EVP_MD_CTX *sha_ctx;
 	unsigned char az[64];
 	unsigned char nonce[64];
 	unsigned char hram[64];
 	ge_p3 R;
 
-	g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-	EVP_DigestUpdate (&sha_ctx, sk, 32);
-	EVP_DigestFinal (&sha_ctx, az, NULL);
+	sha_ctx = EVP_MD_CTX_create ();
+	g_assert (sha_ctx && EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+	EVP_DigestUpdate (sha_ctx, sk, 32);
+	EVP_DigestFinal (sha_ctx, az, NULL);
 	az[0] &= 248;
 	az[31] &= 63;
 	az[31] |= 64;
 
-	g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-	EVP_DigestUpdate (&sha_ctx, az + 32, 32);
-	EVP_DigestUpdate (&sha_ctx, m, mlen);
-	EVP_DigestFinal (&sha_ctx, nonce, NULL);
+	g_assert (EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+	EVP_DigestUpdate (sha_ctx, az + 32, 32);
+	EVP_DigestUpdate (sha_ctx, m, mlen);
+	EVP_DigestFinal (sha_ctx, nonce, NULL);
 
 	memmove (sig + 32, sk + 32, 32);
 
@@ -127,15 +135,16 @@ ed_sign_ref(unsigned char *sig, size_t *siglen_p,
 	ge_scalarmult_base (&R, nonce);
 	ge_p3_tobytes (sig, &R);
 
-	g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
-	EVP_DigestUpdate (&sha_ctx, sig, 64);
-	EVP_DigestUpdate (&sha_ctx, m, mlen);
-	EVP_DigestFinal (&sha_ctx, hram, NULL);
+	g_assert (EVP_DigestInit (sha_ctx, EVP_sha512()) == 1);
+	EVP_DigestUpdate (sha_ctx, sig, 64);
+	EVP_DigestUpdate (sha_ctx, m, mlen);
+	EVP_DigestFinal (sha_ctx, hram, NULL);
 
 	sc_reduce (hram);
 	sc_muladd (sig + 32, hram, az, nonce);
 
 	rspamd_explicit_memzero (az, sizeof (az));
+	EVP_MD_CTX_destroy (sha_ctx);
 
 	if (siglen_p != NULL) {
 		*siglen_p = 64U;
