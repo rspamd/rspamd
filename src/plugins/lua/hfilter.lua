@@ -299,7 +299,7 @@ local function hfilter(task)
 
   --No more checks for auth user or local network
   local rip = task:get_from_ip()
-  if ((not check_user and task:get_user()) or
+  if ((not check_authed and task:get_user()) or
       (not check_local and rip and rip:is_local())) then
     return false
   end
@@ -312,8 +312,9 @@ local function hfilter(task)
 
   -- Check's HELO
   local weight_helo = 0
+  local helo
   if config['helo_enabled'] then
-    local helo = task:get_helo()
+    helo = task:get_helo()
     if helo then
       if helo ~= rspamc_local_helo then
         helo = string.gsub(helo, '[%[%]]', '')

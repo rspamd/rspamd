@@ -95,7 +95,7 @@ local function process_single_pattern(pat, symbol, cf)
 end
 
 local function process_trie_file(symbol, cf)
-  file = io.open(cf['file'])
+  local file = io.open(cf['file'])
 
   if not file then
     rspamd_logger.errx(rspamd_config, 'Cannot open trie file %1', cf['file'])
