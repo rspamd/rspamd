@@ -376,7 +376,7 @@ local function set_limits(task, args)
           conn:add_cmd('setex', v)
         end, fun.drop_n(1, values))
       else
-        rspamd_logger.infox(task, 'got error while connecting to redis: %1', addr)
+        rspamd_logger.infox(task, 'got error while connecting to redis: %1', upstream:get_addr())
         upstream:fail()
       end
     end
@@ -482,8 +482,8 @@ local function parse_limit(str)
 
   local key_keywords = rspamd_str_split(params[1], '_')
   for _, k in ipairs(key_keywords) do
-    if (custom_keywords[v] and type(custom_keywords[v]['get_value']) == 'function') or
-        (keywords[v] and type(keywords[v]['get_value']) == 'function') then
+    if (custom_keywords[k] and type(custom_keywords[k]['get_value']) == 'function') or
+        (keywords[k] and type(keywords[k]['get_value']) == 'function') then
       set_limit(settings[params[1]], params[2], params[3])
     else
       rspamd_logger.errx(rspamd_config, 'invalid limit type: ' .. params[1])
@@ -588,6 +588,7 @@ if opts then
         priority = 10,
       })
     else
+      local symbol
       if not ratelimit_symbol then
         symbol = 'RATELIMIT_CHECK'
       else
