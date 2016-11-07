@@ -168,7 +168,7 @@ end
 
 -- RFC 2369 headers
 local function check_rfc2369(task)
-  header = task:get_header('List-Unsubscribe')
+  local header = task:get_header('List-Unsubscribe')
   if not header or not string.find(header, '<.+>') then
     return false
   end
