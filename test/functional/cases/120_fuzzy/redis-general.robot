@@ -11,7 +11,6 @@ Fuzzy Add
   Fuzzy Multimessage Add Test
 
 Fuzzy Fuzzy
-  [Tags]  isbroken
   Fuzzy Multimessage Fuzzy Test
 
 Fuzzy Delete
