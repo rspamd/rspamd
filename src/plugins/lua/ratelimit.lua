@@ -187,8 +187,8 @@ local function dynamic_rate_key(task, rtype)
   if not have_to then
     return table.concat(key_t, ":")
   else
-    rate_keys = {}
-    rcpts = task:get_recipients(0)
+    local rate_keys = {}
+    local rcpts = task:get_recipients(0)
     if not rcpts or not rcpts[1] or not rcpts[1]['addr'] then
       return nil
     end
@@ -196,7 +196,7 @@ local function dynamic_rate_key(task, rtype)
     local total_rcpt = 0
     for _, r in ipairs(rcpts) do
       if r['addr'] and total_rcpt < max_rcpt then
-        key_f = string.format(key_s, r['addr'])
+        local key_f = string.format(key_s, r['addr'])
         table.insert(rate_keys, key_f)
         total_rcpt = total_rcpt + 1
       end
@@ -298,6 +298,7 @@ local function check_limits(task, args)
       fun.map(function(a) return rspamd_str_split(a[2], ":")[2] end, args)))
   end
 
+  local _
   ret,_,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
@@ -381,6 +382,7 @@ local function set_limits(task, args)
     end
   end
 
+  local _
   ret,_,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
