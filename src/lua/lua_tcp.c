@@ -758,6 +758,7 @@ lua_tcp_request (lua_State *L)
 	cbd->stop_pattern = stop_pattern;
 	cbd->connect_cb = conn_cbref;
 	cbd->in = g_byte_array_new ();
+	cbd->do_read = do_read;
 	rspamd_mempool_add_destructor (cbd->pool,
 			(rspamd_mempool_destruct_t)g_byte_array_unref,
 			cbd->in);
