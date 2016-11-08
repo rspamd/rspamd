@@ -1178,13 +1178,15 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		break;
 
 	case parse_value:
-		if (g_ascii_isspace (*in) || *in == '>' || *in == '/') {
-			if (*in == '/') {
-				tag->flags |= FL_CLOSED;
-			}
+		if (*in == '/' && *(in + 1) == '>') {
+			tag->flags |= FL_CLOSED;
+			store = TRUE;
+		}
+		else if (g_ascii_isspace (*in) || *in == '>') {
 			store = TRUE;
 			state = spaces_after_param;
 		}
+
 		if (store) {
 			if (*savep != NULL) {
 				g_assert (tag->params != NULL);
