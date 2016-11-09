@@ -790,6 +790,13 @@ reconf['X_PHP_EVAL'] = {
   group = 'header'
 }
 
+reconf['X_PHP_FORGED_0X'] = {
+  re = "X-PHP-Originating-Script=/^0\\d/X",
+  score = 4.0,
+  description = "X-PHP-Originating-Script header appears forged",
+  group = 'header'
+}
+
 reconf['GOOGLE_FORWARDING_MID_MISSING'] = {
   re = "Message-ID=/SMTPIN_ADDED_MISSING\\@mx\\.google\\.com>$/X",
   score = 2.5,
