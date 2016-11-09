@@ -103,7 +103,7 @@ reconf['WP_COMPROMISED'] = {
 }
 
 reconf['PHP_XPS_PATTERN'] = {
-  re = 'X-PHP-Script=/^[^\\. ]+\.[^\\.\\/ ]+\\/sendmail\\.php\\b/Hi',
+  re = 'X-PHP-Script=/^[^\\. ]+\\.[^\\.\\/ ]+\\/sendmail\\.php\\b/Hi',
   description = "Message contains X-PHP-Script pattern",
   score = 5.0,
   group = "compromised_hosts"
