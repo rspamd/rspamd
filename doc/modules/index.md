@@ -73,6 +73,7 @@ Additionally, the following Lua modules are shipped with rspamd:
 blacklists.
 - [greylisting](greylisting.html) - allows to delay suspicious messages
 - [ip_score](ip_score.html) - dynamically scores sender reputation
+- [metadata_exporter](metadata_exporter.html) - pushes message metadata to external systems
 - [metric_exporter](metric_exporter.html) - pushes statistics to external monitoring systems
 - [multimap](multimap.html) - a complex module that operates with different types
 of maps.
