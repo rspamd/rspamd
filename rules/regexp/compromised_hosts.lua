@@ -1,5 +1,6 @@
 local reconf = config['regexp']
 local rspamd_regexp = require 'rspamd_regexp'
+local util = require 'rspamd_util'
 
 reconf['HAS_PHPMAILER_SIG'] = {
   re = "X-Mailer=/^PHPMailer/Hi || Content-Type=/boundary=\"b[123]_/Hi",
