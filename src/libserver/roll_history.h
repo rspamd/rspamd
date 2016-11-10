@@ -24,8 +24,8 @@
  * and displaying them in webui
  */
 
-#define HISTORY_MAX_ID 64
-#define HISTORY_MAX_SYMBOLS 128
+#define HISTORY_MAX_ID 256
+#define HISTORY_MAX_SYMBOLS 256
 #define HISTORY_MAX_USER 32
 #define HISTORY_MAX_ADDR 32
 
