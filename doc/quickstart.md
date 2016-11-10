@@ -579,7 +579,9 @@ You can also setup rspamc to learn via passing messages to a certain email addre
 
 You'd need some less predictable aliases to avoid sending messages to such addresses by some adversary or just by a mistake to prevent statistics pollution.
 
-There is also an addon for Thunderbird MUA written by Alexander Moisseev to visualise Rspamd stats. You can download it from its [homepage](https://addons.mozilla.org/en-GB/thunderbird/addon/rspamd-spamness/). You'd need to add extended spam headers with Rmilter to make the whole setup work. This could be done by adding the following line to `rmilter.conf`:
+There is also an add-on for Thunderbird MUA written by Alexander Moisseev to visualise Rspamd stats. You can download it from its [homepage](https://addons.mozilla.org/en-GB/thunderbird/addon/rspamd-spamness/). You'd need to add extended spam headers (`X-Spamd-Result`) with Rmilter and/or (from add-on's version 0.8.0) `X-Spam-Score` and `X-Spam-Report` headers with Exim to make the whole setup work.
+
+To enable extended spam headers in Rmilter add the following line to `rmilter.conf`:
 
 {% highlight ucl %}
 spamd {
@@ -587,6 +589,8 @@ spamd {
         extended_spam_headers = yes;
 }
 {% endhighlight %}
+
+To enable headers in Exim refer to the "Integration with Exim MTA" section of the [MTA integration](/doc/integration.html) document.
 
 Here is a screenshot of this addon in use:
 
