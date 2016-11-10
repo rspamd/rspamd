@@ -20,9 +20,6 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 
 local settings = {
-  select = function(task)
-    return true
-  end,
   format = function(task)
     return task:get_content()
   end,
@@ -58,15 +55,22 @@ local function metadata_exporter(task)
       upstream:ok()
     end
   end
-  if not settings.select(task) then return end
-  rspamd_logger.debugx(task, 'Message selected for processing')
+  if settings.select then
+    if not settings.select(task) then return end
+    rspamd_logger.debugx(task, 'Message selected for processing')
+  end
+  local data = settings.format(task)
+  if not data then
+    rspamd_logger.debugx(task, 'Format returned non-truthy value: %1', data)
+    return
+  end
   ret,conn,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     nil, -- hash key
     true, -- is write
     redis_set_cb, --callback
     'PUBLISH', -- command
-    {channel, settings.format(task)} -- arguments
+    {channel, data} -- arguments
   )
 end
 
