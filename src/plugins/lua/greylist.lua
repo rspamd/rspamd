@@ -275,8 +275,10 @@ local function greylist_set(task)
   end
 
   local action = task:get_metric_action('default')
-  if action == 'no action' or action == 'reject' then
-    if not do_greylisting_required or do_greylisting_required ~= "1" then return end
+  if do_greylisting_required then
+    if do_greylisting_required ~= "1" then return end
+  else
+    if action == 'no action' or action == 'reject' then return end
   end
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
