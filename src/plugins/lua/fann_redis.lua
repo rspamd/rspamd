@@ -25,7 +25,7 @@ local fann_symbol_ham = 'FANN_HAM'
 require "fun" ()
 local ucl = require "ucl"
 
-local module_log_id = 0x100
+local module_log_id = 0x200
 -- Module vars
 -- ANNs indexed by settings id
 local data = {
