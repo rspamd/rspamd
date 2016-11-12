@@ -168,6 +168,7 @@ enum rspamc_command_type {
 	RSPAMC_COMMAND_LEARN_HAM,
 	RSPAMC_COMMAND_FUZZY_ADD,
 	RSPAMC_COMMAND_FUZZY_DEL,
+	RSPAMC_COMMAND_FUZZY_DELHASH,
 	RSPAMC_COMMAND_STAT,
 	RSPAMC_COMMAND_STAT_RESET,
 	RSPAMC_COMMAND_COUNTERS,
@@ -221,7 +222,7 @@ struct rspamc_command {
 		.name = "fuzzy_add",
 		.path = "fuzzyadd",
 		.description =
-			"add message to fuzzy storage (check -f and -w options for this command)",
+			"add hashes from a message to the fuzzy storage (check -f and -w options for this command)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
 		.need_input = TRUE,
@@ -232,10 +233,21 @@ struct rspamc_command {
 		.name = "fuzzy_del",
 		.path = "fuzzydel",
 		.description =
-			"delete message from fuzzy storage (check -f option for this command)",
+			"delete hashes from a message from the fuzzy storage (check -f option for this command)",
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
 		.need_input = TRUE,
+		.command_output_func = NULL
+	},
+	{
+		.cmd = RSPAMC_COMMAND_FUZZY_DELHASH,
+		.name = "fuzzy_delhash",
+		.path = "fuzzydelhash",
+		.description =
+			"delete a hash from fuzzy storage (check -f option for this command)",
+		.is_controller = TRUE,
+		.is_privileged = TRUE,
+		.need_input = FALSE,
 		.command_output_func = NULL
 	},
 	{
@@ -384,6 +396,9 @@ check_rspamc_command (const gchar *cmd)
 	}
 	else if (g_ascii_strcasecmp (cmd, "FUZZY_DEL") == 0) {
 		ct = RSPAMC_COMMAND_FUZZY_DEL;
+	}
+	else if (g_ascii_strcasecmp (cmd, "FUZZY_DELHASH") == 0) {
+		ct = RSPAMC_COMMAND_FUZZY_DELHASH;
 	}
 	else if (g_ascii_strcasecmp (cmd, "STAT") == 0) {
 		ct = RSPAMC_COMMAND_STAT;
@@ -1640,30 +1655,39 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 	else {
 		for (i = start_argc; i < argc; i++) {
-			if (stat (argv[i], &st) == -1) {
-				fprintf (stderr, "cannot stat file %s\n", argv[i]);
-				exit (EXIT_FAILURE);
-			}
-			if (S_ISDIR (st.st_mode)) {
-				/* Directories are processed with a separate limit */
-				rspamc_process_dir (ev_base, cmd, argv[i], kwattrs);
-				cur_req = 0;
+			if (cmd->cmd == RSPAMC_COMMAND_FUZZY_DELHASH) {
+				ADD_CLIENT_HEADER (kwattrs, "Hash",  argv[i]);
 			}
 			else {
-				in = fopen (argv[i], "r");
-				if (in == NULL) {
-					fprintf (stderr, "cannot open file %s\n", argv[i]);
+				if (stat (argv[i], &st) == -1) {
+					fprintf (stderr, "cannot stat file %s\n", argv[i]);
 					exit (EXIT_FAILURE);
 				}
-				rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
-				cur_req++;
-				fclose (in);
+				if (S_ISDIR (st.st_mode)) {
+					/* Directories are processed with a separate limit */
+					rspamc_process_dir (ev_base, cmd, argv[i], kwattrs);
+					cur_req = 0;
+				}
+				else {
+					in = fopen (argv[i], "r");
+					if (in == NULL) {
+						fprintf (stderr, "cannot open file %s\n", argv[i]);
+						exit (EXIT_FAILURE);
+					}
+					rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
+					cur_req++;
+					fclose (in);
+				}
+				if (cur_req >= max_requests) {
+					cur_req = 0;
+					/* Wait for completion */
+					event_base_loop (ev_base, 0);
+				}
 			}
-			if (cur_req >= max_requests) {
-				cur_req = 0;
-				/* Wait for completion */
-				event_base_loop (ev_base, 0);
-			}
+		}
+
+		if (cmd->cmd == RSPAMC_COMMAND_FUZZY_DELHASH) {
+			rspamc_process_input (ev_base, cmd, NULL, "hashes", kwattrs);
 		}
 	}
 
