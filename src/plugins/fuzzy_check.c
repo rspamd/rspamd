@@ -1960,7 +1960,7 @@ cleanup:
 
 			reply = ucl_object_typed_new (UCL_OBJECT);
 
-			ucl_object_insert_key (reply, ucl_object_fromstring ("true"),
+			ucl_object_insert_key (reply, ucl_object_frombool (true),
 					"success", 0, false);
 			hashes = ucl_object_typed_new (UCL_ARRAY);
 
