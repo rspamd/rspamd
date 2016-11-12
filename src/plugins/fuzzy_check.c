@@ -2442,6 +2442,12 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				if (io) {
 					commands = g_ptr_array_sized_new (1);
 					g_ptr_array_add (commands, io);
+					res = register_fuzzy_controller_call (conn_ent,
+							rule,
+							task,
+							commands,
+							saved,
+							err);
 				}
 			}
 			else {
