@@ -19,7 +19,7 @@ title: Rspamd Blog
   {% if paginator.previous_page %}
     <li class="previous">
       {% if paginator.previous_page == 1 %}
-        <a href="/blog/">&laquo;</a>
+        <a href="{{ site.baseurl }}/blog/">&laquo;</a>
       {% else %}
         <a href="{{ paginator.previous_page_path }}">&laquo;</a>
       {% endif %}
@@ -34,7 +34,7 @@ title: Rspamd Blog
       {% if paginator.page == 1 %}
         <span class="current-page">1</span>
       {% else %}
-        <a href="/blog/">1</a>
+        <a href="{{ site.baseurl }}/blog/">1</a>
       {% endif %}
     </li>
 
@@ -43,7 +43,7 @@ title: Rspamd Blog
         {% if count == paginator.page %}
           <span class="current-page">{{ count }}</span>
         {% else %}
-          <a href="/blog/page{{ count }}">{{ count }}</a>
+          <a href="{{ site.baseurl }}/blog/page{{ count }}">{{ count }}</a>
         {% endif %}
       </li>
     {% endfor %}

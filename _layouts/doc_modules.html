@@ -1,9 +1,9 @@
 {% include top.html %}
 <div class="container">
 	<ol class="breadcrumb">
-		<li><a href="/">Home</a></li>
-		<li><a href="/doc/index.html">Documentation</a></li>
-		<li><a href="/doc/modules/index.html">Modules index</a></li>
+		<li><a href="{{ site.baseurl }}/">Home</a></li>
+		<li><a href="{{ site.baseurl }}/doc/index.html">Documentation</a></li>
+		<li><a href="{{ site.baseurl }}/doc/modules/index.html">Modules index</a></li>
 		<li class="active">{{ page.title }}</li>
 	</ol>
 	<div class="row">
@@ -11,41 +11,41 @@
 			<!-- Docs navigation -->
 			<ul class="nav nav-pills nav-stacked" role="navigation">
 				<li class="nav-header">Rspamd modules</li>
-				<li><a href="/doc/modules/index.html">Overview</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/index.html">Overview</a></li>
 				<li class="divider"></li>
 				<li class="nav-header">C (internal) modules</li>
-				<li><a href="/doc/modules/chartable.html">Chartable</a></li>
-				<li><a href="/doc/modules/dkim.html">DKIM</a></li>
-				<li><a href="/doc/modules/fuzzy_check.html">Fuzzy check</a></li>
-				<li><a href="/doc/modules/regexp.html">Regexp</a></li>
-				<li><a href="/doc/modules/spf.html">SPF</a></li>
-				<li><a href="/doc/modules/surbl.html">Surbl</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/chartable.html">Chartable</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/dkim.html">DKIM</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/fuzzy_check.html">Fuzzy check</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/regexp.html">Regexp</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/spf.html">SPF</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/surbl.html">Surbl</a></li>
 				<li class="divider"></li>
 				<li class="nav-header">Lua modules</li>
-				<li><a href="/doc/modules/antivirus.html">Antivirus</a></li>
-				<li><a href="/doc/modules/asn.html">ASN module</a></li>
-				<li><a href="/doc/modules/dcc.html">DCC module</a></li>
-				<li><a href="/doc/modules/dmarc.html">DMARC</a></li>
-				<li><a href="/doc/modules/emails.html">Emails scan</a></li>
-				<li><a href="/doc/modules/greylisting.html">Greylisting module</a></li>
-				<li><a href="/doc/modules/ip_score.html">IP Score</a></li>
-				<li><a href="/doc/modules/maillist.html">Mailing list</a></li>
-				<li><a href="/doc/modules/metadata_exporter.html">Metadata exporter</a></li>
-				<li><a href="/doc/modules/metric_exporter.html">Metric exporter</a></li>
-				<li><a href="/doc/modules/mid.html">MID module</a></li>
-				<li><a href="/doc/modules/mime_types.html">Mime types</a></li>
-				<li><a href="/doc/modules/multimap.html">Multimap</a></li>
-				<li><a href="/doc/modules/mx_check.html">MX Check</a></li>
-				<li><a href="/doc/modules/fann.html">Neural network module</a></li>
-				<li><a href="/doc/modules/phishing.html">Phishing check</a></li>
-				<li><a href="/doc/modules/ratelimit.html">Ratelimit</a></li>
-				<li><a href="/doc/modules/rbl.html">RBL</a></li>
-				<li><a href="/doc/modules/once_received.html">Received policy</a></li>
-				<li><a href="/doc/modules/replies.html">Replies module</a></li>
-				<li><a href="/doc/modules/rspamd_update.html">Rspamd updates</a></li>
-				<li><a href="/doc/modules/spamassassin.html">Spamassassin rules</a></li>
-				<li><a href="/doc/modules/trie.html">Trie matcher</a></li>
-				<li><a href="/doc/modules/whitelist.html">Whitelist</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/antivirus.html">Antivirus</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/asn.html">ASN module</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/dcc.html">DCC module</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/dmarc.html">DMARC</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/emails.html">Emails scan</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/greylisting.html">Greylisting module</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/ip_score.html">IP Score</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/maillist.html">Mailing list</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/metadata_exporter.html">Metadata exporter</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/metric_exporter.html">Metric exporter</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/mid.html">MID module</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/mime_types.html">Mime types</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/multimap.html">Multimap</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/mx_check.html">MX Check</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/fann.html">Neural network module</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/phishing.html">Phishing check</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/ratelimit.html">Ratelimit</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/rbl.html">RBL</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/once_received.html">Received policy</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/replies.html">Replies module</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/rspamd_update.html">Rspamd updates</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/spamassassin.html">Spamassassin rules</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/trie.html">Trie matcher</a></li>
+				<li><a href="{{ site.baseurl }}/doc/modules/whitelist.html">Whitelist</a></li>
 			</ul>
 		</div>
 		<div class="col-sm-9">

@@ -594,7 +594,7 @@ To enable headers in Exim refer to the "Integration with Exim MTA" section of th
 
 Here is a screenshot of this addon in use:
 
-<img class="img-responsive" src="/img/thunderbird_rspamd.png">
+<img class="img-responsive" src="{{ site.baseurl }}/img/thunderbird_rspamd.png">
 
 ### Using the WebUI
 

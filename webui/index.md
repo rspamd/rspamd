@@ -11,7 +11,7 @@ This is a simple control interface for Rspamd spam filtering system.
 It provides basic functions for setting metric actions, scores,
 viewing statistic and learning.
 
-<img src="/img/webui.png" class="img-responsive" alt="Webui screenshot">
+<img src="{{ site.baseurl }}/img/webui.png" class="img-responsive" alt="Webui screenshot">
 
 ## Rspamd setup.
 

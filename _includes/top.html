@@ -14,17 +14,17 @@
 	<link href="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/css/bootstrap.min.css" rel="stylesheet">
 	-->
 
-    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ site.baseurl }}/css/bootstrap.min.css" rel="stylesheet">
     <!-- for glyphicons -->
-    <link href="/css/bootstrap-social.css" rel="stylesheet">
-    <link href="/css/font-awesome.min.css" rel="stylesheet">
+    <link href="{{ site.baseurl }}/css/bootstrap-social.css" rel="stylesheet">
+    <link href="{{ site.baseurl }}/css/font-awesome.min.css" rel="stylesheet">
     <!-- syntax highlighting CSS -->
-    <link rel="stylesheet" href="/css/main.css">
-    <link rel="stylesheet" href="/css/syntax.css">
+    <link rel="stylesheet" href="{{ site.baseurl }}/css/main.css">
+    <link rel="stylesheet" href="{{ site.baseurl }}/css/syntax.css">
     <!-- Ubuntu fonts from google -->
     <link href='https://fonts.googleapis.com/css?family=Ubuntu:400,400italic,700' rel='stylesheet' type='text/css'>
-    <link rel="icon" href="/favicon.png?v=2" type="image/png"/>
-    <link rel="alternate" type="application/rss+xml" title="Rspamd news" href="/feed.xml">
+    <link rel="icon" href="{{ site.baseurl }}/favicon.png?v=2" type="image/png"/>
+    <link rel="alternate" type="application/rss+xml" title="Rspamd news" href="{{ site.baseurl }}/feed.xml">
     <script>
         (function(i, s, o, g, r, a, m) {
             i['GoogleAnalyticsObject'] = r;
@@ -58,48 +58,48 @@
                       <span class="icon-bar"></span>
                       <span class="icon-bar"></span>
                   </button>
-                <a class="navbar-brand" href="/"><img src="/img/rspamd_logo_navbar.png" style="width: 67px; margin-top: -13px;"></a>
+                <a class="navbar-brand" href="{{ site.baseurl }}/"><img src="{{ site.baseurl }}/img/rspamd_logo_navbar.png" style="width: 67px; margin-top: -13px;"></a>
             </div>
             <div id="navbar" class="navbar-collapse collapse">
                 <ul class="nav navbar-nav">
                     <li>
-                        <a href="/downloads.html">Downloads <i class="fa fa-lg fa-download"></i></a></a>
+                        <a href="{{ site.baseurl }}/downloads.html">Downloads <i class="fa fa-lg fa-download"></i></a></a>
                     </li>
                     <li class="dropdown">
                         <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Documentation
                            <span class="caret"></span></a>
                         <ul class="dropdown-menu">
-                            <li><a href="/doc/index.html">Documentation index</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/index.html">Documentation index</a></li>
                             <li role="separator" class="divider"></li>
-                            <li><a href="/doc/quickstart.html">Quick start</a></li>
-                            <li><a href="/doc/integration.html">MTA integration</a></li>
-                            <li><a href="/doc/migration.html">Upgrading</a></li>
-                            <li><a href="/doc/faq.html">FAQ</a></li>
-                            <li><a href="/doc/tutorials/migrate_sa.html">Migrating from SA</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/quickstart.html">Quick start</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/integration.html">MTA integration</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/migration.html">Upgrading</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/faq.html">FAQ</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/tutorials/migrate_sa.html">Migrating from SA</a></li>
                             <li role="separator" class="divider"></li>
-                            <!--li><a href="/doc/architecture/">Architecture</a></li-->
-                            <li><a href="/doc/configuration/">Configuration structure</a></li>
-                            <li><a href="/doc/modules/">Modules documentation</a></li>
-                            <li><a href="/doc/workers/">Workers documentation</a></li>
+                            <!--li><a href="{{ site.baseurl }}/doc/architecture/">Architecture</a></li-->
+                            <li><a href="{{ site.baseurl }}/doc/configuration/">Configuration structure</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/modules/">Modules documentation</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/workers/">Workers documentation</a></li>
                             <li role="separator" class="divider"></li>
-                            <li><a href="/doc/tutorials/writing_rules.html">Writing Rspamd rules</a></li>
-                            <li><a href="/doc/lua/">Lua API reference</a></li>
-                            <li><a href="/doc/fuzzy_storage.html">Creating your fuzzy storage</a></li>
-                            <li><a href="/doc/architecture/index.html">Architecture information</a></li>
-                            <li><a href="/doc/architecture/protocol.html">Protocol documentation</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/tutorials/writing_rules.html">Writing Rspamd rules</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/lua/">Lua API reference</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/fuzzy_storage.html">Creating your fuzzy storage</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/architecture/index.html">Architecture information</a></li>
+                            <li><a href="{{ site.baseurl }}/doc/architecture/protocol.html">Protocol documentation</a></li>
                         </ul>
                     </li>
                     <li>
-                        <a href="/blog/">News</a>
+                        <a href="{{ site.baseurl }}/blog/">News</a>
                     </li>
                     <li>
-                        <a href="/support.html">Support</a>
+                        <a href="{{ site.baseurl }}/support.html">Support</a>
                     </li>
                 </ul>
                 <!-- Login link -->
                 <ul class="nav navbar-nav navbar-right">
-                    <li><a href="/rmilter/">Rmilter</a></li>
-                    <li><a href="/webui/">WebUI</a></li>
+                    <li><a href="{{ site.baseurl }}/rmilter/">Rmilter</a></li>
+                    <li><a href="{{ site.baseurl }}/webui/">WebUI</a></li>
                     <li><a href="https://github.com/vstakhov/rspamd" target="_blank"><i class="fa fa-lg fa-github" aria-hidden="true"></i>&nbsp;Github</a></li>
                 </ul>
             </div>

@@ -9,11 +9,11 @@ Rspamd has been started to handle mail flows that has grown over the last decade
 
 So far, Rspamd can filter hundreds of messages per second using a single 4 cores SandyBridge machine:
 
-<img class="img-responsive" src="/img/graph1.png" width="75%">
+<img class="img-responsive" src="{{ site.baseurl }}/img/graph1.png" width="75%">
 
 Rspamd can be treated as a faster replacement for [SpamAssassin](https://spamassassin.apache.org) mail filter with the ability to scan **ten times** more messages using the **same** rules (by means of [SpamAssassin plugin](/doc/modules/spamassassin.html)). In the next graph, you can see how switch to Rspamd from <abbr title="SpamAssassin">SA</abbr> helped to reduce CPU load on scanner machines:
 
-<img class="img-responsive" src="/img/graph2.png" width="50%">
+<img class="img-responsive" src="{{ site.baseurl }}/img/graph2.png" width="50%">
 
 For faster email processing, Rspamd uses a set of global and local optimization techniques. You can learn more about these techniques from my FOSDEM-2016 [talk](https://www.youtube.com/watch?v=_fl9i-az_Q0) ([slides](http://www.slideshare.net/VsevolodStakhov/rspamdfosdem-57772063)).
 
@@ -23,7 +23,7 @@ Global optimizations are used to speed up the overall messages processing improv
 
 * **Events driven architecture** allows Rspamd to execute network and other slow request simultaneously in the background, allowing to process other messages while waiting for replies:
 
-<img class="img-responsive" src="/img/rspamd-events.png" width="50%">
+<img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-events.png" width="50%">
 
 * **Rules reordering** is used to reduce messages processing time. Rspamd prefers to check for rules with higher weight, lower execution time and higher hit rate first. Moreover, Rspamd stops processing when a message reaches spam threshold as further checks are likely meaningless.
 

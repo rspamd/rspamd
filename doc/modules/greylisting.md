@@ -21,7 +21,7 @@ IP address is stored with certain mask applied: it is `/19` for IPv4 and `/64` f
 
 The hashes lifetime is depicted in the following scheme:
 
-<img class="img-responsive" width="75%" src="/img/greylisting.png">
+<img class="img-responsive" width="75%" src="{{ site.baseurl }}/img/greylisting.png">
 
 This module produces `soft reject` action on greylisting which **SHOULD** be treated as temporary rejection by MTA. Rmilter can recognize this action. Exim can recognise it with configuration - refer to the [integration guide](/doc/integration.html#integration-with-exim-mta) for details. Haraka supports it from v2.9.0.
 

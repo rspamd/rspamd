@@ -39,7 +39,7 @@ For instance, if the weight of a complaint is `w=1` and the threshold is `t=20`,
 
 In addition, rspamd does not assign the maximum score finding a threshold value - scores gradually increases from zero to a maximum (up to metric value) when the weight of hash grows up to the threshold value multiplied by two (t .. 2 * t).
 
-<center><img class="img-responsive" src="/img/rspamd-fuzzy-1.png" width="50%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-fuzzy-1.png" width="50%"></center>
 
 The second method, namely learning filters, allows you to write certain conditions that can skip learning or change a value of hash for instance, for emails from a specific domain (for example, facebook.com). Such filters are written in Lua language. The possibilities of the filters are quite extensive, however, they require manual writing and configuring.
 
@@ -57,7 +57,7 @@ In this chapter, we describe the basic fuzzy storage settings and how to optimiz
 
 **Important note:** fuzzy storage works with hashes and not with email messages. Hence, in order to convert a email into the corresponging set of hashes you need to use a scanner (for checking) or a controller process:
 
-<center><img class="img-responsive" src="/img/rspamd-fuzzy-2.png" width="75%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-fuzzy-2.png" width="75%"></center>
 
 Fuzzy storage functions:
 
@@ -161,7 +161,7 @@ worker "fuzzy" {
 
 This feature is useful for creating restricted storages where access is allowed merely to those customers who knows about one of the public keys of storage:
 
-<center><img class="img-responsive" src="/img/rspamd-fuzzy-3.png" width="75%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-fuzzy-3.png" width="75%"></center>
 
 To enable such a mandatory encryption mode you should use `encrypted_only` option:
 
@@ -260,7 +260,7 @@ Where `-w` parameter is for setting the hash weight discussed above whilst `-f` 
 
 Flags allow to store hashes of different origin in storage. For example, the hash of spam traps, hashes of user complaints and hashes of emails that come from a "white" list. Each flag may be associated with its own symbol and have a weight while checking emails:
 
-<center><img class="img-responsive" src="/img/rspamd-fuzzy-4.png" width="75%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-fuzzy-4.png" width="75%"></center>
 
 Symbol name could also be used instead of a numeric flag during learning, e.g.:
 
@@ -337,7 +337,7 @@ Let’s discuss some useful options that could be set in the module.
 
 Firstly, `max_score` specifies the threshold for a hash weight:
 
-<center><img class="img-responsive" src="/img/rspamd-fuzzy-1.png" width="50%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-fuzzy-1.png" width="50%"></center>
 
 Another useful option is `mime_types` that specifies what attachments types are checked (or learned) using this fuzzy rule. This parameter contains a list of valid types in format: `["type/subtype", "*/subtype", "type/*", "*"]`, where `*` matches any valid type. In practice, it is quite useful to save the hashes for all `application/*` attachments. Texts and embedded images are implicitly checked by `fuzzy_check` plugin, so there is no need to add `image/*` in the list of scanned attachments. Please note that attachments and images are searched for the exact match whilst texts are matched using the aproximate algorithm (shingles).
 
@@ -449,7 +449,7 @@ end
 
 It is often desired to have a local copy of the remote storage. Rspamd supports replication for this purposes that is implemented in the hashes storage since version 1.3:
 
-<center><img class="img-responsive" src="/img/rspamd-fuzzy-5.png" width="75%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-fuzzy-5.png" width="75%"></center>
 
 The hashes transfer is initiated by the replication **master**. It sends hash update commands, such as adding, modifying or deleting, to all specified slaves. Hence, the slaves should be able to accept such a connection from the master - it should be considered while configuring a firewall.
 

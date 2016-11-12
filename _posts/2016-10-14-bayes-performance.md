@@ -36,9 +36,9 @@ The raw results are pasted at the following [gist](https://gist.github.com/vstak
 
 Here are the corresponding graphs for detection rate and errors for the competitors.
 
-<center><img class="img-responsive" src="/img/bayes_rate.png" width="75%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/bayes_rate.png" width="75%"></center>
 
-<center><img class="img-responsive" src="/img/bayes_error.png" width="75%"></center>
+<center><img class="img-responsive" src="{{ site.baseurl }}/img/bayes_error.png" width="75%"></center>
 
 ## Conclusions
 
