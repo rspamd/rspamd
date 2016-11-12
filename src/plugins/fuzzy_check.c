@@ -1954,8 +1954,27 @@ cleanup:
 		rspamd_upstream_ok (session->server);
 
 		if (session->http_entry) {
-			rspamd_controller_send_string (session->http_entry,
-				"{\"success\":true}");
+			ucl_object_t *reply, *hashes;
+			guint i;
+			gchar hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+
+			reply = ucl_object_typed_new (UCL_OBJECT);
+
+			ucl_object_insert_key (reply, ucl_object_fromstring ("true"),
+					"success", 0, false);
+			hashes = ucl_object_typed_new (UCL_ARRAY);
+
+			for (i = 0; i < session->commands->len; i ++) {
+				io = g_ptr_array_index (session->commands, i);
+
+				rspamd_snprintf (hexbuf, sizeof (hexbuf), "%*xs",
+						(gint)sizeof (io->cmd.digest), io->cmd.digest);
+				ucl_array_append (hashes, ucl_object_fromstring (hexbuf));
+			}
+
+			ucl_object_insert_key (reply, hashes, "hashes", 0, false);
+			rspamd_controller_send_ucl (session->http_entry, reply);
+			ucl_object_unref (reply);
 		}
 	}
 
