@@ -2429,26 +2429,33 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		res = 0;
 
 		if (is_hash) {
+			GPtrArray *args;
 			const rspamd_ftok_t *arg;
+			guint i;
 
-			arg = rspamd_http_message_find_header (msg, "Hash");
+			args = rspamd_http_message_find_header_multiple (msg, "Hash");
 
-			if (arg) {
+			if (args) {
 				struct fuzzy_cmd_io *io;
+				commands = g_ptr_array_sized_new (args->len);
 
-				io = fuzzy_cmd_hash (rule, cmd, arg, flag, value,
-						task->task_pool);
+				for (i = 0; i < args->len; i ++) {
+					arg = g_ptr_array_index (args, i);
+					io = fuzzy_cmd_hash (rule, cmd, arg, flag, value,
+							task->task_pool);
 
-				if (io) {
-					commands = g_ptr_array_sized_new (1);
-					g_ptr_array_add (commands, io);
-					res = register_fuzzy_controller_call (conn_ent,
-							rule,
-							task,
-							commands,
-							saved,
-							err);
+					if (io) {
+						g_ptr_array_add (commands, io);
+					}
 				}
+
+				res = register_fuzzy_controller_call (conn_ent,
+						rule,
+						task,
+						commands,
+						saved,
+						err);
+				g_ptr_array_free (args, TRUE);
 			}
 			else {
 				rspamd_controller_send_error (conn_ent, 400,
