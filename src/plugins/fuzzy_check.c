@@ -1462,7 +1462,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	msg_info_task (
 			"found fuzzy hash %*xs with weight: "
 			"%.2f, in list: %s:%d%s",
-			rspamd_fuzzy_hash_len, cmd->digest,
+			(gint)sizeof (cmd->digest), cmd->digest,
 			nval,
 			symbol,
 			rep->flag,
@@ -1776,7 +1776,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 				if (rep->prob > 0.5) {
 					msg_info_task ("processed fuzzy hash %*xs, list: %s:%d for "
 									"message <%s>",
-							rspamd_fuzzy_hash_len, cmd->digest,
+							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
 							rep->flag,
 							session->task->message_id);
@@ -1786,7 +1786,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 							"<%s>, %*xs, "
 							"list %s:%d, error: %d",
 							session->task->message_id,
-							rspamd_fuzzy_hash_len, cmd->digest,
+							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
 							rep->flag,
 							rep->value);
