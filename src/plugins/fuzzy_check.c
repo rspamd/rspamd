@@ -1106,6 +1106,63 @@ fuzzy_cmd_stat (struct fuzzy_rule *rule,
 	return io;
 }
 
+static struct fuzzy_cmd_io *
+fuzzy_cmd_hash (struct fuzzy_rule *rule,
+		int c,
+		const rspamd_ftok_t *hash,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool)
+{
+	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_encrypted_cmd *enccmd;
+	struct fuzzy_cmd_io *io;
+
+	if (rule->peer_key) {
+		enccmd = rspamd_mempool_alloc0 (pool, sizeof (*enccmd));
+		cmd = &enccmd->cmd;
+	}
+	else {
+		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
+	}
+
+	if (hash->len == sizeof (cmd->digest) * 2) {
+		/* It is hex encoding */
+		if (rspamd_decode_hex_buf (hash->begin, hash->len, cmd->digest,
+				sizeof (cmd->digest)) == -1) {
+			msg_err_pool ("cannot decode hash, wrong encoding");
+			return NULL;
+		}
+	}
+	else {
+		msg_err_pool ("cannot decode hash, wrong length: %z", hash->len);
+		return NULL;
+	}
+
+	cmd->cmd = c;
+	cmd->version = RSPAMD_FUZZY_PLUGIN_VERSION;
+	cmd->shingles_count = 0;
+	cmd->tag = ottery_rand_uint32 ();
+
+	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->flags = 0;
+	io->tag = cmd->tag;
+
+	memcpy (&io->cmd, cmd, sizeof (io->cmd));
+
+	if (rule->peer_key) {
+		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
+		io->io.iov_base = enccmd;
+		io->io.iov_len = sizeof (*enccmd);
+	}
+	else {
+		io->io.iov_base = cmd;
+		io->io.iov_len = sizeof (*cmd);
+	}
+
+	return io;
+}
+
 static void *
 fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
@@ -2267,7 +2324,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 static void
 fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg, gint cmd, gint value, gint flag,
-	struct fuzzy_ctx *ctx)
+	struct fuzzy_ctx *ctx, gboolean is_hash)
 {
 	struct fuzzy_rule *rule;
 	struct rspamd_controller_session *session = conn_ent->ud;
@@ -2284,23 +2341,25 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	task = rspamd_task_new (session->wrk, session->cfg);
 	task->cfg = ctx->cfg;
 	task->ev_base = conn_ent->rt->ev_base;
-
-	/* Allocate message from string */
-	/* XXX: what about encrypted messsages ? */
-	task->msg.begin = msg->body_buf.begin;
-	task->msg.len = msg->body_buf.len;
-
 	saved = rspamd_mempool_alloc0 (session->pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (session->pool, sizeof (GError *));
-	r = rspamd_message_parse (task);
 
-	if (r == -1) {
-		msg_warn_task ("<%s>: cannot process message for fuzzy",
-				task->message_id);
-		rspamd_task_free (task);
-		rspamd_controller_send_error (conn_ent, 400,
-			"Message processing error");
-		return;
+	if (!is_hash) {
+		/* Allocate message from string */
+		/* XXX: what about encrypted messsages ? */
+		task->msg.begin = msg->body_buf.begin;
+		task->msg.len = msg->body_buf.len;
+
+		r = rspamd_message_parse (task);
+
+		if (r == -1) {
+			msg_warn_task ("<%s>: cannot process message for fuzzy",
+					task->message_id);
+			rspamd_task_free (task);
+			rspamd_controller_send_error (conn_ent, 400,
+					"Message processing error");
+			return;
+		}
 	}
 
 	cur = fuzzy_module_ctx->fuzzy_rules;
@@ -2368,11 +2427,42 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		rules ++;
 
 		res = 0;
-		commands = fuzzy_generate_commands (task, rule, cmd, flag, value);
-		if (commands != NULL) {
-			res = register_fuzzy_controller_call (conn_ent, rule, task, commands,
-					saved, err);
+
+		if (is_hash) {
+			const rspamd_ftok_t *arg;
+
+			arg = rspamd_http_message_find_header (msg, "Hash");
+
+			if (arg) {
+				struct fuzzy_cmd_io *io;
+
+				io = fuzzy_cmd_hash (rule, cmd, arg, flag, value,
+						task->task_pool);
+
+				if (io) {
+					commands = g_ptr_array_sized_new (1);
+					g_ptr_array_add (commands, io);
+				}
+			}
+			else {
+				rspamd_controller_send_error (conn_ent, 400,
+						"No hash defined");
+				rspamd_task_free (task);
+				return;
+			}
 		}
+		else {
+			commands = fuzzy_generate_commands (task, rule, cmd, flag, value);
+			if (commands != NULL) {
+				res = register_fuzzy_controller_call (conn_ent,
+						rule,
+						task,
+						commands,
+						saved,
+						err);
+			}
+		}
+
 
 		if (res) {
 			processed = TRUE;
@@ -2412,7 +2502,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 static int
 fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
-	struct rspamd_http_message *msg, struct module_ctx *ctx, gint cmd)
+	struct rspamd_http_message *msg, struct module_ctx *ctx, gint cmd,
+	gboolean is_hash)
 {
 	const rspamd_ftok_t *arg;
 	glong value = 1, flag = 0;
@@ -2486,7 +2577,7 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	fuzzy_process_handler (conn_ent, msg, cmd, value, flag,
-		(struct fuzzy_ctx *)ctx);
+		(struct fuzzy_ctx *)ctx, is_hash);
 
 	return 0;
 }
@@ -2740,7 +2831,7 @@ fuzzy_add_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg, struct module_ctx *ctx)
 {
 	return fuzzy_controller_handler (conn_ent, msg,
-			   ctx, FUZZY_WRITE);
+			   ctx, FUZZY_WRITE, FALSE);
 }
 
 static gboolean
@@ -2748,7 +2839,15 @@ fuzzy_delete_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg, struct module_ctx *ctx)
 {
 	return fuzzy_controller_handler (conn_ent, msg,
-			   ctx, FUZZY_DEL);
+			   ctx, FUZZY_DEL, FALSE);
+}
+
+static gboolean
+fuzzy_deletehash_handler (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg, struct module_ctx *ctx)
+{
+	return fuzzy_controller_handler (conn_ent, msg,
+			   ctx, FUZZY_DEL, TRUE);
 }
 
 static int
@@ -2770,6 +2869,13 @@ fuzzy_attach_controller (struct module_ctx *ctx, GHashTable *commands)
 	cmd->handler = fuzzy_delete_handler;
 	cmd->ctx = ctx;
 	g_hash_table_insert (commands, "/fuzzydel", cmd);
+
+	cmd = rspamd_mempool_alloc (fctx->fuzzy_pool, sizeof (*cmd));
+	cmd->privilleged = TRUE;
+	cmd->require_message = FALSE;
+	cmd->handler = fuzzy_deletehash_handler;
+	cmd->ctx = ctx;
+	g_hash_table_insert (commands, "/fuzzydelhash", cmd);
 
 	return 0;
 }
