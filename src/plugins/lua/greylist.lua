@@ -276,7 +276,7 @@ local function greylist_set(task)
 
   local action = task:get_metric_action('default')
   if do_greylisting_required then
-    if do_greylisting_required ~= "1" then return end
+    if do_greylisting_required ~= "1" or action == 'reject' then return end
   else
     if action == 'no action' or action == 'reject' then return end
   end
