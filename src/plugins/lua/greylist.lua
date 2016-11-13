@@ -275,10 +275,10 @@ local function greylist_set(task)
   end
 
   local action = task:get_metric_action('default')
-  if do_greylisting_required then
-    if do_greylisting_required ~= "1" or action == 'reject' then return end
+  if action == 'reject' then return end
+  if do_greylisting_required and do_greylisting_required ~= "1" then return end
   else
-    if action == 'no action' or action == 'reject' then return end
+    if action == 'no action' then return end
   end
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
@@ -322,7 +322,7 @@ local function greylist_set(task)
      rspamd_logger.infox(task, 'got error while connecting to redis: %1', upstream:get_addr())
      upstream:fail()
     end
-  elseif do_greylisting or do_greylisting_required then
+  elseif do_greylisting or (do_greylisting_required and do_greylisting_required == "1") then
     local t = tostring(math.floor(rspamd_util.get_time()))
     local end_time = rspamd_util.time_to_string(t + settings['timeout'])
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
