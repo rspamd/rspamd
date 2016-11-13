@@ -432,16 +432,31 @@ static void
 print_commands_list (void)
 {
 	guint i;
+	guint cmd_len = 0;
+	gchar fmt_str[32];
 
 	rspamd_fprintf (stdout, "Rspamc commands summary:\n");
+
 	for (i = 0; i < G_N_ELEMENTS (rspamc_commands); i++) {
-		rspamd_fprintf (stdout,
-			"  %10s (%7s%1s)\t%s\n",
-			rspamc_commands[i].name,
-			rspamc_commands[i].is_controller ? "control" : "normal",
-			rspamc_commands[i].is_privileged ? "*" : "",
-			rspamc_commands[i].description);
+		gsize clen = strlen (rspamc_commands[i].name);
+
+		if (clen > cmd_len) {
+			cmd_len = clen;
+		}
 	}
+
+	rspamd_snprintf (fmt_str, sizeof (fmt_str), "  %%%ds (%%7s%%1s)\t%%s\n",
+			cmd_len);
+
+	for (i = 0; i < G_N_ELEMENTS (rspamc_commands); i++) {
+		fprintf (stdout,
+				fmt_str,
+				rspamc_commands[i].name,
+				rspamc_commands[i].is_controller ? "control" : "normal",
+				rspamc_commands[i].is_privileged ? "*" : "",
+				rspamc_commands[i].description);
+	}
+
 	rspamd_fprintf (stdout,
 		"\n* is for privileged commands that may need password (see -P option)\n");
 	rspamd_fprintf (stdout,
