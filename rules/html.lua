@@ -14,8 +14,6 @@
 -- limitations under the License.
 
 local reconf = config['regexp']
-local rspamd_regexp = require "rspamd_regexp"
-local rspamd_logger = require "rspamd_logger"
 
 -- Messages that have only HTML part
 reconf['MIME_HTML_ONLY'] = {
@@ -184,7 +182,7 @@ rspamd_config.R_WHITE_ON_WHITE = {
         normal_len = p:get_length()
         local hc = p:get_html() -- we get HTML context
 
-        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag, len)
+        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag, _)
           local bl = tag:get_extra()
           if bl then
             if bl['bgcolor'] and bl['color'] and bl['visible'] then
@@ -208,8 +206,6 @@ rspamd_config.R_WHITE_ON_WHITE = {
                     color[1], color[2], color[3],
                     bgcolor[1], bgcolor[2], bgcolor[3])
                 end
-              else
-
               end
             end
           end

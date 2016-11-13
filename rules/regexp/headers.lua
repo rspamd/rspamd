@@ -529,7 +529,6 @@ reconf['FM_FAKE_HELO_VERIZON'] = {
 
 -- Forged yahoo msgid
 local at_yahoo_msgid = 'Message-Id=/\\@yahoo\\.com\\b/iH'
-local at_yahoogroups_msgid = 'Message-Id=/\\@yahoogroups\\.com\\b/iH'
 local from_yahoo_com = 'From=/\\@yahoo\\.com\\b/iH'
 reconf['FORGED_MSGID_YAHOO'] = {
   re = string.format('(%s) & !(%s)', at_yahoo_msgid, from_yahoo_com),
@@ -537,8 +536,6 @@ reconf['FORGED_MSGID_YAHOO'] = {
   description = 'Forged yahoo msgid',
   group = 'header'
 }
-local r_from_yahoo_groups = 'From=/rambler.ru\\@returns\\.groups\\.yahoo\\.com\\b/iH'
-local r_from_yahoo_groups_ro = 'From=/ro.ru\\@returns\\.groups\\.yahoo\\.com\\b/iH'
 
 -- Forged The Bat! MUA headers
 local thebat_mua_v1 = 'X-Mailer=/^The Bat! \\(v1\\./H'
@@ -564,8 +561,6 @@ reconf['RCVD_DOUBLE_IP_SPAM'] = {
 
 -- Quoted reply-to from yahoo (seems to be forged)
 local repto_quote = 'Reply-To=/\\".*\\"\\s*\\</H'
-local from_yahoo_com = 'From=/\\@yahoo\\.com\\b/iH'
-local at_yahoo_msgid = 'Message-Id=/\\@yahoo\\.com\\b/iH'
 reconf['REPTO_QUOTE_YAHOO'] = {
   re = string.format('(%s) & ((%s) | (%s))', repto_quote, from_yahoo_com, at_yahoo_msgid),
   score = 2.0,
@@ -577,8 +572,6 @@ reconf['REPTO_QUOTE_YAHOO'] = {
 local xm_gnus = 'X-Mailer=/^Gnus v/H'
 local xm_msoe5 = 'X-Mailer=/^Microsoft Outlook Express 5/H'
 local xm_msoe6 = 'X-Mailer=/^Microsoft Outlook Express 6/H'
-local xm_mso12 = 'X-Mailer=/^Microsoft(?: Office Outlook 12\\.0| Outlook 14\\.0)/H'
-local xm_cgpmapi = 'X-Mailer=/^CommuniGate Pro MAPI Connector/H'
 local xm_moz4 = 'X-Mailer=/^Mozilla 4/H'
 local xm_skyri = 'X-Mailer=/^SKYRiXgreen/H'
 local xm_wwwmail = 'X-Mailer=/^WWW-Mail \\d/H'

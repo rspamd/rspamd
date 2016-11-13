@@ -16,10 +16,7 @@ limitations under the License.
 
 -- This is main lua config file for rspamd
 
-local util = require "rspamd_util"
-
 config['regexp'] = {}
-local reconf = config['regexp']
 
 local local_conf = rspamd_paths['CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
