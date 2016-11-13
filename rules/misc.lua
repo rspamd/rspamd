@@ -18,9 +18,6 @@ limitations under the License.
 
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
-local rspamd_logger = require "rspamd_logger"
-
-local reconf = config['regexp']
 
 -- Uncategorized rules
 local subject_re = rspamd_regexp.create('/^(?:(?:Re|Fwd|Fw|Aw|Antwort|Sv):\\s*)+(.+)$/i')
@@ -54,7 +51,7 @@ end
 
 rspamd_config.SUBJ_ALL_CAPS = {
   callback = function(task)
-    local caps_test = function(sbj, len)
+    local caps_test = function(sbj, _)
       return util.is_uppercase(sbj)
     end
     return test_subject(task, caps_test, 1.0/40.0)
@@ -66,7 +63,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 
 rspamd_config.LONG_SUBJ = {
   callback = function(task)
-    local length_test = function(sbj, len)
+    local length_test = function(_, len)
       return len > 200
     end
     return test_subject(task, length_test, 1.0/400.0)
@@ -161,7 +158,7 @@ rspamd_config.R_SUSPICIOUS_URL = {
     local urls = task:get_urls()
 
     if urls then
-      for i,u in ipairs(urls) do
+      for _,u in ipairs(urls) do
         if u:is_obscured() then
           task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
         end
@@ -272,7 +269,7 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
     local res = 0
     local res_tbl = {}
 
-    for i,hdr in ipairs(headers_unique) do
+    for _,hdr in ipairs(headers_unique) do
       local h = task:get_header_full(hdr)
 
       if h and #h > 1 then
@@ -372,7 +369,6 @@ rspamd_config.RCVD_TLS_ALL = {
         for _, rcvd in ipairs(rcvds) do
             count = count + 1
             local r = rcvd['decoded']:lower()
-            local by = r:match('^by%s+([^%s]+)') or r:match('%sby%s+([^%s]+)')
             local with = r:match('%swith%s+(e?smtps?a?)')
             if with and with:match('esmtps') then
                 encrypted = encrypted + 1

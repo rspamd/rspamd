@@ -54,7 +54,7 @@ if opts and opts['symbols'] then
   end
 end
 
-local opts = rspamd_config:get_all_opt('dkim')
+opts = rspamd_config:get_all_opt('dkim')
 if opts then
   for k,_ in pairs(dkim_symbols) do
     if opts[k] then
@@ -63,7 +63,7 @@ if opts then
   end
 end
 
-local opts = rspamd_config:get_all_opt('spf')
+opts = rspamd_config:get_all_opt('spf')
 if opts then
   for k,_ in pairs(spf_symbols) do
     if opts[k] then

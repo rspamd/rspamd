@@ -16,6 +16,8 @@ limitations under the License.
 
 -- Detect language of message and selects appropriate statfiles for it
 
+local fun = require "fun"
+
 -- Common labels for specific statfiles
 local many_recipients_label = 'many recipients'
 local undisclosed_recipients_label = 'undisclosed recipients'
@@ -24,18 +26,13 @@ local long_subject_label = 'long subject'
 
 -- Get specific statfiles set based on message rules
 local function get_specific_statfiles(classifier, task)
-	if not table.foreach then
-		table.foreach = function(t, f)
-			for k, v in pairs(t) do f(k, v) end
-		end
-	end
 	local spec_st = {}
 	-- More 5 recipients
 	local st_many = classifier:get_statfile_by_label(many_recipients_label)
 	if st_many then
 		local rcpt = task:get_recipients(2)
 		if rcpt and #rcpt > 5 then
-			table.foreach(st_many, function(i,v) table.insert(spec_st,v) end)
+			fun.each(function(_,v) table.insert(spec_st,v) end, st_many)
 		end
 	end
 	-- Undisclosed
@@ -43,7 +40,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_undisc then
 		local rcpt = task:get_recipients(2)
 		if rcpt and #rcpt == 0 then
-			table.foreach(st_undisc, function(i,v) table.insert(spec_st,v) end)
+			fun.each(function(_,v) table.insert(spec_st,v) end, st_undisc)
 		end
 	end
 	-- Maillist
@@ -51,7 +48,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_maillist then
 		local unsub_header = task:get_header_raw('List-Unsubscribe')
 		if unsub_header then
-			table.foreach(st_maillist, function(i,v) table.insert(spec_st,v) end)
+			fun.each(function(_,v) table.insert(spec_st,v) end, st_maillist)
 		end
 	end
 	-- Long subject
@@ -59,7 +56,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_longsubj then
 		local subj = task:get_header_raw('Subject')
 		if subj and string.len(subj) > 150 then
-			table.foreach(st_longsubj, function(i,v) table.insert(spec_st,v) end)
+			fun.each(function(_,v) table.insert(spec_st,v) end, st_longsubj)
 		end
 	end
 	
@@ -70,9 +67,9 @@ local function get_specific_statfiles(classifier, task)
 	end
 end
 
-classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
+classifiers['bayes'] = function(classifier, task, is_learn, _)
 	-- Subfunction for detection of message's language
-	local detect_language = function(task)
+	local detect_language = function()
 		local parts = task:get_text_parts()
 		for _,p in ipairs(parts) do
 			local l = p:get_language()
@@ -91,11 +88,11 @@ classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
 			return spec_st
 		else
 			-- Merge tables
-			table.foreach(spec_st, function(i,v) table.insert(selected,v) end)
+			fun.each(function(_,v) table.insert(selected,v) end, spec_st)
 		end
 	end
 	-- Detect statfile by language
-	local language = detect_language(task)
+	local language = detect_language()
 	if language then
 		-- Find statfiles with specified language
 		for _,st in ipairs(classifier:get_statfiles()) do
