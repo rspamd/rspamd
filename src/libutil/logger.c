@@ -37,7 +37,7 @@ struct rspamd_logger_error_elt {
 	gint completed;
 	GQuark ptype;
 	pid_t pid;
-	time_t ts;
+	gdouble ts;
 	gchar id[LOG_ID + 1];
 	gchar module[9];
 	gchar message[];
@@ -549,7 +549,7 @@ rspamd_log_write_ringbuffer (rspamd_logger_t *rspamd_log,
 
 	if (row_num < elog->max_elts) {
 		elt = (struct rspamd_logger_error_elt *)(((guchar *)elog->elts) +
-				(sizeof (*elog) + elog->elt_len) * row_num);
+				(sizeof (*elt) + elog->elt_len) * row_num);
 		g_atomic_int_set (&elt->completed, 0);
 	}
 	else {
@@ -560,8 +560,22 @@ rspamd_log_write_ringbuffer (rspamd_logger_t *rspamd_log,
 
 	elt->pid = rspamd_log->pid;
 	elt->ptype = rspamd_log->process_type;
-	rspamd_strlcpy (elt->id, id, sizeof (elt->id));
-	rspamd_strlcpy (elt->module, module, sizeof (elt->module));
+	elt->ts = rspamd_get_calendar_ticks ();
+
+	if (id) {
+		rspamd_strlcpy (elt->id, id, sizeof (elt->id));
+	}
+	else {
+		rspamd_strlcpy (elt->id, "", sizeof (elt->id));
+	}
+
+	if (module) {
+		rspamd_strlcpy (elt->module, module, sizeof (elt->module));
+	}
+	else {
+		rspamd_strlcpy (elt->module, "", sizeof (elt->module));
+	}
+
 	rspamd_strlcpy (elt->message, data, MIN (len + 1, elog->elt_len));
 	g_atomic_int_set (&elt->completed, 1);
 }
@@ -1149,7 +1163,14 @@ rspamd_log_errlog_cmp (const ucl_object_t **o1, const ucl_object_t **o2)
 	ts2 = ucl_object_lookup (*o2, "ts");
 
 	if (ts1 && ts2) {
-		return ucl_object_toint (ts2) - ucl_object_toint (ts1);
+		gdouble t1 = ucl_object_todouble (ts1), t2 = ucl_object_todouble (ts2);
+
+		if (t1 > t2) {
+			return -1;
+		}
+		else if (t2 > t1) {
+			return 1;
+		}
 	}
 
 	return 0;
@@ -1177,7 +1198,7 @@ rspamd_log_errorbuf_export (const rspamd_logger_t *logger)
 		if (cur->completed) {
 			ucl_object_t *obj = ucl_object_typed_new (UCL_OBJECT);
 
-			ucl_object_insert_key (obj, ucl_object_fromint (cur->ts),
+			ucl_object_insert_key (obj, ucl_object_fromdouble (cur->ts),
 					"ts", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromint (cur->pid),
 					"pid", 0, false);
