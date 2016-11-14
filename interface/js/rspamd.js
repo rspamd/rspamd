@@ -30,6 +30,9 @@
         var history;
         var graph;
         var symbols;
+        var read_only = false;
+        var btn_class = "";
+        var stat_timeout;
 
         var selected = []; // Keep graph selectors state
 
@@ -63,6 +66,7 @@
                 symbols.destroy();
                 symbols = null;
             }
+            clearTimeout(stat_timeout);
             cleanCredentials();
             connectRSPAMD();
             // window.location.reload();
@@ -99,37 +103,6 @@
 
         // @detect session storate
         supportsSessionStorage();
-        // @request credentials
-        function requestCredentials() {
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'auth',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (data) {
-                    if (data.auth === 'failed') {
-                        connectRSPAMD();
-                    }
-                }
-            });
-        }
-        // @request credentials
-        function updateCredentials() {
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'auth',
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (data) {
-                    saveCredentials(data, password);
-                }
-            });
-        }
         // @save credentials
         function saveCredentials(data, password) {
             if (!supportsSessionStorage()) {
@@ -232,7 +205,7 @@
                     $.each(data, function (i, item) {
                         var caption;
                         var label;
-                        if ((item.editable == false)) {
+                        if ((item.editable == false || read_only)) {
                             caption = 'View';
                             label = '<span class="label label-default">Read</span>';
                         } else {
@@ -291,7 +264,7 @@
                     },
                     success: function (text) {
                         var disabled = '';
-                        if ((item.editable == false)) {
+                        if ((item.editable == false || read_only)) {
                             disabled = 'disabled="disabled"';
                         }
 
@@ -334,7 +307,6 @@
         // @show widgets
         function statWidgets() {
             var widgets = $('#statWidgets');
-            updateCredentials();
             $(widgets).empty().hide();
             var data;
             if (!supportsSessionStorage()) {
@@ -376,7 +348,7 @@
             });
             $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
             $(widgets).show();
-            window.setTimeout(statWidgets, 10000);
+            stat_timeout = window.setTimeout(statWidgets, 10000);
         }
         // @opem modal with target form enabled
         $(document).on('click', '[data-toggle="modal"]', function (e) {
@@ -704,8 +676,8 @@
                                 '" id="_sym_' + item.symbol + '"></span></td>' +
                                 '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
                                 '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
-                                '<td><button type="button" class="btn btn-primary btn-sm">Save</button></td>' +
-                                '</tr>');
+                                '<td><button type="button" class="btn btn-primary btn-sm ' + btn_class +
+                                '">Save</button></td></tr>');
                         });
                     });
                     $('<tbody/>', {
@@ -1002,8 +974,8 @@
                             return e.html;
                         }).join('') +
                         '<br><div class="form-group">' +
-                        '<button class="btn btn-primary" ' +
-                        'type="submit">Save actions</button></div></form>');
+                        '<button class="btn btn-primary ' + btn_class +
+                        '" type="submit">Save actions</button></div></form>');
                 }
             });
         }
@@ -1032,7 +1004,6 @@
                     alertMessage('alert-modal alert-error', data.statusText);
                 }
             });
-            getMapById('update');
             return false;
         });
         // @catch changes of file upload form
@@ -1121,17 +1092,6 @@
                 displayUI();
                 return;
             }
-            $.ajax({
-                type: 'GET',
-                url: 'stat',
-                jsonp: false,
-                success: function () {
-                    saveCredentials({}, 'nopassword');
-                    $(dialog).hide();
-                    $(backdrop).hide();
-                    displayUI();
-                },
-            });
             var nav = $('#navBar');
             var ui = $('#mainUI');
             var dialog = $('#connectDialog');
@@ -1141,7 +1101,7 @@
             $(dialog).show();
             $('#connectHost').focus();
             $(backdrop).show();
-            $(document).on('submit', '#connectForm', function (e) {
+            $('#connectForm').one('submit', function (e) {
                 e.preventDefault();
                 var password = $('#connectPassword').val();
                 document.getElementById('connectPassword').value = '';
@@ -1160,6 +1120,17 @@
                                 $('.form-group').addClass('error');
                             });
                         } else {
+                            if (data.read_only) {
+                                read_only = true;
+                                btn_class = "disabled";
+                                $('#learning_nav').parent().addClass('disabled');
+                            }
+                            else {
+                                read_only = false;
+                                btn_class = "";
+                                $('#learning_nav').parent().removeClass('disabled')
+                            }
+
                             saveCredentials(data, password);
                             $(dialog).hide();
                             $(backdrop).hide();

@@ -442,8 +442,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 }
 
 /* Check for password if it is required by configuration */
-static gboolean rspamd_controller_check_password(
-		struct rspamd_http_connection_entry *entry,
+static gboolean
+rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		struct rspamd_controller_session *session,
 		struct rspamd_http_message *msg, gboolean is_enable)
 {
@@ -678,6 +678,8 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 			st->messages_scanned), "scanned",  0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
 			st->messages_learned), "learned",  0, false);
+	ucl_object_insert_key (obj, ucl_object_frombool (!session->is_enable),
+			"read_only", 0, false);
 
 	rspamd_controller_send_ucl (conn_ent, obj);
 	ucl_object_unref (obj);
