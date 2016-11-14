@@ -1599,7 +1599,7 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	if (RSPAMD_TASK_IS_PROCESSED (task)) {
 		/* Successful learn */
-		msg_info_session ("<%s> learned message as %s: %s",
+		msg_info_task ("<%s> learned message as %s: %s",
 				rspamd_inet_address_to_string (session->from_addr),
 				session->is_spam ? "spam" : "ham",
 						task->message_id);
@@ -1608,7 +1608,7 @@ rspamd_controller_learn_fin_task (void *ud)
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
-		msg_info_session ("cannot learn <%s>: %e", task->message_id, task->err);
+		msg_info_task ("cannot learn <%s>: %e", task->message_id, task->err);
 
 		if (task->err) {
 			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
@@ -1626,7 +1626,7 @@ rspamd_controller_learn_fin_task (void *ud)
 					task->err->message);
 		}
 		else {
-			msg_info_session ("<%s> learned message as %s: %s",
+			msg_info_task ("<%s> learned message as %s: %s",
 					rspamd_inet_address_to_string (session->from_addr),
 					session->is_spam ? "spam" : "ham",
 							task->message_id);
