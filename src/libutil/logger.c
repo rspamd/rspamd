@@ -33,6 +33,24 @@
 #define LOG_ID 6
 #define RSPAMD_LOGBUF_SIZE 8192
 
+struct rspamd_logger_error_elt {
+	GQuark ptype;
+	pid_t pid;
+	time_t ts;
+	guchar id[LOG_ID];
+	gchar module[10];
+	gchar message[];
+};
+
+struct rspamd_logger_error_log {
+	struct rspamd_logger_error_elt *elts;
+	guint32 max_elts;
+	/* Avoid false cache sharing */
+	guint32 __pad32;
+	guchar __padding[64 - sizeof(gpointer) - sizeof(guint64)];
+	guint cur_row;
+};
+
 /**
  * Static structure that store logging parameters
  * It is NOT shared between processes and is created by main process
@@ -40,6 +58,7 @@
 struct rspamd_logger_s {
 	rspamd_log_func_t log_func;
 	struct rspamd_config *cfg;
+	struct rspamd_logger_error_log *errlog;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct rspamd_cryptobox_keypair *keypair;
 	struct {
