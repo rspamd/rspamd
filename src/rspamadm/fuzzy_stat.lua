@@ -47,7 +47,7 @@ local function print_stat(st, tabs)
 end
 
 -- Sort by checked
-local function sort_ips(tbl, opts)
+local function sort_ips(tbl, _opts)
   local res = {}
   for k,v in pairs(tbl) do
     table.insert(res, {ip = k, data = v})
@@ -55,23 +55,23 @@ local function sort_ips(tbl, opts)
 
   local function sort_order(elt)
     local key = 'checked'
-    local res = 0
+    local _res = 0
 
-    if opts['sort'] then
-      if opts['sort'] == 'matched' then
+    if _opts['sort'] then
+      if _opts['sort'] == 'matched' then
         key = 'matched'
-      elseif opts['sort'] == 'errors' then
+      elseif _opts['sort'] == 'errors' then
         key = 'errors'
-      elseif opts['sort'] == 'ip' then
+      elseif _opts['sort'] == 'ip' then
         return elt['ip']
       end
     end
 
     if elt['data'][key] then
-      res = elt['data'][key]
+      _res = elt['data'][key]
     end
 
-    return res
+    return _res
   end
 
   table.sort(res, function(a, b)
@@ -150,7 +150,7 @@ return function(args, res)
   opts = getopt(args, '')
 
   if wrk then
-    for i,pr in pairs(wrk) do
+    for _,pr in pairs(wrk) do
       -- processes cycle
       if pr['data'] then
         local id = pr['id']
@@ -227,16 +227,16 @@ return function(args, res)
     local res_keys = st['keys']
     if res_keys and not opts['no-keys'] and not opts['short'] then
       print('Keys statistics:')
-      for k,st in pairs(res_keys) do
+      for k,_st in pairs(res_keys) do
         print(string.format('Key id: %s', k))
-        print_stat(st, '\t')
+        print_stat(_st, '\t')
 
-        if st['ips'] and not opts['no-ips'] then
+        if _st['ips'] and not opts['no-ips'] then
           print('')
           print('\tIPs stat:')
-          local sorted_ips = sort_ips(st['ips'], opts)
+          local sorted_ips = sort_ips(_st['ips'], opts)
 
-          for i,v in ipairs(sorted_ips) do
+          for _,v in ipairs(sorted_ips) do
             print(string.format('\t%s', v['ip']))
             print_stat(v['data'], '\t\t')
             print('')
@@ -264,7 +264,7 @@ return function(args, res)
     print('IPs statistics:')
 
     local sorted_ips = sort_ips(res_ips, opts)
-    for i, v in ipairs(sorted_ips) do
+    for _, v in ipairs(sorted_ips) do
       print(string.format('%s', v['ip']))
       print_stat(v['data'], '\t')
       print('')

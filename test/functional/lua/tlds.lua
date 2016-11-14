@@ -1,7 +1,7 @@
 rspamd_config:register_symbol({
   name = 'TEST_TLD',
   score = 1.0,
-  callback = function(task)
+  callback = function()
     local prefixes = {
       '',
       'example.'
@@ -38,7 +38,7 @@ rspamd_config:register_symbol({
             return
           end
           local u = rspamd_url.create(pool, p .. d)
-          local test = u:get_tld()
+          test = u:get_tld()
           if (test ~= d) then
             table.insert(worry, 'url.get_tld:' .. p .. d .. ':' .. test)
             return
