@@ -26,7 +26,7 @@ greylist {
     "${CONFDIR}/dmarc_whitelist.inc",
     "${CONFDIR}/spf_dkim_whitelist.inc",
     "${CONFDIR}/surbl-whitelist.inc",
-    "${CONFDIR}/freemail.inc"
+    "https://rspamd.com/freemail/free.txt.zst"
   ];
 }
 Example config for exim users:
