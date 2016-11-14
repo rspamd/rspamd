@@ -28,6 +28,7 @@
         //$.cookie.json = true;
         var pie;
         var history;
+        var errors;
         var graph;
         var symbols;
         var read_only = false;
@@ -61,6 +62,9 @@
             }
             if (history) {
                 history.destroy();
+            }
+            if (errors) {
+                errors.destroy();
             }
             if (symbols) {
                 symbols.destroy();
@@ -154,6 +158,7 @@
             $('#listMaps').empty();
             $('#modalBody').empty();
             $('#historyLog tbody').remove();
+            $('#errorsLog tbody').remove();
             $('#symbolsTable tbody').remove();
             password = '';
         }
@@ -616,6 +621,60 @@
             });
         }
 
+        function getErrors() {
+
+            if (errors) {
+                errors.destroy();
+                $('#errorsLog').children('tbody').remove();
+            }
+
+            var items = [];
+            $.ajax({
+                dataType: 'json',
+                url: 'errors',
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
+                },
+                error: function () {
+                    alertMessage('alert-error', 'Cannot receive errors');
+                },
+                success: function (data) {
+                    $.each(data, function (i, item) {
+
+                        items.push(
+                            '<tr><td data-order="' + item.ts + '">' + new Date(item.ts * 1000) + '</td>' +
+                            '<td data-order="' + item.type + '">' + item.type + '</td>' +
+                            '<td data-order="' + item.pid + '">' + item.pid + '</td>' +
+                            '<td data-order="' + item.module + '">' + item.module + '</td>' +
+                            '<td data-order="' + item.id + '">' + item.id + '</td>' +
+                            '<td data-order="' + item.message + '"><div class="cell-overflow" tabindex="1" title="' + item.message + '">' + item.message + '</div></td></tr>'
+                        );
+                    });
+                    $('<tbody/>', {
+                        html: items.join('')
+                    }).insertAfter('#errorsLog thead');
+                    errors = $('#errorsLog').DataTable({
+                        "paging": true,
+                        "orderMulti": false,
+                        "order": [
+                            [0, "desc"],
+                        ],
+                        "info": false,
+                        "columns": [
+                            {"width": "15%", "searchable": true, "orderable": true, "type": "num"},
+                            {"width": "5%", "searchable": true, "orderable": true},
+                            {"width": "5%", "searchable": true, "orderable": true},
+                            {"width": "3%", "searchable": true, "orderable": true},
+                            {"width": "3%", "searchable": true, "orderable": true},
+                            {"width": "65%", "searchable": true, "orderable": true},
+                        ],
+                    });
+                    errors.columns.adjust().draw();
+                }
+            });
+        }
+
         function decimalStep(number) {
             var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, '').length;
             if (digits == 0 || digits > 4) {
@@ -730,6 +789,7 @@
                 },
                 success: function (data) {
                     getHistory();
+                    getErrors();
                 },
                 error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
@@ -740,6 +800,9 @@
         // @update history log
         $('#updateHistory').on('click', function () {
             getHistory();
+        });
+        $('#updateErrors').on('click', function () {
+            getErrors();
         });
 
         $('#updateSymbols').on('click', function () {
@@ -1178,6 +1241,7 @@
         });
         $('#history_nav').bind('click', function () {
             getHistory();
+            getErrors();
         });
         $('#symbols_nav').bind('click', function () {
             getSymbols();

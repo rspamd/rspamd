@@ -56,7 +56,7 @@
 #define PATH_STAT "/stat"
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
-
+#define PATH_ERRORS "/errors"
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
@@ -1358,6 +1358,36 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 		}
 	}
 
+	rspamd_controller_send_ucl (conn_ent, top);
+	ucl_object_unref (top);
+
+	return 0;
+}
+
+/*
+ * Errors command handler:
+ * request: /errors
+ * headers: Password
+ * reply: json [
+ *      { ts: 100500, type: normal, pid: 100, module: lua, message: bad things },
+ *      {...}
+ * ]
+ */
+static int
+rspamd_controller_handle_errors (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	ucl_object_t *top;
+
+	ctx = session->ctx;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	top = rspamd_log_errorbuf_export (ctx->worker->srv->logger);
 	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
 
@@ -3113,6 +3143,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_COUNTERS,
 			rspamd_controller_handle_counters);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_ERRORS,
+			rspamd_controller_handle_errors);
 
 	rspamd_regexp_t *lua_re = rspamd_regexp_new ("^/.*/.*\\.lua$", NULL, NULL);
 	rspamd_http_router_add_regexp (ctx->http, lua_re,

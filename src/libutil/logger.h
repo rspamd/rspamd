@@ -150,6 +150,13 @@ void rspamd_log_lock (rspamd_logger_t *logger);
  */
 const guint64* rspamd_log_counters (rspamd_logger_t *logger);
 
+/**
+ * Returns errors ring buffer as ucl array
+ * @param logger
+ * @return
+ */
+ucl_object_t * rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
+
 /* Typical functions */
 
 /* Logging in postfix style */

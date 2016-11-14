@@ -33,6 +33,26 @@
 #define LOG_ID 6
 #define RSPAMD_LOGBUF_SIZE 8192
 
+struct rspamd_logger_error_elt {
+	gint completed;
+	GQuark ptype;
+	pid_t pid;
+	gdouble ts;
+	gchar id[LOG_ID + 1];
+	gchar module[9];
+	gchar message[];
+};
+
+struct rspamd_logger_error_log {
+	struct rspamd_logger_error_elt *elts;
+	rspamd_mempool_t *pool;
+	guint32 max_elts;
+	guint32 elt_len;
+	/* Avoid false cache sharing */
+	guchar __padding[64 - sizeof(gpointer) * 2 - sizeof(guint64)];
+	guint cur_row;
+};
+
 /**
  * Static structure that store logging parameters
  * It is NOT shared between processes and is created by main process
@@ -40,6 +60,7 @@
 struct rspamd_logger_s {
 	rspamd_log_func_t log_func;
 	struct rspamd_config *cfg;
+	struct rspamd_logger_error_log *errlog;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct rspamd_cryptobox_keypair *keypair;
 	struct {
@@ -319,9 +340,22 @@ rspamd_set_logger (struct rspamd_config *cfg,
 
 	if (rspamd->logger == NULL) {
 		rspamd->logger = g_slice_alloc0 (sizeof (rspamd_logger_t));
-	}
+		logger = rspamd->logger;
 
-	logger = rspamd->logger;
+		if (cfg->log_error_elts > 0) {
+			logger->errlog = rspamd_mempool_alloc0_shared (rspamd->server_pool,
+					sizeof (*logger->errlog));
+			logger->errlog->pool = rspamd->server_pool;
+			logger->errlog->max_elts = cfg->log_error_elts;
+			logger->errlog->elt_len = cfg->log_error_elt_maxlen;
+			logger->errlog->elts = rspamd_mempool_alloc0_shared (rspamd->server_pool,
+					sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
+					cfg->log_error_elt_maxlen * cfg->log_error_elts);
+		}
+	}
+	else {
+		logger = rspamd->logger;
+	}
 
 	logger->type = cfg->log_type;
 	logger->pid = getpid ();
@@ -491,6 +525,61 @@ rspamd_log_encrypt_message (const gchar *begin, const gchar *end,
 	return b64;
 }
 
+static void
+rspamd_log_write_ringbuffer (rspamd_logger_t *rspamd_log,
+		const gchar *module, const gchar *id,
+		const gchar *data, glong len)
+{
+	guint32 row_num;
+	struct rspamd_logger_error_log *elog;
+	struct rspamd_logger_error_elt *elt;
+
+	if (!rspamd_log->errlog) {
+		return;
+	}
+
+	elog = rspamd_log->errlog;
+
+	g_atomic_int_compare_and_exchange (&elog->cur_row, elog->max_elts, 0);
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
+	row_num = g_atomic_int_add (&elog->cur_row, 1);
+#else
+	row_num = g_atomic_int_exchange_and_add (&elog->cur_row, 1);
+#endif
+
+	if (row_num < elog->max_elts) {
+		elt = (struct rspamd_logger_error_elt *)(((guchar *)elog->elts) +
+				(sizeof (*elt) + elog->elt_len) * row_num);
+		g_atomic_int_set (&elt->completed, 0);
+	}
+	else {
+		/* Race condition */
+		elog->cur_row = 0;
+		return;
+	}
+
+	elt->pid = rspamd_log->pid;
+	elt->ptype = rspamd_log->process_type;
+	elt->ts = rspamd_get_calendar_ticks ();
+
+	if (id) {
+		rspamd_strlcpy (elt->id, id, sizeof (elt->id));
+	}
+	else {
+		rspamd_strlcpy (elt->id, "", sizeof (elt->id));
+	}
+
+	if (module) {
+		rspamd_strlcpy (elt->module, module, sizeof (elt->module));
+	}
+	else {
+		rspamd_strlcpy (elt->module, "", sizeof (elt->module));
+	}
+
+	rspamd_strlcpy (elt->message, data, MIN (len + 1, elog->elt_len));
+	g_atomic_int_set (&elt->completed, 1);
+}
+
 void
 rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *module, const gchar *id, const gchar *function,
@@ -499,11 +588,11 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 	gchar logbuf[RSPAMD_LOGBUF_SIZE], *end;
 	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK);
 
-	if (rspamd_log == NULL) {
+	if (G_UNLIKELY (rspamd_log == NULL)) {
 		rspamd_log = default_logger;
 	}
 
-	if (rspamd_log == NULL) {
+	if (G_UNLIKELY (rspamd_log == NULL)) {
 		/* Just fprintf message to stderr */
 		if (level >= G_LOG_LEVEL_INFO) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
@@ -536,6 +625,8 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 			switch (level) {
 			case G_LOG_LEVEL_CRITICAL:
 				rspamd_log->log_cnt[0] ++;
+				rspamd_log_write_ringbuffer (rspamd_log, module, id, logbuf,
+						end - logbuf);
 				break;
 			case G_LOG_LEVEL_WARNING:
 				rspamd_log->log_cnt[1]++;
@@ -1061,4 +1152,72 @@ rspamd_log_lock (rspamd_logger_t *logger)
 	if (logger) {
 		logger->no_lock = FALSE;
 	}
+}
+
+static gint
+rspamd_log_errlog_cmp (const ucl_object_t **o1, const ucl_object_t **o2)
+{
+	const ucl_object_t *ts1, *ts2;
+
+	ts1 = ucl_object_lookup (*o1, "ts");
+	ts2 = ucl_object_lookup (*o2, "ts");
+
+	if (ts1 && ts2) {
+		gdouble t1 = ucl_object_todouble (ts1), t2 = ucl_object_todouble (ts2);
+
+		if (t1 > t2) {
+			return -1;
+		}
+		else if (t2 > t1) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+ucl_object_t *
+rspamd_log_errorbuf_export (const rspamd_logger_t *logger)
+{
+	struct rspamd_logger_error_elt *cpy, *cur;
+	ucl_object_t *top = ucl_object_typed_new (UCL_ARRAY);
+	guint i;
+
+	if (logger->errlog == NULL) {
+		return top;
+	}
+
+	cpy = g_malloc0_n (logger->errlog->max_elts,
+			sizeof (*cpy) + logger->errlog->elt_len);
+	memcpy (cpy, logger->errlog->elts, logger->errlog->max_elts *
+			(sizeof (*cpy) + logger->errlog->elt_len));
+
+	for (i = 0; i < logger->errlog->max_elts; i ++) {
+		cur = (struct rspamd_logger_error_elt *)((guchar *)cpy +
+				i * ((sizeof (*cpy) + logger->errlog->elt_len)));
+		if (cur->completed) {
+			ucl_object_t *obj = ucl_object_typed_new (UCL_OBJECT);
+
+			ucl_object_insert_key (obj, ucl_object_fromdouble (cur->ts),
+					"ts", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (cur->pid),
+					"pid", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromstring (g_quark_to_string (cur->ptype)),
+					"type", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (cur->id),
+					"id", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (cur->module),
+					"module", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (cur->message),
+					"message", 0, false);
+
+			ucl_array_append (top, obj);
+		}
+	}
+
+	ucl_object_array_sort (top, rspamd_log_errlog_cmp);
+	g_free (cpy);
+
+	return top;
 }
