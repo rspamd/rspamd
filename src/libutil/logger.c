@@ -1139,3 +1139,64 @@ rspamd_log_lock (rspamd_logger_t *logger)
 		logger->no_lock = FALSE;
 	}
 }
+
+static gint
+rspamd_log_errlog_cmp (const ucl_object_t **o1, const ucl_object_t **o2)
+{
+	const ucl_object_t *ts1, *ts2;
+
+	ts1 = ucl_object_lookup (*o1, "ts");
+	ts2 = ucl_object_lookup (*o2, "ts");
+
+	if (ts1 && ts2) {
+		return ucl_object_toint (ts2) - ucl_object_toint (ts1);
+	}
+
+	return 0;
+}
+
+ucl_object_t *
+rspamd_log_errorbuf_export (const rspamd_logger_t *logger)
+{
+	struct rspamd_logger_error_elt *cpy, *cur;
+	ucl_object_t *top = ucl_object_typed_new (UCL_ARRAY);
+	guint i;
+
+	if (logger->errlog == NULL) {
+		return top;
+	}
+
+	cpy = g_malloc0_n (logger->errlog->max_elts,
+			sizeof (*cpy) + logger->errlog->elt_len);
+	memcpy (cpy, logger->errlog->elts, logger->errlog->max_elts *
+			(sizeof (*cpy) + logger->errlog->elt_len));
+
+	for (i = 0; i < logger->errlog->max_elts; i ++) {
+		cur = (struct rspamd_logger_error_elt *)((guchar *)cpy +
+				i * ((sizeof (*cpy) + logger->errlog->elt_len)));
+		if (cur->completed) {
+			ucl_object_t *obj = ucl_object_typed_new (UCL_OBJECT);
+
+			ucl_object_insert_key (obj, ucl_object_fromint (cur->ts),
+					"ts", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (cur->pid),
+					"pid", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromstring (g_quark_to_string (cur->ptype)),
+					"type", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (cur->id),
+					"id", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (cur->module),
+					"module", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (cur->message),
+					"message", 0, false);
+
+			ucl_array_append (top, obj);
+		}
+	}
+
+	ucl_object_array_sort (top, rspamd_log_errlog_cmp);
+	g_free (cpy);
+
+	return top;
+}
