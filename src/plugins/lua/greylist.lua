@@ -53,11 +53,8 @@ local settings = {
 }
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require "rspamd_redis"
-local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
-local rspamd_cryptobox = require "rspamd_cryptobox"
 local hash = require "rspamd_cryptobox_hash"
 
 local function data_key(task)
@@ -144,8 +141,6 @@ local function check_time(task, tm, type)
 
     return true,false
   end
-
-  return false,false
 end
 
 local function greylist_check(task)
@@ -168,21 +163,11 @@ local function greylist_check(task)
   local hash_key = body_key .. meta_key
   local upstream
 
-  local function redis_set_cb(err, data)
-    if not err then
-      upstream:ok()
-    else
-      rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
-          err, upstream:get_addr())
-    end
-  end
-
   local function redis_get_cb(err, data)
     local ret_body = false
     local greylisted_body = false
     local ret_meta = false
     local greylisted_meta = false
-    local greylist_type
 
     if data then
       if data[1] and type(data[1]) ~= 'userdata' then
@@ -205,8 +190,6 @@ local function greylist_check(task)
         end
       end
 
-      upstream:ok()
-
       if not ret_body and not ret_meta then
         local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
           + settings['timeout'])
@@ -216,11 +199,10 @@ local function greylist_check(task)
           settings['timeout'])
         rspamd_logger.infox(task, 'greylisted until "%s" using %s key',
           end_time, type)
-        task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
-          greylist_type)
+        task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
         if settings.message_func then
           task:set_pre_result('soft reject',
-            settings.message_func(task, end_time, greylist_type))
+            settings.message_func(task, end_time))
         else
           task:set_pre_result('soft reject', settings['message'])
         end
@@ -228,7 +210,9 @@ local function greylist_check(task)
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
       upstream:fail()
+      return
     end
+    upstream:ok()
   end
 
   local ret, _
@@ -242,6 +226,7 @@ local function greylist_check(task)
   )
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to check results')
+    upstream:fail()
   end
 end
 
@@ -284,12 +269,13 @@ local function greylist_set(task)
   local upstream, ret, conn
   local hash_key = body_key .. meta_key
 
-  local function redis_set_cb(err, data)
+  local function redis_set_cb(err)
     if not err then
       upstream:ok()
     else
       rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
           err, upstream:get_addr())
+      upstream:fail()
     end
   end
 
@@ -313,7 +299,7 @@ local function greylist_set(task)
       {body_key, tostring(settings['expire'])} -- arguments
     )
     -- Update greylisting record expire
-    if conn then
+    if ret then
       conn:add_cmd('EXPIRE', {
         meta_key, tostring(settings['expire'])
       })
@@ -329,7 +315,6 @@ local function greylist_set(task)
       'new record')
     task:set_pre_result(settings['action'], settings['message'])
     -- Create new record
-    local ret, conn
     ret,conn,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       hash_key, -- hash key
@@ -339,12 +324,10 @@ local function greylist_set(task)
       {body_key, tostring(settings['expire']), t} -- arguments
     )
 
-    if conn then
+    if ret then
       conn:add_cmd('SETEX', {
         meta_key, tostring(settings['expire']), t
       })
-      local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
-        + settings['timeout'])
     else
       rspamd_logger.infox(task, 'got error while connecting to redis: %s',
       upstream:get_addr())
@@ -380,7 +363,7 @@ end
 local opts =  rspamd_config:get_all_opt('greylist')
 if opts then
   if opts['message_func'] then
-    settings.message_func = assert(loadstring(opts['message_func']))()
+    settings.message_func = assert(load(opts['message_func']))()
   end
   for k,v in pairs(opts) do
     if k ~= 'message_func' then

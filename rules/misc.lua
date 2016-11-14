@@ -51,7 +51,7 @@ end
 
 rspamd_config.SUBJ_ALL_CAPS = {
   callback = function(task)
-    local caps_test = function(sbj, _)
+    local caps_test = function(sbj)
       return util.is_uppercase(sbj)
     end
     return test_subject(task, caps_test, 1.0/40.0)

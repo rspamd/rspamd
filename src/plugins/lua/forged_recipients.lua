@@ -17,7 +17,6 @@ limitations under the License.
 -- Plugin for comparing smtp dialog recipients and sender with recipients and sender
 -- in mime headers
 
-local logger = require "rspamd_logger"
 local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 
@@ -25,7 +24,7 @@ local function check_forged_headers(task)
   local auser = task:get_user()
   local smtp_rcpt = task:get_recipients(1)
   local smtp_from = task:get_from(1)
-  local res = false
+  local res
   local score = 1.0
 
   if not smtp_rcpt then return end

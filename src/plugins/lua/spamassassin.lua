@@ -83,7 +83,6 @@ local symbols_replacements = {
 -- Internal variables
 local rules = {}
 local atoms = {}
-local metas = {}
 local scores = {}
 local scores_added = {}
 local external_deps = {}
@@ -171,7 +170,7 @@ local function process_regexp_opt(re, task, re_type, header, strong)
     if not strong then
       strong = 0
     else
-      string = 1
+      strong = 1
     end
     local iret = ffi.C.rspamd_re_cache_process_ffi (task, re, itype, header, strong)
 
@@ -196,14 +195,12 @@ local function handle_header_def(hline, cur_rule)
   -- Check if an re is an ordinary re
   local ordinary = true
 
-  for i,h in ipairs(hdrs) do
+  for _,h in ipairs(hdrs) do
     if h == 'ALL' or h == 'ALL:raw' then
       ordinary = false
       cur_rule['type'] = 'function'
       -- Pack closure
       local re = cur_rule['re']
-      local not_f = cur_rule['not']
-      local sym = cur_rule['symbol']
       -- Rule to match all headers
       rspamd_config:register_regexp({
         re = re,
@@ -235,7 +232,7 @@ local function handle_header_def(hline, cur_rule)
               local addr_parsed = util.parse_addr(str)
               local ret = {}
               if addr_parsed then
-                for i,elt in ipairs(addr_parsed) do
+                for _,elt in ipairs(addr_parsed) do
                   if elt['addr'] then
                     table.insert(ret, elt['addr'])
                   end
@@ -249,7 +246,7 @@ local function handle_header_def(hline, cur_rule)
               local addr_parsed = util.parse_addr(str)
               local ret = {}
               if addr_parsed then
-                for i,elt in ipairs(addr_parsed) do
+                for _,elt in ipairs(addr_parsed) do
                   if elt['name'] then
                     table.insert(ret, elt['name'])
                   end
@@ -269,7 +266,7 @@ local function handle_header_def(hline, cur_rule)
         end, fun.tail(args))
 
         local function split_hdr_param(param, headers)
-          for i,h in ipairs(headers) do
+          for _,hh in ipairs(headers) do
             local nparam = {}
             for k,v in pairs(param) do
               if k ~= 'header' then
@@ -277,7 +274,7 @@ local function handle_header_def(hline, cur_rule)
               end
             end
 
-            nparam['header'] = h
+            nparam['header'] = hh
             table.insert(hdr_params, nparam)
           end
         end
@@ -319,7 +316,7 @@ end
 
 local function gen_eval_rule(arg)
   local eval_funcs = {
-    {'check_freemail_from', function(task, remain)
+    {'check_freemail_from', function(task)
         local from = task:get_from('mime')
         if from and from[1] then
           return freemail_search(string.lower(from[1]['addr']))
@@ -327,26 +324,26 @@ local function gen_eval_rule(arg)
         return 0
       end},
     {'check_freemail_replyto',
-      function(task, remain)
+      function(task)
         return freemail_search(task:get_header('Reply-To'))
       end
     },
     {'check_freemail_header',
       function(task, remain)
         -- Remain here contains one or two args: header and regexp to match
-        local arg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
+        local larg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
         local re = nil
-        if not arg then
-          arg, re = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*,%s*['\"]([^%s]+)['\"]%s*%)$")
+        if not larg then
+          larg, re = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*,%s*['\"]([^%s]+)['\"]%s*%)$")
         end
 
-        if arg then
+        if larg then
           local h
-          if arg == 'EnvelopeFrom' then
+          if larg == 'EnvelopeFrom' then
             h = task:get_from('smtp')
             if h then h = h[1]['addr'] end
           else
-            h = task:get_header(arg)
+            h = task:get_header(larg)
           end
           if h then
             local hdr_freemail = freemail_search(string.lower(h))
@@ -372,7 +369,7 @@ local function gen_eval_rule(arg)
     },
     {
       'check_for_missing_to_header',
-      function (task, remain)
+      function (task)
         local th = task:get_recipients('mime')
         if not th or #th == 0 then
           return 1
@@ -383,7 +380,7 @@ local function gen_eval_rule(arg)
     },
     {
       'check_relays_unparseable',
-      function(task, remain)
+      function(task)
         local rh_mime = task:get_header_full('Received')
         local rh_parsed = task:get_received_headers()
 
@@ -433,13 +430,13 @@ local function gen_eval_rule(arg)
     {
       'check_for_mime',
       function(task, remain)
-        local arg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
+        local larg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
 
-        if arg then
-          if arg == 'mime_attachment' then
+        if larg then
+          if larg == 'mime_attachment' then
             local parts = task:get_parts()
             if parts then
-              for i,p in ipairs(parts) do
+              for _,p in ipairs(parts) do
                 if p:get_filename() then
                   return 1
                 end
@@ -455,7 +452,7 @@ local function gen_eval_rule(arg)
     },
     {
       'check_from_in_blacklist',
-      function(task, remain)
+      function(task)
         local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
           if sa_lists['from_blacklist'][string.lower(from[1]['addr'])] then
@@ -468,7 +465,7 @@ local function gen_eval_rule(arg)
     },
     {
       'check_from_in_whitelist',
-      function(task, remain)
+      function(task)
         local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
           if sa_lists['from_whitelist'][string.lower(from[1]['addr'])] then
@@ -481,7 +478,7 @@ local function gen_eval_rule(arg)
     },
     {
       'check_from_in_default_whitelist',
-      function(task, remain)
+      function(task)
         local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
           if sa_lists['from_def_whitelist'][string.lower(from[1]['addr'])] then
@@ -494,10 +491,10 @@ local function gen_eval_rule(arg)
     },
     {
       'check_to_in_blacklist',
-      function(task, remain)
+      function(task)
         local rcpt = task:get_recipients('mime')
         if rcpt then
-          for i,r in ipairs(rcpt) do
+          for _,r in ipairs(rcpt) do
             if sa_lists['to_blacklist'][string.lower(r['addr'])] then
               return 1
             end
@@ -509,10 +506,10 @@ local function gen_eval_rule(arg)
     },
     {
       'check_to_in_whitelist',
-      function(task, remain)
+      function(task)
         local rcpt = task:get_recipients('mime')
         if rcpt then
-          for i,r in ipairs(rcpt) do
+          for _,r in ipairs(rcpt) do
             if sa_lists['to_whitelist'][string.lower(r['addr'])] then
               return 1
             end
@@ -524,7 +521,7 @@ local function gen_eval_rule(arg)
     },
   }
 
-  for k,f in ipairs(eval_funcs) do
+  for _,f in ipairs(eval_funcs) do
     local pat = string.format('^%s', f[1])
     local first,last = string.find(arg, pat)
 
@@ -548,7 +545,7 @@ local function maybe_parse_sa_function(line)
   local substitutions = {
     {'^exists:',
       function(task) -- filter
-        local hdrs_check = {}
+        local hdrs_check
         if arg == 'MESSAGEID' then
           hdrs_check = {
             'Message-ID',
@@ -561,7 +558,7 @@ local function maybe_parse_sa_function(line)
           hdrs_check = {arg}
         end
 
-        for i,h in ipairs(hdrs_check) do
+        for _,h in ipairs(hdrs_check) do
           if task:get_header(h) then
             return 1
           end
@@ -589,7 +586,7 @@ local function maybe_parse_sa_function(line)
     },
   }
 
-  for k,s in ipairs(substitutions) do
+  for _,s in ipairs(substitutions) do
     if string.find(line, s[1]) then
       return s[2]
     end
@@ -723,8 +720,6 @@ local function process_sa_conf(f)
       end
     end
 
-    local slash = string.find(l, '/')
-
     -- Skip comments
     local words = fun.totable(fun.take_while(
       function(w) return string.sub(w, 1, 1) ~= '#' end,
@@ -777,7 +772,7 @@ local function process_sa_conf(f)
           valid_rule = true
           cur_rule['re']:set_max_hits(1)
           if cur_rule['header'] and cur_rule['ordinary'] then
-            for i,h in ipairs(cur_rule['header']) do
+            for _,h in ipairs(cur_rule['header']) do
               if type(h) == 'string' then
                 if cur_rule['mime'] then
                   rspamd_config:register_regexp({
@@ -1102,14 +1097,14 @@ local function apply_replacements(str)
   end
 
   local function replace_all_tags(s)
-    local str, matches
-    str = s
+    local sstr, _
+    sstr = s
     fun.each(function(n, t)
-        str,matches = string.gsub(str, string.format("<%s>", n),
+        sstr,_ = string.gsub(sstr, string.format("<%s>", n),
           string.format("%s%s%s", pre, t, post))
     end, replace['tags'])
 
-    return str
+    return sstr
   end
 
   local s = replace_all_tags(str)
@@ -1264,20 +1259,19 @@ local function post_process()
 
       -- Slow path
       fun.each(function(h)
-        local headers = {}
         local hname = h['header']
 
         local hdr
         if h['mime'] then
           local parts = task:get_parts()
-          for i, p in ipairs(parts) do
+          for _, p in ipairs(parts) do
             local m_hdr = p:get_header_full(hname, h['strong'])
 
             if m_hdr then
               if not hdr then
                 hdr = {}
               end
-              for k, mh in ipairs(m_hdr) do
+              for _, mh in ipairs(m_hdr) do
                 table.insert(hdr, mh)
               end
             end
@@ -1287,7 +1281,7 @@ local function post_process()
         end
 
         if hdr then
-          for n, rh in ipairs(hdr) do
+          for _, rh in ipairs(hdr) do
             -- Subject for optimization
             local str
             if h['raw'] then
@@ -1305,7 +1299,7 @@ local function post_process()
             if type(str) == 'string' then
               table.insert(check, str)
             else
-              for ii, c in ipairs(str) do
+              for _, c in ipairs(str) do
                 table.insert(check, c)
               end
             end
@@ -1321,7 +1315,7 @@ local function post_process()
       end
 
       local ret = 0
-      for i, c in ipairs(check) do
+      for _, c in ipairs(check) do
         local match = sa_regexp_match(c, r['re'], raw, r)
         if (match > 0 and not r['not']) or (match == 0 and r['not']) then
           ret = 1
@@ -1338,7 +1332,7 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  fun.filter(function(k, r)
+  fun.filter(function(_, r)
       return r['type'] == 'header' and r['header']
   end,
   rules))
@@ -1360,7 +1354,7 @@ local function post_process()
     end
     atoms[k] = f
   end,
-    fun.filter(function(k, r)
+    fun.filter(function(_, r)
       return r['type'] == 'function' and r['function']
     end,
       rules))
@@ -1386,7 +1380,7 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  fun.filter(function(k, r)
+  fun.filter(function(_, r)
       return r['type'] == 'part'
   end, rules))
 
@@ -1411,7 +1405,7 @@ local function post_process()
     end
     atoms[k] = f
   end,
-  fun.filter(function(k, r)
+  fun.filter(function(_, r)
       return r['type'] == 'sabody' or r['type'] == 'message' or r['type'] == 'sarawbody'
   end, rules))
 
@@ -1433,7 +1427,7 @@ local function post_process()
     end
     atoms[k] = f
   end,
-    fun.filter(function(k, r)
+    fun.filter(function(_, r)
       return r['type'] == 'uri'
     end,
       rules))
@@ -1484,7 +1478,7 @@ local function post_process()
         end
       end
     end,
-    fun.filter(function(k, r)
+    fun.filter(function(_, r)
         return r['type'] == 'meta'
       end,
       rules))
@@ -1495,9 +1489,9 @@ local function post_process()
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
 
-        for i,a in ipairs(expr_atoms) do
+        for _,a in ipairs(expr_atoms) do
           if not atoms[a] then
-            local rspamd_symbol, replaced_symbol = replace_symbol(a)
+            local rspamd_symbol = replace_symbol(a)
             rspamd_logger.debugx('atom %1 is a direct foreign dependency, ' ..
               'register dependency for %2 on %3',
               a, k, rspamd_symbol)
@@ -1511,7 +1505,7 @@ local function post_process()
         end
       end
     end,
-    fun.filter(function(k, r)
+    fun.filter(function(_, r)
       return r['type'] == 'meta'
     end,
     rules))
@@ -1520,7 +1514,7 @@ local function post_process()
   fun.each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
-        for i,a in ipairs(expr_atoms) do
+        for _,a in ipairs(expr_atoms) do
           if type(external_deps[a]) == 'table' then
             for _,dep in ipairs(external_deps[a]) do
               rspamd_logger.debugx('atom %1 holds a foreign dependency, ' ..
@@ -1539,7 +1533,7 @@ local function post_process()
         end
       end
     end,
-    fun.filter(function(k, r)
+    fun.filter(function(_, r)
       return r['type'] == 'meta'
     end,
     rules))
@@ -1572,15 +1566,15 @@ if type(section) == "table" then
     elseif k == 'match_limit' and type(fn) == 'number' then
       match_limit = fn
     elseif k == 'pcre_only' and type(fn) == 'table' then
-      for i,s in ipairs(fn) do
+      for _,s in ipairs(fn) do
         pcre_only_regexps[s] = 1
       end
     else
       if type(fn) == 'table' then
-        for k, elt in ipairs(fn) do
+        for _, elt in ipairs(fn) do
           local files = util.glob(elt)
 
-          for i,matched in ipairs(files) do
+          for _,matched in ipairs(files) do
             local f = io.open(matched, "r")
             if f then
               process_sa_conf(f)
@@ -1594,7 +1588,7 @@ if type(section) == "table" then
         -- assume string
         local files = util.glob(fn)
 
-        for i,matched in ipairs(files) do
+        for _,matched in ipairs(files) do
           local f = io.open(matched, "r")
           if f then
             process_sa_conf(f)

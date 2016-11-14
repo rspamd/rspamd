@@ -19,7 +19,6 @@ limitations under the License.
 -- https://rspamd.com/doc/configuration/settings.html
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require 'rspamd_redis'
 local redis_params
 
 local settings = {}
@@ -43,6 +42,8 @@ local function check_query_settings(task)
       task:set_settings(parser:get_object())
 
       return true
+    else
+      rspamd_logger.errx(task, 'Parse error: %s', err)
     end
   end
 
@@ -136,7 +137,7 @@ local function check_settings(task)
     return false
   end
 
-  local function check_specific_setting(name, rule, ip, client_ip, from, rcpt,
+  local function check_specific_setting(_, rule, ip, client_ip, from, rcpt,
       user, auth_user)
     local res = false
 
@@ -254,13 +255,12 @@ local function check_settings(task)
   local user = {}
   if uname then
     user[1] = {}
-    for localpart, domainpart in string.gmatch(uname, "(.+)@(.+)") do
+    local localpart, domainpart = string.gmatch(uname, "(.+)@(.+)")()
+    if localpart then
       user[1]["user"] = localpart
       user[1]["domain"] = domainpart
       user[1]["addr"] = uname
-      break
-    end
-    if not user[1]["addr"] then
+    else
       user[1]["user"] = uname
       user[1]["addr"] = uname
     end
@@ -324,7 +324,7 @@ local function process_settings_table(tbl)
       local out = {}
 
       if type(ip) == "table" then
-        for i,v in ipairs(ip) do
+        for _,v in ipairs(ip) do
           table.insert(out, process_ip(v))
         end
       elseif type(ip) == "string" then
@@ -363,7 +363,7 @@ local function process_settings_table(tbl)
     local function process_addr(addr)
       local out = {}
       if type(addr) == "table" then
-        for i,v in ipairs(addr) do
+        for _,v in ipairs(addr) do
           table.insert(out, process_addr(v))
         end
       elseif type(addr) == "string" then
@@ -399,8 +399,8 @@ local function process_settings_table(tbl)
       return out
     end
 
-    local check_table = function(elt, out)
-      if type(elt) == 'string' then
+    local check_table = function(chk_elt, out)
+      if type(chk_elt) == 'string' then
         return {out}
       end
 
@@ -480,7 +480,7 @@ local function process_settings_table(tbl)
   max_pri = 0
   local nrules = 0
   settings_ids = {}
-  for k,v in pairs(settings) do settings[k]={} end
+  for k in pairs(settings) do settings[k]={} end
   -- fill new settings by priority
   fun.for_each(function(k, v)
     local pri = get_priority(v)
@@ -507,7 +507,6 @@ end
 
 -- Parse settings map from the ucl line
 local function process_settings_map(string)
-  local ucl = require "ucl"
   local parser = ucl.parser()
   local res,err = parser:parse_string(string)
   if not res then
@@ -530,12 +529,11 @@ local function gen_redis_callback(handler, id)
 
     local function redis_settings_cb(err, data)
       if not err and type(data) == 'string' then
-        local ucl = require "ucl"
         local parser = ucl.parser()
-        local res,err = parser:parse_string(data)
+        local res,ucl_err = parser:parse_string(data)
         if not res then
           rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
-            err)
+            ucl_err)
         else
           local obj = parser:get_object()
           rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
@@ -558,6 +556,9 @@ local function gen_redis_callback(handler, id)
       'GET', -- command
       {key} -- arguments
     )
+    if not ret then
+      rspamd_logger.errx(task, 'Redis GET failed: %s', ret)
+    end
   end
 end
 
@@ -570,7 +571,7 @@ if redis_section then
     local handlers = redis_section.handlers
 
     for _,h in ipairs(handlers) do
-      local chunk,err = loadstring(h)
+      local chunk,err = load(h)
 
       if not chunk then
         rspamd_logger.errx(rspamd_config, 'Cannot load handler from string: %s',

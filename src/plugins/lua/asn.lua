@@ -17,7 +17,6 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
-local rspamd_redis = require "rspamd_redis"
 
 local options = {
   provider_type = 'rspamd',
@@ -56,7 +55,10 @@ local function asn_check(task)
 
   local asn_check_func = {}
   function asn_check_func.rspamd(ip)
-    local function rspamd_dns_cb(resolver, to_resolve, results, err, key)
+    local function rspamd_dns_cb(_, _, results, dns_err)
+      if dns_err then
+        rspamd_logger.errx(task, 'error querying dns: %s', dns_err)
+      end
       if not (results and results[1]) then return end
       local parts = rspamd_re:split(results[1])
       -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
@@ -65,12 +67,13 @@ local function asn_check(task)
       if redis_params then
         local redis_key = options.key_prefix .. ip:to_string()
         local ret,conn,upstream
-        local function redis_asn_set_cb(err, data)
-          if not err then
+        local function redis_asn_set_cb(redis_err)
+          if not redis_err then
             upstream:ok()
           else
             rspamd_logger.infox(task, 'got error %s when setting asn record on server %s',
-              err, upstream:get_addr())
+              redis_err, upstream:get_addr())
+            upstream:fail()
           end
         end
         ret,conn,upstream = rspamd_redis_make_request(task,
@@ -81,7 +84,7 @@ local function asn_check(task)
           'HMSET', -- command
           {redis_key, "asn", parts[1], "net", parts[2], "country", parts[3]} -- arguments
         )
-        if conn then
+        if ret then
           conn:add_cmd('EXPIRE', {
             redis_key, tostring(options['expire'])
           })
@@ -107,10 +110,14 @@ local function asn_check(task)
       else
         asn_set(data[1], data[2], data[3])
         -- Refresh key
-        local function redis_asn_expire_cb(err, data)
+        local function redis_asn_expire_cb(redis_err)
+          if redis_err then
+            rspamd_logger.errx(task, 'Error setting expire: %s',
+                redis_err)
+          end
         end
 
-        local ret,_,_ = rspamd_redis_make_request(task,
+        local ret,_,upstream = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           true, -- is write
@@ -118,6 +125,9 @@ local function asn_check(task)
           'EXPIRE', -- command
           {key, tostring(options.expire)} -- arguments
         )
+        if not ret then
+          upstream:fail()
+        end
       end
     end
 

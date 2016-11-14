@@ -160,7 +160,7 @@ if opts then
   end
 
   if id ~= -1 then
-    for sym, opt in pairs(opts) do
+    for sym in pairs(opts) do
       rspamd_config:register_symbol({
         name = sym,
         type = 'virtual',

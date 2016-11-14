@@ -17,10 +17,7 @@ limitations under the License.
 
 -- Dmarc policy filter
 
-local rspamd_regexp = require "rspamd_regexp"
 local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require "rspamd_redis"
-local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 local check_local = false
 local check_authed = false
@@ -52,7 +49,6 @@ local dmarc_symbols = {
 -- Default port for redis upstreams
 local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
-local dmarc_domain = nil
 local dmarc_reporting = false
 local dmarc_actions = {}
 
@@ -108,7 +104,7 @@ local function dmarc_callback(task)
     return maybe_force_action('na')
   end
 
-  local function dmarc_report_cb(err, data)
+  local function dmarc_report_cb(err)
     if not err then
       rspamd_logger.infox(task, '<%1> dmarc report saved for %2',
         task:get_message_id(), from[1]['domain'])
@@ -118,7 +114,7 @@ local function dmarc_callback(task)
     end
   end
 
-  local function dmarc_dns_cb(resolver, to_resolve, results, err, key)
+  local function dmarc_dns_cb(_, to_resolve, results, err)
 
     local lookup_domain = string.sub(to_resolve, 8)
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
@@ -281,7 +277,7 @@ local function dmarc_callback(task)
     end
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
     if das and das[1] and das[1]['options'] then
-      for i,dkim_domain in ipairs(das[1]['options']) do
+      for _,dkim_domain in ipairs(das[1]['options']) do
         if strict_dkim and rspamd_util.strequal_caseless(from[1]['domain'], dkim_domain) then
           dkim_ok = true
         elseif strict_dkim then
@@ -367,7 +363,7 @@ if opts and type(opts) ~= 'table' then
   end
 end
 
-local opts = rspamd_config:get_all_opt('dmarc')
+opts = rspamd_config:get_all_opt('dmarc')
 if not opts or type(opts) ~= 'table' then
   return
 end
@@ -397,9 +393,9 @@ if opts['key_prefix'] then
 end
 
 -- Check spf and dkim sections for changed symbols
-local function check_mopt(var, opts, name)
-  if opts[name] then
-    symbols['var'] = tostring(opts[name])
+local function check_mopt(var, m_opts, name)
+  if m_opts[name] then
+    symbols[var] = tostring(m_opts[name])
   end
 end
 

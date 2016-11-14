@@ -1,3 +1,4 @@
+local logger = require "rspamd_logger"
 
 -- This function parses redis server definition using either
 -- specific server string for this module or global
@@ -6,7 +7,6 @@ function rspamd_parse_redis_server(module_name)
 
   local default_port = 6379
   local default_timeout = 1.0
-  local logger = require "rspamd_logger"
   local upstream_list = require "rspamd_upstream_list"
 
   local function try_load_redis_servers(options)
@@ -311,9 +311,6 @@ local function meta_urls_function(task)
   end
 
   return {0}
-end
-
-local function meta_attachments_function(task)
 end
 
 local metafunctions = {

@@ -26,7 +26,6 @@ local redirector_domains = {}
 local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_map = 'http://data.phishtank.com/data/online-valid.json'
 -- Not enabled by default as their feed is quite large
-local phishtank_enabled = false
 local openphish_premium = false
 local openphish_hash
 local phishtank_hash
@@ -41,7 +40,7 @@ if not (opts and type(opts) == 'table') then
 end
 
 local function phishing_cb(task)
-  local function check_phishing_map(map, url, symbol)
+  local function check_phishing_map(map, url, phish_symbol)
     local host = url:get_host()
 
     if host then
@@ -49,7 +48,6 @@ local function phishing_cb(task)
       local found_path = false
       local found_query = false
       local data = nil
-      local d
 
       if elt then
         local path = url:get_path()
@@ -69,14 +67,17 @@ local function phishing_cb(task)
             end
           end
         else
-          if not d['path'] then
-            found_path = true
-            found_query = true
+          for _,d in ipairs(elt) do
+            if not d['path'] then
+              found_path = true
+              found_query = true
+              break
+            end
           end
         end
 
         if found_path then
-          local args = nil
+          local args
 
           if type(data) == 'table' then
             args = {
@@ -92,15 +93,15 @@ local function phishing_cb(task)
 
           if found_query then
             -- Query + path match
-            task:insert_result(symbol, 1.0, args)
+            task:insert_result(phish_symbol, 1.0, args)
           else
             -- Host + path match
-            task:insert_result(symbol, 0.3, args)
+            task:insert_result(phish_symbol, 0.3, args)
           end
         else
           if url:is_phished() then
             -- Only host matches
-            task:insert_result(symbol, 0.1, host)
+            task:insert_result(phish_symbol, 0.1, host)
           end
         end
       end
@@ -138,7 +139,7 @@ local function phishing_cb(task)
         end
         rspamd_logger.debugx(task, "distance: %1 -> %2: %3", tld, ptld, dist)
 
-        local function found_in_map(map, url, weight)
+        local function found_in_map(map)
           if #map > 0 then
             for _,rule in ipairs(map) do
                 for _,dn in ipairs({url:get_tld(), url:get_host()}) do
@@ -151,7 +152,7 @@ local function phishing_cb(task)
           end
         end
 
-        if not found_in_map(redirector_domains, url, weight) then
+        if not found_in_map(redirector_domains) then
           if not found_in_map(strict_domains, purl, 1.0) then
             if domains then
               if domains:get_key(ptld) then

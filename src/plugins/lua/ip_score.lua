@@ -16,17 +16,15 @@ limitations under the License.
 
 -- IP score is a module that set ip score of specific ip, asn, country
 local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require "rspamd_redis"
-local upstream_list = require "rspamd_upstream_list"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_util = require "rspamd_util"
-local _ = require "fun"
 
 -- Default settings
 local redis_params = nil
 local whitelist = nil
 local asn_cc_whitelist = nil
 local check_authed = false
+local check_local = false
 
 local options = {
   actions = { -- how each action is treated in scoring
@@ -105,18 +103,21 @@ local ip_score_set = function(task)
     return old_score + score, new_total
   end
 
-  local score_set_cb = function(err, data)
+  local score_set_cb = function(err)
     if err then
       rspamd_logger.infox(task, 'got error while IP score changing: %1', err)
     end
   end
 
   local ip = task:get_from_ip()
-  if task:get_user() or (ip and ip:is_local()) then
+  if not check_authed and task:get_user() then
     return
   end
   local action = task:get_metric_action(options['metric'])
   if not ip or not ip:is_valid() then
+    return
+  end
+  if not check_local and ip:is_local() then
     return
   end
 
@@ -145,7 +146,6 @@ local ip_score_set = function(task)
   score = score_mult * rspamd_util.tanh (2.718281 * (score/options['score_divisor']))
 
   local hkey = ip_score_hash_key(asn, country, ipnet, ip)
-  local upstream,ret
 
   asn_score,total_asn = new_score_set(score, asn_score, total_asn)
   country_score,total_country = new_score_set(score, country_score, total_country)
@@ -157,7 +157,7 @@ local ip_score_set = function(task)
     options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
     ip:to_string(), string.format('%f|%d', ip_score, total_ip)}
 
-  ret,_,upstream = rspamd_redis_make_request(task,
+  local ret,_,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     hkey, -- hash key
     true, -- is write
@@ -165,6 +165,11 @@ local ip_score_set = function(task)
     'HMSET', -- command
     redis_args -- arguments
   )
+  if not ret then
+    rspamd_logger.errx(task, 'Redis HMSET failed on %s', upstream:get_addr())
+    upstream:fail()
+    return
+  end
 
   -- Now insert final result
   asn_score = normalize_score(asn_score, total_asn, options['scores']['asn'])
@@ -209,8 +214,13 @@ end
 -- Check score for ip in keystorage
 local ip_score_check = function(task)
   local asn, country, ipnet = ip_score_get_task_vars(task)
+  local ip = task:get_from_ip()
 
   local ip_score_redis_cb = function(err, data)
+    if err then
+      rspamd_logger.errx(task, 'Redis error: %s', err)
+      -- XXX: upstreams
+    end
     local function calculate_score(score)
       local parts = asn_re:split(score)
       local rep = tonumber(parts[1])
@@ -248,7 +258,7 @@ local ip_score_check = function(task)
     end
   end
 
-  local function create_get_command(ip, asn, country, ipnet)
+  local function create_get_command()
     local cmd = 'HMGET'
 
     local args = {options['hash']}
@@ -277,7 +287,6 @@ local ip_score_check = function(task)
     return cmd, args
   end
 
-  local ip = task:get_from_ip()
   if task:get_user() or (ip and ip:is_local()) then
     rspamd_logger.infox(task, "skip IP Score for local networks and authorized users")
     return
@@ -300,7 +309,7 @@ local ip_score_check = function(task)
       end
     end
 
-    local cmd, args = create_get_command(ip, asn, country, ipnet)
+    local cmd, args = create_get_command()
 
     local ret,_,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -310,6 +319,10 @@ local ip_score_check = function(task)
       cmd, -- command
       args -- arguments
     )
+    if not ret then
+      rspamd_logger.errx(task, 'Call to redis at %s failed', upstream:get_addr())
+      upstream:fail()
+    end
   end
 end
 
@@ -320,6 +333,9 @@ local configure_ip_score_module = function()
   if opts and type(opts) ~= 'table' then
     if type(opts['check_authed']) == 'boolean' then
       check_authed = opts['check_authed']
+    end
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
     end
   end
   opts = rspamd_config:get_all_opt('ip_score')

@@ -182,7 +182,7 @@ rspamd_config.R_WHITE_ON_WHITE = {
         normal_len = p:get_length()
         local hc = p:get_html() -- we get HTML context
 
-        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag, _)
+        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag)
           local bl = tag:get_extra()
           if bl then
             if bl['bgcolor'] and bl['color'] and bl['visible'] then

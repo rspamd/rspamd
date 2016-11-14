@@ -15,7 +15,6 @@ limitations under the License.
 ]]--
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require 'rspamd_redis'
 local redis_params
 local ucl = require "ucl"
 local fun = require "fun"
@@ -92,7 +91,7 @@ local function redis_make_request(ev_base, cfg, key, is_write, callback, command
   return ret,conn,addr
 end
 
-local function apply_dynamic_actions(cfg, acts)
+local function apply_dynamic_actions(_, acts)
   fun.each(function(k, v)
      if type(v) == 'table' then
       v['name'] = k
@@ -117,7 +116,7 @@ local function apply_dynamic_actions(cfg, acts)
   end, acts))
 end
 
-local function apply_dynamic_scores(cfg, sc)
+local function apply_dynamic_scores(_, sc)
   fun.each(function(k, v)
     if type(v) == 'table' then
       v['name'] = k
@@ -154,13 +153,13 @@ local function apply_dynamic_conf(cfg, data)
   end
 
   if data['symbols_enabled'] then
-    fun.each(function(i, v)
+    fun.each(function(_, v)
       cfg:enable_symbol(v)
     end, data['symbols_enabled'])
   end
 
   if data['symbols_disabled'] then
-    fun.each(function(i, v)
+    fun.each(function(_, v)
       cfg:disable_symbol(v)
     end, data['symbols_disabled'])
   end
@@ -177,7 +176,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       cur_settings.updates.actions = {}
     end
   end
-  local function redis_data_set_cb(err, data)
+  local function redis_data_set_cb(err)
     if err then
       rspamd_logger.errx(cfg, "cannot save dynamic conf to redis: %s", err)
     else
@@ -195,7 +194,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       fun.each(function(k, v)
         cur_settings.data.scores[k] = v
       end,
-      fun.filter(function(k,v)
+      fun.filter(function(k)
         if cur_settings.updates.symbols[k] then
           return false
         end
@@ -209,7 +208,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       fun.each(function(k, v)
         cur_settings.data.actions[k] = v
       end,
-      fun.filter(function(k,v)
+      fun.filter(function(k)
         if cur_settings.updates.actions[k] then
           return false
         end
@@ -223,10 +222,12 @@ local function update_dynamic_conf(cfg, ev_base, recv)
 end
 
 local function check_dynamic_conf(cfg, ev_base)
-  local function redis_load_cb(err, data)
-    if data and type(data) == 'string' then
+  local function redis_load_cb(redis_err, data)
+    if redis_err then
+      rspamd_logger.errx(cfg, "cannot read dynamic conf from redis: %s", redis_err)
+    elseif data and type(data) == 'string' then
       local parser = ucl.parser()
-      local res,err = parser:parse_string(data)
+      local _,err = parser:parse_string(data)
 
       if err then
         rspamd_logger.errx(cfg, "cannot load dynamic conf from redis: %s", err)
@@ -278,17 +279,17 @@ if section then
     settings[k] = v
   end
 
-  rspamd_config:add_on_load(function(cfg, ev_base)
+  rspamd_config:add_on_load(function(_, ev_base)
     rspamd_config:add_periodic(ev_base, 0.0,
-    function(cfg, ev_base)
-      check_dynamic_conf(cfg, ev_base)
+    function(cfg, _ev_base)
+      check_dynamic_conf(cfg, _ev_base)
       return settings.redis_watch_interval
     end, true)
   end)
 end
 
 -- Updates part
-local function add_dynamic_symbol(cfg, sym, score)
+local function add_dynamic_symbol(_, sym, score)
   local add = false
   if not cur_settings.data then
     cur_settings.data = {}
@@ -318,7 +319,7 @@ local function add_dynamic_symbol(cfg, sym, score)
   return add
 end
 
-local function add_dynamic_action(cfg, act, score)
+local function add_dynamic_action(_, act, score)
   local add = false
   if not cur_settings.data then
     cur_settings.data = {}

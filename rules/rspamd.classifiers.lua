@@ -67,7 +67,7 @@ local function get_specific_statfiles(classifier, task)
 	end
 end
 
-classifiers['bayes'] = function(classifier, task, is_learn, _)
+classifiers['bayes'] = function(classifier, task, is_learn)
 	-- Subfunction for detection of message's language
 	local detect_language = function()
 		local parts = task:get_text_parts()

@@ -23,7 +23,6 @@ local rbls = {}
 local local_exclusions = nil
 
 local rspamd_logger = require 'rspamd_logger'
-local rspamd_ip = require 'rspamd_ip'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
 
@@ -62,7 +61,10 @@ end
 
 local function rbl_cb (task)
   local function gen_rbl_callback(rule)
-    return function (resolver, to_resolve, results, err)
+    return function (_, to_resolve, results, err)
+      if err then
+        rspamd_logger.errx(task, 'DNS lookup error: %s', err)
+      end
       if not results then return end
 
       for _,rbl in ipairs(rule.rbls) do
@@ -72,7 +74,7 @@ local function rbl_cb (task)
         end
         for _,result in pairs(results) do
           local ipstr = result:to_string()
-          local foundrc, s
+          local foundrc
           for s,i in pairs(rbl['returncodes']) do
             if type(i) == 'string' then
               if string.find(ipstr, '^' .. i .. '$') then
@@ -126,7 +128,7 @@ local function rbl_cb (task)
   local havegot = {}
   local notgot = {}
 
-  local alive_rbls = fun.filter(function(k, rbl)
+  local alive_rbls = fun.filter(function(_, rbl)
     if not rbl.monitored:alive() then
       return false
     end
@@ -135,7 +137,7 @@ local function rbl_cb (task)
   end, rbls)
 
   -- Now exclude rbls, that are disabled by configuration
-  local enabled_rbls = fun.filter(function(k, rbl)
+  local enabled_rbls = fun.filter(function(_, rbl)
     if rbl['exclude_users'] then
       if not havegot['user'] and not notgot['user'] then
         havegot['user'] = task:get_user()
@@ -260,17 +262,17 @@ local function rbl_cb (task)
 
   -- Now we iterate over enabled rbls and fill params
   -- Helo RBLs
-  fun.each(function(k, rbl)
+  fun.each(function(_, rbl)
     local to_resolve = havegot['helo'] .. '.' .. rbl['rbl']
     gen_rbl_rule(to_resolve, rbl)
   end,
-  fun.filter(function(k, rbl)
+  fun.filter(function(_, rbl)
     if rbl['helo'] then return true end
     return false
   end, enabled_rbls))
 
   -- DKIM RBLs
-  fun.each(function(k, rbl)
+  fun.each(function(_, rbl)
     for _, d in ipairs(havegot['dkim']) do
       if rbl['dkim_domainonly'] then
         d = rspamd_util.get_tld(d)
@@ -279,13 +281,13 @@ local function rbl_cb (task)
       gen_rbl_rule(to_resolve, rbl)
     end
   end,
-  fun.filter(function(k, rbl)
+  fun.filter(function(_, rbl)
     if rbl['dkim'] then return true end
     return false
   end, enabled_rbls))
 
   -- Emails RBLs
-  fun.each(function(k, rbl)
+  fun.each(function(_, rbl)
     if rbl['emails'] == 'domain_only' then
       for domain, _ in pairs(havegot['emails']) do
         local to_resolve = domain .. '.' .. rbl['rbl']
@@ -298,36 +300,36 @@ local function rbl_cb (task)
       end
     end
   end,
-  fun.filter(function(k, rbl)
+  fun.filter(function(_, rbl)
     if rbl['emails'] then return true end
     return false
   end, enabled_rbls))
 
   -- RDNS lists
-  fun.each(function(k, rbl)
+  fun.each(function(_, rbl)
     local to_resolve = havegot['rdns'] .. '.' .. rbl['rbl']
     gen_rbl_rule(to_resolve, rbl)
   end,
-  fun.filter(function(k, rbl)
+  fun.filter(function(_, rbl)
     if rbl['rdns'] then return true end
     return false
   end, enabled_rbls))
 
   -- From lists
-  fun.each(function(k, rbl)
+  fun.each(function(_, rbl)
     if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
       (havegot['from']:get_version() == 4 and rbl['ipv4']) then
       local to_resolve = ip_to_rbl(havegot['from'], rbl['rbl'])
       gen_rbl_rule(to_resolve, rbl)
     end
   end,
-  fun.filter(function(k, rbl)
+  fun.filter(function(_, rbl)
     if rbl['from'] then return true end
     return false
   end, enabled_rbls))
 
   -- Received lists
-  fun.each(function(k, rbl)
+  fun.each(function(_, rbl)
     for _,rh in ipairs(havegot['received']) do
       if rh['real_ip'] and rh['real_ip']:is_valid() then
         if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
@@ -344,7 +346,7 @@ local function rbl_cb (task)
       end
     end
   end,
-  fun.filter(function(k, rbl)
+  fun.filter(function(_, rbl)
     if rbl['received'] then return true end
     return false
   end, enabled_rbls))
@@ -403,7 +405,6 @@ local default_defaults = {
   ['default_dkim'] = {[1] = false, [2] = 'dkim'},
   ['default_dkim_domainonly'] = {[1] = true, [2] = 'dkim_domainonly'},
   ['default_emails'] = {[1] = false, [2] = 'emails'},
-  ['default_exclude_users'] = {[1] = false, [2] = 'exclude_users'},
   ['default_exclude_private_ips'] = {[1] = true, [2] = 'exclude_private_ips'},
   ['default_exclude_users'] = {[1] = false, [2] = 'exclude_users'},
   ['default_exclude_local'] = {[1] = true, [2] = 'exclude_local'},
@@ -433,7 +434,6 @@ local id = rspamd_config:register_symbol({
 for key,rbl in pairs(opts['rbls']) do
   (function()
     if rbl['disabled'] then return end
-    local s
     for default, default_v in pairs(default_defaults) do
       if(rbl[default_v[2]] == nil) then
         rbl[default_v[2]] = opts[default]
@@ -501,7 +501,7 @@ for key,rbl in pairs(opts['rbls']) do
             elseif type(rbl['whitelist_exception']) == 'table' then
               local foundException = false
               for _, e in pairs(rbl['whitelist_exception']) do
-                if e == s then
+                if e == rbl['symbol'] then
                   foundException = true
                   break
                 end

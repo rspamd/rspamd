@@ -85,7 +85,7 @@ local function load_defaults(defaults)
   end
 end
 
-local function graphite_config(opts)
+local function graphite_config()
   load_defaults({
     host = 'localhost',
     port = 2003,
@@ -124,7 +124,7 @@ local function graphite_push(kwargs)
     data = {
       metrics_str,
     },
-    callback = (function (err, data)
+    callback = (function (err)
       if err then
         logger.errx('Push failed: %1', err)
         return
@@ -150,16 +150,16 @@ local function configure_metric_exporter()
   for k, v in pairs(opts) do
     settings[k] = v
   end
-  return backends[opts['backend']]['configure'](opts)
+  return backends[opts['backend']]['configure']()
 end
 
 if not configure_metric_exporter() then return end
 
-rspamd_config:add_on_load(function (cfg, ev_base, worker)
+rspamd_config:add_on_load(function (_, ev_base, worker)
   -- Exit unless we're the first 'normal' worker
   if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
   -- Persist mempool variable to statefile on shutdown
-  rspamd_config:register_finish_script(function (task)
+  rspamd_config:register_finish_script(function ()
     local stamp = pool:get_variable(VAR_NAME, 'double')
     if not stamp then
       logger.warn('No last metric exporter push to persist to disk')
@@ -176,7 +176,7 @@ rspamd_config:add_on_load(function (cfg, ev_base, worker)
     end
   end)
   -- Push metrics to backend
-  local function push_metrics(worker, time)
+  local function push_metrics(time)
     logger.infox('Pushing metrics to %s backend', settings['backend'])
     local args = {
       ev_base = ev_base,
@@ -189,15 +189,15 @@ rspamd_config:add_on_load(function (cfg, ev_base, worker)
   end
   -- Push metrics at regular intervals
   local function schedule_regular_push()
-    rspamd_config:add_periodic(ev_base, settings['interval'], function (cfg, ev_base)
-      push_metrics(worker)
+    rspamd_config:add_periodic(ev_base, settings['interval'], function ()
+      push_metrics()
       return true
     end)
   end
   -- Push metrics to backend and reschedule check
   local function schedule_intermediate_push(when)
-    rspamd_config:add_periodic(ev_base, when, function (cfg, ev_base)
-      push_metrics(worker)
+    rspamd_config:add_periodic(ev_base, when, function ()
+      push_metrics()
       schedule_regular_push()
       return false
     end)
@@ -215,7 +215,7 @@ rspamd_config:add_on_load(function (cfg, ev_base, worker)
   end
   if not stamp then
     logger.debug('No state found - pushing stats immediately')
-    push_metrics(worker)
+    push_metrics()
     schedule_regular_push()
     return
   end
@@ -223,7 +223,7 @@ rspamd_config:add_on_load(function (cfg, ev_base, worker)
   local delta = stamp - time + settings['interval']
   if delta <= 0 then
     logger.debug('Last push is too old - pushing stats immediately')
-    push_metrics(worker, time)
+    push_metrics(time)
     schedule_regular_push()
     return
   end

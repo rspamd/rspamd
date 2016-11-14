@@ -16,7 +16,6 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local rspamd_redis = require "rspamd_redis"
 local rspamd_regexp = require "rspamd_regexp"
 local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
@@ -191,6 +190,7 @@ local function check_av_cache(task, rule, fn)
         yield_result(task, rule, data)
       end
     else
+      rspamd_logger.errx(task, 'Got error checking cache: %1', err)
       fn()
     end
   end
@@ -219,7 +219,7 @@ end
 local function save_av_cache(task, rule, to_save)
   local key = task:get_digest()
 
-  local function redis_set_cb(err, data)
+  local function redis_set_cb(err)
     -- Do nothing
     if err then
       rspamd_logger.errx(task, 'failed to save virus cache for %s -> "%s": %s',
@@ -506,7 +506,7 @@ if opts and type(opts) == 'table' then
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
-        local id = rspamd_config:register_symbol({
+        rspamd_config:register_symbol({
           type = 'normal',
           name = m['symbol'],
           callback = cb,

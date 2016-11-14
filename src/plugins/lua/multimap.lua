@@ -22,7 +22,6 @@ local cdb = require "rspamd_cdb"
 local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
-local rspamd_redis = require "rspamd_redis"
 local redis_params
 local fun = require "fun"
 
@@ -54,7 +53,7 @@ local value_types = {
     get_value = function(val) return val end,
   },
   content = {
-    get_value = function(val) return nil end,
+    get_value = function() return nil end,
   },
   hostname = {
     get_value = function(val) return val end,
@@ -267,7 +266,7 @@ local function apply_regexp_filter(task, filter, fn, r)
   return fn
 end
 
-local function apply_content_filter(task, filter, r)
+local function apply_content_filter(task, filter)
   if filter == 'body' then
     return {task:get_rawbody()}
   elseif filter == 'full' then
@@ -276,19 +275,19 @@ local function apply_content_filter(task, filter, r)
     return {task:get_raw_headers()}
   elseif filter == 'text' then
     local ret = {}
-    for i,p in ipairs(task:get_text_parts()) do
+    for _,p in ipairs(task:get_text_parts()) do
       table.insert(ret, p:get_content())
     end
     return ret
   elseif filter == 'rawtext' then
     local ret = {}
-    for i,p in ipairs(task:get_text_parts()) do
+    for _,p in ipairs(task:get_text_parts()) do
       table.insert(ret, p:get_raw_content())
     end
     return ret
   elseif filter == 'oneline' then
     local ret = {}
-    for i,p in ipairs(task:get_text_parts()) do
+    for _,p in ipairs(task:get_text_parts()) do
       table.insert(ret, p:get_content_oneline())
     end
     return ret
@@ -306,6 +305,7 @@ local multimap_filters = {
   url = apply_url_filter,
   filename = apply_filename_filter,
   mempool = apply_regexp_filter,
+  hostname = apply_hostname_filter,
   --content = apply_content_filter, -- Content filters are special :(
 }
 
@@ -359,8 +359,8 @@ local function multimap_callback(task, rule)
   end
 
   -- Parse result in form: <symbol>:<score>|<symbol>|<score>
-  local function parse_ret(rule, ret)
-    if ret and type(ret) == 'string' then
+  local function parse_ret(parse_rule, p_ret)
+    if p_ret and type(p_ret) == 'string' then
       local lpeg = require "lpeg"
       local number = {}
 
@@ -388,7 +388,7 @@ local function multimap_callback(task, rule)
       local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
       local grammar = symscore_cap + symbol_cap + score_cap
       local parser = lpeg.Ct(grammar)
-      local tbl = parser:match(ret)
+      local tbl = parser:match(p_ret)
 
       if tbl then
         local sym = nil
@@ -403,15 +403,15 @@ local function multimap_callback(task, rule)
 
         return true,sym,score
       else
-        if ret ~= '' then
+        if p_ret ~= '' then
           rspamd_logger.infox(task, '%s: cannot parse string "%s"',
-            rule.symbol, ret)
+            parse_rule.symbol, p_ret)
         end
 
         return true,nil,1.0
       end
-    elseif type(ret) == 'boolean' then
-      return ret,nil,0.0
+    elseif type(p_ret) == 'boolean' then
+      return p_ret,nil,0.0
     end
 
     return false,nil,0.0
@@ -421,7 +421,7 @@ local function multimap_callback(task, rule)
   local function match_rule(r, value)
     local function rule_callback(result)
       if result then
-        local res,symbol,score = parse_ret(r, result)
+        local _,symbol,score = parse_ret(r, result)
         if symbol and r['symbols_set'] then
           if not r['symbols_set'][symbol] then
             rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
@@ -495,7 +495,7 @@ local function multimap_callback(task, rule)
   end
 
   local function match_content(r)
-    local data = {}
+    local data
 
     if r['filter'] then
       data = apply_content_filter(task, r['filter'], r)
@@ -503,7 +503,7 @@ local function multimap_callback(task, rule)
       data = {task:get_content()}
     end
 
-    for i,v in ipairs(data) do
+    for _,v in ipairs(data) do
       match_rule(r, v)
     end
   end
@@ -527,7 +527,10 @@ local function multimap_callback(task, rule)
       if rt == 'ip' then
         match_rule(rule, ip)
       else
-        local cb = function (resolver, to_resolve, results, err, rbl)
+        local cb = function (_, _, results, err)
+          if err then
+            rspamd_logger.errx(task, 'DNS lookup failed: %s', err)
+          end
           if results then
             task:insert_result(rule['symbol'], 1, rule['map'])
 
@@ -558,18 +561,18 @@ local function multimap_callback(task, rule)
     end
   elseif rt == 'url' then
     if task:has_urls() then
-      local urls = task:get_urls()
-      for i,url in ipairs(urls) do
+      local msg_urls = task:get_urls()
+      for _,url in ipairs(msg_urls) do
         match_url(rule, url)
       end
     end
   elseif rt == 'filename' then
     local parts = task:get_parts()
-    for i,p in ipairs(parts) do
+    for _,p in ipairs(parts) do
       if p:is_archive() then
         local fnames = p:get_archive():get_files()
 
-        for ii,fn in ipairs(fnames) do
+        for _,fn in ipairs(fnames) do
           match_filename(rule, fn)
         end
       end
@@ -635,7 +638,6 @@ local function add_multimap_rule(key, newrule)
   end
   -- Check cdb flag
   if string.find(newrule['map'], '^cdb://.*$') then
-    local test = cdb.create(newrule['map'])
     newrule['cdb'] = cdb.create(newrule['map'])
     if newrule['cdb'] then
       ret = true
@@ -747,10 +749,10 @@ local function add_multimap_rule(key, newrule)
       end
 
       local function process_atom(atom, task)
-        local ret = task:has_symbol(atom)
-        rspamd_logger.debugx('check for symbol %s: %s', atom, ret)
+        local f_ret = task:has_symbol(atom)
+        rspamd_logger.debugx('check for symbol %s: %s', atom, f_ret)
 
-        if ret then
+        if f_ret then
           return 1
         end
 

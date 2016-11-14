@@ -30,7 +30,10 @@ local check_authed = false
 local function check_quantity_received (task)
   local recvh = task:get_received_headers()
 
-  local function recv_dns_cb(resolver, to_resolve, results, err)
+  local function recv_dns_cb(_, to_resolve, results, err)
+    if err then
+      rspamd_logger.errx(task, 'DNS lookup error: %s', err)
+    end
     task:inc_dns_req()
 
     if not results then
@@ -85,7 +88,6 @@ local function check_quantity_received (task)
     return
   end
 
-  local recvh = task:get_received_headers()
   if recvh and #recvh <= 1 then
     local ret = true
     local r = recvh[1]
@@ -94,13 +96,12 @@ local function check_quantity_received (task)
       return
     end
 
-    local hn = nil
     if r['real_hostname'] then
-      hn = string.lower(r['real_hostname'])
+      local rhn = string.lower(r['real_hostname'])
       -- Check for good hostname
-      if hn and good_hosts then
+      if rhn and good_hosts then
         for _,gh in ipairs(good_hosts) do
-          if string.find(hn, gh) then
+          if string.find(rhn, gh) then
             ret = false
             break
           end
@@ -148,10 +149,10 @@ if opts and type(opts) ~= 'table' then
   end
 end
 -- Configuration
-local opts =  rspamd_config:get_all_opt('once_received')
+opts = rspamd_config:get_all_opt('once_received')
 if opts then
   if opts['symbol'] then
-    local symbol = opts['symbol']
+    symbol = opts['symbol']
 
     local id = rspamd_config:register_symbol({
       name = symbol,

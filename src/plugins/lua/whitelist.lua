@@ -16,7 +16,6 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local ucl = require "ucl"
 local fun = require "fun"
 
 local options = {
@@ -55,7 +54,6 @@ local function whitelist_cb(symbol, rule, task)
     return false,0.0
   end
 
-  local from = task:get_from(1)
   local found = false
   local mult = 1.0
   local spf_violated = false
@@ -167,18 +165,6 @@ end
 local function gen_whitelist_cb(symbol, rule)
   return function(task)
     whitelist_cb(symbol, rule, task)
-  end
-end
-
-local function process_whitelist_map(input)
-  local parser = ucl.parser()
-  local res,err = parser:parse_string(string)
-  if not res then
-    rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
-  else
-    local obj = parser:get_object()
-
-    options['rules'] = obj
   end
 end
 

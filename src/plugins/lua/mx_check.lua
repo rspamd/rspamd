@@ -17,7 +17,6 @@ limitations under the License.
 -- MX check plugin
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
-local rspamd_redis = require "rspamd_redis"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 
@@ -56,15 +55,19 @@ local function mx_check(task)
   end
 
   local valid = false
+  local ret,_,upstream
 
   local function check_results(mxes)
-    if fun.all(function(k, elt) return elt.checked end, mxes) then
+    if fun.all(function(_, elt) return elt.checked end, mxes) then
       -- Save cache
       local key = settings.key_prefix .. mx_domain
-      local function redis_cache_cb(err, data)
+      local function redis_cache_cb(err)
         if err ~= nil then
           rspamd_logger.errx(task, 'redis_cache_cb received error: %1', err)
+          upstream:fail()
           return
+        else
+          upstream:ok()
         end
       end
       if not valid then
@@ -78,7 +81,7 @@ local function mx_check(task)
         else
           task:insert_result(settings.symbol_bad_mx, 1.0)
         end
-        local ret,_,_ = rspamd_redis_make_request(task,
+        ret,_,upstream = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           false, -- is write
@@ -86,13 +89,17 @@ local function mx_check(task)
           'SETEX', -- command
           {key, tostring(settings.expire_novalid), '0'} -- arguments
         )
+        if not ret then
+          rspamd_logger.errx(task, 'Redis SETEX failed')
+          upstream:fail()
+        end
       else
         local valid_mx = {}
-        fun.each(function(k, mx)
+        fun.each(function(k)
           table.insert(valid_mx, k)
-        end, fun.filter(function (k, elt) return elt.working end, mxes))
+        end, fun.filter(function (_, elt) return elt.working end, mxes))
         task:insert_result(settings.symbol_good_mx, 1.0, valid_mx)
-        local ret,_,_ = rspamd_redis_make_request(task,
+        ret,_,upstream = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           false, -- is write
@@ -100,16 +107,20 @@ local function mx_check(task)
           'SETEX', -- command
           {key, tostring(settings.expire), table.concat(valid_mx, ';')} -- arguments
         )
+        if not ret then
+          rspamd_logger.errx(task, 'Redis SETEX failed')
+          upstream:fail()
+        end
       end
     end
   end
 
   local function gen_mx_a_callback(name, mxes)
-    return function(resolver, to_resolve, results, err, _, authenticated)
+    return function(_, _, results, err)
       mxes[name].ips = results
 
-      local function io_cb(err, data, conn)
-        if err then
+      local function io_cb(io_err)
+        if io_err then
           mxes[name].checked = true
         else
           mxes[name].checked = true
@@ -135,7 +146,7 @@ local function mx_check(task)
       else
         -- Try to open TCP connection to port 25
         for _,res in ipairs(results) do
-          local ret = rspamd_tcp.new({
+          local t_ret = rspamd_tcp.new({
             task = task,
             host = res:to_string(),
             callback = io_cb,
@@ -144,7 +155,7 @@ local function mx_check(task)
             port = 25
           })
 
-          if not ret then
+          if not t_ret then
             mxes[name].checked = true
           end
         end
@@ -153,7 +164,7 @@ local function mx_check(task)
     end
   end
 
-  local function mx_callback(resolver, to_resolve, results, err, _, authenticated)
+  local function mx_callback(_, _, results, err)
     local mxes = {}
     if err or not results then
       local r = task:get_resolver()
@@ -219,7 +230,7 @@ local function mx_check(task)
     end
 
     local key = settings.key_prefix .. mx_domain
-    local ret,_,_ = rspamd_redis_make_request(task,
+    ret,_,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
@@ -229,6 +240,7 @@ local function mx_check(task)
     )
 
     if not ret then
+      upstream:fail()
       local r = task:get_resolver()
       r:resolve('mx', {
         name = mx_domain,

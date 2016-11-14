@@ -17,7 +17,6 @@ limitations under the License.
 -- Module for checking mail list headers
 
 local symbol = 'MAILLIST'
-local rspamd_logger = require "rspamd_logger"
 -- EZMLM
 -- Mailing-List: .*run by ezmlm
 -- Precedence: bulk
@@ -219,7 +218,7 @@ local function check_ml_majordomo(task)
     return false
   end
 
-  local header = task:get_header('Precedence')
+  header = task:get_header('Precedence')
   if not header or (header ~= 'list' and header ~= 'bulk') then
     return false
   end

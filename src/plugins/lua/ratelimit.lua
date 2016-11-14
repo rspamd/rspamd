@@ -36,13 +36,11 @@ local ip_score_lower_bound = 10
 local ip_score_ham_multiplier = 1.1
 local ip_score_spam_divisor = 1.1
 
-local message_func = function(task, limit_type, bucket, threshold)
+local message_func = function(_, limit_type)
   return string.format('Ratelimit "%s" exceeded', limit_type)
 end
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require "rspamd_redis"
-local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 
@@ -152,7 +150,7 @@ local keywords = {
     end,
   },
   ['to'] = {
-    ['get_value'] = function(task)
+    ['get_value'] = function()
       return '%s' -- 'to' is special
     end,
   },
@@ -215,6 +213,8 @@ local function check_limits(task, args)
     if err then
       rspamd_logger.infox(task, 'got error while getting limit: %1', err)
       upstream:fail()
+    else
+      upstream:ok()
     end
     if not data then return end
     local ntime = rspamd_util.get_time()
@@ -307,6 +307,10 @@ local function check_limits(task, args)
     'mget', -- command
     fun.totable(fun.map(function(l) return l[2] end, args)) -- arguments
   )
+  if not ret then
+    rspamd_logger.errx(task, 'Redis MGET failed on %s', upstream:get_addr())
+    upstream:fail()
+  end
 end
 
 --- Set specific limit inside redis
@@ -314,7 +318,7 @@ local function set_limits(task, args)
   local key = fun.foldl(function(acc, k) return acc .. k[2] end, '', args)
   local ret, upstream
 
-  local function rate_set_cb(err, data)
+  local function rate_set_cb(err)
     if not err then
       upstream:ok()
     else
@@ -333,7 +337,6 @@ local function set_limits(task, args)
     fun.each(function(elt, limit)
       local bucket = elt[2]
       local rate = limit[1][2]
-      local threshold = limit[1][1]
       local atime = elt[1]
       local ctime = elt[3]
 
@@ -342,7 +345,6 @@ local function set_limits(task, args)
           atime - ctime)
         bucket = 1
         ctime = ntime
-        atime = ntime
       else
         if bucket > 0 then
           bucket = bucket - rate * (ntime - atime) + 1;
@@ -391,6 +393,10 @@ local function set_limits(task, args)
     'mget', -- command
     fun.totable(fun.map(function(l) return l[2] end, args)) -- arguments
   )
+  if not ret then
+    rspamd_logger.errx(task, 'Redis MGET failed on %s', upstream:get_addr())
+    upstream:fail()
+  end
 end
 
 --- Check or update ratelimit
@@ -428,7 +434,7 @@ local function rate_test_set(task, func)
   end
 
   local rate_key
-  for k, v in pairs(settings) do
+  for k in pairs(settings) do
     rate_key = dynamic_rate_key(task, k)
     if rate_key then
       if type(rate_key) == 'table' then
@@ -517,9 +523,9 @@ if opts then
     end, opts['dynamic_rates'])
   end
 
-  local enabled_limits = fun.totable(fun.map(function(t, lim)
+  local enabled_limits = fun.totable(fun.map(function(t)
     return t
-  end, fun.filter(function(t, lim)
+  end, fun.filter(function(_, lim)
     return type(lim) == 'string' or
         (type(lim) == 'table' and type(lim[1]) == 'number' and lim[1] > 0)
   end, settings)))
@@ -573,7 +579,7 @@ if opts then
   end
 
   if opts['message_func'] then
-    message_func = assert(loadstring(opts['message_func']))()
+    message_func = assert(load(opts['message_func']))()
   end
 
   redis_params = rspamd_parse_redis_server('ratelimit')
