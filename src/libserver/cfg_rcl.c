@@ -1628,7 +1628,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"log_buffer",
 			rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct rspamd_config, log_buf_size),
-			0,
+			RSPAMD_CL_FLAG_INT_32,
 			"Size of log buffer in bytes (for file logging)");
 	rspamd_rcl_add_default_handler (sub,
 			"log_urls",
@@ -1698,6 +1698,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, log_encryption_key),
 			0,
 			"Encrypt sensitive information in logs using this pubkey");
+	rspamd_rcl_add_default_handler (sub,
+			"error_elts",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, log_error_elts),
+			RSPAMD_CL_FLAG_UINT,
+			"Size of circular buffer for last errors (10 by default)");
+	rspamd_rcl_add_default_handler (sub,
+			"error_maxlen",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, log_error_elt_maxlen),
+			RSPAMD_CL_FLAG_UINT,
+			"Size of each element in error log buffer (1000 by default)");
 	/**
 	 * Options section
 	 */

@@ -141,6 +141,8 @@ rspamd_config_new (void)
 
 	cfg->dns_max_requests = 64;
 	cfg->history_rows = 200;
+	cfg->log_error_elts = 10;
+	cfg->log_error_elt_maxlen = 1000;
 
 	/* Default log line */
 	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"

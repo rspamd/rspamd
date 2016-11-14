@@ -326,6 +326,8 @@ struct rspamd_config {
 	gboolean log_extended;                          /**< log extended information							*/
 	gboolean log_systemd;                           /**< special case for systemd logger					*/
 	gboolean log_re_cache;                          /**< show statistics about regexps						*/
+	guint log_error_elts;                           /**< number of elements in error logbuf					*/
+	guint log_error_elt_maxlen;                     /**< maximum size of error log element					*/
 
 	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
 
