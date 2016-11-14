@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 
+use 5.010;
 use Data::Dumper;
 use Getopt::Long;
 use Pod::Usage;
@@ -57,6 +58,12 @@ my $ham_junk_change = 0;
 my %sym_res;
 my $rspamd_log;
 my $enabled = 0;
+
+my %timeStamp;
+my %scanTime = (
+    max   => 0,
+    total => 0,
+);
 
 if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
@@ -158,6 +165,20 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
   }
 }
 
+print "
+=== Summary ", '=' x 68, "
+Messages scanned: $total";
+printf " [ %s / %s ]
+", $timeStamp{'start'}, $timeStamp{'end'}
+  if defined $timeStamp{'start'};
+say '';
+printf "scan time min/avg/max = %.2f/%.2f/%.2f s
+", $scanTime{'min'} / 1000,
+  ($total) ? $scanTime{'total'} / $total / 1000 : undef,
+  $scanTime{'max'} / 1000
+  if exists $scanTime{'min'};
+say '=' x 80;
+
 exit;
 
 sub ProcessLog {
@@ -169,13 +190,19 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
-      my @elts = split /\s+/;
-      my $ts = $elts[0] . ' ' . $elts[1];
+      $timeStamp{'end'} = join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
-      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\]/) {
+      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
         #print "BAD: $_\n";
         next;
       }
+
+      $timeStamp{'start'} //= $timeStamp{'end'};
+      $scanTime{'min'} = $4
+        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $4 );
+      $scanTime{'max'} = $4
+        if ( $scanTime{'max'} < $4 );
+      $scanTime{'total'} += $4;
 
       $total ++;
       my $score = $1 * 1.0;
