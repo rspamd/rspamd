@@ -15,8 +15,6 @@ limitations under the License.
 ]]--
 
 -- This plugin implements mime types checks for mail messages
-local rspamd_logger = require "rspamd_logger"
-local rspamd_regexp = require "rspamd_regexp"
 
 local settings = {
   file = '',

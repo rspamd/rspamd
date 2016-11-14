@@ -24,15 +24,17 @@ local logger = require "rspamd_logger"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
-  local function emails_dns_cb(resolver, to_resolve, results, err)
-    if results then
+  local function emails_dns_cb(_, to_resolve, results, err)
+    if err then
+      logger.errx(task, 'Error querying DNS: %1', err)
+    elseif results then
       logger.infox(task, '<%1> email: [%2] resolved for symbol: %3',
         task:get_message_id(), to_resolve, rule['symbol'])
       task:insert_result(rule['symbol'], 1)
     end
   end
   if rule['dnsbl'] then
-    local to_resolve = ''
+    local to_resolve
     if rule['domain_only'] then
       to_resolve = string.format('%s.%s', addr:get_host(), rule['dnsbl'])
     else

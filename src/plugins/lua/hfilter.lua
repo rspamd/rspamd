@@ -22,7 +22,6 @@ limitations under the License.
 
 --local dumper = require 'pl.pretty'.dump
 local rspamd_regexp = require "rspamd_regexp"
-local rspamd_logger = require "rspamd_logger"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = {
   ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5,
@@ -69,30 +68,30 @@ local checks_hello = {
 }
 
 local checks_hello_badip = {
-  ['^0\\.'] = 5,
-  ['^::1$'] = 5, --loopback ipv4, ipv6
-  ['^127\\.'] = 5,
-  ['^10\\.'] = 5,
-  ['^192\\.168\\.'] = 5, --local ipv4
-  ['^172\\.1[6-9]\\.'] = 5,
-  ['^172\\.2[0-9]\\.'] = 5,
-  ['^172\\.3[01]\\.'] = 5,  --local ipv4
-  ['^169\\.254\\.'] = 5, --chanel ipv4
-  ['^192\\.0\\.0\\.'] = 5, --IETF Protocol
-  ['^192\\.88\\.99\\.'] = 5, --RFC3068
-  ['^100.6[4-9]\\.'] = 5,
-  ['^100.[7-9]\\d\\.'] = 5,
-  ['^100.1[01]\\d\\.'] = 5,
-  ['^100.12[0-7]\\d\\.'] = 5, --RFC6598
-  ['^\\d\\.\\d\\.\\d\\.255$'] = 5, --multicast ipv4
-  ['^192\\.0\\.2\\.'] = 5,
-  ['^198\\.51\\.100\\.'] = 5,
-  ['^203\\.0\\.113\\.'] = 5,  --sample
-  ['^fe[89ab][0-9a-f]::'] = 5,
-  ['^fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
-  ['^2001:db8::'] = 5, --reserved RFC 3849 for ipv6
-  ['^fc00::'] = 5,
-  ['^ffxx::'] = 5 --unicast, multicast ipv6
+  ['^0\\.'] = 1,
+  ['^::1$'] = 1, --loopback ipv4, ipv6
+  ['^127\\.'] = 1,
+  ['^10\\.'] = 1,
+  ['^192\\.168\\.'] = 1, --local ipv4
+  ['^172\\.1[6-9]\\.'] = 1,
+  ['^172\\.2[0-9]\\.'] = 1,
+  ['^172\\.3[01]\\.'] = 1,  --local ipv4
+  ['^169\\.254\\.'] = 1, --chanel ipv4
+  ['^192\\.0\\.0\\.'] = 1, --IETF Protocol
+  ['^192\\.88\\.99\\.'] = 1, --RFC3068
+  ['^100.6[4-9]\\.'] = 1,
+  ['^100.[7-9]\\d\\.'] = 1,
+  ['^100.1[01]\\d\\.'] = 1,
+  ['^100.12[0-7]\\d\\.'] = 1, --RFC6598
+  ['^\\d\\.\\d\\.\\d\\.255$'] = 1, --multicast ipv4
+  ['^192\\.0\\.2\\.'] = 1,
+  ['^198\\.51\\.100\\.'] = 1,
+  ['^203\\.0\\.113\\.'] = 1,  --sample
+  ['^fe[89ab][0-9a-f]::'] = 1,
+  ['^fe[cdf][0-9a-f]:'] = 1, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
+  ['^2001:db8::'] = 1, --reserved RFC 3849 for ipv6
+  ['^fc00::'] = 1,
+  ['^ffxx::'] = 1 --unicast, multicast ipv6
 }
 
 local checks_hello_bareip = {
@@ -143,7 +142,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local failed_address = 0
   local resolved_address = {}
 
-  local function check_host_cb_mx(resolver, to_resolve, results, err)
+  local function check_host_cb_mx(_, _, results)
     task:inc_dns_req()
     if not results then
       task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0)
@@ -152,10 +151,10 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
         if mx['name'] then
           local failed_mx_address = 0
           -- Capture failed_mx_address
-          local function check_host_cb_mx_a(resolver, to_resolve, results, err)
+          local function check_host_cb_mx_a(_, _, mx_results)
             task:inc_dns_req()
 
-            if not results then
+            if not mx_results then
               failed_mx_address = failed_mx_address + 1
             end
 
@@ -178,7 +177,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       end
     end
   end
-  local function check_host_cb_a(resolver, to_resolve, results, err)
+  local function check_host_cb_a(_, _, results)
     task:inc_dns_req()
 
     if not results then
@@ -259,7 +258,7 @@ local function hfilter(task)
         local hc = html_text_part:get_html()
         if hc then
           local url_len = 0
-          hc:foreach_tag('a', function(tag, len)
+          hc:foreach_tag('a', function(_, len)
             url_len = url_len + len
             return false
           end)
@@ -322,7 +321,7 @@ local function hfilter(task)
         local find_badip = false
         for regexp,weight in pairs(checks_hello_badip) do
           if check_regexp(helo, regexp) then
-            task:insert_result('HFILTER_HELO_BADIP', 1.0)
+            task:insert_result('HFILTER_HELO_BADIP', weight)
             find_badip = true
             break
           end
@@ -494,7 +493,7 @@ if opts and type(opts) ~= 'table' then
   end
 end
 
-local opts = rspamd_config:get_all_opt('hfilter')
+opts = rspamd_config:get_all_opt('hfilter')
 if opts then
   for k,v in pairs(opts) do
     config[k] = v

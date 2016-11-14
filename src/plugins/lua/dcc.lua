@@ -70,21 +70,17 @@ local function check_dcc (task)
 
     if header then
       local _,_,info = header:find("; (.-)$")
-      if (result == 'A') then
-      -- Accept
-      elseif (result == 'G') then
-      -- Greylist
-      elseif (result == 'R') then
+      if (result == 'R') then
         -- Reject
         task:insert_result(symbol_bulk, 1.0, info)
-      elseif (result == 'S') then
-      -- Accept for some recipients only
       elseif (result == 'T') then
         -- Temporary failure
         logger.warnx(task, 'DCC returned a temporary failure result')
       else
-        -- Unknown result
-        logger.warnx(task, 'DCC result error: %1', result);
+        if result ~= 'A' and result ~= 'G' and result ~= 'S' then
+          -- Unknown result
+          logger.warnx(task, 'DCC result error: %1', result);
+        end
       end
     end
   end

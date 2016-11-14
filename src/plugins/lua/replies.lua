@@ -19,7 +19,6 @@ limitations under the License.
 
 -- Default port for redis upstreams
 local redis_params
-local whitelisted_ip
 local settings = {
   action = nil,
   expire = 86400, -- 1 day by default
@@ -29,8 +28,6 @@ local settings = {
 }
 
 local rspamd_logger = require 'rspamd_logger'
-local rspamd_redis = require 'rspamd_redis'
-local upstream_list = require 'rspamd_upstream_list'
 local hash = require 'rspamd_cryptobox_hash'
 
 local function make_key(goop)
@@ -83,7 +80,7 @@ local function replies_check(task)
 end
 
 local function replies_set(task)
-  local function redis_set_cb(err, data)
+  local function redis_set_cb(err)
     if err ~=nil then
       rspamd_logger.errx('redis_set_cb received error: %1', err)
     end

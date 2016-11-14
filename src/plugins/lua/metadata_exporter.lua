@@ -46,18 +46,18 @@ if url then
   rspamd_http = require "rspamd_http"
 end
 if opts['select'] then
-  settings.select = assert(loadstring(opts['select']))()
+  settings.select = assert(load(opts['select']))()
 end
 if opts['format'] then
-  settings.format = assert(loadstring(opts['format']))()
+  settings.format = assert(load(opts['format']))()
 end
 if opts['mime_type'] then
   settings['mime_type'] = opts['mime_type']
 end
 
 local function metadata_exporter(task)
-  local ret,conn,upstream
-  local function http_callback(err, code, body, headers)
+  local _,ret,upstream
+  local function http_callback(err, code)
     if err then
       rspamd_logger.errx(task, 'got error %s in http callback', err)
     end
@@ -65,7 +65,7 @@ local function metadata_exporter(task)
       rspamd_logger.errx(task, 'got unexpected http status: %s', code)
     end
   end
-  local function redis_set_cb(err, data)
+  local function redis_set_cb(err)
     if err then
       rspamd_logger.errx(task, 'got error %s when publishing record on server %s',
           err, upstream:get_addr())
@@ -84,7 +84,7 @@ local function metadata_exporter(task)
     return
   end
   if channel then
-    ret,conn,upstream = rspamd_redis_make_request(task,
+    ret,_,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       nil, -- hash key
       true, -- is write
@@ -92,6 +92,10 @@ local function metadata_exporter(task)
       'PUBLISH', -- command
       {channel, data} -- arguments
     )
+    if not ret then
+      rspamd_logger.errx(task, 'Redis PUBLISH failed')
+      upstream:fail()
+    end
   end
   if url then
     rspamd_http.request({

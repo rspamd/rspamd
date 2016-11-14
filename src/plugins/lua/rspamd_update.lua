@@ -19,7 +19,6 @@ limitations under the License.
 local ucl = require "ucl"
 local fun = require "fun"
 local rspamd_logger = require "rspamd_logger"
-local updates_priority = 2
 local rspamd_config = rspamd_config
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_version = rspamd_version
@@ -47,7 +46,7 @@ end
 
 local function process_rules(obj)
   fun.each(function(key, code)
-    local f = loadstring(code)
+    local f = load(code)
     if f then
       f()
     else
@@ -81,10 +80,9 @@ local function check_version(obj)
   return ret
 end
 
-local function gen_callback(map)
+local function gen_callback()
 
   return function(data)
-    local ucl = require "ucl"
     local parser = ucl.parser()
     local res,err = parser:parse_string(data)
 
@@ -96,12 +94,6 @@ local function gen_callback(map)
       local obj = parser:get_object()
 
       if check_version(obj) then
-
-        local priority = updates_priority
-
-        if obj['priority'] then
-          priority = obj['priority']
-        end
 
         if obj['symbols'] then
           process_symbols(obj['symbols'])
@@ -127,9 +119,7 @@ local section = rspamd_config:get_all_opt("rspamd_update")
 if section then
   local trusted_key
   fun.each(function(k, elt)
-    if k == 'priority' then
-      updates_priority = tonumber(elt)
-    elseif k == 'key' then
+    if k == 'key' then
       trusted_key = elt
     else
       local map = rspamd_config:add_map(elt, "rspamd updates map", nil)
