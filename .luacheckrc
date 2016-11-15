@@ -4,7 +4,6 @@ std = 'min'
 exclude_files = {
   '/**/src/plugins/lua/fann_classifier.lua',
   '/**/src/plugins/lua/fann_scores.lua',
-  '/**/src/plugins/lua/fann_redis.lua',
 }
 
 globals = {
