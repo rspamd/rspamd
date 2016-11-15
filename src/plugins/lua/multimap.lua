@@ -527,9 +527,9 @@ local function multimap_callback(task, rule)
       if rt == 'ip' then
         match_rule(rule, ip)
       else
-        local cb = function (_, _, results, err)
-          if err then
-            rspamd_logger.errx(task, 'DNS lookup failed: %s', err)
+        local cb = function (_, to_resolve, results, err)
+          if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+            rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
           end
           if results then
             task:insert_result(rule['symbol'], 1, rule['map'])

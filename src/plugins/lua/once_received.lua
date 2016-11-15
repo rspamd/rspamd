@@ -31,8 +31,8 @@ local function check_quantity_received (task)
   local recvh = task:get_received_headers()
 
   local function recv_dns_cb(_, to_resolve, results, err)
-    if err then
-      rspamd_logger.errx(task, 'DNS lookup error: %s', err)
+    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+      rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
     end
     task:inc_dns_req()
 
