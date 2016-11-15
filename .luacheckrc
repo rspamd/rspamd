@@ -2,8 +2,6 @@ codes = true
 std = 'min'
 
 exclude_files = {
-  '/**/src/plugins/lua/fann_classifier.lua',
-  '/**/src/plugins/lua/fann_scores.lua',
 }
 
 globals = {

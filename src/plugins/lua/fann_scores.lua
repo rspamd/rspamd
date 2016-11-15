@@ -23,7 +23,6 @@ local rspamd_util = require "rspamd_util"
 local fann_symbol_spam = 'FANN_SPAM'
 local fann_symbol_ham = 'FANN_HAM'
 local fun = require "fun"
-local ucl = require "ucl"
 
 local module_log_id = 0x100
 -- Module vars
@@ -46,9 +45,9 @@ local function symbols_to_fann_vector(syms, scores)
   local matched_symbols = {}
   local n = rspamd_config:get_symbols_count()
 
-  each(function(s, score)
+  fun.each(function(s, score)
      matched_symbols[s + 1] = rspamd_util.tanh(score)
-  end, zip(syms, scores))
+  end, fun.zip(syms, scores))
 
   for i=1,n do
     if matched_symbols[i] then
@@ -71,7 +70,7 @@ end
 
 local function load_fann(id)
   local fname = gen_fann_file(id)
-  local err,st = rspamd_util.stat(fname)
+  local err = rspamd_util.stat(fname)
 
   if err then
     return false
@@ -89,10 +88,10 @@ local function load_fann(id)
       ' is found in the cache; removing', data[id].fann:get_inputs(), n)
       data[id].fann = nil
 
-      local ret,err = rspamd_util.unlink(fname)
+      local ret,_err = rspamd_util.unlink(fname)
       if not ret then
         rspamd_logger.errx(rspamd_config, 'cannot remove invalid fann from %s: %s',
-          fname, err)
+          fname, _err)
       end
     else
       local layers = data[id].fann:get_layers()
@@ -101,10 +100,10 @@ local function load_fann(id)
         rspamd_logger.infox(rspamd_config, 'fann has incorrect number of layers: %s, removing',
           #layers)
         data[id].fann = nil
-        local ret,err = rspamd_util.unlink(fname)
+        local ret,_err = rspamd_util.unlink(fname)
         if not ret then
           rspamd_logger.errx(rspamd_config, 'cannot remove invalid fann from %s: %s',
-            fname, err)
+            fname, _err)
         end
       else
         rspamd_logger.infox(rspamd_config, 'loaded fann from %s', fname)
@@ -113,10 +112,10 @@ local function load_fann(id)
     end
   else
     rspamd_logger.infox(rspamd_config, 'fann is invalid: "%s"; removing', fname)
-    local ret,err = rspamd_util.unlink(fname)
+    local ret,_err = rspamd_util.unlink(fname)
     if not ret then
       rspamd_logger.errx(rspamd_config, 'cannot remove invalid fann from %s: %s',
-        fname, err)
+        fname, _err)
     end
   end
 
@@ -218,9 +217,10 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
     -- Store fann on disk
     local res = false
 
-    local err,st = rspamd_util.stat(fname)
+    local err = rspamd_util.stat(fname)
+    local fd
     if err then
-      local fd,err = rspamd_util.create_file(fname)
+      fd,err = rspamd_util.create_file(fname)
       if not fd then
         rspamd_logger.errx(cf, 'cannot save fann in %s: %s', fname, err)
       else
@@ -229,7 +229,7 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
         rspamd_util.unlock_file(fd) -- Closes fd as well
       end
     else
-      local fd = rspamd_util.lock_file(fname)
+      fd = rspamd_util.lock_file(fname)
       res = data[id].fann_train:save(fname)
       rspamd_util.unlock_file(fd) -- Closes fd as well
     end
@@ -244,7 +244,7 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
   else
     if not data[id].checked then
       data[id].checked = true
-      local err,st = rspamd_util.stat(fname)
+      local err = rspamd_util.stat(fname)
       if err then
         data[id].exist = false
       end
@@ -262,7 +262,7 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
     create_train_fann(n, id)
   end
 
-  local learn_spam, learn_ham = false, false
+  local learn_spam, learn_ham
   if opts['spam_score'] then
     learn_spam = score >= opts['spam_score']
   else
@@ -276,11 +276,11 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
 
   if learn_spam or learn_ham then
     local learn_data = symbols_to_fann_vector(
-      map(function(r) return r[1] end, results),
-      map(function(r) return r[2] end, results)
+      fun.map(function(r) return r[1] end, results),
+      fun.map(function(r) return r[2] end, results)
     )
     -- Add filtered meta tokens
-    each(function(e) table.insert(learn_data, e) end, extra)
+    fun.each(function(e) table.insert(learn_data, e) end, extra)
 
     if learn_spam then
       data[id].fann_train:train(learn_data, {1.0})
@@ -344,13 +344,13 @@ else
           max_epoch = opts['train']['max_epoch']
         end
         local ret = cfg:register_worker_script("log_helper",
-          function(score, req_score, results, cf, id, extra)
+          function(score, req_score, results, cf, _id, extra)
             -- map (snd x) (filter (fst x == module_id) extra)
-            local extra_fann = map(function(e) return e[2] end,
-              filter(function(e) return e[1] == module_log_id end, extra))
+            local extra_fann = fun.map(function(e) return e[2] end,
+              fun.filter(function(e) return e[1] == module_log_id end, extra))
             if use_settings then
               fann_train_callback(score, req_score, results, cf,
-                tostring(id), opts['train'], extra_fann)
+                tostring(_id), opts['train'], extra_fann)
             else
               fann_train_callback(score, req_score, results, cf, '0',
                 opts['train'], extra_fann)
@@ -363,7 +363,7 @@ else
       end)
       rspamd_plugins["fann_score"] = {
         log_callback = function(task)
-          return totable(map(
+          return fun.totable(fun.map(
             function(tok) return {module_log_id, tok} end,
             rspamd_gen_metatokens(task)))
         end
