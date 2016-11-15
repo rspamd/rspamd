@@ -1,5 +1,3 @@
-local logger = require "rspamd_logger"
-
 local cb = function(task)
   task:insert_result('TOP', 1.0)
 end

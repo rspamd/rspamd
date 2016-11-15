@@ -24,8 +24,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]--
 
-local logger = require "rspamd_logger"
-
 rspamd_config:register_post_filter(function(task)
   task:set_flag('no_stat')
   task:set_flag('no_log', false)

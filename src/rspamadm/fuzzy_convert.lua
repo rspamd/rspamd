@@ -41,10 +41,13 @@ end
 
 local function send_digests(digests, redis_host, redis_password, redis_db)
   local conn, err = connect_redis(redis_host, redis_password, redis_db)
-  if not conn then return false end
-  local _, v
+  if err then
+    print(err)
+    return false
+  end
+  local ret
   for _, v in ipairs(digests) do
-    local ret, err = conn:add_cmd('HMSET', {
+    ret, err = conn:add_cmd('HMSET', {
       'fuzzy' .. v[1],
       'F', v[2],
       'V', v[3],
@@ -72,10 +75,13 @@ end
 
 local function send_shingles(shingles, redis_host, redis_password, redis_db)
   local conn, err = connect_redis(redis_host, redis_password, redis_db)
-  if not conn then return false end
-  local _, v
+  if err then
+    print("Redis error: " .. err)
+    return false
+  end
+  local ret
   for _, v in ipairs(shingles) do
-    local ret, err = conn:add_cmd('SET', {
+    ret, err = conn:add_cmd('SET', {
       'fuzzy_' .. v[2] .. '_' .. v[1],
       v[4],
     })
@@ -102,8 +108,12 @@ end
 
 local function update_counters(total, redis_host, redis_password, redis_db)
   local conn, err = connect_redis(redis_host, redis_password, redis_db)
-  if not conn then return false end
-  local ret, err = conn:add_cmd('SET', {
+  if err then
+    print(err)
+    return false
+  end
+  local ret
+  ret, err = conn:add_cmd('SET', {
     'fuzzylocal',
     total,
   })
@@ -111,7 +121,7 @@ local function update_counters(total, redis_host, redis_password, redis_db)
     print('Cannot batch SET command: ' .. err)
     return false
   end
-  local ret, err = conn:add_cmd('SET', {
+  ret, err = conn:add_cmd('SET', {
     'fuzzy_count',
     total,
   })
@@ -127,7 +137,7 @@ local function update_counters(total, redis_host, redis_password, redis_db)
   return true
 end
 
-return function (args, res)
+return function (_, res)
   local db = sqlite3.open(res['source_db'])
   local shingles = {}
   local digests = {}

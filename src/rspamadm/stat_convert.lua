@@ -41,6 +41,7 @@ local function convert_learned(cache, server, password, redis_db)
   local converted = 0
   local db = sqlite3.open(cache)
   local ret = true
+  local err_str
 
   if not db then
     print('Cannot open cache database: ' .. cache)
@@ -84,7 +85,6 @@ local function convert_learned(cache, server, password, redis_db)
   end
   db:sql('COMMIT;')
 
-  local err_str
   if ret then
     ret,err_str = conn:exec()
   end
@@ -99,7 +99,7 @@ local function convert_learned(cache, server, password, redis_db)
   return ret
 end
 
-return function (args, res)
+return function (_, res)
   local db = sqlite3.open(res['source_db'])
   local tokens = {}
   local num = 0
@@ -110,8 +110,8 @@ return function (args, res)
   local learns = {}
   local redis_password = res['redis_password']
   local redis_db = nil
-  local ret = false
   local cmd = 'HINCRBY'
+  local ret, err_str
 
   if res['redis_db'] then
     redis_db = tostring(res['redis_db'])
@@ -166,7 +166,7 @@ return function (args, res)
     num = num + 1
     total = total + 1
     if num > lim then
-      local ret,err_str = send_redis(res['redis_host'], res['symbol'],
+      ret,err_str = send_redis(res['redis_host'], res['symbol'],
         tokens, redis_password, redis_db, cmd)
       if not ret then
         print('Cannot send tokens to the redis server: ' .. err_str)
@@ -178,7 +178,7 @@ return function (args, res)
     end
   end
   if #tokens > 0 then
-    local ret, err_str = send_redis(res['redis_host'], res['symbol'], tokens,
+    ret, err_str = send_redis(res['redis_host'], res['symbol'], tokens,
       redis_password, redis_db, cmd)
 
     if not ret then

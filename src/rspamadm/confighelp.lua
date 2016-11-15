@@ -1,4 +1,3 @@
-local util = require "rspamd_util"
 local opts = {}
 local known_attrs = {
   data = 1,
@@ -20,7 +19,7 @@ local function maybe_print_color(key)
   end
 end
 
-local function sort_values(tbl, opts)
+local function sort_values(tbl)
   local res = {}
   for k, v in pairs(tbl) do
     table.insert(res, { key = k, value = v })
@@ -91,7 +90,7 @@ local function print_help(key, value, tabs)
   end
 
   local sorted = sort_values(value)
-  for i, v in ipairs(sorted) do
+  for _, v in ipairs(sorted) do
     if not known_attrs[v['key']] then
       -- We need to go deeper
       print_help(v['key'], v['value'], tabs .. '\t')
@@ -104,7 +103,7 @@ return function(args, res)
 
   local sorted = sort_values(res)
 
-  for i,v in ipairs(sorted) do
+  for _,v in ipairs(sorted) do
     print_help(v['key'], v['value'], '')
     print('')
   end

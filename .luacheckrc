@@ -2,11 +2,16 @@ codes = true
 std = 'min'
 
 exclude_files = {
+  '/**/contrib/**',
+  '/**/test/lua/**',
 }
 
 globals = {
+  'check_header_delimiter_empty',
+  'check_header_delimiter_tab',
   'classifiers',
   'config',
+  'kmail_msgid',
   'rspamd_config',
   'rspamd_count_metatokens',
   'rspamd_gen_metatokens',
@@ -21,13 +26,12 @@ globals = {
 ignore = {
 }
 
-files['/**/rules/regexp/headers.lua'].globals = {
-  'check_header_delimiter_empty',
-  'check_header_delimiter_tab',
-  'kmail_msgid',
-}
-
 files['/**/src/plugins/lua/spamassassin.lua'].globals = {
   'ffi',
   'jit',
+}
+
+files['/**/src/rspamadm/*'].globals = {
+  'ansicolors',
+  'getopt',
 }
