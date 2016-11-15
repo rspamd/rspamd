@@ -400,6 +400,14 @@ local function train_fann(_, ev_base, elt)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot save ANN %s to redis: %s',
         fann_prefix .. elt, err)
+      redis_make_request(ev_base,
+        rspamd_config,
+        nil,
+        false, -- is write
+        redis_unlock_cb, --callback
+        'DEL', -- command
+        {fann_prefix .. elt .. '_lock'}
+      )
     end
   end
 
