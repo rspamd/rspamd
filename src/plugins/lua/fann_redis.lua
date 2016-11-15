@@ -20,8 +20,8 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
-local fann_symbol_spam = 'FANN_SPAM'
-local fann_symbol_ham = 'FANN_HAM'
+local fann_symbol_spam = 'FANNR_SPAM'
+local fann_symbol_ham = 'FANNR_HAM'
 require "fun" ()
 local ucl = require "ucl"
 
@@ -625,6 +625,12 @@ if not rspamd_fann.is_enabled() then
   return
 else
   use_settings = opts['use_settings']
+  if opts['spam_symbol'] then
+    fann_symbol_spam = opts['spam_symbol']
+  end
+  if opts['ham_symbol'] then
+    fann_symbol_ham = opts['ham_symbol']
+  end
   rspamd_config:set_metric_symbol({
     name = fann_symbol_spam,
     score = 3.0,
