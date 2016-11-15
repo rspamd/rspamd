@@ -32,7 +32,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_many then
 		local rcpt = task:get_recipients(2)
 		if rcpt and #rcpt > 5 then
-			fun.each(function(_,v) table.insert(spec_st,v) end, st_many)
+			fun.each(function(v) table.insert(spec_st,v) end, st_many)
 		end
 	end
 	-- Undisclosed
@@ -40,7 +40,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_undisc then
 		local rcpt = task:get_recipients(2)
 		if rcpt and #rcpt == 0 then
-			fun.each(function(_,v) table.insert(spec_st,v) end, st_undisc)
+			fun.each(function(v) table.insert(spec_st,v) end, st_undisc)
 		end
 	end
 	-- Maillist
@@ -48,7 +48,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_maillist then
 		local unsub_header = task:get_header_raw('List-Unsubscribe')
 		if unsub_header then
-			fun.each(function(_,v) table.insert(spec_st,v) end, st_maillist)
+			fun.each(function(v) table.insert(spec_st,v) end, st_maillist)
 		end
 	end
 	-- Long subject
@@ -56,7 +56,7 @@ local function get_specific_statfiles(classifier, task)
 	if st_longsubj then
 		local subj = task:get_header_raw('Subject')
 		if subj and string.len(subj) > 150 then
-			fun.each(function(_,v) table.insert(spec_st,v) end, st_longsubj)
+			fun.each(function(v) table.insert(spec_st,v) end, st_longsubj)
 		end
 	end
 	
@@ -88,7 +88,7 @@ classifiers['bayes'] = function(classifier, task, is_learn)
 			return spec_st
 		else
 			-- Merge tables
-			fun.each(function(_,v) table.insert(selected,v) end, spec_st)
+			fun.each(function(v) table.insert(selected,v) end, spec_st)
 		end
 	end
 	-- Detect statfile by language
