@@ -49,7 +49,7 @@ local redis_lua_script_can_train = [[
   local nham = 0
 
   local exists = redis.call('SISMEMBER', KEYS[1], KEYS[2])
-  if not exists then
+  if not exists or exists == 0 then
     redis.call('SADD', KEYS[1], KEYS[2])
   end
 
@@ -208,11 +208,7 @@ local function symbols_to_fann_vector(syms, scores)
 end
 
 local function gen_fann_prefix(id)
-  if use_settings then
-    return fann_prefix .. id
-  else
-    return fann_prefix
-  end
+  return fann_prefix .. id,id
 end
 
 local function is_fann_valid(ann)
@@ -301,13 +297,13 @@ local function load_or_invalidate_fann(data, id, ev_base)
       true, -- is write
       redis_invalidate_cb, --callback
       'EVALSHA', -- command
-      {redis_maybe_invalidate_sha, 1, fann_prefix .. id}
+      {redis_maybe_invalidate_sha, 1, gen_fann_prefix(id)}
     )
   end
 end
 
 local function fann_train_callback(score, required_score, results, cf, id, opts, extra, ev_base)
-  local fname = gen_fann_prefix(id)
+  local fname,suffix = gen_fann_prefix(id)
 
   local learn_spam, learn_ham = false, false
 
@@ -363,7 +359,7 @@ local function fann_train_callback(score, required_score, results, cf, id, opts,
       true, -- is write
       can_train_cb, --callback
       'EVALSHA', -- command
-      {redis_can_train_sha, '3', fann_prefix, id, k} -- arguments
+      {redis_can_train_sha, '3', fann_prefix, suffix, k} -- arguments
     )
   end
 end
