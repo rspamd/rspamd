@@ -51,9 +51,8 @@ fuzzy_check {
 		# Default symbol
 		symbol = "FUZZY_UNKNOWN";
 
-		# List of additional mime types to be checked in this fuzzy
-		mime_types = "application/pdf";
-		mime_types = ["application/*", "*/octet-stream", "*"];
+		# List of additional mime types to be checked in this fuzzy ("*" for any)
+		mime_types = ["application/*", "*/octet-stream"];
 
 		# Maximum global score for all maps
 		max_score = 20.0;
