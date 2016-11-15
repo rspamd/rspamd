@@ -1,12 +1,11 @@
 dependencies:
     pre:
       - sudo apt-get update -qq || true
-      - sudo apt-get install -qq cmake gcc lcov libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev make python-dev ragel redis-server
+      - sudo apt-get install -qq cmake gcc lcov libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev luarocks make python-dev ragel redis-server
       - gem install coveralls-lcov
       - sudo pip install demjson ipaddress psutil robotframework
-      - wget http://download.redis.io/redis-stable.tar.gz
-      - tar xvzf redis-stable.tar.gz
-      - cd redis-stable && make && sudo cp src/redis-cli /usr/bin/
+      - cd .. && wget http://download.redis.io/redis-stable.tar.gz && tar xvzf redis-stable.tar.gz && cd redis-stable && make && sudo cp src/redis-cli /usr/bin/
+      - sudo luarocks install luacheck
 
 test:
   override:
@@ -14,6 +13,7 @@ test:
     - cmake ../rspamd -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
     - make install
     - RSPAMADM=../install/bin/rspamadm RSPAMC=../install/bin/rspamc RSPAMD=../install/bin/rspamd sudo -E robot -x xunit.xml --exclude isbroken ../rspamd/test/functional/cases
+    - luacheck --config ../rspamd/.luacheckrc ../rspamd
     - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
     - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info; fi
   post:
