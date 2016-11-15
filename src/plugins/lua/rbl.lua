@@ -62,8 +62,8 @@ end
 local function rbl_cb (task)
   local function gen_rbl_callback(rule)
     return function (_, to_resolve, results, err)
-      if err then
-        rspamd_logger.errx(task, 'DNS lookup error: %s', err)
+      if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+        rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
       end
       if not results then return end
 
