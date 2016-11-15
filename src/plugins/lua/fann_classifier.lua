@@ -19,8 +19,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
-require "fun" ()
-local ucl = require "ucl"
+local fun = require "fun"
 
 local redis_params
 local classifier_config = {
@@ -41,13 +40,14 @@ redis_params = rspamd_parse_redis_server('fann_classifier')
 local function maybe_load_fann(task, continue_cb, call_if_fail)
   local function load_fann()
     local function redis_fann_load_cb(err, data)
+      -- XXX: upstreams
       if not err and type(data) == 'table' and type(data[2]) == 'string' then
         local version = tonumber(data[1])
-        local err,ann_data = rspamd_util.zstd_decompress(data[2])
+        local _err,ann_data = rspamd_util.zstd_decompress(data[2])
         local ann
 
-        if err or not ann_data then
-          rspamd_logger.errx(task, 'cannot decompress ann: %s', err)
+        if _err or not ann_data then
+          rspamd_logger.errx(task, 'cannot decompress ann: %s', _err)
         else
           ann = rspamd_fann.load_data(ann_data)
         end
@@ -80,7 +80,7 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
     end
 
     local key = classifier_config.key
-    local ret,_,_ = rspamd_redis_make_request(task,
+    local ret,_,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
@@ -88,10 +88,21 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
       'HMGET', -- command
       {key, 'version', 'data', 'spam', 'ham'} -- arguments
     )
+    if not ret then
+      rspamd_logger.errx(task, 'redis error on host %s', upstream:get_addr())
+      upstream:fail()
+    end
   end
 
   local function check_fann()
+    local _, ret, upstream
     local function redis_fann_check_cb(err, data)
+      if err then
+        rspamd_logger.errx(task, 'redis error on host %s: %s', upstream:get_addr(), err)
+        upstream:fail()
+      else
+        upstream:ok()
+      end
       if not err and type(data) == 'string' then
         local version = tonumber(data)
 
@@ -104,7 +115,7 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
     end
 
     local key = classifier_config.key
-    local ret,_,_ = rspamd_redis_make_request(task,
+    ret,_,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
@@ -112,6 +123,10 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
       'HGET', -- command
       {key, 'version'} -- arguments
     )
+    if not ret then
+      rspamd_logger.errx(task, 'redis error on host %s', upstream:get_addr())
+      upstream:fail()
+    end
   end
 
   if not current_classify_ann.loaded then
@@ -122,14 +137,13 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
 end
 
 local function tokens_to_vector(tokens)
-  local vec = totable(map(function(tok) return tok[1] end, tokens))
+  local vec = fun.totable(fun.map(function(tok) return tok[1] end, tokens))
   local ret = {}
-  local ntok = #vec
   local neurons = classifier_config.neurons
   for i = 1,neurons do
     ret[i] = 0
   end
-  each(function(e)
+  fun.each(function(e)
     local n = (e % neurons) + 1
     ret[n] = ret[n] + 1
   end, vec)
@@ -175,9 +189,13 @@ local function create_fann()
 end
 
 local function save_fann(task, is_spam)
-  local function redis_fann_save_cb(err, data)
+  local ret, conn, upstream
+  local function redis_fann_save_cb(err)
     if err then
       rspamd_logger.errx(task, "cannot save neural net to redis: %s", err)
+      upstream:fail()
+    else
+      upstream:ok()
     end
   end
 
@@ -190,7 +208,7 @@ local function save_fann(task, is_spam)
   else
     current_classify_ann.ham_learned = current_classify_ann.ham_learned + 1
   end
-  local ret,conn,_ = rspamd_redis_make_request(task,
+  ret,conn,upstream = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     true, -- is write
@@ -201,22 +219,23 @@ local function save_fann(task, is_spam)
       'data', rspamd_util.zstd_compress(data),
     }) -- arguments
 
-  if conn then
+  if ret then
     conn:add_cmd('HINCRBY', {key, 'version', 1})
     if is_spam then
       conn:add_cmd('HINCRBY', {key, 'spam', 1})
-      rspamd_logger.errx(task, 'hui')
     else
       conn:add_cmd('HINCRBY', {key, 'ham', 1})
-      rspamd_logger.errx(task, 'pezda')
     end
+  else
+    rspamd_logger.errx(task, 'redis error on host %s: %s', upstream:get_addr())
+    upstream:fail()
   end
 end
 
 if redis_params then
   rspamd_classifiers['neural'] = {
     classify = function(task, classifier, tokens)
-      local function classify_cb(task)
+      local function classify_cb()
         local min_learns = classifier:get_param('min_learns')
 
         if min_learns then
@@ -243,18 +262,18 @@ if redis_params then
         rspamd_logger.infox(task, 'fann classifier score: %s', symscore)
 
         if result > 0 then
-          each(function(st)
+          fun.each(function(st)
               task:insert_result(st:get_symbol(), result, symscore)
             end,
-            filter(function(st)
+            fun.filter(function(st)
               return st:is_spam()
             end, classifier:get_statfiles())
           )
         else
-          each(function(st)
+          fun.each(function(st)
               task:insert_result(st:get_symbol(), -result, symscore)
             end,
-            filter(function(st)
+            fun.filter(function(st)
               return not st:is_spam()
             end, classifier:get_statfiles())
           )
@@ -263,8 +282,8 @@ if redis_params then
       maybe_load_fann(task, classify_cb, false)
     end,
 
-    learn = function(task, classifier, tokens, is_spam, is_unlearn)
-      local function learn_cb(task, is_loaded)
+    learn = function(task, _, tokens, is_spam, _)
+      local function learn_cb(_, is_loaded)
         if not is_loaded then
           create_fann()
         end
