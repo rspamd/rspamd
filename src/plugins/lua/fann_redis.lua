@@ -79,7 +79,7 @@ local redis_lua_script_maybe_load = [[
   local ver = 0
   local ret = redis.call('GET', KEYS[1] .. '_version')
   if ret then ver = tonumber(ret) end
-  if ver > tonumber(KEYS[2]) then return redis.call('GET', KEYS[1] .. '_ann') end
+  if ver > tonumber(KEYS[2]) then return redis.call('GET', KEYS[1] .. '_data') end
 
   return false
 ]]
