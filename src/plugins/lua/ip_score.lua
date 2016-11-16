@@ -157,7 +157,7 @@ local ip_score_set = function(task)
     options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
     ip:to_string(), string.format('%f|%d', ip_score, total_ip)}
 
-  local ret,_,upstream = rspamd_redis_make_request(task,
+  local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
     hkey, -- hash key
     true, -- is write
@@ -310,7 +310,7 @@ local ip_score_check = function(task)
 
     local cmd, args = create_get_command()
 
-    local ret,_,upstream = rspamd_redis_make_request(task,
+    local ret = rspamd_redis_make_request(task,
       redis_params, -- connect params
       ip_score_hash_key(asn, country, ipnet, ip), -- hash key
       false, -- is write

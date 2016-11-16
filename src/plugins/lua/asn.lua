@@ -116,7 +116,7 @@ local function asn_check(task)
           end
         end
 
-        local ret,_,upstream = rspamd_redis_make_request(task,
+        local ret = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           true, -- is write

@@ -80,7 +80,7 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
     end
 
     local key = classifier_config.key
-    local ret,_,upstream = rspamd_redis_make_request(task,
+    local ret = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
