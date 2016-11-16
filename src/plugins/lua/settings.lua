@@ -599,10 +599,6 @@ if redis_section then
 end
 
 local set_section = rspamd_config:get_all_opt("settings")
-if not redis_params and not (set_section and type(set_section) == 'table') then
-  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
-  return
-end
 
 if set_section and set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
