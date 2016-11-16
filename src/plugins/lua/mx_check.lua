@@ -55,7 +55,6 @@ local function mx_check(task)
   end
 
   local valid = false
-  local ret,_,upstream
 
   local function check_results(mxes)
     if fun.all(function(_, elt) return elt.checked end, mxes) then
@@ -64,10 +63,7 @@ local function mx_check(task)
       local function redis_cache_cb(err)
         if err ~= nil then
           rspamd_logger.errx(task, 'redis_cache_cb received error: %1', err)
-          upstream:fail()
           return
-        else
-          upstream:ok()
         end
       end
       if not valid then
@@ -81,7 +77,7 @@ local function mx_check(task)
         else
           task:insert_result(settings.symbol_bad_mx, 1.0)
         end
-        ret,_,upstream = rspamd_redis_make_request(task,
+        local ret = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           false, -- is write
@@ -98,7 +94,7 @@ local function mx_check(task)
           table.insert(valid_mx, k)
         end, fun.filter(function (_, elt) return elt.working end, mxes))
         task:insert_result(settings.symbol_good_mx, 1.0, valid_mx)
-        ret,_,upstream = rspamd_redis_make_request(task,
+        local ret = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
           false, -- is write
@@ -228,7 +224,7 @@ local function mx_check(task)
     end
 
     local key = settings.key_prefix .. mx_domain
-    ret,_,upstream = rspamd_redis_make_request(task,
+    local ret = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
@@ -238,7 +234,6 @@ local function mx_check(task)
     )
 
     if not ret then
-      upstream:fail()
       local r = task:get_resolver()
       r:resolve('mx', {
         name = mx_domain,

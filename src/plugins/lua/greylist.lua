@@ -161,7 +161,6 @@ local function greylist_check(task)
   local body_key = data_key(task)
   local meta_key = envelope_key(task)
   local hash_key = body_key .. meta_key
-  local upstream
 
   local function redis_get_cb(err, data)
     local ret_body = false
@@ -209,14 +208,11 @@ local function greylist_check(task)
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
-      upstream:fail()
       return
     end
-    upstream:ok()
   end
 
-  local ret, _
-  ret,_,upstream = rspamd_redis_make_request(task,
+  local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
     hash_key, -- hash key
     false, -- is write
@@ -269,12 +265,9 @@ local function greylist_set(task)
   local hash_key = body_key .. meta_key
 
   local function redis_set_cb(err)
-    if not err then
-      upstream:ok()
-    else
+    if err then
       rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
           err, upstream:get_addr())
-      upstream:fail()
     end
   end
 

@@ -274,10 +274,8 @@ local function fprot_check(task, rule)
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
-          upstream:fail()
         end
       else
-        upstream:ok()
 
         data = tostring(data)
         local found = (string.sub(data, 1, 1) == '1')
@@ -340,10 +338,8 @@ local function clamav_check(task, rule)
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
-          upstream:fail()
         end
       else
-        upstream:ok()
 
         data = tostring(data)
         local s = string.find(data, ' FOUND')
@@ -405,10 +401,8 @@ local function sophos_check(task, rule)
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
-          upstream:fail()
         end
       else
-        upstream:ok()
 
         data = tostring(data)
         local vname = string.match(data, 'VIRUS (%S+) ')
