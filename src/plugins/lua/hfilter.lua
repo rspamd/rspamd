@@ -257,7 +257,7 @@ local function hfilter(task)
       end
       local hc = nil
       if html_text_part then
-        local hc = html_text_part:get_html()
+        hc = html_text_part:get_html()
         if hc then
           local url_len = 0
           hc:foreach_tag('a', function(_, len)
