@@ -255,9 +255,9 @@ local function hfilter(task)
           plain_text_part = p
         end
       end
-
+      local hc = nil
       if html_text_part then
-        local hc = html_text_part:get_html()
+        hc = html_text_part:get_html()
         if hc then
           local url_len = 0
           hc:foreach_tag('a', function(_, len)
@@ -279,18 +279,19 @@ local function hfilter(task)
               end
             end
           end
-        elseif plain_text_part then
-          local url_len = plain_text_part:get_urls_length()
-          local plen = plain_text_part:get_length()
+        end
+      end
+      if not hc and plain_text_part then
+        local url_len = plain_text_part:get_urls_length()
+        local plen = plain_text_part:get_length()
 
-          if plen > 0 and url_len > 0 then
-            local rel = url_len / plen
-            if rel > 0.8 then
-              task:insert_result('HFILTER_URL_ONLY', (rel - 0.8) * 5.0)
-              local lines =  plain_text_part:get_lines_count()
-              if lines > 0 and lines < 2 then
-                task:insert_result('HFILTER_URL_ONELINE', 1.00)
-              end
+        if plen > 0 and url_len > 0 then
+          local rel = url_len / plen
+          if rel > 0.8 then
+            task:insert_result('HFILTER_URL_ONLY', (rel - 0.8) * 5.0)            
+            local lines = plain_text_part:get_lines_count()
+            if lines > 0 and lines < 2 then
+              task:insert_result('HFILTER_URL_ONELINE', 1.00)
             end
           end
         end
