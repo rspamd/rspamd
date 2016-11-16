@@ -629,16 +629,15 @@ local function check_fanns(_, ev_base)
         local redis_update_cb = function(_err, _data)
           if _err then
             rspamd_logger.errx(rspamd_config, 'cannot get FANN version %s from redis: %s', elt, _err)
-          elseif _data and type(_data) == 'string' then
+          elseif _data and type(_data) == 'table' then
             load_or_invalidate_fann(_data, elt, ev_base)
           end
         end
 
         local local_ver = 0
-        local numelt = tonumber(elt)
-        if fanns[numelt] then
-          if fanns[numelt].version then
-            local_ver = fanns[numelt].version
+        if fanns[elt] then
+          if fanns[elt].version then
+            local_ver = fanns[elt].version
           end
         end
         redis_make_request(ev_base,
