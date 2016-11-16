@@ -89,8 +89,7 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
       {key, 'version', 'data', 'spam', 'ham'} -- arguments
     )
     if not ret then
-      rspamd_logger.errx(task, 'redis error on host %s', upstream:get_addr())
-      upstream:fail()
+      rspamd_logger.err(task, 'got error connecting to redis')
     end
   end
 
@@ -124,8 +123,7 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
       {key, 'version'} -- arguments
     )
     if not ret then
-      rspamd_logger.errx(task, 'redis error on host %s', upstream:get_addr())
-      upstream:fail()
+      rspamd_logger.err(task, 'got error connecting to redis')
     end
   end
 
@@ -227,8 +225,7 @@ local function save_fann(task, is_spam)
       conn:add_cmd('HINCRBY', {key, 'ham', 1})
     end
   else
-    rspamd_logger.errx(task, 'redis error on host %s: %s', upstream:get_addr())
-    upstream:fail()
+    rspamd_logger.err(task, 'got error connecting to redis')
   end
 end
 
@@ -282,7 +279,7 @@ if redis_params then
       maybe_load_fann(task, classify_cb, false)
     end,
 
-    learn = function(task, _, tokens, is_spam, _)
+    learn = function(task, _, tokens, is_spam)
       local function learn_cb(_, is_loaded)
         if not is_loaded then
           create_fann()

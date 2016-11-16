@@ -346,7 +346,7 @@ local function clamav_check(task, rule)
         upstream:ok()
 
         data = tostring(data)
-        local s,_ = string.find(data, ' FOUND')
+        local s = string.find(data, ' FOUND')
         local cached = 'OK'
         if s then
           local vname = string.match(data:sub(1, s - 1), 'stream: (.+)')

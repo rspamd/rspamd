@@ -71,7 +71,7 @@ local function asn_check(task)
           if not redis_err then
             upstream:ok()
           else
-            rspamd_logger.infox(task, 'got error %s when setting asn record on server %s',
+            rspamd_logger.errx(task, 'got error %s when setting asn record on server %s',
               redis_err, upstream:get_addr())
             upstream:fail()
           end
@@ -89,8 +89,7 @@ local function asn_check(task)
             redis_key, tostring(options['expire'])
           })
         else
-          rspamd_logger.infox(task, 'got error while connecting to redis: %1', upstream:get_addr())
-          upstream:fail()
+          rspamd_logger.err(task, 'got error while connecting to redis')
         end
       end
     end
@@ -126,12 +125,12 @@ local function asn_check(task)
           {key, tostring(options.expire)} -- arguments
         )
         if not ret then
-          upstream:fail()
+          rspamd_logger.err('got error connecting to redis')
         end
       end
     end
 
-    local ret,_,_ = rspamd_redis_make_request(task,
+    local ret = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write

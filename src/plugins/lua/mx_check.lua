@@ -90,8 +90,7 @@ local function mx_check(task)
           {key, tostring(settings.expire_novalid), '0'} -- arguments
         )
         if not ret then
-          rspamd_logger.errx(task, 'Redis SETEX failed')
-          upstream:fail()
+          rspamd_logger.err(task, 'got error connecting to redis')
         end
       else
         local valid_mx = {}
@@ -108,8 +107,7 @@ local function mx_check(task)
           {key, tostring(settings.expire), table.concat(valid_mx, ';')} -- arguments
         )
         if not ret then
-          rspamd_logger.errx(task, 'Redis SETEX failed')
-          upstream:fail()
+          rspamd_logger.err(task, 'error connecting to redis')
         end
       end
     end

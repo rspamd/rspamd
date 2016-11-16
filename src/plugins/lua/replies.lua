@@ -65,7 +65,7 @@ local function replies_check(task)
   -- Create hash of in-reply-to and query redis
   local key = make_key(irt)
 
-  local ret,_,_ = rspamd_redis_make_request(task,
+  local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     false, -- is write
@@ -96,7 +96,7 @@ local function replies_set(task)
   end
   -- Create hash of message-id and store to redis
   local key = make_key(msg_id)
-  local ret,_,_ = rspamd_redis_make_request(task,
+  local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     true, -- is write

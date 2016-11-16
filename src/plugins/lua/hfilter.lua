@@ -19,8 +19,7 @@ limitations under the License.
 -- Weight for checks_hellohost and checks_hello: 5 - very hard, 4 - hard, 3 - meduim, 2 - low, 1 - very low.
 -- From HFILTER_HELO_* and HFILTER_HOSTNAME_* symbols the maximum weight is selected in case of their actuating.
 
-
---local dumper = require 'pl.pretty'.dump
+local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = {
@@ -142,8 +141,11 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local failed_address = 0
   local resolved_address = {}
 
-  local function check_host_cb_mx(_, _, results)
+  local function check_host_cb_mx(_, to_resolve, results, err)
     task:inc_dns_req()
+    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+        rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
+    end
     if not results then
       task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0)
     else

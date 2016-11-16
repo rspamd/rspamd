@@ -18,7 +18,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_trie = require "rspamd_trie"
-local _ = require "fun"
+local fun = require "fun"
 
 local mime_trie
 local raw_trie
@@ -122,7 +122,7 @@ local function process_trie_conf(symbol, cf)
   if cf['file'] then
     process_trie_file(symbol, cf)
   elseif cf['patterns'] then
-    _.each(function(pat)
+    fun.each(function(pat)
       process_single_pattern(pat, symbol, cf)
     end, cf['patterns'])
   end

@@ -177,7 +177,7 @@ local function phishing_map(mapname, phishmap, id)
       xd[1] = opts[mapname]
     end
     for _,d in ipairs(xd) do
-      local s, _ = string.find(d, ':[^:]+$')
+      local s = string.find(d, ':[^:]+$')
       if s then
         local sym = string.sub(d, s + 1, -1)
         local map = string.sub(d, 1, s - 1)
