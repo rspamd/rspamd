@@ -69,9 +69,6 @@ local function metadata_exporter(task)
     if err then
       rspamd_logger.errx(task, 'got error %s when publishing record on server %s',
           err, upstream:get_addr())
-      upstream:fail()
-    else
-      upstream:ok()
     end
   end
   if settings.select then

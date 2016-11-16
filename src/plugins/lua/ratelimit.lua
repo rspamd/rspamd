@@ -207,14 +207,11 @@ end
 local function check_limits(task, args)
 
   local key = fun.foldl(function(acc, k) return acc .. k[2] end, '', args)
-  local ret,upstream
+  local ret
   --- Called when value is got from server
   local function rate_get_cb(err, data)
     if err then
       rspamd_logger.infox(task, 'got error while getting limit: %1', err)
-      upstream:fail()
-    else
-      upstream:ok()
     end
     if not data then return end
     local ntime = rspamd_util.get_time()
@@ -298,8 +295,7 @@ local function check_limits(task, args)
       fun.map(function(a) return rspamd_str_split(a[2], ":")[2] end, args)))
   end
 
-  local _
-  ret,_,upstream = rspamd_redis_make_request(task,
+  ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     false, -- is write
@@ -318,9 +314,7 @@ local function set_limits(task, args)
   local ret, upstream
 
   local function rate_set_cb(err)
-    if not err then
-      upstream:ok()
-    else
+    if err then
       rspamd_logger.infox(task, 'got error %s when setting ratelimit record on server %s',
         err, upstream:get_addr())
     end
@@ -328,7 +322,6 @@ local function set_limits(task, args)
   local function rate_get_cb(err, data)
     if err then
       rspamd_logger.infox(task, 'got error while setting limit: %1', err)
-      upstream:fail()
     end
     if not data then return end
     local ntime = rspamd_util.get_time()

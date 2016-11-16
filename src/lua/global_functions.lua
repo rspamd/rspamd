@@ -111,11 +111,19 @@ end
 -- command - redis command
 -- args - table of arguments
 function rspamd_redis_make_request(task, redis_params, key, is_write, callback, command, args)
+  local addr
+  local function rspamd_redis_make_request_cb(err, data)
+    if err then
+      addr:fail()
+    else
+      addr:ok()
+    end
+    callback(err, data, addr)
+  end
   if not task or not redis_params or not callback or not command then
     return false,nil,nil
   end
 
-  local addr
   local rspamd_redis = require "rspamd_redis"
 
   if key then
@@ -138,7 +146,7 @@ function rspamd_redis_make_request(task, redis_params, key, is_write, callback, 
 
   local options = {
     task = task,
-    callback = callback,
+    callback = rspamd_redis_make_request_cb,
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
     cmd = command,

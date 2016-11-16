@@ -68,12 +68,9 @@ local function asn_check(task)
         local redis_key = options.key_prefix .. ip:to_string()
         local ret,conn,upstream
         local function redis_asn_set_cb(redis_err)
-          if not redis_err then
-            upstream:ok()
-          else
+          if redis_err then
             rspamd_logger.errx(task, 'got error %s when setting asn record on server %s',
               redis_err, upstream:get_addr())
-            upstream:fail()
           end
         end
         ret,conn,upstream = rspamd_redis_make_request(task,

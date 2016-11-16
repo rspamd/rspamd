@@ -98,9 +98,6 @@ local function maybe_load_fann(task, continue_cb, call_if_fail)
     local function redis_fann_check_cb(err, data)
       if err then
         rspamd_logger.errx(task, 'redis error on host %s: %s', upstream:get_addr(), err)
-        upstream:fail()
-      else
-        upstream:ok()
       end
       if not err and type(data) == 'string' then
         local version = tonumber(data)
@@ -187,13 +184,9 @@ local function create_fann()
 end
 
 local function save_fann(task, is_spam)
-  local ret, conn, upstream
   local function redis_fann_save_cb(err)
     if err then
       rspamd_logger.errx(task, "cannot save neural net to redis: %s", err)
-      upstream:fail()
-    else
-      upstream:ok()
     end
   end
 
@@ -206,7 +199,7 @@ local function save_fann(task, is_spam)
   else
     current_classify_ann.ham_learned = current_classify_ann.ham_learned + 1
   end
-  ret,conn,upstream = rspamd_redis_make_request(task,
+  local ret,conn = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     true, -- is write
