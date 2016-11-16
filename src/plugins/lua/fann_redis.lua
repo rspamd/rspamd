@@ -619,6 +619,95 @@ local function maybe_train_fanns(cfg, ev_base)
   return watch_interval
 end
 
+local function load_scripts(cfg, ev_base, on_load_cb)
+  local function can_train_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis train script: %s', err)
+    else
+      redis_can_train_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    can_train_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_can_train} -- arguments
+  )
+
+  local function maybe_load_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis load script: %s', err)
+    else
+      redis_maybe_load_sha = tostring(data)
+
+      if on_load_cb then
+        rspamd_config:add_periodic(ev_base, 0.0,
+          function(_cfg, _ev_base)
+            return on_load_cb(_cfg, _ev_base)
+          end)
+      end
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    maybe_load_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_maybe_load} -- arguments
+  )
+
+  local function maybe_invalidate_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis invalidate script: %s', err)
+    else
+      redis_maybe_invalidate_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    maybe_invalidate_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_maybe_invalidate} -- arguments
+  )
+
+  local function maybe_lock_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis lock script: %s', err)
+    else
+      redis_maybe_lock_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    maybe_lock_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_maybe_lock} -- arguments
+  )
+
+  local function save_unlock_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis save script: %s', err)
+    else
+      redis_save_unlock_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    save_unlock_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_save_unlock} -- arguments
+  )
+end
+
 local function check_fanns(_, ev_base)
   local function members_cb(err, data)
     if err then
@@ -629,6 +718,9 @@ local function check_fanns(_, ev_base)
         local redis_update_cb = function(_err, _data)
           if _err then
             rspamd_logger.errx(rspamd_config, 'cannot get FANN version %s from redis: %s', elt, _err)
+            if string.match(_err, 'NOSCRIPT') then
+              load_scripts(rspamd_config, ev_base, nil)
+            end
           elseif _data and type(_data) == 'table' then
             load_or_invalidate_fann(_data, elt, ev_base)
           end
@@ -756,90 +848,7 @@ else
   end
   -- Add training scripts
   rspamd_config:add_on_load(function(cfg, ev_base, worker)
-    local function can_train_sha_cb(err, data)
-      if err or not data or type(data) ~= 'string' then
-        rspamd_logger.errx(cfg, 'cannot save redis train script: %s', err)
-      else
-        redis_can_train_sha = tostring(data)
-      end
-    end
-    redis_make_request(ev_base,
-      rspamd_config,
-      nil,
-      true, -- is write
-      can_train_sha_cb, --callback
-      'SCRIPT', -- command
-      {'LOAD', redis_lua_script_can_train} -- arguments
-    )
-
-    local function maybe_load_sha_cb(err, data)
-      if err or not data or type(data) ~= 'string' then
-        rspamd_logger.errx(cfg, 'cannot save redis load script: %s', err)
-      else
-        redis_maybe_load_sha = tostring(data)
-
-        rspamd_config:add_periodic(ev_base, 0.0,
-          function(_cfg, _ev_base)
-            return check_fanns(_cfg, _ev_base)
-          end)
-      end
-    end
-    redis_make_request(ev_base,
-      rspamd_config,
-      nil,
-      true, -- is write
-      maybe_load_sha_cb, --callback
-      'SCRIPT', -- command
-      {'LOAD', redis_lua_script_maybe_load} -- arguments
-    )
-
-    local function maybe_invalidate_sha_cb(err, data)
-      if err or not data or type(data) ~= 'string' then
-        rspamd_logger.errx(cfg, 'cannot save redis invalidate script: %s', err)
-      else
-        redis_maybe_invalidate_sha = tostring(data)
-      end
-    end
-    redis_make_request(ev_base,
-      rspamd_config,
-      nil,
-      true, -- is write
-      maybe_invalidate_sha_cb, --callback
-      'SCRIPT', -- command
-      {'LOAD', redis_lua_script_maybe_invalidate} -- arguments
-    )
-
-    local function maybe_lock_sha_cb(err, data)
-      if err or not data or type(data) ~= 'string' then
-        rspamd_logger.errx(cfg, 'cannot save redis lock script: %s', err)
-      else
-        redis_maybe_lock_sha = tostring(data)
-      end
-    end
-    redis_make_request(ev_base,
-      rspamd_config,
-      nil,
-      true, -- is write
-      maybe_lock_sha_cb, --callback
-      'SCRIPT', -- command
-      {'LOAD', redis_lua_script_maybe_lock} -- arguments
-    )
-
-    local function save_unlock_sha_cb(err, data)
-      if err or not data or type(data) ~= 'string' then
-        rspamd_logger.errx(cfg, 'cannot save redis save script: %s', err)
-      else
-        redis_save_unlock_sha = tostring(data)
-      end
-    end
-    redis_make_request(ev_base,
-      rspamd_config,
-      nil,
-      true, -- is write
-      save_unlock_sha_cb, --callback
-      'SCRIPT', -- command
-      {'LOAD', redis_lua_script_save_unlock} -- arguments
-    )
+    load_scripts(cfg, ev_base, check_fanns)
 
     if worker:get_name() == 'normal' then
       -- We also want to train neural nets when they have enough data
