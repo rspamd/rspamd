@@ -528,6 +528,7 @@ local function multimap_callback(task, rule)
         match_rule(rule, ip)
       else
         local cb = function (_, to_resolve, results, err)
+          task:inc_dns_req()
           if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
             rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
           end

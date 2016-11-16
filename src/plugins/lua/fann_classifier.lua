@@ -282,7 +282,7 @@ if redis_params then
       maybe_load_fann(task, classify_cb, false)
     end,
 
-    learn = function(task, _, tokens, is_spam, _)
+    learn = function(task, _, tokens, is_spam)
       local function learn_cb(_, is_loaded)
         if not is_loaded then
           create_fann()
