@@ -93,17 +93,17 @@ local function check_settings(task)
   local function check_addr_setting(rule, addr)
     local function check_specific_addr(elt)
       if rule['name'] then
-        if elt['addr'] == rule['name'] then
+        if rule['name']:lower() == elt['addr']:lower() then
           return true
         end
       end
       if rule['user'] then
-        if rule['user'] == elt['user'] then
+        if rule['user']:lower() == elt['user']:lower() then
           return true
         end
       end
       if rule['domain'] then
-        if rule['domain'] == elt['domain'] then
+        if rule['domain']:lower() == elt['domain']:lower() then
           return true
         end
       end
