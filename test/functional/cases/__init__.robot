@@ -6,6 +6,7 @@ Variables       ../lib/vars.py
 *** Keywords ***
 Export Global Variables
   ${TESTDIR} =  Get Test Directory
+  ${TOPDIR} =  Get Top Dir
   ${RSPAMADM} =  Get Rspamadm
   ${RSPAMC} =  Get Rspamc
   ${RSPAMD} =  Get Rspamd
@@ -13,3 +14,4 @@ Export Global Variables
   Set Global Variable  ${RSPAMC}
   Set Global Variable  ${RSPAMD}
   Set Global Variable  ${TESTDIR}
+  Set Global Variable  ${TOPDIR}
