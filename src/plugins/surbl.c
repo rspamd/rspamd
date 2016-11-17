@@ -461,17 +461,196 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 	}
 }
 
+static gint
+surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
+		ucl_object_t* monitored_opts)
+{
+	const ucl_object_t* cur_rule;
+	const ucl_object_t* cur;
+	gint cb_id;
+	gint nrules = 0;
+	struct suffix_item* new_suffix;
+	const gchar* ip_val;
+	struct surbl_bit_item* new_bit;
+
+	LL_FOREACH(value, cur_rule) {
+		cur = ucl_object_lookup (cur_rule, "suffix");
+		if (cur == NULL) {
+			msg_err_config("surbl rule must have explicit symbol "
+					"definition");
+			continue;
+		}
+
+		new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
+				sizeof(struct suffix_item));
+		new_suffix->magic = rspamd_surbl_cb_magic;
+		new_suffix->suffix = rspamd_mempool_strdup (
+				surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
+		new_suffix->options = 0;
+		new_suffix->bits = g_array_new (FALSE, FALSE,
+				sizeof(struct surbl_bit_item));
+		rspamd_mempool_add_destructor(surbl_module_ctx->surbl_pool,
+				(rspamd_mempool_destruct_t )rspamd_array_free_hard,
+				new_suffix->bits);
+
+		cur = ucl_object_lookup (cur_rule, "symbol");
+		if (cur == NULL) {
+			if (ucl_object_key (value)) {
+				new_suffix->symbol = rspamd_mempool_strdup (
+						surbl_module_ctx->surbl_pool,
+						ucl_object_key (value));
+			}
+			else {
+				msg_warn_config(
+						"surbl rule for suffix %s lacks symbol, using %s as symbol",
+						new_suffix->suffix, DEFAULT_SURBL_SYMBOL);
+				new_suffix->symbol = rspamd_mempool_strdup (
+						surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SYMBOL);
+			}
+		}
+		else {
+			new_suffix->symbol = rspamd_mempool_strdup (
+					surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
+		}
+
+		cur = ucl_object_lookup (cur_rule, "options");
+		if (cur != NULL && cur->type == UCL_STRING) {
+			if (strstr(ucl_obj_tostring(cur), "noip") != NULL) {
+				new_suffix->options |= SURBL_OPTION_NOIP;
+			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "no_ip");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean(cur)) {
+				new_suffix->options |= SURBL_OPTION_NOIP;
+			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "resolve_ip");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean(cur)) {
+				new_suffix->options |= SURBL_OPTION_RESOLVEIP;
+			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "images");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean (cur)) {
+				new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
+			}
+		}
+
+		if ((new_suffix->options & (SURBL_OPTION_RESOLVEIP | SURBL_OPTION_NOIP))
+				== (SURBL_OPTION_NOIP | SURBL_OPTION_RESOLVEIP)) {
+			/* Mutually exclusive options */
+			msg_err_config("options noip and resolve_ip are "
+					"mutually exclusive for suffix %s", new_suffix->suffix);
+		}
+
+		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache, "SURBL_CALLBACK",
+				0, surbl_test_url, new_suffix, SYMBOL_TYPE_CALLBACK, -1);
+		nrules++;
+		new_suffix->callback_id = cb_id;
+		cur = ucl_object_lookup (cur_rule, "bits");
+
+		if (cur != NULL && cur->type == UCL_OBJECT) {
+			ucl_object_iter_t it = NULL;
+			const ucl_object_t* cur_bit;
+			guint32 bit;
+
+			while ((cur_bit = ucl_object_iterate (cur, &it, true)) != NULL) {
+				if (ucl_object_key (cur_bit) != NULL
+						&& cur_bit->type == UCL_INT) {
+					gchar* p;
+					bit = ucl_obj_toint (cur_bit);
+					new_bit = rspamd_mempool_alloc (
+							surbl_module_ctx->surbl_pool,
+							sizeof(struct surbl_bit_item));
+					new_bit->bit = bit;
+					new_bit->symbol = rspamd_mempool_strdup (
+							surbl_module_ctx->surbl_pool,
+							ucl_object_key (cur_bit));
+					/* Convert to uppercase */
+					p = new_bit->symbol;
+					while (*p) {
+						*p = g_ascii_toupper (*p);
+						p++;
+					}
+					msg_debug_config("add new bit suffix: %d with symbol: %s",
+							(gint )new_bit->bit, new_bit->symbol);
+					g_array_append_val(new_suffix->bits, *new_bit);
+				}
+			}
+		}
+
+		cur = ucl_object_lookup(cur_rule, "ips");
+		if (cur != NULL && cur->type == UCL_OBJECT) {
+			ucl_object_iter_t it = NULL;
+			const ucl_object_t* cur_bit;
+			guint32 bit;
+
+			new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
+			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+					(rspamd_mempool_destruct_t )g_hash_table_unref,
+					new_suffix->ips);
+
+			while ((cur_bit = ucl_object_iterate (cur, &it, true)) != NULL) {
+				if (ucl_object_key (cur_bit) != NULL) {
+					gchar* p;
+					ip_val = ucl_obj_tostring (cur_bit);
+					new_bit = rspamd_mempool_alloc (
+							surbl_module_ctx->surbl_pool,
+							sizeof(struct surbl_bit_item));
+					if (inet_pton (AF_INET, ip_val, &bit) != 1) {
+						msg_err_config("cannot parse ip %s: %s", ip_val,
+								strerror (errno));
+						continue;
+					}
+					new_bit->bit = bit;
+					new_bit->symbol = rspamd_mempool_strdup (
+							surbl_module_ctx->surbl_pool,
+							ucl_object_key (cur_bit));
+					/* Convert to uppercase */
+					p = new_bit->symbol;
+					while (*p) {
+						*p = g_ascii_toupper (*p);
+						p++;
+					}
+					msg_debug_config ("add new IP suffix: %d with symbol: %s",
+							(gint )new_bit->bit, new_bit->symbol);
+					g_hash_table_insert (new_suffix->ips, &new_bit->bit,
+							new_bit);
+				}
+			}
+		}
+
+		if (new_suffix->symbol) {
+			/* Register just a symbol itself */
+			rspamd_symbols_cache_add_symbol (cfg->cache,
+					new_suffix->symbol, 0,
+					NULL, NULL, SYMBOL_TYPE_VIRTUAL, cb_id);
+			nrules++;
+		}
+
+		new_suffix->m = rspamd_monitored_create (cfg->monitored_ctx,
+				new_suffix->suffix, RSPAMD_MONITORED_DNS,
+				RSPAMD_MONITORED_DEFAULT, monitored_opts);
+		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes,
+				new_suffix);
+	}
+
+	return nrules;
+}
+
 gint
 surbl_module_config (struct rspamd_config *cfg)
 {
 	GList *cur_opt;
-	struct suffix_item *new_suffix, *cur_suffix = NULL;
-	struct surbl_bit_item *new_bit;
-	const ucl_object_t *value, *cur, *cur_rule, *cur_bit;
-	ucl_object_iter_t it = NULL;
-	const gchar *redir_val, *ip_val;
-	guint32 bit;
-	gint cb_id, nrules = 0;
+	struct suffix_item *cur_suffix = NULL;
+	const ucl_object_t *value, *cur;
+	const gchar *redir_val;
+	gint nrules = 0;
 	ucl_object_t *monitored_opts;
 
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
@@ -582,182 +761,18 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	value = rspamd_config_get_module_opt (cfg, "surbl", "rule");
 	if (value != NULL && value->type == UCL_OBJECT) {
-		LL_FOREACH (value, cur_rule)
-		{
-			cur = ucl_obj_get_key (cur_rule, "suffix");
-			if (cur == NULL) {
-				msg_err_config ("surbl rule must have explicit symbol "
-						"definition");
-				continue;
+		ucl_object_iter_t it = NULL;
+		const ucl_object_t *cur_value;
+
+		if (ucl_object_lookup (value, "symbol") != NULL) {
+			/* Old style */
+			nrules += surbl_module_parse_rule (value, cfg, monitored_opts);
+		}
+		else {
+			/* New style */
+			while ((cur_value = ucl_object_iterate (value, &it, true)) != NULL) {
+				nrules += surbl_module_parse_rule (cur_value, cfg, monitored_opts);
 			}
-
-			new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
-					sizeof (struct suffix_item));
-			new_suffix->magic = rspamd_surbl_cb_magic;
-			new_suffix->suffix = rspamd_mempool_strdup (
-				surbl_module_ctx->surbl_pool,
-				ucl_obj_tostring (cur));
-			new_suffix->options = 0;
-			new_suffix->bits = g_array_new (FALSE, FALSE,
-					sizeof (struct surbl_bit_item));
-			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-					(rspamd_mempool_destruct_t)rspamd_array_free_hard,
-					new_suffix->bits);
-
-			cur = ucl_obj_get_key (cur_rule, "symbol");
-			if (cur == NULL) {
-				msg_warn_config (
-					"surbl rule for suffix %s lacks symbol, using %s as symbol",
-					new_suffix->suffix,
-					DEFAULT_SURBL_SYMBOL);
-				new_suffix->symbol = rspamd_mempool_strdup (
-					surbl_module_ctx->surbl_pool,
-					DEFAULT_SURBL_SYMBOL);
-			}
-			else {
-				new_suffix->symbol = rspamd_mempool_strdup (
-					surbl_module_ctx->surbl_pool,
-					ucl_obj_tostring (cur));
-			}
-
-			cur = ucl_obj_get_key (cur_rule, "options");
-			if (cur != NULL && cur->type == UCL_STRING) {
-				if (strstr (ucl_obj_tostring (cur), "noip") != NULL) {
-					new_suffix->options |= SURBL_OPTION_NOIP;
-				}
-			}
-
-			cur = ucl_obj_get_key (cur_rule, "no_ip");
-			if (cur != NULL && cur->type == UCL_BOOLEAN) {
-				if (ucl_object_toboolean (cur)) {
-					new_suffix->options |= SURBL_OPTION_NOIP;
-				}
-			}
-
-			cur = ucl_obj_get_key (cur_rule, "resolve_ip");
-			if (cur != NULL && cur->type == UCL_BOOLEAN) {
-				if (ucl_object_toboolean (cur)) {
-					new_suffix->options |= SURBL_OPTION_RESOLVEIP;
-				}
-			}
-
-			cur = ucl_obj_get_key (cur_rule, "images");
-			if (cur != NULL && cur->type == UCL_BOOLEAN) {
-				if (ucl_object_toboolean (cur)) {
-					new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
-				}
-			}
-
-			if ((new_suffix->options & (SURBL_OPTION_RESOLVEIP|SURBL_OPTION_NOIP)) ==
-					(SURBL_OPTION_NOIP|SURBL_OPTION_RESOLVEIP)) {
-				/* Mutually exclusive options */
-				msg_err_config ("options noip and resolve_ip are "
-						"mutually exclusive for suffix %s", new_suffix->suffix);
-			}
-
-			cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
-					"SURBL_CALLBACK",
-					0,
-					surbl_test_url,
-					new_suffix,
-					SYMBOL_TYPE_CALLBACK,
-					-1);
-			nrules++;
-			new_suffix->callback_id = cb_id;
-
-			cur = ucl_obj_get_key (cur_rule, "bits");
-			if (cur != NULL && cur->type == UCL_OBJECT) {
-				it = NULL;
-				while ((cur_bit =
-					ucl_object_iterate (cur, &it, true)) != NULL) {
-					if (ucl_object_key (cur_bit) != NULL && cur_bit->type ==
-						UCL_INT) {
-						gchar *p;
-
-						bit = ucl_obj_toint (cur_bit);
-						new_bit = rspamd_mempool_alloc (
-							surbl_module_ctx->surbl_pool,
-							sizeof (struct surbl_bit_item));
-						new_bit->bit = bit;
-						new_bit->symbol = rspamd_mempool_strdup (
-							surbl_module_ctx->surbl_pool,
-							ucl_object_key (cur_bit));
-						/* Convert to uppercase */
-						p = new_bit->symbol;
-						while (*p) {
-							*p = g_ascii_toupper (*p);
-							p ++;
-						}
-
-						msg_debug_config ("add new bit suffix: %d with symbol: %s",
-							(gint)new_bit->bit, new_bit->symbol);
-						g_array_append_val (new_suffix->bits, *new_bit);
-					}
-				}
-			}
-
-			cur = ucl_obj_get_key (cur_rule, "ips");
-
-			if (cur != NULL && cur->type == UCL_OBJECT) {
-				it = NULL;
-				new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
-				rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-						(rspamd_mempool_destruct_t)g_hash_table_unref,
-						new_suffix->ips);
-
-				while ((cur_bit =
-						ucl_object_iterate (cur, &it, true)) != NULL) {
-					if (ucl_object_key (cur_bit) != NULL) {
-						gchar *p;
-
-						ip_val = ucl_obj_tostring (cur_bit);
-						new_bit = rspamd_mempool_alloc (
-								surbl_module_ctx->surbl_pool,
-								sizeof (struct surbl_bit_item));
-
-						if (inet_pton (AF_INET, ip_val, &bit) != 1) {
-							msg_err_config ("cannot parse ip %s: %s", ip_val,
-									strerror (errno));
-							continue;
-						}
-
-						new_bit->bit = bit;
-						new_bit->symbol = rspamd_mempool_strdup (
-								surbl_module_ctx->surbl_pool,
-								ucl_object_key (cur_bit));
-						/* Convert to uppercase */
-						p = new_bit->symbol;
-						while (*p) {
-							*p = g_ascii_toupper (*p);
-							p ++;
-						}
-
-						msg_debug_config ("add new IP suffix: %d with symbol: %s",
-								(gint)new_bit->bit, new_bit->symbol);
-						g_hash_table_insert (new_suffix->ips, &new_bit->bit,
-								new_bit);
-					}
-				}
-			}
-
-			if (new_suffix->symbol) {
-				/* Register just a symbol itself */
-				rspamd_symbols_cache_add_symbol (cfg->cache,
-						new_suffix->symbol,
-						0,
-						NULL, NULL,
-						SYMBOL_TYPE_VIRTUAL,
-						cb_id);
-				nrules ++;
-			}
-
-			new_suffix->m = rspamd_monitored_create (cfg->monitored_ctx,
-					new_suffix->suffix, RSPAMD_MONITORED_DNS,
-					RSPAMD_MONITORED_DEFAULT, monitored_opts);
-
-			surbl_module_ctx->suffixes = g_list_prepend (
-				surbl_module_ctx->suffixes,
-				new_suffix);
 		}
 	}
 	/* Add default suffix */
