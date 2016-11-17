@@ -141,6 +141,8 @@ Currently, you cannot mix several settings for a single message.
 
 The match section performs `AND` operation on different matches: for example, if you have `from` and `rcpt` in the same rule, then the rule matches only when `from` `AND` `rcpt` match. For similar matches, the `OR` rule applies: if you have multiple `rcpt` matches, then *any* of these will trigger the rule. If a rule is triggered then no more rules are matched.
 
+By default, regular expressions are case-sensitive. This can be changed with the `i` flag. String comparisons are case-insensitive.
+
 Regexp rules can be slow and should not be used extensively.
 
 The picture below describes the architecture of settings matching.
