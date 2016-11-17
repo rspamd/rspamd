@@ -64,10 +64,10 @@ The match type is defined by special flags after the last `/` symbol:
 * `B` - MIME header regexp (applied for headers in MIME parts only)
 * `R` - full headers content (applied for all headers undecoded and for the message only - **not** including MIME headers)
 * `M` - raw message regexp
-* `P` - part regexp without HTML tags
-* `Q` - part regexp with HTML tags
+* `P` - part regexp without HTML tags b64/qp decoded
+* `Q` - raw part regexp with HTML tags unencoded
 * `C` - spamassassin `BODY` regexp analogue(see http://spamassassin.apache.org/full/3.4.x/doc/Mail_SpamAssassin_Conf.txt)
-* `D` - spamassassin `RAWBODY` regexp analogue
+* `D` - spamassassin `RAWBODY` regexp analogue (raw part regexp with HTML tags b64/qp decoded)
 * `U` - URL regexp
 
 From 1.3, it is also possible to specify long regexp types for convenience in curly braces:
