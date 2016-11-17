@@ -150,6 +150,7 @@ struct rspamd_proxy_session {
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	gpointer map;
+	gchar *fname;
 	gpointer shmem_ref;
 	struct rspamd_proxy_backend_connection *master_conn;
 	struct rspamd_http_message *client_message;
@@ -875,7 +876,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 {
 	const rspamd_ftok_t *tok, *key_tok;
 	rspamd_ftok_t srch;
-	const gchar *file_str;
+	gchar *file_str;
 	GHashTable *query_args;
 	GHashTableIter it;
 	gpointer k, v;
@@ -896,6 +897,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 		}
 		/* Remove header after processing */
 		rspamd_http_message_remove_header (msg, "File");
+		session->fname = file_str;
 	}
 	else {
 		/* Need to parse query URL */
@@ -946,6 +948,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 
 				rspamd_fstring_free (msg->url);
 				msg->url = new_url;
+				session->fname = file_str;
 			}
 
 			g_hash_table_unref (query_args);
@@ -1083,12 +1086,21 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		if (m->local ||
 				rspamd_inet_address_is_local (rspamd_upstream_addr (bk_conn->up))) {
+
+			if (session->fname) {
+				rspamd_http_message_add_header (msg, "File", session->fname);
+			}
+
 			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
 					bk_conn->backend_sock,
 					bk_conn->io_tv, session->ctx->ev_base);
 		}
 		else {
+			if (session->fname) {
+				rspamd_http_message_set_body (msg, session->map, session->map_len);
+			}
+
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
 					bk_conn->backend_sock,
@@ -1275,6 +1287,11 @@ retry:
 		if (backend->local ||
 				rspamd_inet_address_is_local (
 						rspamd_upstream_addr (session->master_conn->up))) {
+
+			if (session->fname) {
+				rspamd_http_message_add_header (msg, "File", session->fname);
+			}
+
 			rspamd_http_connection_write_message_shared (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
@@ -1282,6 +1299,10 @@ retry:
 					session->master_conn->io_tv, session->ctx->ev_base);
 		}
 		else {
+			if (session->fname) {
+				rspamd_http_message_set_body (msg, session->map, session->map_len);
+			}
+
 			rspamd_http_connection_write_message (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
