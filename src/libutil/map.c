@@ -1666,6 +1666,11 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			goto err;
 		}
 	}
+	else {
+		msg_err_config ("map has invalid type for value: %s",
+				ucl_object_type_to_string (ucl_object_type (obj)));
+		goto err;
+	}
 
 	rspamd_map_calculate_hash (map);
 	msg_info_map ("added map from ucl");
