@@ -173,8 +173,13 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 		cl->ctx = stat_ctx;
 		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
 		cl->subrs = rspamd_stat_get_classifier (clf->classifier);
-		g_assert (cl->subrs != NULL);
 
+		if (cl->subrs == NULL) {
+			g_slice_free1 (sizeof (*cl), cl);
+			msg_err_config ("cannot init classifier type %s", clf->name);
+			cur = g_list_next (cur);
+			continue;
+		}
 
 		if (!cl->subrs->init_func (cfg->cfg_pool, cl)) {
 			g_slice_free1 (sizeof (*cl), cl);
