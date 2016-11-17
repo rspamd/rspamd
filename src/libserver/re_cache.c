@@ -635,7 +635,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	for (i = 0; i < count; i++) {
 		ret = rspamd_re_cache_process_pcre (rt,
 				re,
-				pool,
+				task,
 				in[i],
 				lens[i],
 				is_raw);
