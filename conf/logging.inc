@@ -8,3 +8,12 @@ $if_user{ user: $,}$if_smtp_from{ from: <$>,} (default: $is_spam
  $time_virtual virtual, dns req: $dns_req, digest: <$digest>
 $if_smtp_rcpts{ rcpts: <$>, }$if_mime_rcpt{ mime_rcpt: <$>, }
 EOD
+
+# Show statistics for regular expressions
+log_re_cache = true;
+
+# Can be used for console logging
+color = false
+
+# Enable debug for specific modules (e.g. `debug_modules = ["dkim", "re_cache"];`)
+debug_modules = []
