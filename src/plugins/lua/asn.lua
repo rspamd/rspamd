@@ -86,7 +86,7 @@ local function asn_check(task)
             redis_key, tostring(options['expire'])
           })
         else
-          rspamd_logger.err(task, 'got error while connecting to redis')
+          rspamd_logger.errx(task, 'got error while connecting to redis')
         end
       end
     end
@@ -122,7 +122,7 @@ local function asn_check(task)
           {key, tostring(options.expire)} -- arguments
         )
         if not ret then
-          rspamd_logger.err('got error connecting to redis')
+          rspamd_logger.errx(task, 'got error connecting to redis')
         end
       end
     end

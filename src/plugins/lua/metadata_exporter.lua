@@ -90,7 +90,7 @@ local function metadata_exporter(task)
       {channel, data} -- arguments
     )
     if not ret then
-      rspamd_logger.err(task, 'error connecting to redis')
+      rspamd_logger.errx(task, 'error connecting to redis')
     end
   end
   if url then

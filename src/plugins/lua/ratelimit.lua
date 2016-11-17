@@ -304,7 +304,7 @@ local function check_limits(task, args)
     fun.totable(fun.map(function(l) return l[2] end, args)) -- arguments
   )
   if not ret then
-    rspamd_logger.err(task, 'got error connecting to redis')
+    rspamd_logger.errx(task, 'got error connecting to redis')
   end
 end
 
@@ -370,7 +370,7 @@ local function set_limits(task, args)
           conn:add_cmd('setex', v)
         end, fun.drop_n(1, values))
       else
-        rspamd_logger.err(task, 'got error while connecting to redis')
+        rspamd_logger.errx(task, 'got error while connecting to redis')
       end
     end
   end
@@ -385,7 +385,7 @@ local function set_limits(task, args)
     fun.totable(fun.map(function(l) return l[2] end, args)) -- arguments
   )
   if not ret then
-    rspamd_logger.err(task, 'got error connecting to redis')
+    rspamd_logger.errx(task, 'got error connecting to redis')
   end
 end
 
