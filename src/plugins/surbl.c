@@ -775,6 +775,18 @@ surbl_module_config (struct rspamd_config *cfg)
 			}
 		}
 	}
+
+	value = rspamd_config_get_module_opt (cfg, "surbl", "rules");
+	if (value != NULL && value->type == UCL_OBJECT) {
+		ucl_object_iter_t it = NULL;
+		const ucl_object_t *cur_value;
+
+		/* New style only */
+		while ((cur_value = ucl_object_iterate (value, &it, true)) != NULL) {
+			nrules += surbl_module_parse_rule (cur_value, cfg, monitored_opts);
+		}
+	}
+
 	/* Add default suffix */
 	if (surbl_module_ctx->suffixes == NULL) {
 		msg_err_config ("surbl module loaded but no suffixes defined, skip "
