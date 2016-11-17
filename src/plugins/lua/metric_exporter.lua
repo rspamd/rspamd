@@ -53,7 +53,7 @@ local valid_metrics = {
 
 local function validate_metrics(settings_metrics)
   if type(settings_metrics) ~= 'table' or #settings_metrics == 0 then
-    logger.err('No metrics specified for collection')
+    logger.errx(rspamd_config, 'No metrics specified for collection')
     return false
   end
   for _, v in ipairs(settings_metrics) do
@@ -144,7 +144,7 @@ local backends = {
 local function configure_metric_exporter()
   local opts = rspamd_config:get_all_opt('metric_exporter')
   if not backends[opts['backend']] then
-    logger.err('Backend is invalid or unspecified')
+    logger.errx(rspamd_config, 'Backend is invalid or unspecified')
     return false
   end
   for k, v in pairs(opts) do

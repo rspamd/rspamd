@@ -166,7 +166,7 @@ local ip_score_set = function(task)
     redis_args -- arguments
   )
   if not ret then
-    rspamd_logger.err(task, 'error connecting to redis')
+    rspamd_logger.errx(task, 'error connecting to redis')
     return
   end
 
@@ -319,7 +319,7 @@ local ip_score_check = function(task)
       args -- arguments
     )
     if not ret then
-      rspamd_logger.err(task, 'error connecting to redis')
+      rspamd_logger.errx(task, 'error connecting to redis')
     end
   end
 end

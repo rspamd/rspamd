@@ -326,7 +326,7 @@ local function load_or_invalidate_fann(data, id, ev_base)
       if _err then
         rspamd_logger.errx(rspamd_config, 'cannot invalidate ANN %s from redis: %s', id, _err)
       elseif type(_data) == 'string' then
-        rspamd_logger.info(rspamd_config, 'invalidated ANN %s from redis: %s', id, _err)
+        rspamd_logger.infox(rspamd_config, 'invalidated ANN %s from redis: %s', id, _err)
         fanns[id].version = 0
       end
     end

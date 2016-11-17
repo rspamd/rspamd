@@ -221,7 +221,7 @@ local function greylist_check(task)
     {body_key, meta_key} -- arguments
   )
   if not ret then
-    rspamd_logger.err(task, 'cannot make redis request to check results')
+    rspamd_logger.errx(task, 'cannot make redis request to check results')
   end
 end
 
@@ -296,7 +296,7 @@ local function greylist_set(task)
         meta_key, tostring(settings['expire'])
       })
     else
-      rspamd_logger.err(task, 'got error while connecting to redis')
+      rspamd_logger.errx(task, 'got error while connecting to redis')
     end
   elseif do_greylisting or do_greylisting_required then
     local t = tostring(math.floor(rspamd_util.get_time()))
@@ -320,7 +320,7 @@ local function greylist_set(task)
         meta_key, tostring(settings['expire']), t
       })
     else
-      rspamd_logger.err(task, 'got error while connecting to redis')
+      rspamd_logger.errx(task, 'got error while connecting to redis')
     end
   else
     if action ~= 'no action' and action ~= 'reject' then
