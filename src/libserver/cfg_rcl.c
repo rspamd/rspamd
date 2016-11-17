@@ -1799,7 +1799,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
 			0,
-			"Treat text attachements as normal text parts");
+			"Treat text attachments as normal text parts");
+	rspamd_rcl_add_default_handler (sub,
+			"check_attachments",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
+			0,
+			"Treat text attachments as normal text parts");
 	rspamd_rcl_add_default_handler (sub,
 			"tempdir",
 			rspamd_rcl_parse_struct_string,

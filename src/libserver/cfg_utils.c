@@ -139,6 +139,8 @@ rspamd_config_new (void)
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;
 
+	cfg->check_text_attachements = TRUE;
+
 	cfg->dns_max_requests = 64;
 	cfg->history_rows = 200;
 	cfg->log_error_elts = 10;
