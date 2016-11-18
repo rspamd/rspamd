@@ -40,6 +40,11 @@ TLD parts
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  TEST_TLD (1.00)[no worry]
 
+Hashes
+  [Setup]  Lua Setup  ${TESTDIR}/lua/hashes.lua
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  TEST_HASHES (1.00)[no worry]
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
