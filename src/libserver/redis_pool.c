@@ -351,6 +351,10 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 				db, password, ip, port);
 	}
 
+	if (!conn) {
+		return NULL;
+	}
+
 	REF_RETAIN (conn);
 
 	return conn->ctx;
