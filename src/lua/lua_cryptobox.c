@@ -37,6 +37,7 @@ struct rspamd_lua_cryptobox_hash {
 	rspamd_cryptobox_hash_state_t *h;
 	EVP_MD_CTX *c;
 	gboolean is_ssl;
+	gboolean is_finished;
 };
 
 LUA_FUNCTION_DEF (cryptobox_pubkey,	 load);
@@ -53,6 +54,7 @@ LUA_FUNCTION_DEF (cryptobox_hash, create);
 LUA_FUNCTION_DEF (cryptobox_hash, create_specific);
 LUA_FUNCTION_DEF (cryptobox_hash, create_keyed);
 LUA_FUNCTION_DEF (cryptobox_hash, update);
+LUA_FUNCTION_DEF (cryptobox_hash, reset);
 LUA_FUNCTION_DEF (cryptobox_hash, hex);
 LUA_FUNCTION_DEF (cryptobox_hash, base32);
 LUA_FUNCTION_DEF (cryptobox_hash, base64);
@@ -117,6 +119,7 @@ static const struct luaL_reg cryptoboxhashlib_f[] = {
 
 static const struct luaL_reg cryptoboxhashlib_m[] = {
 	LUA_INTERFACE_DEF (cryptobox_hash, update),
+	LUA_INTERFACE_DEF (cryptobox_hash, reset),
 	LUA_INTERFACE_DEF (cryptobox_hash, hex),
 	LUA_INTERFACE_DEF (cryptobox_hash, base32),
 	LUA_INTERFACE_DEF (cryptobox_hash, base64),
@@ -842,8 +845,34 @@ lua_cryptobox_hash_update (lua_State *L)
 		len = nlen;
 	}
 
-	if (h && data) {
+	if (h && !h->is_finished && data) {
 		rspamd_lua_hash_update (h, data, len);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+/***
+ * @method cryptobox_hash:reset()
+ * Resets hash to the initial state
+ */
+static gint
+lua_cryptobox_hash_reset (lua_State *L)
+{
+	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
+
+	if (h) {
+		if (h->is_ssl) {
+			EVP_DigestInit (h->c, EVP_MD_CTX_md (h->c));
+		}
+		else {
+			memset (h->h, 0, sizeof (*h->h));
+			rspamd_cryptobox_hash_init (h->h, NULL, 0);
+		}
+		h->is_finished = FALSE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -865,12 +894,12 @@ lua_cryptobox_hash_hex (lua_State *L)
 		out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	guint dlen;
 
-	if (h) {
+	if (h && !h->is_finished) {
 		memset (out_hex, 0, sizeof (out_hex));
 
 		if (h->is_ssl) {
 			dlen = sizeof (out);
-			EVP_DigestFinal (h->c, out, &dlen);
+			EVP_DigestFinal_ex (h->c, out, &dlen);
 		}
 		else {
 			dlen = sizeof (out);
@@ -879,6 +908,7 @@ lua_cryptobox_hash_hex (lua_State *L)
 
 		rspamd_encode_hex_buf (out, dlen, out_hex, sizeof (out_hex));
 		lua_pushstring (L, out_hex);
+		h->is_finished = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -900,11 +930,11 @@ lua_cryptobox_hash_base32 (lua_State *L)
 		out_b32[rspamd_cryptobox_HASHBYTES * 2];
 	guint dlen;
 
-	if (h) {
+	if (h && !h->is_finished) {
 		memset (out_b32, 0, sizeof (out_b32));
 		if (h->is_ssl) {
 			dlen = sizeof (out);
-			EVP_DigestFinal (h->c, out, &dlen);
+			EVP_DigestFinal_ex (h->c, out, &dlen);
 		}
 		else {
 			dlen = sizeof (out);
@@ -913,6 +943,7 @@ lua_cryptobox_hash_base32 (lua_State *L)
 
 		rspamd_encode_base32_buf (out, dlen, out_b32, sizeof (out_b32));
 		lua_pushstring (L, out_b32);
+		h->is_finished = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -934,10 +965,10 @@ lua_cryptobox_hash_base64 (lua_State *L)
 	gsize len;
 	guint dlen;
 
-	if (h) {
+	if (h && !h->is_finished) {
 		if (h->is_ssl) {
 			dlen = sizeof (out);
-			EVP_DigestFinal (h->c, out, &dlen);
+			EVP_DigestFinal_ex (h->c, out, &dlen);
 		}
 		else {
 			dlen = sizeof (out);
@@ -947,6 +978,7 @@ lua_cryptobox_hash_base64 (lua_State *L)
 		b64 = rspamd_encode_base64 (out, dlen, 0, &len);
 		lua_pushlstring (L, b64, len);
 		g_free (b64);
+		h->is_finished = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -967,10 +999,10 @@ lua_cryptobox_hash_bin (lua_State *L)
 	guchar out[rspamd_cryptobox_HASHBYTES];
 	guint dlen;
 
-	if (h) {
+	if (h && !h->is_finished) {
 		if (h->is_ssl) {
 			dlen = sizeof (out);
-			EVP_DigestFinal (h->c, out, &dlen);
+			EVP_DigestFinal_ex (h->c, out, &dlen);
 		}
 		else {
 			dlen = sizeof (out);
@@ -978,6 +1010,7 @@ lua_cryptobox_hash_bin (lua_State *L)
 		}
 
 		lua_pushlstring (L, out, sizeof (out));
+		h->is_finished = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -992,6 +1025,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 
 	if (h->is_ssl) {
+		EVP_MD_CTX_cleanup (h->c);
 		EVP_MD_CTX_destroy (h->c);
 	}
 	else {
