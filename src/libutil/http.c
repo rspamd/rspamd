@@ -633,7 +633,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 	 *
 	 * Hence, we skip body setup here
 	 */
-	if (parser->content_length != ULLONG_MAX) {
+	if (parser->content_length != ULLONG_MAX && parser->content_length != 0) {
 		if (conn->max_size > 0 &&
 				parser->content_length > conn->max_size) {
 			/* Too large message */
