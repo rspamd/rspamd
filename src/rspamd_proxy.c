@@ -703,9 +703,8 @@ proxy_backend_close_connection (struct rspamd_proxy_backend_connection *conn)
 		if (conn->backend_conn) {
 			rspamd_http_connection_reset (conn->backend_conn);
 			rspamd_http_connection_unref (conn->backend_conn);
+			close (conn->backend_sock);
 		}
-
-		close (conn->backend_sock);
 
 		conn->flags |= RSPAMD_BACKEND_CLOSED;
 	}
