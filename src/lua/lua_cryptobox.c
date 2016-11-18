@@ -1025,7 +1025,11 @@ lua_cryptobox_hash_gc (lua_State *L)
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 
 	if (h->is_ssl) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 		EVP_MD_CTX_cleanup (h->c);
+#else
+		EVP_MD_CTX_reset (h->c);
+#endif
 		EVP_MD_CTX_destroy (h->c);
 	}
 	else {

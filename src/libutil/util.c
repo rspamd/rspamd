@@ -2070,7 +2070,9 @@ rspamd_init_libs (void)
 	OPENSSL_init_ssl (0, NULL);
 #endif
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 	OPENSSL_config (NULL);
+#endif
 
 	if (RAND_poll () == 0) {
 		guchar seed[128];
