@@ -1337,7 +1337,9 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				state = test_spaces;
 			}
 			else {
-				*need_crlf = TRUE;
+				if (type != DKIM_CANON_RELAXED) {
+					*need_crlf = TRUE;
+				}
 
 				goto end;
 			}
@@ -1797,6 +1799,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 {
 	const gchar *p, *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
+	EVP_MD_CTX *cpy_ctx;
 	gsize dlen;
 	gint res = DKIM_CONTINUE;
 	guint i;
@@ -1832,14 +1835,62 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			ctx->dkim_header, ctx->domain);
 
 	dlen = EVP_MD_CTX_size (ctx->common.body_hash);
-	EVP_DigestFinal_ex (ctx->common.body_hash, raw_digest, NULL);
+	/* Copy md_ctx to deal with broken CRLF at the end */
+	cpy_ctx = EVP_MD_CTX_create ();
+	EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+	EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
 
 	/* Check bh field */
 	if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-		msg_debug_dkim ("bh value mismatch: %*xs versus %*xs", dlen, ctx->bh,
+		msg_debug_dkim ("bh value mismatch: %*xs versus %*xs, try add CRLF",
+				dlen, ctx->bh,
 				dlen, raw_digest);
-		return DKIM_REJECT;
+		/* Try add CRLF */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+		EVP_MD_CTX_reset (cpy_ctx);
+#endif
+		EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+		EVP_DigestUpdate (cpy_ctx, "\r\n", 2);
+		EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
+
+		if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
+			msg_debug_dkim ("bh value mismatch: %*xs versus %*xs, try add LF",
+					dlen, ctx->bh,
+					dlen, raw_digest);
+
+			/* Try add LF */
+	#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+			EVP_MD_CTX_cleanup (cpy_ctx);
+	#else
+			EVP_MD_CTX_reset (cpy_ctx);
+	#endif
+			EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+			EVP_DigestUpdate (cpy_ctx, "\n", 2);
+			EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
+
+			if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
+				msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+						dlen, ctx->bh,
+						dlen, raw_digest);
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+				EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+				EVP_MD_CTX_reset (cpy_ctx);
+#endif
+				EVP_MD_CTX_destroy (cpy_ctx);
+				return DKIM_REJECT;
+			}
+		}
 	}
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+	EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+	EVP_MD_CTX_reset (cpy_ctx);
+#endif
+	EVP_MD_CTX_destroy (cpy_ctx);
 
 	dlen = EVP_MD_CTX_size (ctx->common.headers_hash);
 	EVP_DigestFinal_ex (ctx->common.headers_hash, raw_digest, NULL);
