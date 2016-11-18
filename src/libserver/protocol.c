@@ -99,6 +99,7 @@
 #define NO_LOG_HEADER "Log"
 #define MLEN_HEADER "Message-Length"
 #define USER_AGENT_HEADER "User-Agent"
+#define MTA_TAG_HEADER "MTA-Tag"
 
 
 static GQuark
@@ -470,6 +471,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					else {
 						task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
 					}
+				}
+				IF_HEADER (MTA_TAG_HEADER) {
+					gchar *mta_tag;
+					mta_tag = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
+					rspamd_mempool_set_variable (task->task_pool, "MTA-Tag",
+							mta_tag, NULL);
+					debug_task ("read MTA-Tag header, value: %s", mta_tag);
 				}
 				break;
 			default:
