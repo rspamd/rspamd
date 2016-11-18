@@ -682,14 +682,11 @@ lua_cryptobox_hash_create (lua_State *L)
 	gsize len = 0;
 
 	h = rspamd_lua_hash_create (NULL);
-	ph = lua_newuserdata (L, sizeof (void *));
-	*ph = h;
-	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		s = lua_tolstring (L, 1, &len);
 	}
-	else if (lua_isuserdata (L, 1)) {
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
 		t = lua_check_text (L, 1);
 
 		if (!t) {
@@ -703,6 +700,10 @@ lua_cryptobox_hash_create (lua_State *L)
 	if (s) {
 		rspamd_lua_hash_update (h, s, len);
 	}
+
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 
 	return 1;
 }
@@ -727,14 +728,11 @@ lua_cryptobox_hash_create_specific (lua_State *L)
 	}
 
 	h = rspamd_lua_hash_create (type);
-	ph = lua_newuserdata (L, sizeof (void *));
-	*ph = h;
-	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 
 	if (lua_type (L, 2) == LUA_TSTRING) {
 		s = lua_tolstring (L, 2, &len);
 	}
-	else if (lua_isuserdata (L, 2)) {
+	else if (lua_type (L, 2) == LUA_TUSERDATA) {
 		t = lua_check_text (L, 2);
 
 		if (!t) {
@@ -748,6 +746,10 @@ lua_cryptobox_hash_create_specific (lua_State *L)
 	if (s) {
 		rspamd_lua_hash_update (h, s, len);
 	}
+
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 
 	return 1;
 }
@@ -772,14 +774,11 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 	if (key != NULL) {
 		h = rspamd_lua_hash_create (NULL);
 		rspamd_cryptobox_hash_init (h->h, key, keylen);
-		ph = lua_newuserdata (L, sizeof (void *));
-		*ph = h;
-		rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			s = lua_tolstring (L, 2, &len);
 		}
-		else if (lua_isuserdata (L, 2)) {
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
 			t = lua_check_text (L, 2);
 
 			if (!t) {
@@ -793,6 +792,10 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 		if (s) {
 			rspamd_cryptobox_hash_update (h, s, len);
 		}
+
+		ph = lua_newuserdata (L, sizeof (void *));
+		*ph = h;
+		rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
