@@ -59,7 +59,7 @@ local function get_specific_statfiles(classifier, task)
 			fun.each(function(v) table.insert(spec_st,v) end, st_longsubj)
 		end
 	end
-	
+
 	if #spec_st > 1 then
 		return spec_st
 	else
@@ -100,7 +100,7 @@ classifiers['bayes'] = function(classifier, task, is_learn)
 			if not st:get_label() then
 				local st_l = st:get_param('language')
 				if st_l and st_l == language then
-					-- Insert statfile with specified language    
+					-- Insert statfile with specified language
 					table.insert(selected, st)
 				end
 			end
@@ -124,7 +124,7 @@ classifiers['bayes'] = function(classifier, task, is_learn)
 	if #selected > 1 then
 		return selected
 	end
-	
+
 	return nil
 end
 

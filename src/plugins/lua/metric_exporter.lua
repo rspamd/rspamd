@@ -139,7 +139,7 @@ local backends = {
     configure = graphite_config,
     push = graphite_push,
   },
-} 
+}
 
 local function configure_metric_exporter()
   local opts = rspamd_config:get_all_opt('metric_exporter')

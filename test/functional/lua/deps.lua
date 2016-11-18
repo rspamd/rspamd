@@ -14,7 +14,7 @@ local cb_gen = function(num)
       task:insert_result('DEP' .. tostring(num + 1), 1.0)
     end
   end
-  
+
   return cb_dep
 end
 

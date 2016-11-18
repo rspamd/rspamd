@@ -112,7 +112,7 @@ end
 local opts = rspamd_config:get_all_opt('replies')
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'module is unconfigured')
-  return 
+  return
 end
 if opts then
   redis_params = rspamd_parse_redis_server('replies')
