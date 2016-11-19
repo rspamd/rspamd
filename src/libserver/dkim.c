@@ -1310,7 +1310,7 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 
 static const gchar *
 rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
-		guint type, gboolean *need_crlf)
+		guint type, gboolean sign, gboolean *need_crlf)
 {
 	const gchar *p = end - 1, *t;
 	enum {
@@ -1337,7 +1337,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				state = test_spaces;
 			}
 			else {
-				if (type != DKIM_CANON_RELAXED) {
+				if (sign || type != DKIM_CANON_RELAXED) {
 					*need_crlf = TRUE;
 				}
 
@@ -1360,7 +1360,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_cr:
-			if (p > start + 1) {
+			if (p >= start + 1) {
 				if (*(p - 1) == '\r') {
 					p --;
 					state = got_cr;
@@ -1396,7 +1396,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_lf:
-			if (p > start + 1) {
+			if (p >= start + 1) {
 				if (*(p - 1) == '\r') {
 					state = got_crlf;
 				}
@@ -1424,7 +1424,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_crlf:
-			if (p > start + 2) {
+			if (p >= start + 2) {
 				if (*(p - 2) == '\r') {
 					p -= 2;
 					state = got_cr;
@@ -1454,7 +1454,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 		case test_spaces:
 			t = p - skip;
 
-			while (t > start + 2 && (*t == ' ' || *t == '\t')) {
+			while (t >= start + 2 && (*t == ' ' || *t == '\t')) {
 				t --;
 			}
 
@@ -1480,7 +1480,8 @@ end:
 static gboolean
 rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 	const gchar *start,
-	const gchar *end)
+	const gchar *end,
+	gboolean sign)
 {
 	const gchar *p;
 	guint remain = ctx->len ? ctx->len : (guint)(end - start);
@@ -1497,7 +1498,8 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 	}
 	else {
 		/* Strip extra ending CRLF */
-		p = rspamd_dkim_skip_empty_lines (start, end, ctx->body_canon_type, &need_crlf);
+		p = rspamd_dkim_skip_empty_lines (start, end, ctx->body_canon_type,
+				sign, &need_crlf);
 		end = p + 1;
 
 		if (end == start) {
@@ -1820,7 +1822,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
+	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end, FALSE)) {
 		return DKIM_RECORD_ERROR;
 	}
 	/* Now canonize headers */
@@ -2129,7 +2131,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	}
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
+	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end, TRUE)) {
 		return NULL;
 	}
 
