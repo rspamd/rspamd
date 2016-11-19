@@ -12,7 +12,7 @@ The idea behind this module is to learn which symbols combinations are common fo
 
 Training is performed in background and after some amount of trains (`1k` again) neural network is updated on the disk allowing scanners to load and update their own data.
 
-After some amount of such iterations (`100` by default), the training process removes old neural network and starts training new one. This is done to ensure that old data does not influence on the current processing. The neural network is also reset when you add or remove rules from rspamd. Once trained, neural network data is saved into file so it could persist between restarts. The current training epoch is however vanished upon restart.
+After some amount of such iterations (`10` by default), the training process removes old neural network and starts training new one. This is done to ensure that old data does not influence on the current processing. The neural network is also reset when you add or remove rules from rspamd. Once trained, neural network data is saved into redis where all Rspamd scanners share their learning data. Redis is also used to store intermediate train vectors. ANN and training data is saved in Redis compressed using `zstd` compressor.
 
 ## Configuration
 
@@ -27,11 +27,11 @@ worker "log_helper" {
 Then you'd need to setup fann plugin:
 
 ~~~ucl
-fann_scores {
-  fann_file = "${DBDIR}/data.fann"; # Used to store ANN file on disk
+fann_redis {
+  servers = 127.0.0.1:6379; # Redis server to store learning data and ANN
   train {
     max_train = 10k; # Number of trains per epoch
-    max_epoch = 1k; # Number of epoch while ANN data is valid
+    max_usages = 10; # Number of learn iterations while ANN data is valid
     spam_score = 8; # Score to learn spam
     ham_score = -2; # Score to learn ham
   }
