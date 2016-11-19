@@ -116,6 +116,8 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 		}
 
 		if (conn->ctx) {
+			/* To prevent on_disconnect here */
+			conn->active = TRUE;
 			g_hash_table_remove (conn->elt->pool->elts_by_ctx, conn->ctx);
 			redisAsyncFree (conn->ctx);
 		}
