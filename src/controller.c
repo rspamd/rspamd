@@ -461,11 +461,15 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		ret = rspamd_controller_check_forwarded (session, msg, ctx);
 
 		if (ret == 1) {
+			session->is_enable = TRUE;
+
 			return TRUE;
 		}
 		else if (ret == 0) {
 			/* No forwarded found */
 			msg_info_session ("allow unauthorized connection from a unix socket");
+			session->is_enable = TRUE;
+
 			return TRUE;
 		}
 	}
@@ -475,12 +479,16 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		ret = rspamd_controller_check_forwarded (session, msg, ctx);
 
 		if (ret == 1) {
+			session->is_enable = TRUE;
+
 			return TRUE;
 		}
 		else if (ret == 0) {
 			/* No forwarded found */
 			msg_info_session ("allow unauthorized connection from a trusted IP %s",
 							rspamd_inet_address_to_string (session->from_addr));
+			session->is_enable = TRUE;
+
 			return TRUE;
 		}
 	}
@@ -509,6 +517,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 				return TRUE;
 			}
 		}
+
 		msg_info_session ("absent password has been specified");
 		ret = FALSE;
 	}
