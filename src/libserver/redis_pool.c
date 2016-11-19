@@ -154,7 +154,8 @@ rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
 {
 	struct rspamd_redis_pool_connection *conn = p;
 
-	msg_debug_rpool ("scheduled removal of connection");
+	msg_debug_rpool ("scheduled removal of connection, refcount: %d",
+			conn->ref.refcount);
 	REF_RELEASE (conn);
 }
 
@@ -198,8 +199,8 @@ rspamd_redis_pool_on_disconnect (const struct redisAsyncContext *ac, int status,
 	if (!conn->active) {
 		/* Do nothing for active connections as it is already handled somewhere */
 		if (conn->ctx) {
-			msg_info_rpool ("inactive connection terminated: %s",
-				conn->ctx->errstr);
+			msg_info_rpool ("inactive connection terminated: %s, refs: %d",
+				conn->ctx->errstr, conn->ref.refcount);
 		}
 
 		REF_RELEASE (conn);
