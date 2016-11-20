@@ -1,3 +1,7 @@
+---
+# Front matter added to ensure Jekyll processes file.
+---
+
 /* Set some basic padding to keep content from hitting the edges */
 .body-content {
   padding-left: 15px;
@@ -108,19 +112,19 @@ h2{
   height:25px;
 }
 #jumbo-features{
-  background: url(/img/rspamd_jumbotron_features.png);
+  background: url({{ site.baseurl }}/img/rspamd_jumbotron_features.png);
   background-size: cover;
 }
 #jumbo-performance{
-  background: url(/img/rspamd_jumbotron_performance.png);
+  background: url({{ site.baseurl }}/img/rspamd_jumbotron_performance.png);
   background-size: cover;
 }
 #jumbo-head{
-  background: url(/img/rspamd_jumbotron.png);
+  background: url({{ site.baseurl }}/img/rspamd_jumbotron.png);
   background-size: cover;
 }
 #jumbo-rmilter{
-  background: url(/img/rmilter_jumbotron.png);
+  background: url({{ site.baseurl }}/img/rmilter_jumbotron.png);
   background-size: cover;
 }
 .support-block {
