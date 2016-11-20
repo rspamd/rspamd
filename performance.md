@@ -11,7 +11,7 @@ So far, Rspamd can filter hundreds of messages per second using a single 4 cores
 
 <img class="img-responsive" src="{{ site.baseurl }}/img/graph1.png" width="75%">
 
-Rspamd can be treated as a faster replacement for [SpamAssassin](https://spamassassin.apache.org) mail filter with the ability to scan **ten times** more messages using the **same** rules (by means of [SpamAssassin plugin](/doc/modules/spamassassin.html)). In the next graph, you can see how switch to Rspamd from <abbr title="SpamAssassin">SA</abbr> helped to reduce CPU load on scanner machines:
+Rspamd can be treated as a faster replacement for [SpamAssassin](https://spamassassin.apache.org) mail filter with the ability to scan **ten times** more messages using the **same** rules (by means of [SpamAssassin plugin]({{ site.baseurl }}/doc/modules/spamassassin.html)). In the next graph, you can see how switch to Rspamd from <abbr title="SpamAssassin">SA</abbr> helped to reduce CPU load on scanner machines:
 
 <img class="img-responsive" src="{{ site.baseurl }}/img/graph2.png" width="50%">
 

@@ -779,7 +779,7 @@ rspamd_config.RULE = function(task)
 end
 ~~~
 
-However, you should consider using regexp maps with [multimap module](/doc/modules/multimap.html) when you need something like this.
+However, you should consider using regexp maps with [multimap module]({{ site.baseurl }}/doc/modules/multimap.html) when you need something like this.
 
 ## Rmilter questions
 
@@ -789,11 +789,11 @@ Rspamd can be integrated with an MTA using different methods described in the [i
 
 ### How to set up DKIM signing in Rmilter
 
-Please use [dkim module](/doc/modules/replies.html) in Rspamd.
+Please use [dkim module]({{ site.baseurl }}/doc/modules/replies.html) in Rspamd.
 
 ### Setup whitelisting of reply messages
 
-Please use [replies module](/doc/modules/replies.html) in Rspamd.
+Please use [replies module]({{ site.baseurl }}/doc/modules/replies.html) in Rspamd.
 
 ### How to distinguish inbound and outbound traffic for Rspamd instance
 

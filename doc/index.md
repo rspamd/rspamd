@@ -7,7 +7,7 @@ title: Rspamd Documentation
 
 Here are the main introduction documents that are recommended for reading if you are going to use Rspamd in your mail system.
 
-* **[Quick start](/doc/quickstart.html)** - learn how to install, setup and perform initial configuring of Rspamd
+* **[Quick start]({{ site.baseurl }}/doc/quickstart.html)** - learn how to install, setup and perform initial configuring of Rspamd
 * **[MTA integration](integration.html)** - describes how to integrate Rspamd into your mail infrastructure
 * **[Upgrading](migration.html)** - the list of incompatible changes between versions of Rspamd
 * **[Frequently asked questions](faq.html)** - common questions about Rspamd and Rmilter
@@ -19,15 +19,15 @@ This section contains documents about various configuration details.
 
 * **[Configuration structure](./configuration/index.html)** explains the basic principles of Rspamd configuration files
   + **[Users settings description](./configuration/settings.html)** could be useful if you need to setup per-user configuration or want to process mail in different ways, for example, for inbound and outbound messages.
-  + **[Top-level options](/doc/configuration/options.html)** are used to set the global options for Rspamd, such as DNS resolver setup and so on
-  + **[Logging setup](/doc/configuration/logging.html)** is required if you need customized logging
-  + **[Metrics, actions and symbols](/doc/configuration/metrics.html)** are very important as they allow to set custom rules scores and thresholds for different actions
-  + **[Composite symbols](/doc/configuration/composites.html)** are useful to combine rules into meta-rules
-  + **[Statistical module](/doc/configuration/statistic.html)** describes the Bayes classifier and its backends
+  + **[Top-level options]({{ site.baseurl }}/doc/configuration/options.html)** are used to set the global options for Rspamd, such as DNS resolver setup and so on
+  + **[Logging setup]({{ site.baseurl }}/doc/configuration/logging.html)** is required if you need customized logging
+  + **[Metrics, actions and symbols]({{ site.baseurl }}/doc/configuration/metrics.html)** are very important as they allow to set custom rules scores and thresholds for different actions
+  + **[Composite symbols]({{ site.baseurl }}/doc/configuration/composites.html)** are useful to combine rules into meta-rules
+  + **[Statistical module]({{ site.baseurl }}/doc/configuration/statistic.html)** describes the Bayes classifier and its backends
 * **[Modules documentation](./modules/)** gives the detailed description of each Rspamd module
 * **[Workers documentation](./workers/)** contains information about different Rspamd worker processes: scanners, controller, fuzzy storage and so on
-* **[Redis configuration page](/doc/configuration/redis.html)** describes how to configure Redis cache for Rspamd
-* **[Upstreams article](/doc/configuration/upstream.html)** depicts how Rspamd connects to external servers (e.g. Redis or DNS)
+* **[Redis configuration page]({{ site.baseurl }}/doc/configuration/redis.html)** describes how to configure Redis cache for Rspamd
+* **[Upstreams article]({{ site.baseurl }}/doc/configuration/upstream.html)** depicts how Rspamd connects to external servers (e.g. Redis or DNS)
 
 ## Developers documentation
 

@@ -16,12 +16,12 @@ viewing statistic and learning.
 ## Rspamd setup.
 
 Default configuration is expected to work but it's strongly recommended to [change
-the default controller password](/doc/quickstart.html#setting-the-controller-password)
+the default controller password]({{ site.baseurl }}/doc/quickstart.html#setting-the-controller-password)
 (whether you plan on using webui or not).
 
 Furthermore, if you intend to expose the webui via a proxy running on the same
 machine (or some other machine which has been added to `secure_ip` setting) then
-it is important that this is configured correctly, see the [FAQ](/doc/faq.html#how-to-use-the-webui-behind-a-proxy-server)
+it is important that this is configured correctly, see the [FAQ]({{ site.baseurl }}/doc/faq.html#how-to-use-the-webui-behind-a-proxy-server)
 for details & example configurations.
 
 ## Interface setup.

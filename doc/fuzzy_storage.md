@@ -374,7 +374,7 @@ test/rspamd-test -p /rspamd/shingles
 
 ### Condition scripts for the learning
 
-As the `fuzzy_check` plugin is responsible for learning, we create the script within its configuration. This script checks if a email is suitable for learning. Script should return a Lua function with exactly one argument of [`rspamd_task`](/doc/lua/task.html) type. This function should return either a boolean value: `true` - learn, `false` - skip learning, or a pair of a boolean value and numeric value - new flag value in case it is required to modify the hash flag. Parameter `learn_condition` is used to setup learn script. The most convenient way to set the script is to write it as a multiline string supported by `UCL`:
+As the `fuzzy_check` plugin is responsible for learning, we create the script within its configuration. This script checks if a email is suitable for learning. Script should return a Lua function with exactly one argument of [`rspamd_task`]({{ site.baseurl }}/doc/lua/task.html) type. This function should return either a boolean value: `true` - learn, `false` - skip learning, or a pair of a boolean value and numeric value - new flag value in case it is required to modify the hash flag. Parameter `learn_condition` is used to setup learn script. The most convenient way to set the script is to write it as a multiline string supported by `UCL`:
 
 ~~~ucl
 # Fuzzy check plugin configuration snippet

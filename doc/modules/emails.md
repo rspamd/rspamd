@@ -9,7 +9,7 @@ This module implements emails filtering based on DNS or static lists.
 
 ## Module configuration
 
-The configuration for this module is quite common to [`surbl` module](/doc/modules/surbl.html). You can define multiple `rule` section where it is possible to define either static maps or DNS lists:
+The configuration for this module is quite common to [`surbl` module]({{ site.baseurl }}/doc/modules/surbl.html). You can define multiple `rule` section where it is possible to define either static maps or DNS lists:
 
 ~~~ucl
 # /etc/rspamd/local.d/emails.conf

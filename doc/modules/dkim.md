@@ -146,7 +146,7 @@ dkim {
 
 ### DKIM keys management
 
-Rspamd always use `relaxed/relaxed` encoding with `rsa-sha256` signature algorithm. This selection seems to be the most appropriate for all cases. Rspamd adds a special element called `DKIM-Signature` to the output when signing has been done. [Rmilter](/rmilter/) can use this header out of the box. Other integration methods cannot recognize this header so far.
+Rspamd always use `relaxed/relaxed` encoding with `rsa-sha256` signature algorithm. This selection seems to be the most appropriate for all cases. Rspamd adds a special element called `DKIM-Signature` to the output when signing has been done. [Rmilter]({{ site.baseurl }}/rmilter/) can use this header out of the box. Other integration methods cannot recognize this header so far.
 
 You can also generate DKIM keys for your domain using `rspamadm dkim_keygen` utility:
 
