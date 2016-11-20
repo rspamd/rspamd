@@ -115,11 +115,15 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 			event_del (&conn->timeout);
 		}
 
-		if (conn->ctx) {
+		if (conn->ctx && !(conn->ctx->c->flags & REDIS_FREEING)) {
+			redisAsyncContext *ac = conn->ctx;
+
 			/* To prevent on_disconnect here */
 			conn->active = TRUE;
 			g_hash_table_remove (conn->elt->pool->elts_by_ctx, conn->ctx);
-			redisAsyncFree (conn->ctx);
+			conn->ctx = NULL;
+			ac->onDisconnect = NULL;
+			redisAsyncFree (ac);
 		}
 
 		g_queue_unlink (conn->elt->inactive, conn->entry);
