@@ -310,6 +310,7 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
         if (c->flags & REDIS_FREEING) {
             ac->onDisconnect(ac,REDIS_OK,ac->disconnectCbdata);
         } else {
+            c->flags |= REDIS_FREEING;
             ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR,ac->disconnectCbdata);
         }
     }
