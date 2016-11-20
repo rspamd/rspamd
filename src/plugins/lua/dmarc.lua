@@ -49,6 +49,8 @@ local dmarc_symbols = {
 -- Default port for redis upstreams
 local redis_params = nil
 local dmarc_redis_key_prefix = "dmarc_"
+-- 2 days
+local dmarc_redis_key_expire = 60 * 60 * 24 * 2
 local dmarc_reporting = false
 local dmarc_actions = {}
 
@@ -330,7 +332,7 @@ local function dmarc_callback(task)
       local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition)
 
       if report_data then
-        rspamd_redis_make_request(task,
+        local ret,conn,upstream = rspamd_redis_make_request(task,
           redis_params, -- connect params
           from[1]['domain'], -- hash key
           true, -- is write
@@ -338,6 +340,11 @@ local function dmarc_callback(task)
           'LPUSH', -- command
           {redis_key, report_data} -- arguments
         )
+        if ret and conn then
+          conn:add_cmd('EXPIRE', {
+            redis_key, tostring(dmarc_redis_key_expire)
+          })
+        end
       end
     end
 
@@ -391,6 +398,14 @@ end
 
 if opts['key_prefix'] then
   dmarc_redis_key_prefix = opts['key_prefix']
+end
+
+if opts['expire'] then
+  dmarc_redis_key_expire = opts['expire']
+end
+
+if opts['key_expire'] then
+  dmarc_redis_key_expire = opts['key_expire']
 end
 
 -- Check spf and dkim sections for changed symbols
