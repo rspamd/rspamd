@@ -26,7 +26,7 @@ Rmilter is used to integrate Rspamd and `milter` compatible MTA, for example Pos
     </div>
     <div class="row" style="margin-top: 20px; margin-bottom: 20px;">
         <div class="col-sm-3 col-xs-12">
-            <a class="btn btn-social btn-primary btn-block" href="/rmilter/configuration.html"><i class="fa fa-file-text-o"></i> Rmilter configuration</a>
+            <a class="btn btn-social btn-primary btn-block" href="{{ site.baseurl }}/rmilter/configuration.html"><i class="fa fa-file-text-o"></i> Rmilter configuration</a>
         </div>
         <div class="col-sm-9 col-xs-12">
             <p>Rmilter configuration format is described in here.</p>
@@ -38,7 +38,7 @@ Rmilter is used to integrate Rspamd and `milter` compatible MTA, for example Pos
 
 Here is a scheme that demonstrates Rspamd and Postfix MTA integration using Rmilter:
 
-<img class="img-responsive" src="/img/rspamd-schemes.007_2.png">
+<img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-schemes.007_2.png">
 
 There are several useful settings for Postfix to work with this milter:
 

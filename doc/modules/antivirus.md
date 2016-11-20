@@ -9,7 +9,7 @@ Antivirus module (new in Rspamd 1.4) provides integration with virus scanners. C
 
 ### Configuration
 
-By default, given [Redis](/doc/configuration/redis.html) is configured globally and `antivirus` is not explicitly disabled in redis configuration, results are cached in Redis according to message checksums.
+By default, given [Redis]({{ site.baseurl }}/doc/configuration/redis.html) is configured globally and `antivirus` is not explicitly disabled in redis configuration, results are cached in Redis according to message checksums.
 
 Settings should be added to `rspamd.conf.local`:
 

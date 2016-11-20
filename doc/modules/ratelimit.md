@@ -36,7 +36,7 @@ Where `type` is one of:
 `burst` is a capacity of a bucket and `leak` is a rate in messages per second.
 Both these attributes are floating point values.
 
-- `servers` - list of servers where ratelimit data is stored; [global settings](/doc/configuration/redis.html) used if not set
+- `servers` - list of servers where ratelimit data is stored; [global settings]({{ site.baseurl }}/doc/configuration/redis.html) used if not set
 - `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
 - `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
 the value of this option is 'postmaster, mailer-daemon'
@@ -104,7 +104,7 @@ ratelimit {
 
 ### User-defined ratelimits
 
-From 1.4.0 bucket names can be dynamically constructed - `to`, `ip`, `from`, `user`, `bounce` and `asn` (new in 1.4- requires [asn module](/asn.html)) - are all keywords that can be rearranged freely joined by underscores to form new buckets, eg. `from_ip`. Furthermore the user can define their own keywords to use in construction of these buckets. Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
+From 1.4.0 bucket names can be dynamically constructed - `to`, `ip`, `from`, `user`, `bounce` and `asn` (new in 1.4- requires [asn module]({{ site.baseurl }}/asn.html)) - are all keywords that can be rearranged freely joined by underscores to form new buckets, eg. `from_ip`. Furthermore the user can define their own keywords to use in construction of these buckets. Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
 
 To create a custom keyword, we add `custom_keywords` setting to config pointing at a Lua script which we will create:
 
@@ -142,7 +142,7 @@ end
 return custom_keywords
 ~~~
 
-Each keyword should define a `get_value` function which is passed the [task object](https://rspamd.com/doc/lua/task.html) and should return either a value to use in the ratelimit key or `nil` to indicate that the ratelimit should not be applied. Optionally we could also define an `init` function to perform some initialization on startup and a `condition` function which could determine wether the ratelimit is to be checked or not (typically it would make more sense to add conditions into the `get_value` function directly).
+Each keyword should define a `get_value` function which is passed the [task object]({{ site.url }}{{ site.baseurl }}/doc/lua/task.html) and should return either a value to use in the ratelimit key or `nil` to indicate that the ratelimit should not be applied. Optionally we could also define an `init` function to perform some initialization on startup and a `condition` function which could determine wether the ratelimit is to be checked or not (typically it would make more sense to add conditions into the `get_value` function directly).
 
 Since we want to apply the keyword to authenticated users we must add this to the `user_keywords` setting:
 
@@ -167,7 +167,7 @@ ratelimit {
 
 ### Adaptive ratelimits
 
-From 1.4.0 Rspamd supports adaptive ratelimits- these allow for granting trusted senders increased ratelimits while reducing limits for hosts with bad or unknown reputation. This functionality requires the [ASN](/asn.html) and [IP Score](/ip_score.html) modules to be enabled.
+From 1.4.0 Rspamd supports adaptive ratelimits- these allow for granting trusted senders increased ratelimits while reducing limits for hosts with bad or unknown reputation. This functionality requires the [ASN]({{ site.baseurl }}/asn.html) and [IP Score]({{ site.baseurl }}/ip_score.html) modules to be enabled.
 
 To enable adaptive ratelimits, set the following:
 

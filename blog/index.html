@@ -5,7 +5,7 @@ title: Rspamd Blog
 
 <!-- This loops through the paginated posts -->
 {% for post in paginator.posts %}
-  <h1><a href="{{ post.url }}">{{ post.title }}</a></h1>
+  <h1><a href="{{ site.baseurl }}{{ post.url }}">{{ post.title }}</a></h1>
   <p class="author">
     <span class="date">{{ post.date }}</span>
   </p>
@@ -19,9 +19,9 @@ title: Rspamd Blog
   {% if paginator.previous_page %}
     <li class="previous">
       {% if paginator.previous_page == 1 %}
-        <a href="/blog/">&laquo;</a>
+        <a href="{{ site.baseurl }}/blog/">&laquo;</a>
       {% else %}
-        <a href="{{ paginator.previous_page_path }}">&laquo;</a>
+        <a href="{{ site.baseurl }}{{ paginator.previous_page_path }}">&laquo;</a>
       {% endif %}
     </li>
   {% else %}
@@ -34,7 +34,7 @@ title: Rspamd Blog
       {% if paginator.page == 1 %}
         <span class="current-page">1</span>
       {% else %}
-        <a href="/blog/">1</a>
+        <a href="{{ site.baseurl }}/blog/">1</a>
       {% endif %}
     </li>
 
@@ -43,14 +43,14 @@ title: Rspamd Blog
         {% if count == paginator.page %}
           <span class="current-page">{{ count }}</span>
         {% else %}
-          <a href="/blog/page{{ count }}">{{ count }}</a>
+          <a href="{{ site.baseurl }}/blog/page{{ count }}">{{ count }}</a>
         {% endif %}
       </li>
     {% endfor %}
 
   {% if paginator.next_page %}
     <li class="next">
-      <a href="{{ paginator.next_page_path }}">&raquo;</a>
+      <a href="{{ site.baseurl }}{{ paginator.next_page_path }}">&raquo;</a>
     </li>
   {% else %}
     <li class="next disabled">

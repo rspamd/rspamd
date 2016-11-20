@@ -43,4 +43,4 @@ metadata_exporter {
 }
 ~~~
 
-At least one of `channel` or `url` should be set. See [here](/doc/configuration/redis.html) for information on configuring Redis.
+At least one of `channel` or `url` should be set. See [here]({{ site.baseurl }}/doc/configuration/redis.html) for information on configuring Redis.

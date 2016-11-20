@@ -6,7 +6,7 @@ title: Downloads
 <!--# Downloading rspamd->
 
 <!-- download button with tooltip
-<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-1.3.1.tar.xz" data-toggle="tooltip" data-placement="right" title="Download the most recent stable version as source tarball">Download rspamd-1.3.1</a></p>
+<p><a class="btn btn-primary btn-lg" href="{{ site.baseurl }}/downloads/rspamd-1.3.1.tar.xz" data-toggle="tooltip" data-placement="right" title="Download the most recent stable version as source tarball">Download rspamd-1.3.1</a></p>
 <!-- github button >
 <p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p-->
@@ -104,7 +104,7 @@ For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> bra
     apt-get update
     apt-get --no-install-recommends install rspamd
 
-Check [quick start](/doc/quickstart.html#rspamd-installation) for further steps.
+Check [quick start]({{ site.baseurl }}/doc/quickstart.html#rspamd-installation) for further steps.
 
 ### Debian `official` repos
 
@@ -215,7 +215,7 @@ Alternatively, you can create a distribution package and use it for build your o
 
 ## Further reading
 
-Please check the [quickstart guide](/doc/quickstart.html) that describes the subsequent steps to keep rspamd up and running. The most frequently asked questions are listed in the [FAQ](/doc/faq.html).
+Please check the [quickstart guide]({{ site.baseurl }}/doc/quickstart.html) that describes the subsequent steps to keep rspamd up and running. The most frequently asked questions are listed in the [FAQ]({{ site.baseurl }}/doc/faq.html).
 
 ## Reporting bugs and other issues
 

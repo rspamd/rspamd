@@ -15,11 +15,11 @@ This guide describes the main steps to get and start working with Rspamd. In par
 - Redis cache
 - Dovecot with Sieve plugin to sort mail and learn by moving messages to `Junk` folder
 
-For those who are planning migration from SpamAssassin, it might be useful to check the [SA migration guide](/doc/tutorials/migrate_sa.html)
+For those who are planning migration from SpamAssassin, it might be useful to check the [SA migration guide]({{ site.baseurl }}/doc/tutorials/migrate_sa.html)
 
 ## Preparation steps
 
-First of all, you need a working <abbr title="Mail Transfer Agent">MTA</abbr> that can send and receive email for your domain using <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> protocol. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, Rspamd can work with other MTA software - you can find details in the [integration document](/doc/integration.html).
+First of all, you need a working <abbr title="Mail Transfer Agent">MTA</abbr> that can send and receive email for your domain using <abbr title="Simple Mail Transfer Protocol">SMTP</abbr> protocol. In this guide, we describe the setup of the [Postfix MTA](http://www.postfix.org/). However, Rspamd can work with other MTA software - you can find details in the [integration document]({{ site.baseurl }}/doc/integration.html).
 
 ### TLS Setup
 
@@ -177,15 +177,15 @@ Note that for the moment by default stable releases of Redis listen for connecti
 
 When you are done with Postfix/Dovecot/Redis initial setup, it might be a good idea to setup Rmilter. Rmilter is used to connect Postfix (or Sendmail) with Rspamd. It can alter messages, change subject, reject spam, perform greylisting, check rate limits and even sign messages for authorized users/networks with DKIM signatures.
 
-To install Rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of `rspamd`. With the default configuration, Rmilter will use Redis and Rspamd on the local machine. You might want to change the bind settings as the default settings the use of unix sockets which might not work in some circumstances. To use TCP sockets for Rmilter, you can set the `bind_socket` option according to your Postfix setup:
+To install Rmilter, please follow the instructions on the [downloads page]({{ site.baseurl }}/downloads.html) but install `rmilter` package instead of `rspamd`. With the default configuration, Rmilter will use Redis and Rspamd on the local machine. You might want to change the bind settings as the default settings the use of unix sockets which might not work in some circumstances. To use TCP sockets for Rmilter, you can set the `bind_socket` option according to your Postfix setup:
 
 	bind_socket = inet:9900@127.0.0.1;
 
-For advanced setup, please check the [Rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have a systemd-less system, then you can check Rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
+For advanced setup, please check the [Rmilter documentation]({{ site.baseurl }}/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have a systemd-less system, then you can check Rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
 
 ## Rspamd installation
 
-The download process is described in the [downloads page](/downloads.html) where you can find how to get Rspamd, how to install it in your system, and, alternatively, how to build Rspamd from the sources.
+The download process is described in the [downloads page]({{ site.baseurl }}/downloads.html) where you can find how to get Rspamd, how to install it in your system, and, alternatively, how to build Rspamd from the sources.
 
 ## Running Rspamd
 
@@ -435,7 +435,7 @@ classifier {
 }
 {% endhighlight %}
 
-For other possibilities please read the full [documentation](/doc/configuration/statistic.html). The more specific Redis related documentation can be found [here](/doc/configuration/redis.html).
+For other possibilities please read the full [documentation]({{ site.baseurl }}/doc/configuration/statistic.html). The more specific Redis related documentation can be found [here]({{ site.baseurl }}/doc/configuration/redis.html).
 
 ## Adjusting scores and actions
 
@@ -488,7 +488,7 @@ Within maps you can use whitespace or comments. For example, here is an example 
     10.0.0.0/8
     fe80::/64
 
-There is a special module called `multimap` that allows you to define your own maps without writing lua rules. You can check the module's [documentation](/doc/modules/multimap.html) and create your configuration in `rspamd.conf.override`.
+There is a special module called `multimap` that allows you to define your own maps without writing lua rules. You can check the module's [documentation]({{ site.baseurl }}/doc/modules/multimap.html) and create your configuration in `rspamd.conf.override`.
 
 ## Configuring RBLs
 
@@ -510,7 +510,7 @@ Though Rspamd is free to use for any purpose many of the RBLs used in the defaul
 
 [UCEProtect](http://www.uceprotect.net/en/index.php?m=6&s=11) - If you're sending 100k queries or more per day you should use the (free) Rsync service.
 
-These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. Detailed documentation for the RBL module is available [here](https://rspamd.com/doc/modules/rbl.html).
+These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. Detailed documentation for the RBL module is available [here]({{ site.url }}{{ site.baseurl }}/doc/modules/rbl.html).
 
 ## Using Rspamd
 
@@ -537,7 +537,7 @@ Common use-cases for `rspamc` include:
     rspamc -f 1 -w 1 fuzzy_add file.eml
     rspamc -f 2 fuzzy_del file2.eml
 
-* Acting as a local delivery agent (read the [integration document](/doc/integration.html))
+* Acting as a local delivery agent (read the [integration document]({{ site.baseurl }}/doc/integration.html))
 
 ### The rspamadm command
 
@@ -590,12 +590,12 @@ spamd {
 }
 {% endhighlight %}
 
-To enable headers in Exim refer to the "Integration with Exim MTA" section of the [MTA integration](/doc/integration.html) document.
+To enable headers in Exim refer to the "Integration with Exim MTA" section of the [MTA integration]({{ site.baseurl }}/doc/integration.html) document.
 
 Here is a screenshot of this addon in use:
 
-<img class="img-responsive" src="/img/thunderbird_rspamd.png">
+<img class="img-responsive" src="{{ site.baseurl }}/img/thunderbird_rspamd.png">
 
 ### Using the WebUI
 
-Rspamd has a built-in WebUI which supports setting metric actions and scores; Bayes training and scanning messages - for more information see the [WebUI documentation](https://rspamd.com/webui).
+Rspamd has a built-in WebUI which supports setting metric actions and scores; Bayes training and scanning messages - for more information see the [WebUI documentation]({{ site.url }}{{ site.baseurl }}/webui).

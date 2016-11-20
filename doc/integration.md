@@ -18,7 +18,7 @@ This document also describes the rspamd LDA proxy mode that can be used for any 
 
 To link rspamd with Postfix it is recommended to use a tool called `rmilter`:
 
-<img class="img-responsive" src="/img/rspamd-schemes.007.png">
+<img class="img-responsive" src="{{ site.baseurl }}/img/rspamd-schemes.007.png">
 
 Rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
 
@@ -30,7 +30,7 @@ First of all build and install rmilter from source (or use a binary package if a
 	% make
 	# make install
 
-Rmilter configuration is described in its [documentation](https://rspamd.com/rmilter/)
+Rmilter configuration is described in its [documentation]({{ site.url }}{{ site.baseurl }}/rmilter/)
 Here is a relevant example of rspamd setup within rmilter configuration file:
 
 ~~~ucl

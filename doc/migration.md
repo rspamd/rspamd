@@ -192,7 +192,7 @@ worker {
 
 ### Settings changes
 
-The settings system has been completely reworked. It is now a lua plugin that registers pre-filters and assigns settings according to dynamic maps or a static configuration. Should you want to use the new settings system then please check the recent [documentation](https://rspamd.com/doc/configuration/settings.html). The old settings have been completely removed from Rspamd.
+The settings system has been completely reworked. It is now a lua plugin that registers pre-filters and assigns settings according to dynamic maps or a static configuration. Should you want to use the new settings system then please check the recent [documentation]({{ site.url }}{{ site.baseurl }}/doc/configuration/settings.html). The old settings have been completely removed from Rspamd.
 
 ### Lua changes
 
@@ -241,7 +241,7 @@ local dm = task:get_date{format = 'message'} -- MIME message date
 local dt = task:get_date{format = 'connect'} -- check date
 ~~~
 
-* `get_header` - this function is totally reworked. Now `get_header` version returns just a decoded string, `get_header_raw` returns an undecoded string and `get_header_full` returns the full list of tables. Please consult the corresponding [documentation](https://rspamd.com/doc/lua/task.html) for details. You also might want to update the old invocation of task:get_header to the new one.
+* `get_header` - this function is totally reworked. Now `get_header` version returns just a decoded string, `get_header_raw` returns an undecoded string and `get_header_full` returns the full list of tables. Please consult the corresponding [documentation]({{ site.url }}{{ site.baseurl }}/doc/lua/task.html) for details. You also might want to update the old invocation of task:get_header to the new one.
 Old version:
 
 ~~~lua

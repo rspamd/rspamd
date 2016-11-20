@@ -5,9 +5,9 @@ title: IP Score module
 
 # IP Score
 
-IP Score stores records in Redis - [see here](/doc/configuration/redis.html) for information about configuring Redis.
+IP Score stores records in Redis - [see here]({{ site.baseurl }}/doc/configuration/redis.html) for information about configuring Redis.
 
-Since Rspamd 1.3.4, IP Score requires lookup information from [ASN module](/doc/modules/asn.html).
+Since Rspamd 1.3.4, IP Score requires lookup information from [ASN module]({{ site.baseurl }}/doc/modules/asn.html).
 
 ### Theory of operation
 
@@ -68,7 +68,7 @@ Subscores are added to each other to determine a total. If `min_score` or `max_s
 
 ### Configuration
 
-Refer to example configuration below for available settings. To use default settings, [configure Redis](/doc/configuration/redis.html) globally and add `ip_score { }` to `/etc/rspamd/rspamd.conf.local`.
+Refer to example configuration below for available settings. To use default settings, [configure Redis]({{ site.baseurl }}/doc/configuration/redis.html) globally and add `ip_score { }` to `/etc/rspamd/rspamd.conf.local`.
 
 ~~~ucl
 ip_score {

@@ -5,7 +5,7 @@ title: About Rspamd
 
 ## Introduction
 
-[Rspamd](https://rspamd.com) is an advanced spam filtering system supporting a variety of filtering mechanisms
+[Rspamd]({{ site.url }}{{ site.baseurl }}) is an advanced spam filtering system supporting a variety of filtering mechanisms
 including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by rspamd and given a `spam score`.
 
@@ -15,7 +15,7 @@ Rspamd is designed to process hundreds of messages per second simultaneously.
 
 You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from [FOSDEM-2016](http://fosdem.org) where I describe the main features of rspamd and explain why rspamd runs so fast.
 
-Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux distributions and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd) and NetBSD [pkgsrc](https://pkgsrc.org).
+Rspamd is [packaged]({{ site.url }}{{ site.baseurl }}/downloads.html) for the major Linux distributions and is also available via [FreeBSD ports](https://freshports.org/mail/rspamd) and NetBSD [pkgsrc](https://pkgsrc.org).
 
 ## Spam filtering features
 
@@ -62,9 +62,9 @@ and learning messages and viewing the history of scans. The interface is self-ho
 web server or application server to run the web UI - you just need to run rspamd itself.
 
 * **Integration with MTA** - rspamd can work with the most popular mail transfer systems, such as postfix, exim or sendmail. For postfix and sendmail, there is the [`rmilter` project](https://github.com/vstakhov/rmilter),
-whilst for exim there are several solutions to work with rspamd. Should you require MTA integration then please consult with the [integration guide](https://rspamd.com/doc/integration.html).
+whilst for exim there are several solutions to work with rspamd. Should you require MTA integration then please consult with the [integration guide]({{ site.url }}{{ site.baseurl }}/doc/integration.html).
 
-* **Extensive Lua API** - rspamd ships with hundreds of [lua functions](https://rspamd.com/doc/lua) that are available to write one's own rules for efficient and targeted spam filtering.
+* **Extensive Lua API** - rspamd ships with hundreds of [lua functions]({{ site.url }}{{ site.baseurl }}/doc/lua) that are available to write one's own rules for efficient and targeted spam filtering.
 
 * **Dynamic tables** - rspamd supports `dynamic maps` containing strings or IP addresses that are checked during runtime and updated in memory when changed. Maps can be stored on disk or accessed over HTTP/HTTPS.
 
@@ -113,7 +113,7 @@ end
 ~~~
 
 * **Full access to the content of messages** - you can access text parts, headers, SMTP data and so on and so forth by using the `task` object. The full list of methods can be found
-[here](https://rspamd.com/doc/lua/task.html).
+[here]({{ site.url }}{{ site.baseurl }}/doc/lua/task.html).
 
 
 * **Pre- and post- filters** - you can register callbacks that are called before or after messages processing to make results more precise or to make some early decision,
@@ -128,7 +128,7 @@ statistical systems, e.g. based on an input language.
 all features from rspamd core, including such features as non-blocking IO, HTTP client and server, non-blocking redis client, asynchronous DNS, UCL configuration and so on
 and so forth.
 
-* **API documentation** - rspamd Lua API has [extensive documentation](https://rspamd.com/doc/lua) where you can find examples, references and the guide about how to extend
+* **API documentation** - rspamd Lua API has [extensive documentation]({{ site.url }}{{ site.baseurl }}/doc/lua) where you can find examples, references and the guide about how to extend
 rspamd with Lua.
 
 

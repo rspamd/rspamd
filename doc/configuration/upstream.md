@@ -61,7 +61,7 @@ Selects upstream based on hash value of the input key. Rspamd uses a [consistent
 
 Each upstream is monitored by Rspamd for errors. If an error occur Rspamd places an upstream in monitoring mode during which it analyses errors rate (this is usually set by options `max_errors` and `error_time` where rate is calculated by `errors` / `time elapsed since monitoring start`). If this error rate is higher than desired (`max_errors` / `error_time`) then Rspamd marks upstream as inactive unless there are no active upstreams. Any successful connection during `monitoring` state returns an upstream to the `active` state. Upon reaching error rate limit, an upstream is marked as inactive and Rspamd waits for some time configured by option `dead_time` to restore upstream in the active list. The overall process is depicted in the following scheme:
 
-<img class="img-responsive" width="75%" src="/img/upstreams.png">
+<img class="img-responsive" width="75%" src="{{ site.baseurl }}/img/upstreams.png">
 
 ## Name resolution
 
