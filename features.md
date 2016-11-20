@@ -5,7 +5,7 @@ title: Rspamd features
 
 ## About Rspamd
 
-<abbr title="Rapid Spam Daemon"><a href="https://rspamd.com">Rspamd</a></abbr> is an advanced spam filtering system that allows evaluation of messages by a number of
+<abbr title="Rapid Spam Daemon"><a href="{{ site.url }}{{ site.baseurl }}">Rspamd</a></abbr> is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by Rspamd and given a `spam score`.
 

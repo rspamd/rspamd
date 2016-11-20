@@ -35,7 +35,7 @@ This section contains details about Rspamd internals, documents about writing ne
 
 * **[Writing Rspamd rules](./tutorials/writing_rules.html)** is a step-by-step guide that describes how to write rules for Rspamd
 * **[Lua API reference](./lua/)** provides the extensive information about all Lua modules available in Rspamd
-* **[Creating your fuzzy storage](http://rspamd.com/doc/fuzzy_storage.html)** provides information about how to make your own hashes storage and how to learn it efficiently
+* **[Creating your fuzzy storage]({{ site.url }}{{ site.baseurl }}/doc/fuzzy_storage.html)** provides information about how to make your own hashes storage and how to learn it efficiently
 * **[Architecture information](./architecture/index.html)** provides an overview of the Rspamd internal structure
 * **[Protocol documentation](./architecture/protocol.html)** describes Rspamd protocol which is used to communicate with external tools, such as Rmilter or `rspamc` client utility
 

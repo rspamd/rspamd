@@ -142,7 +142,7 @@ end
 return custom_keywords
 ~~~
 
-Each keyword should define a `get_value` function which is passed the [task object](https://rspamd.com/doc/lua/task.html) and should return either a value to use in the ratelimit key or `nil` to indicate that the ratelimit should not be applied. Optionally we could also define an `init` function to perform some initialization on startup and a `condition` function which could determine wether the ratelimit is to be checked or not (typically it would make more sense to add conditions into the `get_value` function directly).
+Each keyword should define a `get_value` function which is passed the [task object]({{ site.url }}{{ site.baseurl }}/doc/lua/task.html) and should return either a value to use in the ratelimit key or `nil` to indicate that the ratelimit should not be applied. Optionally we could also define an `init` function to perform some initialization on startup and a `condition` function which could determine wether the ratelimit is to be checked or not (typically it would make more sense to add conditions into the `get_value` function directly).
 
 Since we want to apply the keyword to authenticated users we must add this to the `user_keywords` setting:
 

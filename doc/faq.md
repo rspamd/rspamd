@@ -10,7 +10,7 @@ This document includes some questions and practical examples that are frequently
 ## General questions
 
 ### Where to get help about Rspamd
-The most convenient place for asking questions about Rspamd is the IRC channel _#rspamd_ on [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
+The most convenient place for asking questions about Rspamd is the IRC channel _#rspamd_ on [http://freenode.net](http://freenode.net). For more information you can also check the [support page]({{ site.url }}{{ site.baseurl }}/support.html)
 
 ### How to figure out why Rspamd process crashed
 Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following:
@@ -144,7 +144,7 @@ rspamc -f 1 -w 10 fuzzy_add message.eml # Add message to fuzzy storage
 
 By default, Rspamd converts all messages to `UTF-8` encoding. This includes text parts (both `text/plain` and `text/html`), headers and MIME elements (boundaries, filenames). If there is no information on how to convert something to `UTF-8` - for example, when there is no `charset` attribute in the `Content-Type` header or if there are some broken `UTF-8` characters - then Rspamd treats this text as raw for safety considerations. The difference between raw and `UTF-8` text is that for `UTF-8` it is possible to use unicode regular expressions by specifying the `/U` flag. For raw texts, Rspamd uses raw complementary expressions, which may lack some features.
 
-It is always safe to assume that everything will be encoded in `UTF-8`; even in the case of raw messages, you would just miss some particular features. There is also a module called [chartable](https://rspamd.com/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and tries to guess if there is an attempt to mix characters sets.
+It is always safe to assume that everything will be encoded in `UTF-8`; even in the case of raw messages, you would just miss some particular features. There is also a module called [chartable]({{ site.url }}{{ site.baseurl }}/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and tries to guess if there is an attempt to mix characters sets.
 
 ### Can I relearn messages for fuzzy storage or for statistics
 
@@ -201,7 +201,7 @@ Unlike SpamAssassin, Rspamd **suggests** the desired action for a specific messa
 - `greylist`: delay message for a while
 - `no action`: pass message
 
-Rspamd itself **does not** alter a message, that is a task for the MTA or any shim agent (e.g. [Rmilter](https://rspamd.com/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for the user.
+Rspamd itself **does not** alter a message, that is a task for the MTA or any shim agent (e.g. [Rmilter]({{ site.url }}{{ site.baseurl }}/rmilter/)). All actions but `reject` and `no action` could be treated as `potential spam` and greylisted or moved to a `Junk` folder for the user.
 
 ### What are local and override config files
 Historically, Rspamd provided user-editable configuration files. However, as the project developed, it became clear that this idea had drawbacks: Rspamd configuration influences the overall filtering quality, performance and other important metrics and it was difficult to maintain local configurations with new releases of Rspamd. Hence, I decided to add two possibilities:
@@ -491,11 +491,11 @@ rspamd_config:add_condition('SOME_SYMBOL', function(task) return false end)
 
 You can add more complex conditions but this one is the easiest in terms of rules management and upgrades.
 
-Additionally you can dynamically selectively enable/disable symbols with [settings module](https://rspamd.com/doc/configuration/settings.html).
+Additionally you can dynamically selectively enable/disable symbols with [settings module]({{ site.url }}{{ site.baseurl }}/doc/configuration/settings.html).
 
 ### Can I scan outgoing mail with Rspamd
 
-Yes, Rspamd should be safe for outbound scanning by default, [see here for detail](https://rspamd.com/doc/tutorials/scanning_outbound.html).
+Yes, Rspamd should be safe for outbound scanning by default, [see here for detail]({{ site.url }}{{ site.baseurl }}/doc/tutorials/scanning_outbound.html).
 
 ## Administration questions
 
@@ -536,7 +536,7 @@ $lua{
 EOD
 ```
 
-As you can see, you can use both embedded log variables and Lua code to customize log output. More information is available in the [logger documentation](https://rspamd.com/doc/configuration/logging.html)
+As you can see, you can use both embedded log variables and Lua code to customize log output. More information is available in the [logger documentation]({{ site.url }}{{ site.baseurl }}/doc/configuration/logging.html)
 
 ### Which backend should I use for statistics
 
@@ -546,7 +546,7 @@ Currently, I recommend using `redis` for the statistics back end. You can conver
 rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379  -s BAYES_SPAM
 ```
 
-The only limitation of the redis plugin is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
+The only limitation of the redis plugin is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation]({{ site.url }}{{ site.baseurl }}/doc/configuration/statistic.html) for further details.
 
 
 ### What Redis keys are used by Rspamd
@@ -559,7 +559,7 @@ It is recommended to set a limit for dynamic Rspamd data stored in Redis ratelim
 ## Plugin questions
 
 ### How to whitelist messages
-You have multiple options here. First of all, if you need to define a whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at the [whitelist module](https://rspamd.com/doc/modules/whitelist.html). Otherwise, there is a [multimap module](https://rspamd.com/doc/modules/multimap.html) that implements different types of checks to add symbols according to list matches or to set pre-actions which allow you to reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
+You have multiple options here. First of all, if you need to define a whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at the [whitelist module]({{ site.url }}{{ site.baseurl }}/doc/modules/whitelist.html). Otherwise, there is a [multimap module]({{ site.url }}{{ site.baseurl }}/doc/modules/multimap.html) that implements different types of checks to add symbols according to list matches or to set pre-actions which allow you to reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
 
 ```
 exe
@@ -580,7 +580,7 @@ filename_blacklist {
 }
 ```
 
-Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/configuration/settings.html). You can specify `want_spam = yes` and Rspamd will skip messages that satisfy a particular rule's conditions.
+Another option is to disable spam filtering for some senders or recipients based on [user settings]({{ site.url }}{{ site.baseurl }}/doc/configuration/settings.html). You can specify `want_spam = yes` and Rspamd will skip messages that satisfy a particular rule's conditions.
 
 ### What are filters, pre-filters and post-filters
 Rspamd executes different types of filters depending on the time of execution.
@@ -698,7 +698,7 @@ Historically, all Lua methods used the sequential call type. This has changed so
 - it is easier to **extend** methods with new features and to keep backward compatibility
 - it is much easier to allow **optional** arguments
 
-However, there is a drawback: table calls are slightly more expensive in terms of computational resources. The difference is negligible in the majority of cases so Rspamd now supports the table form for most functions which accept more than two or three arguments. You can check in the [documentation](https://rspamd.com/doc/lua/) which forms are allowed for a particular function.
+However, there is a drawback: table calls are slightly more expensive in terms of computational resources. The difference is negligible in the majority of cases so Rspamd now supports the table form for most functions which accept more than two or three arguments. You can check in the [documentation]({{ site.url }}{{ site.baseurl }}/doc/lua/) which forms are allowed for a particular function.
 
 ### How to use rspamd modules
 
@@ -715,7 +715,7 @@ Rspamd also ships some additional lua modules which you can use in your rules:
 - [Lua LPEG](http://www.inf.puc-rio.br/~roberto/lpeg/)
 
 ### How to write to Rspamd log
-[Rspamd logger](https://rspamd.com/doc/lua/logger.html) provides many convenient methods to log data from lua rules and plugins. You should consider using one of the modern methods (with `x` suffix) that allow use of `%s` and `%1` .. `%N` notation. The `%s` format is used to print the **next** argument, and `%<number>` is used to process the particular argument (starting from `1`):
+[Rspamd logger]({{ site.url }}{{ site.baseurl }}/doc/lua/logger.html) provides many convenient methods to log data from lua rules and plugins. You should consider using one of the modern methods (with `x` suffix) that allow use of `%s` and `%1` .. `%N` notation. The `%s` format is used to print the **next** argument, and `%<number>` is used to process the particular argument (starting from `1`):
 
 ```lua
 local rspamd_logger = require 'rspamd_logger'
@@ -797,7 +797,7 @@ Please use [replies module]({{ site.baseurl }}/doc/modules/replies.html) in Rspa
 
 ### How to distinguish inbound and outbound traffic for Rspamd instance
 
-From version 1.8.0 onwards, Rmilter can pass a special header to Rspamd called `settings-id`. This header allows Rspamd to apply specific settings for a message. You can set custom scores for a message or disable some rules or even a group of rules when scanning. For example, if we want to disable some rules for outbound scanning we could create an entry in the [settings](https://rspamd.com/doc/configuration/settings.html) module:
+From version 1.8.0 onwards, Rmilter can pass a special header to Rspamd called `settings-id`. This header allows Rspamd to apply specific settings for a message. You can set custom scores for a message or disable some rules or even a group of rules when scanning. For example, if we want to disable some rules for outbound scanning we could create an entry in the [settings]({{ site.url }}{{ site.baseurl }}/doc/configuration/settings.html) module:
 
 ```ucl
 settings {
@@ -829,13 +829,13 @@ spamd {
 }
 ```
 
-Another possibility is to apply settings based merely on the sender being authenticated or having an IP address in a particular range, refer to the [documentation](https://rspamd.com/doc/configuration/settings.html) for detail.
+Another possibility is to apply settings based merely on the sender being authenticated or having an IP address in a particular range, refer to the [documentation]({{ site.url }}{{ site.baseurl }}/doc/configuration/settings.html) for detail.
 
 ### How can I restore the old SPF behaviour
 
 Previously, Rmilter could reject mail which fail SPF verification for certain domains. However, this was removed. Nevertheless, this behaviour could be reproduced using Rspamd.
 
-One can create rules in rspamd to force rejection on whatever symbols (+ other conditions) they want (DMARC module, among others has built-in support for such; [multimap](https://rspamd.com/doc/modules/multimap.html) being the most generally useful)
+One can create rules in rspamd to force rejection on whatever symbols (+ other conditions) they want (DMARC module, among others has built-in support for such; [multimap]({{ site.url }}{{ site.baseurl }}/doc/modules/multimap.html) being the most generally useful)
 
 For example, add to `/etc/rspamd/rspamd.local.lua`:
 

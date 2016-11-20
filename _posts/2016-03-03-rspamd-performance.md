@@ -5,7 +5,7 @@ categories: misc
 ---
 
 Just before `1.2` release, I have measured performance of rspamd comparing to SA. In this experiment, I've taken rspamd master branch with default rules.
-Then I've added all rules from SA using [spamassassin](https://rspamd.com/doc/modules/spamassassin.html) plugin. Hence, two scanners run with almost exact set of rules.
+Then I've added all rules from SA using [spamassassin]({{ site.url }}{{ site.baseurl }}/doc/modules/spamassassin.html) plugin. Hence, two scanners run with almost exact set of rules.
 
 This set is quite large and it includes about 3k of custom regexp rules. Rspamd runs **without** hyperscan and pcre2, so it performs literally the same job as SA does.
 And here are results for about 100k messages being scanned:
@@ -21,5 +21,5 @@ So the difference in checks is **less than 1%** and in many cases rspamd does be
 differences. And it's still **13 times** faster than SA. Moreover, it eats less memory and can process more messages in parallel. In other experiments, rspamd was able to process
 about 450 messages per second on a single SandyBridge 4 cores scanner box.
 
-I plan to release rspamd 1.2 very soon with a lot of cool features, including dynamic rules updates. I would appreciate any help in testing of the [experimental packages](https://rspamd.com/downloads.html). In fact,
+I plan to release rspamd 1.2 very soon with a lot of cool features, including dynamic rules updates. I would appreciate any help in testing of the [experimental packages]({{ site.url }}{{ site.baseurl }}/downloads.html). In fact,
 they are already used in production and are even more stable than 1.1 branch.

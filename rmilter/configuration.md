@@ -198,7 +198,7 @@ it bucket is counted as overflowed and new messages are rejected),
 second value is rate (how much messages can be removed from bucket
 each second). It can be schematically displayed as following:
 
-<div><img src="https://rspamd.com/img/rspamd-schemes.006.jpg" alt="Leaking bucket" class="img-responsive" style="padding-bottom:20px; max-height: 200px;"></div>
+<div><img src="{{ site.url }}{{ site.baseurl }}/img/rspamd-schemes.006.jpg" alt="Leaking bucket" class="img-responsive" style="padding-bottom:20px; max-height: 200px;"></div>
 
 - `limit_whitelist_ip`: don't check limits for specified ips, networks or hostnames
 	+ Default: `empty`

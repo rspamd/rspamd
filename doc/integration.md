@@ -30,7 +30,7 @@ First of all build and install rmilter from source (or use a binary package if a
 	% make
 	# make install
 
-Rmilter configuration is described in its [documentation](https://rspamd.com/rmilter/)
+Rmilter configuration is described in its [documentation]({{ site.url }}{{ site.baseurl }}/rmilter/)
 Here is a relevant example of rspamd setup within rmilter configuration file:
 
 ~~~ucl

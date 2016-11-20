@@ -510,7 +510,7 @@ Though Rspamd is free to use for any purpose many of the RBLs used in the defaul
 
 [UCEProtect](http://www.uceprotect.net/en/index.php?m=6&s=11) - If you're sending 100k queries or more per day you should use the (free) Rsync service.
 
-These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. Detailed documentation for the RBL module is available [here](https://rspamd.com/doc/modules/rbl.html).
+These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. Detailed documentation for the RBL module is available [here]({{ site.url }}{{ site.baseurl }}/doc/modules/rbl.html).
 
 ## Using Rspamd
 
@@ -598,4 +598,4 @@ Here is a screenshot of this addon in use:
 
 ### Using the WebUI
 
-Rspamd has a built-in WebUI which supports setting metric actions and scores; Bayes training and scanning messages - for more information see the [WebUI documentation](https://rspamd.com/webui).
+Rspamd has a built-in WebUI which supports setting metric actions and scores; Bayes training and scanning messages - for more information see the [WebUI documentation]({{ site.url }}{{ site.baseurl }}/webui).
