@@ -332,7 +332,7 @@ local function dmarc_callback(task)
       local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition)
 
       if report_data then
-        local ret,conn,upstream = rspamd_redis_make_request(task,
+        local ret,conn,_ = rspamd_redis_make_request(task,
           redis_params, -- connect params
           from[1]['domain'], -- hash key
           true, -- is write
