@@ -86,7 +86,8 @@ local function replies_set(task)
     end
   end
   -- If sender is unauthenticated return
-  if task:get_user() == nil then
+  local ip = task:get_ip()
+  if task:get_user() == nil and not (ip and ip:is_local()) then
     return
   end
   -- If no message-id present return
