@@ -10,7 +10,7 @@ title: Rspamd spam filtering system
 				<p style="margin-bottom: 0px; margin-top: 5px">The new stable release with major features and bugfixes.</p>
    </div>
 	 <div class="col-xs-12 col-sm-2 bottom-right">
-				<a class="btn btn-primary pull-right" href="{{ site.baseurl }}/announce/22016/11/21/rspamd-1.4.0.html" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
+				<a class="btn btn-primary pull-right" href="{{ site.baseurl }}/announce/2016/11/21/rspamd-1.4.0.html" style="margin-top: 10px;">Learn more <small><i class="fa fa-chevron-right"></i></small></a>
 	 </div>
 </div>
 <div class="row news_row" style="position: relative;">
