@@ -1,3 +1,294 @@
+1.4.0:
+	* [CritFix] Add guards for inactive redis connections
+	* [CritFix] Another fix for proxying files using rspamd_proxy
+	* [CritFix] Cleanup inactive redis connections
+	* [CritFix] Do not sometimes try to exec posfilters before classification
+	* [CritFix] Fix application of IPv6 mask
+	* [CritFix] Fix chunked encoding when reading messages
+	* [CritFix] Fix file mode for rspamd_proxy
+	* [CritFix] Fix hyperscan compilation on regexp change
+	* [CritFix] Fix issue with finding of end of lines pointers
+	* [CritFix] Fix iteration over headers array (introduced in 1.4)
+	* [CritFix] Fix processing of learned tokens count for redis backend
+	* [CritFix] Fix race condition in checking of cached maps
+	* [CritFix] Fix workers scripts by sharing workers configs
+	* [CritFix] Introduce raw content to text parts
+	* [CritFix] Plug memory leak and potential memory corruption
+	* [Feature] Adaptive ratelimits
+	* [Feature] Add ASN -> rbldnsd script for asn.rspamd.com
+	* [Feature] Add DMARC_NA symbol
+	* [Feature] Add F-Prot support to antivirus module
+	* [Feature] Add HTTP backend to metadata exporter
+	* [Feature] Add Lua API module for monitored objects
+	* [Feature] Add R_DKIM_NA / R_SPF_NA / AUTH_NA symbols
+	* [Feature] Add R_DKIM_PERMFAIL symbol
+	* [Feature] Add R_SPF_PERMFAIL symbol
+	* [Feature] Add Sophos antivirus support
+	* [Feature] Add ZSTD compression to Lua API
+	* [Feature] Add `mid` Lua module
+	* [Feature] Add `one_param` flag for metric symbols
+	* [Feature] Add a generic lua classifier
+	* [Feature] Add a very basic interface to access workers data from on_load
+	* [Feature] Add ability to delete a hash by its data to fuzzy_check plugin
+	* [Feature] Add ability to enable/disable symbols via dynamic_conf
+	* [Feature] Add ability to lookup settings by key
+	* [Feature] Add common way to disable Lua modules
+	* [Feature] Add compression support to rspamd client
+	* [Feature] Add condition to do antiviral check
+	* [Feature] Add configuration for lua classifiers
+	* [Feature] Add configuration knobs for the errors circular buffer
+	* [Feature] Add decompression support in rspamd client
+	* [Feature] Add errors exporter to the controller
+	* [Feature] Add expected value for monitored DNS resources
+	* [Feature] Add exporter from error ringbuf to ucl
+	* [Feature] Add extended version for fann creation function
+	* [Feature] Add ffi friendly version of process_regexp function
+	* [Feature] Add frequency and time display to webui
+	* [Feature] Add fuzzy_delhash command to rspamc client
+	* [Feature] Add implementation of redis connections pool
+	* [Feature] Add latency and offline time monitoring
+	* [Feature] Add learning support for lua classifiers
+	* [Feature] Add max-size and timeout options to CGP helper
+	* [Feature] Add method to enable/disable symbols in config
+	* [Feature] Add methods to get metric's actions and symbols from Lua
+	* [Feature] Add mmap support to lua_text
+	* [Feature] Add monitored object for surbl plugin
+	* [Feature] Add more exceptions to surbl whitelist
+	* [Feature] Add more meta-tokens to bayes
+	* [Feature] Add neural net classifier to fann_scores module
+	* [Feature] Add neural net serialization/deserialization
+	* [Feature] Add new dynamic conf module
+	* [Feature] Add periodic events support for lua_config
+	* [Feature] Add plugin to check MX'es for the sender's domain
+	* [Feature] Add preliminary monitored module
+	* [Feature] Add preliminary support of dynamic conf updates in Redis
+	* [Feature] Add preliminary version of clamav plugin
+	* [Feature] Add redis cache to asn module
+	* [Feature] Add replies compression
+	* [Feature] Add spamhaus DROP dnsbl
+	* [Feature] Add support for dictionary in client compression
+	* [Feature] Add support for fuzzy learn and unlearn from lua
+	* [Feature] Add support for input encryption
+	* [Feature] Add support of min_learns to neural net classifier
+	* [Feature] Add termination callbacks for workers
+	* [Feature] Add user-agent for rspamc
+	* [Feature] Add utility to perform classifier tests
+	* [Feature] Add zstd compression library
+	* [Feature] Allow HTTPS requests in lua_http
+	* [Feature] Allow conditions for pre and postfilters
+	* [Feature] Allow custom functions for ratelimits
+	* [Feature] Allow for excluding messages from AV scanning based on size
+	* [Feature] Allow for getting worker stats from Lua
+	* [Feature] Allow getting task UID from Lua
+	* [Feature] Allow parsing of mailbox messages from the commandline
+	* [Feature] Allow plugins to publish their lua API via rspamd_plugins
+	* [Feature] Allow to compare other systems with Rspamd
+	* [Feature] Allow to execute Lua scripts by controller
+	* [Feature] Allow to have a function to set custom greylist message
+	* [Feature] Allow to iterate over multiple tags
+	* [Feature] Allow to pass extra data from plugins to log helper
+	* [Feature] Allow to plan new periodics at different time
+	* [Feature] Allow to reset hashes
+	* [Feature] Allow to run rspamadm lua just as a lua interpreter
+	* [Feature] Allow to store settings in redis
+	* [Feature] Allow to update dynamic conf in Redis
+	* [Feature] Allow to use dictionaries for compression
+	* [Feature] Allow to use md5, sha1, sha256, sha384 and sha512 hashes in Lua
+	* [Feature] Allow whitelisting by IP for greylisting plugin
+	* [Feature] Antivirus: Support whitelists & pattern-matching sig names
+	* [Feature] Backport pack/unpack routines from Lua 5.3
+	* [Feature] Check settings with equal priopities in alphabetical order
+	* [Feature] Compress neural net in redis
+	* [Feature] Consider more tags when doing WHITE_ON_WHITE rule
+	* [Feature] Descriptive options for DMARC failure symbols
+	* [Feature] Descriptive options for RBL symbols
+	* [Feature] Enable configuration for monitored objects
+	* [Feature] Execute on_load scripts with ev_base ready
+	* [Feature] Fann scores now uses metadata from a message
+	* [Feature] Implement FANN threaded learning
+	* [Feature] Implement classifying for lua classifiers
+	* [Feature] Implement finish scripts for worker processes
+	* [Feature] Implement monitoring for DNS resources
+	* [Feature] Implement real priorities for pre and post filters
+	* [Feature] Insert two symbols: FANN_HAM and FANN_SPAM instead of one
+	* [Feature] Module to push metadata/messages to redis pubsub
+	* [Feature] Monitor RBL records
+	* [Feature] Move fann_classifier to a separate plugin
+	* [Feature] Normalize all ANN inputs
+	* [Feature] Preliminary version of metric exporter module
+	* [Feature] Preserve decompression context between tasks
+	* [Feature] Ratelimit: Support dynamic bucket size/leak rate
+	* [Feature] Relax FORGED_RECIPIENTS: allow senders to BCC themselves
+	* [Feature] Remove symbols weights on composites processing
+	* [Feature] Return symbol scores when getting resulting symbols
+	* [Feature] Rework lua tcp module
+	* [Feature] Rule to detect some obvious X-PHP-Originating-Script forgeries
+	* [Feature] Rule to identify some X-PHP-Script forgeries
+	* [Feature] Rules for scoring Google Message-ID fixes
+	* [Feature] Send hashes values to reply
+	* [Feature] Set expire for dmarc reports
+	* [Feature] Stop using cymru zone as it is unstable
+	* [Feature] Stop using of GLists for headers, improve performance
+	* [Feature] Store `for` in task:get_received_headers
+	* [Feature] Store `for` part in received headers
+	* [Feature] Store enabled flag for webui session
+	* [Feature] Store error messages in ring buffer
+	* [Feature] Support compressed maps
+	* [Feature] Support excluding selected users from ratelimits
+	* [Feature] Support looking up NS records in lua_dns
+	* [Feature] Support modern style SURBL configuration
+	* [Feature] Support multiple hashes in delhash path
+	* [Feature] Support new messages in rspamc
+	* [Feature] Support requests without reads in lua_tcp
+	* [Feature] Support setting task message from Lua
+	* [Feature] Track visibility of HTML elements
+	* [Feature] Try to add CRLF when checking DKIM
+	* [Feature] Try to guess line endings when folding headers
+	* [Feature] Try to improve normalization function for bayes
+	* [Feature] Use FFI to optimize SA module
+	* [Feature] Use length based arguments for redis, allow lua_text as arg
+	* [Feature] Use more layers for fann and another normalization
+	* [Feature] User-defined ratelimits
+	* [Feature] Utility to convert fuzzy storage from sqlite to redis
+	* [Feature] Yield DMARC_DNSFAIL on lookup failure
+	* [Fix] Adopt fuzzy storage for flexible backends
+	* [Fix] Allow plain IP addresses in Rspamd maps
+	* [Fix] Another fix for brain-damaged hiredis
+	* [Fix] Another fix for rdns write errors
+	* [Fix] Another fix for rdns_make_request_full invocation
+	* [Fix] Another fix in DKIM canonicalization
+	* [Fix] Another memory leak plugged
+	* [Fix] Another try to deal with posix idiotizm
+	* [Fix] Another try to fix RDNS events processing logic
+	* [Fix] Avoid double frees in HEAD requests
+	* [Fix] Avoid extra symbols for RBLs
+	* [Fix] Banish table.maxn from Lua parts
+	* [Fix] Check for socket error before connection in lua_tcp
+	* [Fix] Correctly propagate redis timeouts to Lua
+	* [Fix] Do not add extra newline in MIME mode
+	* [Fix] Do not be cheated by system hiredis
+	* [Fix] Do not classify when a message has not enough tokens
+	* [Fix] Do not crash on redis errors
+	* [Fix] Do not distinguish NXDOMAIN and NOREC for monitored
+	* [Fix] Do not replan retransmits if merely one server is defined
+	* [Fix] Do not use headers to calculate messages digests
+	* [Fix] Don't force action in replies module for authenticated users/local networks
+	* [Fix] Explicitly ban default passwords in webui
+	* [Fix] Finally fix ambiguity between parsed and resolved spf elts
+	* [Fix] Fix 'decoded' value in task:get_header_full()
+	* [Fix] Fix DKIM calculations
+	* [Fix] Fix DKIM signing for messages with no newline at the end
+	* [Fix] Fix DNS request in monitored
+	* [Fix] Fix DNS write errors processing
+	* [Fix] Fix HTTP methods other than GET and POST
+	* [Fix] Fix PERMFAIL for v6/v4 ambiguities
+	* [Fix] Fix absurdic scores for HFILTER_URL_ONLY
+	* [Fix] Fix actions in rolling history
+	* [Fix] Fix actrie patterns
+	* [Fix] Fix applying of lua dynamic confg
+	* [Fix] Fix autolearning errors and redis cache
+	* [Fix] Fix bayes learn_condition
+	* [Fix] Fix build with the recent OpenSSL
+	* [Fix] Fix caching and compressed maps
+	* [Fix] Fix check plain text part
+	* [Fix] Fix crash on OpenBSD in `url_email_start`
+	* [Fix] Fix double free in SPF
+	* [Fix] Fix extraction of shingles from redis fuzzy storage
+	* [Fix] Fix false sharing for symbols in the cache
+	* [Fix] Fix float usage in util:get_time
+	* [Fix] Fix folding algorithm to deal with empty tokens
+	* [Fix] Fix format string
+	* [Fix] Fix format string usage in controller errors handling
+	* [Fix] Fix handling of '\0' in lua_tcp
+	* [Fix] Fix handling of HTTP HEAD methods
+	* [Fix] Fix hash creation
+	* [Fix] Fix hiredis stupidity
+	* [Fix] Fix implicit settings module settingsup
+	* [Fix] Fix interaction with lua GC to avoid craches
+	* [Fix] Fix ip_score module registration
+	* [Fix] Fix issue with empty messages and dkim
+	* [Fix] Fix issues with CGP helper
+	* [Fix] Fix issues with the recent SPF changes
+	* [Fix] Fix key name to load ANN correctly
+	* [Fix] Fix lua tcp module by saving `do_read` in callback data
+	* [Fix] Fix memory leak in client when using compression
+	* [Fix] Fix min_learns option
+	* [Fix] Fix on_finish scripts and async handlers
+	* [Fix] Fix options for SPF dnsfail symbol
+	* [Fix] Fix parsing includes and redirects in SPF
+	* [Fix] Fix parsing of lua comments with empty lines
+	* [Fix] Fix parsing of unquoted HTML attributes
+	* [Fix] Fix periodic events and redis
+	* [Fix] Fix processing of fuzzy learns from Lua
+	* [Fix] Fix processing of redirect in SPF includes
+	* [Fix] Fix processing of symbols when reject limit is reached
+	* [Fix] Fix refcounts when map is specified by IP
+	* [Fix] Fix rspamd{session} class in Lua API
+	* [Fix] Fix setting ratelimit key for 'ip' bucket
+	* [Fix] Fix some cases of TLD urls detector
+	* [Fix] Fix statconvert tool
+	* [Fix] Fix stats for backend-less classifiers
+	* [Fix] Fix training script for fann_redis
+	* [Fix] Fix variable in ann module
+	* [Fix] Fix various errors in lua dynamic conf plugin
+	* [Fix] Forget old ANN when max_usages is reached to avoid overtrain
+	* [Fix] Further canonicalization fixes
+	* [Fix] Further fixes for fann_redis prefixes
+	* [Fix] Handle failures for inactive pooled connections
+	* [Fix] Improve multimap info message
+	* [Fix] More fixes in ANN loading
+	* [Fix] More fixes to fann_redis
+	* [Fix] More issues in fann_redis
+	* [Fix] More spaces fix in DKIM signature
+	* [Fix] Multiple fixes to asn script, add IPv6 support
+	* [Fix] Multiple issues in fann_redis
+	* [Fix] No greylist rejected messages
+	* [Fix] One more attempt to fix lua_redis
+	* [Fix] One more check for readdir...
+	* [Fix] Params should be treated as a hash
+	* [Fix] Plug memory leak in regexp desctructor
+	* [Fix] Process headers only once
+	* [Fix] Properly handle nil values in ratelimit plugin
+	* [Fix] Really fix redis shingles check
+	* [Fix] Remove fann with incorrect layers count
+	* [Fix] Remove mentions of deleted include
+	* [Fix] Remove some incompatible functions
+	* [Fix] Settings: fix `authenticated` parameter (#886)
+	* [Fix] Skip MX check for authenticated users and local networks
+	* [Fix] Slightly fix ANN routines
+	* [Fix] Stop caching records with DNS failures
+	* [Fix] Treat all errors in redis_pool as fatal errors for a connection
+	* [Fix] Try avoid false-positives in HEADER_FORGED_MDN rule
+	* [Fix] Try to avoid race condition when using rrd
+	* [Fix] Try to reload redis scripts if they are missing
+	* [Fix] Unbreak once_received skipping for local networks
+	* [Fix] Unlock ANN on error
+	* [Fix] Use memmove for overlapping regions
+	* [Fix] Use real size instead of displayed for core limits
+	* [Fix] Use the correct macro to get the size of control
+	* [Fix] Various fixes for errors ringbuffer
+	* [Fix] Yield R_SPF_DNSFAIL if lookup of included record fails
+	* [Fix] mid: fix map initialization
+	* [Fix] mid: handle incorrect rgexps in the map
+	* [Rework] Add extract training data function to fann_redis
+	* [Rework] Add preliminary train tests
+	* [Rework] Add redis storage feature to fann_redis
+	* [Rework] Adopt fuzzy storage for abstract backend
+	* [Rework] Adopt plugins
+	* [Rework] First reiteration on fann scores
+	* [Rework] Implement loading/invalidating
+	* [Rework] Make lua_redis task agnostic
+	* [Rework] Make rspamd protocol messages useful
+	* [Rework] Massive removal of legacy code
+	* [Rework] More cleanup actions
+	* [Rework] Remove legacy code never used for classifiers
+	* [Rework] Remove outdated and unused lua_session module
+	* [Rework] Reorganize fuzzy backend structure
+	* [Rework] Reorganize the internal backend structure
+	* [Rework] Restore old fann_scores, move common parts
+	* [Rework] Rework and simplify rbl plugin
+	* [Rework] Rework parsing of DMARC records
+
 1.3.4:
 	* [Feature] ASN module; support matching ASN/country in multimap
 	* [Feature] Add SPF method in spf return result
