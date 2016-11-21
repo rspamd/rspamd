@@ -474,7 +474,7 @@ rspamd_config.CHECK_FROM = {
     local from = task:get_from(2)
     if (from and from[1] and not from[1].name) then
       task:insert_result('FROM_NO_DN', 1.0)
-    elseif (from and from[1] and from[1].name and 
+    elseif (from and from[1] and from[1].name and
             from[1].name:lower() == from[1].addr:lower()) then
       task:insert_result('FROM_DN_EQ_ADDR', 1.0)
     elseif (from and from[1] and from[1].name) then
@@ -482,7 +482,7 @@ rspamd_config.CHECK_FROM = {
       -- Look for Mr/Mrs/Dr titles
       local n = from[1].name:lower()
       if (n:find('^mrs?[%.%s]') or n:find('^dr[%.%s]')) then
-        task:insert_result('FROM_NAME_HAS_TITLE', 1.0) 
+        task:insert_result('FROM_NAME_HAS_TITLE', 1.0)
       end
     end
     if (envfrom and from and envfrom[1] and from[1] and
@@ -598,8 +598,8 @@ rspamd_config.CHECK_TO_CC = {
       -- See if header recipients match envrcpts
       if (rcpts) then
         for _, rcpt in ipairs(rcpts) do
-          if (toa and toa['addr'] and rcpt and rcpt['addr'] and 
-              rcpt['addr']:lower() == toa['addr']:lower()) 
+          if (toa and toa['addr'] and rcpt and rcpt['addr'] and
+              rcpt['addr']:lower() == toa['addr']:lower())
           then
             to_match_envrcpt = to_match_envrcpt + 1
           end
@@ -931,7 +931,7 @@ rspamd_config.CHECK_MIME = {
 }
 
 rspamd_config.MISSING_MIME_VERSION = {
-  callback = function () 
+  callback = function ()
     -- Set by CHECK_MIME
   end,
   description = 'MIME-Version header is missing',
@@ -947,7 +947,7 @@ rspamd_config.MIME_MA_MISSING_TEXT = {
 }
 
 rspamd_config.MIME_NA_MISSING_HTML = {
-  callback = function () 
+  callback = function ()
     -- Set by CHECK_MIME
   end,
   description = 'MIME multipart/alternative missing text/html part',
