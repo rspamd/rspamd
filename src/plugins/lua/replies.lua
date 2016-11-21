@@ -127,11 +127,16 @@ if opts then
       callback = replies_set,
       priority = 5
     })
-    rspamd_config:register_symbol({
+    local id = rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',
       type = 'prefilter',
       callback = replies_check,
       priority = 10
+    })
+    rspamd_config:register_symbol({
+      name = settings['symbol'],
+      parent = id,
+      type = 'virtual'
     })
   end
 
