@@ -403,6 +403,15 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"surbl.rule",
+			"Enable this URL list",
+			"enabled",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"surbl.rule",
 			"Parse IP bits in DNS reply, the content is 'symbol = <bit>'",
 			"bits",
 			UCL_OBJECT,
@@ -539,6 +548,16 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
 			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "enabled");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean (cur)) {
+				new_suffix->options |= SURBL_OPTION_ENABLED;
+			}
+		}
+		else {
+			new_suffix->options |= SURBL_OPTION_ENABLED;
 		}
 
 		if ((new_suffix->options & (SURBL_OPTION_RESOLVEIP | SURBL_OPTION_NOIP))
@@ -1475,6 +1494,12 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 
 	if (!rspamd_monitored_alive (suffix->m)) {
 		msg_info_task ("disable surbl %s as it is reported to be offline",
+				suffix->suffix);
+		return;
+	}
+
+	if (!(suffix->options & SURBL_OPTION_ENABLED)) {
+		msg_debug_task ("surbl %s is administratively disabled",
 				suffix->suffix);
 		return;
 	}
