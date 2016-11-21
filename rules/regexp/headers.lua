@@ -821,7 +821,7 @@ reconf['GOOGLE_FORWARDING_MID_BROKEN'] = {
 }
 
 reconf['CTE_CASE'] = {
-  re = 'Content-Transfer-Encoding=/^[78]BsX',
+  re = 'Content-Transfer-Encoding=/^[78]B/X',
   description = '[78]Bit .vs. [78]bit',
   score = 0.5,
   group = 'header'
