@@ -6,6 +6,10 @@ title: Upgrading
 
 This document describes incompatible changes introduced in recent Rspamd versions and details how to update your rules and configuration accordingly.
 
+## Migrating to Rmilter 1.10.0 and Rspamd 1.4.0
+
+The default passwords, namely `q1` and `q2` are no longer allowed to be used for remote authentication. This is done due to many misusages of these **example** passwords and dangerous security flaws introduced by some Rspamd users.
+
 ## Migrating to Rmilter 1.9.1 and Rspamd 1.3.1
 
 Systemd socket activation has been removed in these releases. Rmilter may not restart correctly on upgrade on Debian platforms. Please run `systemctl restart rmilter` after installing the package if necessary. Rspamd is expected to restart correctly on upgrade. Both Rspamd & Rmilter should be automatically configured to run on reboot post-upgrade.
