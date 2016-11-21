@@ -824,7 +824,7 @@ reconf['CTE_CASE'] = {
   re = 'Content-Transfer-Encoding=/^[78]BsX',
   description = '[78]Bit .vs. [78]bit',
   score = 0.5,
-  group = header'
+  group = 'header'
 }
 
 reconf['HAS_INTERSPIRE_SIG'] = {
