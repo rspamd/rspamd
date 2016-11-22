@@ -536,8 +536,10 @@ rspamadm_signtool (gint argc, gchar **argv)
 					RSPAMD_KEYPAIR_SIGN, mode);
 
 			if (pk == NULL) {
-				rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n", flen,
-						 rspamd_cryptobox_pk_sig_bytes (mode));
+				rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n",
+						pubkey_file,
+						(guint)flen,
+						rspamd_cryptobox_pk_sig_bytes (mode));
 				exit (errno);
 			}
 

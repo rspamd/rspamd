@@ -564,10 +564,6 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 {
 	struct stat st;
 	rspamd_mmaped_file_t *new_file;
-	struct timespec sleep_ts = {
-			.tv_sec = 0,
-			.tv_nsec = 1000000
-	};
 	gchar *lock;
 	gint lock_fd;
 
@@ -576,7 +572,7 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 
 	if (lock_fd == -1) {
 		msg_info_pool ("cannot open file %s, it is locked by another process",
-				filename, strerror (errno), errno);
+				filename);
 		return NULL;
 	}
 

@@ -489,7 +489,7 @@ fin:
 #endif
 		if (res->raw_re == NULL) {
 			msg_warn ("raw regexp parsing error: '%s': '%s' at position %d",
-					err_str, (gint)err_off);
+					err_str, real_pattern, (gint)err_off);
 		}
 	}
 

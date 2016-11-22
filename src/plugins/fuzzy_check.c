@@ -455,7 +455,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 				rule->alg = RSPAMD_SHINGLES_FAST;
 			}
 			else {
-				msg_warn_config ("unknown algorithm: %s, use siphash by default");
+				msg_warn_config ("unknown algorithm: %s, use siphash by default",
+						rule->algorithm_str);
 			}
 		}
 	}

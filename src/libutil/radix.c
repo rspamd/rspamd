@@ -88,13 +88,13 @@ radix_insert_compressed (radix_compressed_t * tree,
 			msg_err_radix ("cannot insert %p, key: %s/%d, duplicate value",
 					(gpointer)value,
 					inet_ntop (AF_INET, key, ip_str, sizeof (ip_str) - 1),
-					keybits - masklen);
+					(gint)(keybits - masklen));
 		}
 		else if (keybits == 128) {
 			msg_err_radix ("cannot insert %p, key: [%s]/%d, duplicate value",
 					(gpointer)value,
 					inet_ntop (AF_INET6, key, ip_str, sizeof (ip_str) - 1),
-					keybits - masklen);
+					(gint)(keybits - masklen));
 		}
 		else {
 			msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",

@@ -1271,11 +1271,11 @@ rspamd_check_module (struct rspamd_config *cfg, module_t *mod)
 	if (mod != NULL) {
 		if (mod->module_version != RSPAMD_CUR_MODULE_VERSION) {
 			msg_err_config ("module %s has incorrect version %xd (%xd expected)",
-					mod->name, mod->module_version, RSPAMD_CUR_MODULE_VERSION);
+					mod->name, (gint)mod->module_version, RSPAMD_CUR_MODULE_VERSION);
 			ret = FALSE;
 		}
 		if (ret && mod->rspamd_version != RSPAMD_VERSION_NUM) {
-			msg_err_config ("module %s has incorrect rspamd version %xd (%xd expected)",
+			msg_err_config ("module %s has incorrect rspamd version %xL (%xL expected)",
 					mod->name, mod->rspamd_version, RSPAMD_VERSION_NUM);
 			ret = FALSE;
 		}

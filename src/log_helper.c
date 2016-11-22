@@ -94,8 +94,8 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 				(r - sizeof (*sm)) / sizeof (struct rspamd_protocol_log_symbol_result)) {
 			msg_warn ("cannot read data from log pipe: bad length: %d elements "
 					"announced but %d available", n + nextra,
-					(r - sizeof (*sm)) /
-					sizeof (struct rspamd_protocol_log_symbol_result));
+					(gint)((r - sizeof (*sm)) /
+					sizeof (struct rspamd_protocol_log_symbol_result)));
 		}
 		else {
 			sm = g_malloc (r);

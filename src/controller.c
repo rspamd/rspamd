@@ -1500,7 +1500,7 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 		}
 
 		rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%T",
-				ctx->static_files_dir, G_DIR_SEPARATOR, lookup);
+				ctx->static_files_dir, G_DIR_SEPARATOR, &lookup);
 
 		if (realpath (filebuf, realbuf) == NULL ||
 				lstat (realbuf, &st) == -1) {

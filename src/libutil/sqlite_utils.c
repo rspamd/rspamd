@@ -423,12 +423,12 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		GString *new_ver_sql;
 
 		if (sqlite3_prepare (sqlite, db_version, -1, &stmt, NULL) != SQLITE_OK) {
-			msg_warn_pool_check ("Cannot get user version pragma",
+			msg_warn_pool_check ("Cannot get user version pragma: %s",
 							sqlite3_errmsg (sqlite));
 		}
 		else {
 			if (sqlite3_step (stmt) != SQLITE_ROW) {
-				msg_warn_pool_check ("Cannot get user version pragma, step failed",
+				msg_warn_pool_check ("Cannot get user version pragma, step failed: %s",
 											sqlite3_errmsg (sqlite));
 				sqlite3_finalize (stmt);
 			}

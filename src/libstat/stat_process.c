@@ -135,7 +135,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 			if (part->content && part->content->len > 1) {
 				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "mime%d:%dlog",
-						(gint)log2 (part->content->len));
+						i, (gint)log2 (part->content->len));
 				elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
 				elt.len = strlen (elt.begin);
 				g_array_append_val (ar, elt);

@@ -912,7 +912,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 
 				if (ctx == NULL) {
 					msg_err_task ("cannot create sign context: %e",
-							key, err);
+							err);
 					g_error_free (err);
 
 					return;

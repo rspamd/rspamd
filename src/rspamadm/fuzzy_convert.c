@@ -23,7 +23,7 @@ static gchar *source_db = NULL;
 static gchar *redis_host = NULL;
 static gchar *redis_db = NULL;
 static gchar *redis_password = NULL;
-static int64_t fuzzy_expiry = NULL;
+static int64_t fuzzy_expiry = 0;
 
 static void rspamadm_fuzzyconvert (gint argc, gchar **argv);
 static const char *rspamadm_fuzzyconvert_help (gboolean full_help);
