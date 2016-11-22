@@ -729,8 +729,7 @@ rspamd_inet_address_to_string_pretty (const rspamd_inet_addr_t *addr)
 		break;
 	case AF_UNIX:
 		rspamd_snprintf (addr_str, sizeof (addr_str), "unix:%s",
-				rspamd_inet_address_to_string (addr),
-				rspamd_inet_address_get_port (addr));
+				rspamd_inet_address_to_string (addr));
 		break;
 	}
 
