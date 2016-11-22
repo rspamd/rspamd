@@ -9,30 +9,19 @@ local function connect_redis(server, password, db)
   })
 
   if not conn then
-    print('Cannot connect to ' .. server .. ' error: ' .. err)
-    return nil, err
+    return nil, 'Cannot connect: ' .. err
   end
 
   if password then
     ret = conn:add_cmd('AUTH', {password})
     if not ret then
-      print('Cannot queue command. Error: ' .. err)
-      return nil, err
+      return nil, 'Cannot queue command'
     end
   end
   if db then
     ret = conn:add_cmd('SELECT', {db})
     if not ret then
-      print('Cannot queue command. Error: ' .. err)
-      return nil, err
-    end
-  end
-
-  if password or db then
-    ret, err = conn:exec()
-    if not ret then
-     print('Cannot send commands to ' .. server .. ' error: ' .. err)
-     return nil, err
+      return nil, 'Cannot queue command'
     end
   end
 
@@ -47,21 +36,21 @@ local function send_digests(digests, redis_host, redis_password, redis_db)
   end
   local ret
   for _, v in ipairs(digests) do
-    ret, err = conn:add_cmd('HMSET', {
+    ret = conn:add_cmd('HMSET', {
       'fuzzy' .. v[1],
       'F', v[2],
       'V', v[3],
     })
     if not ret then
-      print('Cannot batch HMSET command: ' .. err)
+      print('Cannot batch command')
       return false
     end
-    ret, err = conn:add_cmd('EXPIRE', {
+    ret = conn:add_cmd('EXPIRE', {
       'fuzzy' .. v[1],
       tostring(v[4]),
     })
     if not ret then
-      print('Cannot batch EXPIRE command: ' .. err)
+      print('Cannot batch command')
       return false
     end
   end
@@ -81,7 +70,7 @@ local function send_shingles(shingles, redis_host, redis_password, redis_db)
   end
   local ret
   for _, v in ipairs(shingles) do
-    ret, err = conn:add_cmd('SET', {
+    ret = conn:add_cmd('SET', {
       'fuzzy_' .. v[2] .. '_' .. v[1],
       v[4],
     })
@@ -89,12 +78,12 @@ local function send_shingles(shingles, redis_host, redis_password, redis_db)
       print('Cannot batch SET command: ' .. err)
       return false
     end
-    ret, err = conn:add_cmd('EXPIRE', {
+    ret = conn:add_cmd('EXPIRE', {
       'fuzzy_' .. v[2] .. '_' .. v[1],
       tostring(v[3]),
     })
     if not ret then
-      print('Cannot batch EXPIRE command: ' .. err)
+      print('Cannot batch command')
       return false
     end
   end
@@ -113,20 +102,20 @@ local function update_counters(total, redis_host, redis_password, redis_db)
     return false
   end
   local ret
-  ret, err = conn:add_cmd('SET', {
+  ret = conn:add_cmd('SET', {
     'fuzzylocal',
     total,
   })
   if not ret then
-    print('Cannot batch SET command: ' .. err)
+    print('Cannot batch command')
     return false
   end
-  ret, err = conn:add_cmd('SET', {
+  ret = conn:add_cmd('SET', {
     'fuzzy_count',
     total,
   })
   if not ret then
-    print('Cannot batch SET command: ' .. err)
+    print('Cannot batch command')
     return false
   end
   ret, err = conn:exec()
