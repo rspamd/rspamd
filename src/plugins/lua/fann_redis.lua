@@ -528,10 +528,10 @@ local function train_fann(_, ev_base, elt)
         -- Invalidate ANN as it is definitely invalid
         local function redis_invalidate_cb(_err, _data)
           if _err then
-            rspamd_logger.errx(rspamd_config, 'cannot invalidate ANN %s from redis: %s', id, _err)
+            rspamd_logger.errx(rspamd_config, 'cannot invalidate ANN %s from redis: %s', elt, _err)
           elseif type(_data) == 'string' then
-            rspamd_logger.infox(rspamd_config, 'invalidated ANN %s from redis: %s', id, _err)
-            fanns[id].version = 0
+            rspamd_logger.infox(rspamd_config, 'invalidated ANN %s from redis: %s', elt, _err)
+            fanns[elt].version = 0
           end
         end
         -- Invalidate ANN
@@ -542,7 +542,7 @@ local function train_fann(_, ev_base, elt)
           true, -- is write
           redis_invalidate_cb, --callback
           'EVALSHA', -- command
-          {redis_locked_invalidate_sha, 1, gen_fann_prefix(id)}
+          {redis_locked_invalidate_sha, 1, elt}
         )
       else
         learning_spawned = true
