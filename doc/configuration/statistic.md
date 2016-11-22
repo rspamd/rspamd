@@ -209,7 +209,7 @@ From version 1.1, it is also possible to specify Redis as a backend for statisti
     }
 ~~~
 
-`per_languages` is not supported by Redis - it just stores everything in the same place. `write_servers` are used in the
+`per_language` is not supported by Redis - it just stores everything in the same place. `write_servers` are used in the
 `master-slave` rotation by default and used for learning, whilst `servers` are selected randomly each time:
 
 	write_servers = "master.example.com:6379:10, slave.example.com:6379:1"
