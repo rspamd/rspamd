@@ -235,7 +235,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 
 
 		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_treshold) {
-			msg_debug_task ("message has two common parts (%d%%), so skip the last one",
+			msg_debug_task ("message has two common parts (%.2f), so skip the last one",
 					*pdiff);
 			break;
 		}

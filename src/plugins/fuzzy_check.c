@@ -1531,8 +1531,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 				"%d:%*xs:%.2f",
 				rep->flag,
 				rspamd_fuzzy_hash_len, cmd->digest,
-				rep->prob,
-				nval);
+				rep->prob);
 		rspamd_task_insert_result_single (session->task,
 				symbol,
 				nval,

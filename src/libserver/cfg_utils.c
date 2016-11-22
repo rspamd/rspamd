@@ -1304,7 +1304,7 @@ rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk)
 			ret = FALSE;
 		}
 		if (ret && wrk->rspamd_version != RSPAMD_VERSION_NUM) {
-			msg_err_config ("worker %s has incorrect rspamd version %xd (%xd expected)",
+			msg_err_config ("worker %s has incorrect rspamd version %xL (%xL expected)",
 					wrk->name, wrk->rspamd_version, RSPAMD_VERSION_NUM);
 			ret = FALSE;
 		}
