@@ -492,15 +492,19 @@ local function train_fann(_, ev_base, elt)
       local inputs = {}
       local outputs = {}
 
+      local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
+      local filt = function(elts)
+        return #elts == n
+      end
+
       fun.each(function(spam_sample, ham_sample)
         table.insert(inputs, fun.totable(spam_sample))
         table.insert(outputs, {1.0})
         table.insert(inputs, fun.totable(ham_sample))
         table.insert(outputs, {-1.0})
-      end, fun.zip(spam_elts, ham_elts))
+      end, fun.zip(fun.filter(filt, spam_elts), fun.filter(filt, ham_elts)))
 
       -- Now we can train fann
-      local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
       if not fanns[elt] or not fanns[elt].fann_train
         or n ~= fanns[elt].fann_train:get_inputs() then
         -- Create fann if it does not exist
