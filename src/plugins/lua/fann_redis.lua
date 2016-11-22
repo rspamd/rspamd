@@ -283,7 +283,12 @@ local function create_train_fann(n, id)
   end
 
   if fanns[id].fann then
-    if fanns[id].version % max_usages == 0 then
+    if n ~= fanns[id].fann:get_inputs() then
+      rspamd_logger.infox(rspamd_config, 'recreate ANN %s as it has a wrong number of inputs, version %s', id,
+        fanns[id].version)
+      fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
+      fanns[id].fann = nil
+    elseif fanns[id].version % max_usages == 0 then
       -- Forget last fann
       rspamd_logger.infox(rspamd_config, 'recreate ANN %s, version %s', id,
         fanns[id].version)
