@@ -41,7 +41,7 @@ end
 local function replies_check(task)
   local function redis_get_cb(err, data)
     if err ~= nil then
-      rspamd_logger.errx('redis_get_cb received error: %1', err)
+      rspamd_logger.errx(task, 'redis_get_cb received error: %1', err)
       return
     end
     if data == '1' then
@@ -75,14 +75,14 @@ local function replies_check(task)
   )
 
   if not ret then
-    rspamd_logger.errx("redis request wasn't scheduled")
+    rspamd_logger.errx(task, "redis request wasn't scheduled")
   end
 end
 
 local function replies_set(task)
   local function redis_set_cb(err)
     if err ~=nil then
-      rspamd_logger.errx('redis_set_cb received error: %1', err)
+      rspamd_logger.errx(task, 'redis_set_cb received error: %1', err)
     end
   end
   -- If sender is unauthenticated return
@@ -97,6 +97,7 @@ local function replies_set(task)
   end
   -- Create hash of message-id and store to redis
   local key = make_key(msg_id)
+  rspamd_logger.infox(task, 'storing message-id for replies check')
   local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
@@ -106,7 +107,7 @@ local function replies_set(task)
     {key, tostring(settings['expire']), "1"} -- arguments
   )
   if not ret then
-    rspamd_logger.errx("redis request wasn't scheduled")
+    rspamd_logger.errx(task, "redis request wasn't scheduled")
   end
 end
 
@@ -126,11 +127,16 @@ if opts then
       callback = replies_set,
       priority = 5
     })
-    rspamd_config:register_symbol({
+    local id = rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',
       type = 'prefilter',
       callback = replies_check,
       priority = 10
+    })
+    rspamd_config:register_symbol({
+      name = settings['symbol'],
+      parent = id,
+      type = 'virtual'
     })
   end
 
