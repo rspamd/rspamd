@@ -1643,7 +1643,7 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 	}
 
 	if (!rspamd_action_from_str (action_name, &act_num)) {
-		msg_err_config ("invalid action name", action_name);
+		msg_err_config ("invalid action name: %s", action_name);
 		return FALSE;
 	}
 
