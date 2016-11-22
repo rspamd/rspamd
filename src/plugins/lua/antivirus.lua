@@ -39,6 +39,10 @@ local function yield_result(task, rule, vname)
   end
   task:insert_result(symname, 1.0, vname)
   rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
+  if rule['action'] then
+    task:set_pre_result(rule['action'],
+        string.format('%s: virus found: "%s"', rule['type'], vname))
+  end
 end
 
 local function clamav_config(opts)
