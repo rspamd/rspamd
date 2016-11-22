@@ -25,13 +25,6 @@ local function connect_redis(server, password, db)
     end
   end
 
-  if password or db then
-    ret, err = conn:exec()
-    if not ret then
-     return nil, 'Cannot execute queued commands: ' .. err
-    end
-  end
-
   return conn, nil
 end
 
