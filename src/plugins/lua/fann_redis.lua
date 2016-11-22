@@ -500,7 +500,8 @@ local function train_fann(_, ev_base, elt)
 
       -- Now we can train fann
       local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
-      if not fanns[elt] or not fanns[elt].fann_train then
+      if not fanns[elt] or not fanns[elt].fann_train
+        or n ~= fanns[elt].fann_train:get_inputs() then
         -- Create fann if it does not exist
         create_train_fann(n, elt)
       end
