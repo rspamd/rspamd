@@ -283,7 +283,8 @@ local function create_train_fann(n, id)
   end
 
   if fanns[id].fann then
-    if n ~= fanns[id].fann:get_inputs() then
+    if n ~= fanns[id].fann:get_inputs() or
+      (fanns[id].fann_train and n ~= fanns[id].fann_train:get_inputs()) then
       rspamd_logger.infox(rspamd_config, 'recreate ANN %s as it has a wrong number of inputs, version %s', id,
         fanns[id].version)
       fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
