@@ -138,6 +138,7 @@ odnoklassniki.ru
 ok.ru
 olx.ua
 overstock.com
+ozon.ru
 pandora.com
 paypal.ca
 paypal.cn
