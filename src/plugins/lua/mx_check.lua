@@ -253,6 +253,10 @@ if not (opts and type(opts) == 'table') then
 end
 if opts then
   redis_params = rspamd_parse_redis_server('mx_check')
+  if not redis_params then
+    rspamd_logger.errx(rspamd_config, 'no redis servers are specified, disabling module')
+    return
+  end
   for k,v in pairs(opts) do
     settings[k] = v
   end
