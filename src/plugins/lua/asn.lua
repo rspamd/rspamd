@@ -174,10 +174,17 @@ local configure_asn_module = function()
 end
 
 if configure_asn_module() then
-  rspamd_config:register_symbol({
+  local id = rspamd_config:register_symbol({
     name = 'ASN_CHECK',
     type = 'prefilter',
     callback = asn_check,
     priority = 10,
   })
+  if options['symbol'] then
+    rspamd_config:register_symbol({
+      name = options['symbol'],
+      parent = id,
+      type = 'virtual'
+    })
+  end
 end
