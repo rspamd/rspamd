@@ -16,7 +16,8 @@ This document describes how to setup Redis cache in Rspamd.
 * [DMARC module]({{ site.baseurl }}/doc/modules/dmarc.html) can save DMARC reports inside Redis keys
 * [Replies plugin]({{ site.baseurl }}/doc/modules/replies.html) requires Redis to save message ids hashes for outgoing messages
 * [IP score plugin]({{ site.baseurl }}/doc/modules/ip_score.html) uses Redis to store data about AS, countries and networks reputation
-* [Multimap module](doc/modules/multimap.html) can use Redis as readonly database for maps
+* [Multimap module]({{ site.baseurl }}/doc/modules/multimap.html) can use Redis as readonly database for maps
+* [MX Check module]({{ site.baseurl }}/doc/modules/mx_check.html) uses Redis for caching
 
 Furthermore, Redis is used to store Bayes tokens in the [statistics]({{ site.baseurl }}/doc/configuration/statistic.html) module. Rspamd provides several ways to configure Redis storage. There is also support for Redis [replication](http://redis.io/topics/replication), so Rspamd can **write** values to one set of Redis servers and **read** data from another set.
 
@@ -51,37 +52,31 @@ By default, Rspamd uses port `6379` for Redis. Alternatively, you can define the
 
 You can read more about upstream line in the [upstreams documentation]({{ site.baseurl }}/doc/configuration/upstream.html).
 
-Setting Redis options for each individual module might be simplified by using of common `redis` section (for example, by defining it in `/etc/rspamd/rspamd.conf.local`):
+Setting Redis options for each individual module might be simplified by using of common `redis` section (for example, by defining it in `/etc/rspamd/local.d/redis.conf`):
 
 ~~~ucl
-# /etc/rspamd/rspamd.conf.local
-redis {
-  servers = "127.0.0.1";
-}
+# /etc/rspamd/local.d/redis.conf
+servers = "127.0.0.1";
 ~~~
 
 It is also possible to redefine Redis options inside `redis` section for the specific module or modules:
 
 ~~~ucl
-# /etc/rspamd/rspamd.conf.local
-redis {
-  servers = "127.0.0.1";
+# /etc/rspamd/local.d/redis.conf
+servers = "127.0.0.1";
 
-  dmarc {
-    servers = "10.0.1.1";
-  }
+dmarc {
+  servers = "10.0.1.1";
 }
 ~~~
 
 In this example, `dmarc` module will use different servers set than other modules. To exclude specific modules from using of the common redis options, you can add them to the list of `disabled_modules`, for example:
 
 ~~~ucl
-# /etc/rspamd/rspamd.conf.local
-redis {
-  servers = "127.0.0.1";
+# /etc/rspamd/local.d/redis.conf
+servers = "127.0.0.1";
 
-  disabled_modules = ["ratelimit"];
-}
+disabled_modules = ["ratelimit"];
 ~~~
 
 This configuration snippet denies `ratelimit` to use the common Redis configuration and this module will be disabled if Redis is not explicitly configured for this module (either in `redis -> ratelimit` section or in `ratelimit` section).

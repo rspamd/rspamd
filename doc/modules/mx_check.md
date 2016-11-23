@@ -7,7 +7,7 @@ title: MX Check module
 
 The MX Check module checks if the domain in a message's SMTP FROM addresses (or the domain in HELO in case SMTP FROM is empty) has at least one connectable MX. If a connectable MX is found this information is cached in [Redis]({{ site.baseurl }}/doc/configuration/redis.html).
 
-Example configuration indicating default settings is shown below. Symbols indicated by configuration should be added to metric to provide non-zero scoring. At minimum you should add `mx_check { }` to `rspamd.conf.local` to enable the module.
+Example configuration indicating default settings is shown below.
 
 ~~~ucl
 mx_check {
@@ -23,5 +23,13 @@ mx_check {
   expire = 86400;
   # prefix used for redis key
   key_prefix = "rmx";
+}
+~~~
+
+Symbols indicated by configuration should be added to metric to provide non-zero scoring. At minimum you should add `mx_check { }` to `rspamd.conf.local` to enable the module. Make sure at least one Redis server is [specified]({{ site.baseurl }}/doc/configuration/redis.html) in common `redis` section. Alternatively, you can define Redis server in the module configuration:
+
+~~~ucl
+mx_check {
+  servers = "localhost";
 }
 ~~~
