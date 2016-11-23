@@ -566,7 +566,7 @@ local redis_section = rspamd_config:get_all_opt("settings_redis")
 local redis_key_handlers = {}
 
 if redis_section then
-  redis_params = rspamd_parse_redis_server('replies')
+  redis_params = rspamd_parse_redis_server('settings_redis')
   if redis_params then
     local handlers = redis_section.handlers
 
