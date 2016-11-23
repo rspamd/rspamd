@@ -2,10 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Please pull this list from, and only from https://publicsuffix.org/list/public_suffix_list.dat , 
+// Please pull this list from, and only from https://publicsuffix.org/list/public_suffix_list.dat,
 // rather than any other VCS sites. Pulling from any other URL is not guaranteed to be supported.
 
-// Instructions on pulling and using this list can be found at https://publicsuffix.org/list/ .
+// Instructions on pulling and using this list can be found at https://publicsuffix.org/list/.
 
 // ===BEGIN ICANN DOMAINS===
 
@@ -708,7 +708,9 @@ org.cw
 cx
 gov.cx
 
-// cy : https://en.wikipedia.org/wiki/.cy
+// cy : http://www.nic.cy/
+// Submitted by registry Panayiotou Fotia <cydns@ucy.ac.cy>
+cy
 ac.cy
 biz.cy
 com.cy
@@ -2614,9 +2616,7 @@ arao.kumamoto.jp
 aso.kumamoto.jp
 choyo.kumamoto.jp
 gyokuto.kumamoto.jp
-hitoyoshi.kumamoto.jp
 kamiamakusa.kumamoto.jp
-kashima.kumamoto.jp
 kikuchi.kumamoto.jp
 kumamoto.kumamoto.jp
 mashiki.kumamoto.jp
@@ -4440,9 +4440,17 @@ edu.my
 mil.my
 name.my
 
-// mz : http://www.gobin.info/domainname/mz-template.doc
-*.mz
-!teledata.mz
+// mz : http://www.uem.mz/
+// Submitted by registry <antonio@uem.mz>
+mz
+ac.mz
+adv.mz
+co.mz
+edu.mz
+gov.mz
+mil.mz
+net.mz
+org.mz
 
 // na : http://www.na-nic.com.na/
 // http://www.info.na/domain/
@@ -6761,7 +6769,7 @@ lib.ca.us
 lib.co.us
 lib.ct.us
 lib.dc.us
-lib.de.us
+// lib.de.us  Issue #243 - Moved to Private section at request of Ed Moore <Ed.Moore@lib.de.us>
 lib.fl.us
 lib.ga.us
 lib.gu.us
@@ -7239,7 +7247,7 @@ sch.zm
 *.zw
 
 
-// List of new gTLDs imported from https://newgtlds.icann.org/newgtlds.csv on 2016-05-09T22:17:27Z
+// List of new gTLDs imported from https://newgtlds.icann.org/newgtlds.csv on 2016-08-17T00:17:46Z
 
 // aaa : 2015-02-26 American Automobile Association, Inc.
 aaa
@@ -7315,9 +7323,6 @@ afl
 
 // africa : 2014-03-24 ZA Central Registry NPC trading as Registry.Africa
 africa
-
-// africamagic : 2015-03-05 Electronic Media Network (Pty) Ltd
-africamagic
 
 // agakhan : 2015-04-23 Fondation Aga Khan (Aga Khan Foundation)
 agakhan
@@ -7598,7 +7603,7 @@ blanco
 // blockbuster : 2015-07-30 Dish DBS Corporation
 blockbuster
 
-// blog : 2015-05-14 PRIMER NIVEL S.A.
+// blog : 2015-05-14
 blog
 
 // bloomberg : 2014-07-17 Bloomberg IP Holdings LLC
@@ -8024,6 +8029,9 @@ dad
 // dance : 2013-10-24 United TLD Holdco Ltd.
 dance
 
+// data : 2016-06-02 Dish DBS Corporation
+data
+
 // date : 2014-11-20 dot Date Limited
 date
 
@@ -8120,6 +8128,9 @@ dnp
 // docs : 2014-10-16 Charleston Road Registry Inc.
 docs
 
+// doctor : 2016-06-02 Brice Trail, LLC
+doctor
+
 // dodge : 2015-07-30 FCA US LLC.
 dodge
 
@@ -8140,9 +8151,6 @@ download
 
 // drive : 2015-03-05 Charleston Road Registry Inc.
 drive
-
-// dstv : 2015-03-12 MultiChoice (Proprietary) Limited
-dstv
 
 // dtv : 2015-06-04 Dish DBS Corporation
 dtv
@@ -8168,6 +8176,9 @@ durban
 // dvag : 2014-06-23 Deutsche Vermögensberatung Aktiengesellschaft DVAG
 dvag
 
+// dvr : 2016-05-26 Hughes Satellite Systems Corporation
+dvr
+
 // dwg : 2015-07-23 Autodesk, Inc.
 dwg
 
@@ -8176,6 +8187,9 @@ earth
 
 // eat : 2014-01-23 Charleston Road Registry Inc.
 eat
+
+// eco : 2016-07-08 Big Room Inc.
+eco
 
 // edeka : 2014-12-18 EDEKA Verband kaufmännischer Genossenschaften e.V.
 edeka
@@ -8360,9 +8374,6 @@ florist
 // flowers : 2014-10-09 Uniregistry, Corp.
 flowers
 
-// flsmidth : 2014-07-24 FLSmidth A/S
-flsmidth
-
 // fly : 2014-05-08 Charleston Road Registry Inc.
 fly
 
@@ -8453,7 +8464,7 @@ gallup
 // game : 2015-05-28 Uniregistry, Corp.
 game
 
-// games : 2015-05-28 Foggy Beach, LLC
+// games : 2015-05-28
 games
 
 // gap : 2015-07-31 The Gap, Inc.
@@ -8555,9 +8566,6 @@ gop
 // got : 2014-12-18 Amazon EU S.à r.l.
 got
 
-// gotv : 2015-03-12 MultiChoice (Proprietary) Limited
-gotv
-
 // grainger : 2015-05-07 Grainger Registry Services, LLC
 grainger
 
@@ -8572,6 +8580,9 @@ green
 
 // gripe : 2014-03-06 Corn Sunset, LLC
 gripe
+
+// grocery : 2016-06-16 Wal-Mart Stores, Inc.
+grocery
 
 // group : 2014-08-15 Romeo Town, LLC
 group
@@ -8936,9 +8947,6 @@ kred
 // kuokgroup : 2015-04-09 Kerry Trading Co. Limited
 kuokgroup
 
-// kyknet : 2015-03-05 Electronic Media Network (Pty) Ltd
-kyknet
-
 // kyoto : 2014-11-07 Academic Institution: Kyoto Jyoho Gakuen
 kyoto
 
@@ -9143,6 +9151,9 @@ management
 // mango : 2013-10-24 PUNTO FA S.L.
 mango
 
+// map : 2016-06-09 Charleston Road Registry Inc.
+map
+
 // market : 2014-03-06
 market
 
@@ -9203,6 +9214,9 @@ menu
 // meo : 2014-11-07 PT Comunicacoes S.A.
 meo
 
+// merckmsd : 2016-07-14 MSD Registry Holdings, Inc.
+merckmsd
+
 // metlife : 2015-05-07 MetLife Services and Solutions, LLC
 metlife
 
@@ -9233,8 +9247,8 @@ mls
 // mma : 2014-11-07 MMA IARD
 mma
 
-// mnet : 2015-03-05 Electronic Media Network (Pty) Ltd
-mnet
+// mobile : 2016-06-02 Dish DBS Corporation
+mobile
 
 // mobily : 2014-12-18 GreenTech Consultancy Company W.L.L.
 mobily
@@ -9302,17 +9316,11 @@ mtpc
 // mtr : 2015-03-12 MTR Corporation Limited
 mtr
 
-// multichoice : 2015-03-12 MultiChoice (Proprietary) Limited
-multichoice
-
 // mutual : 2015-04-02 Northwestern Mutual MU TLD Registry, LLC
 mutual
 
 // mutuelle : 2015-06-18 Fédération Nationale de la Mutualité Française
 mutuelle
-
-// mzansimagic : 2015-03-05 Electronic Media Network (Pty) Ltd
-mzansimagic
 
 // nab : 2015-08-20 National Australia Bank Limited
 nab
@@ -9322,9 +9330,6 @@ nadex
 
 // nagoya : 2013-10-24 GMO Registry, Inc.
 nagoya
-
-// naspers : 2015-02-12 Intelprop (Proprietary) Limited
-naspers
 
 // nationwide : 2015-07-23 Nationwide Mutual Insurance Company
 nationwide
@@ -9488,7 +9493,7 @@ orange
 // organic : 2014-03-27 Afilias Limited
 organic
 
-// orientexpress : 2015-02-05 Belmond Ltd.
+// orientexpress : 2015-02-05
 orientexpress
 
 // origins : 2015-10-01 The Estée Lauder Companies Inc.
@@ -9539,9 +9544,6 @@ passagens
 // pay : 2015-08-27 Amazon EU S.à r.l.
 pay
 
-// payu : 2015-02-12 MIH PayU B.V.
-payu
-
 // pccw : 2015-05-14 PCCW Enterprises Limited
 pccw
 
@@ -9554,8 +9556,14 @@ pfizer
 // pharmacy : 2014-06-19 National Association of Boards of Pharmacy
 pharmacy
 
+// phd : 2016-07-28 Charleston Road Registry Inc.
+phd
+
 // philips : 2014-11-07 Koninklijke Philips N.V.
 philips
+
+// phone : 2016-06-02 Dish DBS Corporation
+phone
 
 // photo : 2013-11-14 Uniregistry, Corp.
 photo
@@ -9691,6 +9699,9 @@ qvc
 
 // racing : 2014-12-04 Premier Registry Limited
 racing
+
+// radio : 2016-07-21 European Broadcasting Union (EBU)
+radio
 
 // raid : 2015-07-23 Johnson Shareholdings, Inc.
 raid
@@ -9914,6 +9925,9 @@ scor
 // scot : 2014-01-23 Dot Scot Registry Limited
 scot
 
+// search : 2016-06-09 Charleston Road Registry Inc.
+search
+
 // seat : 2014-05-22 SEAT, S.A. (Sociedad Unipersonal)
 seat
 
@@ -10126,9 +10140,6 @@ style
 
 // sucks : 2014-12-22 Vox Populi Registry Inc.
 sucks
-
-// supersport : 2015-03-05 SuperSport International Holdings Proprietary Limited
-supersport
 
 // supplies : 2013-12-19 Atomic Fields, LLC
 supplies
@@ -11028,6 +11039,10 @@ beep.pl
 *.compute.estate
 *.alces.network
 
+// alwaysdata : https://www.alwaysdata.com
+// Submitted by Cyril <admin@alwaysdata.com>
+*.alwaysdata.net
+
 // Amazon CloudFront : https://aws.amazon.com/cloudfront/
 // Submitted by Donavan Miller <donavanm@amazon.com>
 cloudfront.net
@@ -11091,6 +11106,10 @@ poivron.org
 potager.org
 sweetpepper.org
 
+// ASUSTOR Inc. : http://www.asustor.com
+// Submitted by Vincent Tseng <vincenttseng@asustor.com>
+myasustor.com
+
 // AVM : https://avm.de
 // Submitted by Andreas Weise <a.weise@avm.de>
 myfritz.net
@@ -11103,9 +11122,17 @@ backplaneapp.io
 // Submitted by Adrian <adrian@betainabox.com>
 betainabox.com
 
+// BinaryLane : http://www.binarylane.com
+// Submitted by Nathan O'Sullivan <nathan@mammoth.com.au>
+bnr.la
+
 // Boxfuse : https://boxfuse.com
 // Submitted by Axel Fontaine <axel@boxfuse.com>
 boxfuse.io
+
+// BrowserSafetyMark
+// Submitted by Dave Tharp <browsersafetymark.io@quicinc.com>
+browsersafetymark.io
 
 // callidomus: https://www.callidomus.com/
 // Submitted by Marcus Popp <admin@callidomus.com>
@@ -11197,6 +11224,20 @@ r.cdn77.net
 rsc.cdn77.org
 ssl.origin.cdn77-secure.org
 
+// Cloud DNS Ltd : http://www.cloudns.net
+// Submitted by Aleksander Hristov <noc@cloudns.net>
+cloudns.asia
+cloudns.biz
+cloudns.club
+cloudns.cc
+cloudns.eu
+cloudns.in
+cloudns.info
+cloudns.org
+cloudns.pro
+cloudns.pw
+cloudns.us
+
 // CoDNS B.V.
 co.nl
 co.no
@@ -11204,6 +11245,18 @@ co.no
 // Commerce Guys, SAS
 // Submitted by Damien Tournoud <damien@commerceguys.com>
 *.platform.sh
+
+// COSIMO GmbH http://www.cosimo.de
+// Submitted by Rene Marticke <rmarticke@cosimo.de>
+dyn.cosidns.de
+dynamisches-dns.de
+dnsupdater.de
+internet-dns.de
+l-o-g-i-n.de
+dynamic-dns.info
+feste-ip.net
+knx-server.net
+static-access.net
 
 // Craynic, s.r.o. : http://www.craynic.com/
 // Submitted by Ales Krajnik <ales.krajnik@craynic.com>
@@ -11545,6 +11598,18 @@ webhop.org
 worse-than.tv
 writesthisblog.com
 
+// ddnss.de : https://www.ddnss.de/
+// Submitted by Robert Niedziela <webmaster@ddnss.de>
+ddnss.de
+dyn.ddnss.de
+dyndns.ddnss.de
+dyndns1.de
+dyn-ip24.de
+home-webserver.de
+dyn.home-webserver.de
+myhome-server.de
+ddnss.org
+
 // dynv6 : https://dynv6.com
 // Submitted by Dominik Menke <dom@digineo.de> 2016-01-18
 dynv6.net
@@ -11552,6 +11617,11 @@ dynv6.net
 // E4YOU spol. s.r.o. : https://e4you.cz/
 // Submitted by Vladimir Dudr <info@e4you.cz>
 e4.cz
+
+// Enonic : http://enonic.com/
+// Submitted by Erik Kaareng-Sunde <esu@enonic.com>
+enonic.io
+customer.enonic.io
 
 // EU.org https://eu.org/
 // Submitted by Pierre Beyssac <hostmaster@eu.org>
@@ -11652,6 +11722,18 @@ fbxos.fr
 freebox-os.fr
 freeboxos.fr
 
+// Fusion Intranet : https://www.fusion-intranet.com
+// Submitted by Matthias Burtscher <matthias.burtscher@fusonic.net>
+myfusion.cloud
+
+// Futureweb OG : http://www.futureweb.at
+// Submitted by Andreas Schnederle-Wagner <schnederle@futureweb.at>
+futurehosting.at
+futuremailing.at
+*.ex.ortsinfo.at
+*.kunden.ortsinfo.at
+*.statics.cloud
+
 // GDS : https://www.gov.uk/service-manual/operations/operating-servicegovuk-subdomains
 // Submitted by David Illsley <david.illsley@digital.cabinet-office.gov.uk>
 service.gov.uk
@@ -11673,6 +11755,8 @@ gitlab.io
 // GlobeHosting, Inc.
 // Submitted by Zoltan Egresi <egresi@globehosting.com>
 ro.com
+ro.im
+shop.ro
 
 // GoIP DNS Services : http://www.goip.de
 // Submitted by Christian Poulter <milchstrasse@goip.de>
@@ -11761,6 +11845,7 @@ codespot.com
 googleapis.com
 googlecode.com
 pagespeedmobilizer.com
+publishproxy.com
 withgoogle.com
 withyoutube.com
 
@@ -11787,6 +11872,57 @@ iki.fi
 // info.at : http://www.info.at/
 biz.at
 info.at
+
+// Interlegis : http://www.interlegis.leg.br
+// Submitted by Gabriel Ferreira <registrobr@interlegis.leg.br>
+ac.leg.br
+al.leg.br
+am.leg.br
+ap.leg.br
+ba.leg.br
+ce.leg.br
+df.leg.br
+es.leg.br
+go.leg.br
+ma.leg.br
+mg.leg.br
+ms.leg.br
+mt.leg.br
+pa.leg.br
+pb.leg.br
+pe.leg.br
+pi.leg.br
+pr.leg.br
+rj.leg.br
+rn.leg.br
+ro.leg.br
+rr.leg.br
+rs.leg.br
+sc.leg.br
+se.leg.br
+sp.leg.br
+to.leg.br
+
+// Joyent : https://www.joyent.com/
+// Submitted by Brian Bennett <brian.bennett@joyent.com>
+*.triton.zone
+*.cns.joyent.com
+
+// JS.ORG : http://dns.js.org
+// Submitted by Stefan Keim <admin@js.org>
+js.org
+
+// Keyweb AG : https://www.keyweb.de
+// Submitted by Martin Dannehl <postmaster@keymachine.de>
+keymachine.de
+
+// KnightPoint Systems, LLC : http://www.knightpoint.com/
+// Submitted by Roy Keene <rkeene@knightpoint.com>
+knightpoint.systems
+
+// .KRD : http://nic.krd/data/krd/Registration%20Policy.pdf
+co.krd
+edu.krd
 
 // Magento Commerce
 // Submitted by Damien Tournoud <dtournoud@magento.cloud>
@@ -11923,6 +12059,10 @@ nyc.mn
 // Submitted by Eddie Jones <eddie@onefoldmedia.com>
 nid.io
 
+// OpenCraft GmbH : http://opencraft.com/
+// Submitted by Sven Marnach <sven@opencraft.com>
+opencraft.hosting
+
 // Opera Software, A.S.A.
 // Submitted by Yngve Pettersen <yngve@opera.com>
 operaunite.com
@@ -11972,6 +12112,10 @@ xen.prgmr.com
 // Submitted by registry <lendl@nic.at>
 priv.at
 
+// Protonet GmbH : http://protonet.io
+// Submitted by Martin Meier <admin@protonet.io>
+protonet.io
+
 // Publication Presse Communication SARL : https://ppcom.fr
 // Submitted by Yaacov Akiba Slama <admin@chirurgiens-dentistes-en-france.fr>
 chirurgiens-dentistes-en-france.fr
@@ -11979,6 +12123,12 @@ chirurgiens-dentistes-en-france.fr
 // QA2
 // Submitted by Daniel Dent (https://www.danieldent.com/)
 qa2.com
+
+// QNAP System Inc : https://www.qnap.com
+// Submitted by Nick Chang <nickchang@qnap.com>
+dev-myqnapcloud.com
+alpha-myqnapcloud.com
+myqnapcloud.com
 
 // Rackmaze LLC : https://www.rackmaze.com
 // Submitted by Kirill Pertsev <kika@rackmaze.com>
@@ -11993,6 +12143,12 @@ rhcloud.com
 // Submitted by Chris Kastorff <info@rethinkdb.com>
 hzc.io
 
+// Revitalised Limited : http://www.revitalised.co.uk
+// Submitted by Jack Price <jack@revitalised.co.uk>
+wellbeingzone.eu
+ptplus.fit
+wellbeingzone.co.uk
+
 // Sandstorm Development Group, Inc. : https://sandcats.io/
 // Submitted by Asheesh Laroia <asheesh@sandstorm.io>
 sandcats.io
@@ -12002,11 +12158,28 @@ sandcats.io
 logoip.de
 logoip.com
 
+// Securepoint GmbH : https://www.securepoint.de
+// Submitted by Erik Anders <erik.anders@securepoint.de>
+firewall-gateway.com
+firewall-gateway.de
+my-gateway.de
+my-router.de
+spdns.de
+spdns.eu
+firewall-gateway.net
+my-firewall.org
+myfirewall.org
+spdns.org
+
 // Service Online LLC : http://drs.ua/
 // Submitted by Serhii Bulakh <support@drs.ua>
 biz.ua
 co.ua
 pp.ua
+
+// ShiftEdit : https://shiftedit.net/
+// Submitted by Adam Jimenez <adam@shiftcreate.com>
+shiftedit.io
 
 // Shopblocks : http://www.shopblocks.com/
 // Submitted by Alex Bowers <alex@shopblocks.com>
@@ -12014,9 +12187,11 @@ myshopblocks.com
 
 // SinaAppEngine : http://sae.sina.com.cn/
 // Submitted by SinaAppEngine <saesupport@sinacloud.com>
+1kapp.com
+appchizi.com
+applinzi.com
 sinaapp.com
 vipsinaapp.com
-1kapp.com
 
 // Skyhat : http://www.skyhat.io
 // Submitted by Shante Adam <shante@skyhat.io>
@@ -12024,9 +12199,24 @@ bounty-full.com
 alpha.bounty-full.com
 beta.bounty-full.com
 
+// staticland : https://static.land
+// Submitted by Seth Vincent <sethvincent@gmail.com>
+static.land
+dev.static.land
+sites.static.land
+
+// SourceLair PC : https://www.sourcelair.com
+// Submitted by Antonis Kalipetis <akalipetis@sourcelair.com>
+apps.lair.io
+*.stolos.io
+
 // SpaceKit : https://www.spacekit.io/
 // Submitted by Reza Akhavan <spacekit.io@gmail.com>
 spacekit.io
+
+// Stackspace : https://www.stackspace.io/
+// Submitted by Lina He <info@stackspace.io>
+stackspace.space
 
 // Synology, Inc. : https://www.synology.com/
 // Submitted by Rony Weng <ronyweng@synology.com>
@@ -12044,6 +12234,10 @@ i234.me
 myds.me
 synology.me
 
+// TAIFUN Software AG : http://taifun-software.de
+// Submitted by Bjoern Henke <dev-server@taifun-software.de>
+taifun-dns.de
+
 // TASK geographical domains (www.task.gda.pl/uslugi/dns)
 gda.pl
 gdansk.pl
@@ -12056,6 +12250,12 @@ sopot.pl
 bloxcms.com
 townnews-staging.com
 
+// TransIP : htts://www.transip.nl
+// Submitted by Rory Breuk <rbreuk@transip.nl>
+*.transurl.be
+*.transurl.eu
+*.transurl.nl
+
 // TuxFamily : http://tuxfamily.org
 // Submitted by TuxFamily administrators <adm@staff.tuxfamily.org>
 tuxfamily.org
@@ -12067,17 +12267,39 @@ hk.org
 ltd.hk
 inc.hk
 
+// .US
+// Submitted by Ed Moore <Ed.Moore@lib.de.us>
+lib.de.us
+
 // Viprinet Europe GmbH : http://www.viprinet.com
 // Submitted by Simon Kissel <hostmaster@viprinet.com>
 router.management
+
+// Wikimedia Labs : https://wikitech.wikimedia.org
+// Submitted by Yuvi Panda <yuvipanda@wikimedia.org>
+wmflabs.org
 
 // Yola : https://www.yola.com/
 // Submitted by Stefano Rivera <stefano@yola.com>
 yolasite.com
 
+// Yombo : https://yombo.net
+// Submitted by Mitch Schwenk <mitch@yombo.net>
+ybo.faith
+yombo.me
+homelink.one
+ybo.party
+ybo.review
+ybo.science
+ybo.trade
+
 // ZaNiC : http://www.za.net/
 // Submitted by registry <hostmaster@nic.za.net>
 za.net
 za.org
+
+// Zeit, Inc. : https://zeit.domains/
+// Submitted by Olli Vanhoja <olli@zeit.co>
+now.sh
 
 // ===END PRIVATE DOMAINS===
