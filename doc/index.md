@@ -38,6 +38,7 @@ This section contains details about Rspamd internals, documents about writing ne
 * **[Creating your fuzzy storage]({{ site.url }}{{ site.baseurl }}/doc/fuzzy_storage.html)** provides information about how to make your own hashes storage and how to learn it efficiently
 * **[Architecture information](./architecture/index.html)** provides an overview of the Rspamd internal structure
 * **[Protocol documentation](./architecture/protocol.html)** describes Rspamd protocol which is used to communicate with external tools, such as Rmilter or `rspamc` client utility
+* **[Contributing to rspamd.com web-site](./tutorials/site_contributing.html)** describes general conventions and how to test web-site changes
 
 ## External resources
 
