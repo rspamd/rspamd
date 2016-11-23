@@ -439,10 +439,21 @@ rspamd_url_init (const gchar *tld_file)
 
 	if (url_scanner == NULL) {
 		url_scanner = g_malloc (sizeof (struct url_match_scanner));
-		url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
-				sizeof (struct url_matcher), 512);
-		url_scanner->search_trie = rspamd_multipattern_create_sized (512,
+
+		if (tld_file) {
+			/* Reserve larger multipattern */
+			url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
+					sizeof (struct url_matcher), 13000);
+			url_scanner->search_trie = rspamd_multipattern_create_sized (13000,
 				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+		}
+		else {
+			url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
+					sizeof (struct url_matcher), 128);
+			url_scanner->search_trie = rspamd_multipattern_create_sized (128,
+					RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+		}
+
 		rspamd_url_add_static_matchers (url_scanner);
 
 		if (tld_file != NULL) {
