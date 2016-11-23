@@ -143,7 +143,7 @@ local function clickhouse_urls_row(tname)
     'Urls.Url',
   }
   local elt = string.format('INSERT INTO %s (%s) VALUES ',
-    settings['urls_table'], table.concat(urls_fields, ','))
+    tname, table.concat(urls_fields, ','))
   return elt
 end
 
@@ -175,7 +175,7 @@ local function clickhouse_check_symbol(task, symbols, need_score)
 end
 
 local function clickhouse_send_data(task)
-  local function http_cb(err_message, code, body, headers)
+  local function http_cb(err_message, code, _, _)
     if code ~= 200 or err_message then
       rspamd_logger.errx(task, "cannot send data to clickhouse server %s: %d:%s",
         settings['server'], code, err_message)
@@ -399,7 +399,7 @@ local function clickhouse_collect(task)
     -- Use dkim
     local das = task:get_symbol(settings['dkim_allow_symbols'][1])
     if das and das[1] and das[1]['options'] then
-      for i,dkim_domain in ipairs(das[1]['options']) do
+      for _,dkim_domain in ipairs(das[1]['options']) do
         local specific = settings.from_map:get_key(dkim_domain)
         if specific then
           if not specific_rows[specific] then
