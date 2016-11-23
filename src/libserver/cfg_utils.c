@@ -729,7 +729,12 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			}
 		}
 
-		rspamd_url_init (cfg->tld_file);
+		if (opts & RSPAMD_CONFIG_INIT_NO_TLD) {
+			rspamd_url_init (NULL);
+		}
+		else {
+			rspamd_url_init (cfg->tld_file);
+		}
 	}
 
 	init_dynamic_config (cfg);
