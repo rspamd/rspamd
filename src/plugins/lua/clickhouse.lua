@@ -513,7 +513,7 @@ local function clickhouse_collect(task)
 
   -- ASN information
   if settings['asn_table'] then
-    local asn, country, ipnet, ret = 'unknown', 'unknown', 'unknown'
+    local asn, country, ipnet = 'unknown', 'unknown', 'unknown'
     local pool = task:get_mempool()
     ret = pool:get_variable("asn")
     if ret then
