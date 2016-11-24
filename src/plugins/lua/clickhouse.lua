@@ -40,6 +40,7 @@ local settings = {
   attachments_table = 'rspamd_attachments',
   urls_table = 'rspamd_urls',
   ipmask = 19,
+  ipmask6 = 48,
   full_urls = false,
   from_tables = nil
 }
@@ -288,7 +289,12 @@ local function clickhouse_collect(task)
   local ip_str = 'undefined'
   local ip = task:get_from_ip()
   if ip and ip:is_valid() then
-    local ipnet = ip:apply_mask(settings['ipmask'])
+    local ipnet
+    if ip:get_version() == 4 then
+      ipnet = ip:apply_mask(settings['ipmask'])
+    else
+      ipnet = ip:apply_mask(settings['ipmask6'])
+    end
     ip_str = ipnet:to_string()
   end
 
