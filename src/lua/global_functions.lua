@@ -446,7 +446,6 @@ function rspamd_map_add(mname, optname, mtype, description)
             if re then
               table.insert(data, re)
             else
-              local logger = require "rspamd_logger"
               logger.errx(rspamd_config, "cannot create regexp from '%s'", elt)
             end
           end
