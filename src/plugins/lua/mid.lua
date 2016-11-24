@@ -66,13 +66,8 @@ if opts then
     settings[k] = v
   end
 
-  if settings['url'] and #settings['url'] > 0 then
-    map = rspamd_config:add_map ({
-      url = settings['url'],
-      type = 'map',
-      description = 'Message-IDs map'
-    })
-
+  map = rspamd_map_add('mid', 'url', 'map', 'Message-IDs map')
+  if map then
     local id = rspamd_config:register_symbol({
       name = 'KNOWN_MID_CALLBACK',
       type = 'callback',

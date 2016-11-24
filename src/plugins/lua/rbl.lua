@@ -418,7 +418,8 @@ for default, default_v in pairs(default_defaults) do
 end
 
 if(opts['local_exclude_ip_map'] ~= nil) then
-  local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
+  local_exclusions = rspamd_map_add('rbl', 'local_exclude_ip_map', 'radix',
+    'RBL exclusions map')
 end
 
 local white_symbols = {}

@@ -493,13 +493,8 @@ if opts then
     if not settings['server'] then
       rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     else
-      if settings['from_tables'] then
-        settings['from_map'] = rspamd_config:add_map({
-          url = settings['from_tables'],
-          description = 'clickhouse specific domains',
-          type = 'regexp'
-        })
-      end
+      settings['from_map'] = rspamd_map_add('clickhouse', 'from_tables',
+        'regexp', 'clickhouse specific domains')
       clickhouse_first_row()
       rspamd_config:register_symbol({
         name = 'CLICKHOUSE_COLLECT',

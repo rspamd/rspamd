@@ -177,7 +177,8 @@ if opts then
           good_hosts = v
         end
       elseif n == 'whitelist' then
-        whitelist = rspamd_config:add_radix_map (v, 'once received whitelist')
+        whitelist = rspamd_map_add('once_received', 'whitelist', 'radix',
+          'once received whitelist')
       end
     end
 

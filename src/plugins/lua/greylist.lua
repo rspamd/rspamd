@@ -359,17 +359,10 @@ if opts then
       settings[k] = v
     end
   end
-  if settings['whitelisted_ip'] then
-    whitelisted_ip = rspamd_config:add_radix_map(settings['whitelisted_ip'],
-      'Greylist whitelist ip map')
-  end
-  if settings['whitelist_domains_url'] and #settings['whitelist_domains_url'] > 0 then
-    whitelist_domains_map = rspamd_config:add_map ({
-      url = settings['whitelist_domains_url'],
-      type = 'map',
-      description = 'Greylist whitelist domains map'
-    })
-  end
+  whitelisted_ip = rspamd_map_add('greylist', 'whitelisted_ip', 'radix',
+    'Greylist whitelist ip map')
+  whitelist_domains_map = rspamd_map_add('greylist', 'whitelist_domains_url',
+    'map', 'Greylist whitelist domains map')
 
   redis_params = rspamd_parse_redis_server('greylist')
   if not redis_params then

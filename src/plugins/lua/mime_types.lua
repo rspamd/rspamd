@@ -202,21 +202,11 @@ if opts then
     settings[k] = v
   end
 
-  if settings['file'] and #settings['file'] > 0 then
-
-    if settings['regexp'] then
-      map = rspamd_config:add_map ({
-        url = settings['file'],
-        type = 'regexp',
-        description = 'mime types map (regexps)'
-      })
-    else
-      map = rspamd_config:add_map ({
-        url = settings['file'],
-        type = 'map',
-        description = 'mime types map (plain)'
-      })
-    end
+  local type = 'map'
+  if settings['regexp'] then type = 'regexp' end
+  map = rspamd_map_add('mime_types', 'file', type,
+    'mime types map')
+  if map then
     local id = rspamd_config:register_symbol({
       callback = check_mime_type,
       type = 'callback'

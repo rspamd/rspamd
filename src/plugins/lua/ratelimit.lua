@@ -528,15 +528,13 @@ if opts then
   end
 
   if opts['whitelisted_ip'] then
-    whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'], 'Ratelimit whitelist ip map')
+    whitelisted_ip = rspamd_map_add('ratelimit', 'whitelisted_ip', 'radix',
+      'Ratelimit whitelist ip map')
   end
 
   if opts['whitelisted_user'] then
-    whitelisted_user = rspamd_config:add_map({
-      ['url'] = opts['whitelisted_user'],
-      ['description'] = 'Ratelimit whitelist user map',
-      ['type'] = 'set'
-    })
+    whitelisted_ip = rspamd_map_add('ratelimit', 'whitelisted_user', 'set',
+      'Ratelimit whitelist user map')
   end
 
   if opts['symbol'] then
