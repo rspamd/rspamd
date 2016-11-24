@@ -867,6 +867,12 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					if (is_url_end (t)) {
 						goto set;
 					}
+					else if (*p == '@' && !user_seen) {
+						/* We need to fallback and test user */
+						p = slash;
+						user_seen = TRUE;
+						st = parse_user;
+					}
 					else if (*p != '.' && *p != '-' && *p != '_' && *p != '%') {
 						uc = g_utf8_get_char_validated (p, last - p);
 
