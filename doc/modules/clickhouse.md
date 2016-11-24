@@ -35,6 +35,7 @@ CREATE TABLE rspamd
   ListId String,
   Digest FixedString(32)
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
+
 CREATE TABLE rspamd_attachments (
   Date Date,
   Digest FixedString(32),
@@ -43,11 +44,20 @@ CREATE TABLE rspamd_attachments (
   `Attachments.Length` Array(UInt32),
   `Attachments.Digest` Array(FixedString(16))
 ) ENGINE = MergeTree(Date, Digest, 8192)
+
 CREATE TABLE rspamd_urls (
   Date Date,
   Digest FixedString(32),
   `Urls.Tld` Array(String),
   `Urls.Url` Array(String)
+) ENGINE = MergeTree(Date, Digest, 8192)
+
+CREATE TABLE rspamd_asn (
+    Date Date,
+    Digest FixedString(32),
+    ASN String,
+    Country FixedString(2),
+    IPNet String
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ~~~
 
@@ -71,7 +81,10 @@ clickhouse {
   # If a message has a domain in this map in From: header and DKIM signature,
   # record general metadata in a table named after the domain
   #from_tables = "/etc/rspamd/clickhouse_from.map";
-  # These are tables used to store data in Clickhouse (defaults as shown)
+  # These are tables used to store data in Clickhouse
+  # Table used to store ASN information (default unset: not collected)
+  #asn_table = "rspamd_asn"; # default unset
+  # The following table names are set by default
   # Set these if you use want to use different table names
   #table = "rspamd"; # general metadata
   #attachments_table = "rspamd_attachments"; # attachment metadata
