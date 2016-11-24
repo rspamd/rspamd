@@ -533,7 +533,7 @@ if opts then
   end
 
   if opts['whitelisted_user'] then
-    whitelisted_ip = rspamd_map_add('ratelimit', 'whitelisted_user', 'set',
+    whitelisted_user = rspamd_map_add('ratelimit', 'whitelisted_user', 'set',
       'Ratelimit whitelist user map')
   end
 
