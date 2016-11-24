@@ -440,7 +440,7 @@ function rspamd_map_add(mname, optname, mtype, description)
         local data = {}
         for _,elt in ipairs(opt) do
           if type(elt) == 'string' then
-            table.insert(data, tostring(elt))
+            data[elt] = '1'
           end
         end
 
