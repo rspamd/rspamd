@@ -600,12 +600,6 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 				if (rspamd_inet_address_get_port (ip) == 0) {
 					rspamd_inet_address_set_port (ip, 6379);
 				}
-
-				if (task) {
-					rspamd_mempool_add_destructor (task->task_pool,
-							(rspamd_mempool_destruct_t)rspamd_inet_address_destroy,
-							ip);
-				}
 			}
 		}
 		lua_pop (L, 1);
@@ -655,6 +649,10 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 				rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
 
+		if (ip) {
+			rspamd_inet_address_destroy (ip);
+		}
+
 		if (ud->ctx == NULL || ud->ctx->err) {
 			if (ud->ctx) {
 				msg_err_task_check ("cannot connect to redis: %s",
@@ -673,6 +671,10 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 
 
 		return ctx;
+	}
+
+	if (ip) {
+		rspamd_inet_address_destroy (ip);
 	}
 
 	return NULL;
