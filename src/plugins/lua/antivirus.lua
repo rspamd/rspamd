@@ -194,7 +194,9 @@ local function check_av_cache(task, rule, fn)
         yield_result(task, rule, data)
       end
     else
-      rspamd_logger.errx(task, 'Got error checking cache: %1', err)
+      if err then
+        rspamd_logger.errx(task, 'Got error checking cache: %1', err)
+      end
       fn()
     end
   end
