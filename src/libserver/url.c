@@ -1842,7 +1842,7 @@ url_tld_end (struct url_callback_data *cb,
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
-	else if (*p == '/' || *p == ':' || is_url_end (*p) ||
+	else if (*p == '/' || *p == ':' || is_url_end (*p) || is_lwsp (*p) ||
 			(match->st != '<' && p == match->newline_pos)) {
 		/* Parse arguments, ports by normal way by url default function */
 		p = match->m_begin;
