@@ -25,7 +25,7 @@ local logger = require "rspamd_logger"
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
   local function emails_dns_cb(_, to_resolve, results, err)
-    if err then
+    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
       logger.errx(task, 'Error querying DNS: %1', err)
     elseif results then
       logger.infox(task, '<%1> email: [%2] resolved for symbol: %3',

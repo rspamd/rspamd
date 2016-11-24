@@ -56,7 +56,7 @@ local function asn_check(task)
   local asn_check_func = {}
   function asn_check_func.rspamd(ip)
     local function rspamd_dns_cb(_, _, results, dns_err)
-      if dns_err then
+      if dns_err and (dns_err ~= 'requested record is not found' and dns_err ~= 'no records with this name') then
         rspamd_logger.errx(task, 'error querying dns: %s', dns_err)
       end
       if not (results and results[1]) then return end
