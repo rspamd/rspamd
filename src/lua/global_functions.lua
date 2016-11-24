@@ -386,3 +386,82 @@ function rspamd_count_metatokens()
 
   return total
 end
+
+function rspamd_map_add(mname, optname, mtype, description)
+  local ret = {
+    get_key = function(t, k)
+      if t.__data then
+        return t.__data:get_key(k)
+      end
+
+      return nil
+    end
+  }
+  local ret_mt = {
+    __index = function(t, k)
+      if t.__data then
+        return t.get_key(k)
+      end
+
+      return nil
+    end
+  }
+  local opt = rspamd_config:get_module_opt(mname, optname)
+
+  if not opt then
+    return nil
+  end
+
+  if type(opt) == 'string' then
+    -- We have a single string, so we treat it as a map
+    local map = rspamd_config:add_map{
+      type = mtype,
+      description = description,
+      url = opt,
+    }
+
+    if map then
+      ret.__data = map
+      setmetatable(ret, ret_mt)
+      return ret
+    end
+  elseif type(opt) == 'table' then
+    -- it might be plain map or map of plain elements
+    if opt[1] then
+      if mtype == 'radix' then
+        local map = rspamd_config:radix_from_config(mname, optname)
+
+        if map then
+          ret.__data = map
+          setmetatable(ret, ret_mt)
+          return ret
+        end
+      else
+        local data = {}
+        for _,elt in ipairs(opt) do
+          if type(elt) == 'string' then
+            table.insert(data, tostring(elt))
+          end
+        end
+
+        ret.__data = data
+        ret.get_key = function(t, k)
+          return t.__data[k]
+        end
+      end
+    else
+      local map = rspamd_config:add_map{
+        type = mtype,
+        description = description,
+        url = opt,
+      }
+      if map then
+        ret.__data = map
+        setmetatable(ret, ret_mt)
+        return ret
+      end
+    end
+  end
+
+  return nil
+end
