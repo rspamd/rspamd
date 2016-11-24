@@ -73,8 +73,10 @@ clickhouse {
   server = "localhost:8123";
   # Timeout to wait for response (5 seconds if unset)
   timeout = 5;
-  # How many bits of sending IP to mask in logs (19 if unset)
+  # How many bits of sending IP to mask in logs for IPv4 (19 if unset)
   ipmask = 19;
+  # How many bits of sending IP to mask in logs for IPv6 (48 if unset)
+  ipmask6 = 48;
   # Record URL paths? (default false)
   full_urls = false;
   # This parameter points to a map of domain names
