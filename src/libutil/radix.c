@@ -315,12 +315,14 @@ gboolean
 radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree,
 		gboolean resolve)
 {
+	static const char fill_ptr[] = "1";
+
 	if (*tree == NULL) {
 		*tree = radix_create_compressed ();
 	}
 
 	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree,
-			GINT_TO_POINTER (1), resolve) > 0);
+			fill_ptr, resolve) > 0);
 }
 
 

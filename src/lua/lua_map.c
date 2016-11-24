@@ -158,6 +158,7 @@ lua_config_radix_from_config (lua_State *L)
 	const gchar *mname, *optname;
 	const ucl_object_t *obj;
 	struct rspamd_lua_map *map, **pmap;
+	static const char fill_ptr[] = "1";
 
 	if (!cfg) {
 		return luaL_error (L, "invalid arguments");
@@ -174,8 +175,25 @@ lua_config_radix_from_config (lua_State *L)
 			map->type = RSPAMD_LUA_MAP_RADIX;
 			map->data.radix = radix_create_compressed ();
 			map->flags |= RSPAMD_LUA_MAP_FLAG_EMBEDDED;
-			radix_add_generic_iplist (ucl_obj_tostring (obj), &map->data.radix,
-					TRUE);
+
+			if (ucl_object_type (obj) == UCL_STRING) {
+				radix_add_generic_iplist (ucl_obj_tostring (obj), &map->data.radix,
+						TRUE);
+			}
+			else {
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+
+				map->data.radix = radix_create_compressed ();
+
+				while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+					if (ucl_object_type (cur) == UCL_STRING) {
+						rspamd_radix_add_iplist (ucl_object_tostring (cur),
+								",;", map->data.radix, fill_ptr, TRUE);
+					}
+				}
+			}
+
 			pmap = lua_newuserdata (L, sizeof (void *));
 			*pmap = map;
 			rspamd_lua_setclass (L, "rspamd{map}", -1);
