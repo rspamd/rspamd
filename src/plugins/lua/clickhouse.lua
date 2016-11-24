@@ -177,7 +177,7 @@ end
 local function clickhouse_send_data(task)
   local function http_cb(err_message, code, _, _)
     if code ~= 200 or err_message then
-      rspamd_logger.errx(task, "cannot send data to clickhouse server %s: %d:%s",
+      rspamd_logger.errx(task, "cannot send data to clickhouse server %s: %s:%s",
         settings['server'], code, err_message)
     else
       rspamd_logger.infox(task, "sent %s rows to clickhouse server %s",
