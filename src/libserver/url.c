@@ -119,13 +119,21 @@ struct url_matcher static_matchers[] = {
 		/* Common prefixes */
 		{"file://",   "",          url_file_start,  url_file_end,
 				0, 0},
+		{"file:\\\\",   "",          url_file_start,  url_file_end,
+				0, 0},
 		{"ftp://",    "",          url_web_start,   url_web_end,
+				0, 0},
+		{"ftp:\\\\",    "",          url_web_start,   url_web_end,
 				0, 0},
 		{"sftp://",   "",          url_web_start,   url_web_end,
 				0, 0},
 		{"http://",   "",          url_web_start,   url_web_end,
 				0, 0},
+		{"http:\\\\",   "",          url_web_start,   url_web_end,
+				0, 0},
 		{"https://",  "",          url_web_start,   url_web_end,
+				0, 0},
+		{"https:\\\\",  "",          url_web_start,   url_web_end,
 				0, 0},
 		{"news://",   "",          url_web_start,   url_web_end,
 				0, 0},
@@ -543,7 +551,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				p++;
 				break;
 			case parse_semicolon:
-				if (t == '/') {
+				if (t == '/' || t == '\\') {
 					st = parse_slash;
 					p++;
 				}
@@ -552,7 +560,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 				break;
 			case parse_slash:
-				if (t == '/') {
+				if (t == '/' || t == '\\') {
 					st = parse_slash_slash;
 				}
 				else {
@@ -565,7 +573,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					st = parse_prefix_question;
 					p++;
 				}
-				else if (t != '/') {
+				else if (t != '/' && t != '\\') {
 					c = p;
 					st = parse_user;
 				}
