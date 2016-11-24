@@ -182,40 +182,96 @@ To learn specific classifier, you can use `-c` option for `rspamc` (or `Classifi
 
 ## Redis statistics
 
-From version 1.1, it is also possible to specify Redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup Redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
+From version 1.1, it is also possible to specify Redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup Redis, you could use redis backend for a classifier (cache is set to the same servers accordingly).
+
+The following configuration is a full featured example of how you can set up redis for the statistics. Please edit `/etc/rspamd/local.d/statistic.conf` and paste the code.
+
+For a redis classifier, you need to set the backend to `redis`. It is important to define the `servers` parameter, as it is not taken from a global configuration (You might have defined redis for LUA modules). If you want to have bayes auto learning, you need to tell it to the configuration file. See below for further explanations on this parameter.
+
+Bayes tokens can be stored per user when you define a LUA function.
+
+The statfile parameters are used for the key names in redis. You should also specify, which symbol is spam and which is for ham.
+
+At the end of this configuration file, you find a learning condition LUA function. It keeps track of already learned tokens.
 
 ~~~ucl
-    classifier "bayes" {
-        tokenizer {
-            name = "osb";
-        }
-
-        name = "bayes";
-        min_tokens = 11;
-        min_learns = 200;
-        backend = "redis";
-        servers = "localhost:6379";
-        #write_servers = "localhost:6379"; # If needed another servers for learning
-        #password = "xxx"; # Optional password
-        #database = "2"; # Optional database id
-
-        statfile {
-            symbol = "BAYES_SPAM";
-        }
-        statfile {
-            symbol = "BAYES_HAM";
-        }
-        per_user = true;
+classifier "bayes" {
+    tokenizer {
+    name = "osb";
     }
+
+    backend = "redis";
+    servers = "127.0.0.1:6379";
+    min_tokens = 11;
+    min_learns = 200;
+    autolearn = true;
+
+    per_user = <<EOD
+return function(task)
+    local rcpt = task:get_recipients(1)
+
+if rcpt then
+    one_rcpt = rcpt[1]
+    if one_rcpt['domain'] then
+        return one_rcpt['domain']
+    end
+end
+
+return nil
+end
+EOD
+
+    statfile {
+        symbol = "BAYES_HAM";
+        spam = false;
+    }
+    statfile {
+        symbol = "BAYES_SPAM";
+        spam = true;
+    }
+    learn_condition =<<EOD
+return function(task, is_spam, is_unlearn)
+    local prob = task:get_mempool():get_variable('bayes_prob', 'double')
+
+    if prob then
+        local in_class = false
+        local cl
+        if is_spam then
+            cl = 'spam'
+            in_class = prob >= 0.95
+        else
+            cl = 'ham'
+            in_class = prob <= 0.05
+        end
+
+        if in_class then
+            return false,string.format('already in class %s; probability %.2f%%',
+            cl, math.abs((prob - 0.5) * 200.0))
+        end
+    end
+
+    return true
+end
+EOD
+}
 ~~~
 
-`per_language` is not supported by Redis - it just stores everything in the same place. `write_servers` are used in the
-`master-slave` rotation by default and used for learning, whilst `servers` are selected randomly each time:
+`per_languages` is not supported by Redis - it just stores everything in the same place. `write_servers` are used in the master-slave rotation by default and used for learning, whilst read-only servers are selected randomly each time:
 
-	write_servers = "master.example.com:6379:10, slave.example.com:6379:1"
-	write_servers = "master.example.com:6379, slave.example.com:6379"
+Supported parameters for the redis backend are:
 
-Where the last number is priority used to distinguish master from slave.
+- `tokenizer`: leave it as shown for now. Currently only osb is supported
+- `backend`: set it to redis
+- `servers`: IP or hostname with port for the redis server. Use an IP for the loopback interface, if you have defined localhost in /etc/hosts for both IPv4 and IPv6, or your redis server will not be found!
+- `write_servers` (optional): If needed, define dedicated servers for learning
+- `password` (optional): Password for the redis server
+- `database` (optional): Database to use (though it is recommended to use dedicated redis instances and not databases in redis)
+- `min_tokens` : minimum number of words required for statistics processing
+- `min_learns` (optional): minimum learn count for **both** spam and ham classes to perform  classification
+- `autolearn` (optional): see below for details
+- `per_user` (optional): enable per users statistics. See above
+- `statfile`: Define keys for spam and ham mails.
+- `learn_condition` (optional): Lua function for autoleraning as described below.
 
 ## Autolearning
 
