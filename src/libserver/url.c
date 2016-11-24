@@ -716,7 +716,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				p++;
 				break;
 			case parse_semicolon:
-				if (t == '/') {
+				if (t == '/' || t == '\\') {
 					st = parse_slash;
 					p++;
 				}
@@ -725,7 +725,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 				break;
 			case parse_slash:
-				if (t == '/') {
+				if (t == '/' || t == '\\') {
 					st = parse_slash_slash;
 				}
 				else {
@@ -735,7 +735,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				break;
 			case parse_slash_slash:
 
-				if (t != '/') {
+				if (t != '/' && t != '\\') {
 					c = p;
 					st = parse_domain;
 					slash = p;
