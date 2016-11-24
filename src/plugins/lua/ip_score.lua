@@ -327,7 +327,7 @@ end
 
 -- Configuration options
 local configure_ip_score_module = function()
-  local opts = rspamd_config:get_all_opt('options')
+  local opts = rspamd_config:get_all_opt('ip_score')
   if opts and type(opts) ~= 'table' then
     if type(opts['check_authed']) == 'boolean' then
       check_authed = opts['check_authed']
