@@ -27,6 +27,7 @@ antivirus {
     type = "clamav";
     # servers to query (if port is unspecified, scanner-specific default is used)
     # can be specified multiple times to pool servers
+    # can be set to a path to a unix socket
     servers = "127.0.0.1:3310";
     # if `patterns` is specified virus name will be matched against provided regexes and the related
     # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
