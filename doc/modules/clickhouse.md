@@ -7,7 +7,105 @@ title: Clickhouse module
 
 Clickhouse module pushes a variety of message-related metadata to an instance of [Clickhouse](https://clickhouse.yandex/), an open-source column-oriented DBMS useful for realtime analytics. Information that could be collected includes: senders/recipients/scores of scanned messages and metadata such as DKIM/DMARC/bayes/fuzzy status & information about URLs and attachments.
 
-Schema is shown below:
+### Clickhouse usage examples
+
+Clickhouse module is extremely useful to perform statistical researches for mail flows. For example, to find top sending domains for spam and ham:
+
+~~~
+SELECT
+    From,
+    count() AS c
+FROM rspamd
+WHERE (Date = today()) AND ((Action = 'reject') OR (Action = 'add header'))
+GROUP BY From
+ORDER BY c DESC
+LIMIT 10
+
+┌─From────────────┬──────c─┐
+│ xxx.com         │ 152931 │
+│ xxx.com         │ 102123 │
+│ gmail.com       │  60865 │
+│ yahoo.com       │  58832 │
+│ xxx.com         │  58082 │
+...
+└─────────────────┴────────┘
+~~~
+
+Or messages with failed DKIM and DMARC groupped by domain:
+
+~~~
+SELECT
+    From,
+    IP,
+    count() AS c
+FROM rspamd
+WHERE (Date = today()) AND (IsDkim = 'reject')
+GROUP BY
+    From,
+    IP
+ORDER BY c DESC
+LIMIT 10
+
+┌─From─────────────────┬─IP─────────────┬─────c─┐
+│ xxx.xxx              │ xx.xx.xx.xx    │ 27542 │
+│ xxx.xxx              │ xx.yy.yy.yy    │ 24958 │
+...
+└──────────────────────┴────────────────┴───────┘
+~~~
+
+Or perform some attachments analysis (e.g. top attachments types for Spam):
+
+~~~
+SELECT
+    count() AS c,
+    d
+FROM rspamd_attachments
+ARRAY JOIN Attachments.ContentType AS d
+ANY INNER JOIN
+(
+    SELECT Digest
+    FROM rspamd
+    WHERE (Date = today()) AND ((Action = 'reject') OR (Action = 'add header'))
+) USING (Digest)
+GROUP BY d
+ORDER BY c DESC
+LIMIT 5
+
+┌──────c─┬─d────────────────────────┐
+│ ddd    │ image/jpeg               │
+│ ddd    │ image/png                │
+│ ddd    │ application/octet-stream │
+│ ddd    │ image/gif                │
+│ ddd    │ application/msword       │
+└────────┴──────────────────────────┘
+~~~
+
+Rspamd can also send copies of data for specific domains to a separate tables to simplify analytics.
+
+For mailing lists, Rspamd sends list ids which allows to provide very precise statistics for each particular mailing list:
+
+~~~
+SELECT
+    ListId,
+    IP,
+    count() AS c
+FROM rspamd
+WHERE (Date = today()) AND (ListId != '')
+GROUP BY
+    ListId,
+    IP
+ORDER BY c DESC
+LIMIT 10
+
+┌─ListId───────────────────────────────┬─IP──────────────┬──────c─┐
+│ xxx                                  │ xx.xx.xx.xx     │ dddd   │
+...
+└──────────────────────────────────────┴─────────────────┴────────┘
+~~~
+
+### Clickhouse tables schema
+
+Before using of this module, you need to create certain tables in clickhouse. Here is the desired schema for these tables:
 
 ~~~
 CREATE TABLE rspamd
@@ -59,6 +157,12 @@ CREATE TABLE rspamd_asn (
     Country FixedString(2),
     IPNet String
 ) ENGINE = MergeTree(Date, Digest, 8192)
+~~~
+
+You can install this schema running Clickhouse CLI:
+
+~~~
+clickhouse-client --multiline
 ~~~
 
 ### Configuration
