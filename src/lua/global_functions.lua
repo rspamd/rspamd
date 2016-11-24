@@ -436,17 +436,45 @@ function rspamd_map_add(mname, optname, mtype, description)
           setmetatable(ret, ret_mt)
           return ret
         end
-      else
+      elseif mtype == 'regexp' then
         local data = {}
+        local rspamd_regexp = require "rspamd_regexp"
         for _,elt in ipairs(opt) do
           if type(elt) == 'string' then
-            data[elt] = '1'
+            local re = rspamd_regexp:create_cached(elt)
+
+            if re then
+              table.insert(data, re)
+            else
+              local logger = require "rspamd_logger"
+              logger.errx(rspamd_config, "cannot create regexp from '%s'", elt)
+            end
           end
         end
 
         ret.__data = data
         ret.get_key = function(t, k)
-          return t.__data[k]
+          for _,re in ipairs(t.__data) do
+            if re:match(k) then return true end
+          end
+
+          return nil
+        end
+      else
+        local data = {}
+        for _,elt in ipairs(opt) do
+          if type(elt) == 'string' then
+            data[elt] = true
+          end
+        end
+
+        ret.__data = data
+        ret.get_key = function(t, k)
+          if k ~= '__data' then
+            return t.__data[k]
+          end
+
+          return nil
         end
       end
     else
