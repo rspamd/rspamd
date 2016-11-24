@@ -451,29 +451,37 @@ function rspamd_map_add(mname, optname, mtype, description)
           end
         end
 
-        ret.__data = data
-        ret.get_key = function(t, k)
-          for _,re in ipairs(t.__data) do
-            if re:match(k) then return true end
-          end
+        if #data > 0 then
+          ret.__data = data
+          ret.get_key = function(t, k)
+            for _,re in ipairs(t.__data) do
+              if re:match(k) then return true end
+            end
 
-          return nil
+            return nil
+          end
+          return ret
         end
       else
         local data = {}
+        local nelts = 0
         for _,elt in ipairs(opt) do
           if type(elt) == 'string' then
             data[elt] = true
+            nelts = nelts + 1
           end
         end
 
-        ret.__data = data
-        ret.get_key = function(t, k)
-          if k ~= '__data' then
-            return t.__data[k]
-          end
+        if nelts > 0 then
+          ret.__data = data
+          ret.get_key = function(t, k)
+            if k ~= '__data' then
+              return t.__data[k]
+            end
 
-          return nil
+            return nil
+          end
+          return ret
         end
       end
     else
