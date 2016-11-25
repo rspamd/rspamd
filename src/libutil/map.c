@@ -1592,7 +1592,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 		}
 
 		if (map->backends->len == 0) {
-			msg_err_config ("map has no urls to be loaded");
+			msg_err_config ("map has no urls to be loaded: empty list");
 			goto err;
 		}
 	}
@@ -1619,11 +1619,11 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 
 		elt = ucl_object_lookup_any (obj, "upstreams", "url", "urls", NULL);
 		if (elt == NULL) {
-			msg_err_config ("map has no urls to be loaded");
+			msg_err_config ("map has no urls to be loaded: no elt");
 			goto err;
 		}
 
-		if (ucl_object_type (obj) == UCL_ARRAY) {
+		if (ucl_object_type (elt) == UCL_ARRAY) {
 			/* Add array of maps as multiple backends */
 			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
 				if (ucl_object_type (cur) == UCL_STRING) {
@@ -1645,7 +1645,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			}
 
 			if (map->backends->len == 0) {
-				msg_err_config ("map has no urls to be loaded");
+				msg_err_config ("map has no urls to be loaded: empty object list");
 				goto err;
 			}
 		}
@@ -1662,7 +1662,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 		}
 
 		if (map->backends->len == 0) {
-			msg_err_config ("map has no urls to be loaded");
+			msg_err_config ("map has no urls to be loaded: no valid backends");
 			goto err;
 		}
 	}

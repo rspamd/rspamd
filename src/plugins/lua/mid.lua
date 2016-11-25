@@ -90,6 +90,6 @@ if opts then
 
     rspamd_config:register_dependency(id, settings['symbol_dkim_allow'])
   else
-    rspamd_logger.infox(rspamd_config, 'url is not specified, disabling module')
+    rspamd_logger.infox(rspamd_config, 'source is not specified, disabling module')
   end
 end
