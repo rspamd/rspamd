@@ -31,7 +31,6 @@
 #define REPEATS_MIN 3
 #define REPEATS_MAX 300
 #define LOG_ID 6
-#define RSPAMD_LOGBUF_SIZE 8192
 
 struct rspamd_logger_error_elt {
 	gint completed;

@@ -22,6 +22,8 @@ typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
 
 typedef struct rspamd_logger_s rspamd_logger_t;
 
+#define RSPAMD_LOGBUF_SIZE 8192
+
 /**
  * Init logger
  */
