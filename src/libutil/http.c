@@ -1355,7 +1355,11 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 	/* Clear priv */
 
 	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)) {
-		event_del (&priv->ev);
+
+		if (event_get_base (&priv->ev)) {
+			event_del (&priv->ev);
+		}
+
 		rspamd_http_parser_reset (conn);
 	}
 

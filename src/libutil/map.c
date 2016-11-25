@@ -118,9 +118,9 @@ write_http_request (struct http_callback_data *cbd)
 			g_assert_not_reached ();
 		}
 
+		MAP_RETAIN (cbd, "http_callback_data");
 		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
 				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
-		MAP_RETAIN (cbd, "http_callback_data");
 	}
 	else {
 		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
