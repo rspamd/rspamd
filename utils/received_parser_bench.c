@@ -26,6 +26,7 @@ static gint total_real_ip = 0;
 static gint total_real_host = 0;
 static gint total_known_proto = 0;
 static gint total_known_ts = 0;
+static gint total_known_for = 0;
 
 static void
 rspamd_process_file (const gchar *fname)
@@ -82,6 +83,10 @@ rspamd_process_file (const gchar *fname)
 		if (rh.timestamp != 0) {
 			total_known_ts ++;
 		}
+
+		if (rh.for_mbox) {
+			total_known_for ++;
+		}
 	}
 
 	if (err) {
@@ -111,11 +116,13 @@ main (int argc, char **argv)
 			"Total real ip: %d\n"
 			"Total real host: %d\n"
 			"Total known proto: %d\n"
-			"Total known timestamp: %d\n",
+			"Total known timestamp: %d\n"
+			"Total known for: %d\n",
 			total_parsed, total_time,
 			total_valid, total_real_ip,
 			total_real_host, total_known_proto,
-			total_known_ts);
+			total_known_ts,
+			total_known_for);
 
 	return 0;
 }
