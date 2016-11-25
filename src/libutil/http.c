@@ -542,7 +542,6 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 
 	DL_APPEND (hdr, priv->header);
 
-
 	rspamd_http_check_special_header (conn, priv);
 }
 
