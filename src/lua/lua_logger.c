@@ -471,7 +471,7 @@ lua_logger_get_id (lua_State *L, gint pos)
 		clsname = lua_tostring (L, -1);
 
 		if (strcmp (clsname, "rspamd{task}") == 0) {
-			struct rspamd_task *task = lua_check_task (L, 1);
+			struct rspamd_task *task = lua_check_task (L, pos);
 
 			if (task) {
 				uid = task->task_pool->tag.uid;
@@ -480,7 +480,7 @@ lua_logger_get_id (lua_State *L, gint pos)
 		else if (strcmp (clsname, "rspamd{mempool}") == 0) {
 			rspamd_mempool_t  *pool;
 
-			pool = rspamd_lua_check_mempool (L, 1);
+			pool = rspamd_lua_check_mempool (L, pos);
 
 			if (pool) {
 				uid = pool->tag.uid;
@@ -489,7 +489,7 @@ lua_logger_get_id (lua_State *L, gint pos)
 		else if (strcmp (clsname, "rspamd{config}") == 0) {
 			struct rspamd_config *cfg;
 
-			cfg = lua_check_config (L, 1);
+			cfg = lua_check_config (L, pos);
 
 			if (cfg) {
 				uid = cfg->checksum;
@@ -498,7 +498,7 @@ lua_logger_get_id (lua_State *L, gint pos)
 		else if (strcmp (clsname, "rspamd{map}") == 0) {
 			struct rspamd_lua_map *map;
 
-			map = lua_check_map (L, 1);
+			map = lua_check_map (L, pos);
 
 			if (map) {
 				if (map->map) {
