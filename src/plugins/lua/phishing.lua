@@ -17,6 +17,7 @@ limitations under the License.
 -- Phishing detection interface for selecting phished urls and inserting corresponding symbol
 --
 --
+local N = 'phishing'
 local symbol = 'PHISHED_URL'
 local openphish_symbol = 'PHISHED_OPENPHISH'
 local phishtank_symbol = 'PHISHED_PHISHTANK'
@@ -33,7 +34,7 @@ local openphish_data = {}
 local phishtank_data = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
-local opts = rspamd_config:get_all_opt('phishing')
+local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
@@ -137,7 +138,7 @@ local function phishing_cb(task)
           -- Use distance to penalize the total weight
           weight = util.tanh(3 * (1 - dist + 0.1))
         end
-        rspamd_logger.debugx(task, "distance: %1 -> %2: %3", tld, ptld, dist)
+        rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
 
         local function found_in_map(map)
           if #map > 0 then

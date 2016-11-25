@@ -16,6 +16,7 @@ limitations under the License.
 
 -- Trie is rspamd module designed to define and operate with suffix trie
 
+local N = 'trie'
 local rspamd_logger = require "rspamd_logger"
 local rspamd_trie = require "rspamd_trie"
 local fun = require "fun"
@@ -55,7 +56,7 @@ local function tries_callback(task)
       local pattern = patterns[idx]
 
       if param['multi'] or not matched[pattern] then
-        rspamd_logger.debugx(task, "<%1> matched pattern %2 at pos %3",
+        rspamd_logger.debugm(N, task, "<%1> matched pattern %2 at pos %3",
           task:get_message_id(), pattern, pos)
         task:insert_result(param['symbol'], 1.0, type)
         if not param['multi'] then

@@ -19,6 +19,7 @@ limitations under the License.
 
 local rspamd_http
 local rspamd_logger = require "rspamd_logger"
+local N = 'metadata_exporter'
 
 local settings = {
   format = function(task)
@@ -27,7 +28,7 @@ local settings = {
   mime_type = 'text/plain',
 }
 
-local opts = rspamd_config:get_all_opt('metadata_exporter')
+local opts = rspamd_config:get_all_opt(N)
 if not opts then return end
 local redis_params
 local channel = opts['channel']
@@ -36,7 +37,7 @@ if not (url or channel) then
   rspamd_logger.errx('No backends configured')
 end
 if channel then
-  redis_params = rspamd_parse_redis_server('metadata_exporter')
+  redis_params = rspamd_parse_redis_server(N)
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
     return
@@ -73,11 +74,11 @@ local function metadata_exporter(task)
   end
   if settings.select then
     if not settings.select(task) then return end
-    rspamd_logger.debugx(task, 'Message selected for processing')
+    rspamd_logger.debugm(N, task, 'Message selected for processing')
   end
   local data = settings.format(task)
   if not data then
-    rspamd_logger.debugx(task, 'Format returned non-truthy value: %1', data)
+    rspamd_logger.debugm(N, task, 'Format returned non-truthy value: %1', data)
     return
   end
   if channel then

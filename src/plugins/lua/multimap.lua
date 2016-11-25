@@ -24,6 +24,7 @@ local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local redis_params
 local fun = require "fun"
+local N = 'multimap'
 
 local urls = {}
 
@@ -512,10 +513,10 @@ local function multimap_callback(task, rule)
     local res,trace = rule['expression']:process_traced(task)
 
     if not res or res == 0 then
-      rspamd_logger.debugx(task, 'condition is false for %s', rule['symbol'])
+      rspamd_logger.debugm(N, task, 'condition is false for %s', rule['symbol'])
       return
     else
-      rspamd_logger.debugx(task, 'condition is true for %s: %s', rule['symbol'],
+      rspamd_logger.debugm(N, task, 'condition is true for %s: %s', rule['symbol'],
         trace)
     end
   end
@@ -751,7 +752,7 @@ local function add_multimap_rule(key, newrule)
 
       local function process_atom(atom, task)
         local f_ret = task:has_symbol(atom)
-        rspamd_logger.debugx('check for symbol %s: %s', atom, f_ret)
+        rspamd_logger.debugm(N, rspamd_config, 'check for symbol %s: %s', atom, f_ret)
 
         if f_ret then
           return 1
@@ -766,7 +767,7 @@ local function add_multimap_rule(key, newrule)
         newrule['expression'] = expression
 
         fun.each(function(v)
-          rspamd_logger.debugx(rspamd_config, 'add dependency %s -> %s',
+          rspamd_logger.debugm(N, rspamd_config, 'add dependency %s -> %s',
             newrule['symbol'], v)
           rspamd_config:register_dependency(newrule['symbol'], v)
         end, atoms)
@@ -779,9 +780,9 @@ local function add_multimap_rule(key, newrule)
 end
 
 -- Registration
-local opts =  rspamd_config:get_all_opt('multimap')
+local opts = rspamd_config:get_all_opt(N)
 if opts and type(opts) == 'table' then
-  redis_params = rspamd_parse_redis_server('multimap')
+  redis_params = rspamd_parse_redis_server(N)
   for k,m in pairs(opts) do
     if type(m) == 'table' and m['type'] then
       local rule = add_multimap_rule(k, m)
@@ -814,7 +815,7 @@ if opts and type(opts) == 'table' then
     if rule['score'] then
       -- Register metric symbol
       local description = 'multimap symbol'
-      local group = 'multimap'
+      local group = N
       if rule['description'] then
         description = rule['description']
       end

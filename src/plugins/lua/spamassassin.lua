@@ -17,6 +17,7 @@ limitations under the License.
 -- This plugin is intended to read and parse spamassassin rules with regexp
 -- rules. SA plugins or statistics are not supported
 
+local N = 'spamassassin'
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
@@ -303,7 +304,7 @@ end
 local function freemail_search(input)
   local res = 0
   local function trie_callback(number, pos)
-    rspamd_logger.debugx('Matched pattern %1 at pos %2', freemail_domains[number], pos)
+    rspamd_logger.debugm(N, rspamd_config, 'Matched pattern %1 at pos %2', freemail_domains[number], pos)
     res = res + 1
   end
 
@@ -540,7 +541,7 @@ local function maybe_parse_sa_function(line)
   local elts = split(line, '[^:]+')
   arg = elts[2]
 
-  rspamd_logger.debugx(rspamd_config, 'trying to parse SA function %1 with args %2',
+  rspamd_logger.debugm(N, rspamd_config, 'trying to parse SA function %1 with args %2',
     elts[1], elts[2])
   local substitutions = {
     {'^exists:',
@@ -658,12 +659,12 @@ local function process_sa_conf(f)
   local function parse_score(words)
     if #words == 3 then
       -- score rule <x>
-      rspamd_logger.debugx(rspamd_config, 'found score for %1: %2', words[2], words[3])
+      rspamd_logger.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[3])
       return tonumber(words[3])
     elseif #words == 6 then
       -- score rule <x1> <x2> <x3> <x4>
       -- we assume here that bayes and network are enabled and select <x4>
-      rspamd_logger.debugx(rspamd_config, 'found score for %1: %2', words[2], words[6])
+      rspamd_logger.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[6])
       return tonumber(words[6])
     else
       rspamd_logger.errx(rspamd_config, 'invalid score for %1', words[2])
@@ -1135,9 +1136,9 @@ local function process_atom(atom, task)
     local res = atom_cb(task)
 
     if not res then
-      rspamd_logger.debugx(task, 'atom: %1, NULL result', atom)
+      rspamd_logger.debugm(N, task, 'atom: %1, NULL result', atom)
     elseif res > 0 then
-      rspamd_logger.debugx(task, 'atom: %1, result: %2', atom, res)
+      rspamd_logger.debugm(N, task, 'atom: %1, result: %2', atom, res)
     end
     return res
   else
@@ -1156,11 +1157,11 @@ local function process_atom(atom, task)
         end
       end
 
-      rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
+      rspamd_logger.debugm(N, task, 'external atom: %1, result: %2', atom, res)
 
       return res
     else
-      rspamd_logger.debugx(task, 'Cannot find atom ' .. atom)
+      rspamd_logger.debugm(N, task, 'Cannot find atom ' .. atom)
     end
   end
   return 0
@@ -1203,7 +1204,7 @@ local function post_process()
           --rule['re'] = nil
         else
           local old_max_hits = rule['re']:get_max_hits()
-          rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
+          rspamd_logger.debugm(N, rspamd_config, 'replace %1 -> %2', r, nexpr)
           rspamd_config:replace_regexp({
             old_re = rule['re'],
             new_re = nre
@@ -1492,7 +1493,7 @@ local function post_process()
         for _,a in ipairs(expr_atoms) do
           if not atoms[a] then
             local rspamd_symbol = replace_symbol(a)
-            rspamd_logger.debugx('atom %1 is a direct foreign dependency, ' ..
+            rspamd_logger.debugm(N, rspamd_config, 'atom %1 is a direct foreign dependency, ' ..
               'register dependency for %2 on %3',
               a, k, rspamd_symbol)
             rspamd_config:register_dependency(k, rspamd_symbol)
@@ -1517,7 +1518,7 @@ local function post_process()
         for _,a in ipairs(expr_atoms) do
           if type(external_deps[a]) == 'table' then
             for _,dep in ipairs(external_deps[a]) do
-              rspamd_logger.debugx('atom %1 holds a foreign dependency, ' ..
+              rspamd_logger.debugm(N, rspamd_config, 'atom %1 holds a foreign dependency, ' ..
                 'register dependency for %2 on %3',
                 a, k, dep);
                 rspamd_config:register_dependency(k, dep)
