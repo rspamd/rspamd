@@ -468,8 +468,8 @@ rspamd_config.FAKE_REPLY = {
   score = 1.0
 }
 
-rspamd_config.CHECK_FROM = {
-  callback = function(task)
+local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
+  function(task)
     local envfrom = task:get_from(1)
     local from = task:get_from(2)
     if (from and from[1] and not from[1].name) then
@@ -502,75 +502,27 @@ rspamd_config.CHECK_FROM = {
       task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
     end
   end
-}
+)
 
-rspamd_config.FROM_NO_DN = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'From header does not have a display name',
-  score = 0.0
-}
+rspamd_config:register_virtual_symbol('FROM_NO_DN', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NO_DN', 0, 'From header does not have a display name')
+rspamd_config:register_virtual_symbol('FROM_DN_EQ_ADDR', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_DN_EQ_ADDR', 1.0, 'From header display name is the same as the address')
+rspamd_config:register_virtual_symbol('FROM_HAS_DN', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_HAS_DN', 0, 'From header has a display name')
+rspamd_config:register_virtual_symbol('FROM_NAME_HAS_TITLE', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NAME_HAS_TITLE', 1.0, 'From header display name has a title (Mr/Mrs/Dr)')
+rspamd_config:register_virtual_symbol('FROM_EQ_ENVFROM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_EQ_ENVFROM', 0, 'From address is the same as the envelope')
+rspamd_config:register_virtual_symbol('FROM_NEQ_ENVFROM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NEQ_ENVFROM', 0, 'From address is different to the envelope')
+rspamd_config:register_virtual_symbol('TO_EQ_FROM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('TO_EQ_FROM', 0, 'To address matches the From address')
+rspamd_config:register_virtual_symbol('TO_DOM_EQ_FROM_DOM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('TO_DOM_EQ_FROM_DOM', 0, 'To domain is the same as the From domain')
 
-rspamd_config.FROM_DN_EQ_ADDR = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'From header display name is the same as the address',
-  score = 1.0
-}
-
-rspamd_config.FROM_HAS_DN = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'From header has a display name',
-  score = 0.0
-}
-
-rspamd_config.FROM_NAME_HAS_TITLE = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'From header display name has a title (Mr/Mrs/Dr)',
-  score = 1.0
-}
-
-rspamd_config.FROM_EQ_ENVFROM = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'From address is the same as the envelope',
-  score = 0.0
-}
-
-rspamd_config.FROM_NEQ_ENVFROM = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'From address is different to the envelope',
-  score = 0.0
-}
-
-rspamd_config.TO_EQ_FROM = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'To address matches the From address',
-  score = 0.0
-}
-
-rspamd_config.TO_DOM_EQ_FROM_DOM = {
-  callback = function()
-    -- Set by CHECK_FROM
-  end,
-  description = 'To domain is the same as the From domain',
-  score = 0.0
-}
-
-
-rspamd_config.CHECK_TO_CC = {
-  callback = function(task)
+local check_to_cc_id = rspamd_config:register_callback_symbol('CHECK_TO_CC', 1.0,
+  function(task)
     local rcpts = task:get_recipients(1)
     local to = task:get_recipients(2)
     local to_match_envrcpt = 0
@@ -626,157 +578,24 @@ rspamd_config.CHECK_TO_CC = {
       task:insert_result('TO_MATCH_ENVRCPT_SOME', 1.0)
     end
   end
-}
+)
 
-rspamd_config.TO_DN_RECIPIENTS = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'To header display name is "Recipients"',
-  score = 2.0
-}
-
-rspamd_config.TO_DN_NONE = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'None of the recipients have display names',
-  score = 0.0
-}
-
-rspamd_config.TO_DN_ALL = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'All of the recipients have display names',
-  score = 0.0
-}
-
-rspamd_config.TO_DN_SOME = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'Some of the recipients have display names',
-  score = 0.0
-}
-
-rspamd_config.TO_DN_EQ_ADDR_ALL = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'All of the recipients have display names that are the same as their address',
-  score = 0.0
-}
-
-rspamd_config.TO_DN_EQ_ADDR_SOME = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'Some of the recipients have display names that are the same as their address',
-  score = 0.0
-}
-
-rspamd_config.TO_MATCH_ENVRCPT_ALL = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'All of the recipients match the envelope',
-  score = 0.0
-}
-
-rspamd_config.TO_MATCH_ENVRCPT_SOME = {
-  callback = function()
-    -- Set by CHECK_TO_CC
-  end,
-  description = 'Some of the recipients match the envelope',
-  score = 0.0
-}
-
-
-rspamd_config.CHECK_MID = {
-  callback = function (task)
-    local mid = task:get_header('Message-ID')
-    if not mid then return false end
-    -- Check for 'bare' IP addresses in RHS
-    if mid:find("@%d+%.%d+%.%d+%.%d+>$") then
-      task:insert_result('MID_BARE_IP', 1.0)
-    end
-    -- Check for non-FQDN RHS
-    if mid:find("@[^%.]+>?$") then
-      task:insert_result('MID_RHS_NOT_FQDN', 1.0)
-    end
-    -- Check for missing <>'s
-    if not mid:find('^<[^>]+>$') then
-      task:insert_result('MID_MISSING_BRACKETS', 1.0)
-    end
-    -- Check for IP literal in RHS
-    if mid:find("@%[%d+%.%d+%.%d+%.%d+%]") then
-      task:insert_result('MID_RHS_IP_LITERAL', 1.0)
-    end
-    -- Check From address atrributes against MID
-    local from = task:get_from(2)
-    if (from and from[1] and from[1].domain) then
-      local fd = from[1].domain:lower()
-      local _,_,md = mid:find("@([^>]+)>?$")
-      -- See if all or part of the From address
-      -- can be found in the Message-ID
-      if (mid:lower():find(from[1].addr:lower(),1,true)) then
-        task:insert_result('MID_CONTAINS_FROM', 1.0)
-      elseif (md and fd == md:lower()) then
-        task:insert_result('MID_RHS_MATCH_FROM', 1.0)
-      end
-    end
-  end
-}
-
-
-rspamd_config.MID_BARE_IP = {
-  callback = function()
-    -- Set by CHECK_MID
-  end,
-  description = 'Message-ID RHS is a bare IP address',
-  score = 2.0
-}
-
-rspamd_config.MID_RHS_NOT_FQDN = {
-  callback = function()
-    -- Set by CHECK_MID
-  end,
-  description = 'Message-ID RHS is not a fully-qualified domain name',
-  score = 0.5
-}
-
-rspamd_config.MID_MISSING_BRACKETS = {
-  callback = function()
-    -- Set by CHECK_MID
-  end,
-  description = 'Message-ID is missing <>\'s',
-  score = 0.5
-}
-
-rspamd_config.MID_RHS_IP_LITERAL = {
-  callback = function ()
-    -- Set by CHECK_MID
-  end,
-  description = 'Message-ID RHS is an IP-literal',
-  score = 0.5
-}
-
-rspamd_config.MID_CONTAINS_FROM = {
-  callback = function ()
-    -- Set by CHECK_MID
-  end,
-  description = 'Message-ID contains From address',
-  score = 1.0
-}
-
-rspamd_config.MID_RHS_MATCH_FROM = {
-  callback = function ()
-    -- Set by CHECK_MID
-  end,
-  description = 'Message-ID RHS matches From domain',
-  score = 1.0
-}
+rspamd_config:register_virtual_symbol('TO_DN_RECIPIENTS', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_RECIPIENTS', 2.0, 'To header display name is "Recipients"')
+rspamd_config:register_virtual_symbol('TO_DN_NONE', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_NONE', 0, 'None of the recipients have display names')
+rspamd_config:register_virtual_symbol('TO_DN_ALL', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_ALL', 0, 'All of the recipients have display names')
+rspamd_config:register_virtual_symbol('TO_DN_SOME', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_SOME', 0, 'Some of the recipients have display names')
+rspamd_config:register_virtual_symbol('TO_DN_EQ_ADDR_ALL', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_EQ_ADDR_ALL', 0, 'All of the recipients have display names that are the same as their address')
+rspamd_config:register_virtual_symbol('TO_DN_EQ_ADDR_SOME', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_EQ_ADDR_SOME', 0, 'Some of the recipients have display names that are the same as their address')
+rspamd_config:register_virtual_symbol('TO_MATCH_ENVRCPT_ALL', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_ALL', 0, 'All of the recipients match the envelope')
+rspamd_config:register_virtual_symbol('TO_MATCH_ENVRCPT_SOME', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_SOME', 0, 'Some of the recipients match the envelope')
 
 rspamd_config.CHECK_RECEIVED = {
   callback = function (task)
@@ -796,8 +615,8 @@ rspamd_config.HAS_X_PRIO = {
   end
 }
 
-rspamd_config.CHECK_REPLYTO = {
-  callback = function (task)
+local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
+  function (task)
     local replyto = task:get_header('Reply-To')
     if not replyto then return false end
     local rt = util.parse_mail_address(replyto)
@@ -832,66 +651,25 @@ rspamd_config.CHECK_REPLYTO = {
       end
     end
   end
-}
+)
 
-rspamd_config.REPLYTO_UNPARSEABLE = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Reply-To header could not be parsed',
-  score = 1.0
-}
+rspamd_config:register_virtual_symbol('REPLYTO_UNPARSEABLE', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_UNPARSEABLE', 1.0, 'Reply-To header could not be parsed')
+rspamd_config:register_virtual_symbol('HAS_REPLYTO', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('HAS_REPLYTO', 0, 'Has Reply-To header')
+rspamd_config:register_virtual_symbol('REPLYTO_EQ_FROM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_EQ_FROM', 0, 'Reply-To header is identical to From header')
+rspamd_config:register_virtual_symbol('REPLYTO_ADDR_EQ_FROM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_ADDR_EQ_FROM', 0, 'Reply-To address is the same as From')
+rspamd_config:register_virtual_symbol('REPLYTO_DOM_EQ_FROM_DOM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_DOM_EQ_FROM_DOM', 0, 'Reply-To domain matches the From domain')
+rspamd_config:register_virtual_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 0, 'Reply-To domain does not match the From domain')
+rspamd_config:register_virtual_symbol('REPLYTO_DN_EQ_FROM_DN', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_DN_EQ_FROM_DN', 0, 'Reply-To display name matches From')
 
-rspamd_config.HAS_REPLYTO = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Has Reply-To header',
-  score = 0.0
-}
-
-rspamd_config.REPLYTO_EQ_FROM = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Reply-To header is identical to From header',
-  score = 0.0
-}
-
-rspamd_config.REPLYTO_ADDR_EQ_FROM = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Reply-To address is the same as From',
-  score = 0.0
-}
-
-rspamd_config.REPLYTO_DOM_EQ_FROM_DOM = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Reply-To domain matches the From domain',
-  score = 0.0
-}
-
-rspamd_config.REPLYTO_DOM_NEQ_FROM_DOM = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Reply-To domain does not match the From domain',
-  score = 0.0
-}
-
-rspamd_config.REPLYTO_DN_EQ_FROM_DN = {
-  callback = function ()
-    -- Set by CHECK_REPLYTO
-  end,
-  description = 'Reply-To display name matches From',
-  score = 0.0
-}
-
-rspamd_config.CHECK_MIME = {
-  callback = function (task)
+local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
+  function (task)
     local parts = task:get_parts()
     if not parts then return false end
 
@@ -928,31 +706,14 @@ rspamd_config.CHECK_MIME = {
       end
     end
   end
-}
+)
 
-rspamd_config.MISSING_MIME_VERSION = {
-  callback = function ()
-    -- Set by CHECK_MIME
-  end,
-  description = 'MIME-Version header is missing',
-  score = 2.0
-}
-
-rspamd_config.MIME_MA_MISSING_TEXT = {
-  callback = function ()
-    -- Set by CHECK_MIME
-  end,
-  description = 'MIME multipart/alternative missing text/plain part',
-  score = 2.0
-}
-
-rspamd_config.MIME_NA_MISSING_HTML = {
-  callback = function ()
-    -- Set by CHECK_MIME
-  end,
-  description = 'MIME multipart/alternative missing text/html part',
-  score = 2.0
-}
+rspamd_config:register_virtual_symbol('MISSING_MIME_VERSION', 1.0, check_mime_id)
+rspamd_config:set_metric_symbol('MISSING_MIME_VERSION', 2.0, 'MIME-Version header is missing')
+rspamd_config:register_virtual_symbol('MIME_MA_MISSING_TEXT', 1.0, check_mime_id)
+rspamd_config:set_metric_symbol('MIME_MA_MISSING_TEXT', 2.0, 'MIME multipart/alternative missing text/plain part')
+rspamd_config:register_virtual_symbol('MIME_MA_MISSING_HTML', 1.0, check_mime_id)
+rspamd_config:set_metric_symbol('MIME_MA_MISSING_HTML', 1.0, 'multipart/alternative missing text/html part')
 
 -- Used to be called IS_LIST
 rspamd_config.PREVIOUSLY_DELIVERED = {
