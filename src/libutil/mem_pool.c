@@ -244,8 +244,8 @@ rspamd_mempool_new (gsize size, const gchar *tag)
 		/* Check G_SLICE=always-malloc to allow memory pool debug */
 		const char *g_slice;
 
-		g_slice = getenv ("G_SLICE");
-		if (g_slice != NULL && g_ascii_strcasecmp (g_slice, "always-malloc") == 0) {
+		g_slice = getenv ("VALGRIND");
+		if (g_slice != NULL) {
 			always_malloc = TRUE;
 		}
 		env_checked = TRUE;
