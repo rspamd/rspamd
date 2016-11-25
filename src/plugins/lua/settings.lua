@@ -570,7 +570,7 @@ if redis_section then
   if redis_params then
     local handlers = redis_section.handlers
 
-    for _,h in ipairs(handlers) do
+    for id,h in pairs(handlers) do
       local chunk,err = load(h)
 
       if not chunk then
@@ -582,7 +582,7 @@ if redis_section then
           rspamd_logger.errx(rspamd_config, 'Cannot add handler from string: %s',
             tostring(func))
         else
-          table.insert(redis_key_handlers, func)
+          redis_key_handlers[id] = func
         end
       end
     end
