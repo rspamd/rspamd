@@ -644,7 +644,7 @@ static gint
 lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 {
 	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
-	const gchar *uid;
+	const gchar *uid = NULL;
 	gint fmt_pos = 1;
 	gboolean ret;
 

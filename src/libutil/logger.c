@@ -993,7 +993,9 @@ file_log_function (const gchar *module, const gchar *id,
 		m = modulebuf;
 
 		if (id != NULL) {
-			mr = rspamd_snprintf (m, mremain, "<%*.s>; ", LOG_ID,
+			guint slen = strlen (id);
+			slen = MIN (LOG_ID, slen);
+			mr = rspamd_snprintf (m, mremain, "<%*.s>; ", slen,
 					id);
 			m += mr;
 			mremain -= mr;
