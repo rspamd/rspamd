@@ -108,6 +108,16 @@ LUA_FUNCTION_DEF (logger, infox);
  * @param {any} args list of arguments to be replaced in %<number> positions
  */
 LUA_FUNCTION_DEF (logger, debugx);
+
+/***
+ * @function logger.debugm(module, id, fmt[, args)
+ * Extended interface to make a debug log message
+ * @param {string} module debug module
+ * @param {task|cfg|pool|string} id id to log
+ * @param {string} fmt format string, arguments are encoded as %<number>
+ * @param {any} args list of arguments to be replaced in %<number> positions
+ */
+LUA_FUNCTION_DEF (logger, debugm);
 /***
  * @function logger.slog(fmt[, args)
  * Create string replacing percent params with corresponding arguments
@@ -126,6 +136,7 @@ static const struct luaL_reg loggerlib_f[] = {
 		LUA_INTERFACE_DEF (logger, warnx),
 		LUA_INTERFACE_DEF (logger, infox),
 		LUA_INTERFACE_DEF (logger, debugx),
+		LUA_INTERFACE_DEF (logger, debugm),
 		LUA_INTERFACE_DEF (logger, slog),
 		{"__tostring", rspamd_lua_class_tostring},
 		{NULL, NULL}
@@ -704,6 +715,38 @@ lua_logger_debugx (lua_State *L)
 {
 	return lua_logger_logx (L, G_LOG_LEVEL_DEBUG, FALSE);
 }
+
+static gint
+lua_logger_debugm (lua_State *L)
+{
+	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
+	const gchar *uid = NULL, *module = NULL;
+	gboolean ret;
+
+	module = luaL_checkstring (L, 1);
+
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		uid = luaL_checkstring (L, 2);
+	}
+	else {
+		uid = lua_logger_get_id (L, 2);
+	}
+
+	if (uid && module && lua_type (L, 3) == LUA_TSTRING) {
+		ret = lua_logger_log_format (L, 3, FALSE, logbuf, sizeof (logbuf) - 1);
+
+		if (ret) {
+			lua_common_log_line (G_LOG_LEVEL_DEBUG, L, logbuf, uid, module);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+
 
 static gint
 lua_logger_slog (lua_State *L)
