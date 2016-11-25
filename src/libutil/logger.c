@@ -85,6 +85,7 @@ struct rspamd_logger_s {
 	gchar *saved_function;
 	gchar *saved_module;
 	gchar *saved_id;
+	rspamd_mempool_mutex_t *mtx;
 	guint saved_loglevel;
 	guint64 log_cnt[4];
 };
@@ -129,7 +130,11 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 
 	if (rspamd_log->enabled) {
 		if (!rspamd_log->no_lock) {
+#ifndef DISABLE_PTHREAD_MUTEX
+			rspamd_mempool_lock_mutex (rspamd_log->mtx);
+#else
 			rspamd_file_lock (rspamd_log->fd, FALSE);
+#endif
 		}
 
 		if (is_iov) {
@@ -142,7 +147,11 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 		}
 
 		if (!rspamd_log->no_lock) {
+#ifndef DISABLE_PTHREAD_MUTEX
+			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+#else
 			rspamd_file_unlock (rspamd_log->fd, FALSE);
+#endif
 		}
 
 		if (r == -1) {
@@ -351,6 +360,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 			logger->errlog->elts = rspamd_mempool_alloc0_shared (rspamd->server_pool,
 					sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
 					cfg->log_error_elt_maxlen * cfg->log_error_elts);
+			logger->mtx = rspamd_mempool_get_mutex (rspamd->server_pool);
 		}
 	}
 	else {
