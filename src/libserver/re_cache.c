@@ -187,7 +187,7 @@ rspamd_re_cache_new (void)
 {
 	struct rspamd_re_cache *cache;
 
-	cache = g_slice_alloc (sizeof (*cache));
+	cache = g_slice_alloc0 (sizeof (*cache));
 	cache->re_classes = g_hash_table_new (g_int64_hash, g_int64_equal);
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full (256, rspamd_re_cache_elt_dtor);
