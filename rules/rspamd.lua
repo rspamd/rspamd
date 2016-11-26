@@ -32,6 +32,7 @@ dofile(local_rules .. '/html.lua')
 dofile(local_rules .. '/misc.lua')
 dofile(local_rules .. '/http_headers.lua')
 dofile(local_rules .. '/forwarding.lua')
+dofile(local_rules .. '/mid.lua')
 
 local function file_exists(filename)
 	local file = io.open(filename)
