@@ -535,14 +535,14 @@ local function train_fann(_, ev_base, elt)
           end
         end
         -- Invalidate ANN
-        rspamd_logger.infox('invalidate ANN %s: training data is invalid')
+        rspamd_logger.infox(rspamd_config, 'invalidate ANN %s: training data is invalid', elt)
         redis_make_request(ev_base,
           rspamd_config,
           nil,
           true, -- is write
           redis_invalidate_cb, --callback
           'EVALSHA', -- command
-          {redis_locked_invalidate_sha, 1, elt}
+          {redis_locked_invalidate_sha, 1, gen_fann_prefix(elt)}
         )
       else
         learning_spawned = true
