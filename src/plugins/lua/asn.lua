@@ -178,7 +178,7 @@ if configure_asn_module() then
     name = 'ASN_CHECK',
     type = 'prefilter',
     callback = asn_check,
-    priority = 10,
+    priority = 5,
   })
   if options['symbol'] then
     rspamd_config:register_symbol({
