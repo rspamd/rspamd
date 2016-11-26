@@ -19,6 +19,7 @@ limitations under the License.
 -- Documentation can be found here:
 -- https://rspamd.com/doc/modules/rbl.html
 
+local N = 'rbl'
 local rbls = {}
 local local_exclusions = nil
 
@@ -65,7 +66,12 @@ local function rbl_cb (task)
       if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
         rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
       end
-      if not results then return end
+      if not results then
+        rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4', to_resolve, false, err, rule['rbls'][1]['symbol'])
+        return
+      else
+        rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4', to_resolve, true, err, rule['rbls'][1]['symbol'])
+      end
 
       for _,rbl in ipairs(rule.rbls) do
         if rbl['returncodes'] == nil and rbl['symbol'] ~= nil then
@@ -75,6 +81,7 @@ local function rbl_cb (task)
         for _,result in pairs(results) do
           local ipstr = result:to_string()
           local foundrc
+          rspamd_logger.debugm(N, task, '%s DNS result %s', to_resolve, ipstr)
           for s,i in pairs(rbl['returncodes']) do
             if type(i) == 'string' then
               if string.find(ipstr, '^' .. i .. '$') then
@@ -110,6 +117,7 @@ local function rbl_cb (task)
   local params = {} -- indexed by rbl name
 
   local function gen_rbl_rule(to_resolve, rbl)
+    rspamd_logger.debugm(N, task, 'DNS REQUEST: label=%1 rbl=%2', to_resolve, rbl['symbol'])
     if not params[to_resolve] then
       local nrule = {
         to_resolve = to_resolve,
@@ -365,28 +373,28 @@ end
 -- Registration
 if type(rspamd_config.get_api_version) ~= 'nil' then
   if rspamd_config:get_api_version() >= 1 then
-    rspamd_config:register_module_option('rbl', 'rbls', 'map')
-    rspamd_config:register_module_option('rbl', 'default_ipv4', 'string')
-    rspamd_config:register_module_option('rbl', 'default_ipv6', 'string')
-    rspamd_config:register_module_option('rbl', 'default_received', 'string')
-    rspamd_config:register_module_option('rbl', 'default_from', 'string')
-    rspamd_config:register_module_option('rbl', 'default_rdns', 'string')
-    rspamd_config:register_module_option('rbl', 'default_helo', 'string')
-    rspamd_config:register_module_option('rbl', 'default_dkim', 'string')
-    rspamd_config:register_module_option('rbl', 'default_dkim_domainonly', 'string')
-    rspamd_config:register_module_option('rbl', 'default_unknown', 'string')
-    rspamd_config:register_module_option('rbl', 'default_exclude_users', 'string')
-    rspamd_config:register_module_option('rbl', 'default_exclude_private_ips', 'string')
-    rspamd_config:register_module_option('rbl', 'local_exclude_ip_map', 'string')
-    rspamd_config:register_module_option('rbl', 'default_exclude_local', 'string')
-    rspamd_config:register_module_option('rbl', 'default_emails', 'string')
-    rspamd_config:register_module_option('rbl', 'default_is_whitelist', 'string')
-    rspamd_config:register_module_option('rbl', 'default_ignore_whitelists', 'string')
+    rspamd_config:register_module_option(N, 'rbls', 'map')
+    rspamd_config:register_module_option(N, 'default_ipv4', 'string')
+    rspamd_config:register_module_option(N, 'default_ipv6', 'string')
+    rspamd_config:register_module_option(N, 'default_received', 'string')
+    rspamd_config:register_module_option(N, 'default_from', 'string')
+    rspamd_config:register_module_option(N, 'default_rdns', 'string')
+    rspamd_config:register_module_option(N, 'default_helo', 'string')
+    rspamd_config:register_module_option(N, 'default_dkim', 'string')
+    rspamd_config:register_module_option(N, 'default_dkim_domainonly', 'string')
+    rspamd_config:register_module_option(N, 'default_unknown', 'string')
+    rspamd_config:register_module_option(N, 'default_exclude_users', 'string')
+    rspamd_config:register_module_option(N, 'default_exclude_private_ips', 'string')
+    rspamd_config:register_module_option(N, 'local_exclude_ip_map', 'string')
+    rspamd_config:register_module_option(N, 'default_exclude_local', 'string')
+    rspamd_config:register_module_option(N, 'default_emails', 'string')
+    rspamd_config:register_module_option(N, 'default_is_whitelist', 'string')
+    rspamd_config:register_module_option(N, 'default_ignore_whitelists', 'string')
   end
 end
 
 -- Configuration
-local opts = rspamd_config:get_all_opt('rbl')
+local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
@@ -418,7 +426,7 @@ for default, default_v in pairs(default_defaults) do
 end
 
 if(opts['local_exclude_ip_map'] ~= nil) then
-  local_exclusions = rspamd_map_add('rbl', 'local_exclude_ip_map', 'radix',
+  local_exclusions = rspamd_map_add(N, 'local_exclude_ip_map', 'radix',
     'RBL exclusions map')
 end
 

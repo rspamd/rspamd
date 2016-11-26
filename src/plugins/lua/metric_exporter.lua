@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]] --
 
+local N = 'metric_exporter'
 local logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"
 local util = require "rspamd_util"
@@ -142,7 +143,7 @@ local backends = {
 }
 
 local function configure_metric_exporter()
-  local opts = rspamd_config:get_all_opt('metric_exporter')
+  local opts = rspamd_config:get_all_opt(N)
   if not backends[opts['backend']] then
     logger.errx(rspamd_config, 'Backend is invalid or unspecified')
     return false
@@ -214,7 +215,7 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
     pool:set_variable(VAR_NAME, stamp)
   end
   if not stamp then
-    logger.debug('No state found - pushing stats immediately')
+    logger.debugm(N, rspamd_config, 'No state found - pushing stats immediately')
     push_metrics()
     schedule_regular_push()
     return
@@ -222,11 +223,11 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
   local time = util.get_time()
   local delta = stamp - time + settings['interval']
   if delta <= 0 then
-    logger.debug('Last push is too old - pushing stats immediately')
+    logger.debugm(N, rspamd_config, 'Last push is too old - pushing stats immediately')
     push_metrics(time)
     schedule_regular_push()
     return
   end
-  logger.debugx('Scheduling next push in %s seconds', delta)
+  logger.debugm(N, rspamd_config, 'Scheduling next push in %s seconds', delta)
   schedule_intermediate_push(delta)
 end)

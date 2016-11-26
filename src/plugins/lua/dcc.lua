@@ -17,8 +17,9 @@ limitations under the License.
 
 -- Check messages for 'bulkiness' using DCC
 
+local N = 'dcc'
 local symbol_bulk = "DCC_BULK"
-local opts = rspamd_config:get_all_opt('dcc')
+local opts = rspamd_config:get_all_opt(N)
 local logger = require "rspamd_logger"
 local tcp = require "rspamd_tcp"
 local fun = require "fun"
@@ -65,7 +66,7 @@ local function check_dcc (task)
     end
     -- Parse the response
     local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
-    logger.debugx(task, 'DCC result=%1 disposition=%2 header="%3"',
+    logger.debugm(N, task, 'DCC result=%1 disposition=%2 header="%3"',
       result, disposition, header)
 
     if header then
@@ -97,7 +98,7 @@ local function check_dcc (task)
     task:get_content()
   }
 
-  logger.debugx(task, 'sending to dcc: client=%1 helo="%2" envfrom="%3" envrcpt="%4"',
+  logger.debugm(N, task, 'sending to dcc: client=%1 helo="%2" envfrom="%3" envrcpt="%4"',
     client, helo, envfrom, envrcpt)
 
   tcp.request({
@@ -117,7 +118,7 @@ if opts and opts['host'] then
     callback = check_dcc
   })
   rspamd_config:set_metric_symbol({
-    group = 'dcc',
+    group = N,
     score = 2.0,
     description = 'Detected as bulk mail by DCC',
     one_shot = true,
