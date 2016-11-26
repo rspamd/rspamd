@@ -97,7 +97,7 @@ reconf['HAS_WP_URI'] = {
 }
 
 reconf['WP_COMPROMISED'] = {
-  re = '/\\/wp-(?!content|includes)[^\\/]+\\//Ui',
+  re = '/\\/wp-(?:content|includes)[^\\/]+\\//Ui',
   description = "URL that is pointing to a compromised WordPress installation",
   score = 5.0,
   group = "compromised_hosts"

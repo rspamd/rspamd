@@ -778,13 +778,6 @@ reconf['FORGED_GENERIC_RECEIVED4'] = {
   group = 'header'
 }
 
-reconf['FORGED_GENERIC_RECEIVED5'] = {
-  re = 'Received=/\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$/X',
-  score = 4.6,
-  description = 'Forged generic Received',
-  group = 'header'
-}
-
 reconf['INVALID_POSTFIX_RECEIVED'] = {
   re = 'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X',
   score = 3.0,
@@ -875,7 +868,7 @@ reconf['SUBJECT_HAS_QUESTION'] = {
 }
 
 reconf['SUBJECT_HAS_CURRENCY'] = {
-  re = 'Subject=/$€$¢¥₽/H',
+  re = 'Subject=/[$€$¢¥₽]/Hu',
   description = 'Subject contains currency',
   score = 1.0,
   group = 'headers'
