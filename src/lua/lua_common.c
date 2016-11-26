@@ -17,6 +17,7 @@
 #include "lua/global_functions.lua.h"
 #include "lptree.h"
 #include "utlist.h"
+#include <math.h>
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -698,6 +699,34 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 							1,
 							"bad type for key:"
 									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, idx)),
+							"double");
+					va_end (ap);
+
+					return FALSE;
+				}
+
+				if (is_table) {
+					lua_pop (L, 1);
+				}
+				break;
+
+			case 'D':
+				if (t == LUA_TNUMBER) {
+					*(va_arg (ap, gdouble *)) = lua_tonumber (L, idx);
+				}
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
+					failed = TRUE;
+					*(va_arg (ap,  gdouble *)) = NAN;
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+							" %.*s: '%s', '%s' is expected",
 							(gint) keylen,
 							key,
 							lua_typename (L, lua_type (L, idx)),
