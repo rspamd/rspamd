@@ -255,6 +255,7 @@
                 $('#modalBody').empty();
                 getMaps();
             }
+
             $.each(data, function (i, item) {
                 $.ajax({
                     dataType: 'text',
@@ -376,7 +377,11 @@
         $(document).on('click', '[data-dismiss="modal"]', function (e) {
             $('#modalBody form').hide();
         });
-
+        $(document).on('click', '', function (e) {
+            if (event.target == document.getElementById('modalDialog')) {
+                $('#modalBody form').hide();
+            }
+        });
         function getChart() {
             $.ajax({
                 dataType: 'json',
@@ -1224,6 +1229,7 @@
 
         $('#configuration_nav').bind('click', function (e) {
             getActions();
+            $('#modalBody').empty();
             getMaps();
         });
 

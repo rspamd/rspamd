@@ -338,6 +338,9 @@ td.maps-cell {
 		margin:0 10px 10px 0;
 		padding:0 10px;
 		}
+	.stat-box:not(.pull-right) {
+		width: 90px;
+	}
 	/*.stat-boxes .stat-box:first-child {
 		margin-right:0;
 		}*/
