@@ -19,10 +19,6 @@
 		<div class="navbar-header">
 			<a class="navbar-brand" href="."><img src="./img/rspamd_logo_navbar.png" style="width: 67px; margin-top: -16px;"/></a>
 		</div>
-		<ul class="nav pull-right navbar-nav navbar-right" style="display:none">
-			<li><a href="#" data-toggle="tab" id="refresh"><i class="glyphicon glyphicon-refresh"></i> Refresh</a></li>
-			<li class="spinner"><a href="#" data-toggle="tab" id="disconnect">Disconnect</a></li>
-		</ul>
 		<ul class="nav navbar-nav nav-pills" role="tablist">
 			<li role="presentation" class="active"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab">Status</a></li>
 
@@ -34,6 +30,10 @@
 			<li role="presentation"><a id="scan_nav"aria-controls="scan" role="tab"  href="#scan" data-toggle="tab">Scan</a></li>
 			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
 		</ul>
+    <ul class="nav navbar-nav nav-pills pull-right" style="display:none">
+      <li><a href="#" data-toggle="tab" id="refresh"><i class="glyphicon glyphicon-refresh"></i> Refresh</a></li>
+      <li class="spinner"><a href="#" data-toggle="tab" id="disconnect"><i class="glyphicon glyphicon-off"></i> Disconnect</a></li>
+    </ul>
 	</div>
 </nav>
 
@@ -219,8 +219,11 @@
 						<div class="row">
 							<form class="col-md-12 nomargin" id="scanForm">
 								<textarea class="col-md-12 scan-textarea" id="scanTextSource"></textarea>
-								<p><button class="btn btn-default btn-primary" data-upload="scan">Scan message</button>
-									<button class="btn btn-default pull-right" id="scanClean">Clean form</button></p>
+                <button type="submit" class="btn btn-default btn-primary" data-upload="scan">Scan message</button>
+                   <!--span class="btn btn-default btn-file" style="margin-top:10px; margin-left:5px;">
+                       <i class="glyphicon glyphicon-upload"></i> Upload file <input type="file" class="btn btn-default" id="inputFile">
+                   </span-->
+									 <button class="btn btn-default pull-right" id="scanClean">Clean form</button>
 							</form>
 						</div>
 						<div id="scanResult" style="display:none">

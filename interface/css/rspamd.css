@@ -235,7 +235,6 @@ td.maps-cell {
 	}
 .spinner {
 	background:url('../img/spinner.gif') no-repeat -100px;
-	padding-left:25px;
 	}
 .loading .spinner {
 	background-position:0 50%;
@@ -562,4 +561,24 @@ td.maps-cell {
 
 .scorebar-ham {
 	background: rgba(100, 230, 80, 0.1)
+}
+/*btn-file for upload file button*/
+.btn-file {
+    position: relative;
+    overflow: hidden;
+}
+.btn-file input[type=file] {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 100%;
+    min-height: 100%;
+    font-size: 100px;
+    text-align: right;
+    filter: alpha(opacity=0);
+    opacity: 0;
+    outline: none;
+    background: white;
+    cursor: inherit;
+    display: block;
 }

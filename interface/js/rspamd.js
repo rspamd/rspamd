@@ -947,12 +947,11 @@
         }
         // @close scan output
         $('#scanClean').on('click', function () {
-            $('#scanTextSource').val('');
+            $('#scanTextSource').val("");
             $('#scanResult').hide();
             $('#scanOutput tbody').remove();
-            $('html, body').animate({
-                scrollTop: 0
-            }, 1000);
+            $('html, body').animate({scrollTop: 0}, 1000);
+            return false;
         });
         // @init upload
         $('[data-upload]').on('click', function () {
