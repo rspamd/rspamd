@@ -653,18 +653,30 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 	ENDIF(NOT LUA_FOUND)
 ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
-ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
-ProcessPackage(GMODULE2 LIBRARY gmodule-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES gmodule-no-export-2.0>=2.28 gmodule-2.0>=2.28)
-ProcessPackage(GOBJECT LIBRARY gobject-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES gobject-no-export-2.0>=2.28 gobject-2.0>=2.28)
+IF(ENABLE_JEMALLOC MATCHES "ON")
+	ProcessPackage(JEMALLOC LIBRARY jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
+		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
+	SET(WITH_JEMALLOC "1")
+ENDIF()
+ProcessPackage(GMIME LIBRARY gmime-2.6 gmime-2.4 gmime-2.2 gmime-2
+	INCLUDE gmime/gmime.h
+	INCLUDE_SUFFIXES include/gmime include/gmime-2.0 include/gmime-2.4 include/gmime-2.6
+	ROOT ${GMIME_ROOT_DIR} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
+IF(GMIME_ROOT_DIR)
+	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lz")
+ENDIF()
 ProcessPackage(GIO LIBRARY gio-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES gio-no-export-2.0>=2.28 gio-2.0>=2.28)
+ProcessPackage(GOBJECT LIBRARY gobject-2.0 INCLUDE glib.h
+	INCLUDE_SUFFIXES include/glib include/glib-2.0
+	ROOT ${GLIB_ROOT_DIR} MODULES gobject-no-export-2.0>=2.28 gobject-2.0>=2.28)
+ProcessPackage(GMODULE2 LIBRARY gmodule-2.0 INCLUDE glib.h
+	INCLUDE_SUFFIXES include/glib include/glib-2.0
+	ROOT ${GLIB_ROOT_DIR} MODULES gmodule-no-export-2.0>=2.28 gmodule-2.0>=2.28)
+ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
+	INCLUDE_SUFFIXES include/glib include/glib-2.0
+	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
 IF(GLIB_ROOT_DIR)
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lpthread")
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lffi")
@@ -678,18 +690,7 @@ ELSE()
 	ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre
 		ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
 ENDIF()
-IF(ENABLE_JEMALLOC MATCHES "ON")
-	ProcessPackage(JEMALLOC LIBRARY jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
-		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
-	SET(WITH_JEMALLOC "1")
-ENDIF()
-ProcessPackage(GMIME LIBRARY gmime-2.6 gmime-2.4 gmime-2.2 gmime-2
-	INCLUDE gmime/gmime.h
-	INCLUDE_SUFFIXES include/gmime include/gmime-2.0 include/gmime-2.4 include/gmime-2.6
-	ROOT ${GMIME_ROOT_DIR} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
-IF(GMIME_ROOT_DIR)
-	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lz")
-ENDIF()
+
 ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/event
 	ROOT ${LIBEVENT_ROOT_DIR} MODULES event libevent)
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite
