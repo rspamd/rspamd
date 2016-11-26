@@ -395,3 +395,346 @@ rspamd_config.MISSING_FROM = {
     group = 'header',
     description = 'Missing From: header'
 }
+
+rspamd_config.RCVD_HELO_USER = {
+  callback = function (task)
+    -- Check HELO argument from MTA
+    local helo = task:get_helo()
+    if (helo and helo:lower():find('^user$')) then
+      return true
+    end
+    -- Check Received headers
+    local rcvds = task:get_header_full('Received')
+    if not rcvds then return false end
+    for _, rcvd in ipairs(rcvds) do
+      local r = rcvd['decoded']:lower()
+      if (r:find("^%s*from%suser%s")) then return true end
+      if (r:find("helo[%s=]user[%s%)]")) then return true end
+    end
+  end,
+  description = 'HELO User spam pattern',
+  score = 3.0
+}
+
+rspamd_config.URI_COUNT_ODD = {
+  callback = function (task)
+    local ct = task:get_header('Content-Type')
+    if (ct and ct:lower():find('^multipart/alternative')) then
+      local urls = task:get_urls()
+      if (urls and (#urls % 2 == 1)) then
+        return true
+      end
+    end
+  end,
+  description = 'Odd number of URIs in multipart/alternative message',
+  score = 1.0
+}
+
+rspamd_config.HAS_ATTACHMENT = {
+  callback = function (task)
+    local parts = task:get_parts()
+    if parts and #parts > 1 then
+      for _, p in ipairs(parts) do
+        local cd = p:get_header('Content-Disposition')
+        if (cd and cd:lower():match('^attachment')) then
+          return true
+        end
+      end
+    end
+  end,
+  description = 'Message contains attachments'
+}
+
+rspamd_config.MV_CASE = {
+  callback = function (task)
+    local mv = task:get_header('Mime-Version', true)
+    if (mv) then return true end
+  end,
+  description = 'Mime-Version .vs. MIME-Version',
+  score = 0.5
+}
+
+rspamd_config.FAKE_REPLY = {
+  callback = function (task)
+    local subject = task:get_header('Subject')
+    if (subject and subject:lower():find('^re:')) then
+      local ref = task:get_header('References')
+      local rt  = task:get_header('In-Reply-To')
+      if (not (ref or rt)) then return true end
+    end
+    return false
+  end,
+  description = 'Fake reply',
+  score = 1.0
+}
+
+local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
+  function(task)
+    local envfrom = task:get_from(1)
+    local from = task:get_from(2)
+    if (from and from[1] and not from[1].name) then
+      task:insert_result('FROM_NO_DN', 1.0)
+    elseif (from and from[1] and from[1].name and
+            from[1].name:lower() == from[1].addr:lower()) then
+      task:insert_result('FROM_DN_EQ_ADDR', 1.0)
+    elseif (from and from[1] and from[1].name) then
+      task:insert_result('FROM_HAS_DN', 1.0)
+      -- Look for Mr/Mrs/Dr titles
+      local n = from[1].name:lower()
+      if (n:find('^mrs?[%.%s]') or n:find('^dr[%.%s]')) then
+        task:insert_result('FROM_NAME_HAS_TITLE', 1.0)
+      end
+    end
+    if (envfrom and from and envfrom[1] and from[1] and
+        envfrom[1].addr:lower() == from[1].addr:lower())
+    then
+      task:insert_result('FROM_EQ_ENVFROM', 1.0)
+    elseif (envfrom and envfrom[1] and envfrom[1].addr) then
+      task:insert_result('FROM_NEQ_ENVFROM', 1.0, from[1].addr, envfrom[1].addr)
+    end
+
+    local to = task:get_recipients(2)
+    if not (to and to[1]) then return false end
+    -- Check if FROM == TO
+    if (#to == 1 and to[1].addr:lower() == from[1].addr:lower()) then
+      task:insert_result('TO_EQ_FROM', 1.0)
+    elseif (#to == 1 and to[1].domain:lower() == from[1].domain:lower()) then
+      task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
+    end
+  end
+)
+
+rspamd_config:register_virtual_symbol('FROM_NO_DN', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NO_DN', 0, 'From header does not have a display name')
+rspamd_config:register_virtual_symbol('FROM_DN_EQ_ADDR', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_DN_EQ_ADDR', 1.0, 'From header display name is the same as the address')
+rspamd_config:register_virtual_symbol('FROM_HAS_DN', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_HAS_DN', 0, 'From header has a display name')
+rspamd_config:register_virtual_symbol('FROM_NAME_HAS_TITLE', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NAME_HAS_TITLE', 1.0, 'From header display name has a title (Mr/Mrs/Dr)')
+rspamd_config:register_virtual_symbol('FROM_EQ_ENVFROM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_EQ_ENVFROM', 0, 'From address is the same as the envelope')
+rspamd_config:register_virtual_symbol('FROM_NEQ_ENVFROM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NEQ_ENVFROM', 0, 'From address is different to the envelope')
+rspamd_config:register_virtual_symbol('TO_EQ_FROM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('TO_EQ_FROM', 0, 'To address matches the From address')
+rspamd_config:register_virtual_symbol('TO_DOM_EQ_FROM_DOM', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('TO_DOM_EQ_FROM_DOM', 0, 'To domain is the same as the From domain')
+
+local check_to_cc_id = rspamd_config:register_callback_symbol('CHECK_TO_CC', 1.0,
+  function(task)
+    local rcpts = task:get_recipients(1)
+    local to = task:get_recipients(2)
+    local to_match_envrcpt = 0
+    if (not to) then return false end
+    -- Add symbol for recipient count
+    if (#to > 50) then
+      task:insert_result('RCPT_COUNT_GT_50', 1.0)
+    else
+      task:insert_result('RCPT_COUNT_' .. #to, 1.0)
+    end
+    -- Check for display names
+    local to_dn_count = 0
+    local to_dn_eq_addr_count = 0
+    for _, toa in ipairs(to) do
+      -- To: Recipients <noreply@dropbox.com>
+      if (toa['name'] and (toa['name']:lower() == 'recipient'
+          or toa['name']:lower() == 'recipients')) then
+        task:insert_result('TO_DN_RECIPIENTS', 1.0)
+      end
+      if (toa['name'] and toa['name']:lower() == toa['addr']:lower()) then
+        to_dn_eq_addr_count = to_dn_eq_addr_count + 1
+      elseif (toa['name']) then
+        to_dn_count = to_dn_count + 1
+      end
+      -- See if header recipients match envrcpts
+      if (rcpts) then
+        for _, rcpt in ipairs(rcpts) do
+          if (toa and toa['addr'] and rcpt and rcpt['addr'] and
+              rcpt['addr']:lower() == toa['addr']:lower())
+          then
+            to_match_envrcpt = to_match_envrcpt + 1
+          end
+        end
+      end
+    end
+    if (to_dn_count == 0 and to_dn_eq_addr_count == 0) then
+      task:insert_result('TO_DN_NONE', 1.0)
+    elseif (to_dn_count == #to) then
+      task:insert_result('TO_DN_ALL', 1.0)
+    elseif (to_dn_count > 0) then
+      task:insert_result('TO_DN_SOME', 1.0)
+    end
+    if (to_dn_eq_addr_count == #to) then
+      task:insert_result('TO_DN_EQ_ADDR_ALL', 1.0)
+    elseif (to_dn_eq_addr_count > 0) then
+      task:insert_result('TO_DN_EQ_ADDR_SOME', 1.0)
+    end
+
+    -- See if header recipients match envelope recipients
+    if (to_match_envrcpt == #to) then
+      task:insert_result('TO_MATCH_ENVRCPT_ALL', 1.0)
+    elseif (to_match_envrcpt > 0) then
+      task:insert_result('TO_MATCH_ENVRCPT_SOME', 1.0)
+    end
+  end
+)
+
+rspamd_config:register_virtual_symbol('TO_DN_RECIPIENTS', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_RECIPIENTS', 2.0, 'To header display name is "Recipients"')
+rspamd_config:register_virtual_symbol('TO_DN_NONE', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_NONE', 0, 'None of the recipients have display names')
+rspamd_config:register_virtual_symbol('TO_DN_ALL', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_ALL', 0, 'All of the recipients have display names')
+rspamd_config:register_virtual_symbol('TO_DN_SOME', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_SOME', 0, 'Some of the recipients have display names')
+rspamd_config:register_virtual_symbol('TO_DN_EQ_ADDR_ALL', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_EQ_ADDR_ALL', 0, 'All of the recipients have display names that are the same as their address')
+rspamd_config:register_virtual_symbol('TO_DN_EQ_ADDR_SOME', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_DN_EQ_ADDR_SOME', 0, 'Some of the recipients have display names that are the same as their address')
+rspamd_config:register_virtual_symbol('TO_MATCH_ENVRCPT_ALL', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_ALL', 0, 'All of the recipients match the envelope')
+rspamd_config:register_virtual_symbol('TO_MATCH_ENVRCPT_SOME', 1.0, check_to_cc_id)
+rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_SOME', 0, 'Some of the recipients match the envelope')
+
+rspamd_config.CHECK_RECEIVED = {
+  callback = function (task)
+    local received = task:get_received_headers()
+    task:insert_result('RCVD_COUNT_' .. #received, 1.0)
+  end
+}
+
+rspamd_config.HAS_X_PRIO = {
+  callback = function (task)
+    local xprio = task:get_header('X-Priority');
+    if not xprio then return false end
+    local _,_,x = xprio:find('^%s?(%d+)');
+    if (x) then
+      task:insert_result('HAS_X_PRIO_' .. x, 1.0)
+    end
+  end
+}
+
+local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
+  function (task)
+    local replyto = task:get_header('Reply-To')
+    if not replyto then return false end
+    local rt = util.parse_mail_address(replyto)
+    if not (rt and rt[1]) then
+      task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
+      return false
+    else
+      task:insert_result('HAS_REPLYTO', 1.0)
+    end
+
+    -- See if Reply-To matches From in some way
+    local from = task:get_from(2)
+    local from_h = task:get_header('From')
+    if not (from and from[1]) then return false end
+    if (from_h and from_h == replyto) then
+      -- From and Reply-To are identical
+      task:insert_result('REPLYTO_EQ_FROM', 1.0)
+    else
+      if (from and from[1]) then
+        -- See if From and Reply-To addresses match
+        if (from[1].addr:lower() == rt[1].addr:lower()) then
+          task:insert_result('REPLYTO_ADDR_EQ_FROM', 1.0)
+        elseif (from[1].domain:lower() == rt[1].addr:lower()) then
+          task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
+        elseif (from[1].domain:lower() ~= rt[1].domain:lower()) then
+          task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
+        end
+        -- See if the Display Names match
+        if (from[1].name and rt[1].name and from[1].name:lower() == rt[1].name:lower()) then
+          task:insert_result('REPLYTO_DN_EQ_FROM_DN', 1.0)
+        end
+      end
+    end
+  end
+)
+
+rspamd_config:register_virtual_symbol('REPLYTO_UNPARSEABLE', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_UNPARSEABLE', 1.0, 'Reply-To header could not be parsed')
+rspamd_config:register_virtual_symbol('HAS_REPLYTO', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('HAS_REPLYTO', 0, 'Has Reply-To header')
+rspamd_config:register_virtual_symbol('REPLYTO_EQ_FROM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_EQ_FROM', 0, 'Reply-To header is identical to From header')
+rspamd_config:register_virtual_symbol('REPLYTO_ADDR_EQ_FROM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_ADDR_EQ_FROM', 0, 'Reply-To address is the same as From')
+rspamd_config:register_virtual_symbol('REPLYTO_DOM_EQ_FROM_DOM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_DOM_EQ_FROM_DOM', 0, 'Reply-To domain matches the From domain')
+rspamd_config:register_virtual_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 0, 'Reply-To domain does not match the From domain')
+rspamd_config:register_virtual_symbol('REPLYTO_DN_EQ_FROM_DN', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_DN_EQ_FROM_DN', 0, 'Reply-To display name matches From')
+
+local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
+  function (task)
+    local parts = task:get_parts()
+    if not parts then return false end
+
+    -- Make sure there is a MIME-Version header
+    local mv = task:get_header('MIME-Version')
+    if (not mv) then
+      task:insert_result('MISSING_MIME_VERSION', 1.0)
+    end
+
+    local found_ma = false
+    local found_plain = false
+    local found_html = false
+
+    for _,p in ipairs(parts) do
+      local mtype,subtype = p:get_type()
+      local ctype = mtype:lower() .. '/' .. subtype:lower()
+      if (ctype == 'multipart/alternative') then
+        found_ma = true
+      end
+      if (ctype == 'text/plain') then
+        found_plain = true
+      end
+      if (ctype == 'text/html') then
+        found_html = true
+      end
+    end
+
+    if (found_ma) then
+      if (not found_plain) then
+        task:insert_result('MIME_MA_MISSING_TEXT', 1.0)
+      end
+      if (not found_html) then
+        task:insert_result('MIME_MA_MISSING_HTML', 1.0)
+      end
+    end
+  end
+)
+
+rspamd_config:register_virtual_symbol('MISSING_MIME_VERSION', 1.0, check_mime_id)
+rspamd_config:set_metric_symbol('MISSING_MIME_VERSION', 2.0, 'MIME-Version header is missing')
+rspamd_config:register_virtual_symbol('MIME_MA_MISSING_TEXT', 1.0, check_mime_id)
+rspamd_config:set_metric_symbol('MIME_MA_MISSING_TEXT', 2.0, 'MIME multipart/alternative missing text/plain part')
+rspamd_config:register_virtual_symbol('MIME_MA_MISSING_HTML', 1.0, check_mime_id)
+rspamd_config:set_metric_symbol('MIME_MA_MISSING_HTML', 1.0, 'multipart/alternative missing text/html part')
+
+-- Used to be called IS_LIST
+rspamd_config.PREVIOUSLY_DELIVERED = {
+  callback = function(task)
+    if not task:has_recipients(2) then return false end
+    local to = task:get_recipients(2)
+    local rcvds = task:get_header_full('Received')
+    if not rcvds then return false end
+    for _, rcvd in ipairs(rcvds) do
+      local _,_,addr = rcvd['decoded']:lower():find("%sfor%s<(.-)>")
+      if addr then
+        for _, toa in ipairs(to) do
+          if toa and toa.addr:lower() == addr then
+            return true, addr
+          end
+        end
+        return false
+      end
+    end
+  end,
+  description = 'Message either to a list or was forwarded',
+  score = 0.0
+}
+

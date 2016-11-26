@@ -255,6 +255,22 @@ reconf['CC_EXCESS_QP'] = {
   group = 'excessqp'
 }
 
+local subj_encoded_b64 = 'Subject=/\\=\\?\\S+\\?B\\?/iX'
+local subj_needs_mime = 'Subject=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
+reconf['SUBJ_EXCESS_BASE64'] = {
+  re = string.format('%s & !%s', subj_encoded_b64, subj_needs_mime),
+  score = 1.5,
+  description = 'Subject is unnecessarily encoded in base64',
+  group = 'excessb64'
+}
+
+local subj_encoded_qp = 'Subject=/\\=\\?\\S+\\?Q\\?/iX'
+reconf['SUBJ_EXCESS_QP'] = {
+  re = string.format('%s & !%s', subj_encoded_qp, subj_needs_mime),
+  score = 1.2,
+  description = 'Subect is unnecessarily encoded in quoted-printable',
+  group = 'excessqp'
+}
 
 -- Detect forged outlook headers
 -- OE X-Mailer header
@@ -802,4 +818,79 @@ reconf['GOOGLE_FORWARDING_MID_BROKEN'] = {
   score = 1.7,
   description = "Message had invalid Message-ID pre-forwarding",
   group = 'header'
+}
+
+reconf['CTE_CASE'] = {
+  re = 'Content-Transfer-Encoding=/^[78]B/X',
+  description = '[78]Bit .vs. [78]bit',
+  score = 0.5,
+  group = 'header'
+}
+
+reconf['HAS_INTERSPIRE_SIG'] = {
+  re = string.format('((%s) & (%s) & (%s) & (%s)) | (%s)',
+                     'header_exists(X-Mailer-LID)',
+                     'header_exists(X-Mailer-RecptId)',
+                     'header_exists(X-Mailer-SID)',
+                     'header_exists(X-Mailer-Sent-By)',
+                     'List-Unsubscribe=/\\/unsubscribe\\.php\\?M=[^&]+&C=[^&]+&L=[^&]+&N=[^>]+>$/Xi'),
+  description = "Has Interspire fingerprint",
+  score = 3.0,
+  group = 'header'
+}
+
+reconf['CT_EXTRA_SEMI'] = {
+  re = 'Content-Type=/;$/X',
+  description = 'Content-Type ends with a semi-colon',
+  score = 1.0,
+  group = 'header'
+}
+
+reconf['SUBJECT_ENDS_EXCLAIM'] = {
+  re = 'Subject=/!\\s*$/H',
+  description = 'Subject ends with an exclaimation',
+  score = 1.0,
+  group = 'headers'
+}
+
+reconf['SUBJECT_HAS_EXCLAIM'] = {
+  re = string.format('%s & !%s', 'Subject=/!/H', 'Subject=/!\\s*$/H'),
+  description = 'Subject contains an exclaimation',
+  score = 0.0,
+  group = 'headers'
+}
+
+reconf['SUBJECT_ENDS_QUESTION'] = {
+  re = 'Subject=/\\?\\s*$/H',
+  description = 'Subject ends with a question',
+  score = 1.0,
+  group = 'headers'
+}
+
+reconf['SUBJECT_HAS_QUESTION'] = {
+  re = string.format('%s & !%s', 'Subject=/\\?/H', 'Subject=/\\?\\s*$/H'),
+  description = 'Subject contains a question',
+  score = 0.0,
+  group = 'headers'
+}
+
+reconf['SUBJECT_HAS_CURRENCY'] = {
+  re = 'Subject=/$€$¢¥₽/H',
+  description = 'Subject contains currency',
+  score = 1.0,
+  group = 'headers'
+}
+
+reconf['SUBJECT_ENDS_SPACES'] = {
+  re = 'Subject=/\\s+$/H',
+  description = 'Subject ends with space characters',
+  score = 0.5,
+  group = 'headers'
+}
+
+reconf['HAS_ORG_HEADER'] = {
+  re = string.format('%s || %s', 'header_exists(Organization)', 'header_exists(Organisation)'),
+  description = 'Has Organization header',
+  score = 0.0,
+  group = 'headers'
 }
