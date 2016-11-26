@@ -338,7 +338,7 @@ td.maps-cell {
 		padding:0 10px;
 		}
 	.stat-box:not(.pull-right) {
-		width: 90px;
+		min-width: 90px;
 	}
 	/*.stat-boxes .stat-box:first-child {
 		margin-right:0;
