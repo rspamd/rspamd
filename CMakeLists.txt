@@ -672,7 +672,7 @@ IF(ENABLE_JEMALLOC MATCHES "ON")
 ENDIF()
 ProcessPackage(GMIME LIBRARY gmime-2.6 gmime-2.4 gmime-2.2 gmime-2
 	INCLUDE gmime.h
-	INCLUDE_SUFFIXES include/gmime include/gmime-2.0 include/gmime-2.4 include/gmime-2.6
+	INCLUDE_SUFFIXES include/gmime include/gmime-2.0/gmime include/gmime-2.4/gmime include/gmime-2.6/gmime
 	ROOT ${GMIME_ROOT_DIR} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
 ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/event
 	ROOT ${LIBEVENT_ROOT_DIR} MODULES event libevent)
