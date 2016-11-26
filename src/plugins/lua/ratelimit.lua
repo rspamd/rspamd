@@ -579,7 +579,7 @@ if opts then
         name = 'RATELIMIT_CHECK',
         callback = rate_test,
         type = 'prefilter',
-        priority = 10,
+        priority = 4,
       })
     else
       local symbol
