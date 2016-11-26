@@ -21,19 +21,22 @@ reconf['HTML_META_REFRESH_URL'] = {
   -- Requires options { check_attachements = true; }
   re = '/<meta\\s+http-equiv="refresh"\\s+content="\\d+;url=/{sa_raw_body}i',
   description = "Has HTML Meta refresh URL",
-  score = 5.0
+  score = 5.0,
+  group = 'HTML'
 }
 
 reconf['HAS_DATA_URI'] = {
   -- Requires options { check_attachements = true; }
   re = '/data:[^\\/]+\\/[^; ]+;base64,/{sa_raw_body}i',
-  description = "Has Data URI encoding"
+  description = "Has Data URI encoding",
+  group = 'HTML'
 }
 
 reconf['DATA_URI_OBFU'] = {
   -- Requires options { check_attachements = true; }
   re = '/data:text\\/(?:plain|html);base64,/{sa_raw_body}i',
   description = "Uses Data URI encoding to obfuscate plain or HTML in base64",
+  group = 'HTML',
   score = 2.0
 }
 
