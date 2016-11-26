@@ -657,6 +657,10 @@ ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
 ProcessPackage(GMODULE2 LIBRARY gmodule-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES gmodule-no-export-2.0>=2.28 gmodule-2.0>=2.28)
+IF(GLIB_ROOT_DIR)
+	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lpthread")
+	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lffi")
+ENDIF()
 
 IF(ENABLE_PCRE2 MATCHES "ON")
 	ProcessPackage(PCRE LIBRARY pcre2 INCLUDE pcre2.h INCLUDE_SUFFIXES include/pcre2
