@@ -378,7 +378,7 @@ if opts then
       name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
-      priority = 10
+      priority = 6
     })
   end
 end
