@@ -298,7 +298,7 @@ MEM_STATIC size_t BIT_getUpperBits(size_t bitContainer, U32 const start)
 
 MEM_STATIC size_t BIT_getMiddleBits(size_t bitContainer, U32 const start, U32 const nbBits)
 {
-#if defined(__BMI__) && defined(__GNUC__)   /* experimental */
+#if defined(__BMI__) && defined(__GNUC__) && !defined(__llvm__)  /* experimental */
 #  if defined(__x86_64__)
     if (sizeof(bitContainer)==8)
         return _bextr_u64(bitContainer, start, nbBits);
