@@ -426,6 +426,7 @@ td.maps-cell {
 	padding:8px 15px 5px;
 	}
 	.modal-header h3 {
+		margin:7px;
 		font-size:12px;
 		text-shadow:0 1px 0 #FFFFFF;
 		}
