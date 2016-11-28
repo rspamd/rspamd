@@ -534,6 +534,8 @@ start_worker (struct rspamd_worker *worker)
 	struct rspamd_worker_ctx *ctx = worker->ctx;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
+	ctx->cfg = worker->srv->cfg;
+	REF_RETAIN (ctx->cfg);
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);
@@ -578,6 +580,8 @@ start_worker (struct rspamd_worker *worker)
 		close (lp->fd);
 		g_slice_free1 (sizeof (*lp), lp);
 	}
+
+	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);
 }

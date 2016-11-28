@@ -166,6 +166,7 @@ start_log_helper (struct rspamd_worker *worker)
 			"log_helper",
 			NULL);
 	ctx->cfg = worker->srv->cfg;
+	REF_RETAIN (ctx->cfg);
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;
 
@@ -192,6 +193,7 @@ start_log_helper (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	rspamd_log_close (worker->srv->logger);
+	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);
 }
