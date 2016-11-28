@@ -146,11 +146,11 @@ return function (_, res)
   end
 
   -- Workaround for old databases
-  for row in db:rows('SELECT * FROM languages WHERE id=0;') do
-    if learns[row.id] then
-      learns[row.id] = learns[row.id] + row.learns
+  for row in db:rows('SELECT * FROM languages') do
+    if learns['0'] then
+      learns['0'] = learns['0'] + row.learns
     else
-      learns[row.id] = row.learns
+      learns['0'] = row.learns
     end
   end
 
