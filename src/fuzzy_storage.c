@@ -2259,6 +2259,8 @@ start_fuzzy (struct rspamd_worker *worker)
 			FALSE);
 	ctx->peer_fd = -1;
 	ctx->worker = worker;
+	ctx->cfg = worker->srv->cfg;
+	REF_RETAIN (ctx->cfg);
 	double_to_tv (ctx->master_timeout, &ctx->master_io_tv);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
@@ -2367,6 +2369,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_lru_hash_destroy (ctx->errors_ips);
 
 	g_hash_table_unref (ctx->keys);
+	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);
 }

@@ -268,6 +268,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	double tim;
 
 	ctx->cfg = worker->srv->cfg;
+	REF_RETAIN (ctx->cfg);
 
 	if (ctx->hs_dir == NULL) {
 		ctx->hs_dir = ctx->cfg->hs_cache_dir;
@@ -299,6 +300,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	rspamd_log_close (worker->srv->logger);
+	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);
 }

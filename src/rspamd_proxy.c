@@ -1464,6 +1464,8 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
 	struct timeval rot_tv;
 
+	ctx->cfg = worker->srv->cfg;
+	REF_RETAIN (ctx->cfg);
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket,
 			TRUE);
@@ -1499,6 +1501,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
+	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);
 }

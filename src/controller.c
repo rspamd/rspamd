@@ -3039,6 +3039,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->start_time = time (NULL);
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
+	REF_RETAIN (ctx->cfg);
 	ctx->srv = worker->srv;
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
@@ -3211,6 +3212,8 @@ start_controller_worker (struct rspamd_worker *worker)
 		m = (gpointer) ctx->cached_enable_password.begin;
 		munmap (m, ctx->cached_enable_password.len);
 	}
+
+	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);
 }
