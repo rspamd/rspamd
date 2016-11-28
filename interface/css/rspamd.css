@@ -195,9 +195,8 @@ input::-webkit-inner-spin-button {
 .scan-textarea {
 	height:300px;
 	}
-.stat-boxes {
-	overflow:hidden !important;
-	height:73px !important;
+ .stat-boxes {
+	padding-left: 0;
 	}
 
 .row-bordered {
@@ -334,11 +333,12 @@ td.maps-cell {
 		box-shadow:0 1px 0 0 #FFFFFF inset, 0 1px 0 rgba(255,255,255,0.4);
 		display:inline-block;
 		line-height:18px;
-		margin:0 10px 10px 0;
+		margin:0 0 10px 0;
 		padding:0 10px;
 		}
 	.stat-box:not(.pull-right) {
 		min-width: 90px;
+		margin:0 10px 10px 0;
 	}
 	/*.stat-boxes .stat-box:first-child {
 		margin-right:0;
