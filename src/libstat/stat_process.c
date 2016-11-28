@@ -1132,9 +1132,17 @@ rspamd_stat_statistics (struct rspamd_task *task,
 			st = g_ptr_array_index (st_ctx->statfiles, id);
 			backend_runtime = st->backend->runtime (task, st->stcf, FALSE,
 					st->bkcf);
-			learns += st->backend->total_learns (task, backend_runtime,
-					st->bkcf);
 			elt = st->backend->get_stat (backend_runtime, st->bkcf);
+
+			if (elt && ucl_object_type (elt) == UCL_OBJECT) {
+				const ucl_object_t *rev = ucl_object_lookup (elt, "revision");
+
+				learns += ucl_object_toint (rev);
+			}
+			else {
+				learns += st->backend->total_learns (task, backend_runtime,
+						st->bkcf);
+			}
 
 			if (elt != NULL) {
 				ucl_array_append (res, elt);
