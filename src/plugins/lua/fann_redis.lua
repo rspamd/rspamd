@@ -844,6 +844,9 @@ else
   if opts['ham_symbol'] then
     fann_symbol_ham = opts['ham_symbol']
   end
+  if opts['prefix'] then
+    fann_prefix = opts['prefix']
+  end
   rspamd_config:set_metric_symbol({
     name = fann_symbol_spam,
     score = 3.0,
