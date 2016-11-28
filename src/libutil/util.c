@@ -2143,7 +2143,6 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		}
 
 		g_free (ctx->ottery_cfg);
-		g_slice_free1 (sizeof (*ctx), ctx);
 		g_mime_shutdown ();
 
 #ifdef HAVE_OPENSSL
@@ -2152,6 +2151,7 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		SSL_CTX_free (ctx->ssl_ctx);
 #endif
 		rspamd_inet_library_destroy ();
+		g_slice_free1 (sizeof (*ctx), ctx);
 	}
 }
 
