@@ -17,6 +17,8 @@
 ** Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include <glib.h>
+
 #include "_acism.h"
 #include "unix-std.h"
 
