@@ -216,6 +216,8 @@ rspamd_dns_server_init (struct upstream *up, gpointer ud)
 				rspamd_inet_address_get_port (addr), 0, 8);
 	}
 
+	g_assert (serv != NULL);
+
 	elt = g_slice_alloc0 (sizeof (*elt));
 	elt->server = serv;
 	elt->lib_data = up;
@@ -265,6 +267,8 @@ dns_resolver_init (rspamd_logger_t *logger,
 	}
 	else {
 		dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
+		rspamd_upstreams_set_flags (dns_resolver->ups,
+				RSPAMD_UPSTREAM_FLAG_NORESOLVE);
 
 		if (!rspamd_upstreams_from_ucl (dns_resolver->ups, cfg->nameservers,
 				53, dns_resolver)) {
@@ -277,7 +281,6 @@ dns_resolver_init (rspamd_logger_t *logger,
 
 		rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_init,
 				dns_resolver);
-		rspamd_upstreams_set_flags (dns_resolver->ups, RSPAMD_UPSTREAM_FLAG_NORESOLVE);
 		rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
 				dns_resolver->ups);
 	}

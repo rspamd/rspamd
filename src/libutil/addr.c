@@ -999,34 +999,10 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 	gchar *addr_cpy = NULL;
 
 	rspamd_ip_check_ipv6 ();
-	memset (&hints, 0, sizeof (hints));
-	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
-	hints.ai_flags = AI_NUMERICSERV|flags;
 
-	if (len > 0) {
-		addr_cpy = g_malloc (len + 1);
-		rspamd_strlcpy (addr_cpy, begin, len + 1);
-	}
-	/* Otherwise it will be NULL */
-
-	if (ipv6_status == RSPAMD_IPV6_SUPPORTED) {
-		hints.ai_family = AF_UNSPEC;
-	}
-	else {
-		hints.ai_family = AF_INET;
-	}
-
-	if ((r = getaddrinfo (addr_cpy, portbuf, &hints, &res)) == 0) {
-		/* Now copy up to max_addrs of addresses */
-		addr_cnt = 0;
-		cur = res;
-		while (cur) {
-			cur = cur->ai_next;
-			addr_cnt ++;
-		}
-
+	if (rspamd_parse_inet_address (&cur_addr, begin, len)) {
 		if (*addrs == NULL) {
-			*addrs = g_ptr_array_new_full (addr_cnt,
+			*addrs = g_ptr_array_new_full (1,
 					(GDestroyNotify)rspamd_inet_address_destroy);
 
 			if (pool != NULL) {
@@ -1035,30 +1011,71 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 			}
 		}
 
-		cur = res;
-		while (cur) {
-			cur_addr = rspamd_inet_address_from_sa (cur->ai_addr,
-					cur->ai_addrlen);
-
-			if (cur_addr != NULL) {
-				g_ptr_array_add (*addrs, cur_addr);
-			}
-			cur = cur->ai_next;
-		}
-
-		freeaddrinfo (res);
-	}
-	else if (addr_cpy) {
-		msg_err_pool_check ("address resolution for %s failed: %s",
-				addr_cpy,
-				gai_strerror (r));
-		g_free (addr_cpy);
-
-		return FALSE;
+		rspamd_inet_address_set_port (cur_addr, strtoul (portbuf, NULL, 10));
+		g_ptr_array_add (*addrs, cur_addr);
 	}
 	else {
-		/* Should never ever happen */
-		g_assert (0);
+		memset (&hints, 0, sizeof (hints));
+		hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
+		hints.ai_flags = AI_NUMERICSERV|flags;
+
+		if (len > 0) {
+			addr_cpy = g_malloc (len + 1);
+			rspamd_strlcpy (addr_cpy, begin, len + 1);
+		}
+		/* Otherwise it will be NULL */
+
+		if (ipv6_status == RSPAMD_IPV6_SUPPORTED) {
+			hints.ai_family = AF_UNSPEC;
+		}
+		else {
+			hints.ai_family = AF_INET;
+		}
+
+		if ((r = getaddrinfo (addr_cpy, portbuf, &hints, &res)) == 0) {
+			/* Now copy up to max_addrs of addresses */
+			addr_cnt = 0;
+			cur = res;
+			while (cur) {
+				cur = cur->ai_next;
+				addr_cnt ++;
+			}
+
+			if (*addrs == NULL) {
+				*addrs = g_ptr_array_new_full (addr_cnt,
+						(GDestroyNotify)rspamd_inet_address_destroy);
+
+				if (pool != NULL) {
+					rspamd_mempool_add_destructor (pool,
+							rspamd_ptr_array_free_hard, *addrs);
+				}
+			}
+
+			cur = res;
+			while (cur) {
+				cur_addr = rspamd_inet_address_from_sa (cur->ai_addr,
+						cur->ai_addrlen);
+
+				if (cur_addr != NULL) {
+					g_ptr_array_add (*addrs, cur_addr);
+				}
+				cur = cur->ai_next;
+			}
+
+			freeaddrinfo (res);
+		}
+		else if (addr_cpy) {
+			msg_err_pool_check ("address resolution for %s failed: %s",
+					addr_cpy,
+					gai_strerror (r));
+			g_free (addr_cpy);
+
+			return FALSE;
+		}
+		else {
+			/* Should never ever happen */
+			g_assert (0);
+		}
 	}
 
 	return TRUE;
