@@ -32,6 +32,10 @@ SET(ASM_CODE "
 	")
 ASM_OP(HAVE_DOLLARMACRO "dollar macro convention")
 
+IF(NOT HAVE_SLASHMACRO AND NOT HAVE_DOLLARMACRO)
+	MESSAGE(FATAL_ERROR "Your assembler cannot compile macros, please check your CMakeFiles/CMakeError.log")
+ENDIF()
+
 # For now we support only x86_64 architecture with optimizations
 IF("${ARCH}" STREQUAL "x86_64")
 	SET(ASM_CODE "vpaddq %ymm0, %ymm0, %ymm0")
