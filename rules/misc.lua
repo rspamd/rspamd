@@ -753,7 +753,6 @@ end
 
 local freemail_reply_neq_from_id = rspamd_config:register_symbol({
   name = 'FREEMAIL_REPLYTO_NEQ_FROM_DOM',
-  type = 'callback',
   callback = freemail_reply_neq_from,
   description = 'Freemail From and Reply-To, but to different Freemail services',
   score = 3.0
