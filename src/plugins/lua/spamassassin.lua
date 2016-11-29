@@ -1101,8 +1101,9 @@ local function apply_replacements(str)
     local sstr
     sstr = s
     fun.each(function(n, t)
-        sstr = string.gsub(sstr, string.format("<%s>", n),
-          string.format("%s%s%s", pre, t, post))
+      local rep = string.format("%s%s%s", pre, t, post)
+      rep = string.gsub(rep, '%%', '%%%%')
+      sstr = string.gsub(sstr, string.format("<%s>", n), rep)
     end, replace['tags'])
 
     return sstr
