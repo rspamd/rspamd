@@ -1493,14 +1493,17 @@ local function post_process()
         for _,a in ipairs(expr_atoms) do
           if not atoms[a] then
             local rspamd_symbol = replace_symbol(a)
-            rspamd_logger.debugm(N, rspamd_config, 'atom %1 is a direct foreign dependency, ' ..
-              'register dependency for %2 on %3',
-              a, k, rspamd_symbol)
-            rspamd_config:register_dependency(k, rspamd_symbol)
             if not external_deps[k] then
-              external_deps[k] = {rspamd_symbol}
-            else
-              table.insert(external_deps[k], rspamd_symbol)
+              external_deps[k] = {}
+            end
+
+            if not external_deps[k][rspamd_symbol] then
+              rspamd_config:register_dependency(k, rspamd_symbol)
+              external_deps[k][rspamd_symbol] = true
+              rspamd_logger.debugm(N, rspamd_config,
+                'atom %1 is a direct foreign dependency, ' ..
+                'register dependency for %2 on %3',
+                a, k, rspamd_symbol)
             end
           end
         end
@@ -1512,16 +1515,27 @@ local function post_process()
     rules))
 
   -- ... And then indirect ones ...
-  fun.each(function(k, r)
+  local nchanges
+  repeat
+  nchanges = 0
+    fun.each(function(k, r)
       if r['expression'] then
         local expr_atoms = r['expression']:atoms()
         for _,a in ipairs(expr_atoms) do
           if type(external_deps[a]) == 'table' then
             for _,dep in ipairs(external_deps[a]) do
-              rspamd_logger.debugm(N, rspamd_config, 'atom %1 holds a foreign dependency, ' ..
-                'register dependency for %2 on %3',
-                a, k, dep);
+              if not external_deps[k] then
+                external_deps[k] = {}
+              end
+              if not external_deps[k][dep] then
                 rspamd_config:register_dependency(k, dep)
+                external_deps[k][dep] = true
+                rspamd_logger.debugm(N, rspamd_config,
+                  'atom %1 is a direct foreign dependency, ' ..
+                  'register dependency for %2 on %3',
+                  a, k, dep)
+              end
+              nchanges = nchanges + 1
             end
           else
             local rspamd_symbol, replaced_symbol = replace_symbol(a)
@@ -1538,6 +1552,7 @@ local function post_process()
       return r['type'] == 'meta'
     end,
     rules))
+  until nchanges ~= 0
 
   -- Set missing symbols
   fun.each(function(key, score)
