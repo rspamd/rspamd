@@ -785,13 +785,6 @@ reconf['INVALID_POSTFIX_RECEIVED'] = {
   group = 'header'
 }
 
-reconf['X_PHP_EVAL'] = {
-  re = "X-PHP-Originating-Script=/ : eval\\(\\)'d code$/X",
-  score = 4.0,
-  description = "Message sent by eval()'d PHP code",
-  group = 'header'
-}
-
 reconf['X_PHP_FORGED_0X'] = {
   re = "X-PHP-Originating-Script=/^0\\d/X",
   score = 4.0,
