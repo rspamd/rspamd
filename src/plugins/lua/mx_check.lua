@@ -80,7 +80,7 @@ local function mx_check(task)
         local ret = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
-          false, -- is write
+          true, -- is write
           redis_cache_cb, --callback
           'SETEX', -- command
           {key, tostring(settings.expire_novalid), '0'} -- arguments
@@ -97,7 +97,7 @@ local function mx_check(task)
         local ret = rspamd_redis_make_request(task,
           redis_params, -- connect params
           key, -- hash key
-          false, -- is write
+          true, -- is write
           redis_cache_cb, --callback
           'SETEX', -- command
           {key, tostring(settings.expire), table.concat(valid_mx, ';')} -- arguments
