@@ -221,6 +221,8 @@ MACRO(FindLua)
 						"include/luajit${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}"
 						"include/luajit${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
 						"include/luajit-${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
+						"include/luajit-${LUA_VERSION_MAJOR}_${LUA_VERSION_MINOR}-2.0"
+						"include/luajit-${LUA_VERSION_MAJOR}_${LUA_VERSION_MINOR}-2.1"
 						"include/luajit"
 						"include/lua${LUA_VERSION_MAJOR}${LUA_VERSION_MINOR}"
 						"include/lua${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}"
