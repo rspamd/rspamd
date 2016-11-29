@@ -350,7 +350,7 @@ local function load_or_invalidate_fann(data, id, ev_base)
       end
     end
     -- Invalidate ANN
-    rspamd_logger.infox('invalidate ANN %s')
+    rspamd_logger.infox(rspamd_config, 'invalidate ANN %s', id)
     redis_make_request(ev_base,
       rspamd_config,
       nil,
@@ -459,7 +459,7 @@ local function train_fann(_, ev_base, elt)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
-        false, -- is write
+        true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
         {fann_prefix .. elt .. '_lock'}
@@ -489,17 +489,17 @@ local function train_fann(_, ev_base, elt)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
-        false, -- is write
+        true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
         {fann_prefix .. elt .. '_lock'}
       )
     else
       -- Decompress and convert to numbers each training vector
-      ham_elts = fun.map(function(tok)
+      ham_elts = fun.totable(fun.map(function(tok)
         local _,str = rspamd_util.zstd_decompress(tok)
-        return fun.map(tonumber, rspamd_str_split(tostring(str), ';'))
-      end, data)
+        return fun.totable(fun.map(tonumber, rspamd_str_split(tostring(str), ';')))
+      end, data))
 
       -- Now we need to join inputs and create the appropriate test vectors
       local inputs = {}
@@ -511,9 +511,9 @@ local function train_fann(_, ev_base, elt)
       end
 
       fun.each(function(spam_sample, ham_sample)
-        table.insert(inputs, fun.totable(spam_sample))
+        table.insert(inputs, spam_sample)
         table.insert(outputs, {1.0})
-        table.insert(inputs, fun.totable(ham_sample))
+        table.insert(inputs, ham_sample)
         table.insert(outputs, {-1.0})
       end, fun.zip(fun.filter(filt, spam_elts), fun.filter(filt, ham_elts)))
 
@@ -560,17 +560,17 @@ local function train_fann(_, ev_base, elt)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
-        false, -- is write
+        true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
         {fann_prefix .. elt .. '_lock'}
       )
     else
       -- Decompress and convert to numbers each training vector
-      spam_elts = fun.map(function(tok)
+      spam_elts = fun.totable(fun.map(function(tok)
         local _,str = rspamd_util.zstd_decompress(tok)
-        return fun.map(tonumber, rspamd_str_split(tostring(str), ';'))
-      end, data)
+        return fun.totable(fun.map(tonumber, rspamd_str_split(tostring(str), ';')))
+      end, data))
       redis_make_request(ev_base,
         rspamd_config,
         nil,
