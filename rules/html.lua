@@ -59,7 +59,7 @@ rspamd_config.HTML_SHORT_LINK_IMG_1 = {
   callback = function(task)
     return check_html_image(task, 0, 1024)
   end,
-  score = 3.0,
+  score = 2.0,
   group = 'html',
   description = 'Short html part (0..1K) with a link to an image'
 }

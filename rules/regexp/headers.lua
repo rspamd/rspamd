@@ -66,7 +66,7 @@ local r_cte_7bit = 'compare_transfer_encoding(7bit)'
 local r_body_8bit = '/[^\\x01-\\x7f]/Qr'
 reconf['R_BAD_CTE_7BIT'] = {
   re = string.format('(%s) & (%s) & (%s)', r_ctype_text, r_cte_7bit, r_body_8bit),
-  score = 3.0,
+  score = 2.0,
   description = 'Detects bad content-transfer-encoding for text parts',
   group = 'header'
 }
