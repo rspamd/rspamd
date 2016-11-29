@@ -51,12 +51,17 @@ textarea {
 .chart-content {
 	text-align:center;
 	}
-	.chart {
+.chart {
 		height:400px;
 		margin:0 auto;
 		text-align:center;
 		background:#fff;
+		display: flex;
+    justify-content: center;
 		}
+.chart svg {
+	flex: none;
+}
 .notice {
 	display:none;
 	}
