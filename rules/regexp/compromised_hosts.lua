@@ -11,7 +11,7 @@ reconf['HAS_PHPMAILER_SIG'] = {
 reconf['PHP_SCRIPT_ROOT'] = {
   re = "X-PHP-Originating-Script=/^0:/Hi",
   description = "PHP Script executed by root UID",
-  score = 2.0,
+  score = 1.0,
   group = "compromised_hosts"
 }
 
@@ -99,14 +99,12 @@ reconf['HAS_WP_URI'] = {
 reconf['WP_COMPROMISED'] = {
   re = '/\\/wp-(?:content|includes)[^\\/]+\\//Ui',
   description = "URL that is pointing to a compromised WordPress installation",
-  score = 5.0,
   group = "compromised_hosts"
 }
 
 reconf['PHP_XPS_PATTERN'] = {
   re = 'X-PHP-Script=/^[^\\. ]+\\.[^\\.\\/ ]+\\/sendmail\\.php\\b/Hi',
   description = "Message contains X-PHP-Script pattern",
-  score = 5.0,
   group = "compromised_hosts"
 }
 

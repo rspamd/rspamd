@@ -739,3 +739,25 @@ rspamd_config.PREVIOUSLY_DELIVERED = {
   score = 0.0
 }
 
+-- Requires freemail maps loaded in multimap
+local function freemail_reply_neq_from(task)
+  local frt = task:get_symbol('FREEMAIL_REPLYTO')
+  local ff  = task:get_symbol('FREEMAIL_FROM')
+  if (frt and ff and frt['options'] and ff['options'] and
+      frt['options'][1] ~= ff['options'][1])
+  then
+    return true
+  end
+  return false
+end
+
+local freemail_reply_neq_from_id = rspamd_config:register_symbol({
+  name = 'FREEMAIL_REPLYTO_NEQ_FROM_DOM',
+  type = 'callback',
+  callback = freemail_reply_neq_from,
+  description = 'Freemail From and Reply-To, but to different Freemail services',
+  score = 3.0
+})
+rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_REPLYTO')
+rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
+

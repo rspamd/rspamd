@@ -821,7 +821,7 @@ reconf['HAS_INTERSPIRE_SIG'] = {
                      'header_exists(X-Mailer-Sent-By)',
                      'List-Unsubscribe=/\\/unsubscribe\\.php\\?M=[^&]+&C=[^&]+&L=[^&]+&N=[^>]+>$/Xi'),
   description = "Has Interspire fingerprint",
-  score = 3.0,
+  score = 1.0,
   group = 'header'
 }
 
@@ -835,7 +835,7 @@ reconf['CT_EXTRA_SEMI'] = {
 reconf['SUBJECT_ENDS_EXCLAIM'] = {
   re = 'Subject=/!\\s*$/H',
   description = 'Subject ends with an exclaimation',
-  score = 1.0,
+  score = 0.0,
   group = 'headers'
 }
 
@@ -880,3 +880,11 @@ reconf['HAS_ORG_HEADER'] = {
   score = 0.0,
   group = 'headers'
 }
+
+reconf['X_PHPOS_FAKE'] = {
+  re = 'X-PHP-Originating-Script=/^\\d{7}:/Hi',
+  description = 'Fake X-PHP-Originating-Script header',
+  score = 3.0,
+  group = 'headers'
+}
+
