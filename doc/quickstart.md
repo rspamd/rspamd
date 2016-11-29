@@ -153,17 +153,19 @@ ssl_key = </var/lib/acme/live/mail.example.com/privkey
 
 ## Caching setup
 
-Both Rspamd and Rmilter can use [Redis](https://redis.io) for caching. Rmilter uses Redis for the following features:
+Both Rspamd and Rmilter use [Redis](https://redis.io) for caching.
+
+Rmilter uses Redis for the following optional features:
 
 - greylisting (delaying of suspicious emails)
-- rate limits
-- storing reply message IDs to avoid certain checks for replies to our own messages
+- rate limiting
+- whitelisting of reply messages (storing reply message IDs to avoid certain checks for replies to our own sent messages)
 
-Rspamd uses Redis as well:
+Rspamd uses Redis as:
 
-- for statistic tokens (BAYES classifier)
-- for storing learned messages IDs
-- for storing DMARC stats (optionally)
+- a backend for tokens storage and cache of learned messages by [statistical module](configuration/statistic.html) (BAYES classifier)
+- a fuzzy storage backend (optional)
+- a key-value storage by [many Rspamd modules](configuration/redis.html#introduction)
 
 Installation of Redis is quite straightforward: install it using packages, start it with the default settings (it should listen on local interface using port 6379) and you are done. You might also want to limit memory used by Redis at some sane value:
 
