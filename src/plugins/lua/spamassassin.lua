@@ -1068,14 +1068,15 @@ local function apply_replacements(str)
   end
 
   local function replace_all_tags(s)
-    local str, matches
-    str = s
+    local sstr
+    sstr = s
     each(function(n, t)
-        str,matches = string.gsub(str, string.format("<%s>", n),
-          string.format("%s%s%s", pre, t, post))
+      local rep = string.format("%s%s%s", pre, t, post)
+      rep = string.gsub(rep, '%%', '%%%%')
+      sstr = string.gsub(sstr, string.format("<%s>", n), rep)
     end, replace['tags'])
 
-    return str
+    return sstr
   end
 
   local s = replace_all_tags(str)
