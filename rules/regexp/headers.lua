@@ -842,7 +842,7 @@ reconf['CT_EXTRA_SEMI'] = {
 reconf['SUBJECT_ENDS_EXCLAIM'] = {
   re = 'Subject=/!\\s*$/H',
   description = 'Subject ends with an exclaimation',
-  score = 1.0,
+  score = 0.0,
   group = 'headers'
 }
 
