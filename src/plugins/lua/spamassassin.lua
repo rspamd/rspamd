@@ -1523,7 +1523,7 @@ local function post_process()
       return r['type'] == 'meta'
     end,
     rules))
-  until nchanges ~= 0
+  until nchanges == 0
 
   -- Set missing symbols
   each(function(key, score)
