@@ -768,7 +768,7 @@
                     });
                     symbols.columns.adjust().draw();
                     $('#symbolsTable :button').on('click',
-                        function(){saveSymbols("/savesymbols", "symbolsTable")});
+                        function(){saveSymbols("./savesymbols", "symbolsTable")});
                 },
                 error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
