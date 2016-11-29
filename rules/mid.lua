@@ -63,4 +63,4 @@ rspamd_config:set_metric_symbol('MID_RHS_IP_LITERAL', 0.5, 'Message-ID RHS is an
 rspamd_config:register_virtual_symbol('MID_CONTAINS_FROM', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_CONTAINS_FROM', 1.0, 'Message-ID contains From address', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_FROM', 1.0, check_mid_id)
-rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROM', 1.0, 'Message-ID RHS matches From domain', 'default', 'Message ID')
+rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROM', 0.0, 'Message-ID RHS matches From domain', 'default', 'Message ID')
