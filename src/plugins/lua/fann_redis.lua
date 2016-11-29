@@ -73,9 +73,6 @@ local redis_can_train_sha = nil
 -- key2 - local version
 -- returns nil or bulk string if new ANN can be loaded
 local redis_lua_script_maybe_load = [[
-  local locked = redis.call('GET', KEYS[1] .. '_locked')
-  if locked then return false end
-
   local ver = 0
   local ret = redis.call('GET', KEYS[1] .. '_version')
   if ret then ver = tonumber(ret) end
