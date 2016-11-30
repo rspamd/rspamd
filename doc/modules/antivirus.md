@@ -17,6 +17,8 @@ Settings should be added to `rspamd.conf.local`:
 antivirus {
   # multiple scanners could be checked, for each we create a configuration block with an arbitrary name
   first {
+    # If set force this action if any virus is found (default unset: no action is forced)
+    # action = "reject";
     # if `true` only messages with non-image attachments will be checked (default true)
     attachments_only = true;
     # If `max_size` is set, messages > n bytes in size are not scanned
