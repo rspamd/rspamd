@@ -49,7 +49,7 @@ Please note that `CentOS` rpm packages **requires** [EPEL](https://fedoraproject
 
 To install rspamd repo, please download the corresponding repository file and the signing key (both repo and all packages are signed with my GPG key). You could use the following commands to install rspamd <a class="undecor" href="#stableSys1">stable<sup>1</sup></a> RPM repository:
 
-    wget -O /etc/yum.repos.d/rspamd.repo http://rspamd.com/rpm-stable/${YOUR_DISTRO}/rspamd.repo
+    curl http://rspamd.com/rpm-stable/${YOUR_DISTRO}/rspamd.repo > /etc/yum.repos.d/rspamd.repo
     rpm --import http://rspamd.com/rpm-stable/gpg.key
     yum update
     yum install rspamd
@@ -58,7 +58,7 @@ Where `${YOUR_DISTRO}` is the short name of your os (e.g. `centos-7` or `fedora-
 
 For <a class="undecor" href="#experimentalSys1">experimental<sup>2</sup></a> branch packages, download `rpm-experimental` repofile as following:
 
-    wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRO}/rspamd-experimental.repo
+    curl http://rspamd.com/rpm-stable/${YOUR_DISTRO}/rspamd-experimental.repo > /etc/yum.repos.d/rspamd-experimental.repo
     rpm --import http://rspamd.com/rpm/gpg.key
     yum update
     yum install rspamd    
