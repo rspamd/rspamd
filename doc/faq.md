@@ -540,14 +540,38 @@ As you can see, you can use both embedded log variables and Lua code to customiz
 
 ### Which backend should I use for statistics
 
-Currently, I recommend using `redis` for the statistics back end. You can convert existing statistics in sqlite by using `rspamadm statconvert` routine:
+Currently, we recommend using `redis` for the statistics and fuzzy storage backend.
+
+You can convert existing statistics in `sqlite` by using `rspamadm statconvert` routine:
 
 ```
-rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379  -s BAYES_SPAM
+# rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379 -s BAYES_SPAM
+# rspamadm statconvert -d bayes.ham.sqlite -h 127.0.0.1:6379 -s BAYES_HAM \
+-c learn_cache.sqlite
+```
+You should import learn cache just once with either ham or spam statistics.
+
+The only limitation of the redis backend is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation]({{ site.url }}{{ site.baseurl }}/doc/configuration/statistic.html) for further details.
+
+You can also convert fuzzy storage using using `rspamadm fuzzyconvert`:
+
+```
+# rspamadm fuzzyconvert -d fuzzy.db -h 127.0.0.1:6379 -e 7776000
 ```
 
-The only limitation of the redis plugin is that it doesn't support per language statistics. This feature, however, is not needed in the majority of cases. Per user statistics in redis works in a different way than in sqlite. Please read the [corresponding documentation]({{ site.url }}{{ site.baseurl }}/doc/configuration/statistic.html) for further details.
+Finally, you need to change the default `sqlite` backend to `redis` and restart rspamd.
 
+local.d/classifier-bayes.conf:
+
+```ucl
+backend = "redis";
+```
+
+override.d/worker-fuzzy.inc:
+
+```ucl
+backend = "redis";
+```
 
 ### What Redis keys are used by Rspamd
 
