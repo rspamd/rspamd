@@ -492,6 +492,7 @@
 
                 type: selected.selType,
                 interpolate: selected.selInterpolate,
+                convert: selected.selConvert,
 
                 legend: {
                     entries: [{
