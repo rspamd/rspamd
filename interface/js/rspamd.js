@@ -323,7 +323,9 @@
             var stat_w = [];
             $.each(data, function (i, item) {
                 var widget = '';
-                if (i == 'auth') {} else if (i == 'error') {} else if (i == 'version') {
+                if (i == 'auth') {}
+                else if (i == 'error') {}
+                else if (i == 'version') {
                     widget = '<div class="left"><strong>' + item + '</strong>' +
                         i + '</div>';
                     $(widget).appendTo(widgets);
@@ -353,6 +355,7 @@
                 $(item).appendTo(widgets);
             });
             $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
+            $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
             $(widgets).show();
             stat_timeout = window.setTimeout(statWidgets, 10000);
         }
