@@ -1625,7 +1625,10 @@ rspamd_message_parse (struct rspamd_task *task)
 				trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
 						rspamd_inet_address_to_string (task->from_addr));
 				trecv->from_ip = trecv->real_ip;
-				trecv->addr = task->from_addr;
+				trecv->addr = rspamd_inet_address_copy (task->from_addr);
+				rspamd_mempool_add_destructor (task->task_pool,
+						(rspamd_mempool_destruct_t)rspamd_inet_address_destroy,
+						trecv->addr);
 
 				if (task->hostname) {
 					trecv->real_hostname = task->hostname;
