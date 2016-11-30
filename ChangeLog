@@ -1,3 +1,47 @@
+1.4.1:
+	* [Feature] ASN support in Clickhouse module
+	* [Feature] Add clickhouse plugin
+	* [Feature] Add generic tool to add universal maps for lua modules
+	* [Feature] Add logger.debugm to debug lua modules
+	* [Feature] Allow to register metrics symbols using register_symbol
+	* [Feature] Allow to specify prefix for fann_redis
+	* [Feature] Clickhouse: support different masks for IPv4/IPv6
+	* [Feature] Support forcing action in antivirus plugin
+	* [Fix] Add handling of regexp maps
+	* [Fix] Allow backslashes in http urls
+	* [Fix] Avoid mapping of empty files
+	* [Fix] Do not load tld file to speed up rspamadm
+	* [Fix] Do not resolve numeric IP addresses due to ipv6 insanity
+	* [Fix] Filter incorrect training data
+	* [Fix] Fix Fuzzyconvert tool when password or DB is given
+	* [Fix] Fix build with custom glib/gmime
+	* [Fix] Fix converting of learn count from sqlite to redis
+	* [Fix] Fix crashes with invalid received and task:set_from_ip
+	* [Fix] Fix external dependencies for SA module
+	* [Fix] Fix fann_redis when number of scores has been changed
+	* [Fix] Fix hyperscan usage for non compatible platforms
+	* [Fix] Fix loading of maps from UCL objects
+	* [Fix] Fix memory leak for task-less redis requests
+	* [Fix] Fix mid module with new maps syntax
+	* [Fix] Fix parsing of URLs with username
+	* [Fix] Fix re cache initialisation
+	* [Fix] Fix replacements to sanitize '%' character
+	* [Fix] Fix set and regexp like static maps
+	* [Fix] Fix some issues in redis settings
+	* [Fix] Fix static IP maps
+	* [Fix] Fix total learns counter for redis stats
+	* [Fix] Fix usage of config during reload
+	* [Fix] Fix various warnings and issues
+	* [Fix] Invalidate ANN if training data is incorrect
+	* [Fix] Miltiple fixes to fann_redis module
+	* [Fix] More fixes for URLs with backslashes
+	* [Fix] Properly get options for ip_score module
+	* [Fix] Relax requirements for Received as gmail cannot RFC
+	* [Fix] Remove or fix hyperscan incompatible regexps
+	* [Fix] Settings: correctly read redis config
+	* [Rework] Rework lua logger interface slightly
+	* [Rework] Use new maps add function
+
 1.4.0:
 	* [CritFix] Add guards for inactive redis connections
 	* [CritFix] Another fix for proxying files using rspamd_proxy
