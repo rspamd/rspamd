@@ -232,3 +232,35 @@ rspamd_config.R_WHITE_ON_WHITE = {
   group = 'html',
   description = 'Message contains low contrast text'
 }
+
+rspamd_config.EXT_CSS = {
+  callback = function(task)
+    local regexp_lib = require "rspamd_regexp"
+    local re = regexp_lib.create_cached('/^.*\\.css(?:[?#].*)?$/i')
+    local tp = task:get_text_parts() -- get text parts in a message
+    local ret = false
+    for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+      if p:is_html() and p:get_html() then -- if the current part is html part
+        local hc = p:get_html() -- we get HTML context
+        hc:foreach_tag({'link'}, function(tag)
+          local bl = tag:get_extra()
+          if bl then
+            local s = tostring(bl)
+            if s and re:match(s) then
+              ret = true
+            end
+          end
+
+          return ret -- Continue search
+        end)
+
+      end
+    end
+
+    return ret
+  end,
+
+  score = 1.0,
+  group = 'html',
+  description = 'Message contains external CSS reference'
+}
