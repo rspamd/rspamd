@@ -167,7 +167,7 @@ ratelimit {
 
 ### Adaptive ratelimits
 
-From 1.4.0 Rspamd supports adaptive ratelimits- these allow for granting trusted senders increased ratelimits while reducing limits for hosts with bad or unknown reputation. This functionality requires the [ASN]({{ site.baseurl }}/asn.html) and [IP Score]({{ site.baseurl }}/ip_score.html) modules to be enabled.
+From 1.4.0 Rspamd supports adaptive ratelimits- these allow for granting trusted senders increased ratelimits while reducing limits for hosts with bad or unknown reputation. This functionality requires the [ASN]({{ site.baseurl }}/doc/modules/asn.html) and [IP Score]({{ site.baseurl }}/doc/modules/ip_score.html) modules to be enabled.
 
 To enable adaptive ratelimits, set the following:
 
