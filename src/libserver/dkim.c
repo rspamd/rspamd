@@ -1303,7 +1303,7 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 
 static const gchar *
 rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
-		guint type, gboolean *need_crlf)
+		guint type, gboolean sign, gboolean *need_crlf)
 {
 	const gchar *p = end - 1, *t;
 	enum {
@@ -1330,7 +1330,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				state = test_spaces;
 			}
 			else {
-				if (type == DKIM_CANON_SIMPLE) {
+				if (sign || type != DKIM_CANON_RELAXED) {
 					*need_crlf = TRUE;
 				}
 
@@ -1344,7 +1344,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			else if (*p == '\n') {
 				state = got_lf;
 			}
-			else if (type == DKIM_CANON_RELAXED && *p == ' ') {
+			else if (type == DKIM_CANON_RELAXED && (*p == ' ' || *p == '\t')) {
 				skip = 0;
 				state = test_spaces;
 			}
@@ -1353,7 +1353,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 			}
 			break;
 		case got_cr:
-			if (p > start - 1) {
+			if (p >= start + 1) {
 				if (*(p - 1) == '\r') {
 					p --;
 					state = got_cr;
@@ -1370,7 +1370,8 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 						state = got_lf;
 					}
 				}
-				else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 1) == ' ' ||
+						*(p - 1) == '\t')) {
 					skip = 1;
 					state = test_spaces;
 				}
@@ -1379,14 +1380,16 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
-				if (type == DKIM_CANON_RELAXED) {
-					p -= 1;
+				if (g_ascii_isspace (*(p - 1))) {
+					if (type == DKIM_CANON_RELAXED) {
+						p -= 1;
+					}
 				}
 				goto end;
 			}
 			break;
 		case got_lf:
-			if (p > start - 1) {
+			if (p >= start + 1) {
 				if (*(p - 1) == '\r') {
 					state = got_crlf;
 				}
@@ -1395,7 +1398,8 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 					p --;
 					state = got_lf;
 				}
-				else if (type == DKIM_CANON_RELAXED && *(p - 1) == ' ') {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 1) == ' ' ||
+						*(p - 1) == '\t')) {
 					skip = 1;
 					state = test_spaces;
 				}
@@ -1404,23 +1408,26 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
-				if (type == DKIM_CANON_RELAXED) {
-					p -= 1;
+				if (g_ascii_isspace (*(p - 1))) {
+					if (type == DKIM_CANON_RELAXED) {
+						p -= 1;
+					}
 				}
 				goto end;
 			}
 			break;
 		case got_crlf:
-			if (p > start - 2) {
-				if (*(p - 3) == '\r') {
+			if (p >= start + 2) {
+				if (*(p - 2) == '\r') {
 					p -= 2;
 					state = got_cr;
 				}
-				else if (*(p - 3) == '\n') {
+				else if (*(p - 2) == '\n') {
 					p -= 2;
 					state = got_lf;
 				}
-				else if (type == DKIM_CANON_RELAXED && *(p - 3) == ' ') {
+				else if (type == DKIM_CANON_RELAXED && (*(p - 2) == ' ' ||
+						*(p - 2) == '\t')) {
 					skip = 2;
 					state = test_spaces;
 				}
@@ -1429,8 +1436,10 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 				}
 			}
 			else {
-				if (type == DKIM_CANON_RELAXED) {
-					p -= 2;
+				if (g_ascii_isspace (*(p - 2))) {
+					if (type == DKIM_CANON_RELAXED) {
+						p -= 2;
+					}
 				}
 				goto end;
 			}
@@ -1438,7 +1447,7 @@ rspamd_dkim_skip_empty_lines (const gchar *start, const gchar *end,
 		case test_spaces:
 			t = p - skip;
 
-			while (t > start - 2 && *t == ' ') {
+			while (t >= start + 2 && (*t == ' ' || *t == '\t')) {
 				t --;
 			}
 
@@ -1464,7 +1473,8 @@ end:
 static gboolean
 rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 	const gchar *start,
-	const gchar *end)
+	const gchar *end,
+	gboolean sign)
 {
 	const gchar *p;
 	guint remain = ctx->len ? ctx->len : (guint)(end - start);
@@ -1481,7 +1491,8 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 	}
 	else {
 		/* Strip extra ending CRLF */
-		p = rspamd_dkim_skip_empty_lines (start, end, ctx->body_canon_type, &need_crlf);
+		p = rspamd_dkim_skip_empty_lines (start, end, ctx->body_canon_type,
+				sign, &need_crlf);
 		end = p + 1;
 
 		if (end == start) {
@@ -1510,6 +1521,13 @@ rspamd_dkim_canonize_body (struct rspamd_dkim_common_ctx *ctx,
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx, ctx->body_hash,
 						&start, end - start, &remain)) ;
+				if (need_crlf) {
+					start = "\r\n";
+					end = start + 2;
+					remain = 2;
+					rspamd_dkim_relaxed_body_step (ctx, ctx->body_hash,
+							&start, end - start, &remain);
+				}
 			}
 		}
 		return TRUE;
@@ -1799,6 +1817,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 {
 	const gchar *p, *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
+	EVP_MD_CTX *cpy_ctx;
 	gsize dlen;
 	gint res = DKIM_CONTINUE;
 	guint i;
@@ -1819,7 +1838,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
+	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end, FALSE)) {
 		return DKIM_RECORD_ERROR;
 	}
 	/* Now canonize headers */
@@ -1834,14 +1853,62 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			ctx->dkim_header, ctx->domain);
 
 	dlen = EVP_MD_CTX_size (ctx->common.body_hash);
-	EVP_DigestFinal_ex (ctx->common.body_hash, raw_digest, NULL);
+	/* Copy md_ctx to deal with broken CRLF at the end */
+	cpy_ctx = EVP_MD_CTX_create ();
+	EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+	EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
 
 	/* Check bh field */
 	if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-		msg_debug_dkim ("bh value mismatch: %*xs versus %*xs", dlen, ctx->bh,
+		msg_debug_dkim ("bh value mismatch: %*xs versus %*xs, try add CRLF",
+				dlen, ctx->bh,
 				dlen, raw_digest);
-		return DKIM_REJECT;
+		/* Try add CRLF */
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+		EVP_MD_CTX_reset (cpy_ctx);
+#endif
+		EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+		EVP_DigestUpdate (cpy_ctx, "\r\n", 2);
+		EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
+
+		if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
+			msg_debug_dkim ("bh value mismatch: %*xs versus %*xs, try add LF",
+					dlen, ctx->bh,
+					dlen, raw_digest);
+
+			/* Try add LF */
+	#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+			EVP_MD_CTX_cleanup (cpy_ctx);
+	#else
+			EVP_MD_CTX_reset (cpy_ctx);
+	#endif
+			EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+			EVP_DigestUpdate (cpy_ctx, "\n", 2);
+			EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
+
+			if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
+				msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+						dlen, ctx->bh,
+						dlen, raw_digest);
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+				EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+				EVP_MD_CTX_reset (cpy_ctx);
+#endif
+				EVP_MD_CTX_destroy (cpy_ctx);
+				return DKIM_REJECT;
+			}
+		}
 	}
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+	EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+	EVP_MD_CTX_reset (cpy_ctx);
+#endif
+	EVP_MD_CTX_destroy (cpy_ctx);
 
 	dlen = EVP_MD_CTX_size (ctx->common.headers_hash);
 	EVP_DigestFinal_ex (ctx->common.headers_hash, raw_digest, NULL);
@@ -2080,7 +2147,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	}
 
 	/* Start canonization of body part */
-	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end)) {
+	if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end, TRUE)) {
 		return NULL;
 	}
 
