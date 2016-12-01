@@ -304,10 +304,8 @@ local function create_train_fann(n, id)
       rspamd_logger.infox(rspamd_config, 'recreate ANN %s, version %s', id,
         fanns[id].version)
       fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
-      fanns[id].fann = nil
     else
       fanns[id].fann_train = fanns[id].fann
-      fanns[id].fann = nil
     end
   else
     fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
