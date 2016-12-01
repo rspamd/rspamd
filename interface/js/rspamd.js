@@ -1224,6 +1224,10 @@
 
             getChart();
             initGraph();
+            if ($("#throughput_nav").attr("aria-expanded") === "true") {
+                getGraphData(selected.selData);
+            }
+
             $('#progress').hide();
             $(disconnect).show();
         }
