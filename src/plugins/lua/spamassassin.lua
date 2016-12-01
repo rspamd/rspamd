@@ -1495,7 +1495,7 @@ local function post_process()
         local expr_atoms = r['expression']:atoms()
         for i,a in ipairs(expr_atoms) do
           if type(external_deps[a]) == 'table' then
-            for _,dep in ipairs(external_deps[a]) do
+            for dep in pairs(external_deps[a]) do
               if not external_deps[k] then
                 external_deps[k] = {}
               end
@@ -1503,11 +1503,11 @@ local function post_process()
                 rspamd_config:register_dependency(k, dep)
                 external_deps[k][dep] = true
                 rspamd_logger.debugx(rspamd_config,
-                  'atom %1 is a direct foreign dependency, ' ..
+                  'atom %1 is an indirect foreign dependency, ' ..
                   'register dependency for %2 on %3',
                   a, k, dep)
+                  nchanges = nchanges + 1
               end
-              nchanges = nchanges + 1
             end
           else
             local rspamd_symbol, replaced_symbol = replace_symbol(a)
