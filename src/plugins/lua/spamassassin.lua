@@ -1541,9 +1541,9 @@ local function post_process()
           else
             local rspamd_symbol, replaced_symbol = replace_symbol(a)
             if replaced_symbol then
-              external_deps[a] = rspamd_symbol
+              external_deps[a] = {rspamd_symbol}
             else
-              external_deps[a] = 1
+              external_deps[a] = {}
             end
           end
         end
