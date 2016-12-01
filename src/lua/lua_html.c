@@ -638,7 +638,7 @@ lua_html_tag_get_extra (lua_State *L)
 
 	if (tag) {
 		if (tag->extra) {
-			if (tag->id == Tag_A || tag->id == Tag_IFRAME) {
+			if (tag->id == Tag_A || tag->id == Tag_IFRAME || tag->id == Tag_LINK) {
 				/* For A that's URL */
 				purl = lua_newuserdata (L, sizeof (gpointer));
 				*purl = tag->extra;

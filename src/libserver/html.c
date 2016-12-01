@@ -2115,6 +2115,9 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						url = NULL;
 					}
 				}
+				else if (cur_tag->id == Tag_LINK) {
+					url = rspamd_html_process_url_tag (pool, cur_tag);
+				}
 
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc);
