@@ -1113,27 +1113,16 @@ local function process_atom(atom, task)
     end
     return res
   else
-    local ext_dep = external_deps[atom]
-    if ext_dep then
-      local res = 0
-
-      if type(ext_dep) == 'number' then
-        if task:has_symbol(atom) then
-          res = 1
-        end
-      elseif type(ext_dep) == 'string' then
-        -- Apply replacement
-        if task:has_symbol(ext_dep) then
-          res = 1
-        end
-      end
-
-      rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
-
-      return res
-    else
-      rspamd_logger.debugx(task, 'Cannot find atom ' .. atom)
+    -- This is likely external atom
+    local real_sym = atom
+    if symbols_replacements[atom] then
+      real_sym = symbols_replacements[atom]
     end
+    if task:has_symbol(real_sym) then
+      rspamd_logger.debugx(task, 'external atom: %1, result: 1', real_sym)
+      return 1
+    end
+    rspamd_logger.debugx(task, 'external atom: %1, result: 0', real_sym)
   end
   return 0
 end

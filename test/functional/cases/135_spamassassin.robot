@@ -26,7 +26,7 @@ Freemail Subject
   Should Contain  ${FREEMAIL_RESULT.stdout}  FREEMAIL_SUBJECT
 
 Metas
-  Should Contain  ${FREEMAIL_RESULT.stdout}  TEST_META3
+  Should Contain  ${FREEMAIL_RESULT.stdout}  TEST_META4
 
 WLBL From Whitelist
   ${BAD_MESSAGE_RESULT} =  Scan Message With Rspamc  ${TESTDIR}/messages/bad_message.eml
