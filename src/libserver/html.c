@@ -1223,8 +1223,11 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	gchar *decoded;
 	gint rc;
 	gsize decoded_len;
-	const gchar *p;
-	gchar *t, *h;
+	const gchar *p, *s;
+	gchar *d;
+	guint i, dlen;
+	gboolean has_bad_chars = FALSE;
+	static const gchar hexdigests[16] = "0123456789abcdef";
 
 	p = start;
 
@@ -1253,36 +1256,55 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	/* Also we need to perform url decode */
-	decoded = rspamd_mempool_alloc (pool, len + 1);
-	rspamd_strlcpy (decoded, start, len + 1);
-	decoded_len = rspamd_decode_url (decoded, start, len);
+	s = start;
+	dlen = 0;
 
-	/* We also need to remove all internal newlines */
-	t = decoded;
-	h = t;
-
-	while (*h) {
-		if (*h == '\r' || *h == '\n') {
-			h ++;
-			decoded_len --;
+	for (i = 0; i < len; i ++) {
+		if (G_UNLIKELY (!g_ascii_isgraph (s[i]))) {
+			dlen += 3;
 		}
 		else {
-			*t++ = *h++;
+			dlen ++;
 		}
 	}
-	*t = *h;
 
-	if (comp) {
-		comp->start = decoded;
-		comp->len = decoded_len;
+	decoded = rspamd_mempool_alloc (pool, dlen + 1);
+	d = decoded;
+
+	/* We also need to remove all internal newlines and encode unsafe characters */
+	for (i = 0; i < len; i ++) {
+		if (G_UNLIKELY (s[i] == '\r' || s[i] == '\n')) {
+			continue;
+		}
+		else if (G_UNLIKELY (!g_ascii_isgraph (s[i]))) {
+			/* URL encode */
+			*d++ = '%';
+			*d++ = hexdigests[(s[i] >> 4) & 0xf];
+			*d++ = hexdigests[s[i] & 0xf];
+			has_bad_chars = TRUE;
+		}
+		else {
+			*d++ = s[i];
+		}
 	}
 
+	*d = '\0';
+
 	url = rspamd_mempool_alloc (pool, sizeof (*url));
-	rc = rspamd_url_parse (url, decoded, decoded_len, pool);
+	rc = rspamd_url_parse (url, decoded, d - decoded, pool);
 
 	if (rc == URI_ERRNO_OK) {
+		if (has_bad_chars) {
+			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
 
+		decoded = url->string;
+		decoded_len = url->urllen;
+
+		if (comp) {
+			comp->start = decoded;
+			comp->len = decoded_len;
+		}
 		/* Spaces in href usually mean an attempt to obfuscate URL */
 		/* See https://github.com/vstakhov/rspamd/issues/593 */
 #if 0
