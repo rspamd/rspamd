@@ -789,7 +789,6 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					if (p - c == 0) {
 						goto out;
 					}
-					SET_U (u, UF_USERINFO);
 					st = parse_password_start;
 				}
 				else if (t == '@') {
@@ -808,6 +807,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			case parse_password_start:
 				if (t == '@') {
 					/* Empty password */
+					SET_U (u, UF_USERINFO);
 					st = parse_at;
 				}
 				else {
@@ -819,6 +819,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			case parse_password:
 				if (t == '@') {
 					/* XXX: password is not stored */
+					SET_U (u, UF_USERINFO);
 					st = parse_at;
 				}
 				else if (!g_ascii_isgraph (t)) {
@@ -1353,6 +1354,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		uri->protocollen -= shift;
 		memmove (uri->string + uri->protocollen, uri->string + old_shift,
 				uri->urllen - uri->protocollen);
+		uri->urllen -= shift;
 		break;
 	case UF_HOST:
 		if (nlen >= uri->hostlen) {
@@ -1366,6 +1368,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		uri->hostlen -= shift;
 		memmove (uri->host + uri->hostlen, uri->host + old_shift,
 				uri->datalen + uri->querylen + uri->fragmentlen);
+		uri->urllen -= shift;
 		break;
 	case UF_PATH:
 		if (nlen >= uri->datalen) {
@@ -1379,6 +1382,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		uri->datalen -= shift;
 		memmove (uri->data + uri->datalen, uri->data + old_shift,
 				uri->querylen + uri->fragmentlen);
+		uri->urllen -= shift;
 		break;
 	case UF_QUERY:
 		if (nlen >= uri->querylen) {
@@ -1392,6 +1396,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		uri->querylen -= shift;
 		memmove (uri->query + uri->querylen, uri->query + old_shift,
 				uri->fragmentlen);
+		uri->urllen -= shift;
 		break;
 	case UF_FRAGMENT:
 		if (nlen >= uri->fragmentlen) {
@@ -1402,6 +1407,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		}
 
 		uri->fragmentlen -= shift;
+		uri->urllen -= shift;
 		break;
 	default:
 		break;
