@@ -842,6 +842,9 @@ else
   if opts['prefix'] then
     fann_prefix = opts['prefix']
   end
+  if opts['lock_expire'] then
+    lock_expire = tonumber(opts['lock_expire'])
+  end
   rspamd_config:set_metric_symbol({
     name = fann_symbol_spam,
     score = 3.0,
