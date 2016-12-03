@@ -490,7 +490,7 @@ local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
     then
       task:insert_result('FROM_EQ_ENVFROM', 1.0)
     elseif (envfrom and envfrom[1] and envfrom[1].addr) then
-      task:insert_result('FROM_NEQ_ENVFROM', 1.0, from[1].addr, envfrom[1].addr)
+      task:insert_result('FROM_NEQ_ENVFROM', 1.0, from and from[1].addr or '', envfrom[1].addr)
     end
 
     local to = task:get_recipients(2)
