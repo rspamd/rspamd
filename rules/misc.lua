@@ -640,10 +640,12 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
         -- See if From and Reply-To addresses match
         if (from[1].addr:lower() == rt[1].addr:lower()) then
           task:insert_result('REPLYTO_ADDR_EQ_FROM', 1.0)
-        elseif (from[1].domain:lower() == rt[1].addr:lower()) then
-          task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
-        elseif (from[1].domain:lower() ~= rt[1].domain:lower()) then
-          task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
+        elseif from[1].domain and rt[1].domain then
+          if (from[1].domain:lower() == rt[1].domain:lower()) then
+            task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
+          else
+            task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
+          end
         end
         -- See if the Display Names match
         if (from[1].name and rt[1].name and from[1].name:lower() == rt[1].name:lower()) then
