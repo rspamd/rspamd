@@ -102,7 +102,7 @@ local function check_settings(task)
           return true
         end
       end
-      if rule['domain'] then
+      if rule['domain'] and elt['domain'] then
         if rule['domain']:lower() == elt['domain']:lower() then
           return true
         end
