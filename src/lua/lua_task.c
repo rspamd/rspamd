@@ -345,14 +345,14 @@ LUA_FUNCTION_DEF (task, has_from);
 
 /***
  * @method task:get_from([type])
- * Return SMTP or MIME sender for a task. This function returns list of internet addresses each one is a table with the following structure:
+ * Return SMTP or MIME sender for a task. This function returns an internet address which one is a table with the following structure:
  *
  * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
  * - `domain` - domain part (if present), e.g. `foo.com`
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only
- * @return {list of addresses} list of recipients or `nil`
+ * @return {address} sender or `nil`
  */
 LUA_FUNCTION_DEF (task, get_from);
 /***
