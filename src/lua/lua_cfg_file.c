@@ -256,13 +256,6 @@ rspamd_lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 	lua_setglobal (L, "osrelease");
 #endif
 
-#ifdef HAVE_OPENSSL
-	lua_pushboolean (L, TRUE);
-#else
-	lua_pushboolean (L, FALSE);
-#endif
-	lua_setglobal (L, "rspamd_supports_rsa");
-
 	/* Rspamd paths */
 	lua_newtable (L);
 	rspamd_lua_table_set (L, "confdir",	  RSPAMD_CONFDIR);
