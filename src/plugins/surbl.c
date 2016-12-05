@@ -376,6 +376,15 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"surbl.rule",
+			"Whether the defined rule should be used",
+			"enabled",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"surbl.rule",
 			"Do not try to check URLs with IP address instead of hostname",
 			"no_ip",
 			UCL_BOOLEAN,
@@ -474,6 +483,12 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 	struct surbl_bit_item* new_bit;
 
 	LL_FOREACH(value, cur_rule) {
+		cur = ucl_object_lookup (cur_rule, "enabled");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (!ucl_object_toboolean(cur)) {
+				continue;
+			}
+		}
 		cur = ucl_object_lookup (cur_rule, "suffix");
 		if (cur == NULL) {
 			msg_err_config("surbl rule must have explicit symbol "
