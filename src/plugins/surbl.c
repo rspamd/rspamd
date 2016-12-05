@@ -1137,9 +1137,7 @@ process_dns_results (struct rspamd_task *task,
 					task->message_id,
 					url, suffix->suffix,
 					bit->bit);
-			rspamd_task_insert_result (task, bit->symbol, 1,
-				g_list_prepend (NULL,
-				rspamd_mempool_strdup (task->task_pool, url)));
+			rspamd_task_insert_result (task, bit->symbol, 1, url);
 			got_result = TRUE;
 		}
 	}
@@ -1158,9 +1156,7 @@ process_dns_results (struct rspamd_task *task,
 						task->message_id,
 						url, suffix->suffix,
 						bit->bit);
-				rspamd_task_insert_result (task, bit->symbol, 1,
-					g_list_prepend (NULL,
-					rspamd_mempool_strdup (task->task_pool, url)));
+				rspamd_task_insert_result (task, bit->symbol, 1, url);
 			}
 		}
 	}
@@ -1170,9 +1166,7 @@ process_dns_results (struct rspamd_task *task,
 			msg_info_task ("<%s> domain [%s] is in surbl %s",
 					task->message_id,
 					url, suffix->suffix);
-			rspamd_task_insert_result (task, suffix->symbol, 1,
-					g_list_prepend (NULL,
-							rspamd_mempool_strdup (task->task_pool, url)));
+			rspamd_task_insert_result (task, suffix->symbol, 1, url);
 		}
 		else {
 			ina.s_addr = addr;
@@ -1456,7 +1450,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 					rspamd_task_insert_result (param->task,
 							surbl_module_ctx->redirector_symbol,
 							1,
-							g_list_prepend (NULL, found_tld));
+							found_tld);
 				}
 
 				register_redirector_call (url,

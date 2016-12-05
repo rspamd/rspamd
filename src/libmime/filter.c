@@ -80,7 +80,6 @@ insert_metric_result (struct rspamd_task *task,
 {
 	struct metric_result *metric_res;
 	struct symbol *s = NULL;
-	char *opt_cpy;
 	gdouble w, *gr_score = NULL;
 	struct rspamd_symbol_def *sdef;
 	struct rspamd_symbols_group *gr = NULL;

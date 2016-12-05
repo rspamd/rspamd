@@ -808,6 +808,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	gint level = lua_gettop (cd->L), nresults, err_idx;
 	lua_State *L = cd->L;
 	GString *tb;
+	struct symbol *s;
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
@@ -837,7 +838,6 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 		if (nresults >= 1) {
 			/* Function returned boolean, so maybe we need to insert result? */
 			gint res = 0;
-			GList *opts = NULL;
 			gint i;
 			gdouble flag = 1.0;
 
@@ -860,17 +860,18 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 					flag = res;
 				}
 
-				for (i = lua_gettop (L); i >= level + first_opt; i--) {
-					if (lua_type (L, i) == LUA_TSTRING) {
-						const char *opt = lua_tostring (L, i);
+				s = rspamd_task_insert_result (task, cd->symbol, flag, NULL);
 
-						opts = g_list_prepend (opts,
-								rspamd_mempool_strdup (task->task_pool,
-										opt));
+				if (s) {
+					for (i = lua_gettop (L); i >= level + first_opt; i--) {
+						if (lua_type (L, i) == LUA_TSTRING) {
+							const char *opt = lua_tostring (L, i);
+
+							rspamd_task_add_result_option (task, s, opt);
+						}
 					}
 				}
 
-				rspamd_task_insert_result (task, cd->symbol, flag, opts);
 			}
 
 			lua_pop (L, nresults);

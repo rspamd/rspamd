@@ -181,13 +181,12 @@ bayes_classify (struct rspamd_classifier * ctx,
 		struct rspamd_task *task)
 {
 	double final_prob, h, s, *pprob;
-	char *sumbuf;
+	gchar sumbuf[32];
 	struct rspamd_statfile *st = NULL;
 	struct bayes_task_closure cl;
 	rspamd_token_t *tok;
 	guint i;
 	gint id;
-	GList *cur;
 
 	g_assert (ctx != NULL);
 	g_assert (tokens != NULL);
@@ -262,9 +261,6 @@ bayes_classify (struct rspamd_classifier * ctx,
 	rspamd_mempool_set_variable (task->task_pool, "bayes_prob", pprob, NULL);
 
 	if (cl.processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
-
-		sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
-
 		/* Now we can have exactly one HAM and exactly one SPAM statfiles per classifier */
 		for (i = 0; i < ctx->statfiles_ids->len; i++) {
 			id = g_array_index (ctx->statfiles_ids, gint, i);
@@ -287,14 +283,14 @@ bayes_classify (struct rspamd_classifier * ctx,
 		 * Bayes p is from 0.5 to 1.0, but confidence is from 0 to 1, so
 		 * we need to rescale it to display correctly
 		 */
-		rspamd_snprintf (sumbuf, 32, "%.2f%%", (final_prob - 0.5) * 200.);
+		rspamd_snprintf (sumbuf, sizeof (sumbuf), "%.2f%%",
+				(final_prob - 0.5) * 200.);
 		final_prob = rspamd_normalize_probability (final_prob, 0.5);
 		g_assert (st != NULL);
-		cur = g_list_prepend (NULL, sumbuf);
 		rspamd_task_insert_result (task,
 				st->stcf->symbol,
 				final_prob,
-				cur);
+				sumbuf);
 	}
 
 	return TRUE;

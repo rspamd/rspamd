@@ -1018,7 +1018,7 @@ lua_task_insert_result (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol_name, *param;
 	double flag;
-	GList *params = NULL;
+	struct symbol *s;
 	gint i, top;
 
 	if (task != NULL) {
@@ -1026,35 +1026,30 @@ lua_task_insert_result (lua_State * L)
 			rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 2));
 		flag = luaL_checknumber (L, 3);
 		top = lua_gettop (L);
-		/* Get additional options */
-		for (i = 4; i <= top; i++) {
-			if (lua_type (L, i) == LUA_TSTRING) {
-				param = luaL_checkstring (L, i);
-				params =
-						g_list_prepend (params,
-								rspamd_mempool_strdup (task->task_pool, param));
-			}
-			else if (lua_type (L, i) == LUA_TTABLE) {
-				lua_pushvalue (L, i);
-				lua_pushnil (L);
+		s = rspamd_task_insert_result (task, symbol_name, flag, NULL);
 
-				while (lua_next (L, -2)) {
-					param = lua_tostring (L, -1);
-					params = g_list_prepend (params,
-									rspamd_mempool_strdup (task->task_pool,
-											param));
+		/* Get additional options */
+		if (s) {
+			for (i = 4; i <= top; i++) {
+				if (lua_type (L, i) == LUA_TSTRING) {
+					param = luaL_checkstring (L, i);
+					rspamd_task_add_result_option (task, s, param);
+				}
+				else if (lua_type (L, i) == LUA_TTABLE) {
+					lua_pushvalue (L, i);
+					lua_pushnil (L);
+
+					while (lua_next (L, -2)) {
+						param = lua_tostring (L, -1);
+						rspamd_task_add_result_option (task, s, param);
+						lua_pop (L, 1);
+					}
+
 					lua_pop (L, 1);
 				}
-
-				lua_pop (L, 1);
 			}
 		}
 
-		if (params) {
-			params = g_list_reverse (params);
-		}
-
-		rspamd_task_insert_result (task, symbol_name, flag, params);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

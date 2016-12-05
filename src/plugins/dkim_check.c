@@ -616,8 +616,8 @@ dkim_module_check (struct dkim_check_result *res)
 	if (all_done) {
 		DL_FOREACH (first, cur) {
 			const gchar *symbol = NULL;
-			GList *messages = NULL;
 			int symbol_weight = 1;
+
 			if (cur->ctx == NULL) {
 				continue;
 			}
@@ -635,14 +635,12 @@ dkim_module_check (struct dkim_check_result *res)
 			else if (cur->res == DKIM_TRYAGAIN) {
 				symbol = dkim_module_ctx->symbol_tempfail;
 			}
+
 			if (symbol != NULL) {
-				messages = g_list_prepend (messages,
-						rspamd_mempool_strdup (cur->task->task_pool,
-						rspamd_dkim_get_domain (cur->ctx)));
 				rspamd_task_insert_result (cur->task,
 						symbol,
 						symbol_weight,
-						messages);
+						rspamd_dkim_get_domain (cur->ctx));
 			}
 		}
 		rspamd_session_watcher_pop (res->task->s, res->w);

@@ -347,7 +347,6 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 	gchar *spf_result;
 	guint af, mask, bmask, addrlen;
 	const gchar *spf_message, *spf_symbol;
-	GList *opts = NULL;
 
 	if (task->from_addr == NULL) {
 		return FALSE;
@@ -406,7 +405,6 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 	if (res) {
 		spf_result = rspamd_mempool_alloc (task->task_pool,
 				strlen (addr->spf_string) + 2);
-		opts = g_list_prepend (opts, spf_result);
 
 		switch (addr->mech) {
 		case SPF_FAIL:
@@ -464,7 +462,7 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 		rspamd_task_insert_result (task,
 				spf_symbol,
 				1,
-				opts);
+				spf_result);
 		ucl_object_insert_key (task->messages,
 				ucl_object_fromstring (spf_message), "spf", 0,
 				false);
@@ -575,15 +573,12 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			w = rspamd_session_get_watcher (task->s);
 
 			if (!rspamd_spf_resolve (task, spf_plugin_callback, w)) {
-				GList *opts = NULL;
-
-				opts = g_list_prepend (opts, "(SPF): spf DNS fail");
 				msg_info_task ("cannot make spf request for [%s]",
 						task->message_id);
 				rspamd_task_insert_result (task,
 						spf_module_ctx->symbol_dnsfail,
 						1,
-						opts);
+						"(SPF): spf DNS fail");
 			}
 			else {
 				rspamd_session_watcher_push (task->s);
