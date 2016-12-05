@@ -1535,10 +1535,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		rspamd_task_insert_result_single (session->task,
 				symbol,
 				nval,
-				g_list_prepend (NULL,
-						rspamd_mempool_strdup (
-								session->task->task_pool,
-								buf)));
+				buf);
 	}
 }
 
