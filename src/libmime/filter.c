@@ -70,7 +70,7 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	return metric_res;
 }
 
-static void
+static struct symbol *
 insert_metric_result (struct rspamd_task *task,
 	struct metric *metric,
 	const gchar *symbol,
@@ -79,7 +79,7 @@ insert_metric_result (struct rspamd_task *task,
 	gboolean single)
 {
 	struct metric_result *metric_res;
-	struct symbol *s;
+	struct symbol *s = NULL;
 	char *opt_cpy;
 	gdouble w, *gr_score = NULL;
 	struct rspamd_symbol_def *sdef;
@@ -125,7 +125,7 @@ insert_metric_result (struct rspamd_task *task,
 			msg_info_task ("maximum group score %.2f for group %s has been reached,"
 					" ignoring symbol %s with weight %.2f", gr->max_score,
 					gr->name, symbol, w);
-			return;
+			return g_hash_table_lookup (metric_res->symbols, symbol);
 		}
 		else if (*gr_score + w > gr->max_score) {
 			w = gr->max_score - *gr_score;
@@ -143,25 +143,6 @@ insert_metric_result (struct rspamd_task *task,
 			 */
 			single = TRUE;
 		}
-		if (opt) {
-			if (s->options && !(sdef &&
-					(sdef->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
-				/* Append new options */
-				if (!g_hash_table_lookup (s->options, opt)) {
-					opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
-					g_hash_table_insert (s->options, opt_cpy, opt_cpy);
-				}
-			}
-			else {
-				s->options = g_hash_table_new (rspamd_strcase_hash,
-						rspamd_strcase_equal);
-				rspamd_mempool_add_destructor (task->task_pool,
-						(rspamd_mempool_destruct_t)g_hash_table_unref,
-						s->options);
-				opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
-				g_hash_table_insert (s->options, opt_cpy, opt_cpy);
-			}
-		}
 		if (!single) {
 			/* Handle grow factor */
 			if (metric_res->grow_factor && w > 0) {
@@ -178,9 +159,10 @@ insert_metric_result (struct rspamd_task *task,
 				s->score = w;
 			}
 		}
+		rspamd_task_add_result_option (task, s, opt);
 	}
 	else {
-		s = rspamd_mempool_alloc (task->task_pool, sizeof (struct symbol));
+		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct symbol));
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && w > 0) {
@@ -196,19 +178,7 @@ insert_metric_result (struct rspamd_task *task,
 		s->def = sdef;
 		metric_res->score += w;
 
-		if (opt) {
-			s->options = g_hash_table_new (rspamd_strcase_hash,
-					rspamd_strcase_equal);
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t)g_hash_table_unref,
-					s->options);
-			opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
-			g_hash_table_insert (s->options, opt_cpy, opt_cpy);
-		}
-		else {
-			s->options = NULL;
-		}
-
+		rspamd_task_add_result_option (task, s, opt);
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
 
@@ -217,9 +187,11 @@ insert_metric_result (struct rspamd_task *task,
 		s->score,
 		metric->name,
 		w);
+
+	return s;
 }
 
-static void
+static struct symbol *
 insert_result_common (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
@@ -228,6 +200,7 @@ insert_result_common (struct rspamd_task *task,
 {
 	struct metric *metric;
 	GList *cur, *metric_list;
+	struct symbol *s = NULL;
 
 	metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
 	if (metric_list) {
@@ -235,13 +208,13 @@ insert_result_common (struct rspamd_task *task,
 
 		while (cur) {
 			metric = cur->data;
-			insert_metric_result (task, metric, symbol, flag, opt, single);
+			s = insert_metric_result (task, metric, symbol, flag, opt, single);
 			cur = g_list_next (cur);
 		}
 	}
 	else {
 		/* Insert symbol to default metric */
-		insert_metric_result (task,
+		s = insert_metric_result (task,
 			task->cfg->default_metric,
 			symbol,
 			flag,
@@ -253,26 +226,56 @@ insert_result_common (struct rspamd_task *task,
 	if (task->cfg->cache) {
 		rspamd_symbols_cache_inc_frequency (task->cfg->cache, symbol);
 	}
+
+	return s;
 }
 
 /* Insert result that may be increased on next insertions */
-void
+struct symbol *
 rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opt)
 {
-	insert_result_common (task, symbol, flag, opt, task->cfg->one_shot_mode);
+	return insert_result_common (task, symbol, flag, opt,
+			task->cfg->one_shot_mode);
 }
 
 /* Insert result as a single option */
-void
+struct symbol *
 rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opt)
 {
-	insert_result_common (task, symbol, flag, opt, TRUE);
+	return insert_result_common (task, symbol, flag, opt, TRUE);
+}
+
+void
+rspamd_task_add_result_option (struct rspamd_task *task,
+		struct symbol *s, const gchar *opt)
+{
+	char *opt_cpy;
+
+	if (s && opt) {
+		if (s->options && !(s->def &&
+				(s->def->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
+			/* Append new options */
+			if (!g_hash_table_lookup (s->options, opt)) {
+				opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
+				g_hash_table_insert (s->options, opt_cpy, opt_cpy);
+			}
+		}
+		else {
+			s->options = g_hash_table_new (rspamd_strcase_hash,
+					rspamd_strcase_equal);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)g_hash_table_unref,
+					s->options);
+			opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
+			g_hash_table_insert (s->options, opt_cpy, opt_cpy);
+		}
+	}
 }
 
 gboolean

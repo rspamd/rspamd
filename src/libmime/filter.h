@@ -54,7 +54,7 @@ struct metric_result * rspamd_create_metric_result (struct rspamd_task *task,
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void rspamd_task_insert_result (struct rspamd_task *task,
+struct symbol* rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opts);
@@ -67,10 +67,20 @@ void rspamd_task_insert_result (struct rspamd_task *task,
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void rspamd_task_insert_result_single (struct rspamd_task *task,
+struct symbol* rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opts);
+
+
+/**
+ * Adds new option to symbol
+ * @param task
+ * @param s
+ * @param opt
+ */
+void rspamd_task_add_result_option (struct rspamd_task *task,
+		struct symbol *s, const gchar *opt);
 
 /**
  * Default consolidation function for metric, it get all symbols and multiply symbol
