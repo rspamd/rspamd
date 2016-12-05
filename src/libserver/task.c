@@ -1047,19 +1047,23 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 					gpointer k, v;
 
 					rspamd_printf_fstring (&symbuf, "{");
-					j = 0;
-					g_hash_table_iter_init (&it, sym->options);
 
-					while (g_hash_table_iter_next (&it, &k, &v)) {
-						const char *opt = v;
+					if (sym->options) {
+						j = 0;
+						g_hash_table_iter_init (&it, sym->options);
 
-						rspamd_printf_fstring (&symbuf, "%s;", opt);
+						while (g_hash_table_iter_next (&it, &k, &v)) {
+							const char *opt = v;
 
-						if (j >= max_log_elts) {
-							rspamd_printf_fstring (&symbuf, "...;");
-							break;
+							rspamd_printf_fstring (&symbuf, "%s;", opt);
+
+							if (j >= max_log_elts) {
+								rspamd_printf_fstring (&symbuf, "...;");
+								break;
+							}
+
+							j ++;
 						}
-						j ++;
 					}
 
 					rspamd_printf_fstring (&symbuf, "}");
