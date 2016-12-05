@@ -156,3 +156,27 @@ As `slaves` do not connect to `masters` directly, `stunnel's` sockets are specif
 ## Checking
 
 Check slave instances logs. If resynchronization with the masters was successful, you are done.
+
+## Rspamd configuration
+
+On both `master` and `slave` sides configure Rspamd to use distinct Redis instances respectively:
+
+`local.d/redis.conf`:
+
+```ucl
+servers = "localhost";
+```
+
+`local.d/classifier-bayes.conf`:
+
+```ucl
+backend = "redis";
+servers = "localhost:6378";
+```
+
+`override.d/worker-fuzzy.inc`:
+
+```ucl
+backend = "redis";
+servers = "localhost:6377";
+```
