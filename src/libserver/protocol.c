@@ -766,7 +766,7 @@ rspamd_emails_tree_ucl (GHashTable *input, struct rspamd_task *task)
 
 /* Write new subject */
 static const gchar *
-make_rewritten_subject (struct metric *metric, struct rspamd_task *task)
+make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 {
 	static gchar subj_buf[1024];
 	gchar *p = subj_buf, *end, *res;
@@ -825,14 +825,14 @@ rspamd_str_hash_ucl (GHashTable *ht)
 }
 
 static ucl_object_t *
-rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
-	struct symbol *sym)
+rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
+	struct rspamd_symbol_result *sym)
 {
 	ucl_object_t *obj = NULL;
 	const gchar *description = NULL;
 
-	if (sym->def != NULL) {
-		description = sym->def->description;
+	if (sym->sym != NULL) {
+		description = sym->sym->description;
 	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
@@ -854,11 +854,11 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 
 static ucl_object_t *
 rspamd_metric_result_ucl (struct rspamd_task *task,
-	struct metric_result *mres)
+	struct rspamd_metric_result *mres)
 {
 	GHashTableIter hiter;
-	struct symbol *sym;
-	struct metric *m;
+	struct rspamd_symbol_result *sym;
+	struct rspamd_metric *m;
 	gboolean is_spam;
 	enum rspamd_metric_action action = METRIC_ACTION_NOACTION;
 	ucl_object_t *obj = NULL, *sobj;;
@@ -903,7 +903,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	/* Now handle symbols */
 	g_hash_table_iter_init (&hiter, mres->symbols);
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
-		sym = (struct symbol *)v;
+		sym = (struct rspamd_symbol_result *)v;
 		sobj = rspamd_metric_symbol_ucl (task, m, sym);
 		ucl_object_insert_key (obj, sobj, h, 0, false);
 	}
@@ -1010,7 +1010,7 @@ rspamd_ucl_tospamc_output (const ucl_object_t *top,
 ucl_object_t *
 rspamd_protocol_write_ucl (struct rspamd_task *task)
 {
-	struct metric_result *metric_res;
+	struct rspamd_metric_result *metric_res;
 	ucl_object_t *top = NULL, *obj;
 	GHashTableIter hiter;
 	GString *dkim_sig;
@@ -1021,7 +1021,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 	top = ucl_object_typed_new (UCL_OBJECT);
 	/* Convert results to an ucl object */
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
-		metric_res = (struct metric_result *)v;
+		metric_res = (struct rspamd_metric_result *)v;
 		obj = rspamd_metric_result_ucl (task, metric_res);
 		ucl_object_insert_key (top, obj, h, 0, false);
 	}
@@ -1069,7 +1069,7 @@ void
 rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	struct rspamd_task *task)
 {
-	struct metric_result *metric_res;
+	struct rspamd_metric_result *metric_res;
 	GHashTableIter hiter;
 	const struct rspamd_re_cache_stat *restat;
 	gpointer h, v;
@@ -1224,10 +1224,10 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 	struct rspamd_worker_log_pipe *lp;
 	struct rspamd_protocol_log_message_sum *ls;
 	lua_State *L = task->cfg->lua_state;
-	struct metric_result *mres;
+	struct rspamd_metric_result *mres;
 	GHashTableIter it;
 	gpointer k, v;
-	struct symbol *sym;
+	struct rspamd_symbol_result *sym;
 	gint id, i;
 	guint32 *sid, n = 0, nextra = 0;
 	gsize sz;

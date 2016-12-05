@@ -32,9 +32,9 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 	GList *metric_list;
 	gchar *symbol;
 	const gchar *desc = NULL;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	gdouble *score;
-	struct rspamd_symbol_def *s;
+	struct rspamd_symbol *s;
 
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {

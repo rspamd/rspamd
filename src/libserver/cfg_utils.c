@@ -647,7 +647,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 #endif
-	struct metric *def_metric;
+	struct rspamd_metric *def_metric;
 	gboolean ret = TRUE;
 
 #ifdef HAVE_CLOCK_GETTIME
@@ -894,14 +894,14 @@ rspamd_config_new_statfile (struct rspamd_config *cfg,
 	return c;
 }
 
-struct metric *
-rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
+struct rspamd_metric *
+rspamd_config_new_metric (struct rspamd_config *cfg, struct rspamd_metric *c,
 		const gchar *name)
 {
 	int i;
 
 	if (c == NULL) {
-		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_metric));
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->groups = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -933,7 +933,7 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
 }
 
 struct rspamd_symbols_group *
-rspamd_config_new_group (struct rspamd_config *cfg, struct metric *metric,
+rspamd_config_new_group (struct rspamd_config *cfg, struct rspamd_metric *metric,
 		const gchar *name)
 {
 	struct rspamd_symbols_group *gr;
@@ -1408,17 +1408,17 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 static void
 rspamd_config_new_metric_symbol (struct rspamd_config *cfg,
-		struct metric *metric, const gchar *symbol,
+		struct rspamd_metric *metric, const gchar *symbol,
 		gdouble score, const gchar *description, const gchar *group,
 		guint flags, guint priority)
 {
 	struct rspamd_symbols_group *sym_group;
-	struct rspamd_symbol_def *sym_def;
+	struct rspamd_symbol *sym_def;
 	GList *metric_list;
 	gdouble *score_ptr;
 
 	sym_def =
-		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_symbol_def));
+		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_symbol));
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	*score_ptr = score;
@@ -1474,8 +1474,8 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		gdouble score, const gchar *description, const gchar *group,
 		guint flags, guint priority)
 {
-	struct rspamd_symbol_def *sym_def;
-	struct metric *metric;
+	struct rspamd_symbol *sym_def;
+	struct rspamd_metric *metric;
 
 	g_assert (cfg != NULL);
 	g_assert (symbol != NULL);
@@ -1544,7 +1544,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		const gchar *module_name)
 {
 	gboolean is_c = FALSE;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	const ucl_object_t *conf, *enabled;
 	GList *cur;
 	struct rspamd_symbols_group *gr;
@@ -1630,7 +1630,7 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 		guint priority)
 {
 	struct metric_action *act;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	gint act_num;
 
 	g_assert (cfg != NULL);

@@ -1041,7 +1041,7 @@ process_text_part (struct rspamd_task *task,
 	mime_part->specific_data = text_part;
 
 	if (rspamd_check_gtube (task, text_part)) {
-		struct metric_result *mres;
+		struct rspamd_metric_result *mres;
 
 		mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
 

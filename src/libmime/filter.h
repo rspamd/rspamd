@@ -17,18 +17,18 @@ struct rspamd_classifier_config;
 /**
  * Rspamd symbol
  */
-struct symbol {
+struct rspamd_symbol_result {
 	double score;                                   /**< symbol's score							*/
 	GHashTable *options;                            /**< list of symbol's options				*/
 	const gchar *name;
-	struct rspamd_symbol_def *def;					/**< symbol configuration					*/
+	struct rspamd_symbol *sym;						/**< symbol configuration					*/
 };
 
 /**
  * Result of metric processing
  */
-struct metric_result {
-	struct metric *metric;                          /**< pointer to metric structure			*/
+struct rspamd_metric_result {
+	struct rspamd_metric *metric;                   /**< pointer to metric structure			*/
 	double score;                                   /**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
 	GHashTable *symbols;                            /**< symbols of metric						*/
@@ -43,7 +43,7 @@ struct metric_result {
  * @param name name of metric
  * @return metric result or NULL if metric `name` has not been found
  */
-struct metric_result * rspamd_create_metric_result (struct rspamd_task *task,
+struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *task,
 		const gchar *name);
 
 /**
@@ -54,7 +54,7 @@ struct metric_result * rspamd_create_metric_result (struct rspamd_task *task,
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-struct symbol* rspamd_task_insert_result (struct rspamd_task *task,
+struct rspamd_symbol_result* rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opts);
@@ -67,7 +67,7 @@ struct symbol* rspamd_task_insert_result (struct rspamd_task *task,
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-struct symbol* rspamd_task_insert_result_single (struct rspamd_task *task,
+struct rspamd_symbol_result* rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opts);
@@ -80,7 +80,7 @@ struct symbol* rspamd_task_insert_result_single (struct rspamd_task *task,
  * @param opt
  */
 void rspamd_task_add_result_option (struct rspamd_task *task,
-		struct symbol *s, const gchar *opt);
+		struct rspamd_symbol_result *s, const gchar *opt);
 
 /**
  * Default consolidation function for metric, it get all symbols and multiply symbol
@@ -109,6 +109,6 @@ const gchar * rspamd_action_to_str_alt (enum rspamd_metric_action action);
  * Get action for specific metric
  */
 enum rspamd_metric_action rspamd_check_action_metric (struct rspamd_task *task,
-	struct metric_result *mres);
+	struct rspamd_metric_result *mres);
 
 #endif

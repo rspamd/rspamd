@@ -37,7 +37,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 	gint test_act;
 	const ucl_object_t *cur_elt, *cur_nm, *it_val;
 	ucl_object_iter_t it = NULL;
-	struct metric *real_metric;
+	struct rspamd_metric *real_metric;
 	const gchar *name;
 	gdouble nscore;
 	static const guint priority = 3;

@@ -718,8 +718,8 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GHashTableIter it, sit;
 	struct rspamd_symbols_group *gr;
-	struct rspamd_symbol_def *sym;
-	struct metric *metric;
+	struct rspamd_symbol *sym;
+	struct rspamd_metric *metric;
 	ucl_object_t *obj, *top, *sym_obj, *group_symbols;
 	gpointer k, v;
 
@@ -799,7 +799,7 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	struct metric_action *act;
 	gint i;
 	ucl_object_t *obj, *top;
@@ -1885,7 +1885,7 @@ rspamd_controller_handle_saveactions (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct ucl_parser *parser;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	ucl_object_t *obj;
 	const ucl_object_t *cur;
 	struct rspamd_controller_worker_ctx *ctx;
@@ -1995,14 +1995,14 @@ rspamd_controller_handle_savesymbols (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct ucl_parser *parser;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	ucl_object_t *obj;
 	const ucl_object_t *cur, *jname, *jvalue;
 	ucl_object_iter_t iter = NULL;
 	struct rspamd_controller_worker_ctx *ctx;
 	const gchar *error;
 	gdouble val;
-	struct rspamd_symbol_def *sym;
+	struct rspamd_symbol *sym;
 	int added = 0;
 
 	ctx = session->ctx;

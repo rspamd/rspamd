@@ -961,8 +961,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 static gint
 rspamd_task_compare_log_sym (gconstpointer a, gconstpointer b)
 {
-	const struct symbol *s1 = *(const struct symbol **)a,
-			*s2 = *(const struct symbol **)b;
+	const struct rspamd_symbol_result *s1 = *(const struct rspamd_symbol_result **)a,
+			*s2 = *(const struct rspamd_symbol_result **)b;
 	gdouble w1, w2;
 
 
@@ -982,12 +982,12 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 {
 	static gchar scorebuf[32];
 	rspamd_ftok_t res = {.begin = NULL, .len = 0};
-	struct metric_result *mres;
+	struct rspamd_metric_result *mres;
 	GHashTableIter it;
 	gboolean first = TRUE;
 	gpointer k, v;
 	rspamd_fstring_t *symbuf;
-	struct symbol *sym;
+	struct rspamd_symbol_result *sym;
 	GPtrArray *sorted_symbols;
 	guint i, j;
 
@@ -1417,7 +1417,7 @@ rspamd_task_write_log (struct rspamd_task *task)
 }
 
 gdouble
-rspamd_task_get_required_score (struct rspamd_task *task, struct metric_result *m)
+rspamd_task_get_required_score (struct rspamd_task *task, struct rspamd_metric_result *m)
 {
 	guint i;
 

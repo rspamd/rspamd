@@ -808,7 +808,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	gint level = lua_gettop (cd->L), nresults, err_idx;
 	lua_State *L = cd->L;
 	GString *tb;
-	struct symbol *s;
+	struct rspamd_symbol_result *s;
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
@@ -1386,7 +1386,7 @@ lua_config_set_metric_symbol (lua_State * L)
 	const gchar *metric_name = DEFAULT_METRIC, *description = NULL,
 			*group = NULL, *name = NULL, *flags_str = NULL;
 	double weight;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
 	gdouble priority = 0.0;
@@ -1470,8 +1470,8 @@ lua_config_get_metric_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym_name = luaL_checkstring (L, 2),
 			*metric_name = DEFAULT_METRIC;
-	struct rspamd_symbol_def *sym_def;
-	struct metric *metric;
+	struct rspamd_symbol *sym_def;
+	struct rspamd_metric *metric;
 
 	if (cfg && sym_name) {
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
@@ -1519,7 +1519,7 @@ lua_config_set_metric_action (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *metric_name = DEFAULT_METRIC, *name = NULL;
 	double weight;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	GError *err = NULL;
 	gdouble priority = 0.0;
 
@@ -1568,7 +1568,7 @@ lua_config_get_metric_action (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *metric_name = DEFAULT_METRIC,
 			*act_name = luaL_checkstring (L, 2);
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	gint act = 0;
 
 	if (cfg && act_name) {

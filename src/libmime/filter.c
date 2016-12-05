@@ -25,11 +25,11 @@
 
 #define COMMON_PART_FACTOR 95
 
-struct metric_result *
+struct rspamd_metric_result *
 rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 {
-	struct metric_result *metric_res;
-	struct metric *metric;
+	struct rspamd_metric_result *metric_res;
+	struct rspamd_metric *metric;
 	guint i;
 
 	metric_res = g_hash_table_lookup (task->results, name);
@@ -45,7 +45,7 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 
 	metric_res =
 			rspamd_mempool_alloc (task->task_pool,
-					sizeof (struct metric_result));
+					sizeof (struct rspamd_metric_result));
 	metric_res->symbols = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -70,18 +70,18 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	return metric_res;
 }
 
-static struct symbol *
+static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
-	struct metric *metric,
+	struct rspamd_metric *metric,
 	const gchar *symbol,
 	double flag,
 	const gchar *opt,
 	gboolean single)
 {
-	struct metric_result *metric_res;
-	struct symbol *s = NULL;
+	struct rspamd_metric_result *metric_res;
+	struct rspamd_symbol_result *s = NULL;
 	gdouble w, *gr_score = NULL;
-	struct rspamd_symbol_def *sdef;
+	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
 
@@ -161,7 +161,7 @@ insert_metric_result (struct rspamd_task *task,
 		rspamd_task_add_result_option (task, s, opt);
 	}
 	else {
-		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct symbol));
+		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_symbol_result));
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && w > 0) {
@@ -174,7 +174,7 @@ insert_metric_result (struct rspamd_task *task,
 
 		s->score = w;
 		s->name = symbol;
-		s->def = sdef;
+		s->sym = sdef;
 		metric_res->score += w;
 
 		rspamd_task_add_result_option (task, s, opt);
@@ -190,16 +190,16 @@ insert_metric_result (struct rspamd_task *task,
 	return s;
 }
 
-static struct symbol *
+static struct rspamd_symbol_result *
 insert_result_common (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	const gchar *opt,
 	gboolean single)
 {
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	GList *cur, *metric_list;
-	struct symbol *s = NULL;
+	struct rspamd_symbol_result *s = NULL;
 
 	metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
 	if (metric_list) {
@@ -230,7 +230,7 @@ insert_result_common (struct rspamd_task *task,
 }
 
 /* Insert result that may be increased on next insertions */
-struct symbol *
+struct rspamd_symbol_result *
 rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
@@ -241,7 +241,7 @@ rspamd_task_insert_result (struct rspamd_task *task,
 }
 
 /* Insert result as a single option */
-struct symbol *
+struct rspamd_symbol_result *
 rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
@@ -252,13 +252,13 @@ rspamd_task_insert_result_single (struct rspamd_task *task,
 
 void
 rspamd_task_add_result_option (struct rspamd_task *task,
-		struct symbol *s, const gchar *opt)
+		struct rspamd_symbol_result *s, const gchar *opt)
 {
 	char *opt_cpy;
 
 	if (s && opt) {
-		if (s->options && !(s->def &&
-				(s->def->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
+		if (s->options && !(s->sym &&
+				(s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
 			/* Append new options */
 			if (!g_hash_table_lookup (s->options, opt)) {
 				opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
@@ -363,7 +363,7 @@ rspamd_action_to_str_alt (enum rspamd_metric_action action)
 }
 
 enum rspamd_metric_action
-rspamd_check_action_metric (struct rspamd_task *task, struct metric_result *mres)
+rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_result *mres)
 {
 	struct metric_action *action, *selected_action = NULL;
 	double max_score = 0, sc;

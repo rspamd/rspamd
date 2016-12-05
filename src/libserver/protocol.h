@@ -31,7 +31,7 @@ struct rspamd_protocol_log_message_sum {
 	struct rspamd_protocol_log_symbol_result results[];
 };
 
-struct metric;
+struct rspamd_metric;
 
 /**
  * Process headers into HTTP message and set appropriate task fields

@@ -24,7 +24,7 @@
 struct composites_data {
 	struct rspamd_task *task;
 	struct rspamd_composite *composite;
-	struct metric_result *metric_res;
+	struct rspamd_metric_result *metric_res;
 	GHashTable *symbols_to_remove;
 	guint8 *checked;
 };
@@ -37,7 +37,7 @@ enum rspamd_composite_action {
 };
 
 struct symbol_remove_data {
-	struct symbol *ms;
+	struct rspamd_symbol_result *ms;
 	struct rspamd_composite *comp;
 	GNode *parent;
 	guint action;
@@ -92,9 +92,9 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 static gint
 rspamd_composite_process_single_symbol (struct composites_data *cd,
-		const gchar *sym, struct symbol **pms)
+		const gchar *sym, struct rspamd_symbol_result **pms)
 {
-	struct symbol *ms = NULL;
+	struct rspamd_symbol_result *ms = NULL;
 	gint rc = 0;
 	struct rspamd_composite *ncomp;
 
@@ -139,10 +139,10 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	const gchar *beg = atom->data, *sym = NULL;
 	gchar t;
 	struct symbol_remove_data *rd, *nrd;
-	struct symbol *ms;
+	struct rspamd_symbol_result *ms;
 	struct rspamd_symbols_group *gr;
-	struct rspamd_symbol_def *sdef;
-	struct metric *metric;
+	struct rspamd_symbol *sdef;
+	struct rspamd_metric *metric;
 	GHashTableIter it;
 	gpointer k, v;
 	gint rc = 0;
@@ -371,10 +371,10 @@ composites_metric_callback (gpointer key, gpointer value, gpointer data)
 	struct rspamd_task *task = (struct rspamd_task *)data;
 	struct composites_data *cd =
 		rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
-	struct metric_result *metric_res = (struct metric_result *)value;
+	struct rspamd_metric_result *metric_res = (struct rspamd_metric_result *)value;
 
 	cd->task = task;
-	cd->metric_res = (struct metric_result *)metric_res;
+	cd->metric_res = (struct rspamd_metric_result *)metric_res;
 	cd->symbols_to_remove = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cd->checked =
 		rspamd_mempool_alloc0 (task->task_pool,

@@ -275,7 +275,7 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 }
 
 struct rspamd_rcl_symbol_data {
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_config *cfg;
 };
@@ -286,7 +286,7 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_symbol_data *sd = ud;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	struct rspamd_symbols_group *gr;
 	const ucl_object_t *val, *cur;
 	struct rspamd_rcl_section *subsection;
@@ -331,7 +331,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_symbol_data *sd = ud;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	struct rspamd_config *cfg;
 	const ucl_object_t *elt;
 	const gchar *description = NULL;
@@ -393,7 +393,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 struct metric_actions_cbdata {
 	struct rspamd_config *cfg;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 };
 
 static gboolean
@@ -406,7 +406,7 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	gint action_value;
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	struct rspamd_config *cfg;
 
 	metric = cbdata->metric;
@@ -440,10 +440,10 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const ucl_object_t *val, *cur, *elt;
 	ucl_object_iter_t it;
 	struct rspamd_config *cfg = ud;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
-	struct rspamd_symbol_def *sym_def;
+	struct rspamd_symbol *sym_def;
 	struct metric_actions_cbdata acts_cbdata;
 
 	g_assert (key != NULL);
@@ -2117,13 +2117,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	rspamd_rcl_add_default_handler (sub,
 			"unknown_weight",
 			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct metric, unknown_weight),
+			G_STRUCT_OFFSET (struct rspamd_metric, unknown_weight),
 			0,
 			"Accept unknown symbols with the specified weight");
 	rspamd_rcl_add_default_handler (sub,
 			"grow_factor",
 			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct metric, grow_factor),
+			G_STRUCT_OFFSET (struct rspamd_metric, grow_factor),
 			0,
 			"Multiply the subsequent symbols by this number "
 					"(does not affect symbols with score less or "
@@ -2131,7 +2131,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	rspamd_rcl_add_default_handler (sub,
 			"subject",
 			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct metric, subject),
+			G_STRUCT_OFFSET (struct rspamd_metric, subject),
 			0,
 			"Rewrite subject with this value");
 

@@ -85,7 +85,7 @@ enum lua_var_type {
 /**
  * Symbols group
  */
-struct rspamd_symbol_def;
+struct rspamd_symbol;
 struct rspamd_symbols_group {
 	gchar *name;
 	GHashTable *symbols;
@@ -101,7 +101,7 @@ struct rspamd_symbols_group {
 /**
  * Symbol definition
  */
-struct rspamd_symbol_def {
+struct rspamd_symbol {
 	gchar *name;
 	gchar *description;
 	gdouble *weight_ptr;
@@ -258,7 +258,7 @@ struct metric_action {
 /**
  * Common definition of metric
  */
-struct metric {
+struct rspamd_metric {
 	const gchar *name;                              /**< name of metric									*/
 	gchar *func_name;                               /**< name of consolidation function					*/
 	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
@@ -370,7 +370,7 @@ struct rspamd_config {
 
 	struct symbols_cache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/
-	struct metric *default_metric;                  /**< default metric										*/
+	struct rspamd_metric *default_metric;                  /**< default metric										*/
 
 	gchar * checksum;                               /**< real checksum of config file						*/
 	gchar * dump_checksum;                          /**< dump checksum of config file						*/
@@ -524,14 +524,14 @@ struct rspamd_worker_conf * rspamd_config_new_worker (struct rspamd_config *cfg,
 /*
  * Return a new metric structure, setting default and non-conflicting attributes
  */
-struct metric * rspamd_config_new_metric (struct rspamd_config *cfg,
-	struct metric *c, const gchar *name);
+struct rspamd_metric * rspamd_config_new_metric (struct rspamd_config *cfg,
+	struct rspamd_metric *c, const gchar *name);
 
 /*
  * Return new symbols group definition
  */
 struct rspamd_symbols_group * rspamd_config_new_group (
-		struct rspamd_config *cfg, struct metric *metric,
+		struct rspamd_config *cfg, struct rspamd_metric *metric,
 		const gchar *name);
 /*
  * Return a new statfile structure, setting default and non-conflicting attributes

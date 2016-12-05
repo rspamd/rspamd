@@ -147,7 +147,7 @@ struct cache_savepoint {
 		RSPAMD_CACHE_PASS_DONE,
 	} pass;
 	guint version;
-	struct metric_result *rs;
+	struct rspamd_metric_result *rs;
 	gdouble lim;
 	GPtrArray *waitq;
 	struct symbols_cache_order *order;
@@ -907,8 +907,8 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	struct cache_item *item = v, *parent;
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	GList *cur;
-	struct metric *m;
-	struct rspamd_symbol_def *s;
+	struct rspamd_metric *m;
+	struct rspamd_symbol *s;
 	gboolean skipped, ghost;
 	gint p1, p2;
 
@@ -992,7 +992,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 {
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	const gchar *sym = k;
-	struct rspamd_symbol_def *s = (struct rspamd_symbol_def *)v;
+	struct rspamd_symbol *s = (struct rspamd_symbol *)v;
 	gdouble weight;
 	struct cache_item *item;
 
@@ -1013,8 +1013,8 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	GHashTableIter it;
 	GList *cur;
 	gpointer k, v;
-	struct rspamd_symbol_def *sym_def;
-	struct metric *metric;
+	struct rspamd_symbol *sym_def;
+	struct rspamd_metric *metric;
 	gboolean ignore_symbol = FALSE, ret = TRUE;
 
 	if (cache == NULL) {
@@ -1074,9 +1074,9 @@ static gboolean
 rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 		struct cache_savepoint *cp)
 {
-	struct metric_result *res;
+	struct rspamd_metric_result *res;
 	GList *cur;
-	struct metric *metric;
+	struct rspamd_metric *metric;
 	double ms;
 
 	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {
@@ -1397,7 +1397,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
 	const ucl_object_t *wl, *cur, *disabled, *enabled;
-	struct metric *def;
+	struct rspamd_metric *def;
 	struct rspamd_symbols_group *gr;
 	GHashTableIter gr_it;
 	ucl_object_iter_t it = NULL;

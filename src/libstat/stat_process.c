@@ -888,7 +888,7 @@ rspamd_stat_learn (struct rspamd_task *task,
 
 static gboolean
 rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
-		struct metric_result *mres,
+		struct rspamd_metric_result *mres,
 		struct rspamd_classifier *cl)
 {
 	guint i;
@@ -923,7 +923,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_classifier *cl;
 	const ucl_object_t *obj, *elt1, *elt2;
-	struct metric_result *mres = NULL;
+	struct rspamd_metric_result *mres = NULL;
 	struct rspamd_task **ptask;
 	lua_State *L;
 	GString *tb;

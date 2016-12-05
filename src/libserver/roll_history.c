@@ -52,7 +52,7 @@ static void
 roll_history_symbols_callback (gpointer key, gpointer value, void *user_data)
 {
 	struct history_metric_callback_data *cb = user_data;
-	struct symbol *s = value;
+	struct rspamd_symbol_result *s = value;
 	guint wr;
 
 	if (cb->remain > 0) {
@@ -73,7 +73,7 @@ rspamd_roll_history_update (struct roll_history *history,
 {
 	guint row_num;
 	struct roll_history_row *row;
-	struct metric_result *metric_res;
+	struct rspamd_metric_result *metric_res;
 	struct history_metric_callback_data cbdata;
 
 	/* First of all obtain check and obtain row number */

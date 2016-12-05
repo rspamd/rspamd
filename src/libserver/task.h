@@ -276,9 +276,9 @@ gboolean rspamd_learn_task_spam (struct rspamd_task *task,
  * @param m
  * @return
  */
-struct metric_result;
+struct rspamd_metric_result;
 gdouble rspamd_task_get_required_score (struct rspamd_task *task,
-		struct metric_result *m);
+		struct rspamd_metric_result *m);
 
 /**
  * Returns the first header as value for a header
