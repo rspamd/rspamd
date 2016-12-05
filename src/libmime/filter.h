@@ -19,7 +19,7 @@ struct rspamd_classifier_config;
  */
 struct symbol {
 	double score;                                   /**< symbol's score							*/
-	GList *options;                                 /**< list of symbol's options				*/
+	GHashTable *options;                            /**< list of symbol's options				*/
 	const gchar *name;
 	struct rspamd_symbol_def *def;					/**< symbol configuration					*/
 };
@@ -57,7 +57,7 @@ struct metric_result * rspamd_create_metric_result (struct rspamd_task *task,
 void rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
-	GList *opts);
+	const gchar *opts);
 
 /**
  * Insert a single result to task
@@ -70,7 +70,7 @@ void rspamd_task_insert_result (struct rspamd_task *task,
 void rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
-	GList *opts);
+	const gchar *opts);
 
 /**
  * Default consolidation function for metric, it get all symbols and multiply symbol

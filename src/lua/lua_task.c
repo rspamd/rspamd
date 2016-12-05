@@ -2322,7 +2322,6 @@ lua_push_symbol_result (lua_State *L,
 	struct metric_result *metric_res;
 	struct symbol *s;
 	gint j;
-	GList *opt;
 
 	metric_res = g_hash_table_lookup (task->results, metric->name);
 	if (metric_res) {
@@ -2348,14 +2347,16 @@ lua_push_symbol_result (lua_State *L,
 			}
 
 			if (s->options) {
-				opt = s->options;
-				lua_pushstring (L, "options");
-				lua_newtable (L);
+				GHashTableIter it;
+				gpointer k, v;
 
-				while (opt) {
-					lua_pushstring (L, opt->data);
+				lua_pushstring (L, "options");
+				lua_createtable (L, g_hash_table_size (s->options), 0);
+				g_hash_table_iter_init (&it, s->options);
+
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					lua_pushstring (L, (const char*)v);
 					lua_rawseti (L, -2, j++);
-					opt = g_list_next (opt);
 				}
 
 				lua_settable (L, -3);

@@ -1043,14 +1043,17 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 				}
 
 				if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_PARAMS) {
-					GList *cur;
+					GHashTableIter it;
+					gpointer k, v;
 
 					rspamd_printf_fstring (&symbuf, "{");
-
 					j = 0;
+					g_hash_table_iter_init (&it, sym->options);
 
-					for (cur = sym->options; cur != NULL; cur = g_list_next (cur)) {
-						rspamd_printf_fstring (&symbuf, "%s;", cur->data);
+					while (g_hash_table_iter_next (&it, &k, &v)) {
+						const char *opt = v;
+
+						rspamd_printf_fstring (&symbuf, "%s;", opt);
 
 						if (j >= max_log_elts) {
 							rspamd_printf_fstring (&symbuf, "...;");

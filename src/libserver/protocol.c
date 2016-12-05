@@ -804,17 +804,21 @@ make_rewritten_subject (struct metric *metric, struct rspamd_task *task)
 }
 
 static ucl_object_t *
-rspamd_str_list_ucl (GList *str_list)
+rspamd_str_hash_ucl (GHashTable *ht)
 {
+	GHashTableIter it;
+	gpointer k, v;
 	ucl_object_t *top = NULL, *obj;
-	GList *cur;
 
 	top = ucl_object_typed_new (UCL_ARRAY);
-	cur = str_list;
-	while (cur) {
-		obj = ucl_object_fromstring (cur->data);
-		ucl_array_append (top, obj);
-		cur = g_list_next (cur);
+
+	if (ht) {
+		g_hash_table_iter_init (&it, ht);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			obj = ucl_object_fromstring ((const char *)v);
+			ucl_array_append (top, obj);
+		}
 	}
 
 	return top;
@@ -841,8 +845,8 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 				description), "description", 0, false);
 	}
 	if (sym->options != NULL) {
-		ucl_object_insert_key (obj, rspamd_str_list_ucl (
-				sym->options), "options", 0, false);
+		ucl_object_insert_key (obj, rspamd_str_hash_ucl (sym->options),
+				"options", 0, false);
 	}
 
 	return obj;
