@@ -142,23 +142,25 @@ insert_metric_result (struct rspamd_task *task,
 			 */
 			single = TRUE;
 		}
-		if (!single) {
-			/* Handle grow factor */
-			if (metric_res->grow_factor && w > 0) {
-				w *= metric_res->grow_factor;
-				metric_res->grow_factor *= metric->grow_factor;
+
+		if (rspamd_task_add_result_option (task, s, opt)) {
+			if (!single) {
+				/* Handle grow factor */
+				if (metric_res->grow_factor && w > 0) {
+					w *= metric_res->grow_factor;
+					metric_res->grow_factor *= metric->grow_factor;
+				}
+				s->score += w;
+				metric_res->score += w;
 			}
-			s->score += w;
-			metric_res->score += w;
-		}
-		else {
-			if (fabs (s->score) < fabs (w)) {
-				/* Replace less weight with a bigger one */
-				metric_res->score = metric_res->score - s->score + w;
-				s->score = w;
+			else {
+				if (fabs (s->score) < fabs (w)) {
+					/* Replace less weight with a bigger one */
+					metric_res->score = metric_res->score - s->score + w;
+					s->score = w;
+				}
 			}
 		}
-		rspamd_task_add_result_option (task, s, opt);
 	}
 	else {
 		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_symbol_result));
@@ -250,11 +252,12 @@ rspamd_task_insert_result_single (struct rspamd_task *task,
 	return insert_result_common (task, symbol, flag, opt, TRUE);
 }
 
-void
+gboolean
 rspamd_task_add_result_option (struct rspamd_task *task,
 		struct rspamd_symbol_result *s, const gchar *opt)
 {
 	char *opt_cpy;
+	gboolean ret = FALSE;
 
 	if (s && opt) {
 		if (s->options && !(s->sym &&
@@ -263,6 +266,7 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			if (!g_hash_table_lookup (s->options, opt)) {
 				opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
 				g_hash_table_insert (s->options, opt_cpy, opt_cpy);
+				ret = TRUE;
 			}
 		}
 		else {
@@ -273,8 +277,14 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 					s->options);
 			opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
 			g_hash_table_insert (s->options, opt_cpy, opt_cpy);
+			ret = TRUE;
 		}
 	}
+	else if (!opt) {
+		ret = TRUE;
+	}
+
+	return ret;
 }
 
 gboolean
