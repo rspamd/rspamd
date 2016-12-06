@@ -591,6 +591,34 @@ local function train_fann(_, ev_base, elt)
         'LRANGE', -- command
         {fann_prefix .. elt .. '_spam', '0', '-1'}
       )
+
+      rspamd_config:add_periodic(ev_base, 30.0,
+        function(_, _)
+          local function redis_lock_extend_cb(_err, _)
+            if _err then
+              rspamd_logger.errx(rspamd_config, 'cannot lock ANN %s from redis: %s',
+                fann_prefix .. elt, _err)
+            else
+              rspamd_logger.infox(rspamd_config, 'extend lock for ANN %s for 30 seconds',
+                fann_prefix .. elt)
+            end
+          end
+          if learning_spawned then
+            redis_make_request(ev_base,
+              rspamd_config,
+              nil,
+              true, -- is write
+              redis_lock_extend_cb, --callback
+              'INCRBY', -- command
+              {fann_prefix .. elt, '30'}
+            )
+          else
+            return false -- do not plan any more updates
+          end
+
+          return true
+        end
+      )
       rspamd_logger.infox(rspamd_config, 'lock ANN %s for learning', elt)
     else
       rspamd_logger.infox(rspamd_config, 'do not learn ANN %s, locked by another process', elt)
