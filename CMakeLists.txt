@@ -60,6 +60,7 @@ OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]"
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: OFF]" OFF)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
+OPTION(ENABLE_GD           "Enable libgd for images processing [default: ON]" ON)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 
@@ -717,6 +718,13 @@ IF (ENABLE_FANN MATCHES "ON")
 			include/fann
 			ROOT ${FANN_ROOT_DIR} MODULES fann)
 	SET(WITH_FANN 1)
+ENDIF ()
+
+IF (ENABLE_GD MATCHES "ON")
+	ProcessPackage(GD LIBRARY gd INCLUDE gd.h INCLUDE_SUFFIXES
+			include/gd include/libgd
+			ROOT ${GD_ROOT_DIR} MODULES gd)
+	SET(WITH_GD 1)
 ENDIF ()
 
 #Check for openssl (required for dkim)

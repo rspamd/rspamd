@@ -124,6 +124,7 @@
 #cmakedefine PARAM_H_HAS_BITSET  1
 #cmakedefine WITH_DB             1
 #cmakedefine WITH_FANN           1
+#cmakedefine WITH_GD             1
 #cmakedefine WITH_GPERF_TOOLS    1
 #cmakedefine WITH_HIREDIS        1
 #cmakedefine WITH_HYPERSCAN      1
