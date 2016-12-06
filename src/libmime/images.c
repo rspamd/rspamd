@@ -263,11 +263,10 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		}
 
 		dst = gdImageScale (src, nw, nh);
-		gdImageGrayScale (dst);
 		gdImageDestroy (src);
 
-		img->normalized_data = g_array_new (FALSE, FALSE, sizeof (gint));
-		g_array_set_size (img->normalized_data, nh * nw);
+		img->normalized_data = g_array_sized_new (FALSE, FALSE, sizeof (gint),
+				nh * nw);
 
 		for (i = 0; i < nh; i ++) {
 			for (j = 0; j < nw; j ++) {
