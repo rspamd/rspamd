@@ -2128,6 +2128,22 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 						if (io) {
 							g_ptr_array_add (res, io);
 						}
+
+						if (image->normalized_data) {
+							guchar norm_digest[rspamd_cryptobox_HASHBYTES];
+
+							rspamd_cryptobox_hash (norm_digest,
+									image->normalized_data->data,
+									image->normalized_data->len * sizeof (gint),
+									NULL, 0);
+							/* TODO: add shingles here */
+							io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+									task->task_pool,
+									norm_digest);
+							if (io) {
+								g_ptr_array_add (res, io);
+							}
+						}
 					}
 				}
 			}
