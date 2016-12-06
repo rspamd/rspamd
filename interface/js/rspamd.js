@@ -1172,6 +1172,7 @@
             $(dialog).show();
             $('#connectHost').focus();
             $(backdrop).show();
+            document.getElementById("connectPassword").focus();
             $('#connectForm').one('submit', function (e) {
                 e.preventDefault();
                 var password = $('#connectPassword').val();
