@@ -19,6 +19,12 @@
 #include "message.h"
 #include "html.h"
 
+#ifdef WITH_GD
+#include "gd.h"
+
+#define RSPAMD_NORMALIZED_DIM 64
+#endif
+
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
 static const guint8 jpg_sig1[] = {0xff, 0xd8};
 static const guint8 jpg_sig_jfif[] = {0xff, 0xe0};
@@ -203,6 +209,82 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 }
 
 static void
+rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
+{
+#ifdef WITH_GD
+	gdImagePtr src = NULL, dst = NULL;
+	guint nw, nh, i, j;
+
+	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
+		return;
+	}
+
+	if (img->height <= RSPAMD_NORMALIZED_DIM ||
+			img->width <= RSPAMD_NORMALIZED_DIM) {
+		return;
+	}
+
+	switch (img->type) {
+	case IMAGE_TYPE_JPG:
+		src = gdImageCreateFromJpegPtr (img->data->len, img->data->data);
+		break;
+	case IMAGE_TYPE_PNG:
+		src = gdImageCreateFromPngPtr (img->data->len, img->data->data);
+		break;
+	case IMAGE_TYPE_GIF:
+		src = gdImageCreateFromGifPtr (img->data->len, img->data->data);
+		break;
+	case IMAGE_TYPE_BMP:
+		src = gdImageCreateFromBmpPtr (img->data->len, img->data->data);
+		break;
+	default:
+		return;
+	}
+
+	if (src == NULL) {
+		msg_info_task ("cannot load image of type %s from %s",
+				rspamd_image_type_str (img->type), img->filename);
+	}
+	else {
+		gdImageSetInterpolationMethod (src, GD_BILINEAR_FIXED);
+		nw = img->width;
+		nh = img->height;
+
+		if (nh > RSPAMD_NORMALIZED_DIM) {
+			nw = nw * RSPAMD_NORMALIZED_DIM / nh;
+			nw = nw ? nw : 1;
+			nh = RSPAMD_NORMALIZED_DIM;
+		}
+
+		if (nw > RSPAMD_NORMALIZED_DIM) {
+			nh = nh * RSPAMD_NORMALIZED_DIM / nw;
+			nh = nh ? nh : 1;
+			nw = RSPAMD_NORMALIZED_DIM;
+		}
+
+		dst = gdImageScale (src, nw, nh);
+		gdImageGrayScale (dst);
+		gdImageDestroy (src);
+
+		img->normalized_data = g_array_new (FALSE, FALSE, sizeof (gint));
+		g_array_set_size (img->normalized_data, nh * nw);
+
+		for (i = 0; i < nh; i ++) {
+			for (j = 0; j < nw; j ++) {
+				gint px = gdImageGetPixel (dst, j, i);
+
+				g_array_append_val (img->normalized_data, px);
+			}
+		}
+
+		gdImageDestroy (dst);
+		rspamd_mempool_add_destructor (task->task_pool, rspamd_array_free_hard,
+				img->normalized_data);
+	}
+#endif
+}
+
+static void
 process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	enum rspamd_image_type type;
@@ -241,6 +323,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 			task->message_id);
 		img->filename = part->filename;
 		img->parent = part;
+		rspamd_image_normalize (task, img);
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
 		part->specific_data = img;
 

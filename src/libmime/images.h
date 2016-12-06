@@ -18,6 +18,7 @@ enum rspamd_image_type {
 struct rspamd_image {
 	struct rspamd_mime_part *parent;
 	GByteArray *data;
+	GArray *normalized_data;
 	const gchar *filename;
 	struct html_image *html_image;
 	enum rspamd_image_type type;
