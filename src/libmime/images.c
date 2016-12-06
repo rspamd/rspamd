@@ -113,9 +113,8 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 static struct rspamd_image *
 process_jpg_image (struct rspamd_task *task, GByteArray *data)
 {
-	guint8 *p;
-	guint16 t;
-	gsize remain;
+	guint8 *p, *end;
+	guint16 h, w;
 	struct rspamd_image *img;
 
 	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
@@ -123,18 +122,32 @@ process_jpg_image (struct rspamd_task *task, GByteArray *data)
 	img->data = data;
 
 	p = data->data;
-	remain = data->len;
-	/* In jpeg we should find any data stream (ff c0 .. ff c3) and extract its height and width */
-	while (remain--) {
-		if (*p == 0xFF && remain > 8 &&
-			(*(p + 1) >= 0xC0 && *(p + 1) <= 0xC3)) {
-			memcpy (&t, p + 5, sizeof (guint16));
-			img->height = ntohs (t);
-			memcpy (&t, p + 7, sizeof (guint16));
-			img->width = ntohs (t);
-			return img;
+	end = p + data->len - 8;
+	p += 2;
+
+	while (p < end) {
+		if (p[0] == 0xFF && p[1] != 0xFF) {
+			guint len = p[2] * 256 + p[3];
+
+			p ++;
+
+			if (*p == 0xc0 || *p == 0xc1 || *p == 0xc2 || *p == 0xc3 ||
+					*p == 0xc9 || *p == 0xca || *p == 0xcb) {
+				memcpy (&h, p + 4, sizeof (guint16));
+				h = p[4] * 0xff + p[5];
+				img->height = h;
+				w = p[6] * 0xff + p[7];
+				img->width = w;
+
+				return img;
+			}
+
+
+			p += len;
 		}
-		p++;
+		else {
+			p++;
+		}
 	}
 
 	return NULL;
