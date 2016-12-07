@@ -85,8 +85,9 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.id = rspamd_fuzzy_backend_id_sqlite,
 		.periodic = rspamd_fuzzy_backend_expire_sqlite,
 		.close = rspamd_fuzzy_backend_close_sqlite,
-	},
-	[RSPAMD_FUZZY_BACKEND_REDIS] = {
+	}
+#ifdef ENABLE_HIREDIS
+	,[RSPAMD_FUZZY_BACKEND_REDIS] = {
 		.init = rspamd_fuzzy_backend_init_redis,
 		.check = rspamd_fuzzy_backend_check_redis,
 		.update = rspamd_fuzzy_backend_update_redis,
@@ -96,6 +97,7 @@ static const struct rspamd_fuzzy_backend_subr fuzzy_subrs[] = {
 		.periodic = rspamd_fuzzy_backend_expire_redis,
 		.close = rspamd_fuzzy_backend_close_redis,
 	}
+#endif
 };
 
 struct rspamd_fuzzy_backend {
