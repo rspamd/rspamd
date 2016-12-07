@@ -27,6 +27,8 @@ This section contains documents about various configuration details.
 * **[Modules documentation](./modules/)** gives the detailed description of each Rspamd module
 * **[Workers documentation](./workers/)** contains information about different Rspamd worker processes: scanners, controller, fuzzy storage and so on
 * **[Redis configuration page]({{ site.baseurl }}/doc/configuration/redis.html)** describes how to configure Redis cache for Rspamd
+* **[Redis replication](./tutorials/redis_replication.html)** is a step-by-step guide on establishing Bayesian statistics and fuzzy storage replication
+* **[Stunnel setup](./tutorials/stunnel_setup.html)** is a step-by-step guide to secure communications between Redis instances with [stunnel](https://www.stunnel.org)
 * **[Upstreams article]({{ site.baseurl }}/doc/configuration/upstream.html)** depicts how Rspamd connects to external servers (e.g. Redis or DNS)
 
 ## Developers documentation
