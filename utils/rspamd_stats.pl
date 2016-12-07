@@ -192,7 +192,7 @@ sub ProcessLog {
     if (/^.*rspamd_task_write_log.*$/) {
       $timeStamp{'end'} = join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
-      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
+      if ($_ !~ /\[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
         #print "BAD: $_\n";
         next;
       }
