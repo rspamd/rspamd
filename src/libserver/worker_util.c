@@ -289,7 +289,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 
 	rspamd_worker_init_signals (worker, ev_base);
 	rspamd_control_worker_add_default_handler (worker, ev_base);
-#ifdef ENABLE_HIREDIS
+#ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
 			worker->srv->cfg, ev_base);
 #endif
