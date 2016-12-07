@@ -215,7 +215,7 @@ sub ProcessLog {
       }
 
       # Symbols
-      my @symbols = split /,/, $3;
+      my @symbols = split /(?:\{[^}]*\})?,/, $3;
       my @sym_names;
 
       foreach my $s (@symbols_search) {
