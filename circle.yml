@@ -10,7 +10,7 @@ dependencies:
 test:
   override:
     - mkdir ../build ; mkdir ../install ; cd ../build
-    - cmake ../rspamd -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
+    - cmake ../rspamd -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install -DENABLE_HIREDIS=ON
     - make install
     - RSPAMADM=../install/bin/rspamadm RSPAMC=../install/bin/rspamc RSPAMD=../install/bin/rspamd sudo -E robot -x xunit.xml --exclude isbroken ../rspamd/test/functional/cases
     - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
