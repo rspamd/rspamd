@@ -39,6 +39,15 @@ redis_enable="YES"
 redis_profiles="redis bayes fuzzy"
 ```
 
+Enable Redis logs rotation by creating a newsyslog configuration file `/usr/local/etc/newsyslog.conf.d/redis.newsyslog.conf`:
+
+```sh
+# logfilename          [owner:group]    mode count size when  flags [/pid_file] [sig_num]
+/var/log/redis/redis.log    redis:redis    644  5       100    *  J
+/var/log/redis/bayes.log    redis:redis    644  5       100    *  J
+/var/log/redis/fuzzy.log    redis:redis    644  5       100    *  J
+```
+
 ## Configuration
 
 Create the default configuration on both `master` and `slave` (common for all of the instances):
