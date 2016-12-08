@@ -21,8 +21,9 @@
 
 #ifdef WITH_GD
 #include "gd.h"
+#include <math.h>
 
-#define RSPAMD_NORMALIZED_DIM 64
+#define RSPAMD_NORMALIZED_DIM rspamd_cryptobox_HASHBYTES / 8
 #endif
 
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
@@ -213,7 +214,9 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 {
 #ifdef WITH_GD
 	gdImagePtr src = NULL, dst = NULL;
-	guint nw, nh, i, j;
+	guint nw, nh, i, j, b = 0;
+	gdouble avg, sum;
+	guchar sig[rspamd_cryptobox_HASHBYTES];
 
 	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
 		return;
@@ -247,34 +250,90 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 	}
 	else {
 		gdImageSetInterpolationMethod (src, GD_BILINEAR_FIXED);
-		nw = img->width;
-		nh = img->height;
 
-		if (nh > RSPAMD_NORMALIZED_DIM) {
-			nw = nw * RSPAMD_NORMALIZED_DIM / nh;
-			nw = nw ? nw : 1;
-			nh = RSPAMD_NORMALIZED_DIM;
-		}
-
-		if (nw > RSPAMD_NORMALIZED_DIM) {
-			nh = nh * RSPAMD_NORMALIZED_DIM / nw;
-			nh = nh ? nh : 1;
-			nw = RSPAMD_NORMALIZED_DIM;
-		}
+		nw = RSPAMD_NORMALIZED_DIM;
+		nh = RSPAMD_NORMALIZED_DIM;
 
 		dst = gdImageScale (src, nw, nh);
+		gdImageGrayScale (dst);
 		gdImageDestroy (src);
 
 		img->normalized_data = g_array_sized_new (FALSE, FALSE, sizeof (gint),
 				nh * nw);
 
+		avg = 0;
+
+		/* Calculate moving average */
 		for (i = 0; i < nh; i ++) {
 			for (j = 0; j < nw; j ++) {
 				gint px = gdImageGetPixel (dst, j, i);
+				avg += (px - avg) / (gdouble)(i * nh + j + 1);
 
 				g_array_append_val (img->normalized_data, px);
 			}
 		}
+
+		/*
+		 * Split message into blocks:
+		 *
+		 * ****
+		 * ****
+		 *
+		 * Get sum of saturation values, and set bit if sum is > avg * 4
+		 * Then go further
+		 *
+		 * ****
+		 * ****
+		 *
+		 * and repeat this algorithm.
+		 *
+		 * So on each iteration we move by 16 pixels and calculate 2 bits of signature
+		 * hence, we produce ({64} / {4}) ^ 2 * 2 == 512 bits
+		 */
+		for (i = 0; i < nh; i += 4) {
+			for (j = 0; j < nw; j += 4) {
+				gint p[8];
+
+				p[0] = g_array_index (img->normalized_data, gint, i * nh + j);
+				p[1] = g_array_index (img->normalized_data, gint, i * nh + j + 1);
+				p[2] = g_array_index (img->normalized_data, gint, i * nh + j + 2);
+				p[3] = g_array_index (img->normalized_data, gint, i * nh + j + 3);
+				p[4] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j);
+				p[5] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j + 1);
+				p[6] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j + 2);
+				p[7] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j + 3);
+				sum = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
+
+				if (fabs (sum) >= fabs (avg * 8)) {
+					setbit (sig, b);
+				}
+				else {
+					clrbit (sig, b);
+				}
+				b ++;
+
+				p[0] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j);
+				p[1] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j + 1);
+				p[2] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j + 2);
+				p[3] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j + 3);
+				p[4] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j);
+				p[5] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j + 1);
+				p[6] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j + 2);
+				p[7] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j + 3);
+
+				sum = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
+
+				if (fabs (sum) >= fabs (avg * 8)) {
+					setbit (sig, b);
+				}
+				else {
+					clrbit (sig, b);
+				}
+				b ++;
+			}
+		}
+
+		msg_debug_task ("avg: %.0f, sig: %32xs, bits: %d", avg, sig, b);
 
 		gdImageDestroy (dst);
 		rspamd_mempool_add_destructor (task->task_pool, rspamd_array_free_hard,
