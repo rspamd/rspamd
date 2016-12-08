@@ -59,6 +59,7 @@ my %sym_res;
 my $rspamd_log;
 my $enabled = 0;
 
+my %action;
 my %timeStamp;
 my %scanTime = (
     max   => 0,
@@ -172,6 +173,8 @@ printf " [ %s / %s ]
 ", $timeStamp{'start'}, $timeStamp{'end'}
   if defined $timeStamp{'start'};
 say '';
+printf "%11s: %d\n", $_, $action{$_} for sort keys %action;
+say '';
 printf "scan time min/avg/max = %.2f/%.2f/%.2f s
 ", $scanTime{'min'} / 1000,
   ($total) ? $scanTime{'total'} / $total / 1000 : undef,
@@ -192,20 +195,21 @@ sub ProcessLog {
     if (/^.*rspamd_task_write_log.*$/) {
       $timeStamp{'end'} = join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
-      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
+      if ($_ !~ /\(([^()]+)\): \[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
         #print "BAD: $_\n";
         next;
       }
 
       $timeStamp{'start'} //= $timeStamp{'end'};
-      $scanTime{'min'} = $4
-        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $4 );
-      $scanTime{'max'} = $4
-        if ( $scanTime{'max'} < $4 );
-      $scanTime{'total'} += $4;
+      $scanTime{'min'} = $5
+        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $5 );
+      $scanTime{'max'} = $5
+        if ( $scanTime{'max'} < $5 );
+      $scanTime{'total'} += $5;
 
+      $action{$1}++;
       $total ++;
-      my $score = $1 * 1.0;
+      my $score = $2 * 1.0;
 
       if ($score >= $reject_score) {
         $total_spam ++;
@@ -215,7 +219,7 @@ sub ProcessLog {
       }
 
       # Symbols
-      my @symbols = split /,/, $3;
+      my @symbols = split /(?:\{[^}]*\})?,/, $4;
       my @sym_names;
 
       foreach my $s (@symbols_search) {
