@@ -1318,12 +1318,16 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 		/*
 		 * Generate shingles
 		 */
-		for (i = 0; i < sizeof (img->fuzzy_sig); i += 2) {
-			shingles[i / 2] = rspamd_cryptobox_fast_hash_specific (
-					RSPAMD_CRYPTOBOX_MUMHASH, &img->fuzzy_sig[i], 2, 0);
+		G_STATIC_ASSERT (G_N_ELEMENTS (img->fuzzy_sig) == RSPAMD_SHINGLE_SIZE);
+
+		for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+			shingles[i] = rspamd_cryptobox_fast_hash_specific (
+					RSPAMD_CRYPTOBOX_MUMHASH,
+					(const guchar *)&img->fuzzy_sig[i],
+					sizeof (img->fuzzy_sig[i]), 0);
 		}
 		rspamd_cryptobox_hash (shcmd->basic.digest,
-				img->fuzzy_sig, sizeof (img->fuzzy_sig),
+				(const guchar *)img->fuzzy_sig, sizeof (img->fuzzy_sig),
 				rule->hash_key->str, rule->hash_key->len);
 
 		msg_debug_pool ("loading shingles of type %s with key %*xs",
@@ -2211,7 +2215,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							g_ptr_array_add (res, io);
 						}
 
-						if (image->normalized_data) {
+						if (image->is_normalized) {
 							io = fuzzy_cmd_from_image_part (rule, c, flag, value,
 									task->task_pool,
 									image);

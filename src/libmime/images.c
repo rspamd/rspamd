@@ -214,9 +214,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 {
 #ifdef WITH_GD
 	gdImagePtr src = NULL, dst = NULL;
-	guint nw, nh, i, j, b = 0;
-	gdouble avg, sum;
-	guchar sig[rspamd_cryptobox_HASHBYTES];
+	guint nw, nh, i, j, b = 0, nmax, nmin;
 
 	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
 		return;
@@ -258,18 +256,20 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		gdImageGrayScale (dst);
 		gdImageDestroy (src);
 
-		img->normalized_data = g_array_sized_new (FALSE, FALSE, sizeof (gint),
-				nh * nw);
-
-		avg = 0;
+		img->is_normalized = TRUE;
+		nmax = 0;
+		nmin = G_MAXUINT;
 
 		/* Calculate moving average */
 		for (i = 0; i < nh; i ++) {
 			for (j = 0; j < nw; j ++) {
-				gint px = gdImageGetPixel (dst, j, i);
-				avg += (px - avg) / (gdouble)(i * nh + j + 1);
-
-				g_array_append_val (img->normalized_data, px);
+				guint px = (guint)gdImageGetPixel (dst, j, i);
+				if (px > nmax) {
+					nmax = px;
+				}
+				if (px < nmin) {
+					nmin = px;
+				}
 			}
 		}
 
@@ -279,7 +279,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		 * ****
 		 * ****
 		 *
-		 * Get sum of saturation values, and set bit if sum is > avg * 4
+		 * Get sum of saturation values, and set bit if sum is > avg
 		 * Then go further
 		 *
 		 * ****
@@ -287,58 +287,58 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		 *
 		 * and repeat this algorithm.
 		 *
-		 * So on each iteration we move by 16 pixels and calculate 2 bits of signature
-		 * hence, we produce ({64} / {4}) ^ 2 * 2 == 512 bits
+		 * So on each iteration we move by 16 pixels and calculate 2 elements of
+		 * signature
 		 */
 		for (i = 0; i < nh; i += 4) {
 			for (j = 0; j < nw; j += 4) {
-				gint p[8];
+				guint p[8];
+				guint64 n = 0;
 
-				p[0] = g_array_index (img->normalized_data, gint, i * nh + j);
-				p[1] = g_array_index (img->normalized_data, gint, i * nh + j + 1);
-				p[2] = g_array_index (img->normalized_data, gint, i * nh + j + 2);
-				p[3] = g_array_index (img->normalized_data, gint, i * nh + j + 3);
-				p[4] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j);
-				p[5] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j + 1);
-				p[6] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j + 2);
-				p[7] = g_array_index (img->normalized_data, gint, (i + 1) * nh + j + 3);
-				sum = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
+				p[0] = nmax - (guint)gdImageGetPixel (dst, i, j) + nmin;
+				p[1] = nmax - (guint)gdImageGetPixel (dst, i, j + 1) + nmin;
+				p[2] = nmax - (guint)gdImageGetPixel (dst, i, j + 2) + nmin;
+				p[3] = nmax - (guint)gdImageGetPixel (dst, i, j + 3) + nmin;
+				p[4] = nmax - (guint)gdImageGetPixel (dst, i + 1, j) + nmin;
+				p[5] = nmax - (guint)gdImageGetPixel (dst, i + 1, j + 1) + nmin;
+				p[6] = nmax - (guint)gdImageGetPixel (dst, i + 1, j + 2) + nmin;
+				p[7] = nmax - (guint)gdImageGetPixel (dst, i + 1, j + 3) + nmin;
 
-				if (fabs (sum) >= fabs (avg * 8)) {
-					setbit (sig, b);
-				}
-				else {
-					clrbit (sig, b);
-				}
-				b ++;
+				n |= ((guint64)(p[0] / (nmax - nmin) % 256)) << 0;
+				n |= ((guint64)(p[1] / (nmax - nmin) % 256)) << 8;
+				n |= ((guint64)(p[2] / (nmax - nmin) % 256)) << 16;
+				n |= ((guint64)(p[3] / (nmax - nmin) % 256)) << 24;
+				n |= ((guint64)(p[4] / (nmax - nmin) % 256)) << 32;
+				n |= ((guint64)(p[5] / (nmax - nmin) % 256)) << 40;
+				n |= ((guint64)(p[6] / (nmax - nmin) % 256)) << 48;
+				n |= ((guint64)(p[7] / (nmax - nmin) % 256)) << 56;
+				img->fuzzy_sig[b++] = n;
 
-				p[0] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j);
-				p[1] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j + 1);
-				p[2] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j + 2);
-				p[3] = g_array_index (img->normalized_data, gint, (i + 2) * nh + j + 3);
-				p[4] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j);
-				p[5] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j + 1);
-				p[6] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j + 2);
-				p[7] = g_array_index (img->normalized_data, gint, (i + 3) * nh + j + 3);
+				p[0] = nmax - (guint)gdImageGetPixel (dst, i + 2, j) + nmin;
+				p[1] = nmax - (guint)gdImageGetPixel (dst, i + 2, j + 1) + nmin;
+				p[2] = nmax - (guint)gdImageGetPixel (dst, i + 2, j + 2) + nmin;
+				p[3] = nmax - (guint)gdImageGetPixel (dst, i + 2, j + 3) + nmin;
+				p[4] = nmax - (guint)gdImageGetPixel (dst, i + 3, j) + nmin;
+				p[5] = nmax - (guint)gdImageGetPixel (dst, i + 3, j + 1) + nmin;
+				p[6] = nmax - (guint)gdImageGetPixel (dst, i + 3, j + 2) + nmin;
+				p[7] = nmax - (guint)gdImageGetPixel (dst, i + 3, j + 3) + nmin;
 
-				sum = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
-
-				if (fabs (sum) >= fabs (avg * 8)) {
-					setbit (sig, b);
-				}
-				else {
-					clrbit (sig, b);
-				}
-				b ++;
+				n |= ((guint64)(p[0] / (nmax - nmin) % 256)) << 0;
+				n |= ((guint64)(p[1] / (nmax - nmin) % 256)) << 8;
+				n |= ((guint64)(p[2] / (nmax - nmin) % 256)) << 16;
+				n |= ((guint64)(p[3] / (nmax - nmin) % 256)) << 24;
+				n |= ((guint64)(p[4] / (nmax - nmin) % 256)) << 32;
+				n |= ((guint64)(p[5] / (nmax - nmin) % 256)) << 40;
+				n |= ((guint64)(p[6] / (nmax - nmin) % 256)) << 48;
+				n |= ((guint64)(p[7] / (nmax - nmin) % 256)) << 56;
+				img->fuzzy_sig[b++] = n;
 			}
 		}
 
-		msg_debug_task ("avg: %.0f, sig: %32xs, bits: %d", avg, sig, b);
-		memcpy (img->fuzzy_sig, sig, sizeof (img->fuzzy_sig));
+		msg_debug_task ("min: %d, max: %d, sig: %32xs, elts: %d", nmin, nmax,
+				(const char *)img->fuzzy_sig, b);
 
 		gdImageDestroy (dst);
-		rspamd_mempool_add_destructor (task->task_pool, rspamd_array_free_hard,
-				img->normalized_data);
 	}
 #endif
 }

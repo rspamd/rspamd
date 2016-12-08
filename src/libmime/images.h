@@ -2,7 +2,6 @@
 #define IMAGES_H_
 
 #include "config.h"
-#include "cryptobox.h"
 
 struct html_image;
 struct rspamd_task;
@@ -19,13 +18,13 @@ enum rspamd_image_type {
 struct rspamd_image {
 	struct rspamd_mime_part *parent;
 	GByteArray *data;
-	GArray *normalized_data;
-	guchar fuzzy_sig[rspamd_cryptobox_HASHBYTES];
 	const gchar *filename;
 	struct html_image *html_image;
 	enum rspamd_image_type type;
 	guint32 width;
 	guint32 height;
+	gboolean is_normalized;
+	guint64 fuzzy_sig[32];
 };
 
 /*
