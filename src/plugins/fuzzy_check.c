@@ -1167,13 +1167,13 @@ fuzzy_cmd_hash (struct fuzzy_rule *rule,
 static void *
 fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
-		struct rspamd_mime_text_part *part)
+		gpointer p)
 {
 	gchar key[32];
 	gint key_part;
 
 	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
-	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", p, rule->algorithm_str,
 			key_part);
 
 	return rspamd_mempool_get_variable (pool, key);
@@ -1182,14 +1182,14 @@ fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 static void
 fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
-		struct rspamd_mime_text_part *part,
+		gpointer p,
 		struct rspamd_fuzzy_encrypted_shingle_cmd *data)
 {
 	gchar key[32];
 	gint key_part;
 
 	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
-	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", p, rule->algorithm_str,
 			key_part);
 	/* Key is copied */
 	rspamd_mempool_set_variable (pool, key, data, NULL);
@@ -1259,6 +1259,88 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		 * it this way.
 		 */
 		fuzzy_cmd_set_cached (rule, pool, part, encshcmd);
+	}
+
+	shcmd->basic.tag = ottery_rand_uint32 ();
+	shcmd->basic.cmd = c;
+	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+
+	if (c != FUZZY_CHECK) {
+		shcmd->basic.flag = flag;
+		shcmd->basic.value = weight;
+	}
+
+	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->tag = shcmd->basic.tag;
+	io->flags = 0;
+	memcpy (&io->cmd, &shcmd->basic, sizeof (io->cmd));
+
+	if (rule->peer_key) {
+		/* Encrypt data */
+		fuzzy_encrypt_cmd (rule, &encshcmd->hdr, (guchar *) shcmd, sizeof (*shcmd));
+		io->io.iov_base = encshcmd;
+		io->io.iov_len = sizeof (*encshcmd);
+	}
+	else {
+		io->io.iov_base = shcmd;
+		io->io.iov_len = sizeof (*shcmd);
+	}
+
+	return io;
+}
+
+static struct fuzzy_cmd_io *
+fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
+		int c,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool,
+		struct rspamd_image *img)
+{
+	struct rspamd_fuzzy_shingle_cmd *shcmd;
+	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
+	guint i;
+	struct fuzzy_cmd_io *io;
+	guint64 shingles[RSPAMD_SHINGLE_SIZE];
+
+	cached = fuzzy_cmd_get_cached (rule, pool, img);
+
+	if (cached) {
+		/* Copy cached */
+		encshcmd = rspamd_mempool_alloc (pool, sizeof (*encshcmd));
+		memcpy (encshcmd, cached, sizeof (*encshcmd));
+		shcmd = &encshcmd->cmd;
+	}
+	else {
+		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
+		shcmd = &encshcmd->cmd;
+
+		/*
+		 * Generate shingles
+		 */
+		for (i = 0; i < sizeof (img->fuzzy_sig); i += 2) {
+			shingles[i / 2] = rspamd_cryptobox_fast_hash_specific (
+					RSPAMD_CRYPTOBOX_MUMHASH, &img->fuzzy_sig[i], 2, 0);
+		}
+		rspamd_cryptobox_hash (shcmd->basic.digest,
+				img->fuzzy_sig, sizeof (img->fuzzy_sig),
+				rule->hash_key->str, rule->hash_key->len);
+
+		msg_debug_pool ("loading shingles of type %s with key %*xs",
+				rule->algorithm_str,
+				16, rule->shingles_key->str);
+
+		memcpy (&shcmd->sgl, shingles, sizeof (shcmd->sgl));
+		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+
+		/*
+		 * We always save encrypted command as it can handle both
+		 * encrypted and unencrypted requests.
+		 *
+		 * Since it is copied when obtained from the cache, it is safe to use
+		 * it this way.
+		 */
+		fuzzy_cmd_set_cached (rule, pool, img, encshcmd);
 	}
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
@@ -2130,16 +2212,9 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 						}
 
 						if (image->normalized_data) {
-							guchar norm_digest[rspamd_cryptobox_HASHBYTES];
-
-							rspamd_cryptobox_hash (norm_digest,
-									image->normalized_data->data,
-									image->normalized_data->len * sizeof (gint),
-									NULL, 0);
-							/* TODO: add shingles here */
-							io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+							io = fuzzy_cmd_from_image_part (rule, c, flag, value,
 									task->task_pool,
-									norm_digest);
+									image);
 							if (io) {
 								g_ptr_array_add (res, io);
 							}

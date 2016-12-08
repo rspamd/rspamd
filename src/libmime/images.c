@@ -334,6 +334,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		}
 
 		msg_debug_task ("avg: %.0f, sig: %32xs, bits: %d", avg, sig, b);
+		memcpy (img->fuzzy_sig, sig, sizeof (img->fuzzy_sig));
 
 		gdImageDestroy (dst);
 		rspamd_mempool_add_destructor (task->task_pool, rspamd_array_free_hard,
