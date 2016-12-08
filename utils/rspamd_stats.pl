@@ -173,7 +173,8 @@ printf " [ %s / %s ]
 ", $timeStamp{'start'}, $timeStamp{'end'}
   if defined $timeStamp{'start'};
 say '';
-printf "%11s: %d\n", $_, $action{$_} for sort keys %action;
+printf "%11s: %6.2f%%, %d\n", $_, 100 * $action{$_} / $total, $action{$_}
+  for sort keys %action;
 say '';
 printf "scan time min/avg/max = %.2f/%.2f/%.2f s
 ", $scanTime{'min'} / 1000,
@@ -219,7 +220,7 @@ sub ProcessLog {
       }
 
       # Symbols
-      my @symbols = split /(?:\{[^}]*\})?,/, $4;
+      my @symbols = split /(?:\{[^}]*\})?(?:$|,)/, $4;
       my @sym_names;
 
       foreach my $s (@symbols_search) {
