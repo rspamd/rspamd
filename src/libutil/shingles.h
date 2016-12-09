@@ -67,7 +67,7 @@ struct rspamd_shingle* rspamd_shingles_from_text (GArray *input,
  * @param filterd opaque data for filtering function
  * @return shingles array
  */
-struct rspamd_shingle* rspamd_shingles_from_image (gdouble *dct,
+struct rspamd_shingle* rspamd_shingles_from_image (guchar *dct,
 		const guchar key[16],
 		rspamd_mempool_t *pool,
 		rspamd_shingles_filter filter,

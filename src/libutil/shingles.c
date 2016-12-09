@@ -16,6 +16,7 @@
 #include "shingles.h"
 #include "fstring.h"
 #include "cryptobox.h"
+#include "images.h"
 
 #define SHINGLES_WINDOW 3
 
@@ -161,7 +162,7 @@ rspamd_shingles_from_text (GArray *input,
 }
 
 struct rspamd_shingle* RSPAMD_OPTIMIZE("unroll-loops")
-rspamd_shingles_from_image (gdouble *dct,
+rspamd_shingles_from_image (guchar *dct,
 		const guchar key[16],
 		rspamd_mempool_t *pool,
 		rspamd_shingles_filter filter,
@@ -173,7 +174,7 @@ rspamd_shingles_from_image (gdouble *dct,
 	rspamd_sipkey_t keys[RSPAMD_SHINGLE_SIZE];
 	guchar shabuf[rspamd_cryptobox_HASHBYTES], *out_key;
 	const guchar *cur_key;
-	gdouble d;
+	guint64 d;
 	rspamd_cryptobox_hash_state_t bs;
 	guint64 val;
 	gint i, j, k;
@@ -194,7 +195,7 @@ rspamd_shingles_from_image (gdouble *dct,
 
 	/* Init hashes pipes and keys */
 	hashes = g_slice_alloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
-	hlen = 64 - SHINGLES_WINDOW + 1;
+	hlen = RSPAMD_DCT_LEN / NBBY  + 1;
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		hashes[i] = g_slice_alloc (hlen * sizeof (guint64));
@@ -232,33 +233,17 @@ rspamd_shingles_from_image (gdouble *dct,
 
 	memset (res, 0, sizeof (res));
 
-	for (i = 0; i <=  64; i ++) {
-		if (i - beg >= SHINGLES_WINDOW || i == 64) {
-			for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
-				/* Shift hashes window to right */
-				for (k = 0; k < SHINGLES_WINDOW - 1; k ++) {
-					res[j * SHINGLES_WINDOW + k] =
-							res[j * SHINGLES_WINDOW + k + 1];
-				}
-
-				d = dct[beg];
-				/* Insert the last element to the pipe */
-				memcpy (&seed, keys[j], sizeof (seed));
-				res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
-						rspamd_cryptobox_fast_hash_specific (ht,
-								&d, sizeof (d),
-								seed);
-				val = 0;
-				for (k = 0; k < SHINGLES_WINDOW; k ++) {
-					val ^= res[j * SHINGLES_WINDOW + k] >>
-							(8 * (SHINGLES_WINDOW - k - 1));
-				}
-
-				g_assert (hlen > beg);
-				hashes[j][beg] = val;
-			}
-			beg++;
+	for (i = 0; i <= RSPAMD_DCT_LEN / NBBY; i ++) {
+		for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
+			d = dct[beg];
+			/* Insert the last element to the pipe */
+			memcpy (&seed, keys[j], sizeof (seed));
+			val = rspamd_cryptobox_fast_hash_specific (ht,
+							&d, sizeof (d),
+							seed);
+			hashes[j][beg] = val;
 		}
+		beg++;
 	}
 
 	/* Now we need to filter all hashes and make a shingles result */
@@ -272,7 +257,6 @@ rspamd_shingles_from_image (gdouble *dct,
 
 	return shingle;
 }
-
 
 guint64
 rspamd_shingles_default_filter (guint64 *input, gsize count,
