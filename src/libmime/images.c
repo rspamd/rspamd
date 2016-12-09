@@ -23,7 +23,7 @@
 #include "gd.h"
 #include <math.h>
 
-#define RSPAMD_NORMALIZED_DIM rspamd_cryptobox_HASHBYTES / 8
+#define RSPAMD_NORMALIZED_DIM 64
 #endif
 
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
@@ -209,12 +209,167 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	return img;
 }
 
+#define SET_P(off_i, off_j) do { \
+	p[0] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j)); \
+	p[1] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j) + 1); \
+	p[2] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j) + 2); \
+	p[3] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j) + 3); \
+	p[4] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j)); \
+	p[5] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j) + 1); \
+	p[6] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j) + 2); \
+	p[7] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j) + 3); \
+} while (0)
+
+#define SET_N() do { \
+	n += (guint) ((gint)p[0] - navg); \
+	n += (guint) ((gint)p[1] - navg); \
+	n += (guint) ((gint)p[2] - navg); \
+	n += (guint) ((gint)p[3] - navg); \
+	n += (guint) ((gint)p[4] - navg); \
+	n += (guint) ((gint)p[5] - navg); \
+	n += (guint) ((gint)p[6] - navg); \
+	n += (guint) ((gint)p[7] - navg); \
+} while (0)
+
+#ifdef WITH_GD
+/*
+ * DCT from Emil Mikulic.
+ * http://unix4lyfe.org/dct/
+ */
+static void
+rspamd_image_dct_block (gint pixels[8][8], gdouble *out)
+{
+	gint i;
+	gint rows[8][8];
+
+	static const gint c1 = 1004 /* cos(pi/16) << 10 */,
+			s1 = 200 /* sin(pi/16) */,
+			c3 = 851 /* cos(3pi/16) << 10 */,
+			s3 = 569 /* sin(3pi/16) << 10 */,
+			r2c6 = 554 /* sqrt(2)*cos(6pi/16) << 10 */,
+			r2s6 = 1337 /* sqrt(2)*sin(6pi/16) << 10 */,
+			r2 = 181; /* sqrt(2) << 7*/
+
+	gint x0, x1, x2, x3, x4, x5, x6, x7, x8;
+
+	/* transform rows */
+	for (i = 0; i < 8; i++) {
+		x0 = pixels[0][i];
+		x1 = pixels[1][i];
+		x2 = pixels[2][i];
+		x3 = pixels[3][i];
+		x4 = pixels[4][i];
+		x5 = pixels[5][i];
+		x6 = pixels[6][i];
+		x7 = pixels[7][i];
+
+		/* Stage 1 */
+		x8 = x7 + x0;
+		x0 -= x7;
+		x7 = x1 + x6;
+		x1 -= x6;
+		x6 = x2 + x5;
+		x2 -= x5;
+		x5 = x3 + x4;
+		x3 -= x4;
+
+		/* Stage 2 */
+		x4 = x8 + x5;
+		x8 -= x5;
+		x5 = x7 + x6;
+		x7 -= x6;
+		x6 = c1 * (x1 + x2);
+		x2 = (-s1 - c1) * x2 + x6;
+		x1 = (s1 - c1) * x1 + x6;
+		x6 = c3 * (x0 + x3);
+		x3 = (-s3 - c3) * x3 + x6;
+		x0 = (s3 - c3) * x0 + x6;
+
+		/* Stage 3 */
+		x6 = x4 + x5;
+		x4 -= x5;
+		x5 = r2c6 * (x7 + x8);
+		x7 = (-r2s6 - r2c6) * x7 + x5;
+		x8 = (r2s6 - r2c6) * x8 + x5;
+		x5 = x0 + x2;
+		x0 -= x2;
+		x2 = x3 + x1;
+		x3 -= x1;
+
+		/* Stage 4 and output */
+		rows[i][0] = x6;
+		rows[i][4] = x4;
+		rows[i][2] = x8 >> 10;
+		rows[i][6] = x7 >> 10;
+		rows[i][7] = (x2 - x5) >> 10;
+		rows[i][1] = (x2 + x5) >> 10;
+		rows[i][3] = (x3 * r2) >> 17;
+		rows[i][5] = (x0 * r2) >> 17;
+	}
+
+	/* transform columns */
+	for (i = 0; i < 8; i++) {
+		x0 = rows[0][i];
+		x1 = rows[1][i];
+		x2 = rows[2][i];
+		x3 = rows[3][i];
+		x4 = rows[4][i];
+		x5 = rows[5][i];
+		x6 = rows[6][i];
+		x7 = rows[7][i];
+
+		/* Stage 1 */
+		x8 = x7 + x0;
+		x0 -= x7;
+		x7 = x1 + x6;
+		x1 -= x6;
+		x6 = x2 + x5;
+		x2 -= x5;
+		x5 = x3 + x4;
+		x3 -= x4;
+
+		/* Stage 2 */
+		x4 = x8 + x5;
+		x8 -= x5;
+		x5 = x7 + x6;
+		x7 -= x6;
+		x6 = c1 * (x1 + x2);
+		x2 = (-s1 - c1) * x2 + x6;
+		x1 = (s1 - c1) * x1 + x6;
+		x6 = c3 * (x0 + x3);
+		x3 = (-s3 - c3) * x3 + x6;
+		x0 = (s3 - c3) * x0 + x6;
+
+		/* Stage 3 */
+		x6 = x4 + x5;
+		x4 -= x5;
+		x5 = r2c6 * (x7 + x8);
+		x7 = (-r2s6 - r2c6) * x7 + x5;
+		x8 = (r2s6 - r2c6) * x8 + x5;
+		x5 = x0 + x2;
+		x0 -= x2;
+		x2 = x3 + x1;
+		x3 -= x1;
+
+		/* Stage 4 and output */
+		out[i * 8] = (double) ((x6 + 16) >> 3);
+		out[i * 8 + 1] = (double) ((x4 + 16) >> 3);
+		out[i * 8 + 2] = (double) ((x8 + 16384) >> 13);
+		out[i * 8 + 3] = (double) ((x7 + 16384) >> 13);
+		out[i * 8 + 4] = (double) ((x2 - x5 + 16384) >> 13);
+		out[i * 8 + 5] = (double) ((x2 + x5 + 16384) >> 13);
+		out[i * 8 + 6] = (double) (((x3 >> 8) * r2 + 8192) >> 12);
+		out[i * 8 + 7] = (double) (((x0 >> 8) * r2 + 8192) >> 12);
+	}
+}
+#endif
+
 static void
 rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 {
 #ifdef WITH_GD
 	gdImagePtr src = NULL, dst = NULL;
-	guint nw, nh, i, j, b = 0, nmax, nmin;
+	guint i, j, k, l;
 
 	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
 		return;
@@ -249,29 +404,14 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 	else {
 		gdImageSetInterpolationMethod (src, GD_BILINEAR_FIXED);
 
-		nw = RSPAMD_NORMALIZED_DIM;
-		nh = RSPAMD_NORMALIZED_DIM;
-
-		dst = gdImageScale (src, nw, nh);
+		dst = gdImageScale (src, RSPAMD_NORMALIZED_DIM, RSPAMD_NORMALIZED_DIM);
 		gdImageGrayScale (dst);
 		gdImageDestroy (src);
 
 		img->is_normalized = TRUE;
-		nmax = 0;
-		nmin = G_MAXUINT;
-
-		/* Calculate moving average */
-		for (i = 0; i < nh; i ++) {
-			for (j = 0; j < nw; j ++) {
-				guint px = (guint)gdImageGetPixel (dst, j, i);
-				if (px > nmax) {
-					nmax = px;
-				}
-				if (px < nmin) {
-					nmin = px;
-				}
-			}
-		}
+		img->dct = g_malloc (sizeof (gdouble) * 64 * 64);
+		rspamd_mempool_add_destructor (task->task_pool, g_free,
+				img->dct);
 
 		/*
 		 * Split message into blocks:
@@ -290,58 +430,52 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		 * So on each iteration we move by 16 pixels and calculate 2 elements of
 		 * signature
 		 */
-		for (i = 0; i < nh; i += 4) {
-			for (j = 0; j < nw; j += 4) {
-				guint p[8];
-				guint64 n = 0;
+		for (i = 0; i < RSPAMD_NORMALIZED_DIM; i += 8) {
+			for (j = 0; j < RSPAMD_NORMALIZED_DIM; j += 8) {
+				gint p[8][8];
 
-				p[0] = nmax - (guint)gdImageGetPixel (dst, i, j) + nmin;
-				p[1] = nmax - (guint)gdImageGetPixel (dst, i, j + 1) + nmin;
-				p[2] = nmax - (guint)gdImageGetPixel (dst, i, j + 2) + nmin;
-				p[3] = nmax - (guint)gdImageGetPixel (dst, i, j + 3) + nmin;
-				p[4] = nmax - (guint)gdImageGetPixel (dst, i + 1, j) + nmin;
-				p[5] = nmax - (guint)gdImageGetPixel (dst, i + 1, j + 1) + nmin;
-				p[6] = nmax - (guint)gdImageGetPixel (dst, i + 1, j + 2) + nmin;
-				p[7] = nmax - (guint)gdImageGetPixel (dst, i + 1, j + 3) + nmin;
+				for (k = 0; k < 8; k ++) {
+					p[k][0] = gdImageGetPixel (dst, i + k, j);
+					p[k][1] = gdImageGetPixel (dst, i + k, j + 1);
+					p[k][2] = gdImageGetPixel (dst, i + k, j + 2);
+					p[k][3] = gdImageGetPixel (dst, i + k, j + 3);
+					p[k][4] = gdImageGetPixel (dst, i + k, j + 4);
+					p[k][5] = gdImageGetPixel (dst, i + k, j + 5);
+					p[k][6] = gdImageGetPixel (dst, i + k, j + 6);
+					p[k][7] = gdImageGetPixel (dst, i + k, j + 7);
+				}
 
-				n |= ((guint64)(p[0] / (nmax - nmin) % 256)) << 0;
-				n |= ((guint64)(p[1] / (nmax - nmin) % 256)) << 8;
-				n |= ((guint64)(p[2] / (nmax - nmin) % 256)) << 16;
-				n |= ((guint64)(p[3] / (nmax - nmin) % 256)) << 24;
-				n |= ((guint64)(p[4] / (nmax - nmin) % 256)) << 32;
-				n |= ((guint64)(p[5] / (nmax - nmin) % 256)) << 40;
-				n |= ((guint64)(p[6] / (nmax - nmin) % 256)) << 48;
-				n |= ((guint64)(p[7] / (nmax - nmin) % 256)) << 56;
-				img->fuzzy_sig[b++] = n;
+				rspamd_image_dct_block (p,
+						img->dct + i * RSPAMD_NORMALIZED_DIM + j);
 
-				p[0] = nmax - (guint)gdImageGetPixel (dst, i + 2, j) + nmin;
-				p[1] = nmax - (guint)gdImageGetPixel (dst, i + 2, j + 1) + nmin;
-				p[2] = nmax - (guint)gdImageGetPixel (dst, i + 2, j + 2) + nmin;
-				p[3] = nmax - (guint)gdImageGetPixel (dst, i + 2, j + 3) + nmin;
-				p[4] = nmax - (guint)gdImageGetPixel (dst, i + 3, j) + nmin;
-				p[5] = nmax - (guint)gdImageGetPixel (dst, i + 3, j + 1) + nmin;
-				p[6] = nmax - (guint)gdImageGetPixel (dst, i + 3, j + 2) + nmin;
-				p[7] = nmax - (guint)gdImageGetPixel (dst, i + 3, j + 3) + nmin;
+				gdouble avg = 0.0;
 
-				n |= ((guint64)(p[0] / (nmax - nmin) % 256)) << 0;
-				n |= ((guint64)(p[1] / (nmax - nmin) % 256)) << 8;
-				n |= ((guint64)(p[2] / (nmax - nmin) % 256)) << 16;
-				n |= ((guint64)(p[3] / (nmax - nmin) % 256)) << 24;
-				n |= ((guint64)(p[4] / (nmax - nmin) % 256)) << 32;
-				n |= ((guint64)(p[5] / (nmax - nmin) % 256)) << 40;
-				n |= ((guint64)(p[6] / (nmax - nmin) % 256)) << 48;
-				n |= ((guint64)(p[7] / (nmax - nmin) % 256)) << 56;
-				img->fuzzy_sig[b++] = n;
+				for (k = 0; k < 8; k ++) {
+					for (l = 0; l < 8; l ++) {
+						gdouble x = *(img->dct +
+								i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
+						avg += (x - avg) / (gdouble)(k * 8 + l + 1);
+					}
+
+				}
+
+				for (k = 0; k < 8; k ++) {
+					for (l = 0; l < 8; l ++) {
+						gdouble* x = img->dct +
+								i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
+						*x = *x >= avg ? 1.0 : 0.0;
+					}
+				}
+
 			}
 		}
-
-		msg_debug_task ("min: %d, max: %d, sig: %32xs, elts: %d", nmin, nmax,
-				(const char *)img->fuzzy_sig, b);
 
 		gdImageDestroy (dst);
 	}
 #endif
 }
+
+#undef SET_P
 
 static void
 process_image (struct rspamd_task *task, struct rspamd_mime_part *part)

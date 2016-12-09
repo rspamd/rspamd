@@ -24,7 +24,7 @@ struct rspamd_image {
 	guint32 width;
 	guint32 height;
 	gboolean is_normalized;
-	guint64 fuzzy_sig[32];
+	gdouble *dct;
 };
 
 /*
