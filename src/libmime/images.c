@@ -19,7 +19,7 @@
 #include "message.h"
 #include "html.h"
 
-#ifdef WITH_GD
+#ifdef USABLE_GD
 #include "gd.h"
 #include <math.h>
 
@@ -209,7 +209,7 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	return img;
 }
 
-#ifdef WITH_GD
+#ifdef USABLE_GD
 /*
  * DCT from Emil Mikulic.
  * http://unix4lyfe.org/dct/
@@ -345,7 +345,7 @@ rspamd_image_dct_block (gint pixels[8][8], gdouble *out)
 static void
 rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 {
-#ifdef WITH_GD
+#ifdef USABLE_GD
 	gdImagePtr src = NULL, dst = NULL;
 	guint i, j, k, l;
 
