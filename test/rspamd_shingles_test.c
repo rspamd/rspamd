@@ -117,11 +117,11 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor,
 	ottery_rand_bytes (key, sizeof (key));
 	input = generate_fuzzy_words (cnt, max_len);
 	ts1 = rspamd_get_virtual_ticks ();
-	sgl = rspamd_shingles_generate (input, key, NULL,
+	sgl = rspamd_shingles_from_text (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, alg);
 	ts2 = rspamd_get_virtual_ticks ();
 	permute_vector (input, perm_factor);
-	sgl_permuted = rspamd_shingles_generate (input, key, NULL,
+	sgl_permuted = rspamd_shingles_from_text (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, alg);
 
 	res = rspamd_shingles_compare (sgl, sgl_permuted);
@@ -203,28 +203,28 @@ rspamd_shingles_test_func (void)
 		g_array_append_val (input, tok);
 	}
 
-	sgl = rspamd_shingles_generate (input, key, NULL,
+	sgl = rspamd_shingles_from_text (input, key, NULL,
 				rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_OLD);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		g_assert (sgl->hashes[i] == expected_old[i]);
 	}
 	g_free (sgl);
 
-	sgl = rspamd_shingles_generate (input, key, NULL,
+	sgl = rspamd_shingles_from_text (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_XXHASH);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		g_assert (sgl->hashes[i] == expected_xxhash[i]);
 	}
 	g_free (sgl);
 
-	sgl = rspamd_shingles_generate (input, key, NULL,
+	sgl = rspamd_shingles_from_text (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_MUMHASH);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		g_assert (sgl->hashes[i] == expected_mumhash[i]);
 	}
 	g_free (sgl);
 
-	sgl = rspamd_shingles_generate (input, key, NULL,
+	sgl = rspamd_shingles_from_text (input, key, NULL,
 			rspamd_shingles_default_filter, NULL, RSPAMD_SHINGLES_FAST);
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		g_assert (sgl->hashes[i] == expected_fasthash[i]);

@@ -1242,7 +1242,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		msg_debug_pool ("loading shingles of type %s with key %*xs",
 				rule->algorithm_str,
 				16, rule->shingles_key->str);
-		sh = rspamd_shingles_generate (words,
+		sh = rspamd_shingles_from_text (words,
 				rule->shingles_key->str, pool,
 				rspamd_shingles_default_filter, NULL,
 				rule->alg);
@@ -1299,9 +1299,8 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd;
 	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
-	guint i;
 	struct fuzzy_cmd_io *io;
-	guint64 shingles[RSPAMD_SHINGLE_SIZE];
+	struct rspamd_shingle *sh;
 
 	cached = fuzzy_cmd_get_cached (rule, pool, img);
 
@@ -1318,24 +1317,22 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 		/*
 		 * Generate shingles
 		 */
-		G_STATIC_ASSERT (G_N_ELEMENTS (img->fuzzy_sig) == RSPAMD_SHINGLE_SIZE);
-
-		for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-			shingles[i] = rspamd_cryptobox_fast_hash_specific (
-					RSPAMD_CRYPTOBOX_MUMHASH,
-					(const guchar *)&img->fuzzy_sig[i],
-					sizeof (img->fuzzy_sig[i]), 0);
+		sh = rspamd_shingles_from_image (img->dct,
+				rule->shingles_key->str, pool,
+				rspamd_shingles_default_filter, NULL,
+				rule->alg);
+		if (sh != NULL) {
+			memcpy (&shcmd->sgl, sh->hashes, sizeof (shcmd->sgl));
+			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 		}
+
 		rspamd_cryptobox_hash (shcmd->basic.digest,
-				(const guchar *)img->fuzzy_sig, sizeof (img->fuzzy_sig),
+				(const guchar *)img->dct, sizeof (gdouble) * 64 * 64,
 				rule->hash_key->str, rule->hash_key->len);
 
 		msg_debug_pool ("loading shingles of type %s with key %*xs",
 				rule->algorithm_str,
 				16, rule->shingles_key->str);
-
-		memcpy (&shcmd->sgl, shingles, sizeof (shcmd->sgl));
-		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 
 		/*
 		 * We always save encrypted command as it can handle both
@@ -1605,9 +1602,10 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	nval *= rep->prob;
 	msg_info_task (
 			"found fuzzy hash %*xs with weight: "
-			"%.2f, in list: %s:%d%s",
+			"%.2f, probability %.2f, in list: %s:%d%s",
 			(gint)sizeof (cmd->digest), cmd->digest,
 			nval,
+			(gdouble)rep->prob,
 			symbol,
 			rep->flag,
 			map == NULL ? "(unknown)" : "");
