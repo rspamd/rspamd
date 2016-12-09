@@ -20,7 +20,7 @@
 #define SHINGLES_WINDOW 3
 
 struct rspamd_shingle* RSPAMD_OPTIMIZE("unroll-loops")
-rspamd_shingles_generate (GArray *input,
+rspamd_shingles_from_text (GArray *input,
 		const guchar key[16],
 		rspamd_mempool_t *pool,
 		rspamd_shingles_filter filter,
@@ -158,6 +158,119 @@ rspamd_shingles_generate (GArray *input,
 	rspamd_fstring_free (row);
 
 	return res;
+}
+
+struct rspamd_shingle* RSPAMD_OPTIMIZE("unroll-loops")
+rspamd_shingles_from_image (gdouble *dct,
+		const guchar key[16],
+		rspamd_mempool_t *pool,
+		rspamd_shingles_filter filter,
+		gpointer filterd,
+		enum rspamd_shingle_alg alg)
+{
+	struct rspamd_shingle *shingle;
+	guint64 **hashes;
+	rspamd_sipkey_t keys[RSPAMD_SHINGLE_SIZE];
+	guchar shabuf[rspamd_cryptobox_HASHBYTES], *out_key;
+	const guchar *cur_key;
+	gdouble d;
+	rspamd_cryptobox_hash_state_t bs;
+	guint64 val;
+	gint i, j, k;
+	gsize hlen, beg = 0;
+	enum rspamd_cryptobox_fast_hash_type ht;
+	guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
+
+	if (pool != NULL) {
+		shingle = rspamd_mempool_alloc (pool, sizeof (*shingle));
+	}
+	else {
+		shingle = g_malloc (sizeof (*shingle));
+	}
+
+	rspamd_cryptobox_hash_init (&bs, NULL, 0);
+	cur_key = key;
+	out_key = (guchar *)&keys[0];
+
+	/* Init hashes pipes and keys */
+	hashes = g_slice_alloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
+	hlen = 64 - SHINGLES_WINDOW + 1;
+
+	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+		hashes[i] = g_slice_alloc (hlen * sizeof (guint64));
+		/*
+		 * To generate a set of hashes we just apply sha256 to the
+		 * initial key as many times as many hashes are required and
+		 * xor left and right parts of sha256 to get a single 16 bytes SIP key.
+		 */
+		rspamd_cryptobox_hash_update (&bs, cur_key, 16);
+		rspamd_cryptobox_hash_final (&bs, shabuf);
+
+		for (j = 0; j < 16; j ++) {
+			out_key[j] = shabuf[j];
+		}
+
+		rspamd_cryptobox_hash_init (&bs, NULL, 0);
+		cur_key = out_key;
+		out_key += 16;
+	}
+
+	switch (alg) {
+	case RSPAMD_SHINGLES_OLD:
+		ht = RSPAMD_CRYPTOBOX_MUMHASH;
+		break;
+	case RSPAMD_SHINGLES_XXHASH:
+		ht = RSPAMD_CRYPTOBOX_XXHASH64;
+		break;
+	case RSPAMD_SHINGLES_MUMHASH:
+		ht = RSPAMD_CRYPTOBOX_MUMHASH;
+		break;
+	default:
+		ht = RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT;
+		break;
+	}
+
+	memset (res, 0, sizeof (res));
+
+	for (i = 0; i <=  64; i ++) {
+		if (i - beg >= SHINGLES_WINDOW || i == 64) {
+			for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
+				/* Shift hashes window to right */
+				for (k = 0; k < SHINGLES_WINDOW - 1; k ++) {
+					res[j * SHINGLES_WINDOW + k] =
+							res[j * SHINGLES_WINDOW + k + 1];
+				}
+
+				d = dct[beg];
+				/* Insert the last element to the pipe */
+				memcpy (&seed, keys[j], sizeof (seed));
+				res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
+						rspamd_cryptobox_fast_hash_specific (ht,
+								&d, sizeof (d),
+								seed);
+				val = 0;
+				for (k = 0; k < SHINGLES_WINDOW; k ++) {
+					val ^= res[j * SHINGLES_WINDOW + k] >>
+							(8 * (SHINGLES_WINDOW - k - 1));
+				}
+
+				g_assert (hlen > beg);
+				hashes[j][beg] = val;
+			}
+			beg++;
+		}
+	}
+
+	/* Now we need to filter all hashes and make a shingles result */
+	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+		shingle->hashes[i] = filter (hashes[i], hlen,
+				i, key, filterd);
+		g_slice_free1 (hlen * sizeof (guint64), hashes[i]);
+	}
+
+	g_slice_free1 (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE, hashes);
+
+	return shingle;
 }
 
 
