@@ -285,30 +285,27 @@
         }
         // @ ms to date
         function msToTime(seconds) {
-            minutes = parseInt(seconds / 60);
-            hours = parseInt(seconds / 3600);
-            days = parseInt(seconds / 3600 / 24);
-            weeks = parseInt(seconds / 3600 / 24 / 7);
-            years = parseInt(seconds / 3600 / 168 / 365);
-            if (weeks > 0) {
-                years = years >= 10 ? years : '0' + years;
-                weeks -= years * 168;
-                weeks = weeks >= 10 ? weeks : '0' + weeks;
-                // Return in format X years and Y weeks
-                return years + ' years ' + weeks + ' weeks';
-            }
-            seconds -= minutes * 60;
-            minutes -= hours * 60;
-            hours -= days * 24;
-            days = days >= 10 ? days : '0' + days;
-            hours = hours >= 10 ? hours : '0' + hours;
-            minutes = minutes >= 10 ? minutes : '0' + minutes;
-            seconds = seconds >= 10 ? seconds : '0' + seconds;
-            if (days > 0) {
-                return days + ' days, ' + hours + ':' + minutes + ':' + seconds;
-            } else {
-                return hours + ':' + minutes + ':' + seconds;
-            }
+             years = seconds / 31536000 >> 0 // 3600*24*365
+             months = seconds % 31536000 / 2628000 >> 0; //3600*24*365/12
+             days = seconds % 31536000 % 2628000 / 86400 >> 0; //24*3600
+             hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
+             minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
+             if (years > 0) {
+               if (months > 0) {
+                 out = years + 'yr ' + months + 'mth';
+               } else {
+                 out = years + 'yr ' + days + 'd';
+               }
+             } else if (months > 0) {
+               out = months + 'mth ' + days + 'd';
+             } else if (days > 0) {
+               out = days + 'd ' + hours + 'hr';
+             } else if (hours > 0) {
+               out = hours + 'hr ' + minutes + 'min';
+             } else {
+               out = minutes + 'min';
+             }
+             return out;
         }
         // @show widgets
         function statWidgets() {
