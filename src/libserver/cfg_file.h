@@ -310,6 +310,7 @@ struct rspamd_config {
 	gsize max_cores_count;                          /**< maximum number of core files						*/
 	gchar *cores_dir;                               /**< directory for core files							*/
 	gsize max_message;                              /**< maximum size for messages							*/
+	gsize max_pic_size;                             /**< maximum size for a picture to process				*/
 
 	enum rspamd_log_type log_type;                  /**< log type											*/
 	gint log_facility;                              /**< log facility in case of syslog						*/

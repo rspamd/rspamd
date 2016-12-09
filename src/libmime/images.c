@@ -209,28 +209,6 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	return img;
 }
 
-#define SET_P(off_i, off_j) do { \
-	p[0] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j)); \
-	p[1] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j) + 1); \
-	p[2] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j) + 2); \
-	p[3] = (guint)gdImageGetPixel (dst, i + (off_i), j + (off_j) + 3); \
-	p[4] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j)); \
-	p[5] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j) + 1); \
-	p[6] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j) + 2); \
-	p[7] = (guint)gdImageGetPixel (dst, i + (off_i) + 1, j + (off_j) + 3); \
-} while (0)
-
-#define SET_N() do { \
-	n += (guint) ((gint)p[0] - navg); \
-	n += (guint) ((gint)p[1] - navg); \
-	n += (guint) ((gint)p[2] - navg); \
-	n += (guint) ((gint)p[3] - navg); \
-	n += (guint) ((gint)p[4] - navg); \
-	n += (guint) ((gint)p[5] - navg); \
-	n += (guint) ((gint)p[6] - navg); \
-	n += (guint) ((gint)p[7] - navg); \
-} while (0)
-
 #ifdef WITH_GD
 /*
  * DCT from Emil Mikulic.
@@ -475,8 +453,6 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 #endif
 }
 
-#undef SET_P
-
 static void
 process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
@@ -516,7 +492,14 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 			task->message_id);
 		img->filename = part->filename;
 		img->parent = part;
-		rspamd_image_normalize (task, img);
+
+		if (img->data->len <= task->cfg->max_pic_size) {
+			rspamd_image_normalize (task, img);
+		}
+		else {
+			msg_info_task ("skip normalization for image %s: too large: %z",
+					img->filename, img->data->len);
+		}
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
 		part->specific_data = img;
 

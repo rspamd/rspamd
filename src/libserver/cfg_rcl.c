@@ -2015,7 +2015,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct rspamd_config, max_message),
 			RSPAMD_CL_FLAG_INT_SIZE,
-			"Maximum size of the message to be scanned");
+			"Maximum size of the message to be scanned (50Mb by default)");
+	rspamd_rcl_add_default_handler (sub,
+			"max_pic",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_pic_size),
+			RSPAMD_CL_FLAG_INT_SIZE,
+			"Maximum size of the picture to be normalized (1Mb by default)");
 	rspamd_rcl_add_default_handler (sub,
 			"zstd_input_dictionary",
 			rspamd_rcl_parse_struct_string,
