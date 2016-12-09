@@ -7,6 +7,8 @@ struct html_image;
 struct rspamd_task;
 struct rspamd_mime_part;
 
+#define RSPAMD_DCT_LEN (64 * 64)
+
 enum rspamd_image_type {
 	IMAGE_TYPE_PNG = 0,
 	IMAGE_TYPE_JPG,
@@ -24,7 +26,7 @@ struct rspamd_image {
 	guint32 width;
 	guint32 height;
 	gboolean is_normalized;
-	gdouble *dct;
+	guchar *dct;
 };
 
 /*

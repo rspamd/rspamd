@@ -21,9 +21,13 @@
 
 #ifdef USABLE_GD
 #include "gd.h"
+#include "hash.h"
 #include <math.h>
 
 #define RSPAMD_NORMALIZED_DIM 64
+#define RSPAMD_IMAGES_CACHE_SIZE 256
+
+static rspamd_lru_hash_t *images_hash = NULL;
 #endif
 
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
@@ -34,7 +38,6 @@ static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
 static void process_image (struct rspamd_task *task, struct rspamd_mime_part *part);
-
 
 void
 rspamd_images_process (struct rspamd_task *task)
@@ -340,6 +343,87 @@ rspamd_image_dct_block (gint pixels[8][8], gdouble *out)
 		out[i * 8 + 7] = (double) (((x0 >> 8) * r2 + 8192) >> 12);
 	}
 }
+
+struct rspamd_image_cache_entry {
+	guchar digest[64];
+	guchar dct[RSPAMD_DCT_LEN / NBBY];
+};
+
+static void
+rspamd_image_cache_entry_dtor (gpointer p)
+{
+	struct rspamd_image_cache_entry *entry = p;
+	g_slice_free1 (sizeof (*entry), entry);
+}
+
+static guint32
+rspamd_image_dct_hash (gconstpointer p)
+{
+	return rspamd_cryptobox_fast_hash (p, rspamd_cryptobox_HASHBYTES,
+			rspamd_hash_seed ());
+}
+
+static gboolean
+rspamd_image_dct_equal (gconstpointer a, gconstpointer b)
+{
+	return memcmp (a, b, rspamd_cryptobox_HASHBYTES) == 0;
+}
+
+static void
+rspamd_image_create_cache (struct rspamd_config *cfg)
+{
+	images_hash = rspamd_lru_hash_new_full (RSPAMD_IMAGES_CACHE_SIZE, NULL,
+			rspamd_image_cache_entry_dtor,
+			rspamd_image_dct_hash, rspamd_image_dct_equal);
+}
+
+static gboolean
+rspamd_image_check_hash (struct rspamd_task *task, struct rspamd_image *img)
+{
+	struct rspamd_image_cache_entry *found;
+
+	if (images_hash == NULL) {
+		rspamd_image_create_cache (task->cfg);
+	}
+
+	found = rspamd_lru_hash_lookup (images_hash, img->parent->digest,
+			task->tv.tv_sec);
+
+	if (found) {
+		/* We need to decompress */
+		img->dct = g_malloc (RSPAMD_DCT_LEN / NBBY);
+		rspamd_mempool_add_destructor (task->task_pool, g_free,
+				img->dct);
+		/* Copy as found could be destroyed by LRU */
+		memcpy (img->dct, found->dct, RSPAMD_DCT_LEN / NBBY);
+		img->is_normalized = TRUE;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static void
+rspamd_image_save_hash (struct rspamd_task *task, struct rspamd_image *img)
+{
+	struct rspamd_image_cache_entry *found;
+
+	if (img->is_normalized) {
+		found = rspamd_lru_hash_lookup (images_hash, img->parent->digest,
+				task->tv.tv_sec);
+
+		if (!found) {
+			found = g_slice_alloc0 (sizeof (*found));
+			memcpy (found->dct, img->dct, RSPAMD_DCT_LEN / NBBY);
+			memcpy (found->digest, img->parent->digest, sizeof (found->digest));
+
+			rspamd_lru_hash_insert (images_hash, found->digest, found,
+					task->tv.tv_sec, 0);
+		}
+	}
+}
+
 #endif
 
 static void
@@ -348,6 +432,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 #ifdef USABLE_GD
 	gdImagePtr src = NULL, dst = NULL;
 	guint i, j, k, l;
+	gdouble *dct;
 
 	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
 		return;
@@ -355,6 +440,10 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 
 	if (img->height <= RSPAMD_NORMALIZED_DIM ||
 			img->width <= RSPAMD_NORMALIZED_DIM) {
+		return;
+	}
+
+	if (rspamd_image_check_hash (task, img)) {
 		return;
 	}
 
@@ -387,7 +476,8 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		gdImageDestroy (src);
 
 		img->is_normalized = TRUE;
-		img->dct = g_malloc (sizeof (gdouble) * 64 * 64);
+		dct = g_malloc (sizeof (gdouble) * RSPAMD_DCT_LEN);
+		img->dct = g_malloc0 (RSPAMD_DCT_LEN / NBBY);
 		rspamd_mempool_add_destructor (task->task_pool, g_free,
 				img->dct);
 
@@ -424,31 +514,37 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 				}
 
 				rspamd_image_dct_block (p,
-						img->dct + i * RSPAMD_NORMALIZED_DIM + j);
+						dct + i * RSPAMD_NORMALIZED_DIM + j);
 
 				gdouble avg = 0.0;
 
 				for (k = 0; k < 8; k ++) {
 					for (l = 0; l < 8; l ++) {
-						gdouble x = *(img->dct +
+						gdouble x = *(dct +
 								i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
 						avg += (x - avg) / (gdouble)(k * 8 + l + 1);
 					}
 
 				}
 
+
 				for (k = 0; k < 8; k ++) {
 					for (l = 0; l < 8; l ++) {
-						gdouble* x = img->dct +
-								i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
-						*x = *x >= avg ? 1.0 : 0.0;
+						guint idx = i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
+
+						if (dct[idx] >= avg) {
+							setbit (img->dct, idx);
+						}
 					}
 				}
+
 
 			}
 		}
 
 		gdImageDestroy (dst);
+		g_free (dct);
+		rspamd_image_save_hash (task, img);
 	}
 #endif
 }
