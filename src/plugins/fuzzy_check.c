@@ -1324,10 +1324,15 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 		if (sh != NULL) {
 			memcpy (&shcmd->sgl, sh->hashes, sizeof (shcmd->sgl));
 			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+#if 0
+			for (unsigned int i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+				msg_err ("shingle %d: %L", i, sh->hashes[i]);
+			}
+#endif
 		}
 
 		rspamd_cryptobox_hash (shcmd->basic.digest,
-				(const guchar *)img->dct, sizeof (gdouble) * 64 * 64,
+				(const guchar *)img->dct, RSPAMD_DCT_LEN / NBBY,
 				rule->hash_key->str, rule->hash_key->len);
 
 		msg_debug_pool ("loading shingles of type %s with key %*xs",
