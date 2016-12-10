@@ -2023,6 +2023,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			RSPAMD_CL_FLAG_INT_SIZE,
 			"Maximum size of the picture to be normalized (1Mb by default)");
 	rspamd_rcl_add_default_handler (sub,
+			"images_cache",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_pic_size),
+			RSPAMD_CL_FLAG_INT_SIZE,
+			"Size of DCT data cache for images (256 elements by default)");
+	rspamd_rcl_add_default_handler (sub,
 			"zstd_input_dictionary",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_config, zstd_input_dictionary),

@@ -173,6 +173,7 @@ rspamd_config_new (void)
 	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
 	cfg->max_pic_size = DEFAULT_MAX_PIC;
+	cfg->images_cache_size = 256;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init ();
 #ifdef WITH_HIREDIS
 	cfg->redis_pool = rspamd_redis_pool_init ();

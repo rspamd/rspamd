@@ -25,7 +25,6 @@
 #include <math.h>
 
 #define RSPAMD_NORMALIZED_DIM 64
-#define RSPAMD_IMAGES_CACHE_SIZE 256
 
 static rspamd_lru_hash_t *images_hash = NULL;
 #endif
@@ -372,7 +371,7 @@ rspamd_image_dct_equal (gconstpointer a, gconstpointer b)
 static void
 rspamd_image_create_cache (struct rspamd_config *cfg)
 {
-	images_hash = rspamd_lru_hash_new_full (RSPAMD_IMAGES_CACHE_SIZE, NULL,
+	images_hash = rspamd_lru_hash_new_full (cfg->images_cache_size, NULL,
 			rspamd_image_cache_entry_dtor,
 			rspamd_image_dct_hash, rspamd_image_dct_equal);
 }
