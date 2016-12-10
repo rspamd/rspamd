@@ -2322,7 +2322,7 @@ rspamd_hash_seed (void)
 static inline gdouble
 rspamd_double_from_int64 (guint64 x)
 {
-	const union { guint i; double d; } u = {
+	const union { guint64 i; double d; } u = {
 			.i = G_GUINT64_CONSTANT(0x3FF) << 52 | x >> 12
 	};
 
