@@ -2320,15 +2320,13 @@ rspamd_hash_seed (void)
 }
 
 static inline gdouble
-rspamd_double_from_int64 (guint64 rnd_int)
+rspamd_double_from_int64 (guint64 x)
 {
-	double res;
-	const double transform_bias = 2.2204460492503130808472633361816e-16;
+	const union { guint i; double d; } u = {
+			.i = G_GUINT64_CONSTANT(0x3FF) << 52 | x >> 12
+	};
 
-	res = rnd_int >> 12;
-	res *= transform_bias;
-
-	return res;
+	return u.d - 1.0;
 }
 
 gdouble
