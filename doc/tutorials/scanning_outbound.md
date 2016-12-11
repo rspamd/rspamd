@@ -1,3 +1,7 @@
+---
+layout: doc
+title: Scanning outbound mail
+---
 # Scanning outbound mail
 
 ## Why and how to scan outbound mail
