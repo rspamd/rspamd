@@ -309,6 +309,26 @@
         }
         // @show widgets
         function statWidgets() {
+            $.ajax({
+                dataType: 'json',
+                type: 'GET',
+                url: 'auth',
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
+                },
+                success: function (data) {
+                  if (!supportsSessionStorage()) {
+                      $.cookie('rspamdsession', data, {
+                          expires: 1
+                      }, {
+                          path: '/'
+                      });
+                      } else {
+                          sessionStorage.setItem('Credentials', JSON.stringify(data));
+                      }
+                  }
+            });
             var widgets = $('#statWidgets');
             $(widgets).empty().hide();
             var data;
