@@ -1671,7 +1671,7 @@ rspamd_encode_hex (const guchar *in, gsize inlen)
 	return out;
 }
 
-gint
+gssize
 rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 		guchar *out, gsize outlen)
 {
@@ -1736,6 +1736,93 @@ rspamd_decode_hex (const gchar *in, gsize inlen)
 	g_free (out);
 
 	return NULL;
+}
+
+gssize
+rspamd_decode_qp_buf (const gchar *in, gsize inlen,
+		gchar *out, gsize outlen)
+{
+	gchar *o, *end, *pos, c;
+	const gchar *p;
+	guchar ret;
+	gsize remain, processed;
+
+	p = in;
+	o = out;
+	end = out + outlen;
+	remain = inlen;
+
+	while (remain > 0 && o < end) {
+		if (*p == '=') {
+			p ++;
+			remain --;
+
+			if (remain == 0) {
+				if (end - o > 0) {
+					*o++ = *p;
+					break;
+				}
+			}
+decode:
+			/* Decode character after '=' */
+			c = *p++;
+			remain --;
+
+			if      (c >= '0' && c <= '9') { ret = c - '0'; }
+			else if (c >= 'A' && c <= 'F') { ret = c - 'A' + 10; }
+			else if (c >= 'a' && c <= 'f') { ret = c - 'a' + 10; }
+			else if (c == '\r' || c == '\n') {
+				/* Soft line break */
+				while (remain > 0 && (*p == '\r' || *p == '\n')) {
+					remain --;
+					p ++;
+				}
+
+				continue;
+			}
+
+			if (remain > 0) {
+				c = *p++;
+				ret *= 16;
+
+				if      (c >= '0' && c <= '9') ret += c - '0';
+				else if (c >= 'A' && c <= 'F') ret += c - 'A' + 10;
+				else if (c >= 'a' && c <= 'f') ret += c - 'a' + 10;
+
+				if (end - o > 0) {
+					*o++ = (gchar)ret;
+				}
+				else {
+					return (-1);
+				}
+
+				remain --;
+			}
+		}
+		else {
+			if (end - o >= remain) {
+				if ((pos = memccpy (o, p, '=', remain)) == NULL) {
+					/* All copied */
+					o += remain;
+					break;
+				}
+				else {
+					processed = pos - o;
+					remain -= processed;
+					p += processed;
+					o = pos - 1;
+					/* Skip comparison, as we know that we have found match */
+					goto decode;
+				}
+			}
+			else {
+				/* Buffer overflow */
+				return (-1);
+			}
+		}
+	}
+
+	return (o - out);
 }
 
 
