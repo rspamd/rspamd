@@ -21,11 +21,8 @@
   ietf_token = token+;
   custom_x_token = 'x'i "-" token+;
   extension_token = ietf_token | custom_x_token;
-  discrete_type = 'text'i | 'image'i | 'audio'i | 'video'i |
-                  'application'i | extension_token;
-  composite_type = 'message'i | 'multipart'i | extension_token;
   iana_token = token+;
-  main_type = (discrete_type | composite_type) >Type_Start %Type_End;
+  main_type = (extension_token) >Type_Start %Type_End;
   sub_type = (extension_token | iana_token) >Subtype_Start %Subtype_End;
   content_type = main_type ("/" sub_type)? (((CFWS? ";"+) | CFWS) parameter CFWS?)*;
 
