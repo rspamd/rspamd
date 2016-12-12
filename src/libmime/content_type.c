@@ -115,6 +115,17 @@ rspamd_content_type_parse (const gchar *in,
 				}
 			}
 		}
+		else {
+			/* Common mistake done by retards */
+			srch.begin = "alternate";
+			srch.len = 9;
+
+			if (rspamd_ftok_cmp (&res->subtype, &srch) == 0) {
+				res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+				res->subtype.begin = "alternative";
+				res->subtype.len = 11;
+			}
+		}
 	}
 	else {
 		msg_warn_pool ("cannot parse content type: %*s", (gint)len, val.lc_data);
