@@ -1,44 +1,18 @@
 %%{
   machine content_type_parser;
 
-  action Type_Start {
-    qstart = NULL;
-    qend = NULL;
-    ct->type.begin = p;
+  action Disposition_Start {
   }
 
-  action Type_End {
-    if (qstart) {
-      ct->type.begin = qstart;
-    }
-    if (qend && qend >= qstart) {
-      ct->type.len = qend - qstart;
-    }
-    else if (p >= ct->type.begin) {
-      ct->type.len = p - ct->type.begin;
-    }
-    qstart = NULL;
-    qend = NULL;
+  action Disposition_End {
   }
 
-  action Subtype_Start {
-    qstart = NULL;
-    qend = NULL;
-    ct->subtype.begin = p;
+  action Disposition_Inline {
+    cd->type = RSPAMD_CT_INLINE;
   }
 
-  action Subtype_End {
-    if (qstart) {
-      ct->subtype.begin = qstart;
-    }
-    if (qend && qend >= qstart) {
-      ct->subtype.len = qend - qstart;
-    }
-    else if (p >= ct->subtype.begin) {
-      ct->subtype.len = p - ct->subtype.begin;
-    }
-    qstart = NULL;
-    qend = NULL;
+  action Disposition_Attachment {
+    cd->type = RSPAMD_CT_ATTACHMENT;
   }
 
   action Param_Name_Start {
@@ -47,7 +21,6 @@
     pname_start = p;
     pname_end = NULL;
   }
-
 
   action Param_Name_End {
     if (qstart) {
@@ -90,7 +63,7 @@
       qend = NULL;
 
       if (pvalue_end && pvalue_end > pvalue_start && pname_end > pname_start) {
-        rspamd_content_type_add_param (pool, ct, pname_start, pname_end, pvalue_start, pvalue_end);
+        rspamd_content_disposition_add_param (pool, cd, pname_start, pname_end, pvalue_start, pvalue_end);
       }
     }
 
@@ -114,9 +87,9 @@
   }
 
 
-  include content_type "content_type.rl";
+  include content_disposition "content_disposition.rl";
 
-  main := content_type;
+  main := content_disposition;
 
 }%%
 
@@ -126,7 +99,7 @@
 %% write data;
 
 gboolean
-rspamd_content_type_parser (const char *data, size_t len, struct rspamd_content_type *ct, rspamd_mempool_t *pool)
+rspamd_content_disposition_parser (const char *data, size_t len, struct rspamd_content_disposition *cd, rspamd_mempool_t *pool)
 {
   const char *p = data, *pe = data + len, *eof, *qstart = NULL, *qend = NULL,
     *pname_start = NULL, *pname_end = NULL, *pvalue_start = NULL, *pvalue_end = NULL;
@@ -138,7 +111,7 @@ rspamd_content_type_parser (const char *data, size_t len, struct rspamd_content_
   } st_storage;
 
   memset (&st_storage, 0, sizeof (st_storage));
-  memset (ct, 0, sizeof (*ct));
+  memset (cd, 0, sizeof (*cd));
   eof = pe;
 
   %% write init;
@@ -148,5 +121,5 @@ rspamd_content_type_parser (const char *data, size_t len, struct rspamd_content_
     free (st_storage.data);
   }
 
-  return ct->type.len > 0;
+  return cd->type != RSPAMD_CT_UNKNOWN;
 }

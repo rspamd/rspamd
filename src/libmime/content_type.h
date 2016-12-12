@@ -41,6 +41,17 @@ struct rspamd_content_type {
 	GHashTable *attrs; /* Can be empty */
 };
 
+struct rspamd_content_disposition {
+	gchar *lc_data;
+	enum {
+		RSPAMD_CT_UNKNOWN = 0,
+		RSPAMD_CT_INLINE = 1,
+		RSPAMD_CT_ATTACHMENT = 2,
+	} type;
+	rspamd_ftok_t filename;
+	GHashTable *attrs; /* Can be empty */
+};
+
 /**
  * Adds new parameter to content type structure
  * @param ct
@@ -63,6 +74,31 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
  * @return
  */
 struct rspamd_content_type * rspamd_content_type_parse (const gchar *in,
+		gsize len, rspamd_mempool_t *pool);
+
+/**
+ * Adds new param for content disposition header
+ * @param pool
+ * @param cd
+ * @param name_start
+ * @param name_end
+ * @param value_start
+ * @param value_end
+ */
+void
+rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
+		struct rspamd_content_disposition *cd,
+		const gchar *name_start, const gchar *name_end,
+		const gchar *value_start, const gchar *value_end);
+
+/**
+ * Parse content-disposition header
+ * @param in
+ * @param len
+ * @param pool
+ * @return
+ */
+struct rspamd_content_disposition * rspamd_content_disposition_parse (const gchar *in,
 		gsize len, rspamd_mempool_t *pool);
 
 #endif /* SRC_LIBMIME_CONTENT_TYPE_H_ */

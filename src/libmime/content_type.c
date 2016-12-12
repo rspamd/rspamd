@@ -142,3 +142,73 @@ rspamd_content_type_parse (const gchar *in,
 
 	return res;
 }
+
+void
+rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
+		struct rspamd_content_disposition *cd,
+		const gchar *name_start, const gchar *name_end,
+		const gchar *value_start, const gchar *value_end)
+{
+	rspamd_ftok_t srch;
+	struct rspamd_content_type_param *found = NULL, *nparam;
+
+	g_assert (cd != NULL);
+
+	srch.begin = name_start;
+	srch.len = name_end - name_start;
+
+	if (cd->attrs) {
+		found = g_hash_table_lookup (cd->attrs, &srch);
+	}
+	else {
+		cd->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
+				rspamd_ftok_icase_equal);
+	}
+
+	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
+	nparam->name.begin = name_start;
+	nparam->name.len = name_end - name_start;
+	nparam->value.begin = value_start;
+	nparam->value.len = value_end - value_start;
+	DL_APPEND (found, nparam);
+
+	if (!found) {
+		g_hash_table_insert (cd->attrs, &nparam->name, nparam);
+	}
+
+	srch.begin = "filename";
+	srch.len = 8;
+
+	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
+		/* Adjust charset */
+		cd->filename.begin = nparam->value.begin;
+		cd->filename.len = nparam->value.len;
+	}
+}
+
+struct rspamd_content_disposition *
+rspamd_content_disposition_parse (const gchar *in,
+		gsize len, rspamd_mempool_t *pool)
+{
+	struct rspamd_content_disposition *res = NULL, val;
+
+	val.lc_data = rspamd_mempool_alloc (pool, len);
+	memcpy (val.lc_data, in, len);
+	rspamd_str_lc (val.lc_data, len);
+
+	if (rspamd_content_disposition_parser (val.lc_data, len, &val, pool)) {
+		res = rspamd_mempool_alloc (pool, sizeof (val));
+		memcpy (res, &val, sizeof (val));
+
+		if (res->attrs) {
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
+		}
+	}
+	else {
+		msg_warn_pool ("cannot parse content disposition: %*s",
+				(gint)len, val.lc_data);
+	}
+
+	return res;
+}

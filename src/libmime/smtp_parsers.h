@@ -33,5 +33,7 @@ void rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 gboolean rspamd_content_type_parser (const char *data, size_t len,
 		struct rspamd_content_type *ct, rspamd_mempool_t *pool);
+gboolean rspamd_content_disposition_parser (const char *data, size_t len,
+		struct rspamd_content_disposition *cd, rspamd_mempool_t *pool);
 
 #endif /* SRC_LIBMIME_SMTP_PARSERS_H_ */
