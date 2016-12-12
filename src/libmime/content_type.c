@@ -59,6 +59,15 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 		ct->charset.begin = nparam->value.begin;
 		ct->charset.len = nparam->value.len;
 	}
+
+	srch.begin = "boundary";
+	srch.len = 8;
+
+	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
+		/* Adjust boundary */
+		ct->boundary.begin = nparam->value.begin;
+		ct->boundary.len = nparam->value.len;
+	}
 }
 
 struct rspamd_content_type *

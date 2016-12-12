@@ -27,6 +27,7 @@ static gint total_type = 0;
 static gint total_subtype = 0;
 static gint total_charset = 0;
 static gint total_attrs = 0;
+static gint total_boundaries = 0;
 static gboolean verbose = 1;
 
 #define MODE_NORMAL 0
@@ -99,6 +100,9 @@ rspamd_process_file (const gchar *fname, gint mode)
 				if (ct->charset.len > 0) {
 					total_charset ++;
 				}
+				if (ct->boundary.len > 0) {
+					total_boundaries ++;
+				}
 				if (ct->attrs) {
 					total_attrs ++;
 				}
@@ -116,6 +120,9 @@ rspamd_process_file (const gchar *fname, gint mode)
 				}
 				if (g_mime_content_type_get_parameter (gct, "charset")) {
 					total_charset ++;
+				}
+				if (g_mime_content_type_get_parameter (gct, "boundary")) {
+					total_boundaries ++;
 				}
 				if (g_mime_content_type_get_params (gct)) {
 					total_attrs ++;
@@ -165,6 +172,31 @@ rspamd_process_file (const gchar *fname, gint mode)
 						rspamd_fprintf (stderr, "charset: '%*s'(rspamd) '%s'gmime\n",
 								(gint)ct->charset.len, ct->charset.begin,
 								t.begin);
+					}
+				}
+				else if (g_mime_content_type_get_parameter (gct, "charset")) {
+					if (verbose) {
+						rspamd_fprintf (stderr, "charset: '%s'gmime\n",
+								g_mime_content_type_get_parameter (gct, "charset"));
+					}
+				}
+				if (g_mime_content_type_get_parameter (gct, "boundary") && ct->boundary.len) {
+					t.begin = g_mime_content_type_get_parameter (gct, "boundary");
+					t.len = strlen (t.begin);
+
+					if (rspamd_ftok_casecmp (&ct->boundary, &t) == 0) {
+						total_boundaries ++;
+					}
+					else if (verbose) {
+						rspamd_fprintf (stderr, "boundary: '%*s'(rspamd) '%s'gmime\n",
+								(gint)ct->boundary.len, ct->boundary.begin,
+								t.begin);
+					}
+				}
+				else if (g_mime_content_type_get_parameter (gct, "boundary")) {
+					if (verbose) {
+						rspamd_fprintf (stderr, "boundary: '%s'gmime\n",
+								g_mime_content_type_get_parameter (gct, "boundary"));
 					}
 				}
 			}
@@ -219,21 +251,25 @@ main (int argc, char **argv)
 				"Total known type: %d\n"
 				"Total known subtype: %d\n"
 				"Total known charset: %d\n"
-				"Total has attrs: %d\n",
+				"Total has attrs: %d\n"
+				"Total has boundaries: %d\n",
 				total_parsed, total_time,
 				total_valid, total_type,
 				total_subtype, total_charset,
-				total_attrs);
+				total_attrs,
+				total_boundaries);
 	}
 	else {
 		rspamd_printf ("Parsed %d received headers in %.3f seconds\n"
 				"Total valid (parsed by both): %d\n"
 				"Total same type: %d\n"
 				"Total same subtype: %d\n"
-				"Total same charset: %d\n",
+				"Total same charset: %d\n"
+				"Total same boundaries: %d\n",
 				total_parsed, total_time,
 				total_valid, total_type,
-				total_subtype, total_charset);
+				total_subtype, total_charset,
+				total_boundaries);
 	}
 
 	g_mime_shutdown ();

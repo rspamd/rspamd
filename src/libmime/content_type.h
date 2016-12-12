@@ -36,6 +36,7 @@ struct rspamd_content_type {
 	rspamd_ftok_t type;
 	rspamd_ftok_t subtype;
 	rspamd_ftok_t charset;
+	rspamd_ftok_t boundary;
 	enum rspamd_content_type_flags flags;
 	GHashTable *attrs; /* Can be empty */
 };
