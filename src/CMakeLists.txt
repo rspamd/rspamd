@@ -105,7 +105,8 @@ SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_date.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_whitespace.rl"
-	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl")
+	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl"
+	"${CMAKE_SOURCE_DIR}/src/ragel/content_type.rl")
 RAGEL_TARGET(ragel_smtp_addr
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_addr_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
@@ -121,6 +122,11 @@ RAGEL_TARGET(ragel_newlines_strip
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/newlines_strip.rl.c)
+RAGEL_TARGET(ragel_content_type
+	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/content_type_parser.rl
+	DEPENDS ${RAGEL_DEPENDS}
+	COMPILE_FLAGS -G2
+	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/content_type.rl.c)
 ######################### LINK SECTION ###############################
 
 ADD_LIBRARY(rspamd-server STATIC
@@ -134,7 +140,8 @@ ADD_LIBRARY(rspamd-server STATIC
 		${PLUGINSSRC}
 		"${RAGEL_ragel_smtp_addr_OUTPUTS}"
 		"${RAGEL_ragel_smtp_received_OUTPUTS}"
-		"${RAGEL_ragel_newlines_strip_OUTPUTS}")
+		"${RAGEL_ragel_newlines_strip_OUTPUTS}"
+		"${RAGEL_ragel_content_type_OUTPUTS}")
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)

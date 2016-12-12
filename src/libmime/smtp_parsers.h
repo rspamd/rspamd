@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "email_addr.h"
+#include "content_type.h"
 #include "task.h"
 #include "message.h"
 
@@ -29,5 +30,8 @@ int rspamd_smtp_addr_parse (const char *data, size_t len,
 void rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 		GByteArray *data, gboolean is_html, guint *newlines_count,
 		GPtrArray *newlines);
+
+gboolean rspamd_content_type_parser (const char *data, size_t len,
+		struct rspamd_content_type *ct, rspamd_mempool_t *pool);
 
 #endif /* SRC_LIBMIME_SMTP_PARSERS_H_ */
