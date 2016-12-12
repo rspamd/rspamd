@@ -27,9 +27,14 @@ static gint total_type = 0;
 static gint total_subtype = 0;
 static gint total_charset = 0;
 static gint total_attrs = 0;
+static gboolean verbose = 1;
+
+#define MODE_NORMAL 0
+#define MODE_GMIME 1
+#define MODE_COMPARE 2
 
 static void
-rspamd_process_file (const gchar *fname)
+rspamd_process_file (const gchar *fname, gint mode)
 {
 	rspamd_mempool_t *pool;
 	GIOChannel *f;
@@ -37,6 +42,8 @@ rspamd_process_file (const gchar *fname)
 	GString *buf;
 	struct rspamd_content_type *ct;
 	gdouble t1, t2;
+	GMimeContentType *gct;
+	rspamd_ftok_t t;
 
 	f = g_io_channel_new_file (fname, "r", &err);
 
@@ -58,27 +65,116 @@ rspamd_process_file (const gchar *fname)
 			buf->len --;
 		}
 
-		t1 = rspamd_get_virtual_ticks ();
-		ct = rspamd_content_type_parse (buf->str, buf->len, pool);
-		t2 = rspamd_get_virtual_ticks ();
+		if (mode == MODE_NORMAL) {
+			t1 = rspamd_get_virtual_ticks ();
+			ct = rspamd_content_type_parse (buf->str, buf->len, pool);
+			t2 = rspamd_get_virtual_ticks ();
+		}
+		else if (mode == MODE_GMIME) {
+			t1 = rspamd_get_virtual_ticks ();
+			gct = g_mime_content_type_new_from_string (buf->str);
+			t2 = rspamd_get_virtual_ticks ();
+		}
+		else {
+			t1 = rspamd_get_virtual_ticks ();
+			ct = rspamd_content_type_parse (buf->str, buf->len, pool);
+			gct = g_mime_content_type_new_from_string (buf->str);
+			t2 = rspamd_get_virtual_ticks ();
+		}
 
 		total_time += t2 - t1;
 		total_parsed ++;
 
-		if (ct) {
-			total_valid ++;
+		if (mode == MODE_NORMAL) {
 
-			if (ct->type.len > 0) {
-				total_type ++;
+			if (ct) {
+				total_valid ++;
+
+				if (ct->type.len > 0) {
+					total_type ++;
+				}
+				if (ct->subtype.len > 0) {
+					total_subtype ++;
+				}
+				if (ct->charset.len > 0) {
+					total_charset ++;
+				}
+				if (ct->attrs) {
+					total_attrs ++;
+				}
 			}
-			if (ct->subtype.len > 0) {
-				total_subtype ++;
+		}
+		else if (mode == MODE_GMIME) {
+			if (gct) {
+				total_valid ++;
+
+				if (g_mime_content_type_get_media_type (gct)) {
+					total_type ++;
+				}
+				if (g_mime_content_type_get_media_subtype (gct)) {
+					total_subtype ++;
+				}
+				if (g_mime_content_type_get_parameter (gct, "charset")) {
+					total_charset ++;
+				}
+				if (g_mime_content_type_get_params (gct)) {
+					total_attrs ++;
+				}
+
+				g_object_unref (gct);
 			}
-			if (ct->charset.len > 0) {
-				total_charset ++;
+		}
+		else {
+			if (gct && ct) {
+				total_valid ++;
+
+				if (g_mime_content_type_get_media_type (gct) && ct->type.len) {
+					t.begin = g_mime_content_type_get_media_type (gct);
+					t.len = strlen (t.begin);
+
+					if (rspamd_ftok_casecmp (&ct->type, &t) == 0) {
+						total_type ++;
+					}
+					else if (verbose) {
+						rspamd_fprintf (stderr, "type: '%*s'(rspamd) '%s'gmime\n",
+								(gint)ct->type.len, ct->type.begin,
+								t.begin);
+					}
+				}
+				if (g_mime_content_type_get_media_subtype (gct) && ct->subtype.len) {
+					t.begin = g_mime_content_type_get_media_subtype (gct);
+					t.len = strlen (t.begin);
+
+					if (rspamd_ftok_casecmp (&ct->subtype, &t) == 0) {
+						total_subtype ++;
+					}
+					else if (verbose) {
+						rspamd_fprintf (stderr, "subtype: '%*s'(rspamd) '%s'gmime\n",
+								(gint)ct->subtype.len, ct->subtype.begin,
+								t.begin);
+					}
+				}
+				if (g_mime_content_type_get_parameter (gct, "charset") && ct->charset.len) {
+					t.begin = g_mime_content_type_get_parameter (gct, "charset");
+					t.len = strlen (t.begin);
+
+					if (rspamd_ftok_casecmp (&ct->charset, &t) == 0) {
+						total_charset ++;
+					}
+					else if (verbose) {
+						rspamd_fprintf (stderr, "charset: '%*s'(rspamd) '%s'gmime\n",
+								(gint)ct->charset.len, ct->charset.begin,
+								t.begin);
+					}
+				}
 			}
-			if (ct->attrs) {
-				total_attrs ++;
+			else if (verbose) {
+				rspamd_fprintf (stderr, "cannot parse: %v, %d(rspamd), %d(gmime)\n",
+						buf, ct ? 1 : 0, gct ? 1 : 0);
+			}
+
+			if (gct) {
+				g_object_unref (gct);
 			}
 		}
 	}
@@ -96,26 +192,49 @@ rspamd_process_file (const gchar *fname)
 int
 main (int argc, char **argv)
 {
-	gint i;
+	gint i, start = 1, mode = MODE_NORMAL;
 
 	g_mime_init (0);
 
-	for (i = 1; i < argc; i ++) {
-		if (argv[i]) {
-			rspamd_process_file (argv[i]);
+	if (argc > 2 && *argv[1] == '-') {
+		start = 2;
+
+		if (argv[1][1] == 'g') {
+			mode = MODE_GMIME;
+		}
+		else if (argv[1][1] == 'c') {
+			mode = MODE_COMPARE;
 		}
 	}
 
-	rspamd_printf ("Parsed %d received headers in %.3f seconds\n"
-			"Total valid (has by part): %d\n"
-			"Total known type: %d\n"
-			"Total known subtype: %d\n"
-			"Total known charset: %d\n"
-			"Total has attrs: %d\n",
-			total_parsed, total_time,
-			total_valid, total_type,
-			total_subtype, total_type,
-			total_attrs);
+	for (i = start; i < argc; i ++) {
+		if (argv[i]) {
+			rspamd_process_file (argv[i], mode);
+		}
+	}
+
+	if (mode != MODE_COMPARE) {
+		rspamd_printf ("Parsed %d received headers in %.3f seconds\n"
+				"Total valid (has type): %d\n"
+				"Total known type: %d\n"
+				"Total known subtype: %d\n"
+				"Total known charset: %d\n"
+				"Total has attrs: %d\n",
+				total_parsed, total_time,
+				total_valid, total_type,
+				total_subtype, total_charset,
+				total_attrs);
+	}
+	else {
+		rspamd_printf ("Parsed %d received headers in %.3f seconds\n"
+				"Total valid (parsed by both): %d\n"
+				"Total same type: %d\n"
+				"Total same subtype: %d\n"
+				"Total same charset: %d\n",
+				total_parsed, total_time,
+				total_valid, total_type,
+				total_subtype, total_charset);
+	}
 
 	g_mime_shutdown ();
 
