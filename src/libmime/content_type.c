@@ -83,6 +83,7 @@ rspamd_content_type_parse (const gchar *in,
 
 		/* Now do some hacks to work with broken content types */
 		if (res->subtype.len == 0) {
+			res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 			srch.begin = "text";
 			srch.len = 4;
 

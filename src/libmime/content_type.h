@@ -20,6 +20,11 @@
 #include "libutil/fstring.h"
 #include "libutil/mem_pool.h"
 
+enum rspamd_content_type_flags {
+	RSPAMD_CONTENT_TYPE_VALID = 0,
+	RSPAMD_CONTENT_TYPE_BROKEN = 1 << 0,
+};
+
 struct rspamd_content_type_param {
 	rspamd_ftok_t name;
 	rspamd_ftok_t value;
@@ -31,6 +36,7 @@ struct rspamd_content_type {
 	rspamd_ftok_t type;
 	rspamd_ftok_t subtype;
 	rspamd_ftok_t charset;
+	enum rspamd_content_type_flags flags;
 	GHashTable *attrs; /* Can be empty */
 };
 
