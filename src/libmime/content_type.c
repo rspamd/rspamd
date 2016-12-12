@@ -66,6 +66,7 @@ rspamd_content_type_parse (const gchar *in,
 		gsize len, rspamd_mempool_t *pool)
 {
 	struct rspamd_content_type *res = NULL, val;
+	rspamd_ftok_t srch;
 
 	val.lc_data = rspamd_mempool_alloc (pool, len);
 	memcpy (val.lc_data, in, len);
@@ -78,6 +79,40 @@ rspamd_content_type_parse (const gchar *in,
 		if (res->attrs) {
 			rspamd_mempool_add_destructor (pool,
 					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
+		}
+
+		/* Now do some hacks to work with broken content types */
+		if (res->subtype.len == 0) {
+			srch.begin = "text";
+			srch.len = 4;
+
+			if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+				/* Workaround for Content-Type: text */
+				/* Assume text/plain */
+				res->subtype.begin = "plain";
+				res->subtype.len = 5;
+			}
+			else {
+				srch.begin = "html";
+				srch.len = 4;
+
+				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+					/* Workaround for Content-Type: html */
+					res->type.begin = "text";
+					res->type.len = 4;
+					res->subtype.begin = "html";
+					res->subtype.len = 4;
+				}
+				else {
+					srch.begin = "application";
+					srch.len = 11;
+
+					if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+						res->subtype.begin = "octet-stream";
+						res->subtype.len = 12;
+					}
+				}
+			}
 		}
 	}
 	else {
