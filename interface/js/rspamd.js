@@ -1057,13 +1057,16 @@
                         return a.idx - b.idx;
                     });
 
-                    $('#actionsBody').html('<form id="actionsForm">' +
+                    $('#actionsBody').html('<form id="actionsForm"><fieldset id="actionsFormField">' +
                         items.map(function (e) {
                             return e.html;
                         }).join('') +
                         '<br><div class="form-group">' +
                         '<button class="btn btn-primary ' + btn_class +
-                        '" type="submit">Save actions</button></div></form>');
+                        '" type="submit">Save actions</button></div></fieldset></form>');
+                    if (read_only) {
+                      $('#actionsFormField').attr('disabled', true)
+                    }
                 }
             });
         }
@@ -1177,6 +1180,24 @@
         // @connect to server
         function connectRSPAMD() {
             if (isLogged()) {
+                var data;
+                if (!supportsSessionStorage()) {
+                    data = $.cookie('rspamdsession');
+                } else {
+                    data = JSON.parse(sessionStorage.getItem('Credentials'));
+                }
+                if (data.read_only) {
+                    read_only = true;
+                    btn_class = "disabled";
+                    $('#learning_nav').parent().addClass('disabled');
+                    $('#learning_nav').removeAttr('data-toggle', 'tab');
+                }
+                else {
+                    read_only = false;
+                    btn_class = "";
+                    $('#learning_nav').parent().removeClass('disabled')
+                    $('#learning_nav').attr('data-toggle', 'tab');
+                }
                 displayUI();
                 return;
             }
@@ -1213,11 +1234,13 @@
                                 read_only = true;
                                 btn_class = "disabled";
                                 $('#learning_nav').parent().addClass('disabled');
+                                $('#learning_nav').removeAttr('data-toggle', 'tab');
                             }
                             else {
                                 read_only = false;
                                 btn_class = "";
                                 $('#learning_nav').parent().removeClass('disabled')
+                                $('#learning_nav').attr('data-toggle', 'tab');
                             }
 
                             saveCredentials(data, password);
