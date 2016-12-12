@@ -50,6 +50,15 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 	if (!found) {
 		g_hash_table_insert (ct->attrs, &nparam->name, nparam);
 	}
+
+	srch.begin = "charset";
+	srch.len = 7;
+
+	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
+		/* Adjust charset */
+		ct->charset.begin = nparam->value.begin;
+		ct->charset.len = nparam->value.len;
+	}
 }
 
 struct rspamd_content_type *
