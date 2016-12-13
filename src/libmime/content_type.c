@@ -90,6 +90,13 @@ rspamd_content_type_parse (const gchar *in,
 					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
 		}
 
+		srch.begin = "multipart";
+		srch.len = 9;
+
+		if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+			res->flags |= RSPAMD_CONTENT_TYPE_MULTIPART;
+		}
+
 		/* Now do some hacks to work with broken content types */
 		if (res->subtype.len == 0) {
 			res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
