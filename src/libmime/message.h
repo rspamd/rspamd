@@ -10,6 +10,7 @@
 #include "email_addr.h"
 #include "addr.h"
 #include "cryptobox.h"
+#include "mime_headers.h"
 #include <gmime/gmime.h>
 
 struct rspamd_task;
@@ -89,17 +90,6 @@ struct received_header {
 	rspamd_inet_addr_t *addr;
 	time_t timestamp;
 	enum rspamd_received_type type;
-};
-
-struct raw_header {
-	gchar *name;
-	gchar *value;
-	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
-	gsize raw_len;
-	gboolean tab_separated;
-	gboolean empty_separator;
-	gchar *separator;
-	gchar *decoded;
 };
 
 /**
