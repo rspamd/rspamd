@@ -1767,6 +1767,7 @@ decode:
 			/* Decode character after '=' */
 			c = *p++;
 			remain --;
+			ret = 0;
 
 			if      (c >= '0' && c <= '9') { ret = c - '0'; }
 			else if (c >= 'A' && c <= 'F') { ret = c - 'A' + 10; }
@@ -1870,6 +1871,7 @@ decode:
 			/* Decode character after '=' */
 			c = *p++;
 			remain --;
+			ret = 0;
 
 			if      (c >= '0' && c <= '9') { ret = c - '0'; }
 			else if (c >= 'A' && c <= 'F') { ret = c - 'A' + 10; }
