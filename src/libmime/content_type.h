@@ -24,6 +24,8 @@ enum rspamd_content_type_flags {
 	RSPAMD_CONTENT_TYPE_VALID = 0,
 	RSPAMD_CONTENT_TYPE_BROKEN = 1 << 0,
 	RSPAMD_CONTENT_TYPE_MULTIPART = 1 << 1,
+	RSPAMD_CONTENT_TYPE_TEXT = 1 << 2,
+	RSPAMD_CONTENT_TYPE_MESSAGE = 1 << 3,
 };
 
 struct rspamd_content_type_param {

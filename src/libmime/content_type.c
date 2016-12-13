@@ -90,12 +90,6 @@ rspamd_content_type_parse (const gchar *in,
 					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
 		}
 
-		srch.begin = "multipart";
-		srch.len = 9;
-
-		if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
-			res->flags |= RSPAMD_CONTENT_TYPE_MULTIPART;
-		}
 
 		/* Now do some hacks to work with broken content types */
 		if (res->subtype.len == 0) {
@@ -140,6 +134,29 @@ rspamd_content_type_parse (const gchar *in,
 				res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 				res->subtype.begin = "alternative";
 				res->subtype.len = 11;
+			}
+		}
+
+		srch.begin = "multipart";
+		srch.len = 9;
+
+		if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+			res->flags |= RSPAMD_CONTENT_TYPE_MULTIPART;
+		}
+		else {
+			srch.begin = "text";
+			srch.len = 4;
+
+			if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+				res->flags |= RSPAMD_CONTENT_TYPE_TEXT;
+			}
+			else {
+				srch.begin = "message";
+				srch.len = 7;
+
+				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+					res->flags |= RSPAMD_CONTENT_TYPE_MESSAGE;
+				}
 			}
 		}
 	}
