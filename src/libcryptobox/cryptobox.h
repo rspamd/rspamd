@@ -370,4 +370,14 @@ guint64 rspamd_cryptobox_fast_hash_specific (
 		const void *data,
 		gsize len, guint64 seed);
 
+/**
+ * Decode base64 using platform optimized code
+ * @param in
+ * @param inlen
+ * @param out
+ * @param outlen
+ * @return
+ */
+gboolean rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
+		guchar *out, gsize *outlen);
 #endif /* CRYPTOBOX_H_ */

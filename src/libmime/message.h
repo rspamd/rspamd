@@ -11,6 +11,7 @@
 #include "addr.h"
 #include "cryptobox.h"
 #include "mime_headers.h"
+#include "content_type.h"
 #include <gmime/gmime.h>
 
 struct rspamd_task;
@@ -24,13 +25,26 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_ARCHIVE = (1 << 3)
 };
 
+enum rspamd_cte {
+	RSPAMD_CTE_UNKNOWN = 0,
+	RSPAMD_CTE_7BIT = 1,
+	RSPAMD_CTE_8BIT = 2,
+	RSPAMD_CTE_QP = 3,
+	RSPAMD_CTE_B64 = 4,
+};
+
 struct rspamd_mime_part {
 	GMimeContentType *type;
+	struct rspamd_content_type *ct;
+	rspamd_ftok_t raw_data;
+	rspamd_ftok_t parsed_data;
+	enum rspamd_cte cte;
 	GByteArray *content;
 	GMimeObject *parent;
 	GMimeObject *mime;
 	GHashTable *raw_headers;
 	gchar *raw_headers_str;
+	gsize raw_headers_len;
 	guchar digest[rspamd_cryptobox_HASHBYTES];
 	const gchar *filename;
 	const gchar *boundary;
