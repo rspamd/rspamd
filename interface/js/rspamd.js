@@ -1185,15 +1185,13 @@
                 }
                 if (data.read_only) {
                     read_only = true;
-                    $('#learning_nav').parent().addClass('disabled');
-                    $('#learning_nav').removeAttr('data-toggle', 'tab');
+                    $('#learning_nav').hide();
                     $('#resetHistory').attr('disabled', true);
                     $('#errors-history').hide();
                 }
                 else {
                     read_only = false;
-                    $('#learning_nav').parent().removeClass('disabled');
-                    $('#learning_nav').attr('data-toggle', 'tab');
+                    $('#learning_nav').show();
                     $('#resetHistory').removeAttr('disabled', true);
                 }
                 displayUI();
@@ -1230,15 +1228,13 @@
                         } else {
                             if (data.read_only) {
                                 read_only = true;
-                                $('#learning_nav').parent().addClass('disabled');
-                                $('#learning_nav').removeAttr('data-toggle', 'tab');
+                                $('#learning_nav').hide();
                                 $('#resetHistory').attr('disabled', true);
                                 $('#errors-history').hide();
                             }
                             else {
                                 read_only = false;
-                                $('#learning_nav').parent().removeClass('disabled')
-                                $('#learning_nav').attr('data-toggle', 'tab');
+                                $('#learning_nav').show();
                                 $('#resetHistory').removeAttr('disabled', true);
                             }
 
