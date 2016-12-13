@@ -1267,7 +1267,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	dlen = 0;
 
 	for (i = 0; i < len; i ++) {
-		if (G_UNLIKELY (!g_ascii_isgraph (s[i]))) {
+		if (G_UNLIKELY (((guint)s[i]) < 0x80 && !g_ascii_isgraph (s[i]))) {
 			dlen += 3;
 		}
 		else {
@@ -1283,7 +1283,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		if (G_UNLIKELY (s[i] == '\r' || s[i] == '\n')) {
 			continue;
 		}
-		else if (G_UNLIKELY (s[i] < 0x80 && !g_ascii_isgraph (s[i]))) {
+		else if (G_UNLIKELY (((guint)s[i]) < 0x80 && !g_ascii_isgraph (s[i]))) {
 			/* URL encode */
 			*d++ = '%';
 			*d++ = hexdigests[(s[i] >> 4) & 0xf];
