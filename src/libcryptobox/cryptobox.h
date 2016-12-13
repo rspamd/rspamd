@@ -67,6 +67,7 @@ struct rspamd_cryptobox_library_ctx {
 	const gchar *poly1305_impl;
 	const gchar *siphash_impl;
 	const gchar *blake2_impl;
+	const gchar *base64_impl;
 	unsigned long cpu_config;
 };
 

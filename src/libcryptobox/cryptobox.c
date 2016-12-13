@@ -29,6 +29,7 @@
 #include "blake2/blake2.h"
 #include "siphash/siphash.h"
 #include "catena/catena.h"
+#include "base64/base64.h"
 #include "ottery.h"
 #include "printf.h"
 #include "xxhash.h"
@@ -314,6 +315,7 @@ rspamd_cryptobox_init (void)
 	ctx->curve25519_impl = curve25519_load ();
 	ctx->blake2_impl = blake2b_load ();
 	ctx->ed25519_impl = ed25519_load ();
+	ctx->base64_impl = base64_load ();
 #ifdef HAVE_USABLE_OPENSSL
 	ERR_load_EC_strings ();
 	ERR_load_RAND_strings ();
