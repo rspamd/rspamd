@@ -648,6 +648,7 @@
         }
 
         function getErrors() {
+            if (read_only) return;
 
             if (errors) {
                 errors.destroy();
