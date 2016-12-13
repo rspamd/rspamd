@@ -1713,7 +1713,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	const gchar *dkim_header,
 	const gchar *dkim_domain)
 {
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	guint rh_num = 0, i;
 	GPtrArray *ar;
 

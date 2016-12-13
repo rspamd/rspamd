@@ -1350,7 +1350,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	GPtrArray *headerlist;
 	struct expression_argument *arg;
 	guint i;
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	static const char *hname = "Content-Transfer-Encoding";
 
 	if (args == NULL) {

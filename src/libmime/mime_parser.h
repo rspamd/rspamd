@@ -13,25 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef SRC_LIBMIME_MIME_HEADERS_H_
-#define SRC_LIBMIME_MIME_HEADERS_H_
+#ifndef SRC_LIBMIME_MIME_PARSER_H_
+#define SRC_LIBMIME_MIME_PARSER_H_
 
 #include "config.h"
 
 struct rspamd_task;
 
-struct rspamd_mime_header {
-	gchar *name;
-	gchar *value;
-	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
-	gsize raw_len;
-	gboolean tab_separated;
-	gboolean empty_separator;
-	gchar *separator;
-	gchar *decoded;
-};
+gboolean rspamd_mime_parse_task (struct rspamd_task *task, GError **err);
 
-void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
-		const gchar *in, gsize len, gboolean check_newlines);
-
-#endif /* SRC_LIBMIME_MIME_HEADERS_H_ */
+#endif /* SRC_LIBMIME_MIME_PARSER_H_ */

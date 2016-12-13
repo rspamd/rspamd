@@ -19,7 +19,7 @@
 
 static void
 rspamd_mime_header_add (struct rspamd_task *task,
-		GHashTable *target, struct raw_header *rh)
+		GHashTable *target, struct rspamd_mime_header *rh)
 {
 	GPtrArray *ar;
 
@@ -40,7 +40,7 @@ void
 rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		const gchar *in, gsize len, gboolean check_newlines)
 {
-	struct raw_header *new = NULL;
+	struct rspamd_mime_header *new = NULL;
 	const gchar *p, *c, *end;
 	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
@@ -73,7 +73,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 			if (*p == ':') {
 				new =
 					rspamd_mempool_alloc0 (task->task_pool,
-						sizeof (struct raw_header));
+						sizeof (struct rspamd_mime_header));
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);

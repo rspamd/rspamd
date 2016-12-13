@@ -35,7 +35,7 @@ static void
 rspamd_stat_tokenize_header (struct rspamd_task *task,
 		const gchar *name, const gchar *prefix, GArray *ar)
 {
-	struct raw_header *cur;
+	struct rspamd_mime_header *cur;
 	GPtrArray *hdrs;
 	guint i;
 	rspamd_ftok_t str;

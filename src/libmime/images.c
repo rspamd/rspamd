@@ -553,7 +553,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	enum rspamd_image_type type;
 	struct rspamd_image *img = NULL;
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *tp;
 	struct html_image *himg;
 	const gchar *cid, *html_cid;

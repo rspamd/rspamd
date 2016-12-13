@@ -1138,7 +1138,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	GPtrArray *hdrs;
 	GMimeObject *parent;
 	const GMimeContentType *ct;
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
 	struct received_header *recv, *trecv;
@@ -1527,7 +1527,7 @@ rspamd_message_get_header_from_hash (GHashTable *htb,
 		gboolean strong)
 {
 	GPtrArray *ret, *ar;
-	struct raw_header *cur;
+	struct rspamd_mime_header *cur;
 	guint i;
 
 	ar = g_hash_table_lookup (htb, field);
@@ -1573,7 +1573,7 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		gboolean strong)
 {
 	GPtrArray *ret, *ar;
-	struct raw_header *cur;
+	struct rspamd_mime_header *cur;
 	guint nelems = 0, i, j;
 	struct rspamd_mime_part *mp;
 

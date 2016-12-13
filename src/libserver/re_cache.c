@@ -753,7 +753,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	guint ret = 0, i, re_id;
 	GPtrArray *headerlist;
 	GHashTableIter it;
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	const gchar *in, *end;
 	const guchar **scvec;
 	guint *lenvec;

@@ -702,7 +702,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	rspamd_dkim_context_t *ctx;
 	rspamd_dkim_key_t *key;
 	GError *err = NULL;
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
 	guint checked = 0, i;
 
