@@ -56,19 +56,9 @@ typedef struct base64_impl {
 
 BASE64_DECLARE(ref);
 #define BASE64_REF BASE64_IMPL(0, "ref", ref)
-BASE64_DECLARE(avx2);
-#define BASE64_AVX2 BASE64_IMPL(CPUID_AVX2,"avx2", avx2)
-BASE64_DECLARE(ssse3);
-#define BASE64_SSSE3 BASE64_IMPL(CPUID_SSSE3, "avx2", ssse3)
 
 static const base64_impl_t base64_list[] = {
 		BASE64_REF,
-#if defined(BASE64_AVX2)
-		BASE64_AVX2,
-#endif
-#if defined(BASE64_SSSE3)
-		BASE64_SSSE3,
-#endif
 };
 
 static const base64_impl_t *base64_opt = &base64_list[0];

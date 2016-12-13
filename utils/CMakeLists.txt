@@ -2,6 +2,8 @@ SET(UTILSERVERSRC rspamd_http_server.c)
 SET(UTILBENCHSRC rspamd_http_bench.c)
 SET(RECVBENCHSRC received_parser_bench.c)
 SET(CTYPEBENCHSRC content_type_bench.c)
+SET(BASE64SRC base64.c)
+
 
 MACRO(ADD_UTIL NAME)
 	ADD_EXECUTABLE("${NAME}" "${ARGN}")
@@ -24,6 +26,7 @@ ADD_UTIL(rspamd-http-server ${UTILSERVERSRC})
 ADD_UTIL(rspamd-http-bench ${UTILBENCHSRC})
 ADD_UTIL(rspamd-received-bench ${RECVBENCHSRC})
 ADD_UTIL(rspamd-ctype-bench ${CTYPEBENCHSRC})
+ADD_UTIL(rspamd-base64 ${BASE64SRC})
 
 # Redirector
 IF (ENABLE_REDIRECTOR MATCHES "ON")
