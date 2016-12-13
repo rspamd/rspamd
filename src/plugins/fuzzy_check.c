@@ -138,6 +138,7 @@ struct fuzzy_learn_session {
 
 #define FUZZY_CMD_FLAG_REPLIED (1 << 0)
 #define FUZZY_CMD_FLAG_SENT (1 << 1)
+#define FUZZY_CMD_FLAG_IMAGE (1 << 2)
 
 struct fuzzy_cmd_io {
 	guint32 tag;
@@ -1360,7 +1361,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->tag = shcmd->basic.tag;
-	io->flags = 0;
+	io->flags = FUZZY_CMD_FLAG_IMAGE;
 	memcpy (&io->cmd, &shcmd->basic, sizeof (io->cmd));
 
 	if (rule->peer_key) {
@@ -1494,7 +1495,8 @@ fuzzy_cmd_vector_to_wire (gint fd, GPtrArray *v)
  */
 static const struct rspamd_fuzzy_reply *
 fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
-		struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd)
+		struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd,
+		struct fuzzy_cmd_io **pio)
 {
 	guchar *p = *pos;
 	gint remain = *r;
@@ -1558,6 +1560,10 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 					*pcmd = &io->cmd;
 				}
 
+				if (pio) {
+					*pio = io;
+				}
+
 				return rep;
 			}
 			found = TRUE;
@@ -1574,7 +1580,9 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 static void
 fuzzy_insert_result (struct fuzzy_client_session *session,
 		const struct rspamd_fuzzy_reply *rep,
-		struct rspamd_fuzzy_cmd *cmd, guint flag)
+		struct rspamd_fuzzy_cmd *cmd,
+		struct fuzzy_cmd_io *io,
+		guint flag)
 {
 	const gchar *symbol;
 	struct fuzzy_mapping *map;
@@ -1604,7 +1612,15 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 
 	nval = fuzzy_normalize (rep->value,
 			session->rule->max_score);
-	nval *= rep->prob;
+
+	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
+		nval *= rspamd_normalize_probability (rep->prob, 0.5);
+	}
+	else {
+		/* XXX: we need something better here */
+		nval *= rep->prob;
+	}
+
 	msg_info_task (
 			"found fuzzy hash %*xs with weight: "
 			"%.2f, probability %.2f, in list: %s:%d%s",
@@ -1634,6 +1650,7 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 	struct rspamd_task *task;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
+	struct fuzzy_cmd_io *io = NULL;
 	gint r, ret;
 	guchar buf[2048], *p;
 
@@ -1653,10 +1670,10 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 		ret = 0;
 
 		while ((rep = fuzzy_process_reply (&p, &r,
-				session->commands, session->rule, &cmd)) != NULL) {
+				session->commands, session->rule, &cmd, &io)) != NULL) {
 			if (rep->prob > 0.5) {
 				if (cmd->cmd == FUZZY_CHECK) {
-					fuzzy_insert_result (session, rep, cmd, rep->flag);
+					fuzzy_insert_result (session, rep, cmd, io, rep->flag);
 				}
 				else if (cmd->cmd == FUZZY_STAT) {
 					/* Just set pool variable to extract it in further */
@@ -1870,7 +1887,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	guchar buf[2048], *p;
 	struct fuzzy_cmd_io *io;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
-	const gchar *symbol;
+	const gchar *symbol, *ftype;
 	struct event_base *ev_base;
 	gint r;
 	enum {
@@ -1903,7 +1920,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 			ret = return_want_more;
 
 			while ((rep = fuzzy_process_reply (&p, &r,
-					session->commands, session->rule, &cmd)) != NULL) {
+					session->commands, session->rule, &cmd, &io)) != NULL) {
 				if ((map =
 						g_hash_table_lookup (session->rule->mappings,
 								GINT_TO_POINTER (rep->flag))) == NULL) {
@@ -1916,28 +1933,41 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					symbol = map->symbol;
 				}
 
+				ftype = "bin";
+
+				if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
+					ftype = "img";
+				}
+				else if (cmd->shingles_count > 0) {
+					ftype = "txt";
+				}
+
 				if (rep->prob > 0.5) {
-					msg_info_task ("processed fuzzy hash %*xs, list: %s:%d for "
+					msg_info_task ("processed fuzzy hash (%s) %*xs, list: %s:%d for "
 									"message <%s>",
+							ftype,
 							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
 							rep->flag,
 							session->task->message_id);
 				}
 				else {
-					msg_info_task ("cannot process fuzzy hash for message "
+					msg_info_task ("cannot process fuzzy hash (%s) for message "
 							"<%s>, %*xs, "
 							"list %s:%d, error: %d",
+							ftype,
 							session->task->message_id,
 							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
 							rep->flag,
 							rep->value);
+
 					if (*(session->err) == NULL) {
 						g_set_error (session->err,
 							g_quark_from_static_string ("fuzzy check"),
 							rep->value, "process fuzzy error");
 					}
+
 					ret = return_finished;
 				}
 			}
