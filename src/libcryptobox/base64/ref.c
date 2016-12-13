@@ -119,6 +119,7 @@ base64_decode_ref (const char *in, size_t inlen,
 	size_t outl = 0;
 	size_t leftover = 0;
 
+repeat:
 	switch (leftover) {
 		for (;;) {
 		case 0:
@@ -133,7 +134,7 @@ base64_decode_ref (const char *in, size_t inlen,
 				break;
 			}
 			if ((q = base64_table_dec[*c++]) >= 254) {
-
+				ret = 0;
 				break;
 			}
 			carry = q << 2;
@@ -145,7 +146,8 @@ base64_decode_ref (const char *in, size_t inlen,
 				break;
 			}
 			if ((q = base64_table_dec[*c++]) >= 254) {
-				return (-1);
+				ret = 0;
+				break;
 			}
 			*o++ = carry | (q >> 4);
 			carry = q << 4;
@@ -199,6 +201,18 @@ base64_decode_ref (const char *in, size_t inlen,
 			carry = 0;
 			leftover = 0;
 			outl++;
+		}
+	}
+
+	if (!ret && inlen > 0) {
+		/* Skip to the next valid character in input */
+		while (base64_table_dec[*c] >= 254 && inlen > 0) {
+			c ++;
+			inlen --;
+		}
+
+		if (inlen > 0) {
+			goto repeat;
 		}
 	}
 
