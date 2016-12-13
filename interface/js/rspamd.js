@@ -32,7 +32,6 @@
         var graph;
         var symbols;
         var read_only = false;
-        var btn_class = "";
         var stat_timeout;
 
         var selected = []; // Keep graph selectors state
@@ -753,7 +752,7 @@
                                 '<td data-order="' + group.group + '"><div class="cell-overflow" tabindex="1" title="' + group.group + '">' + group.group + '</div></td>' +
                                 '<td data-order="' + item.symbol + '"><strong>' + item.symbol + '</strong></td>' +
                                 '<td data-order="' + item.description + '"><div class="cell-overflow" tabindex="1" title="' + item.description + '">' + item.description + '</div></td>' +
-                                '<td data-order="' + item.weight + '"><input class="numeric ' + label_class +
+                                '<td data-order="' + item.weight + '"><input class="numeric mb-disabled ' + label_class +
                                 '" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
                                 min + '" max="' +
                                 max + '" step="' + decimalStep(item.weight) +
@@ -761,8 +760,7 @@
                                 '" id="_sym_' + item.symbol + '"></span></td>' +
                                 '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
                                 '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
-                                '<td><button type="button" class="btn btn-primary btn-sm ' + btn_class +
-                                '">Save</button></td></tr>');
+                                '<td><button type="button" class="btn btn-primary btn-sm mb-disabled">Save</button></td></tr>');
                         });
                     });
                     $('<tbody/>', {
@@ -790,6 +788,9 @@
                     symbols.columns.adjust().draw();
                     $('#symbolsTable :button').on('click',
                         function(){saveSymbols("./savesymbols", "symbolsTable")});
+                  if (read_only) {
+                    $( ".mb-disabled" ).attr('disabled', true);
+                  }
                 },
                 error: function (data) {
                     alertMessage('alert-modal alert-error', data.statusText);
@@ -1062,8 +1063,7 @@
                             return e.html;
                         }).join('') +
                         '<br><div class="form-group">' +
-                        '<button class="btn btn-primary ' + btn_class +
-                        '" type="submit">Save actions</button></div></fieldset></form>');
+                        '<button class="btn btn-primary" type="submit">Save actions</button></div></fieldset></form>');
                     if (read_only) {
                       $('#actionsFormField').attr('disabled', true)
                     }
@@ -1188,15 +1188,16 @@
                 }
                 if (data.read_only) {
                     read_only = true;
-                    btn_class = "disabled";
                     $('#learning_nav').parent().addClass('disabled');
                     $('#learning_nav').removeAttr('data-toggle', 'tab');
+                    $('#resetHistory').attr('disabled', true);
+                    $('#errors-history').hide();
                 }
                 else {
                     read_only = false;
-                    btn_class = "";
-                    $('#learning_nav').parent().removeClass('disabled')
+                    $('#learning_nav').parent().removeClass('disabled');
                     $('#learning_nav').attr('data-toggle', 'tab');
+                    $('#resetHistory').removeAttr('disabled', true);
                 }
                 displayUI();
                 return;
@@ -1232,15 +1233,16 @@
                         } else {
                             if (data.read_only) {
                                 read_only = true;
-                                btn_class = "disabled";
                                 $('#learning_nav').parent().addClass('disabled');
                                 $('#learning_nav').removeAttr('data-toggle', 'tab');
+                                $('#resetHistory').attr('disabled', true);
+                                $('#errors-history').hide();
                             }
                             else {
                                 read_only = false;
-                                btn_class = "";
                                 $('#learning_nav').parent().removeClass('disabled')
                                 $('#learning_nav').attr('data-toggle', 'tab');
+                                $('#resetHistory').removeAttr('disabled', true);
                             }
 
                             saveCredentials(data, password);
