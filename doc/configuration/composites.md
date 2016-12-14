@@ -57,11 +57,11 @@ Composites should not be recursive; but this is normally detected and avoided by
 It is also possible to setup policies for composites regarding symbols enclosed within a composite expression. By default Rspamd **removes** symbols and weights that trigger composite with the composite itself. However, it is possible to change this setting by 2 ways.
 
 1. Set up removal policy for each symbol:
-    * `~`: remove weigth of symbol
+    * `~`: remove weight of symbol
     * `-`: do not remove anything
     * `^`: force removing of symbol and weight (by default, Rspamd prefers to leave symbols when some composite wants to remove and another composite wants to leave any of score/name pair)
 2. Set the default policy for all elements in the expression using `policy` option:
-    * `default`: default policy - remove weigth and symbol
+    * `default`: default policy - remove weight and symbol
     * `remove_weight`: remove weight only
     * `remove_symbol`: remove symbol only
     * `leave`: leave both symbol and score
@@ -94,13 +94,13 @@ When you have multiple composites which include the same symbol and a composite 
 
 ~~~ucl
 composite "COMP1" {
-    expression = "BLAH || !DATE_IN_PAST";
+    expression = "BLAH | !DATE_IN_PAST";
 }
 composite "COMP2" {
-    expression = "!BLAH || DATE_IN_PAST";
+    expression = "!BLAH | DATE_IN_PAST";
 }
 composite "COMP3" {
-    expression = "!BLAH || -DATE_IN_PAST";
+    expression = "!BLAH | -DATE_IN_PAST";
 }
 ~~~
 
@@ -110,13 +110,13 @@ If we rewrite the previous example but replace `-` with `~` then `DATE_IN_PAST` 
 
 ~~~ucl
 composite "COMP1" {
-    expression = "BLAH || !DATE_IN_PAST";
+    expression = "BLAH | !DATE_IN_PAST";
 }
 composite "COMP2" {
-    expression = "!BLAH || DATE_IN_PAST";
+    expression = "!BLAH | DATE_IN_PAST";
 }
 composite "COMP3" {
-    expression = "!BLAH || -DATE_IN_PAST";
+    expression = "!BLAH | -DATE_IN_PAST";
 }
 ~~~
 
@@ -124,13 +124,13 @@ When we want to remove a symbol, despite other composites combinations, it is po
 
 ~~~ucl
 composite "COMP1" {
-    expression = "BLAH || !DATE_IN_PAST";
+    expression = "BLAH | !DATE_IN_PAST";
 }
 composite "COMP2" {
-    expression = "!BLAH || ^DATE_IN_PAST";
+    expression = "!BLAH | ^DATE_IN_PAST";
 }
 composite "COMP3" {
-    expression = "!BLAH || -DATE_IN_PAST";
+    expression = "!BLAH | -DATE_IN_PAST";
 }
 ~~~
 
@@ -143,6 +143,6 @@ It is possible to include a group of symbols in a composite rule. This effective
 ~~~ucl
 composite {
     name = "TEST2";
-    expression = "SYMBOL2 && !g:mua";
+    expression = "SYMBOL2 & !g:mua";
 }
 ~~~
