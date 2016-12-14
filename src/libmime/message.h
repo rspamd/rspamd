@@ -38,6 +38,8 @@ struct rspamd_mime_part {
 	struct rspamd_content_type *ct;
 	rspamd_ftok_t raw_data;
 	rspamd_ftok_t parsed_data;
+	struct rspamd_mime_part *parent_part;
+	GPtrArray *children;
 	enum rspamd_cte cte;
 	GByteArray *content;
 	GMimeObject *parent;

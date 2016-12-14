@@ -257,6 +257,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		g_assert_not_reached ();
 	}
 
+	g_ptr_array_add (task->parts, part);
 	msg_debug_mime ("parsed data part %T/%T of length %z (%z orig), %s cte",
 			&part->ct->type, &part->ct->subtype, part->parsed_data.len,
 			part->raw_data.len, rspamd_cte_to_string (part->cte));
@@ -294,9 +295,15 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	str.len = end - start;
 
 	hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
+
+	if (multipart->children == NULL) {
+		multipart->children = g_ptr_array_sized_new (2);
+	}
+
 	npart = rspamd_mempool_alloc0 (task->task_pool,
 			sizeof (struct rspamd_mime_part));
-	npart->parent = multipart;
+	npart->parent_part = multipart;
+	g_ptr_array_add (multipart->children, npart);
 
 	if (hdr_pos > 0 && hdr_pos < str.len) {
 
@@ -492,6 +499,8 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 		return FALSE;
 	}
 
+	g_ptr_array_add (task->parts, part);
+
 	cbdata.multipart = part;
 	cbdata.task = task;
 	cbdata.st = st;
@@ -534,6 +543,10 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		g_set_error (err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
 				st->stack->len);
 		return FALSE;
+	}
+
+	if (part) {
+		g_ptr_array_add (task->parts, part);
 	}
 
 	/* Parse headers */
@@ -676,7 +689,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			sizeof (struct rspamd_mime_part));
 	npart->raw_data.begin = pbegin;
 	npart->raw_data.len = plen;
-	npart->parent = part;
+	npart->parent_part = part;
 	npart->ct = sel;
 
 	if (st->cur_part == NULL) {
