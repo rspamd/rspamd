@@ -41,8 +41,9 @@ rspamd_show_multipart (struct rspamd_mime_part *part)
 	struct rspamd_mime_part *cur;
 	guint i;
 
-	rspamd_printf ("got multipart part %p: parent: %p, type: %T/%T, children: [",
-			part, part->parent_part,
+	rspamd_printf ("got multipart part %p, boundary: %T: parent: %p, type: %T/%T, children: [",
+			part, &part->ct->boundary,
+			part->parent_part,
 			&part->ct->type, &part->ct->subtype);
 
 	if (part->children) {
@@ -66,7 +67,7 @@ rspamd_show_multipart (struct rspamd_mime_part *part)
 static void
 rspamd_show_message (struct rspamd_mime_part *part)
 {
-	rspamd_printf ("got message part %p: parent: %p, type: %T/%T",
+	rspamd_printf ("got message part %p: parent: %p\n",
 				part, part->parent_part);
 }
 
