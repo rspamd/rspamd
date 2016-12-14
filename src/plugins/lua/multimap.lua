@@ -442,7 +442,14 @@ local function multimap_callback(task, rule)
         end
 
         if pre_filter then
-          task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+          if r['message_func'] then
+            r['message'] = r.message_func(task, r['symbol'], opt)
+          end
+          if r['message'] then
+            task:set_pre_result(r['action'], r['message'])
+          else
+            task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+          end
         end
       end
     end
@@ -617,6 +624,9 @@ end
 
 local function add_multimap_rule(key, newrule)
   local ret = false
+  if newrule['message_func'] then
+    newrule['message_func'] = assert(load(newrule['message_func']))()
+  end
   if newrule['url'] and not newrule['map'] then
     newrule['map'] = newrule['url']
   end
