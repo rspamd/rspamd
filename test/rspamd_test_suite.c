@@ -21,7 +21,8 @@ main (int argc, char **argv)
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	cfg->log_level = G_LOG_LEVEL_INFO;
 
-	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
+	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"),
+			&rspamd_main->logger, rspamd_main->server_pool);
 	(void)rspamd_log_open (rspamd_main->logger);
 
 	g_test_init (&argc, &argv, NULL);
@@ -33,7 +34,8 @@ main (int argc, char **argv)
 
 	if (g_test_verbose ()) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
-		rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
+		rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"),
+				&rspamd_main->logger, rspamd_main->server_pool);
 		(void)rspamd_log_reopen (rspamd_main->logger);
 	}
 
