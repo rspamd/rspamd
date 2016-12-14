@@ -199,6 +199,7 @@ local function greylist_check(task)
         rspamd_logger.infox(task, 'greylisted until "%s" using %s key',
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
+        if not task:get_queue_id() then return end
         if settings.message_func then
           task:set_pre_result('soft reject',
             settings.message_func(task, end_time))
@@ -271,6 +272,7 @@ local function greylist_set(task)
     end
   end
 
+  local qid = task:get_queue_id()
   if is_whitelisted then
     if action == 'greylist' then
       -- We are going to accept message
@@ -282,6 +284,7 @@ local function greylist_set(task)
       is_whitelisted,
       rspamd_util.time_to_string(rspamd_util.get_time() + settings['expire']))
 
+    if not qid then return end
     ret,conn,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       hash_key, -- hash key
@@ -304,6 +307,7 @@ local function greylist_set(task)
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
     task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
       'new record')
+    if not qid then return end
     task:set_pre_result(settings['action'], settings['message'])
     -- Create new record
     ret,conn,upstream = rspamd_redis_make_request(task,
@@ -342,6 +346,7 @@ local function greylist_set(task)
         end
       end
       task:set_metric_action('default', settings['action'])
+      if not qid then return end
       task:set_pre_result(settings['action'], settings['message'])
     else
       task:insert_result(settings['symbol'], 0.0, 'greylisted', 'passed')
