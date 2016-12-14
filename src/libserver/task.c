@@ -199,10 +199,9 @@ rspamd_task_free (struct rspamd_task *task)
 
 		for (i = 0; i < task->parts->len; i ++) {
 			p = g_ptr_array_index (task->parts, i);
-			g_byte_array_free (p->content, TRUE);
 
-			if (p->raw_headers_str) {
-				g_free (p->raw_headers_str);
+			if (p->content) {
+				g_byte_array_free (p->content, TRUE);
 			}
 
 			if (p->raw_headers) {

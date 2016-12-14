@@ -914,6 +914,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			rspamd_mime_headers_process (task, mime_part->raw_headers,
 					hdrs, strlen (hdrs), FALSE);
 			mime_part->raw_headers_str = hdrs;
+			rspamd_mempool_add_destructor (task->task_pool, g_free, hdrs);
 		}
 
 		mime_part->type = type;
@@ -983,6 +984,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 					rspamd_mime_headers_process (task, mime_part->raw_headers,
 							hdrs, strlen (hdrs), FALSE);
 					mime_part->raw_headers_str = hdrs;
+					rspamd_mempool_add_destructor (task->task_pool, g_free, hdrs);
 				}
 
 				mime_part->type = type;
