@@ -130,7 +130,12 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 	if (rspamd_log->enabled) {
 		if (!rspamd_log->no_lock) {
 #ifndef DISABLE_PTHREAD_MUTEX
-			rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			if (rspamd_log->mtx) {
+				rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			}
+			else {
+				rspamd_file_lock (rspamd_log->fd, FALSE);
+			}
 #else
 			rspamd_file_lock (rspamd_log->fd, FALSE);
 #endif
@@ -147,7 +152,12 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 
 		if (!rspamd_log->no_lock) {
 #ifndef DISABLE_PTHREAD_MUTEX
-			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+			if (rspamd_log->mtx) {
+				rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+			}
+			else {
+				rspamd_file_unlock (rspamd_log->fd, FALSE);
+			}
 #else
 			rspamd_file_unlock (rspamd_log->fd, FALSE);
 #endif
@@ -342,28 +352,35 @@ rspamd_log_reopen (rspamd_logger_t *logger)
 void
 rspamd_set_logger (struct rspamd_config *cfg,
 		GQuark ptype,
-		struct rspamd_main *rspamd)
+		rspamd_logger_t **plogger,
+		rspamd_mempool_t *pool)
 {
 	rspamd_logger_t *logger;
 
-	if (rspamd->logger == NULL) {
-		rspamd->logger = g_slice_alloc0 (sizeof (rspamd_logger_t));
-		logger = rspamd->logger;
+	if (plogger == NULL || *plogger == NULL) {
+		logger = g_slice_alloc0 (sizeof (rspamd_logger_t));
 
-		if (cfg->log_error_elts > 0) {
-			logger->errlog = rspamd_mempool_alloc0_shared (rspamd->server_pool,
+		if (cfg->log_error_elts > 0 && pool) {
+			logger->errlog = rspamd_mempool_alloc0_shared (pool,
 					sizeof (*logger->errlog));
-			logger->errlog->pool = rspamd->server_pool;
+			logger->errlog->pool = pool;
 			logger->errlog->max_elts = cfg->log_error_elts;
 			logger->errlog->elt_len = cfg->log_error_elt_maxlen;
-			logger->errlog->elts = rspamd_mempool_alloc0_shared (rspamd->server_pool,
+			logger->errlog->elts = rspamd_mempool_alloc0_shared (pool,
 					sizeof (struct rspamd_logger_error_elt) * cfg->log_error_elts +
 					cfg->log_error_elt_maxlen * cfg->log_error_elts);
-			logger->mtx = rspamd_mempool_get_mutex (rspamd->server_pool);
+		}
+
+		if (pool) {
+			logger->mtx = rspamd_mempool_get_mutex (pool);
+		}
+
+		if (plogger) {
+			*plogger = logger;
 		}
 	}
 	else {
-		logger = rspamd->logger;
+		logger = *plogger;
 	}
 
 	logger->type = cfg->log_type;

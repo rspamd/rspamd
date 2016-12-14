@@ -281,7 +281,8 @@ main (gint argc, gchar **argv, gchar **env)
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
-	rspamd_set_logger (cfg, process_quark, rspamd_main);
+	rspamd_set_logger (cfg, process_quark, &rspamd_main->logger,
+			rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler (rspamd_glib_printerr_function);

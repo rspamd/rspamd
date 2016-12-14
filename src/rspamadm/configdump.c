@@ -86,7 +86,8 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 	rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
 	rm->cfg->log_level = G_LOG_LEVEL_CRITICAL;
 
-	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), rm);
+	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), &rm->logger,
+			rm->server_pool);
 	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) ==
 			-1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");

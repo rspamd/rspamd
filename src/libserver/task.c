@@ -208,6 +208,9 @@ rspamd_task_free (struct rspamd_task *task)
 			if (p->raw_headers) {
 				g_hash_table_unref (p->raw_headers);
 			}
+			if (p->children) {
+				g_ptr_array_free (p->children, TRUE);
+			}
 		}
 
 		for (i = 0; i < task->text_parts->len; i ++) {

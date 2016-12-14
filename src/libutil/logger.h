@@ -29,7 +29,8 @@ typedef struct rspamd_logger_s rspamd_logger_t;
  */
 void rspamd_set_logger (struct rspamd_config *cfg,
 		GQuark ptype,
-		struct rspamd_main *main);
+		rspamd_logger_t **plogger,
+		rspamd_mempool_t *pool);
 
 /**
  * Open log file or initialize other structures

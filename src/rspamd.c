@@ -255,7 +255,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 	}
 
 	rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
-			rspamd_main);
+			&rspamd_main->logger, rspamd_main->server_pool);
 	if (rspamd_log_open_priv (rspamd_main->logger,
 			rspamd_main->workers_uid, rspamd_main->workers_gid) == -1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
@@ -273,7 +273,8 @@ reread_config (struct rspamd_main *rspamd_main)
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
-	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
+	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"),
+			&rspamd_main->logger, rspamd_main->server_pool);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 			rspamd_main->cfg->cfg_name);
 	/* Save some variables */
@@ -281,8 +282,8 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
 			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE)) {
-		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
-				"main"), rspamd_main);
+		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
+				&rspamd_main->logger, rspamd_main->server_pool);
 		msg_err_main ("cannot parse new config file, revert to old one");
 		REF_RELEASE (tmp_cfg);
 	}
@@ -291,7 +292,8 @@ reread_config (struct rspamd_main *rspamd_main)
 		REF_RELEASE (rspamd_main->cfg);
 
 		rspamd_main->cfg = tmp_cfg;
-		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
+		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"),
+				&rspamd_main->logger, rspamd_main->server_pool);
 		/* Force debug log */
 		if (is_debug) {
 			rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -1137,7 +1139,8 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* First set logger to console logger */
 	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
-	rspamd_set_logger (rspamd_main->cfg, type, rspamd_main);
+	rspamd_set_logger (rspamd_main->cfg, type,
+			&rspamd_main->logger, rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler (rspamd_glib_printerr_function);
