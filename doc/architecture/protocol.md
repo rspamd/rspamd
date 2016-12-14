@@ -156,3 +156,41 @@ Here is an example of a JSON control block:
 ~~~
 
 Moreover, [UCL](https://github.com/vstakhov/libucl) JSON extensions and syntax conventions are also supported inside the control block.
+
+## Curl example
+
+To check a message without rspamc:
+`curl --data-binary @- http://localhost:11333/symbols < file.eml`
+
+## Normal worker HTTP endpoints
+
+The following endpoints are valid on the normal worker and accept `POST`:
+
+* `/check` - Check message and return action
+* `/symbols` - Same as `check` but also returns score & list of symbols yielded
+
+## Controller HTTP endpoints
+
+The following endpoints are valid merely on the controller. All of these may require `Password` header to be sent depending on configuration (passing this as query string works too).
+
+* `/fuzzy_add` - Add message to fuzzy storage
+* `/fuzzy_del` - Remove message from fuzzy storage
+
+These accept `POST`. Headers which may be set are:
+
+- `Flag`: flag identifying fuzzy storage
+- `Weight`: weight to add to hashes
+
+* `/learnspam` - Train bayes classifier on spam message
+* `/learnham` - Train bayes classifier on ham message
+
+These also accept `POST`. The below endpoints all use `GET`:
+
+* `/errors` - Return error messages from ring buffer
+* `/stat` - Return statistics
+* `/graph?type=<hourly|daily|weekly|monthly>` - Plots throughput graph
+* `/history` - Returns rolling history
+* `/actions` - Return thresholds for actions
+* `/symbols` - Returns symbols in metric & their scores
+* `/maps` - Returns list of maps
+* `/getmap` - Fetches contents of map according to ID passed in `Map:` header
