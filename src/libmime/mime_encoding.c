@@ -216,7 +216,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 
 	if (utf_compatible_re == NULL) {
 		utf_compatible_re = rspamd_regexp_new (
-			"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:us)|(?:ISO-8859-1)|"
+			"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
 			"(?:latin.*)|(?:CSASCII)$",
 			"i", NULL);
 	}
