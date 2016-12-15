@@ -189,7 +189,9 @@ routines['authentication-results'] = function(task, common_meta)
           hdr = hdr .. ' policy=' .. common_meta.symbols[auth_types['dmarc'][key]][1]['options'][2]
           hdr = hdr .. ' header.from=' .. common_meta.symbols[auth_types['dmarc'][key]][1]['options'][1]
         elseif key ~= 'none' then
-          local dom, rsn = rspamd_str_split(common_meta.symbols[auth_types['dmarc'][key]][1]['options'][1], ' : ')
+          local t = rspamd_str_split(common_meta.symbols[auth_types['dmarc'][key]][1]['options'][1], ' : ')
+          local dom = t[1]
+          local rsn = t[2]
           hdr = hdr .. ' reason="' .. rsn .. '"'
           hdr = hdr .. ' header.from=' .. dom
           if key == 'softfail' then
