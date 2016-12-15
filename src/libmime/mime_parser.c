@@ -43,7 +43,6 @@ static const guint max_key_usages = 10000;
 
 struct rspamd_mime_boundary {
 	goffset start;
-	gsize len;
 	guint64 hash;
 	gint flags;
 };
@@ -644,6 +643,87 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 	return (ret != -1);
 }
 
+/* Process boundary like structures in a message */
+static gint
+rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
+		guint strnum,
+		gint match_start,
+		gint match_pos,
+		const gchar *text,
+		gsize len,
+		void *context)
+{
+	const gchar *end = text + len, *p = text + match_pos, *bend, *pend;
+	gsize blen;
+	gboolean closing = FALSE;
+	struct rspamd_mime_boundary b;
+	struct rspamd_mime_parser_ctx *st = context;
+
+	if (G_LIKELY (p < end)) {
+		blen = rspamd_memcspn (p, "\r\n", end - p);
+
+		if (blen > 0) {
+			/* We have found something like boundary */
+			bend = p + blen - 1;
+			pend = p + blen;
+
+			if (*bend == '-') {
+				/* We need to verify last -- */
+				if (bend > p + 1 && *(bend - 1) == '-') {
+					closing = TRUE;
+					bend --;
+				}
+				else {
+					/* Not a closing boundary somehow */
+					bend ++;
+				}
+			}
+			else {
+				bend ++;
+			}
+
+			if (*bend == '\r') {
+				bend ++;
+
+				/* \r\n */
+				if (*bend == '\n') {
+					bend ++;
+				}
+			}
+			else {
+				/* \n */
+				bend ++;
+			}
+
+			b.start = bend - text;
+			rspamd_cryptobox_siphash ((guchar *)&b.hash, p, bend - p,
+					lib_ctx->hkey);
+
+			if (closing) {
+				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
+			}
+			else {
+				b.flags = 0;
+			}
+
+			g_array_append_val (st->boundaries, b);
+		}
+	}
+
+	return 0;
+}
+
+static void
+rspamd_mime_preprocess_message (struct rspamd_task *task,
+		struct rspamd_mime_part *top,
+		struct rspamd_mime_parser_ctx *st)
+{
+	rspamd_multipattern_lookup (lib_ctx->mp_boundary,
+			top->raw_data.begin - 1,
+			top->raw_data.len + 1,
+			rspamd_mime_preprocess_cb, st, NULL);
+}
+
 static gboolean
 rspamd_mime_parse_message (struct rspamd_task *task,
 		struct rspamd_mime_part *part,
@@ -795,10 +875,17 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		g_set_error (err, RSPAMD_MIME_QUARK, EINVAL,
 				"Content type header cannot be parsed");
 
+		/* TODO: assume it raw */
 		return FALSE;
 	}
 
 	npart->ct = sel;
+
+	if (part == NULL &&
+			(sel->flags & (RSPAMD_CONTENT_TYPE_MULTIPART|RSPAMD_CONTENT_TYPE_MESSAGE))) {
+		/* Not a trivial message, need to preprocess */
+		rspamd_mime_preprocess_message (task, npart, st);
+	}
 
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
 		g_ptr_array_add (st->stack, npart);
