@@ -23,6 +23,7 @@
 #include "mime_parser.h"
 #include "unix-std.h"
 
+static gdouble total_time = 0.0;
 
 static void
 rspamd_show_normal (struct rspamd_mime_part *part)
@@ -81,6 +82,7 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 	GError *err = NULL;
 	struct rspamd_mime_part *part;
 	guint i;
+	gdouble ts1, ts2;
 
 	fd = open (fname, O_RDONLY);
 
@@ -106,10 +108,15 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 	task->msg.begin = map;
 	task->msg.len = st.st_size;
 
+	ts1 = rspamd_get_ticks ();
+
 	if (!rspamd_mime_parse_task (task, &err)) {
 		rspamd_fprintf (stderr, "cannot parse %s: %e\n", fname, err);
 		g_error_free (err);
 	}
+
+	ts2 = rspamd_get_ticks ();
+	total_time += ts2 - ts1;
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
@@ -151,6 +158,8 @@ main (int argc, char **argv)
 			rspamd_process_file (cfg, argv[i], 0);
 		}
 	}
+
+	rspamd_printf ("Total time parsing: %.4f seconds\n", total_time);
 
 	rspamd_log_close (logger);
 	REF_RELEASE (cfg);
