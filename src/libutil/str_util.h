@@ -350,4 +350,13 @@ extern const guchar lc_map[256];
  */
 const void *rspamd_memrchr (const void *m, gint c, gsize len);
 
+/**
+ * Return length of memory segment starting in `s` that contains no chars from `e`
+ * @param s any input
+ * @param e zero terminated string of exceptions
+ * @param len length of `s`
+ * @return segment size
+ */
+gsize rspamd_memcspn (const gchar *s, const gchar *e, gsize len);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

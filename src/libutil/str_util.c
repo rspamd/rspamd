@@ -1828,13 +1828,13 @@ decode:
 
 #define BITOP(a,b,op) \
 		((a)[(gsize)(b)/(8*sizeof *(a))] op (gsize)1<<((gsize)(b)%(8*sizeof *(a))))
-static gsize
+gsize
 rspamd_memcspn (const gchar *s, const gchar *e, gsize len)
 {
-	gsize byteset[32/sizeof(gsize)];
+	gsize byteset[32 / sizeof(gsize)];
 	const gchar *p = s, *end = s + len;
 
-	memset(byteset, 0, sizeof byteset);
+	memset (byteset, 0, sizeof byteset);
 
 	for (; *e && BITOP (byteset, *(guchar *)e, |=); e++);
 	for (; p < end && !BITOP (byteset, *(guchar *)p, &); p++);
