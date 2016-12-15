@@ -17,7 +17,9 @@ limitations under the License.
 -- This plugin is intended to read and parse spamassassin rules with regexp
 -- rules. SA plugins or statistics are not supported
 
+local E = {}
 local N = 'spamassassin'
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
@@ -455,7 +457,7 @@ local function gen_eval_rule(arg)
       'check_from_in_blacklist',
       function(task)
         local from = task:get_from('mime')
-        if from and from[1] and from[1]['addr'] then
+        if ((from or E)[1] or E).addr then
           if sa_lists['from_blacklist'][string.lower(from[1]['addr'])] then
             return 1
           end
@@ -468,7 +470,7 @@ local function gen_eval_rule(arg)
       'check_from_in_whitelist',
       function(task)
         local from = task:get_from('mime')
-        if from and from[1] and from[1]['addr'] then
+        if ((from or E)[1] or E).addr then
           if sa_lists['from_whitelist'][string.lower(from[1]['addr'])] then
             return 1
           end
@@ -481,7 +483,7 @@ local function gen_eval_rule(arg)
       'check_from_in_default_whitelist',
       function(task)
         local from = task:get_from('mime')
-        if from and from[1] and from[1]['addr'] then
+        if ((from or E)[1] or E).addr then
           if sa_lists['from_def_whitelist'][string.lower(from[1]['addr'])] then
             return 1
           end

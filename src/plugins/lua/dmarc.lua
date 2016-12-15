@@ -54,6 +54,8 @@ local dmarc_redis_key_expire = 60 * 60 * 24 * 2
 local dmarc_reporting = false
 local dmarc_actions = {}
 
+local E = {}
+
 local function gen_dmarc_grammar()
   local lpeg = require "lpeg"
   lpeg.locale(lpeg)
@@ -99,7 +101,7 @@ local function dmarc_callback(task)
     rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
     return
   end
-  if from and from[1] and from[1]['domain'] and not from[2] then
+  if ((from or E)[1] or E).domain and not (from or E)[2] then
     dmarc_domain = rspamd_util.get_tld(from[1]['domain'])
   else
     task:insert_result(dmarc_symbols['na'], 1.0, 'No From header')
@@ -260,7 +262,7 @@ local function dmarc_callback(task)
     local dkim_ok = false
     if task:has_symbol(symbols['spf_allow_symbol']) then
       local efrom = task:get_from(1)
-      if efrom and efrom[1] and efrom[1]['domain'] then
+      if ((efrom or E)[1] or E).domain then
         if strict_spf and rspamd_util.strequal_caseless(efrom[1]['domain'], from[1]['domain']) then
           spf_ok = true
         elseif strict_spf then
@@ -279,7 +281,7 @@ local function dmarc_callback(task)
       table.insert(reason, "No valid SPF")
     end
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
-    if das and das[1] and das[1]['options'] then
+    if ((das or E)[1] or E).options then
       for _,dkim_domain in ipairs(das[1]['options']) do
         if strict_dkim and rspamd_util.strequal_caseless(from[1]['domain'], dkim_domain) then
           dkim_ok = true

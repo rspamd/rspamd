@@ -17,6 +17,8 @@ limitations under the License.
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
 
+local E = {}
+
 local rows = {}
 local attachment_rows = {}
 local urls_rows = {}
@@ -444,7 +446,7 @@ local function clickhouse_collect(task)
   if settings['from_map'] and dkim == 'allow' then
     -- Use dkim
     local das = task:get_symbol(settings['dkim_allow_symbols'][1])
-    if das and das[1] and das[1]['options'] then
+    if ((das or E)[1] or E).options then
       for _,dkim_domain in ipairs(das[1]['options']) do
         local specific = settings.from_map:get_key(dkim_domain)
         if specific then

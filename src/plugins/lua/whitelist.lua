@@ -26,6 +26,8 @@ local options = {
   rules = {}
 }
 
+local E = {}
+
 local function whitelist_cb(symbol, rule, task)
 
   local domains = {}
@@ -73,7 +75,7 @@ local function whitelist_cb(symbol, rule, task)
     -- Now we can check from domain or helo
     local from = task:get_from(1)
 
-    if from and from[1] and from[1]['domain'] then
+    if ((from or E)[1] or E).domain then
       local tld = rspamd_util.get_tld(from[1]['domain'])
 
       if tld then
@@ -126,7 +128,7 @@ local function whitelist_cb(symbol, rule, task)
     end
     local from = task:get_from(2)
 
-    if from and from[1] and from[1]['domain'] then
+    if ((from or E)[1] or E).domain then
       local tld = rspamd_util.get_tld(from[1]['domain'])
 
       if tld then

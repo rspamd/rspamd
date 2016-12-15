@@ -35,11 +35,13 @@ local settings = {
 
 local map = {}
 
+local E = {}
+
 local function known_mid_cb(task)
   local re = {}
   local header = task:get_header('Message-Id')
   local das = task:get_symbol(settings['symbol_dkim_allow'])
-  if das and das[1] and das[1]['options'] then
+  if ((das or E)[1] or E).options then
     for _,dkim_domain in ipairs(das[1]['options']) do
       local v = map:get_key(dkim_domain)
       if v then
