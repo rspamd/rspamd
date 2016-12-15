@@ -42,14 +42,17 @@ static const guint max_key_usages = 10000;
 #define RSPAMD_BOUNDARY_IS_CLOSED(b) ((b)->flags & RSPAMD_MIME_BOUNDARY_FLAG_CLOSED)
 
 struct rspamd_mime_boundary {
+	goffset boundary;
 	goffset start;
 	guint64 hash;
+	guint64 closed_hash;
 	gint flags;
 };
 
 struct rspamd_mime_parser_ctx {
 	GPtrArray *stack; /* Stack of parts */
 	GArray *boundaries; /* Boundaries found in the whole message */
+	const gchar *start;
 	const gchar *pos;
 	const gchar *end;
 };
@@ -289,6 +292,7 @@ struct rspamd_mime_multipart_cbdata {
 	struct rspamd_mime_parser_ctx *st;
 	const gchar *part_start;
 	rspamd_ftok_t *cur_boundary;
+	guint64 bhash;
 	GError **err;
 };
 
@@ -373,6 +377,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	if (sel == NULL) {
 		/* TODO: assume part as octet-stream */
 		g_set_error (err, RSPAMD_MIME_QUARK, EINVAL, "no content type");
+		g_assert (0);
 		return FALSE;
 	}
 
@@ -396,65 +401,21 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	return ret;
 }
 
-static gint
-rspamd_mime_parse_multipart_cb (struct rspamd_multipattern *mp,
-		guint strnum,
-		gint match_start,
-		gint match_pos,
-		const gchar *text,
-		gsize len,
-		void *context)
+static gboolean
+rspamd_mime_parse_multipart_cb (struct rspamd_task *task,
+		struct rspamd_mime_part *multipart,
+		struct rspamd_mime_parser_ctx *st,
+		struct rspamd_mime_multipart_cbdata *cb,
+		struct rspamd_mime_boundary *b)
 {
-	struct rspamd_mime_multipart_cbdata *cb = context;
-	struct rspamd_task *task;
-	const gchar *pos = text + match_pos, *end = text + len, *st;
-	gint ret = 0;
-	guint i, j;
-	struct rspamd_mime_part *par;
+	const gchar *pos = st->start + b->boundary;
 
 	task = cb->task;
 
-	if (cb->st->pos && pos <= cb->st->pos) {
-		/* Already processed */
-		return 0;
-	}
-
 	/* Now check boundary */
 	if (!cb->part_start) {
-		if (cb->cur_boundary) {
-			if (match_pos + cb->cur_boundary->len < len) {
-				if (rspamd_lc_cmp (pos, cb->cur_boundary->begin,
-						cb->cur_boundary->len) != 0) {
-					msg_debug_mime ("found invalid boundary: %*s, %T expected",
-							(gint)cb->cur_boundary->len, pos, cb->cur_boundary);
-
-					/* Just continue search */
-					return 0;
-				}
-
-				pos += cb->cur_boundary->len;
-
-				while (pos < end && (*pos == '\r' || *pos == '\n')) {
-					pos ++;
-				}
-
-				cb->part_start = pos;
-				cb->st->pos = pos;
-			}
-			else {
-				msg_debug_mime ("boundary is stripped");
-				g_set_error (cb->err, RSPAMD_MIME_QUARK, EINVAL,
-						"start boundary is stripped at %d (%zd available)",
-						match_pos, len);
-
-				return (-1);
-			}
-		}
-		else {
-			/* We see something like boundary: '[\r\n]--xxx */
-			/* TODO: write heuristic */
-			g_assert_not_reached ();
-		}
+		cb->part_start = st->start + b->start;
+		st->pos = cb->part_start;
 	}
 	else {
 		/* We have seen the start of the boundary */
@@ -462,133 +423,113 @@ rspamd_mime_parse_multipart_cb (struct rspamd_multipattern *mp,
 			/* We should have seen some boundary */
 			g_assert (cb->cur_boundary != NULL);
 
-			if (pos == end) {
-				return 1;
-				/* We have part without ending line, assume it fine */
-				st = match_pos + text - 2;
 
-				if (!rspamd_mime_process_multipart_node (task, cb->st,
-						cb->multipart, cb->part_start, st, cb->err)) {
-					return -1;
-				}
-
-				while (pos < end && (*pos == '\r' || *pos == '\n')) {
-					pos ++;
-				}
-
-				/* Go towards the next part */
-				cb->part_start = pos;
-				cb->st->pos = pos;
+			if (!rspamd_mime_process_multipart_node (task, cb->st,
+					cb->multipart, cb->part_start, pos, cb->err)) {
+				return FALSE;
 			}
 
-			if (match_pos + cb->cur_boundary->len > len ||
-					rspamd_lc_cmp (pos, cb->cur_boundary->begin,
-							cb->cur_boundary->len) != 0) {
-				msg_debug_mime ("found invalid boundary: %*s, %T expected",
-						(gint)cb->cur_boundary->len, pos, cb->cur_boundary);
-
-				/*
-				 * We also need to check parent parts:
-				 *
-				 * --1
-				 * --1.1
-				 * --1.1 <- this one is closed implicitly by the next
-				 * --1--
-				 */
-				if (cb->st->stack->len > 0) {
-					for (i = cb->st->stack->len - 1; ; i --) {
-						par = g_ptr_array_index (cb->st->stack, i);
-
-						if (par->ct->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-							if (par->ct->boundary.len > 0 &&
-									end - pos >= par->ct->boundary.len &&
-									rspamd_lc_cmp (pos,
-											par->ct->boundary.begin,
-											par->ct->boundary.len) == 0) {
-								pos += par->ct->boundary.len + 1;
-
-								/* Now we need to check for:
-								 * 1. --\r|\n
-								 * 2. \r|\n
-								 * 3. --<EOF>
-								 */
-								ret = 0;
-
-								if (pos == end || (*pos == '\r' || *pos == '\n')) {
-									ret = 1;
-								}
-								else if (pos < end - 1) {
-									if (pos[0] == '-' && pos[1] == '-') {
-										pos += 2;
-										if (pos == end ||
-												(*pos == '\r' || *pos == '\n')) {
-											ret = 1;
-										}
-									}
-								}
-
-								if (ret) {
-									/* Unwind parts stack to this part */
-									for (j = cb->st->stack->len - 1; j > i; j ++) {
-										g_ptr_array_remove_index_fast (
-												cb->st->stack, j);
-									}
-
-									g_ptr_array_remove_index_fast (cb->st->stack, i);
-								}
-
-								break;
-							}
-						}
-
-						if (i == 0) {
-							break;
-						}
-					}
-				}
-				if (!ret) {
-					/* Not a valid boundary */
-					return 0;
-				}
-			}
-			else {
-				pos += cb->cur_boundary->len;
-				cb->st->pos = pos;
-
-				if (pos < end - 1 && pos[0] == '-' && pos[1] == '-') {
-					/* It should be end of multipart, but it is sometimes isn't */
-					/* TODO: deal with such perversions */
-					pos += 2;
-					ret = 1;
-				}
-				else if (pos[0] != '\r' && pos[0] != '\n' && pos != end) {
-					/* This is not actually our boundary, but something else */
-					return 0;
-				}
-
-				st = match_pos + text - 2;
-
-				if (!rspamd_mime_process_multipart_node (task, cb->st,
-						cb->multipart, cb->part_start, st, cb->err)) {
-					return -1;
-				}
-
-				while (pos < end && (*pos == '\r' || *pos == '\n')) {
-					pos ++;
-				}
-
-				/* Go towards the next part */
-				cb->part_start = pos;
-				cb->st->pos = pos;
-			}
+			/* Go towards the next part */
+			cb->part_start = st->start + b->start;
+			cb->st->pos = cb->part_start;
 		}
 		else {
-			/* We have something very bad in fact */
 			g_assert_not_reached ();
 		}
 	}
 
-	return ret;
+	return TRUE;
+}
+
+static gint
+rspamd_multipart_boundaries_filter (struct rspamd_task *task,
+		struct rspamd_mime_part *multipart,
+		struct rspamd_mime_parser_ctx *st,
+		struct rspamd_mime_multipart_cbdata *cb)
+{
+	struct rspamd_mime_boundary *cur;
+	goffset last_offset;
+	guint i, sel = 0;
+
+	last_offset = (multipart->raw_data.begin - st->start) +
+			multipart->raw_data.len;
+
+	/* Find the first offset suitable for this part */
+	for (i = 0; i < st->boundaries->len; i ++) {
+		cur = &g_array_index (st->boundaries, struct rspamd_mime_boundary, i);
+
+		if (cur->start >= multipart->raw_data.begin - st->start) {
+			if (cb->cur_boundary) {
+				/* Check boundary */
+				msg_debug_mime ("compare %L and %L", cb->bhash, cur->hash);
+
+				if (cb->bhash == cur->hash) {
+					sel = i;
+					break;
+				}
+				else if (cb->bhash == cur->closed_hash) {
+					/* Not a closing element in fact */
+					cur->flags &= ~(RSPAMD_MIME_BOUNDARY_FLAG_CLOSED);
+					sel = i;
+					break;
+				}
+			}
+			else {
+				/* Set current boundary */
+				cb->cur_boundary = rspamd_mempool_alloc (task->task_pool,
+						sizeof (rspamd_ftok_t));
+				cb->cur_boundary->begin = st->start + cur->boundary;
+				cb->cur_boundary->len = 0;
+				cb->bhash = cur->hash;
+				sel = i;
+				break;
+			}
+		}
+	}
+
+	/* Now we can go forward with boundaries that are same to what we have */
+	for (i = sel; i < st->boundaries->len; i ++) {
+		cur = &g_array_index (st->boundaries, struct rspamd_mime_boundary, i);
+
+		if (cur->boundary > last_offset) {
+			break;
+		}
+
+		if (cur->hash == cb->bhash) {
+			if (!rspamd_mime_parse_multipart_cb (task, multipart, st,
+					cb, cur)) {
+				return FALSE;
+			}
+
+			if (RSPAMD_BOUNDARY_IS_CLOSED (cur)) {
+				/* We also might check the next boundary... */
+				if (i < st->boundaries->len - 1) {
+					cur = &g_array_index (st->boundaries,
+							struct rspamd_mime_boundary, i + 1);
+
+					if (cur->hash == cb->bhash) {
+						continue;
+					}
+				}
+
+				break;
+			}
+		}
+	}
+
+	if (i == st->boundaries->len && cb->cur_boundary) {
+		/* Process the last part */
+		struct rspamd_mime_boundary fb;
+
+		fb.boundary = last_offset;
+
+		if (!rspamd_mime_parse_multipart_cb (task, multipart, st,
+				cb, &fb)) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -598,7 +539,7 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 		GError **err)
 {
 	struct rspamd_mime_multipart_cbdata cbdata;
-	gint ret;
+	gboolean ret;
 
 	if (st->stack->len > max_nested) {
 		g_set_error (err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
@@ -618,29 +559,22 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 	if (part->ct->boundary.len > 0) {
 		/* We know our boundary */
 		cbdata.cur_boundary = &part->ct->boundary;
+		rspamd_cryptobox_siphash ((guchar *)&cbdata.bhash,
+				cbdata.cur_boundary->begin, cbdata.cur_boundary->len,
+				lib_ctx->hkey);
+		msg_debug_mime ("hash: %T -> %L", cbdata.cur_boundary, cbdata.bhash);
 	}
 	else {
 		/* Guess boundary */
 		cbdata.cur_boundary = NULL;
+		cbdata.bhash = 0;
 	}
 
-	ret = rspamd_multipattern_lookup (lib_ctx->mp_boundary,
-			part->raw_data.begin - 1,
-			part->raw_data.len + 1,
-			rspamd_mime_parse_multipart_cb, &cbdata, NULL);
-
-	if (st->pos < part->raw_data.begin + part->raw_data.len) {
-		if (!rspamd_mime_process_multipart_node (task, st,
-				part, cbdata.part_start,
-				part->raw_data.begin + part->raw_data.len, err)) {
-			return -1;
-		}
-	}
-
+	ret = rspamd_multipart_boundaries_filter (task, part, st, &cbdata);
 	/* Cleanup stack */
 	g_ptr_array_remove_index_fast (st->stack, st->stack->len - 1);
 
-	return (ret != -1);
+	return ret;
 }
 
 /* Process boundary like structures in a message */
@@ -653,7 +587,8 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 		gsize len,
 		void *context)
 {
-	const gchar *end = text + len, *p = text + match_pos, *bend, *pend;
+	const gchar *end = text + len, *p = text + match_pos, *bend;
+	gchar *lc_copy;
 	gsize blen;
 	gboolean closing = FALSE;
 	struct rspamd_mime_boundary b;
@@ -665,13 +600,13 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 		if (blen > 0) {
 			/* We have found something like boundary */
 			bend = p + blen - 1;
-			pend = p + blen;
 
 			if (*bend == '-') {
 				/* We need to verify last -- */
 				if (bend > p + 1 && *(bend - 1) == '-') {
 					closing = TRUE;
 					bend --;
+					blen -= 2;
 				}
 				else {
 					/* Not a closing boundary somehow */
@@ -695,12 +630,20 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				bend ++;
 			}
 
-			b.start = bend - text;
-			rspamd_cryptobox_siphash ((guchar *)&b.hash, p, bend - p,
+			b.boundary = p - text - 3;
+			b.start = bend - text - 1;
+
+			lc_copy = g_malloc (blen);
+			memcpy (lc_copy, p, blen);
+			rspamd_str_lc (lc_copy, blen);
+			rspamd_cryptobox_siphash ((guchar *)&b.hash, lc_copy, blen,
 					lib_ctx->hkey);
+			g_free (lc_copy);
 
 			if (closing) {
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
+				rspamd_cryptobox_siphash ((guchar *)&b.closed_hash, p, blen + 2,
+						lib_ctx->hkey);
 			}
 			else {
 				b.flags = 0;
@@ -718,10 +661,19 @@ rspamd_mime_preprocess_message (struct rspamd_task *task,
 		struct rspamd_mime_part *top,
 		struct rspamd_mime_parser_ctx *st)
 {
-	rspamd_multipattern_lookup (lib_ctx->mp_boundary,
-			top->raw_data.begin - 1,
-			top->raw_data.len + 1,
-			rspamd_mime_preprocess_cb, st, NULL);
+
+	if (top->raw_data.begin >= st->pos) {
+		rspamd_multipattern_lookup (lib_ctx->mp_boundary,
+				top->raw_data.begin - 1,
+				top->raw_data.len + 1,
+				rspamd_mime_preprocess_cb, st, NULL);
+	}
+	else {
+		rspamd_multipattern_lookup (lib_ctx->mp_boundary,
+				st->pos,
+				st->end - st->pos,
+				rspamd_mime_preprocess_cb, st, NULL);
+	}
 }
 
 static gboolean
@@ -930,6 +882,7 @@ rspamd_mime_parse_task (struct rspamd_task *task, GError **err)
 	if (++lib_ctx->key_usages > max_key_usages) {
 		/* Regenerate siphash key */
 		ottery_rand_bytes (lib_ctx->hkey, sizeof (lib_ctx->hkey));
+		lib_ctx->key_usages = 0;
 	}
 
 	st = g_slice_alloc0 (sizeof (*st));
@@ -943,6 +896,7 @@ rspamd_mime_parse_task (struct rspamd_task *task, GError **err)
 		st->pos = task->msg.begin;
 	}
 
+	st->start = task->msg.begin;
 	ret = rspamd_mime_parse_message (task, NULL, st, err);
 	rspamd_mime_parse_stack_free (st);
 
