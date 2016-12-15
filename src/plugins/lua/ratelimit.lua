@@ -16,6 +16,8 @@ limitations under the License.
 
 -- A plugin that implements ratelimits using redis or kvstorage server
 
+local E = {}
+
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
 }
@@ -114,7 +116,7 @@ local keywords = {
   ['from'] = {
     ['get_value'] = function(task)
       local from = task:get_from(0)
-      if from and from[1] and from[1]['addr'] then
+      if ((from or E)[1] or E).addr then
         return from[1]['addr']
       end
       return nil
@@ -123,7 +125,7 @@ local keywords = {
   ['bounce'] = {
     ['get_value'] = function(task)
       local from = task:get_from(0)
-      if not from or not from[1] or not from[1]['user'] then
+      if not ((from or E)[1] or E).user then
         return '_'
       end
       if check_bounce(from[1]['user']) then return '_' else return nil end
@@ -187,7 +189,7 @@ local function dynamic_rate_key(task, rtype)
   else
     local rate_keys = {}
     local rcpts = task:get_recipients(0)
-    if not rcpts or not rcpts[1] or not rcpts[1]['addr'] then
+    if not ((rcpts or E)[1] or E).addr then
       return nil
     end
     local key_s = table.concat(key_t, ":")

@@ -19,7 +19,9 @@ limitations under the License.
 -- Documentation can be found here:
 -- https://rspamd.com/doc/modules/rbl.html
 
+local E = {}
 local N = 'rbl'
+
 local rbls = {}
 local local_exclusions = nil
 
@@ -191,7 +193,7 @@ local function rbl_cb (task)
       end
       if not havegot['dkim'] then
         local das = task:get_symbol(symbols['dkim_allow_symbol'])
-        if das and das[1] and das[1]['options'] then
+        if ((das or E)[1] or E).options then
           havegot['dkim'] = das[1]['options']
         else
           notgot['dkim'] = true

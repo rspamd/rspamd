@@ -20,6 +20,8 @@ limitations under the License.
 local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 
+local E = {}
+
 local function check_forged_headers(task)
   local auser = task:get_user()
   local smtp_rcpt = task:get_recipients(1)
@@ -48,7 +50,7 @@ local function check_forged_headers(task)
         -- allow user to BCC themselves
         res = true
         break
-      elseif smtp_from and smtp_from[1] and smtp_from[1]['addr'] and
+      elseif ((smtp_from or E)[1] or E).addr and
           smtp_from[1]['addr'] == sr['addr'] then
         -- allow sender to BCC themselves
         res = true
