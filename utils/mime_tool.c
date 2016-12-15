@@ -23,6 +23,8 @@
 #include "mime_parser.h"
 #include "unix-std.h"
 
+#define MODE_NORMAL 0
+#define MODE_GMIME 1
 static gdouble total_time = 0.0;
 
 static void
@@ -73,6 +75,46 @@ rspamd_show_message (struct rspamd_mime_part *part)
 }
 
 static void
+mime_foreach_callback (GMimeObject * parent,
+	GMimeObject * part,
+	gpointer user_data)
+{
+	GMimeContentType *type;
+
+	if (GMIME_IS_MESSAGE_PART (part)) {
+		/* message/rfc822 or message/news */
+		GMimeMessage *message;
+
+		/* g_mime_message_foreach_part() won't descend into
+			   child message parts, so if we want to count any
+			   subparts of this child message, we'll have to call
+			   g_mime_message_foreach_part() again here. */
+		rspamd_printf ("got message part %p: parent: %p\n",
+						part, parent);
+		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
+		g_mime_message_foreach (message, mime_foreach_callback, part);
+	}
+	else if (GMIME_IS_MULTIPART (part)) {
+		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
+						part));
+		rspamd_printf ("got multipart part %p, boundary: %s: parent: %p, type: %s/%s\n",
+					part, g_mime_multipart_get_boundary (GMIME_MULTIPART(part)),
+					parent,
+					g_mime_content_type_get_media_type (type),
+					g_mime_content_type_get_media_subtype (type));
+	}
+	else {
+		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
+				part));
+		rspamd_printf ("got normal part %p, parent: %p, type: %s/%s\n",
+				part,
+				parent,
+				g_mime_content_type_get_media_type (type),
+				g_mime_content_type_get_media_subtype (type));
+	}
+}
+
+static void
 rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 {
 	struct rspamd_task *task;
@@ -80,6 +122,10 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 	gpointer map;
 	struct stat st;
 	GError *err = NULL;
+	GMimeMessage *message;
+	GMimeParser *parser;
+	GMimeStream *stream;
+	GByteArray tmp;
 	struct rspamd_mime_part *part;
 	guint i;
 	gdouble ts1, ts2;
@@ -110,39 +156,65 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 
 	ts1 = rspamd_get_ticks ();
 
-	if (!rspamd_mime_parse_task (task, &err)) {
-		rspamd_fprintf (stderr, "cannot parse %s: %e\n", fname, err);
-		g_error_free (err);
+	if (mode == MODE_NORMAL) {
+		if (!rspamd_mime_parse_task (task, &err)) {
+			rspamd_fprintf (stderr, "cannot parse %s: %e\n", fname, err);
+			g_error_free (err);
+		}
+	}
+	else if (mode == MODE_GMIME) {
+		tmp.data = map;
+		tmp.len = st.st_size;
+		stream = g_mime_stream_mem_new_with_byte_array (&tmp);
+		g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
+		parser = g_mime_parser_new_with_stream (stream);
+		message = g_mime_parser_construct_message (parser);
 	}
 
 	ts2 = rspamd_get_ticks ();
 	total_time += ts2 - ts1;
 
-	for (i = 0; i < task->parts->len; i ++) {
-		part = g_ptr_array_index (task->parts, i);
+	if (mode == MODE_NORMAL) {
+		for (i = 0; i < task->parts->len; i ++) {
+			part = g_ptr_array_index (task->parts, i);
 
-		if (part->ct->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-			rspamd_show_multipart (part);
+			if (part->ct->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
+				rspamd_show_multipart (part);
+			}
+			else if (part->ct->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
+				rspamd_show_message (part);
+			}
+			else {
+				rspamd_show_normal (part);
+			}
 		}
-		else if (part->ct->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
-			rspamd_show_message (part);
-		}
-		else {
-			rspamd_show_normal (part);
-		}
+	}
+	else if (mode == MODE_GMIME) {
+		g_mime_message_foreach (message, mime_foreach_callback, NULL);
 	}
 
 	rspamd_task_free (task);
 	munmap (map, st.st_size);
+
+	if (mode == MODE_GMIME) {
+		g_object_unref (message);
+	}
 }
 
 int
 main (int argc, char **argv)
 {
-	gint i, start = 1;
+	gint i, start = 1, mode = MODE_NORMAL;
 	struct rspamd_config *cfg;
 	rspamd_logger_t *logger = NULL;
 
+	if (argc > 2 && *argv[1] == '-') {
+		start = 2;
+
+		if (argv[1][1] == 'g') {
+			mode = MODE_GMIME;
+		}
+	}
 	cfg = rspamd_config_new ();
 	cfg->libs_ctx = rspamd_init_libs ();
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
@@ -152,10 +224,11 @@ main (int argc, char **argv)
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 	rspamd_config_post_load (cfg,
 			RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_NO_TLD);
+	g_mime_init (0);
 
 	for (i = start; i < argc; i ++) {
 		if (argv[i]) {
-			rspamd_process_file (cfg, argv[i], 0);
+			rspamd_process_file (cfg, argv[i], mode);
 		}
 	}
 
@@ -163,6 +236,7 @@ main (int argc, char **argv)
 
 	rspamd_log_close (logger);
 	REF_RELEASE (cfg);
+	g_mime_shutdown ();
 
 	return 0;
 }
