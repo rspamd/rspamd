@@ -19,6 +19,7 @@
 #include "message.h"
 #include "util.h"
 #include "content_type.h"
+#include <gmime/gmime.h>
 
 static gdouble total_time = 0;
 static gint total_parsed = 0;
