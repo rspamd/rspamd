@@ -233,6 +233,44 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 		}
 	}
 }
+static void
+rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part)
+{
+	struct rspamd_mime_header *hdr;
+	guint i;
+	GPtrArray *hdrs;
+	struct rspamd_content_disposition *cd = NULL;
+
+	hdrs = rspamd_message_get_header_from_hash (part->raw_headers,
+			task->task_pool,
+			"Content-Disposition", FALSE);
+
+
+	if (hdrs == NULL) {
+		cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
+		cd->type = RSPAMD_CT_INLINE;
+	}
+	else {
+		for (i = 0; i < hdrs->len; i ++) {
+			gsize hlen;
+
+			hdr = g_ptr_array_index (hdrs, i);
+			hlen = strlen (hdr->value);
+			rspamd_str_lc (hdr->value, hlen);
+			cd = rspamd_content_disposition_parse (hdr->value, hlen,
+					task->task_pool);
+
+			if (cd) {
+				break;
+			}
+		}
+
+		msg_debug_mime ("processed content disposition: %s",
+				cd->lc_data);
+	}
+
+	part->cd = cd;
+}
 
 static void
 rspamd_mime_parser_calc_digest (struct rspamd_mime_part *part)
@@ -268,6 +306,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 	g_assert (part != NULL);
 
 	rspamd_mime_part_get_cte (task, part);
+	rspamd_mime_part_get_cd (task, part);
 
 	switch (part->cte) {
 	case RSPAMD_CTE_7BIT:
