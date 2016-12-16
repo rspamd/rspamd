@@ -286,7 +286,7 @@ parse_fuzzy_headers (const gchar *str)
 }
 
 static gboolean
-fuzzy_check_content_type (struct fuzzy_rule *rule, GMimeContentType *type)
+fuzzy_check_content_type (struct fuzzy_rule *rule, struct rspamd_content_type *ct)
 {
 	struct fuzzy_mime_type *ft;
 	GList *cur;
@@ -296,9 +296,10 @@ fuzzy_check_content_type (struct fuzzy_rule *rule, GMimeContentType *type)
 		ft = cur->data;
 		if (ft->type) {
 
-			if (g_pattern_match_string (ft->type, type->type)) {
+			if (g_pattern_match (ft->type, ct->type.len, ct->type.begin, NULL)) {
 				if (ft->subtype) {
-					if (g_pattern_match_string (ft->subtype, type->subtype)) {
+					if (g_pattern_match (ft->subtype, ct->subtype.len,
+							ct->subtype.begin, NULL)) {
 						return TRUE;
 					}
 				}
@@ -2234,7 +2235,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		mime_part = g_ptr_array_index (task->parts, i);
 
 		if (mime_part->flags & RSPAMD_MIME_PART_IMAGE) {
-			image = mime_part->specific_data;
+			image = mime_part->specific.img;
 
 			if (image->data->len > 0) {
 				if (fuzzy_module_ctx->min_height <= 0 || image->height >=
@@ -2261,9 +2262,9 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			}
 		}
 
-		if (mime_part->content->len > 0 &&
-			fuzzy_check_content_type (rule, mime_part->type)) {
-			if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->content->len >=
+		if (mime_part->parsed_data.len > 0 &&
+			fuzzy_check_content_type (rule, mime_part->ct)) {
+			if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->parsed_data.len >=
 				fuzzy_module_ctx->min_bytes) {
 				io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 						task->task_pool,
