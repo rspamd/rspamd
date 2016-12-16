@@ -73,7 +73,7 @@ local function tries_callback(task)
     raw_trie:search_rawmsg(task, gen_trie_cb('rawmessage'))
   end
   if body_trie then
-    raw_trie:search_rawbody(task, gen_trie_cb('rawbody'))
+    body_trie:search_rawbody(task, gen_trie_cb('rawbody'))
   end
 end
 
