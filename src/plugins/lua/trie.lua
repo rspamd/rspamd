@@ -54,13 +54,14 @@ local function tries_callback(task)
     return function (idx, pos)
       local param = params[idx]
       local pattern = patterns[idx]
+      local pattern_idx = pattern .. tostring(idx) .. type
 
-      if param['multi'] or not matched[pattern] then
+      if param['multi'] or not matched[pattern_idx] then
         rspamd_logger.debugm(N, task, "<%1> matched pattern %2 at pos %3",
           task:get_message_id(), pattern, pos)
         task:insert_result(param['symbol'], 1.0, type)
         if not param['multi'] then
-          matched[pattern] = true
+          matched[pattern_idx] = true
         end
       end
     end
