@@ -432,6 +432,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		text_part->parsed.begin = mime_part->parsed_data.begin;
 		text_part->parsed.len = mime_part->parsed_data.len;
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
+		text_part->mime_part = mime_part;
 
 		if (mime_part->parsed_data.len == 0) {
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
@@ -473,6 +474,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		text_part->raw.len = mime_part->raw_data.len;
 		text_part->parsed.begin = mime_part->parsed_data.begin;
 		text_part->parsed.len = mime_part->parsed_data.len;
+		text_part->mime_part = mime_part;
 
 		if (mime_part->parsed_data.len == 0) {
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
