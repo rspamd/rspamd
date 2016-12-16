@@ -203,8 +203,11 @@ rspamd_task_free (struct rspamd_task *task)
 			if (p->raw_headers) {
 				g_hash_table_unref (p->raw_headers);
 			}
-			if (p->children) {
-				g_ptr_array_free (p->children, TRUE);
+
+			if (IS_CT_MULTIPART (p->ct)) {
+				if (p->specific.mp.children) {
+					g_ptr_array_free (p->specific.mp.children, TRUE);
+				}
 			}
 		}
 

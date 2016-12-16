@@ -778,7 +778,7 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 		c = SPAM_SUBJECT;
 	}
 
-	s = g_mime_message_get_subject (task->message);
+	s = task->subject;
 
 	while (p < end) {
 		if (*c == '\0') {
@@ -794,6 +794,7 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 		}
 		p++;
 	}
+
 	res = g_mime_utils_header_encode_text (subj_buf);
 
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -897,8 +898,11 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
 		subject = make_rewritten_subject (m, task);
-		ucl_object_insert_key (obj, ucl_object_fromstring (subject),
+
+		if (subject) {
+			ucl_object_insert_key (obj, ucl_object_fromstring (subject),
 				"subject", 0, false);
+		}
 	}
 	/* Now handle symbols */
 	g_hash_table_iter_init (&hiter, mres->symbols);

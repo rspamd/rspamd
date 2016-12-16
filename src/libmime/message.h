@@ -36,6 +36,10 @@ enum rspamd_cte {
 
 struct rspamd_mime_text_part;
 
+struct rspamd_mime_multipart {
+	GPtrArray *children;
+};
+
 struct rspamd_mime_part {
 	struct rspamd_content_type *ct;
 	struct rspamd_content_disposition *cd;
@@ -48,7 +52,7 @@ struct rspamd_mime_part {
 	enum rspamd_cte cte;
 
 	union {
-		struct rspamd_mime_multipart *mp;
+		struct rspamd_mime_multipart mp;
 		struct rspamd_mime_text_part *txt;
 		struct rspamd_image *img;
 		struct rspamd_archive *arch;
@@ -56,10 +60,6 @@ struct rspamd_mime_part {
 
 	enum rspamd_mime_part_flags flags;
 	guchar digest[rspamd_cryptobox_HASHBYTES];
-};
-
-struct rspamd_mime_multipart {
-	GPtrArray *children;
 };
 
 #define RSPAMD_MIME_TEXT_PART_FLAG_UTF (1 << 0)

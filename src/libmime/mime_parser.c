@@ -341,8 +341,8 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 
 	hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 
-	if (multipart->children == NULL) {
-		multipart->children = g_ptr_array_sized_new (2);
+	if (multipart->specific.mp.children == NULL) {
+		multipart->specific.mp.children = g_ptr_array_sized_new (2);
 	}
 
 	npart = rspamd_mempool_alloc0 (task->task_pool,
@@ -350,7 +350,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	npart->parent_part = multipart;
 	npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	g_ptr_array_add (multipart->children, npart);
+	g_ptr_array_add (multipart->specific.mp.children, npart);
 
 	if (hdr_pos > 0 && hdr_pos < str.len) {
 			npart->raw_headers_str = str.str;
