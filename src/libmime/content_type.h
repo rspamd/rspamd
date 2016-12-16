@@ -28,6 +28,10 @@ enum rspamd_content_type_flags {
 	RSPAMD_CONTENT_TYPE_MESSAGE = 1 << 3,
 };
 
+#define IS_CT_MULTIPART(ct) ((ct)->flags & RSPAMD_CONTENT_TYPE_MULTIPART)
+#define IS_CT_TEXT(ct) ((ct)->flags & RSPAMD_CONTENT_TYPE_TEXT)
+#define IS_CT_MESSAGE(ct) (((ct)->flags & RSPAMD_CONTENT_TYPE_MESSAGE))
+
 struct rspamd_content_type_param {
 	rspamd_ftok_t name;
 	rspamd_ftok_t value;

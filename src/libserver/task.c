@@ -200,15 +200,14 @@ rspamd_task_free (struct rspamd_task *task)
 		for (i = 0; i < task->parts->len; i ++) {
 			p = g_ptr_array_index (task->parts, i);
 
-			if (p->content) {
-				g_byte_array_free (p->content, TRUE);
-			}
-
 			if (p->raw_headers) {
 				g_hash_table_unref (p->raw_headers);
 			}
-			if (p->children) {
-				g_ptr_array_free (p->children, TRUE);
+
+			if (IS_CT_MULTIPART (p->ct)) {
+				if (p->specific.mp.children) {
+					g_ptr_array_free (p->specific.mp.children, TRUE);
+				}
 			}
 		}
 

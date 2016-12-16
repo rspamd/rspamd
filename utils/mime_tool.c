@@ -22,6 +22,7 @@
 #include "task.h"
 #include "mime_parser.h"
 #include "unix-std.h"
+#include <gmime/gmime.h>
 
 #define MODE_NORMAL 0
 #define MODE_GMIME 1
@@ -49,9 +50,9 @@ rspamd_show_multipart (struct rspamd_mime_part *part)
 			part->parent_part,
 			&part->ct->type, &part->ct->subtype);
 
-	if (part->children) {
-		for (i = 0; i < part->children->len; i ++) {
-			cur = g_ptr_array_index (part->children, i);
+	if (part->specific.mp.children) {
+		for (i = 0; i < part->specific.mp.children->len; i ++) {
+			cur = g_ptr_array_index (part->specific.mp.children, i);
 
 			if (i != 0) {
 				rspamd_printf (", %p{%T/%T}", cur,

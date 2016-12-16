@@ -941,23 +941,7 @@ lua_task_destroy (lua_State *L)
 static int
 lua_task_get_message (lua_State * L)
 {
-	GMimeMessage **pmsg;
-	struct rspamd_task *task = lua_check_task (L, 1);
-
-	if (task != NULL) {
-		if (task->message != NULL) {
-			pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
-			rspamd_lua_setclass (L, "rspamd{message}", -1);
-			*pmsg = task->message;
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-	return 1;
+	return luaL_error (L, "task:get_message is no longer supported");
 }
 
 static int
@@ -2267,7 +2251,7 @@ lua_task_get_images (lua_State *L)
 			if (part->flags & RSPAMD_MIME_PART_IMAGE) {
 				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
 				rspamd_lua_setclass (L, "rspamd{image}", -1);
-				*pimg = part->specific_data;
+				*pimg = part->specific.img;
 				lua_rawseti (L, -2, ++nelt);
 			}
 		}
@@ -2296,7 +2280,7 @@ lua_task_get_archives (lua_State *L)
 			if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
 				parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
 				rspamd_lua_setclass (L, "rspamd{archive}", -1);
-				*parch = part->specific_data;
+				*parch = part->specific.arch;
 				lua_rawseti (L, -2, ++nelt);
 			}
 		}
@@ -2575,6 +2559,7 @@ static gint
 lua_task_get_date (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	GPtrArray *hdrs;
 	gdouble tim;
 	enum lua_date_type type = DATE_CONNECT;
 	gboolean gmt = TRUE;
@@ -2601,10 +2586,16 @@ lua_task_get_date (lua_State *L)
 			}
 		}
 		else {
-			if (task->message) {
+			hdrs = rspamd_message_get_header_array (task, "Date",
+					FALSE);
+
+			if (hdrs && hdrs->len > 0) {
 				time_t tt;
 				gint offset;
-				g_mime_message_get_date (task->message, &tt, &offset);
+				struct rspamd_mime_header *h;
+
+				h = g_ptr_array_index (hdrs, 0);
+				tt = g_mime_utils_header_decode_date (h->decoded, &offset);
 
 				if (!gmt) {
 					tt += (offset * 60 * 60) / 100 + (offset * 60 * 60) % 100;
@@ -3348,7 +3339,7 @@ lua_image_get_filename (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL && img->filename != NULL) {
-		lua_pushstring (L, img->filename);
+		lua_pushlstring (L, img->filename->begin, img->filename->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3474,7 +3465,7 @@ lua_archive_get_filename (lua_State *L)
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
-		lua_pushstring (L, arch->archive_name);
+		lua_pushlstring (L, arch->archive_name->begin, arch->archive_name->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

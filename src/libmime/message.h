@@ -12,11 +12,12 @@
 #include "cryptobox.h"
 #include "mime_headers.h"
 #include "content_type.h"
-#include <gmime/gmime.h>
 
 struct rspamd_task;
 struct controller_session;
 struct html_content;
+struct rspamd_image;
+struct rspamd_archive;
 
 enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_TEXT = (1 << 0),
@@ -33,25 +34,32 @@ enum rspamd_cte {
 	RSPAMD_CTE_B64 = 4,
 };
 
+struct rspamd_mime_text_part;
+
+struct rspamd_mime_multipart {
+	GPtrArray *children;
+};
+
 struct rspamd_mime_part {
-	GMimeContentType *type;
 	struct rspamd_content_type *ct;
+	struct rspamd_content_disposition *cd;
 	rspamd_ftok_t raw_data;
 	rspamd_ftok_t parsed_data;
 	struct rspamd_mime_part *parent_part;
-	GPtrArray *children;
-	enum rspamd_cte cte;
-	GByteArray *content;
-	GMimeObject *parent;
-	GMimeObject *mime;
 	GHashTable *raw_headers;
 	gchar *raw_headers_str;
 	gsize raw_headers_len;
-	guchar digest[rspamd_cryptobox_HASHBYTES];
-	const gchar *filename;
-	const gchar *boundary;
-	gpointer specific_data;
+	enum rspamd_cte cte;
+
+	union {
+		struct rspamd_mime_multipart mp;
+		struct rspamd_mime_text_part *txt;
+		struct rspamd_image *img;
+		struct rspamd_archive *arch;
+	} specific;
+
 	enum rspamd_mime_part_flags flags;
+	guchar digest[rspamd_cryptobox_HASHBYTES];
 };
 
 #define RSPAMD_MIME_TEXT_PART_FLAG_UTF (1 << 0)
@@ -70,19 +78,17 @@ struct rspamd_mime_text_part {
 	const gchar *lang_code;
 	const gchar *language;
 	const gchar *real_charset;
-	GByteArray *raw; /**< undecoded mime part */
-	GByteArray *orig;
+	rspamd_ftok_t raw;
+	rspamd_ftok_t parsed;
 	GByteArray *content;
-	GByteArray *stripped_content; /**< no newlines or html tags 			*/
+	GByteArray *stripped_content;
 	GPtrArray *newlines;	/**< positions of newlines in text					*/
 	struct html_content *html;
 	GList *exceptions;	/**< list of offsets of urls						*/
-	GMimeObject *parent;
 	struct rspamd_mime_part *mime_part;
 	GArray *normalized_words;
 	GArray *normalized_hashes;
 	guint nlines;
-	guint64 hash;
 };
 
 enum rspamd_received_type {

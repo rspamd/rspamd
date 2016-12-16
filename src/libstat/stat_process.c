@@ -85,8 +85,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
 
-		if (part->flags & RSPAMD_MIME_PART_IMAGE) {
-			img = part->specific_data;
+		if ((part->flags & RSPAMD_MIME_PART_IMAGE) && part->specific.img) {
+			img = part->specific.img;
 
 			/* If an image has a linked HTML part, then we push its details to the stat */
 			if (img->html_image) {
@@ -112,9 +112,9 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 				msg_debug_task ("added stat tokens for image '%s'", img->html_image->src);
 			}
 		}
-		else if (part->filename) {
-			elt.begin = (gchar *)part->filename;
-			elt.len = strlen (elt.begin);
+		else if (part->cd && part->cd->filename.len > 0) {
+			elt.begin = (gchar *)part->cd->filename.begin;
+			elt.len = part->cd->filename.len;
 			g_array_append_val (ar, elt);
 		}
 	}
@@ -123,19 +123,18 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
 
-		if (GMIME_IS_MULTIPART (part->mime)) {
-			elt.begin = (gchar *)g_mime_multipart_get_boundary (
-					GMIME_MULTIPART (part->mime));
+		if (IS_CT_MULTIPART (part->ct)) {
+			elt.begin = (gchar *)part->ct->boundary.begin;
+			elt.len = part->ct->boundary.len;
 
-			if (elt.begin) {
-				elt.len = strlen (elt.begin);
+			if (elt.len) {
 				msg_debug_task ("added stat tokens for mime boundary '%s'", elt.begin);
 				g_array_append_val (ar, elt);
 			}
 
-			if (part->content && part->content->len > 1) {
+			if (part->parsed_data.len > 1) {
 				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "mime%d:%dlog",
-						i, (gint)log2 (part->content->len));
+						i, (gint)log2 (part->parsed_data.len));
 				elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
 				elt.len = strlen (elt.begin);
 				g_array_append_val (ar, elt);
@@ -205,7 +204,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 {
 	struct rspamd_mime_text_part *part;
 	GArray *words;
-	gchar *sub;
+	gchar *sub = NULL;
 	guint i, reserved_len = 0;
 	gdouble *pdiff;
 
@@ -243,9 +242,6 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 
 	if (task->subject != NULL) {
 		sub = task->subject;
-	}
-	else {
-		sub = (gchar *)g_mime_message_get_subject (task->message);
 	}
 
 	if (sub != NULL) {

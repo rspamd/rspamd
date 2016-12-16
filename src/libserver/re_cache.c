@@ -884,8 +884,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 				/* Select data for regexp */
 				if (re_class->type == RSPAMD_RE_RAWMIME) {
-					in = part->raw->data;
-					len = part->raw->len;
+					in = part->raw.begin;
+					len = part->raw.len;
 					raw = TRUE;
 				}
 				else {
@@ -1022,9 +1022,9 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			for (i = 0; i < task->text_parts->len; i++) {
 				part = g_ptr_array_index (task->text_parts, i);
 
-				if (part->orig) {
-					scvec[i] = (guchar *)part->orig->data;
-					lenvec[i] = part->orig->len;
+				if (part->parsed.len > 0) {
+					scvec[i] = (guchar *)part->parsed.begin;
+					lenvec[i] = part->parsed.len;
 				}
 				else {
 					scvec[i] = (guchar *)"";

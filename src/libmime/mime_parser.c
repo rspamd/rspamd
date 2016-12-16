@@ -233,6 +233,66 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 		}
 	}
 }
+static void
+rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part)
+{
+	struct rspamd_mime_header *hdr;
+	guint i;
+	GPtrArray *hdrs;
+	struct rspamd_content_disposition *cd = NULL;
+
+	hdrs = rspamd_message_get_header_from_hash (part->raw_headers,
+			task->task_pool,
+			"Content-Disposition", FALSE);
+
+
+	if (hdrs == NULL) {
+		cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
+		cd->type = RSPAMD_CT_INLINE;
+	}
+	else {
+		for (i = 0; i < hdrs->len; i ++) {
+			gsize hlen;
+
+			hdr = g_ptr_array_index (hdrs, i);
+			hlen = strlen (hdr->value);
+			rspamd_str_lc (hdr->value, hlen);
+			cd = rspamd_content_disposition_parse (hdr->value, hlen,
+					task->task_pool);
+
+			if (cd) {
+				break;
+			}
+		}
+
+		msg_debug_mime ("processed content disposition: %s",
+				cd->lc_data);
+	}
+
+	part->cd = cd;
+}
+
+static void
+rspamd_mime_parser_calc_digest (struct rspamd_mime_part *part)
+{
+	/* Blake2b applied to string 'rspamd' */
+	static const guchar hash_key[] = {
+			0xef,0x43,0xae,0x80,0xcc,0x8d,0xc3,0x4c,
+			0x6f,0x1b,0xd6,0x18,0x1b,0xae,0x87,0x74,
+			0x0c,0xca,0xf7,0x8e,0x5f,0x2e,0x54,0x32,
+			0xf6,0x79,0xb9,0x27,0x26,0x96,0x20,0x92,
+			0x70,0x07,0x85,0xeb,0x83,0xf7,0x89,0xe0,
+			0xd7,0x32,0x2a,0xd2,0x1a,0x64,0x41,0xef,
+			0x49,0xff,0xc3,0x8c,0x54,0xf9,0x67,0x74,
+			0x30,0x1e,0x70,0x2e,0xb7,0x12,0x09,0xfe,
+	};
+
+	if (part->parsed_data.len > 0) {
+		rspamd_cryptobox_hash (part->digest,
+				part->parsed_data.begin, part->parsed_data.len,
+				hash_key, sizeof (hash_key));
+	}
+}
 
 static gboolean
 rspamd_mime_parse_normal_part (struct rspamd_task *task,
@@ -246,6 +306,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 	g_assert (part != NULL);
 
 	rspamd_mime_part_get_cte (task, part);
+	rspamd_mime_part_get_cd (task, part);
 
 	switch (part->cte) {
 	case RSPAMD_CTE_7BIT:
@@ -282,6 +343,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 	msg_debug_mime ("parsed data part %T/%T of length %z (%z orig), %s cte",
 			&part->ct->type, &part->ct->subtype, part->parsed_data.len,
 			part->raw_data.len, rspamd_cte_to_string (part->cte));
+	rspamd_mime_parser_calc_digest (part);
 
 	return TRUE;
 }
@@ -318,8 +380,8 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 
 	hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 
-	if (multipart->children == NULL) {
-		multipart->children = g_ptr_array_sized_new (2);
+	if (multipart->specific.mp.children == NULL) {
+		multipart->specific.mp.children = g_ptr_array_sized_new (2);
 	}
 
 	npart = rspamd_mempool_alloc0 (task->task_pool,
@@ -327,7 +389,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	npart->parent_part = multipart;
 	npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	g_ptr_array_add (multipart->children, npart);
+	g_ptr_array_add (multipart->specific.mp.children, npart);
 
 	if (hdr_pos > 0 && hdr_pos < str.len) {
 			npart->raw_headers_str = str.str;
