@@ -12,11 +12,12 @@
 #include "cryptobox.h"
 #include "mime_headers.h"
 #include "content_type.h"
-#include <gmime/gmime.h>
 
 struct rspamd_task;
 struct controller_session;
 struct html_content;
+struct rspamd_image;
+struct rspamd_archive;
 
 enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_TEXT = (1 << 0),
@@ -49,6 +50,8 @@ struct rspamd_mime_part {
 	union {
 		struct rspamd_mime_multipart *mp;
 		struct rspamd_mime_text_part *txt;
+		struct rspamd_image *img;
+		struct rspamd_archive *arch;
 	} specific;
 
 	enum rspamd_mime_part_flags flags;

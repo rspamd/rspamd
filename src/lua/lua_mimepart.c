@@ -375,8 +375,8 @@ lua_textpart_get_raw_content (lua_State * L)
 
 	t = lua_newuserdata (L, sizeof (*t));
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
-	t->start = part->orig->data;
-	t->len = part->orig->len;
+	t->start = part->raw.begin;
+	t->len = part->raw.len;
 	t->flags = 0;
 
 	return 1;
@@ -432,12 +432,7 @@ lua_textpart_get_raw_length (lua_State * L)
 		return 1;
 	}
 
-	if (part->orig == NULL) {
-		lua_pushnumber (L, 0);
-	}
-	else {
-		lua_pushnumber (L, part->orig->len);
-	}
+	lua_pushnumber (L, part->raw.len);
 
 	return 1;
 }
@@ -607,8 +602,8 @@ lua_mimepart_get_content (lua_State * L)
 
 	t = lua_newuserdata (L, sizeof (*t));
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
-	t->start = part->content->data;
-	t->len = part->content->len;
+	t->start = part->parsed_data.begin;
+	t->len = part->parsed_data.len;
 	t->flags = 0;
 
 	return 1;
@@ -624,7 +619,7 @@ lua_mimepart_get_length (lua_State * L)
 		return 1;
 	}
 
-	lua_pushinteger (L, part->content->len);
+	lua_pushinteger (L, part->parsed_data.len);
 
 	return 1;
 }
@@ -639,13 +634,9 @@ lua_mimepart_get_type (lua_State * L)
 		lua_pushnil (L);
 		return 2;
 	}
-#ifndef GMIME24
-	lua_pushstring (L, part->type->type);
-	lua_pushstring (L, part->type->subtype);
-#else
-	lua_pushstring (L, g_mime_content_type_get_media_type (part->type));
-	lua_pushstring (L, g_mime_content_type_get_media_subtype (part->type));
-#endif
+
+	lua_pushlstring (L, part->ct->type.begin, part->ct->type.len);
+	lua_pushlstring (L, part->ct->subtype.begin, part->ct->subtype.len);
 
 	return 2;
 }
@@ -655,12 +646,12 @@ lua_mimepart_get_filename (lua_State * L)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
 
-	if (part == NULL || part->filename == NULL) {
+	if (part == NULL || part->cd == NULL || part->cd->filename.len == 0) {
 		lua_pushnil (L);
 		return 1;
 	}
 
-	lua_pushstring (L, part->filename);
+	lua_pushlstring (L, part->cd->filename.begin, part->cd->filename.len);
 
 	return 1;
 }
@@ -757,12 +748,12 @@ lua_mimepart_get_image (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & RSPAMD_MIME_PART_IMAGE)) {
+	if (!(part->flags & RSPAMD_MIME_PART_IMAGE) || part->specific.img == NULL) {
 		lua_pushnil (L);
 	}
 	else {
 		pimg = lua_newuserdata (L, sizeof (*pimg));
-		*pimg = part->specific_data;
+		*pimg = part->specific.img;
 		rspamd_lua_setclass (L, "rspamd{image}", -1);
 	}
 
@@ -779,12 +770,12 @@ lua_mimepart_get_archive (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & RSPAMD_MIME_PART_ARCHIVE)) {
+	if (!(part->flags & RSPAMD_MIME_PART_ARCHIVE) || part->specific.arch == NULL) {
 		lua_pushnil (L);
 	}
 	else {
 		parch = lua_newuserdata (L, sizeof (*parch));
-		*parch = part->specific_data;
+		*parch = part->specific.arch;
 		rspamd_lua_setclass (L, "rspamd{archive}", -1);
 	}
 
@@ -801,12 +792,12 @@ lua_mimepart_get_text (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & RSPAMD_MIME_PART_TEXT)) {
+	if (!(part->flags & RSPAMD_MIME_PART_TEXT) || part->specific.txt == NULL) {
 		lua_pushnil (L);
 	}
 	else {
 		ppart = lua_newuserdata (L, sizeof (*ppart));
-		*ppart = part->specific_data;
+		*ppart = part->specific.txt;
 		rspamd_lua_setclass (L, "rspamd{textpart}", -1);
 	}
 
