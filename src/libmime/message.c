@@ -664,27 +664,6 @@ rspamd_message_parse (struct rspamd_task *task)
 				rspamd_message_from_data (task, p, len);
 			}
 		}
-		else {
-			GString str;
-
-			str.str = (gchar *)p;
-			str.len = len;
-
-			hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
-
-			if (hdr_pos > 0 && hdr_pos < len) {
-				task->raw_headers_content.begin = (gchar *) (p);
-				task->raw_headers_content.len = hdr_pos;
-				task->raw_headers_content.body_start = p + body_pos;
-
-				if (task->raw_headers_content.len > 0) {
-					rspamd_mime_headers_process (task, task->raw_headers,
-							task->raw_headers_content.begin,
-							task->raw_headers_content.len,
-							TRUE);
-				}
-			}
-		}
 	}
 	else {
 		task->flags &= ~RSPAMD_TASK_FLAG_MIME;
