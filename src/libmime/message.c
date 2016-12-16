@@ -27,6 +27,8 @@
 #include "tokenizers/tokenizers.h"
 #include "cryptobox.h"
 #include "smtp_parsers.h"
+#include "mime_parser.h"
+#include "mime_encoding.h"
 
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"
@@ -34,8 +36,6 @@
 
 #include <iconv.h>
 
-#define RECURSION_LIMIT 5
-#define UTF8_CHARSET "UTF-8"
 #define GTUBE_SYMBOL "GTUBE"
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -43,14 +43,7 @@
 
 static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
-static rspamd_regexp_t *utf_compatible_re = NULL;
 static const guint64 words_hash_seed = 0xdeadbabe;
-
-static GQuark
-rspamd_message_quark (void)
-{
-	return g_quark_from_static_string ("mime-error");
-}
 
 
 static void
@@ -58,246 +51,6 @@ free_byte_array_callback (void *pointer)
 {
 	GByteArray *arr = (GByteArray *) pointer;
 	g_byte_array_free (arr, TRUE);
-}
-
-static gboolean
-charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
-{
-	/*
-	 * This is a simple routine to validate input charset
-	 * we just check that charset starts with alphanumeric and ends
-	 * with alphanumeric
-	 */
-	const gchar *begin, *end;
-	gboolean changed = FALSE, to_uppercase = FALSE;
-
-	begin = in;
-
-	while (!g_ascii_isalnum (*begin)) {
-		begin ++;
-		changed = TRUE;
-	}
-
-	if (g_ascii_islower (*begin)) {
-		changed = TRUE;
-		to_uppercase = TRUE;
-	}
-
-	end = begin + strlen (begin) - 1;
-	while (!g_ascii_isalnum (*end)) {
-		end --;
-		changed = TRUE;
-	}
-
-	if (!changed) {
-		*out = (gchar *)in;
-	}
-	else {
-		*out = rspamd_mempool_alloc (pool, end - begin + 2);
-		if (to_uppercase) {
-			gchar *o = *out;
-
-			while (begin != end + 1) {
-				if (g_ascii_islower (*begin)) {
-					*o++ = g_ascii_toupper (*begin ++);
-				}
-				else {
-					*o++ = *begin++;
-				}
-			}
-			*o = '\0';
-		}
-		else {
-			rspamd_strlcpy (*out, begin, end - begin + 2);
-		}
-	}
-
-	return TRUE;
-}
-
-static const gchar *
-charset_heuristic_detection (const gchar *in, rspamd_mempool_t *pool)
-{
-	gchar *ret = NULL, *h, *t;
-
-	if (strchr (in, '-') != NULL) {
-		/* Try to remove '-' chars from encoding: e.g. CP-100 to CP100 */
-		ret = rspamd_mempool_strdup (pool, in);
-
-		h = ret;
-		t = ret;
-
-		while (*h != '\0') {
-			if (*h != '-') {
-				*t++ = *h;
-			}
-
-			h ++;
-		}
-
-		*t = '\0';
-
-		return ret;
-	}
-
-	return in;
-}
-
-static GQuark
-converter_error_quark (void)
-{
-	return g_quark_from_static_string ("conversion error");
-}
-
-static gchar *
-rspamd_text_to_utf8 (struct rspamd_task *task,
-		gchar *input, gsize len, const gchar *in_enc,
-		gsize *olen, GError **err)
-{
-	gchar *s, *d;
-	gsize outlen;
-	iconv_t ic;
-	rspamd_fstring_t *dst;
-	gsize remain, ret, inremain = len;
-
-	ic = iconv_open (UTF8_CHARSET, in_enc);
-
-	if (ic == (iconv_t)-1) {
-		in_enc = charset_heuristic_detection (in_enc, task->task_pool);
-
-		ic = iconv_open (UTF8_CHARSET, in_enc);
-
-		if (ic == (iconv_t)-1) {
-			g_set_error (err, converter_error_quark(), EINVAL,
-					"cannot open iconv for: %s", in_enc);
-
-			return NULL;
-		}
-	}
-
-	/* Preallocate for half of characters to be converted */
-	outlen = len + len / 2 + 1;
-	dst = rspamd_fstring_sized_new (outlen);
-	s = input;
-	d = dst->str;
-	remain = outlen - 1;
-
-	while (inremain > 0 && remain > 0) {
-		ret = iconv (ic, &s, &inremain, &d, &remain);
-		dst->len = d - dst->str;
-
-		if (ret == (gsize)-1) {
-			switch (errno) {
-			case E2BIG:
-				/* Enlarge string */
-				if (inremain > 0) {
-					dst = rspamd_fstring_grow (dst, inremain * 2);
-					d = dst->str + dst->len;
-					remain = dst->allocated - dst->len - 1;
-				}
-				break;
-			case EILSEQ:
-			case EINVAL:
-				/* Ignore bad characters */
-				if (remain > 0 && inremain > 0) {
-					*d++ = '?';
-					s++;
-					inremain --;
-					remain --;
-				}
-				break;
-			}
-		}
-		else if (ret == 0) {
-			break;
-		}
-	}
-
-	*d = '\0';
-	*olen = dst->len;
-	iconv_close (ic);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)rspamd_fstring_free, dst);
-	msg_info_task ("converted from %s to UTF-8 inlen: %z, outlen: %z",
-			in_enc, len, dst->len);
-
-	return dst->str;
-}
-
-
-static GByteArray *
-convert_text_to_utf (struct rspamd_task *task,
-	GByteArray * part_content,
-	GMimeContentType * type,
-	struct rspamd_mime_text_part *text_part)
-{
-	GError *err = NULL;
-	gsize write_bytes;
-	const gchar *charset;
-	gchar *res_str, *ocharset;
-	GByteArray *result_array;
-
-	if (task->cfg && task->cfg->raw_mode) {
-		SET_PART_RAW (text_part);
-		return part_content;
-	}
-
-	if (utf_compatible_re == NULL) {
-		utf_compatible_re = rspamd_regexp_new (
-			"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:us)|(?:ISO-8859-1)|"
-			"(?:latin.*)|(?:CSASCII)$",
-			"i", NULL);
-	}
-
-	if ((charset =
-		g_mime_content_type_get_parameter (type, "charset")) == NULL) {
-		SET_PART_RAW (text_part);
-		return part_content;
-	}
-	if (!charset_validate (task->task_pool, charset, &ocharset)) {
-		msg_info_task (
-			"<%s>: has invalid charset",
-			task->message_id);
-		SET_PART_RAW (text_part);
-		return part_content;
-	}
-
-	if (rspamd_regexp_match (utf_compatible_re, ocharset, strlen (ocharset), TRUE)) {
-		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
-			SET_PART_UTF (text_part);
-			return part_content;
-		}
-		else {
-			msg_info_task (
-				"<%s>: contains invalid utf8 characters, assume it as raw",
-				task->message_id);
-			SET_PART_RAW (text_part);
-			return part_content;
-		}
-	}
-	else {
-		res_str = rspamd_text_to_utf8 (task, part_content->data,
-				part_content->len,
-				ocharset,
-				&write_bytes,
-				&err);
-		if (res_str == NULL) {
-			msg_warn_task ("<%s>: cannot convert from %s to utf8: %s",
-					task->message_id,
-					ocharset,
-					err ? err->message : "unknown problem");
-			SET_PART_RAW (text_part);
-			g_error_free (err);
-			return part_content;
-		}
-	}
-
-	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
-	result_array->data = res_str;
-	result_array->len = write_bytes;
-	SET_PART_UTF (text_part);
-
-	return result_array;
 }
 
 struct language_match {
@@ -650,59 +403,46 @@ exceptions_compare_func (gconstpointer a, gconstpointer b)
 }
 
 static void
-process_text_part (struct rspamd_task *task,
-	GByteArray *part_content,
-	GMimeContentType *type,
-	struct rspamd_mime_part *mime_part,
-	GMimeObject *parent,
-	gboolean is_empty)
+rspamd_message_process_text_part (struct rspamd_task *task,
+	struct rspamd_mime_part *mime_part)
 {
 	struct rspamd_mime_text_part *text_part;
-	const gchar *cd;
-	GMimeStream *st;
+	rspamd_ftok_t html_tok, xhtml_tok;
+	GByteArray *part_content;
 
 	/* Skip attachments */
-#ifndef GMIME24
-	cd = g_mime_part_get_content_disposition (GMIME_PART (rspamd_mime_part->mime));
-	if (cd &&
-		g_ascii_strcasecmp (cd,
-		"attachment") == 0 && (task->cfg && !task->cfg->check_text_attachements)) {
-		debug_task ("skip attachments for checking as text parts");
-		return;
-	}
-#else
-	cd = g_mime_object_get_disposition (GMIME_OBJECT (mime_part->mime));
-	if (cd &&
-		g_ascii_strcasecmp (cd,
-		GMIME_DISPOSITION_ATTACHMENT) == 0 &&
+	if (mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT &&
 		(task->cfg && !task->cfg->check_text_attachements)) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
-#endif
 
-	if (g_mime_content_type_is_type (type, "text",
-		"html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
+	html_tok.begin = "html";
+	html_tok.len = 4;
+	xhtml_tok.begin = "xhtml";
+	xhtml_tok.len = 5;
 
-		text_part =
-			rspamd_mempool_alloc0 (task->task_pool,
+	if (rspamd_ftok_cmp (&mime_part->ct->subtype, &html_tok) == 0 ||
+			rspamd_ftok_cmp (&mime_part->ct->subtype, &xhtml_tok) == 0) {
+
+		text_part = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_text_part));
+		text_part->raw.begin = mime_part->raw_data.begin;
+		text_part->raw.len = mime_part->raw_data.len;
+		text_part->parsed.begin = mime_part->parsed_data.begin;
+		text_part->parsed.len = mime_part->parsed_data.len;
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
-		if (is_empty) {
+
+		if (mime_part->parsed_data.len == 0) {
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
-			text_part->orig = NULL;
-			text_part->content = NULL;
 			g_ptr_array_add (task->text_parts, text_part);
 			return;
 		}
-		text_part->orig = part_content;
-		part_content = convert_text_to_utf (task,
-				text_part->orig,
-				type,
-				text_part);
+
+		part_content = rspamd_mime_text_part_maybe_convert (task, text_part);
+
 		text_part->html = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (*text_part->html));
-		text_part->parent = parent;
 		text_part->mime_part = mime_part;
 
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
@@ -723,35 +463,31 @@ process_text_part (struct rspamd_task *task,
 			text_part->content);
 		g_ptr_array_add (task->text_parts, text_part);
 	}
-	else if (g_mime_content_type_is_type (type, "text", "*")) {
+	else {
 
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_text_part));
-		text_part->parent = parent;
 		text_part->mime_part = mime_part;
+		text_part->raw.begin = mime_part->raw_data.begin;
+		text_part->raw.len = mime_part->raw_data.len;
+		text_part->parsed.begin = mime_part->parsed_data.begin;
+		text_part->parsed.len = mime_part->parsed_data.len;
 
-		if (is_empty) {
+		if (mime_part->parsed_data.len == 0) {
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
-			text_part->orig = NULL;
-			text_part->content = NULL;
 			g_ptr_array_add (task->text_parts, text_part);
 			return;
 		}
 
-		text_part->content = convert_text_to_utf (task,
-				part_content,
-				type,
+		text_part->content = rspamd_mime_text_part_maybe_convert (task,
 				text_part);
-		text_part->orig = part_content;
 		g_ptr_array_add (task->text_parts, text_part);
 	}
-	else {
-		return;
-	}
+
 
 	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
-	mime_part->specific_data = text_part;
+	mime_part->specific.txt = text_part;
 
 	if (rspamd_check_gtube (task, text_part)) {
 		struct rspamd_metric_result *mres;
@@ -790,356 +526,62 @@ process_text_part (struct rspamd_task *task,
 	}
 
 	rspamd_extract_words (task, text_part);
-
-	if (!(text_part->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)) {
-		text_part->raw = g_byte_array_sized_new (part_content->len * 1.5 + 0.5);
-		st = g_mime_stream_mem_new_with_byte_array (text_part->raw);
-		g_mime_object_write_to_stream (GMIME_OBJECT (mime_part->mime), st);
-		g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (st), FALSE);
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) free_byte_array_callback,
-				text_part->raw);
-	}
-	else {
-		text_part->raw = NULL;
-	}
-}
-
-struct mime_foreach_data {
-	struct rspamd_task *task;
-	guint parser_recursion;
-	GMimeObject *parent;
-};
-
-#ifdef GMIME24
-static void
-mime_foreach_callback (GMimeObject * parent,
-	GMimeObject * part,
-	gpointer user_data)
-#else
-static void
-mime_foreach_callback (GMimeObject * part, gpointer user_data)
-#endif
-{
-	struct mime_foreach_data *md = user_data;
-	struct rspamd_task *task;
-	struct rspamd_mime_part *mime_part;
-	GMimeContentType *type;
-	GMimeDataWrapper *wrapper;
-	GMimeStream *part_stream;
-	GByteArray *part_content;
-	gchar *hdrs;
-	/* Blake2b applied to string 'rspamd' */
-	static const guchar hash_key[] = {
-			0xef,0x43,0xae,0x80,0xcc,0x8d,0xc3,0x4c,
-			0x6f,0x1b,0xd6,0x18,0x1b,0xae,0x87,0x74,
-			0x0c,0xca,0xf7,0x8e,0x5f,0x2e,0x54,0x32,
-			0xf6,0x79,0xb9,0x27,0x26,0x96,0x20,0x92,
-			0x70,0x07,0x85,0xeb,0x83,0xf7,0x89,0xe0,
-			0xd7,0x32,0x2a,0xd2,0x1a,0x64,0x41,0xef,
-			0x49,0xff,0xc3,0x8c,0x54,0xf9,0x67,0x74,
-			0x30,0x1e,0x70,0x2e,0xb7,0x12,0x09,0xfe,
-	};
-
-	task = md->task;
-	/* 'part' points to the current part node that g_mime_message_foreach_part() is iterating over */
-
-	/* find out what class 'part' is... */
-	if (GMIME_IS_MESSAGE_PART (part)) {
-		/* message/rfc822 or message/news */
-		GMimeMessage *message;
-
-		/* g_mime_message_foreach_part() won't descend into
-		   child message parts, so if we want to count any
-		   subparts of this child message, we'll have to call
-		   g_mime_message_foreach_part() again here. */
-
-		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
-		if (md->parser_recursion++ < RECURSION_LIMIT) {
-#ifdef GMIME24
-			g_mime_message_foreach (message, mime_foreach_callback, md);
-#else
-			g_mime_message_foreach_part (message, mime_foreach_callback, md);
-#endif
-		}
-		else {
-			msg_err_task ("too deep mime recursion detected: %d", md->parser_recursion);
-			return;
-		}
-#ifndef GMIME24
-		g_object_unref (message);
-#endif
-	}
-	else if (GMIME_IS_MESSAGE_PARTIAL (part)) {
-		/* message/partial */
-
-		/* this is an incomplete message part, probably a
-		   large message that the sender has broken into
-		   smaller parts and is sending us bit by bit. we
-		   could save some info about it so that we could
-		   piece this back together again once we get all the
-		   parts? */
-	}
-	else if (GMIME_IS_MULTIPART (part)) {
-		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
-#ifndef GMIME24
-		debug_task ("detected multipart part");
-		/* we'll get to finding out if this is a signed/encrypted multipart later... */
-		if (task->parser_recursion++ < RECURSION_LIMIT) {
-			g_mime_multipart_foreach ((GMimeMultipart *) part,
-				mime_foreach_callback,
-				md);
-		}
-		else {
-			msg_err_task ("endless recursion detected: %d", task->parser_recursion);
-			return;
-		}
-#endif
-		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
-				part));
-		mime_part = rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct rspamd_mime_part));
-
-		if (md->parent != NULL) {
-			hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
-		}
-		else {
-			hdrs = NULL;
-		}
-
-		mime_part->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
-				rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-
-		if (hdrs != NULL) {
-			rspamd_mime_headers_process (task, mime_part->raw_headers,
-					hdrs, strlen (hdrs), FALSE);
-			mime_part->raw_headers_str = hdrs;
-			rspamd_mempool_add_destructor (task->task_pool, g_free, hdrs);
-		}
-
-		mime_part->type = type;
-		/* XXX: we don't need it, but it's sometimes dereferenced */
-		mime_part->content = g_byte_array_new ();
-		mime_part->parent = md->parent;
-		mime_part->filename = NULL;
-		mime_part->mime = part;
-		mime_part->boundary = g_mime_multipart_get_boundary (GMIME_MULTIPART (part));
-
-		if (mime_part->boundary) {
-			rspamd_cryptobox_hash (mime_part->digest, mime_part->boundary,
-					strlen (mime_part->boundary), hash_key, sizeof (hash_key));
-		}
-
-		debug_task ("found part with content-type: %s/%s",
-				type->type,
-				type->subtype);
-		g_ptr_array_add (task->parts, mime_part);
-
-		md->parent = part;
-	}
-	else if (GMIME_IS_PART (part)) {
-		/* a normal leaf part, could be text/plain or image/jpeg etc */
-#ifdef GMIME24
-		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
-					part));
-#else
-		type =
-			(GMimeContentType *) g_mime_part_get_content_type (GMIME_PART (part));
-#endif
-
-		if (type == NULL) {
-			msg_warn_task ("type of part is unknown, assume text/plain");
-			type = g_mime_content_type_new ("text", "plain");
-#ifdef GMIME24
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_object_unref,				 type);
-#else
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_mime_content_type_destroy, type);
-#endif
-		}
-		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
-#ifdef GMIME24
-		if (wrapper != NULL && GMIME_IS_DATA_WRAPPER (wrapper)) {
-#else
-		if (wrapper != NULL) {
-#endif
-			part_stream = g_mime_stream_mem_new ();
-			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
-
-				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream),
-						FALSE);
-				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (
-						part_stream));
-				g_object_unref (part_stream);
-				mime_part =
-					rspamd_mempool_alloc0 (task->task_pool,
-						sizeof (struct rspamd_mime_part));
-
-				hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
-				mime_part->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
-						rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-
-				if (hdrs != NULL) {
-					rspamd_mime_headers_process (task, mime_part->raw_headers,
-							hdrs, strlen (hdrs), FALSE);
-					mime_part->raw_headers_str = hdrs;
-					rspamd_mempool_add_destructor (task->task_pool, g_free, hdrs);
-				}
-
-				mime_part->type = type;
-				mime_part->content = part_content;
-				mime_part->parent = md->parent;
-				mime_part->filename = g_mime_part_get_filename (GMIME_PART (
-							part));
-				mime_part->mime = part;
-
-				if (mime_part->content->len > 0) {
-					rspamd_cryptobox_hash (mime_part->digest,
-							mime_part->content->data, mime_part->content->len,
-							hash_key, sizeof (hash_key));
-				}
-
-				debug_task ("found part with content-type: %s/%s",
-					type->type,
-					type->subtype);
-				g_ptr_array_add (task->parts, mime_part);
-				/* Skip empty parts */
-				process_text_part (task,
-					part_content,
-					type,
-					mime_part,
-					md->parent,
-					(part_content->len <= 0));
-			}
-			else {
-				msg_warn_task ("write to stream failed: %d, %s", errno,
-					strerror (errno));
-			}
-#ifndef GMIME24
-			g_object_unref (wrapper);
-#endif
-		}
-		else {
-			msg_warn_task ("cannot get wrapper for mime part, type of part: %s/%s",
-				type->type,
-				type->subtype);
-		}
-	}
-	else {
-		g_assert_not_reached ();
-	}
-}
-
-static void
-destroy_message (void *pointer)
-{
-	GMimeMessage *msg = pointer;
-
-	g_object_unref (msg);
 }
 
 /* Creates message from various data using libmagic to detect type */
 static void
-rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
-		GMimeStream *stream)
+rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
+		gsize len)
 {
-	GMimeMessage *message;
-	GMimePart *part;
-	GMimeDataWrapper *wrapper;
-	GMimeContentType *ct = NULL;
+	struct rspamd_content_type *ct = NULL;
+	struct rspamd_mime_part *part;
 	const char *mb = NULL;
 	gchar *mid;
 	rspamd_ftok_t srch, *tok;
-	struct rspamd_email_address *addr;
 
-	g_assert (data != NULL);
-
-	message = g_mime_message_new (TRUE);
-	task->message = message;
-	if (task->from_envelope) {
-		addr = rspamd_task_get_sender (task);
-
-		if (addr->addr_len > 0) {
-			srch.begin = addr->addr;
-			srch.len = addr->addr_len;
-			g_mime_message_set_sender (task->message,
-					rspamd_mempool_ftokdup (task->task_pool, &srch));
-		}
-	}
+	g_assert (start != NULL);
 
 	tok = rspamd_task_get_request_header (task, "Content-Type");
 
 	if (tok) {
 		/* We have Content-Type defined */
-		gchar *ct_cpy = g_malloc (tok->len + 1);
-
-		rspamd_strlcpy (ct_cpy, tok->begin, tok->len + 1);
-		ct = g_mime_content_type_new_from_string (ct_cpy);
-		g_free (ct_cpy);
+		ct = rspamd_content_type_parse (tok->begin, tok->len,
+				task->task_pool);
 	}
 	else if (task->cfg && task->cfg->libs_ctx) {
 		/* Try to predict it by content (slow) */
 		mb = magic_buffer (task->cfg->libs_ctx->libmagic,
-				data->data,
-				data->len);
+				start,
+				len);
 
 		if (mb) {
-			ct = g_mime_content_type_new_from_string (mb);
+			srch.begin = mb;
+			srch.len = strlen (mb);
+			ct = rspamd_content_type_parse (srch.begin, srch.len,
+					task->task_pool);
 		}
 	}
 
 	msg_warn_task ("construct fake mime of type: %s", mb);
-
-	part = g_mime_part_new ();
-
-	if (ct != NULL) {
-		g_mime_object_set_content_type (GMIME_OBJECT (part), ct);
-		g_object_unref (ct);
-	}
-
-#ifdef GMIME24
-	wrapper = g_mime_data_wrapper_new_with_stream (stream,
-			GMIME_CONTENT_ENCODING_8BIT);
-#else
-	wrapper = g_mime_data_wrapper_new_with_stream (stream,
-				GMIME_PART_ENCODING_8BIT);
-#endif
-
-	g_mime_part_set_content_object (part, wrapper);
-	g_mime_message_set_mime_part (task->message, GMIME_OBJECT (part));
-	/* Register destructors */
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_object_unref, wrapper);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_object_unref, part);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) destroy_message, task->message);
+	part = rspamd_mempool_alloc0 (task->task_pool, sizeof (*part));
+	part->ct = ct;
+	part->raw_data.begin = start;
+	part->raw_data.len = len;
+	part->parsed_data.begin = start;
+	part->parsed_data.len = len;
 
 	/* Generate message ID */
 	mid = g_mime_utils_generate_message_id ("localhost.localdomain");
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_free, mid);
-	g_mime_message_set_message_id (task->message, mid);
 	task->message_id = mid;
 	task->queue_id = mid;
-
-	/* Set headers for message */
-	if (task->subject) {
-		g_mime_message_set_subject (task->message, task->subject);
-	}
 }
 
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
-	GMimeMessage *message;
-	GMimeParser *parser;
-	GMimeStream *stream;
-	GByteArray *tmp;
 	GPtrArray *hdrs;
-	GMimeObject *parent;
-	const GMimeContentType *ct;
 	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
@@ -1150,6 +592,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	gint i;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
+	GError *err = NULL;
 	rspamd_cryptobox_hash_state_t st;
 	guchar digest_out[rspamd_cryptobox_HASHBYTES];
 
@@ -1159,7 +602,6 @@ rspamd_message_parse (struct rspamd_task *task)
 		return TRUE;
 	}
 
-	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	p = task->msg.begin;
 	len = task->msg.len;
 
@@ -1197,30 +639,20 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 	}
 
-	tmp->data = (guint8 *)p;
-	tmp->len = len;
 	task->msg.begin = p;
 	task->msg.len = len;
-
-	stream = g_mime_stream_mem_new_with_byte_array (tmp);
-	/*
-	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
-	 * pool allocator
-	 */
-	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 
 		debug_task ("construct mime parser from string length %d",
 				(gint) task->msg.len);
-		/* create a new parser object to parse the stream */
-		parser = g_mime_parser_new_with_stream (stream);
+		if (!rspamd_mime_parse_task (task, &err)) {
+			msg_err_task ("cannot construct mime from stream: %e", err);
 
-		/* parse the message from the stream */
-		message = g_mime_parser_construct_message (parser);
-
-		if (message == NULL) {
+			if (err) {
+				g_error_free (err);
+			}
 			if (task->cfg && (!task->cfg->allow_raw_input)) {
 				msg_err_task ("cannot construct mime from stream");
 				g_set_error (&task->err,
@@ -1228,26 +660,22 @@ rspamd_message_parse (struct rspamd_task *task)
 						RSPAMD_FILTER_ERROR, \
 
 						"cannot parse MIME in the message");
-				g_object_unref (parser);
 				return FALSE;
 			}
 			else {
 				task->flags &= ~RSPAMD_TASK_FLAG_MIME;
-				rspamd_message_from_data (task, tmp, stream);
+				rspamd_message_from_data (task, p, len);
 			}
 		}
 		else {
 			GString str;
 
-			task->message = message;
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) destroy_message, task->message);
-			str.str = tmp->data;
-			str.len = tmp->len;
+			str.str = p;
+			str.len = len;
 
 			hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 
-			if (hdr_pos > 0 && hdr_pos < tmp->len) {
+			if (hdr_pos > 0 && hdr_pos < len) {
 				task->raw_headers_content.begin = (gchar *) (p);
 				task->raw_headers_content.len = hdr_pos;
 				task->raw_headers_content.body_start = p + body_pos;
@@ -1260,41 +688,41 @@ rspamd_message_parse (struct rspamd_task *task)
 				}
 			}
 		}
-
-		/* free the parser (and the stream) */
-		g_object_unref (stream);
-		g_object_unref (parser);
 	}
 	else {
 		task->flags &= ~RSPAMD_TASK_FLAG_MIME;
-		rspamd_message_from_data (task, tmp, stream);
-		g_object_unref (stream);
+		rspamd_message_from_data (task, p, len);
 	}
 
 
 	/* Save message id for future use */
-	task->message_id = g_mime_message_get_message_id (task->message);
+	hdrs = rspamd_message_get_header_array (task, "Message-ID", FALSE);
+
+	if (hdrs) {
+		rh = g_ptr_array_index (hdrs, 0);
+		task->message_id = rh->decoded;
+	}
+
 	if (task->message_id == NULL) {
 		task->message_id = "undef";
 	}
 
 	memset (&md, 0, sizeof (md));
 	md.task = task;
-#ifdef GMIME24
-	g_mime_message_foreach (task->message, mime_foreach_callback, &md);
-#else
-	/*
-	 * This is rather strange, but gmime 2.2 do NOT pass top-level part to foreach callback
-	 * so we need to set up parent part by hands
-	 */
-	md.parent = g_mime_message_get_mime_part (task->message);
-	g_object_unref (md.parent);
-	g_mime_message_foreach_part (task->message, mime_foreach_callback, &md);
-#endif
 
 	debug_task ("found %ud parts in message", task->parts->len);
 	if (task->queue_id == NULL) {
 		task->queue_id = "undef";
+	}
+
+	for (i = 0; i < task->parts->len; i ++) {
+		struct rspamd_mime_part *part;
+
+		part = g_ptr_array_index (task->parts, i);
+
+		if (IS_CT_TEXT (part->ct)) {
+			rspamd_message_process_text_part (task, part);
+		}
 	}
 
 	rspamd_images_process (task);
@@ -1396,19 +824,33 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	/* Set mime recipients and sender for the task */
-	task->rcpt_mime = g_mime_message_get_all_recipients (task->message);
-	if (task->rcpt_mime) {
-#ifdef GMIME24
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_object_unref,
-			task->rcpt_mime);
-#else
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) internet_address_list_destroy,
-			task->rcpt_mime);
-#endif
+	/* TODO: kill it with fire */
+	task->rcpt_mime = internet_address_list_new ();
+
+	static const gchar *to_hdrs[] = {"To", "Cc", "Bcc"};
+
+	for (int k = 0; k < G_N_ELEMENTS (to_hdrs); k ++) {
+		hdrs = rspamd_message_get_header_array (task, to_hdrs[k], FALSE);
+		if (hdrs && hdrs->len > 0) {
+
+			InternetAddress *tia;
+
+			for (i = 0; i < hdrs->len; i ++) {
+				rh = g_ptr_array_index (hdrs, i);
+
+				tia = internet_address_list_parse_string (rh->decoded);
+
+				if (tia) {
+					internet_address_list_append (task->rcpt_mime, tia);
+					g_object_unref (tia);
+				}
+			}
+		}
 	}
 
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_object_unref,
+			task->rcpt_mime);
 
 	hdrs = rspamd_message_get_header_array (task, "From", FALSE);
 
@@ -1444,16 +886,14 @@ rspamd_message_parse (struct rspamd_task *task)
 		p2 = g_ptr_array_index (task->text_parts, 1);
 
 		/* First of all check parent object */
-		if (p1->parent && p1->parent == p2->parent) {
-			parent = p1->parent;
-			ct = g_mime_object_get_content_type (parent);
-			if (ct == NULL ||
-					!g_mime_content_type_is_type ((GMimeContentType *)ct,
-							"multipart", "alternative")) {
-				debug_task (
-						"two parts are not belong to multipart/alternative container, skip check");
-			}
-			else {
+		if (p1->mime_part->parent_part &&
+				p1->mime_part->parent_part == p2->mime_part->parent_part) {
+			rspamd_ftok_t srch;
+
+			srch.begin = "alternative";
+			srch.len = 11;
+
+			if (rspamd_ftok_cmp (&p1->mime_part->parent_part->ct->subtype, &srch) == 0) {
 				if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
 						p1->normalized_hashes && p2->normalized_hashes) {
 

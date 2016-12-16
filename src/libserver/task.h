@@ -141,7 +141,6 @@ struct rspamd_task {
 	rspamd_ftok_t msg;								/**< message buffer									*/
 	struct rspamd_http_connection *http_conn;		/**< HTTP server connection							*/
 	struct rspamd_async_session * s;				/**< async session object							*/
-	GMimeMessage *message;							/**< message, parsed with GMime						*/
 	GPtrArray *parts;								/**< list of parsed parts							*/
 	GPtrArray *text_parts;							/**< list of text parts								*/
 	struct {
