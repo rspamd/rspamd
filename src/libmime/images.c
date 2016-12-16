@@ -43,11 +43,14 @@ rspamd_images_process (struct rspamd_task *task)
 {
 	guint i;
 	struct rspamd_mime_part *part;
+	rspamd_ftok_t srch;
+
+	RSPAMD_FTOK_ASSIGN (&srch, "image");
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
-		if (g_mime_content_type_is_type (part->type, "image", "*") &&
-				part->content->len > 0) {
+		if (rspamd_ftok_cmp (&part->ct->type, &srch) == 0 &&
+				part->parsed_data.len > 0) {
 			process_image (task, part);
 		}
 	}
@@ -55,28 +58,28 @@ rspamd_images_process (struct rspamd_task *task)
 }
 
 static enum rspamd_image_type
-detect_image_type (GByteArray *data)
+detect_image_type (rspamd_ftok_t *data)
 {
 	if (data->len > sizeof (png_signature) / sizeof (png_signature[0])) {
-		if (memcmp (data->data, png_signature, sizeof (png_signature)) == 0) {
+		if (memcmp (data->begin, png_signature, sizeof (png_signature)) == 0) {
 			return IMAGE_TYPE_PNG;
 		}
 	}
 	if (data->len > 10) {
-		if (memcmp (data->data, jpg_sig1, sizeof (jpg_sig1)) == 0) {
-			if (memcmp (data->data + 2, jpg_sig_jfif, sizeof (jpg_sig_jfif)) == 0 ||
-					memcmp (data->data + 2, jpg_sig_exif, sizeof (jpg_sig_exif)) == 0) {
+		if (memcmp (data->begin, jpg_sig1, sizeof (jpg_sig1)) == 0) {
+			if (memcmp (data->begin + 2, jpg_sig_jfif, sizeof (jpg_sig_jfif)) == 0 ||
+					memcmp (data->begin + 2, jpg_sig_exif, sizeof (jpg_sig_exif)) == 0) {
 				return IMAGE_TYPE_JPG;
 			}
 		}
 	}
 	if (data->len > sizeof (gif_signature) / sizeof (gif_signature[0])) {
-		if (memcmp (data->data, gif_signature, sizeof (gif_signature)) == 0) {
+		if (memcmp (data->begin, gif_signature, sizeof (gif_signature)) == 0) {
 			return IMAGE_TYPE_GIF;
 		}
 	}
 	if (data->len > sizeof (bmp_signature) / sizeof (bmp_signature[0])) {
-		if (memcmp (data->data, bmp_signature, sizeof (bmp_signature)) == 0) {
+		if (memcmp (data->begin, bmp_signature, sizeof (bmp_signature)) == 0) {
 			return IMAGE_TYPE_BMP;
 		}
 	}
@@ -86,11 +89,11 @@ detect_image_type (GByteArray *data)
 
 
 static struct rspamd_image *
-process_png_image (struct rspamd_task *task, GByteArray *data)
+process_png_image (struct rspamd_task *task, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	guint32 t;
-	guint8 *p;
+	const guint8 *p;
 
 	if (data->len < 24) {
 		msg_info_task ("bad png detected (maybe striped)");
@@ -99,7 +102,7 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 
 	/* In png we should find iHDR section and get data from it */
 	/* Skip signature and read header section */
-	p = data->data + 12;
+	p = data->begin + 12;
 	if (memcmp (p, "IHDR", 4) != 0) {
 		msg_info_task ("png doesn't begins with IHDR section");
 		return NULL;
@@ -120,9 +123,9 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 }
 
 static struct rspamd_image *
-process_jpg_image (struct rspamd_task *task, GByteArray *data)
+process_jpg_image (struct rspamd_task *task, rspamd_ftok_t *data)
 {
-	guint8 *p, *end;
+	const guint8 *p, *end;
 	guint16 h, w;
 	struct rspamd_image *img;
 
@@ -130,7 +133,7 @@ process_jpg_image (struct rspamd_task *task, GByteArray *data)
 	img->type = IMAGE_TYPE_JPG;
 	img->data = data;
 
-	p = data->data;
+	p = data->begin;
 	end = p + data->len - 8;
 	p += 2;
 
@@ -163,10 +166,10 @@ process_jpg_image (struct rspamd_task *task, GByteArray *data)
 }
 
 static struct rspamd_image *
-process_gif_image (struct rspamd_task *task, GByteArray *data)
+process_gif_image (struct rspamd_task *task, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
-	guint8 *p;
+	const guint8 *p;
 	guint16 t;
 
 	if (data->len < 10) {
@@ -178,7 +181,7 @@ process_gif_image (struct rspamd_task *task, GByteArray *data)
 	img->type = IMAGE_TYPE_GIF;
 	img->data = data;
 
-	p = data->data + 6;
+	p = data->begin + 6;
 	memcpy (&t, p,	   sizeof (guint16));
 	img->width = GUINT16_FROM_LE (t);
 	memcpy (&t, p + 2, sizeof (guint16));
@@ -188,11 +191,11 @@ process_gif_image (struct rspamd_task *task, GByteArray *data)
 }
 
 static struct rspamd_image *
-process_bmp_image (struct rspamd_task *task, GByteArray *data)
+process_bmp_image (struct rspamd_task *task, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	gint32 t;
-	guint8 *p;
+	const guint8 *p;
 
 	if (data->len < 28) {
 		msg_info_task ("bad bmp detected (maybe striped)");
@@ -202,7 +205,7 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
-	p = data->data + 18;
+	p = data->begin + 18;
 	memcpy (&t, p,	   sizeof (gint32));
 	img->width = abs (GINT32_FROM_LE (t));
 	memcpy (&t, p + 4, sizeof (gint32));
@@ -448,16 +451,16 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 
 	switch (img->type) {
 	case IMAGE_TYPE_JPG:
-		src = gdImageCreateFromJpegPtr (img->data->len, img->data->data);
+		src = gdImageCreateFromJpegPtr (img->data->len, (void *)img->data->begin);
 		break;
 	case IMAGE_TYPE_PNG:
-		src = gdImageCreateFromPngPtr (img->data->len, img->data->data);
+		src = gdImageCreateFromPngPtr (img->data->len, (void *)img->data->begin);
 		break;
 	case IMAGE_TYPE_GIF:
-		src = gdImageCreateFromGifPtr (img->data->len, img->data->data);
+		src = gdImageCreateFromGifPtr (img->data->len, (void *)img->data->begin);
 		break;
 	case IMAGE_TYPE_BMP:
-		src = gdImageCreateFromBmpPtr (img->data->len, img->data->data);
+		src = gdImageCreateFromBmpPtr (img->data->len, (void *)img->data->begin);
 		break;
 	default:
 		return;
@@ -560,19 +563,19 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 	guint cid_len, i, j;
 	GPtrArray *ar;
 
-	if ((type = detect_image_type (part->content)) != IMAGE_TYPE_UNKNOWN) {
+	if ((type = detect_image_type (&part->parsed_data)) != IMAGE_TYPE_UNKNOWN) {
 		switch (type) {
 		case IMAGE_TYPE_PNG:
-			img = process_png_image (task, part->content);
+			img = process_png_image (task, &part->parsed_data);
 			break;
 		case IMAGE_TYPE_JPG:
-			img = process_jpg_image (task, part->content);
+			img = process_jpg_image (task, &part->parsed_data);
 			break;
 		case IMAGE_TYPE_GIF:
-			img = process_gif_image (task, part->content);
+			img = process_gif_image (task, &part->parsed_data);
 			break;
 		case IMAGE_TYPE_BMP:
-			img = process_bmp_image (task, part->content);
+			img = process_bmp_image (task, &part->parsed_data);
 			break;
 		default:
 			img = NULL;
@@ -585,7 +588,11 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 			rspamd_image_type_str (img->type),
 			img->width, img->height,
 			task->message_id);
-		img->filename = part->filename;
+
+		if (part->cd) {
+			img->filename = &part->cd->filename;
+		}
+
 		img->parent = part;
 
 		if (img->data->len <= task->cfg->max_pic_size) {
@@ -596,7 +603,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 					img->filename, img->data->len);
 		}
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
-		part->specific_data = img;
+		part->specific.img = img;
 
 		/* Check Content-Id */
 		ar = rspamd_message_get_header_from_hash (part->raw_headers,

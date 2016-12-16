@@ -40,7 +40,7 @@ struct rspamd_archive_file {
 
 struct rspamd_archive {
 	enum rspamd_archive_type type;
-	const gchar *archive_name;
+	const rspamd_ftok_t *archive_name;
 	gsize size;
 	enum rspamd_archive_flags flags;
 	GPtrArray *files; /* Array of struct rspamd_archive_file */

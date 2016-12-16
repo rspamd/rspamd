@@ -209,7 +209,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	GByteArray *result_array, *part_content;
 	struct rspamd_mime_part *part = text_part->mime_part;
 
-	part_content = rspamd_mempool_alloc0 (sizeof (GByteArray));
+	part_content = rspamd_mempool_alloc0 (task->task_pool, sizeof (GByteArray));
 	part_content->data = (guint8 *)text_part->parsed.begin;
 	part_content->len = text_part->parsed.len;
 

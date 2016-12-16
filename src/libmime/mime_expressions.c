@@ -1326,18 +1326,8 @@ rspamd_is_recipients_sorted (struct rspamd_task * task,
 	void *unused)
 {
 	/* Check all types of addresses */
-	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message,
-		GMIME_RECIPIENT_TYPE_TO)) == TRUE) {
-		return TRUE;
-	}
-	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message,
-		GMIME_RECIPIENT_TYPE_BCC)) == TRUE) {
-		return TRUE;
-	}
-	if (is_recipient_list_sorted (g_mime_message_get_recipients (task->message,
-		GMIME_RECIPIENT_TYPE_CC)) == TRUE) {
-		return TRUE;
-	}
+
+	/* TODO: fix this function */
 
 	return FALSE;
 }
@@ -1654,76 +1644,9 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	const gchar *param_name;
-	const gchar *param_data;
-	rspamd_regexp_t *re;
-	struct expression_argument *arg, *arg1, *arg_pattern;
-	GMimeObject *part;
-	GMimeContentType *ct;
-	gint r;
-	guint i;
-	gboolean recursive = FALSE;
-	struct rspamd_mime_part *cur_part;
 
-	if (args == NULL || args->len < 2) {
-		msg_warn_task ("no parameters to function");
-		return FALSE;
-	}
-
-	arg = &g_array_index (args, struct expression_argument, 0);
-	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
-	param_name = arg->data;
-	arg_pattern = &g_array_index (args, struct expression_argument, 1);
-
-	for (i = 0; i < task->parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->parts, i);
-		part = cur_part->mime;
-		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-
-		if (args->len >= 3) {
-			arg1 = &g_array_index (args, struct expression_argument, 2);
-			if (g_ascii_strncasecmp (arg1->data, "true",
-					sizeof ("true") - 1) == 0) {
-				recursive = TRUE;
-			}
-		}
-		else {
-			/*
-			 * If user did not specify argument, let's assume that he wants
-			 * recursive search if mime part is multipart/mixed
-			 */
-			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
-				recursive = TRUE;
-			}
-		}
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
-
-		if ((param_data =
-				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
-						param_name)) != NULL) {
-			if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
-				re = arg_pattern->data;
-				r = rspamd_regexp_search (re, param_data, 0,
-							NULL, NULL, FALSE, NULL);
-
-				if (r) {
-					return TRUE;
-				}
-			}
-			else {
-				/* Just do strcasecmp */
-				if (g_ascii_strcasecmp (param_data, arg_pattern->data) == 0) {
-					return TRUE;
-				}
-			}
-		}
-		/* Get next part */
-		if (!recursive) {
-			break;
-		}
-	}
+	/* TODO: fix */
+	msg_err_task ("content_type_compare_param is broken XXX");
 
 	return FALSE;
 }
@@ -1733,61 +1656,10 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	gchar *param_name;
-	const gchar *param_data;
-	struct expression_argument *arg, *arg1;
-	GMimeObject *part;
-	GMimeContentType *ct;
-	gboolean recursive = FALSE, result = FALSE;
-	guint i;
-	struct rspamd_mime_part *cur_part;
+	/* TODO: fix */
+	msg_err_task ("content_type_compare_param is broken XXX");
 
-	if (args == NULL || args->len < 1) {
-		msg_warn_task ("no parameters to function");
-		return FALSE;
-	}
-
-	arg = &g_array_index (args, struct expression_argument, 0);
-	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
-	param_name = arg->data;
-
-	for (i = 0; i < task->parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->parts, i);
-		part = cur_part->mime;
-		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-
-		if (args->len >= 2) {
-			arg1 = &g_array_index (args, struct expression_argument, 2);
-			if (g_ascii_strncasecmp (arg1->data, "true",
-					sizeof ("true") - 1) == 0) {
-				recursive = TRUE;
-			}
-		}
-		else {
-			/*
-			 * If user did not specify argument, let's assume that he wants
-			 * recursive search if mime part is multipart/mixed
-			 */
-			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
-				recursive = TRUE;
-			}
-		}
-
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
-		if ((param_data =
-				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
-						param_name)) != NULL) {
-			return TRUE;
-		}
-		/* Get next part */
-		if (!recursive) {
-			break;
-		}
-	}
-
-	return result;
+	return FALSE;
 }
 
 static gboolean
@@ -1795,11 +1667,10 @@ rspamd_content_type_check (struct rspamd_task *task,
 	GArray * args,
 	gboolean check_subtype)
 {
-	const gchar *param_data;
+	rspamd_ftok_t *param_data, srch;
 	rspamd_regexp_t *re;
 	struct expression_argument *arg1, *arg_pattern;
-	GMimeObject *part;
-	GMimeContentType *ct;
+	struct rspamd_content_type *ct;
 	gint r;
 	guint i;
 	gboolean recursive = FALSE;
@@ -1814,8 +1685,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 
 	for (i = 0; i < task->parts->len; i ++) {
 		cur_part = g_ptr_array_index (task->parts, i);
-		part = cur_part->mime;
-		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+		ct = cur_part->ct;
 
 		if (args->len >= 2) {
 			arg1 = &g_array_index (args, struct expression_argument, 1);
@@ -1829,7 +1699,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 			 * If user did not specify argument, let's assume that he wants
 			 * recursive search if mime part is multipart/mixed
 			 */
-			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+			if (IS_CT_MULTIPART (ct)) {
 				recursive = TRUE;
 			}
 		}
@@ -1838,15 +1708,15 @@ rspamd_content_type_check (struct rspamd_task *task,
 		g_object_unref (part);
 #endif
 		if (check_subtype) {
-			param_data = ct->subtype;
+			param_data = &ct->subtype;
 		}
 		else {
-			param_data = ct->type;
+			param_data = &ct->type;
 		}
 
 		if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
 			re = arg_pattern->data;
-			r = rspamd_regexp_search (re, param_data, 0,
+			r = rspamd_regexp_search (re, param_data->begin, param_data->len,
 					NULL, NULL, FALSE, NULL);
 
 			if (r) {
@@ -1855,7 +1725,10 @@ rspamd_content_type_check (struct rspamd_task *task,
 		}
 		else {
 			/* Just do strcasecmp */
-			if (g_ascii_strcasecmp (param_data, arg_pattern->data) == 0) {
+			srch.begin = arg_pattern->data;
+			srch.len = strlen (arg_pattern->data);
+
+			if (rspamd_ftok_casecmp (param_data, &srch) == 0) {
 				return TRUE;
 			}
 		}
@@ -1886,10 +1759,11 @@ rspamd_content_type_is_subtype (struct rspamd_task * task,
 }
 
 static gboolean
-compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
+compare_subtype (struct rspamd_task *task, struct rspamd_content_type *ct,
 	struct expression_argument *subtype)
 {
 	rspamd_regexp_t *re;
+	rspamd_ftok_t srch;
 	gint r = 0;
 
 	if (subtype == NULL || ct == NULL) {
@@ -1898,12 +1772,15 @@ compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
 	}
 	if (subtype->type == EXPRESSION_ARGUMENT_REGEXP) {
 		re = subtype->data;
-		r = rspamd_regexp_search (re, ct->subtype, 0,
+		r = rspamd_regexp_search (re, ct->subtype.begin, ct->subtype.len,
 				NULL, NULL, FALSE, NULL);
 	}
 	else {
+		srch.begin = subtype->data;
+		srch.len = strlen (subtype->data);
+
 		/* Just do strcasecmp */
-		if (ct->subtype && g_ascii_strcasecmp (ct->subtype, subtype->data) == 0) {
+		if (rspamd_ftok_casecmp (&ct->subtype, &srch) == 0) {
 			return TRUE;
 		}
 	}
@@ -1919,13 +1796,13 @@ compare_len (struct rspamd_mime_part *part, guint min, guint max)
 	}
 
 	if (min == 0) {
-		return part->content->len <= max;
+		return part->parsed_data.len <= max;
 	}
 	else if (max == 0) {
-		return part->content->len >= min;
+		return part->parsed_data.len >= min;
 	}
 	else {
-		return part->content->len >= min && part->content->len <= max;
+		return part->parsed_data.len >= min && part->parsed_data.len <= max;
 	}
 }
 
@@ -1938,13 +1815,14 @@ common_has_content_part (struct rspamd_task * task,
 {
 	rspamd_regexp_t *re;
 	struct rspamd_mime_part *part;
-	GMimeContentType *ct;
+	struct rspamd_content_type *ct;
+	rspamd_ftok_t srch;
 	gint r;
 	guint i;
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
-		ct = part->type;
+		ct = part->ct;
 
 		if (ct == NULL) {
 			continue;
@@ -1953,7 +1831,7 @@ common_has_content_part (struct rspamd_task * task,
 		if (param_type->type == EXPRESSION_ARGUMENT_REGEXP) {
 			re = param_type->data;
 
-			r = rspamd_regexp_search (re, ct->type, 0,
+			r = rspamd_regexp_search (re, ct->type.begin, ct->type.len,
 					NULL, NULL, FALSE, NULL);
 			/* Also check subtype and length of the part */
 			if (r && param_subtype) {
@@ -1965,7 +1843,10 @@ common_has_content_part (struct rspamd_task * task,
 		}
 		else {
 			/* Just do strcasecmp */
-			if (ct->type && g_ascii_strcasecmp (ct->type, param_type->data) == 0) {
+			srch.begin = param_type->data;
+			srch.len = strlen (param_type->data);
+
+			if (rspamd_ftok_casecmp (&ct->type, &srch) == 0) {
 				if (param_subtype) {
 					if (compare_subtype (task, ct, param_subtype)) {
 						if (compare_len (part, min_len, max_len)) {

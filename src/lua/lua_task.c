@@ -3339,7 +3339,7 @@ lua_image_get_filename (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL && img->filename != NULL) {
-		lua_pushstring (L, img->filename);
+		lua_pushlstring (L, img->filename->begin, img->filename->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3465,7 +3465,7 @@ lua_archive_get_filename (lua_State *L)
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
-		lua_pushstring (L, arch->archive_name);
+		lua_pushlstring (L, arch->archive_name->begin, arch->archive_name->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

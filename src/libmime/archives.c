@@ -18,6 +18,7 @@
 #include "message.h"
 #include "task.h"
 #include "archives.h"
+#include "fstring.h"
 
 static void
 rspamd_archive_dtor (gpointer p)
@@ -51,8 +52,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	struct rspamd_archive_file *f;
 
 	/* Zip files have interesting data at the end of archive */
-	p = part->content->data + part->content->len - 1;
-	start = part->content->data;
+	p = part->parsed_data.begin + part->parsed_data.len - 1;
+	start = part->parsed_data.begin;
 	end = p;
 
 	/* Search for EOCD:
@@ -78,13 +79,13 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 
 	if (eocd == NULL) {
 		/* Not a zip file */
-		msg_debug_task ("zip archive is invalid (no EOCD): %s", part->filename);
+		msg_debug_task ("zip archive is invalid (no EOCD)");
 
 		return;
 	}
 
 	if (end - eocd < 21) {
-		msg_debug_task ("zip archive is invalid (short EOCD): %s", part->filename);
+		msg_debug_task ("zip archive is invalid (short EOCD)");
 
 		return;
 	}
@@ -97,8 +98,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 
 	/* We need to check sanity as well */
 	if (cd_offset + cd_size != (guint)(eocd - start)) {
-		msg_debug_task ("zip archive is invalid (bad size/offset for CD): %s",
-				part->filename);
+		msg_debug_task ("zip archive is invalid (bad size/offset for CD)");
 
 		return;
 	}
@@ -115,8 +115,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		/* Read central directory record */
 		if (eocd - cd < cd_basic_len ||
 				memcmp (cd, cd_magic, sizeof (cd_magic)) != 0) {
-			msg_debug_task ("zip archive is invalid (bad cd record): %s",
-					part->filename);
+			msg_debug_task ("zip archive is invalid (bad cd record)");
 
 			return;
 		}
@@ -133,8 +132,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		comment_len = GUINT16_FROM_LE (comment_len);
 
 		if (cd + fname_len + comment_len + extra_len + cd_basic_len > eocd) {
-			msg_debug_task ("zip archive is invalid (too large cd record): %s",
-					part->filename);
+			msg_debug_task ("zip archive is invalid (too large cd record)");
 
 			return;
 		}
@@ -150,9 +148,13 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	}
 
 	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
-	part->specific_data = arch;
-	arch->archive_name = part->filename;
-	arch->size = part->content->len;
+	part->specific.arch = arch;
+
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
+
+	arch->size = part->parsed_data.len;
 }
 
 static inline gint
@@ -197,11 +199,11 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_SKIP_BYTES(n) do { \
 	if ((n) <= 0) { \
-		msg_debug_task ("rar archive is invalid (bad skip value): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (bad skip value)"); \
 		return; \
 	} \
 	if ((gsize)(end - p) < (n)) { \
-		msg_debug_task ("rar archive is invalid (truncated): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (truncated)"); \
 		return; \
 	} \
 	p += (n); \
@@ -210,11 +212,11 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 #define RAR_READ_VINT() do { \
 	r = rspamd_archive_rar_read_vint (p, end - p, &vint); \
 	if (r == -1) { \
-		msg_debug_task ("rar archive is invalid (bad vint): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (bad vint)"); \
 		return; \
 	} \
 	else if (r == 0) { \
-		msg_debug_task ("rar archive is invalid (BAD vint offset): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (BAD vint offset)"); \
 		return; \
 	}\
 } while (0)
@@ -222,7 +224,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 #define RAR_READ_VINT_SKIP() do { \
 	r = rspamd_archive_rar_read_vint (p, end - p, &vint); \
 	if (r == -1) { \
-		msg_debug_task ("rar archive is invalid (bad vint): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (bad vint)"); \
 		return; \
 	} \
 	p += r; \
@@ -230,7 +232,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_READ_UINT16(n) do { \
 	if (end - p < (glong)sizeof (guint16)) { \
-		msg_debug_task ("rar archive is invalid (bad int16): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (bad int16)"); \
 		return; \
 	} \
 	n = p[0] + (p[1] << 8); \
@@ -239,7 +241,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_READ_UINT32(n) do { \
 	if (end - p < (glong)sizeof (guint32)) { \
-		msg_debug_task ("rar archive is invalid (bad int32): %s", part->filename); \
+		msg_debug_task ("rar archive is invalid (bad int32)"); \
 		return; \
 	} \
 	n = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); \
@@ -293,8 +295,7 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 		if (sz == 0) {
 			/* Zero sized block - error */
-			msg_debug_task ("rar archive is invalid (zero size block): %s",
-					part->filename);
+			msg_debug_task ("rar archive is invalid (zero size block)");
 
 			return;
 		}
@@ -310,7 +311,7 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 			RAR_READ_UINT16 (fname_len);
 
 			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
-				msg_debug_task ("rar archive is invalid (bad fileame size): %s", part->filename);
+				msg_debug_task ("rar archive is invalid (bad fileame size)");
 
 				return;
 			}
@@ -367,9 +368,9 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 end:
 	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
-	part->specific_data = arch;
-	arch->archive_name = part->filename;
-	arch->size = part->content->len;
+	part->specific.arch = arch;
+	arch->archive_name = &part->cd->filename;
+	arch->size = part->parsed_data.len;
 }
 
 static void
@@ -386,11 +387,11 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	struct rspamd_archive_file *f;
 	gint r;
 
-	p = part->content->data;
-	end = p + part->content->len;
+	p = part->parsed_data.begin;
+	end = p + part->parsed_data.len;
 
 	if ((gsize)(end - p) <= sizeof (rar_v5_magic)) {
-		msg_debug_task ("rar archive is invalid (too small): %s", part->filename);
+		msg_debug_task ("rar archive is invalid (too small)");
 
 		return;
 	}
@@ -405,7 +406,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		return;
 	}
 	else {
-		msg_debug_task ("rar archive is invalid (no rar magic): %s", part->filename);
+		msg_debug_task ("rar archive is invalid (no rar magic)");
 
 		return;
 	}
@@ -447,8 +448,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		goto end;
 	}
 	else if (type != rar_main_header) {
-		msg_debug_task ("rar archive is invalid (bad main header): %s",
-				part->filename);
+		msg_debug_task ("rar archive is invalid (bad main header)");
 
 		return;
 	}
@@ -467,8 +467,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		sz = vint;
 		if (sz == 0) {
 			/* Zero sized block - error */
-			msg_debug_task ("rar archive is invalid (zero size block): %s",
-					part->filename);
+			msg_debug_task ("rar archive is invalid (zero size block)");
 
 			return;
 		}
@@ -528,7 +527,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			fname_len = vint;
 
 			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
-				msg_debug_task ("rar archive is invalid (bad fileame size): %s", part->filename);
+				msg_debug_task ("rar archive is invalid (bad fileame size)");
 
 				return;
 			}
@@ -546,45 +545,51 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	}
 
 end:
-	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
-	part->specific_data = arch;
-	arch->archive_name = part->filename;
-	arch->size = part->content->len;
+part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->specific.arch = arch;
+	if (part->cd != NULL) {
+		arch->archive_name = &part->cd->filename;
+	}
+	arch->size = part->parsed_data.len;
 }
 
 static gboolean
 rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
 		const guchar *magic_start, gsize magic_len)
 {
-	GMimeContentType *ct;
-	const gchar *fname, *p;
+	struct rspamd_content_type *ct;
+	const gchar *p;
+	rspamd_ftok_t srch, *fname;
 
-	ct = part->type;
+	ct = part->ct;
+	RSPAMD_FTOK_ASSIGN (&srch, "application");
 
-	if (ct && ct->type && ct->subtype && strcmp (ct->type,
-			"application") == 0) {
-		if (rspamd_substring_search_caseless (ct->subtype, strlen (ct->subtype),
+	if (ct && ct->type.len && ct->subtype.len > 0 && rspamd_ftok_cmp (&ct->type,
+			&srch) == 0) {
+		if (rspamd_substring_search_caseless (ct->subtype.begin, ct->subtype.len,
 				str, strlen (str)) != -1) {
 			return TRUE;
 		}
 	}
 
-	fname = part->filename;
+	if (part->cd) {
+		fname = &part->cd->filename;
 
-	if (fname && strlen (fname) > strlen (str)) {
-		p = fname + strlen (fname) - strlen (str);
+		if (fname && fname->len > strlen (str)) {
+			p = fname->begin + fname->len - strlen (str);
 
-		if (rspamd_lc_cmp (p, str, strlen (str)) == 0) {
-			if (*(p - 1) == '.') {
-				return TRUE;
+			if (rspamd_lc_cmp (p, str, strlen (str)) == 0) {
+				if (*(p - 1) == '.') {
+					return TRUE;
+				}
 			}
 		}
-	}
 
-	if (magic_start != NULL) {
-		if (part->content->len > magic_len && memcmp (part->content->data,
-				magic_start, magic_len) == 0) {
-			return TRUE;
+		if (magic_start != NULL) {
+			if (part->parsed_data.len > magic_len && memcmp (part->parsed_data.begin,
+					magic_start, magic_len) == 0) {
+				return TRUE;
+			}
 		}
 	}
 
@@ -602,7 +607,7 @@ rspamd_archives_process (struct rspamd_task *task)
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
 
-		if (part->content->len > 0) {
+		if (part->parsed_data.len > 0) {
 			if (rspamd_archive_cheat_detect (part, "zip",
 					zip_magic, sizeof (zip_magic))) {
 				rspamd_archive_process_zip (task, part);

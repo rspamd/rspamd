@@ -584,7 +584,6 @@ rspamd_message_parse (struct rspamd_task *task)
 	GPtrArray *hdrs;
 	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *p1, *p2;
-	struct mime_foreach_data md;
 	struct received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
@@ -650,16 +649,12 @@ rspamd_message_parse (struct rspamd_task *task)
 		if (!rspamd_mime_parse_task (task, &err)) {
 			msg_err_task ("cannot construct mime from stream: %e", err);
 
-			if (err) {
-				g_error_free (err);
-			}
 			if (task->cfg && (!task->cfg->allow_raw_input)) {
 				msg_err_task ("cannot construct mime from stream");
-				g_set_error (&task->err,
-						rspamd_message_quark (),
-						RSPAMD_FILTER_ERROR, \
+				if (err) {
+					task->err = err;
+				}
 
-						"cannot parse MIME in the message");
 				return FALSE;
 			}
 			else {
@@ -670,7 +665,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		else {
 			GString str;
 
-			str.str = p;
+			str.str = (gchar *)p;
 			str.len = len;
 
 			hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
@@ -706,9 +701,6 @@ rspamd_message_parse (struct rspamd_task *task)
 	if (task->message_id == NULL) {
 		task->message_id = "undef";
 	}
-
-	memset (&md, 0, sizeof (md));
-	md.task = task;
 
 	debug_task ("found %ud parts in message", task->parts->len);
 	if (task->queue_id == NULL) {
@@ -833,7 +825,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		hdrs = rspamd_message_get_header_array (task, to_hdrs[k], FALSE);
 		if (hdrs && hdrs->len > 0) {
 
-			InternetAddress *tia;
+			InternetAddressList *tia;
 
 			for (i = 0; i < hdrs->len; i ++) {
 				rh = g_ptr_array_index (hdrs, i);
