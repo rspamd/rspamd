@@ -22,6 +22,7 @@
 #include "html.h"
 #include "email_addr.h"
 #include "lua/lua_common.h"
+#include "utlist.h"
 
 gboolean rspamd_compare_encoding (struct rspamd_task *task,
 	GArray * args,
@@ -1327,7 +1328,9 @@ rspamd_is_recipients_sorted (struct rspamd_task * task,
 {
 	/* Check all types of addresses */
 
-	/* TODO: fix this function */
+	if (task->rcpt_mime) {
+		return is_recipient_list_sorted (task->rcpt_mime);
+	}
 
 	return FALSE;
 }
@@ -1644,9 +1647,78 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
+	rspamd_regexp_t *re;
+	struct expression_argument *arg, *arg1, *arg_pattern;
+	gboolean recursive = FALSE;
+	struct rspamd_mime_part *cur_part;
+	guint i;
+	rspamd_ftok_t srch;
+	struct rspamd_content_type_param *found = NULL, *cur;
+	const gchar *param_name;
+	gboolean r = FALSE;
 
-	/* TODO: fix */
-	msg_err_task ("content_type_compare_param is broken XXX");
+	if (args == NULL || args->len < 2) {
+		msg_warn_task ("no parameters to function");
+		return FALSE;
+	}
+
+	arg = &g_array_index (args, struct expression_argument, 0);
+	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
+	param_name = arg->data;
+	arg_pattern = &g_array_index (args, struct expression_argument, 1);
+
+	for (i = 0; i < task->parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->parts, i);
+
+		if (args->len >= 3) {
+			arg1 = &g_array_index (args, struct expression_argument, 2);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+					sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (IS_CT_MULTIPART (cur_part->ct)) {
+				recursive = TRUE;
+			}
+		}
+
+		if (cur_part->ct->attrs) {
+			RSPAMD_FTOK_FROM_STR (&srch, param_name);
+
+			found = g_hash_table_lookup (cur_part->ct->attrs, &srch);
+
+			if (found) {
+				DL_FOREACH (found, cur) {
+					if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
+						re = arg_pattern->data;
+						r = rspamd_regexp_search (re,
+								cur->value.begin, cur->value.len,
+								NULL, NULL, FALSE, NULL);
+
+						if (r) {
+							return TRUE;
+						}
+					}
+					else {
+						/* Just do strcasecmp */
+						RSPAMD_FTOK_FROM_STR (&srch, arg_pattern->data);
+						if (rspamd_ftok_casecmp (&srch, &cur->value) == 0) {
+							return TRUE;
+						}
+					}
+				}
+			}
+		}
+
+		if (!recursive) {
+			break;
+		}
+	}
 
 	return FALSE;
 }
@@ -1656,8 +1728,57 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	/* TODO: fix */
-	msg_err_task ("content_type_compare_param is broken XXX");
+	struct expression_argument *arg, *arg1;
+	gboolean recursive = FALSE;
+	struct rspamd_mime_part *cur_part;
+	guint i;
+	rspamd_ftok_t srch;
+	struct rspamd_content_type_param *found = NULL;
+	const gchar *param_name;
+
+	if (args == NULL || args->len < 1) {
+		msg_warn_task ("no parameters to function");
+		return FALSE;
+	}
+
+	arg = &g_array_index (args, struct expression_argument, 0);
+	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
+	param_name = arg->data;
+
+	for (i = 0; i < task->parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->parts, i);
+
+		if (args->len >= 2) {
+			arg1 = &g_array_index (args, struct expression_argument, 1);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+					sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (IS_CT_MULTIPART (cur_part->ct)) {
+				recursive = TRUE;
+			}
+		}
+
+		if (cur_part->ct->attrs) {
+			RSPAMD_FTOK_FROM_STR (&srch, param_name);
+
+			found = g_hash_table_lookup (cur_part->ct->attrs, &srch);
+
+			if (found) {
+				return TRUE;
+			}
+		}
+
+		if (!recursive) {
+			break;
+		}
+	}
 
 	return FALSE;
 }
