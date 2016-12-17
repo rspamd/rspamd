@@ -179,4 +179,15 @@ gchar *rspamd_ftokdup (const rspamd_ftok_t *src) G_GNUC_WARN_UNUSED_RESULT;
 gchar *rspamd_fstringdup (const rspamd_fstring_t *src) G_GNUC_WARN_UNUSED_RESULT;
 
 #define RSPAMD_FTOK_ASSIGN(t, lit) do { (t)->begin = (lit); (t)->len = sizeof(lit) - 1; } while (0)
+#define RSPAMD_FTOK_FROM_STR(t, str) do { \
+	if (G_LIKELY(str)) { \
+		(t)->begin = (const char*)(str); \
+		(t)->len = strlen (str); \
+	} \
+	else { \
+		(t)->begin = NULL; \
+		(t)->len = 0; \
+	} \
+} while (0)
+
 #endif
