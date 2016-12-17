@@ -45,14 +45,16 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 	nparam->name.len = name_end - name_start;
 	nparam->value.begin = value_start;
 	nparam->value.len = value_end - value_start;
-	DL_APPEND (found, nparam);
 
 	if (!found) {
+		DL_APPEND (found, nparam);
 		g_hash_table_insert (ct->attrs, &nparam->name, nparam);
 	}
+	else {
+		DL_APPEND (found, nparam);
+	}
 
-	srch.begin = "charset";
-	srch.len = 7;
+	RSPAMD_FTOK_ASSIGN (&srch, "charset");
 
 	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
 		/* Adjust charset */
@@ -60,8 +62,7 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 		ct->charset.len = nparam->value.len;
 	}
 
-	srch.begin = "boundary";
-	srch.len = 8;
+	RSPAMD_FTOK_ASSIGN (&srch, "boundary");
 
 	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
 		/* Adjust boundary */
@@ -94,65 +95,53 @@ rspamd_content_type_parse (const gchar *in,
 		/* Now do some hacks to work with broken content types */
 		if (res->subtype.len == 0) {
 			res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
-			srch.begin = "text";
-			srch.len = 4;
+			RSPAMD_FTOK_ASSIGN (&srch, "text");
 
 			if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
 				/* Workaround for Content-Type: text */
 				/* Assume text/plain */
-				res->subtype.begin = "plain";
-				res->subtype.len = 5;
+				RSPAMD_FTOK_ASSIGN (&srch, "plain");
 			}
 			else {
-				srch.begin = "html";
-				srch.len = 4;
+				RSPAMD_FTOK_ASSIGN (&srch, "html");
 
 				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
 					/* Workaround for Content-Type: html */
-					res->type.begin = "text";
-					res->type.len = 4;
-					res->subtype.begin = "html";
-					res->subtype.len = 4;
+					RSPAMD_FTOK_ASSIGN (&res->type, "text");
+					RSPAMD_FTOK_ASSIGN (&res->subtype, "html");
 				}
 				else {
-					srch.begin = "application";
-					srch.len = 11;
+					RSPAMD_FTOK_ASSIGN (&srch, "application");
 
 					if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
-						res->subtype.begin = "octet-stream";
-						res->subtype.len = 12;
+						RSPAMD_FTOK_ASSIGN (&res->subtype, "octet-stream");
 					}
 				}
 			}
 		}
 		else {
 			/* Common mistake done by retards */
-			srch.begin = "alternate";
-			srch.len = 9;
+			RSPAMD_FTOK_ASSIGN (&srch, "alternate");
 
 			if (rspamd_ftok_cmp (&res->subtype, &srch) == 0) {
 				res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
-				res->subtype.begin = "alternative";
-				res->subtype.len = 11;
+				RSPAMD_FTOK_ASSIGN (&res->subtype, "alternative");
 			}
 		}
 
-		srch.begin = "multipart";
-		srch.len = 9;
+		RSPAMD_FTOK_ASSIGN (&srch, "multipart");
 
 		if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
 			res->flags |= RSPAMD_CONTENT_TYPE_MULTIPART;
 		}
 		else {
-			srch.begin = "text";
-			srch.len = 4;
+			RSPAMD_FTOK_ASSIGN (&srch, "text");
 
 			if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
 				res->flags |= RSPAMD_CONTENT_TYPE_TEXT;
 			}
 			else {
-				srch.begin = "message";
-				srch.len = 7;
+				RSPAMD_FTOK_ASSIGN (&srch, "message");
 
 				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
 					res->flags |= RSPAMD_CONTENT_TYPE_MESSAGE;
