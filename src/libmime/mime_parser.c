@@ -437,10 +437,9 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	}
 
 	if (sel == NULL) {
-		/* TODO: assume part as octet-stream */
-		g_set_error (err, RSPAMD_MIME_QUARK, EINVAL, "no content type");
-		g_assert (0);
-		return FALSE;
+		sel = rspamd_mempool_alloc0 (task->task_pool, sizeof (*sel));
+		RSPAMD_FTOK_ASSIGN (&sel->type, "application");
+		RSPAMD_FTOK_ASSIGN (&sel->subtype, "octet-stream");
 	}
 
 	npart->ct = sel;
@@ -777,7 +776,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 		/*
 		 * Exim somehow uses mailbox format for messages being scanned:
-		 * From xxx@xxx.com Fri May 13 19:08:48 2016
+		 * From x@x.com Fri May 13 19:08:48 2016
 		 *
 		 * So we check if a task has non-http format then we check for such a line
 		 * at the beginning to avoid errors
@@ -886,11 +885,10 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	}
 
 	if (sel == NULL) {
-		g_set_error (err, RSPAMD_MIME_QUARK, EINVAL,
-				"Content type header cannot be parsed");
-
-		/* TODO: assume it raw */
-		return FALSE;
+		/* For messages we automatically assume plaintext */
+		sel = rspamd_mempool_alloc0 (task->task_pool, sizeof (*sel));
+		RSPAMD_FTOK_ASSIGN (&sel->type, "text");
+		RSPAMD_FTOK_ASSIGN (&sel->subtype, "plain");
 	}
 
 	npart->ct = sel;
