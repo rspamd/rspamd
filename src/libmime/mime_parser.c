@@ -693,7 +693,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 			}
 
 			b.boundary = p - st->start - 3;
-			b.start = bend - st->start - 1;
+			b.start = bend - st->start;
 
 			lc_copy = g_malloc (blen);
 			memcpy (lc_copy, p, blen);
