@@ -1142,3 +1142,119 @@ rspamd_regexp_set_class (rspamd_regexp_t *re, gpointer re_class)
 
 	return old_class;
 }
+
+rspamd_regexp_t *
+rspamd_regexp_from_glob (const gchar *gl, gsize sz, GError **err)
+{
+	GString *out;
+	rspamd_regexp_t *re;
+	const gchar *end;
+	gboolean escaping = FALSE;
+	gint nbraces = 0;
+
+	g_assert (gl != NULL);
+
+	if (sz == 0) {
+		sz = strlen (gl);
+	}
+
+	end = gl + sz;
+	out = g_string_sized_new (sz + 2);
+	g_string_append_c (out, '^');
+
+	while (gl < end) {
+		switch (*gl) {
+		case '*':
+			if (escaping) {
+				g_string_append (out, "\\*");
+			}
+			else {
+				g_string_append (out, ".*");
+			}
+
+			escaping = FALSE;
+			break;
+		case '?':
+			if (escaping) {
+				g_string_append (out, "\\?");
+			}
+			else {
+				g_string_append (out, ".");
+			}
+
+			escaping = FALSE;
+			break;
+		case '.':
+		case '(':
+		case ')':
+		case '+':
+		case '|':
+		case '^':
+		case '$':
+		case '@':
+		case '%':
+			g_string_append_c (out, '\\');
+			g_string_append_c (out, *gl);
+			escaping = FALSE;
+			break;
+		case '\\':
+			if (escaping) {
+				g_string_append (out, "\\\\");
+				escaping = FALSE;
+			}
+			else {
+				escaping = TRUE;
+			}
+			break;
+		case '{':
+			if (escaping) {
+				g_string_append (out, "\\{");
+			}
+			else {
+				g_string_append_c (out, '(');
+				nbraces++;
+			}
+
+			escaping = FALSE;
+			break;
+		case '}':
+			if (nbraces > 0 && !escaping) {
+				g_string_append_c (out, ')');
+				nbraces--;
+			}
+			else if (escaping) {
+				g_string_append (out, "\\}");
+			}
+			else {
+				g_string_append (out, "}");
+			}
+
+			escaping = FALSE;
+			break;
+		case ',':
+			if (nbraces > 0 && !escaping) {
+				g_string_append_c (out, '|');
+			}
+			else if (escaping) {
+				g_string_append (out, "\\,");
+			}
+			else {
+				g_string_append_c (out, ',');
+			}
+
+			break;
+		default:
+			escaping = FALSE;
+			g_string_append_c (out, *gl);
+			break;
+		}
+
+		gl ++;
+	}
+
+	g_string_append_c (out, '$');
+	re = rspamd_regexp_new (out->str, "i", err);
+	g_string_free (out, TRUE);
+
+	return re;
+}

@@ -257,4 +257,12 @@ void rspamd_regexp_library_init (void);
  */
 void rspamd_regexp_library_finalize (void);
 
+/**
+ * Create regexp from glob
+ * @param gl
+ * @param err
+ * @return
+ */
+rspamd_regexp_t *rspamd_regexp_from_glob (const gchar *gl, gsize sz, GError **err);
+
 #endif /* REGEXP_H_ */
