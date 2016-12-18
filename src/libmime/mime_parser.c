@@ -692,8 +692,8 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				bend ++;
 			}
 
-			b.boundary = p - text - 3;
-			b.start = bend - text - 1;
+			b.boundary = p - st->start - 3;
+			b.start = bend - st->start - 1;
 
 			lc_copy = g_malloc (blen);
 			memcpy (lc_copy, p, blen);
@@ -825,7 +825,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 					"Content-Type", FALSE);
 		}
 
-		pbegin = st->pos;
+		pbegin = st->start + body_pos;
 		plen = st->end - pbegin;
 		npart->raw_headers = g_hash_table_ref (task->raw_headers);
 	}
