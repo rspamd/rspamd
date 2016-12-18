@@ -494,7 +494,7 @@ rspamd_mime_parse_multipart_cb (struct rspamd_task *task,
 			cb->st->pos = cb->part_start;
 		}
 		else {
-			g_assert_not_reached ();
+			/* We have an empty boundary, do nothing */
 		}
 	}
 
