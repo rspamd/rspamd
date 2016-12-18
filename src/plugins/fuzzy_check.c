@@ -65,8 +65,8 @@ struct fuzzy_mapping {
 };
 
 struct fuzzy_mime_type {
-	GPatternSpec *type;
-	GPatternSpec *subtype;
+	rspamd_regexp_t *type_re;
+	rspamd_regexp_t *subtype_re;
 };
 
 struct fuzzy_rule {
@@ -76,8 +76,8 @@ struct fuzzy_rule {
 	const gchar *name;
 	enum rspamd_shingle_alg alg;
 	GHashTable *mappings;
-	GList *mime_types;
-	GList *fuzzy_headers;
+	GPtrArray *mime_types;
+	GPtrArray *fuzzy_headers;
 	GString *hash_key;
 	GString *shingles_key;
 	struct rspamd_cryptobox_keypair *local_key;
@@ -91,7 +91,7 @@ struct fuzzy_rule {
 struct fuzzy_ctx {
 	struct module_ctx ctx;
 	rspamd_mempool_t *fuzzy_pool;
-	GList *fuzzy_rules;
+	GPtrArray *fuzzy_rules;
 	struct rspamd_config *cfg;
 	const gchar *default_symbol;
 	guint32 min_hash_len;
@@ -230,33 +230,36 @@ parse_flags (struct fuzzy_rule *rule,
 	}
 }
 
-static GList *
+
+static GPtrArray *
 parse_mime_types (const gchar *str)
 {
 	gchar **strvec, *p;
 	gint num, i;
 	struct fuzzy_mime_type *type;
-	GList *res = NULL;
+	GPtrArray *res = g_ptr_array_new ();
 
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
+	res = g_ptr_array_sized_new (num);
+
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
+
 		if ((p = strchr (strvec[i], '/')) != NULL) {
-			*p = 0;
 			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
 					sizeof (struct fuzzy_mime_type));
-			type->type = g_pattern_spec_new (strvec[i]);
-			type->subtype = g_pattern_spec_new (p + 1);
-			*p = '/';
-			res = g_list_prepend (res, type);
+			type->type_re = rspamd_regexp_from_glob (strvec[i], p - strvec[i],
+					NULL);
+			type->subtype_re = rspamd_regexp_from_glob (p + 1, 0, NULL);
+			g_ptr_array_add (res, type);
 		}
 		else {
 			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
 							sizeof (struct fuzzy_mime_type));
-			type->type = g_pattern_spec_new (strvec[i]);
-			type->subtype = NULL;
-			res = g_list_prepend (res, type);
+			type->type_re = rspamd_regexp_from_glob (strvec[i], 0, NULL);
+			type->subtype_re = NULL;
+			g_ptr_array_add (res, type);
 		}
 	}
 
@@ -265,19 +268,21 @@ parse_mime_types (const gchar *str)
 	return res;
 }
 
-static GList *
+static GPtrArray *
 parse_fuzzy_headers (const gchar *str)
 {
 	gchar **strvec;
 	gint num, i;
-	GList *res = NULL;
+	GPtrArray *res;
 
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
+	res = g_ptr_array_sized_new (num);
+
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
-		res = g_list_prepend (res,
-				rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]));
+		g_ptr_array_add (res, rspamd_mempool_strdup (
+				fuzzy_module_ctx->fuzzy_pool, strvec[i]));
 	}
 
 	g_strfreev (strvec);
@@ -289,17 +294,16 @@ static gboolean
 fuzzy_check_content_type (struct fuzzy_rule *rule, struct rspamd_content_type *ct)
 {
 	struct fuzzy_mime_type *ft;
-	GList *cur;
+	guint i;
 
-	cur = rule->mime_types;
-	while (cur) {
-		ft = cur->data;
-		if (ft->type) {
+	PTR_ARRAY_FOREACH (rule->mime_types, i, ft) {
+		if (ft->type_re) {
 
-			if (g_pattern_match (ft->type, ct->type.len, ct->type.begin, NULL)) {
-				if (ft->subtype) {
-					if (g_pattern_match (ft->subtype, ct->subtype.len,
-							ct->subtype.begin, NULL)) {
+			if (rspamd_regexp_match (ft->type_re, ct->type.begin, ct->type.len,
+					TRUE)) {
+				if (ft->subtype_re) {
+					if (rspamd_regexp_match (ft->subtype_re, ct->subtype.begin,
+							ct->subtype.len, TRUE)) {
 						return TRUE;
 					}
 				}
@@ -308,8 +312,6 @@ fuzzy_check_content_type (struct fuzzy_rule *rule, struct rspamd_content_type *c
 				}
 			}
 		}
-
-		cur = g_list_next (cur);
 	}
 
 	return FALSE;
@@ -385,32 +387,65 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		it = NULL;
 		while ((cur = ucl_object_iterate (value, &it, value->type == UCL_ARRAY))
 				!= NULL) {
-			rule->mime_types = g_list_concat (rule->mime_types,
-					parse_mime_types (ucl_obj_tostring (cur)));
+			GPtrArray *tmp;
+			guint i;
+			gpointer ptr;
+
+			tmp = parse_mime_types (ucl_obj_tostring (cur));
+
+			if (tmp) {
+				if (rule->mime_types) {
+					PTR_ARRAY_FOREACH (tmp, i, ptr) {
+						g_ptr_array_add (rule->mime_types, ptr);
+					}
+
+					g_ptr_array_free (tmp, TRUE);
+				}
+				else {
+					rule->mime_types = tmp;
+				}
+			}
 		}
 	}
 
 	if (rule->mime_types != NULL) {
 		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
-			(rspamd_mempool_destruct_t)g_list_free, rule->mime_types);
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard,
+			rule->mime_types);
 	}
 
 	if ((value = ucl_object_lookup (obj, "headers")) != NULL) {
 		it = NULL;
 		while ((cur = ucl_object_iterate (value, &it, value->type == UCL_ARRAY))
 				!= NULL) {
-			rule->fuzzy_headers = g_list_concat (rule->fuzzy_headers,
-					parse_fuzzy_headers (ucl_obj_tostring (cur)));
+			GPtrArray *tmp;
+			guint i;
+			gpointer ptr;
+
+			tmp = parse_fuzzy_headers (ucl_obj_tostring (cur));
+
+			if (tmp) {
+				if (rule->fuzzy_headers) {
+					PTR_ARRAY_FOREACH (tmp, i, ptr) {
+						g_ptr_array_add (rule->fuzzy_headers, ptr);
+					}
+
+					g_ptr_array_free (tmp, TRUE);
+				}
+				else {
+					rule->fuzzy_headers = tmp;
+				}
+			}
 		}
 	}
 	else {
-		rule->fuzzy_headers = g_list_concat (rule->fuzzy_headers,
-				parse_fuzzy_headers (default_headers));
+		rule->fuzzy_headers = parse_fuzzy_headers (default_headers);
 	}
 
 	if (rule->fuzzy_headers != NULL) {
 		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
-				(rspamd_mempool_destruct_t) g_list_free, rule->fuzzy_headers);
+				(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
+				rule->fuzzy_headers);
 	}
 
 
@@ -573,9 +608,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		return -1;
 	}
 	else {
-		fuzzy_module_ctx->fuzzy_rules = g_list_prepend (
-			fuzzy_module_ctx->fuzzy_rules,
-			rule);
+		g_ptr_array_add (fuzzy_module_ctx->fuzzy_rules, rule);
+
 		if (rule->symbol != fuzzy_module_ctx->default_symbol) {
 			rspamd_symbols_cache_add_symbol (cfg->cache, rule->symbol,
 					0,
@@ -609,6 +643,7 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->cfg = cfg;
 	/* TODO: this should match rules count actually */
 	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
+	fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
@@ -2354,7 +2389,7 @@ static void
 fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	struct fuzzy_rule *rule;
-	GList *cur;
+	guint i;
 	GPtrArray *commands;
 
 	if (!fuzzy_module_ctx->enabled) {
@@ -2372,14 +2407,12 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 		}
 	}
 
-	cur = fuzzy_module_ctx->fuzzy_rules;
-	while (cur) {
-		rule = cur->data;
+	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0);
+
 		if (commands != NULL) {
 			register_fuzzy_client_call (task, rule, commands);
 		}
-		cur = g_list_next (cur);
 	}
 }
 
@@ -2387,21 +2420,18 @@ void
 fuzzy_stat_command (struct rspamd_task *task)
 {
 	struct fuzzy_rule *rule;
-	GList *cur;
+	guint i;
 	GPtrArray *commands;
 
 	if (!fuzzy_module_ctx->enabled) {
 		return;
 	}
 
-	cur = fuzzy_module_ctx->fuzzy_rules;
-	while (cur) {
-		rule = cur->data;
+	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 		commands = fuzzy_generate_commands (task, rule, FUZZY_STAT, 0, 0);
 		if (commands != NULL) {
 			register_fuzzy_client_call (task, rule, commands);
 		}
-		cur = g_list_next (cur);
 	}
 }
 
@@ -2475,7 +2505,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_task *task, **ptask;
 	gboolean processed = FALSE, res = TRUE, skip;
-	GList *cur;
+	guint i;
 	GError **err;
 	GPtrArray *commands;
 	GString *tb;
@@ -2507,13 +2537,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		}
 	}
 
-	cur = fuzzy_module_ctx->fuzzy_rules;
-
-	while (cur && res) {
-		rule = cur->data;
-
+	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 		if (rule->read_only) {
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -2522,7 +2547,6 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				GINT_TO_POINTER (flag)) == NULL) {
 			msg_info_task ("skip rule %s as it has no flag %d defined"
 					" false", rule->name, flag);
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -2564,7 +2588,6 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			if (skip) {
 				msg_info_task ("skip rule %s as its condition callback returned"
 						" false", rule->name);
-				cur = g_list_next (cur);
 				continue;
 			}
 		}
@@ -2625,8 +2648,6 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		if (res) {
 			processed = TRUE;
 		}
-
-		cur = g_list_next (cur);
 	}
 
 	if (res == -1) {
@@ -2704,14 +2725,15 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 		/* Search flag by symbol */
 		if (arg) {
 			struct fuzzy_rule *rule;
-			GList *cur;
+			guint i;
 			GHashTableIter it;
 			gpointer k, v;
 			struct fuzzy_mapping *map;
 
-			for (cur = fuzzy_module_ctx->fuzzy_rules; cur != NULL && flag == 0;
-					cur = g_list_next (cur)) {
-				rule = cur->data;
+			PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+				if (flag != 0) {
+					break;
+				}
 
 				g_hash_table_iter_init (&it, rule->mappings);
 
@@ -2808,7 +2830,7 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 {
 	struct fuzzy_rule *rule;
 	gboolean processed = FALSE, res = TRUE;
-	GList *cur;
+	guint i;
 	GError **err;
 	GPtrArray *commands;
 	gint *saved, rules = 0;
@@ -2816,13 +2838,11 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 	saved = rspamd_mempool_alloc0 (task->task_pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
 
-	cur = fuzzy_module_ctx->fuzzy_rules;
-
-	while (cur && res) {
-		rule = cur->data;
-
+	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+		if (!res) {
+			break;
+		}
 		if (rule->read_only) {
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -2831,7 +2851,6 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 				GINT_TO_POINTER (flag)) == NULL) {
 			msg_info_task ("skip rule %s as it has no flag %d defined"
 					" false", rule->name, flag);
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -2847,8 +2866,6 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 		if (res) {
 			processed = TRUE;
 		}
-
-		cur = g_list_next (cur);
 	}
 
 	if (res == -1) {
@@ -2887,16 +2904,17 @@ fuzzy_lua_learn_handler (lua_State *L)
 		}
 		else if (lua_type (L, 2) == LUA_TSTRING) {
 			struct fuzzy_rule *rule;
-			GList *cur;
+			guint i;
 			GHashTableIter it;
 			gpointer k, v;
 			struct fuzzy_mapping *map;
 
 			symbol = lua_tostring (L, 2);
 
-			for (cur = fuzzy_module_ctx->fuzzy_rules; cur != NULL && flag == 0;
-					cur = g_list_next (cur)) {
-				rule = cur->data;
+			PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+				if (flag != 0) {
+					break;
+				}
 
 				g_hash_table_iter_init (&it, rule->mappings);
 
@@ -2942,16 +2960,18 @@ fuzzy_lua_unlearn_handler (lua_State *L)
 		}
 		else if (lua_type (L, 2) == LUA_TSTRING) {
 			struct fuzzy_rule *rule;
-			GList *cur;
+			guint i;
 			GHashTableIter it;
 			gpointer k, v;
 			struct fuzzy_mapping *map;
 
 			symbol = lua_tostring (L, 2);
 
-			for (cur = fuzzy_module_ctx->fuzzy_rules; cur != NULL && flag == 0;
-					cur = g_list_next (cur)) {
-				rule = cur->data;
+			PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
+
+				if (flag != 0) {
+					break;
+				}
 
 				g_hash_table_iter_init (&it, rule->mappings);
 
