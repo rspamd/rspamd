@@ -230,12 +230,16 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	/* Pcre 1 needs study */
 	if (r->re) {
 		r->extra = pcre_study (r->re, study_flags, &err_str);
+
+		if (r->extra == NULL) {
+			msg_debug ("cannot optimize regexp pattern: '%s': %s",
+					r->pattern, err_str);
+			try_jit = FALSE;
+			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+		}
 	}
 	else {
-		msg_warn ("cannot optimize regexp pattern: '%s': %s",
-				r->pattern, err_str);
-		try_jit = FALSE;
-		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+		g_assert_not_reached ();
 	}
 
 	if (r->raw_re && r->raw_re != r->re) {
@@ -247,7 +251,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 
 	if (r->raw_extra == NULL) {
 
-		msg_warn ("cannot optimize raw regexp pattern: '%s': %s",
+		msg_debug ("cannot optimize raw regexp pattern: '%s': %s",
 				r->pattern, err_str);
 		try_raw_jit = FALSE;
 	}
@@ -274,7 +278,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 #endif
 	}
 	else {
-		msg_warn ("cannot optimize regexp pattern: '%s': %s",
+		msg_debug ("cannot optimize regexp pattern: '%s': %s",
 				r->pattern, err_str);
 		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
