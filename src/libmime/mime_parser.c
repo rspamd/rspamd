@@ -261,12 +261,11 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 					task->task_pool);
 
 			if (cd) {
+				msg_debug_mime ("processed content disposition: %s",
+						cd->lc_data);
 				break;
 			}
 		}
-
-		msg_debug_mime ("processed content disposition: %s",
-				cd->lc_data);
 	}
 
 	part->cd = cd;
