@@ -132,7 +132,7 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 }
 
 gchar *
-rspamd_text_to_utf8 (rspamd_mempool_t *pool,
+rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 		gchar *input, gsize len, const gchar *in_enc,
 		gsize *olen, GError **err)
 {
@@ -198,6 +198,69 @@ rspamd_text_to_utf8 (rspamd_mempool_t *pool,
 			in_enc, len, dst->len);
 
 	return dst->str;
+}
+
+gboolean
+rspamd_mime_to_utf8_byte_array (GByteArray *in,
+		GByteArray *out,
+		const gchar *enc)
+{
+	guchar *s, *d;
+	gsize outlen, pos;
+	iconv_t ic;
+	gsize remain, ret, inremain = in->len;
+
+	ic = iconv_open (UTF8_CHARSET, enc);
+
+	if (ic == (iconv_t)-1) {
+		return FALSE;
+	}
+
+	/* Preallocate for half of characters to be converted */
+	outlen = inremain + inremain / 2 + 1;
+	g_byte_array_set_size (out, outlen);
+	s = in->data;
+	d = out->data;
+	remain = outlen;
+
+	while (inremain > 0 && remain > 0) {
+		ret = iconv (ic, (gchar **)&s, &inremain, (gchar **)&d, &remain);
+		out->len = d - out->data;
+
+		if (ret == (gsize)-1) {
+			switch (errno) {
+			case E2BIG:
+				/* Enlarge string */
+				if (inremain > 0) {
+					pos = outlen;
+					outlen += inremain * 2;
+					/* May cause reallocate, so store previous len in pos */
+					g_byte_array_set_size (out, outlen);
+					d = out->data + pos;
+					remain = outlen - pos;
+				}
+				break;
+			case EILSEQ:
+			case EINVAL:
+				/* Ignore bad characters */
+				if (remain > 0 && inremain > 0) {
+					*d++ = '?';
+					s++;
+					inremain --;
+					remain --;
+				}
+				break;
+			}
+		}
+		else if (ret == 0) {
+			break;
+		}
+	}
+
+	out->len = d - out->data;
+	iconv_close (ic);
+
+	return TRUE;
 }
 
 gboolean
@@ -287,7 +350,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		return part_content;
 	}
 	else {
-		res_str = rspamd_text_to_utf8 (task->task_pool, part_content->data,
+		res_str = rspamd_mime_text_to_utf8 (task->task_pool, part_content->data,
 				part_content->len,
 				charset,
 				&write_bytes,

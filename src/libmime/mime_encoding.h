@@ -50,6 +50,16 @@ gchar * rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 		gsize *olen, GError **err);
 
 /**
+ * Converts data from `in` to `out`, returns `FALSE` if `enc` is not a valid iconv charset
+ * @param in
+ * @param out
+ * @param enc
+ * @return
+ */
+gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
+		GByteArray *out, const gchar *enc);
+
+/**
  * Maybe convert part to utf-8
  * @param task
  * @param text_part
@@ -58,5 +68,14 @@ gchar * rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 GByteArray * rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part);
 
+/**
+ * Checks utf8 charset and normalize/validate utf8 string
+ * @param charset
+ * @param in
+ * @param len
+ * @return
+ */
+gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
+		gchar *in, gsize len);
 
 #endif /* SRC_LIBMIME_MIME_ENCODING_H_ */
