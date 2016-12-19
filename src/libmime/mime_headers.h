@@ -17,8 +17,14 @@
 #define SRC_LIBMIME_MIME_HEADERS_H_
 
 #include "config.h"
+#include "libutil/mem_pool.h"
 
 struct rspamd_task;
+
+enum rspamd_rfc2047_encoding {
+	RSPAMD_RFC2047_QP = 0,
+	RSPAMD_RFC2047_BASE64,
+};
 
 struct rspamd_mime_header {
 	gchar *name;
@@ -31,7 +37,25 @@ struct rspamd_mime_header {
 	gchar *decoded;
 };
 
+/**
+ * Process headers and store them in `target`
+ * @param task
+ * @param target
+ * @param in
+ * @param len
+ * @param check_newlines
+ */
 void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		const gchar *in, gsize len, gboolean check_newlines);
+
+/**
+ * Perform rfc2047 decoding of a header
+ * @param pool
+ * @param in
+ * @param inlen
+ * @return
+ */
+gchar *rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
+		gsize inlen);
 
 #endif /* SRC_LIBMIME_MIME_HEADERS_H_ */

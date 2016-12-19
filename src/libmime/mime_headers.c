@@ -15,6 +15,8 @@
  */
 
 #include "mime_headers.h"
+#include "smtp_parsers.h"
+#include "mime_encoding.h"
 #include "task.h"
 
 static void
@@ -309,4 +311,195 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 
 		task->nlines_type = sel;
 	}
+}
+
+static void
+rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
+		GByteArray *token, GByteArray *decoded_token,
+		rspamd_ftok_t *old_charset, rspamd_ftok_t *new_charset)
+{
+	if (new_charset->len == 0) {
+		g_assert_not_reached ();
+	}
+
+	if (old_charset->len > 0) {
+		if (rspamd_ftok_casecmp (new_charset, old_charset) == 0) {
+			/* We can concatenate buffers, just return */
+			return;
+		}
+	}
+
+	/* We need to flush and decode old token to out string */
+	if (rspamd_mime_to_utf8_byte_array (token, decoded_token,
+			rspamd_mime_detect_charset (pool, new_charset))) {
+		g_string_append_len (out, decoded_token->data, decoded_token->len);
+	}
+
+	/* We also reset buffer */
+	g_byte_array_set_size (token, 0);
+	/* Propagate charset */
+	memcpy (old_charset, new_charset, sizeof (*old_charset));
+}
+
+gchar *
+rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
+		gsize inlen)
+{
+	GString *out;
+	const gchar *c, *p, *end, *tok_start = NULL;
+	gsize tok_len = 0, pos;
+	GByteArray *token = NULL, *decoded;
+	rspamd_ftok_t cur_charset = {0, NULL}, old_charset = {0, NULL};
+	gint encoding;
+	gssize r;
+	enum {
+		parse_normal = 0,
+		got_eqsign,
+		got_encoded_start,
+		got_more_qmark,
+		skip_spaces,
+	} state = parse_normal;
+
+	g_assert (in != NULL);
+
+	c = in;
+	p = in;
+	end = in + inlen;
+	out = g_string_sized_new (inlen);
+	token = g_byte_array_sized_new (80);
+	decoded = g_byte_array_sized_new (122);
+
+	while (p < end) {
+		switch (state) {
+		case parse_normal:
+			if (*p == '=') {
+				g_string_append_len (out, c, p - c);
+				c = p;
+				state = got_eqsign;
+			}
+			p ++;
+			break;
+		case got_eqsign:
+			if (*p == '?') {
+				state = got_encoded_start;
+			}
+			else {
+				g_string_append_len (out, c, 2);
+				c = p + 1;
+			}
+			p ++;
+			break;
+		case got_encoded_start:
+			if (*p == '?') {
+				state = got_more_qmark;
+			}
+			p ++;
+			break;
+		case got_more_qmark:
+			if (*p == '=') {
+				/* Finished encoded boundary */
+				if (rspamd_rfc2047_parser (c, p - c + 1, &encoding,
+						&cur_charset.begin, &cur_charset.len,
+						&tok_start, &tok_len)) {
+					/* We have a token, so we can decode it from `encoding` */
+					if (token->len > 0) {
+						rspamd_mime_header_maybe_save_token (pool, out,
+								token, decoded,
+								&old_charset, &cur_charset);
+					}
+					pos = token->len;
+					g_byte_array_set_size (token, pos + tok_len);
+
+					if (encoding == RSPAMD_RFC2047_QP) {
+						r = rspamd_decode_qp2047_buf (tok_start, tok_len,
+								token->data + pos, tok_len);
+
+						if (r != -1) {
+							token->len = pos + r;
+						}
+						else {
+							/* Cannot decode qp */
+							token->len -= tok_len;
+						}
+					}
+					else {
+						if (rspamd_cryptobox_base64_decode (tok_start, tok_len,
+								token->data + pos, &tok_len)) {
+							token->len = pos + tok_len;
+						}
+						else {
+							/* Cannot decode */
+							token->len -= tok_len;
+						}
+					}
+					c = p + 1;
+					state = skip_spaces;
+				}
+				else {
+					/* Not encoded-word */
+					old_charset.len = 0;
+
+					if (token->len > 0) {
+						rspamd_mime_header_maybe_save_token (pool, out,
+								token, decoded,
+								&old_charset, &cur_charset);
+					}
+
+					g_string_append_len (out, c, p - c);
+					c = p;
+					state = parse_normal;
+				}
+
+			}
+			else {
+				state = got_encoded_start;
+			}
+			p ++;
+			break;
+		case skip_spaces:
+			if (g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else if (*p == '=' && p < end - 1 && p[1] == '?') {
+				/* Next boundary, can glue */
+				c = p;
+				p += 2;
+				state = got_encoded_start;
+			}
+			else {
+				/* Need to save spaces and decoded token */
+				if (token->len > 0) {
+					old_charset.len = 0;
+					rspamd_mime_header_maybe_save_token (pool, out,
+							token, decoded,
+							&old_charset, &cur_charset);
+				}
+
+				g_string_append_len (out, c, p - c);
+				c = p;
+				state = parse_normal;
+			}
+			break;
+		}
+	}
+
+	/* Leftover */
+	switch (state) {
+	case skip_spaces:
+		if (token->len > 0 && cur_charset.len > 0) {
+			old_charset.len = 0;
+			rspamd_mime_header_maybe_save_token (pool, out,
+					token, decoded,
+					&old_charset, &cur_charset);
+		}
+		break;
+	default:
+		/* Just copy leftover */
+		if (p > c) {
+			g_string_append_len (out, c, p - c);
+		}
+		break;
+	}
+
+	return g_string_free (out, FALSE);
 }
