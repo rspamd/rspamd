@@ -341,7 +341,7 @@ rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
 	memcpy (old_charset, new_charset, sizeof (*old_charset));
 }
 
-GString *
+gchar *
 rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen)
 {
@@ -365,7 +365,9 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 	c = in;
 	p = in;
 	end = in + inlen;
-	out = g_string_sized_new (inlen);
+	out = rspamd_mempool_alloc0 (pool, sizeof (*out));
+	g_string_set_size (out, inlen);
+	out->len = 0;
 	token = g_byte_array_sized_new (80);
 	decoded = g_byte_array_sized_new (122);
 
@@ -501,5 +503,9 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		break;
 	}
 
-	return out;
+	g_byte_array_free (token, TRUE);
+	g_byte_array_free (decoded, TRUE);
+	rspamd_mempool_add_destructor (pool, g_free, out->str);
+
+	return out->str;
 }
