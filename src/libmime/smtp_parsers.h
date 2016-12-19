@@ -36,4 +36,9 @@ gboolean rspamd_content_type_parser (const char *data, size_t len,
 gboolean rspamd_content_disposition_parser (const char *data, size_t len,
 		struct rspamd_content_disposition *cd, rspamd_mempool_t *pool);
 
+gboolean
+rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
+		const gchar **charset, gsize *charset_len,
+		const gchar **encoded, gsize *encoded_len);
+
 #endif /* SRC_LIBMIME_SMTP_PARSERS_H_ */
