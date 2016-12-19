@@ -331,7 +331,7 @@ rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
 
 	/* We need to flush and decode old token to out string */
 	if (rspamd_mime_to_utf8_byte_array (token, decoded_token,
-			rspamd_mime_detect_charset (pool, new_charset))) {
+			rspamd_mime_detect_charset (new_charset, pool))) {
 		g_string_append_len (out, decoded_token->data, decoded_token->len);
 	}
 
@@ -341,7 +341,7 @@ rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
 	memcpy (old_charset, new_charset, sizeof (*old_charset));
 }
 
-gchar *
+GString *
 rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen)
 {
@@ -501,5 +501,5 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		break;
 	}
 
-	return g_string_free (out, FALSE);
+	return out;
 }

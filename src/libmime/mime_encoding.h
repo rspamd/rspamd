@@ -29,8 +29,8 @@ struct rspamd_mime_text_part;
  * @param in
  * @return
  */
-const gchar * rspamd_mime_detect_charset (rspamd_mempool_t *pool,
-		const rspamd_ftok_t *in);
+const gchar * rspamd_mime_detect_charset (const rspamd_ftok_t *in,
+		rspamd_mempool_t *pool);
 
 /**
  * Convert text chunk to utf-8. Input encoding is substituted using

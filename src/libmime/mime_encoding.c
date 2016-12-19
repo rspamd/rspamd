@@ -18,6 +18,7 @@
 #include "libutil/mem_pool.h"
 #include "libutil/regexp.h"
 #include "libserver/task.h"
+#include "mime_encoding.h"
 #include "message.h"
 #include <iconv.h>
 
@@ -209,6 +210,16 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	gsize outlen, pos;
 	iconv_t ic;
 	gsize remain, ret, inremain = in->len;
+	rspamd_ftok_t charset_tok;
+
+	RSPAMD_FTOK_FROM_STR (&charset_tok, enc);
+
+	if (rspamd_mime_charset_utf_check (&charset_tok, (gchar *)in->data, in->len)) {
+		g_byte_array_set_size (out, in->len);
+		memcpy (out->data, in->data, out->len);
+
+		return TRUE;
+	}
 
 	ic = iconv_open (UTF8_CHARSET, enc);
 
@@ -264,7 +275,8 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 }
 
 gboolean
-rspamd_mime_charset_utf_check (rspamd_ftok_t *charset, gchar *in, gsize len)
+rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
+		gchar *in, gsize len)
 {
 	const gchar *end, *p;
 	gsize remain = len;

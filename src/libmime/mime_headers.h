@@ -55,7 +55,7 @@ void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
  * @param inlen
  * @return
  */
-gchar *rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
+GString * rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen);
 
 #endif /* SRC_LIBMIME_MIME_HEADERS_H_ */
