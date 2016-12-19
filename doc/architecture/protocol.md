@@ -26,9 +26,7 @@ You can also use chunked encoding that allows streamlined data transfer which is
 
 ### HTTP request
 
-Normally, you should just use '/check' here. However, if you want to communicate with the controller then you might want to use controllers commands.
-
-(TODO: write this part)
+Normally, you should just use '/check' here. However, if you want to communicate with the controller then you might want to use [controller commands](#controller-http-endpoints).
 
 ### HTTP headers
 
@@ -48,9 +46,7 @@ To avoid unnecessary work, Rspamd allows an MTA to pass pre-processed data about
 | **User:**       | Defines SMTP user. |
 | **Message-Length:** | Defines the length of message excluding the control block. |
 
-Controller also defines certain headers:
-
-(TODO: write this part)
+Controller also defines certain headers, see [here](#controller-http-endpoints) for detail.
 
 Standard HTTP headers, such as `Content-Length`, are also supported.
 
