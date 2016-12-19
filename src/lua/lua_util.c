@@ -688,10 +688,11 @@ lua_util_decode_base64 (lua_State *L)
 		if (t != NULL) {
 			s = t->start;
 			inlen = t->len;
-			zero_copy = TRUE;
+
 			if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
 				t->flags = 0;
 				grab_own = TRUE;
+				zero_copy = TRUE;
 			}
 		}
 	}
