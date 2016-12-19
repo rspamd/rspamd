@@ -27,8 +27,8 @@ context("Task processing", function()
   }
   
   test("Process a simple task", function()
-    local cfg = rspamd_util.config_from_ucl(config)
-    assert_not_nil(cfg)
+    --local cfg = rspamd_util.config_from_ucl(config)
+    --assert_not_nil(cfg)
     
     local msg = [[
 From: <>
