@@ -1908,7 +1908,7 @@ decode:
 			if (end - o >= remain) {
 				processed = rspamd_memcspn (p, "=_", remain);
 				memcpy (o, p, processed);
-				o += remain;
+				o += processed;
 
 				if (processed == remain) {
 					break;
@@ -1918,7 +1918,7 @@ decode:
 					remain -= processed;
 					p += processed;
 
-					if (*p == '=') {
+					if (G_LIKELY (*p == '=')) {
 						p ++;
 						/* Skip comparison, as we know that we have found match */
 						goto decode;
@@ -1926,6 +1926,7 @@ decode:
 					else {
 						*o++ = ' ';
 						p ++;
+						remain --;
 					}
 				}
 			}
