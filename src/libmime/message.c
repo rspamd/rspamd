@@ -589,7 +589,6 @@ rspamd_message_parse (struct rspamd_task *task)
 	struct received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
-	goffset hdr_pos, body_pos;
 	gint i;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
@@ -675,8 +674,24 @@ rspamd_message_parse (struct rspamd_task *task)
 	hdrs = rspamd_message_get_header_array (task, "Message-ID", FALSE);
 
 	if (hdrs) {
+		gchar *p, *end;
+
 		rh = g_ptr_array_index (hdrs, 0);
-		task->message_id = rh->decoded;
+
+		p = rh->decoded;
+		end = p + strlen (p);
+
+		if (*p == '<') {
+			p ++;
+
+			if (end > p && *(end - 1) == '>') {
+				*(end - 1) = '\0';
+				p = rspamd_mempool_strdup (task->task_pool, p);
+				*(end - 1) = '>';
+			}
+		}
+
+		task->message_id = p;
 	}
 
 	if (task->message_id == NULL) {
