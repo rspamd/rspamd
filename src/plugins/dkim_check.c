@@ -88,6 +88,8 @@ static struct dkim_ctx *dkim_module_ctx = NULL;
 static void dkim_symbol_callback (struct rspamd_task *task, void *unused);
 static void dkim_sign_callback (struct rspamd_task *task, void *unused);
 
+static gint lua_dkim_sign_handler (lua_State *L);
+
 /* Initialization */
 gint dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
 gint dkim_module_config (struct rspamd_config *cfg);
@@ -270,6 +272,22 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+
+        /* Register global methods */
+	lua_getglobal (cfg->lua_state, "rspamd_plugins");
+
+	if (lua_type (cfg->lua_state, -1) == LUA_TTABLE) {
+		lua_pushstring (cfg->lua_state, "dkim");
+		lua_createtable (cfg->lua_state, 0, 1);
+		/* Set methods */
+		lua_pushstring (cfg->lua_state, "sign");
+		lua_pushcfunction (cfg->lua_state, lua_dkim_sign_handler);
+		lua_settable (cfg->lua_state, -3);
+                /* Finish dkim key */
+		lua_settable (cfg->lua_state, -3);
+	}
+
+	lua_pop (cfg->lua_state, 1); /* Remove global function */
 
 	return 0;
 }
@@ -475,8 +493,8 @@ dkim_module_config (struct rspamd_config *cfg)
 
 		if (lua_script) {
 			if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
-				msg_err_config ("cannot execute lua script for fuzzy "
-						"learn condition: %s", lua_tostring (cfg->lua_state, -1));
+				msg_err_config ("cannot execute lua script for dkim "
+						"sign condition: %s", lua_tostring (cfg->lua_state, -1));
 			}
 			else {
 				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
@@ -520,6 +538,87 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	return res;
+}
+
+gint
+lua_dkim_sign_handler (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	luaL_argcheck (L, lua_type (L, 2) == LUA_TTABLE, 2, "'table' expected");
+
+	GError *err = NULL;
+	GString *hdr;
+	const gchar *selector = NULL, *domain = NULL, *key = NULL;
+	rspamd_dkim_sign_context_t *ctx;
+	rspamd_dkim_sign_key_t *dkim_key;
+	/*
+	 * Get the following elements:
+	 * - selector
+	 * - domain
+	 * - key
+	 */
+	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+			"*key=S;*domain=S;*selector=S",
+			&key, &domain, &selector)) {
+		msg_err_task ("invalid return value from sign condition: %e",
+				err);
+		g_error_free (err);
+
+		lua_pushboolean (L, FALSE);
+		return 1;
+	}
+
+	if (dkim_module_ctx->dkim_sign_hash == NULL) {
+		dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
+				128,
+				g_free, /* Keys are just C-strings */
+				(GDestroyNotify)rspamd_dkim_sign_key_unref);
+	}
+
+	dkim_key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
+			key, time (NULL));
+
+	if (dkim_key == NULL) {
+		dkim_key = rspamd_dkim_sign_key_load (key, &err);
+
+		if (dkim_key == NULL) {
+			msg_err_task ("cannot load dkim key %s: %e",
+					key, err);
+			g_error_free (err);
+
+			lua_pushboolean (L, FALSE);
+			return 1;
+		}
+
+		rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+				g_strdup (key), dkim_key,
+				time (NULL), 0);
+	}
+
+	ctx = rspamd_create_dkim_sign_context (task, dkim_key,
+			DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
+			dkim_module_ctx->sign_headers, &err);
+
+	if (ctx == NULL) {
+		msg_err_task ("cannot create sign context: %e",
+				err);
+		g_error_free (err);
+
+		lua_pushboolean (L, FALSE);
+		return 1;
+	}
+
+	hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, ctx);
+
+	if (hdr) {
+		rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+				hdr, rspamd_gstring_free_hard);
+		lua_pushboolean (L, TRUE);
+		return 1;
+	}
+
+	lua_pushboolean (L, FALSE);
+	return 1;
 }
 
 gint
