@@ -200,6 +200,49 @@ rspamd_text_to_utf8 (rspamd_mempool_t *pool,
 	return dst->str;
 }
 
+gboolean
+rspamd_mime_charset_utf_check (rspamd_ftok_t *charset, gchar *in, gsize len)
+{
+	const gchar *end, *p;
+	gsize remain = len;
+
+	if (utf_compatible_re == NULL) {
+		utf_compatible_re = rspamd_regexp_new (
+				"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
+				"(?:latin.*)|(?:CSASCII)$",
+				"i", NULL);
+	}
+
+	if (rspamd_regexp_match (utf_compatible_re, charset->begin, charset->len,
+			TRUE)) {
+		/* Now we validate input and replace bad characters with '?' symbol */
+		p = in;
+
+		while (remain > 0 && !g_utf8_validate (p, remain, &end)) {
+			gchar *valid;
+
+			valid = g_utf8_find_next_char (end, in + len);
+
+			if (!valid) {
+				valid = in + len;
+			}
+
+			if (valid > end) {
+				memset ((gchar *)end, '?', valid - end);
+				p = valid;
+				remain = (in + len) - p;
+			}
+			else {
+				break;
+			}
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 GByteArray *
 rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part)
@@ -209,6 +252,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	const gchar *charset;
 	gchar *res_str;
 	GByteArray *result_array, *part_content;
+	rspamd_ftok_t charset_tok;
 	struct rspamd_mime_part *part = text_part->mime_part;
 
 	part_content = rspamd_mempool_alloc0 (task->task_pool, sizeof (GByteArray));
@@ -218,13 +262,6 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	if (task->cfg && task->cfg->raw_mode) {
 		SET_PART_RAW (text_part);
 		return part_content;
-	}
-
-	if (utf_compatible_re == NULL) {
-		utf_compatible_re = rspamd_regexp_new (
-			"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
-			"(?:latin.*)|(?:CSASCII)$",
-			"i", NULL);
 	}
 
 	if (part->ct->charset.len == 0) {
@@ -241,17 +278,13 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		return part_content;
 	}
 
-	if (rspamd_regexp_match (utf_compatible_re, charset, strlen (charset), TRUE)) {
-		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
-			SET_PART_UTF (text_part);
-			return part_content;
-		}
-		else {
-			msg_info_task ("<%s>: contains invalid utf8 characters, assume it as raw",
-				task->message_id);
-			SET_PART_RAW (text_part);
-			return part_content;
-		}
+	RSPAMD_FTOK_FROM_STR (&charset_tok, charset);
+
+	if (rspamd_mime_charset_utf_check (&charset_tok, part_content->data,
+			part_content->len)) {
+		SET_PART_UTF (text_part);
+
+		return part_content;
 	}
 	else {
 		res_str = rspamd_text_to_utf8 (task->task_pool, part_content->data,
