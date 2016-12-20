@@ -1954,8 +1954,7 @@ rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
 			*o++ = c;
 		}
 		else if (c == ' ') {
-			*o++ = "_";
-			in++;
+			*o++ = '_';
 		}
 		else if (end - o >= 3){
 			*o++ = '=';
