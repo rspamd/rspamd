@@ -234,6 +234,17 @@ gssize rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 gssize rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
 		gchar *out, gsize outlen);
 
+/**
+ * Encode quoted-printable buffer using rfc2047 format, input and output must not overlap
+ * @param in
+ * @param inlen
+ * @param out
+ * @param outlen
+ * @return
+ */
+gssize rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
+		gchar *out, gsize outlen);
+
 #ifndef g_tolower
 #   define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
 #endif

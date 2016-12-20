@@ -1940,6 +1940,43 @@ decode:
 	return (o - out);
 }
 
+gssize
+rspamd_encode_qp2047_buf (const gchar *in, gsize inlen,
+		gchar *out, gsize outlen)
+{
+	gchar *o = out, *end = out + outlen, c;
+	static const gchar hexdigests[16] = "0123456789ABCDEF";
+
+	while (inlen > 0 && o < end) {
+		c = *in;
+
+		if (g_ascii_isalnum (c)) {
+			*o++ = c;
+		}
+		else if (c == ' ') {
+			*o++ = "_";
+			in++;
+		}
+		else if (end - o >= 3){
+			*o++ = '=';
+			*o++ = hexdigests[((c >> 4) & 0xF)];
+			*o++ = hexdigests[(c & 0xF)];
+		}
+		else {
+			return (-1);
+		}
+
+		in ++;
+		inlen --;
+	}
+
+	if (inlen != 0) {
+		return (-1);
+	}
+
+	return (o - out);
+}
+
 
 /*
  * GString ucl emitting functions
