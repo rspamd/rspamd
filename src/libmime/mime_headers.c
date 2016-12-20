@@ -411,6 +411,11 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 						&tok_start, &tok_len)) {
 					/* We have a token, so we can decode it from `encoding` */
 					if (token->len > 0) {
+						if (old_charset.len == 0) {
+							memcpy (&old_charset, &cur_charset,
+									sizeof (old_charset));
+						}
+
 						rspamd_mime_header_maybe_save_token (pool, out,
 								token, decoded,
 								&old_charset, &cur_charset);
