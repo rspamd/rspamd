@@ -352,6 +352,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 	rspamd_ftok_t cur_charset = {0, NULL}, old_charset = {0, NULL};
 	gint encoding;
 	gssize r;
+	guint qmarks = 0;
 	enum {
 		parse_normal = 0,
 		got_eqsign,
@@ -384,6 +385,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		case got_eqsign:
 			if (*p == '?') {
 				state = got_encoded_start;
+				qmarks = 0;
 			}
 			else {
 				g_string_append_len (out, c, 2);
@@ -394,13 +396,17 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		case got_encoded_start:
 			if (*p == '?') {
 				state = got_more_qmark;
+				qmarks ++;
 			}
 			p ++;
 			break;
 		case got_more_qmark:
 			if (*p == '=') {
+				if (qmarks < 3) {
+					state = got_encoded_start;
+				}
 				/* Finished encoded boundary */
-				if (rspamd_rfc2047_parser (c, p - c + 1, &encoding,
+				else if (rspamd_rfc2047_parser (c, p - c + 1, &encoding,
 						&cur_charset.begin, &cur_charset.len,
 						&tok_start, &tok_len)) {
 					/* We have a token, so we can decode it from `encoding` */
@@ -409,6 +415,8 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 								token, decoded,
 								&old_charset, &cur_charset);
 					}
+
+					qmarks = 0;
 					pos = token->len;
 					g_byte_array_set_size (token, pos + tok_len);
 
@@ -434,6 +442,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 							token->len -= tok_len;
 						}
 					}
+
 					c = p + 1;
 					state = skip_spaces;
 				}
