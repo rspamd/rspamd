@@ -30,13 +30,17 @@ context("RFC2047 decoding", function()
   ffi.cdef[[
     const char * rspamd_mime_header_decode (void *pool, const char *in, size_t inlen);
     void * rspamd_mempool_new (size_t sz, const char *name);
-    void rspamd_mempool_destroy (void *pool);
+    void rspamd_mempool_delete (void *pool);
   ]]
 
   test("Decode rfc2047 tokens", function()
     -- Test -> expected
     local cases = {
       {"=?US-ASCII*EN?Q?Keith_Moore?= <moore@cs.utk.edu>", "Keith Moore <moore@cs.utk.edu>"},
+      {[[=?windows-1251?Q?=C2=FB_=F1=EC=EE=E6=E5=F2=E5_=F5=E0=F0?=
+ =?windows-1251?Q?=E0=EA=F2=E5=F0=E8=E7=EE=E2=E0=F2=FC=F1?=
+ =?windows-1251?Q?=FF_=E7=EE=F0=EA=E8=EC_=E7=F0=E5=ED=E8?=
+ =?windows-1251?Q?=E5=EC?=]], "Вы сможете характеризоваться зорким зрением"},
     }
 
     local pool = ffi.C.rspamd_mempool_new(4096, "lua")
@@ -48,6 +52,6 @@ context("RFC2047 decoding", function()
       assert_not_nil(res, "cannot decode " .. c[1])
     end
 
-    ffi.C.rspamd_mempool_destroy(pool)
+    ffi.C.rspamd_mempool_delete(pool)
   end)
 end)
