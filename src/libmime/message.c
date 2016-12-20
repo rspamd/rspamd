@@ -700,8 +700,11 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	if (!task->subject) {
 		hdrs = rspamd_message_get_header_array (task, "Subject", FALSE);
-		rh = g_ptr_array_index (hdrs, 0);
-		task->subject = rh->decoded;
+
+		if (hdrs) {
+			rh = g_ptr_array_index (hdrs, 0);
+			task->subject = rh->decoded;
+		}
 	}
 
 	debug_task ("found %ud parts in message", task->parts->len);
