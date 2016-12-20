@@ -573,7 +573,7 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->parsed_data.len = len;
 
 	/* Generate message ID */
-	mid = g_mime_utils_generate_message_id ("localhost.localdomain");
+	mid = rspamd_mime_message_id_generate ("localhost.localdomain");
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_free, mid);
 	task->message_id = mid;

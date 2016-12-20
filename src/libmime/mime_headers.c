@@ -18,6 +18,7 @@
 #include "smtp_parsers.h"
 #include "mime_encoding.h"
 #include "task.h"
+#include "contrib/libottery/ottery.h"
 
 static void
 rspamd_mime_header_add (struct rspamd_task *task,
@@ -600,4 +601,22 @@ rspamd_mime_header_encode (const gchar *in, gsize len)
 	}
 
 	return out;
+}
+
+gchar *
+rspamd_mime_message_id_generate (const gchar *fqdn)
+{
+	GString *out;
+	guint64 rnd, clk;
+
+	out = g_string_sized_new (strlen (fqdn) + 22);
+	rnd = ottery_rand_uint64 ();
+	clk = rspamd_get_calendar_ticks () * 1e6;
+
+	rspamd_printf_gstring (out, "%*bs.%*bs@%s",
+			(gint)sizeof (guint64) - 3, (guchar *)&clk,
+			(gint)sizeof (guint64), (gchar *)&rnd,
+			fqdn);
+
+	return g_string_free (out, FALSE);
 }

@@ -66,4 +66,11 @@ gchar * rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
  */
 gchar * rspamd_mime_header_encode (const gchar *in, gsize len);
 
+/**
+ * Generate new unique message id
+ * @param fqdn
+ * @return
+ */
+gchar * rspamd_mime_message_id_generate (const gchar *fqdn);
+
 #endif /* SRC_LIBMIME_MIME_HEADERS_H_ */
