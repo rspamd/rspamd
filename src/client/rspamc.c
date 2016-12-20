@@ -609,6 +609,9 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "action") == 0) {
 			rspamd_fprintf (out, "Action: %s\n", ucl_object_tostring (cur));
 		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "subject") == 0) {
+			rspamd_fprintf (out, "Subject: %s\n", ucl_object_tostring (cur));
+		}
 		else if (cur->type == UCL_OBJECT) {
 			g_ptr_array_add (sym_ptr, (void *)cur);
 		}
