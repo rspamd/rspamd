@@ -768,38 +768,51 @@ rspamd_emails_tree_ucl (GHashTable *input, struct rspamd_task *task)
 static const gchar *
 make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 {
-	static gchar subj_buf[1024];
-	gchar *p = subj_buf, *end, *res;
-	const gchar *s, *c;
+	GString *subj_buf;
+	gchar *res;
+	const gchar *s, *c, *p;
+	gsize slen = 0;
 
-	end = p + sizeof(subj_buf);
 	c = metric->subject;
+
 	if (c == NULL) {
 		c = SPAM_SUBJECT;
 	}
 
+	p = c;
 	s = task->subject;
 
-	while (p < end) {
-		if (*c == '\0') {
-			*p = '\0';
-			break;
-		}
-		else if (*c == '%' && *(c + 1) == 's') {
-			p += rspamd_strlcpy (p, (s != NULL) ? s : "", end - p);
-			c += 2;
-		}
-		else {
-			*p = *c++;
-		}
-		p++;
+	if (s) {
+		slen = strlen (s);
 	}
 
-	res = rspamd_mime_header_encode (subj_buf, strlen (subj_buf));
+	subj_buf = g_string_sized_new (strlen (c) + slen);
+
+	while (*p) {
+		if (*p == '%' && *(p + 1) == 's') {
+			g_string_append_len (subj_buf, c, p - c);
+
+			if (s) {
+				g_string_append_len (subj_buf, s, slen);
+			}
+
+			p += 2;
+			c = p;
+		}
+
+		p ++;
+	}
+
+	if (p > c) {
+		g_string_append_len (subj_buf, c, p - c);
+	}
+
+	res = rspamd_mime_header_encode (subj_buf->str, subj_buf->len);
 
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_free,
 		res);
+	g_string_free (subj_buf, TRUE);
 
 	return res;
 }
