@@ -58,4 +58,12 @@ void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 gchar * rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen);
 
+/**
+ * Encode mime header if needed
+ * @param in
+ * @param len
+ * @return newly allocated encoded header
+ */
+gchar * rspamd_mime_header_encode (const gchar *in, gsize len);
+
 #endif /* SRC_LIBMIME_MIME_HEADERS_H_ */

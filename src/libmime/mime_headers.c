@@ -520,3 +520,84 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 
 	return out->str;
 }
+
+gchar *
+rspamd_mime_header_encode (const gchar *in, gsize len)
+{
+	const gchar *p = in, *end = in + len;
+	gchar *out, encode_buf[80];
+	GString *res;
+	gboolean need_encoding = FALSE;
+
+	/* Check if we need to encode */
+	while (p < end) {
+		if ((((guchar)*p) & 0x80) != 0) {
+			need_encoding = TRUE;
+			break;
+		}
+		p ++;
+	}
+
+	if (!need_encoding) {
+		out = g_malloc (len + 1);
+		rspamd_strlcpy (out, in, len + 1);
+	}
+	else {
+		/* Need encode */
+		gsize ulen, pos;
+		gint r;
+		const gchar *prev;
+		/* Choose step: =?UTF-8?Q?<qp>?= should be less than 76 chars */
+		const guint step = (76 - 12) / 3 + 1;
+
+		ulen = g_utf8_strlen (in, len);
+		res = g_string_sized_new (len * 2 + 1);
+		pos = 0;
+		prev = in;
+
+		while (pos < ulen) {
+			p = g_utf8_offset_to_pointer (in, pos);
+
+			if (p > prev) {
+				/* Encode and print */
+				r = rspamd_encode_qp2047_buf (prev, p - prev,
+						encode_buf, sizeof (encode_buf));
+
+				if (r != -1) {
+					if (res->len > 0) {
+						rspamd_printf_gstring (res, " =?UTF-8?Q?%*s?=", r,
+								encode_buf);
+					}
+					else {
+						rspamd_printf_gstring (res, "=?UTF-8?Q?%*s?=", r,
+								encode_buf);
+					}
+				}
+			}
+
+			pos += MIN (step, ulen - pos);
+			prev = p;
+		}
+
+		/* Leftover */
+		if (prev < end) {
+			r = rspamd_encode_qp2047_buf (prev, end - prev,
+					encode_buf, sizeof (encode_buf));
+
+			if (r != -1) {
+				if (res->len > 0) {
+					rspamd_printf_gstring (res, " =?UTF-8?Q?%*s?=", r,
+							encode_buf);
+				}
+				else {
+					rspamd_printf_gstring (res, "=?UTF-8?Q?%*s?=", r,
+							encode_buf);
+				}
+			}
+		}
+
+		out = g_string_free (res, FALSE);
+	}
+
+	return out;
+}
