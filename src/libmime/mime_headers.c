@@ -219,13 +219,10 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 			}
 
 			new->value = tmp;
-			new->decoded = g_mime_utils_header_decode_text (new->value);
+			new->decoded = rspamd_mime_header_decode (task->task_pool,
+					new->value, strlen (tmp));
 
-			if (new->decoded != NULL) {
-				rspamd_mempool_add_destructor (task->task_pool,
-						(rspamd_mempool_destruct_t)g_free, new->decoded);
-			}
-			else {
+			if (new->decoded == NULL) {
 				new->decoded = "";
 			}
 
