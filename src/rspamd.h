@@ -29,7 +29,7 @@
 #define SOFT_SHUTDOWN_TIME 10
 
 /* Spam subject */
-#define SPAM_SUBJECT "*** SPAM *** "
+#define SPAM_SUBJECT "*** SPAM *** %s"
 
 #ifdef CRLF
 #undef CRLF
