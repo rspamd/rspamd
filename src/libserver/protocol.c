@@ -795,7 +795,7 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 		p++;
 	}
 
-	res = g_mime_utils_header_encode_text (subj_buf);
+	res = rspamd_mime_header_encode (subj_buf, strlen (subj_buf));
 
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_free,
