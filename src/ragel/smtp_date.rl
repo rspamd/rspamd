@@ -31,10 +31,10 @@
       gulong n;
       if (rspamd_strtoul (tmp, p - tmp, &n)) {
         if (n < 1000) {
-          tm.tm_year = n + 1900;
+          tm.tm_year = n;
         }
         else {
-          tm.tm_year = n;
+          tm.tm_year = n - 1900;
         }
       }
     }
@@ -172,12 +172,12 @@
   day_name        =    "Mon" | "Tue" | "Wed" | "Thu" |
                        "Fri" | "Sat" | "Sun";
   day_of_week     =   FWS? day_name;
-  day             =   FWS? digit{1,2} FWS;
+  day             =   FWS? digit{1,2} >Day_Start %Day_End FWS;
   month           =    "Jan" %Month_Jan | "Feb" %Month_Feb | "Mar" %Month_Mar | "Apr" %Month_Apr |
                        "May" %Month_May | "Jun" %Month_Jun | "Jul" %Month_Jul | "Aug" %Month_Aug |
                        "Sep" %Month_Sep | "Oct" %Month_Oct | "Nov" %Month_Nov | "Dec" %Month_Dec;
-  year            =   FWS digit{2,} FWS;
-  date            =   day >Day_Start %Day_End month %Month_End year >Year_Start %Year_End;
+  year            =   FWS digit{2,4} >Year_Start %Year_End FWS;
+  date            =   day month %Month_End year;
   hour            =   digit_2;
   minute          =   digit_2;
   second          =   digit_2;

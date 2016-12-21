@@ -2596,7 +2596,7 @@ lua_task_get_date (lua_State *L)
 				struct rspamd_mime_header *h;
 
 				h = g_ptr_array_index (hdrs, 0);
-				tt = rspamd_parse_smtp_date (h->raw_value, h->raw_len);
+				tt = rspamd_parse_smtp_date (h->decoded, strlen (h->decoded));
 
 				if (!gmt) {
 					localtime_r (&tt, &t);
