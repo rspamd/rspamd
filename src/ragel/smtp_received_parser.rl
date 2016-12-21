@@ -284,10 +284,12 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
               *reported_domain_start, *reported_domain_end,
               *reported_ip_start, *reported_ip_end,
               *ip_start, *ip_end, *date_start,
-              *for_start, *for_end;
+              *for_start, *for_end, *tmp;
+  struct tm tm;
   const char *p = data, *pe = data + len, *eof;
   int cs, in_v6 = 0, *stack = NULL;
   gsize top = 0;
+  glong tz = 0;
   struct _ragel_st_storage {
     int *data;
     gsize size;
@@ -295,6 +297,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
 
   memset (&st_storage, 0, sizeof (st_storage));
   memset (rh, 0, sizeof (*rh));
+  memset (&tm, 0, sizeof (tm));
   real_domain_start = NULL;
   real_domain_end = NULL;
   real_ip_start = NULL;
