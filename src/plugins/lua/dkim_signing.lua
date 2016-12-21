@@ -26,6 +26,7 @@ local settings = {
   auth_only = true,
   domain = {},
   path = string.format('%s/%s/%s', rspamd_paths['DBDIR'], 'dkim', '$domain.$selector.key'),
+  sign_local = true,
   selector = 'dkim',
   symbol = 'DKIM_SIGNED',
   try_fallback = true,
@@ -39,11 +40,14 @@ local N = 'dkim_signing'
 local function dkim_signing_cb(task)
   local auser = task:get_user()
   if settings.auth_only and not auser then
-    if not (settings.sign_networks and settings.sign_networks:get_key(task:get_from_ip())) then
-      rspamd_logger.debugm(N, task, 'ignoring unauthenticated user')
-      return
-    else
+    local ip = task:get_from_ip()
+    if settings.sign_local and ip:is_local() then
+      rspamd_logger.debugm(N, task, 'mail is from local address')
+    elseif (settings.sign_networks and settings.sign_networks:get_key(ip)) then
       rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
+    else
+      rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
+      return
     end
   end
   local efrom = task:get_from('smtp')
@@ -71,12 +75,17 @@ local function dkim_signing_cb(task)
   end
   if settings.use_esld then
     dkim_domain = rspamd_util.get_tld(dkim_domain)
+    if settings.use_domain == 'envelope' then
+      hdom = rspamd_util.get_tld(hdom)
+    elseif settings.use_domain == 'header' then
+      edom = rspamd_util.get_tld(edom)
+    end
   end
   if not settings.allow_hdrfrom_mismatch and hdom ~= edom then
     rspamd_logger.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
     return false
   end
-  if not settings.allow_username_mismatch then
+  if auser and not settings.allow_username_mismatch then
     local udom = string.match(auser, '.*@(.*)')
     if not udom then
       rspamd_logger.debugm(N, task, 'couldnt find domain in username')
