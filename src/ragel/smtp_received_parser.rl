@@ -254,14 +254,7 @@
   }
   action Date_End {
     if (date_start && p > date_start) {
-      guint len;
-      char *tdate;
-
-      len = p - date_start;
-      tdate = g_malloc (len + 1);
-      rspamd_strlcpy (tdate, date_start, len + 1);
-      rh->timestamp = g_mime_utils_header_decode_date (tdate, NULL);
-      g_free (tdate);
+      rh->timestamp = rspamd_tm_to_time (&tm, tz);
     }
   }
 
