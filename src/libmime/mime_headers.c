@@ -388,6 +388,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 			else {
 				g_string_append_len (out, c, 2);
 				c = p + 1;
+				state = parse_normal;
 			}
 			p ++;
 			break;

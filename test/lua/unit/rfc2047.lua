@@ -41,6 +41,8 @@ context("RFC2047 decoding", function()
  =?windows-1251?Q?=E0=EA=F2=E5=F0=E8=E7=EE=E2=E0=F2=FC=F1?=
  =?windows-1251?Q?=FF_=E7=EE=F0=EA=E8=EC_=E7=F0=E5=ED=E8?=
  =?windows-1251?Q?=E5=EC?=]], "Вы сможете характеризоваться зорким зрением"},
+      {'v=1; a=rsa-sha256; c=relaxed/relaxed; d=yoni.za.org; s=testdkim1;',
+      'v=1; a=rsa-sha256; c=relaxed/relaxed; d=yoni.za.org; s=testdkim1;'},
     }
 
     local pool = ffi.C.rspamd_mempool_new(4096, "lua")
