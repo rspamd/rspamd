@@ -130,6 +130,7 @@ rspamd_mime_parse_cte (const gchar *in, gsize len)
 		ret = RSPAMD_CTE_7BIT;
 		break;
 	case 0x42E0745448B39FC1ULL: /* 8bit */
+	case 0x6B169E6B155BADC0ULL: /* binary */
 		ret = RSPAMD_CTE_8BIT;
 		break;
 	case 0x6D69A5BB02A633B0ULL: /* quoted-printable */
