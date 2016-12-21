@@ -256,7 +256,6 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 
 			hdr = g_ptr_array_index (hdrs, i);
 			hlen = strlen (hdr->value);
-			rspamd_str_lc (hdr->value, hlen);
 			cd = rspamd_content_disposition_parse (hdr->value, hlen,
 					task->task_pool);
 

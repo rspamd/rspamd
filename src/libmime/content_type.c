@@ -163,6 +163,7 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 		const gchar *value_start, const gchar *value_end)
 {
 	rspamd_ftok_t srch;
+	gchar *decoded;
 	struct rspamd_content_type_param *found = NULL, *nparam;
 
 	g_assert (cd != NULL);
@@ -181,8 +182,8 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
 	nparam->name.begin = name_start;
 	nparam->name.len = name_end - name_start;
-	nparam->value.begin = value_start;
-	nparam->value.len = value_end - value_start;
+	decoded = rspamd_mime_header_decode (pool, value_start, value_end - value_start);
+	RSPAMD_FTOK_FROM_STR (&nparam->value, decoded);
 	DL_APPEND (found, nparam);
 
 	if (!found) {
@@ -193,7 +194,7 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 	srch.len = 8;
 
 	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
-		/* Adjust charset */
+		/* Adjust filename */
 		cd->filename.begin = nparam->value.begin;
 		cd->filename.len = nparam->value.len;
 	}
