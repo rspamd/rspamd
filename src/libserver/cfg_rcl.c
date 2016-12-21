@@ -1505,6 +1505,29 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	return TRUE;
 }
 
+static gboolean
+rspamd_rcl_composites_handler (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	const gchar *key,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+	gboolean success = TRUE;
+
+	while ((cur = ucl_iterate_object (obj, &it, true))) {
+		success = rspamd_rcl_composite_handler(pool, cur, ucl_object_key(cur), ud, section, err);
+		if (!success) {
+			break;
+		}
+	}
+
+	return success;
+}
+
+
 struct rspamd_rcl_section *
 rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 	const gchar *name, const gchar *key_attr, rspamd_rcl_handler_t handler,
@@ -2317,11 +2340,19 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Sets if this statfile contains spam samples");
 
 	/**
-	 * Composites handler
+	 * Composites handlers
 	 */
 	sub = rspamd_rcl_add_section_doc (&new,
 			"composite", "name",
 			rspamd_rcl_composite_handler,
+			UCL_OBJECT,
+			FALSE,
+			TRUE,
+			cfg->doc_strings,
+			"Rspamd composite symbols");
+	sub = rspamd_rcl_add_section_doc (&new,
+			"composites", NULL,
+			rspamd_rcl_composites_handler,
 			UCL_OBJECT,
 			FALSE,
 			TRUE,
