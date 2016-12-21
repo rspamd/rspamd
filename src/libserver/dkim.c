@@ -1130,6 +1130,11 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 		LL_FOREACH (reply->entries, elt)
 		{
 			if (elt->type == RDNS_REQUEST_TXT) {
+				if (err != NULL) {
+					/* Free error as it is insignificant */
+					g_error_free (err);
+					err = NULL;
+				}
 				key = rspamd_dkim_parse_key (cbdata->ctx, elt->content.txt.data,
 						&keylen,
 						&err);
@@ -1138,11 +1143,6 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 					break;
 				}
 			}
-		}
-		if (key != NULL && err != NULL) {
-			/* Free error as it is insignificant */
-			g_error_free (err);
-			err = NULL;
 		}
 		cbdata->handler (key, keylen, cbdata->ctx, cbdata->ud, err);
 	}
