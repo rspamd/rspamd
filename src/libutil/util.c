@@ -2563,3 +2563,98 @@ rspamd_normalize_probability (gdouble x, gdouble bias)
 
 	return pow (xx, 8);
 }
+
+/*
+ * Calculations from musl libc
+ */
+guint64
+rspamd_tm_to_time (const struct tm *tm, glong tz)
+{
+	guint64 result;
+	gboolean is_leap = FALSE;
+	gint leaps, y = tm->tm_year, cycles, rem, centuries;
+	glong offset = (tz / 100) * 3600 + (tz % 100) * 60;
+
+	/* How many seconds in each month from the beginning of the year */
+	static const gint secs_through_month[] = {
+			0, 31*86400, 59*86400, 90*86400,
+			120*86400, 151*86400, 181*86400, 212*86400,
+			243*86400, 273*86400, 304*86400, 334*86400
+	};
+
+	/* Convert year */
+	if (tm->tm_year - 2ULL <= 136) {
+		leaps = (y - 68) / 4;
+
+		if (!((y - 68) & 3)) {
+			leaps--;
+			is_leap = 1;
+		}
+
+		result = 31536000 * (y - 70) + 86400 * leaps;
+	}
+	else {
+		cycles = (y - 100) / 400;
+		rem = (y - 100) % 400;
+		if (rem < 0) {
+			cycles--;
+			rem += 400;
+		}
+
+		if (!rem) {
+			is_leap = 1;
+			centuries = 0;
+			leaps = 0;
+		}
+		else {
+			if (rem >= 200) {
+				if (rem >= 300) {
+					centuries = 3;
+					rem -= 300;
+				}
+				else {
+					centuries = 2;
+					rem -= 200;
+				}
+			}
+			else {
+				if (rem >= 100) {
+					centuries = 1;
+					rem -= 100;
+				}
+				else {
+					centuries = 0;
+				}
+			}
+
+			if (!rem) {
+				is_leap = 1;
+				leaps = 0;
+			} else {
+				leaps = rem / 4U;
+				rem %= 4U;
+				is_leap = !rem;
+			}
+		}
+
+		leaps += 97 * cycles + 24 * centuries - (gint)is_leap;
+		result = (y - 100) * 31536000LL + leaps * 86400LL + 946684800 + 86400;
+	}
+
+	/* Now convert months to seconds */
+	result += secs_through_month[tm->tm_mon];
+	/* One more day */
+	if (is_leap && tm->tm_mon >= 2) {
+		result += 86400;
+	}
+
+	result += 86400LL * (tm->tm_mday-1);
+	result += 3600LL * tm->tm_hour;
+	result += 60LL * tm->tm_min;
+	result += tm->tm_sec;
+
+	/* Now apply tz offset */
+	result += offset;
+
+	return result;
+}

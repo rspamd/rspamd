@@ -12,6 +12,7 @@
 #include <netdb.h>
 #endif
 #include <event.h>
+#include <time.h>
 
 struct rspamd_config;
 struct rspamd_main;
@@ -506,6 +507,14 @@ gpointer rspamd_shmem_xmap (const char *fname, guint mode,
  * @return
  */
 gdouble rspamd_normalize_probability (gdouble x, gdouble bias);
+
+/**
+ * Converts struct tm to time_t
+ * @param tm
+ * @param tz timezone in format (hours * 100) + minutes
+ * @return
+ */
+guint64 rspamd_tm_to_time (const struct tm *tm, glong tz);
 
 #define PTR_ARRAY_FOREACH(ar, i, cur) if (ar != NULL) for ((i) = 0, (cur) = g_ptr_array_index((ar), 0); (i) < (ar)->len; (cur) = g_ptr_array_index((ar), (i + 1)), ++(i))
 #endif
