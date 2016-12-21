@@ -213,7 +213,7 @@ rspamd_extract_words (struct rspamd_task *task,
 	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
 		stem = sb_stemmer_new (part->language, "UTF_8");
 		if (stem == NULL) {
-			msg_info_task ("<%s> cannot create lemmatizer for %s language",
+			msg_debug_task ("<%s> cannot create lemmatizer for %s language",
 					task->message_id, part->language);
 		}
 	}
