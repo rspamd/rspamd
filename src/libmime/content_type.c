@@ -210,7 +210,7 @@ rspamd_content_disposition_parse (const gchar *in,
 	memcpy (val.lc_data, in, len);
 	rspamd_str_lc (val.lc_data, len);
 
-	if (rspamd_content_disposition_parser (val.lc_data, len, &val, pool)) {
+	if (rspamd_content_disposition_parser (in, len, &val, pool)) {
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
 
