@@ -41,4 +41,6 @@ rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
 		const gchar **charset, gsize *charset_len,
 		const gchar **encoded, gsize *encoded_len);
 
+guint64 rspamd_parse_smtp_date (const char *data, size_t len);
+
 #endif /* SRC_LIBMIME_SMTP_PARSERS_H_ */

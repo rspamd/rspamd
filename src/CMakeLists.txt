@@ -138,6 +138,11 @@ RAGEL_TARGET(ragel_rfc2047
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/rfc2047.rl.c)
+RAGEL_TARGET(ragel_smtp_date
+	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_date_parser.rl
+	DEPENDS ${RAGEL_DEPENDS}
+	COMPILE_FLAGS -G2
+	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/date_parser.rl.c)
 ######################### LINK SECTION ###############################
 
 ADD_LIBRARY(rspamd-server STATIC
@@ -154,7 +159,8 @@ ADD_LIBRARY(rspamd-server STATIC
 		"${RAGEL_ragel_newlines_strip_OUTPUTS}"
 		"${RAGEL_ragel_content_type_OUTPUTS}"
 		"${RAGEL_ragel_content_disposition_OUTPUTS}"
-		"${RAGEL_ragel_rfc2047_OUTPUTS}")
+		"${RAGEL_ragel_rfc2047_OUTPUTS}"
+		"${RAGEL_ragel_smtp_date_OUTPUTS}")
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)

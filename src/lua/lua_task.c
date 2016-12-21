@@ -26,6 +26,7 @@
 #include "utlist.h"
 #include "cryptobox.h"
 #include "unix-std.h"
+#include "libmime/smtp_parsers.h"
 
 /***
  * @module rspamd_task
@@ -2591,16 +2592,23 @@ lua_task_get_date (lua_State *L)
 
 			if (hdrs && hdrs->len > 0) {
 				time_t tt;
-				gint offset;
+				struct tm t;
 				struct rspamd_mime_header *h;
 
 				h = g_ptr_array_index (hdrs, 0);
-				tt = g_mime_utils_header_decode_date (h->decoded, &offset);
+				tt = rspamd_parse_smtp_date (h->raw_value, h->raw_len);
 
 				if (!gmt) {
-					tt += (offset * 60 * 60) / 100 + (offset * 60 * 60) % 100;
+					localtime_r (&tt, &t);
+#if !defined(__sun)
+					t.tm_gmtoff = 0;
+#endif
+					t.tm_isdst = 0;
+					tim = mktime (&t);
 				}
-				tim = tt;
+				else {
+					tim = tt;
+				}
 			}
 			else {
 				tim = 0.0;
