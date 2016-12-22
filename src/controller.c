@@ -3198,7 +3198,6 @@ start_controller_worker (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
-	g_mime_shutdown ();
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);
 	rspamd_log_close (worker->srv->logger);

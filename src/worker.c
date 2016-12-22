@@ -36,6 +36,7 @@
 #include "utlist.h"
 #include "libutil/http_private.h"
 #include "monitored.h"
+#include "unix-std.h"
 
 #include "lua/lua_common.h"
 
@@ -633,7 +634,6 @@ start_worker (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
-	g_mime_shutdown ();
 	rspamd_stat_close ();
 	rspamd_log_close (worker->srv->logger);
 

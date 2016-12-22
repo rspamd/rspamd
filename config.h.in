@@ -9,7 +9,6 @@
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine GLIB_RE_COMPAT		 1
 #cmakedefine GLIB_UNISCRIPT_COMPAT		 1
-#cmakedefine GMIME24             1
 #cmakedefine HAVE_AIO_H          1
 #cmakedefine HAVE_ARPA_INET_H    1
 #cmakedefine HAVE_ASM_PAUSE      1

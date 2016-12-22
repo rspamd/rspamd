@@ -2105,11 +2105,6 @@ rspamd_init_libs (void)
 	rlim.rlim_max = rlim.rlim_cur;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-#ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
-	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);
-#else
-	g_mime_init (0);
-#endif
 	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
 			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
 	ctx->local_addrs = rspamd_inet_library_init ();
@@ -2291,7 +2286,6 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		}
 
 		g_free (ctx->ottery_cfg);
-		g_mime_shutdown ();
 
 #ifdef HAVE_OPENSSL
 		EVP_cleanup ();

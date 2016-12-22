@@ -24,8 +24,6 @@
 #include "dns.h"
 #include "re_cache.h"
 
-#include <gmime/gmime.h>
-
 enum rspamd_command {
 	CMD_CHECK,
 	CMD_SYMBOLS,

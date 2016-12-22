@@ -1750,9 +1750,6 @@ rspamd_content_type_check (struct rspamd_task *task,
 			}
 		}
 
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
 		if (check_subtype) {
 			param_data = &ct->subtype;
 		}

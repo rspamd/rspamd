@@ -22,7 +22,6 @@
 #include "task.h"
 #include "mime_parser.h"
 #include "unix-std.h"
-#include <gmime/gmime.h>
 
 #define MODE_NORMAL 0
 #define MODE_GMIME 1
@@ -75,6 +74,7 @@ rspamd_show_message (struct rspamd_mime_part *part)
 				part, part->parent_part);
 }
 
+#if 0
 static void
 mime_foreach_callback (GMimeObject * parent,
 	GMimeObject * part,
@@ -114,7 +114,7 @@ mime_foreach_callback (GMimeObject * parent,
 				g_mime_content_type_get_media_subtype (type));
 	}
 }
-
+#endif
 static void
 rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 {
@@ -123,10 +123,12 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 	gpointer map;
 	struct stat st;
 	GError *err = NULL;
+#if 0
 	GMimeMessage *message;
 	GMimeParser *parser;
 	GMimeStream *stream;
 	GByteArray tmp;
+#endif
 	struct rspamd_mime_part *part;
 	guint i;
 	gdouble ts1, ts2;
@@ -163,6 +165,7 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 			g_error_free (err);
 		}
 	}
+#if 0
 	else if (mode == MODE_GMIME) {
 		tmp.data = map;
 		tmp.len = st.st_size;
@@ -171,7 +174,7 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 		parser = g_mime_parser_new_with_stream (stream);
 		message = g_mime_parser_construct_message (parser);
 	}
-
+#endif
 	ts2 = rspamd_get_ticks ();
 	total_time += ts2 - ts1;
 
@@ -190,16 +193,19 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 			}
 		}
 	}
+#if 0
 	else if (mode == MODE_GMIME) {
 		g_mime_message_foreach (message, mime_foreach_callback, NULL);
 	}
+#endif
 
 	rspamd_task_free (task);
 	munmap (map, st.st_size);
-
+#if 0
 	if (mode == MODE_GMIME) {
 		g_object_unref (message);
 	}
+#endif
 }
 
 int
@@ -237,7 +243,6 @@ main (int argc, char **argv)
 
 	rspamd_log_close (logger);
 	REF_RELEASE (cfg);
-	g_mime_shutdown ();
 
 	return 0;
 }

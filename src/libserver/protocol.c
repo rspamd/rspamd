@@ -27,6 +27,7 @@
 #include "cryptobox.h"
 #include "contrib/zstd/zstd.h"
 #include "lua/lua_common.h"
+#include "unix-std.h"
 #include <math.h>
 
 /* Max line size */

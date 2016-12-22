@@ -51,7 +51,6 @@ OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  
 OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: ON]"  ON)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
-OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
 OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
 OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" OFF)
@@ -662,22 +661,6 @@ IF(ENABLE_JEMALLOC MATCHES "ON")
 		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
 	SET(WITH_JEMALLOC "1")
 ENDIF()
-ProcessPackage(GMIME LIBRARY gmime-2.6 gmime-2.4 gmime-2.2 gmime-2
-	INCLUDE gmime/gmime.h
-	INCLUDE_SUFFIXES include/gmime include/gmime-2.0 include/gmime-2.4 include/gmime-2.6
-	ROOT ${GMIME_ROOT_DIR} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
-IF(GMIME_ROOT_DIR)
-	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lz")
-ENDIF()
-ProcessPackage(GIO LIBRARY gio-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES gio-no-export-2.0>=2.28 gio-2.0>=2.28)
-ProcessPackage(GOBJECT LIBRARY gobject-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES gobject-no-export-2.0>=2.28 gobject-2.0>=2.28)
-ProcessPackage(GMODULE2 LIBRARY gmodule-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES gmodule-no-export-2.0>=2.28 gmodule-2.0>=2.28)
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
@@ -745,10 +728,6 @@ ENDIF ()
 
 #Check for openssl (required for dkim)
 SET(HAVE_OPENSSL 1)
-
-IF(GMIME2_VERSION VERSION_GREATER "2.4.0" OR NOT GMIME2_VERSION)
-	SET(GMIME24 1)
-ENDIF()
 
 IF(ENABLE_HIREDIS MATCHES "ON")
 	ADD_SUBDIRECTORY(contrib/hiredis)
