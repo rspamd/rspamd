@@ -32,10 +32,6 @@ rspamd_email_addr_dtor (struct rspamd_email_address *addr)
 		g_free ((void *)addr->user);
 	}
 
-	if (addr->name) {
-		g_free ((gpointer)addr->name);
-	}
-
 	g_slice_free1 (sizeof (*addr), addr);
 }
 
