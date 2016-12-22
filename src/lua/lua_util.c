@@ -436,6 +436,15 @@ LUA_FUNCTION_DEF (util, packsize);
  */
 LUA_FUNCTION_DEF (util, unpack);
 
+/***
+ *  @function util.caseless_hash(str[, seed])
+ * Calculates caseless non-crypto hash from a string or rspamd text
+ * @param str string or lua_text
+ * @param seed mandatory seed (0xdeadbabe by default)
+ * @return {int64} boxed int64_t
+ */
+LUA_FUNCTION_DEF (util, caseless_hash);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -474,11 +483,33 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, zstd_compress),
 	LUA_INTERFACE_DEF (util, zstd_decompress),
 	LUA_INTERFACE_DEF (util, normalize_prob),
+	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
 	{NULL, NULL}
 };
+
+LUA_FUNCTION_DEF (int64, tostring);
+LUA_FUNCTION_DEF (int64, tonumber);
+LUA_FUNCTION_DEF (int64, hex);
+
+static const struct luaL_reg int64lib_m[] = {
+	LUA_INTERFACE_DEF (int64, tostring),
+	LUA_INTERFACE_DEF (int64, tonumber),
+	LUA_INTERFACE_DEF (int64, hex),
+	{"__tostring", lua_int64_tostring},
+	{NULL, NULL}
+};
+
+static gint64
+lua_check_int64 (lua_State * L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{int64}");
+	luaL_argcheck (L, ud != NULL, pos, "'int64' expected");
+	return ud ? *((gint64 *)ud) : 0LL;
+}
+
 
 static gint
 lua_util_create_event_base (lua_State *L)
@@ -1746,6 +1777,41 @@ lua_util_normalize_prob (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_util_caseless_hash (lua_State *L)
+{
+	guint64 seed = 0xdeadbabe, h;
+	struct rspamd_lua_text *t = NULL;
+	gint64 *r;
+	gsize sz;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		t = g_alloca (sizeof (*t));
+		t->start = lua_tolstring (L, 1, &sz);
+		t->len = sz;
+	}
+	else {
+		t = lua_check_text (L, 1);
+	}
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		seed = lua_tonumber (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TUSERDATA) {
+		seed = lua_check_int64 (L, 2);
+	}
+
+	h = rspamd_icase_hash (t->start, t->len, seed);
+	r = lua_newuserdata (L, sizeof (*r));
+	*r = h;
+	rspamd_lua_setclass (L, "rspamd{int64}", -1);
+
+	return 1;
+}
 
 /* Backport from Lua 5.3 */
 
@@ -2471,5 +2537,43 @@ lua_load_util (lua_State * L)
 void
 luaopen_util (lua_State * L)
 {
+	rspamd_lua_new_class (L, "rspamd{int64}", int64lib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_util", lua_load_util);
+}
+
+static int
+lua_int64_tostring (lua_State *L)
+{
+	gint64 n = lua_check_int64 (L, 1);
+	gchar buf[32];
+
+	rspamd_snprintf (buf, sizeof (buf), "%uL", n);
+	lua_pushstring (L, buf);
+
+	return 1;
+}
+
+static int
+lua_int64_tonumber (lua_State *L)
+{
+	gint64 n = lua_check_int64 (L, 1);
+	gdouble d;
+
+	d = n;
+	lua_pushnumber (L, d);
+
+	return 1;
+}
+
+static int
+lua_int64_hex (lua_State *L)
+{
+	gint64 n = lua_check_int64 (L, 1);
+	gchar buf[32];
+
+	rspamd_snprintf (buf, sizeof (buf), "%XL", n);
+	lua_pushstring (L, buf);
+
+	return 1;
 }
