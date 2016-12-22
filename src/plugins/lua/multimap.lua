@@ -177,22 +177,22 @@ end
 
 local function apply_addr_filter(task, filter, input, rule)
   if filter == 'email:addr' or filter == 'email' then
-    local addr = util.parse_mail_address(input)
+    local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
       return addr[1]['addr']
     end
   elseif filter == 'email:user' then
-    local addr = util.parse_mail_address(input)
+    local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
       return addr[1]['user']
     end
   elseif filter == 'email:domain' then
-    local addr = util.parse_mail_address(input)
+    local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
       return addr[1]['domain']
     end
   elseif filter == 'email:name' then
-    local addr = util.parse_mail_address(input)
+    local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
       return addr[1]['name']
     end
