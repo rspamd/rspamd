@@ -45,6 +45,7 @@ void rspamd_str_lc_utf8 (gchar *str, guint size);
 /*
  * Hash table utility functions for case insensitive hashing
  */
+guint64 rspamd_icase_hash (const gchar *in, gsize len, guint64 seed);
 guint rspamd_strcase_hash (gconstpointer key);
 gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
 
