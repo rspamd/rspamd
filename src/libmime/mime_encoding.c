@@ -106,8 +106,7 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 	rspamd_charset_normalize (ret);
 
 	if ((in->len > 3 && rspamd_lc_cmp (in->begin, "cp-", 3) == 0) ||
-			(in->len > 4 && (rspamd_lc_cmp (in->begin, "ibm-", 4) == 0 ||
-					rspamd_lc_cmp (in->begin, "iso-", 4) == 0) )) {
+			(in->len > 4 && (rspamd_lc_cmp (in->begin, "ibm-", 4) == 0))) {
 		/* Try to remove '-' chars from encoding: e.g. CP-100 to CP100 */
 		h = ret;
 		t = ret;
