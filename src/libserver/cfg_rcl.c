@@ -1414,6 +1414,12 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 
 	composite_name = key;
 
+	val = ucl_object_lookup (obj, "enabled");
+	if (val != NULL && !ucl_object_toboolean (val)) {
+		msg_info_config ("composite %s is disabled", composite_name);
+		return TRUE;
+	}
+
 	if (g_hash_table_lookup (cfg->composite_symbols, composite_name) != NULL) {
 		msg_warn_config ("composite %s is redefined", composite_name);
 		new = FALSE;
