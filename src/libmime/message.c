@@ -670,41 +670,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 
-	/* Save message id for future use */
-	hdrs = rspamd_message_get_header_array (task, "Message-ID", FALSE);
-
-	if (hdrs) {
-		gchar *p, *end;
-
-		rh = g_ptr_array_index (hdrs, 0);
-
-		p = rh->decoded;
-		end = p + strlen (p);
-
-		if (*p == '<') {
-			p ++;
-
-			if (end > p && *(end - 1) == '>') {
-				*(end - 1) = '\0';
-				p = rspamd_mempool_strdup (task->task_pool, p);
-				*(end - 1) = '>';
-			}
-		}
-
-		task->message_id = p;
-	}
-
 	if (task->message_id == NULL) {
 		task->message_id = "undef";
-	}
-
-	if (!task->subject) {
-		hdrs = rspamd_message_get_header_array (task, "Subject", FALSE);
-
-		if (hdrs) {
-			rh = g_ptr_array_index (hdrs, 0);
-			task->subject = rh->decoded;
-		}
 	}
 
 	debug_task ("found %ud parts in message", task->parts->len);
@@ -725,62 +692,70 @@ rspamd_message_parse (struct rspamd_task *task)
 	rspamd_images_process (task);
 	rspamd_archives_process (task);
 
-	/* Parse received headers */
-	hdrs = rspamd_message_get_header_array (task, "Received", FALSE);
+	if (task->received && task->received->len > 0) {
+		gboolean need_recv_correction = FALSE;
+		rspamd_inet_addr_t *raddr;
 
-	PTR_ARRAY_FOREACH (hdrs, i, rh) {
-		recv = rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct received_header));
-		rspamd_smtp_recieved_parse (task, rh->decoded, strlen (rh->decoded), recv);
+		recv = g_ptr_array_index (task->received, 0);
 		/*
 		 * For the first header we must ensure that
 		 * received is consistent with the IP that we obtain through
 		 * client.
 		 */
-		if (i == 0) {
-			gboolean need_recv_correction = FALSE;
-			rspamd_inet_addr_t *raddr = recv->addr;
 
-			if (recv->real_ip == NULL || (task->cfg && task->cfg->ignore_received)) {
+		raddr = recv->addr;
+		if (recv->real_ip == NULL || (task->cfg && task->cfg->ignore_received)) {
+			need_recv_correction = TRUE;
+		}
+		else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
+			if (!raddr) {
 				need_recv_correction = TRUE;
 			}
-			else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
-				if (!raddr) {
+			else {
+				if (rspamd_inet_address_compare (raddr, task->from_addr) != 0) {
 					need_recv_correction = TRUE;
 				}
-				else {
-					if (rspamd_inet_address_compare (raddr, task->from_addr) != 0) {
-						need_recv_correction = TRUE;
-					}
-				}
-
-			}
-
-			if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
-					&& task->from_addr) {
-				msg_debug_task ("the first received seems to be"
-						" not ours, replace it with fake one");
-
-				trecv = rspamd_mempool_alloc0 (task->task_pool,
-								sizeof (struct received_header));
-				trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
-						rspamd_inet_address_to_string (task->from_addr));
-				trecv->from_ip = trecv->real_ip;
-				trecv->addr = rspamd_inet_address_copy (task->from_addr);
-				rspamd_mempool_add_destructor (task->task_pool,
-						(rspamd_mempool_destruct_t)rspamd_inet_address_destroy,
-						trecv->addr);
-
-				if (task->hostname) {
-					trecv->real_hostname = task->hostname;
-					trecv->from_hostname = trecv->real_hostname;
-				}
-
-				g_ptr_array_add (task->received, trecv);
 			}
 		}
 
-		g_ptr_array_add (task->received, recv);
+		if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
+				&& task->from_addr) {
+			msg_debug_task ("the first received seems to be"
+					" not ours, replace it with fake one");
+
+			trecv = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (struct received_header));
+			trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
+					rspamd_inet_address_to_string (task->from_addr));
+			trecv->from_ip = trecv->real_ip;
+			trecv->addr = rspamd_inet_address_copy (task->from_addr);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)rspamd_inet_address_destroy,
+					trecv->addr);
+
+			if (task->hostname) {
+				trecv->real_hostname = task->hostname;
+				trecv->from_hostname = trecv->real_hostname;
+			}
+
+#ifdef GLIB_VERSION_2_40
+			g_ptr_array_insert (task->received, 0, trecv);
+#else
+			/*
+			 * Unfortunately, before glib 2.40 we cannot insert element into a
+			 * ptr array
+			 */
+			GPtrArray *nar = g_ptr_array_sized_new (task->received->len + 1);
+
+			g_ptr_array_add (nar, trecv);
+			PTR_ARRAY_FOREACH (task->received, i, recv) {
+				g_ptr_array_add (nar, recv);
+			}
+			rspamd_mempool_add_destructor (task->task_pool,
+						rspamd_ptr_array_free_hard, nar);
+			task->received = nar;
+#endif
+		}
 	}
 
 	/* Extract data from received header if we were not given IP */
@@ -798,72 +773,6 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 		if (recv->real_hostname) {
 			task->hostname = recv->real_hostname;
-		}
-	}
-
-	if (task->from_envelope == NULL) {
-		hdrs = rspamd_message_get_header_array (task, "Return-Path", FALSE);
-
-		if (hdrs && hdrs->len > 0) {
-			rh = g_ptr_array_index (hdrs, 0);
-			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
-					strlen (rh->decoded));
-		}
-	}
-
-	if (task->deliver_to == NULL) {
-		hdrs = rspamd_message_get_header_array (task, "Delivered-To", FALSE);
-
-		if (hdrs && hdrs->len > 0) {
-			rh = g_ptr_array_index (hdrs, 0);
-			task->deliver_to = rspamd_mempool_strdup (task->task_pool, rh->decoded);
-		}
-	}
-
-	/* Set mime recipients and sender for the task */
-	/* TODO: kill it with fire */
-	task->rcpt_mime = internet_address_list_new ();
-
-	static const gchar *to_hdrs[] = {"To", "Cc", "Bcc"};
-
-	for (int k = 0; k < G_N_ELEMENTS (to_hdrs); k ++) {
-		hdrs = rspamd_message_get_header_array (task, to_hdrs[k], FALSE);
-		if (hdrs && hdrs->len > 0) {
-
-			InternetAddressList *tia;
-
-			for (i = 0; i < hdrs->len; i ++) {
-				rh = g_ptr_array_index (hdrs, i);
-
-				tia = internet_address_list_parse_string (rh->decoded);
-
-				if (tia) {
-					internet_address_list_append (task->rcpt_mime, tia);
-					g_object_unref (tia);
-				}
-			}
-		}
-	}
-
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_object_unref,
-			task->rcpt_mime);
-
-	hdrs = rspamd_message_get_header_array (task, "From", FALSE);
-
-	if (hdrs && hdrs->len > 0) {
-		rh = g_ptr_array_index (hdrs, 0);
-		task->from_mime = internet_address_list_parse_string (rh->value);
-		if (task->from_mime) {
-#ifdef GMIME24
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) g_object_unref,
-					task->from_mime);
-#else
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) internet_address_list_destroy,
-					task->from_mime);
-#endif
 		}
 	}
 

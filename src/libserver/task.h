@@ -156,9 +156,9 @@ struct rspamd_task {
 													 *    metric's name									*/
 	GPtrArray *tokens;								/**< statistics tokens */
 
-	InternetAddressList *rcpt_mime;
+	GPtrArray *rcpt_mime;
 	GPtrArray *rcpt_envelope;						/**< array of rspamd_email_address					*/
-	InternetAddressList *from_mime;
+	GPtrArray *from_mime;
 	struct rspamd_email_address *from_envelope;
 	enum rspamd_newlines_type nlines_type;			/**< type of newlines (detected on most of headers 	*/
 

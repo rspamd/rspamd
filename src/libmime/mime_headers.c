@@ -17,14 +17,89 @@
 #include "mime_headers.h"
 #include "smtp_parsers.h"
 #include "mime_encoding.h"
+#include "email_addr.h"
 #include "task.h"
+#include "cryptobox.h"
 #include "contrib/libottery/ottery.h"
+
+static void
+rspamd_mime_header_check_special (struct rspamd_task *task,
+		struct rspamd_mime_header *rh)
+{
+	guint64 h;
+	struct received_header *recv;
+
+	h = rspamd_icase_hash (rh->name, strlen (rh->name), 0xdeadbabe);
+
+	switch (h) {
+	case 0x88705DC4D9D61ABULL:	/* received */
+		recv = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct received_header));
+		rspamd_smtp_recieved_parse (task, rh->decoded,
+				strlen (rh->decoded), recv);
+		g_ptr_array_add (task->received, recv);
+		break;
+	case 0x76F31A09F4352521ULL:	/* to */
+		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
+				rh->value, strlen (rh->value), task->rcpt_mime);
+		break;
+	case 0x7EB117C1480B76ULL:	/* cc */
+		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
+				rh->value, strlen (rh->value), task->rcpt_mime);
+		break;
+	case 0xE4923E11C4989C8DULL:	/* bcc */
+		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
+				rh->value, strlen (rh->value), task->rcpt_mime);
+		break;
+	case 0x41E1985EDC1CBDE4ULL:	/* from */
+		task->from_mime = rspamd_email_address_from_mime (task->task_pool,
+				rh->value, strlen (rh->value), task->from_mime);
+		break;
+	case 0x43A558FC7C240226ULL:	/* message-id */ {
+		gchar *p, *end;
+
+		p = rh->decoded;
+		end = p + strlen (p);
+
+		if (*p == '<') {
+			p ++;
+
+			if (end > p && *(end - 1) == '>') {
+				*(end - 1) = '\0';
+				p = rspamd_mempool_strdup (task->task_pool, p);
+				*(end - 1) = '>';
+			}
+		}
+
+		task->message_id = p;
+		break;
+	}
+	case 0xB91D3910358E8212ULL:	/* subject */
+		if (task->subject == NULL) {
+			task->subject = rh->decoded;
+		}
+		break;
+	case 0xEE4AA2EAAC61D6F4ULL:	/* return-path */
+		if (task->from_envelope == NULL) {
+			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
+					strlen (rh->decoded));
+		}
+		break;
+	case 0xB9EEFAD2E93C2161ULL:	/* delivered-to */
+		if (task->deliver_to == NULL) {
+			task->deliver_to = rh->decoded;
+		}
+		break;
+	}
+}
 
 static void
 rspamd_mime_header_add (struct rspamd_task *task,
 		GHashTable *target, struct rspamd_mime_header *rh)
 {
 	GPtrArray *ar;
+
+	rspamd_mime_header_check_special (task, rh);
 
 	if ((ar = g_hash_table_lookup (target, rh->name)) != NULL) {
 		g_ptr_array_add (ar, rh);
@@ -36,6 +111,8 @@ rspamd_mime_header_add (struct rspamd_task *task,
 		g_hash_table_insert (target, rh->name, ar);
 		msg_debug_task ("add new raw header %s: %s", rh->name, rh->value);
 	}
+
+	rspamd_mime_header_check_special (task, rh);
 }
 
 /* Convert raw headers to a list of struct raw_header * */
