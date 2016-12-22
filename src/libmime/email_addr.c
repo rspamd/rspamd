@@ -19,6 +19,7 @@
 #include "message.h"
 #include "printf.h"
 #include "smtp_parsers.h"
+#include "mime_headers.h"
 
 static void
 rspamd_email_addr_dtor (struct rspamd_email_address *addr)
@@ -29,6 +30,10 @@ rspamd_email_addr_dtor (struct rspamd_email_address *addr)
 
 	if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
 		g_free ((void *)addr->user);
+	}
+
+	if (addr->name) {
+		g_free ((gpointer)addr->name);
 	}
 
 	g_slice_free1 (sizeof (*addr), addr);
@@ -112,4 +117,196 @@ void
 rspamd_email_address_unref (struct rspamd_email_address *addr)
 {
 	REF_RELEASE (addr);
+}
+
+static inline void
+rspamd_email_address_add (rspamd_mempool_t *pool,
+		GPtrArray *ar,
+		struct rspamd_email_address *addr,
+		GString *name)
+{
+	struct rspamd_email_address *elt;
+	guint nlen;
+
+	elt = g_slice_alloc (sizeof (*elt));
+	memcpy (elt, addr, sizeof (*addr));
+
+	if ((elt->flags & RSPAMD_EMAIL_ADDR_QUOTED) && elt->addr[0] == '"') {
+		if (elt->flags & RSPAMD_EMAIL_ADDR_HAS_BACKSLASH) {
+			/* We also need to unquote user */
+			rspamd_email_address_unescape (elt);
+		}
+
+		/* We need to unquote addr */
+		nlen = elt->domain_len + elt->user_len + 2;
+		elt->addr = g_malloc (nlen + 1);
+		elt->addr_len = rspamd_snprintf ((char *)elt->addr, nlen, "%*s@%*s",
+				(gint)elt->user_len, elt->user,
+				(gint)elt->domain_len, elt->domain);
+		elt->flags |= RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED;
+	}
+
+	REF_INIT_RETAIN (elt, rspamd_email_addr_dtor);
+
+	if (name->len > 0) {
+		elt->name = rspamd_mime_header_decode (pool, name->str, name->len);
+	}
+
+	g_ptr_array_add (ar, elt);
+}
+
+GPtrArray *
+rspamd_email_address_from_mime (rspamd_mempool_t *pool,
+		const gchar *hdr, guint len,
+		GPtrArray *src)
+{
+	GPtrArray *res = src;
+	struct rspamd_email_address addr;
+	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
+	GString *ns;
+	enum {
+		parse_name = 0,
+		parse_quoted,
+		parse_addr,
+		skip_spaces
+	} state = parse_name, next_state = parse_name;
+
+	if (res == NULL) {
+		res = g_ptr_array_sized_new (2);
+		rspamd_mempool_add_destructor (pool, rspamd_email_address_list_destroy,
+				res);
+	}
+
+	ns = g_string_sized_new (127);
+
+	while (p < end) {
+		switch (state) {
+		case parse_name:
+			if (*p == '"') {
+				/* We need to strip last spaces and update `ns` */
+				if (p > c) {
+					t = p;
+					while (t > c && g_ascii_isspace (*t)) {
+						t --;
+					}
+
+					g_string_append_len (ns, c, t - c);
+				}
+
+				state = parse_quoted;
+				c = p + 1;
+			}
+			else if (*p == '<') {
+				if (p > c) {
+					t = p;
+					while (t > c && g_ascii_isspace (*t)) {
+						t --;
+					}
+
+					g_string_append_len (ns, c, t - c);
+				}
+
+				c = p;
+				state = parse_addr;
+			}
+			else if (*p == ',') {
+				if (p > c) {
+					/*
+					 * Last token must be the address:
+					 * e.g. Some name name@domain.com
+					 */
+					t = p;
+					while (t > c && g_ascii_isspace (*t)) {
+						t --;
+					}
+
+					rspamd_smtp_addr_parse (c, t - c, &addr);
+
+					if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
+						rspamd_email_address_add (pool, res, &addr, ns);
+					}
+
+					/* Cleanup for the next use */
+					g_string_set_size (ns, 0);
+				}
+
+				state = skip_spaces;
+				next_state = parse_name;
+			}
+			p ++;
+			break;
+		case parse_quoted:
+			if (*p == '"') {
+				if (p > c) {
+					g_string_append_len (ns, c, p - c);
+				}
+
+				state = skip_spaces;
+				next_state = parse_name;
+			}
+			p ++;
+			break;
+		case parse_addr:
+			if (*p == '>') {
+				rspamd_smtp_addr_parse (c, p - c + 1, &addr);
+
+				if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
+					rspamd_email_address_add (pool, res, &addr, ns);
+				}
+
+				/* Cleanup for the next use */
+				g_string_set_size (ns, 0);
+
+				state = skip_spaces;
+				next_state = parse_name;
+			}
+			p ++;
+			break;
+		case skip_spaces:
+			if (!g_ascii_isspace (*p)) {
+				c = p;
+				state = next_state;
+			}
+			else {
+				p ++;
+			}
+			break;
+		}
+	}
+
+	/* Handle leftover */
+	switch (state) {
+	case parse_name:
+	case parse_addr:
+		if (p > c) {
+			rspamd_smtp_addr_parse (c, p - c + 1, &addr);
+
+			if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
+				rspamd_email_address_add (pool, res, &addr, ns);
+			}
+		}
+		break;
+	case parse_quoted:
+		/* Unfinished quoted string */
+		break;
+	default:
+		/* Do nothing */
+		break;
+	}
+
+	return res;
+}
+
+void
+rspamd_email_address_list_destroy (gpointer ptr)
+{
+	GPtrArray *ar = ptr;
+	guint i;
+	struct rspamd_email_address *addr;
+
+	PTR_ARRAY_FOREACH (ar, i, addr) {
+		REF_RELEASE (addr);
+	}
+
+	g_ptr_array_free (ar, TRUE);
 }

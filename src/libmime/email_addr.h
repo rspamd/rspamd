@@ -17,7 +17,8 @@
 #define SRC_LIBMIME_EMAIL_ADDR_H_
 
 #include "config.h"
-#include "ref.h"
+#include "libutil/mem_pool.h"
+#include "libutil/ref.h"
 
 struct rspamd_mime_header;
 
@@ -61,6 +62,26 @@ struct rspamd_email_address {
  */
 struct rspamd_email_address * rspamd_email_address_from_smtp (
 		const gchar *str, guint len);
+
+/**
+ * Parses email address from the mime header, decodes names and return the array
+ * of `rspamd_email_address`. If `src` is NULL, then this function creates a new
+ * array and adds a destructor to remove elements when `pool` is destroyed.
+ * Otherwise, addresses are appended to `src`.
+ * @param hdr
+ * @param len
+ * @return
+ */
+GPtrArray *rspamd_email_address_from_mime (rspamd_mempool_t *pool,
+		const gchar *hdr,
+		guint len,
+		GPtrArray *src);
+
+/**
+ * Destroys list of email addresses
+ * @param ptr
+ */
+void rspamd_email_address_list_destroy (gpointer ptr);
 
 struct rspamd_email_address * rspamd_email_address_ref (
 		struct rspamd_email_address *addr);
