@@ -274,13 +274,39 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	return TRUE;
 }
 
-gboolean
-rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
-		gchar *in, gsize len)
+void
+rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 {
 	const gchar *end, *p;
 	gsize remain = len;
 
+	/* Now we validate input and replace bad characters with '?' symbol */
+	p = in;
+
+	while (remain > 0 && !g_utf8_validate (p, remain, &end)) {
+		gchar *valid;
+
+		valid = g_utf8_find_next_char (end, in + len);
+
+		if (!valid) {
+			valid = in + len;
+		}
+
+		if (valid > end) {
+			memset ((gchar *)end, '?', valid - end);
+			p = valid;
+			remain = (in + len) - p;
+		}
+		else {
+			break;
+		}
+	}
+}
+
+gboolean
+rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
+		gchar *in, gsize len)
+{
 	if (utf_compatible_re == NULL) {
 		utf_compatible_re = rspamd_regexp_new (
 				"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
@@ -290,27 +316,7 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 
 	if (rspamd_regexp_match (utf_compatible_re, charset->begin, charset->len,
 			TRUE)) {
-		/* Now we validate input and replace bad characters with '?' symbol */
-		p = in;
-
-		while (remain > 0 && !g_utf8_validate (p, remain, &end)) {
-			gchar *valid;
-
-			valid = g_utf8_find_next_char (end, in + len);
-
-			if (!valid) {
-				valid = in + len;
-			}
-
-			if (valid > end) {
-				memset ((gchar *)end, '?', valid - end);
-				p = valid;
-				remain = (in + len) - p;
-			}
-			else {
-				break;
-			}
-		}
+		rspamd_mime_charset_utf_enforce (in, len);
 
 		return TRUE;
 	}

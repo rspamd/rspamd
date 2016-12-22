@@ -78,4 +78,12 @@ GByteArray * rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 		gchar *in, gsize len);
 
+/**
+ * Ensure that all characters in string are valid utf8 chars or replace them
+ * with '?'
+ * @param in
+ * @param len
+ */
+void rspamd_mime_charset_utf_enforce (gchar *in, gsize len);
+
 #endif /* SRC_LIBMIME_MIME_ENCODING_H_ */

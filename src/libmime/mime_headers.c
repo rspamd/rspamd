@@ -227,6 +227,8 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 				new->decoded = "";
 			}
 
+			/* We also validate utf8 and replace all non-valid utf8 chars */
+			rspamd_mime_charset_utf_enforce (new->decoded, strlen (new->decoded));
 			rspamd_mime_header_add (task, target, new);
 			state = 0;
 			break;
