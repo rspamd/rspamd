@@ -146,6 +146,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 
 	if (name->len > 0) {
 		elt->name = rspamd_mime_header_decode (pool, name->str, name->len);
+		elt->name_len = strlen (elt->name);
 	}
 
 	g_ptr_array_add (ar, elt);
@@ -181,12 +182,13 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			if (*p == '"') {
 				/* We need to strip last spaces and update `ns` */
 				if (p > c) {
-					t = p;
+					t = p - 1;
+
 					while (t > c && g_ascii_isspace (*t)) {
 						t --;
 					}
 
-					g_string_append_len (ns, c, t - c);
+					g_string_append_len (ns, c, t - c + 1);
 				}
 
 				state = parse_quoted;
@@ -194,12 +196,13 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			}
 			else if (*p == '<') {
 				if (p > c) {
-					t = p;
+					t = p - 1;
+
 					while (t > c && g_ascii_isspace (*t)) {
 						t --;
 					}
 
-					g_string_append_len (ns, c, t - c);
+					g_string_append_len (ns, c, t - c + 1);
 				}
 
 				c = p;
@@ -212,11 +215,12 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 					 * e.g. Some name name@domain.com
 					 */
 					t = p;
+
 					while (t > c && g_ascii_isspace (*t)) {
 						t --;
 					}
 
-					rspamd_smtp_addr_parse (c, t - c, &addr);
+					rspamd_smtp_addr_parse (c, t - c + 1, &addr);
 
 					if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 						rspamd_email_address_add (pool, res, &addr, ns);
@@ -275,7 +279,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 	case parse_name:
 	case parse_addr:
 		if (p > c) {
-			rspamd_smtp_addr_parse (c, p - c + 1, &addr);
+			rspamd_smtp_addr_parse (c, p - c, &addr);
 
 			if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 				rspamd_email_address_add (pool, res, &addr, ns);
