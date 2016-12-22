@@ -27,6 +27,7 @@
 #include "unix-std.h"
 #include "cryptobox.h"
 #include "libutil/multipattern.h"
+#include "libmime/email_addr.h"
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
@@ -3129,51 +3130,19 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 	GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
-	InternetAddressList **target, *tmp_addr;
+	GPtrArray **target, *tmp_addr = NULL;
 	const gchar *val;
 	ucl_object_iter_t it;
 	const ucl_object_t *cur;
 
-	target = (InternetAddressList **)(((gchar *)pd->user_struct) + pd->offset);
-	if (*target == NULL) {
-		*target = internet_address_list_new ();
-	#ifdef GMIME24
-			rspamd_mempool_add_destructor (pool,
-					(rspamd_mempool_destruct_t) g_object_unref,
-					*target);
-	#else
-			rspamd_mempool_add_destructor (pool,
-					(rspamd_mempool_destruct_t) internet_address_list_destroy,
-					*target);
-	#endif
-	}
-
+	target = (GPtrArray **)(((gchar *)pd->user_struct) + pd->offset);
 	it = ucl_object_iterate_new (obj);
 
 	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
-
 		if (ucl_object_type (cur) == UCL_STRING) {
 			val = ucl_object_tostring (obj);
-			tmp_addr = internet_address_list_parse_string (val);
-
-			if (tmp_addr) {
-				internet_address_list_append (*target, tmp_addr);
-#ifdef GMIME24
-				g_object_unref (tmp_addr);
-#else
-				internet_address_list_destroy (tmp_addr);
-#endif
-			}
-			else {
-				g_set_error (err,
-						CFG_RCL_ERROR,
-						EINVAL,
-						"cannot parse inet address: %s in %s", val,
-						ucl_object_key (obj));
-				ucl_object_iterate_free (it);
-
-				return FALSE;
-			}
+			tmp_addr = rspamd_email_address_from_mime (pool, val,
+					strlen (val), tmp_addr);
 		}
 		else {
 			g_set_error (err,
@@ -3188,6 +3157,8 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 	}
 
 	ucl_object_iterate_free (it);
+	*target = tmp_addr;
+
 	return TRUE;
 }
 

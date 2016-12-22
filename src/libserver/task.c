@@ -826,7 +826,6 @@ rspamd_task_cache_principal_recipient (struct rspamd_task *task,
 const gchar *
 rspamd_task_get_principal_recipient (struct rspamd_task *task)
 {
-	InternetAddress *iaelt = NULL;
 	const gchar *val;
 	struct rspamd_email_address *addr;
 
@@ -849,32 +848,14 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 		}
 	}
 
-#ifdef GMIME24
-	InternetAddressMailbox *imb;
+	if (task->rcpt_mime != NULL && task->rcpt_mime->len > 0) {
+		addr = g_ptr_array_index (task->rcpt_mime, 0);
 
-	if (task->rcpt_mime != NULL) {
-		iaelt = internet_address_list_get_address (task->rcpt_mime, 0);
+		if (addr->addr) {
+			return rspamd_task_cache_principal_recipient (task, addr->addr,
+					addr->addr_len);
+		}
 	}
-
-	imb = INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
-			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
-
-	if (imb) {
-		val = internet_address_mailbox_get_addr (imb);
-
-		return rspamd_task_cache_principal_recipient (task, val, strlen (val));
-	}
-#else
-	if (task->rcpt_mime != NULL) {
-		iaelt = internet_address_list_get_address (task->rcpt_mime);
-	}
-
-	if (iaelt) {
-		val = internet_address_get_addr (iaelt);
-
-		return rspamd_task_cache_principal_recipient (task, val, strlen (val));
-	}
-#endif
 
 	return NULL;
 }
@@ -932,8 +913,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (task->rcpt_mime &&
-				internet_address_list_length (task->rcpt_mime) > 0) {
+		if (task->rcpt_mime && task->rcpt_mime->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -943,8 +923,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (task->from_mime &&
-				internet_address_list_length (task->from_mime) > 0) {
+		if (task->from_mime && task->from_mime->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -1131,33 +1110,29 @@ rspamd_task_log_write_var (struct rspamd_task *task, rspamd_fstring_t *logbuf,
 
 static rspamd_fstring_t *
 rspamd_task_write_ialist (struct rspamd_task *task,
-		InternetAddressList *ialist, gint lim,
+		GPtrArray *addrs, gint lim,
 		struct rspamd_log_format *lf,
 		rspamd_fstring_t *logbuf)
 {
 	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
-	InternetAddressMailbox *iamb;
-	InternetAddress *ia = NULL;
+	struct rspamd_email_address *addr;
 	gint i, nchars = 0, cur_chars;
 
 	if (lim <= 0) {
-		lim = internet_address_list_length (ialist);
+		lim = addrs->len;
 	}
-
 
 	varbuf = rspamd_fstring_new ();
 
-	for (i = 0; i < lim; i++) {
-		ia = internet_address_list_get_address (ialist, i);
-
-		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
-			iamb = INTERNET_ADDRESS_MAILBOX (ia);
-			cur_chars = strlen (iamb->addr);
-			varbuf = rspamd_fstring_append (varbuf, iamb->addr,
-					cur_chars);
-			nchars += cur_chars;
+	PTR_ARRAY_FOREACH (addrs, i, addr) {
+		if (i >= lim) {
+			break;
 		}
+		cur_chars = addr->addr_len;
+		varbuf = rspamd_fstring_append (varbuf, addr->addr,
+				cur_chars);
+		nchars += cur_chars;
 
 		if (varbuf->len > 0) {
 			if (i != lim - 1) {

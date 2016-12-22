@@ -177,9 +177,9 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		g_array_append_val (ar, elt);
 	}
 	/* Number recipients */
-	if (task->rcpt_mime && internet_address_list_length (task->rcpt_mime) > 0) {
+	if (task->rcpt_mime && task->rcpt_mime->len > 0) {
 		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "recipients%d",
-				(gint)internet_address_list_length (task->rcpt_mime));
+				(gint)task->rcpt_mime->len);
 		elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
 		elt.len = strlen (elt.begin);
 		g_array_append_val (ar, elt);

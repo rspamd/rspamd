@@ -1116,7 +1116,9 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 
 struct addr_list {
 	const gchar *name;
+	guint namelen;
 	const gchar *addr;
+	guint addrlen;
 };
 
 #define COMPARE_RCPT_LEN 3
@@ -1127,10 +1129,9 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	void *unused)
 {
 	struct expression_argument *arg;
-	InternetAddressList *cur;
+	struct rspamd_email_address *cur;
 	double threshold;
 	struct addr_list *ar;
-	gchar *c;
 	gint num, i, j, hits = 0, total = 0;
 
 	if (args == NULL) {
@@ -1158,76 +1159,31 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 		return FALSE;
 	}
 
-	num = internet_address_list_length (task->rcpt_mime);
+	num = task->rcpt_mime->len;
 
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
-	ar =
-		rspamd_mempool_alloc0 (task->task_pool, num *
-			sizeof (struct addr_list));
+
+	ar = rspamd_mempool_alloc0 (task->task_pool, num * sizeof (struct addr_list));
 
 	/* Fill array */
-	cur = task->rcpt_mime;
-#ifdef GMIME24
-	for (i = 0; i < num; i++) {
-		InternetAddress *iaelt =
-			internet_address_list_get_address(cur, i);
-		InternetAddressMailbox *iamb =
-			INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
-			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
-		if (iamb) {
-			ar[i].name = internet_address_mailbox_get_addr (iamb);
-			if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
-				ar[i].addr = c + 1;
-			}
-		}
+	PTR_ARRAY_FOREACH (task->rcpt_mime, i, cur) {
+		ar[i].name = cur->addr;
+		ar[i].namelen = cur->addr_len;
+		ar[i].addr = cur->domain;
+		ar[i].addrlen = cur->domain_len;
 	}
-#else
-	InternetAddress *addr;
-	i = 0;
-	while (cur) {
-		addr = internet_address_list_get_address (cur);
-		if (addr && internet_address_get_type (addr) == INTERNET_ADDRESS_NAME) {
-			ar[i].name = rspamd_mempool_strdup (task->task_pool,
-					internet_address_get_addr (addr));
-			if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
-				*c = '\0';
-				ar[i].addr = c + 1;
-			}
-			cur = internet_address_list_next (cur);
-			i++;
-		}
-		else {
-			cur = internet_address_list_next (cur);
-		}
-	}
-#endif
 
 	/* Cycle all elements in array */
 	for (i = 0; i < num; i++) {
 		for (j = i + 1; j < num; j++) {
-			if (ar[i].name && ar[j].name &&
-				g_ascii_strncasecmp (ar[i].name, ar[j].name,
-				COMPARE_RCPT_LEN) == 0) {
+			if (ar[i].namelen >= COMPARE_RCPT_LEN && ar[j].namelen >= COMPARE_RCPT_LEN &&
+				rspamd_lc_cmp (ar[i].name, ar[j].name, COMPARE_RCPT_LEN) == 0) {
 				/* Common name part */
 				hits++;
 			}
-#if 0
-			/* XXX: when we have a typical mail that is headed towards
-			 * several users within the same domain, then this rule
-			 * leads to a false-positive.
-			 * We actually need to match host against tld, but this is currently
-			 * too expensive.
-			 *
-			 * TODO: think about normal representation of InternetAddress shit
-			 */
-			else if (ar[i].addr && ar[j].addr &&
-				g_ascii_strcasecmp (ar[i].addr, ar[j].addr) == 0) {
-				/* Common address part, but different name */
-				hits++;
-			}
-#endif
+
 			total++;
 		}
 	}
@@ -1261,62 +1217,31 @@ rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 }
 
 static gboolean
-is_recipient_list_sorted (const InternetAddressList * ia)
+is_recipient_list_sorted (GPtrArray *ar)
 {
-	const InternetAddressList *cur;
-	InternetAddress *addr;
-	InternetAddressMailbox *addr_mb;
+	struct rspamd_email_address *addr;
 	gboolean res = TRUE;
-	struct addr_list current = { NULL, NULL }, previous = {
-		NULL, NULL
-	};
-#ifdef GMIME24
-	gint num, i;
-#endif
+	rspamd_ftok_t cur, prev;
+	gint i;
 
 	/* Do not check to short address lists */
-	if (internet_address_list_length ((InternetAddressList *)ia) <
-		MIN_RCPT_TO_COMPARE) {
+	if (ar == NULL || ar->len < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
-#ifdef GMIME24
-	num = internet_address_list_length ((InternetAddressList *)ia);
-	cur = ia;
-	for (i = 0; i < num; i++) {
-		addr =
-			internet_address_list_get_address ((InternetAddressList *)cur, i);
-		if (INTERNET_ADDRESS_IS_MAILBOX (addr)) {
-			addr_mb = INTERNET_ADDRESS_MAILBOX (addr);
-			current.addr = (gchar *) internet_address_mailbox_get_addr (addr_mb);
-		}
 
-		if (previous.addr != NULL) {
-			if (current.addr &&
-				g_ascii_strcasecmp (current.addr, previous.addr) <= 0) {
+	PTR_ARRAY_FOREACH (ar, i, addr) {
+		cur.begin = addr->addr;
+		cur.len = addr->addr_len;
+
+		if (prev.len != 0) {
+			if (rspamd_ftok_casecmp (&cur, &prev) <= 0) {
 				res = FALSE;
 				break;
 			}
 		}
-		previous.addr = current.addr;
+
+		prev = cur;
 	}
-#else
-	cur = ia;
-	while (cur) {
-		addr = internet_address_list_get_address (cur);
-		if (internet_address_get_type (addr) == INTERNET_ADDRESS_NAME) {
-			current.addr = internet_address_get_addr (addr);
-			if (previous.addr != NULL) {
-				if (current.addr &&
-					g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
-					res = FALSE;
-					break;
-				}
-			}
-			previous.addr = current.addr;
-		}
-		cur = internet_address_list_next (cur);
-	}
-#endif
 
 	return res;
 }

@@ -1881,7 +1881,7 @@ fuzzy_storage_parse_master_flags (rspamd_mempool_t *pool,
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 		if (rspamd_strtoul (cur->key, cur->keylen, &remote_flag) &&
-				ucl_object_toint_safe (cur, &local_flag)) {
+				ucl_object_toint_safe (cur, (int64_t *)&local_flag)) {
 			g_hash_table_insert (ctx->master_flags, GUINT_TO_POINTER (remote_flag),
 					GUINT_TO_POINTER (local_flag));
 		}

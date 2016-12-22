@@ -1765,7 +1765,7 @@ static void
 lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 {
 	if (addr) {
-		lua_createtable (L, 0, 3);
+		lua_createtable (L, 0, 4);
 
 		if (addr->addr_len > 0) {
 			lua_pushstring (L, "addr");
@@ -1797,10 +1797,21 @@ lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 			lua_pushstring (L, "");
 			lua_settable (L, -3);
 		}
+
+		if (addr->name_len > 0) {
+			lua_pushstring (L, "name");
+			lua_pushlstring (L, addr->name, addr->name_len);
+			lua_settable (L, -3);
+		}
+		else {
+			lua_pushstring (L, "name");
+			lua_pushstring (L, "");
+			lua_settable (L, -3);
+		}
 	}
 }
 
-static void
+void
 lua_push_emails_address_list (lua_State *L, GPtrArray *addrs)
 {
 	struct rspamd_email_address *addr;
@@ -1819,7 +1830,6 @@ static gint
 lua_task_get_recipients (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	InternetAddressList *addrs = NULL;
 	GPtrArray *ptrs = NULL;
 	gint what = 0;
 
@@ -1836,7 +1846,7 @@ lua_task_get_recipients (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			addrs = task->rcpt_mime;
+			ptrs = task->rcpt_mime;
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
@@ -1844,15 +1854,11 @@ lua_task_get_recipients (lua_State *L)
 				ptrs = task->rcpt_envelope;
 			}
 			else {
-				addrs = task->rcpt_mime;
+				ptrs = task->rcpt_mime;
 			}
 			break;
 		}
-
-		if (addrs) {
-			lua_push_internet_address_list (L, addrs);
-		}
-		else if (ptrs) {
+		if (ptrs) {
 			lua_push_emails_address_list (L, ptrs);
 		}
 		else {
@@ -1866,14 +1872,6 @@ lua_task_get_recipients (lua_State *L)
 	return 1;
 }
 
-#define CHECK_ADDR(addr) do { \
-	if (addr == NULL) { \
-		ret = 0; \
-	} \
-	else { \
-		ret = internet_address_list_length (addr) > 0 ? 1 : 0; \
-	} \
-} while (0)
 
 #define CHECK_EMAIL_ADDR(addr) do { \
 	if (addr == NULL) { \
@@ -1913,14 +1911,14 @@ lua_task_has_from (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			CHECK_ADDR (task->from_mime);
+			CHECK_EMAIL_ADDR_LIST (task->from_mime);
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
 			CHECK_EMAIL_ADDR (task->from_envelope);
 
 			if (!ret) {
-				CHECK_ADDR (task->from_mime);
+				CHECK_EMAIL_ADDR_LIST (task->from_mime);
 			}
 			break;
 		}
@@ -1954,14 +1952,14 @@ lua_task_has_recipients (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			CHECK_ADDR (task->rcpt_mime);
+			CHECK_EMAIL_ADDR_LIST (task->rcpt_mime);
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
 			CHECK_EMAIL_ADDR_LIST (task->rcpt_envelope);
 
 			if (!ret) {
-				CHECK_ADDR (task->rcpt_mime);
+				CHECK_EMAIL_ADDR_LIST (task->rcpt_mime);
 			}
 			break;
 		}
@@ -1979,7 +1977,7 @@ static gint
 lua_task_get_from (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	InternetAddressList *addrs = NULL;
+	GPtrArray *addrs = NULL;
 	struct rspamd_email_address *addr = NULL;
 	gint what = 0;
 
@@ -2010,7 +2008,7 @@ lua_task_get_from (lua_State *L)
 		}
 
 		if (addrs) {
-			lua_push_internet_address_list (L, addrs);
+			lua_push_emails_address_list (L, addrs);
 		}
 		else if (addr) {
 			/* Create table to preserve compatibility */

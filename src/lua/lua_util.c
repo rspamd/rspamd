@@ -22,6 +22,7 @@
 #include "libserver/url.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
+#include "libmime/email_addr.h"
 #include <math.h>
 #include <glob.h>
 
@@ -1043,41 +1044,36 @@ lua_util_levenshtein_distance (lua_State *L)
 static gint
 lua_util_parse_addr (lua_State *L)
 {
-	InternetAddressList *ia;
-	InternetAddress *addr;
-	const gchar *str = luaL_checkstring (L, 1);
-	int i, cnt;
+	GPtrArray *addrs;
+	gsize len;
+	const gchar *str = luaL_checklstring (L, 1, &len);
+	rspamd_mempool_t *pool;
+	gboolean own_pool = FALSE;
 
 	if (str) {
-		ia = internet_address_list_parse_string (str);
 
-		if (ia == NULL) {
+		if (lua_type (L, 2) == LUA_TUSERDATA) {
+			pool = rspamd_lua_check_mempool (L, 2);
+
+			if (pool == NULL) {
+				return luaL_error (L, "invalid arguments");
+			}
+		}
+		else {
+			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "lua util");
+			own_pool = TRUE;
+		}
+
+		addrs = rspamd_email_address_from_mime (pool, str, len, NULL);
+
+		if (addrs == NULL) {
 			lua_pushnil (L);
 		}
 		else {
-			cnt = internet_address_list_length (ia);
-			lua_createtable (L, cnt, 0);
-
-			for (i = 0; i < cnt; i ++) {
-				addr = internet_address_list_get_address (ia, i);
-
-				lua_createtable (L, 0, 2);
-				lua_pushstring (L, "name");
-				lua_pushstring (L, internet_address_get_name (addr));
-				lua_settable (L, -3);
-
-				if (INTERNET_ADDRESS_IS_MAILBOX (addr)) {
-					lua_pushstring (L, "addr");
-					lua_pushstring (L, internet_address_mailbox_get_addr (
-							INTERNET_ADDRESS_MAILBOX (addr)));
-					lua_settable (L, -3);
-				}
-
-				lua_rawseti (L, -2, (i + 1));
-			}
-
-			g_object_unref (ia);
+			lua_push_emails_address_list (L, addrs);
 		}
+
+		rspamd_mempool_delete (pool);
 	}
 	else {
 		lua_pushnil (L);
@@ -1226,26 +1222,38 @@ lua_util_glob (lua_State *L)
 static gint
 lua_util_parse_mail_address (lua_State *L)
 {
-	InternetAddressList *ia;
-	const gchar *str = luaL_checkstring (L, 1);
-	gboolean ret = FALSE;
+	GPtrArray *addrs;
+	gsize len;
+	const gchar *str = luaL_checklstring (L, 1, &len);
+	rspamd_mempool_t *pool;
+	gboolean own_pool = FALSE;
 
 	if (str) {
-		ia = internet_address_list_parse_string (str);
 
-		if (ia != NULL) {
-			ret = TRUE;
+		if (lua_type (L, 2) == LUA_TUSERDATA) {
+			pool = rspamd_lua_check_mempool (L, 2);
 
-			lua_push_internet_address_list (L, ia);
-#ifdef GMIME24
-		g_object_unref (ia);
-#else
-		internet_address_list_destroy (ia);
-#endif
+			if (pool == NULL) {
+				return luaL_error (L, "invalid arguments");
+			}
 		}
-	}
+		else {
+			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "lua util");
+			own_pool = TRUE;
+		}
 
-	if (!ret) {
+		addrs = rspamd_email_address_from_mime (pool, str, len, NULL);
+
+		if (addrs == NULL) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_push_emails_address_list (L, addrs);
+		}
+
+		rspamd_mempool_delete (pool);
+	}
+	else {
 		lua_pushnil (L);
 	}
 

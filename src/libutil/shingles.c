@@ -177,7 +177,7 @@ rspamd_shingles_from_image (guchar *dct,
 	guint64 d;
 	rspamd_cryptobox_hash_state_t bs;
 	guint64 val;
-	gint i, j, k;
+	gint i, j;
 	gsize hlen, beg = 0;
 	enum rspamd_cryptobox_fast_hash_type ht;
 	guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;

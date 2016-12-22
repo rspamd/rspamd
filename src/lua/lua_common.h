@@ -312,20 +312,7 @@ gint rspamd_lua_traceback (lua_State *L);
  */
 guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);
 
-/**
- * Pushes a single InternetAddress as lua table
- * @param L
- * @param addrs
- */
-void lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs);
-
-/**
- * Pushes internet address list to Lua as table of tables
- * @param L
- * @param ia
- * @return
- */
-gboolean lua_push_internet_address (lua_State *L, InternetAddress *ia);
+void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs);
 
 /**
  * Log lua object to string
