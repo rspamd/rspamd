@@ -214,7 +214,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 					 * Last token must be the address:
 					 * e.g. Some name name@domain.com
 					 */
-					t = p;
+					t = p - 1;
 
 					while (t > c && g_ascii_isspace (*t)) {
 						t --;
