@@ -79,16 +79,16 @@
     }
   }
   action TZ_Sign {
-    tmp = p - 1;
+    tmp = p;
   }
   action TZ_Offset_Start {
 
   }
   action TZ_Offset_End {
     if (p > tmp + 1) {
-      rspamd_strtoul (tmp + 1, p - tmp - 1, (gulong *)&tz);
+      rspamd_strtoul (tmp + 1, p - tmp, (gulong *)&tz);
 
-      if (*tmp == '-') {
+      if (*(tmp - 1) == '-') {
         tz = -(tz);
       }
     }
@@ -189,6 +189,6 @@
                      "MST" %TZ_MST | "MDT" %TZ_MDT |
                      "PST" %TZ_PST | "PDT" %TZ_PDT |
                      [a-iA-I] | [k-zK-Z];
-  time            =   time_of_day %DT_End (zone | obs_zone %Obs_Zone_End);
+  time            =   time_of_day %DT_End (zone | obs_zone %Obs_Zone_End) FWS*;
   date_time       =   (day_of_week ",")? date time;
 }%%
