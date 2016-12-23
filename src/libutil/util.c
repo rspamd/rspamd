@@ -2648,7 +2648,7 @@ rspamd_tm_to_time (const struct tm *tm, glong tz)
 	result += tm->tm_sec;
 
 	/* Now apply tz offset */
-	result += offset;
+	result -= offset;
 
 	return result;
 }
