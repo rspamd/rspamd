@@ -123,8 +123,8 @@ rspamd_config.MISSING_DATE = {
 rspamd_config.DATE_IN_FUTURE = {
   callback = function(task)
     if rspamd_config:get_api_version() >= 5 then
-      local dm = task:get_date{format = 'message'}
-      local dt = task:get_date{format = 'connect'}
+      local dm = task:get_date{format = 'message', gmt = true}
+      local dt = task:get_date{format = 'connect', gmt = true}
       -- 2 hours
       if dm > 0 and dm - dt > 7200 then
         return true
