@@ -227,7 +227,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	}
 
 	/* Preallocate for half of characters to be converted */
-	outlen = inremain + inremain / 2 + 1;
+	outlen = inremain * 2 + 1;
 	g_byte_array_set_size (out, outlen);
 	s = in->data;
 	d = out->data;
@@ -243,11 +243,11 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 				/* Enlarge string */
 				if (inremain > 0) {
 					pos = outlen;
-					outlen += inremain * 2;
+					outlen += inremain * 4;
+					remain += inremain * 4;
 					/* May cause reallocate, so store previous len in pos */
 					g_byte_array_set_size (out, outlen);
 					d = out->data + pos;
-					remain = outlen - pos;
 				}
 				break;
 			case EILSEQ:
