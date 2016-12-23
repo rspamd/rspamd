@@ -76,10 +76,18 @@
             return false;
         });
         $('#refresh').on('click', function (event) {
-            clearTimeout(stat_timeout);
-            getChart();
-            getGraphData(selected.selData);
-            statWidgets();
+            if (!$(this).attr('disabled')) {
+                $(this).attr('disabled', true);
+                clearTimeout(stat_timeout);
+
+                getChart();
+                getGraphData(selected.selData);
+                statWidgets();
+
+                setTimeout(function () {
+                    $('#refresh').removeAttr('disabled');
+                }, 1000);
+            }
         });
         // @supports session storage
         function supportsSessionStorage() {
