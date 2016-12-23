@@ -1073,7 +1073,9 @@ lua_util_parse_addr (lua_State *L)
 			lua_push_emails_address_list (L, addrs);
 		}
 
-		rspamd_mempool_delete (pool);
+		if (own_pool) {
+			rspamd_mempool_delete (pool);
+		}
 	}
 	else {
 		lua_pushnil (L);
@@ -1251,7 +1253,9 @@ lua_util_parse_mail_address (lua_State *L)
 			lua_push_emails_address_list (L, addrs);
 		}
 
-		rspamd_mempool_delete (pool);
+		if (own_pool) {
+			rspamd_mempool_delete (pool);
+		}
 	}
 	else {
 		lua_pushnil (L);
