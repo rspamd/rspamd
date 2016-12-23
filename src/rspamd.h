@@ -191,20 +191,6 @@ typedef struct worker_s {
 	const gchar *rspamd_features;
 } worker_t;
 
-struct rspamd_dynamic_module {
-	module_t mod;
-	GModule *lib;
-	const gchar *path;
-	GQuark type;
-};
-
-struct rspamd_dynamic_worker {
-	worker_t wrk;
-	GModule *lib;
-	GQuark type;
-	const gchar *path;
-};
-
 /**
  * Check if loaded worker is compatible with rspamd
  * @param cfg

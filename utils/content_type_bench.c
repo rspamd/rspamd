@@ -71,7 +71,7 @@ rspamd_process_file (const gchar *fname, gint mode)
 			t2 = rspamd_get_virtual_ticks ();
 		}
 		else {
-			rspamd_fprintf ("gmime is no longer supported\n");
+			rspamd_fprintf (stderr, "gmime is no longer supported\n");
 			exit (EXIT_FAILURE);
 		}
 

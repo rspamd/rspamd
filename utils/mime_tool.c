@@ -231,7 +231,6 @@ main (int argc, char **argv)
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 	rspamd_config_post_load (cfg,
 			RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_NO_TLD);
-	g_mime_init (0);
 
 	for (i = start; i < argc; i ++) {
 		if (argv[i]) {

@@ -410,8 +410,6 @@ struct rspamd_config {
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/
 	struct worker_s **compiled_workers;				/**< list of compiled C modules							*/
-	GList *dynamic_modules;							/**< list of dynamic C modules							*/
-	GList *dynamic_workers;							/**< list of dynamic C modules							*/
 	struct rspamd_config_post_load_script *finish_callbacks; /**< list of callbacks called on worker's termination	*/
 	struct rspamd_log_format *log_format;			/**< parsed log format									*/
 	gchar *log_format_str;							/**< raw log format string								*/

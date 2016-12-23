@@ -187,10 +187,7 @@ rspamd_config_new (void)
 void
 rspamd_config_free (struct rspamd_config *cfg)
 {
-	struct rspamd_dynamic_module *dyn_mod;
-	struct rspamd_dynamic_worker *dyn_wrk;
 	struct rspamd_config_post_load_script *sc, *sctmp;
-	GList *cur;
 
 	rspamd_map_remove_all (cfg);
 	ucl_object_unref (cfg->rcl_obj);
@@ -212,28 +209,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
-	}
-
-	/* Unload dynamic workers/modules */
-	cur = g_list_first (cfg->dynamic_modules);
-	while (cur) {
-		dyn_mod = cur->data;
-
-		if (dyn_mod->lib) {
-			g_module_close (dyn_mod->lib);
-		}
-
-		cur = g_list_next (cur);
-	}
-	cur = g_list_first (cfg->dynamic_workers);
-	while (cur) {
-		dyn_wrk = cur->data;
-
-		if (dyn_wrk->lib) {
-			g_module_close (dyn_wrk->lib);
-		}
-
-		cur = g_list_next (cur);
 	}
 
 	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
@@ -1336,7 +1311,6 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 {
 	GList *cur;
 	module_t *mod, **pmod;
-	struct rspamd_dynamic_module *dyn_mod;
 	struct module_ctx *mod_ctx;
 
 	/* Init all compiled modules */
@@ -1354,29 +1328,6 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 					mod_ctx->mod = mod;
 				}
 			}
-		}
-
-		cur = g_list_first (cfg->dynamic_modules);
-
-		while (cur) {
-			dyn_mod = cur->data;
-
-			if (dyn_mod->lib) {
-				mod = &dyn_mod->mod;
-
-				if (rspamd_check_module (cfg, mod)) {
-					mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
-
-					if (mod->module_init_func (cfg, &mod_ctx) == 0) {
-						g_hash_table_insert (cfg->c_modules,
-								(gpointer) mod->name,
-								mod_ctx);
-						mod_ctx->mod = mod;
-					}
-				}
-			}
-
-			cur = g_list_next (cur);
 		}
 	}
 

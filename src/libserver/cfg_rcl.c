@@ -551,11 +551,9 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	const ucl_object_t *val, *cur, *cur_obj;
-	struct rspamd_dynamic_worker *dyn_wrk;
-	worker_t *dyn_ctx;
 	ucl_object_t *robj;
 	ucl_object_iter_t it = NULL;
-	const gchar *worker_type, *worker_bind, *lib_path;
+	const gchar *worker_type, *worker_bind;
 	struct rspamd_config *cfg = ud;
 	GQuark qtype;
 	struct rspamd_worker_conf *wrk;
@@ -565,49 +563,6 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	g_assert (key != NULL);
 	worker_type = key;
-
-	val = ucl_object_lookup_any (obj, "module", "load", NULL);
-
-	if (val != NULL && ucl_object_tostring_safe (val, &lib_path)) {
-
-		if (!g_module_supported ()) {
-			msg_err_config ("modules are not supported, so load of %s is impossible",
-					worker_type);
-
-			return FALSE;
-		}
-
-		dyn_wrk = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*dyn_wrk));
-		dyn_wrk->lib = g_module_open (lib_path, G_MODULE_BIND_LAZY);
-
-		if (dyn_wrk->lib == NULL) {
-			msg_err_config ("cannot load %s at %s: %s", worker_type,
-					lib_path, strerror (errno));
-
-			return FALSE;
-		}
-
-		if (!g_module_symbol (dyn_wrk->lib, "rspamd_dyn_worker",
-				(gpointer *)&dyn_ctx)) {
-			msg_err_config ("cannot load %s at %s: missing entry point",
-					worker_type,
-					lib_path);
-			g_module_close (dyn_wrk->lib);
-
-			return FALSE;
-		}
-
-		if (!rspamd_check_worker (cfg, dyn_ctx)) {
-			g_module_close (dyn_wrk->lib);
-
-			return FALSE;
-		}
-
-		memcpy (&dyn_wrk->wrk, dyn_ctx, sizeof (dyn_wrk->wrk));
-		dyn_wrk->path = lib_path;
-		dyn_wrk->type = g_quark_from_static_string (worker_type);
-		cfg->dynamic_workers = g_list_prepend (cfg->dynamic_workers, dyn_wrk);
-	}
 
 	qtype = g_quark_try_string (worker_type);
 	if (qtype != 0) {

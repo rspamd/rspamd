@@ -52,9 +52,7 @@
 worker_t *
 rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 {
-	worker_t **pwrk, *wrk;
-	struct rspamd_dynamic_worker *dyn_wrk;
-	GList *cur;
+	worker_t **pwrk;
 
 	pwrk = cfg->compiled_workers;
 	while (pwrk && *pwrk) {
@@ -65,23 +63,6 @@ rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 		}
 
 		pwrk++;
-	}
-
-	cur = g_list_first (cfg->dynamic_workers);
-	while (cur) {
-		dyn_wrk = cur->data;
-
-		if (dyn_wrk->lib) {
-			wrk = &dyn_wrk->wrk;
-
-			if (rspamd_check_worker (cfg, wrk)) {
-				if (g_quark_from_string (wrk->name) == type) {
-					return wrk;
-				}
-			}
-		}
-
-		cur = g_list_next (cur);
 	}
 
 	return NULL;
