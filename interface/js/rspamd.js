@@ -76,9 +76,10 @@
             return false;
         });
         $('#refresh').on('click', function (event) {
-            statWidgets();
+            clearTimeout(stat_timeout);
             getChart();
             getGraphData(selected.selData);
+            statWidgets();
         });
         // @supports session storage
         function supportsSessionStorage() {
