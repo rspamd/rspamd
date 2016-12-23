@@ -95,11 +95,10 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 
 static void
 rspamd_mime_header_add (struct rspamd_task *task,
-		GHashTable *target, struct rspamd_mime_header *rh)
+		GHashTable *target, struct rspamd_mime_header *rh,
+		gboolean check_special)
 {
 	GPtrArray *ar;
-
-	rspamd_mime_header_check_special (task, rh);
 
 	if ((ar = g_hash_table_lookup (target, rh->name)) != NULL) {
 		g_ptr_array_add (ar, rh);
@@ -112,7 +111,9 @@ rspamd_mime_header_add (struct rspamd_task *task,
 		msg_debug_task ("add new raw header %s: %s", rh->name, rh->value);
 	}
 
-	rspamd_mime_header_check_special (task, rh);
+	if (check_special) {
+		rspamd_mime_header_check_special (task, rh);
+	}
 }
 
 /* Convert raw headers to a list of struct raw_header * */
@@ -306,14 +307,14 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 
 			/* We also validate utf8 and replace all non-valid utf8 chars */
 			rspamd_mime_charset_utf_enforce (new->decoded, strlen (new->decoded));
-			rspamd_mime_header_add (task, target, new);
+			rspamd_mime_header_add (task, target, new, check_newlines);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			new->value = "";
 			new->decoded = "";
-			rspamd_mime_header_add (task, target, new);
+			rspamd_mime_header_add (task, target, new, check_newlines);
 			state = 0;
 			break;
 		case 99:
