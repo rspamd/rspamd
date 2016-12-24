@@ -1289,7 +1289,9 @@
             $('#navBar').addClass('loading');
         });
         $(document).ajaxComplete(function () {
-            $('#navBar').removeClass('loading');
+            setTimeout(function () {
+                $('#navBar').removeClass('loading');
+            }, 1000);
         });
         $('#status_nav').bind('click', function (e) {
             getChart();

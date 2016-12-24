@@ -91,28 +91,6 @@ textarea {
 		font-size:11px !important;
 		}
 
-/* spinners optional */
-input {
-	margin:0px;
-	padding:0px;
-	width:60px;
-	}
-input[type=number] {
-	padding-right:25px;	/* at least image width */
-	text-align:right;
-	width:60px;
-	}
-input.number { /* should be same as type=number for IE and overriding */
-	padding-right:25px;	/* at least image width */
-	text-align:right;
-	}
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-	/* display:none; <- Crashes Chrome on hover */
-	-webkit-appearance:none;
-	margin:0; /* <-- Apparently some margin are still there even though it's hidden */
-}
-
 /* history table */
 .table-log {
 	table-layout:fixed;
@@ -238,12 +216,19 @@ td.maps-cell {
 	color:#005580;
 	text-decoration:underline;
 	}
-.spinner {
-	background:url('../img/spinner.gif') no-repeat -100px;
-	}
-.loading .spinner {
-	background-position:0 50%;
-	}
+
+/* Glyphicons animated spinners */
+.loading .glyphicon-spin {
+    animation: spin 1000ms infinite linear;
+}
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(359deg);
+    }
+}
 
 /* widget */
 .widget-box {
