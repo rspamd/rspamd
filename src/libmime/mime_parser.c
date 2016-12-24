@@ -861,31 +861,32 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	npart->parent_part = part;
 
 	if (hdrs == NULL) {
-		g_set_error (err, RSPAMD_MIME_QUARK, EINVAL,
-				"Content type header is absent");
-
-		return FALSE;
+		sel = NULL;
 	}
+	else {
 
-	for (i = 0; i < hdrs->len; i ++) {
-		hdr = g_ptr_array_index (hdrs, i);
-		ct = rspamd_content_type_parse (hdr->value, strlen (hdr->value),
-				task->task_pool);
+		for (i = 0; i < hdrs->len; i ++) {
+			hdr = g_ptr_array_index (hdrs, i);
+			ct = rspamd_content_type_parse (hdr->value, strlen (hdr->value),
+					task->task_pool);
 
-		/* Here we prefer multipart content-type or any content-type */
-		if (ct) {
-			if (sel == NULL) {
-				sel = ct;
-			}
-			else if (ct->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-				sel = ct;
+			/* Here we prefer multipart content-type or any content-type */
+			if (ct) {
+				if (sel == NULL) {
+					sel = ct;
+				}
+				else if (ct->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
+					sel = ct;
+				}
 			}
 		}
 	}
 
 	if (sel == NULL) {
 		/* For messages we automatically assume plaintext */
+		msg_info_task ("cannot find content-type for a message, assume text/plain");
 		sel = rspamd_mempool_alloc0 (task->task_pool, sizeof (*sel));
+		sel->flags = RSPAMD_CONTENT_TYPE_TEXT|RSPAMD_CONTENT_TYPE_BROKEN;
 		RSPAMD_FTOK_ASSIGN (&sel->type, "text");
 		RSPAMD_FTOK_ASSIGN (&sel->subtype, "plain");
 	}
