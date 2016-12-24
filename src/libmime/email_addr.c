@@ -294,6 +294,8 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		break;
 	}
 
+	g_string_free (ns, TRUE);
+
 	return res;
 }
 
