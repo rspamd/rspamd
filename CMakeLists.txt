@@ -39,7 +39,6 @@ SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
 
-OPTION(DEBUG_MODE          "Enable debug output [default: OFF]"                 OFF)
 OPTION(ENABLE_OPTIMIZATION "Enable extra optimizations [default: OFF]"          OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
@@ -63,6 +62,7 @@ OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"       
 OPTION(ENABLE_GD           "Enable libgd for images processing [default: ON]" ON)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
+OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -845,11 +845,11 @@ IF(NOT CMAKE_C_OPT_FLAGS)
 		SET(CMAKE_C_OPT_FLAGS "-g -O3 -fstrict-aliasing")
 	ENDIF()
 	ELSE(ENABLE_OPTIMIZATION MATCHES "ON")
-		IF(DEBUG_MODE MATCHES "ON")
+		IF(ENABLE_FULL_DEBUG MATCHES "ON")
 			SET(CMAKE_C_OPT_FLAGS "-g -O0 -fstrict-aliasing")
-		ELSE(DEBUG_MODE MATCHES "ON")
+		ELSE(ENABLE_FULL_DEBUG MATCHES "ON")
 			SET(CMAKE_C_OPT_FLAGS "-g -O2 -fstrict-aliasing")
-		ENDIF(DEBUG_MODE MATCHES "ON")
+		ENDIF(ENABLE_FULL_DEBUG MATCHES "ON")
 	ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 ENDIF(NOT CMAKE_C_OPT_FLAGS)
 
