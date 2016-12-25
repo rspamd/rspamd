@@ -232,17 +232,20 @@ rspamd_shingles_from_image (guchar *dct,
 	}
 
 	memset (res, 0, sizeof (res));
+#define INNER_CYCLE_SHINGLES(s, e) for (j = (s); j < (e); j ++) { \
+	d = dct[beg]; \
+	memcpy (&seed, keys[j], sizeof (seed)); \
+	val = rspamd_cryptobox_fast_hash_specific (ht, \
+					&d, sizeof (d), \
+					seed); \
+	hashes[j][beg] = val; \
+}
+	for (i = 0; i < RSPAMD_DCT_LEN / NBBY; i ++) {
+		INNER_CYCLE_SHINGLES (0, RSPAMD_SHINGLE_SIZE / 4);
+		INNER_CYCLE_SHINGLES (RSPAMD_SHINGLE_SIZE / 4 + 1, RSPAMD_SHINGLE_SIZE / 2);
+		INNER_CYCLE_SHINGLES (RSPAMD_SHINGLE_SIZE / 2 + 1, 3 * RSPAMD_SHINGLE_SIZE / 4);
+		INNER_CYCLE_SHINGLES (3 * RSPAMD_SHINGLE_SIZE / 4 + 1, RSPAMD_SHINGLE_SIZE);
 
-	for (i = 0; i <= RSPAMD_DCT_LEN / NBBY; i ++) {
-		for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
-			d = dct[beg];
-			/* Insert the last element to the pipe */
-			memcpy (&seed, keys[j], sizeof (seed));
-			val = rspamd_cryptobox_fast_hash_specific (ht,
-							&d, sizeof (d),
-							seed);
-			hashes[j][beg] = val;
-		}
 		beg++;
 	}
 
