@@ -355,7 +355,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	ctx = sp_ud->ctx;
 	ud = sp_ud->c;
 
-	if (ud->terminated || sp_ud->finished) {
+	if (ud->terminated) {
 		/* We are already at the termination stage, just go out */
 		return;
 	}
@@ -363,29 +363,33 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	msg_debug ("got reply from redis %p for query %p", ctx, sp_ud);
 
 	REDIS_RETAIN (ctx);
-	ctx->cmds_pending --;
 
-	if (c->err == 0) {
-		if (r != NULL) {
-			if (reply->type != REDIS_REPLY_ERROR) {
-				lua_redis_push_data (reply, ctx, sp_ud);
+	/* If session is finished, we cannot call lua callbacks */
+	if (!sp_ud->finished) {
+		if (c->err == 0) {
+			if (r != NULL) {
+				if (reply->type != REDIS_REPLY_ERROR) {
+					lua_redis_push_data (reply, ctx, sp_ud);
+				}
+				else {
+					lua_redis_push_error (reply->str, ctx, sp_ud, TRUE);
+				}
 			}
 			else {
-				lua_redis_push_error (reply->str, ctx, sp_ud, TRUE);
+				lua_redis_push_error ("received no data from server", ctx, sp_ud, TRUE);
 			}
 		}
 		else {
-			lua_redis_push_error ("received no data from server", ctx, sp_ud, TRUE);
+			if (c->err == REDIS_ERR_IO) {
+				lua_redis_push_error (strerror (errno), ctx, sp_ud, TRUE);
+			}
+			else {
+				lua_redis_push_error (c->errstr, ctx, sp_ud, TRUE);
+			}
 		}
 	}
-	else {
-		if (c->err == REDIS_ERR_IO) {
-			lua_redis_push_error (strerror (errno), ctx, sp_ud, TRUE);
-		}
-		else {
-			lua_redis_push_error (c->errstr, ctx, sp_ud, TRUE);
-		}
-	}
+
+	ctx->cmds_pending --;
 
 	if (ctx->cmds_pending == 0 && !ud->terminated) {
 		/* Disconnect redis early as we don't need it anymore */
