@@ -751,7 +751,7 @@ lua_redis_make_request (lua_State *L)
 				sp_ud->w = NULL;
 			}
 
-			REDIS_RETAIN (ctx);
+			REDIS_RETAIN (ctx); /* Cleared by fin event */
 			ctx->cmds_pending ++;
 			double_to_tv (timeout, &tv);
 			event_set (&sp_ud->timeout, -1, EV_TIMEOUT, lua_redis_timeout, sp_ud);

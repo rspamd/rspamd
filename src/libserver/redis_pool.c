@@ -394,12 +394,19 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 			REF_RELEASE (conn);
 		}
 		else {
-			/* Just move it to the inactive queue */
-			g_queue_unlink (conn->elt->active, conn->entry);
-			g_queue_push_head_link (conn->elt->inactive, conn->entry);
-			conn->active = FALSE;
-			rspamd_redis_pool_schedule_timeout (conn);
-			msg_debug_rpool ("mark connection inactive");
+			/* Ensure that there are no callbacks attached to this conn */
+			if (ctx->replies.head == NULL) {
+				/* Just move it to the inactive queue */
+				g_queue_unlink (conn->elt->active, conn->entry);
+				g_queue_push_head_link (conn->elt->inactive, conn->entry);
+				conn->active = FALSE;
+				rspamd_redis_pool_schedule_timeout (conn);
+				msg_debug_rpool ("mark connection inactive");
+			}
+			else {
+				msg_debug_rpool ("closed connection due to callbacks leftover");
+				REF_RELEASE (conn);
+			}
 		}
 
 		REF_RELEASE (conn);
