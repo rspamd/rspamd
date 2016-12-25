@@ -28,6 +28,7 @@
 
 static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
 static gboolean json = FALSE;
+static gboolean ucl = TRUE;
 static gboolean compact = FALSE;
 static gdouble timeout = 1.0;
 
@@ -53,6 +54,8 @@ static GOptionEntry entries[] = {
 				"Output json",                    NULL},
 		{"compact", 'c', 0, G_OPTION_ARG_NONE, &compact,
 				"Output compacted", NULL},
+		{"ucl", 'u', 0, G_OPTION_ARG_NONE, &ucl,
+				"Output ucl (default)", NULL},
 		{"socket", 's', 0, G_OPTION_ARG_STRING, &control_path,
 				"Use the following socket path", NULL},
 		{"timeout", 't', 0, G_OPTION_ARG_DOUBLE, &timeout,
@@ -71,7 +74,7 @@ rspamadm_control_help (gboolean full_help)
 				"Where options are:\n\n"
 				"-c: output compacted json\n"
 				"-j: output linted json\n"
-				"-u: output ucl\n"
+				"-u: output ucl (default)\n"
 				"-s: use the following socket instead of " RSPAMD_DBDIR "/rspamd.sock\n"
 				"-t: set IO timeout (1.0 seconds default)\n"
 				"--help: shows available options and commands\n\n"

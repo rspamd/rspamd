@@ -19,7 +19,7 @@
 #include "config.h"
 #include "ref.h"
 
-struct raw_header;
+struct rspamd_mime_header;
 
 enum rspamd_email_address_flags {
 	RSPAMD_EMAIL_ADDR_VALID = (1 << 0),

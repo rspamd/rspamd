@@ -67,6 +67,7 @@ struct rspamd_cryptobox_library_ctx {
 	const gchar *poly1305_impl;
 	const gchar *siphash_impl;
 	const gchar *blake2_impl;
+	const gchar *base64_impl;
 	unsigned long cpu_config;
 };
 
@@ -370,4 +371,14 @@ guint64 rspamd_cryptobox_fast_hash_specific (
 		const void *data,
 		gsize len, guint64 seed);
 
+/**
+ * Decode base64 using platform optimized code
+ * @param in
+ * @param inlen
+ * @param out
+ * @param outlen
+ * @return
+ */
+gboolean rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
+		guchar *out, gsize *outlen);
 #endif /* CRYPTOBOX_H_ */

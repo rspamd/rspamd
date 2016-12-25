@@ -29,12 +29,13 @@
 #include "blake2/blake2.h"
 #include "siphash/siphash.h"
 #include "catena/catena.h"
+#include "base64/base64.h"
 #include "ottery.h"
 #include "printf.h"
 #include "xxhash.h"
 #define MUM_TARGET_INDEPENDENT_HASH 1 /* For 32/64 bit equal hashes */
 #include "../../contrib/mumhash/mum.h"
-#include "../../contrib/metrohash/metro.h"
+#include "../../contrib/t1ha/t1ha.h"
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
 #endif
@@ -314,6 +315,7 @@ rspamd_cryptobox_init (void)
 	ctx->curve25519_impl = curve25519_load ();
 	ctx->blake2_impl = blake2b_load ();
 	ctx->ed25519_impl = ed25519_load ();
+	ctx->base64_impl = base64_load ();
 #ifdef HAVE_USABLE_OPENSSL
 	ERR_load_EC_strings ();
 	ERR_load_RAND_strings ();
@@ -1498,27 +1500,18 @@ static inline guint64
 rspamd_cryptobox_fast_hash_machdep (const void *data,
 		gsize len, guint64 seed)
 {
-	if (len >= 8 && len % 8 == 0) {
-		return mum_hash (data, len, seed);
-	}
-	else {
 #if defined(__LP64__) || defined(_LP64)
-		return metrohash64_1 (data, len, seed);
+	return t1ha (data, len, seed);
+#else
+	return t1ha32 (data, len, seed);
 #endif
-	}
-
-	return XXH32 (data, len, seed);
 }
 
 static inline guint64
 rspamd_cryptobox_fast_hash_indep (const void *data,
 		gsize len, guint64 seed)
 {
-	if (len >= 8 && len % 8 == 0) {
-		return mum_hash (data, len, seed);
-	}
-
-	return metrohash64_1 (data, len, seed);
+	return t1ha (data, len, seed);
 }
 
 guint64

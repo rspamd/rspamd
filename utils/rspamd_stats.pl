@@ -14,6 +14,8 @@ my $diff_alpha = 0.1;
 my $correlations = 0;
 my $log_file = "";
 my $search_pattern = "";
+my $startTime="";
+my $endTime;
 my $num_logs;
 my $exclude_logs = 0;
 my $man = 0;
@@ -34,6 +36,8 @@ GetOptions(
   "alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
   "search-pattern=s" => \$search_pattern,
+  "start=s" => \$startTime,
+  "end=s" => \$endTime,
   "num-logs|n=i" => \$num_logs,
   "exclude-logs|x=i" => \$exclude_logs,
   "help|?" => \$help,
@@ -59,6 +63,7 @@ my %sym_res;
 my $rspamd_log;
 my $enabled = 0;
 
+my %action;
 my %timeStamp;
 my %scanTime = (
     max   => 0,
@@ -172,6 +177,9 @@ printf " [ %s / %s ]
 ", $timeStamp{'start'}, $timeStamp{'end'}
   if defined $timeStamp{'start'};
 say '';
+printf "%11s: %6.2f%%, %d\n", $_, 100 * $action{$_} / $total, $action{$_}
+  for sort keys %action;
+say '';
 printf "scan time min/avg/max = %.2f/%.2f/%.2f s
 ", $scanTime{'min'} / 1000,
   ($total) ? $scanTime{'total'} / $total / 1000 : undef,
@@ -190,22 +198,27 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
-      $timeStamp{'end'} = join ' ', ( split /\s+/ )[ 0 .. 1 ];
+      my $ts = join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
-      if ($_ !~ /\[(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
+      next if ( $ts lt $startTime );
+      next if ( defined $endTime && $ts gt $endTime );
+
+      if ($_ !~ /\(([^()]+)\): \[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/) {
         #print "BAD: $_\n";
         next;
       }
 
+      $timeStamp{'end'} = $ts;
       $timeStamp{'start'} //= $timeStamp{'end'};
-      $scanTime{'min'} = $4
-        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $4 );
-      $scanTime{'max'} = $4
-        if ( $scanTime{'max'} < $4 );
-      $scanTime{'total'} += $4;
+      $scanTime{'min'} = $5
+        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $5 );
+      $scanTime{'max'} = $5
+        if ( $scanTime{'max'} < $5 );
+      $scanTime{'total'} += $5;
 
+      $action{$1}++;
       $total ++;
-      my $score = $1 * 1.0;
+      my $score = $2 * 1.0;
 
       if ($score >= $reject_score) {
         $total_spam ++;
@@ -215,7 +228,7 @@ sub ProcessLog {
       }
 
       # Symbols
-      my @symbols = split /,/, $3;
+      my @symbols = split /(?:\{[^}]*\})?(?:$|,)/, $4;
       my @sym_names;
 
       foreach my $s (@symbols_search) {
@@ -370,6 +383,8 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
    --alpha=value          set ignore score for symbols (0.1 by default)
    --correlations         enable correlations report
    --search-pattern       do not process input unless the desired pattern is found
+   --start                starting time (oldest) for log parsing
+   --end                  ending time (newest) for log parsing
    --num-logs=integer     number of recent logfiles to analyze (all files in the directory by default)
    --exclude-logs=integer number of latest logs to exclude (0 by default)
    --help                 brief help message
@@ -419,7 +434,19 @@ Additionaly print correlation rate for each symbol displayed. This routine calcu
 
 =item B<--search-pattern>
 
-Do not process input unless finding the specified regular expression. Useful to skip logs to certain date, for example, --search-pattern="2016-08-09 10:00:0[0-9]"
+Do not process input unless finding the specified regular expression. Useful to skip logs to a certain position.
+
+=item B<--start>
+
+Select log entries after this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
+truncated to any desired accuracy). If used with B<--end> select entries between
+B<--start> and B<--end>.
+
+=item B<--end>
+
+Select log entries before this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
+truncated to any desired accuracy). If used with B<--start> select entries between
+B<--start> and B<--end>.
 
 =item B<--help>
 

@@ -40,6 +40,7 @@
 #define DEFAULT_MAX_WORD 40
 #define DEFAULT_WORDS_DECAY 200
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
+#define DEFAULT_MAX_PIC (1 * 1024 * 1024)
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -171,6 +172,8 @@ rspamd_config_new (void)
 
 	cfg->ssl_ciphers = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
 	cfg->max_message = DEFAULT_MAX_MESSAGE;
+	cfg->max_pic_size = DEFAULT_MAX_PIC;
+	cfg->images_cache_size = 256;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init ();
 #ifdef WITH_HIREDIS
 	cfg->redis_pool = rspamd_redis_pool_init ();

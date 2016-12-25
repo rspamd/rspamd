@@ -1426,7 +1426,7 @@ rspamd_lua_push_header (lua_State * L,
 		gboolean raw)
 {
 
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	guint i;
 	const gchar *val;
 

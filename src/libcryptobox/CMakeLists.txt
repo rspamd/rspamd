@@ -15,6 +15,8 @@ SET(CURVESRC ${CMAKE_CURRENT_SOURCE_DIR}/curve25519/ref.c
 
 SET(EDSRC ${CMAKE_CURRENT_SOURCE_DIR}/ed25519/ref.c
 		${CMAKE_CURRENT_SOURCE_DIR}/ed25519/ed25519.c)
+SET(BASE64SRC ${CMAKE_CURRENT_SOURCE_DIR}/base64/ref.c
+		${CMAKE_CURRENT_SOURCE_DIR}/base64/base64.c)
 
 SET(ASM_CODE "
 	.macro TEST1 op
@@ -32,12 +34,12 @@ SET(ASM_CODE "
 	")
 ASM_OP(HAVE_DOLLARMACRO "dollar macro convention")
 
-IF(NOT HAVE_SLASHMACRO AND NOT HAVE_DOLLARMACRO)
-	MESSAGE(FATAL_ERROR "Your assembler cannot compile macros, please check your CMakeFiles/CMakeError.log")
-ENDIF()
-
 # For now we support only x86_64 architecture with optimizations
 IF("${ARCH}" STREQUAL "x86_64")
+	IF(NOT HAVE_SLASHMACRO AND NOT HAVE_DOLLARMACRO)
+		MESSAGE(FATAL_ERROR "Your assembler cannot compile macros, please check your CMakeFiles/CMakeError.log")
+	ENDIF()
+
 	SET(ASM_CODE "vpaddq %ymm0, %ymm0, %ymm0")
 	ASM_OP(HAVE_AVX2 "avx2")
 	SET(ASM_CODE "vpaddq %xmm0, %xmm0, %xmm0")
@@ -61,6 +63,9 @@ IF("${ARCH}" STREQUAL "x86_64")
 
 	SET(BLAKE2SRC ${BLAKE2SRC} ${CMAKE_CURRENT_SOURCE_DIR}/blake2/x86-64.S)
 ELSEIF("${ARCH}" STREQUAL "i386")
+	IF(NOT HAVE_SLASHMACRO AND NOT HAVE_DOLLARMACRO)
+		MESSAGE(FATAL_ERROR "Your assembler cannot compile macros, please check your CMakeFiles/CMakeError.log")
+	ENDIF()
 	SET(POLYSRC ${POLYSRC} ${CMAKE_CURRENT_SOURCE_DIR}/poly1305/ref-32.c)
 	SET(CURVESRC ${CURVESRC} ${CMAKE_CURRENT_SOURCE_DIR}/curve25519/curve25519-donna.c)
 	SET(BLAKE2SRC ${BLAKE2SRC} ${CMAKE_CURRENT_SOURCE_DIR}/blake2/x86-32.S)
@@ -96,4 +101,4 @@ SET(LIBCRYPTOBOXSRC	${CMAKE_CURRENT_SOURCE_DIR}/cryptobox.c
 					${CMAKE_CURRENT_SOURCE_DIR}/catena/catena.c)
 
 SET(RSPAMD_CRYPTOBOX ${LIBCRYPTOBOXSRC} ${CHACHASRC} ${POLYSRC} ${SIPHASHSRC}
-	${CURVESRC} ${BLAKE2SRC} ${EDSRC} PARENT_SCOPE)
+	${CURVESRC} ${BLAKE2SRC} ${EDSRC} ${BASE64SRC} PARENT_SCOPE)

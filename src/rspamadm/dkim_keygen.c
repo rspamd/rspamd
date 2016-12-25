@@ -24,6 +24,7 @@
 static gchar *privkey_file = NULL;
 static gchar *selector = NULL;
 static gchar *domain = NULL;
+static guint bits = 1024;
 
 static void rspamadm_dkim_keygen (gint argc, gchar **argv);
 static const char *rspamadm_dkim_keygen_help (gboolean full_help);
@@ -42,6 +43,8 @@ static GOptionEntry entries[] = {
 				"Use the specified selector", NULL},
 		{"privkey",  'k', 0, G_OPTION_ARG_STRING, &privkey_file,
 				"Save private key in the specified file", NULL},
+		{"bits",  'b', 0, G_OPTION_ARG_INT, &bits,
+				"Set key length to N bits (1024 by default)", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -52,11 +55,12 @@ rspamadm_dkim_keygen_help (gboolean full_help)
 
 	if (full_help) {
 		help_str = "Create key pairs for dkim signing\n\n"
-				"Usage: rspamadm dkim_keygen -s selector -d domain [-k privkey]\n"
+				"Usage: rspamadm dkim_keygen -s selector -d domain [-k privkey] [-b bits]\n"
 				"Where options are:\n\n"
 				"-d: use the specified domain\n"
 				"-s: use the specified selector\n"
 				"-k: save private key to file instead of printing it to stdout\n"
+				"-b: set number of bits instead of 1024\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -94,11 +98,16 @@ rspamadm_dkim_keygen (gint argc, gchar **argv)
 		exit (1);
 	}
 
+	if (bits > 4096 || bits < 512) {
+		fprintf (stderr, "Bits number must be in the interval 512...4096\n");
+		exit (EXIT_FAILURE);
+	}
+
 	e = BN_new ();
 	r = RSA_new ();
 	pk = EVP_PKEY_new ();
 	g_assert (BN_set_word (e, RSA_F4) == 1);
-	g_assert (RSA_generate_key_ex (r, 1024, e, NULL) == 1);
+	g_assert (RSA_generate_key_ex (r, bits, e, NULL) == 1);
 	g_assert (EVP_PKEY_set1_RSA (pk, r) == 1);
 
 	if (privkey_file) {

@@ -13,7 +13,7 @@ SECTION_RODATA
 .globl subc2
 .globl v9_0
 .globl v9_9
-
+.globl base64_table_dec
 .globl REDMASK51
 
 .p2align 4

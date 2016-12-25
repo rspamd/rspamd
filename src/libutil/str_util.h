@@ -180,7 +180,7 @@ gint rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
  * @param outlen output buf len
  * @return decoded len if in is valid hex and `outlen` is enough to encode `inlen`
  */
-gint rspamd_decode_hex_buf (const gchar *in, gsize inlen,
+gssize rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 		guchar *out, gsize outlen);
 
 /**
@@ -211,6 +211,28 @@ gchar * rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
  * @return
  */
 gsize rspamd_decode_url (gchar *dst, const gchar *src, gsize size);
+
+/**
+ * Decode quoted-printable encoded buffer, input and output must not overlap
+ * @param in input
+ * @param inlen length of input
+ * @param out output
+ * @param outlen length of output
+ * @return real size of decoded output or (-1) if outlen is not enough
+ */
+gssize rspamd_decode_qp_buf (const gchar *in, gsize inlen,
+		gchar *out, gsize outlen);
+
+/**
+ * Decode quoted-printable encoded buffer using rfc2047 format, input and output must not overlap
+ * @param in input
+ * @param inlen length of input
+ * @param out output
+ * @param outlen length of output
+ * @return real size of decoded output or (-1) if outlen is not enough
+ */
+gssize rspamd_decode_qp2047_buf (const gchar *in, gsize inlen,
+		gchar *out, gsize outlen);
 
 #ifndef g_tolower
 #   define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))

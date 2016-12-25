@@ -565,6 +565,16 @@ reconf['FORGED_MUA_THEBAT_BOUN'] = {
   group = 'header'
 }
 
+-- Detect Mail.Ru web-mail
+local xm_mail_ru_mailer_1_0 = 'X-Mailer=/^Mail\\.Ru Mailer 1\\.0$/H'
+local rcvd_e_mail_ru = 'Received=/^from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by e\\.mail\\.ru with HTTP;/mH'
+reconf['MAIL_RU_MAILER'] = {
+  re = string.format('(%s) & (%s)', xm_mail_ru_mailer_1_0, rcvd_e_mail_ru),
+  score = 0.0,
+  description = 'Sent with Mail.Ru web-mail',
+  group = 'header'
+}
+
 -- Two received headers with ip addresses
 local double_ip_spam_1 = 'Received=/from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3} with/H'
 local double_ip_spam_2 = 'Received=/from\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s+by\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3};/H'

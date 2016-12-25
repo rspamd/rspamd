@@ -138,6 +138,7 @@ struct fuzzy_learn_session {
 
 #define FUZZY_CMD_FLAG_REPLIED (1 << 0)
 #define FUZZY_CMD_FLAG_SENT (1 << 1)
+#define FUZZY_CMD_FLAG_IMAGE (1 << 2)
 
 struct fuzzy_cmd_io {
 	guint32 tag;
@@ -1167,13 +1168,13 @@ fuzzy_cmd_hash (struct fuzzy_rule *rule,
 static void *
 fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
-		struct rspamd_mime_text_part *part)
+		gpointer p)
 {
 	gchar key[32];
 	gint key_part;
 
 	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
-	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", p, rule->algorithm_str,
 			key_part);
 
 	return rspamd_mempool_get_variable (pool, key);
@@ -1182,14 +1183,14 @@ fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 static void
 fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
-		struct rspamd_mime_text_part *part,
+		gpointer p,
 		struct rspamd_fuzzy_encrypted_shingle_cmd *data)
 {
 	gchar key[32];
 	gint key_part;
 
 	memcpy (&key_part, rule->shingles_key->str, sizeof (key_part));
-	rspamd_snprintf (key, sizeof (key), "%p%s%d", part, rule->algorithm_str,
+	rspamd_snprintf (key, sizeof (key), "%p%s%d", p, rule->algorithm_str,
 			key_part);
 	/* Key is copied */
 	rspamd_mempool_set_variable (pool, key, data, NULL);
@@ -1242,7 +1243,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		msg_debug_pool ("loading shingles of type %s with key %*xs",
 				rule->algorithm_str,
 				16, rule->shingles_key->str);
-		sh = rspamd_shingles_generate (words,
+		sh = rspamd_shingles_from_text (words,
 				rule->shingles_key->str, pool,
 				rspamd_shingles_default_filter, NULL,
 				rule->alg);
@@ -1273,6 +1274,94 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->tag = shcmd->basic.tag;
 	io->flags = 0;
+	memcpy (&io->cmd, &shcmd->basic, sizeof (io->cmd));
+
+	if (rule->peer_key) {
+		/* Encrypt data */
+		fuzzy_encrypt_cmd (rule, &encshcmd->hdr, (guchar *) shcmd, sizeof (*shcmd));
+		io->io.iov_base = encshcmd;
+		io->io.iov_len = sizeof (*encshcmd);
+	}
+	else {
+		io->io.iov_base = shcmd;
+		io->io.iov_len = sizeof (*shcmd);
+	}
+
+	return io;
+}
+
+static struct fuzzy_cmd_io *
+fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
+		int c,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool,
+		struct rspamd_image *img)
+{
+	struct rspamd_fuzzy_shingle_cmd *shcmd;
+	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
+	struct fuzzy_cmd_io *io;
+	struct rspamd_shingle *sh;
+
+	cached = fuzzy_cmd_get_cached (rule, pool, img);
+
+	if (cached) {
+		/* Copy cached */
+		encshcmd = rspamd_mempool_alloc (pool, sizeof (*encshcmd));
+		memcpy (encshcmd, cached, sizeof (*encshcmd));
+		shcmd = &encshcmd->cmd;
+	}
+	else {
+		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
+		shcmd = &encshcmd->cmd;
+
+		/*
+		 * Generate shingles
+		 */
+		sh = rspamd_shingles_from_image (img->dct,
+				rule->shingles_key->str, pool,
+				rspamd_shingles_default_filter, NULL,
+				rule->alg);
+		if (sh != NULL) {
+			memcpy (&shcmd->sgl, sh->hashes, sizeof (shcmd->sgl));
+			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+#if 0
+			for (unsigned int i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+				msg_err ("shingle %d: %L", i, sh->hashes[i]);
+			}
+#endif
+		}
+
+		rspamd_cryptobox_hash (shcmd->basic.digest,
+				(const guchar *)img->dct, RSPAMD_DCT_LEN / NBBY,
+				rule->hash_key->str, rule->hash_key->len);
+
+		msg_debug_pool ("loading shingles of type %s with key %*xs",
+				rule->algorithm_str,
+				16, rule->shingles_key->str);
+
+		/*
+		 * We always save encrypted command as it can handle both
+		 * encrypted and unencrypted requests.
+		 *
+		 * Since it is copied when obtained from the cache, it is safe to use
+		 * it this way.
+		 */
+		fuzzy_cmd_set_cached (rule, pool, img, encshcmd);
+	}
+
+	shcmd->basic.tag = ottery_rand_uint32 ();
+	shcmd->basic.cmd = c;
+	shcmd->basic.version = RSPAMD_FUZZY_PLUGIN_VERSION;
+
+	if (c != FUZZY_CHECK) {
+		shcmd->basic.flag = flag;
+		shcmd->basic.value = weight;
+	}
+
+	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->tag = shcmd->basic.tag;
+	io->flags = FUZZY_CMD_FLAG_IMAGE;
 	memcpy (&io->cmd, &shcmd->basic, sizeof (io->cmd));
 
 	if (rule->peer_key) {
@@ -1406,7 +1495,8 @@ fuzzy_cmd_vector_to_wire (gint fd, GPtrArray *v)
  */
 static const struct rspamd_fuzzy_reply *
 fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
-		struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd)
+		struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd,
+		struct fuzzy_cmd_io **pio)
 {
 	guchar *p = *pos;
 	gint remain = *r;
@@ -1470,6 +1560,10 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 					*pcmd = &io->cmd;
 				}
 
+				if (pio) {
+					*pio = io;
+				}
+
 				return rep;
 			}
 			found = TRUE;
@@ -1486,7 +1580,9 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 static void
 fuzzy_insert_result (struct fuzzy_client_session *session,
 		const struct rspamd_fuzzy_reply *rep,
-		struct rspamd_fuzzy_cmd *cmd, guint flag)
+		struct rspamd_fuzzy_cmd *cmd,
+		struct fuzzy_cmd_io *io,
+		guint flag)
 {
 	const gchar *symbol;
 	struct fuzzy_mapping *map;
@@ -1516,12 +1612,21 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 
 	nval = fuzzy_normalize (rep->value,
 			session->rule->max_score);
-	nval *= rep->prob;
+
+	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
+		nval *= rspamd_normalize_probability (rep->prob, 0.5);
+	}
+	else {
+		/* XXX: we need something better here */
+		nval *= rep->prob;
+	}
+
 	msg_info_task (
 			"found fuzzy hash %*xs with weight: "
-			"%.2f, in list: %s:%d%s",
+			"%.2f, probability %.2f, in list: %s:%d%s",
 			(gint)sizeof (cmd->digest), cmd->digest,
 			nval,
+			(gdouble)rep->prob,
 			symbol,
 			rep->flag,
 			map == NULL ? "(unknown)" : "");
@@ -1545,6 +1650,7 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 	struct rspamd_task *task;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
+	struct fuzzy_cmd_io *io = NULL;
 	gint r, ret;
 	guchar buf[2048], *p;
 
@@ -1564,10 +1670,10 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 		ret = 0;
 
 		while ((rep = fuzzy_process_reply (&p, &r,
-				session->commands, session->rule, &cmd)) != NULL) {
+				session->commands, session->rule, &cmd, &io)) != NULL) {
 			if (rep->prob > 0.5) {
 				if (cmd->cmd == FUZZY_CHECK) {
-					fuzzy_insert_result (session, rep, cmd, rep->flag);
+					fuzzy_insert_result (session, rep, cmd, io, rep->flag);
 				}
 				else if (cmd->cmd == FUZZY_STAT) {
 					/* Just set pool variable to extract it in further */
@@ -1781,7 +1887,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	guchar buf[2048], *p;
 	struct fuzzy_cmd_io *io;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
-	const gchar *symbol;
+	const gchar *symbol, *ftype;
 	struct event_base *ev_base;
 	gint r;
 	enum {
@@ -1814,7 +1920,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 			ret = return_want_more;
 
 			while ((rep = fuzzy_process_reply (&p, &r,
-					session->commands, session->rule, &cmd)) != NULL) {
+					session->commands, session->rule, &cmd, &io)) != NULL) {
 				if ((map =
 						g_hash_table_lookup (session->rule->mappings,
 								GINT_TO_POINTER (rep->flag))) == NULL) {
@@ -1827,28 +1933,41 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					symbol = map->symbol;
 				}
 
+				ftype = "bin";
+
+				if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
+					ftype = "img";
+				}
+				else if (cmd->shingles_count > 0) {
+					ftype = "txt";
+				}
+
 				if (rep->prob > 0.5) {
-					msg_info_task ("processed fuzzy hash %*xs, list: %s:%d for "
+					msg_info_task ("processed fuzzy hash (%s) %*xs, list: %s:%d for "
 									"message <%s>",
+							ftype,
 							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
 							rep->flag,
 							session->task->message_id);
 				}
 				else {
-					msg_info_task ("cannot process fuzzy hash for message "
+					msg_info_task ("cannot process fuzzy hash (%s) for message "
 							"<%s>, %*xs, "
 							"list %s:%d, error: %d",
+							ftype,
 							session->task->message_id,
 							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
 							rep->flag,
 							rep->value);
+
 					if (*(session->err) == NULL) {
 						g_set_error (session->err,
 							g_quark_from_static_string ("fuzzy check"),
 							rep->value, "process fuzzy error");
 					}
+
 					ret = return_finished;
 				}
 			}
@@ -2129,17 +2248,10 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							g_ptr_array_add (res, io);
 						}
 
-						if (image->normalized_data) {
-							guchar norm_digest[rspamd_cryptobox_HASHBYTES];
-
-							rspamd_cryptobox_hash (norm_digest,
-									image->normalized_data->data,
-									image->normalized_data->len * sizeof (gint),
-									NULL, 0);
-							/* TODO: add shingles here */
-							io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+						if (image->is_normalized) {
+							io = fuzzy_cmd_from_image_part (rule, c, flag, value,
 									task->task_pool,
-									norm_digest);
+									image);
 							if (io) {
 								g_ptr_array_add (res, io);
 							}

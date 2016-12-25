@@ -19,10 +19,14 @@
 #include "message.h"
 #include "html.h"
 
-#ifdef WITH_GD
+#ifdef USABLE_GD
 #include "gd.h"
+#include "hash.h"
+#include <math.h>
 
 #define RSPAMD_NORMALIZED_DIM 64
+
+static rspamd_lru_hash_t *images_hash = NULL;
 #endif
 
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
@@ -33,7 +37,6 @@ static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
 static void process_image (struct rspamd_task *task, struct rspamd_mime_part *part);
-
 
 void
 rspamd_images_process (struct rspamd_task *task)
@@ -208,12 +211,227 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	return img;
 }
 
+#ifdef USABLE_GD
+/*
+ * DCT from Emil Mikulic.
+ * http://unix4lyfe.org/dct/
+ */
+static void
+rspamd_image_dct_block (gint pixels[8][8], gdouble *out)
+{
+	gint i;
+	gint rows[8][8];
+
+	static const gint c1 = 1004 /* cos(pi/16) << 10 */,
+			s1 = 200 /* sin(pi/16) */,
+			c3 = 851 /* cos(3pi/16) << 10 */,
+			s3 = 569 /* sin(3pi/16) << 10 */,
+			r2c6 = 554 /* sqrt(2)*cos(6pi/16) << 10 */,
+			r2s6 = 1337 /* sqrt(2)*sin(6pi/16) << 10 */,
+			r2 = 181; /* sqrt(2) << 7*/
+
+	gint x0, x1, x2, x3, x4, x5, x6, x7, x8;
+
+	/* transform rows */
+	for (i = 0; i < 8; i++) {
+		x0 = pixels[0][i];
+		x1 = pixels[1][i];
+		x2 = pixels[2][i];
+		x3 = pixels[3][i];
+		x4 = pixels[4][i];
+		x5 = pixels[5][i];
+		x6 = pixels[6][i];
+		x7 = pixels[7][i];
+
+		/* Stage 1 */
+		x8 = x7 + x0;
+		x0 -= x7;
+		x7 = x1 + x6;
+		x1 -= x6;
+		x6 = x2 + x5;
+		x2 -= x5;
+		x5 = x3 + x4;
+		x3 -= x4;
+
+		/* Stage 2 */
+		x4 = x8 + x5;
+		x8 -= x5;
+		x5 = x7 + x6;
+		x7 -= x6;
+		x6 = c1 * (x1 + x2);
+		x2 = (-s1 - c1) * x2 + x6;
+		x1 = (s1 - c1) * x1 + x6;
+		x6 = c3 * (x0 + x3);
+		x3 = (-s3 - c3) * x3 + x6;
+		x0 = (s3 - c3) * x0 + x6;
+
+		/* Stage 3 */
+		x6 = x4 + x5;
+		x4 -= x5;
+		x5 = r2c6 * (x7 + x8);
+		x7 = (-r2s6 - r2c6) * x7 + x5;
+		x8 = (r2s6 - r2c6) * x8 + x5;
+		x5 = x0 + x2;
+		x0 -= x2;
+		x2 = x3 + x1;
+		x3 -= x1;
+
+		/* Stage 4 and output */
+		rows[i][0] = x6;
+		rows[i][4] = x4;
+		rows[i][2] = x8 >> 10;
+		rows[i][6] = x7 >> 10;
+		rows[i][7] = (x2 - x5) >> 10;
+		rows[i][1] = (x2 + x5) >> 10;
+		rows[i][3] = (x3 * r2) >> 17;
+		rows[i][5] = (x0 * r2) >> 17;
+	}
+
+	/* transform columns */
+	for (i = 0; i < 8; i++) {
+		x0 = rows[0][i];
+		x1 = rows[1][i];
+		x2 = rows[2][i];
+		x3 = rows[3][i];
+		x4 = rows[4][i];
+		x5 = rows[5][i];
+		x6 = rows[6][i];
+		x7 = rows[7][i];
+
+		/* Stage 1 */
+		x8 = x7 + x0;
+		x0 -= x7;
+		x7 = x1 + x6;
+		x1 -= x6;
+		x6 = x2 + x5;
+		x2 -= x5;
+		x5 = x3 + x4;
+		x3 -= x4;
+
+		/* Stage 2 */
+		x4 = x8 + x5;
+		x8 -= x5;
+		x5 = x7 + x6;
+		x7 -= x6;
+		x6 = c1 * (x1 + x2);
+		x2 = (-s1 - c1) * x2 + x6;
+		x1 = (s1 - c1) * x1 + x6;
+		x6 = c3 * (x0 + x3);
+		x3 = (-s3 - c3) * x3 + x6;
+		x0 = (s3 - c3) * x0 + x6;
+
+		/* Stage 3 */
+		x6 = x4 + x5;
+		x4 -= x5;
+		x5 = r2c6 * (x7 + x8);
+		x7 = (-r2s6 - r2c6) * x7 + x5;
+		x8 = (r2s6 - r2c6) * x8 + x5;
+		x5 = x0 + x2;
+		x0 -= x2;
+		x2 = x3 + x1;
+		x3 -= x1;
+
+		/* Stage 4 and output */
+		out[i * 8] = (double) ((x6 + 16) >> 3);
+		out[i * 8 + 1] = (double) ((x4 + 16) >> 3);
+		out[i * 8 + 2] = (double) ((x8 + 16384) >> 13);
+		out[i * 8 + 3] = (double) ((x7 + 16384) >> 13);
+		out[i * 8 + 4] = (double) ((x2 - x5 + 16384) >> 13);
+		out[i * 8 + 5] = (double) ((x2 + x5 + 16384) >> 13);
+		out[i * 8 + 6] = (double) (((x3 >> 8) * r2 + 8192) >> 12);
+		out[i * 8 + 7] = (double) (((x0 >> 8) * r2 + 8192) >> 12);
+	}
+}
+
+struct rspamd_image_cache_entry {
+	guchar digest[64];
+	guchar dct[RSPAMD_DCT_LEN / NBBY];
+};
+
+static void
+rspamd_image_cache_entry_dtor (gpointer p)
+{
+	struct rspamd_image_cache_entry *entry = p;
+	g_slice_free1 (sizeof (*entry), entry);
+}
+
+static guint32
+rspamd_image_dct_hash (gconstpointer p)
+{
+	return rspamd_cryptobox_fast_hash (p, rspamd_cryptobox_HASHBYTES,
+			rspamd_hash_seed ());
+}
+
+static gboolean
+rspamd_image_dct_equal (gconstpointer a, gconstpointer b)
+{
+	return memcmp (a, b, rspamd_cryptobox_HASHBYTES) == 0;
+}
+
+static void
+rspamd_image_create_cache (struct rspamd_config *cfg)
+{
+	images_hash = rspamd_lru_hash_new_full (cfg->images_cache_size, NULL,
+			rspamd_image_cache_entry_dtor,
+			rspamd_image_dct_hash, rspamd_image_dct_equal);
+}
+
+static gboolean
+rspamd_image_check_hash (struct rspamd_task *task, struct rspamd_image *img)
+{
+	struct rspamd_image_cache_entry *found;
+
+	if (images_hash == NULL) {
+		rspamd_image_create_cache (task->cfg);
+	}
+
+	found = rspamd_lru_hash_lookup (images_hash, img->parent->digest,
+			task->tv.tv_sec);
+
+	if (found) {
+		/* We need to decompress */
+		img->dct = g_malloc (RSPAMD_DCT_LEN / NBBY);
+		rspamd_mempool_add_destructor (task->task_pool, g_free,
+				img->dct);
+		/* Copy as found could be destroyed by LRU */
+		memcpy (img->dct, found->dct, RSPAMD_DCT_LEN / NBBY);
+		img->is_normalized = TRUE;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static void
+rspamd_image_save_hash (struct rspamd_task *task, struct rspamd_image *img)
+{
+	struct rspamd_image_cache_entry *found;
+
+	if (img->is_normalized) {
+		found = rspamd_lru_hash_lookup (images_hash, img->parent->digest,
+				task->tv.tv_sec);
+
+		if (!found) {
+			found = g_slice_alloc0 (sizeof (*found));
+			memcpy (found->dct, img->dct, RSPAMD_DCT_LEN / NBBY);
+			memcpy (found->digest, img->parent->digest, sizeof (found->digest));
+
+			rspamd_lru_hash_insert (images_hash, found->digest, found,
+					task->tv.tv_sec, 0);
+		}
+	}
+}
+
+#endif
+
 static void
 rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 {
-#ifdef WITH_GD
+#ifdef USABLE_GD
 	gdImagePtr src = NULL, dst = NULL;
-	guint nw, nh, i, j;
+	guint i, j, k, l;
+	gdouble *dct;
 
 	if (img->data->len == 0 || img->data->len > G_MAXINT32) {
 		return;
@@ -221,6 +439,10 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 
 	if (img->height <= RSPAMD_NORMALIZED_DIM ||
 			img->width <= RSPAMD_NORMALIZED_DIM) {
+		return;
+	}
+
+	if (rspamd_image_check_hash (task, img)) {
 		return;
 	}
 
@@ -247,38 +469,81 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 	}
 	else {
 		gdImageSetInterpolationMethod (src, GD_BILINEAR_FIXED);
-		nw = img->width;
-		nh = img->height;
 
-		if (nh > RSPAMD_NORMALIZED_DIM) {
-			nw = nw * RSPAMD_NORMALIZED_DIM / nh;
-			nw = nw ? nw : 1;
-			nh = RSPAMD_NORMALIZED_DIM;
-		}
-
-		if (nw > RSPAMD_NORMALIZED_DIM) {
-			nh = nh * RSPAMD_NORMALIZED_DIM / nw;
-			nh = nh ? nh : 1;
-			nw = RSPAMD_NORMALIZED_DIM;
-		}
-
-		dst = gdImageScale (src, nw, nh);
+		dst = gdImageScale (src, RSPAMD_NORMALIZED_DIM, RSPAMD_NORMALIZED_DIM);
+		gdImageGrayScale (dst);
 		gdImageDestroy (src);
 
-		img->normalized_data = g_array_sized_new (FALSE, FALSE, sizeof (gint),
-				nh * nw);
+		img->is_normalized = TRUE;
+		dct = g_malloc (sizeof (gdouble) * RSPAMD_DCT_LEN);
+		img->dct = g_malloc0 (RSPAMD_DCT_LEN / NBBY);
+		rspamd_mempool_add_destructor (task->task_pool, g_free,
+				img->dct);
 
-		for (i = 0; i < nh; i ++) {
-			for (j = 0; j < nw; j ++) {
-				gint px = gdImageGetPixel (dst, j, i);
+		/*
+		 * Split message into blocks:
+		 *
+		 * ****
+		 * ****
+		 *
+		 * Get sum of saturation values, and set bit if sum is > avg
+		 * Then go further
+		 *
+		 * ****
+		 * ****
+		 *
+		 * and repeat this algorithm.
+		 *
+		 * So on each iteration we move by 16 pixels and calculate 2 elements of
+		 * signature
+		 */
+		for (i = 0; i < RSPAMD_NORMALIZED_DIM; i += 8) {
+			for (j = 0; j < RSPAMD_NORMALIZED_DIM; j += 8) {
+				gint p[8][8];
 
-				g_array_append_val (img->normalized_data, px);
+				for (k = 0; k < 8; k ++) {
+					p[k][0] = gdImageGetPixel (dst, i + k, j);
+					p[k][1] = gdImageGetPixel (dst, i + k, j + 1);
+					p[k][2] = gdImageGetPixel (dst, i + k, j + 2);
+					p[k][3] = gdImageGetPixel (dst, i + k, j + 3);
+					p[k][4] = gdImageGetPixel (dst, i + k, j + 4);
+					p[k][5] = gdImageGetPixel (dst, i + k, j + 5);
+					p[k][6] = gdImageGetPixel (dst, i + k, j + 6);
+					p[k][7] = gdImageGetPixel (dst, i + k, j + 7);
+				}
+
+				rspamd_image_dct_block (p,
+						dct + i * RSPAMD_NORMALIZED_DIM + j);
+
+				gdouble avg = 0.0;
+
+				for (k = 0; k < 8; k ++) {
+					for (l = 0; l < 8; l ++) {
+						gdouble x = *(dct +
+								i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l);
+						avg += (x - avg) / (gdouble)(k * 8 + l + 1);
+					}
+
+				}
+
+
+				for (k = 0; k < 8; k ++) {
+					for (l = 0; l < 8; l ++) {
+						guint idx = i * RSPAMD_NORMALIZED_DIM + j + k * 8 + l;
+
+						if (dct[idx] >= avg) {
+							setbit (img->dct, idx);
+						}
+					}
+				}
+
+
 			}
 		}
 
 		gdImageDestroy (dst);
-		rspamd_mempool_add_destructor (task->task_pool, rspamd_array_free_hard,
-				img->normalized_data);
+		g_free (dct);
+		rspamd_image_save_hash (task, img);
 	}
 #endif
 }
@@ -288,7 +553,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	enum rspamd_image_type type;
 	struct rspamd_image *img = NULL;
-	struct raw_header *rh;
+	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *tp;
 	struct html_image *himg;
 	const gchar *cid, *html_cid;
@@ -322,7 +587,14 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 			task->message_id);
 		img->filename = part->filename;
 		img->parent = part;
-		rspamd_image_normalize (task, img);
+
+		if (img->data->len <= task->cfg->max_pic_size) {
+			rspamd_image_normalize (task, img);
+		}
+		else {
+			msg_info_task ("skip normalization for image %s: too large: %z",
+					img->filename, img->data->len);
+		}
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
 		part->specific_data = img;
 
