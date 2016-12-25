@@ -102,8 +102,14 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 		msg_debug_rpool ("active connection removed");
 
 		if (conn->ctx) {
-			g_hash_table_remove (conn->elt->pool->elts_by_ctx, conn->ctx);
-			redisAsyncFree (conn->ctx);
+			if (!(conn->ctx->c.flags & REDIS_FREEING)) {
+				redisAsyncContext *ac = conn->ctx;
+
+				conn->ctx = NULL;
+				g_hash_table_remove (conn->elt->pool->elts_by_ctx, conn->ctx);
+				ac->onDisconnect = NULL;
+				redisAsyncFree (ac);
+			}
 		}
 
 		g_queue_unlink (conn->elt->active, conn->entry);

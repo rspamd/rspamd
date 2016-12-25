@@ -115,7 +115,6 @@ rspamd_shingles_from_text (GArray *input,
 		}
 
 		memset (res, 0, sizeof (res));
-
 		for (i = 0; i <= (gint)input->len; i ++) {
 			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 
@@ -248,7 +247,7 @@ rspamd_shingles_from_image (guchar *dct,
 
 		beg++;
 	}
-
+#undef INNER_CYCLE_SHINGLES
 	/* Now we need to filter all hashes and make a shingles result */
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		shingle->hashes[i] = filter (hashes[i], hlen,
