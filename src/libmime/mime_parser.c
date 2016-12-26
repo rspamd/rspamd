@@ -707,6 +707,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 			}
 			else {
 				b.flags = 0;
+				b.closed_hash = 0;
 			}
 
 			g_array_append_val (st->boundaries, b);
