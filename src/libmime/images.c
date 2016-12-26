@@ -478,7 +478,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 		gdImageDestroy (src);
 
 		img->is_normalized = TRUE;
-		dct = g_malloc (sizeof (gdouble) * RSPAMD_DCT_LEN);
+		dct = g_malloc0 (sizeof (gdouble) * RSPAMD_DCT_LEN);
 		img->dct = g_malloc0 (RSPAMD_DCT_LEN / NBBY);
 		rspamd_mempool_add_destructor (task->task_pool, g_free,
 				img->dct);
