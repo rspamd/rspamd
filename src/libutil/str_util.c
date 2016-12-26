@@ -1936,6 +1936,7 @@ decode:
 					if (G_LIKELY (*p == '=')) {
 						p ++;
 						/* Skip comparison, as we know that we have found match */
+						remain --;
 						goto decode;
 					}
 					else {
