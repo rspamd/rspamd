@@ -311,8 +311,20 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 	case RSPAMD_CTE_7BIT:
 	case RSPAMD_CTE_8BIT:
 	case RSPAMD_CTE_UNKNOWN:
-		part->parsed_data.begin = part->raw_data.begin;
-		part->parsed_data.len = part->raw_data.len;
+		if (IS_CT_TEXT (part->ct)) {
+			/* Need to copy text as we have couple of in-place change functions */
+			parsed = rspamd_fstring_sized_new (part->raw_data.len);
+			parsed->len = part->raw_data.len;
+			memcpy (parsed->str, part->raw_data.begin, parsed->len);
+			part->parsed_data.begin = parsed->str;
+			part->parsed_data.len = parsed->len;
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)rspamd_fstring_free, parsed);
+		}
+		else {
+			part->parsed_data.begin = part->raw_data.begin;
+			part->parsed_data.len = part->raw_data.len;
+		}
 		break;
 	case RSPAMD_CTE_QP:
 		parsed = rspamd_fstring_sized_new (part->raw_data.len);
