@@ -60,11 +60,8 @@
     $('#youtube3').attr('src', youtube3_url);
   };
 
-  // Fix for offsets in links
   $(document).ready(
     function() {
-      var offset = 50;
-
       var contentBlock = document.getElementsByClassName("doc-content")[0] || document.getElementsByClassName("news")[0];
       if (!contentBlock) {
         return;
@@ -75,28 +72,9 @@
 
       $('body').scrollspy({
         target: '#navbar-spy',
-        offset: offset + 10
+        offset: 1
       });
 
-      $('[data-toggle="tooltip"]').tooltip(); // tooltips for buttons
-      $('.nav-stacked li a').click(function(event) {
-        var href = $(this).attr('href');
-        if (href && href != "#top" && href[0] == '#') {
-          event.preventDefault();
-          window.location.hash = $(this).attr('href')
-          $(href)[0].scrollIntoView();
-          scrollBy(0, -offset);
-        }
-      });
-      $('.container a').click(function(event) {
-        var href = $(this).attr('href');
-        if (href && href != "#top" && href[0] == '#') {
-          event.preventDefault();
-          window.location.hash = $(this).attr('href')
-          $(href)[0].scrollIntoView();
-          scrollBy(0, -offset);
-        }
-      });
       //change icon inside collapse btn
       $(".collapse-block").on("hide.bs.collapse", function() {
         $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
