@@ -727,7 +727,7 @@ local function train_fann(_, ev_base, elt)
               true, -- is write
               redis_lock_extend_cb, --callback
               'INCRBY', -- command
-              {fann_prefix .. elt, '30'}
+              {fann_prefix .. elt .. '_lock', '30'}
             )
           else
             return false -- do not plan any more updates
