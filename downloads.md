@@ -8,7 +8,7 @@ title: Downloads
 <!-- download button with tooltip
 <p><a class="btn btn-primary btn-lg" href="{{ site.baseurl }}/downloads/rspamd-1.3.1.tar.xz" data-toggle="tooltip" data-placement="right" title="Download the most recent stable version as source tarball">Download rspamd-1.3.1</a></p>
 <!-- github button >
-<p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
+<p><iframe src="{{ site.baseurl }}/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p-->
 
 ## Rspamd packages
