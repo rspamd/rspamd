@@ -75,6 +75,8 @@
         offset: 1
       });
 
+      $('[data-toggle="tooltip"]').tooltip(); // tooltips for buttons
+
       //change icon inside collapse btn
       $(".collapse-block").on("hide.bs.collapse", function() {
         $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
