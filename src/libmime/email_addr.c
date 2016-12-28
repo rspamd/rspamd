@@ -152,6 +152,43 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	g_ptr_array_add (ar, elt);
 }
 
+/*
+ * Tries to parse an email address that doesn't conform RFC
+ */
+static gboolean
+rspamd_email_address_parse_heuristic (const char *data, size_t len,
+		struct rspamd_email_address *addr)
+{
+	const gchar *p = data;
+
+	memset (addr, 0, sizeof (*addr));
+
+	if (*p == '<' && len > 1) {
+		/* Angled address */
+		addr->addr_len = rspamd_memcspn (p + 1, ">", len - 1);
+
+		if (addr->addr_len > 1) {
+			addr->addr_len --;
+		}
+
+		addr->addr = p + 1;
+		addr->raw = p;
+		addr->raw_len = len;
+
+		return TRUE;
+	}
+	else if (len > 0) {
+		addr->addr = p;
+		addr->addr_len = len;
+		addr->raw = p;
+		addr->raw_len = len;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 GPtrArray *
 rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		const gchar *hdr, guint len,
@@ -225,6 +262,13 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 					if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 						rspamd_email_address_add (pool, res, &addr, ns);
 					}
+					else {
+						/* Try heuristic */
+						if (rspamd_email_address_parse_heuristic (c, t - c + 1,
+								&addr)) {
+							rspamd_email_address_add (pool, res, &addr, ns);
+						}
+					}
 
 					/* Cleanup for the next use */
 					g_string_set_size (ns, 0);
@@ -252,6 +296,13 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 
 				if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 					rspamd_email_address_add (pool, res, &addr, ns);
+				}
+				else {
+					/* Try heuristic */
+					if (rspamd_email_address_parse_heuristic (c, p - c + 1,
+							&addr)) {
+						rspamd_email_address_add (pool, res, &addr, ns);
+					}
 				}
 
 				/* Cleanup for the next use */
@@ -283,6 +334,13 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 
 			if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 				rspamd_email_address_add (pool, res, &addr, ns);
+			}
+			else {
+				/* Try heuristic */
+				if (rspamd_email_address_parse_heuristic (c, p - c,
+						&addr)) {
+					rspamd_email_address_add (pool, res, &addr, ns);
+				}
 			}
 		}
 		break;
