@@ -2196,3 +2196,11 @@ rspamd_symbols_cache_enable_symbol (struct symbols_cache *cache,
 		item->enabled = TRUE;
 	}
 }
+
+guint64
+rspamd_symbols_cache_get_cksum (struct symbols_cache *cache)
+{
+	g_assert (cache != NULL);
+
+	return cache->cksum;
+}
