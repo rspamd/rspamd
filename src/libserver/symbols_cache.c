@@ -21,6 +21,7 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
+#include "contrib/t1ha/t1ha.h"
 #include <math.h>
 
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -68,6 +69,7 @@ struct symbols_cache {
 	GList *delayed_deps;
 	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
+	guint64 cksum;
 	gdouble total_weight;
 	guint used_items;
 	gdouble total_freq;
@@ -699,11 +701,6 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	 */
 	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
 			sizeof (struct counter_data));
-
-	if (name != NULL) {
-		item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
-	}
-
 	item->func = func;
 	item->user_data = user_data;
 	item->priority = priority;
@@ -717,7 +714,21 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->id = cache->used_items;
 	item->parent = parent;
 	cache->used_items ++;
-	msg_debug_cache ("used items: %d, added symbol: %s", cache->used_items, name);
+
+	if (name != NULL) {
+		item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
+		msg_debug_cache ("used items: %d, added symbol: %s, %d",
+				cache->used_items, name, item->id);
+		cache->cksum = t1ha (item->symbol, strlen (item->symbol),
+				cache->cksum);
+	}
+	else {
+		msg_debug_cache ("used items: %d, added unnamed symbol: %d",
+				cache->used_items, item->id);
+		cache->cksum = t1ha (&item->id, sizeof (item->id),
+				cache->cksum);
+	}
+
 	rspamd_set_counter (item, 0);
 	g_ptr_array_add (cache->items_by_id, item);
 	item->deps = g_ptr_array_new ();
@@ -875,6 +886,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->total_freq = 1;
 	cache->total_weight = 1.0;
 	cache->cfg = cfg;
+	cache->cksum = 0xdeadbabe;
 
 	return cache;
 }
