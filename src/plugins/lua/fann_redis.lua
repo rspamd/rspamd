@@ -556,7 +556,7 @@ local function train_fann(_, ev_base, elt)
         false, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {gen_fann_prefix(elt) .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
       if string.match(err, 'NOSCRIPT') then
         load_scripts(rspamd_config, ev_base, nil)
@@ -575,7 +575,7 @@ local function train_fann(_, ev_base, elt)
         true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {gen_fann_prefix(elt) .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
     else
       rspamd_logger.infox(rspamd_config, 'trained ANN %s: MSE: %s',
@@ -605,7 +605,7 @@ local function train_fann(_, ev_base, elt)
         true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {gen_fann_prefix(elt) .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
     else
       -- Decompress and convert to numbers each training vector
@@ -676,7 +676,7 @@ local function train_fann(_, ev_base, elt)
         true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {gen_fann_prefix(elt) .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
     else
       -- Decompress and convert to numbers each training vector
@@ -731,7 +731,7 @@ local function train_fann(_, ev_base, elt)
               true, -- is write
               redis_lock_extend_cb, --callback
               'INCRBY', -- command
-              {gen_fann_prefix(elt) .. '_lock', '30'}
+              {gen_fann_prefix(elt) .. '_locked', '30'}
             )
           else
             return false -- do not plan any more updates
