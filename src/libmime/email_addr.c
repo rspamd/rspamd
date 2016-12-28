@@ -166,11 +166,6 @@ rspamd_email_address_parse_heuristic (const char *data, size_t len,
 	if (*p == '<' && len > 1) {
 		/* Angled address */
 		addr->addr_len = rspamd_memcspn (p + 1, ">", len - 1);
-
-		if (addr->addr_len > 1) {
-			addr->addr_len --;
-		}
-
 		addr->addr = p + 1;
 		addr->raw = p;
 		addr->raw_len = len;
