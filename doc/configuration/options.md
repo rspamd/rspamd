@@ -66,13 +66,22 @@ These options are in a separate subsection named `dns` and specify the behaviour
 options {
 	dns {
 		# 9/10 on 127.0.0.1 and 1/10 to 8.8.8.8
-		nameserver = ["127.0.0.1:10", "8.8.8.8:1"];
-		# or
-		# nameserver = "127.0.0.1:10";
-		# nameserver = "8.8.8.8:1";
+		nameserver = ["127.0.0.1:53:10", "10.0.1.1:53:1"];
 	}
 }
 ~~~
+
+You can also specify another configuration of DNS servers selection strategy using [upstream](./upstream.html) syntax, e.g.:
+
+~~~ucl
+options {
+	dns {
+		nameserver = "master-slave:127.0.0.1:53:10,8.8.8.8:53:1";
+	}
+}
+~~~
+
+In this case, `8.8.8.8` public resolver will be used as a backup when local resolver is down. Please mention, that by default, Rspamd uses `round-robin` strategy which is also used when resolvers are read from `/etc/resolv.conf`.
 
 * `timeout`: timeout for each DNS request
 * `retransmits`: how many times each request is retransmitted before it is treated as failed (the overall timeout for each request is thus `timeout * retransmits`)
