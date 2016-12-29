@@ -62,6 +62,31 @@ LUA_FUNCTION_DEF (tcp, close);
  */
 LUA_FUNCTION_DEF (tcp, set_timeout);
 
+/***
+ * @method tcp:add_read(callback, [pattern])
+ *
+ * Adds new read event to the tcp connection
+ * @param {function} callback to be called when data is read
+ * @param {string} pattern optional stop pattern
+ */
+LUA_FUNCTION_DEF (tcp, add_read);
+
+/***
+ * @method tcp:add_write(callback, data)
+ *
+ * Adds new write event to the tcp connection
+ * @param {function} optional callback to be called when data is completely written
+ * @param {table/string/text} data to send to a remote server
+ */
+LUA_FUNCTION_DEF (tcp, add_write);
+
+/***
+ * @method tcp:shift_callback()
+ *
+ * Shifts the current callback and go to the next one (if any)
+ */
+LUA_FUNCTION_DEF (tcp, shift_callback);
+
 static const struct luaL_reg tcp_libf[] = {
 	LUA_INTERFACE_DEF (tcp, request),
 	{"new", lua_tcp_request},
@@ -72,6 +97,9 @@ static const struct luaL_reg tcp_libf[] = {
 static const struct luaL_reg tcp_libm[] = {
 	LUA_INTERFACE_DEF (tcp, close),
 	LUA_INTERFACE_DEF (tcp, set_timeout),
+	LUA_INTERFACE_DEF (tcp, add_read),
+	LUA_INTERFACE_DEF (tcp, add_write),
+	LUA_INTERFACE_DEF (tcp, shift_callback),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1105,6 +1133,144 @@ lua_tcp_set_timeout (lua_State *L)
 
 	ms *= 1000.0;
 	double_to_tv (ms, &cbd->tv);
+
+	return 0;
+}
+
+static gint
+lua_tcp_add_read (lua_State *L)
+{
+	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
+	struct lua_tcp_handler *rh;
+	gchar *stop_pattern = NULL;
+	gint cbref = -1;
+
+	if (cbd == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TFUNCTION) {
+		lua_pushvalue (L, 2);
+		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	}
+
+	if (lua_type (L, 3) == LUA_TSTRING) {
+		stop_pattern = g_strdup (lua_tostring (L, 3));
+	}
+
+	rh = g_slice_alloc0 (sizeof (*rh));
+	rh->type = LUA_WANT_READ;
+	rh->h.r.cbref = cbref;
+	rh->h.r.stop_pattern = stop_pattern;
+	g_queue_push_tail (cbd->handlers, rh);
+	lua_tcp_plan_handler_event (cbd, TRUE, TRUE);
+
+	return 0;
+}
+
+static gint
+lua_tcp_add_write (lua_State *L)
+{
+	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
+	struct lua_tcp_handler *wh;
+	gint cbref = -1, tp;
+	struct iovec *iov = NULL;
+	guint niov = 0, total_out = 0;
+
+	if (cbd == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TFUNCTION) {
+		lua_pushvalue (L, 2);
+		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	}
+
+	tp = lua_type (L, 3);
+	if (tp == LUA_TSTRING || tp == LUA_TUSERDATA) {
+		iov = g_malloc (sizeof (*iov));
+		niov = 1;
+
+		if (!lua_tcp_arg_toiovec (L, 3, cbd, iov)) {
+			msg_err ("tcp request has bad data argument");
+			lua_pushboolean (L, FALSE);
+			g_free (iov);
+
+			return 1;
+		}
+
+		total_out = iov[0].iov_len;
+	}
+	else if (tp == LUA_TTABLE) {
+		/* Count parts */
+		lua_pushvalue (L, 3);
+
+		lua_pushnil (L);
+		while (lua_next (L, -2) != 0) {
+			niov ++;
+			lua_pop (L, 1);
+		}
+
+		iov = g_malloc (sizeof (*iov) * niov);
+		lua_pushnil (L);
+		niov = 0;
+
+		while (lua_next (L, -2) != 0) {
+			if (!lua_tcp_arg_toiovec (L, -1, cbd, &iov[niov])) {
+				lua_pop (L, 2);
+				msg_err ("tcp request has bad data argument at pos %d", niov);
+				lua_pushboolean (L, FALSE);
+				g_free (iov);
+				g_slice_free1 (sizeof (*cbd), cbd);
+
+				return 1;
+			}
+
+			total_out += iov[niov].iov_len;
+			niov ++;
+
+			lua_pop (L, 1);
+		}
+
+		lua_pop (L, 1);
+	}
+
+	wh = g_slice_alloc0 (sizeof (*wh));
+	wh->type = LUA_WANT_WRITE;
+	wh->h.w.iov = iov;
+	wh->h.w.iovlen = niov;
+	wh->h.w.total = total_out;
+	wh->h.w.pos = 0;
+	/* Cannot set write handler here */
+	wh->h.w.cbref = -1;
+
+	if (cbref != -1) {
+		/* We have write only callback */
+		wh->h.w.cbref = cbref;
+	}
+	else {
+		/* We have simple client callback */
+		wh->h.w.cbref = -1;
+	}
+
+	g_queue_push_tail (cbd->handlers, wh);
+	lua_tcp_plan_handler_event (cbd, TRUE, TRUE);
+	lua_pushboolean (L, TRUE);
+
+	return 1;
+}
+
+static gint
+lua_tcp_shift_callback (lua_State *L)
+{
+	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
+
+	if (cbd == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_tcp_shift_handler (cbd);
+	lua_tcp_plan_handler_event (cbd, TRUE, TRUE);
 
 	return 0;
 }
