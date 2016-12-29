@@ -492,12 +492,14 @@ lua_tcp_process_read_handler (struct lua_tcp_cbdata *cbd,
 					memmove (cbd->in->data, cbd->in->data + pos + slen,
 							cbd->in->len - (pos + slen));
 					lua_tcp_shift_handler (cbd);
+					cbd->in->len = cbd->in->len - (pos + slen);
 				}
 				else {
 					lua_tcp_shift_handler (cbd);
-
-					return TRUE;
+					cbd->in->len = 0;
 				}
+
+				return TRUE;
 			}
 			else {
 				/* Plan new read */
@@ -510,6 +512,7 @@ lua_tcp_process_read_handler (struct lua_tcp_cbdata *cbd,
 		msg_debug_tcp ("read TCP partial data");
 		lua_tcp_push_data (cbd, cbd->in->data, cbd->in->len);
 		lua_tcp_shift_handler (cbd);
+		cbd->in->len = 0;
 
 		return TRUE;
 	}
