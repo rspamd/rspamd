@@ -44,6 +44,51 @@ rspamd_config.SYM = function(task)
     	data = {"GET / HTTP/1.0\r\n", "Host: google.com\r\n", "\r\n"},
     	callback = cb})
 end
+
+-- New TCP syntax test
+rspamd_config:register_symbol({
+  name = 'TCP_TEST',
+  type = "normal",
+  callback = function(task)
+    local logger = require "rspamd_logger"
+    local function rcpt_done_cb(err, data, conn)
+      logger.errx(task, 'RCPT: got reply: %s, error: %s', data, err)
+      conn:close()
+    end
+    local function rcpt_cb(err, conn)
+      logger.errx(task, 'written rcpt, error: %s', err)
+      conn:add_read(rcpt_done_cb, '\r\n')
+    end
+    local function from_done_cb(err, data, conn)
+      logger.errx(task, 'FROM: got reply: %s, error: %s', data, err)
+      conn:add_write(rcpt_cb, 'RCPT TO: <hui@yandex.ru>\r\n')
+    end
+    local function from_cb(err, conn)
+      logger.errx(task, 'written from, error: %s', err)
+      conn:add_read(from_done_cb, '\r\n')
+    end
+    local function hello_done_cb(err, data, conn)
+      logger.errx(task, 'HELO: got reply: %s, error: %s', data, err)
+      conn:add_write(from_cb, 'MAIL FROM: <>\r\n')
+    end
+    local function hello_cb(err, conn)
+      logger.errx(task, 'written hello, error: %s', err)
+      conn:add_read(hello_done_cb, '\r\n')
+    end
+    local function init_cb(err, data, conn)
+      logger.errx(task, 'got reply: %s, error: %s', data, err)
+      conn:add_write(hello_cb, 'HELO example.com\r\n')
+    end
+    tcp.request{
+      task = task,
+      callback = init_cb,
+      stop_pattern = '\r\n',
+      host = 'mx.yandex.ru',
+      port = 25
+    }
+  end,
+  priority = 10,
+})
  */
 
 LUA_FUNCTION_DEF (tcp, request);
