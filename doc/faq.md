@@ -626,6 +626,20 @@ The overall execution order in Rspamd is the following:
 
 This symbol means that you have exceeded the amount of DNS queries allowed for non-commercial usage by SURBL services. If you use some a public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or set one up, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying a [commercial subscription](http://www.surbl.org/df) or you won't be able to use the service. The `URIBL_BLOCKED` symbol has a weight of 0 and is used just to inform you about this problem.
 
+### Why do I have `monitored` errors in my log files
+
+Some users complain about log lines like the following ones:
+
+```
+<xxx>; monitored; rspamd_monitored_dns_cb: DNS reply returned 'no error' for multi.uribl.com while 'no records with this name' was expected
+```
+
+This errors usually means that you are blocked on `uribl.com` which, in turn, can mean that you are using some public DNS resolver (e.g. Google DNS). If you do not use public resolver but if you have a significant mail flow then you might be out of `free band` for URIBL so you could consider a [commercial subscription](http://www.surbl.org/df) option. However, even in this case you should use a dedicated resolvers and not some public ones. You can read more about DNS setup [here](https://rspamd.com/doc/configuration/options.html#dns-options).
+
+The second possible reason of this error is RBL/URLBL malfunction which means that it returns positive results for queries that shouldn't be banned (e.g. `facebook.com` or `127.0.0.1`). This means a serious malfunction in the DNS list.
+
+The third reason could be in your DNS server: sometimes DNS servers provides fake replies for queries that are not found. For example, they could lead you to some search page or to some informational page. Rspamd cannot work normally in such a situation and will disable DNSBL lookups. Please consider using of your own forwarding DNS server in this case.
+
 ### What is faster between custom Lua rules and regular expressions
 
 Switching from C to Lua might be expensive. Hence, you should use regular expressions for simple checks where possible. If Rspamd is compiled with [Hyperscan](https://01.org/hyperscan) the cost of adding another regular expression is usually very cheap. In this case, you should avoid constructions that are not supported by Hyperscan: backtracking, lookbehind and some [others](http://01org.github.io/hyperscan/dev-reference/compilation.html#unsupported-constructs). On the other hand, Lua provides some unique functions that are not available by using of regular expressions. In this case, you should use Lua.

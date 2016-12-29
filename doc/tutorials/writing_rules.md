@@ -422,7 +422,7 @@ if rule['score'] then
     rule['group'] = 'whitelist'
   end
   rule['name'] = symbol
-  Rspamd_config:set_metric_symbol(rule)
+  rspamd_config:set_metric_symbol(rule)
 end
 ~~~
 
