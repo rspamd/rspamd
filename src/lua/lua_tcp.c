@@ -487,8 +487,7 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 		if (cbd->flags & LUA_TCP_FLAG_PARTIAL) {
 			lua_tcp_push_data (cbd, in, r);
 			/* Plan next event */
-			lua_tcp_shift_handler (cbd);
-			lua_tcp_shift_handler (cbd);
+			lua_tcp_plan_read (cbd);
 		}
 		else {
 			g_byte_array_append (cbd->in, in, r);
