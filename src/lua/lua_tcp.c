@@ -461,6 +461,12 @@ lua_tcp_process_read_handler (struct lua_tcp_cbdata *cbd,
 			}
 		}
 	}
+	else {
+		lua_tcp_push_data (cbd, cbd->in->data, cbd->in->len);
+		lua_tcp_shift_handler (cbd);
+
+		return TRUE;
+	}
 
 	return FALSE;
 }
