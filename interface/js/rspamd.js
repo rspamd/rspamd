@@ -69,7 +69,7 @@
                 symbols.destroy();
                 symbols = null;
             }
-            clearTimeout(stat_timeout);
+            Visibility.stop(stat_timeout);
             cleanCredentials();
             connectRSPAMD();
             // window.location.reload();
@@ -78,11 +78,14 @@
         $('#refresh').on('click', function (event) {
             if (!$(this).attr('disabled')) {
                 $(this).attr('disabled', true);
-                clearTimeout(stat_timeout);
+                Visibility.stop(stat_timeout);
 
+                statWidgets();
+                stat_timeout = Visibility.every(10000, function () {
+                    statWidgets();
+                });
                 getChart();
                 getGraphData(selected.selData);
-                statWidgets();
 
                 setTimeout(function () {
                     $('#refresh').removeAttr('disabled');
@@ -382,7 +385,6 @@
             $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
             $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
             $(widgets).show();
-            stat_timeout = window.setTimeout(statWidgets, 10000);
         }
         // @opem modal with target form enabled
         $(document).on('click', '[data-toggle="modal"]', function (e) {
@@ -1264,6 +1266,9 @@
             // @toggle auth and main
             var disconnect = $('#navBar .pull-right');
             statWidgets();
+            stat_timeout = Visibility.every(10000, function () {
+                statWidgets();
+            });
             $('#mainUI').show();
             $('#progress').show();
 
