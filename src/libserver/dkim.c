@@ -1727,7 +1727,8 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				rh_num = ar->len - count - 1;
 			}
 			else {
-				rh_num = ar->len - 1;
+				/* Absence of header is just NULL signature update */
+				return TRUE;
 			}
 
 			rh = g_ptr_array_index (ar, rh_num);
