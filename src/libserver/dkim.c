@@ -2159,7 +2159,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 			rspamd_dkim_canonize_header (&ctx->common, task, dh->name, dh->count,
 					NULL, NULL);
 
-			for (j = 0; j < dh->count; j++) {
+			for (j = 0; j < dh->count + 1; j++) {
 				rspamd_printf_gstring (hdr, "%s:", dh->name);
 			}
 		}
