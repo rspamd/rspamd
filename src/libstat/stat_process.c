@@ -757,6 +757,10 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 	}
 
 end:
+	if (!res && err) {
+		return res;
+	}
+
 	if (!res && sel == NULL) {
 		if (classifier) {
 			g_set_error (err, rspamd_stat_quark (), 404, "cannot find classifier "
