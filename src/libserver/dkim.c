@@ -1869,7 +1869,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			EVP_MD_CTX_reset (cpy_ctx);
 	#endif
 			EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
-			EVP_DigestUpdate (cpy_ctx, "\n", 2);
+			EVP_DigestUpdate (cpy_ctx, "\n", 1);
 			EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
 
 			if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
