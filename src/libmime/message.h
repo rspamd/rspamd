@@ -23,7 +23,8 @@ enum rspamd_mime_part_flags {
 	RSPAMD_MIME_PART_TEXT = (1 << 0),
 	RSPAMD_MIME_PART_ATTACHEMENT = (1 << 1),
 	RSPAMD_MIME_PART_IMAGE = (1 << 2),
-	RSPAMD_MIME_PART_ARCHIVE = (1 << 3)
+	RSPAMD_MIME_PART_ARCHIVE = (1 << 3),
+	RSPAMD_MIME_PART_BAD_CTE = (1 << 4)
 };
 
 enum rspamd_cte {

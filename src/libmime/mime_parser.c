@@ -145,7 +145,7 @@ rspamd_mime_parse_cte (const gchar *in, gsize len)
 	return ret;
 }
 
-static void
+static enum rspamd_cte
 rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		struct rspamd_mime_part *part)
 {
@@ -192,8 +192,8 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		ret = RSPAMD_CTE_8BIT;
 	}
 
-	part->cte = ret;
 	msg_debug_mime ("detected cte: %s", rspamd_cte_to_string (ret));
+	return ret;
 }
 
 static void
@@ -209,7 +209,8 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 			"Content-Transfer-Encoding", FALSE);
 
 	if (hdrs == NULL) {
-		rspamd_mime_part_get_cte_heuristic (task, part);
+		part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
+		part->flags |= RSPAMD_MIME_PART_BAD_CTE;
 	}
 	else {
 		for (i = 0; i < hdrs->len; i ++) {
@@ -221,15 +222,27 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 			cte = rspamd_mime_parse_cte (hdr->value, hlen);
 
 			if (cte != RSPAMD_CTE_UNKNOWN) {
+				part->cte = cte;
 				break;
 			}
 		}
 
-		if (cte == RSPAMD_CTE_UNKNOWN) {
-			rspamd_mime_part_get_cte_heuristic (task, part);
+		if (part->cte == RSPAMD_CTE_UNKNOWN) {
+			part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
+		}
+		else if (part->cte == RSPAMD_CTE_B64 || part->cte == RSPAMD_CTE_QP) {
+			/* Additionally check sanity */
+			cte = rspamd_mime_part_get_cte_heuristic (task, part);
+
+			if (cte != part->cte) {
+				msg_info_task ("incorrect cte specified for part: %s, %s detected",
+						rspamd_cte_to_string (part->cte),
+						rspamd_cte_to_string (cte));
+				part->cte = cte;
+				part->flags |= RSPAMD_MIME_PART_BAD_CTE;
+			}
 		}
 		else {
-			part->cte = cte;
 			msg_debug_mime ("processed cte: %s", rspamd_cte_to_string (cte));
 		}
 	}
