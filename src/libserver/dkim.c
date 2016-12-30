@@ -373,7 +373,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 	gchar *h;
 	gboolean from_found = FALSE;
 	guint count = 0;
-	struct rspamd_dkim_header *new;
+	struct rspamd_dkim_header *new, *check;
 	GHashTable *htb;
 
 	p = param;
@@ -401,25 +401,26 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 			rspamd_strlcpy (h, c, p - c + 1);
 			g_strstrip (h);
 
-			if ((new = g_hash_table_lookup (htb, h)) != NULL) {
+			new = rspamd_mempool_alloc (ctx->pool,
+					sizeof (struct rspamd_dkim_header));
+			new->name = h;
+			new->count = 0;
+
+			/* Check mandatory from */
+			if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
+				from_found = TRUE;
+			}
+
+			g_ptr_array_add (ctx->hlist, new);
+
+			if ((check = g_hash_table_lookup (htb, h)) != NULL) {
 				new->count++;
 			}
 			else {
 				/* Insert new header to the list */
-				new =
-					rspamd_mempool_alloc (ctx->pool,
-						sizeof (struct rspamd_dkim_header));
-				new->name = h;
-				new->count = 1;
 				g_hash_table_insert (htb, new->name, new);
-
-				/* Check mandatory from */
-				if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
-					from_found = TRUE;
-				}
-
-				g_ptr_array_add (ctx->hlist, new);
 			}
+
 			c = p + 1;
 			p++;
 		}
@@ -1723,27 +1724,24 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		if (ar) {
 			if (ar->len > count) {
 				/* Set skip count */
-				rh_num = ar->len - count;
+				rh_num = ar->len - count - 1;
 			}
 			else {
-				rh_num = 0;
+				rh_num = ar->len - 1;
 			}
 
+			rh = g_ptr_array_index (ar, rh_num);
 
-			for (i = rh_num; i < ar->len; i ++) {
-				rh = g_ptr_array_index (ar, i);
-
-				if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
-					rspamd_dkim_hash_update (ctx->headers_hash, rh->raw_value,
-							rh->raw_len);
-					msg_debug_dkim ("update signature with header: %*s",
-							(gint)rh->raw_len, rh->raw_value);
-				}
-				else {
-					if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
-							header_name, FALSE)) {
-						return FALSE;
-					}
+			if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
+				rspamd_dkim_hash_update (ctx->headers_hash, rh->raw_value,
+						rh->raw_len);
+				msg_debug_dkim ("update signature with header: %*s",
+						(gint)rh->raw_len, rh->raw_value);
+			}
+			else {
+				if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
+						header_name, FALSE)) {
+					return FALSE;
 				}
 			}
 		}
@@ -1752,6 +1750,8 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		/* For signature check just use the saved dkim header */
 		if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 			/* We need to find our own signature and use it */
+			guint i;
+
 			ar = g_hash_table_lookup (task->raw_headers, DKIM_SIGNHEADER);
 
 			if (ar) {
@@ -1833,7 +1833,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 	/* Canonize dkim signature */
-	rspamd_dkim_canonize_header (&ctx->common, task, DKIM_SIGNHEADER, 1,
+	rspamd_dkim_canonize_header (&ctx->common, task, DKIM_SIGNHEADER, 0,
 			ctx->dkim_header, ctx->domain);
 
 	dlen = EVP_MD_CTX_size (ctx->common.body_hash);
