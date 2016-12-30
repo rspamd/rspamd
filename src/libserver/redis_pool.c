@@ -231,7 +231,12 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 	struct rspamd_redis_pool_connection *conn;
 	struct redisAsyncContext *ctx;
 
-	ctx = redisAsyncConnect (ip, port);
+	if (*ip == '/' || *ip == '.') {
+		ctx = redisAsyncConnectUnix (ip);
+	}
+	else {
+		ctx = redisAsyncConnect (ip, port);
+	}
 
 	if (ctx) {
 
