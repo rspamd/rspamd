@@ -157,7 +157,15 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 
 	real_len = MIN (check_len, part->raw_data.len);
 	p = (const guchar *)part->raw_data.begin;
-	end = p + real_len;
+	end = p + part->raw_data.len;
+
+	while (p < end && g_ascii_isspace (*p)) {
+		p ++;
+	}
+
+	if (end - p > real_len) {
+		end = p + real_len;
+	}
 
 	while (p < end) {
 		if (*p == '\r' || *p == '\n') {
