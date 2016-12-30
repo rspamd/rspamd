@@ -650,8 +650,15 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 	g_assert (cbdata->selected != NULL);
 	addr = rspamd_upstream_addr (cbdata->selected);
 	g_assert (addr != NULL);
-	cbdata->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
-			rspamd_inet_address_get_port (addr));
+
+	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {
+		cbdata->redis = redisAsyncConnectUnix (rspamd_inet_address_to_string (addr));
+	}
+	else {
+		cbdata->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+	}
+
 	g_assert (cbdata->redis != NULL);
 
 	redisLibeventAttach (cbdata->redis, redis_elt->ev_base);
@@ -1143,8 +1150,14 @@ rspamd_redis_runtime (struct rspamd_task *task,
 
 	addr = rspamd_upstream_addr (up);
 	g_assert (addr != NULL);
-	rt->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
-			rspamd_inet_address_get_port (addr));
+
+	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {
+		rt->redis = redisAsyncConnectUnix (rspamd_inet_address_to_string (addr));
+	}
+	else {
+		rt->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+	}
 
 	if (rt->redis == NULL) {
 		msg_err_task ("cannot connect redis");
@@ -1270,8 +1283,14 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 	addr = rspamd_upstream_addr (up);
 	g_assert (addr != NULL);
-	rt->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
-			rspamd_inet_address_get_port (addr));
+	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {
+		rt->redis = redisAsyncConnectUnix (rspamd_inet_address_to_string (addr));
+	}
+	else {
+		rt->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+	}
+
 	g_assert (rt->redis != NULL);
 
 	redisLibeventAttach (rt->redis, task->ev_base);

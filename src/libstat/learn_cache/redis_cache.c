@@ -398,8 +398,15 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 
 	addr = rspamd_upstream_addr (up);
 	g_assert (addr != NULL);
-	rt->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
-			rspamd_inet_address_get_port (addr));
+
+	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {
+		rt->redis = redisAsyncConnectUnix (rspamd_inet_address_to_string (addr));
+	}
+	else {
+		rt->redis = redisAsyncConnect (rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+	}
+
 	g_assert (rt->redis != NULL);
 
 	redisLibeventAttach (rt->redis, task->ev_base);
