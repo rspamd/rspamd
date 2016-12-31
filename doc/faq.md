@@ -640,6 +640,18 @@ The second possible reason of this error is RBL/URLBL malfunction which means th
 
 The third reason could be in your DNS server: sometimes DNS servers provides fake replies for queries that are not found. For example, they could lead you to some search page or to some informational page. Rspamd cannot work normally in such a situation and will disable DNSBL lookups. Please consider using of your own forwarding DNS server in this case.
 
+### What is the meaning of the message like `inv_chi_square: exp overflow`
+
+This message usually means that some statistics class is overflowed with tokens and another one is underflowed. You should consider to learn more messages from both Spam and Ham classes for Bayes classifier.
+
+### How can I learn messages
+
+You should use `rspamc learn_spam` and `rspamc learn_ham` commands to learn Spam and Ham classes accordingly. Youd should always learn both classes with almost equal amount of messages to increase performance of the statistical engine. Learning requires `enable` level for the controller and you need to specify `enable_password` or use `secure_ip` setting to allow learning and other modifications from certain IP addresses.
+
+### How to learn Rspamd automatically
+
+Please check the [following document](https://rspamd.com/doc/configuration/statistic.html#autolearning) for more details.
+
 ### What is faster between custom Lua rules and regular expressions
 
 Switching from C to Lua might be expensive. Hence, you should use regular expressions for simple checks where possible. If Rspamd is compiled with [Hyperscan](https://01.org/hyperscan) the cost of adding another regular expression is usually very cheap. In this case, you should avoid constructions that are not supported by Hyperscan: backtracking, lookbehind and some [others](http://01org.github.io/hyperscan/dev-reference/compilation.html#unsupported-constructs). On the other hand, Lua provides some unique functions that are not available by using of regular expressions. In this case, you should use Lua.
