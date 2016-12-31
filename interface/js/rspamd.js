@@ -51,7 +51,7 @@
             graph.interpolate(this.value);
         });
 
-        $('#disconnect').on('click', function (event) {
+        function disconnect() {
             if (pie) {
                 pie.destroy();
             }
@@ -74,24 +74,52 @@
             connectRSPAMD();
             // window.location.reload();
             return false;
-        });
-        $('#refresh').on('click', function (event) {
-            if (!$(this).attr('disabled')) {
-                $(this).attr('disabled', true);
-                Visibility.stop(stat_timeout);
+        }
 
-                statWidgets();
-                stat_timeout = Visibility.every(10000, function () {
-                    statWidgets();
-                });
-                getChart();
-                getGraphData(selected.selData);
+        function tabClick(tab_id) {
+            if ($(tab_id).attr('disabled')) return;
+            $(tab_id).attr('disabled', true);
 
-                setTimeout(function () {
-                    $('#refresh').removeAttr('disabled');
-                }, 1000);
+            Visibility.stop(stat_timeout);
+
+            if (tab_id === "#refresh") {
+                tab_id = "#" + $('.navbar-nav .active > a' ).attr('id');
             }
-        });
+
+            switch (tab_id) {
+                case "#status_nav":
+                    statWidgets();
+                    stat_timeout = Visibility.every(10000, function () {
+                        statWidgets();
+                    });
+                    getChart();
+                    break;
+                case "#throughput_nav":
+                    getGraphData(selected.selData);
+                    break;
+                case "#configuration_nav":
+                    getActions();
+                    $('#modalBody').empty();
+                    getMaps();
+                    break;
+                case "#symbols_nav":
+                    getSymbols();
+                    break;
+                case "#history_nav":
+                    getHistory();
+                    getErrors();
+                    break;
+                case "#disconnect":
+                    disconnect();
+                    break;
+            }
+
+            setTimeout(function () {
+                $(tab_id).removeAttr('disabled');
+                $('#refresh').removeAttr('disabled');
+            }, 1000);
+        }
+
         // @supports session storage
         function supportsSessionStorage() {
             return typeof (Storage) !== "undefined";
@@ -1265,30 +1293,17 @@
         function displayUI() {
             // @toggle auth and main
             var disconnect = $('#navBar .pull-right');
-            statWidgets();
-            stat_timeout = Visibility.every(10000, function () {
-                statWidgets();
-            });
             $('#mainUI').show();
             $('#progress').show();
 
-            getChart();
             initGraph();
-            if ($("#throughput_nav").attr("aria-expanded") === "true") {
-                getGraphData(selected.selData);
-            }
+            tabClick("#refresh");
 
             $('#progress').hide();
             $(disconnect).show();
         }
 
         connectRSPAMD();
-
-        $('#configuration_nav').bind('click', function (e) {
-            getActions();
-            $('#modalBody').empty();
-            getMaps();
-        });
 
         $(document).ajaxStart(function () {
             $('#navBar').addClass('loading');
@@ -1298,18 +1313,10 @@
                 $('#navBar').removeClass('loading');
             }, 1000);
         });
-        $('#status_nav').bind('click', function (e) {
-            getChart();
-        });
-        $('#throughput_nav').bind('click', function () {
-            getGraphData(selected.selData);
-        });
-        $('#history_nav').bind('click', function () {
-            getHistory();
-            getErrors();
-        });
-        $('#symbols_nav').bind('click', function () {
-            getSymbols();
+
+        $('a[data-toggle="tab"]').on('click', function (e) {
+            const tab_id = "#" + $(e.target).attr("id")
+            tabClick(tab_id);
         });
     });
 })();
