@@ -32,14 +32,14 @@
         var graph;
         var symbols;
         var read_only = false;
-        var stat_timeout;
 
+        var timer_id = [];
         var selected = []; // Keep graph selectors state
 
         // Bind event handlers to selectors
         $("#selData").change(function () {
             selected.selData = this.value;
-            getGraphData(this.value);
+            tabClick("#throughput_nav");
         });
         $("#selConvert").change(function () {
             graph.convert(this.value);
@@ -50,6 +50,12 @@
         $("#selInterpolate").change(function () {
             graph.interpolate(this.value);
         });
+
+        function stopTimers() {
+            for (var key in timer_id) {
+                Visibility.stop(timer_id[key]);
+            }
+        }
 
         function disconnect() {
             if (pie) {
@@ -69,7 +75,7 @@
                 symbols.destroy();
                 symbols = null;
             }
-            Visibility.stop(stat_timeout);
+            stopTimers();
             cleanCredentials();
             connectRSPAMD();
             // window.location.reload();
@@ -80,7 +86,7 @@
             if ($(tab_id).attr('disabled')) return;
             $(tab_id).attr('disabled', true);
 
-            Visibility.stop(stat_timeout);
+            stopTimers();
 
             if (tab_id === "#refresh") {
                 tab_id = "#" + $('.navbar-nav .active > a' ).attr('id');
@@ -89,13 +95,20 @@
             switch (tab_id) {
                 case "#status_nav":
                     statWidgets();
-                    stat_timeout = Visibility.every(10000, function () {
+                    timer_id.status = Visibility.every(10000, function () {
                         statWidgets();
                     });
                     getChart();
                     break;
                 case "#throughput_nav":
                     getGraphData(selected.selData);
+                    const autoRefresh = {
+                        hourly: 60000,
+                        daily: 300000
+                    };
+                    timer_id.throughput = Visibility.every(autoRefresh[selected.selData] || 3600000, function () {
+                        getGraphData(selected.selData);
+                    });
                     break;
                 case "#configuration_nav":
                     getActions();
