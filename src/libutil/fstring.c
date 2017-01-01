@@ -25,7 +25,7 @@ rspamd_fstring_new (void)
 {
 	rspamd_fstring_t *s;
 
-	if (posix_memalign ((void**)&s, 16, default_initial_size + sizeof (*s)) != 0) {
+	if ((s = malloc (default_initial_size + sizeof (*s))) != 0) {
 		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
 				G_STRLOC, default_initial_size + sizeof (*s));
 
@@ -44,7 +44,7 @@ rspamd_fstring_sized_new (gsize initial_size)
 	rspamd_fstring_t *s;
 	gsize real_size = MAX (default_initial_size, initial_size);
 
-	if (posix_memalign ((void **)&s, 16, real_size + sizeof (*s)) != 0) {
+	if ((s = malloc (real_size + sizeof (*s))) != 0) {
 		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
 				G_STRLOC, real_size + sizeof (*s));
 
@@ -62,7 +62,7 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 	rspamd_fstring_t *s;
 	gsize real_size = MAX (default_initial_size, len);
 
-	if (posix_memalign ((void **) &s, 16, real_size + sizeof (*s)) != 0) {
+	if ((s = malloc (real_size + sizeof (*s))) != 0) {
 		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
 				G_STRLOC, real_size + sizeof (*s));
 
