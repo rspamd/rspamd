@@ -95,17 +95,6 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
 
 
 /*
- * Get action from a string
- */
-gboolean rspamd_action_from_str (const gchar *data, gint *result);
-
-/*
- * Return textual representation of action enumeration
- */
-const gchar * rspamd_action_to_str (enum rspamd_metric_action action);
-const gchar * rspamd_action_to_str_alt (enum rspamd_metric_action action);
-
-/*
  * Get action for specific metric
  */
 enum rspamd_metric_action rspamd_check_action_metric (struct rspamd_task *task,

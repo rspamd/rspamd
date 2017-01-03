@@ -628,6 +628,17 @@ gboolean rspamd_config_set_action_score (struct rspamd_config *cfg,
 gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		const gchar *module_name);
 
+/*
+ * Get action from a string
+ */
+gboolean rspamd_action_from_str (const gchar *data, gint *result);
+
+/*
+ * Return textual representation of action enumeration
+ */
+const gchar * rspamd_action_to_str (enum rspamd_metric_action action);
+const gchar * rspamd_action_to_str_alt (enum rspamd_metric_action action);
+
 /**
  * Parse radix tree or radix map from ucl object
  * @param cfg configuration object

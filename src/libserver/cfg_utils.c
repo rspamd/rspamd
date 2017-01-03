@@ -1723,3 +1723,88 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_action_from_str (const gchar *data, gint *result)
+{
+	guint64 h;
+
+	h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+			data, strlen (data), 0xdeadbabe);
+
+	switch (h) {
+	case 0x9917BFDB46332B8CULL: /* reject */
+		*result = METRIC_ACTION_REJECT;
+		break;
+	case 0x7130EE37D07B3715ULL: /* greylist */
+		*result = METRIC_ACTION_GREYLIST;
+		break;
+	case 0xCA6087E05480C60CULL: /* add_header */
+	case 0x87A3D27783B16241ULL: /* add header */
+		*result = METRIC_ACTION_ADD_HEADER;
+		break;
+	case 0x4963374ED8B90449ULL: /* rewrite_subject */
+	case 0x5C9FC4679C025948ULL: /* rewrite subject */
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+		break;
+	case 0xFC7D6502EE71FDD9ULL: /* soft reject */
+	case 0x73576567C262A82DULL: /* soft_reject */
+		*result = METRIC_ACTION_SOFT_REJECT;
+		break;
+	case 0x207091B927D1EC0DULL: /* no action */
+	case 0xB7D92D002CD46325ULL: /* no_action */
+	case 0x167C0DF4BAA9BCECULL: /* accept */
+		*result = METRIC_ACTION_NOACTION;
+		break;
+	default:
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+const gchar *
+rspamd_action_to_str (enum rspamd_metric_action action)
+{
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		return "reject";
+	case METRIC_ACTION_SOFT_REJECT:
+		return "soft reject";
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		return "rewrite subject";
+	case METRIC_ACTION_ADD_HEADER:
+		return "add header";
+	case METRIC_ACTION_GREYLIST:
+		return "greylist";
+	case METRIC_ACTION_NOACTION:
+		return "no action";
+	case METRIC_ACTION_MAX:
+		return "invalid max action";
+	}
+
+	return "unknown action";
+}
+
+const gchar *
+rspamd_action_to_str_alt (enum rspamd_metric_action action)
+{
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		return "reject";
+	case METRIC_ACTION_SOFT_REJECT:
+		return "soft_reject";
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		return "rewrite_subject";
+	case METRIC_ACTION_ADD_HEADER:
+		return "add_header";
+	case METRIC_ACTION_GREYLIST:
+		return "greylist";
+	case METRIC_ACTION_NOACTION:
+		return "no action";
+	case METRIC_ACTION_MAX:
+		return "invalid max action";
+	}
+
+	return "unknown action";
+}
