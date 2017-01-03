@@ -373,7 +373,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 	gchar *h;
 	gboolean from_found = FALSE;
 	guint count = 0;
-	struct rspamd_dkim_header *new;
+	struct rspamd_dkim_header *new, *check;
 	GHashTable *htb;
 
 	p = param;
@@ -401,25 +401,26 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 			rspamd_strlcpy (h, c, p - c + 1);
 			g_strstrip (h);
 
-			if ((new = g_hash_table_lookup (htb, h)) != NULL) {
+			new = rspamd_mempool_alloc (ctx->pool,
+					sizeof (struct rspamd_dkim_header));
+			new->name = h;
+			new->count = 0;
+
+			/* Check mandatory from */
+			if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
+				from_found = TRUE;
+			}
+
+			g_ptr_array_add (ctx->hlist, new);
+
+			if ((check = g_hash_table_lookup (htb, h)) != NULL) {
 				new->count++;
 			}
 			else {
 				/* Insert new header to the list */
-				new =
-					rspamd_mempool_alloc (ctx->pool,
-						sizeof (struct rspamd_dkim_header));
-				new->name = h;
-				new->count = 1;
 				g_hash_table_insert (htb, new->name, new);
-
-				/* Check mandatory from */
-				if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
-					from_found = TRUE;
-				}
-
-				g_ptr_array_add (ctx->hlist, new);
 			}
+
 			c = p + 1;
 			p++;
 		}
@@ -1130,6 +1131,11 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 		LL_FOREACH (reply->entries, elt)
 		{
 			if (elt->type == RDNS_REQUEST_TXT) {
+				if (err != NULL) {
+					/* Free error as it is insignificant */
+					g_error_free (err);
+					err = NULL;
+				}
 				key = rspamd_dkim_parse_key (cbdata->ctx, elt->content.txt.data,
 						&keylen,
 						&err);
@@ -1138,11 +1144,6 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 					break;
 				}
 			}
-		}
-		if (key != NULL && err != NULL) {
-			/* Free error as it is insignificant */
-			g_error_free (err);
-			err = NULL;
 		}
 		cbdata->handler (key, keylen, cbdata->ctx, cbdata->ud, err);
 	}
@@ -1723,27 +1724,25 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		if (ar) {
 			if (ar->len > count) {
 				/* Set skip count */
-				rh_num = ar->len - count;
+				rh_num = ar->len - count - 1;
 			}
 			else {
-				rh_num = 0;
+				/* Absence of header is just NULL signature update */
+				return TRUE;
 			}
 
+			rh = g_ptr_array_index (ar, rh_num);
 
-			for (i = rh_num; i < ar->len; i ++) {
-				rh = g_ptr_array_index (ar, i);
-
-				if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
-					rspamd_dkim_hash_update (ctx->headers_hash, rh->raw_value,
-							rh->raw_len);
-					msg_debug_dkim ("update signature with header: %*s",
-							(gint)rh->raw_len, rh->raw_value);
-				}
-				else {
-					if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
-							header_name, FALSE)) {
-						return FALSE;
-					}
+			if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
+				rspamd_dkim_hash_update (ctx->headers_hash, rh->raw_value,
+						rh->raw_len);
+				msg_debug_dkim ("update signature with header: %*s",
+						(gint)rh->raw_len, rh->raw_value);
+			}
+			else {
+				if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
+						header_name, FALSE)) {
+					return FALSE;
 				}
 			}
 		}
@@ -1752,6 +1751,8 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		/* For signature check just use the saved dkim header */
 		if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 			/* We need to find our own signature and use it */
+			guint i;
+
 			ar = g_hash_table_lookup (task->raw_headers, DKIM_SIGNHEADER);
 
 			if (ar) {
@@ -1833,7 +1834,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 	/* Canonize dkim signature */
-	rspamd_dkim_canonize_header (&ctx->common, task, DKIM_SIGNHEADER, 1,
+	rspamd_dkim_canonize_header (&ctx->common, task, DKIM_SIGNHEADER, 0,
 			ctx->dkim_header, ctx->domain);
 
 	dlen = EVP_MD_CTX_size (ctx->common.body_hash);
@@ -1869,7 +1870,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			EVP_MD_CTX_reset (cpy_ctx);
 	#endif
 			EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
-			EVP_DigestUpdate (cpy_ctx, "\n", 2);
+			EVP_DigestUpdate (cpy_ctx, "\n", 1);
 			EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
 
 			if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
@@ -2158,7 +2159,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 			rspamd_dkim_canonize_header (&ctx->common, task, dh->name, dh->count,
 					NULL, NULL);
 
-			for (j = 0; j < dh->count; j++) {
+			for (j = 0; j < dh->count + 1; j++) {
 				rspamd_printf_gstring (hdr, "%s:", dh->name);
 			}
 		}
