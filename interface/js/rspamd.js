@@ -459,10 +459,21 @@
                     xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
-                    if (pie) {
-                        pie.destroy();
-                    }
-                    pie = new d3pie("chart", {
+                    pie = drawPie(pie, "chart", data);
+                }
+            });
+        }
+
+        function drawPie(obj, id, data, conf) {
+            if (obj) {
+                obj.updateProp("data.content",
+                    data.filter(function (elt) {
+                        return elt.value > 0;
+                    })
+                );
+            } else {
+                obj = new d3pie(id,
+                    $.extend({}, {
                         "header": {
                             "title": {
                                 "text": "Rspamd filter stats",
@@ -538,9 +549,9 @@
                                 "percentage": 100
                             }
                         }
-                    });
-                }
-            });
+                    }, conf));
+            }
+            return obj;
         }
 
         function initGraph() {
