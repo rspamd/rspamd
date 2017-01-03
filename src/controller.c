@@ -2563,31 +2563,16 @@ rspamd_controller_rrd_update (gint fd, short what, void *arg)
 	struct rspamd_controller_worker_ctx *ctx = arg;
 	struct rspamd_stat *stat;
 	GArray ar;
-	gdouble points[4];
+	gdouble points[METRIC_ACTION_MAX];
 	GError *err = NULL;
-	guint i, j;
+	guint i;
 	gdouble val;
 
 	g_assert (ctx->rrd != NULL);
 	stat = ctx->srv->stat;
 
-	for (i = METRIC_ACTION_REJECT, j = 0;
-		 i <= METRIC_ACTION_NOACTION && j < G_N_ELEMENTS (points);
-		 i++) {
-		switch (i) {
-		case METRIC_ACTION_SOFT_REJECT:
-			break;
-		case METRIC_ACTION_REWRITE_SUBJECT:
-			val = stat->actions_stat[i];
-			break;
-		case METRIC_ACTION_ADD_HEADER:
-			val += stat->actions_stat[i];
-			points[j++] = val;
-			break;
-		default:
-			val = stat->actions_stat[i];
-			points[j++] = val;
-		}
+	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		points[i] = stat->actions_stat[i];
 	}
 
 	ar.data = (gchar *)points;

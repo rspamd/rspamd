@@ -222,7 +222,7 @@ struct rspamd_cryptobox_library_ctx;
  */
 struct rspamd_stat {
 	guint messages_scanned;                             /**< total number of messages scanned				*/
-	guint actions_stat[METRIC_ACTION_NOACTION + 1];     /**< statistic for each action						*/
+	guint actions_stat[METRIC_ACTION_MAX];              /**< statistic for each action						*/
 	guint connections_count;                            /**< total connections count						*/
 	guint control_connections_count;                    /**< connections count to control interface			*/
 	guint messages_learned;                             /**< messages learned								*/
