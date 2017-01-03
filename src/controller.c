@@ -1136,7 +1136,7 @@ rspamd_controller_handle_graph (
 	struct rspamd_rrd_query_result *rrd_result;
 	gulong i, k, start_row, cnt, t, ts, step;
 	gdouble *acc;
-	ucl_object_t *res, *elt[4];
+	ucl_object_t *res, *elt[METRIC_ACTION_MAX];
 	enum {
 		rra_hourly = 0,
 		rra_daily,
@@ -2566,7 +2566,6 @@ rspamd_controller_rrd_update (gint fd, short what, void *arg)
 	gdouble points[METRIC_ACTION_MAX];
 	GError *err = NULL;
 	guint i;
-	gdouble val;
 
 	g_assert (ctx->rrd != NULL);
 	stat = ctx->srv->stat;
