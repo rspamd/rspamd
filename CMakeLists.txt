@@ -729,13 +729,6 @@ ENDIF ()
 #Check for openssl (required for dkim)
 SET(HAVE_OPENSSL 1)
 
-IF(ENABLE_HIREDIS MATCHES "ON")
-	ADD_SUBDIRECTORY(contrib/hiredis)
-	SET(WITH_HIREDIS 1)
-	INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
-ENDIF(ENABLE_HIREDIS MATCHES "ON")
-
-
 # Google performance tools
 
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
@@ -1190,6 +1183,11 @@ ENDIF(NOT DESTDIR)
 
 
 ################################ SUBDIRS SECTION ###########################
+IF(ENABLE_HIREDIS MATCHES "ON")
+	ADD_SUBDIRECTORY(contrib/hiredis)
+	SET(WITH_HIREDIS 1)
+	INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
+ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
 ADD_SUBDIRECTORY(contrib/lgpl)
 IF(GLIB_COMPAT)
