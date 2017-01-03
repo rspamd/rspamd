@@ -339,6 +339,10 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			target->na = TRUE;
 			continue;
 		}
+		if (cur->flags & RSPAMD_SPF_FLAG_INVALID) {
+			/* Ignore invalid elements */
+			continue;
+		}
 		if ((cur->flags & (RSPAMD_SPF_FLAG_PARSED|RSPAMD_SPF_FLAG_RESOLVED)) !=
 				(RSPAMD_SPF_FLAG_RESOLVED|RSPAMD_SPF_FLAG_PARSED)) {
 			/* Ignore unparsed addrs */
@@ -1094,6 +1098,13 @@ parse_spf_all (struct spf_record *rec, struct spf_addr *addr)
 	addr->flags |= RSPAMD_SPF_FLAG_ANY|RSPAMD_SPF_FLAG_RESOLVED;
 	msg_debug_spf ("parsed all elt");
 
+	/* Disallow +all */
+	if (addr->mech == SPF_PASS) {
+		addr->flags |= RSPAMD_SPF_FLAG_INVALID;
+		msg_info_spf ("allow any SPF record for %s, ignore it",
+				rec->sender_domain);
+	}
+
 	return TRUE;
 }
 
@@ -1105,6 +1116,7 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	gsize len;
 	gchar ipbuf[INET_ADDRSTRLEN + 1];
 	guint32 mask;
+	static const guint32 min_valid_mask = 8;
 
 	semicolon = strchr (addr->spf_string, ':');
 
@@ -1133,7 +1145,15 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 		if (mask > 32) {
 			return FALSE;
 		}
+
 		addr->m.dual.mask_v4 = mask;
+
+		if (mask < min_valid_mask) {
+			addr->flags |= RSPAMD_SPF_FLAG_INVALID;
+			msg_info_spf ("too wide SPF record for %s: %s/%d",
+					rec->sender_domain,
+					ipbuf, addr->m.dual.mask_v4);
+		}
 	}
 	else {
 		addr->m.dual.mask_v4 = 32;
@@ -1153,6 +1173,7 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	gsize len;
 	gchar ipbuf[INET6_ADDRSTRLEN + 1];
 	guint32 mask;
+	static const guint32 min_valid_mask = 8;
 
 	semicolon = strchr (addr->spf_string, ':');
 
@@ -1181,7 +1202,15 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 		if (mask > 128) {
 			return FALSE;
 		}
+
 		addr->m.dual.mask_v6 = mask;
+
+		if (mask < min_valid_mask) {
+			addr->flags |= RSPAMD_SPF_FLAG_INVALID;
+			msg_info_spf ("too wide SPF record for %s: %s/%d",
+					rec->sender_domain,
+					ipbuf, addr->m.dual.mask_v6);
+		}
 	}
 	else {
 		addr->m.dual.mask_v6 = 128;
