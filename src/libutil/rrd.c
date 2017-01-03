@@ -21,6 +21,10 @@
 #include "cryptobox.h"
 #include <math.h>
 
+#define RSPAMD_RRD_DS_COUNT METRIC_ACTION_MAX
+#define RSPAMD_RRD_OLD_DS_COUNT 4
+#define RSPAMD_RRD_RRA_COUNT 4
+
 #define msg_err_rrd(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "rrd", file->id, \
         G_STRFUNC, \
@@ -1266,54 +1270,31 @@ rspamd_rrd_close (struct rspamd_rrd_file * file)
 	return 0;
 }
 
-struct rspamd_rrd_file *
-rspamd_rrd_file_default (const gchar *path,
-		GError **err)
+static struct rspamd_rrd_file *
+rspamd_rrd_create_file (const gchar *path, gboolean finalize, GError **err)
 {
 	struct rspamd_rrd_file *file;
-	struct rrd_ds_def ds[4];
-	struct rrd_rra_def rra[4];
+	struct rrd_ds_def ds[RSPAMD_RRD_DS_COUNT];
+	struct rrd_rra_def rra[RSPAMD_RRD_RRA_COUNT];
+	gint i;
 	GArray ar;
-
-	g_assert (path != NULL);
-
-	if (access (path, R_OK) != -1) {
-		/* We can open rrd file */
-		file = rspamd_rrd_open (path, err);
-
-		if (file == NULL) {
-			return NULL;
-		}
-
-
-		if (file->stat_head->ds_cnt != 4 || file->stat_head->rra_cnt != 4) {
-			msg_err_rrd ("rrd file is not suitable for rspamd: it has "
-					"%ul ds and %ul rra", file->stat_head->ds_cnt,
-					file->stat_head->rra_cnt);
-			g_set_error (err, rrd_error_quark (), EINVAL, "bad rrd file");
-			rspamd_rrd_close (file);
-
-			return NULL;
-		}
-
-		return file;
-	}
 
 	/* Try to create new rrd file */
 
-	file = rspamd_rrd_create (path, 4, 4, 1, rspamd_get_calendar_ticks (), err);
+	file = rspamd_rrd_create (path, RSPAMD_RRD_DS_COUNT, RSPAMD_RRD_RRA_COUNT,
+			1, rspamd_get_calendar_ticks (), err);
 
 	if (file == NULL) {
 		return NULL;
 	}
 
 	/* Create DS and RRA */
-	rrd_make_default_ds ("spam", rrd_dst_to_string (RRD_DST_COUNTER), 1, &ds[0]);
-	rrd_make_default_ds ("probable", rrd_dst_to_string (RRD_DST_COUNTER), 1,
-			&ds[1]);
-	rrd_make_default_ds ("greylist", rrd_dst_to_string (RRD_DST_COUNTER), 1,
-			&ds[2]);
-	rrd_make_default_ds ("ham", rrd_dst_to_string (RRD_DST_COUNTER), 1, &ds[3]);
+
+	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		rrd_make_default_ds (rspamd_action_to_str (i),
+				rrd_dst_to_string (RRD_DST_COUNTER), 1, &ds[i]);
+	}
+
 	ar.data = (gchar *)ds;
 	ar.len = sizeof (ds);
 
@@ -1342,10 +1323,149 @@ rspamd_rrd_file_default (const gchar *path,
 		return NULL;
 	}
 
-	if (!rspamd_rrd_finalize (file, err)) {
+	if (finalize && !rspamd_rrd_finalize (file, err)) {
 		rspamd_rrd_close (file);
 		return NULL;
 	}
+
+	return file;
+}
+
+static void
+rspamd_rrd_convert_ds (struct rspamd_rrd_file *old,
+		 struct rspamd_rrd_file *cur, gint idx_old, gint idx_new)
+{
+	struct rrd_pdp_prep *pdp_prep_old, *pdp_prep_new;
+	struct rrd_cdp_prep *cdp_prep_old, *cdp_prep_new;
+	gdouble *val_old, *val_new;
+	gulong rra_cnt, i, j, points_cnt, old_ds, new_ds;
+
+	rra_cnt = old->stat_head->rra_cnt;
+	pdp_prep_old = &old->pdp_prep[idx_old];
+	pdp_prep_new = &cur->pdp_prep[idx_new];
+	memcpy (pdp_prep_new, pdp_prep_old, sizeof (*pdp_prep_new));
+	memcpy (&old->rra_ptr[idx_old], &cur->rra_ptr[idx_new], sizeof (*old->rra_ptr));
+	val_old = old->rrd_value;
+	val_new = cur->rrd_value;
+	old_ds = old->stat_head->ds_cnt;
+	new_ds = cur->stat_head->ds_cnt;
+
+	for (i = 0; i < rra_cnt; i++) {
+		cdp_prep_old = &old->cdp_prep[i] + idx_old;
+		cdp_prep_new = &cur->cdp_prep[i] + idx_new;
+		memcpy (cdp_prep_new, cdp_prep_old, sizeof (*cdp_prep_new));
+		points_cnt = old->rra_def[i].row_cnt;
+
+		for (j = 0; j < points_cnt; j ++) {
+			val_new[j * new_ds + idx_new] = val_old[j * old_ds + idx_old];
+		}
+
+		val_new += points_cnt * new_ds;
+		val_old += points_cnt * old_ds;
+	}
+}
+
+static struct rspamd_rrd_file *
+rspamd_rrd_convert (const gchar *path, struct rspamd_rrd_file *old,
+		GError **err)
+{
+	struct rspamd_rrd_file *rrd;
+	gchar tpath[PATH_MAX];
+
+	g_assert (old != NULL);
+
+	rspamd_snprintf (tpath, sizeof (tpath), "%s.new", path);
+	rrd = rspamd_rrd_create_file (tpath, TRUE, err);
+
+	if (rrd) {
+		/* Copy old data */
+		memcpy (rrd->live_head, old->live_head, sizeof (*rrd->live_head));
+
+		/*
+		 * Old DSes:
+		 * 0 - spam -> reject
+		 * 1 - probable spam -> add header
+		 * 2 - greylist -> greylist
+		 * 3 - ham -> ham
+		 */
+		rspamd_rrd_convert_ds (old, rrd, 0, METRIC_ACTION_REJECT);
+		rspamd_rrd_convert_ds (old, rrd, 1, METRIC_ACTION_ADD_HEADER);
+		rspamd_rrd_convert_ds (old, rrd, 2, METRIC_ACTION_GREYLIST);
+		rspamd_rrd_convert_ds (old, rrd, 3, METRIC_ACTION_NOACTION);
+
+		if (unlink (path) == -1) {
+			g_set_error (err, rrd_error_quark (), errno, "cannot unlink old rrd file %s: %s",
+					path, strerror (errno));
+			unlink (tpath);
+			rspamd_rrd_close (rrd);
+
+			return NULL;
+		}
+
+		if (rename (tpath, path) == -1) {
+			g_set_error (err, rrd_error_quark (), errno, "cannot rename old rrd file %s: %s",
+					path, strerror (errno));
+			unlink (tpath);
+			rspamd_rrd_close (rrd);
+
+			return NULL;
+		}
+	}
+
+	return rrd;
+}
+
+struct rspamd_rrd_file *
+rspamd_rrd_file_default (const gchar *path,
+		GError **err)
+{
+	struct rspamd_rrd_file *file, *nf;
+
+	g_assert (path != NULL);
+
+	if (access (path, R_OK) != -1) {
+		/* We can open rrd file */
+		file = rspamd_rrd_open (path, err);
+
+		if (file == NULL) {
+			return NULL;
+		}
+
+
+		if (file->stat_head->rra_cnt != RSPAMD_RRD_RRA_COUNT) {
+			msg_err_rrd ("rrd file is not suitable for rspamd: it has "
+					"%ul ds and %ul rra", file->stat_head->ds_cnt,
+					file->stat_head->rra_cnt);
+			g_set_error (err, rrd_error_quark (), EINVAL, "bad rrd file");
+			rspamd_rrd_close (file);
+
+			return NULL;
+		}
+		else if (file->stat_head->ds_cnt == RSPAMD_RRD_OLD_DS_COUNT) {
+			/* Old rrd, need to convert */
+			msg_info_rrd ("rrd file %s is not suitable for rspamd, convert it",
+					path);
+
+			nf = rspamd_rrd_convert (path, file, err);
+			rspamd_rrd_close (file);
+
+			return nf;
+		}
+		else if (file->stat_head->ds_cnt == RSPAMD_RRD_DS_COUNT) {
+			return file;
+		}
+		else {
+			msg_err_rrd ("rrd file is not suitable for rspamd: it has "
+					"%ul ds and %ul rra", file->stat_head->ds_cnt,
+					file->stat_head->rra_cnt);
+			g_set_error (err, rrd_error_quark (), EINVAL, "bad rrd file");
+			rspamd_rrd_close (file);
+
+			return NULL;
+		}
+	}
+
+	file = rspamd_rrd_create_file (path, TRUE, err);
 
 	return file;
 }
