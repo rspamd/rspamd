@@ -1344,15 +1344,15 @@ rspamd_rrd_convert_ds (struct rspamd_rrd_file *old,
 	pdp_prep_old = &old->pdp_prep[idx_old];
 	pdp_prep_new = &cur->pdp_prep[idx_new];
 	memcpy (pdp_prep_new, pdp_prep_old, sizeof (*pdp_prep_new));
-	memcpy (&old->rra_ptr[idx_old], &cur->rra_ptr[idx_new], sizeof (*old->rra_ptr));
+	memcpy (&cur->rra_ptr[idx_new], &old->rra_ptr[idx_old], sizeof (*old->rra_ptr));
 	val_old = old->rrd_value;
 	val_new = cur->rrd_value;
 	old_ds = old->stat_head->ds_cnt;
 	new_ds = cur->stat_head->ds_cnt;
 
 	for (i = 0; i < rra_cnt; i++) {
-		cdp_prep_old = &old->cdp_prep[i] + idx_old;
-		cdp_prep_new = &cur->cdp_prep[i] + idx_new;
+		cdp_prep_old = &old->cdp_prep[i * old_ds] + idx_old;
+		cdp_prep_new = &cur->cdp_prep[i * new_ds] + idx_new;
 		memcpy (cdp_prep_new, cdp_prep_old, sizeof (*cdp_prep_new));
 		points_cnt = old->rra_def[i].row_cnt;
 
