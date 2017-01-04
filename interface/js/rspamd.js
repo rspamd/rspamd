@@ -573,9 +573,16 @@
                 convert: selected.selConvert,
 
                 legend: {
+                    space: 140,
                     entries: [{
                         label: "Rejected",
                         color: "#FF0000"
+                    }, {
+                        label: "Temporary rejected",
+                        color: "#CC9966"
+                    }, {
+                        label: "Subject rewrited",
+                        color: "#FF6600"
                     }, {
                         label: "Probable spam",
                         color: "#FFD700"
