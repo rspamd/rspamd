@@ -187,6 +187,8 @@ ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
 			lua_rawseti (L, -2, i);
 			i ++;
 		}
+
+		ucl_object_iterate_free (it);
 	}
 	else {
 		/* Optimize allocation by preallocation of table */
