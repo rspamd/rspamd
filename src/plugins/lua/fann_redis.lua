@@ -209,6 +209,111 @@ local function redis_make_request(ev_base, cfg, key, is_write, callback, command
   return ret,conn,addr
 end
 
+local function load_scripts(cfg, ev_base, on_load_cb)
+  local function can_train_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis train script: %s', err)
+    else
+      redis_can_train_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    can_train_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_can_train} -- arguments
+  )
+
+  local function maybe_load_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis load script: %s', err)
+    else
+      redis_maybe_load_sha = tostring(data)
+
+      if on_load_cb then
+        rspamd_config:add_periodic(ev_base, 0.0,
+          function(_cfg, _ev_base)
+            return on_load_cb(_cfg, _ev_base)
+          end)
+      end
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    maybe_load_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_maybe_load} -- arguments
+  )
+
+  local function maybe_invalidate_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis invalidate script: %s', err)
+    else
+      redis_maybe_invalidate_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    maybe_invalidate_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_maybe_invalidate} -- arguments
+  )
+
+  local function locked_invalidate_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis locked invalidate script: %s', err)
+    else
+      redis_locked_invalidate_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    locked_invalidate_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_locked_invalidate} -- arguments
+  )
+
+  local function maybe_lock_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis lock script: %s', err)
+    else
+      redis_maybe_lock_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    maybe_lock_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_maybe_lock} -- arguments
+  )
+
+  local function save_unlock_sha_cb(err, data)
+    if err or not data or type(data) ~= 'string' then
+      rspamd_logger.errx(cfg, 'cannot save redis save script: %s', err)
+    else
+      redis_save_unlock_sha = tostring(data)
+    end
+  end
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    save_unlock_sha_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_lua_script_save_unlock} -- arguments
+  )
+end
+
 local function symbols_to_fann_vector(syms, scores)
   local learn_data = {}
   local matched_symbols = {}
@@ -230,7 +335,11 @@ local function symbols_to_fann_vector(syms, scores)
 end
 
 local function gen_fann_prefix(id)
-  return fann_prefix .. id,id
+  if id then
+    return fann_prefix .. rspamd_config:get_symbols_cksum():hex() .. id,id
+  else
+    return fann_prefix .. rspamd_config:get_symbols_cksum():hex(), nil
+  end
 end
 
 local function is_fann_valid(ann)
@@ -339,6 +448,9 @@ local function load_or_invalidate_fann(data, id, ev_base)
     local function redis_invalidate_cb(_err, _data)
       if _err then
         rspamd_logger.errx(rspamd_config, 'cannot invalidate ANN %s from redis: %s', id, _err)
+        if string.match(_err, 'NOSCRIPT') then
+          load_scripts(rspamd_config, ev_base, nil)
+        end
       elseif type(_data) == 'string' then
         rspamd_logger.infox(rspamd_config, 'invalidated ANN %s from redis: %s', id, _err)
         fanns[id].version = 0
@@ -404,6 +516,9 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
       else
         if err then
           rspamd_logger.errx(rspamd_config, 'cannot check if we can train: %s', err)
+          if string.match(err, 'NOSCRIPT') then
+            load_scripts(rspamd_config, ev_base, nil)
+          end
         end
       end
     end
@@ -414,7 +529,7 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
       true, -- is write
       can_train_cb, --callback
       'EVALSHA', -- command
-      {redis_can_train_sha, '3', fann_prefix, suffix, k} -- arguments
+      {redis_can_train_sha, '3', gen_fann_prefix(nil), suffix, k} -- arguments
     )
   end
 end
@@ -427,22 +542,25 @@ local function train_fann(_, ev_base, elt)
   local function redis_unlock_cb(err)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot unlock ANN %s from redis: %s',
-        fann_prefix .. elt, err)
+        gen_fann_prefix(elt), err)
     end
   end
 
   local function redis_save_cb(err)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot save ANN %s to redis: %s',
-        fann_prefix .. elt, err)
+        gen_fann_prefix(elt), err)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
         false, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {fann_prefix .. elt .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
+      if string.match(err, 'NOSCRIPT') then
+        load_scripts(rspamd_config, ev_base, nil)
+      end
     end
   end
 
@@ -450,18 +568,18 @@ local function train_fann(_, ev_base, elt)
     learning_spawned = false
     if errcode ~= 0 then
       rspamd_logger.errx(rspamd_config, 'cannot train ANN %s: %s',
-        fann_prefix .. elt, errmsg)
+        gen_fann_prefix(elt), errmsg)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {fann_prefix .. elt .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
     else
       rspamd_logger.infox(rspamd_config, 'trained ANN %s: MSE: %s',
-        fann_prefix .. elt, train_mse)
+        gen_fann_prefix(elt), train_mse)
       local ann_data = rspamd_util.zstd_compress(fanns[elt].fann_train:data())
       fanns[elt].version = fanns[elt].version + 1
       fanns[elt].fann = fanns[elt].fann_train
@@ -472,7 +590,7 @@ local function train_fann(_, ev_base, elt)
         true, -- is write
         redis_save_cb, --callback
         'EVALSHA', -- command
-        {redis_save_unlock_sha, '2', fann_prefix .. elt, ann_data}
+        {redis_save_unlock_sha, '2', gen_fann_prefix(elt), ann_data}
       )
     end
   end
@@ -480,14 +598,14 @@ local function train_fann(_, ev_base, elt)
   local function redis_ham_cb(err, data)
     if err or type(data) ~= 'table' then
       rspamd_logger.errx(rspamd_config, 'cannot get ham tokens for ANN %s from redis: %s',
-        fann_prefix .. elt, err)
+        gen_fann_prefix(elt), err)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {fann_prefix .. elt .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
     else
       -- Decompress and convert to numbers each training vector
@@ -551,14 +669,14 @@ local function train_fann(_, ev_base, elt)
   local function redis_spam_cb(err, data)
     if err or type(data) ~= 'table' then
       rspamd_logger.errx(rspamd_config, 'cannot get spam tokens for ANN %s from redis: %s',
-        fann_prefix .. elt, err)
+        gen_fann_prefix(elt), err)
       redis_make_request(ev_base,
         rspamd_config,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
         'DEL', -- command
-        {fann_prefix .. elt .. '_lock'}
+        {gen_fann_prefix(elt) .. '_locked'}
       )
     else
       -- Decompress and convert to numbers each training vector
@@ -572,7 +690,7 @@ local function train_fann(_, ev_base, elt)
         false, -- is write
         redis_ham_cb, --callback
         'LRANGE', -- command
-        {fann_prefix .. elt .. '_ham', '0', '-1'}
+        {gen_fann_prefix(elt) .. '_ham', '0', '-1'}
       )
     end
   end
@@ -580,7 +698,10 @@ local function train_fann(_, ev_base, elt)
   local function redis_lock_cb(err, data)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot lock ANN %s from redis: %s',
-        fann_prefix .. elt, err)
+        gen_fann_prefix(elt), err)
+      if string.match(err, 'NOSCRIPT') then
+        load_scripts(rspamd_config, ev_base, nil)
+      end
     elseif type(data) == 'number' then
       -- Can train ANN
       redis_make_request(ev_base,
@@ -589,7 +710,35 @@ local function train_fann(_, ev_base, elt)
         false, -- is write
         redis_spam_cb, --callback
         'LRANGE', -- command
-        {fann_prefix .. elt .. '_spam', '0', '-1'}
+        {gen_fann_prefix(elt) .. '_spam', '0', '-1'}
+      )
+
+      rspamd_config:add_periodic(ev_base, 30.0,
+        function(_, _)
+          local function redis_lock_extend_cb(_err, _)
+            if _err then
+              rspamd_logger.errx(rspamd_config, 'cannot lock ANN %s from redis: %s',
+                gen_fann_prefix(elt), _err)
+            else
+              rspamd_logger.infox(rspamd_config, 'extend lock for ANN %s for 30 seconds',
+                gen_fann_prefix(elt))
+            end
+          end
+          if learning_spawned then
+            redis_make_request(ev_base,
+              rspamd_config,
+              nil,
+              true, -- is write
+              redis_lock_extend_cb, --callback
+              'INCRBY', -- command
+              {gen_fann_prefix(elt) .. '_locked', '30'}
+            )
+          else
+            return false -- do not plan any more updates
+          end
+
+          return true
+        end
       )
       rspamd_logger.infox(rspamd_config, 'lock ANN %s for learning', elt)
     else
@@ -606,7 +755,7 @@ local function train_fann(_, ev_base, elt)
     true, -- is write
     redis_lock_cb, --callback
     'EVALSHA', -- command
-    {redis_maybe_lock_sha, '3', fann_prefix .. elt, tostring(os.time()),
+    {redis_maybe_lock_sha, '3', gen_fann_prefix(elt), tostring(os.time()),
       tostring(lock_expire)}
   )
 end
@@ -636,7 +785,7 @@ local function maybe_train_fanns(cfg, ev_base)
           false, -- is write
           redis_len_cb, --callback
           'LLEN', -- command
-          {fann_prefix .. elt .. '_spam'}
+          {gen_fann_prefix(elt) .. '_spam'}
         )
       end,
       data)
@@ -654,115 +803,10 @@ local function maybe_train_fanns(cfg, ev_base)
     false, -- is write
     members_cb, --callback
     'SMEMBERS', -- command
-    {fann_prefix} -- arguments
+    {gen_fann_prefix(nil)} -- arguments
   )
 
   return watch_interval
-end
-
-local function load_scripts(cfg, ev_base, on_load_cb)
-  local function can_train_sha_cb(err, data)
-    if err or not data or type(data) ~= 'string' then
-      rspamd_logger.errx(cfg, 'cannot save redis train script: %s', err)
-    else
-      redis_can_train_sha = tostring(data)
-    end
-  end
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    can_train_sha_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_lua_script_can_train} -- arguments
-  )
-
-  local function maybe_load_sha_cb(err, data)
-    if err or not data or type(data) ~= 'string' then
-      rspamd_logger.errx(cfg, 'cannot save redis load script: %s', err)
-    else
-      redis_maybe_load_sha = tostring(data)
-
-      if on_load_cb then
-        rspamd_config:add_periodic(ev_base, 0.0,
-          function(_cfg, _ev_base)
-            return on_load_cb(_cfg, _ev_base)
-          end)
-      end
-    end
-  end
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    maybe_load_sha_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_lua_script_maybe_load} -- arguments
-  )
-
-  local function maybe_invalidate_sha_cb(err, data)
-    if err or not data or type(data) ~= 'string' then
-      rspamd_logger.errx(cfg, 'cannot save redis invalidate script: %s', err)
-    else
-      redis_maybe_invalidate_sha = tostring(data)
-    end
-  end
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    maybe_invalidate_sha_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_lua_script_maybe_invalidate} -- arguments
-  )
-
-  local function locked_invalidate_sha_cb(err, data)
-    if err or not data or type(data) ~= 'string' then
-      rspamd_logger.errx(cfg, 'cannot save redis locked invalidate script: %s', err)
-    else
-      redis_locked_invalidate_sha = tostring(data)
-    end
-  end
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    locked_invalidate_sha_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_lua_script_locked_invalidate} -- arguments
-  )
-
-  local function maybe_lock_sha_cb(err, data)
-    if err or not data or type(data) ~= 'string' then
-      rspamd_logger.errx(cfg, 'cannot save redis lock script: %s', err)
-    else
-      redis_maybe_lock_sha = tostring(data)
-    end
-  end
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    maybe_lock_sha_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_lua_script_maybe_lock} -- arguments
-  )
-
-  local function save_unlock_sha_cb(err, data)
-    if err or not data or type(data) ~= 'string' then
-      rspamd_logger.errx(cfg, 'cannot save redis save script: %s', err)
-    else
-      redis_save_unlock_sha = tostring(data)
-    end
-  end
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    save_unlock_sha_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_lua_script_save_unlock} -- arguments
-  )
 end
 
 local function check_fanns(_, ev_base)
@@ -795,7 +839,7 @@ local function check_fanns(_, ev_base)
           false, -- is write
           redis_update_cb, --callback
           'EVALSHA', -- command
-          {redis_maybe_load_sha, 2, fann_prefix .. elt, tostring(local_ver)}
+          {redis_maybe_load_sha, 2, gen_fann_prefix(elt), tostring(local_ver)}
         )
       end,
       data)
@@ -813,7 +857,7 @@ local function check_fanns(_, ev_base)
     false, -- is write
     members_cb, --callback
     'SMEMBERS', -- command
-    {fann_prefix} -- arguments
+    {gen_fann_prefix(nil)} -- arguments
   )
 
   return watch_interval
