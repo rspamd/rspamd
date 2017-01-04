@@ -1344,7 +1344,6 @@ rspamd_rrd_convert_ds (struct rspamd_rrd_file *old,
 	pdp_prep_old = &old->pdp_prep[idx_old];
 	pdp_prep_new = &cur->pdp_prep[idx_new];
 	memcpy (pdp_prep_new, pdp_prep_old, sizeof (*pdp_prep_new));
-	memcpy (&cur->rra_ptr[idx_new], &old->rra_ptr[idx_old], sizeof (*old->rra_ptr));
 	val_old = old->rrd_value;
 	val_new = cur->rrd_value;
 	old_ds = old->stat_head->ds_cnt;
@@ -1380,6 +1379,8 @@ rspamd_rrd_convert (const gchar *path, struct rspamd_rrd_file *old,
 	if (rrd) {
 		/* Copy old data */
 		memcpy (rrd->live_head, old->live_head, sizeof (*rrd->live_head));
+		memcpy (rrd->rra_ptr, old->rra_ptr,
+				sizeof (*old->rra_ptr) * rrd->stat_head->rra_cnt);
 
 		/*
 		 * Old DSes:
