@@ -1044,8 +1044,25 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 		ucl_object_insert_key (top, obj, h, 0, false);
 	}
 
-	ucl_object_insert_key (top, ucl_object_ref (task->messages),
+	if (G_UNLIKELY (task->cfg->compat_messages)) {
+		const ucl_object_t *cur;
+		ucl_object_t *msg_object;
+		ucl_object_iter_t iter = NULL;
+
+		msg_object = ucl_object_typed_new (UCL_ARRAY);
+
+		while ((cur = ucl_object_iterate (task->messages, &iter, true)) != NULL) {
+			if (cur->type == UCL_STRING) {
+				ucl_array_append (msg_object, ucl_object_ref (cur));
+			}
+		}
+
+		ucl_object_insert_key (top, msg_object, "messages", 0, false);
+	}
+	else {
+		ucl_object_insert_key (top, ucl_object_ref (task->messages),
 			"messages", 0, false);
+	}
 
 	if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
 		if (g_hash_table_size (task->urls) > 0) {

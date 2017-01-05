@@ -332,6 +332,7 @@ struct rspamd_config {
 	guint log_error_elt_maxlen;                     /**< maximum size of error log element					*/
 
 	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
+	gboolean compat_messages;                       /**< use old messages in the protocol (array) 			*/
 
 	gboolean delivery_enable;                       /**< is delivery agent is enabled						*/
 	gchar *deliver_host;                            /**< host for mail deliviring							*/
@@ -379,13 +380,9 @@ struct rspamd_config {
 	gpointer lua_state;                             /**< pointer to lua state								*/
 
 	gchar * rrd_file;                               /**< rrd file to store statistics						*/
-
 	gchar * history_file;                           /**< file to save rolling history						*/
-
 	gchar * tld_file;                               /**< file to load effective tld list from				*/
-
 	gchar * hs_cache_dir;                           /**< directory to save hyperscan databases				*/
-
 	gchar * magic_file;                             /**< file to initialize libmagic						*/
 
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
