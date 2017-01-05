@@ -52,6 +52,8 @@ LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, is_redirected);
 LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, get_phished);
+LUA_FUNCTION_DEF (url, get_tags);
+LUA_FUNCTION_DEF (url, add_tag);
 LUA_FUNCTION_DEF (url, create);
 LUA_FUNCTION_DEF (url, init);
 LUA_FUNCTION_DEF (url, all);
@@ -71,6 +73,8 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, is_redirected),
 	LUA_INTERFACE_DEF (url, is_obscured),
 	LUA_INTERFACE_DEF (url, get_phished),
+	LUA_INTERFACE_DEF (url, get_tags),
+	LUA_INTERFACE_DEF (url, add_tag),
 	{"get_redirected", lua_url_get_phished},
 	{"__tostring", lua_url_get_text},
 	{NULL, NULL}
@@ -307,6 +311,61 @@ lua_url_is_obscured (lua_State *L)
 	}
 
 	return 1;
+}
+
+/***
+ * @method url:get_tags()
+ * Returns list of string tags for an url
+ * @return {table/strings} list of tags for an url
+ */
+static gint
+lua_url_get_tags (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+	guint i;
+	const gchar *tag;
+
+	if (url != NULL) {
+		if (url->url->tags == NULL) {
+			lua_createtable (L, 0, 0);
+		}
+		else {
+			lua_createtable (L, url->url->tags->len, 0);
+
+			PTR_ARRAY_FOREACH (url->url->tags, i, tag) {
+				lua_pushstring (L, tag);
+				lua_rawseti (L, -2, i + 1);
+			}
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:add_tag(tag, mempool)
+ * Adds a new tag for url
+ * @param {string} tag new tag to add
+ * @param {mempool} mempool memory pool (e.g. `task:get_pool()`)
+ */
+static gint
+lua_url_add_tag (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+	rspamd_mempool_t *mempool = rspamd_lua_check_mempool (L, 3);
+	const gchar *tag = luaL_checkstring (L, 2);
+
+	if (url != NULL && mempool != NULL && tag != NULL) {
+		rspamd_url_add_tag (url->url, tag, mempool);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 /***

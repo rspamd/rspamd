@@ -1308,7 +1308,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 			urllen = hdr->len;
 			urlstr = rspamd_mempool_alloc (task->task_pool,
 					urllen + 1);
-			redirected_url = rspamd_mempool_alloc (task->task_pool,
+			redirected_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (*redirected_url));
 			rspamd_strlcpy (urlstr, hdr->begin, urllen + 1);
 			r = rspamd_url_parse (redirected_url, urlstr, urllen,

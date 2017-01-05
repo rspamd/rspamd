@@ -1297,7 +1297,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	*d = '\0';
 
-	url = rspamd_mempool_alloc (pool, sizeof (*url));
+	url = rspamd_mempool_alloc0 (pool, sizeof (*url));
 	rc = rspamd_url_parse (url, decoded, d - decoded, pool);
 
 	if (rc == URI_ERRNO_OK) {

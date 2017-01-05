@@ -42,6 +42,7 @@ struct rspamd_url {
 	guint urllen;
 
 	enum rspamd_url_flags flags;
+	GPtrArray *tags;
 };
 
 enum uri_errno {
@@ -160,5 +161,14 @@ void rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
  */
 void rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud);
+
+/**
+ * Adds a tag for url
+ * @param url
+ * @param tag
+ * @param pool
+ */
+void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
+		rspamd_mempool_t *pool);
 
 #endif

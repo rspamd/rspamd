@@ -2537,3 +2537,18 @@ rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
 		}
 	}
 }
+
+void
+rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
+		rspamd_mempool_t *pool)
+{
+	g_assert (url != NULL && tag != NULL);
+
+	if (url->tags == NULL) {
+		url->tags = g_ptr_array_sized_new (2);
+		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard, url->tags);
+	}
+
+	g_ptr_array_add (url->tags, rspamd_mempool_strdup (pool, tag));
+
+}
