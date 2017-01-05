@@ -360,9 +360,6 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 				}
 			}
 
-			session->prob = ((float)found) / RSPAMD_SHINGLE_SIZE;
-			rep.prob = session->prob;
-
 			if (found > RSPAMD_SHINGLE_SIZE / 2) {
 				/* Now sort to find the most frequent element */
 				qsort (shingles, RSPAMD_SHINGLE_SIZE,
@@ -390,47 +387,56 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 					}
 				}
 
-				g_assert (sel != NULL);
+				if (max_found > RSPAMD_SHINGLE_SIZE / 2) {
+					session->prob = ((float)max_found) / RSPAMD_SHINGLE_SIZE;
+					rep.prob = session->prob;
 
-				/* Prepare new check command */
-				rspamd_fuzzy_redis_session_free_args (session);
-				session->nargs = 4;
-				session->argv = g_malloc (sizeof (gchar *) * session->nargs);
-				session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
+					g_assert (sel != NULL);
 
-				key = g_string_new (session->backend->redis_object);
-				g_string_append_len (key, sel->digest, sizeof (sel->digest));
-				session->argv[0] = g_strdup ("HMGET");
-				session->argv_lens[0] = 5;
-				session->argv[1] = key->str;
-				session->argv_lens[1] = key->len;
-				session->argv[2] = g_strdup ("V");
-				session->argv_lens[2] = 1;
-				session->argv[3] = g_strdup ("F");
-				session->argv_lens[3] = 1;
-				g_string_free (key, FALSE); /* Do not free underlying array */
+					/* Prepare new check command */
+					rspamd_fuzzy_redis_session_free_args (session);
+					session->nargs = 4;
+					session->argv = g_malloc (sizeof (gchar *) * session->nargs);
+					session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
 
-				g_assert (session->ctx != NULL);
-				if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_check_callback,
-						session, session->nargs,
-						(const gchar **)session->argv, session->argv_lens) != REDIS_OK) {
-					if (session->callback.cb_check) {
-						memset (&rep, 0, sizeof (rep));
-						session->callback.cb_check (&rep, session->cbdata);
+					key = g_string_new (session->backend->redis_object);
+					g_string_append_len (key, sel->digest, sizeof (sel->digest));
+					session->argv[0] = g_strdup ("HMGET");
+					session->argv_lens[0] = 5;
+					session->argv[1] = key->str;
+					session->argv_lens[1] = key->len;
+					session->argv[2] = g_strdup ("V");
+					session->argv_lens[2] = 1;
+					session->argv[3] = g_strdup ("F");
+					session->argv_lens[3] = 1;
+					g_string_free (key, FALSE); /* Do not free underlying array */
+
+					g_assert (session->ctx != NULL);
+					if (redisAsyncCommandArgv (session->ctx,
+							rspamd_fuzzy_redis_check_callback,
+							session, session->nargs,
+							(const gchar **)session->argv,
+							session->argv_lens) != REDIS_OK) {
+
+						if (session->callback.cb_check) {
+							memset (&rep, 0, sizeof (rep));
+							session->callback.cb_check (&rep, session->cbdata);
+						}
+
+						rspamd_fuzzy_redis_session_dtor (session);
+					}
+					else {
+						/* Add timeout */
+						event_set (&session->timeout, -1, EV_TIMEOUT,
+								rspamd_fuzzy_redis_timeout,
+								session);
+						event_base_set (session->ev_base, &session->timeout);
+						double_to_tv (session->backend->timeout, &tv);
+						event_add (&session->timeout, &tv);
 					}
 
-					rspamd_fuzzy_redis_session_dtor (session);
+					return;
 				}
-				else {
-					/* Add timeout */
-					event_set (&session->timeout, -1, EV_TIMEOUT, rspamd_fuzzy_redis_timeout,
-							session);
-					event_base_set (session->ev_base, &session->timeout);
-					double_to_tv (session->backend->timeout, &tv);
-					event_add (&session->timeout, &tv);
-				}
-
-				return;
 			}
 		}
 
