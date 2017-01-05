@@ -464,7 +464,7 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 
 	rspamd_fuzzy_redis_session_free_args (session);
 	/* First of all check digest */
-	session->nargs = session->cmd->shingles_count + 1;
+	session->nargs = RSPAMD_SHINGLE_SIZE + 1;
 	session->argv = g_malloc (sizeof (gchar *) * session->nargs);
 	session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
 	shcmd = (const struct rspamd_fuzzy_shingle_cmd *)session->cmd;
@@ -483,7 +483,6 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 	session->shingles_checked = TRUE;
 
 	g_assert (session->ctx != NULL);
-
 
 	if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_shingles_callback,
 			session, session->nargs,
