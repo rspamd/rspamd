@@ -2028,6 +2028,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, zstd_output_dictionary),
 			RSPAMD_CL_FLAG_STRING_PATH,
 			"Dictionary for outbound zstd compression");
+	rspamd_rcl_add_default_handler (sub,
+			"compat_messages",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, compat_messages),
+			0,
+			"Use pre 1.4 style of messages in the protocol");
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
