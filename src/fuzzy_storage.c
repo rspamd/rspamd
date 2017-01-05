@@ -40,6 +40,7 @@
 #define DEFAULT_SYNC_TIMEOUT 60.0
 #define DEFAULT_KEYPAIR_CACHE_SIZE 512
 #define DEFAULT_MASTER_TIMEOUT 10.0
+#define DEFAULT_UPDATES_MAXFAIL 3
 
 static const gchar *local_db_name = "local";
 
@@ -135,6 +136,8 @@ struct rspamd_fuzzy_storage_ctx {
 	rspamd_lru_hash_t *errors_ips;
 	struct rspamd_fuzzy_backend *backend;
 	GQueue *updates_pending;
+	guint updates_failed;
+	guint updates_maxfail;
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
 	struct rspamd_worker *worker;
@@ -504,12 +507,23 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 		g_queue_clear (ctx->updates_pending);
 		rspamd_fuzzy_backend_version (ctx->backend, source,
 				fuzzy_update_version_callback, (void *)source);
-
+		ctx->updates_failed = 0;
 	}
 	else {
-		msg_err ("cannot commit update transaction to fuzzy backend, "
-				"%ud updates are still pending",
-				g_queue_get_length (ctx->updates_pending));
+		if (++ctx->updates_failed > ctx->updates_maxfail) {
+			msg_err ("cannot commit update transaction to fuzzy backend, discard "
+					"%ud updates after %d retries",
+					g_queue_get_length (ctx->updates_pending),
+					ctx->updates_maxfail);
+			ctx->updates_failed = 0;
+			g_queue_clear (ctx->updates_pending);
+		}
+		else {
+			msg_err ("cannot commit update transaction to fuzzy backend, "
+					"%ud updates are still pending, %d updates left",
+					g_queue_get_length (ctx->updates_pending),
+					ctx->updates_maxfail - ctx->updates_failed);
+		}
 	}
 
 	if (ctx->worker->wanna_die) {
@@ -2015,6 +2029,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
 	ctx->cfg = cfg;
 	ctx->mirrors = g_ptr_array_new ();
+	ctx->updates_maxfail = DEFAULT_UPDATES_MAXFAIL;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2174,6 +2189,14 @@ init_fuzzy (struct rspamd_config *cfg)
 			0,
 			0,
 			"Map of flags in form master_flags = { master_flag = local_flag; ... }; ");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"updates_maxfail",
+			rspamd_rcl_parse_struct_integer,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, updates_maxfail),
+			RSPAMD_CL_FLAG_UINT,
+			"Maximum number of updates to be failed before discarding");
 
 	return ctx;
 }
