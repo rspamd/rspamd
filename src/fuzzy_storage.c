@@ -124,6 +124,8 @@ struct rspamd_fuzzy_storage_ctx {
 	struct event_base *ev_base;
 	gint peer_fd;
 	struct event peer_ev;
+	struct event stat_ev;
+	struct timeval stat_tv;
 	/* Local keypair */
 	struct rspamd_cryptobox_keypair *default_keypair; /* Bad clash, need for parse keypair */
 	struct fuzzy_key *default_key;
@@ -445,6 +447,24 @@ fuzzy_update_version_callback (guint64 ver, void *ud)
 {
 	msg_info ("updated fuzzy storage from %s: version: %d",
 		(const char *)ud, (gint)ver);
+}
+
+static void
+fuzzy_stat_count_callback (guint64 count, void *ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+
+	event_add (&ctx->stat_ev, &ctx->stat_tv);
+	ctx->stat.fuzzy_hashes = count;
+}
+
+static void
+rspamd_fuzzy_stat_callback (gint fd, gshort what, gpointer ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+
+	event_del (&ctx->stat_ev);
+	rspamd_fuzzy_backend_count (ctx->backend, fuzzy_stat_count_callback, ctx);
 }
 
 static void
@@ -2291,6 +2311,11 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_fuzzy_backend_start_update (ctx->backend, ctx->sync_timeout,
 				rspamd_fuzzy_storage_periodic_callback, ctx);
 	}
+
+	double_to_tv (ctx->sync_timeout, &ctx->stat_tv);
+	event_set (&ctx->stat_ev, -1, EV_TIMEOUT, rspamd_fuzzy_stat_callback, ctx);
+	event_base_set (ctx->ev_base, &ctx->stat_ev);
+	event_add (&ctx->stat_ev, &ctx->stat_tv);
 
 	if (ctx->mirrors && ctx->mirrors->len != 0) {
 		if (ctx->sync_keypair == NULL) {
