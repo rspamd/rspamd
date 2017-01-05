@@ -464,8 +464,7 @@ rspamd_fuzzy_stat_callback (gint fd, gshort what, gpointer ud)
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 
 	event_del (&ctx->stat_ev);
-	rspamd_fuzzy_backend_count (ctx->backend, local_db_name,
-			fuzzy_stat_count_callback, ctx);
+	rspamd_fuzzy_backend_count (ctx->backend, fuzzy_stat_count_callback, ctx);
 }
 
 static void
