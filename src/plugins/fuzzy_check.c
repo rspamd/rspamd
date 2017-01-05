@@ -1625,6 +1625,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	struct rspamd_task *task = session->task;
 	double nval;
 	guchar buf[2048];
+	const gchar *type = "bin";
 
 	/* Get mapping by flag */
 	if ((map =
@@ -1651,15 +1652,21 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 
 	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
 		nval *= rspamd_normalize_probability (rep->prob, 0.5);
+		type = "img";
 	}
 	else {
 		/* XXX: we need something better here */
+		if (cmd->shingles_count > 0) {
+			type = "txt";
+		}
+
 		nval *= rep->prob;
 	}
 
 	msg_info_task (
-			"found fuzzy hash %*xs with weight: "
+			"found fuzzy hash(%s) %*xs with weight: "
 			"%.2f, probability %.2f, in list: %s:%d%s",
+			type,
 			(gint)sizeof (cmd->digest), cmd->digest,
 			nval,
 			(gdouble)rep->prob,
@@ -1669,10 +1676,11 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	if (map != NULL || !session->rule->skip_unknown) {
 		rspamd_snprintf (buf,
 				sizeof (buf),
-				"%d:%*xs:%.2f",
+				"%d:%*xs:%.2f:%s",
 				rep->flag,
 				rspamd_fuzzy_hash_len, cmd->digest,
-				rep->prob);
+				rep->prob,
+				type);
 		rspamd_task_insert_result_single (session->task,
 				symbol,
 				nval,
