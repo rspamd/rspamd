@@ -175,6 +175,7 @@ rspamd_config_new (void)
 	cfg->max_pic_size = DEFAULT_MAX_PIC;
 	cfg->images_cache_size = 256;
 	cfg->monitored_ctx = rspamd_monitored_ctx_init ();
+	cfg->neighbours = ucl_object_typed_new (UCL_OBJECT);
 #ifdef WITH_HIREDIS
 	cfg->redis_pool = rspamd_redis_pool_init ();
 #endif
@@ -193,6 +194,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	ucl_object_unref (cfg->rcl_obj);
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
+	ucl_object_unref (cfg->neighbours);
 	g_hash_table_remove_all (cfg->metrics);
 	g_hash_table_unref (cfg->metrics);
 	g_hash_table_unref (cfg->c_modules);

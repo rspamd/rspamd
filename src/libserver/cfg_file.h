@@ -425,6 +425,7 @@ struct rspamd_config {
 	gchar *ssl_ciphers;								/**< set of preferred ciphers							*/
 	gchar *zstd_input_dictionary;					/**< path to zstd input dictionary						*/
 	gchar *zstd_output_dictionary;					/**< path to zstd output dictionary						*/
+	ucl_object_t *neighbours;						/**< other servers in the cluster						*/
 
 	ref_entry_t ref;								/**< reference counter									*/
 };

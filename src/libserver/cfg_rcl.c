@@ -236,9 +236,9 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const gchar *key, gpointer ud,
 	struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *dns, *upstream;
+	const ucl_object_t *dns, *upstream, *neighbours;
 	struct rspamd_config *cfg = ud;
-	struct rspamd_rcl_section *dns_section, *upstream_section;
+	struct rspamd_rcl_section *dns_section, *upstream_section, *neighbours_section;
 
 	HASH_FIND_STR (section->subsections, "dns", dns_section);
 
@@ -259,6 +259,20 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				upstream_section, cfg->cfg_pool,
 				upstream, cfg, err)) {
 			return FALSE;
+		}
+	}
+
+	HASH_FIND_STR (section->subsections, "neighbours", neighbours_section);
+
+	neighbours = ucl_object_lookup (obj, "neighbours");
+	if (neighbours_section != NULL && neighbours != NULL) {
+		const ucl_object_t *cur;
+
+		LL_FOREACH (neighbours, cur) {
+			if (!rspamd_rcl_process_section (cfg, neighbours_section, cfg, cur,
+					pool, err)) {
+				return FALSE;
+			}
 		}
 	}
 
@@ -1489,6 +1503,82 @@ rspamd_rcl_composites_handler (rspamd_mempool_t *pool,
 	return success;
 }
 
+static gboolean
+rspamd_rcl_neighbours_handler (rspamd_mempool_t *pool,
+		const ucl_object_t *obj,
+		const gchar *key,
+		gpointer ud,
+		struct rspamd_rcl_section *section,
+		GError **err)
+{
+	struct rspamd_config *cfg = ud;
+	const ucl_object_t *hostval, *pathval;
+	ucl_object_t *neigh;
+	gboolean has_port = FALSE, has_proto = FALSE;
+	GString *urlstr;
+	const gchar *p;
+
+	if (key == NULL) {
+		g_set_error (err,
+				CFG_RCL_ERROR,
+				EINVAL,
+				"missing name for neighbour");
+		return FALSE;
+	}
+
+	hostval = ucl_object_lookup (obj, "host");
+
+	if (hostval == NULL || ucl_object_type (hostval) != UCL_STRING) {
+		g_set_error (err,
+				CFG_RCL_ERROR,
+				EINVAL,
+				"missing host for neighbour: %s", ucl_object_key (obj));
+		return FALSE;
+	}
+
+	neigh = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (neigh, ucl_object_ref (hostval), "host", 0, false);
+
+	if ((p = strrchr (ucl_object_tostring (hostval), ':')) != NULL) {
+		if (g_ascii_isdigit (p[1])) {
+			has_port = TRUE;
+		}
+	}
+
+	if (strstr (ucl_object_tostring (hostval), "://") != NULL) {
+		has_proto = TRUE;
+	}
+
+	/* Now make url */
+	urlstr = g_string_sized_new (63);
+	pathval = ucl_object_lookup (obj, "path");
+
+	if (!has_proto) {
+		g_string_append_len (urlstr, "http://", sizeof ("http://") - 1);
+	}
+
+	g_string_append (urlstr, ucl_object_tostring (hostval));
+
+	if (!has_port) {
+		g_string_append (urlstr, ":11334");
+	}
+
+	if (pathval == NULL) {
+		g_string_append (urlstr, "/rspamd/");
+	}
+	else {
+		g_string_append (urlstr,  ucl_object_tostring (pathval));
+	}
+
+	ucl_object_insert_key (neigh,
+			ucl_object_fromlstring (urlstr->str, urlstr->len),
+			"url", 0, false);
+	g_string_free (urlstr, TRUE);
+	ucl_object_insert_key (cfg->neighbours, neigh, key, 0, true);
+
+	return TRUE;
+}
+
 
 struct rspamd_rcl_section *
 rspamd_rcl_add_section (struct rspamd_rcl_section **top,
@@ -2031,6 +2121,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, compat_messages),
 			0,
 			"Use pre 1.4 style of messages in the protocol");
+
+	/* Neighbours configuration */
+	rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
+			rspamd_rcl_neighbours_handler,
+			UCL_OBJECT, FALSE, TRUE,
+			cfg->doc_strings,
+			"List of members of Rspamd cluster");
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,

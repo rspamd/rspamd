@@ -57,6 +57,7 @@
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
 #define PATH_ERRORS "/errors"
+#define PATH_NEIGHBOURS "/neighbours"
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
@@ -1402,6 +1403,31 @@ rspamd_controller_handle_errors (struct rspamd_http_connection_entry *conn_ent,
 
 	return 0;
 }
+
+/*
+ * Neighbours command handler:
+ * request: /neighbours
+ * headers: Password
+ * reply: json {name: {url: "http://...", host: "host"}}
+ */
+static int
+rspamd_controller_handle_neighbours (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+
+	ctx = session->ctx;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	rspamd_controller_send_ucl (conn_ent, ctx->cfg->neighbours);
+
+	return 0;
+}
+
 
 static int
 rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *conn_ent,
@@ -3140,6 +3166,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_ERRORS,
 			rspamd_controller_handle_errors);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_NEIGHBOURS,
+			rspamd_controller_handle_neighbours);
 
 	rspamd_regexp_t *lua_re = rspamd_regexp_new ("^/.*/.*\\.lua$", NULL, NULL);
 	rspamd_http_router_add_regexp (ctx->http, lua_re,
