@@ -646,7 +646,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 
 		if (cb) {
 			memset (&rep, 0, sizeof (rep));
-			cb (&rep, subr_ud);
+			cb (&rep, ud);
 		}
 	}
 	else {
@@ -657,7 +657,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 
 			if (cb) {
 				memset (&rep, 0, sizeof (rep));
-				cb (&rep, subr_ud);
+				cb (&rep, ud);
 			}
 		}
 		else {
@@ -768,7 +768,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_redis_session_dtor (session);
 
 		if (cb) {
-			cb (0, subr_ud);
+			cb (0, ud);
 		}
 	}
 	else {
@@ -778,7 +778,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_fuzzy_redis_session_dtor (session);
 
 			if (cb) {
-				cb (0, subr_ud);
+				cb (0, ud);
 			}
 		}
 		else {
@@ -890,7 +890,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_redis_session_dtor (session);
 
 		if (cb) {
-			cb (0, subr_ud);
+			cb (0, ud);
 		}
 	}
 	else {
@@ -900,7 +900,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_fuzzy_redis_session_dtor (session);
 
 			if (cb) {
-				cb (0, subr_ud);
+				cb (0, ud);
 			}
 		}
 		else {
@@ -1301,7 +1301,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_redis_session_dtor (session);
 
 		if (cb) {
-			cb (FALSE, subr_ud);
+			cb (FALSE, ud);
 		}
 	}
 	else {
@@ -1315,7 +1315,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				session->argv_lens) != REDIS_OK) {
 
 			if (cb) {
-				cb (FALSE, subr_ud);
+				cb (FALSE, ud);
 			}
 			rspamd_fuzzy_redis_session_dtor (session);
 
@@ -1331,7 +1331,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			if (!rspamd_fuzzy_update_append_command (bk, session, io_cmd,
 					&cur_shift)) {
 				if (cb) {
-					cb (FALSE, subr_ud);
+					cb (FALSE, ud);
 				}
 				rspamd_fuzzy_redis_session_dtor (session);
 
@@ -1354,7 +1354,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
 
 			if (cb) {
-				cb (FALSE, subr_ud);
+				cb (FALSE, ud);
 			}
 			rspamd_fuzzy_redis_session_dtor (session);
 
@@ -1372,7 +1372,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				&session->argv_lens[cur_shift]) != REDIS_OK) {
 
 			if (cb) {
-				cb (FALSE, subr_ud);
+				cb (FALSE, ud);
 			}
 			rspamd_fuzzy_redis_session_dtor (session);
 
