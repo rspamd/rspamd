@@ -690,6 +690,8 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 			st->messages_learned), "learned",  0, false);
 	ucl_object_insert_key (obj, ucl_object_frombool (!session->is_enable),
 			"read_only", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring (session->ctx->cfg->checksum),
+			"config_id", 0, false);
 
 	rspamd_controller_send_ucl (conn_ent, obj);
 	ucl_object_unref (obj);
