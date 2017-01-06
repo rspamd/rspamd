@@ -27,6 +27,7 @@
         // begin
         //$.cookie.json = true;
         var pie;
+        var rrd_pie;
         var history;
         var errors;
         var graph;
@@ -60,6 +61,9 @@
         function disconnect() {
             if (pie) {
                 pie.destroy();
+            }
+            if (rrd_pie) {
+                rrd_pie.destroy();
             }
             if (graph) {
                 graph.destroy();
@@ -554,6 +558,64 @@
             return obj;
         }
 
+        var rrd_pie_config = {
+            header: {},
+            size: {
+                canvasWidth: 300,
+                canvasHeight: 180,
+                pieInnerRadius: "20%",
+                pieOuterRadius: "80%"
+            },
+            labels: {
+                outer: {
+                    format: "none"
+                },
+            },
+            misc: {
+                pieCenterOffset: {
+                    x: -80,
+                    y: 10,
+                },
+                gradient: {
+                    enabled: true,
+                },
+            },
+        };
+
+        var graph_options = {
+            title: "Rspamd throughput",
+            width: 1060,
+            height: 370,
+            yAxisLabel: "Message rate, msg/s",
+
+            type: selected.selType,
+            interpolate: selected.selInterpolate,
+            convert: selected.selConvert,
+
+            legend: {
+                space: 140,
+                entries: [{
+                    label: "Rejected",
+                    color: "#FF0000"
+                }, {
+                    label: "Temporary rejected",
+                    color: "#CC9966"
+                }, {
+                    label: "Subject rewrited",
+                    color: "#FF6600"
+                }, {
+                    label: "Probable spam",
+                    color: "#FFD700"
+                }, {
+                    label: "Greylisted",
+                    color: "#436EEE"
+                }, {
+                    label: "Clean",
+                    color: "#66cc00"
+                }]
+            }
+        };
+
         function initGraph() {
             // Get selectors' current state
             var selIds = ["selData", "selConvert", "selType", "selInterpolate"];
@@ -562,40 +624,49 @@
                 selected[id] = e.options[e.selectedIndex].value;
             });
 
-            var options = {
-                title: "Rspamd throughput",
-                width: 1060,
-                height: 370,
-                yAxisLabel: "Message rate, msg/s",
+            graph = new D3Evolution("graph", graph_options);
+        }
 
-                type: selected.selType,
-                interpolate: selected.selInterpolate,
-                convert: selected.selConvert,
+        function getRrdSummary(json) {
+            const xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
+            const timeInterval = xExtents[1] - xExtents[0];
 
-                legend: {
-                    space: 140,
-                    entries: [{
-                        label: "Rejected",
-                        color: "#FF0000"
-                    }, {
-                        label: "Temporary rejected",
-                        color: "#CC9966"
-                    }, {
-                        label: "Subject rewrited",
-                        color: "#FF6600"
-                    }, {
-                        label: "Probable spam",
-                        color: "#FFD700"
-                    }, {
-                        label: "Greylisted",
-                        color: "#436EEE"
-                    }, {
-                        label: "Clean",
-                        color: "#66cc00"
-                    }]
+            return json.map(function (curr, i) {
+                var avg = d3.sum(curr, function (d) { return d.y; }) / curr.length;
+                var yExtents = d3.extent(curr, function (d) { return d.y; });
+
+                return {
+                    label: graph_options.legend.entries[i].label,
+                    value: (avg * timeInterval) ^ 0,
+                    min: yExtents[0],
+                    avg: avg.toFixed(6),
+                    max: yExtents[1],
+                    last: curr[curr.length - 1].y,
+                    color: graph_options.legend.entries[i].color,
+                };
+            }, []);
+        }
+
+        function drawRrdTable(data) {
+            $('#rrd-table').DataTable({
+                destroy: true,
+                paging: false,
+                searching: false,
+                info: false,
+                data: data,
+                columns: [
+                    { data: "label", title: "Action" },
+                    { data: "value", title: "Messages" },
+                    { data: "min",   title: "Minimum, msg/s" },
+                    { data: "avg",   title: "Average, msg/s" },
+                    { data: "max",   title: "Maximum, msg/s" },
+                    { data: "last",  title: "Last, msg/s" },
+                ],
+
+                "fnRowCallback": function (nRow, aData) {
+                    $(nRow).css("color", aData.color)
                 }
-            };
-            graph = new D3Evolution("graph", options);
+            });
         }
 
         function getGraphData(type) {
@@ -611,7 +682,10 @@
                     xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
+                    const rrd_summary = getRrdSummary(data);
                     graph.data(data);
+                    rrd_pie = drawPie(rrd_pie, "rrd-pie", rrd_summary, rrd_pie_config);
+                    drawRrdTable(rrd_summary);
                 },
                 error: function (jqXHR, textStatus, errorThrown) {
                     alertMessage('alert-error', 'Cannot receive throughput data: ' +

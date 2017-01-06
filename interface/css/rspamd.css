@@ -538,6 +538,41 @@ td.maps-cell {
     padding: 5px 20px 0 20px;
     }
 
+#throughput div.widget-content {
+    text-align: center;
+}
+#throughput div.widget-content > div {
+    display: inline-block;
+}
+#throughput div.widget-content div.row {
+    background: #fff;
+}
+
+/* RRD summary */
+.col-fixed,
+.col-fluid {
+    position: relative;
+    float: left;
+    padding-left: 80px;
+    padding-right: 80px;
+}
+.col-fixed {
+    width: 200px;
+    z-index: 1;
+}
+.col-fluid {
+    width: calc(100% - 200px);
+}
+#rrd-table {
+    width: 100% !important;
+    text-align: left;
+    font-size: 12px;
+}
+#rrd-table td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
 /* Throughput graph controls */
 #graph_controls select {
     margin: 10px 20px 0;
