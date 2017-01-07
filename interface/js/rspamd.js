@@ -561,7 +561,7 @@
         var rrd_pie_config = {
             header: {},
             size: {
-                canvasWidth: 300,
+                canvasWidth: 400,
                 canvasHeight: 180,
                 pieInnerRadius: "20%",
                 pieOuterRadius: "80%"
@@ -573,7 +573,7 @@
             },
             misc: {
                 pieCenterOffset: {
-                    x: -80,
+                    x: -120,
                     y: 10,
                 },
                 gradient: {
