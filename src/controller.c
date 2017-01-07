@@ -164,6 +164,9 @@ struct rspamd_controller_worker_ctx {
 	/* Custom commands registered by plugins */
 	GHashTable *custom_commands;
 
+	/* Plugins registered from lua */
+	GHashTable *plugins;
+
 	/* Worker */
 	struct rspamd_worker *worker;
 
@@ -172,7 +175,16 @@ struct rspamd_controller_worker_ctx {
 
 	struct event *rrd_event;
 	struct rspamd_rrd_file *rrd;
+};
 
+struct rspamd_controller_plugin_cbdata {
+	lua_State *L;
+	struct rspamd_controller_worker_ctx *ctx;
+	gchar *plugin;
+	struct ucl_lua_funcdata *handler;
+	ucl_object_t *obj;
+	gboolean is_enable;
+	gboolean need_task;
 };
 
 static gboolean
@@ -2519,6 +2531,91 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	return cmd->handler (conn_ent, msg, cmd->ctx);
 }
 
+static int
+rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_plugin_cbdata *cbd;
+	struct rspamd_task *task, **ptask;
+	struct rspamd_http_connection_entry **pconn;
+	struct rspamd_controller_worker_ctx *ctx;
+	lua_State *L;
+	gchar *url_str;
+
+	url_str = rspamd_fstring_cstr (msg->url);
+	cbd = g_hash_table_lookup (session->ctx->plugins, url_str);
+	g_free (url_str);
+
+	if (cbd == NULL || cbd->handler == NULL) {
+		msg_err_session ("plugin handler %V has not been found", msg->url);
+		rspamd_controller_send_error (conn_ent, 404, "No command associated");
+		return 0;
+	}
+
+	L = cbd->L;
+	ctx = cbd->ctx;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg,
+		cbd->is_enable)) {
+		return 0;
+	}
+	if (cbd->need_task && (rspamd_http_message_get_body (msg, NULL) == NULL)) {
+		msg_err_session ("got zero length body, cannot continue");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
+		return 0;
+	}
+
+	/* Callback */
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->handler->idx);
+	task = rspamd_task_new (session->ctx->worker, session->cfg);
+
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+
+	task->s = rspamd_session_create (session->pool,
+			rspamd_controller_lua_fin_task,
+			NULL,
+			(event_finalizer_t )rspamd_task_free,
+			task);
+	task->fin_arg = conn_ent;
+	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
+	task->sock = -1;
+	session->task = task;
+
+	if (msg->body_buf.len > 0) {
+		if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+					task->err->message);
+			return 0;
+		}
+	}
+
+	ptask = lua_newuserdata (L, sizeof (*ptask));
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+
+	pconn = lua_newuserdata (L, sizeof (*pconn));
+	rspamd_lua_setclass (L, "rspamd{csession}", -1);
+	*pconn = conn_ent;
+
+	if (lua_pcall (L, 2, 0, 0) != 0) {
+		rspamd_controller_send_error (conn_ent, 503, "Cannot run callback: %s",
+				lua_tostring (L, -1));
+		rspamd_session_destroy (task->s);
+		lua_settop (L, 0);
+
+		return 0;
+	}
+
+	rspamd_session_pending (task->s);
+
+	return 0;
+}
+
+
 static void
 rspamd_controller_error_handler (struct rspamd_http_connection_entry *conn_ent,
 	GError *err)
@@ -3029,6 +3126,102 @@ rspamd_controller_on_terminate (struct rspamd_worker *worker)
 	return FALSE;
 }
 
+static void
+rspamd_plugin_cbdata_dtor (gpointer p)
+{
+	struct rspamd_controller_plugin_cbdata *cbd = p;
+
+	g_free (cbd->plugin);
+	ucl_object_unref (cbd->obj); /* This also releases lua references */
+}
+
+static void
+rspamd_controller_register_plugin_path (lua_State *L,
+		struct rspamd_controller_worker_ctx *ctx,
+		const ucl_object_t *webui_data,
+		const ucl_object_t *handler,
+		const gchar *path,
+		const gchar *plugin_name)
+{
+	struct rspamd_controller_plugin_cbdata *cbd;
+	const ucl_object_t *elt;
+	GString *full_path;
+
+	cbd = g_slice_alloc0 (sizeof (*cbd));
+	cbd->L = L;
+	cbd->ctx = ctx;
+	cbd->handler = ucl_object_toclosure (handler);
+	cbd->plugin = g_strdup (plugin_name);
+	cbd->obj = ucl_object_ref (webui_data);
+
+	elt = ucl_object_lookup (webui_data, "enable");
+
+	if (elt && !!ucl_object_toboolean (elt)) {
+		cbd->is_enable = TRUE;
+	}
+
+	elt = ucl_object_lookup (webui_data, "need_task");
+
+	if (elt && !!ucl_object_toboolean (elt)) {
+		cbd->need_task = TRUE;
+	}
+
+	full_path = g_string_new ("/plugins/");
+	rspamd_printf_gstring (full_path, "%s/%s",
+			plugin_name, path);
+
+	rspamd_http_router_add_path (ctx->http,
+			full_path->str,
+			rspamd_controller_handle_lua_plugin);
+	g_hash_table_insert (ctx->plugins, full_path->str, cbd);
+	g_string_free (full_path, FALSE); /* Do not free data */
+}
+
+static void
+rspamd_controller_register_plugins_paths (struct rspamd_controller_worker_ctx *ctx)
+{
+	lua_State *L = ctx->cfg->lua_state;
+	ucl_object_t *webui_data;
+	const ucl_object_t *handler_obj, *cur;
+	ucl_object_iter_t it = NULL;
+
+	lua_getglobal (L, "rspamd_plugins");
+
+	if (lua_istable (L, -1)) {
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 2)) {
+			lua_pushvalue (L, -2); /* Store key */
+
+			lua_pushstring (L, "webui");
+			lua_gettable (L, -3); /* value is at -3 index */
+
+			if (lua_istable (L, -1)) {
+				webui_data = ucl_object_lua_import (L, -1);
+
+				while ((cur = ucl_object_iterate (webui_data, &it, true)) != NULL) {
+					handler_obj = ucl_object_lookup (cur, "handler");
+
+					if (handler_obj && ucl_object_key (cur)) {
+						rspamd_controller_register_plugin_path (L, ctx,
+								cur, handler_obj, ucl_object_key (cur),
+								lua_tostring (L, -2));
+					}
+					else {
+						msg_err_ctx ("bad webui definition for plugin: %s",
+								lua_tostring (L, -2));
+					}
+				}
+
+				ucl_object_unref (webui_data);
+			}
+
+			lua_pop (L, 1); /* remove table value */
+		}
+	}
+
+	lua_pop (L, 1); /* rspamd_plugins global */
+}
+
 /*
  * Start worker process
  */
@@ -3055,6 +3248,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->srv = worker->srv;
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
+	ctx->plugins = g_hash_table_new_full (rspamd_strcase_hash,
+				rspamd_strcase_equal, g_free,
+				rspamd_plugin_cbdata_dtor);
 
 	if (ctx->secure_ip != NULL) {
 		rspamd_config_radix_from_ucl (ctx->cfg, ctx->secure_ip,
@@ -3171,6 +3367,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_NEIGHBOURS,
 			rspamd_controller_handle_neighbours);
+	rspamd_controller_register_plugins_paths (ctx);
 
 	rspamd_regexp_t *lua_re = rspamd_regexp_new ("^/.*/.*\\.lua$", NULL, NULL);
 	rspamd_http_router_add_regexp (ctx->http, lua_re,
@@ -3228,6 +3425,8 @@ start_controller_worker (struct rspamd_worker *worker)
 	}
 
 	REF_RELEASE (ctx->cfg);
+	g_hash_table_unref (ctx->plugins);
+	g_hash_table_unref (ctx->custom_commands);
 
 	exit (EXIT_SUCCESS);
 }
