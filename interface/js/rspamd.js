@@ -632,14 +632,14 @@
             const timeInterval = xExtents[1] - xExtents[0];
 
             return json.map(function (curr, i) {
-                var avg = d3.sum(curr, function (d) { return d.y; }) / curr.length;
+                var avg = d3.mean(curr, function (d) { return d.y; });
                 var yExtents = d3.extent(curr, function (d) { return d.y; });
 
                 return {
                     label: graph_options.legend.entries[i].label,
-                    value: (avg * timeInterval) ^ 0,
+                    value: avg && (avg * timeInterval) ^ 0,
                     min: yExtents[0],
-                    avg: avg.toFixed(6),
+                    avg: avg && avg.toFixed(6),
                     max: yExtents[1],
                     last: curr[curr.length - 1].y,
                     color: graph_options.legend.entries[i].color,
@@ -656,10 +656,10 @@
                 data: data,
                 columns: [
                     { data: "label", title: "Action" },
-                    { data: "value", title: "Messages" },
-                    { data: "min",   title: "Minimum, msg/s" },
-                    { data: "avg",   title: "Average, msg/s" },
-                    { data: "max",   title: "Maximum, msg/s" },
+                    { data: "value", title: "Messages",       defaultContent: "" },
+                    { data: "min",   title: "Minimum, msg/s", defaultContent: "" },
+                    { data: "avg",   title: "Average, msg/s", defaultContent: "" },
+                    { data: "max",   title: "Maximum, msg/s", defaultContent: "" },
                     { data: "last",  title: "Last, msg/s" },
                 ],
 
