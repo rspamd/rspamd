@@ -570,6 +570,9 @@
                 outer: {
                     format: "none"
                 },
+                inner: {
+                    hideWhenLessThanPercentage: 8
+                },
             },
             misc: {
                 pieCenterOffset: {
