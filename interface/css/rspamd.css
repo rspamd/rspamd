@@ -573,3 +573,39 @@ td.maps-cell {
     cursor: inherit;
     display: block;
 }
+
+input.radio {
+	margin: 0 !important;
+	height: initial;
+	-webkit-box-shadow: none !important;
+  box-shadow: none !important;
+}
+
+.glyphicon-ok-circle {
+	color:#468847;
+}
+
+.glyphicon-remove-circle {
+	color:#b94a48;
+}
+
+#clusterTable .col1 {
+	width: 40px;
+}
+
+#clusterTable .col4 {
+	width: 50px;
+	text-align: center;
+}
+
+#clusterTable .col5 {
+	width: 100px;
+}
+
+#clusterTable .col2 {
+	width: 30%;
+}
+
+#clusterTable .col3 {
+	width: 50%;
+}
