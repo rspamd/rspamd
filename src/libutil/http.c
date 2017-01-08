@@ -2998,6 +2998,10 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			if (u.field_set & (1 << UF_PATH)) {
 				lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 				lookup.len = u.field_data[UF_PATH].len;
+
+				rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
+						lookup.len,
+						&lookup.len);
 			}
 			else {
 				lookup.begin = msg->url->str;
