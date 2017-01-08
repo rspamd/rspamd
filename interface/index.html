@@ -58,7 +58,7 @@
 						<h5>Statistics</h5>
 					</div>
 					<div class="widget-content chart-content">
-						<div class="row row-chart">
+						<div class="row">
 							<div class="chart" id="chart">
 								<span class="notice">Loading..</span>
 								<noscript>Please enable Javascript</noscript>
@@ -114,45 +114,59 @@
 						<span class="icon"><i class="glyphicon glyphicon-stats"></i></span>
 						<h5>Throughput</h5>
 					</div>
-					<div class="widget-content chart-content">
-						<div class="row row-chart">
-							<div class="chart" id="graph">
-								<span class="notice">Loading..</span>
-								<noscript>Please enable Javascript</noscript>
+					<div class="widget-content">
+						<div>
+							<div class="row">
+								<div id="graph">
+									<span class="notice">Loading..</span>
+									<noscript>Please enable Javascript</noscript>
+								</div>
 							</div>
+
+							<div class="row">
+								<div class="col-fixed" id="rrd-pie" >
+									<span class="notice">Loading..</span>
+									<noscript>Please enable Javascript</noscript>
+								</div>
+
+								<div class="col-fluid">
+									<table id="rrd-table" class="table table-striped table-hover"></table>
+								</div>
+							</div>
+
+							<form id="graph_controls" action="#">
+								Select dataset:
+								<select id="selData" class="form-control">
+									<option value="hourly" selected>Hourly</option>
+									<option value="daily">Daily</option>
+									<option value="weekly">Weekly</option>
+									<option value="monthly">Monthly</option>
+								</select>
+								Convert to:
+								<select id="selConvert" class="form-control">
+									<option value="" selected>--</option>
+									<option value="percentage">percentage</option>
+								</select>
+								Select chart type:
+								<select id="selType" class="form-control">
+									<option value="line" selected>Line</option>
+									<option value="area">Stacked area</option>
+								</select>
+								Select <a title="View Mike Bostock's Block." href="https://bl.ocks.org/mbostock/4342190" target="_blank">interpolation mode</a>:
+								<select id="selInterpolate" class="form-control">
+									<option value="linear" selected>linear</option>
+									<option value="step">step</option>
+									<option value="step-before">step-before</option>
+									<option value="step-after">step-after</option>
+									<option value="basis">basis</option>
+									<option value="basis-open">basis-open</option>
+									<option value="bundle">bundle</option>
+									<option value="cardinal">cardinal</option>
+									<option value="cardinal-open">cardinal-open</option>
+									<option value="monotone">monotone</option>
+								</select>
+							</form>
 						</div>
-						<form id="graph_controls" action="#">
-							Select dataset:
-							<select id="selData" class="form-control">
-								<option value="hourly" selected>Hourly</option>
-								<option value="daily">Daily</option>
-								<option value="weekly">Weekly</option>
-								<option value="monthly">Monthly</option>
-							</select>
-							Convert to:
-							<select id="selConvert" class="form-control">
-								<option value="" selected>--</option>
-								<option value="percentage">percentage</option>
-							</select>
-							Select chart type:
-							<select id="selType" class="form-control">
-								<option value="line" selected>Line</option>
-								<option value="area">Stacked area</option>
-							</select>
-							Select <a title="View Mike Bostock's Block." href="https://bl.ocks.org/mbostock/4342190" target="_blank">interpolation mode</a>:
-							<select id="selInterpolate" class="form-control">
-								<option value="linear" selected>linear</option>
-								<option value="step">step</option>
-								<option value="step-before">step-before</option>
-								<option value="step-after">step-after</option>
-								<option value="basis">basis</option>
-								<option value="basis-open">basis-open</option>
-								<option value="bundle">bundle</option>
-								<option value="cardinal">cardinal</option>
-								<option value="cardinal-open">cardinal-open</option>
-								<option value="monotone">monotone</option>
-							</select>
-						</form>
 					</div>
 				</div>
 			</div>
