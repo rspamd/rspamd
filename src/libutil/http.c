@@ -3549,11 +3549,7 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 				}
 				else {
 					/* We have something like bla../, so we need to copy it as is */
-
-					if (slash) {
-						*o ++ = '/';
-					}
-					if (dot && p > dot) {
+					if (o > path && dot && p > dot) {
 						memcpy (o, dot, p - dot);
 						o += p - dot;
 					}
@@ -3610,6 +3606,18 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 			if (slash) {
 				/* Remove last / */
 				o = (gchar *)slash;
+			}
+		}
+		else {
+			/* Corner case */
+			if (o == path) {
+				*o++ = '/';
+			}
+			else {
+				if (dot && p > dot) {
+					memmove (o, dot, p - dot);
+					o += p - dot;
+				}
 			}
 		}
 		break;

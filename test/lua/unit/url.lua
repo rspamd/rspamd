@@ -135,10 +135,18 @@ context("URL check functions", function()
       {"/foo/../../..", "/"},
       {"/foo/../../../ton", "/ton"},
       {"////../..", "/"},
+      {"./", ""},
+      {"/./", "/"},
+      {"/./././././././", "/"},
+      {"/", "/"},
+      {"/a/b", "/a/b"},
+      {"/a/b/", "/a/b/"},
+      {"..", "/"},
+      {"/../", "/"},
+      {"../", "/"},
     }
 
     for _,v in ipairs(cases) do
-      print(v[1])
       local buf = ffi.new("uint8_t[?]", #v[1])
       local sizbuf = ffi.new("size_t[1]")
       ffi.copy(buf, v[1], #v[1])
