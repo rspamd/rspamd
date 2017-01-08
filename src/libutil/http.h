@@ -501,4 +501,13 @@ GHashTable* rspamd_http_message_parse_query (struct rspamd_http_message *msg);
  */
 glong rspamd_http_date_format (gchar *buf, gsize len, time_t time);
 
+/**
+ * Normalize HTTP path removing dot sequences and repeating '/' symbols as
+ * per rfc3986#section-5.2
+ * @param path
+ * @param len
+ * @param nlen
+ */
+void rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen);
+
 #endif /* HTTP_H_ */

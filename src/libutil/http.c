@@ -3430,3 +3430,122 @@ rspamd_http_message_unref (struct rspamd_http_message *msg)
 {
 	REF_RELEASE (msg);
 }
+
+
+void
+rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
+{
+	const gchar *p, *end, *c, *slash;
+	gchar *o;
+	enum {
+		st_normal = 0,
+		st_got_dot,
+		st_got_dot_dot,
+		st_got_slash,
+		st_got_slash_slash,
+	} state = st_normal;
+
+	p = path;
+	c = path;
+	end = path + len;
+	o = path;
+
+	while (p < end) {
+		switch (state) {
+		case st_normal:
+			if (G_UNLIKELY (*p == '/')) {
+				state = st_got_slash;
+				c = p;
+			}
+			else if (G_UNLIKELY (*p == '.')) {
+				state = st_got_dot;
+				c = p;
+			}
+			else {
+				*o++ = *p;
+			}
+			p ++;
+			break;
+		case st_got_slash:
+			if (G_UNLIKELY (*p == '/')) {
+				/* Ignore double slash */
+				*o++ = *p;
+				state = st_got_slash_slash;
+			}
+			else if (G_UNLIKELY (*p == '.')) {
+				state = st_got_dot;
+			}
+			else {
+				*o++ = *p;
+				state = st_normal;
+			}
+			p ++;
+			break;
+		case st_got_slash_slash:
+			if (G_LIKELY (*p != '/')) {
+				*o++ = *p;
+				state = st_normal;
+			}
+			p ++;
+			break;
+		case st_got_dot:
+			if (G_UNLIKELY (*p == '/')) {
+				/* Remove any /./ or ./ paths */
+				state = st_normal;
+			}
+			else if (*p == '.') {
+				/* Double dot character */
+				state = st_got_dot_dot;
+			}
+			else {
+				/* We have something like .some or /.some */
+				if (p > c) {
+					memcpy (o, c, p - c);
+					o += p - c;
+				}
+
+				state = st_normal;
+			}
+			p ++;
+			break;
+		case st_got_dot_dot:
+			if (*p == '/') {
+				/* We have something like /../ or ../ */
+				if (*c == '/') {
+					/* We need to remove the last component from o if it is there */
+					slash = rspamd_memrchr (path, '/', o - path);
+
+					if (slash) {
+						o = (gchar *)slash;
+					}
+					/* Otherwise we remove these dots */
+					state = st_normal;
+				}
+				else {
+					/* We have something like bla../, so we need to copy it as is */
+					if (p > c) {
+						memcpy (o, c, p - c);
+						o += p - c;
+					}
+
+					state = st_normal;
+				}
+			}
+			else {
+				/* We have something like ..bla or ... */
+				if (p > c) {
+					memcpy (o, c, p - c);
+					o += p - c;
+				}
+
+				state = st_normal;
+			}
+			p ++;
+			break;
+		}
+	}
+
+	if (nlen) {
+		*nlen = (o - path);
+	}
+}
