@@ -116,6 +116,31 @@ local function apply_url_filter(task, filter, url, r)
     else
       return nil
     end
+  elseif filter == 'is_redirected' then
+    if url:is_redirected() then
+      return url:get_host()
+    else
+      return nil
+    end
+  elseif filter == 'is_obscured' then
+    if url:is_obscured() then
+      return url:get_host()
+    else
+      return nil
+    end
+  elseif filter == 'path' then
+    return url:get_path()
+  elseif filter == 'query' then
+    return url:get_query()
+  elseif string.find(filter, 'tag:') then
+    local tags = url:get_tags()
+    local want_tag = string.match(filter, 'tag:(.*)')
+    for _, t in ipairs(tags) do
+      if t == want_tag then
+        return url:get_host()
+      end
+    end
+    return nil
   elseif string.find(filter, 'tld:regexp:') then
     if not r['re_filter'] then
       local type,pat = string.match(filter, '(regexp:)(.+)')

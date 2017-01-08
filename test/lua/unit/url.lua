@@ -8,6 +8,7 @@ context("URL check functions", function()
   ffi.cdef[[
   void rspamd_url_init (const char *tld_file);
   unsigned ottery_rand_range(unsigned top);
+  void rspamd_http_normalize_path_inplace(char *path, size_t len, size_t *nlen);
   ]]
 
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
@@ -119,4 +120,39 @@ context("URL check functions", function()
     end
   end
   )
+  test("Normalize paths", function()
+    local cases = {
+      {"/././foo", "/foo"},
+      {"/a/b/c/./../../g", "/a/g"},
+      {"/./.foo", "/.foo"},
+      {"/foo/.", "/foo"},
+      {"/foo/./", "/foo"},
+      {"/foo/bar/..", "/foo"},
+      {"/foo/bar/../", "/foo/"},
+      {"/foo/..bar", "/foo/..bar"},
+      {"/foo/bar/../ton", "/foo/ton"},
+      {"/foo/bar/../ton/../../a", "/a"},
+      {"/foo/../../..", "/"},
+      {"/foo/../../../ton", "/ton"},
+      {"////../..", "/"},
+      {"./", ""},
+      {"/./", "/"},
+      {"/./././././././", "/"},
+      {"/", "/"},
+      {"/a/b", "/a/b"},
+      {"/a/b/", "/a/b/"},
+      {"..", "/"},
+      {"/../", "/"},
+      {"../", "/"},
+    }
+
+    for _,v in ipairs(cases) do
+      local buf = ffi.new("uint8_t[?]", #v[1])
+      local sizbuf = ffi.new("size_t[1]")
+      ffi.copy(buf, v[1], #v[1])
+      ffi.C.rspamd_http_normalize_path_inplace(buf, #v[1], sizbuf)
+      local res = ffi.string(buf, tonumber(sizbuf[0]))
+      assert_equal(v[2], res, 'expected ' .. v[2] .. ' but got ' .. res .. ' in path ' .. v[1])
+    end
+  end)
 end)

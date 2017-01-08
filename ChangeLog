@@ -1,3 +1,31 @@
+1.4.2:
+	* [CritFix] Deal with absent headers in DKIM
+	* [CritFix] Do not trust remote shingles count
+	* [CritFix] Fix headers selection in DKIM verification
+	* [Feature] Add EXT_CSS rule
+	* [Feature] Add toggle for disabling SURBLs
+	* [Feature] Extend redis lock when learning spawned
+	* [Feature] Parse <link> HTML tags
+	* [Fix] Avoid reusing g_error (Fixes #1262)
+	* [Fix] Do not reset loaded ANN when learning is requested
+	* [Fix] Fix another issue with external deps in SA
+	* [Fix] Fix body trie matching
+	* [Fix] Fix checking of DKIM bodies that needs just `\n` to be added
+	* [Fix] Fix fuzzy hashes count
+	* [Fix] Fix keys names
+	* [Fix] Fix length calculations for url encoded urls
+	* [Fix] Fix matching of the same patterns from different tries
+	* [Fix] Fix name of var
+	* [Fix] Fix parsing of URLs with spaces and other bad chars
+	* [Fix] Fix probability calculations for fuzzy redis backend
+	* [Fix] Fix signing headers creation in DKIM
+	* [Fix] Plug memory leak
+	* [Fix] Really fix chained SA dependencies
+	* [Fix] Really increase lock lifetime
+	* [Fix] Use checksum to avoid intersection between different ANNs
+	* [Fix] Use rspamd hashes in embedded ucl
+	* [Fix] Yet another change for testing external deps
+
 1.4.1:
 	* [Feature] ASN support in Clickhouse module
 	* [Feature] Add clickhouse plugin

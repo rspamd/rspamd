@@ -1578,6 +1578,9 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	if (uri->datalen) {
 		unquoted_len = rspamd_decode_url (uri->data, uri->data, uri->datalen);
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
+		/* We now normalize path */
+		rspamd_http_normalize_path_inplace (uri->data, uri->datalen, &unquoted_len);
+		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 	}
 	if (uri->querylen) {
 		unquoted_len = rspamd_decode_url (uri->query,

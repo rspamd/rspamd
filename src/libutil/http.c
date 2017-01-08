@@ -2371,7 +2371,13 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 		storage->shared.name = g_slice_alloc (sizeof (*storage->shared.name));
 		REF_INIT_RETAIN (storage->shared.name, rspamd_http_shname_dtor);
 #ifdef HAVE_SANE_SHMEM
+#if defined(__DragonFly__)
+		// DragonFly uses regular files for shm. User rspamd is not allowed to create
+		// files in the root.
+		storage->shared.name->shm_name = g_strdup ("/tmp/rhm.XXXXXXXXXXXXXXXXXXXX");
+#else
 		storage->shared.name->shm_name = g_strdup ("/rhm.XXXXXXXXXXXXXXXXXXXX");
+#endif
 		storage->shared.shm_fd = rspamd_shmem_mkstemp (storage->shared.name->shm_name);
 #else
 		/* XXX: assume that tempdir is /tmp */
@@ -2992,6 +2998,10 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			if (u.field_set & (1 << UF_PATH)) {
 				lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 				lookup.len = u.field_data[UF_PATH].len;
+
+				rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
+						lookup.len,
+						&lookup.len);
 			}
 			else {
 				lookup.begin = msg->url->str;
@@ -3423,4 +3433,209 @@ void
 rspamd_http_message_unref (struct rspamd_http_message *msg)
 {
 	REF_RELEASE (msg);
+}
+
+
+void
+rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
+{
+	const gchar *p, *end, *slash = NULL, *dot = NULL;
+	gchar *o;
+	enum {
+		st_normal = 0,
+		st_got_dot,
+		st_got_dot_dot,
+		st_got_slash,
+		st_got_slash_slash,
+	} state = st_normal;
+
+	p = path;
+	end = path + len;
+	o = path;
+
+	while (p < end) {
+		switch (state) {
+		case st_normal:
+			if (G_UNLIKELY (*p == '/')) {
+				state = st_got_slash;
+				slash = p;
+			}
+			else if (G_UNLIKELY (*p == '.')) {
+				state = st_got_dot;
+				dot = p;
+			}
+			else {
+				*o++ = *p;
+			}
+			p ++;
+			break;
+		case st_got_slash:
+			if (G_UNLIKELY (*p == '/')) {
+				/* Ignore double slash */
+				*o++ = *p;
+				state = st_got_slash_slash;
+			}
+			else if (G_UNLIKELY (*p == '.')) {
+				dot = p;
+				state = st_got_dot;
+			}
+			else {
+				*o++ = '/';
+				*o++ = *p;
+				slash = NULL;
+				dot = NULL;
+				state = st_normal;
+			}
+			p ++;
+			break;
+		case st_got_slash_slash:
+			if (G_LIKELY (*p != '/')) {
+				slash = p - 1;
+				dot = NULL;
+				state = st_normal;
+				continue;
+			}
+			p ++;
+			break;
+		case st_got_dot:
+			if (G_UNLIKELY (*p == '/')) {
+				/* Remove any /./ or ./ paths */
+				if (((o > path && *(o - 1) != '/') || (o == path)) && slash) {
+					/* Preserve one slash */
+					*o++ = '/';
+				}
+
+				slash = p;
+				dot = NULL;
+				/* Ignore last slash */
+				state = st_normal;
+			}
+			else if (*p == '.') {
+				/* Double dot character */
+				state = st_got_dot_dot;
+			}
+			else {
+				/* We have something like .some or /.some */
+				if (dot && p > dot) {
+					memmove (o, dot, p - dot);
+					o += p - dot;
+				}
+
+				slash = NULL;
+				dot = NULL;
+				state = st_normal;
+				continue;
+			}
+
+			p ++;
+			break;
+		case st_got_dot_dot:
+			if (*p == '/') {
+				/* We have something like /../ or ../ */
+				if (slash) {
+					/* We need to remove the last component from o if it is there */
+					if (o > path + 2 && *(o - 1) == '/') {
+						slash = rspamd_memrchr (path, '/', o - path - 2);
+					}
+					else if (o > path + 1) {
+						slash = rspamd_memrchr (path, '/', o - path - 1);
+					}
+					else {
+						slash = NULL;
+					}
+
+					if (slash) {
+						o = (gchar *)slash;
+					}
+					/* Otherwise we keep these dots */
+					slash = p;
+					state = st_got_slash;
+				}
+				else {
+					/* We have something like bla../, so we need to copy it as is */
+					if (o > path && dot && p > dot) {
+						memcpy (o, dot, p - dot);
+						o += p - dot;
+					}
+
+					slash = NULL;
+					dot = NULL;
+					state = st_normal;
+					continue;
+				}
+			}
+			else {
+				/* We have something like ..bla or ... */
+				if (slash) {
+					*o ++ = '/';
+				}
+
+				if (dot && p > dot) {
+					memmove (o, dot, p - dot);
+					o += p - dot;
+				}
+
+				slash = NULL;
+				dot = NULL;
+				state = st_normal;
+				continue;
+			}
+
+			p ++;
+			break;
+		}
+	}
+
+	/* Leftover */
+	switch (state) {
+	case st_got_dot_dot:
+		/* Trailing .. */
+		if (slash) {
+			/* We need to remove the last component from o if it is there */
+			if (o > path + 2 && *(o - 1) == '/') {
+				slash = rspamd_memrchr (path, '/', o - path - 2);
+			}
+			else if (o > path + 1) {
+				slash = rspamd_memrchr (path, '/', o - path - 1);
+			}
+			else {
+				if (o == path) {
+					/* Corner case */
+					*o++ = '/';
+				}
+
+				slash = NULL;
+			}
+
+			if (slash) {
+				/* Remove last / */
+				o = (gchar *)slash;
+			}
+		}
+		else {
+			/* Corner case */
+			if (o == path) {
+				*o++ = '/';
+			}
+			else {
+				if (dot && p > dot) {
+					memmove (o, dot, p - dot);
+					o += p - dot;
+				}
+			}
+		}
+		break;
+	case st_got_slash:
+		*o++ = '/';
+		break;
+	default:
+		if (o > path + 1 && *(o - 1) == '/') {
+			o --;
+		}
+		break;
+	}
+
+	if (nlen) {
+		*nlen = (o - path);
+	}
 }
