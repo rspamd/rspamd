@@ -3435,7 +3435,7 @@ rspamd_http_message_unref (struct rspamd_http_message *msg)
 void
 rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 {
-	const gchar *p, *end, *c, *slash;
+	const gchar *p, *end, *slash = NULL, *dot = NULL;
 	gchar *o;
 	enum {
 		st_normal = 0,
@@ -3446,7 +3446,6 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 	} state = st_normal;
 
 	p = path;
-	c = path;
 	end = path + len;
 	o = path;
 
@@ -3455,11 +3454,11 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 		case st_normal:
 			if (G_UNLIKELY (*p == '/')) {
 				state = st_got_slash;
-				c = p;
+				slash = p;
 			}
 			else if (G_UNLIKELY (*p == '.')) {
 				state = st_got_dot;
-				c = p;
+				dot = p;
 			}
 			else {
 				*o++ = *p;
@@ -3473,24 +3472,38 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 				state = st_got_slash_slash;
 			}
 			else if (G_UNLIKELY (*p == '.')) {
+				dot = p;
 				state = st_got_dot;
 			}
 			else {
+				*o++ = '/';
 				*o++ = *p;
+				slash = NULL;
+				dot = NULL;
 				state = st_normal;
 			}
 			p ++;
 			break;
 		case st_got_slash_slash:
 			if (G_LIKELY (*p != '/')) {
-				*o++ = *p;
+				slash = p - 1;
+				dot = NULL;
 				state = st_normal;
+				continue;
 			}
 			p ++;
 			break;
 		case st_got_dot:
 			if (G_UNLIKELY (*p == '/')) {
 				/* Remove any /./ or ./ paths */
+				if (((o > path && *(o - 1) != '/') || (o == path)) && slash) {
+					/* Preserve one slash */
+					*o++ = '/';
+				}
+
+				slash = p;
+				dot = NULL;
+				/* Ignore last slash */
 				state = st_normal;
 			}
 			else if (*p == '.') {
@@ -3499,50 +3512,115 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 			}
 			else {
 				/* We have something like .some or /.some */
-				if (p > c) {
-					memcpy (o, c, p - c);
-					o += p - c;
+				if (dot && p > dot) {
+					memmove (o, dot, p - dot);
+					o += p - dot;
 				}
 
+				slash = NULL;
+				dot = NULL;
 				state = st_normal;
+				continue;
 			}
+
 			p ++;
 			break;
 		case st_got_dot_dot:
 			if (*p == '/') {
 				/* We have something like /../ or ../ */
-				if (*c == '/') {
+				if (slash) {
 					/* We need to remove the last component from o if it is there */
-					slash = rspamd_memrchr (path, '/', o - path);
+					if (o > path + 2 && *(o - 1) == '/') {
+						slash = rspamd_memrchr (path, '/', o - path - 2);
+					}
+					else if (o > path + 1) {
+						slash = rspamd_memrchr (path, '/', o - path - 1);
+					}
+					else {
+						slash = NULL;
+					}
 
 					if (slash) {
 						o = (gchar *)slash;
 					}
-					/* Otherwise we remove these dots */
-					state = st_normal;
+					/* Otherwise we keep these dots */
+					slash = p;
+					state = st_got_slash;
 				}
 				else {
 					/* We have something like bla../, so we need to copy it as is */
-					if (p > c) {
-						memcpy (o, c, p - c);
-						o += p - c;
+
+					if (slash) {
+						*o ++ = '/';
+					}
+					if (dot && p > dot) {
+						memcpy (o, dot, p - dot);
+						o += p - dot;
 					}
 
+					slash = NULL;
+					dot = NULL;
 					state = st_normal;
+					continue;
 				}
 			}
 			else {
 				/* We have something like ..bla or ... */
-				if (p > c) {
-					memcpy (o, c, p - c);
-					o += p - c;
+				if (slash) {
+					*o ++ = '/';
 				}
 
+				if (dot && p > dot) {
+					memmove (o, dot, p - dot);
+					o += p - dot;
+				}
+
+				slash = NULL;
+				dot = NULL;
 				state = st_normal;
+				continue;
 			}
+
 			p ++;
 			break;
 		}
+	}
+
+	/* Leftover */
+	switch (state) {
+	case st_got_dot_dot:
+		/* Trailing .. */
+		if (slash) {
+			/* We need to remove the last component from o if it is there */
+			if (o > path + 2 && *(o - 1) == '/') {
+				slash = rspamd_memrchr (path, '/', o - path - 2);
+			}
+			else if (o > path + 1) {
+				slash = rspamd_memrchr (path, '/', o - path - 1);
+			}
+			else {
+				if (o == path) {
+					/* Corner case */
+					*o++ = '/';
+				}
+
+				slash = NULL;
+			}
+
+			if (slash) {
+				/* Remove last / */
+				o = (gchar *)slash;
+			}
+		}
+		break;
+	case st_got_slash:
+		*o++ = '/';
+		break;
+	default:
+		if (o > path + 1 && *(o - 1) == '/') {
+			o --;
+		}
+		break;
 	}
 
 	if (nlen) {
