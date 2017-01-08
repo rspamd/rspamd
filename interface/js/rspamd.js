@@ -32,6 +32,8 @@
         var graph;
         var symbols;
         var read_only = false;
+        var neighbours = []; //list of clusters
+        var checked_server = "All SERVERS";
 
         var timer_id = [];
         var selected = []; // Keep graph selectors state
@@ -139,43 +141,14 @@
         }
         // @return password
         function getPassword() {
-            if (sessionState()) {
-                if (!supportsSessionStorage()) {
-                    return password = $.cookie('rspamdpasswd');
-                } else {
-                    return password = sessionStorage.getItem('Password');
-                }
-            }
-        }
-        // @return session state
-        function sessionState() {
-            if ((supportsSessionStorage() && (sessionStorage.getItem('Password') !== null)) ||
-                (!supportsSessionStorage() && ($.cookie('rspamdsession')) !== null)) {
-                return true;
-            } else {
-                return false;
-            }
+          return password = sessionStorage.getItem('Password');
         }
 
         // @detect session storate
         supportsSessionStorage();
         // @save credentials
-        function saveCredentials(data, password) {
-            if (!supportsSessionStorage()) {
-                $.cookie('rspamdsession', data, {
-                    expires: 1
-                }, {
-                    path: '/'
-                });
-                $.cookie('rspamdpasswd', password, {
-                    expires: 1
-                }, {
-                    path: '/'
-                });
-            } else {
-                sessionStorage.setItem('Password', password);
-                sessionStorage.setItem('Credentials', JSON.stringify(data));
-            }
+        function saveCredentials(password) {
+          sessionStorage.setItem('Password', password);
         }
         // @update credentials
         function saveActions(data) {
@@ -199,13 +172,7 @@
         }
         // @clean credentials
         function cleanCredentials() {
-            if (!supportsSessionStorage()) {
-                $.removeCookie('rspamdlogged');
-                $.removeCookie('rspamdsession');
-                $.removeCookie('rspamdpasswd');
-            } else {
-                sessionStorage.clear();
-            }
+            sessionStorage.clear();
             $('#statWidgets').empty();
             $('#listMaps').empty();
             $('#modalBody').empty();
@@ -216,14 +183,8 @@
         }
 
         function isLogged() {
-            if (!supportsSessionStorage()) {
-                if ($.cookie('rspamdpasswd') != null) {
-                    return true;
-                }
-            } else {
-                if (sessionStorage.getItem('Password') != null) {
-                    return true;
-                }
+            if (sessionStorage.getItem('Password') != null) {
+                return true;
             }
             return false;
         }
@@ -335,6 +296,7 @@
                 });
             });
         }
+
         // @ ms to date
         function msToTime(seconds) {
              years = seconds / 31536000 >> 0 // 3600*24*365
@@ -359,74 +321,175 @@
              }
              return out;
         }
+
+        function displayStatWidgets() {
+          var widgets = $('#statWidgets');
+          $(widgets).empty().hide();
+          var servers = JSON.parse(sessionStorage.getItem('Credentials'));
+
+          var data = servers[checked_server].data;
+          var stat_w = [];
+
+          $.each(data, function (i, item) {
+              var widget = '';
+              if (i == 'auth') {}
+              else if (i == 'error') {}
+              else if (i == 'version') {
+                  widget = '<div class="left"><strong>' + item + '</strong>' +
+                      i + '</div>';
+                  $(widget).appendTo(widgets);
+              } else if (i == 'uptime') {
+                  widget = '<div class="right"><strong>' + msToTime(item) +
+                      '</strong>' + i + '</div>';
+                  $(widget).appendTo(widgets);
+              } else {
+                  widget = '<li class="stat-box"><div class="widget"><strong>' +
+                      Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
+                  if (i == 'scanned') {
+                      stat_w[0] = widget;
+                  } else if (i == 'clean') {
+                      stat_w[1] = widget;
+                  } else if (i == 'greylist') {
+                      stat_w[2] = widget;
+                  } else if (i == 'probable') {
+                      stat_w[3] = widget;
+                  } else if (i == 'reject') {
+                      stat_w[4] = widget;
+                  } else if (i == 'learned') {
+                      stat_w[5] = widget;
+                  }
+              }
+          });
+          $.each(stat_w, function (i, item) {
+              $(item).appendTo(widgets);
+          });
+          $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
+          $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
+
+          $("#clusterTable tbody").empty();
+          $.each(servers, function (key, val) {
+              var glyph_status;
+              if (val.status) {glyph_status = "glyphicon glyphicon-ok-circle"} else {glyph_status = "glyphicon glyphicon-remove-circle"}
+              if (checked_server == key) {
+                $('#clusterTable tbody').append('<tr>' +
+                    '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '" checked></td>' +
+                    '<td class="col2" title="SNAme">' + key + '</td>' +
+                    '<td class="col3" title="SHost">' + val.host + '</td>' +
+                    '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                    '<td class="col5" title="SId">' + val.data.config_id + '</td></tr>');
+              } else {
+                $('#clusterTable tbody').append('<tr>' +
+                    '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
+                    '<td class="col2" title="SNAme">' + key + '</td>' +
+                    '<td class="col3" title="SHost">' + val.host + '</td>' +
+                    '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                    '<td class="col5" title="SId">' + val.data.config_id + '</td></tr>');
+
+              }
+          });
+          $(widgets).show();
+        }
         // @show widgets
         function statWidgets() {
             $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'auth',
+                dataType: "json",
+                type: "GET",
+                url: "neighbours",
                 jsonp: false,
                 beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
+                    xhr.setRequestHeader("Password", getPassword());
                 },
                 success: function (data) {
-                  if (!supportsSessionStorage()) {
-                      $.cookie('rspamdsession', data, {
-                          expires: 1
-                      }, {
-                          path: '/'
-                      });
-                      } else {
-                          sessionStorage.setItem('Credentials', JSON.stringify(data));
-                      }
-                  }
-            });
-            var widgets = $('#statWidgets');
-            $(widgets).empty().hide();
-            var data;
-            if (!supportsSessionStorage()) {
-                data = $.cookie('rspamdsession');
-            } else {
-                data = JSON.parse(sessionStorage.getItem('Credentials'));
-            }
-            var stat_w = [];
-            $.each(data, function (i, item) {
-                var widget = '';
-                if (i == 'auth') {}
-                else if (i == 'error') {}
-                else if (i == 'version') {
-                    widget = '<div class="left"><strong>' + item + '</strong>' +
-                        i + '</div>';
-                    $(widget).appendTo(widgets);
-                } else if (i == 'uptime') {
-                    widget = '<div class="right"><strong>' + msToTime(item) +
-                        '</strong>' + i + '</div>';
-                    $(widget).appendTo(widgets);
-                } else {
-                    widget = '<li class="stat-box"><div class="widget"><strong>' +
-                        Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
-                    if (i == 'scanned') {
-                        stat_w[0] = widget;
-                    } else if (i == 'clean') {
-                        stat_w[1] = widget;
-                    } else if (i == 'greylist') {
-                        stat_w[2] = widget;
-                    } else if (i == 'probable') {
-                        stat_w[3] = widget;
-                    } else if (i == 'reject') {
-                        stat_w[4] = widget;
-                    } else if (i == 'learned') {
-                        stat_w[5] = widget;
+                    if (jQuery.isEmptyObject(data)) {
+                        neighbours = { local : { host : "localhost", url : "./" }};
+                    }   else {
+                        neighbours = data;
                     }
+                    var neighbours_status = [];
+                    $.each(neighbours, function (ind) {
+                        neighbours_status.push({
+                            name: ind,
+                            url: neighbours[ind].url,
+                            host: neighbours[ind].host,
+                            checked: false,
+                            data: {},
+                            status: false
+                        });
+                    });
+                    $.each(neighbours_status, function (ind) {
+                        "use strict";
+                        $.ajax({
+                          jsonp: false,
+                          beforeSend: function (xhr) {
+                              xhr.setRequestHeader("Password", getPassword());
+                          },
+                          url: neighbours_status[ind].url + "/auth",
+                          success: function (data) {
+                              neighbours_status[ind].checked = true;
+                              if (jQuery.isEmptyObject(data)) {
+                                  neighbours_status[ind].status = false; //serv does not work
+                              } else {
+                                  neighbours_status[ind].status = true; //serv does not work
+                                  neighbours_status[ind].data = data;
+                                  if (!('config_id' in neighbours_status[ind].data)) {
+                                    neighbours_status[ind].data.config_id = "";
+                                  }
+                              }
+                              if (neighbours_status.every(function (elt) {return elt.checked;})) {
+                                  var neighbours_sum = {
+                                      version: neighbours_status[0].data.version,
+                                      auth: "ok",
+                                      uptime: 0,
+                                      clean: 0,
+                                      probable: 0,
+                                      greylist: 0,
+                                      reject: 0,
+                                      scanned: 0,
+                                      learned: 0,
+                                      read_only: neighbours_status[0].data.read_only,
+                                      config_id: ""
+                                  };
+                                  var status_count = 0;
+                                  for(var e in neighbours_status) {
+                                      if(neighbours_status[e].status == true) {
+                                          neighbours_sum.clean += neighbours_status[e].data.clean;
+                                          neighbours_sum.probable += neighbours_status[e].data.probable;
+                                          neighbours_sum.greylist += neighbours_status[e].data.greylist;
+                                          neighbours_sum.reject += neighbours_status[e].data.reject;
+                                          neighbours_sum.scanned += neighbours_status[e].data.scanned;
+                                          neighbours_sum.learned += neighbours_status[e].data.learned;
+                                          neighbours_sum.uptime += neighbours_status[e].data.uptime;
+                                          status_count++;
+                                      }
+                                  }
+                                  neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
+                                  var to_Credentials = {};
+                                  to_Credentials["All SERVERS"] = { name: "All SERVERS",
+                                                                    url: "",
+                                                                    host: "",
+                                                                    checked: true,
+                                                                    data: neighbours_sum,
+                                                                    status: true
+                                                                  }
+                                  neighbours_status.forEach(function (elmt) {
+                                      to_Credentials[elmt.name] = elmt;
+                                  });
+                                  sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
+                                  displayStatWidgets();
+                              }
+                          }
+                          //error display
+                        });
+                    });
                 }
             });
-            $.each(stat_w, function (i, item) {
-                $(item).appendTo(widgets);
-            });
-            $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
-            $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
-            $(widgets).show();
         }
+
+        $(document).on('click', 'input:radio[name="clusterName"]', function (e) {
+            checked_server = this.value;
+            statWidgets();
+        });
+
         // @opem modal with target form enabled
         $(document).on('click', '[data-toggle="modal"]', function (e) {
             var source = $(this).data('source');
@@ -1247,13 +1310,9 @@
         // @connect to server
         function connectRSPAMD() {
             if (isLogged()) {
-                var data;
-                if (!supportsSessionStorage()) {
-                    data = $.cookie('rspamdsession');
-                } else {
-                    data = JSON.parse(sessionStorage.getItem('Credentials'));
-                }
-                if (data.read_only) {
+                var data = JSON.parse(sessionStorage.getItem('Credentials'));
+
+                if (data[checked_server].read_only) {
                     read_only = true;
                     $('#learning_nav').hide();
                     $('#resetHistory').attr('disabled', true);
@@ -1308,7 +1367,7 @@
                                 $('#resetHistory').removeAttr('disabled', true);
                             }
 
-                            saveCredentials(data, password);
+                            saveCredentials(password);
                             $(dialog).hide();
                             $(backdrop).hide();
                             displayUI();
