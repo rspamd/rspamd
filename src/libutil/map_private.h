@@ -51,7 +51,7 @@ struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
-	guint64 id;
+	guint32 id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union {
 		struct file_map_data *fd;

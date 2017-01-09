@@ -849,6 +849,32 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 
 	return 0;
 }
+
+static gboolean
+rspamd_controller_can_edit_map (struct rspamd_map_backend *bk)
+{
+	gchar *fpath;
+
+	if (access (bk->uri, W_OK) == 0) {
+		return TRUE;
+	}
+	else if (access (bk->uri, R_OK) == -1 && errno == ENOENT) {
+		fpath = g_path_get_dirname (bk->uri);
+
+		if (fpath) {
+			if (access (fpath, W_OK) == 0) {
+				g_free (fpath);
+
+				return TRUE;
+			}
+
+			g_free (fpath);
+		}
+	}
+
+	return FALSE;
+}
+
 /*
  * Maps command handler:
  * request: /maps
@@ -867,9 +893,10 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	GList *cur, *tmp = NULL;
+	GList *cur;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
+	guint i;
 	gboolean editable;
 	ucl_object_t *obj, *top;
 
@@ -878,44 +905,38 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	top = ucl_object_typed_new (UCL_ARRAY);
+
 	/* Iterate over all maps */
 	cur = session->ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
-		bk = g_ptr_array_index (map->backends, 0);
 
-		if (bk->protocol == MAP_PROTO_FILE) {
-			if (access (bk->uri, R_OK) == 0) {
-				tmp = g_list_prepend (tmp, map);
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			bk = g_ptr_array_index (map->backends, 0);
+
+			if (bk->protocol == MAP_PROTO_FILE) {
+				editable = rspamd_controller_can_edit_map (bk);
+
+				if (!editable && access (bk->uri, R_OK) == -1) {
+					/* Skip unreadable and non-existing maps */
+					continue;
+				}
+
+				obj = ucl_object_typed_new (UCL_OBJECT);
+				ucl_object_insert_key (obj,	   ucl_object_fromint (bk->id),
+						"map", 0, false);
+				if (map->description) {
+					ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
+							"description", 0, false);
+				}
+				ucl_object_insert_key (obj, ucl_object_fromstring (bk->uri),
+						"uri", 0, false);
+				ucl_object_insert_key (obj,	  ucl_object_frombool (editable),
+						"editable", 0, false);
+				ucl_array_append (top, obj);
 			}
 		}
 		cur = g_list_next (cur);
-	}
-	/* Iterate over selected maps */
-	cur = tmp;
-	while (cur) {
-		map = cur->data;
-		bk = g_ptr_array_index (map->backends, 0);
-		editable = (access (bk->uri, W_OK) == 0);
-
-		obj = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (obj,	   ucl_object_fromint (map->id),
-				"map", 0, false);
-		if (map->description) {
-			ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
-					"description", 0, false);
-		}
-		ucl_object_insert_key (obj, ucl_object_fromstring (bk->uri),
-				"uri", 0, false);
-		ucl_object_insert_key (obj,	  ucl_object_frombool (editable),
-				"editable", 0, false);
-		ucl_array_append (top, obj);
-
-		cur = g_list_next (cur);
-	}
-
-	if (tmp) {
-		g_list_free (tmp);
 	}
 
 	rspamd_controller_send_ucl (conn_ent, top);
@@ -941,7 +962,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	const rspamd_ftok_t *idstr;
 	struct stat st;
 	gint fd;
-	gulong id;
+	gulong id, i;
 	gboolean found = FALSE;
 	struct rspamd_http_message *reply;
 
@@ -965,13 +986,16 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	/* Now let's be sure that we have map defined in configuration */
 	cur = session->ctx->cfg->maps;
-	while (cur) {
+	while (cur && !found) {
 		map = cur->data;
-		bk = g_ptr_array_index (map->backends, 0);
-		if (map->id == id && bk->protocol == MAP_PROTO_FILE) {
-			found = TRUE;
-			break;
+
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (bk->id == id && bk->protocol == MAP_PROTO_FILE) {
+				found = TRUE;
+				break;
+			}
 		}
+
 		cur = g_list_next (cur);
 	}
 
@@ -981,27 +1005,27 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	bk = g_ptr_array_index (map->backends, 0);
-
 	if (stat (bk->uri, &st) == -1 || (fd = open (bk->uri, O_RDONLY)) == -1) {
-		msg_err_session ("cannot open map %s: %s", bk->uri, strerror (errno));
-		rspamd_controller_send_error (conn_ent, 500, "Map open error");
-		return 0;
+		reply = rspamd_http_new_message (HTTP_RESPONSE);
+		reply->date = time (NULL);
+		reply->code = 200;
 	}
+	else {
 
-	reply = rspamd_http_new_message (HTTP_RESPONSE);
-	reply->date = time (NULL);
-	reply->code = 200;
+		reply = rspamd_http_new_message (HTTP_RESPONSE);
+		reply->date = time (NULL);
+		reply->code = 200;
 
-	if (!rspamd_http_message_set_body_from_fd (reply, fd)) {
+		if (!rspamd_http_message_set_body_from_fd (reply, fd)) {
+			close (fd);
+			rspamd_http_message_unref (reply);
+			msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
+			rspamd_controller_send_error (conn_ent, 500, "Map read error");
+			return 0;
+		}
+
 		close (fd);
-		rspamd_http_message_unref (reply);
-		msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
-		rspamd_controller_send_error (conn_ent, 500, "Map read error");
-		return 0;
 	}
-
-	close (fd);
 
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
@@ -2165,7 +2189,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_map_backend *bk;
 	struct rspamd_controller_worker_ctx *ctx;
 	const rspamd_ftok_t *idstr;
-	gulong id;
+	gulong id, i, ntries = 0;
 	gboolean found = FALSE;
 	gint fd;
 
@@ -2199,12 +2223,14 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	/* Now let's be sure that we have map defined in configuration */
 	cur = ctx->cfg->maps;
-	while (cur) {
+	while (cur && !found) {
 		map = cur->data;
-		bk = g_ptr_array_index (map->backends, 0);
-		if (map->id == id && bk->protocol == MAP_PROTO_FILE) {
-			found = TRUE;
-			break;
+
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (bk->id == id && bk->protocol == MAP_PROTO_FILE) {
+				found = TRUE;
+				break;
+			}
 		}
 		cur = g_list_next (cur);
 	}
@@ -2215,19 +2241,30 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	bk = g_ptr_array_index (map->backends, 0);
-	if (g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-		msg_info_session ("map locked: %s", bk->uri);
-		rspamd_controller_send_error (conn_ent, 404, "Map is locked");
-		return 0;
+	while (g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
+		struct timespec sleep_ts = {
+			.tv_sec = 0,
+			.tv_nsec = 100000000ULL,
+		};
+
+		if (ntries > 5) {
+			msg_info_session ("map locked: %s", bk->uri);
+			rspamd_controller_send_error (conn_ent, 404, "Map is locked");
+			return 0;
+		}
+
+		ntries ++;
+		nanosleep (&sleep_ts, NULL);
 	}
 
 	/* Set lock */
-	fd = open (bk->uri, O_WRONLY | O_TRUNC);
+	fd = open (bk->uri, O_WRONLY | O_TRUNC | O_CREAT, 00644);
+
 	if (fd == -1) {
 		g_atomic_int_set (map->locked, 0);
 		msg_info_session ("map %s open error: %s", bk->uri, strerror (errno));
-		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
+		rspamd_controller_send_error (conn_ent, 404, "Cannot open map: %s",
+				strerror (errno));
 		return 0;
 	}
 
@@ -2235,7 +2272,8 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		msg_info_session ("map %s write error: %s", bk->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
-		rspamd_controller_send_error (conn_ent, 500, "Map write error");
+		rspamd_controller_send_error (conn_ent, 500, "Map write error: %s",
+				strerror (errno));
 		return 0;
 	}
 
