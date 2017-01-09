@@ -27,8 +27,6 @@ struct surbl_ctx {
 	guint url_expire;
 	GList *suffixes;
 	gchar *metric;
-	const gchar *tld2_file;
-	const gchar *whitelist_file;
 	const gchar *redirector_symbol;
 	GHashTable **exceptions;
 	GHashTable *whitelist;

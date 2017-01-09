@@ -260,8 +260,6 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->suffixes = NULL;
 	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
-	surbl_module_ctx->tld2_file = NULL;
-	surbl_module_ctx->whitelist_file = NULL;
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
@@ -755,23 +753,16 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
-		if (rspamd_map_add_from_ucl (cfg, value,
-			"SURBL exceptions list", read_exceptions_list, fin_exceptions_list,
-			(void **)&surbl_module_ctx->exceptions)) {
-			surbl_module_ctx->tld2_file = rspamd_mempool_strdup (
-				surbl_module_ctx->surbl_pool,
-				ucl_obj_tostring (value) + sizeof ("file://") - 1);
-		}
+		rspamd_map_add_from_ucl (cfg, value,
+				"SURBL exceptions list",
+				read_exceptions_list, fin_exceptions_list,
+				(void **)&surbl_module_ctx->exceptions);
 	}
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
-		if (rspamd_map_add_from_ucl (cfg, value,
-			"SURBL whitelist", rspamd_hosts_read, rspamd_hosts_fin,
-			(void **)&surbl_module_ctx->whitelist)) {
-			surbl_module_ctx->whitelist_file = rspamd_mempool_strdup (
-				surbl_module_ctx->surbl_pool,
-				ucl_obj_tostring (value) + sizeof ("file://") - 1);
-		}
+		rspamd_map_add_from_ucl (cfg, value,
+				"SURBL whitelist", rspamd_hosts_read, rspamd_hosts_fin,
+				(void **)&surbl_module_ctx->whitelist);
 	}
 
 	value = rspamd_config_get_module_opt (cfg, "surbl", "rule");
@@ -841,8 +832,6 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 	surbl_module_ctx->suffixes = NULL;
 	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
-	surbl_module_ctx->tld2_file = NULL;
-	surbl_module_ctx->whitelist_file = NULL;
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
