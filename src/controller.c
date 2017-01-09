@@ -2615,8 +2615,6 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 		return 0;
 	}
 
-	/* Callback */
-	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->handler->idx);
 	task = rspamd_task_new (session->ctx->worker, session->cfg);
 
 	task->resolver = ctx->resolver;
@@ -2639,6 +2637,9 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 			return 0;
 		}
 	}
+
+	/* Callback */
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->handler->idx);
 
 	ptask = lua_newuserdata (L, sizeof (*ptask));
 	rspamd_lua_setclass (L, "rspamd{task}", -1);
@@ -3052,7 +3053,7 @@ static const struct luaL_reg lua_csessionlib_m[] = {
 static void
 luaopen_controller (lua_State * L)
 {
-	rspamd_lua_new_class (L, "rspamd{url}", lua_csessionlib_m);
+	rspamd_lua_new_class (L, "rspamd{csession}", lua_csessionlib_m);
 	lua_pop (L, 1);
 }
 
