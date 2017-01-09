@@ -1453,7 +1453,8 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		bk->data.hd = hdata;
 	}
 
-	bk->id = rspamd_random_uint64_fast ();
+	bk->id = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_T1HA,
+			bk->uri, strlen (bk->uri), 0xdeadbabe);
 
 	return bk;
 
