@@ -753,6 +753,72 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 	return 0;
 }
 
+static goffset
+rspamd_mime_parser_headers_heuristic (GString *input, goffset *body_start)
+{
+	const gsize default_max_len = 76;
+	gsize max_len = MIN (input->len, default_max_len);
+	const gchar *p, *end;
+	enum {
+		st_before_colon = 0,
+		st_colon,
+		st_spaces_after_colon,
+		st_value,
+		st_error
+	} state = st_before_colon;
+
+	p = input->str;
+	end = p + max_len;
+
+	while (p < end) {
+		switch (state) {
+		case st_before_colon:
+			if (G_UNLIKELY (*p == ':')) {
+				state = st_colon;
+			}
+			else if (G_UNLIKELY (!g_ascii_isgraph (*p))) {
+				state = st_error;
+			}
+
+			p ++;
+			break;
+		case st_colon:
+			if (g_ascii_isspace (*p)) {
+				state = st_spaces_after_colon;
+			}
+			else {
+				state = st_value;
+			}
+			p ++;
+			break;
+		case st_spaces_after_colon:
+			if (!g_ascii_isspace (*p)) {
+				state = st_value;
+			}
+			p ++;
+			break;
+		case st_value:
+			/* We accept any value */
+			goto end;
+			break;
+		case st_error:
+			return (-1);
+			break;
+		}
+	}
+
+end:
+	if (state == st_value) {
+		if (body_start) {
+			*body_start = input->len;
+		}
+
+		return input->len;
+	}
+
+	return (-1);
+}
+
 static void
 rspamd_mime_preprocess_message (struct rspamd_task *task,
 		struct rspamd_mime_part *top,
@@ -844,6 +910,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
+
 			task->raw_headers_content.begin = (gchar *) (str.str);
 			task->raw_headers_content.len = hdr_pos;
 			task->raw_headers_content.body_start = str.str + body_pos;
@@ -860,7 +927,29 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 					"Content-Type", FALSE);
 		}
 		else {
-			body_pos = 0;
+			/* First apply heuristic, maybe we have just headers */
+			hdr_pos = rspamd_mime_parser_headers_heuristic (&str, &body_pos);
+
+			if (hdr_pos > 0 && hdr_pos <= str.len) {
+				task->raw_headers_content.begin = (gchar *) (str.str);
+				task->raw_headers_content.len = hdr_pos;
+				task->raw_headers_content.body_start = str.str + body_pos;
+
+				if (task->raw_headers_content.len > 0) {
+					rspamd_mime_headers_process (task, task->raw_headers,
+							task->raw_headers_content.begin,
+							task->raw_headers_content.len,
+							TRUE);
+				}
+
+				hdrs = rspamd_message_get_header_from_hash (task->raw_headers,
+						task->task_pool,
+						"Content-Type", FALSE);
+				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS|RSPAMD_TASK_FLAG_EMPTY;
+			}
+			else {
+				body_pos = 0;
+			}
 		}
 
 		pbegin = st->start + body_pos;
