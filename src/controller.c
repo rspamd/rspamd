@@ -58,6 +58,7 @@
 #define PATH_COUNTERS "/counters"
 #define PATH_ERRORS "/errors"
 #define PATH_NEIGHBOURS "/neighbours"
+#define PATH_PLUGINS "/plugins"
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
@@ -185,6 +186,7 @@ struct rspamd_controller_plugin_cbdata {
 	ucl_object_t *obj;
 	gboolean is_enable;
 	gboolean need_task;
+	guint version;
 };
 
 static gboolean
@@ -1617,7 +1619,6 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 	if (lua_pcall (L, 2, 0, 0) != 0) {
 		rspamd_controller_send_error (conn_ent, 503, "Cannot run callback: %s",
 				lua_tostring (L, -1));
-		rspamd_session_destroy (task->s);
 		lua_settop (L, 0);
 
 		return 0;
@@ -2532,6 +2533,52 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static int
+rspamd_controller_handle_plugins (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_plugin_cbdata *cbd;
+	GHashTableIter it;
+	gpointer k, v;
+	ucl_object_t *plugins;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg,
+			FALSE)) {
+		return 0;
+	}
+
+	plugins = ucl_object_typed_new (UCL_OBJECT);
+	g_hash_table_iter_init (&it, session->ctx->plugins);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		ucl_object_t *elt, *npath;
+
+		cbd = v;
+		elt = (ucl_object_t *)ucl_object_lookup (plugins, cbd->plugin);
+
+		if (elt == NULL) {
+			elt = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (elt, ucl_object_fromint (cbd->version),
+					"version", 0, false);
+			npath = ucl_object_typed_new (UCL_ARRAY);
+			ucl_object_insert_key (elt, npath, "paths", 0, false);
+			ucl_object_insert_key (plugins, elt, cbd->plugin, 0, false);
+		}
+		else {
+			npath = (ucl_object_t *)ucl_object_lookup (elt, "paths");
+		}
+
+		g_assert (npath != NULL);
+		ucl_array_append (npath, ucl_object_fromstring (k));
+	}
+
+	rspamd_controller_send_ucl (conn_ent, plugins);
+	ucl_object_unref (plugins);
+
+	return 0;
+}
+
+static int
 rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
@@ -2604,7 +2651,6 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 	if (lua_pcall (L, 2, 0, 0) != 0) {
 		rspamd_controller_send_error (conn_ent, 503, "Cannot run callback: %s",
 				lua_tostring (L, -1));
-		rspamd_session_destroy (task->s);
 		lua_settop (L, 0);
 
 		return 0;
@@ -3154,6 +3200,12 @@ rspamd_controller_register_plugin_path (lua_State *L,
 	cbd->plugin = g_strdup (plugin_name);
 	cbd->obj = ucl_object_ref (webui_data);
 
+	elt = ucl_object_lookup (webui_data, "version");
+
+	if (elt) {
+		cbd->version = ucl_object_toint (elt);
+	}
+
 	elt = ucl_object_lookup (webui_data, "enable");
 
 	if (elt && !!ucl_object_toboolean (elt)) {
@@ -3367,6 +3419,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_NEIGHBOURS,
 			rspamd_controller_handle_neighbours);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_PLUGINS,
+			rspamd_controller_handle_plugins);
 	rspamd_controller_register_plugins_paths (ctx);
 
 	rspamd_regexp_t *lua_re = rspamd_regexp_new ("^/.*/.*\\.lua$", NULL, NULL);
