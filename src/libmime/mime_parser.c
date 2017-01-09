@@ -859,6 +859,9 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 					task->task_pool,
 					"Content-Type", FALSE);
 		}
+		else {
+			body_pos = 0;
+		}
 
 		pbegin = st->start + body_pos;
 		plen = st->end - pbegin;
