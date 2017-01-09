@@ -174,13 +174,9 @@ rspamd_config.R_SUSPICIOUS_URL = {
 
 rspamd_config.BROKEN_HEADERS = {
   callback = function(task)
-    if task:has_flag('broken_headers') then
-      return true
-    end
-
-    return false
+    return task:has_flag('broken_headers')
   end,
-  score = 1.0,
+  score = 10.0,
   group = 'header',
   description = 'Headers structure is likely broken'
 }
@@ -761,4 +757,3 @@ local freemail_reply_neq_from_id = rspamd_config:register_symbol({
 })
 rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_REPLYTO')
 rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
-

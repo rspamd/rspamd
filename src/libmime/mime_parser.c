@@ -945,7 +945,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 				hdrs = rspamd_message_get_header_from_hash (task->raw_headers,
 						task->task_pool,
 						"Content-Type", FALSE);
-				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS|RSPAMD_TASK_FLAG_EMPTY;
+				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 			}
 			else {
 				body_pos = 0;
