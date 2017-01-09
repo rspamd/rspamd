@@ -1453,6 +1453,8 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		bk->data.hd = hdata;
 	}
 
+	bk->id = rspamd_random_uint64_fast ();
+
 	return bk;
 
 err:
@@ -1511,7 +1513,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	map->fin_callback = fin_callback;
 	map->user_data = user_data;
 	map->cfg = cfg;
-	map->id = g_random_int ();
+	map->id = rspamd_random_uint64_fast ();
 	map->locked =
 		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->cache =
@@ -1559,7 +1561,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	map->fin_callback = fin_callback;
 	map->user_data = user_data;
 	map->cfg = cfg;
-	map->id = g_random_int ();
+	map->id = rspamd_random_uint64_fast ();
 	map->locked =
 			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->cache =
