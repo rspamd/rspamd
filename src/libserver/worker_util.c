@@ -550,11 +550,10 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);
 		if (rc != OTTERY_ERR_NONE) {
 			msg_err_main ("cannot initialize PRNG: %d", rc);
-			g_assert (0);
+			abort ();
 		}
 
 		rspamd_random_seed_fast ();
-		g_random_set_seed (ottery_rand_uint32 ());
 #ifdef HAVE_EVUTIL_RNG_INIT
 		evutil_secure_rng_init ();
 #endif

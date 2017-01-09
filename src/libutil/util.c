@@ -2096,7 +2096,6 @@ rspamd_init_libs (void)
 
 	SSL_CTX_set_options (ctx->ssl_ctx, ssl_options);
 #endif
-	g_random_set_seed (ottery_rand_uint32 ());
 	rspamd_random_seed_fast ();
 
 	/* Set stack size for pcre */

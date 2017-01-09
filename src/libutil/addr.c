@@ -159,7 +159,7 @@ rspamd_ip_check_ipv6 (void)
 			 */
 			memset (&sin6, 0, sizeof (sin6));
 			sin6.sin6_family = AF_INET6;
-			sin6.sin6_port = g_random_int_range (20000, 60000);
+			sin6.sin6_port = rspamd_random_uint64_fast () % 40000 + 20000;
 			sin6.sin6_addr = ip6_local;
 
 			r = bind (s, (struct sockaddr *)&sin6, sizeof (sin6));
