@@ -499,6 +499,13 @@ LUA_FUNCTION_DEF (config, add_periodic);
 LUA_FUNCTION_DEF (config, get_symbols_count);
 
 /***
+ * @method rspamd_config:get_symbols_cksum()
+ * Returns checksum for all symbols in the cache
+ * @return {int64} boxed value of the 64 bit checksum
+ */
+LUA_FUNCTION_DEF (config, get_symbols_cksum);
+
+/***
  * @method rspamd_config:get_symbol_callback(name)
  * Returns callback function for the specified symbol if it is a lua registered callback
  * @return {function} callback function or nil
@@ -584,6 +591,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_on_load),
 	LUA_INTERFACE_DEF (config, add_periodic),
 	LUA_INTERFACE_DEF (config, get_symbols_count),
+	LUA_INTERFACE_DEF (config, get_symbols_cksum),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, register_finish_script),
@@ -2167,6 +2175,26 @@ lua_config_get_symbols_count (lua_State *L)
 	}
 
 	lua_pushnumber (L, res);
+
+	return 1;
+}
+
+static gint
+lua_config_get_symbols_cksum (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	guint64 res = 0, *pres;
+
+	if (cfg != NULL) {
+		res = rspamd_symbols_cache_get_cksum (cfg->cache);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	pres = lua_newuserdata (L, sizeof (res));
+	*pres = res;
+	rspamd_lua_setclass (L, "rspamd{int64}", -1);
 
 	return 1;
 }

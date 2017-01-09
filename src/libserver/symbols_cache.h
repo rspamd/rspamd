@@ -261,4 +261,11 @@ gboolean rspamd_symbols_cache_process_settings (struct rspamd_task *task,
  */
 gboolean rspamd_symbols_cache_is_checked (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol);
+
+/**
+ * Returns checksum for all cache items
+ * @param cache
+ * @return
+ */
+guint64 rspamd_symbols_cache_get_cksum (struct symbols_cache *cache);
 #endif
