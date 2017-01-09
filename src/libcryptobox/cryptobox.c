@@ -1534,6 +1534,8 @@ rspamd_cryptobox_fast_hash_specific (
 		return XXH64 (data, len, seed);
 	case RSPAMD_CRYPTOBOX_MUMHASH:
 		return mum_hash (data, len, seed);
+	case RSPAMD_CRYPTOBOX_T1HA:
+		return t1ha (data, len, seed);
 	case RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT:
 		return rspamd_cryptobox_fast_hash_indep (data, len, seed);
 	case RSPAMD_CRYPTOBOX_HASHFAST:
