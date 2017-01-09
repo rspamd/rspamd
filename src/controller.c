@@ -912,7 +912,6 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		map = cur->data;
 
 		PTR_ARRAY_FOREACH (map->backends, i, bk) {
-			bk = g_ptr_array_index (map->backends, 0);
 
 			if (bk->protocol == MAP_PROTO_FILE) {
 				editable = rspamd_controller_can_edit_map (bk);
