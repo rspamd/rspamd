@@ -380,14 +380,14 @@
                     '<td class="col2" title="SNAme">' + key + '</td>' +
                     '<td class="col3" title="SHost">' + val.host + '</td>' +
                     '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                    '<td class="col5" title="SId">' + val.data.config_id + '</td></tr>');
+                    '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
               } else {
                 $('#clusterTable tbody').append('<tr>' +
                     '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
                     '<td class="col2" title="SNAme">' + key + '</td>' +
                     '<td class="col3" title="SHost">' + val.host + '</td>' +
                     '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                    '<td class="col5" title="SId">' + val.data.config_id + '</td></tr>');
+                    '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
 
               }
           });
