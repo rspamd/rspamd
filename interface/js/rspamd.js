@@ -351,7 +351,12 @@
           $("#clusterTable tbody").empty();
           $.each(servers, function (key, val) {
               var glyph_status;
-              if (val.status) {glyph_status = "glyphicon glyphicon-ok-circle"} else {glyph_status = "glyphicon glyphicon-remove-circle"}
+              if (val.status) {
+                  glyph_status = "glyphicon glyphicon-ok-circle";
+              }
+              else {
+                  glyph_status = "glyphicon glyphicon-remove-circle";
+              }
               if (checked_server == key) {
                 $('#clusterTable tbody').append('<tr>' +
                     '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '" checked></td>' +
@@ -360,12 +365,22 @@
                     '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
                     '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
               } else {
-                $('#clusterTable tbody').append('<tr>' +
-                    '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
-                    '<td class="col2" title="SNAme">' + key + '</td>' +
-                    '<td class="col3" title="SHost">' + val.host + '</td>' +
-                    '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                    '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
+                if (val.status) {
+                    $('#clusterTable tbody').append('<tr>' +
+                        '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
+                        '<td class="col2" title="SNAme">' + key + '</td>' +
+                        '<td class="col3" title="SHost">' + val.host + '</td>' +
+                        '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                        '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
+                }
+                else {
+                    $('#clusterTable tbody').append('<tr>' +
+                            '<td class="col1" title="Radio"><input type="radio" class="form-control radio disabled" disabled="disabled" name="clusterName" value="' + key + '"></td>' +
+                            '<td class="col2" title="SNAme">' + key + '</td>' +
+                            '<td class="col3" title="SHost">' + val.host + '</td>' +
+                            '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
+                            '<td class="col5" title="SId">???</td></tr>');
+                }
 
               }
           });
@@ -498,9 +513,11 @@
         }
 
         $(document).on('click', 'input:radio[name="clusterName"]', function (e) {
-            checked_server = this.value;
-            statWidgets();
-            getChart();
+            if (!this.disabled) {
+                checked_server = this.value;
+                statWidgets();
+                getChart();
+            }
         });
 
         // @opem modal with target form enabled
