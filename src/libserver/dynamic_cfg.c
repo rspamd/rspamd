@@ -346,15 +346,21 @@ dynamic_metric_find_elt (const ucl_object_t *arr, const gchar *name)
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *n;
 
-	while ((cur = ucl_object_iterate (arr, &it, true)) != NULL) {
+	it = ucl_object_iterate_new (arr);
+
+	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 		if (cur->type == UCL_OBJECT) {
 			n = ucl_object_lookup (cur, "name");
 			if (n && n->type == UCL_STRING &&
 				strcmp (name, ucl_object_tostring (n)) == 0) {
+				ucl_object_iterate_free (it);
+
 				return (ucl_object_t *)ucl_object_lookup (cur, "value");
 			}
 		}
 	}
+
+	ucl_object_iterate_free (it);
 
 	return NULL;
 }
@@ -365,15 +371,21 @@ dynamic_metric_find_metric (const ucl_object_t *arr, const gchar *metric)
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *n;
 
-	while ((cur = ucl_object_iterate (arr, &it, true)) != NULL) {
+	it = ucl_object_iterate_new (arr);
+
+	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 		if (cur->type == UCL_OBJECT) {
 			n = ucl_object_lookup (cur, "metric");
 			if (n && n->type == UCL_STRING &&
 				strcmp (metric, ucl_object_tostring (n)) == 0) {
+				ucl_object_iterate_free (it);
+
 				return (ucl_object_t *)cur;
 			}
 		}
 	}
+
+	ucl_object_iterate_free (it);
 
 	return NULL;
 }

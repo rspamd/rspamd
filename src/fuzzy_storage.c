@@ -1985,7 +1985,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
 		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			if (!fuzzy_parse_keypair (pool, cur, pd, section, err)) {
-				return FALSE;
+				msg_err_pool ("cannot parse keypair");
 			}
 		}
 	}

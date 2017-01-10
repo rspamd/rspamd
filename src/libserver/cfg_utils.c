@@ -1698,7 +1698,9 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			break;
 		case UCL_ARRAY:
 			/* List of IP addresses */
-			while ((cur = ucl_iterate_object (cur_elt, &it, true)) != NULL) {
+			it = ucl_object_iterate_new (cur_elt);
+
+			while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 				str = ucl_object_tostring (cur);
 
 				if (str == NULL || !radix_add_generic_iplist (str, target, TRUE)) {
@@ -1710,9 +1712,13 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 						radix_destroy_compressed (*target);
 					}
 
+					ucl_object_iterate_free (it);
+
 					return FALSE;
 				}
 			}
+
+			ucl_object_iterate_free (it);
 			break;
 		default:
 			g_set_error (err, g_quark_from_static_string ("rspamd-config"),

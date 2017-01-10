@@ -1628,7 +1628,9 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 
 		if (ucl_object_type (elt) == UCL_ARRAY) {
 			/* Add array of maps as multiple backends */
-			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+			it = ucl_object_iterate_new (elt);
+
+			while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 				if (ucl_object_type (cur) == UCL_STRING) {
 					bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
 
@@ -1643,9 +1645,12 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 				else {
 					msg_err_config ("bad map element type: %s",
 							ucl_object_type_to_string (ucl_object_type (cur)));
+					ucl_object_iterate_free (it);
 					goto err;
 				}
 			}
+
+			ucl_object_iterate_free (it);
 
 			if (map->backends->len == 0) {
 				msg_err_config ("map has no urls to be loaded: empty object list");

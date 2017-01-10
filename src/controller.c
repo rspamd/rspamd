@@ -2001,8 +2001,10 @@ rspamd_controller_handle_saveactions (
 		return 0;
 	}
 
+	it = ucl_object_iterate_new (obj);
+
 	for (i = 0; i < 3; i++) {
-		cur = ucl_object_iterate (obj, &it, TRUE);
+		cur = ucl_object_iterate_safe (it, TRUE);
 		if (cur == NULL) {
 			break;
 		}
@@ -2028,6 +2030,8 @@ rspamd_controller_handle_saveactions (
 			}
 		}
 	}
+
+	ucl_object_iterate_free (it);
 
 	if (dump_dynamic_config (ctx->cfg)) {
 		msg_info_session ("<%s> modified %d actions",
@@ -2111,11 +2115,15 @@ rspamd_controller_handle_savesymbols (
 		return 0;
 	}
 
-	while ((cur = ucl_object_iterate (obj, &iter, true))) {
+	iter = ucl_object_iterate_new (obj);
+
+	while ((cur = ucl_object_iterate_safe (iter, true))) {
 		if (cur->type != UCL_OBJECT) {
 			msg_err_session ("json array data error");
 			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 			ucl_object_unref (obj);
+			ucl_object_iterate_free (iter);
+
 			return 0;
 		}
 
@@ -2132,6 +2140,8 @@ rspamd_controller_handle_savesymbols (
 				rspamd_controller_send_error (conn_ent, 506,
 					"Add symbol failed");
 				ucl_object_unref (obj);
+				ucl_object_iterate_free (iter);
+
 				return 0;
 			}
 			added ++;
@@ -2143,6 +2153,8 @@ rspamd_controller_handle_savesymbols (
 			}
 		}
 	}
+
+	ucl_object_iterate_free (iter);
 
 	if (added > 0) {
 		if (ctx->cfg->dynamic_conf) {

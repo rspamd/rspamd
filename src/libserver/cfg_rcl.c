@@ -420,14 +420,15 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct metric_actions_cbdata *cbdata = ud;
 	gint action_value;
 	const ucl_object_t *cur;
-	ucl_object_iter_t it = NULL;
+	ucl_object_iter_t it;
 	struct rspamd_metric *metric;
 	struct rspamd_config *cfg;
 
 	metric = cbdata->metric;
 	cfg = cbdata->cfg;
+	it = ucl_object_iterate_new (obj);
 
-	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
 				!ucl_object_todouble_safe (cur, &action_score)) {
 			g_set_error (err,
@@ -435,6 +436,8 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					EINVAL,
 					"invalid action definition: '%s'",
 					ucl_object_key (cur));
+			ucl_object_iterate_free (it);
+
 			return FALSE;
 		}
 		else {
@@ -443,6 +446,8 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					ucl_object_get_priority (cur));
 		}
 	}
+
+	ucl_object_iterate_free (it);
 
 	return TRUE;
 }
@@ -604,6 +609,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	/* This name is more logical */
 	if (val != NULL) {
 		it = ucl_object_iterate_new (val);
+
 		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
@@ -618,6 +624,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				return FALSE;
 			}
 		}
+
 		ucl_object_iterate_free (it);
 	}
 
@@ -632,8 +639,9 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	wparser = g_hash_table_lookup (cfg->wrk_parsers, &qtype);
 
 	if (wparser != NULL && obj->type == UCL_OBJECT) {
-		it = NULL;
-		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+		it = ucl_object_iterate_new (obj);
+
+		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 			srch.name = ucl_object_key (cur);
 			srch.ptr = wrk->ctx; /* XXX: is it valid? */
 			whandler = g_hash_table_lookup (wparser->parsers, &srch);
@@ -646,6 +654,8 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 							&whandler->parser,
 							section,
 							err)) {
+
+						ucl_object_iterate_free (it);
 						return FALSE;
 					}
 
@@ -655,6 +665,9 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				}
 			}
 		}
+
+		ucl_object_iterate_free (it);
+
 		if (wparser->def_obj_parser != NULL) {
 			robj = ucl_object_ref (obj);
 
@@ -1244,8 +1257,11 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 			ccf->name = ccf->classifier;
 		}
 
-		while ((val = ucl_object_iterate (obj, &it, true)) != NULL && res) {
+		it = ucl_object_iterate_new (obj);
+
+		while ((val = ucl_object_iterate_safe (it, true)) != NULL && res) {
 			st_key = ucl_object_key (val);
+
 			if (st_key != NULL) {
 				if (g_ascii_strcasecmp (st_key, "statfile") == 0) {
 					LL_FOREACH (val, cur) {
@@ -1255,6 +1271,8 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 								cur, cfg->cfg_pool, err);
 
 						if (!res) {
+							ucl_object_iterate_free (it);
+
 							return FALSE;
 						}
 					}
@@ -1282,6 +1300,8 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 				}
 			}
 		}
+
+		ucl_object_iterate_free (it);
 	}
 	else {
 		msg_err_config ("fatal configuration error, cannot parse statfile definition");
@@ -1493,12 +1513,17 @@ rspamd_rcl_composites_handler (rspamd_mempool_t *pool,
 	const ucl_object_t *cur;
 	gboolean success = TRUE;
 
-	while ((cur = ucl_iterate_object (obj, &it, true))) {
-		success = rspamd_rcl_composite_handler(pool, cur, ucl_object_key(cur), ud, section, err);
+	it = ucl_object_iterate_new (obj);
+
+	while ((cur = ucl_object_iterate_safe (it, true))) {
+		success = rspamd_rcl_composite_handler(pool, cur,
+				ucl_object_key(cur), ud, section, err);
 		if (!success) {
 			break;
 		}
 	}
+
+	ucl_object_iterate_free (it);
 
 	return success;
 }
@@ -2487,15 +2512,17 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 	g_assert (obj != NULL);
 	g_assert (sec->handler != NULL);
 
-	it = NULL;
-
 	if (sec->key_attr != NULL) {
-		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+		it = ucl_object_iterate_new (obj);
+
+		while ((cur = ucl_object_iterate_full (it, UCL_ITERATE_EXPLICIT)) != NULL) {
 			if (ucl_object_type (cur) != UCL_OBJECT) {
 				is_nested = FALSE;
 				break;
 			}
 		}
+
+		ucl_object_iterate_free (it);
 	}
 	else {
 		is_nested = FALSE;
@@ -2503,13 +2530,17 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 
 	if (is_nested) {
 		/* Just reiterate on all subobjects */
-		it = NULL;
+		it = ucl_object_iterate_new (obj);
 
-		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate_full (it, UCL_ITERATE_EXPLICIT)) != NULL) {
 			if (!sec->handler (pool, cur, ucl_object_key (cur), ptr, sec, err)) {
+				ucl_object_iterate_free (it);
+
 				return FALSE;
 			}
 		}
+
+		ucl_object_iterate_free (it);
 
 		return TRUE;
 	}
@@ -2521,8 +2552,10 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 			if (cur == NULL) {
 				if (sec->default_key == NULL) {
 					g_set_error (err, CFG_RCL_ERROR, EINVAL, "required attribute "
-							"'%s' is missing for section '%s'", sec->key_attr,
-							sec->name);
+							"'%s' is missing for section '%s', current key: %s",
+							sec->key_attr,
+							sec->name,
+							ucl_object_emit (obj, UCL_EMIT_CONFIG));
 					return FALSE;
 				}
 				else {
@@ -3054,11 +3087,15 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 					EINVAL,
 					"cannot convert an object or array to string: %s",
 					ucl_object_key (obj));
+			ucl_object_iterate_free (iter);
+
 			return FALSE;
 		}
 
 		rspamd_rcl_insert_string_list_item (target, pool, val, is_hash);
 	}
+
+	ucl_object_iterate_free (iter);
 
 	if (*target == NULL) {
 		g_set_error (err,
