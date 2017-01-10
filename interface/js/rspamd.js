@@ -492,6 +492,7 @@
         $(document).on('click', 'input:radio[name="clusterName"]', function (e) {
             checked_server = this.value;
             statWidgets();
+            getChart();
         });
 
         // @opem modal with target form enabled
@@ -516,21 +517,32 @@
             $('#modalBody form').hide();
         });
 
-        function getChart() {
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'pie',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (data) {
-                    pie = drawPie(pie, "chart", data);
-                }
-            });
-        }
+//        function getChart() {
+//            $.ajax({
+//                dataType: 'json',
+//                type: 'GET',
+//                url: 'pie',
+//                jsonp: false,
+//                beforeSend: function (xhr) {
+//                    xhr.setRequestHeader('Password', getPassword());
+//                },
+//                success: function (data) {
+//                	console.log(data);
+//                    pie = drawPie(pie, "chart", data);
+//                }
+//            });
+//        }
 
+        function getChart() {
+        	var data = JSON.parse(sessionStorage.getItem('Credentials'))[checked_server].data;
+        	var new_data = [{"color":"#66cc00","label":"Clean","data":data.clean,"value":data.clean},
+        	            {"color":"#cc9966","label":"Temporary rejected","data":data.learned,"value":data.learned},
+        	            {"color":"#FFD700","label":"Probable spam","data":data.probable,"value":data.probable},
+        	            {"color":"#436EEE","label":"Greylisted","data":data.greylist,"value":data.greylist},
+        	            {"color":"#FF0000","label":"Rejected","data":data.rejected,"value":data.rejected}];
+            pie = drawPie(pie, "chart", new_data);
+        }
+        
         function drawPie(obj, id, data, conf) {
             if (obj) {
                 obj.updateProp("data.content",
