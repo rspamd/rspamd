@@ -1465,7 +1465,6 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	struct timeval rot_tv;
 
 	ctx->cfg = worker->srv->cfg;
-	REF_RETAIN (ctx->cfg);
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket,
 			TRUE);

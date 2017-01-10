@@ -112,7 +112,9 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 			}
 		}
 
-		g_queue_unlink (conn->elt->active, conn->entry);
+		if (conn->entry) {
+			g_queue_unlink (conn->elt->active, conn->entry);
+		}
 	}
 	else {
 		msg_debug_rpool ("inactive connection removed");
@@ -132,7 +134,9 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 			redisAsyncFree (ac);
 		}
 
-		g_queue_unlink (conn->elt->inactive, conn->entry);
+		if (conn->entry) {
+			g_queue_unlink (conn->elt->inactive, conn->entry);
+		}
 	}
 
 
@@ -149,11 +153,13 @@ rspamd_redis_pool_elt_dtor (gpointer p)
 
 	for (cur = elt->active->head; cur != NULL; cur = g_list_next (cur)) {
 		c = cur->data;
+		c->entry = NULL;
 		REF_RELEASE (c);
 	}
 
 	for (cur = elt->inactive->head; cur != NULL; cur = g_list_next (cur)) {
 		c = cur->data;
+		c->entry = NULL;
 		REF_RELEASE (c);
 	}
 

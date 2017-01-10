@@ -161,7 +161,6 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	stat_ctx->classifiers = g_ptr_array_new ();
 	stat_ctx->async_elts = g_queue_new ();
 	stat_ctx->ev_base = ev_base;
-	REF_RETAIN (stat_ctx->cfg);
 
 	/* Create statfiles from the classifiers */
 	cur = cfg->classifiers;
@@ -336,7 +335,6 @@ rspamd_stat_close (void)
 	g_queue_free (stat_ctx->async_elts);
 	g_ptr_array_free (st_ctx->statfiles, TRUE);
 	g_ptr_array_free (st_ctx->classifiers, TRUE);
-	REF_RELEASE (stat_ctx->cfg);
 	g_slice_free1 (sizeof (*st_ctx), st_ctx);
 
 	/* Set global var to NULL */

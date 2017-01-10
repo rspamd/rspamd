@@ -128,7 +128,8 @@ rspamd_config_new (void)
 	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->metrics_symbols = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
+			NULL, (GDestroyNotify)g_list_free);
 	cfg->debug_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->explicit_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->wrk_parsers = g_hash_table_new (g_int_hash, g_int_equal);
@@ -191,6 +192,29 @@ rspamd_config_free (struct rspamd_config *cfg)
 	struct rspamd_config_post_load_script *sc, *sctmp;
 
 	rspamd_map_remove_all (cfg);
+
+	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
+		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		g_slice_free1 (sizeof (*sc), sc);
+	}
+
+	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
+		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		g_slice_free1 (sizeof (*sc), sc);
+	}
+
+	if (cfg->monitored_ctx) {
+		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
+	}
+
+	g_list_free (cfg->classifiers);
+	g_list_free (cfg->metrics_list);
+	rspamd_symbols_cache_destroy (cfg->cache);
+#ifdef WITH_HIREDIS
+	if (cfg->redis_pool) {
+		rspamd_redis_pool_destroy (cfg->redis_pool);
+	}
+#endif
 	ucl_object_unref (cfg->rcl_obj);
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
@@ -213,28 +237,11 @@ rspamd_config_free (struct rspamd_config *cfg)
 		g_free (cfg->checksum);
 	}
 
-	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
-		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		g_slice_free1 (sizeof (*sc), sc);
-	}
-
-	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
-		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		g_slice_free1 (sizeof (*sc), sc);
-	}
-
-	if (cfg->monitored_ctx) {
-		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
-	}
-
-	g_list_free (cfg->classifiers);
-	g_list_free (cfg->metrics_list);
-	rspamd_symbols_cache_destroy (cfg->cache);
-	REF_RELEASE (cfg->libs_ctx);
 	rspamd_re_cache_unref (cfg->re_cache);
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
 	lua_close (cfg->lua_state);
+	REF_RELEASE (cfg->libs_ctx);
 	g_slice_free1 (sizeof (*cfg), cfg);
 }
 
@@ -1210,7 +1217,6 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 		data->prev_data;
 	ucl_object_t *obj;
 	struct ucl_parser *parser;
-	guint32 checksum;
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
 	struct rspamd_config *cfg = data->map->cfg;
@@ -1227,7 +1233,6 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 		return;
 	}
 
-	checksum = rspamd_cryptobox_fast_hash (cbdata->buf->str, cbdata->buf->len, 0);
 	/* New data available */
 	parser = ucl_parser_new (0);
 	if (!ucl_parser_add_chunk (parser, cbdata->buf->str,
@@ -1398,9 +1403,6 @@ rspamd_config_new_metric_symbol (struct rspamd_config *cfg,
 	if ((metric_list =
 			g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
 		metric_list = g_list_prepend (NULL, metric);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-				(rspamd_mempool_destruct_t)g_list_free,
-				metric_list);
 		g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
 	}
 	else {

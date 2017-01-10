@@ -268,7 +268,6 @@ start_hs_helper (struct rspamd_worker *worker)
 	double tim;
 
 	ctx->cfg = worker->srv->cfg;
-	REF_RETAIN (ctx->cfg);
 
 	if (ctx->hs_dir == NULL) {
 		ctx->hs_dir = ctx->cfg->hs_cache_dir;

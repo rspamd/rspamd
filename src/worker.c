@@ -82,6 +82,7 @@ rspamd_worker_finalize (gpointer user_data)
 
 	msg_info_task ("finishing actions has been processed, terminating");
 	event_base_loopexit (task->ev_base, &tv);
+	rspamd_session_destroy (task->s);
 
 	return TRUE;
 }
@@ -111,6 +112,8 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 		}
 
 		if (rspamd_session_pending (task->s)) {
+			rspamd_session_destroy (task->s);
+
 			return TRUE;
 		}
 	}
@@ -599,7 +602,6 @@ start_worker (struct rspamd_worker *worker)
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
 	ctx->cfg = worker->srv->cfg;
-	REF_RETAIN (ctx->cfg);
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket, TRUE);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);

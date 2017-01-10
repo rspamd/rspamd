@@ -188,7 +188,6 @@ start_log_helper (struct rspamd_worker *worker)
 			NULL,
 			TRUE);
 	ctx->cfg = worker->srv->cfg;
-	REF_RETAIN (ctx->cfg);
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
