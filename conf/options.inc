@@ -14,8 +14,7 @@ dns {
     retransmits = 5;
 }
 tempdir = "/tmp";
-url_tld = ["${PLUGINSDIR}/effective_tld_names.dat",
-		   "${DBDIR}/effective_tld_names.dat.local"];
+url_tld = "${PLUGINSDIR}/effective_tld_names.dat";
 classify_headers = [
 	"User-Agent",
 	"X-Mailer",
