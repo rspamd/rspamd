@@ -37,11 +37,11 @@
         var checked_server = "All SERVERS";
 
         var timer_id = [];
-        var selected = []; // Keep graph selectors state
+        var selData; // Graph's dataset selector state
 
         // Bind event handlers to selectors
         $("#selData").change(function () {
-            selected.selData = this.value;
+            selData = this.value;
             tabClick("#throughput_nav");
         });
         $("#selConvert").change(function () {
@@ -107,13 +107,13 @@
                     getChart();
                     break;
                 case "#throughput_nav":
-                    getGraphData(selected.selData);
+                    getGraphData(selData);
                     const autoRefresh = {
                         hourly: 60000,
                         daily: 300000
                     };
-                    timer_id.throughput = Visibility.every(autoRefresh[selected.selData] || 3600000, function () {
-                        getGraphData(selected.selData);
+                    timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
+                        getGraphData(selData);
                     });
                     break;
                 case "#configuration_nav":
@@ -654,10 +654,6 @@
             height: 370,
             yAxisLabel: "Message rate, msg/s",
 
-            type: selected.selType,
-            interpolate: selected.selInterpolate,
-            convert: selected.selConvert,
-
             legend: {
                 space: 140,
                 entries: [{
@@ -684,13 +680,18 @@
 
         function initGraph() {
             // Get selectors' current state
-            var selIds = ["selData", "selConvert", "selType", "selInterpolate"];
-            selIds.forEach(function (id) {
+            function getSelector(id) {
                 var e = document.getElementById(id);
-                selected[id] = e.options[e.selectedIndex].value;
-            });
+                return e.options[e.selectedIndex].value;
+            }
 
-            graph = new D3Evolution("graph", graph_options);
+            selData = getSelector("selData");
+
+            graph = new D3Evolution("graph", $.extend({}, graph_options, {
+                type:        getSelector("selType"),
+                interpolate: getSelector("selInterpolate"),
+                convert:     getSelector("selConvert"),
+            }));
         }
 
         function getRrdSummary(json) {
