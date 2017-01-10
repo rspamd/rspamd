@@ -18,24 +18,21 @@ After some amount of such iterations (`10` by default), the training process rem
 
 First of all, you need a special worker called `log_helper` to accept rspamd scan results. This logger has a trivial setup:
 
+`/etc/rspamd/rspamd.conf.local`:
+
 ~~~ucl
 worker "log_helper" {
   count = 1;
 }
 ~~~
 
-Then you'd need to setup fann plugin:
+Make sure at least one Redis server is [specified]({{ site.baseurl }}/doc/configuration/redis.html) in common `redis` section. Alternatively, you can define Redis server in the module configuration:
+
+`local.d/fann_redis.conf`:
 
 ~~~ucl
 fann_redis {
-  servers = 127.0.0.1:6379; # Redis server to store learning data and ANN
-  train {
-    max_train = 10k; # Number of trains per epoch
-    max_usages = 10; # Number of learn iterations while ANN data is valid
-    spam_score = 8; # Score to learn spam
-    ham_score = -2; # Score to learn ham
-  }
-  use_settings = false; # If enabled, then settings-id could switch this module to another FANN
+  servers = "localhost";
 }
 ~~~
 
