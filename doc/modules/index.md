@@ -84,5 +84,6 @@ of maps.
 - [ratelimit](ratelimit.html) - implements leaked bucket algorithm for ratelimiting and
 uses `redis` to store data.
 - [replies](replies.html) - checks if an incoming message is a reply for our own message
+- [rmilter_headers](rmilter_headers.html) - adds/removes headers from messages
 - [spamassassin](spamassassin.html) - load spamassassin rules
 - [trie](trie.html) - uses suffix trie for extra-fast patterns lookup in messages.
