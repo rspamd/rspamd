@@ -245,7 +245,7 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 			/* Additionally check sanity */
 			cte = rspamd_mime_part_get_cte_heuristic (task, part);
 
-			if (cte != part->cte) {
+			if (cte == RSPAMD_CTE_8BIT) {
 				msg_info_task ("incorrect cte specified for part: %s, %s detected",
 						rspamd_cte_to_string (part->cte),
 						rspamd_cte_to_string (cte));
