@@ -85,8 +85,8 @@
 
   }
   action TZ_Offset_End {
-    if (p > tmp + 1) {
-      rspamd_strtoul (tmp + 1, p - tmp, (gulong *)&tz);
+    if (p > tmp) {
+      rspamd_strtoul (tmp, p - tmp, (gulong *)&tz);
 
       if (*(tmp - 1) == '-') {
         tz = -(tz);
