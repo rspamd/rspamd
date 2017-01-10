@@ -70,6 +70,7 @@ Additionally, the following Lua modules are shipped with rspamd:
 - [antivirus](antivirus.html) - integrates virus scanners
 - [clickhouse](clickhouse.html) - pushes scan-related information to clickhouse DBMS
 - [dcc](dcc.html) - performs [DCC](http://www.dcc-servers.net/dcc/) lookups to determine message bulkiness
+- [dkim_signing](dkim_signing.html) - adds DKIM signatures to messages
 - [emails](emails.html) - extract emails from a message and checks it against DNS
 blacklists.
 - [greylisting](greylisting.html) - allows to delay suspicious messages
