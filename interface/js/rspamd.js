@@ -2,7 +2,7 @@
  The MIT License (MIT)
 
  Copyright (C) 2012-2013 Anton Simonov <untone@gmail.com>
- Copyright (C) 2014-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+ Copyright (C) 2014-2017 Vsevolod Stakhov <vsevolod@highsecure.ru>
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,6 @@
 (function () {
     $(document).ready(function () {
         // begin
-        //$.cookie.json = true;
         var pie;
         var rrd_pie;
         var history;
@@ -156,23 +155,11 @@
         }
         // @update credentials
         function saveActions(data) {
-            if (!supportsSessionStorage()) {
-                $.cookie('rspamdactions', data);
-            } else {
-                sessionStorage.setItem('Actions', JSON.stringify(data));
-            }
+            sessionStorage.setItem('Actions', JSON.stringify(data));
         }
         // @update credentials
         function saveMaps(data) {
-            if (!supportsSessionStorage()) {
-                $.cookie('rspamdmaps', data, {
-                    expires: 1
-                }, {
-                    path: '/'
-                });
-            } else {
-                sessionStorage.setItem('Maps', JSON.stringify(data));
-            }
+            sessionStorage.setItem('Maps', JSON.stringify(data));
         }
         // @clean credentials
         function cleanCredentials() {
@@ -187,7 +174,7 @@
         }
 
         function isLogged() {
-            if (sessionStorage.getItem('Password') != null) {
+            if (sessionStorage.getItem('Credentials') != null) {
                 return true;
             }
             return false;
@@ -258,20 +245,8 @@
         }
         // @get map by id
         function getMapById(mode) {
-            var data;
-            if (!supportsSessionStorage()) {
-                data = $.cookie('rspamdmaps', data, {
-                    expires: 1
-                }, {
-                    path: '/'
-                });
-            } else {
-                data = JSON.parse(sessionStorage.getItem('Maps'));
-            }
-            if (mode === 'update') {
-                $('#modalBody').empty();
-                getMaps();
-            }
+            var data = JSON.parse(sessionStorage.getItem('Maps'));
+            $('#modalBody').empty();
 
             $.each(data, function (i, item) {
                 $.ajax({
@@ -331,7 +306,10 @@
           $(widgets).empty().hide();
           var servers = JSON.parse(sessionStorage.getItem('Credentials'));
 
-          var data = servers[checked_server].data;
+          var data = {}
+          if (servers && servers[checked_server]) {
+              data = servers[checked_server].data;
+          }
           var stat_w = [];
 
           $.each(data, function (i, item) {
@@ -393,8 +371,11 @@
           });
           $(widgets).show();
         }
-        // @show widgets
-        function statWidgets() {
+
+        // Query neighbours and call the specified function at the end,
+        // Data received will be pushed inside object:
+        // {server1: data, server2: data} and passed to a callback
+        function queryNeighbours(req_url, on_success, on_error) {
             $.ajax({
                 dataType: "json",
                 type: "GET",
@@ -405,7 +386,12 @@
                 },
                 success: function (data) {
                     if (jQuery.isEmptyObject(data)) {
-                        neighbours = { local : { host : "localhost", url : "./" }};
+                        neighbours = {
+                                local:  {
+                                    host: window.location.host,
+                                    url: window.location.path
+                                }
+                        };
                     }   else {
                         neighbours = data;
                     }
@@ -423,69 +409,91 @@
                     $.each(neighbours_status, function (ind) {
                         "use strict";
                         $.ajax({
-                          jsonp: false,
-                          beforeSend: function (xhr) {
-                              xhr.setRequestHeader("Password", getPassword());
-                          },
-                          url: neighbours_status[ind].url + "/auth",
-                          success: function (data) {
-                              neighbours_status[ind].checked = true;
-                              if (jQuery.isEmptyObject(data)) {
-                                  neighbours_status[ind].status = false; //serv does not work
-                              } else {
-                                  neighbours_status[ind].status = true; //serv does not work
-                                  neighbours_status[ind].data = data;
-                                  if (!('config_id' in neighbours_status[ind].data)) {
-                                    neighbours_status[ind].data.config_id = "";
-                                  }
-                              }
-                              if (neighbours_status.every(function (elt) {return elt.checked;})) {
-                                  var neighbours_sum = {
-                                      version: neighbours_status[0].data.version,
-                                      auth: "ok",
-                                      uptime: 0,
-                                      clean: 0,
-                                      probable: 0,
-                                      greylist: 0,
-                                      reject: 0,
-                                      scanned: 0,
-                                      learned: 0,
-                                      read_only: neighbours_status[0].data.read_only,
-                                      config_id: ""
-                                  };
-                                  var status_count = 0;
-                                  for(var e in neighbours_status) {
-                                      if(neighbours_status[e].status == true) {
-                                          neighbours_sum.clean += neighbours_status[e].data.clean;
-                                          neighbours_sum.probable += neighbours_status[e].data.probable;
-                                          neighbours_sum.greylist += neighbours_status[e].data.greylist;
-                                          neighbours_sum.reject += neighbours_status[e].data.reject;
-                                          neighbours_sum.scanned += neighbours_status[e].data.scanned;
-                                          neighbours_sum.learned += neighbours_status[e].data.learned;
-                                          neighbours_sum.uptime += neighbours_status[e].data.uptime;
-                                          status_count++;
-                                      }
-                                  }
-                                  neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
-                                  var to_Credentials = {};
-                                  to_Credentials["All SERVERS"] = { name: "All SERVERS",
-                                                                    url: "",
-                                                                    host: "",
-                                                                    checked: true,
-                                                                    data: neighbours_sum,
-                                                                    status: true
-                                                                  }
-                                  neighbours_status.forEach(function (elmt) {
-                                      to_Credentials[elmt.name] = elmt;
-                                  });
-                                  sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
-                                  displayStatWidgets();
-                              }
-                          }
-                          //error display
+                            jsonp: false,
+                            beforeSend: function (xhr) {
+                                xhr.setRequestHeader("Password", getPassword());
+                            },
+                            url: neighbours_status[ind].url + req_url,
+                            success: function (data) {
+                                neighbours_status[ind].checked = true;
+                                if (jQuery.isEmptyObject(data)) {
+                                    neighbours_status[ind].status = false; //serv does not work
+                                } else {
+                                    neighbours_status[ind].status = true; //serv does not work
+                                    neighbours_status[ind].data = data;
+                                    if (!('config_id' in neighbours_status[ind].data)) {
+                                        neighbours_status[ind].data.config_id = "";
+                                    }
+                                }
+                                if (neighbours_status.every(function (elt) {return elt.checked;})) {
+                                    on_success(neighbours_status);
+                                }
+                            },
+                            error: function(jqXHR, textStatus, errorThrown) {
+                                neighbours_status[ind].status = false;
+                                neighbours_status[ind].checked = true;
+                                if (on_error) {
+                                    on_error(neighbours_status[ind],
+                                            jqXHR, textStatus, errorThrown);
+                                }
+                            }
+                            //error display
                         });
                     });
+                },
+                error: function () {
+                    alertMessage('alert-error', 'Cannot receive neighbours data');
+                },
+            });
+        }
+
+        // @show widgets
+        function statWidgets() {
+            queryNeighbours("/auth", function(neighbours_status) {
+                var neighbours_sum = {
+                        version: neighbours_status[0].data.version,
+                        auth: "ok",
+                        uptime: 0,
+                        clean: 0,
+                        probable: 0,
+                        greylist: 0,
+                        reject: 0,
+                        scanned: 0,
+                        learned: 0,
+                        read_only: neighbours_status[0].data.read_only,
+                        config_id: ""
+                };
+                var status_count = 0;
+                for(var e in neighbours_status) {
+                    if(neighbours_status[e].status == true) {
+                        neighbours_sum.clean += neighbours_status[e].data.clean;
+                        neighbours_sum.probable += neighbours_status[e].data.probable;
+                        neighbours_sum.greylist += neighbours_status[e].data.greylist;
+                        neighbours_sum.reject += neighbours_status[e].data.reject;
+                        neighbours_sum.scanned += neighbours_status[e].data.scanned;
+                        neighbours_sum.learned += neighbours_status[e].data.learned;
+                        neighbours_sum.uptime += neighbours_status[e].data.uptime;
+                        status_count++;
+                    }
                 }
+                neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
+                var to_Credentials = {};
+                to_Credentials["All SERVERS"] = { name: "All SERVERS",
+                        url: "",
+                        host: "",
+                        checked: true,
+                        data: neighbours_sum,
+                        status: true
+                }
+                neighbours_status.forEach(function (elmt) {
+                    to_Credentials[elmt.name] = elmt;
+                });
+                sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
+                displayStatWidgets();
+            },
+            function (serv, jqXHR, textStatus, errorThrown) {
+                alertMessage('alert-error', 'Cannot receive stats data from: ' +
+                        serv.name + ', error: ' + errorThrown);
             });
         }
 
@@ -534,15 +542,39 @@
 //        }
 
         function getChart() {
-        	var data = JSON.parse(sessionStorage.getItem('Credentials'))[checked_server].data;
-        	var new_data = [{"color":"#66cc00","label":"Clean","data":data.clean,"value":data.clean},
-        	            {"color":"#cc9966","label":"Temporary rejected","data":data.learned,"value":data.learned},
-        	            {"color":"#FFD700","label":"Probable spam","data":data.probable,"value":data.probable},
-        	            {"color":"#436EEE","label":"Greylisted","data":data.greylist,"value":data.greylist},
-        	            {"color":"#FF0000","label":"Rejected","data":data.rejected,"value":data.rejected}];
-            pie = drawPie(pie, "chart", new_data);
+            var creds = JSON.parse(sessionStorage.getItem('Credentials'));
+            if (creds && creds[checked_server]) {
+                var data = creds[checked_server].data;
+                var new_data = [ {
+                    "color" : "#66cc00",
+                    "label" : "Clean",
+                    "data" : data.clean,
+                    "value" : data.clean
+                }, {
+                    "color" : "#cc9966",
+                    "label" : "Temporary rejected",
+                    "data" : data.learned,
+                    "value" : data.learned
+                }, {
+                    "color" : "#FFD700",
+                    "label" : "Probable spam",
+                    "data" : data.probable,
+                    "value" : data.probable
+                }, {
+                    "color" : "#436EEE",
+                    "label" : "Greylisted",
+                    "data" : data.greylist,
+                    "value" : data.greylist
+                }, {
+                    "color" : "#FF0000",
+                    "label" : "Rejected",
+                    "data" : data.rejected,
+                    "value" : data.rejected
+                } ];
+                pie = drawPie(pie, "chart", new_data);
+            }
         }
-        
+
         function drawPie(obj, id, data, conf) {
             if (obj) {
                 obj.updateProp("data.content",
@@ -1402,7 +1434,7 @@
             if (isLogged()) {
                 var data = JSON.parse(sessionStorage.getItem('Credentials'));
 
-                if (data[checked_server].read_only) {
+                if (data && data[checked_server].read_only) {
                     read_only = true;
                     $('#learning_nav').hide();
                     $('#resetHistory').attr('disabled', true);
@@ -1483,6 +1515,10 @@
             $(disconnect).show();
         }
 
+        $.ajaxSetup({
+            timeout: 1000,
+            jsonp: false
+        })
         connectRSPAMD();
 
         $(document).ajaxStart(function () {
