@@ -57,9 +57,14 @@ The following Lua modules are enabled in the default configuration:
 - [maillist](maillist.html) - determines the common mailing list signatures in a message.
 - [mid](mid.html) - selectively suppresses invalid/missing message-id rules
 - [mime_types](mime_types.html) - applies some rules about mime types met in messages
+- [multimap](multimap.html) - a complex module that operates with different types
+of maps.
+- [neural networks](fann.html) - allows to post-process messages using neural network classification. requires redis configuration and log_helper worker setup for activation.
 - [once_received](once_received.html) - detects messages with a single `Received` headers
 and performs some additional checks for such messages.
 - [phishing](phishing.html) - detects messages with phished URLs.
+- [ratelimit](ratelimit.html) - implements leaked bucket algorithm for ratelimiting and
+requires `redis` to store data - if this is unconfigured the module is inactive.
 - [rbl](rbl.html) - a plugin that checks messages against DNS blacklist based on
 either SMTP FROM addresses or on information from `Received` headers.
 - [rspamd_update](rspamd_update.html) - load dynamic rules and other rspamd updates
@@ -77,12 +82,7 @@ blacklists.
 - [ip_score](ip_score.html) - dynamically scores sender reputation
 - [metadata_exporter](metadata_exporter.html) - pushes message metadata to external systems
 - [metric_exporter](metric_exporter.html) - pushes statistics to external monitoring systems
-- [multimap](multimap.html) - a complex module that operates with different types
-of maps.
 - [mx_check](mx_check.html) - checks if sending domain has a connectable MX
-- [neural networks](fann.html) - allows to post-process messages using neural network classification
-- [ratelimit](ratelimit.html) - implements leaked bucket algorithm for ratelimiting and
-uses `redis` to store data.
 - [replies](replies.html) - checks if an incoming message is a reply for our own message
 - [rmilter_headers](rmilter_headers.html) - adds/removes headers from messages
 - [spamassassin](spamassassin.html) - load spamassassin rules
