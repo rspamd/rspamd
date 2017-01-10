@@ -1589,7 +1589,7 @@ rspamd_rcl_neighbours_handler (rspamd_mempool_t *pool,
 	}
 
 	if (pathval == NULL) {
-		g_string_append (urlstr, "/rspamd/");
+		g_string_append (urlstr, "/");
 	}
 	else {
 		g_string_append (urlstr,  ucl_object_tostring (pathval));
