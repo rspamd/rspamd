@@ -3188,6 +3188,15 @@ rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 }
 
 void
+rspamd_http_router_set_unknown_handler (struct rspamd_http_connection_router *router,
+		rspamd_http_router_handler_t handler)
+{
+	if (router != NULL) {
+		router->unknown_method_handler = handler;
+	}
+}
+
+void
 rspamd_http_router_add_header (struct rspamd_http_connection_router *router,
 		const gchar *name, const gchar *value)
 {

@@ -2627,6 +2627,61 @@ rspamd_controller_handle_plugins (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+/*
+ * Called on unknown methods and is used to deal with CORS as per
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS
+ */
+static int
+rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_http_message *rep;
+
+	if (msg->method == HTTP_OPTIONS) {
+		/* Assume CORS request */
+
+		rep = rspamd_http_new_message (HTTP_RESPONSE);
+		rep->date = time (NULL);
+		rep->code = 200;
+		rep->status = rspamd_fstring_new_init ("OK", 2);
+		rspamd_http_message_add_header (rep, "Access-Control-Allow-Methods",
+				"POST, GET, OPTIONS");
+		rspamd_http_message_add_header (rep, "Access-Control-Allow-Headers",
+						"Content-Type, Password, Map");
+		rspamd_http_connection_reset (conn_ent->conn);
+		rspamd_http_router_insert_headers (conn_ent->rt, rep);
+		rspamd_http_connection_write_message (conn_ent->conn,
+				rep,
+				NULL,
+				"text/plain",
+				conn_ent,
+				conn_ent->conn->fd,
+				conn_ent->rt->ptv,
+				conn_ent->rt->ev_base);
+		conn_ent->is_reply = TRUE;
+	}
+	else {
+		rep = rspamd_http_new_message (HTTP_RESPONSE);
+		rep->date = time (NULL);
+		rep->code = 500;
+		rep->status = rspamd_fstring_new_init ("Invalid method",
+				strlen ("Invalid method"));
+		rspamd_http_connection_reset (conn_ent->conn);
+		rspamd_http_router_insert_headers (conn_ent->rt, rep);
+		rspamd_http_connection_write_message (conn_ent->conn,
+				rep,
+				NULL,
+				"text/plain",
+				conn_ent,
+				conn_ent->conn->fd,
+				conn_ent->rt->ptv,
+				conn_ent->rt->ev_base);
+		conn_ent->is_reply = TRUE;
+	}
+
+	return 0;
+}
+
 static int
 rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
@@ -3503,6 +3558,9 @@ start_controller_worker (struct rspamd_worker *worker)
 		rspamd_http_router_add_header (ctx->http,
 				"Access-Control-Allow-Origin", "*");
 	}
+
+	rspamd_http_router_set_unknown_handler (ctx->http,
+			rspamd_controller_handle_unknown);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,

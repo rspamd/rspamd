@@ -469,6 +469,14 @@ void rspamd_http_router_add_header (struct rspamd_http_connection_router *router
 		const gchar *name, const gchar *value);
 
 /**
+ * Sets method to handle unknown request methods
+ * @param router
+ * @param handler
+ */
+void rspamd_http_router_set_unknown_handler (struct rspamd_http_connection_router *router,
+		rspamd_http_router_handler_t handler);
+
+/**
  * Inserts router headers to the outbound message
  * @param router
  * @param msg
