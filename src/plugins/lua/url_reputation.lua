@@ -20,9 +20,36 @@ limitations under the License.
 local N = 'url_reputation'
 
 local redis_params, redis_set_script_sha
+local category = {}
 local settings = {
   expire = 86400, -- 1 day
-  key_prefix = 'UR.',
+  key_prefix_tags = 'Ut.',
+  key_prefix_rep = 'Ur.',
+  tags = {
+    white = {
+      'white',
+    },
+    black = {
+      'surbl',
+    },
+    grey = {
+    },
+  },
+  symbols = {
+    white = 'URL_REPUTATION_WHITE',
+    black = 'URL_REPUTATION_BLACK',
+    grey = 'URL_REPUTATION_GREY',
+    neutral = 'URL_REPUTATION_NEUTRAL',
+  },
+  threshold = 5,
+  limit = 3,
+}
+
+local scale = {
+  'white',
+  'neutral',
+  'grey',
+  'black',
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -126,7 +153,8 @@ local function load_scripts(cfg, ev_base)
   )
 end
 
-local function reputation_set(task)
+local function tags_save(task)
+
   local function redis_set_cb(err)
     if err then
       rspamd_logger.errx(task, 'Redis error: %s', err)
@@ -135,9 +163,139 @@ local function reputation_set(task)
       end
     end
   end
+
   local tags = {}
+  local tlds = {}
+  local tld_count = 0
+  local reputation = 2
+  local which
+
+  local function dynamic_reputation()
+    local subset = {}
+    local keys = {}
+    local function redis_incr_cb(err)
+      if err then
+        rspamd_logger.errx(task, 'couldnt increment reputation: %s', err)
+      end
+    end
+    local function rep_get_cb(err, data)
+      if err then
+        rspamd_logger.errx(task, 'couldnt get dynamic reputation: %s', err)
+        return
+      end
+      local i, x, highest = 1, 1, 0
+      while(data[i]) do
+        if type(data[i]) == 'string' then
+          local scores = {}
+          scores.total = tonumber(data[i])
+          if scores.total >= settings.threshold then
+            local highest_k
+            scores.white = tonumber(data[i+1])
+            scores.black = tonumber(data[i+2])
+            scores.grey = tonumber(data[i+3])
+            scores.neutral = tonumber(data[i+4])
+            for k, v in pairs(scores) do
+              if (v > highest) then
+                highest_k = k
+                highest = v
+              end
+            end
+            if highest_k == 'black' then
+              reputation = 4
+              which = subset[x]
+            elseif highest_k == 'grey' and reputation ~= 4 then
+              reputation = 3
+              which = subset[x]
+            elseif highest_k == 'white' and reputation == 2 then
+              reputation = 1
+              which = subset[x]
+            elseif highest_k == 'neutral' and reputation <= 2 then
+              reputation = 2
+              which = subset[x]
+            end
+          end
+        end
+        i = i + 5
+        x = x + 1
+      end
+      local rk
+      if which then
+        rk = {
+          settings.key_prefix_rep .. which .. '_total',
+          settings.key_prefix_rep .. which .. '_' .. scale[reputation],
+        }
+      else
+        rk = {}
+        local added = 0
+        for t in pairs(tlds) do
+          table.insert(rk, settings.key_prefix_rep .. t .. '_total')
+          table.insert(rk, settings.key_prefix_rep .. t .. '_' .. scale[reputation])
+          added = added + 1
+          if added >= settings.limit then
+            rspamd_logger.warnx(task, 'Not setting reputation on all TLDs')
+            break
+          end
+        end
+      end
+      for _, k in ipairs(rk) do
+        local ret = rspamd_redis_make_request(task,
+          redis_params,
+          k,
+          false, -- is write
+          redis_incr_cb, --callback
+          'INCR', -- command
+          {k}
+        )
+        if not ret then
+          rspamd_logger.errx(task, 'couldnt schedule increment')
+        end
+      end
+      if which then
+        task:insert_result(settings.symbols[scale[reputation]], 1.0, which)
+      end
+    end
+    local action = task:get_metric_action('default')
+    if action == 'reject' then
+      reputation = 4
+    elseif action == 'add header' then
+      reputation = 3
+    elseif action == 'no action' or action == 'greylist' then
+      local score = task:get_metric_score('default')[1]
+      if score < 0 then
+        reputation = 1
+      end
+    end
+    local count = 0
+    for k in pairs(tlds) do
+      table.insert(subset, k)
+      table.insert(keys, settings.key_prefix_rep .. k .. '_total')
+      table.insert(keys, settings.key_prefix_rep .. k .. '_white')
+      table.insert(keys, settings.key_prefix_rep .. k .. '_black')
+      table.insert(keys, settings.key_prefix_rep .. k .. '_grey')
+      table.insert(keys, settings.key_prefix_rep .. k .. '_neutral')
+      count = count + 1
+    end
+    local key = keys[1]
+    if key then
+      rspamd_redis_make_request(task,
+        redis_params,
+        key,
+        false, -- is write
+        rep_get_cb, --callback
+        'MGET', -- command
+        keys
+      )
+    end
+  end
+
   -- Figure out what tags are present for each URL
+  -- and calculate overall URL reputation
   for _, url in ipairs(task:get_urls(false)) do
+    local tld = url:get_tld()
+    if not tlds[tld] then
+      tlds[tld] = true
+      tld_count = tld_count + 1
+    end
     local utags = url:get_tags()
     if utags[1] then
       local dom = url:get_tld()
@@ -146,9 +304,27 @@ local function reputation_set(task)
       end
       for _, ut in ipairs(utags) do
         tags[dom][ut] = true
+        local cat = category[ut]
+        if cat == 'black' then
+          reputation = 4
+          which = dom
+        elseif cat == 'grey' and reputation ~= 4 then
+          reputation = 3
+          which = dom
+        elseif cat == 'white' and reputation == 2 then
+          reputation = 1
+          which = dom
+        end
       end
     end
   end
+  if reputation == 2 then
+    if next(tlds) then
+      dynamic_reputation()
+    end
+    return
+  end
+  task:insert_result(settings.symbols[scale[reputation]], 1.0, which)
   -- Abort if no tags were found
   if not next(tags) then return end
   -- Don't populate old tags
@@ -176,7 +352,7 @@ local function reputation_set(task)
   local redis_keys = {}
   local redis_args = {}
   for dom, v in pairs(tags) do
-    table.insert(redis_keys, settings.key_prefix .. dom)
+    table.insert(redis_keys, settings.key_prefix_tags .. dom)
     local tmp = {}
     for k in pairs(v) do
       table.insert(tmp, k)
@@ -202,7 +378,7 @@ local function reputation_set(task)
   )
 end
 
-local function reputation_check(task)
+local function tags_restore(task)
   local urls
   local tlds = {}
   local tld_reverse = {}
@@ -249,7 +425,7 @@ local function reputation_check(task)
   if first then
     local keys = {}
     for x in pairs(tlds) do
-      table.insert(keys, settings.key_prefix .. x)
+      table.insert(keys, settings.key_prefix_tags .. x)
     end
     rspamd_redis_make_request(task,
       redis_params,
@@ -272,19 +448,31 @@ end
 for k, v in pairs(opts) do
   settings[k] = v
 end
+for k, v in pairs(settings.tags) do
+  for _, sv in ipairs(v) do
+    category[sv] = k
+  end
+end
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
   load_scripts(cfg, ev_base)
 end)
-rspamd_config:register_symbol({
-  name = 'URL_REPUTATION_SAVE',
+local id = rspamd_config:register_symbol({
+  name = 'URL_TAGS_SAVE',
   type = 'postfilter',
-  callback = reputation_set,
+  callback = tags_save,
   priority = 10
 })
 rspamd_config:register_symbol({
-  name = 'URL_REPUTATION_CHECK',
+  name = 'URL_TAGS_RESTORE',
   type = 'prefilter',
-  callback = reputation_check,
+  callback = tags_restore,
   priority = 5
 })
+for _, v in pairs(settings.symbols) do
+  rspamd_config:register_symbol({
+    name = v,
+    parent = id,
+    type = 'virtual'
+  })
+end
