@@ -3499,6 +3499,10 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_controller_handle_custom);
 	}
 
+	if (worker->srv->cfg->neighbours && worker->srv->cfg->neighbours->len > 0) {
+		rspamd_http_router_add_header (ctx->http,
+				"Access-Control-Allow-Origin", "*");
+	}
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
