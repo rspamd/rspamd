@@ -127,6 +127,7 @@ struct rspamd_http_connection_entry {
 struct rspamd_http_connection_router {
 	struct rspamd_http_connection_entry *conns;
 	GHashTable *paths;
+	GHashTable *response_headers;
 	GPtrArray *regexps;
 	struct timeval tv;
 	struct timeval *ptv;
@@ -456,6 +457,23 @@ void rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
  */
 void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 		const gchar *path, rspamd_http_router_handler_t handler);
+
+/**
+ * Add custom header to append to router replies
+ * @param router
+ * @param name
+ * @param value
+ */
+void rspamd_http_router_add_header (struct rspamd_http_connection_router *router,
+		const gchar *name, const gchar *value);
+
+/**
+ * Inserts router headers to the outbound message
+ * @param router
+ * @param msg
+ */
+void rspamd_http_router_insert_headers (struct rspamd_http_connection_router *router,
+		struct rspamd_http_message *msg);
 
 struct rspamd_regexp_s;
 /**

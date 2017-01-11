@@ -2946,6 +2946,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	reply_msg = rspamd_http_new_message (HTTP_RESPONSE);
 	reply_msg->date = time (NULL);
 	reply_msg->code = 200;
+	rspamd_http_router_insert_headers (entry->rt, reply_msg);
 
 	if (!rspamd_http_message_set_body_from_fd (reply_msg, fd)) {
 		close (fd);
@@ -3024,6 +3025,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			err_msg->code = err->code;
 			rspamd_http_message_set_body (err_msg, err->message,
 					strlen (err->message));
+			rspamd_http_router_insert_headers (router, err_msg);
 			rspamd_http_connection_reset (entry->conn);
 			rspamd_http_connection_write_message (entry->conn,
 					err_msg,
@@ -3070,6 +3072,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
 				err_msg->date = time (NULL);
 				err_msg->code = err->code;
+				rspamd_http_router_insert_headers (router, err_msg);
 				rspamd_http_message_set_body (err_msg, err->message,
 						strlen (err->message));
 				rspamd_http_connection_reset (entry->conn);
@@ -3107,6 +3110,8 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	new->error_handler = eh;
 	new->finish_handler = fh;
 	new->ev_base = base;
+	new->response_headers = g_hash_table_new_full (rspamd_strcase_hash,
+			rspamd_strcase_equal, g_free, g_free);
 
 	if (timeout) {
 		new->tv = *timeout;
@@ -3163,6 +3168,32 @@ rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 		key->begin = storage->str;
 		key->len = storage->len;
 		g_hash_table_insert (router->paths, key, ptr);
+	}
+}
+
+void
+rspamd_http_router_add_header (struct rspamd_http_connection_router *router,
+		const gchar *name, const gchar *value)
+{
+	if (name != NULL && value != NULL && router != NULL) {
+		g_hash_table_replace (router->response_headers, g_strdup (name),
+				g_strdup (value));
+	}
+}
+
+void
+rspamd_http_router_insert_headers (struct rspamd_http_connection_router *router,
+		struct rspamd_http_message *msg)
+{
+	GHashTableIter it;
+	gpointer k, v;
+
+	if (router && msg) {
+		g_hash_table_iter_init (&it, router->response_headers);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			rspamd_http_message_add_header (msg, k, v);
+		}
 	}
 }
 
@@ -3240,6 +3271,7 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 
 		g_ptr_array_free (router->regexps, TRUE);
 		g_hash_table_unref (router->paths);
+		g_hash_table_unref (router->response_headers);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_router), router);
 	}
 }

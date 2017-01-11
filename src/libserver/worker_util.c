@@ -380,6 +380,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
 	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
 		NULL,
@@ -405,6 +406,7 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	reply = rspamd_fstring_new_init (str, strlen (str));
 	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
 		NULL,
@@ -431,6 +433,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &reply);
 	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
 		NULL,
