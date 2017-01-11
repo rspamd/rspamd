@@ -112,8 +112,6 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 		}
 
 		if (rspamd_session_pending (task->s)) {
-			rspamd_session_destroy (task->s);
-
 			return TRUE;
 		}
 	}
