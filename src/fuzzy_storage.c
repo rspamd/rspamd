@@ -516,6 +516,14 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 					g_queue_get_length (ctx->updates_pending),
 					ctx->updates_maxfail);
 			ctx->updates_failed = 0;
+			cur = ctx->updates_pending->head;
+
+			while (cur) {
+				io_cmd = cur->data;
+				g_slice_free1 (sizeof (*io_cmd), io_cmd);
+				cur = g_list_next (cur);
+			}
+
 			g_queue_clear (ctx->updates_pending);
 		}
 		else {
