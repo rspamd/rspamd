@@ -2965,6 +2965,32 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	return TRUE;
 }
 
+static void
+rspamd_http_router_send_error (GError *err,
+		struct rspamd_http_connection_entry *entry)
+{
+	struct rspamd_http_message *err_msg;
+
+	err_msg = rspamd_http_new_message (HTTP_RESPONSE);
+	err_msg->date = time (NULL);
+	err_msg->code = err->code;
+	rspamd_http_message_set_body (err_msg, err->message,
+			strlen (err->message));
+	entry->is_reply = TRUE;
+	err_msg->status = rspamd_fstring_new_init (err->message, strlen (err->message));
+	rspamd_http_router_insert_headers (entry->rt, err_msg);
+	rspamd_http_connection_reset (entry->conn);
+	rspamd_http_connection_write_message (entry->conn,
+			err_msg,
+			NULL,
+			"text/plain",
+			entry,
+			entry->conn->fd,
+			entry->rt->ptv,
+			entry->rt->ev_base);
+}
+
+
 static int
 rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
@@ -2972,7 +2998,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_connection_entry *entry = conn->ud;
 	rspamd_http_router_handler_t handler = NULL;
 	gpointer found;
-	struct rspamd_http_message *err_msg;
+
 	GError *err;
 	rspamd_ftok_t lookup;
 	struct http_parser_url u;
@@ -2991,6 +3017,24 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_http_entry_free (entry);
 	}
 	else {
+		if (G_UNLIKELY (msg->method != HTTP_GET && msg->method != HTTP_POST)) {
+			if (router->unknown_method_handler) {
+				return router->unknown_method_handler (entry, msg);
+			}
+			else {
+				err = g_error_new (HTTP_ERROR, 500,
+						"Invalid method");
+				if (entry->rt->error_handler != NULL) {
+					entry->rt->error_handler (entry, err);
+				}
+
+				rspamd_http_router_send_error (err, entry);
+				g_error_free (err);
+
+				return 0;
+			}
+		}
+
 		/* Search for path */
 		if (msg->url != NULL && msg->url->len != 0) {
 
@@ -3020,21 +3064,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				entry->rt->error_handler (entry, err);
 			}
 
-			err_msg = rspamd_http_new_message (HTTP_RESPONSE);
-			err_msg->date = time (NULL);
-			err_msg->code = err->code;
-			rspamd_http_message_set_body (err_msg, err->message,
-					strlen (err->message));
-			rspamd_http_router_insert_headers (router, err_msg);
-			rspamd_http_connection_reset (entry->conn);
-			rspamd_http_connection_write_message (entry->conn,
-					err_msg,
-					NULL,
-					"text/plain",
-					entry,
-					entry->conn->fd,
-					entry->rt->ptv,
-					entry->rt->ev_base);
+			rspamd_http_router_send_error (err, entry);
 			g_error_free (err);
 
 			return 0;
@@ -3069,21 +3099,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				}
 
 				msg_info ("path: %T not found", &lookup);
-				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
-				err_msg->date = time (NULL);
-				err_msg->code = err->code;
-				rspamd_http_router_insert_headers (router, err_msg);
-				rspamd_http_message_set_body (err_msg, err->message,
-						strlen (err->message));
-				rspamd_http_connection_reset (entry->conn);
-				rspamd_http_connection_write_message (entry->conn,
-					err_msg,
-					NULL,
-					"text/plain",
-					entry,
-					entry->conn->fd,
-					entry->rt->ptv,
-					entry->rt->ev_base);
+				rspamd_http_router_send_error (err, entry);
 				g_error_free (err);
 			}
 		}

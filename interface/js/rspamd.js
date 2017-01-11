@@ -451,6 +451,9 @@
                                     on_error(neighbours_status[ind],
                                             jqXHR, textStatus, errorThrown);
                                 }
+                                if (neighbours_status.every(function (elt) {return elt.checked;})) {
+                                    on_success(neighbours_status);
+                                }
                             }
                             //error display
                         });

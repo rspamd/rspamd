@@ -134,6 +134,7 @@ struct rspamd_http_connection_router {
 	struct event_base *ev_base;
 	struct rspamd_keypair_cache *cache;
 	gchar *default_fs_path;
+	rspamd_http_router_handler_t unknown_method_handler;
 	struct rspamd_cryptobox_keypair *key;
 	rspamd_http_router_error_handler_t error_handler;
 	rspamd_http_router_finish_handler_t finish_handler;
