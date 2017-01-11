@@ -429,59 +429,74 @@ function rspamd_map_add(mname, optname, mtype, description)
     -- it might be plain map or map of plain elements
     if opt[1] then
       if mtype == 'radix' then
-        local map = rspamd_config:radix_from_config(mname, optname)
 
+        if string.find(opt[1], '^%d') then
+          local map = rspamd_config:radix_from_config(mname, optname)
+
+          if map then
+            ret.__data = map
+            setmetatable(ret, ret_mt)
+            return ret
+          end
+        else
+          -- Plain table
+          local map = rspamd_config:add_map{
+            type = mtype,
+            description = description,
+            url = opt,
+          }
+          if map then
+            ret.__data = map
+            setmetatable(ret, ret_mt)
+            return ret
+          end
+        end
+      elseif mtype == 'regexp' then
+        -- Plain table
+        local map = rspamd_config:add_map{
+          type = mtype,
+          description = description,
+          url = opt,
+        }
         if map then
           ret.__data = map
           setmetatable(ret, ret_mt)
           return ret
         end
-      elseif mtype == 'regexp' then
-        local data = {}
-        local rspamd_regexp = require "rspamd_regexp"
-        for _,elt in ipairs(opt) do
-          if type(elt) == 'string' then
-            local re = rspamd_regexp:create_cached(elt)
-
-            if re then
-              table.insert(data, re)
-            else
-              logger.errx(rspamd_config, "cannot create regexp from '%s'", elt)
-            end
-          end
-        end
-
-        if #data > 0 then
-          ret.__data = data
-          ret.get_key = function(t, k)
-            for _,re in ipairs(t.__data) do
-              if re:match(k) then return true end
-            end
-
-            return nil
-          end
-          return ret
-        end
       else
-        local data = {}
-        local nelts = 0
-        for _,elt in ipairs(opt) do
-          if type(elt) == 'string' then
-            data[elt] = true
-            nelts = nelts + 1
+        if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
+          -- Plain table
+          local map = rspamd_config:add_map{
+            type = mtype,
+            description = description,
+            url = opt,
+          }
+          if map then
+            ret.__data = map
+            setmetatable(ret, ret_mt)
+            return ret
           end
-        end
-
-        if nelts > 0 then
-          ret.__data = data
-          ret.get_key = function(t, k)
-            if k ~= '__data' then
-              return t.__data[k]
+        else
+          local data = {}
+          local nelts = 0
+          for _,elt in ipairs(opt) do
+            if type(elt) == 'string' then
+              data[elt] = true
+              nelts = nelts + 1
             end
-
-            return nil
           end
-          return ret
+
+          if nelts > 0 then
+            ret.__data = data
+            ret.get_key = function(t, k)
+              if k ~= '__data' then
+                return t.__data[k]
+              end
+
+              return nil
+            end
+            return ret
+          end
         end
       end
     else
