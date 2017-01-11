@@ -170,7 +170,6 @@ TARGET_LINK_LIBRARIES(rspamd-server rspamd-zstd)
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
-ADD_DEPENDENCIES(rspamd-server rspamd_lua_preprocess)
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)

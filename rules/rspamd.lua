@@ -21,6 +21,7 @@ config['regexp'] = {}
 local local_conf = rspamd_paths['CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
 
+dofile(local_rules .. '/global_functions.lua')
 dofile(local_rules .. '/regexp/headers.lua')
 dofile(local_rules .. '/regexp/lotto.lua')
 dofile(local_rules .. '/regexp/fraud.lua')

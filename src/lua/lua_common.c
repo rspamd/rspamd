@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "lua/global_functions.lua.h"
 #include "lptree.h"
 #include "utlist.h"
 #include <math.h>
@@ -301,11 +300,6 @@ rspamd_lua_init ()
 
 	rspamd_lua_new_class (L, "rspamd{worker}", worker_reg);
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
-
-	if (luaL_dostring (L, rspamadm_script_global_functions) != 0) {
-		msg_err ("cannot execute lua global script: %s",
-				lua_tostring (L, -1));
-	}
 
 	/* Add plugins global */
 	lua_newtable (L);

@@ -28,10 +28,3 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_map.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)
-SET(RSPAMDMLUASRC "${CMAKE_CURRENT_SOURCE_DIR}/global_functions.lua")
-ADD_CUSTOM_TARGET(rspamd_lua_preprocess
-        ${PERL_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/lua_preprocess.pl"
-            "${CMAKE_CURRENT_SOURCE_DIR}"
-            "${CMAKE_CURRENT_BINARY_DIR}"
-        SOURCES ${RSPAMDMLUASRC} ${CMAKE_SOURCE_DIR}/lua_preprocess.pl)
