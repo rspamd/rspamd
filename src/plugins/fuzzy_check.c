@@ -2190,6 +2190,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				errno,
 				strerror (errno));
 			rspamd_upstream_fail (selected);
+			g_ptr_array_free (commands, TRUE);
 		}
 		else {
 			/* Create session for a socket */
@@ -2474,6 +2475,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 						commands,
 						saved,
 						err);
+				rspamd_mempool_add_destructor (task->task_pool,
+						rspamd_ptr_array_free_hard, commands);
 				g_ptr_array_free (args, TRUE);
 			}
 			else {
@@ -2492,6 +2495,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 						commands,
 						saved,
 						err);
+				rspamd_mempool_add_destructor (task->task_pool,
+						rspamd_ptr_array_free_hard, commands);
 			}
 		}
 
