@@ -16,6 +16,11 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_REDIRECTED = 1 << 3,
 };
 
+struct rspamd_url_tag {
+	const gchar *data;
+	struct rspamd_url_tag *prev, *next;
+};
+
 struct rspamd_url {
 	gchar *string;
 	gint protocol;
@@ -42,7 +47,7 @@ struct rspamd_url {
 	guint urllen;
 
 	enum rspamd_url_flags flags;
-	GPtrArray *tags;
+	GHashTable *tags;
 };
 
 enum uri_errno {
@@ -169,6 +174,7 @@ void rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
  * @param pool
  */
 void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
+		const gchar *value,
 		rspamd_mempool_t *pool);
 
 #endif

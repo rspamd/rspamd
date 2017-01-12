@@ -48,6 +48,7 @@
 #include "http.h"
 #include "multipattern.h"
 #include "http_parser.h"
+#include "contrib/uthash/utlist.h"
 
 typedef struct url_match_s {
 	const gchar *m_begin;
@@ -2543,15 +2544,28 @@ rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
 
 void
 rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
+		const gchar *value,
 		rspamd_mempool_t *pool)
 {
-	g_assert (url != NULL && tag != NULL);
+	struct rspamd_url_tag *found, *ntag;
+
+	g_assert (url != NULL && tag != NULL && value != NULL);
 
 	if (url->tags == NULL) {
-		url->tags = g_ptr_array_sized_new (2);
-		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard, url->tags);
+		url->tags = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)g_hash_table_unref, url->tags);
 	}
 
-	g_ptr_array_add (url->tags, rspamd_mempool_strdup (pool, tag));
+	found = g_hash_table_lookup (url->tags, tag);
 
+	ntag = rspamd_mempool_alloc0 (pool, sizeof (*ntag));
+	ntag->data = rspamd_mempool_strdup (pool, value);
+
+	if (found == NULL) {
+		g_hash_table_insert (url->tags, rspamd_mempool_strdup (pool, tag),
+				ntag);
+	}
+
+	DL_APPEND (found, ntag);
 }
