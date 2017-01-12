@@ -1363,7 +1363,7 @@ main (gint argc, gchar **argv, gchar **env)
 		close (control_fd);
 	}
 
-	if (getenv ("G_SLICE") != NULL) {
+	if (getenv ("VALGRIND") != NULL) {
 		/* Special case if we are likely running with valgrind */
 		term_attempts = TERMINATION_ATTEMPTS * 10;
 	}
