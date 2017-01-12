@@ -940,15 +940,11 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 {
 	GString *key, *value;
 	guint cur_shift = *shift;
-	guint i;
+	guint i, klen;
 	struct rspamd_fuzzy_cmd *cmd;
 
 	if (io_cmd->is_shingle) {
 		cmd = &io_cmd->cmd.shingle.basic;
-
-		if (cmd->cmd == FUZZY_WRITE) {
-
-		}
 	}
 	else {
 		cmd = &io_cmd->cmd.normal;
@@ -965,9 +961,12 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		 */
 
 		/* HSET */
-		key = g_string_new (session->backend->redis_object);
+		klen = strlen (session->backend->redis_object) +
+				sizeof (cmd->digest) + 1;
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
 		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
-		value = g_string_sized_new (32);
+		value = g_string_sized_new (30);
 		rspamd_printf_gstring (value, "%d", cmd->flag);
 		session->argv[cur_shift] = g_strdup ("HSET");
 		session->argv_lens[cur_shift++] = sizeof ("HSET") - 1;
@@ -989,9 +988,10 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		}
 
 		/* HINCRBY */
-		key = g_string_new (session->backend->redis_object);
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
 		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
-		value = g_string_sized_new (32);
+		value = g_string_sized_new (30);
 		rspamd_printf_gstring (value, "%d", cmd->value);
 		session->argv[cur_shift] = g_strdup ("HINCRBY");
 		session->argv_lens[cur_shift++] = sizeof ("HINCRBY") - 1;
@@ -1013,9 +1013,10 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		}
 
 		/* EXPIRE */
-		key = g_string_new (session->backend->redis_object);
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
 		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
-		value = g_string_sized_new (32);
+		value = g_string_sized_new (30);
 		rspamd_printf_gstring (value, "%d",
 				(gint)rspamd_fuzzy_backend_get_expire (bk));
 		session->argv[cur_shift] = g_strdup ("EXPIRE");
@@ -1036,7 +1037,8 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		}
 
 		/* INCR */
-		key = g_string_new (session->backend->redis_object);
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
 		g_string_append (key, "_count");
 		session->argv[cur_shift] = g_strdup ("INCR");
 		session->argv_lens[cur_shift++] = sizeof ("INCR") - 1;
@@ -1054,7 +1056,11 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 	}
 	else if (cmd->cmd == FUZZY_DEL) {
 		/* DEL */
-		key = g_string_new (session->backend->redis_object);
+		klen = strlen (session->backend->redis_object) +
+				sizeof (cmd->digest) + 1;
+
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
 		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
 		session->argv[cur_shift] = g_strdup ("DEL");
 		session->argv_lens[cur_shift++] = sizeof ("DEL") - 1;
@@ -1071,7 +1077,8 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		}
 
 		/* DECR */
-		key = g_string_new (session->backend->redis_object);
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
 		g_string_append (key, "_count");
 		session->argv[cur_shift] = g_strdup ("DECR");
 		session->argv_lens[cur_shift++] = sizeof ("DECR") - 1;
@@ -1089,9 +1096,10 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 	}
 
 	if (io_cmd->is_shingle) {
-
-
 		if (cmd->cmd == FUZZY_WRITE) {
+			klen = strlen (session->backend->redis_object) +
+							64 + 1;
+
 			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 				guchar *hval;
 				/*
@@ -1100,10 +1108,12 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 				 */
 
 				/* SETEX */
-				key = g_string_new (session->backend->redis_object);
-				rspamd_printf_gstring (key, "_%d_%uL", i,
+				key = g_string_sized_new (klen);
+				rspamd_printf_gstring (key, "%s_%d_%uL",
+						session->backend->redis_object,
+						i,
 						io_cmd->cmd.shingle.sgl.hashes[i]);
-				value = g_string_sized_new (32);
+				value = g_string_sized_new (30);
 				rspamd_printf_gstring (value, "%d",
 						(gint)rspamd_fuzzy_backend_get_expire (bk));
 				hval = g_malloc (sizeof (io_cmd->cmd.shingle.basic.digest));
@@ -1130,9 +1140,14 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 			}
 		}
 		else if (cmd->cmd == FUZZY_DEL) {
+			klen = strlen (session->backend->redis_object) +
+					64 + 1;
+
 			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-				key = g_string_new (session->backend->redis_object);
-				rspamd_printf_gstring (key, "_%d_%uL", i,
+				key = g_string_sized_new (klen);
+				rspamd_printf_gstring (key, "%s_%d_%uL",
+						session->backend->redis_object,
+						i,
 						io_cmd->cmd.shingle.sgl.hashes[i]);
 				session->argv[cur_shift] = g_strdup ("DEL");
 				session->argv_lens[cur_shift++] = sizeof ("DEL") - 1;
