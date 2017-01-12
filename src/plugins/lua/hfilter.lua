@@ -63,7 +63,7 @@ local checks_hellohost = {
 local checks_hello = {
   ['^[^\\.]+$'] = 5, -- for helo=COMPUTER, ANNA, etc... Without dot in helo
   ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
-  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5
+  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|user|veloxzon)$'] = 5
 }
 
 local checks_hello_badip = {
