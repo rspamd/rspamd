@@ -1296,8 +1296,8 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 
 	/* First of all check digest */
 	session->nargs = nargs;
-	session->argv = g_malloc (sizeof (gchar *) * session->nargs);
-	session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
+	session->argv = g_malloc0 (sizeof (gchar *) * session->nargs);
+	session->argv_lens = g_malloc0 (sizeof (gsize) * session->nargs);
 
 	up = rspamd_upstream_get (backend->write_servers,
 			RSPAMD_UPSTREAM_MASTER_SLAVE,

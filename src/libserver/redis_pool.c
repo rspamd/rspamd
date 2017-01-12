@@ -140,7 +140,10 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 	}
 
 
-	g_list_free (conn->entry);
+	if (conn->entry) {
+		g_list_free (conn->entry);
+	}
+
 	g_slice_free1 (sizeof (*conn), conn);
 }
 
@@ -344,16 +347,18 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 			conn_entry = g_queue_pop_head_link (elt->inactive);
 			conn = conn_entry->data;
 
-			if (event_get_base (&conn->timeout)) {
-				event_del (&conn->timeout);
-			}
-
 			if (conn->ctx->err == REDIS_OK) {
+				if (event_get_base (&conn->timeout)) {
+					event_del (&conn->timeout);
+				}
+
 				conn->active = TRUE;
 				g_queue_push_tail_link (elt->active, conn_entry);
 				msg_debug_rpool ("reused existing connection to %s:%d", ip, port);
 			}
 			else {
+				g_list_free (conn->entry);
+				conn->entry = NULL;
 				REF_RELEASE (conn);
 				conn = rspamd_redis_pool_new_connection (pool, elt,
 						db, password, ip, port);
