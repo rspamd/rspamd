@@ -23,6 +23,7 @@ struct surbl_ctx {
 	guint16 weight;
 	gdouble connect_timeout;
 	gdouble read_timeout;
+	gboolean use_tags;
 	guint max_urls;
 	guint url_expire;
 	GList *suffixes;

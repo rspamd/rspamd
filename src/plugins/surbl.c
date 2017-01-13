@@ -717,6 +717,15 @@ surbl_module_config (struct rspamd_config *cfg)
 	else {
 		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
 	}
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "surbl", "use_tags")) != NULL) {
+		surbl_module_ctx->use_tags = ucl_obj_toboolean (value);
+	}
+	else {
+		surbl_module_ctx->use_tags = TRUE;
+	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_connect_timeout")) != NULL) {
@@ -1407,6 +1416,87 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		rule);
 }
 
+static gboolean
+surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
+		struct rspamd_url *url)
+{
+	struct rspamd_url_tag *tag = NULL, *rtag = NULL, *cur;
+	struct rspamd_url *redirected_url = NULL;
+	gchar *ftld = NULL;
+	rspamd_ftok_t tld;
+	gboolean processed = FALSE;
+
+	if (url->tags) {
+		tag = g_hash_table_lookup (url->tags, "surbl");
+		rtag = g_hash_table_lookup (url->tags, "redirector");
+	}
+
+	if (rtag) {
+		/* This is a redirected URL */
+		gint r;
+
+		redirected_url = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (*redirected_url));
+		r = rspamd_url_parse (redirected_url, (gchar *)rtag->data,
+				strlen (rtag->data),
+				task->task_pool);
+
+		if (r == URI_ERRNO_OK) {
+			if (!g_hash_table_lookup (task->urls, redirected_url)) {
+				g_hash_table_insert (task->urls, redirected_url,
+						redirected_url);
+				redirected_url->phished_url = param->url;
+				redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+			}
+		}
+		else {
+			redirected_url = NULL;
+		}
+	}
+
+	if (tag || redirected_url) {
+		if (redirected_url) {
+			tld.begin = redirected_url->tld;
+			tld.len = redirected_url->tldlen;
+		}
+		else {
+			tld.begin = param->url->tld;
+			tld.len = param->url->tldlen;
+		}
+
+		ftld = rspamd_mempool_ftokdup (task->task_pool, &tld);
+	}
+
+	if (tag) {
+		/* We know results for this URL */
+
+		DL_FOREACH (tag, cur) {
+			rspamd_task_insert_result (task, tag->data, 1, ftld);
+		}
+
+		processed = TRUE;
+	}
+	else if (redirected_url) {
+		/* Just register surbl call for the redirected url */
+		make_surbl_requests (redirected_url,
+				param->task,
+				param->suffix,
+				FALSE,
+				param->tree);
+
+		if (surbl_module_ctx->redirector_symbol != NULL) {
+			rspamd_task_insert_result (param->task,
+					surbl_module_ctx->redirector_symbol,
+					1,
+					ftld);
+		}
+
+		processed = TRUE;
+	}
+
+	return processed;
+}
+
 static void
 surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
@@ -1422,6 +1512,10 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	debug_task ("check url %*s", url->urllen, url->string);
 
 	if (url->hostlen <= 0) {
+		return;
+	}
+
+	if (surbl_module_ctx->use_tags && surbl_test_tags (task, param, url)) {
 		return;
 	}
 
