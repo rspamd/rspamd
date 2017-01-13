@@ -666,7 +666,7 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_stat *st;
 	int64_t uptime;
-	gulong data[4];
+	gulong data[5];
 	ucl_object_t *obj;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
@@ -680,6 +680,7 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 		st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
 	data[2] = st->actions_stat[METRIC_ACTION_GREYLIST];
 	data[3] = st->actions_stat[METRIC_ACTION_REJECT];
+	data[4] = st->actions_stat[METRIC_ACTION_SOFT_REJECT];
 
 	/* Get uptime */
 	uptime = time (NULL) - session->ctx->start_time;
@@ -698,6 +699,8 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 			data[2]),			   "greylist", 0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
 			data[3]),			   "reject",   0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			data[4]),			   "soft_reject",   0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
 			st->messages_scanned), "scanned",  0, false);
 	ucl_object_insert_key (obj,	   ucl_object_fromint (
