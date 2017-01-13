@@ -18,6 +18,7 @@
 #include "cryptobox.h"
 #include "url.h"
 #include "str_util.h"
+#include "contrib/t1ha/t1ha.h"
 #include <math.h>
 
 const guchar lc_map[256] = {
@@ -183,45 +184,59 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 	return FALSE;
 }
 
-static guint
-rspamd_icase_hash (const gchar *in, gsize len)
+guint64
+rspamd_icase_hash (const gchar *in, gsize len, guint64 seed)
 {
-	guint leftover = len % 4;
+	guint leftover = len % sizeof (guint64);
 	guint fp, i;
 	const uint8_t* s = (const uint8_t*) in;
 	union {
 		struct {
-			guchar c1, c2, c3, c4;
+			guchar c1, c2, c3, c4, c5, c6, c7, c8;
 		} c;
-		guint32 pp;
+		guint64 pp;
 	} u;
-	rspamd_cryptobox_fast_hash_state_t st;
+	guint64 h = seed;
 
 	fp = len - leftover;
-	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 
-	for (i = 0; i != fp; i += 4) {
+	for (i = 0; i != fp; i += 8) {
 		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3];
+		u.c.c5 = s[i + 4], u.c.c6 = s[i + 5], u.c.c7 = s[i + 6], u.c.c8 = s[i + 7];
 		u.c.c1 = lc_map[u.c.c1];
 		u.c.c2 = lc_map[u.c.c2];
 		u.c.c3 = lc_map[u.c.c3];
 		u.c.c4 = lc_map[u.c.c4];
-		rspamd_cryptobox_fast_hash_update (&st, &u.pp, sizeof (u));
+		u.c.c5 = lc_map[u.c.c5];
+		u.c.c6 = lc_map[u.c.c6];
+		u.c.c7 = lc_map[u.c.c7];
+		u.c.c8 = lc_map[u.c.c8];
+		h = t1ha (&u.pp, sizeof (u), h);
 	}
 
 	u.pp = 0;
+
 	switch (leftover) {
+	case 7:
+		u.c.c7 = lc_map[(guchar)s[i++]]; /* fallthrough */
+	case 6:
+		u.c.c6 = lc_map[(guchar)s[i++]]; /* fallthrough */
+	case 5:
+		u.c.c5 = lc_map[(guchar)s[i++]]; /* fallthrough */
+	case 4:
+		u.c.c4 = lc_map[(guchar)s[i++]]; /* fallthrough */
 	case 3:
-		u.c.c3 = lc_map[(guchar)s[i++]];
+		u.c.c3 = lc_map[(guchar)s[i++]]; /* fallthrough */
 	case 2:
-		u.c.c2 = lc_map[(guchar)s[i++]];
+		u.c.c2 = lc_map[(guchar)s[i++]]; /* fallthrough */
 	case 1:
 		u.c.c1 = lc_map[(guchar)s[i]];
-		rspamd_cryptobox_fast_hash_update (&st, &u.pp, leftover);
 		break;
 	}
 
-	return rspamd_cryptobox_fast_hash_final (&st);
+	h = t1ha (&u.pp, sizeof (u), h);
+
+	return h;
 }
 
 guint
@@ -232,7 +247,7 @@ rspamd_strcase_hash (gconstpointer key)
 
 	len = strlen (p);
 
-	return rspamd_icase_hash (p, len);
+	return rspamd_icase_hash (p, len, rspamd_hash_seed ());
 }
 
 guint
@@ -270,7 +285,7 @@ rspamd_ftok_icase_hash (gconstpointer key)
 {
 	const rspamd_ftok_t *f = key;
 
-	return rspamd_icase_hash (f->begin, f->len);
+	return rspamd_icase_hash (f->begin, f->len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -291,7 +306,7 @@ rspamd_gstring_icase_hash (gconstpointer key)
 {
 	const GString *f = key;
 
-	return rspamd_icase_hash (f->str, f->len);
+	return rspamd_icase_hash (f->str, f->len, rspamd_hash_seed ());
 }
 
 /* https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord */
