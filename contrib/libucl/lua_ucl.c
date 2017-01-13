@@ -539,6 +539,9 @@ lua_ucl_str_to_parse_type (const char *str)
 				strcasecmp (str, "csexp") == 0) {
 			type = UCL_PARSE_CSEXP;
 		}
+		else if (strcasecmp (str, "auto") == 0) {
+			type = UCL_PARSE_AUTO;
+		}
 	}
 
 	return type;
