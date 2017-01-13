@@ -508,6 +508,7 @@
                 });
                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                 displayStatWidgets();
+                getChart();
             },
             function (serv, jqXHR, textStatus, errorThrown) {
                 alertMessage('alert-error', 'Cannot receive stats data from: ' +
@@ -573,8 +574,8 @@
                 }, {
                     "color" : "#cc9966",
                     "label" : "Temporary rejected",
-                    "data" : data.learned,
-                    "value" : data.learned
+                    "data" : data.soft_reject,
+                    "value" : data.soft_reject
                 }, {
                     "color" : "#FFD700",
                     "label" : "Probable spam",
@@ -588,8 +589,8 @@
                 }, {
                     "color" : "#FF0000",
                     "label" : "Rejected",
-                    "data" : data.rejected,
-                    "value" : data.rejected
+                    "data" : data.reject,
+                    "value" : data.reject
                 } ];
                 pie = drawPie(pie, "chart", new_data);
             }
