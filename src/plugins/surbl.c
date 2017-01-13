@@ -50,7 +50,8 @@ static void surbl_test_url (struct rspamd_task *task, void *user_data);
 static void surbl_dns_callback (struct rdns_reply *reply, gpointer arg);
 static void surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg);
 static void process_dns_results (struct rspamd_task *task,
-	struct suffix_item *suffix, gchar *url, guint32 addr);
+	struct suffix_item *suffix, gchar *resolved_name,
+	guint32 addr, struct rspamd_url *url);
 
 
 #define NO_REGEXP (gpointer) - 1
@@ -1110,8 +1111,9 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 static void
 process_dns_results (struct rspamd_task *task,
 	struct suffix_item *suffix,
-	gchar *url,
-	guint32 addr)
+	gchar *resolved_name,
+	guint32 addr,
+	struct rspamd_url *uri)
 {
 	guint i;
 	gboolean got_result = FALSE;
@@ -1124,9 +1126,10 @@ process_dns_results (struct rspamd_task *task,
 		if (bit != NULL) {
 			msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
 					task->message_id,
-					url, suffix->suffix,
+					resolved_name, suffix->suffix,
 					bit->bit);
-			rspamd_task_insert_result (task, bit->symbol, 1, url);
+			rspamd_task_insert_result (task, bit->symbol, 1, resolved_name);
+			rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
 			got_result = TRUE;
 		}
 	}
@@ -1143,9 +1146,10 @@ process_dns_results (struct rspamd_task *task,
 				got_result = TRUE;
 				msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
 						task->message_id,
-						url, suffix->suffix,
+						resolved_name, suffix->suffix,
 						bit->bit);
-				rspamd_task_insert_result (task, bit->symbol, 1, url);
+				rspamd_task_insert_result (task, bit->symbol, 1, resolved_name);
+				rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
 			}
 		}
 	}
@@ -1154,14 +1158,15 @@ process_dns_results (struct rspamd_task *task,
 				suffix->ips == NULL) {
 			msg_info_task ("<%s> domain [%s] is in surbl %s",
 					task->message_id,
-					url, suffix->suffix);
-			rspamd_task_insert_result (task, suffix->symbol, 1, url);
+					resolved_name, suffix->suffix);
+			rspamd_task_insert_result (task, suffix->symbol, 1, resolved_name);
+			rspamd_url_add_tag (uri, "surbl", suffix->symbol, task->task_pool);
 		}
 		else {
 			ina.s_addr = addr;
 			msg_info_task ("<%s> domain [%s] is in surbl %s but at unknown result: %s",
 					task->message_id,
-					url, suffix->suffix,
+					resolved_name, suffix->suffix,
 					inet_ntoa (ina));
 		}
 	}
@@ -1183,7 +1188,8 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 		elt = reply->entries;
 		if (elt->type == RDNS_REQUEST_A) {
 			process_dns_results (param->task, param->suffix,
-				param->host_resolve, (guint32)elt->content.a.addr.s_addr);
+				param->host_resolve, (guint32)elt->content.a.addr.s_addr,
+				param->url);
 		}
 	}
 	else {
@@ -1316,6 +1322,8 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 						param->suffix,
 						FALSE,
 						param->tree);
+				rspamd_url_add_tag (param->url, "redirector", urlstr,
+						task->task_pool);
 			}
 			else {
 				msg_info_task ("cannot parse redirector reply: %s", urlstr);
