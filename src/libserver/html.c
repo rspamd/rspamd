@@ -768,6 +768,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	gboolean *url_found)
 {
 	struct rspamd_url *text_url;
+	rspamd_ftok_t phished_tld;
 	gint rc;
 	gchar *url_str = NULL;
 
@@ -785,6 +786,11 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 						text_url->tld, href_url->tldlen) != 0) {
 					href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 					href_url->phished_url = text_url;
+					phished_tld.begin = href_url->tld;
+					phished_tld.len = href_url->tldlen;
+					rspamd_url_add_tag (text_url, "phishing",
+							rspamd_mempool_ftokdup (pool, &phished_tld),
+							pool);
 				}
 			}
 
