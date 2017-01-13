@@ -404,7 +404,7 @@
                         neighbours = {
                                 local:  {
                                     host: window.location.host,
-                                    url: window.location.path
+                                    url: window.location.href
                                 }
                         };
                     }   else {
