@@ -356,6 +356,8 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 		if (map->dtor) {
 			map->dtor (map->dtor_data);
 		}
+
+		map->dtor = NULL;
 	}
 }
 
