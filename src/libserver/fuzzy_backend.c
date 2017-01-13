@@ -304,6 +304,8 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 
 	if ((bk->subr_ud = bk->subr->init (bk, config, cfg, err)) == NULL) {
 		g_slice_free1 (sizeof (*bk), bk);
+
+		return NULL;
 	}
 
 	return bk;
