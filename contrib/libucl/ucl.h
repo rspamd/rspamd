@@ -205,7 +205,8 @@ enum ucl_duplicate_strategy {
 enum ucl_parse_type {
 	UCL_PARSE_UCL = 0, /**< Default ucl format */
 	UCL_PARSE_MSGPACK, /**< Message pack input format */
-	UCL_PARSE_CSEXP /**< Canonical S-expressions */
+	UCL_PARSE_CSEXP, /**< Canonical S-expressions */
+	UCL_PARSE_AUTO /**< Try to detect parse type */
 };
 
 /**

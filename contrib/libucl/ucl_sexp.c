@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 
-#include <ucl.h>
 #include "ucl.h"
 #include "ucl_internal.h"
 #include "utlist.h"

@@ -569,4 +569,6 @@ bool ucl_parser_process_object_element (struct ucl_parser *parser,
  */
 bool ucl_parse_msgpack (struct ucl_parser *parser);
 
+bool ucl_parse_csexp (struct ucl_parser *parser);
+
 #endif /* UCL_INTERNAL_H_ */
