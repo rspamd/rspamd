@@ -2874,6 +2874,8 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 		if (commands != NULL) {
 			res = fuzzy_check_send_lua_learn (rule, task, commands,
 					saved, err);
+			rspamd_mempool_add_destructor (task->task_pool,
+					rspamd_ptr_array_free_hard, commands);
 		}
 
 		if (res) {
