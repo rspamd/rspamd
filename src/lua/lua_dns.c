@@ -121,6 +121,9 @@ lua_dns_get_type (lua_State *L, int argno)
 		else if (g_ascii_strcasecmp (strtype, "ptr") == 0) {
 			type = RDNS_REQUEST_PTR;
 		}
+		else if (g_ascii_strcasecmp (strtype, "soa") == 0) {
+			type = RDNS_REQUEST_SOA;
+		}
 		else {
 			msg_err ("bad DNS type: %s", strtype);
 		}
@@ -133,7 +136,7 @@ static void
 lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct lua_dns_cbdata *cd = arg;
-	gint i = 0;
+	gint i = 0, naddrs = 0;
 	struct rspamd_dns_resolver **presolver;
 	struct rdns_reply_entry *elt;
 	rspamd_inet_addr_t *addr;
@@ -149,7 +152,12 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	 * XXX: rework to handle different request types
 	 */
 	if (reply->code == RDNS_RC_NOERROR) {
-		lua_newtable (cd->L);
+		LL_FOREACH (reply->entries, elt) {
+			naddrs ++;
+		}
+
+		lua_createtable (cd->L, naddrs, 0);
+
 		LL_FOREACH (reply->entries, elt)
 		{
 			switch (elt->type) {
@@ -180,10 +188,33 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 			case RDNS_REQUEST_MX:
 				/* mx['name'], mx['priority'] */
-				lua_newtable (cd->L);
+				lua_createtable (cd->L, 0, 2);
 				rspamd_lua_table_set (cd->L, "name", elt->content.mx.name);
 				lua_pushstring (cd->L, "priority");
 				lua_pushnumber (cd->L, elt->content.mx.priority);
+				lua_settable (cd->L, -3);
+
+				lua_rawseti (cd->L, -2, ++i);
+				break;
+			case RDNS_REQUEST_SOA:
+				lua_createtable (cd->L, 0, 7);
+				rspamd_lua_table_set (cd->L, "ns", elt->content.soa.mname);
+				rspamd_lua_table_set (cd->L, "contact", elt->content.soa.admin);
+				lua_pushstring (cd->L, "serial");
+				lua_pushnumber (cd->L, elt->content.soa.serial);
+				lua_settable (cd->L, -3);
+				lua_pushstring (cd->L, "refresh");
+				lua_pushnumber (cd->L, elt->content.soa.refresh);
+				lua_settable (cd->L, -3);
+				lua_pushstring (cd->L, "retry");
+				lua_pushnumber (cd->L, elt->content.soa.retry);
+				lua_settable (cd->L, -3);
+				lua_pushstring (cd->L, "expiry");
+				lua_pushnumber (cd->L, elt->content.soa.expire);
+				lua_settable (cd->L, -3);
+				/* Negative TTL */
+				lua_pushstring (cd->L, "nx");
+				lua_pushnumber (cd->L, elt->content.soa.minimum);
 				lua_settable (cd->L, -3);
 
 				lua_rawseti (cd->L, -2, ++i);
@@ -555,13 +586,14 @@ luaopen_dns_resolver (lua_State * L)
 	lua_rawset (L, -3);
 
 	{
-		LUA_ENUM (L, RDNS_REQUEST_A,	 RDNS_REQUEST_A);
-		LUA_ENUM (L, RDNS_REQUEST_PTR, RDNS_REQUEST_PTR);
-		LUA_ENUM (L, RDNS_REQUEST_MX,	RDNS_REQUEST_MX);
-		LUA_ENUM (L, RDNS_REQUEST_TXT, RDNS_REQUEST_TXT);
-		LUA_ENUM (L, RDNS_REQUEST_SRV, RDNS_REQUEST_SRV);
-		LUA_ENUM (L, RDNS_REQUEST_SPF, RDNS_REQUEST_SRV);
-		LUA_ENUM (L, RDNS_REQUEST_AAA, RDNS_REQUEST_SRV);
+		LUA_ENUM (L, DNS_A,	 RDNS_REQUEST_A);
+		LUA_ENUM (L, DNS_PTR, RDNS_REQUEST_PTR);
+		LUA_ENUM (L, DNS_MX,	RDNS_REQUEST_MX);
+		LUA_ENUM (L, DNS_TXT, RDNS_REQUEST_TXT);
+		LUA_ENUM (L, DNS_SRV, RDNS_REQUEST_SRV);
+		LUA_ENUM (L, DNS_SPF, RDNS_REQUEST_SPF);
+		LUA_ENUM (L, DNS_AAAA, RDNS_REQUEST_AAAA);
+		LUA_ENUM (L, DNS_SOA, RDNS_REQUEST_SOA);
 	}
 
 	luaL_register (L, NULL, dns_resolverlib_m);
