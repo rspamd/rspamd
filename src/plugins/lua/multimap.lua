@@ -626,7 +626,9 @@ local function multimap_callback(task, rule)
   elseif rt == 'asn' then
     local asn = task:get_mempool():get_variable('asn')
     if asn then
-      match_rule(rule, asn)
+      each(function(a)
+        match_rule(rule, a)
+      end, rspamd_str_split(asn, ' '))
     end
   elseif rt == 'country' then
     local country = task:get_mempool():get_variable('country')
