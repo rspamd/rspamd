@@ -476,6 +476,7 @@
                         probable: 0,
                         greylist: 0,
                         reject: 0,
+                        soft_reject: 0,
                         scanned: 0,
                         learned: 0,
                         read_only: neighbours_status[0].data.read_only,
@@ -488,6 +489,7 @@
                         neighbours_sum.probable += neighbours_status[e].data.probable;
                         neighbours_sum.greylist += neighbours_status[e].data.greylist;
                         neighbours_sum.reject += neighbours_status[e].data.reject;
+                        neighbours_sum.soft_reject += neighbours_status[e].data.soft_reject;
                         neighbours_sum.scanned += neighbours_status[e].data.scanned;
                         neighbours_sum.learned += neighbours_status[e].data.learned;
                         neighbours_sum.uptime += neighbours_status[e].data.uptime;
@@ -545,22 +547,6 @@
         $(document).on('click', '[data-dismiss="modal"]', function (e) {
             $('#modalBody form').hide();
         });
-
-//        function getChart() {
-//            $.ajax({
-//                dataType: 'json',
-//                type: 'GET',
-//                url: 'pie',
-//                jsonp: false,
-//                beforeSend: function (xhr) {
-//                    xhr.setRequestHeader('Password', getPassword());
-//                },
-//                success: function (data) {
-//                	console.log(data);
-//                    pie = drawPie(pie, "chart", data);
-//                }
-//            });
-//        }
 
         function getChart() {
             var creds = JSON.parse(sessionStorage.getItem('Credentials'));
