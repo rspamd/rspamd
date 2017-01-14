@@ -317,47 +317,67 @@ lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 }
 
 static void
-lua_tcp_push_error (struct lua_tcp_cbdata *cbd, const char *err, ...)
+lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
+		const char *err, ...)
 {
-	va_list ap;
+	va_list ap, ap_copy;
 	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
 	gint cbref;
 
-	hdl = g_queue_peek_head (cbd->handlers);
+	va_start (ap, err);
 
-	g_assert (hdl != NULL);
-
-	if (hdl->type == LUA_WANT_READ) {
-		cbref = hdl->h.r.cbref;
-	}
-	else {
-		cbref = hdl->h.w.cbref;
-	}
-
-	if (cbref != -1) {
-		lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbref);
-
-		/* Error message */
-		va_start (ap, err);
-		lua_pushvfstring (cbd->L, err, ap);
-		va_end (ap);
-
-		/* Body */
-		lua_pushnil (cbd->L);
-		/* Connection */
-		pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
-		*pcbd = cbd;
-		rspamd_lua_setclass (cbd->L, "rspamd{tcp}", -1);
-		REF_RETAIN (cbd);
-
-		if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
-			msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-			lua_pop (cbd->L, 1);
+	for (;;) {
+		if (is_fatal) {
+			hdl = g_queue_pop_head (cbd->handlers);
+		}
+		else {
+			hdl = g_queue_peek_head (cbd->handlers);
 		}
 
-		REF_RELEASE (cbd);
+		if (hdl == NULL) {
+			va_end (ap_copy);
+			break;
+		}
+
+		if (hdl->type == LUA_WANT_READ) {
+			cbref = hdl->h.r.cbref;
+		}
+		else {
+			cbref = hdl->h.w.cbref;
+		}
+
+		if (cbref != -1) {
+			lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbref);
+
+			/* Error message */
+			va_copy (ap_copy, ap);
+			lua_pushvfstring (cbd->L, err, ap_copy);
+			va_end (ap_copy);
+
+			/* Body */
+			lua_pushnil (cbd->L);
+			/* Connection */
+			pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
+			*pcbd = cbd;
+			rspamd_lua_setclass (cbd->L, "rspamd{tcp}", -1);
+			REF_RETAIN (cbd);
+
+			if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
+				msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
+				lua_pop (cbd->L, 1);
+			}
+
+			REF_RELEASE (cbd);
+		}
+
+		if (!is_fatal) {
+			/* Stop on the first callback found */
+			break;
+		}
 	}
+
+	va_end (ap);
 }
 
 static void
@@ -480,7 +500,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	r = sendmsg (cbd->fd, &msg, flags);
 
 	if (r == -1) {
-		lua_tcp_push_error (cbd, "IO write error while trying to write %d "
+		lua_tcp_push_error (cbd, FALSE, "IO write error while trying to write %d "
 				"bytes: %s", (gint)remain, strerror (errno));
 		lua_tcp_shift_handler (cbd);
 		lua_tcp_plan_handler_event (cbd, TRUE, FALSE);
@@ -603,7 +623,7 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 			lua_tcp_process_read_handler (cbd, rh);
 		}
 		else {
-			lua_tcp_push_error (cbd, "IO read error: connection terminated");
+			lua_tcp_push_error (cbd, FALSE, "IO read error: connection terminated");
 		}
 
 		lua_tcp_plan_handler_event (cbd, FALSE, TRUE);
@@ -618,7 +638,7 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 		}
 
 		/* Fatal error */
-		lua_tcp_push_error (cbd, "IO read error while trying to read data: %s",
+		lua_tcp_push_error (cbd, TRUE, "IO read error while trying to read data: %s",
 				strerror (errno));
 
 		REF_RELEASE (cbd);
@@ -645,13 +665,13 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	else if (what == EV_WRITE) {
 		if (!(cbd->flags & LUA_TCP_FLAG_CONNECTED)) {
 			if (getsockopt (fd, SOL_SOCKET, SO_ERROR, &so_error, &so_len) == -1) {
-				lua_tcp_push_error (cbd, "Cannot get socket error: %s",
+				lua_tcp_push_error (cbd, TRUE, "Cannot get socket error: %s",
 						strerror (errno));
 				REF_RELEASE (cbd);
 				goto out;
 			}
 			else if (so_error != 0) {
-				lua_tcp_push_error (cbd, "Socket error detected: %s",
+				lua_tcp_push_error (cbd, TRUE, "Socket error detected: %s",
 						strerror (so_error));
 				REF_RELEASE (cbd);
 				goto out;
@@ -682,12 +702,12 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	}
 #ifdef EV_CLOSED
 	else if (what == EV_CLOSED) {
-		lua_tcp_push_error (cbd, "Remote peer has closed the connection");
+		lua_tcp_push_error (cbd, TRUE, "Remote peer has closed the connection");
 		REF_RELEASE (cbd);
 	}
 #endif
 	else {
-		lua_tcp_push_error (cbd, "IO timeout");
+		lua_tcp_push_error (cbd, TRUE, "IO timeout");
 		REF_RELEASE (cbd);
 	}
 
@@ -730,7 +750,7 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 				}
 				else {
 					/* Cannot read more */
-					lua_tcp_push_error (cbd, "EOF, cannot read more data");
+					lua_tcp_push_error (cbd, FALSE, "EOF, cannot read more data");
 					lua_tcp_shift_handler (cbd);
 					lua_tcp_plan_handler_event (cbd, can_read, can_write);
 				}
@@ -751,7 +771,7 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 				}
 				else {
 					/* Cannot write more */
-					lua_tcp_push_error (cbd, "EOF, cannot write more data");
+					lua_tcp_push_error (cbd, FALSE, "EOF, cannot write more data");
 					lua_tcp_shift_handler (cbd);
 					lua_tcp_plan_handler_event (cbd, can_read, can_write);
 				}
@@ -791,9 +811,9 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 
 	if (reply->code != RDNS_RC_NOERROR) {
 		rn = rdns_request_get_name (reply->request, NULL);
-		lua_tcp_push_error (cbd, "unable to resolve host: %s",
+		lua_tcp_push_error (cbd, TRUE, "unable to resolve host: %s",
 				rn->name);
-		REF_RETAIN (cbd);
+		REF_RELEASE (cbd);
 	}
 	else {
 		if (reply->entries->type == RDNS_REQUEST_A) {
@@ -808,9 +828,9 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 		rspamd_inet_address_set_port (cbd->addr, cbd->port);
 
 		if (!lua_tcp_make_connection (cbd)) {
-			lua_tcp_push_error (cbd, "unable to make connection to the host %s",
+			lua_tcp_push_error (cbd, TRUE, "unable to make connection to the host %s",
 					rspamd_inet_address_to_string (cbd->addr));
-			REF_RETAIN (cbd);
+			REF_RELEASE (cbd);
 		}
 	}
 }
@@ -1169,14 +1189,14 @@ lua_tcp_request (lua_State *L)
 		if (task == NULL) {
 			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
-				lua_tcp_push_error (cbd, "cannot resolve host: %s", host);
-				REF_RETAIN (cbd);
+				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
+				REF_RELEASE (cbd);
 			}
 		}
 		else {
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
-				lua_tcp_push_error (cbd, "cannot resolve host: %s", host);
+				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				REF_RELEASE (cbd);
 			}
 		}
