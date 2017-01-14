@@ -103,7 +103,6 @@
                     timer_id.status = Visibility.every(10000, function () {
                         statWidgets();
                     });
-                    getChart();
                     break;
                 case "#throughput_nav":
                     getGraphData(selData);
@@ -418,7 +417,7 @@
                             host: neighbours[ind].host,
                             checked: false,
                             data: {},
-                            status: false
+                            status: false,
                         });
                     });
                     $.each(neighbours_status, function (ind) {
@@ -431,6 +430,7 @@
                             url: neighbours_status[ind].url + req_url,
                             success: function (data) {
                                 neighbours_status[ind].checked = true;
+
                                 if (jQuery.isEmptyObject(data)) {
                                     neighbours_status[ind].status = false; //serv does not work
                                 } else {
@@ -451,7 +451,8 @@
                                     on_error(neighbours_status[ind],
                                             jqXHR, textStatus, errorThrown);
                                 }
-                                if (neighbours_status.every(function (elt) {return elt.checked;})) {
+                                if (neighbours_status.every(
+                                        function (elt) {return elt.checked;})) {
                                     on_success(neighbours_status);
                                 }
                             }
@@ -485,6 +486,8 @@
                 var status_count = 0;
                 for(var e in neighbours_status) {
                     if(neighbours_status[e].status == true) {
+                        // Remove alert status
+                        localStorage.removeItem(e + '_alerted');
                         neighbours_sum.clean += neighbours_status[e].data.clean;
                         neighbours_sum.probable += neighbours_status[e].data.probable;
                         neighbours_sum.greylist += neighbours_status[e].data.greylist;
@@ -513,8 +516,13 @@
                 getChart();
             },
             function (serv, jqXHR, textStatus, errorThrown) {
-                alertMessage('alert-error', 'Cannot receive stats data from: ' +
+                var alert_status = serv.name + '_alerted';
+
+                if (!(alert_status in sessionStorage)) {
+                    sessionStorage.setItem(alert_status, true);
+                    alertMessage('alert-error', 'Cannot receive stats data from: ' +
                         serv.name + ', error: ' + errorThrown);
+                }
             });
         }
 
@@ -522,7 +530,6 @@
             if (!this.disabled) {
                 checked_server = this.value;
                 statWidgets();
-                getChart();
             }
         });
 
