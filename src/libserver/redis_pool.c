@@ -176,6 +176,7 @@ rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
 {
 	struct rspamd_redis_pool_connection *conn = p;
 
+	g_assert (!conn->active);
 	msg_debug_rpool ("scheduled removal of connection, refcount: %d",
 			conn->ref.refcount);
 	REF_RELEASE (conn);
@@ -346,12 +347,10 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 		if (g_queue_get_length (elt->inactive) > 0) {
 			conn_entry = g_queue_pop_head_link (elt->inactive);
 			conn = conn_entry->data;
+			g_assert (!conn->active);
 
 			if (conn->ctx->err == REDIS_OK) {
-				if (event_get_base (&conn->timeout)) {
-					event_del (&conn->timeout);
-				}
-
+				event_del (&conn->timeout);
 				conn->active = TRUE;
 				g_queue_push_tail_link (elt->active, conn_entry);
 				msg_debug_rpool ("reused existing connection to %s:%d", ip, port);
