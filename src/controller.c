@@ -345,13 +345,24 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 
 		if (cache->len == 0) {
 			/* Mmap region */
+#ifdef MAP_NOCORE
+			m = mmap (NULL, password->len, PROT_WRITE,
+					MAP_PRIVATE | MAP_ANON | MAP_NOCORE, -1, 0);
+#else
 			m = mmap (NULL, password->len, PROT_WRITE,
 					MAP_PRIVATE | MAP_ANON, -1, 0);
-			memcpy (m, password->begin, password->len);
-			(void)mprotect (m, password->len, PROT_READ);
-			(void)mlock (m, password->len);
-			cache->begin = m;
-			cache->len = password->len;
+#endif
+			if (m != MAP_FAILED) {
+				memcpy (m, password->begin, password->len);
+				(void)mprotect (m, password->len, PROT_READ);
+				(void)mlock (m, password->len);
+				cache->begin = m;
+				cache->len = password->len;
+			}
+			else {
+				msg_err_ctx ("cannot store cached password, mmap failed: %s",
+						strerror (errno));
+			}
 		}
 	}
 
