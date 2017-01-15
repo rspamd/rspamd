@@ -1341,7 +1341,7 @@ rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask)
 			p += 3;
 
 			for (;;) {
-				if (mask > 32) {
+				if (mask >= 32) {
 					mask -= 32;
 					*p = 0;
 				}

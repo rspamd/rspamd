@@ -257,8 +257,8 @@ dns_resolver_init (rspamd_logger_t *logger,
 	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
 		if (!rdns_resolver_parse_resolv_conf (dns_resolver->r, "/etc/resolv.conf")) {
-			msg_err_config (
-				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
+			msg_err ("cannot parse resolv.conf and no nameservers defined, "
+					"so no ways to resolve addresses");
 			rdns_resolver_release (dns_resolver->r);
 			dns_resolver->r = NULL;
 

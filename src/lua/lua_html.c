@@ -374,9 +374,9 @@ lua_html_get_blocks (lua_State *L)
 	guint i;
 
 	if (hc != NULL) {
-		lua_createtable (L, hc->blocks->len, 0);
-
 		if (hc->blocks && hc->blocks->len > 0) {
+			lua_createtable (L, hc->blocks->len, 0);
+
 			for (i = 0; i < hc->blocks->len; i ++) {
 				bl = g_ptr_array_index (hc->blocks, i);
 				lua_html_push_block (L, bl);

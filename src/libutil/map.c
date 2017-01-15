@@ -1465,10 +1465,6 @@ err:
 		g_slice_free1 (sizeof (*hdata), hdata);
 	}
 
-	if (fdata) {
-		g_slice_free1 (sizeof (*fdata), fdata);
-	}
-
 	return NULL;
 }
 

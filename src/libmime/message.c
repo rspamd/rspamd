@@ -692,7 +692,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	rspamd_images_process (task);
 	rspamd_archives_process (task);
 
-	if (task->received && task->received->len > 0) {
+	if (task->received->len > 0) {
 		gboolean need_recv_correction = FALSE;
 		rspamd_inet_addr_t *raddr;
 

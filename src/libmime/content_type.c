@@ -184,11 +184,12 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 	nparam->name.len = name_end - name_start;
 	decoded = rspamd_mime_header_decode (pool, value_start, value_end - value_start);
 	RSPAMD_FTOK_FROM_STR (&nparam->value, decoded);
-	DL_APPEND (found, nparam);
 
 	if (!found) {
 		g_hash_table_insert (cd->attrs, &nparam->name, nparam);
 	}
+
+	DL_APPEND (found, nparam);
 
 	srch.begin = "filename";
 	srch.len = 8;

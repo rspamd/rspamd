@@ -244,7 +244,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 		msg_debug_task ("rar archive is invalid (bad int32)"); \
 		return; \
 	} \
-	n = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); \
+	n = (guint)p[0] + ((guint)p[1] << 8) + ((guint)p[2] << 16) + ((guint)p[3] << 24); \
 	p += sizeof (guint32); \
 } while (0)
 

@@ -533,6 +533,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 
 	if (lua_istable (L, 1)) {
 		/* Table version */
+		lua_pushvalue (L, 1);
 		lua_pushstring (L, "task");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
@@ -621,6 +622,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 			dbname = lua_tostring (L, -1);
 		}
 		lua_pop (L, 1);
+		lua_pop (L, 1); /* table */
 
 
 		if (ret && addr != NULL) {
@@ -817,6 +819,7 @@ lua_redis_make_request_sync (lua_State *L)
 	redisReply *r;
 
 	if (lua_istable (L, 1)) {
+		lua_pushvalue (L, 1);
 
 		lua_pushstring (L, "cmd");
 		lua_gettable (L, -2);
@@ -848,9 +851,13 @@ lua_redis_make_request_sync (lua_State *L)
 		}
 		lua_pop (L, 1);
 
-		lua_pushstring (L, "args");
-		lua_gettable (L, -2);
-		lua_redis_parse_args (L, -1, cmd, &args, &arglens, &nargs);
+		if (cmd) {
+			lua_pushstring (L, "args");
+			lua_gettable (L, -2);
+			lua_redis_parse_args (L, -1, cmd, &args, &arglens, &nargs);
+			lua_pop (L, 1);
+		}
+
 		lua_pop (L, 1);
 
 		if (addr && cmd) {
@@ -928,7 +935,6 @@ lua_redis_connect (lua_State *L)
 	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx, **pctx;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
-	gboolean ret = FALSE;
 
 	ctx = rspamd_lua_redis_prepare_connection (L, NULL);
 
@@ -936,10 +942,11 @@ lua_redis_connect (lua_State *L)
 		ud = &ctx->d.async;
 
 		lua_pushstring (L, "timeout");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
 			timeout = lua_tonumber (L, -1);
 		}
+
 		lua_pop (L, 1);
 		ud->timeout = timeout;
 	}
@@ -950,14 +957,9 @@ lua_redis_connect (lua_State *L)
 		return 2;
 	}
 
-	if (ret) {
-		pctx = lua_newuserdata (L, sizeof (ctx));
-		*pctx = ctx;
-		rspamd_lua_setclass (L, "rspamd{redis}", -1);
-	}
-	else {
-		lua_pushnil (L);
-	}
+	pctx = lua_newuserdata (L, sizeof (ctx));
+	*pctx = ctx;
+	rspamd_lua_setclass (L, "rspamd{redis}", -1);
 
 	return 1;
 }

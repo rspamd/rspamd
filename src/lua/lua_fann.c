@@ -213,6 +213,8 @@ rspamd_fann_create_train (guint num_data, guint num_input, guint num_output)
 	fann_type *inp, *outp;
 	guint i;
 
+	g_assert (num_data > 0 && num_input > 0 && num_output > 0);
+
 	t = calloc (1, sizeof (*t));
 	g_assert (t != NULL);
 

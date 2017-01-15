@@ -1080,7 +1080,7 @@ rspamd_fuzzy_mirror_process_update (struct fuzzy_master_update_session *session,
 	 */
 	p = rspamd_http_message_get_body (msg, &remain);
 
-	if (remain > sizeof (gint32) * 2) {
+	if (p && remain > sizeof (gint32) * 2) {
 		memcpy (&revision, p, sizeof (gint32));
 		revision = GINT32_TO_LE (revision);
 
@@ -1322,6 +1322,7 @@ rspamd_fuzzy_mirror_finish_handler (struct rspamd_http_connection *conn,
 		if (!rspamd_http_message_get_body (msg, NULL) || !msg->url
 				|| msg->url->len == 0) {
 			msg_err_fuzzy_update ("empty update message, not processing");
+			err_str = "Empty update";
 
 			goto end;
 		}
@@ -1883,17 +1884,14 @@ fuzzy_storage_parse_mirror (rspamd_mempool_t *pool,
 	return TRUE;
 
 err:
+	g_free (up->name);
+	rspamd_upstreams_destroy (up->u);
 
-	if (up) {
-		g_free (up->name);
-		rspamd_upstreams_destroy (up->u);
-
-		if (up->key) {
-			rspamd_pubkey_unref (up->key);
-		}
-
-		g_slice_free1 (sizeof (*up), up);
+	if (up->key) {
+		rspamd_pubkey_unref (up->key);
 	}
+
+	g_slice_free1 (sizeof (*up), up);
 
 	return FALSE;
 }

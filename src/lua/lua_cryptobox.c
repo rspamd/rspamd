@@ -1131,6 +1131,10 @@ lua_cryptobox_verify_file (lua_State *L)
 		}
 	}
 	else {
+		if (map != NULL) {
+			munmap (map, len);
+		}
+
 		return luaL_error (L, "invalid arguments");
 	}
 

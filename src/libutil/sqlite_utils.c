@@ -220,7 +220,6 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 			return FALSE;
 		}
 		if (nanosleep (&sleep_ts, NULL) == -1 && errno != EINTR) {
-			close (fd);
 			msg_err_pool_check ("cannot sleep open lock file %s: %s", lock,
 					strerror (errno));
 

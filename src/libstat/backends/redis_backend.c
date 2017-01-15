@@ -126,9 +126,7 @@ rspamd_redis_expand_object (const gchar *pattern,
 	g_assert (ctx != NULL);
 	stcf = ctx->stcf;
 
-	if (task) {
-		L = task->cfg->lua_state;
-	}
+	L = task->cfg->lua_state;
 
 	if (ctx->enable_users) {
 		if (ctx->cbref_user == -1) {

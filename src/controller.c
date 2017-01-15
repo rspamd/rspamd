@@ -1276,7 +1276,7 @@ rspamd_controller_handle_graph (
 	k = 0;
 
 	/* Create window */
-	step = (rrd_result->rra_rows / desired_points + 0.5);
+	step = ceil (((gdouble)rrd_result->rra_rows) / desired_points);
 	g_assert (step >= 1);
 	acc = g_malloc0 (sizeof (double) * rrd_result->ds_count * step);
 
@@ -1996,14 +1996,21 @@ rspamd_controller_handle_saveactions (
 	}
 
 	parser = ucl_parser_new (0);
-	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
+	if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
+		if ((error = ucl_parser_get_error (parser)) != NULL) {
+			msg_err_session ("cannot parse input: %s", error);
+			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+			ucl_parser_free (parser);
+			return 0;
+		}
 
-	if ((error = ucl_parser_get_error (parser)) != NULL) {
-		msg_err_session ("cannot parse input: %s", error);
+		msg_err_session ("cannot parse input: unknown error");
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_parser_free (parser);
 		return 0;
 	}
+
+
 
 	obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
@@ -2110,10 +2117,15 @@ rspamd_controller_handle_savesymbols (
 	}
 
 	parser = ucl_parser_new (0);
-	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
+	if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
+		if ((error = ucl_parser_get_error (parser)) != NULL) {
+			msg_err_session ("cannot parse input: %s", error);
+			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
+			ucl_parser_free (parser);
+			return 0;
+		}
 
-	if ((error = ucl_parser_get_error (parser)) != NULL) {
-		msg_err_session ("cannot parse input: %s", error);
+		msg_err_session ("cannot parse input: unknown error");
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_parser_free (parser);
 		return 0;

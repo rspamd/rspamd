@@ -256,7 +256,7 @@ lua_trie_search_mime (lua_State *L)
 	gsize len, i;
 	gboolean found = FALSE;
 
-	if (trie) {
+	if (trie && task) {
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
 
@@ -292,7 +292,7 @@ lua_trie_search_rawmsg (lua_State *L)
 	gsize len;
 	gboolean found = FALSE;
 
-	if (trie) {
+	if (trie && task) {
 		text = task->msg.begin;
 		len = task->msg.len;
 
@@ -322,7 +322,7 @@ lua_trie_search_rawbody (lua_State *L)
 	gsize len;
 	gboolean found = FALSE;
 
-	if (trie) {
+	if (trie && task) {
 		if (task->raw_headers_content.len > 0) {
 			text = task->msg.begin + task->raw_headers_content.len;
 			len = task->msg.len - task->raw_headers_content.len;
