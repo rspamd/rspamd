@@ -166,6 +166,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	cur = cfg->classifiers;
 
 	while (cur) {
+		bk = NULL;
 		clf = cur->data;
 		cl = g_slice_alloc0 (sizeof (*cl));
 		cl->cfg = clf;
@@ -239,7 +240,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			st->classifier = cl;
 			st->stcf = stf;
 
-			if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
+			if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) && bk) {
 				st->backend = bk;
 				st->bkcf = bk->init (stat_ctx, cfg, st);
 				msg_debug_config ("added backend %s for symbol %s",

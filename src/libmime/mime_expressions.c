@@ -1229,6 +1229,9 @@ is_recipient_list_sorted (GPtrArray *ar)
 		return FALSE;
 	}
 
+	prev.len = 0;
+	prev.begin = NULL;
+
 	PTR_ARRAY_FOREACH (ar, i, addr) {
 		cur.begin = addr->addr;
 		cur.len = addr->addr_len;

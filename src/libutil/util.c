@@ -563,10 +563,6 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 				freeaddrinfo (res);
 
 				if (result == NULL) {
-					if (fd != -1) {
-						close (fd);
-					}
-
 					goto err;
 				}
 			}

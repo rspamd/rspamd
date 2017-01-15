@@ -374,16 +374,16 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 
 		/* Compare the first bytes */
 		bmask = mask / CHAR_BIT;
-		if (bmask > addrlen) {
+		if (mask > addrlen * CHAR_BIT) {
 			msg_info_task ("bad mask length: %d", mask);
 		}
 		else if (memcmp (s, d, bmask) == 0) {
-
-			if (bmask * CHAR_BIT != mask) {
+			if (bmask * CHAR_BIT < mask) {
 				/* Compare the remaining bits */
 				s += bmask;
 				d += bmask;
 				mask = (0xff << (CHAR_BIT - (mask - bmask * 8))) & 0xff;
+
 				if ((*s & mask) == (*d & mask)) {
 					res = TRUE;
 				}
