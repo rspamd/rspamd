@@ -249,6 +249,9 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rspamd_main = ud;
 
+	rspamd_log_close_priv (rspamd_main->logger,
+			rspamd_main->workers_uid, rspamd_main->workers_gid);
+
 	if (config_test) {
 		/* Explicitly set logger type to console in case of config testing */
 		rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
@@ -256,8 +259,6 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 
 	rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
 			&rspamd_main->logger, rspamd_main->server_pool);
-	rspamd_log_close_priv (rspamd_main->logger,
-			rspamd_main->workers_uid, rspamd_main->workers_gid);
 
 	if (rspamd_log_open_priv (rspamd_main->logger,
 			rspamd_main->workers_uid, rspamd_main->workers_gid) == -1) {
