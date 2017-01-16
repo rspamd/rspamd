@@ -356,9 +356,8 @@ lua_map_fin (struct map_cb_data *data)
 			lua_pop (cbdata->L, 1);
 		}
 	}
-	else if (cbdata->data != NULL) {
-		cbdata->data = rspamd_fstring_assign (cbdata->data, "", 0);
-	}
+
+	cbdata->data = rspamd_fstring_assign (cbdata->data, "", 0);
 }
 
 gint
