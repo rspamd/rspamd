@@ -943,6 +943,8 @@ static void
 rspamd_worker_conf_dtor (struct rspamd_worker_conf *wcf)
 {
 	if (wcf) {
+		/* XXX: fix reload memory leak somehow */
+		/* ucl_object_unref (wcf->options); */
 		g_queue_free (wcf->active_workers);
 		g_hash_table_unref (wcf->params);
 		g_slice_free1 (sizeof (*wcf), wcf);

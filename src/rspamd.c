@@ -322,6 +322,7 @@ rspamd_fork_delayed_cb (gint signo, short what, gpointer arg)
 	event_del (&w->wait_ev);
 	rspamd_fork_worker (w->rspamd_main, w->cf, w->oldindex,
 			w->rspamd_main->ev_base);
+	REF_RELEASE (w->cf);
 	g_slice_free1 (sizeof (*w), w);
 }
 
@@ -333,12 +334,13 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 	struct waiting_worker *nw;
 	struct timeval tv;
 
-	nw = g_slice_alloc (sizeof (*nw));
+	nw = g_slice_alloc0 (sizeof (*nw));
 	nw->cf = cf;
 	nw->oldindex = index;
 	nw->rspamd_main = rspamd_main;
 	tv.tv_sec = SOFT_FORK_TIME;
 	tv.tv_usec = 0;
+	REF_RETAIN (cf);
 	event_set (&nw->wait_ev, -1, EV_TIMEOUT, rspamd_fork_delayed_cb, nw);
 	event_base_set (rspamd_main->ev_base, &nw->wait_ev);
 	event_add (&nw->wait_ev, &tv);
@@ -984,6 +986,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 			/* We also need to clean descriptors left */
 			close (cur->control_pipe[0]);
 			close (cur->srv_pipe[0]);
+			REF_RELEASE (cur->cf);
 			g_free (cur);
 		}
 		else {

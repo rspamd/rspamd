@@ -586,7 +586,9 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	qtype = g_quark_try_string (worker_type);
 	if (qtype != 0) {
 		wrk = rspamd_config_new_worker (cfg, NULL);
+		wrk->options = ucl_object_ref (obj);
 		wrk->worker = rspamd_get_worker_by_type (cfg, qtype);
+
 		if (wrk->worker == NULL) {
 			g_set_error (err,
 					CFG_RCL_ERROR,
@@ -595,7 +597,9 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					worker_type);
 			return FALSE;
 		}
+
 		wrk->type = qtype;
+
 		if (wrk->worker->worker_init_func) {
 			wrk->ctx = wrk->worker->worker_init_func (cfg);
 		}
@@ -627,8 +631,6 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 		ucl_object_iterate_free (it);
 	}
-
-	wrk->options = (ucl_object_t *)obj;
 
 	if (!rspamd_rcl_section_parse_defaults (cfg, section, cfg->cfg_pool, obj,
 			wrk, err)) {
