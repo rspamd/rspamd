@@ -418,7 +418,7 @@ static gint
 lua_url_add_tag (lua_State *L)
 {
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
-	rspamd_mempool_t *mempool = rspamd_lua_check_mempool (L, 3);
+	rspamd_mempool_t *mempool = rspamd_lua_check_mempool (L, 4);
 	const gchar *tag = luaL_checkstring (L, 2);
 	const gchar *value;
 
