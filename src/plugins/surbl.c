@@ -1445,7 +1445,7 @@ surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
 			if (!g_hash_table_lookup (task->urls, redirected_url)) {
 				g_hash_table_insert (task->urls, redirected_url,
 						redirected_url);
-				redirected_url->phished_url = param->url;
+				redirected_url->phished_url = url;
 				redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
 			}
 		}
@@ -1460,8 +1460,8 @@ surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
 			tld.len = redirected_url->tldlen;
 		}
 		else {
-			tld.begin = param->url->tld;
-			tld.len = param->url->tldlen;
+			tld.begin = url->tld;
+			tld.len = url->tldlen;
 		}
 
 		ftld = rspamd_mempool_ftokdup (task->task_pool, &tld);
