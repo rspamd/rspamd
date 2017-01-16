@@ -73,6 +73,7 @@ struct rspamd_logger_s {
 	gboolean is_debug;
 	gboolean throttling;
 	gboolean no_lock;
+	gboolean opened;
 	time_t throttling_time;
 	enum rspamd_log_type type;
 	pid_t pid;
@@ -212,18 +213,18 @@ rspamd_escape_log_string (gchar *str)
 gint
 rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
-	switch (rspamd_log->cfg->log_type) {
+	if (!rspamd_log->opened) {
+		switch (rspamd_log->cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			/* Do nothing with console */
 			rspamd_log->enabled = TRUE;
-			return 0;
+			break;
 		case RSPAMD_LOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
 			openlog ("rspamd", LOG_NDELAY | LOG_PID,
 					rspamd_log->cfg->log_facility);
-			rspamd_log->enabled = TRUE;
 #endif
-			return 0;
+			break;
 		case RSPAMD_LOG_FILE:
 			rspamd_log->fd = open (rspamd_log->cfg->log_file,
 					O_CREAT | O_WRONLY | O_APPEND,
@@ -241,10 +242,16 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 				close (rspamd_log->fd);
 				return -1;
 			}
-			rspamd_log->enabled = TRUE;
-			return 0;
+			break;
+		default:
+			return -1;
+		}
+
+		rspamd_log->opened = TRUE;
+		rspamd_log->enabled = TRUE;
 	}
-	return -1;
+
+	return 0;
 }
 
 void
@@ -253,7 +260,8 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 	gchar tmpbuf[256];
 	rspamd_log_flush (rspamd_log);
 
-	switch (rspamd_log->type) {
+	if (rspamd_log->opened) {
+		switch (rspamd_log->type) {
 		case RSPAMD_LOG_CONSOLE:
 			/* Do nothing special */
 			break;
@@ -293,7 +301,6 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 							rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
 							tmpbuf,
 							rspamd_log);
-					return;
 				}
 
 				if (fsync (rspamd_log->fd) == -1) {
@@ -302,15 +309,18 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 				close (rspamd_log->fd);
 			}
 			break;
-	}
+		}
 
-	rspamd_log->enabled = FALSE;
+		rspamd_log->enabled = FALSE;
+		rspamd_log->opened = FALSE;
+	}
 }
 
 gint
 rspamd_log_reopen_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
 	rspamd_log_close_priv (rspamd_log, uid, gid);
+
 	if (rspamd_log_open_priv (rspamd_log, uid, gid) == 0) {
 		msg_info ("log file reopened");
 		return 0;
