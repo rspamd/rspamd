@@ -249,9 +249,6 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rspamd_main = ud;
 
-	rspamd_log_close_priv (rspamd_main->logger,
-			rspamd_main->workers_uid, rspamd_main->workers_gid);
-
 	if (config_test) {
 		/* Explicitly set logger type to console in case of config testing */
 		rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
@@ -277,7 +274,6 @@ reread_config (struct rspamd_main *rspamd_main)
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
-	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 			rspamd_main->cfg->cfg_name);
 	/* Save some variables */
@@ -285,22 +281,21 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
 			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE)) {
-		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
-				"main"), rspamd_main);
+		rspamd_log_close_priv (rspamd_main->logger,
+					rspamd_main->workers_uid,
+					rspamd_main->workers_gid);
+		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
+				rspamd_main);
+		rspamd_log_open_priv (rspamd_main->logger,
+					rspamd_main->workers_uid,
+					rspamd_main->workers_gid);
 		msg_err_main ("cannot parse new config file, revert to old one");
 		REF_RELEASE (tmp_cfg);
 	}
 	else {
 		msg_debug_main ("replacing config");
 		REF_RELEASE (rspamd_main->cfg);
-
 		rspamd_main->cfg = tmp_cfg;
-		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
-		/* Force debug log */
-		if (is_debug) {
-			rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
-		}
-
 		msg_info_main ("config has been reread successfully");
 	}
 }
@@ -897,14 +892,14 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 {
 	struct rspamd_main *rspamd_main = arg;
 
-	rspamd_log_reopen_priv (rspamd_main->logger,
-			rspamd_main->workers_uid,
-			rspamd_main->workers_gid);
 	msg_info_main ("rspamd "
 			RVERSION
 			" is restarting");
 	g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 	rspamd_map_remove_all (rspamd_main->cfg);
+	rspamd_log_close_priv (rspamd_main->logger,
+				rspamd_main->workers_uid,
+				rspamd_main->workers_gid);
 	reread_config (rspamd_main);
 	rspamd_check_core_limits (rspamd_main);
 	spawn_workers (rspamd_main, rspamd_main->ev_base);
@@ -1178,6 +1173,9 @@ main (gint argc, gchar **argv, gchar **env)
 		do_encrypt_password ();
 		exit (EXIT_SUCCESS);
 	}
+
+	rspamd_log_close_priv (rspamd_main->logger, rspamd_main->workers_uid,
+			rspamd_main->workers_gid);
 
 	if (config_test || dump_cache) {
 		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, 0)) {
