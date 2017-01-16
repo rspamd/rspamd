@@ -267,7 +267,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 static void
 reread_config (struct rspamd_main *rspamd_main)
 {
-	struct rspamd_config *tmp_cfg;
+	struct rspamd_config *tmp_cfg, *old_cfg;
 	gchar *cfg_file;
 
 	tmp_cfg = rspamd_config_new ();
@@ -278,9 +278,12 @@ reread_config (struct rspamd_main *rspamd_main)
 			rspamd_main->cfg->cfg_name);
 	/* Save some variables */
 	tmp_cfg->cfg_name = cfg_file;
+	old_cfg = rspamd_main->cfg;
+	rspamd_main->cfg = tmp_cfg;
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
 			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE)) {
+		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
 					rspamd_main->workers_uid,
 					rspamd_main->workers_gid);
@@ -294,8 +297,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	}
 	else {
 		msg_debug_main ("replacing config");
-		REF_RELEASE (rspamd_main->cfg);
-		rspamd_main->cfg = tmp_cfg;
+		REF_RELEASE (old_cfg);
 		msg_info_main ("config has been reread successfully");
 	}
 }
