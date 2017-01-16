@@ -127,30 +127,48 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 	struct iovec *iov;
 	const gchar *line;
 	glong r;
+	gint fd;
+
+	if (rspamd_log->type == RSPAMD_LOG_CONSOLE) {
+		fd = STDERR_FILENO;
+	}
+	else {
+		fd = rspamd_log->fd;
+	}
 
 	if (rspamd_log->enabled) {
 		if (!rspamd_log->no_lock) {
 #ifndef DISABLE_PTHREAD_MUTEX
-			rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			if (rspamd_log->mtx) {
+				rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			}
+			else {
+				rspamd_file_lock (fd, FALSE);
+			}
 #else
-			rspamd_file_lock (rspamd_log->fd, FALSE);
+			rspamd_file_lock (fd, FALSE);
 #endif
 		}
 
 		if (is_iov) {
 			iov = (struct iovec *) data;
-			r = writev (rspamd_log->fd, iov, count);
+			r = writev (fd, iov, count);
 		}
 		else {
 			line = (const gchar *) data;
-			r = write (rspamd_log->fd, line, count);
+			r = write (fd, line, count);
 		}
 
 		if (!rspamd_log->no_lock) {
 #ifndef DISABLE_PTHREAD_MUTEX
-			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+			if (rspamd_log->mtx) {
+				rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+			}
+			else {
+				rspamd_file_unlock (fd, FALSE);
+			}
 #else
-			rspamd_file_unlock (rspamd_log->fd, FALSE);
+			rspamd_file_unlock (fd, FALSE);
 #endif
 		}
 
@@ -207,7 +225,7 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 		switch (rspamd_log->cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			/* Do nothing with console */
-			rspamd_log->enabled = TRUE;
+			rspamd_log->fd = -1;
 			break;
 		case RSPAMD_LOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
@@ -261,38 +279,38 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 #endif
 			break;
 		case RSPAMD_LOG_FILE:
-			if (rspamd_log->enabled) {
-				if (rspamd_log->repeats > REPEATS_MIN) {
-					rspamd_snprintf (tmpbuf,
-							sizeof (tmpbuf),
-							"Last message repeated %ud times",
-							rspamd_log->repeats);
-					rspamd_log->repeats = 0;
-					if (rspamd_log->saved_message) {
-						file_log_function (rspamd_log->saved_module,
-								rspamd_log->saved_id,
-								rspamd_log->saved_function,
-								rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
-								rspamd_log->saved_message,
-								rspamd_log);
-
-						g_free (rspamd_log->saved_message);
-						g_free (rspamd_log->saved_function);
-						g_free (rspamd_log->saved_module);
-						g_free (rspamd_log->saved_id);
-						rspamd_log->saved_message = NULL;
-						rspamd_log->saved_function = NULL;
-						rspamd_log->saved_module = NULL;
-						rspamd_log->saved_id = NULL;
-					}
-					/* It is safe to use temporary buffer here as it is not static */
-					file_log_function (NULL, NULL,
-							G_STRFUNC,
+			if (rspamd_log->repeats > REPEATS_MIN) {
+				rspamd_snprintf (tmpbuf,
+						sizeof (tmpbuf),
+						"Last message repeated %ud times",
+						rspamd_log->repeats);
+				rspamd_log->repeats = 0;
+				if (rspamd_log->saved_message) {
+					file_log_function (rspamd_log->saved_module,
+							rspamd_log->saved_id,
+							rspamd_log->saved_function,
 							rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
-							tmpbuf,
+							rspamd_log->saved_message,
 							rspamd_log);
-				}
 
+					g_free (rspamd_log->saved_message);
+					g_free (rspamd_log->saved_function);
+					g_free (rspamd_log->saved_module);
+					g_free (rspamd_log->saved_id);
+					rspamd_log->saved_message = NULL;
+					rspamd_log->saved_function = NULL;
+					rspamd_log->saved_module = NULL;
+					rspamd_log->saved_id = NULL;
+				}
+				/* It is safe to use temporary buffer here as it is not static */
+				file_log_function (NULL, NULL,
+						G_STRFUNC,
+						rspamd_log->saved_loglevel | RSPAMD_LOG_FORCED,
+						tmpbuf,
+						rspamd_log);
+			}
+
+			if (rspamd_log->fd != -1) {
 				if (fsync (rspamd_log->fd) == -1) {
 					msg_err ("error syncing log file: %s", strerror (errno));
 				}
@@ -383,7 +401,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	switch (cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			logger->log_func = file_log_function;
-			logger->fd = STDERR_FILENO;
+			logger->fd = -1;
 			break;
 		case RSPAMD_LOG_SYSLOG:
 			logger->log_func = syslog_log_function;
