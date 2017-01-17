@@ -67,7 +67,8 @@
 static gboolean load_rspamd_config (struct rspamd_main *rspamd_main,
 		struct rspamd_config *cfg,
 		gboolean init_modules,
-		enum rspamd_post_load_options opts);
+		enum rspamd_post_load_options opts,
+		gboolean reload);
 
 /* Control socket */
 static gint control_fd;
@@ -282,7 +283,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	rspamd_main->cfg = tmp_cfg;
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
-			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE)) {
+			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE, TRUE)) {
 		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
 					rspamd_main->workers_uid,
@@ -808,7 +809,8 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 static gboolean
 load_rspamd_config (struct rspamd_main *rspamd_main,
 		struct rspamd_config *cfg, gboolean init_modules,
-		enum rspamd_post_load_options opts)
+		enum rspamd_post_load_options opts,
+		gboolean reload)
 {
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
@@ -837,7 +839,7 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	rspamd_lua_post_load_config (cfg);
 
 	if (init_modules) {
-		rspamd_init_filters (cfg, FALSE);
+		rspamd_init_filters (cfg, reload);
 	}
 
 	/* Do post-load actions */
@@ -1197,15 +1199,11 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->workers_gid);
 
 	if (config_test || dump_cache) {
-		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, 0)) {
+		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, 0, FALSE)) {
 			exit (EXIT_FAILURE);
 		}
 
 		res = TRUE;
-
-		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
-			res = FALSE;
-		}
 
 		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
 				rspamd_main->cfg,
@@ -1224,7 +1222,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Load config */
 	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE,
-			RSPAMD_CONFIG_LOAD_ALL)) {
+			RSPAMD_CONFIG_LOAD_ALL, FALSE)) {
 		exit (EXIT_FAILURE);
 	}
 
