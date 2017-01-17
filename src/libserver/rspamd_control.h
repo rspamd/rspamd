@@ -44,7 +44,7 @@ enum rspamd_srv_type {
 enum rspamd_log_pipe_type {
 	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
-
+#define CONTROL_PATHLEN 400
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -61,7 +61,7 @@ struct rspamd_control_command {
 			guint unused;
 		} recompile;
 		struct {
-			gpointer cache_dir;
+			gchar cache_dir[CONTROL_PATHLEN];
 			gboolean forced;
 		} hs_loaded;
 		struct {
@@ -112,6 +112,7 @@ struct rspamd_control_reply {
 };
 
 #define PAIR_ID_LEN 16
+
 struct rspamd_srv_command {
 	enum rspamd_srv_type type;
 	guint64 id;
@@ -122,7 +123,7 @@ struct rspamd_srv_command {
 			guint pair_num;
 		} spair;
 		struct {
-			gpointer cache_dir;
+			gchar cache_dir[CONTROL_PATHLEN];
 			gboolean forced;
 		} hs_loaded;
 		struct {
