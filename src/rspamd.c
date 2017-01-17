@@ -915,6 +915,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 	gint res = 0;
 	struct rspamd_worker *cur;
 	pid_t wrk;
+	gboolean need_refork = TRUE;
 
 	/* Turn off locking for logger */
 	rspamd_log_nolock (rspamd_main->logger);
@@ -941,27 +942,36 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 #ifdef WCOREDUMP
 					if (WCOREDUMP (res)) {
 						msg_warn_main (
-								"%s process %P terminated abnormally by signal: %d"
+								"%s process %P terminated abnormally by signal: %s"
 								" and created core file",
 								g_quark_to_string (cur->type),
 								cur->pid,
-								WTERMSIG (res));
+								g_strsignal (WTERMSIG (res)));
 					}
 					else {
 						msg_warn_main (
-								"%s process %P terminated abnormally by signal: %d"
+								"%s process %P terminated abnormally by signal: %s"
 								" but NOT created core file",
 								g_quark_to_string (cur->type),
 								cur->pid,
-								WTERMSIG (res));
+								g_strsignal (WTERMSIG (res)));
 					}
 #else
 					msg_warn_main (
-							"%s process %P terminated abnormally by signal: %d",
+							"%s process %P terminated abnormally by signal: %s",
 							g_quark_to_string (cur->type),
 							cur->pid,
-							WTERMSIG (res));
+							g_strsignal (WTERMSIG (res)));
 #endif
+					if (WTERMSIG (res) == SIGUSR2) {
+						/*
+						 * It is actually race condition when not started process
+						 * has been requested to be reloaded.
+						 *
+						 * We shouldn't refork on this
+						 */
+						need_refork = FALSE;
+					}
 				}
 				else {
 					msg_warn_main ("%s process %P terminated abnormally "
@@ -970,9 +980,12 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 							cur->pid,
 							WEXITSTATUS (res));
 				}
-				/* Fork another worker in replace of dead one */
-				rspamd_check_core_limits (rspamd_main);
-				rspamd_fork_delayed (cur->cf, cur->index, rspamd_main);
+
+				if (need_refork) {
+					/* Fork another worker in replace of dead one */
+					rspamd_check_core_limits (rspamd_main);
+					rspamd_fork_delayed (cur->cf, cur->index, rspamd_main);
+				}
 			}
 
 			event_del (&cur->srv_ev);
