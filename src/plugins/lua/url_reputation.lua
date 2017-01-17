@@ -213,8 +213,6 @@ local function tags_save(task)
   -- Save tags to redis and insert symbol
   local function insert_results()
     task:insert_result(settings.symbols[scale[reputation]], 1.0, which)
-    -- Abort if no tags were found
-    if not next(tags) then return end
     -- Don't populate old tags
     local old_tags = task:get_mempool():get_variable('urltags')
     if old_tags then
@@ -236,6 +234,8 @@ local function tags_save(task)
         end
       end
     end
+    -- Abort if no tags were found
+    if not next(tags) then return end
     -- Prepare arguments to send to Redis
     local redis_keys = {}
     local redis_args = {}
