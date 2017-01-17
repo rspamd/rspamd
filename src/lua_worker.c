@@ -311,7 +311,8 @@ init_lua_worker (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("lua");
 
-	ctx = g_malloc0 (sizeof (struct rspamd_lua_worker_ctx));
+	ctx = rspamd_mempool_alloc (cfg->cfg_pool,
+			sizeof (struct rspamd_lua_worker_ctx));
 	ctx->magic = rspamd_lua_ctx_magic;
 	ctx->params = g_hash_table_new_full (rspamd_str_hash,
 			rspamd_str_equal,
