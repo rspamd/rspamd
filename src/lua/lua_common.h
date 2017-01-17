@@ -360,5 +360,14 @@ void lua_call_finish_script (lua_State *L, struct
 gboolean rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w);
 
+/**
+ * Adds new destructor for a local function for specific pool
+ * @param L
+ * @param pool
+ * @param ref
+ */
+void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
+		gint ref);
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

@@ -502,6 +502,9 @@ dkim_module_config (struct rspamd_config *cfg)
 				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
 					dkim_module_ctx->sign_condition_ref = luaL_ref (cfg->lua_state,
 							LUA_REGISTRYINDEX);
+					rspamd_lua_add_ref_dtor (cfg->lua_state,
+							dkim_module_ctx->dkim_pool,
+							dkim_module_ctx->sign_condition_ref);
 
 					dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
 									128,
@@ -631,8 +634,17 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 	saved_ctx = dkim_module_ctx->ctx;
 	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
 	radix_destroy_compressed (dkim_module_ctx->whitelist_ip);
+
 	if (dkim_module_ctx->dkim_domains) {
 		g_hash_table_destroy (dkim_module_ctx->dkim_domains);
+	}
+
+	if (dkim_module_ctx->dkim_hash) {
+		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_hash);
+	}
+
+	if (dkim_module_ctx->dkim_sign_hash) {
+		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_sign_hash);
 	}
 
 	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));

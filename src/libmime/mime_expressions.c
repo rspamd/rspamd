@@ -456,7 +456,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 }
 
 struct rspamd_function_atom *
-rspamd_mime_expr_parse_function_atom (const gchar *input)
+rspamd_mime_expr_parse_function_atom (rspamd_mempool_t *pool, const gchar *input)
 {
 	const gchar *obrace, *ebrace, *p, *c;
 	gchar t, *databuf;
@@ -477,10 +477,11 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 
 	g_assert (obrace != NULL && ebrace != NULL);
 
-	res = g_slice_alloc0 (sizeof (*res));
-	res->name = g_malloc (obrace - input + 1);
+	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
+	res->name = rspamd_mempool_alloc (pool, obrace - input + 1);
 	rspamd_strlcpy (res->name, input, obrace - input + 1);
 	res->args = g_array_new (FALSE, FALSE, sizeof (struct expression_argument));
+	rspamd_mempool_add_destructor (pool, rspamd_array_free_hard, res->args);
 
 	p = obrace + 1;
 	c = p;
@@ -514,7 +515,7 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 			}
 			else if (t == ',' || p == ebrace) {
 				len = p - c + 1;
-				databuf = g_malloc (len);
+				databuf = rspamd_mempool_alloc (pool, len);
 				rspamd_strlcpy (databuf, c, len);
 				arg.type = EXPRESSION_ARGUMENT_REGEXP;
 				arg.data = rspamd_regexp_cache_create (NULL, databuf, NULL, &err);
@@ -549,7 +550,7 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 					len = p - c + 1;
 				}
 
-				databuf = g_malloc (len);
+				databuf = rspamd_mempool_alloc (pool, len);
 				rspamd_strlcpy (databuf, c, len);
 				arg.type = EXPRESSION_ARGUMENT_NORMAL;
 				arg.data = databuf;
@@ -772,7 +773,8 @@ set:
 		lua_pop (cfg->lua_state, 1);
 	}
 	else {
-		mime_atom->d.func = rspamd_mime_expr_parse_function_atom (mime_atom->str);
+		mime_atom->d.func = rspamd_mime_expr_parse_function_atom (pool,
+				mime_atom->str);
 		if (mime_atom->d.func == NULL) {
 			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse function '%s'",
 					mime_atom->str);

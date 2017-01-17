@@ -296,9 +296,7 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	up = g_malloc0 (sizeof (*up));
-	rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t)g_free, up);
+	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
 	up->parser_from_ref = -1;
 	up->parser_to_ref = -1;
 	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
@@ -365,6 +363,9 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 				&up->parser_to_ref, err)) {
 			goto err;
 		}
+
+		rspamd_lua_add_ref_dtor (L, pool, up->parser_from_ref);
+		rspamd_lua_add_ref_dtor (L, pool, up->parser_to_ref);
 	}
 
 	double_to_tv (up->timeout, &up->io_tv);
@@ -408,9 +409,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	up = g_malloc0 (sizeof (*up));
-	rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)g_free, up);
+	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
 	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->parser_to_ref = -1;
 	up->parser_from_ref = -1;
@@ -480,6 +479,9 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 				&up->parser_to_ref, err)) {
 			goto err;
 		}
+
+		rspamd_lua_add_ref_dtor (L, pool, up->parser_from_ref);
+		rspamd_lua_add_ref_dtor (L, pool, up->parser_to_ref);
 	}
 
 	elt = ucl_object_lookup_any (obj, "settings", "settings_id", NULL);

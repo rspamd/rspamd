@@ -1628,14 +1628,14 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 	}
 	else {
 		parent_doc = (*top)->doc_ref;
-		new->doc_ref = rspamd_rcl_add_doc_obj (parent_doc,
+		new->doc_ref = ucl_object_ref (rspamd_rcl_add_doc_obj (parent_doc,
 				NULL,
 				name,
 				type,
 				NULL,
 				0,
 				NULL,
-				0);
+				0));
 	}
 
 	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
@@ -1658,14 +1658,14 @@ rspamd_rcl_add_section_doc (struct rspamd_rcl_section **top,
 	new->type = type;
 	new->strict_type = strict_type;
 
-	new->doc_ref = rspamd_rcl_add_doc_obj (doc_target,
+	new->doc_ref =  ucl_object_ref (rspamd_rcl_add_doc_obj (doc_target,
 			doc_string,
 			name,
 			type,
 			NULL,
 			0,
 			NULL,
-			0);
+			0));
 
 	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
 	return new;
@@ -3715,7 +3715,7 @@ rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 
 	ucl_object_insert_key (doc_target, doc_obj, doc_name, 0, true);
 
-	return ucl_object_ref (doc_obj);
+	return doc_obj;
 }
 
 ucl_object_t *
@@ -3786,7 +3786,7 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 		}
 	}
 
-	return rspamd_rcl_add_doc_obj ((ucl_object_t *) cur,
+	return rspamd_rcl_add_doc_obj (ucl_object_ref (cur),
 			doc_string,
 			doc_name,
 			type,

@@ -1264,3 +1264,31 @@ lua_worker_get_pid (lua_State *L)
 
 	return 1;
 }
+
+struct rspamd_lua_ref_cbdata {
+	lua_State *L;
+	gint cbref;
+};
+
+static void
+rspamd_lua_ref_dtor (gpointer p)
+{
+	struct rspamd_lua_ref_cbdata *cbdata = p;
+
+	luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
+}
+
+void
+rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
+		gint ref)
+{
+	struct rspamd_lua_ref_cbdata *cbdata;
+
+	if (ref != -1) {
+		cbdata = rspamd_mempool_alloc (pool, sizeof (*cbdata));
+		cbdata->cbref = ref;
+		cbdata->L = L;
+
+		rspamd_mempool_add_destructor (pool, rspamd_lua_ref_dtor, cbdata);
+	}
+}

@@ -332,6 +332,7 @@ spf_module_reconfig (struct rspamd_config *cfg)
 
 	saved_ctx = spf_module_ctx->ctx;
 	rspamd_mempool_delete (spf_module_ctx->spf_pool);
+	rspamd_lru_hash_destroy (spf_module_ctx->spf_hash);
 	radix_destroy_compressed (spf_module_ctx->whitelist_ip);
 	memset (spf_module_ctx, 0, sizeof (*spf_module_ctx));
 	spf_module_ctx->ctx = saved_ctx;

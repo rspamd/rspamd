@@ -1971,9 +1971,9 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 			return FALSE;
 		}
 
-		key = g_slice_alloc (sizeof (*key));
+		key = rspamd_mempool_alloc0 (pool, sizeof (*key));
 		key->key = kp;
-		keystat = g_slice_alloc0 (sizeof (*keystat));
+		keystat = rspamd_mempool_alloc0 (pool, sizeof (*keystat));
 		/* Hash of ip -> fuzzy_key_stat */
 		keystat->last_ips = rspamd_lru_hash_new_full (1024,
 				(GDestroyNotify)rspamd_inet_address_destroy, fuzzy_key_stat_dtor,
@@ -2027,12 +2027,20 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
 			NULL, fuzzy_key_dtor);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->keys);
 	ctx->master_flags = g_hash_table_new (g_direct_hash, g_direct_equal);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->master_flags);
 	ctx->errors_ips = rspamd_lru_hash_new_full (1024,
 			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy, ctx->errors_ips);
 	ctx->cfg = cfg;
 	ctx->mirrors = g_ptr_array_new ();
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ctx->mirrors);
 	ctx->updates_maxfail = DEFAULT_UPDATES_MAXFAIL;
 
 	rspamd_rcl_register_worker_option (cfg,
@@ -2416,8 +2424,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->keypair_cache) {
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
-
-	rspamd_lru_hash_destroy (ctx->errors_ips);
 
 	g_hash_table_unref (ctx->keys);
 	REF_RELEASE (ctx->cfg);
