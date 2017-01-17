@@ -294,8 +294,9 @@ free_http_cbdata_dtor (gpointer p)
 	struct rspamd_map *map;
 
 	map = cbd->map;
+	cbd->stage = map_finished;
 	msg_warn_map ("connection with http server is terminated: worker is stopping");
-	free_http_cbdata_common (cbd, FALSE);
+	REF_RELEASE (cbd);
 }
 
 /*
@@ -784,6 +785,11 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_SHARED;
 
 	map = cbd->map;
+
+	if (cbd->stage == map_finished) {
+		MAP_RELEASE (cbd, "http_callback_data");
+		return;
+	}
 
 	if (reply->code == RDNS_RC_NOERROR) {
 		/*
@@ -1346,6 +1352,8 @@ rspamd_map_is_map (const gchar *map_line)
 static void
 rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 {
+	g_free (bk->uri);
+
 	if (bk->protocol == MAP_PROTO_FILE) {
 		if (bk->data.fd) {
 			g_free (bk->data.fd->filename);

@@ -116,7 +116,8 @@ enum rspamd_map_http_stage {
 	map_resolve_host1, /* 1 requests sent */
 	map_load_file,
 	map_load_pubkey,
-	map_load_signature
+	map_load_signature,
+	map_finished
 };
 
 struct map_periodic_cbdata {
