@@ -856,6 +856,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	return TRUE;
 
 err:
+	g_ptr_array_free (operand_stack, TRUE);
+	rspamd_expression_destroy (e);
+
 	return FALSE;
 }
 

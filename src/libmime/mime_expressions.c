@@ -449,6 +449,8 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	}
 
 	rspamd_regexp_set_ud (result->regexp, result);
+	rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t)rspamd_regexp_unref, result->regexp);
 
 	*dend = '/';
 
@@ -706,9 +708,9 @@ set:
 		return NULL;
 	}
 
-	mime_atom = g_slice_alloc (sizeof (*mime_atom));
+	mime_atom = rspamd_mempool_alloc (pool, sizeof (*mime_atom));
 	mime_atom->type = type;
-	mime_atom->str = g_malloc (p - line + 1);
+	mime_atom->str = rspamd_mempool_alloc (pool, p - line + 1);
 	rspamd_strlcpy (mime_atom->str, line, p - line + 1);
 
 	if (type == MIME_ATOM_REGEXP) {
@@ -788,8 +790,6 @@ set:
 	return a;
 
 err:
-	g_free (mime_atom->str);
-	g_slice_free1 (sizeof (*mime_atom), mime_atom);
 
 	return NULL;
 }
@@ -889,8 +889,6 @@ rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
 			}
 			g_array_free (mime_atom->d.func->args, TRUE);
 		}
-		/* XXX: regexp shouldn't be special */
-		g_slice_free1 (sizeof (*mime_atom), mime_atom);
 	}
 }
 
