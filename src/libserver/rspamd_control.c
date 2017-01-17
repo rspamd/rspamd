@@ -810,7 +810,9 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				 * We assume that cache dir is shared at the same address for all
 				 * workers
 				 */
-				wcmd.cmd.hs_loaded.cache_dir = cmd.cmd.hs_loaded.cache_dir;
+				rspamd_strlcpy (wcmd.cmd.hs_loaded.cache_dir,
+						cmd.cmd.hs_loaded.cache_dir,
+						sizeof (wcmd.cmd.hs_loaded.cache_dir));
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_hs_io_handler, NULL);
