@@ -357,6 +357,7 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 		g_array_free (expr->expressions, TRUE);
 		g_ptr_array_free (expr->expression_stack, TRUE);
 		g_node_destroy (expr->ast);
+		g_slice_free1 (sizeof (*expr), expr);
 	}
 }
 
