@@ -449,8 +449,6 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	}
 
 	rspamd_regexp_set_ud (result->regexp, result);
-	rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t)rspamd_regexp_unref, result->regexp);
 
 	*dend = '/';
 

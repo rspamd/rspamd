@@ -237,9 +237,6 @@ fuzzy_key_dtor (gpointer p)
 	if (key->stat) {
 		fuzzy_key_stat_dtor (key->stat);
 	}
-	if (key->key) {
-		rspamd_keypair_unref (key->key);
-	}
 
 	g_slice_free1 (sizeof (*key), key);
 }

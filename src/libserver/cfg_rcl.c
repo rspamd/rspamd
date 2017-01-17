@@ -2935,6 +2935,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 		kp = rspamd_keypair_from_ucl (obj);
 
 		if (kp != NULL) {
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t)rspamd_keypair_unref, kp);
 			*target = kp;
 		}
 		else {

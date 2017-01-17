@@ -488,7 +488,7 @@ init_worker (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("normal");
 
-	ctx = rspamd_mempool_alloc (cfg->cfg_pool,
+	ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct rspamd_worker_ctx));
 
 	ctx->magic = rspamd_worker_magic;
@@ -637,10 +637,6 @@ start_worker (struct rspamd_worker *worker)
 
 	rspamd_stat_close ();
 	rspamd_log_close (worker->srv->logger);
-
-	if (ctx->key) {
-		rspamd_keypair_unref (ctx->key);
-	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
 

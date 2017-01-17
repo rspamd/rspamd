@@ -296,10 +296,12 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	up = g_slice_alloc0 (sizeof (*up));
+	up = g_malloc0 (sizeof (*up));
+	rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t)g_free, up);
 	up->parser_from_ref = -1;
 	up->parser_to_ref = -1;
-	up->name = g_strdup (ucl_object_tostring (elt));
+	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->timeout = ctx->timeout;
 
 	elt = ucl_object_lookup (obj, "key");
@@ -313,6 +315,9 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 			goto err;
 		}
+
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)rspamd_pubkey_unref, up->key);
 	}
 
 	elt = ucl_object_lookup (obj, "hosts");
@@ -331,6 +336,9 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 		goto err;
 	}
+
+	rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t)rspamd_upstreams_destroy, up->u);
 
 	elt = ucl_object_lookup (obj, "default");
 	if (elt && ucl_object_toboolean (elt)) {
@@ -366,25 +374,6 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	return TRUE;
 
 err:
-
-	if (up) {
-		g_free (up->name);
-		rspamd_upstreams_destroy (up->u);
-
-		if (up->key) {
-			rspamd_pubkey_unref (up->key);
-		}
-
-		if (up->parser_from_ref != -1) {
-			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_from_ref);
-		}
-		if (up->parser_to_ref != -1) {
-			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_to_ref);
-		}
-
-		g_slice_free1 (sizeof (*up), up);
-	}
-
 	return FALSE;
 }
 
@@ -419,8 +408,10 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	up = g_slice_alloc0 (sizeof (*up));
-	up->name = g_strdup (ucl_object_tostring (elt));
+	up = g_malloc0 (sizeof (*up));
+	rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)g_free, up);
+	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->parser_to_ref = -1;
 	up->parser_from_ref = -1;
 	up->timeout = ctx->timeout;
@@ -436,6 +427,9 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 			goto err;
 		}
+
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)rspamd_pubkey_unref, up->key);
 	}
 
 	elt = ucl_object_lookup (obj, "hosts");
@@ -454,6 +448,9 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 		goto err;
 	}
+
+	rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t)rspamd_upstreams_destroy, up->u);
 
 	elt = ucl_object_lookup_any (obj, "probability", "prob", NULL);
 	if (elt) {
@@ -487,7 +484,7 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 
 	elt = ucl_object_lookup_any (obj, "settings", "settings_id", NULL);
 	if (elt && ucl_object_type (elt) == UCL_STRING) {
-		up->settings_id = g_strdup (ucl_object_tostring (elt));
+		up->settings_id = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
 	double_to_tv (up->timeout, &up->io_tv);
@@ -497,24 +494,6 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	return TRUE;
 
 err:
-
-	if (up) {
-		g_free (up->name);
-		rspamd_upstreams_destroy (up->u);
-
-		if (up->key) {
-			rspamd_pubkey_unref (up->key);
-		}
-
-		if (up->parser_from_ref != -1) {
-			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_from_ref);
-		}
-		if (up->parser_to_ref != -1) {
-			luaL_unref (L, LUA_REGISTRYINDEX, up->parser_to_ref);
-		}
-
-		g_slice_free1 (sizeof (*up), up);
-	}
 
 	return FALSE;
 }
@@ -625,11 +604,17 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 	ctx->magic = rspamd_rspamd_proxy_magic;
 	ctx->timeout = 10.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->upstreams);
 	ctx->mirrors = g_ptr_array_new ();
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ctx->mirrors);
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 	ctx->cfg = cfg;
 	ctx->lua_state = cfg->lua_state;
 	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_array_free_hard, ctx->cmp_refs);
 	ctx->max_retries = DEFAULT_RETRIES;
 
 	rspamd_rcl_register_worker_option (cfg,
@@ -1494,10 +1479,6 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	rspamd_log_close (worker->srv->logger);
-
-	if (ctx->key) {
-		rspamd_keypair_unref (ctx->key);
-	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
 	REF_RELEASE (ctx->cfg);
