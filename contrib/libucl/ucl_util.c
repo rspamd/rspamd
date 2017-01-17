@@ -2470,6 +2470,10 @@ ucl_object_iterate_reset (ucl_object_iter_t it, const ucl_object_t *obj)
 
 	UCL_SAFE_ITER_CHECK (rit);
 
+	if (rit->expl_it != NULL) {
+		UCL_FREE (sizeof (*rit->expl_it), rit->expl_it);
+	}
+
 	rit->impl_it = obj;
 	rit->expl_it = NULL;
 
@@ -2501,12 +2505,8 @@ ucl_object_iterate_full (ucl_object_iter_t it, enum ucl_iterate_type type)
 		if (ret == NULL && (type & UCL_ITERATE_IMPLICIT)) {
 			/* Need to switch to another implicit object in chain */
 			rit->impl_it = rit->impl_it->next;
-
-			if (rit->expl_it != NULL) {
-				UCL_FREE (sizeof (*rit->expl_it), rit->expl_it);
-			}
-
 			rit->expl_it = NULL;
+
 			return ucl_object_iterate_safe (it, type);
 		}
 	}
