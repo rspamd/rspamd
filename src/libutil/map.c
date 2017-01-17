@@ -294,9 +294,16 @@ free_http_cbdata_dtor (gpointer p)
 	struct rspamd_map *map;
 
 	map = cbd->map;
-	cbd->stage = map_finished;
+	if (cbd->stage >= map_load_file) {
+		REF_RELEASE (cbd);
+	}
+	else {
+		/* We cannot terminate DNS requests sent */
+		cbd->stage = map_finished;
+	}
+
 	msg_warn_map ("connection with http server is terminated: worker is stopping");
-	REF_RELEASE (cbd);
+
 }
 
 /*
