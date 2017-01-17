@@ -637,13 +637,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	lua_State *L = cfg->lua_state;
 
-	fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
+	if (fuzzy_module_ctx == NULL) {
+		fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
 
-	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		/* TODO: this should match rules count actually */
+		fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
+		fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
+	}
+
 	fuzzy_module_ctx->cfg = cfg;
-	/* TODO: this should match rules count actually */
-	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
-	fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
@@ -1043,10 +1046,12 @@ fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 	saved_ctx = fuzzy_module_ctx->ctx;
 	rspamd_mempool_delete (fuzzy_module_ctx->fuzzy_pool);
 	rspamd_keypair_cache_destroy (fuzzy_module_ctx->keypairs_cache);
+	g_ptr_array_free (fuzzy_module_ctx->fuzzy_rules, TRUE);
 	memset (fuzzy_module_ctx, 0, sizeof (*fuzzy_module_ctx));
 	fuzzy_module_ctx->ctx = saved_ctx;
 	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	fuzzy_module_ctx->cfg = cfg;
+	fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
 	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
 
 	return fuzzy_check_module_config (cfg);

@@ -91,9 +91,10 @@ read_regexp_expression (rspamd_mempool_t * pool,
 gint
 regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
-
-	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	if (regexp_module_ctx == NULL) {
+		regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
+		regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	}
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 

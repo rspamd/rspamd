@@ -115,16 +115,18 @@ dkim_module_key_dtor (gpointer k)
 gint
 dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
+	if (dkim_module_ctx == NULL) {
+		dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
 
-	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
-	dkim_module_ctx->sign_headers = "from:sender:reply-to:subject:date:message-id:"
-			"to:cc:mime-version:content-type:content-transfer-encoding:"
-			"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-			"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
-			"list-subscribe:list-post";
-	dkim_module_ctx->sign_condition_ref = -1;
-	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
+		dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
+		dkim_module_ctx->sign_headers = "from:sender:reply-to:subject:date:message-id:"
+				"to:cc:mime-version:content-type:content-transfer-encoding:"
+				"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
+				"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
+				"list-subscribe:list-post";
+		dkim_module_ctx->sign_condition_ref = -1;
+		dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
+	}
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 

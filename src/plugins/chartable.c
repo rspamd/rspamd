@@ -78,10 +78,12 @@ static void chartable_url_symbol_callback (struct rspamd_task *task, void *unuse
 gint
 chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
+	if (chartable_module_ctx == NULL) {
+		chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
-	chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-	chartable_module_ctx->max_word_len = 10;
+		chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		chartable_module_ctx->max_word_len = 10;
+	}
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
 

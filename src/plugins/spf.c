@@ -83,9 +83,11 @@ module_t spf_module = {
 gint
 spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
+	if (spf_module_ctx == NULL) {
+		spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
 
-	spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	}
 
 	*ctx = (struct module_ctx *)spf_module_ctx;
 
