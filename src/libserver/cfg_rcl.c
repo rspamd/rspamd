@@ -3437,6 +3437,23 @@ rspamd_rcl_emitter_append_double (double elt, void *ud)
 	return 0;
 }
 
+static void
+rspamd_rcl_section_free (gpointer p)
+{
+	struct rspamd_rcl_section *top = p, *cur, *tmp;
+
+	HASH_ITER (hh, top, cur, tmp) {
+		HASH_DEL (top, cur);
+
+		if (cur->subsections) {
+			rspamd_rcl_section_free (cur->subsections);
+		}
+
+		ucl_object_unref (cur->doc_ref);
+		g_slice_free1 (sizeof (*cur), cur);
+	}
+}
+
 gboolean
 rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
@@ -3505,6 +3522,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	top = rspamd_rcl_config_init (cfg);
 	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
+	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);
 	err = NULL;
 
 	if (logger_fin != NULL) {
@@ -3695,7 +3713,7 @@ rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 
 	ucl_object_insert_key (doc_target, doc_obj, doc_name, 0, true);
 
-	return doc_obj;
+	return ucl_object_ref (doc_obj);
 }
 
 ucl_object_t *
