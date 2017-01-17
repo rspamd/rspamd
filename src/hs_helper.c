@@ -62,7 +62,7 @@ init_hs_helper (struct rspamd_config *cfg)
 	GQuark type;
 
 	type = g_quark_try_string ("hs_helper");
-	ctx = g_malloc0 (sizeof (*ctx));
+	ctx = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*ctx));
 
 	ctx->magic = rspamd_hs_helper_magic;
 	ctx->cfg = cfg;

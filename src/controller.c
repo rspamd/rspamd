@@ -3051,7 +3051,8 @@ init_controller_worker (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("controller");
 
-	ctx = g_malloc0 (sizeof (struct rspamd_controller_worker_ctx));
+	ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (struct rspamd_controller_worker_ctx));
 
 	ctx->magic = rspamd_controller_ctx_magic;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;

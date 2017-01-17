@@ -2021,7 +2021,8 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("fuzzy");
 
-	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
+	ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (struct rspamd_fuzzy_storage_ctx));
 
 	ctx->magic = rspamd_fuzzy_storage_magic;
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;

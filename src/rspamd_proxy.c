@@ -620,7 +620,8 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("rspamd_proxy");
 
-	ctx = g_malloc0 (sizeof (struct rspamd_proxy_ctx));
+	ctx = rspamd_mempool_alloc (cfg->cfg_pool,
+			sizeof (struct rspamd_proxy_ctx));
 	ctx->magic = rspamd_rspamd_proxy_magic;
 	ctx->timeout = 10.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);

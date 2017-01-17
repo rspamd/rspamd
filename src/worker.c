@@ -488,7 +488,8 @@ init_worker (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("normal");
 
-	ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
+	ctx = rspamd_mempool_alloc (cfg->cfg_pool,
+			sizeof (struct rspamd_worker_ctx));
 
 	ctx->magic = rspamd_worker_magic;
 	ctx->is_mime = TRUE;
