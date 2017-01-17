@@ -2501,6 +2501,11 @@ ucl_object_iterate_full (ucl_object_iter_t it, enum ucl_iterate_type type)
 		if (ret == NULL && (type & UCL_ITERATE_IMPLICIT)) {
 			/* Need to switch to another implicit object in chain */
 			rit->impl_it = rit->impl_it->next;
+
+			if (rit->expl_it != NULL) {
+				UCL_FREE (sizeof (*rit->expl_it), rit->expl_it);
+			}
+
 			rit->expl_it = NULL;
 			return ucl_object_iterate_safe (it, type);
 		}
@@ -2509,6 +2514,7 @@ ucl_object_iterate_full (ucl_object_iter_t it, enum ucl_iterate_type type)
 		/* Just iterate over the implicit array */
 		ret = rit->impl_it;
 		rit->impl_it = rit->impl_it->next;
+
 		if (type & UCL_ITERATE_EXPLICIT) {
 			/* We flatten objects if need to expand values */
 			if (ret->type == UCL_OBJECT || ret->type == UCL_ARRAY) {
@@ -2526,6 +2532,10 @@ ucl_object_iterate_free (ucl_object_iter_t it)
 	struct ucl_object_safe_iter *rit = UCL_SAFE_ITER (it);
 
 	UCL_SAFE_ITER_CHECK (rit);
+
+	if (rit->expl_it != NULL) {
+		UCL_FREE (sizeof (*rit->expl_it), rit->expl_it);
+	}
 
 	UCL_FREE (sizeof (*rit), it);
 }
