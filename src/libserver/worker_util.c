@@ -44,6 +44,7 @@
 #include <libutil.h>
 #endif
 
+static void rspamd_worker_ignore_signal (int signo);
 /**
  * Return worker's control structure by its type
  * @param type
@@ -94,6 +95,7 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 	struct timeval tv;
 
 	if (!sigh->worker->wanna_die) {
+		rspamd_worker_ignore_signal (SIGUSR2);
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
 		tv.tv_usec = 0;
 		sigh->worker->wanna_die = TRUE;
