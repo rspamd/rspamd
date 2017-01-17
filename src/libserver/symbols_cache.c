@@ -479,7 +479,10 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 		return FALSE;
 	}
 
+	rspamd_file_lock (fd, FALSE);
+
 	if (fstat (fd, &st) == -1) {
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		msg_info_cache ("cannot stat file %s, error %d, %s", name,
 				errno, strerror (errno));
@@ -487,6 +490,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	}
 
 	if (st.st_size < (gint)sizeof (*hdr)) {
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		errno = EINVAL;
 		msg_info_cache ("cannot use file %s, error %d, %s", name,
@@ -497,19 +501,22 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
 
 	if (map == MAP_FAILED) {
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 		msg_info_cache ("cannot mmap file %s, error %d, %s", name,
 				errno, strerror (errno));
 		return FALSE;
 	}
 
-	close (fd);
 	hdr = map;
 
 	if (memcmp (hdr->magic, rspamd_symbols_cache_magic,
 			sizeof (rspamd_symbols_cache_magic)) != 0) {
 		msg_info_cache ("cannot use file %s, bad magic", name);
 		munmap (map, st.st_size);
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
 		return FALSE;
 	}
 
@@ -521,11 +528,16 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				ucl_parser_get_error (parser));
 		munmap (map, st.st_size);
 		ucl_parser_free (parser);
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
 		return FALSE;
 	}
 
 	top = ucl_parser_get_object (parser);
 	munmap (map, st.st_size);
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
 	ucl_parser_free (parser);
 
 	if (top == NULL || ucl_object_type (top) != UCL_OBJECT) {
@@ -607,16 +619,18 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	struct ucl_emitter_functions *efunc;
 	gpointer k, v;
 	gint fd;
-	FILE *f;
 	bool ret;
 
-	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY, 00644);
+	(void)unlink (name);
+	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
 
 	if (fd == -1) {
 		msg_info_cache ("cannot open file %s, error %d, %s", name,
 				errno, strerror (errno));
 		return FALSE;
 	}
+
+	rspamd_file_lock (fd, FALSE);
 
 	memset (&hdr, 0, sizeof (hdr));
 	memcpy (hdr.magic, rspamd_symbols_cache_magic,
@@ -625,6 +639,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
 		msg_info_cache ("cannot write to file %s, error %d, %s", name,
 				errno, strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 
 		return FALSE;
@@ -648,14 +663,12 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 		ucl_object_insert_key (top, elt, k, 0, false);
 	}
 
-	f = fdopen (fd, "a");
-	g_assert (f != NULL);
-
-	efunc = ucl_object_emit_file_funcs (f);
+	efunc = ucl_object_emit_fd_funcs (fd);
 	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc, NULL);
 	ucl_object_emit_funcs_free (efunc);
 	ucl_object_unref (top);
-	fclose (f);
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
 
 	return ret;
 }
