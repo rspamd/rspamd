@@ -306,21 +306,21 @@ local function dmarc_callback(task)
       local spf_tmpfail = task:get_symbol(symbols['spf_tempfail_symbol'])
       local dkim_tmpfail = task:get_symbol(symbols['dkim_tempfail_symbol'])
       if (spf_tmpfail or dkim_tmpfail) then
-        task:insert_result(dmarc_symbols['dnsfail'], 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error')
+        task:insert_result(dmarc_symbols['dnsfail'], 1.0, lookup_domain .. ' : ' .. 'SPF/DKIM temp error', dmarc_policy)
         return maybe_force_action('dnsfail')
       end
       if dmarc_policy == 'quarantine' then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str)
+          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
           disposition = "quarantine"
         end
       elseif dmarc_policy == 'reject' then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str)
+          task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
           disposition = "reject"
         end
       else
-        task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str)
+        task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
       end
     else
       task:insert_result(dmarc_symbols['allow'], res, lookup_domain, dmarc_policy)
