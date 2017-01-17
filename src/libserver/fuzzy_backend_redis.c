@@ -103,7 +103,8 @@ rspamd_fuzzy_redis_session_free_args (struct rspamd_fuzzy_redis_session *session
 	}
 }
 static void
-rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session)
+rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session,
+		gboolean is_fatal)
 {
 	redisAsyncContext *ac;
 
@@ -112,7 +113,7 @@ rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session)
 		ac = session->ctx;
 		session->ctx = NULL;
 		rspamd_redis_pool_release_connection (session->backend->pool,
-				ac, FALSE);
+				ac, is_fatal);
 	}
 
 	if (event_get_base (&session->timeout)) {
@@ -423,7 +424,7 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 							session->callback.cb_check (&rep, session->cbdata);
 						}
 
-						rspamd_fuzzy_redis_session_dtor (session);
+						rspamd_fuzzy_redis_session_dtor (session, TRUE);
 					}
 					else {
 						/* Add timeout */
@@ -456,7 +457,7 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 		rspamd_upstream_fail (session->up);
 	}
 
-	rspamd_fuzzy_redis_session_dtor (session);
+	rspamd_fuzzy_redis_session_dtor (session, FALSE);
 }
 
 static void
@@ -500,7 +501,7 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 			session->callback.cb_check (&rep, session->cbdata);
 		}
 
-		rspamd_fuzzy_redis_session_dtor (session);
+		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 	}
 	else {
 		/* Add timeout */
@@ -581,7 +582,7 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 		rspamd_upstream_fail (session->up);
 	}
 
-	rspamd_fuzzy_redis_session_dtor (session);
+	rspamd_fuzzy_redis_session_dtor (session, FALSE);
 }
 
 void
@@ -642,7 +643,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_fuzzy_redis_session_dtor (session);
+		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
 			memset (&rep, 0, sizeof (rep));
@@ -653,7 +654,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 		if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_check_callback,
 				session, session->nargs,
 				(const gchar **)session->argv, session->argv_lens) != REDIS_OK) {
-			rspamd_fuzzy_redis_session_dtor (session);
+			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 			if (cb) {
 				memset (&rep, 0, sizeof (rep));
@@ -714,7 +715,7 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 		rspamd_upstream_fail (session->up);
 	}
 
-	rspamd_fuzzy_redis_session_dtor (session);
+	rspamd_fuzzy_redis_session_dtor (session, FALSE);
 }
 
 void
@@ -765,7 +766,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_fuzzy_redis_session_dtor (session);
+		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
 			cb (0, ud);
@@ -775,7 +776,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 		if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_count_callback,
 				session, session->nargs,
 				(const gchar **)session->argv, session->argv_lens) != REDIS_OK) {
-			rspamd_fuzzy_redis_session_dtor (session);
+			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 			if (cb) {
 				cb (0, ud);
@@ -835,7 +836,7 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 		rspamd_upstream_fail (session->up);
 	}
 
-	rspamd_fuzzy_redis_session_dtor (session);
+	rspamd_fuzzy_redis_session_dtor (session, FALSE);
 }
 
 void
@@ -887,7 +888,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_fuzzy_redis_session_dtor (session);
+		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
 			cb (0, ud);
@@ -897,7 +898,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 		if (redisAsyncCommandArgv (session->ctx, rspamd_fuzzy_redis_version_callback,
 				session, session->nargs,
 				(const gchar **)session->argv, session->argv_lens) != REDIS_OK) {
-			rspamd_fuzzy_redis_session_dtor (session);
+			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 			if (cb) {
 				cb (0, ud);
@@ -1206,7 +1207,7 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 		rspamd_upstream_fail (session->up);
 	}
 
-	rspamd_fuzzy_redis_session_dtor (session);
+	rspamd_fuzzy_redis_session_dtor (session, FALSE);
 }
 
 void
@@ -1313,7 +1314,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_fuzzy_redis_session_dtor (session);
+		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
 			cb (FALSE, ud);
@@ -1332,7 +1333,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			if (cb) {
 				cb (FALSE, ud);
 			}
-			rspamd_fuzzy_redis_session_dtor (session);
+			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 			return;
 		}
@@ -1348,7 +1349,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				if (cb) {
 					cb (FALSE, ud);
 				}
-				rspamd_fuzzy_redis_session_dtor (session);
+				rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 				return;
 			}
@@ -1371,7 +1372,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			if (cb) {
 				cb (FALSE, ud);
 			}
-			rspamd_fuzzy_redis_session_dtor (session);
+			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 			return;
 		}
@@ -1389,7 +1390,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			if (cb) {
 				cb (FALSE, ud);
 			}
-			rspamd_fuzzy_redis_session_dtor (session);
+			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 			return;
 		}
