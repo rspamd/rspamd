@@ -237,7 +237,7 @@ parse_mime_types (const gchar *str)
 	gchar **strvec, *p;
 	gint num, i;
 	struct fuzzy_mime_type *type;
-	GPtrArray *res = g_ptr_array_new ();
+	GPtrArray *res;
 
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);

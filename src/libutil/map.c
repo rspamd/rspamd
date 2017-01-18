@@ -1603,7 +1603,8 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 					g_ptr_array_add (map->backends, bk);
 
 					if (!map->name) {
-						map->name = g_strdup (ucl_object_tostring (cur));
+						map->name = rspamd_mempool_strdup (cfg->cfg_pool,
+								ucl_object_tostring (cur));
 					}
 				}
 			}
@@ -1621,16 +1622,14 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	else if (ucl_object_type (obj) == UCL_OBJECT) {
 		elt = ucl_object_lookup (obj, "name");
 		if (elt && ucl_object_type (elt) == UCL_STRING) {
-			map->name = g_strdup (ucl_object_tostring (elt));
+			map->name = rspamd_mempool_strdup (cfg->cfg_pool,
+					ucl_object_tostring (elt));
 		}
 
 		elt = ucl_object_lookup (obj, "description");
 		if (elt && ucl_object_type (elt) == UCL_STRING) {
-			if (map->description) {
-				g_free (map->description);
-			}
-
-			map->description = g_strdup (ucl_object_tostring (elt));
+			map->description = rspamd_mempool_strdup (cfg->cfg_pool,
+					ucl_object_tostring (elt));
 		}
 
 		elt = ucl_object_lookup_any (obj, "timeout", "poll", "poll_time",
@@ -1657,7 +1656,8 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 						g_ptr_array_add (map->backends, bk);
 
 						if (!map->name) {
-							map->name = g_strdup (ucl_object_tostring (cur));
+							map->name = rspamd_mempool_strdup (cfg->cfg_pool,
+									ucl_object_tostring (cur));
 						}
 					}
 				}
@@ -1683,7 +1683,8 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 				g_ptr_array_add (map->backends, bk);
 
 				if (!map->name) {
-					map->name = g_strdup (ucl_object_tostring (elt));
+					map->name = rspamd_mempool_strdup (cfg->cfg_pool,
+							ucl_object_tostring (elt));
 				}
 			}
 		}

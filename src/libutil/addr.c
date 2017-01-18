@@ -1020,7 +1020,13 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 		hints.ai_flags = AI_NUMERICSERV|flags;
 
 		if (len > 0) {
-			addr_cpy = g_malloc (len + 1);
+			if (pool) {
+				addr_cpy = rspamd_mempool_alloc (pool, len + 1);
+			}
+			else {
+				addr_cpy = g_malloc (len + 1);
+			}
+
 			rspamd_strlcpy (addr_cpy, begin, len + 1);
 		}
 		/* Otherwise it will be NULL */

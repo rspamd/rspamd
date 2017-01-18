@@ -379,6 +379,8 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 		if (a1 == NULL) {
 			g_set_error (err, rspamd_expr_quark(), EINVAL, "no operand to "
 					"unary '%s' operation", rspamd_expr_op_to_str (op->p.op));
+			g_node_destroy (res);
+
 			return FALSE;
 		}
 

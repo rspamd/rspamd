@@ -381,6 +381,9 @@ lua_config_add_map (lua_State *L)
 				&map_obj, &description, &cbidx, &type)) {
 			ret = luaL_error (L, "invalid table arguments: %s", err->message);
 			g_error_free (err);
+			if (map_obj) {
+				ucl_object_unref (map_obj);
+			}
 
 			return ret;
 		}
@@ -408,6 +411,10 @@ lua_config_add_map (lua_State *L)
 
 				if (cbidx != -1) {
 					luaL_unref (L, LUA_REGISTRYINDEX, cbidx);
+				}
+
+				if (map_obj) {
+					ucl_object_unref (map_obj);
 				}
 
 				lua_pushnil (L);

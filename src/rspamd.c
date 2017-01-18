@@ -642,7 +642,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 		}
 	}
 
-	g_ptr_array_free (seen_mandatory_workers);
+	g_ptr_array_free (seen_mandatory_workers, TRUE);
 }
 
 static void
@@ -1417,6 +1417,7 @@ main (gint argc, gchar **argv, gchar **env)
 	REF_RELEASE (rspamd_main->cfg);
 	g_hash_table_unref (rspamd_main->spairs);
 	rspamd_mempool_delete (rspamd_main->server_pool);
+	rspamd_pidfile_close (rspamd_main->pfh);
 	g_free (rspamd_main);
 	event_base_free (ev_base);
 

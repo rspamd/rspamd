@@ -1184,7 +1184,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	st->symbol = rspamd_mempool_strdup (cfg->cfg_pool, key);
 
 	if (rspamd_rcl_section_parse_defaults (cfg, section, pool, obj, st, err)) {
-		ccf->statfiles = g_list_prepend (ccf->statfiles, st);
+		ccf->statfiles = rspamd_mempool_glist_prepend (pool, ccf->statfiles, st);
 
 		if (st->label != NULL) {
 			labels = g_hash_table_lookup (ccf->labels, st->label);
@@ -1196,6 +1196,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					g_list_prepend (NULL, st));
 			}
 		}
+
 		if (st->symbol != NULL) {
 			g_hash_table_insert (cfg->classifiers_symbols, st->symbol, st);
 		}
@@ -1392,7 +1393,10 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 				}
 
 				ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
-				ccf->learn_conditions = g_list_append (ccf->learn_conditions,
+				rspamd_lua_add_ref_dtor (L, cfg->cfg_pool, ref_idx);
+				ccf->learn_conditions = rspamd_mempool_glist_append (
+						cfg->cfg_pool,
+						ccf->learn_conditions,
 						GINT_TO_POINTER (ref_idx));
 				lua_settop (L, 0);
 			}
