@@ -586,7 +586,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	qtype = g_quark_try_string (worker_type);
 	if (qtype != 0) {
 		wrk = rspamd_config_new_worker (cfg, NULL);
-		wrk->options = ucl_object_ref (obj);
+		wrk->options = ucl_object_copy (obj);
 		wrk->worker = rspamd_get_worker_by_type (cfg, qtype);
 
 		if (wrk->worker == NULL) {
@@ -1588,7 +1588,7 @@ rspamd_rcl_neighbours_handler (rspamd_mempool_t *pool,
 	}
 
 	neigh = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (neigh, ucl_object_ref (hostval), "host", 0, false);
+	ucl_object_insert_key (neigh, ucl_object_copy (hostval), "host", 0, false);
 
 	if ((p = strrchr (ucl_object_tostring (hostval), ':')) != NULL) {
 		if (g_ascii_isdigit (p[1])) {

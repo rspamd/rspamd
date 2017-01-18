@@ -154,6 +154,11 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 		re_class = v;
 		g_hash_table_iter_steal (&it);
 		g_hash_table_unref (re_class->re);
+
+		if (re_class->type_data) {
+			g_slice_free1 (re_class->type_len, re_class->type_data);
+		}
+
 #ifdef WITH_HYPERSCAN
 		if (re_class->hs_db) {
 			hs_free_database (re_class->hs_db);

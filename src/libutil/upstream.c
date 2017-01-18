@@ -80,6 +80,7 @@ struct upstream_ctx {
 	guint dns_retransmits;
 	GQueue *upstreams;
 	gboolean configured;
+	rspamd_mempool_t *pool;
 	ref_entry_t ref;
 };
 
@@ -144,6 +145,7 @@ rspamd_upstream_ctx_dtor (struct upstream_ctx *ctx)
 	}
 
 	g_queue_free (ctx->upstreams);
+	rspamd_mempool_delete (ctx->pool);
 	g_slice_free1 (sizeof (*ctx), ctx);
 }
 
@@ -165,6 +167,8 @@ rspamd_upstreams_library_init (void)
 	ctx->dns_timeout = default_dns_timeout;
 	ctx->revive_jitter = default_revive_jitter;
 	ctx->revive_time = default_revive_time;
+	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"upstreams");
 
 	ctx->upstreams = g_queue_new ();
 	REF_INIT_RETAIN (ctx, rspamd_upstream_ctx_dtor);
@@ -549,7 +553,8 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 
 	if (!rspamd_parse_host_port_priority (str, &addrs,
 			&up->weight,
-			&up->name, def_port, NULL)) {
+			&up->name, def_port, ups->ctx->pool)) {
+
 		g_slice_free1 (sizeof (*up), up);
 		return FALSE;
 	}
@@ -558,8 +563,6 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 			addr = g_ptr_array_index (addrs, i);
 			rspamd_upstream_add_addr (up, rspamd_inet_address_copy (addr));
 		}
-
-		g_ptr_array_free (addrs, TRUE);
 	}
 
 	if (up->weight == 0 && ups->rot_alg == RSPAMD_UPSTREAM_MASTER_SLAVE) {
