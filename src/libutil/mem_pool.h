@@ -320,5 +320,21 @@ gpointer rspamd_mempool_get_variable (rspamd_mempool_t *pool,
  */
 void rspamd_mempool_remove_variable (rspamd_mempool_t *pool,
 		const gchar *name);
+/**
+ * Prepend element to a list creating it in the memory pool
+ * @param l
+ * @param p
+ * @return
+ */
+GList *rspamd_mempool_glist_prepend (rspamd_mempool_t *pool,
+		GList *l, gpointer p) G_GNUC_WARN_UNUSED_RESULT;
+/**
+ * Append element to a list creating it in the memory pool
+ * @param l
+ * @param p
+ * @return
+ */
+GList *rspamd_mempool_glist_append (rspamd_mempool_t *pool,
+		GList *l, gpointer p) G_GNUC_WARN_UNUSED_RESULT;
 
 #endif

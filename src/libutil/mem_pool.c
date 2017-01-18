@@ -874,3 +874,45 @@ rspamd_mempool_remove_variable (rspamd_mempool_t *pool, const gchar *name)
 		g_hash_table_remove (pool->variables, name);
 	}
 }
+
+GList *
+rspamd_mempool_glist_prepend (rspamd_mempool_t *pool, GList *l, gpointer p)
+{
+	GList *cell;
+
+	cell = rspamd_mempool_alloc (pool, sizeof (*cell));
+	cell->prev = NULL;
+	cell->data = p;
+
+	if (l == NULL) {
+		cell->next = NULL;
+	}
+	else {
+		cell->next = l;
+		l->prev = cell;
+	}
+
+	return cell;
+}
+
+GList *
+rspamd_mempool_glist_append (rspamd_mempool_t *pool, GList *l, gpointer p)
+{
+	GList *cell, *cur;
+
+	cell = rspamd_mempool_alloc (pool, sizeof (*cell));
+	cell->next = NULL;
+	cell->data = p;
+
+	if (l) {
+		for (cur = l; cur->next != NULL; cur = cur->next) {}
+		cur->next = cell;
+		cell->prev = cur;
+	}
+	else {
+		l = cell;
+		l->prev = NULL;
+	}
+
+	return l;
+}
