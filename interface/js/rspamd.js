@@ -529,7 +529,7 @@
         $(document).on('click', 'input:radio[name="clusterName"]', function (e) {
             if (!this.disabled) {
                 checked_server = this.value;
-                statWidgets();
+                tabClick("#status_nav");
             }
         });
 
