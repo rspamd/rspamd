@@ -225,8 +225,6 @@ fuzzy_key_stat_dtor (gpointer p)
 	if (st->last_ips) {
 		rspamd_lru_hash_destroy (st->last_ips);
 	}
-
-	g_slice_free1 (sizeof (*st), st);
 }
 
 static void
@@ -237,8 +235,6 @@ fuzzy_key_dtor (gpointer p)
 	if (key->stat) {
 		fuzzy_key_stat_dtor (key->stat);
 	}
-
-	g_slice_free1 (sizeof (*key), key);
 }
 
 static void
@@ -2031,7 +2027,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->keys);
 	ctx->master_flags = g_hash_table_new (g_direct_hash, g_direct_equal);
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
-				(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->master_flags);
+			(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->master_flags);
 	ctx->errors_ips = rspamd_lru_hash_new_full (1024,
 			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
@@ -2425,7 +2421,6 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
 
-	g_hash_table_unref (ctx->keys);
 	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);

@@ -481,7 +481,6 @@ rspamd_mime_expr_parse_function_atom (rspamd_mempool_t *pool, const gchar *input
 	res->name = rspamd_mempool_alloc (pool, obrace - input + 1);
 	rspamd_strlcpy (res->name, input, obrace - input + 1);
 	res->args = g_array_new (FALSE, FALSE, sizeof (struct expression_argument));
-	rspamd_mempool_add_destructor (pool, rspamd_array_free_hard, res->args);
 
 	p = obrace + 1;
 	c = p;
@@ -527,9 +526,6 @@ rspamd_mime_expr_parse_function_atom (rspamd_mempool_t *pool, const gchar *input
 					g_error_free (err);
 					arg.type = EXPRESSION_ARGUMENT_NORMAL;
 					arg.data = databuf;
-				}
-				else {
-					g_free (databuf);
 				}
 
 				g_array_append_val (res->args, arg);
@@ -873,20 +869,10 @@ static void
 rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
 {
 	struct rspamd_mime_atom *mime_atom = atom->data;
-	guint i;
-	struct expression_argument *arg;
 
 	if (mime_atom) {
 		if (mime_atom->type == MIME_ATOM_INTERNAL_FUNCTION) {
 			/* Need to cleanup arguments */
-			for (i = 0; i < mime_atom->d.func->args->len; i ++) {
-				arg = &g_array_index (mime_atom->d.func->args,
-						struct expression_argument, i);
-
-				if (arg->type == EXPRESSION_ARGUMENT_NORMAL) {
-					g_free (arg->data);
-				}
-			}
 			g_array_free (mime_atom->d.func->args, TRUE);
 		}
 	}
