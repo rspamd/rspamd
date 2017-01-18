@@ -23,7 +23,6 @@ local N = 'spamassassin'
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
-local rspamd_mempool = require "rspamd_mempool"
 local rspamd_trie = require "rspamd_trie"
 local util = require "rspamd_util"
 local fun = require "fun"
