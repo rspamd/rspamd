@@ -120,9 +120,7 @@ rspamd_config_new (void)
 	cfg->max_diff = 20480;
 
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	if (cfg->c_modules == NULL) {
-		cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	}
+	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->composite_symbols =
 		g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash,
@@ -209,6 +207,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
+	g_list_free (cfg->workers);
 	rspamd_symbols_cache_destroy (cfg->cache);
 #ifdef WITH_HIREDIS
 	if (cfg->redis_pool) {

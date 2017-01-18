@@ -1375,6 +1375,10 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 		}
 	}
 
+	if (bk->trusted_pubkey) {
+		rspamd_pubkey_unref (bk->trusted_pubkey);
+	}
+
 	g_slice_free1 (sizeof (*bk), bk);
 }
 
@@ -1520,7 +1524,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 		return NULL;
 	}
 
-	map = g_slice_alloc0 (sizeof (struct rspamd_map));
+	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
 	map->read_callback = read_callback;
 	map->fin_callback = fin_callback;
 	map->user_data = user_data;
@@ -1531,12 +1535,14 @@ rspamd_map_add (struct rspamd_config *cfg,
 	map->cache =
 			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (*map->cache));
 	map->backends = g_ptr_array_sized_new (1);
+	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
+			map->backends);
 	g_ptr_array_add (map->backends, bk);
-	map->name = g_strdup (map_line);
+	map->name = rspamd_mempool_strdup (cfg->cfg_pool, map_line);
 	map->poll_timeout = cfg->map_timeout;
 
 	if (description != NULL) {
-		map->description = g_strdup (description);
+		map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
 	}
 
 	rspamd_map_calculate_hash (map);
@@ -1568,7 +1574,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 				read_callback, fin_callback, user_data);
 	}
 
-	map = g_slice_alloc0 (sizeof (struct rspamd_map));
+	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
 	map->read_callback = read_callback;
 	map->fin_callback = fin_callback;
 	map->user_data = user_data;
@@ -1579,10 +1585,12 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	map->cache =
 				rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (*map->cache));
 	map->backends = g_ptr_array_new ();
+	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
+			map->backends);
 	map->poll_timeout = cfg->map_timeout;
 
 	if (description) {
-		map->description = g_strdup (description);
+		map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
 	}
 
 	if (ucl_object_type (obj) == UCL_ARRAY) {
@@ -1699,10 +1707,6 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	return map;
 
 err:
-	g_ptr_array_free (map->backends, TRUE);
-	g_free (map->name);
-	g_free (map->description);
-	g_slice_free1 (sizeof (*map), map);
 
 	return NULL;
 }

@@ -242,6 +242,8 @@ parse_mime_types (const gchar *str)
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
 	res = g_ptr_array_sized_new (num);
+	rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+			rspamd_ptr_array_free_hard, res);
 
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
@@ -252,12 +254,21 @@ parse_mime_types (const gchar *str)
 			type->type_re = rspamd_regexp_from_glob (strvec[i], p - strvec[i],
 					NULL);
 			type->subtype_re = rspamd_regexp_from_glob (p + 1, 0, NULL);
+			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+						(rspamd_mempool_destruct_t)rspamd_regexp_unref,
+						type->type_re);
+			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+					(rspamd_mempool_destruct_t)rspamd_regexp_unref,
+					type->subtype_re);
 			g_ptr_array_add (res, type);
 		}
 		else {
 			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
 							sizeof (struct fuzzy_mime_type));
 			type->type_re = rspamd_regexp_from_glob (strvec[i], 0, NULL);
+			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+					(rspamd_mempool_destruct_t)rspamd_regexp_unref,
+					type->type_re);
 			type->subtype_re = NULL;
 			g_ptr_array_add (res, type);
 		}

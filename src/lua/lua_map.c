@@ -417,15 +417,13 @@ lua_config_add_map (lua_State *L)
 		}
 		else if (strcmp (type, "set") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-			map->data.hash = g_hash_table_new (rspamd_strcase_hash,
-					rspamd_strcase_equal);
+			map->data.hash = NULL;
 			map->type = RSPAMD_LUA_MAP_SET;
 
 			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
 					rspamd_hosts_read,
 					rspamd_hosts_fin,
 					(void **)&map->data.hash)) == NULL) {
-				g_hash_table_destroy (map->data.hash);
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -434,15 +432,13 @@ lua_config_add_map (lua_State *L)
 		}
 		else if (strcmp (type, "map") == 0 || strcmp (type, "hash") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-			map->data.hash = g_hash_table_new (rspamd_strcase_hash,
-					rspamd_strcase_equal);
+			map->data.hash = NULL;
 			map->type = RSPAMD_LUA_MAP_HASH;
 
 			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
 					rspamd_kv_list_read,
 					rspamd_kv_list_fin,
 					(void **)&map->data.hash)) == NULL) {
-				g_hash_table_destroy (map->data.hash);
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -451,14 +447,13 @@ lua_config_add_map (lua_State *L)
 		}
 		else if (strcmp (type, "radix") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-			map->data.radix = radix_create_compressed ();
+			map->data.radix = NULL;
 			map->type = RSPAMD_LUA_MAP_RADIX;
 
 			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
 					rspamd_radix_read,
 					rspamd_radix_fin,
 					(void **)&map->data.radix)) == NULL) {
-				radix_destroy_compressed (map->data.radix);
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 

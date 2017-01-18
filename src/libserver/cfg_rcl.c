@@ -39,7 +39,7 @@
 
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;
-	const gchar *key;
+	gchar *key;
 	rspamd_rcl_default_handler_t handler;
 	UT_hash_handle hh;
 };
@@ -1185,6 +1185,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	if (rspamd_rcl_section_parse_defaults (cfg, section, pool, obj, st, err)) {
 		ccf->statfiles = g_list_prepend (ccf->statfiles, st);
+
 		if (st->label != NULL) {
 			labels = g_hash_table_lookup (ccf->labels, st->label);
 			if (labels != NULL) {
@@ -1698,13 +1699,13 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 		gint flags,
 		const gchar *doc_string)
 {
-	struct rspamd_rcl_default_handler_data *new;
+	struct rspamd_rcl_default_handler_data *nhandler;
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_default_handler_data));
-	new->key = name;
-	new->handler = handler;
-	new->pd.offset = offset;
-	new->pd.flags = flags;
+	nhandler = g_slice_alloc0 (sizeof (struct rspamd_rcl_default_handler_data));
+	nhandler->key = g_strdup (name);
+	nhandler->handler = handler;
+	nhandler->pd.offset = offset;
+	nhandler->pd.flags = flags;
 
 	if (section->doc_ref != NULL) {
 		rspamd_rcl_add_doc_obj (section->doc_ref,
@@ -1717,9 +1718,9 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 				0);
 	}
 
-	HASH_ADD_KEYPTR (hh, section->default_parser, new->key, strlen (
-			new->key), new);
-	return new;
+	HASH_ADD_KEYPTR (hh, section->default_parser, nhandler->key, strlen (
+			nhandler->key), nhandler);
+	return nhandler;
 }
 
 struct rspamd_rcl_section *
@@ -3019,6 +3020,9 @@ rspamd_rcl_parse_struct_pubkey (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t)rspamd_pubkey_unref, pk);
+
 	return TRUE;
 }
 
@@ -3462,12 +3466,19 @@ static void
 rspamd_rcl_section_free (gpointer p)
 {
 	struct rspamd_rcl_section *top = p, *cur, *tmp;
+	struct rspamd_rcl_default_handler_data *dh, *dhtmp;
 
 	HASH_ITER (hh, top, cur, tmp) {
 		HASH_DEL (top, cur);
 
 		if (cur->subsections) {
 			rspamd_rcl_section_free (cur->subsections);
+		}
+
+		HASH_ITER (hh, cur->default_parser, dh, dhtmp) {
+			HASH_DEL (cur->default_parser, dh);
+			g_free (dh->key);
+			g_slice_free1 (sizeof (*dh), dh);
 		}
 
 		ucl_object_unref (cur->doc_ref);

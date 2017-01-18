@@ -654,16 +654,18 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 
 	while (p < end) {
 		len = strcspn (p, separators);
+
 		if (len > 0) {
 			tmp = g_malloc (len + 1);
 			rspamd_strlcpy (tmp, p, len + 1);
+
 			if (rspamd_upstreams_add_upstream (ups, tmp, def_port, data)) {
 				ret = TRUE;
 			}
-			else {
-				g_free (tmp);
-			}
+
+			g_free (tmp);
 		}
+
 		p += len;
 		/* Skip separators */
 		p += strspn (p, separators);

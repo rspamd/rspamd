@@ -272,6 +272,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	gchar *cfg_file;
 
 	tmp_cfg = rspamd_config_new ();
+	g_hash_table_unref (tmp_cfg->c_modules);
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
@@ -640,6 +641,8 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 			}
 		}
 	}
+
+	g_ptr_array_free (seen_mandatory_workers);
 }
 
 static void
@@ -997,6 +1000,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 			close (cur->control_pipe[0]);
 			close (cur->srv_pipe[0]);
 			REF_RELEASE (cur->cf);
+			g_ptr_array_free (cur->finish_actions, TRUE);
 			g_free (cur);
 		}
 		else {

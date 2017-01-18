@@ -745,6 +745,10 @@ luaopen_regexp (lua_State * L)
 	luaL_register (L, NULL, regexplib_m);
 	rspamd_lua_add_preload (L, "rspamd_regexp", lua_load_regexp);
 
-	regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	if (regexp_static_pool == NULL) {
+		regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+				"regexp_lua_pool");
+	}
+
 	lua_settop (L, 0);
 }
