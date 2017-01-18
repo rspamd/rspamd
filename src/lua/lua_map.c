@@ -171,12 +171,11 @@ lua_config_radix_from_config (lua_State *L)
 		obj = rspamd_config_get_module_opt (cfg, mname, optname);
 		if (obj) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-			map->data.radix = radix_create_compressed ();
 			map->type = RSPAMD_LUA_MAP_RADIX;
-			map->data.radix = radix_create_compressed ();
 			map->flags |= RSPAMD_LUA_MAP_FLAG_EMBEDDED;
 
 			if (ucl_object_type (obj) == UCL_STRING) {
+				map->data.radix = radix_create_compressed ();
 				radix_add_generic_iplist (ucl_obj_tostring (obj), &map->data.radix,
 						TRUE);
 			}
@@ -194,6 +193,9 @@ lua_config_radix_from_config (lua_State *L)
 				}
 			}
 
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
+					(rspamd_mempool_destruct_t)radix_destroy_compressed,
+					map->data.radix);
 			pmap = lua_newuserdata (L, sizeof (void *));
 			*pmap = map;
 			rspamd_lua_setclass (L, "rspamd{map}", -1);
