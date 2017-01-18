@@ -1,3 +1,22 @@
+1.4.3:
+	* [CritFix] Backport PTR_ARRAY_FOREACH fix
+	* [CritFix] Fix descriptors leak on reload
+	* [Feature] Add `caseless_hash` method to `lua_util`
+	* [Feature] Use t1ha for hashes, allow inlining
+	* [Feature] Use t1ha instead of metrohash and xxhash32
+	* [Fix] Another try to fix descriptors leak
+	* [Fix] Another try to fix reload and logger
+	* [Fix] Avoid extensive reallocs
+	* [Fix] Avoid race condition on saving cache and reload
+	* [Fix] Backport redis pool fixes from master
+	* [Fix] Break pool connection on fatal redis errors
+	* [Fix] Fix argument returned on redis backend errors
+	* [Fix] Fix errors handling in fuzzy backend initialization
+	* [Fix] Fix race condition in SIGUSR2 handler
+	* [Fix] Fix reload and hyperscan ready event
+	* [Fix] More fixes to logger initialization
+	* [Fix] Plug memory leak in learning fuzzy storage
+
 1.4.2:
 	* [CritFix] Deal with absent headers in DKIM
 	* [CritFix] Do not trust remote shingles count
