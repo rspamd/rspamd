@@ -92,7 +92,6 @@ local external_deps = {}
 local freemail_domains = {}
 local pcre_only_regexps = {}
 local freemail_trie
-local sa_mempool = rspamd_mempool.create()
 local replace = {
   tags = {},
   pre = {},
@@ -1448,7 +1447,7 @@ local function post_process()
         return res
       end
       expression = rspamd_expression.create(r['meta'],
-        {parse_atom, process_atom}, sa_mempool)
+        {parse_atom, process_atom}, rspamd_config:get_mempool())
       if not expression then
         rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
       else
