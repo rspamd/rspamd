@@ -1063,8 +1063,17 @@ rspamd_rcl_add_module_path (struct rspamd_config *cfg,
 					*ext_pos = '\0';
 				}
 
-				cfg->script_modules = g_list_prepend (cfg->script_modules,
-						cur_mod);
+				if (cfg->script_modules == NULL) {
+					cfg->script_modules = g_list_append (cfg->script_modules,
+							cur_mod);
+					rspamd_mempool_add_destructor (cfg->cfg_pool,
+							(rspamd_mempool_destruct_t)g_list_free,
+							cfg->script_modules);
+				}
+				else {
+					cfg->script_modules = g_list_append (cfg->script_modules,
+							cur_mod);
+				}
 			}
 			globfree (&globbuf);
 			g_free (pattern);
@@ -1094,7 +1103,17 @@ rspamd_rcl_add_module_path (struct rspamd_config *cfg,
 			*ext_pos = '\0';
 		}
 
-		cfg->script_modules = g_list_prepend (cfg->script_modules, cur_mod);
+		if (cfg->script_modules == NULL) {
+			cfg->script_modules = g_list_append (cfg->script_modules,
+					cur_mod);
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
+					(rspamd_mempool_destruct_t)g_list_free,
+					cfg->script_modules);
+		}
+		else {
+			cfg->script_modules = g_list_append (cfg->script_modules,
+					cur_mod);
+		}
 	}
 
 	return TRUE;
