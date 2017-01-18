@@ -419,12 +419,6 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 	}
 
-	if (rule->mime_types != NULL) {
-		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
-			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard,
-			rule->mime_types);
-	}
-
 	if ((value = ucl_object_lookup (obj, "headers")) != NULL) {
 		it = NULL;
 		while ((cur = ucl_object_iterate (value, &it, value->type == UCL_ARRAY))

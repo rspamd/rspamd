@@ -774,6 +774,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 			rdata->rep.id = cmd.id;
 			rdata->rep.type = cmd.type;
 			rdata->fd = -1;
+
 			if (msg.msg_controllen >= CMSG_LEN (sizeof (int))) {
 				rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 			}

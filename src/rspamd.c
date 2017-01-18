@@ -160,6 +160,7 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 
 	if (!g_option_context_parse (context, argc, argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
+		g_option_context_free (context);
 		exit (1);
 	}
 
@@ -192,6 +193,7 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 	}
 
 	cfg->pid_file = rspamd_pidfile;
+	g_option_context_free (context);
 }
 
 /* Detect privilleged mode */

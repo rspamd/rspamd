@@ -567,6 +567,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	enum rspamd_expression_op op, op_stack;
 	const gchar *p, *c, *end;
 	GPtrArray *operand_stack;
+	GNode *tmp;
 
 	enum {
 		PARSE_ATOM = 0,
@@ -859,6 +860,10 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	return TRUE;
 
 err:
+	while ((tmp = rspamd_expr_stack_elt_pop (operand_stack)) != NULL) {
+		g_node_destroy (tmp);
+	}
+
 	g_ptr_array_free (operand_stack, TRUE);
 	rspamd_expression_destroy (e);
 
