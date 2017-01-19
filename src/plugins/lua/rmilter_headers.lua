@@ -19,9 +19,20 @@ limitations under the License.
 
 local logger = require "rspamd_logger"
 local N = 'rmilter_headers'
+local E = {}
 
 local settings = {
   routines = {
+    ['spam-header'] = {
+      header = 'Deliver-To',
+      value = 'Junk',
+      remove = 1,
+    },
+    ['x-virus'] = {
+      header = 'X-Virus',
+      remove = 1,
+      symbols = {}, -- needs config
+    },
     ['x-spamd-bar'] = {
       header = 'X-Spamd-Bar',
       positive = '+',
@@ -111,6 +122,55 @@ routines['x-spam-level'] = function(task, common_meta)
     remove[settings.routines['x-spam-level'].header] = settings.routines['x-spam-level'].remove
   end
   add[settings.routines['x-spam-level'].header] = string.rep(settings.routines['x-spam-level'].char, score)
+  return nil, add, remove, common
+end
+
+routines['spam-header'] = function(task, common_meta)
+  local common, add, remove = {}, {}, {}
+  if not common_meta['metric_action'] then
+    common['metric_action'] = task:get_metric_action('default')
+    common_meta['metric_action'] = common['metric_action']
+  end
+  if settings.routines['spam-header'].remove then
+    remove[settings.routines['spam-header'].header] = settings.routines['spam-header'].remove
+  end
+  local action = common_meta['metric_action']
+  if action ~= 'no action' and action ~= 'greylist' then
+    add[settings.routines['spam-header'].header] = settings.routines['spam-header'].value
+  end
+  return nil, add, remove, common
+end
+
+routines['x-virus'] = function(task, common_meta)
+  local add, remove = {}, {}
+  local common = {symbols = {}}
+  if not common_meta.symbols then
+    common_meta.symbols = {}
+  end
+  if settings.routines['x-virus'].remove then
+    remove[settings.routines['x-virus'].header] = settings.routines['x-virus'].remove
+  end
+  local virii = {}
+  for _, sym in ipairs(settings.routines['x-virus'].symbols) do
+    if not (common_meta.symbols[sym] == false) then
+      local s = task:get_symbol(sym)
+      if not s then
+        common_meta.symbols[sym] = false
+        common[sym] = false
+      else
+        common_meta.symbols[sym] = s
+        common[sym] = s
+        if (((s or E)[1] or E).options or E)[1] then
+          table.insert(virii, s[1].options[1])
+        else
+          table.insert(virii, 'unknown')
+        end
+      end
+    end
+  end
+  if #virii > 0 then
+    add[settings.routines['x-virus'].header] = table.concat(virii, ',')
+  end
   return nil, add, remove, common
 end
 
@@ -244,6 +304,9 @@ local function rmilter_headers(task)
       end
       for k, v in pairs(common) do
         if type(v) == 'table' then
+          if not common_meta[k] then
+            common_meta[k] = {}
+          end
           for sk, sv in pairs(v) do
             common_meta[k][sk] = sv
           end
@@ -287,6 +350,11 @@ for _, s in ipairs(opts['use']) do
     logger.errx(rspamd_config, 'routine "%s" does not exist', s)
   else
     table.insert(active_routines, s)
+    if (opts.routines and opts.routines[s]) then
+      for k, v in pairs(opts.routines[s]) do
+        settings.routines[s][k] = v
+      end
+    end
   end
 end
 if (#active_routines < 1) then
