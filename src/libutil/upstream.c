@@ -507,7 +507,6 @@ rspamd_upstream_dtor (struct upstream *up)
 	}
 
 	rspamd_mutex_free (up->lock);
-	g_free (up->name);
 
 	if (up->ctx) {
 		g_queue_delete_link (up->ctx->upstreams, up->ctx_pos);

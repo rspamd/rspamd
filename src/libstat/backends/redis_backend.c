@@ -602,6 +602,10 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 				"users", 0, false);
 
 		rspamd_upstream_ok (cbdata->selected);
+
+		if (cbdata->inflight == 0) {
+			rspamd_redis_async_cbdata_cleanup (cbdata);
+		}
 	}
 	else {
 		if (c->errstr) {
@@ -611,10 +615,6 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 			msg_err ("cannot get keys to gather stat: unknown error");
 		}
 		rspamd_upstream_fail (cbdata->selected);
-		rspamd_redis_async_cbdata_cleanup (cbdata);
-	}
-
-	if (cbdata->inflight == 0) {
 		rspamd_redis_async_cbdata_cleanup (cbdata);
 	}
 }
