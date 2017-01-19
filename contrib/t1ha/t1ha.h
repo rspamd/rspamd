@@ -42,6 +42,11 @@
 #define T1HA_INCLUDED
 #include "config.h"
 #include <string.h>
+#include <stddef.h>
+
+#ifndef __has_builtin
+#define __has_builtin(x) (0)
+#endif
 
 #ifdef BYTE_ORDER
 #ifndef __ORDER_LITTLE_ENDIAN__
