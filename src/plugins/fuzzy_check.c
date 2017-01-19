@@ -242,8 +242,6 @@ parse_mime_types (const gchar *str)
 	strvec = g_strsplit_set (str, ",", 0);
 	num = g_strv_length (strvec);
 	res = g_ptr_array_sized_new (num);
-	rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
-			rspamd_ptr_array_free_hard, res);
 
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
@@ -416,6 +414,11 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 					rule->mime_types = tmp;
 				}
 			}
+		}
+
+		if (rule->mime_types) {
+			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+						rspamd_ptr_array_free_hard, rule->mime_types);
 		}
 	}
 
