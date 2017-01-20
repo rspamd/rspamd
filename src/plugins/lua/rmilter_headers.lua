@@ -336,7 +336,7 @@ if type(opts['custom']) == 'table' then
   end
 end
 for _, s in ipairs(opts['use']) do
-  if (opts.routines and opts.routines[s]) or custom_routines[s] then
+  if settings.routines[s] or custom_routines[s] then
     table.insert(active_routines, s)
     if (opts.routines and opts.routines[s]) then
       for k, v in pairs(opts.routines[s]) do
