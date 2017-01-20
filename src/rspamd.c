@@ -588,6 +588,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 						cf->listen_socks = g_list_concat (cf->listen_socks, ls);
 					}
 				}
+
 				if (listen_ok) {
 					spawn_worker_type (rspamd_main, ev_base, cf);
 				}
@@ -595,7 +596,8 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 					msg_err_main ("cannot create listen socket for %s at %s",
 							g_quark_to_string (cf->type), cf->bind_conf->name);
 
-					exit (EXIT_FAILURE);
+					rspamd_hard_terminate (rspamd_main);
+					g_assert_not_reached ();
 				}
 			}
 			else {

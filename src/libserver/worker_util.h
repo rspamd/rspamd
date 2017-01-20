@@ -124,6 +124,12 @@ void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 void rspamd_worker_block_signals (void);
 
 /**
+ * Kill rspamd main and all workers
+ * @param rspamd_main
+ */
+void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
+
+/**
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,

@@ -530,12 +530,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 	if (!rspamd_socketpair (wrk->control_pipe)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
-		exit (-errno);
+		rspamd_hard_terminate (rspamd_main);
 	}
 
 	if (!rspamd_socketpair (wrk->srv_pipe)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
-		exit (-errno);
+		rspamd_hard_terminate (rspamd_main);
 	}
 
 	wrk->srv = rspamd_main;
@@ -610,7 +610,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	case -1:
 		msg_err_main ("cannot fork main process. %s", strerror (errno));
 		rspamd_pidfile_remove (rspamd_main->pfh);
-		exit (-errno);
+		rspamd_hard_terminate (rspamd_main);
 		break;
 	default:
 		/* Close worker part of socketpair */
@@ -640,4 +640,39 @@ rspamd_worker_block_signals (void)
 	sigaddset (&set, SIGUSR1);
 	sigaddset (&set, SIGUSR2);
 	sigprocmask (SIG_BLOCK, &set, NULL);
+}
+
+void
+rspamd_hard_terminate (struct rspamd_main *rspamd_main)
+{
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_worker *w;
+	sigset_t set;
+
+	/* Block all signals */
+	sigemptyset (&set);
+	sigaddset (&set, SIGTERM);
+	sigaddset (&set, SIGINT);
+	sigaddset (&set, SIGHUP);
+	sigaddset (&set, SIGUSR1);
+	sigaddset (&set, SIGUSR2);
+	sigaddset (&set, SIGCHLD);
+	sigprocmask (SIG_BLOCK, &set, NULL);
+
+	/* We need to terminate all workers that might be already spawned */
+	rspamd_worker_block_signals ();
+	g_hash_table_iter_init (&it, rspamd_main->workers);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		w = v;
+		msg_err_main ("kill worker %p as Rspamd is terminating due to "
+				"an unrecoverable error", w->pid);
+		kill (w->pid, SIGKILL);
+	}
+
+	msg_err_main ("shutting down Rspamd due to fatal error");
+
+	rspamd_log_close (rspamd_main->logger);
+	exit (EXIT_FAILURE);
 }
