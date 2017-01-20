@@ -102,15 +102,27 @@ Add an [authentication-results](https://tools.ietf.org/html/rfc7001) header.
   }
 ~~~
 
+## spam-header
+
+Adds a predefined header to mail identified as spam.
+
+~~~ucl
+  header = "Deliver-To";
+  value = "Junk";
+  remove = 1;
+~~~
+
+Default name/value of the added header is `Deliver-To`/`Junk` which can be manipulated using the `header` and `value` settings.
+
 ## x-spamd-bar
 
 Adds a visual indicator of spam/ham level.
 
 ~~~ucl
-  header = 'X-Spamd-Bar';
-  positive = '+';
-  negative = '-';
-  neutral = '/';
+  header = "X-Spamd-Bar";
+  positive = "+";
+  negative = "-";
+  neutral = "/";
   remove = 1;
 ~~~
 
@@ -119,8 +131,8 @@ Adds a visual indicator of spam/ham level.
 Another visual indicator of spam level- SpamAssassin style.
 
 ~~~ucl
-  header = 'X-Spam-Level';
-  char = '*';
+  header = "X-Spam-Level";
+  char = "*";
   remove = 1;
 ~~~
 
@@ -129,6 +141,18 @@ Another visual indicator of spam level- SpamAssassin style.
 SpamAssassin-style X-Spam-Status header indicating spam status.
 
 ~~~ucl
-  header = 'X-Spam-Status';
+  header = "X-Spam-Status";
   remove = 1;
 ~~~
+
+## x-virus
+
+~~~ucl
+  header = "X-Virus";
+  remove = 1;
+  # The following setting is an empty list by default and required to be set
+  # These are user-defined symbols added by the antivirus module
+  symbols = ["CLAM_VIRUS", "FPROT_VIRUS"];
+~~~
+
+Adds a header containing names of virii detected by scanners configured in [Antivirus module]({{ site.baseurl }}/doc/modules/antivirus.html) in case that virii are detected in a message.
