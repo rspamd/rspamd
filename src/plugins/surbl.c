@@ -132,7 +132,7 @@ read_exceptions_list (gchar * chunk,
 	gboolean final)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_malloc0 (sizeof (GHashTable *) * MAX_LEVELS);
+		data->cur_data = data->prev_data;
 	}
 	return rspamd_parse_kv_list (
 			   chunk,
@@ -155,8 +155,8 @@ fin_exceptions_list (struct map_cb_data *data)
 			if (t[i] != NULL) {
 				g_hash_table_destroy (t[i]);
 			}
+			t[i] = NULL;
 		}
-		g_free (t);
 	}
 }
 
@@ -264,12 +264,12 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
-	/* Zero exceptions hashes */
-	surbl_module_ctx->exceptions = g_malloc0 (MAX_LEVELS * sizeof (GHashTable *));
-	/* Register destructors */
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
-		surbl_module_ctx->whitelist);
+			(rspamd_mempool_destruct_t) g_hash_table_destroy,
+			surbl_module_ctx->whitelist);
+	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
+			surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
