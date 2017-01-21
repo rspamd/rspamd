@@ -26,15 +26,26 @@ option allows to avoid too many work for setting buckets if there are a lot of r
 
 Where `type` is one of:
 
-- `bounce_to`
-- `bounce_to_ip`
-- `to`
-- `to_ip`
-- `to_ip_from`
-- `user`
+- `bounce_to`: limit bounces per recipient
+- `bounce_to_ip`: limit bounces per recipient per ip
+- `to`: limit per recipient for non-bounces
+- `to_ip`: limit per pair of recipient and sender's IP address§
+- `to_ip_from`: limit per triplet: recipient, sender's envelope from and sender's IP
+- `user`: limit per authenticated user (useful for outbound limits)
 
 `burst` is a capacity of a bucket and `leak` is a rate in messages per second.
 Both these attributes are floating point values.
+
+From version `1.5` it is also possible to define limits in a simplified form:
+  bounce_to = "2 / 5m";
+
+Where the first number is number of messages and the second is timeframe. For example, the line above defines a limit for bounce messages per recipient at level 2 message in 5 minutes.
+
+You can use other suffixes for both time and amount of messages:
+
+  user = "1k / 1d"; # 1000 messages per day per authenticated user
+  to_ip_from = "100 / 1h"; # 100 messages per hour
+
 
 - `servers` - list of servers where ratelimit data is stored; [global settings]({{ site.baseurl }}/doc/configuration/redis.html) used if not set
 - `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
