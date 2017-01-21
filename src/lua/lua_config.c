@@ -556,6 +556,22 @@ LUA_FUNCTION_DEF (config, register_finish_script);
  */
 LUA_FUNCTION_DEF (config, register_monitored);
 
+/***
+ * @method rspamd_config:add_doc(path, option, doc_string, [{params}])
+ * Adds new documentation string for an option `option` at path `path`
+ * Options defines optional params, such as:
+ *
+ * - `default`: default option value
+ * - `type`: type of an option (`string`, `number`, `object`, `array` etc)
+ * - `reqired`: if an option is required
+ *
+ * @param {string} path documentation path (e.g. module name)
+ * @param {string} option name of the option
+ * @param {string} doc_string documentation string
+ * @param {table} params optional parameters
+ */
+LUA_FUNCTION_DEF (config, add_doc);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -596,6 +612,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
+	LUA_INTERFACE_DEF (config, add_doc),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -2332,6 +2349,49 @@ lua_config_register_monitored (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_config_add_doc (lua_State *L)
+{
+	struct rspamd_config *cfg;
+	const gchar *path, *option, *doc_string;
+	const gchar *type_str = NULL, *default_value = NULL;
+	ucl_type_t type = UCL_NULL;
+	gboolean required = FALSE;
+	GError *err = NULL;
+
+	cfg = lua_check_config (L, 1);
+	path = luaL_checkstring (L, 2);
+	option = luaL_checkstring (L, 3);
+	doc_string = luaL_checkstring (L, 4);
+
+	if (cfg && path && option && doc_string) {
+		if (lua_type (L, 5) == LUA_TTABLE) {
+			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					"type=S;default=S;required=B",
+					&type_str, &default_value, &required)) {
+				msg_err_config ("cannot get parameters list: %e", err);
+
+				if (err) {
+					g_error_free (err);
+				}
+
+				if (type_str) {
+					if (!ucl_object_string_to_type (type_str, &type)) {
+						msg_err_config ("invalid type: %s", type_str);
+					}
+				}
+			}
+		}
+
+		rspamd_rcl_add_doc_by_path (cfg, path, doc_string, option,
+				type, NULL, 0, default_value, required);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
 
 static gint
 lua_monitored_alive (lua_State *L)
