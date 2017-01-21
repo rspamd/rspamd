@@ -9,54 +9,25 @@ The Rmilter headers module has been added in Rspamd 1.5 to provide a relatively 
 
 # Principles of operation
 
-The Rmilter headers module provides a number of routines to add common headers which can be enabled and configured individually. User-defined routines can also be added to configuration.
+The Rmilter headers module provides a number of routines to add common headers which can be selectively enabled and configured. User-defined routines can also be added to configuration.
 
 # Configuration
 
 ~~~ucl
 rmilter_headers {
-  # routines to use
-  use = ["x-spamd-bar", "authentication-results", "my_routine"];
+  # routines to use- this is the only required setting
+  use = ["x-spamd-bar", "authentication-results"];
+  # this is where we may configure our selected routines
   routines {
     # settings for x-spamd-bar routine
     x-spamd-bar {
       # effectively disables negative spambar
       negative = "";
     }
+    # other routines...
   }
-  # custom routines
   custom {
-    my_routine = <<EOD
-return function(task, common_meta)
-  local add, remove, common = {}, {}, {}
-  local do_stuff = false
-  if common_meta.symbols then
-    if common_meta.symbols.R_SPF_ALLOW == false then
-      # Previous routine recorded R_SPF_ALLOW not present
-      return
-    elseif common_meta.symbols.R_SPF_ALLOW then
-      # Previous routine recorded R_SPF_ALLOW present
-      do_stuff = true
-      add['SPF-Pass'] = 'true'
-      remove['SPF-Pass'] = 1
-    else
-      local sym = task:get_symbol('R_SPF_ALLOW')
-      common.symbols = {}
-      if sym then
-        do_stuff = true
-        common.symbols.R_SPF_ALLOW = sym
-      else
-        common.symbols.R_SPF_ALLOW = false
-      end
-    end
-    if do_stuff then
-      add['SPF-Pass'] = 'true'
-      remove['SPF-Pass'] = 1
-    end
-  end
-  # Return error (or nil); headers to add; headers to remove; metadata to store
-  return nil, add, remove, common
-EOD; 
+    # user-defined routines: more on these later
   }
 }
 ~~~
@@ -156,3 +127,22 @@ SpamAssassin-style X-Spam-Status header indicating spam status.
 ~~~
 
 Adds a header containing names of virii detected by scanners configured in [Antivirus module]({{ site.baseurl }}/doc/modules/antivirus.html) in case that virii are detected in a message.
+
+# Custom routines
+
+User-defined routines can be defined in configuration in the `custom` section, for example:
+
+~~~ucl
+  custom {
+    my_routine = <<EOD
+return function(task, common_meta)
+  -- parameters are task and metadata from previous functions
+  return nil, -- no error
+    {['X-Foo'] = 'Bar'}, -- add header: X-Foo: Bar
+    {['X-Foo'] = 1}, -- remove foreign X-Foo headers
+    {}, -- metadata to return to other functions
+EOD;
+  }
+~~~
+
+The key `my_routine` could then be referenced in the `use` setting like other routines.
