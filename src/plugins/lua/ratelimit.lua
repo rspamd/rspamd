@@ -489,6 +489,64 @@ local function parse_limit(str)
   end
 end
 
+local function parse_string_limit(lim)
+  local function parse_time_suffix(s)
+    if s == 's' then
+      return 1
+    elseif s == 'm' then
+      return 60
+    elseif s == 'h' then
+      return 3600
+    elseif s == 'd' then
+      return 86400
+    end
+  end
+  local function parse_num_suffix(s)
+    if s == '' then
+      return 1
+    elseif s == 'k' then
+      return 1000
+    elseif s == 'm' then
+      return 1000000
+    elseif s == 'g' then
+      return 1000000000
+    end
+  end
+  local lpeg = require "lpeg"
+  local digit = lpeg.R("09")
+  local grammar = {}
+  grammar.integer =
+    (lpeg.S("+-") ^ -1) *
+    (digit   ^  1)
+  grammar.fractional =
+    (lpeg.P(".")   ) *
+    (digit ^ 1)
+  grammar.number =
+    (grammar.integer *
+    (grammar.fractional ^ -1)) +
+    (lpeg.S("+-") * grammar.fractional)
+  grammar.time = lpeg.Cf(lpeg.Cc(1) *
+    (grammar.number / tonumber) *
+    ((lpeg.S("smhd") / parse_time_suffix) ^ -1),
+    function (acc, val) return acc * val end)
+  grammar.suffixed_number = lpeg.Cf(lpeg.Cc(1) *
+    (grammar.number / tonumber) *
+    ((lpeg.S("kmg") / parse_num_suffix) ^ -1),
+    function (acc, val) return acc * val end)
+  grammar.limit = lpeg.Ct(grammar.suffixed_number *
+    (lpeg.S(" ") ^ 0) * lpeg.S("/") * (lpeg.S(" ") ^ 0) *
+    grammar.time)
+  local t = lpeg.match(grammar.limit, lim)
+
+  if t and t[1] and t[2] and t[2] ~= 0 then
+    return t[1] / t[2]
+  end
+
+  rspamd_logger.errx(rspamd_config, 'bad limit: %s', lim)
+
+  return nil
+end
+
 local opts = rspamd_config:get_all_opt('ratelimit')
 if opts then
   local rates = opts['limit']
@@ -503,6 +561,11 @@ if opts then
     fun.each(function(t, lim)
       if type(lim) == 'table' then
         settings[t] = lim
+      elseif type(lim) == 'string' then
+        local plim = parse_string_limit(lim)
+        if plim then
+          settings[t] = plim
+        end
       end
     end, opts['rates'])
   end
