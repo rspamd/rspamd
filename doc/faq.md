@@ -499,6 +499,10 @@ Yes, Rspamd should be safe for outbound scanning by default, [see here for detai
 
 ## Administration questions
 
+### Where can I find all configuration options supported by Rspamd
+
+You can use `rspamadm confighelp` to get a description of options supported by Rspamd. You can either specify a specific option or path: `rspamadm confighelp options` or search some keyword: `rspamadm confighelp -k servers`. Please read `rspamadm help confighelp` for the list of command line options available for this command.
+
 ### How to read Rspamd logs
 Rspamd logs are augmented, meaning that each log line normally includes a `tag` which can help to figure out log lines that are related to, for example, a specific task:
 
@@ -670,7 +674,7 @@ When `password` is specified but `enable_password` is missing then `password` is
 
 ### How to store passwords securely
 
-Rspamd can encrypt passwords and store them using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use the `rspamadm pw` command as follows:
+Rspamd can encrypt passwords and store them using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2) or [Catena](https://www.uni-weimar.de/de/medien/professuren/mediensicherheit/research/catena/). Catena is used by default since `1.4` as it provides better resistance to brute-force attacks requiring additional memory for computation (memory hard function). To use this feature you can use the `rspamadm pw` command as follows:
 
 ```
 rspamadm pw
