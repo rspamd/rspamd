@@ -2813,14 +2813,15 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 		rspamd_session_destroy (session->task->s);
 	}
 
-	if (session->pool) {
-		rspamd_mempool_delete (session->pool);
-		msg_debug_session ("destroy session %p", session);
-	}
-
 	session->wrk->nconns --;
 	rspamd_inet_address_destroy (session->from_addr);
 	REF_RELEASE (session->cfg);
+
+	if (session->pool) {
+		msg_debug_session ("destroy session %p", session);
+		rspamd_mempool_delete (session->pool);
+	}
+
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
 }
 
