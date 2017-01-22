@@ -27,7 +27,7 @@
 			<li role="presentation"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab">Configuration</a></li>
 			<li role="presentation"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-toggle="tab">Symbols</a></li>
 			<li role="presentation"><a id="learning_nav" aria-controls="learning" role="tab" href="#learning" data-toggle="tab">Learning</a></li>
-			<li role="presentation"><a id="scan_nav"aria-controls="scan" role="tab"  href="#scan" data-toggle="tab">Scan</a></li>
+			<li role="presentation"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab">Scan</a></li>
 			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
 		</ul>
     <ul class="nav navbar-nav nav-pills pull-right" style="display:none">
@@ -74,11 +74,13 @@
 						<div class="widget-content nopadding">
 								<table class="table table-log table-hover" id="clusterTable">
 										<thead>
+											<tr>
 												<th class="col1" title="Radio"></th>
 												<th class="col2" title="SName">Server name</th>
 												<th class="col3" title="SHost">Host</th>
 												<th class="col4" title="SStatus">Status</th>
 												<th class="col5" title="SId">Configuration ID</th>
+											</tr>
 										</thead>
 										<tbody>
 										</tbody>
@@ -182,13 +184,15 @@
 					<div class="widget-content nopadding">
 						<table class="table table-log table-hover" id="symbolsTable">
 							<thead>
-								<th title="Group">Group</th>
-								<th title="Symbol">Symbol</th>
-								<th title="Description">Description</th>
-								<th title="Score">Score</th>
-								<th title="Hits">Hits</th>
-								<th title="Avg.time">Avg.time</th>
-								<th title="Save data">Save data</th>
+								<tr>
+									<th title="Group">Group</th>
+									<th title="Symbol">Symbol</th>
+									<th title="Description">Description</th>
+									<th title="Score">Score</th>
+									<th title="Hits">Hits</th>
+									<th title="Avg.time">Avg.time</th>
+									<th title="Save data">Save data</th>
+								</tr>
 							</thead>
 						</table>
 					</div>
@@ -264,9 +268,11 @@
 							<div class="well nomargin nopadding">
 								<table class="table table-log table-hover" id="scanOutput">
 									<thead>
-										<th class="col4" title="Action">Action</th>
-										<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
-										<th class="col6" title="Symbols">Symbols</th>
+										<tr>
+											<th class="col4" title="Action">Action</th>
+											<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
+											<th class="col6" title="Symbols">Symbols</th>
+										</tr>
 									</thead>
 								</table>
 							</div>
@@ -293,15 +299,17 @@
 					<div class="widget-content nopadding">
 						<table class="table table-log table-hover" id="historyLog">
 							<thead>
-								<th class="col1" title="Time">Time</th>
-								<th class="col2" title="ID">ID</th>
-								<th class="col3" title="IP">IP</th>
-								<th class="col4" title="Action">Action</th>
-								<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
-								<th class="col6" title="Symbols">Symbols</th>
-								<th class="col7" title="Size">Size</th>
-								<th class="col8" title="Scan Time (s)"><div class="cell-overflow">Scan Time (s)</div></th>
-								<th class="col9" title="User">User</th>
+								<tr>
+									<th class="col1" title="Time">Time</th>
+									<th class="col2" title="ID">ID</th>
+									<th class="col3" title="IP">IP</th>
+									<th class="col4" title="Action">Action</th>
+									<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
+									<th class="col6" title="Symbols">Symbols</th>
+									<th class="col7" title="Size">Size</th>
+									<th class="col8" title="Scan Time (s)"><div class="cell-overflow">Scan Time (s)</div></th>
+									<th class="col9" title="User">User</th>
+								</tr>
 							</thead>
 						</table>
 					</div>
@@ -319,12 +327,14 @@
 					<div class="widget-content nopadding">
 						<table class="table table-log table-hover" id="errorsLog">
 							<thead>
-								<th title="Time">Time</th>
-								<th title="Worker">Worker</th>
-								<th title="PID">PID</th>
-								<th title="Module">Module</th>
-								<th title="ID">ID</th>
-								<th title="Message">Message</th>
+								<tr>
+									<th title="Time">Time</th>
+									<th title="Worker">Worker</th>
+									<th title="PID">PID</th>
+									<th title="Module">Module</th>
+									<th title="ID">ID</th>
+									<th title="Message">Message</th>
+								</tr>
 							</thead>
 						</table>
 					</div>
