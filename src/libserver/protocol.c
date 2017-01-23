@@ -644,13 +644,15 @@ struct tree_cb_data {
 };
 
 static ucl_object_t *
-rspamd_protocol_extended_url (struct rspamd_url *url)
+rspamd_protocol_extended_url (struct rspamd_task *task,
+		struct rspamd_url *url,
+		const gchar *encoded, gsize enclen)
 {
 	ucl_object_t *obj, *elt;
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 
-	elt = ucl_object_fromlstring (url->string, url->urllen);
+	elt = ucl_object_fromlstring (encoded, enclen);
 	ucl_object_insert_key (obj, elt, "url", 0, false);
 
 	if (url->surbllen > 0) {
@@ -669,7 +671,9 @@ rspamd_protocol_extended_url (struct rspamd_url *url)
 	ucl_object_insert_key (obj, elt, "redirected", 0, false);
 
 	if (url->phished_url) {
-		elt = rspamd_protocol_extended_url (url->phished_url);
+		encoded = rspamd_url_encode (url->phished_url, &enclen, task->task_pool);
+		elt = rspamd_protocol_extended_url (task, url->phished_url, encoded,
+				enclen);
 		ucl_object_insert_key (obj, elt, "orig_url", 0, false);
 	}
 
@@ -686,15 +690,18 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = value;
 	ucl_object_t *obj;
 	struct rspamd_task *task = cb->task;
-	const gchar *user_field = "unknown";
+	const gchar *user_field = "unknown", *encoded;
 	gboolean has_user = FALSE;
 	guint len = 0;
+	gsize enclen;
+
+	encoded = rspamd_url_encode (url, &enclen, task->task_pool);
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
-		obj = ucl_object_fromlstring (url->string, url->urllen);
+		obj = ucl_object_fromlstring (encoded, enclen);
 	}
 	else {
-		obj = rspamd_protocol_extended_url (url);
+		obj = rspamd_protocol_extended_url (task, url, encoded, enclen);
 	}
 
 	ucl_array_append (cb->top, obj);
@@ -715,7 +722,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			has_user ? "user" : "from",
 			len, user_field,
 			rspamd_inet_address_to_string (task->from_addr),
-			url->urllen, url->string);
+			(gint)enclen, encoded);
 	}
 }
 
