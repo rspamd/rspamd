@@ -43,7 +43,7 @@ local function configure_module()
         local message = (opts.messages or E)[symbol]
         local id = rspamd_config:register_symbol({
           type = 'normal',
-          name = 'FORCE_ACTION_ON' .. symbol,
+          name = 'FORCE_ACTION_ON_' .. symbol,
           callback = gen_cb(symbol, action, message),
         })
         rspamd_config:register_dependency(id, symbol)
