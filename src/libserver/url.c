@@ -2720,17 +2720,87 @@ rspamd_url_decode (gchar *dst, const gchar *src, gsize size)
 	return (d - dst);
 }
 
-#define CHECK_URL_COMPONENT(beg, len) do { \
+enum rspamd_url_char_class {
+	RSPAMD_URL_UNRESERVED = (1 << 0),
+	RSPAMD_URL_SUBDELIM = (1 << 1),
+	RSPAMD_URL_PATHSAFE = (1 << 2),
+	RSPAMD_URL_QUERYSAFE = (1 << 3),
+	RSPAMD_URL_FRAGMENTSAFE = (1 << 4),
+	RSPAMD_URL_HOSTSAFE = (1 << 5),
+	RSPAMD_URL_USERSAFE = (1 << 6),
+};
+
+#define RSPAMD_URL_FLAGS_HOSTSAFE (RSPAMD_URL_UNRESERVED|RSPAMD_URL_HOSTSAFE|RSPAMD_URL_SUBDELIM)
+#define RSPAMD_URL_FLAGS_USERSAFE (RSPAMD_URL_UNRESERVED|RSPAMD_URL_USERSAFE|RSPAMD_URL_SUBDELIM)
+#define RSPAMD_URL_FLAGS_PATHSAFE (RSPAMD_URL_UNRESERVED|RSPAMD_URL_PATHSAFE|RSPAMD_URL_SUBDELIM)
+#define RSPAMD_URL_FLAGS_QUERYSAFE (RSPAMD_URL_UNRESERVED|RSPAMD_URL_QUERYSAFE|RSPAMD_URL_SUBDELIM)
+#define RSPAMD_URL_FLAGS_FRAGMENTSAFE (RSPAMD_URL_UNRESERVED|RSPAMD_URL_FRAGMENTSAFE|RSPAMD_URL_SUBDELIM)
+
+static const unsigned char rspamd_url_encoding_classes[256] = {
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0 /*   */, RSPAMD_URL_SUBDELIM /* ! */, 0 /* " */, 0 /* # */,
+	RSPAMD_URL_SUBDELIM /* $ */, 0 /* % */, RSPAMD_URL_SUBDELIM /* & */,
+	RSPAMD_URL_SUBDELIM /* ' */, RSPAMD_URL_SUBDELIM /* ( */,
+	RSPAMD_URL_SUBDELIM /* ) */, RSPAMD_URL_SUBDELIM /* * */,
+	RSPAMD_URL_SUBDELIM /* + */, RSPAMD_URL_SUBDELIM /* , */,
+	RSPAMD_URL_UNRESERVED /* - */, RSPAMD_URL_UNRESERVED /* . */,
+	RSPAMD_URL_PATHSAFE|RSPAMD_URL_QUERYSAFE|RSPAMD_URL_FRAGMENTSAFE /* / */,
+	RSPAMD_URL_UNRESERVED /* 0 */, RSPAMD_URL_UNRESERVED /* 1 */,
+	RSPAMD_URL_UNRESERVED /* 2 */, RSPAMD_URL_UNRESERVED /* 3 */,
+	RSPAMD_URL_UNRESERVED /* 4 */, RSPAMD_URL_UNRESERVED /* 5 */,
+	RSPAMD_URL_UNRESERVED /* 6 */, RSPAMD_URL_UNRESERVED /* 7 */,
+	RSPAMD_URL_UNRESERVED /* 8 */, RSPAMD_URL_UNRESERVED /* 9 */,
+	RSPAMD_URL_USERSAFE|RSPAMD_URL_HOSTSAFE|RSPAMD_URL_PATHSAFE|RSPAMD_URL_QUERYSAFE|RSPAMD_URL_FRAGMENTSAFE /* : */,
+	RSPAMD_URL_SUBDELIM /* ; */, 0 /* < */, RSPAMD_URL_SUBDELIM /* = */, 0 /* > */,
+	RSPAMD_URL_QUERYSAFE|RSPAMD_URL_FRAGMENTSAFE /* ? */,
+	RSPAMD_URL_PATHSAFE|RSPAMD_URL_QUERYSAFE|RSPAMD_URL_FRAGMENTSAFE /* @ */,
+	RSPAMD_URL_UNRESERVED /* A */, RSPAMD_URL_UNRESERVED /* B */,
+	RSPAMD_URL_UNRESERVED /* C */, RSPAMD_URL_UNRESERVED /* D */,
+	RSPAMD_URL_UNRESERVED /* E */, RSPAMD_URL_UNRESERVED /* F */,
+	RSPAMD_URL_UNRESERVED /* G */, RSPAMD_URL_UNRESERVED /* H */,
+	RSPAMD_URL_UNRESERVED /* I */, RSPAMD_URL_UNRESERVED /* J */,
+	RSPAMD_URL_UNRESERVED /* K */, RSPAMD_URL_UNRESERVED /* L */,
+	RSPAMD_URL_UNRESERVED /* M */, RSPAMD_URL_UNRESERVED /* N */,
+	RSPAMD_URL_UNRESERVED /* O */, RSPAMD_URL_UNRESERVED /* P */,
+	RSPAMD_URL_UNRESERVED /* Q */, RSPAMD_URL_UNRESERVED /* R */,
+	RSPAMD_URL_UNRESERVED /* S */, RSPAMD_URL_UNRESERVED /* T */,
+	RSPAMD_URL_UNRESERVED /* U */, RSPAMD_URL_UNRESERVED /* V */,
+	RSPAMD_URL_UNRESERVED /* W */, RSPAMD_URL_UNRESERVED /* X */,
+	RSPAMD_URL_UNRESERVED /* Y */, RSPAMD_URL_UNRESERVED /* Z */,
+	RSPAMD_URL_HOSTSAFE /* [ */, 0 /* \ */, RSPAMD_URL_HOSTSAFE /* ] */, 0 /* ^ */,
+	RSPAMD_URL_UNRESERVED /* _ */, 0 /* ` */, RSPAMD_URL_UNRESERVED /* a */,
+	RSPAMD_URL_UNRESERVED /* b */, RSPAMD_URL_UNRESERVED /* c */,
+	RSPAMD_URL_UNRESERVED /* d */, RSPAMD_URL_UNRESERVED /* e */,
+	RSPAMD_URL_UNRESERVED /* f */, RSPAMD_URL_UNRESERVED /* g */,
+	RSPAMD_URL_UNRESERVED /* h */, RSPAMD_URL_UNRESERVED /* i */,
+	RSPAMD_URL_UNRESERVED /* j */, RSPAMD_URL_UNRESERVED /* k */,
+	RSPAMD_URL_UNRESERVED /* l */, RSPAMD_URL_UNRESERVED /* m */,
+	RSPAMD_URL_UNRESERVED /* n */, RSPAMD_URL_UNRESERVED /* o */,
+	RSPAMD_URL_UNRESERVED /* p */, RSPAMD_URL_UNRESERVED /* q */,
+	RSPAMD_URL_UNRESERVED /* r */, RSPAMD_URL_UNRESERVED /* s */,
+	RSPAMD_URL_UNRESERVED /* t */, RSPAMD_URL_UNRESERVED /* u */,
+	RSPAMD_URL_UNRESERVED /* v */, RSPAMD_URL_UNRESERVED /* w */,
+	RSPAMD_URL_UNRESERVED /* x */, RSPAMD_URL_UNRESERVED /* y */,
+	RSPAMD_URL_UNRESERVED /* z */, 0 /* { */, 0 /* | */, 0 /* } */,
+	RSPAMD_URL_UNRESERVED /* ~ */, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+#define CHECK_URL_COMPONENT(beg, len, flags) do { \
 	for (i = 0; i < (len); i ++) { \
-		if ((beg)[i] > 0x80 || !is_urlsafe ((beg)[i])) { \
+		if ((rspamd_url_encoding_classes[(beg)[i]] & (flags)) == 0) { \
 			dlen += 2; \
 		} \
 	} \
 } while (0)
 
-#define ENCODE_URL_COMPONENT(beg, len) do { \
+#define ENCODE_URL_COMPONENT(beg, len, flags) do { \
 	for (i = 0; i < (len) && dend > d; i ++) { \
-		if ((beg)[i] > 0x80 || !is_urlsafe ((beg)[i])) { \
+		if ((rspamd_url_encoding_classes[(beg)[i]] & (flags)) == 0) { \
 			*d++ = '%'; \
 			*d++ = hexdigests[((beg)[i] >> 4) & 0xf]; \
 			*d++ = hexdigests[(beg)[i] & 0xf]; \
@@ -2752,11 +2822,16 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 
 	g_assert (pdlen != NULL && url != NULL && pool != NULL);
 
-	CHECK_URL_COMPONENT ((guchar *)url->host, url->hostlen);
-	CHECK_URL_COMPONENT ((guchar *)url->user, url->userlen);
-	CHECK_URL_COMPONENT ((guchar *)url->data, url->datalen);
-	CHECK_URL_COMPONENT ((guchar *)url->query, url->querylen);
-	CHECK_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen);
+	CHECK_URL_COMPONENT ((guchar *)url->host, url->hostlen,
+			RSPAMD_URL_FLAGS_HOSTSAFE);
+	CHECK_URL_COMPONENT ((guchar *)url->user, url->userlen,
+			RSPAMD_URL_FLAGS_USERSAFE);
+	CHECK_URL_COMPONENT ((guchar *)url->data, url->datalen,
+			RSPAMD_URL_FLAGS_PATHSAFE);
+	CHECK_URL_COMPONENT ((guchar *)url->query, url->querylen,
+			RSPAMD_URL_FLAGS_QUERYSAFE);
+	CHECK_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen,
+			RSPAMD_URL_FLAGS_FRAGMENTSAFE);
 
 	if (dlen == 0) {
 		*pdlen = url->urllen;
@@ -2773,25 +2848,30 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 			"%*s://", url->protocollen, rspamd_url_protocols[url->protocol].name);
 
 	if (url->userlen > 0) {
-		ENCODE_URL_COMPONENT ((guchar *)url->user, url->userlen);
+		ENCODE_URL_COMPONENT ((guchar *)url->user, url->userlen,
+				RSPAMD_URL_FLAGS_USERSAFE);
 		*d++ = ':';
 	}
 
-	ENCODE_URL_COMPONENT ((guchar *)url->host, url->hostlen);
+	ENCODE_URL_COMPONENT ((guchar *)url->host, url->hostlen,
+			RSPAMD_URL_FLAGS_HOSTSAFE);
 
 	if (url->datalen > 0) {
 		*d++ = '/';
-		ENCODE_URL_COMPONENT ((guchar *)url->data, url->datalen);
+		ENCODE_URL_COMPONENT ((guchar *)url->data, url->datalen,
+				RSPAMD_URL_FLAGS_PATHSAFE);
 	}
 
 	if (url->querylen > 0) {
 		*d++ = '/';
-		ENCODE_URL_COMPONENT ((guchar *)url->query, url->querylen);
+		ENCODE_URL_COMPONENT ((guchar *)url->query, url->querylen,
+				RSPAMD_URL_FLAGS_QUERYSAFE);
 	}
 
 	if (url->fragmentlen > 0) {
 		*d++ = '/';
-		ENCODE_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen);
+		ENCODE_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen,
+				RSPAMD_URL_FLAGS_FRAGMENTSAFE);
 	}
 
 	*pdlen = (d - dest);
