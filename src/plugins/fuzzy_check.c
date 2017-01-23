@@ -85,6 +85,7 @@ struct fuzzy_rule {
 	double max_score;
 	gboolean read_only;
 	gboolean skip_unknown;
+	gboolean fuzzy_images;
 	gint learn_condition_cb;
 };
 
@@ -479,6 +480,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup (obj, "skip_unknown")) != NULL) {
 		rule->skip_unknown = ucl_obj_toboolean (value);
+	}
+
+	if ((value = ucl_object_lookup (obj, "fuzzy_images")) != NULL) {
+		rule->fuzzy_images = ucl_obj_toboolean (value);
 	}
 
 	if ((value = ucl_object_lookup (obj, "algorithm")) != NULL) {
@@ -2303,6 +2308,13 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 								image->parent->digest);
 						if (io) {
 							g_ptr_array_add (res, io);
+						}
+
+						if (rule->fuzzy_images) {
+							/* Try to normalize image */
+							if (!image->is_normalized) {
+								rspamd_image_normalize (task, image);
+							}
 						}
 
 						if (image->is_normalized) {

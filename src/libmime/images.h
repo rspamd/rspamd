@@ -40,4 +40,6 @@ void rspamd_images_process (struct rspamd_task *task);
  */
 const gchar * rspamd_image_type_str (enum rspamd_image_type type);
 
+void rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img);
+
 #endif /* IMAGES_H_ */

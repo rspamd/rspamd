@@ -428,7 +428,7 @@ rspamd_image_save_hash (struct rspamd_task *task, struct rspamd_image *img)
 
 #endif
 
-static void
+void
 rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 {
 #ifdef USABLE_GD
@@ -442,6 +442,10 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 
 	if (img->height <= RSPAMD_NORMALIZED_DIM ||
 			img->width <= RSPAMD_NORMALIZED_DIM) {
+		return;
+	}
+
+	if (img->data->len > task->cfg->max_pic_size) {
 		return;
 	}
 
@@ -595,13 +599,6 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 
 		img->parent = part;
 
-		if (img->data->len <= task->cfg->max_pic_size) {
-			rspamd_image_normalize (task, img);
-		}
-		else {
-			msg_info_task ("skip normalization for image %s: too large: %z",
-					img->filename, img->data->len);
-		}
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
 		part->specific.img = img;
 
