@@ -252,12 +252,23 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 				break;
 			case EILSEQ:
 			case EINVAL:
-				/* Ignore bad characters */
-				if (remain > 0 && inremain > 0) {
-					*d++ = '?';
+				/* Replace bad characters with U+FFFD */
+				if (inremain > 0) {
+					if (remain < 3) {
+						pos = outlen;
+						outlen += inremain * 4;
+						remain += inremain * 4;
+						/* May cause reallocate, so store previous len in pos */
+						g_byte_array_set_size (out, outlen);
+						d = out->data + pos;
+					}
+
+					*d++ = 0xEF;
+					*d++ = 0xBF;
+					*d++ = 0xBD;
 					s++;
 					inremain --;
-					remain --;
+					remain -= 3;
 				}
 				break;
 			}
