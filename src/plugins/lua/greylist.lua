@@ -378,7 +378,7 @@ if opts then
       name = 'GREYLIST_SAVE',
       type = 'postfilter',
       callback = greylist_set,
-      priority = 5
+      priority = 6
     })
     rspamd_config:register_symbol({
       name = 'GREYLIST_CHECK',
