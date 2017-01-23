@@ -78,6 +78,7 @@ Additionally, the following Lua modules are shipped with rspamd:
 - [dkim_signing](dkim_signing.html) - adds DKIM signatures to messages
 - [emails](emails.html) - extract emails from a message and checks it against DNS
 blacklists.
+- [force_actions](force_actions.html) - forces actions if selected symbols are detected
 - [greylisting](greylisting.html) - allows to delay suspicious messages
 - [ip_score](ip_score.html) - dynamically scores sender reputation
 - [metadata_exporter](metadata_exporter.html) - pushes message metadata to external systems
