@@ -70,6 +70,28 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	return metric_res;
 }
 
+static inline gdouble
+rspamd_check_group_score (struct rspamd_task *task,
+		const gchar *symbol,
+		struct rspamd_symbols_group *gr,
+		gdouble *group_score,
+		gdouble w)
+{
+	if (gr != NULL && group_score && gr->max_score > 0.0) {
+		if (*group_score >= gr->max_score && w > 0) {
+			msg_info_task ("maximum group score %.2f for group %s has been reached,"
+					" ignoring symbol %s with weight %.2f", gr->max_score,
+					gr->name, symbol, w);
+			return NAN;
+		}
+		else if (*group_score + w > gr->max_score) {
+			w = gr->max_score - *group_score;
+		}
+	}
+
+	return w;
+}
+
 static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
 	struct rspamd_metric *metric,
@@ -80,7 +102,7 @@ insert_metric_result (struct rspamd_task *task,
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
-	gdouble w, *gr_score = NULL;
+	gdouble w, *gr_score = NULL, next_gf = 1.0, diff;
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
@@ -118,21 +140,6 @@ insert_metric_result (struct rspamd_task *task,
 		}
 	}
 
-	/* XXX: does not take grow factor into account */
-	if (gr != NULL && gr_score != NULL && gr->max_score > 0.0) {
-		if (*gr_score >= gr->max_score) {
-			msg_info_task ("maximum group score %.2f for group %s has been reached,"
-					" ignoring symbol %s with weight %.2f", gr->max_score,
-					gr->name, symbol, w);
-			return g_hash_table_lookup (metric_res->symbols, symbol);
-		}
-		else if (*gr_score + w > gr->max_score) {
-			w = gr->max_score - *gr_score;
-		}
-
-		*gr_score += w;
-	}
-
 	/* Add metric score */
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (sdef && (sdef->flags & RSPAMD_SYMBOL_FLAG_ONESHOT)) {
@@ -145,19 +152,44 @@ insert_metric_result (struct rspamd_task *task,
 
 		if (rspamd_task_add_result_option (task, s, opt)) {
 			if (!single) {
-				/* Handle grow factor */
-				if (metric_res->grow_factor && w > 0) {
-					w *= metric_res->grow_factor;
-					metric_res->grow_factor *= metric->grow_factor;
-				}
-				s->score += w;
-				metric_res->score += w;
+				diff = w;
 			}
 			else {
 				if (fabs (s->score) < fabs (w)) {
 					/* Replace less weight with a bigger one */
-					metric_res->score = metric_res->score - s->score + w;
-					s->score = w;
+					diff = metric_res->score - s->score + w;
+				}
+				else {
+					diff = 0;
+				}
+			}
+
+			if (diff) {
+				/* Handle grow factor */
+				if (metric_res->grow_factor && diff > 0) {
+					diff *= metric_res->grow_factor;
+					next_gf *= metric->grow_factor;
+				}
+				else if (diff > 0) {
+					next_gf = metric->grow_factor;
+				}
+
+				diff = rspamd_check_group_score (task, symbol, gr, gr_score, diff);
+
+				if (!isnan (w)) {
+					metric_res->score += diff;
+					metric_res->grow_factor = next_gf;
+
+					if (gr_score) {
+						*gr_score += diff;
+					}
+
+					if (single) {
+						s->score = w;
+					}
+					else {
+						s->score += diff;
+					}
 				}
 			}
 		}
@@ -168,16 +200,30 @@ insert_metric_result (struct rspamd_task *task,
 		/* Handle grow factor */
 		if (metric_res->grow_factor && w > 0) {
 			w *= metric_res->grow_factor;
-			metric_res->grow_factor *= metric->grow_factor;
+			next_gf *= metric->grow_factor;
 		}
 		else if (w > 0) {
-			metric_res->grow_factor = metric->grow_factor;
+			next_gf = metric->grow_factor;
 		}
 
-		s->score = w;
 		s->name = symbol;
 		s->sym = sdef;
-		metric_res->score += w;
+
+		w = rspamd_check_group_score (task, symbol, gr, gr_score, w);
+
+		if (!isnan (w)) {
+			metric_res->score += w;
+			metric_res->grow_factor = next_gf;
+			s->score = w;
+
+			if (gr_score) {
+				*gr_score += w;
+			}
+
+		}
+		else {
+			s->score = 0;
+		}
 
 		rspamd_task_add_result_option (task, s, opt);
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
