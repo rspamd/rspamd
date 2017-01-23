@@ -68,6 +68,42 @@ typedef struct url_match_s {
 
 struct url_callback_data;
 
+static const struct {
+	enum rspamd_url_protocol proto;
+	const gchar *name;
+	gsize len;
+} rspamd_url_protocols[] = {
+		{
+				.proto = PROTOCOL_FILE,
+				.name = "file",
+				.len = 4
+		},
+		{
+				.proto = PROTOCOL_FTP,
+				.name = "ftp",
+				.len = 3
+		},
+		{
+				.proto = PROTOCOL_HTTP,
+				.name = "http",
+				.len = 4
+		},
+		{
+				.proto = PROTOCOL_HTTPS,
+				.name = "https",
+				.len = 5
+		},
+		{
+				.proto = PROTOCOL_MAILTO,
+				.name = "mailto",
+				.len = 6
+		},
+		{
+				.proto = PROTOCOL_UNKNOWN,
+				.name = NULL,
+				.len = 0
+		}
+};
 struct url_matcher {
 	const gchar *pattern;
 	const gchar *prefix;
@@ -1455,43 +1491,6 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	guint i, complen, ret;
 	gsize unquoted_len = 0;
 
-	const struct {
-		enum rspamd_url_protocol proto;
-		const gchar *name;
-		gsize len;
-	} protocols[] = {
-			{
-					.proto = PROTOCOL_FILE,
-					.name = "file",
-					.len = 4
-			},
-			{
-					.proto = PROTOCOL_FTP,
-					.name = "ftp",
-					.len = 3
-			},
-			{
-					.proto = PROTOCOL_HTTP,
-					.name = "http",
-					.len = 4
-			},
-			{
-					.proto = PROTOCOL_HTTPS,
-					.name = "https",
-					.len = 5
-			},
-			{
-					.proto = PROTOCOL_MAILTO,
-					.name = "mailto",
-					.len = 6
-			},
-			{
-					.proto = PROTOCOL_UNKNOWN,
-					.name = NULL,
-					.len = 0
-			}
-	};
-
 	memset (uri, 0, sizeof (*uri));
 	memset (&u, 0, sizeof (u));
 
@@ -1601,9 +1600,9 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 
 	uri->protocol = PROTOCOL_UNKNOWN;
 
-	for (i = 0; i < G_N_ELEMENTS (protocols); i++) {
-		if (uri->protocollen == protocols[i].len) {
-			if (memcmp (uri->string, protocols[i].name, uri->protocollen) ==
+	for (i = 0; i < G_N_ELEMENTS (rspamd_url_protocols); i++) {
+		if (uri->protocollen == rspamd_url_protocols[i].len) {
+			if (memcmp (uri->string, rspamd_url_protocols[i].name, uri->protocollen) ==
 				0) {
 				uri->protocol = i;
 				break;
@@ -2747,7 +2746,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 		rspamd_mempool_t *pool)
 {
 	guchar *dest, *d, *dend;
-	static const gchar hexdigests[16] = "0123456789abcdef";
+	static const gchar hexdigests[16] = "0123456789ABCDEF";
 	guint i;
 	gsize dlen = 0;
 
@@ -2771,7 +2770,7 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	d = dest;
 	dend = d + dlen;
 	d += rspamd_snprintf ((gchar *)d, dend - d,
-			"%*s://", url->protocollen, url->protocol);
+			"%*s://", url->protocollen, rspamd_url_protocols[url->protocol].name);
 
 	if (url->userlen > 0) {
 		ENCODE_URL_COMPONENT ((guchar *)url->user, url->userlen);
