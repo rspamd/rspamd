@@ -205,15 +205,6 @@ gchar * rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen, enum rspamd_newlines_type how);
 
 /**
- * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
- * @param dst
- * @param src
- * @param size
- * @return
- */
-gsize rspamd_decode_url (gchar *dst, const gchar *src, gsize size);
-
-/**
  * Decode quoted-printable encoded buffer, input and output must not overlap
  * @param in input
  * @param inlen length of input
@@ -342,14 +333,6 @@ void rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
 		rspamd_fstring_t **target,
 		const ucl_object_t *comments);
-
-guint rspamd_url_hash (gconstpointer u);
-
-/* Compare two emails for building emails hash */
-gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
-
-/* Compare two urls for building emails hash */
-gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
 
 extern const guchar lc_map[256];
 

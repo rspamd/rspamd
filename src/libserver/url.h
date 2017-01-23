@@ -177,4 +177,31 @@ void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
 		const gchar *value,
 		rspamd_mempool_t *pool);
 
+guint rspamd_url_hash (gconstpointer u);
+
+/* Compare two emails for building emails hash */
+gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
+
+/* Compare two urls for building emails hash */
+gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
+
+/**
+ * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
+ * @param dst
+ * @param src
+ * @param size
+ * @return
+ */
+gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
+
+/**
+ * Encode url if needed. In this case, memory is allocated from the specific pool.
+ * Returns pointer to begin and encoded length in `dlen`
+ * @param url
+ * @param pool
+ * @return
+ */
+const gchar * rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
+		rspamd_mempool_t *pool);
+
 #endif

@@ -326,7 +326,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		r = rspamd_strlcpy (filepath, tok->begin,
 				MIN (sizeof (filepath), tok->len + 1));
 
-		rspamd_decode_url (filepath, filepath, r + 1);
+		rspamd_url_decode (filepath, filepath, r + 1);
 		flen = strlen (filepath);
 
 		if (filepath[0] == '"' && flen > 2) {
@@ -424,7 +424,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		r = rspamd_strlcpy (filepath, tok->begin,
 				MIN (sizeof (filepath), tok->len + 1));
 
-		rspamd_decode_url (filepath, filepath, r + 1);
+		rspamd_url_decode (filepath, filepath, r + 1);
 		flen = strlen (filepath);
 
 		if (filepath[0] == '"' && flen > 2) {

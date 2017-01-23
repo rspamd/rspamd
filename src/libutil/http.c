@@ -27,6 +27,7 @@
 #include "unix-std.h"
 #include "libutil/ssl_util.h"
 #include "libutil/regexp.h"
+#include "libserver/url.h"
 
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
@@ -3376,7 +3377,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 						/* We have a single parameter without a value */
 						key = rspamd_fstring_new_init (c, p - c);
 						key_tok = rspamd_ftok_map (key);
-						key_tok->len = rspamd_decode_url (key->str, key->str,
+						key_tok->len = rspamd_url_decode (key->str, key->str,
 								key->len);
 
 						value = rspamd_fstring_new_init ("", 0);
@@ -3389,7 +3390,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 						/* We have something like key=value */
 						key = rspamd_fstring_new_init (c, p - c);
 						key_tok = rspamd_ftok_map (key);
-						key_tok->len = rspamd_decode_url (key->str, key->str,
+						key_tok->len = rspamd_url_decode (key->str, key->str,
 								key->len);
 
 						state = parse_eqsign;
@@ -3415,7 +3416,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 						if (p > c) {
 							value = rspamd_fstring_new_init (c, p - c);
 							value_tok = rspamd_ftok_map (value);
-							value_tok->len = rspamd_decode_url (value->str,
+							value_tok->len = rspamd_url_decode (value->str,
 									value->str,
 									value->len);
 							/* Detect quotes for value */

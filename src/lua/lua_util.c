@@ -857,7 +857,7 @@ lua_util_decode_url (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = g_malloc (inlen);
 		memcpy ((char *)t->start, s, inlen);
-		t->len = rspamd_decode_url ((char *)t->start, s, inlen);
+		t->len = rspamd_url_decode ((char *)t->start, s, inlen);
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
 	}
 	else {

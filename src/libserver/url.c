@@ -1569,28 +1569,28 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	uri->string = p;
 	uri->urllen = len;
 
-	unquoted_len = rspamd_decode_url (uri->string,
+	unquoted_len = rspamd_url_decode (uri->string,
 			uri->string,
 			uri->protocollen);
 	rspamd_url_shift (uri, unquoted_len, UF_SCHEMA);
-	unquoted_len = rspamd_decode_url (uri->host, uri->host, uri->hostlen);
+	unquoted_len = rspamd_url_decode (uri->host, uri->host, uri->hostlen);
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
 	if (uri->datalen) {
-		unquoted_len = rspamd_decode_url (uri->data, uri->data, uri->datalen);
+		unquoted_len = rspamd_url_decode (uri->data, uri->data, uri->datalen);
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 		/* We now normalize path */
 		rspamd_http_normalize_path_inplace (uri->data, uri->datalen, &unquoted_len);
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 	}
 	if (uri->querylen) {
-		unquoted_len = rspamd_decode_url (uri->query,
+		unquoted_len = rspamd_url_decode (uri->query,
 				uri->query,
 				uri->querylen);
 		rspamd_url_shift (uri, unquoted_len, UF_QUERY);
 	}
 	if (uri->fragmentlen) {
-		unquoted_len = rspamd_decode_url (uri->fragment,
+		unquoted_len = rspamd_url_decode (uri->fragment,
 				uri->fragment,
 				uri->fragmentlen);
 		rspamd_url_shift (uri, unquoted_len, UF_FRAGMENT);
@@ -2568,4 +2568,234 @@ rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
 	}
 
 	DL_APPEND (found, ntag);
+}
+
+guint
+rspamd_url_hash (gconstpointer u)
+{
+	const struct rspamd_url *url = u;
+	rspamd_cryptobox_fast_hash_state_t st;
+
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+
+	if (url->urllen > 0) {
+		rspamd_cryptobox_fast_hash_update (&st, url->string, url->urllen);
+	}
+
+	rspamd_cryptobox_fast_hash_update (&st, &url->flags, sizeof (url->flags));
+
+	return rspamd_cryptobox_fast_hash_final (&st);
+}
+
+/* Compare two emails for building emails tree */
+gboolean
+rspamd_emails_cmp (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_url *u1 = a, *u2 = b;
+	gint r;
+
+	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
+		return FALSE;
+	}
+	else {
+		if ((r = rspamd_lc_cmp (u1->host, u2->host, u1->hostlen)) == 0) {
+			if (u1->userlen != u2->userlen || u1->userlen == 0) {
+				return FALSE;
+			}
+			else {
+				return rspamd_lc_cmp (u1->user, u2->user, u1->userlen) ==
+						0;
+			}
+		}
+		else {
+			return r == 0;
+		}
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_urls_cmp (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_url *u1 = a, *u2 = b;
+	int r;
+
+	if (u1->urllen != u2->urllen) {
+		return FALSE;
+	}
+	else {
+		r = memcmp (u1->string, u2->string, u1->urllen);
+		if (r == 0 && u1->flags != u2->flags) {
+			/* Always insert phished urls to the tree */
+			return FALSE;
+		}
+	}
+
+	return r == 0;
+}
+
+gsize
+rspamd_url_decode (gchar *dst, const gchar *src, gsize size)
+{
+	gchar *d, ch, c, decoded;
+	const gchar *s;
+	enum {
+		sw_usual = 0,
+		sw_quoted,
+		sw_quoted_second
+	} state;
+
+	d = dst;
+	s = src;
+
+	state = 0;
+	decoded = 0;
+
+	while (size--) {
+
+		ch = *s++;
+
+		switch (state) {
+		case sw_usual:
+
+			if (ch == '%') {
+				state = sw_quoted;
+				break;
+			}
+			else if (ch == '+') {
+				*d++ = ' ';
+			}
+			else {
+				*d++ = ch;
+			}
+			break;
+
+		case sw_quoted:
+
+			if (ch >= '0' && ch <= '9') {
+				decoded = (ch - '0');
+				state = sw_quoted_second;
+				break;
+			}
+
+			c = (ch | 0x20);
+			if (c >= 'a' && c <= 'f') {
+				decoded = (c - 'a' + 10);
+				state = sw_quoted_second;
+				break;
+			}
+
+			/* the invalid quoted character */
+
+			state = sw_usual;
+
+			*d++ = ch;
+
+			break;
+
+		case sw_quoted_second:
+
+			state = sw_usual;
+
+			if (ch >= '0' && ch <= '9') {
+				ch = ((decoded << 4) + ch - '0');
+				*d++ = ch;
+
+				break;
+			}
+
+			c = (u_char) (ch | 0x20);
+			if (c >= 'a' && c <= 'f') {
+				ch = ((decoded << 4) + c - 'a' + 10);
+
+				*d++ = ch;
+				break;
+			}
+
+			/* the invalid quoted character */
+			break;
+		}
+	}
+
+	return (d - dst);
+}
+
+#define CHECK_URL_COMPONENT(beg, len) do { \
+	for (i = 0; i < (len); i ++) { \
+		if ((beg)[i] > 0x80 || !is_urlsafe ((beg)[i])) { \
+			dlen += 2; \
+		} \
+	} \
+} while (0)
+
+#define ENCODE_URL_COMPONENT(beg, len) do { \
+	for (i = 0; i < (len) && dend > d; i ++) { \
+		if ((beg)[i] > 0x80 || !is_urlsafe ((beg)[i])) { \
+			*d++ = '%'; \
+			*d++ = hexdigests[((beg)[i] >> 4) & 0xf]; \
+			*d++ = hexdigests[(beg)[i] & 0xf]; \
+		} \
+		else { \
+			*d++ = (beg)[i]; \
+		} \
+	} \
+} while (0)
+
+const gchar *
+rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
+		rspamd_mempool_t *pool)
+{
+	guchar *dest, *d, *dend;
+	static const gchar hexdigests[16] = "0123456789abcdef";
+	guint i;
+	gsize dlen = 0;
+
+	g_assert (pdlen != NULL && url != NULL && pool != NULL);
+
+	CHECK_URL_COMPONENT ((guchar *)url->host, url->hostlen);
+	CHECK_URL_COMPONENT ((guchar *)url->user, url->userlen);
+	CHECK_URL_COMPONENT ((guchar *)url->data, url->datalen);
+	CHECK_URL_COMPONENT ((guchar *)url->query, url->querylen);
+	CHECK_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen);
+
+	if (dlen == 0) {
+		*pdlen = url->urllen;
+
+		return url->string;
+	}
+
+	/* Need to encode */
+	dlen += url->urllen;
+	dest = rspamd_mempool_alloc (pool, dlen + 1);
+	d = dest;
+	dend = d + dlen;
+	d += rspamd_snprintf ((gchar *)d, dend - d,
+			"%*s://", url->protocollen, url->protocol);
+
+	if (url->userlen > 0) {
+		ENCODE_URL_COMPONENT ((guchar *)url->user, url->userlen);
+		*d++ = ':';
+	}
+
+	ENCODE_URL_COMPONENT ((guchar *)url->host, url->hostlen);
+
+	if (url->datalen > 0) {
+		*d++ = '/';
+		ENCODE_URL_COMPONENT ((guchar *)url->data, url->datalen);
+	}
+
+	if (url->querylen > 0) {
+		*d++ = '/';
+		ENCODE_URL_COMPONENT ((guchar *)url->query, url->querylen);
+	}
+
+	if (url->fragmentlen > 0) {
+		*d++ = '/';
+		ENCODE_URL_COMPONENT ((guchar *)url->fragment, url->fragmentlen);
+	}
+
+	*pdlen = (d - dest);
+
+	return (const gchar *)dest;
 }
