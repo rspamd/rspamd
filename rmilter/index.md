@@ -5,15 +5,7 @@ title: About rmilter
 
 ## Introduction
 
-Rmilter is used to integrate Rspamd and `milter` compatible MTA, for example Postfix or Sendmail. It also performs other useful functions for email filtering including:
-
-- Virus scanning using [ClamAV](http://clamav.net)
-- Spam scanning using Rspamd
-- Greylisting using Redis storage
-- Ratelimit using Redis storage
-- Replies check (whitelisting replies to sent messages)
-- Passing certain messages to Redis Pub/Sub channels
-- DKIM signing
+Rmilter is used to integrate Rspamd and `milter` compatible MTA, for example Postfix or Sendmail. 
 
 <div>
     <div class="row" style="margin-top: 20px; margin-bottom: 20px;">
@@ -33,6 +25,40 @@ Rmilter is used to integrate Rspamd and `milter` compatible MTA, for example Pos
         </div>
     </div>
 </div>
+
+## Project state
+
+This project is now not under active development, however, bug fixes and Rspamd integration features are still considered.
+
+Historically, Rmilter supported many other features besides Rspamd integration. So far, all these features are implemented in Rspamd which allows to simplify integration with different MTA (e.g. Exim, Haraka or other non-milter compatible servers). Therefore, if you use this functionality you should consider switching it to Rspamd where all equal features are usually better implemented and have active and actual support.
+
+The list of features includes the following ones:
+
+- Greylisting - provided by [greylisting module](https://rspamd.com/doc/modules/greylisting.html)
+- Ratelimit - is done by [ratelimit module](https://rspamd.com/doc/modules/ratelimit.html)
+- Replies whitelisting - is implemented in [replies module](https://rspamd.com/doc/modules/replies.html)
+- Antivirus filtering - provided now by [antivirus module](https://rspamd.com/doc/modules/antivirus.html)
+- DCC checks - are now done in [dcc module](https://rspamd.com/doc/modules/dcc.html)
+- Dkim signing - can be done now by using of [dkim module](https://rspamd.com/doc/modules/dkim.html#dkim-signatures) and also by a more simple [dkim signing module](https://rspamd.com/doc/modules/dkim_signing.html)
+
+All duplicating features are still kept in Rmilter for compatibility reasons. However, no further development or bug fixes will likely be done for them.
+
+From version `1.9.1` it is possible to specify `enable` option in `greylisting` and `ratelimit` sections. It is also possible for `dkim` section since `1.9.2`. These options are `true` by default. Here is an example of configuration where greylisting and ratelimit are disabled:
+
+~~~ucl
+# /etc/rmilter.conf.local
+limits {
+    enable = false;
+}
+greylisting {
+    enable = false;
+}
+dkim {
+    enable = false;
+}
+~~~
+
+These options are in their default enabled states merely for compatibility purposes. In future Rmilter releases, they will be **DISABLED** by default.
 
 ## Postfix settings
 
@@ -125,65 +151,5 @@ Using of empty lists can remove the default lists content:
 ~~~ucl
 ratelimit {
     whitelist = ; # Will remove the default whitelist
-}
-~~~
-
-### How to disable DKIM signing, greylisting and ratelimit in Rmilter
-
-From version `1.9.1` it is possible to specify `enable` option in `greylisting` and `ratelimit` sections. It is also possible for `dkim` section since `1.9.2`. These options are `true` by default. Here is an example of configuration where greylisting and ratelimit are disabled:
-
-~~~ucl
-# /etc/rmilter.conf.local
-limits {
-    enable = false;
-}
-greylisting {
-    enable = false;
-}
-dkim {
-    enable = false;
-}
-~~~
-
-### Setup DKIM signing of outcoming email for authenticated users
-
-With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
-This could be done, for example by using `opendkim-genkey`:
-
-    opendkim-genkey --domain=example.com --selector=dkim
-
-That will generate `dkim.private` file with private key and `dkim.txt` with the suggested `TXT` record for your domain.
-
-~~~ucl
-dkim {
-    domain {
-        key = /etc/dkim;
-        domain = "*";
-        selector = "dkim";
-    };
-    header_canon = relaxed;
-    body_canon = relaxed;
-    sign_alg = sha256;
-};
-~~~
-
-Please note, that Rmilter will sign merely mail for the **authenticated** users, hence you should also ensure that `{auth_authen}` macro
-is passed to milter on `MAIL FROM` stage:
-
-    milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
-
-### Setup whitelisting of reply messages
-
-It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of Rmilter. To enable this
-feature, please ensure that you have Redis server running and add the following lines to `redis` section (or add `conf.d/redis.conf` file):
-
-~~~ucl
-redis {
-    # servers_id - Redis servers used for message id storing, can not be mirrored
-    servers_id = localhost;
-
-    # id_prefix - prefix for extracting message ids from Redis
-    # Default: empty (no prefix is prepended to key)
-    id_prefix = "message_id.";
 }
 ~~~
