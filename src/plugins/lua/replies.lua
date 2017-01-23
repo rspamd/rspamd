@@ -46,7 +46,7 @@ local function replies_check(task)
     end
     if data == '1' then
       -- Hash was found
-      task:insert_result(settings['symbol'], 0.0)
+      task:insert_result(settings['symbol'], 1.0)
       if settings['action'] ~= nil then
         local ip_addr = task:get_ip()
         if task:get_user() or (ip_addr and ip_addr:is_local()) then
