@@ -276,6 +276,7 @@ local function greylist_set(task)
   if is_whitelisted then
     if action == 'greylist' then
       -- We are going to accept message
+      rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
       task:set_metric_action('default', 'no action')
     end
 
