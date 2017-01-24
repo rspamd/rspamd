@@ -826,14 +826,9 @@ rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 	return TRUE;
 }
 
-
 void
-rspamd_symbols_cache_destroy (struct symbols_cache *cache)
+rspamd_symbols_cache_save (struct symbols_cache *cache)
 {
-	GList *cur;
-	struct delayed_cache_dependency *ddep;
-	struct delayed_cache_condition *dcond;
-
 	if (cache != NULL) {
 
 		if (cache->cfg->cache_filename) {
@@ -844,6 +839,18 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 						cache->cfg->cache_filename);
 			}
 		}
+	}
+}
+
+void
+rspamd_symbols_cache_destroy (struct symbols_cache *cache)
+{
+	GList *cur;
+	struct delayed_cache_dependency *ddep;
+	struct delayed_cache_condition *dcond;
+
+	if (cache != NULL) {
+		rspamd_symbols_cache_save (cache);
 
 		if (cache->delayed_deps) {
 			cur = cache->delayed_deps;

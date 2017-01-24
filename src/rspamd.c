@@ -273,6 +273,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	struct rspamd_config *tmp_cfg, *old_cfg;
 	gchar *cfg_file;
 
+	rspamd_symbols_cache_save (rspamd_main->cfg->cache);
 	tmp_cfg = rspamd_config_new ();
 	g_hash_table_unref (tmp_cfg->c_modules);
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);

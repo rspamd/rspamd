@@ -62,6 +62,12 @@ struct symbols_cache* rspamd_symbols_cache_new (struct rspamd_config *cfg);
 void rspamd_symbols_cache_destroy (struct symbols_cache *cache);
 
 /**
+ * Saves symbols cache to disk if possible
+ * @param cache
+ */
+void rspamd_symbols_cache_save (struct symbols_cache *cache);
+
+/**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
 gboolean rspamd_symbols_cache_init (struct symbols_cache* cache);
