@@ -1853,6 +1853,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, cache_filename),
 			RSPAMD_CL_FLAG_STRING_PATH,
 			"Path to the cache file");
+	rspamd_rcl_add_default_handler (sub,
+			"cache_reload",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, cache_reload_time),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"How often cache reload should be performed");
 	/* Old DNS configuration */
 	rspamd_rcl_add_default_handler (sub,
 			"dns_nameserver",

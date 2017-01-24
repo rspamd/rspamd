@@ -171,8 +171,6 @@ struct rspamd_cache_refresh_cbdata {
 	struct event_base *ev_base;
 };
 
-/* XXX: Maybe make it configurable */
-#define CACHE_RELOAD_TIME 60.0
 /* weight, frequency, time */
 #define TIME_ALPHA (1.0)
 #define WEIGHT_ALPHA (0.1)
@@ -294,9 +292,6 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 		if (i2->deps->len != 0) {
 			w2 = 1.0 / (i2->deps->len);
 		}
-		msg_debug_cache ("deps length: %s -> %.2f, %s -> %.2f",
-				i1->symbol, w1 * 1000.0,
-				i2->symbol, w2 * 1000.0);
 	}
 	else if (i1->priority == i2->priority) {
 		avg_freq = ((gdouble)cache->total_hits / cache->used_items);
@@ -309,17 +304,11 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 		t2 = i2->st->avg_time;
 		w1 = SCORE_FUN (weight1, f1, t1);
 		w2 = SCORE_FUN (weight2, f2, t2);
-		msg_debug_cache ("%s -> %.2f, %s -> %.2f",
-				i1->symbol, w1 * 1000.0,
-				i2->symbol, w2 * 1000.0);
 	}
 	else {
 		/* Strict sorting */
 		w1 = abs (i1->priority);
 		w2 = abs (i2->priority);
-		msg_debug_cache ("priority: %s -> %.2f, %s -> %.2f",
-				i1->symbol, w1 * 1000.0,
-				i2->symbol, w2 * 1000.0);
 	}
 
 	if (w2 > w1) {
@@ -934,7 +923,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->postfilters = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
 	cache->mtx = rspamd_mempool_get_mutex (cache->static_pool);
-	cache->reload_time = CACHE_RELOAD_TIME;
+	cache->reload_time = cfg->cache_reload_time;
 	cache->total_hits = 1;
 	cache->total_weight = 1.0;
 	cache->cfg = cfg;
@@ -950,6 +939,7 @@ rspamd_symbols_cache_init (struct symbols_cache* cache)
 
 	g_assert (cache != NULL);
 
+	cache->reload_time = cache->cfg->cache_reload_time;
 
 	/* Just in-memory cache */
 	if (cache->cfg->cache_filename == NULL) {

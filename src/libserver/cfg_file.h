@@ -373,7 +373,8 @@ struct rspamd_config {
 
 	struct symbols_cache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/
-	struct rspamd_metric *default_metric;                  /**< default metric										*/
+	gdouble cache_reload_time;                      /**< how often cache reload should be performed			*/
+	struct rspamd_metric *default_metric;           /**< default metric										*/
 
 	gchar * checksum;                               /**< real checksum of config file						*/
 	gchar * dump_checksum;                          /**< dump checksum of config file						*/
