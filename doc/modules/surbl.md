@@ -186,3 +186,15 @@ For example, [SBL list](https://www.spamhaus.org/sbl/) of `spamhaus` project pro
         }
     }
 ~~~
+
+## Disabling SURBLs
+
+Rules can be disabled by setting the `enabled` setting to `false`. This allows for easily disabling SURBLs without overriding the full default configuration. The example below could be added to `/etc/rspamd/local.d/surbl.conf` to disable the `RAMBLER_URIBL` URIBL.
+
+~~~ucl
+rules {
+  "RAMBLER_URIBL" {
+    enabled = false;
+  }
+}
+~~~

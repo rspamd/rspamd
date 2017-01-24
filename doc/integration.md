@@ -120,20 +120,23 @@ Alternatively, you can set `enable_shutdown_workaround = true` in `$LOCAL_CONFDI
 Here is an example of the Exim configuration:
 
 {% highlight make %}
-# Please note the variant parameter
+# This is the global (top) section of the configuration file
+# Please note the variant parameter in spamd_address setting
 spamd_address = 127.0.0.1 11333 variant=rspamd
 
 acl_smtp_data = acl_check_spam
 
+begin acl
 
 acl_check_spam:
   # do not scan messages submitted from our own hosts
+  # +relay_from_hosts is assumed to be a list of hosts in configuration
   accept hosts = +relay_from_hosts
 
-  # do not scan messages from submission port
+  # do not scan messages from submission port (or maybe you want to?)
   accept condition = ${if eq{$interface_port}{587}}
 
-  # skip scanning for authenticated users
+  # skip scanning for authenticated users (if desired?)
   accept authenticated = *
 
   # add spam-score and spam-report header when told by rspamd
@@ -141,6 +144,12 @@ acl_check_spam:
         condition  = ${if eq{$spam_action}{add header}}
         add_header = X-Spam-Score: $spam_score ($spam_bar)
         add_header = X-Spam-Report: $spam_report
+
+  # $spam_action is the action recommended by rspamd
+  # $spam_score is the message score (we unlikely need it)
+  # $spam_score_int is spam score multiplied by 10
+  # $spam_report lists symbols matched & protocol messages
+  # $spam_bar is a visual indicator of spam/ham level
 
   # use greylisting available in rspamd v1.3+
   defer message    = Please try again later
@@ -151,6 +160,8 @@ acl_check_spam:
 
   accept
 {% endhighlight %}
+
+For further information please refer to the [Exim specification](http://www.exim.org/exim-html-current/doc/html/spec_html), especially the [chapter about content scanning](http://www.exim.org/exim-html-current/doc/html/spec_html/ch-content_scanning_at_acl_time.html).
 
 ## Using Rspamd with Sendmail MTA
 
