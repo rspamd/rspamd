@@ -130,6 +130,13 @@ void rspamd_worker_block_signals (void);
 void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
 
 /**
+ * Returns TRUE if a specific worker is normal worker
+ * @param w
+ * @return
+ */
+gboolean rspamd_worker_is_normal (struct rspamd_worker *w);
+
+/**
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,

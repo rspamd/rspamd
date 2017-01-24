@@ -3598,7 +3598,8 @@ start_controller_worker (struct rspamd_worker *worker)
 			ctx->ev_base, ctx->resolver->r);
 	/* Maps events */
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
-	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);
+	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
+			worker);
 	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);

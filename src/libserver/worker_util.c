@@ -676,3 +676,22 @@ rspamd_hard_terminate (struct rspamd_main *rspamd_main)
 	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_FAILURE);
 }
+
+gboolean
+rspamd_worker_is_normal (struct rspamd_worker *w)
+{
+	static GQuark normal_quark = (GQuark)0;
+
+	if (w) {
+		if (normal_quark) {
+			return w->type == normal_quark;
+		}
+		else {
+			normal_quark = g_quark_from_static_string ("normal");
+		}
+
+		return w->type == normal_quark;
+	}
+
+	return FALSE;
+}

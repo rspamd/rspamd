@@ -24,6 +24,7 @@
 struct rspamd_task;
 struct rspamd_config;
 struct symbols_cache;
+struct rspamd_worker;
 
 typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
 
@@ -185,7 +186,7 @@ ucl_object_t *rspamd_symbols_cache_counters (struct symbols_cache * cache);
  * @param ev_base
  */
 void rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
-		struct event_base *ev_base);
+		struct event_base *ev_base, struct rspamd_worker *w);
 
 /**
  * Increases counter for a specific symbol
