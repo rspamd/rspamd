@@ -560,11 +560,14 @@ if opts then
     -- new way of setting limits
     fun.each(function(t, lim)
       if type(lim) == 'table' then
-        settings[t] = lim
-      elseif type(lim) == 'string' then
-        local plim = parse_string_limit(lim)
-        if plim then
-          settings[t] = plim
+        if type(lim[2]) == 'number' then
+          settings[t] = lim
+        elseif type(lim[2]) == 'string' then
+          settings[t] = lim
+          local plim = parse_string_limit(lim[2])
+          if plim then
+            settings[t][2] = plim
+          end
         end
       end
     end, opts['rates'])
