@@ -80,7 +80,8 @@ struct symbols_cache {
 };
 
 struct counter_data {
-	gdouble value;
+	gdouble mean;
+	gdouble stddev;
 	gint number;
 };
 
@@ -328,12 +329,14 @@ rspamd_set_counter (struct cache_item *item, gdouble value)
 
 	/* Cumulative moving average using per-process counter data */
 	if (cd->number == 0) {
-		cd->value = 0;
+		cd->mean = 0;
+		cd->stddev = 0;
 	}
 
-	cd->value = cd->value + (value - cd->value) / (gdouble)(++cd->number);
+	cd->mean += (value - cd->mean) / (gdouble)(++cd->number);
+	cd->stddev += (value - cd->mean) * (value - cd->mean);
 
-	return cd->value;
+	return cd->mean;
 }
 
 static void
@@ -1840,9 +1843,9 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 			if (item->cd->number > 0) {
 				item->st->avg_counter += item->cd->number + 1;
 				item->st->avg_time = item->st->avg_time +
-						(item->cd->value - item->st->avg_time) /
+						(item->cd->mean - item->st->avg_time) /
 								(gdouble)item->st->avg_counter;
-				item->cd->value = item->st->avg_time;
+				item->cd->mean = item->st->avg_time;
 				item->cd->number = item->st->avg_counter;
 			}
 		}
