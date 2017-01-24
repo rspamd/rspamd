@@ -136,7 +136,7 @@ gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache,
  */
 gboolean rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 		const gchar *name,
-		guint *frequency,
+		gdouble *frequency,
 		gdouble *tm);
 /**
  * Find symbol in cache by its id

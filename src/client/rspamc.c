@@ -837,7 +837,7 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		printf ("\033[0m");
 	}
 	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
-		"| %%3d | %%%ds | %%6.1f | %%9d | %%9.3f |\n", max_len);
+		"| %%3d | %%%ds | %%6.1f | %%9.3f | %%9.3f |\n", max_len);
 
 	iter = NULL;
 	i = 0;
@@ -851,7 +851,7 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 			printf (fmt_buf, i,
 				ucl_object_tostring (sym),
 				ucl_object_todouble (weight),
-				(gint)ucl_object_toint (freq),
+				ucl_object_todouble (freq),
 				ucl_object_todouble (tim));
 		}
 		i++;
