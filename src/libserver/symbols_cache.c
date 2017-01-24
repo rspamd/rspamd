@@ -1255,12 +1255,12 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		}
 
 		if (check) {
-			t1 = rspamd_get_ticks ();
 			pending_before = rspamd_session_events_pending (task->s);
 			/* Watch for events appeared */
 			rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
 					item);
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
+			t1 = rspamd_get_ticks ();
 			item->func (task, item->user_data);
 			t2 = rspamd_get_ticks ();
 			diff = (t2 - t1) * 1e6;
@@ -1908,10 +1908,11 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 
 			if (item->cd->number > 0) {
 				if (item->type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
+					item->st->avg_time = item->cd->mean;
 					rspamd_set_counter (&item->st->time_counter,
 							item->st->avg_time);
-					memset (item->cd, 0, sizeof (*item->cd));
 					item->st->avg_time = item->st->time_counter.mean;
+					memset (item->cd, 0, sizeof (*item->cd));
 				}
 			}
 		}
