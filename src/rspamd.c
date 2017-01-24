@@ -656,8 +656,15 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_main *rspamd_main;
 
 	rspamd_main = w->srv;
-	kill (w->pid, SIGUSR2);
-	msg_info_main ("send signal to worker %P", w->pid);
+
+	if (!w->wanna_die) {
+		w->wanna_die = TRUE;
+		kill (w->pid, SIGUSR2);
+		msg_info_main ("send signal to worker %P", w->pid);
+	}
+	else {
+		msg_info_main ("do not send signal to worker %P, already sent", w->pid);
+	}
 }
 
 static gboolean
@@ -941,6 +948,11 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 
 			g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (
 					wrk));
+
+			if (cur->wanna_die) {
+				/* Do not refork workers that are intended to be terminated */
+				need_refork = FALSE;
+			}
 
 			if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 				/* Normal worker termination, do not fork one more */
