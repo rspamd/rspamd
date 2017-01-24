@@ -88,8 +88,10 @@ struct counter_data {
 struct item_stat {
 	gdouble avg_time;
 	gdouble weight;
-	guint64 frequency;
-	guint64 avg_counter;
+	guint hits;
+	guint64 total_hits;
+	gdouble avg_frequency;
+	gdouble stddev_frequency;
 };
 
 struct cache_item {
@@ -116,6 +118,7 @@ struct cache_item {
 	/* Priority */
 	gint priority;
 	gint id;
+	gint frequency_peaks;
 
 	/* Dependencies */
 	GPtrArray *deps;
@@ -296,8 +299,8 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	else if (i1->priority == i2->priority) {
 		avg_freq = (cache->total_freq / cache->used_items);
 		avg_weight = (cache->total_weight / cache->used_items);
-		f1 = (double)i1->st->frequency / avg_freq;
-		f2 = (double)i2->st->frequency / avg_freq;
+		f1 = (double)i1->st->hits / avg_freq;
+		f2 = (double)i2->st->hits / avg_freq;
 		weight1 = fabs (i1->st->weight) / avg_weight;
 		weight2 = fabs (i2->st->weight) / avg_weight;
 		t1 = i1->st->avg_time;
@@ -586,12 +589,23 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 
 			elt = ucl_object_lookup (cur, "count");
 			if (elt) {
-				item->st->avg_counter = ucl_object_toint (elt);
+				item->st->total_hits = ucl_object_toint (elt);
 			}
 
 			elt = ucl_object_lookup (cur, "frequency");
-			if (elt) {
-				item->st->frequency = ucl_object_toint (elt);
+			if (elt && ucl_object_type (elt) == UCL_OBJECT) {
+				const ucl_object_t *cur;
+
+				cur = ucl_object_lookup (elt, "avg");
+
+				if (cur) {
+					item->st->avg_frequency = ucl_object_todouble (cur);
+				}
+				cur = ucl_object_lookup (elt, "stddev");
+
+				if (cur) {
+					item->st->stddev_frequency = ucl_object_todouble (cur);
+				}
 			}
 
 			if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
@@ -607,11 +621,11 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				 * parent item avg_time
 				 */
 				parent->st->avg_time = item->st->avg_time;
-				parent->st->avg_counter = item->st->avg_counter;
+				parent->st->total_hits = item->st->total_hits;
 			}
 
 			cache->total_weight += fabs (item->st->weight);
-			cache->total_freq += item->st->frequency;
+			cache->total_freq += item->st->hits;
 		}
 	}
 
@@ -625,7 +639,7 @@ static gboolean
 rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 {
 	struct rspamd_symbols_cache_header hdr;
-	ucl_object_t *top, *elt;
+	ucl_object_t *top, *elt, *freq;
 	GHashTableIter it;
 	struct cache_item *item;
 	struct ucl_emitter_functions *efunc;
@@ -667,10 +681,15 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 				"weight", 0, false);
 		ucl_object_insert_key (elt, ucl_object_fromdouble (item->st->avg_time),
 				"time", 0, false);
-		ucl_object_insert_key (elt, ucl_object_fromdouble (item->st->avg_counter),
+		ucl_object_insert_key (elt, ucl_object_fromdouble (item->st->total_hits),
 				"count", 0, false);
-		ucl_object_insert_key (elt, ucl_object_fromint (item->st->frequency),
-				"frequency", 0, false);
+
+		freq = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (freq, ucl_object_fromdouble (item->st->avg_frequency),
+				"avg", 0, false);
+		ucl_object_insert_key (freq, ucl_object_fromdouble (item->st->stddev_frequency),
+				"stddev", 0, false);
+		ucl_object_insert_key (elt, freq, "frequency", 0, false);
 
 		ucl_object_insert_key (top, elt, k, 0, false);
 	}
@@ -754,7 +773,6 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 				cache->cksum);
 	}
 
-	rspamd_set_counter (item, 0);
 	g_ptr_array_add (cache->items_by_id, item);
 	item->deps = g_ptr_array_new ();
 	item->rdeps = g_ptr_array_new ();
@@ -1789,16 +1807,20 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 					item->parent);
 			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->weight),
 					"weight", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromint (item->st->frequency),
+			ucl_object_insert_key (obj, ucl_object_fromdouble (parent->st->avg_frequency),
 					"frequency", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (parent->st->total_hits),
+					"hits", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromdouble (parent->st->avg_time),
 					"time", 0, false);
 		}
 		else {
 			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->weight),
 					"weight", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromint (item->st->frequency),
+			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->avg_frequency),
 					"frequency", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (item->st->total_hits),
+					"hits", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->avg_time),
 					"time", 0, false);
 		}
@@ -1851,18 +1873,20 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 		/* Gather stats from shared execution times */
 		for (i = 0; i < cache->items_by_id->len; i ++) {
 			item = g_ptr_array_index (cache->items_by_id, i);
+			if (item->cd->number > 0) {
+				item->st->total_hits += item->cd->number;
 
-			if (item->type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
-				if (item->cd->number > 0) {
-					item->st->avg_counter += item->cd->number + 1;
+				if (item->type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
 					item->st->avg_time = item->st->avg_time +
 							(item->cd->mean - item->st->avg_time) /
-							(gdouble)item->st->avg_counter;
+							(gdouble)item->st->total_hits;
 					item->cd->mean = item->st->avg_time;
-					item->cd->number = item->st->avg_counter;
 				}
+
+				item->cd->number = item->st->total_hits;
 			}
 		}
+
 		/* Sync virtual symbols */
 		for (i = 0; i < cache->items_by_id->len; i ++) {
 			item = g_ptr_array_index (cache->items_by_id, i);
@@ -1872,8 +1896,15 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 
 				if (parent) {
 					item->st->avg_time = parent->st->avg_time;
-					item->st->avg_counter = parent->st->avg_counter;
 				}
+			}
+		}
+
+		if (cbdata->w->index == 0) {
+			/* We also calculate frequencies */
+			for (i = 0; i < cache->items_by_id->len; i ++) {
+				item = g_ptr_array_index (cache->items_by_id, i);
+
 			}
 		}
 
@@ -1916,14 +1947,13 @@ rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
 
 	if (item != NULL) {
-		/* We assume ++ as atomic op */
-		item->st->frequency ++;
+		g_atomic_int_inc (&item->st->hits);
 		cache->total_freq ++;
 
 		/* For virtual symbols we also increase counter for parent */
 		if (item->parent != -1) {
 			parent = g_ptr_array_index (cache->items_by_id, item->parent);
-			parent->st->frequency ++;
+			g_atomic_int_inc (&parent->st->hits);
 		}
 	}
 }
@@ -1999,7 +2029,7 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 	item = g_hash_table_lookup (cache->items_by_symbol, name);
 
 	if (item != NULL) {
-		*frequency = item->st->frequency;
+		*frequency = item->st->hits;
 		*tm = item->st->avg_time;
 
 		return TRUE;
