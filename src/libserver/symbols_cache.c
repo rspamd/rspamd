@@ -582,6 +582,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 			elt = ucl_object_lookup (cur, "count");
 			if (elt) {
 				item->st->total_hits = ucl_object_toint (elt);
+				item->last_count = item->st->total_hits;
 			}
 
 			elt = ucl_object_lookup (cur, "frequency");
@@ -1865,43 +1866,53 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 		/* Gather stats from shared execution times */
 		for (i = 0; i < cache->items_by_id->len; i ++) {
 			item = g_ptr_array_index (cache->items_by_id, i);
-			if (item->st->hits > 0) {
-				item->st->total_hits += item->st->hits;
-				item->st->hits = 0;
+			item->st->total_hits += item->st->hits;
+			item->st->hits = 0;
 
-				if (item->last_count > 0 && cbdata->w->index == 0) {
-					/* Calculate frequency */
-					gdouble cur_err, cur_value;
+			if (item->last_count > 0 && cbdata->w->index == 0) {
+				/* Calculate frequency */
+				gdouble cur_err, cur_value;
 
-					cur_value = (item->st->total_hits - item->last_count) /
-							(cur_ticks - cbdata->last_resort);
-					rspamd_set_counter (&item->st->frequency_counter,
-							cur_value);
-					item->st->avg_frequency = item->st->frequency_counter.mean;
-					item->st->stddev_frequency = item->st->frequency_counter.stddev;
+				cur_value = (item->st->total_hits - item->last_count) /
+						(cur_ticks - cbdata->last_resort);
+				rspamd_set_counter (&item->st->frequency_counter,
+						cur_value);
+				item->st->avg_frequency = item->st->frequency_counter.mean;
+				item->st->stddev_frequency = item->st->frequency_counter.stddev;
 
-					cur_err = (item->st->avg_frequency - cur_value);
-					cur_err *= cur_err;
-
-					/*
-					 * TODO: replace magic number
-					 */
-					if (item->st->frequency_counter.number > 10 &&
-							cur_err > item->st->stddev_frequency * 2) {
-						item->frequency_peaks ++;
-					}
+				if (cur_value > 0) {
+					msg_debug_cache ("frequency for %s is %.2f, avg: %.2f",
+							item->symbol, cur_value, item->st->avg_frequency);
 				}
 
-				item->last_count = item->st->total_hits;
+				cur_err = (item->st->avg_frequency - cur_value);
+				cur_err *= cur_err;
 
+				/*
+				 * TODO: replace magic number
+				 */
+				if (item->st->frequency_counter.number > 10 &&
+						cur_err > item->st->stddev_frequency * 2) {
+					item->frequency_peaks ++;
+					msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
+							"stddev: %.2f, error: %.2f, peaks: %d",
+						item->symbol, cur_value,
+						item->st->avg_frequency,
+						item->st->stddev_frequency,
+						cur_err,
+						item->frequency_peaks);
+				}
+			}
+
+			item->last_count = item->st->total_hits;
+
+			if (item->cd->number > 0) {
 				if (item->type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
 					rspamd_set_counter (&item->st->time_counter,
 							item->st->avg_time);
 					memset (item->cd, 0, sizeof (*item->cd));
 					item->st->avg_time = item->st->time_counter.mean;
 				}
-
-				item->cd->number = item->st->total_hits;
 			}
 		}
 
