@@ -42,7 +42,7 @@
         G_STRFUNC, \
         __VA_ARGS__)
 
-static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 1, 0, 0, 0, 0 };
+static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
 static gint rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
 		const gchar *name);
