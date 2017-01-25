@@ -176,7 +176,7 @@ insert_metric_result (struct rspamd_task *task,
 
 				diff = rspamd_check_group_score (task, symbol, gr, gr_score, diff);
 
-				if (!isnan (w)) {
+				if (!isnan (diff)) {
 					metric_res->score += diff;
 					metric_res->grow_factor = next_gf;
 
