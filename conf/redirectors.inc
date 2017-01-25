@@ -229,6 +229,7 @@ elurl.com
 email.mail.ostrovok.ru
 email.news.ostrovok.ru
 e.mail.ru
+em.digium.com
 emap.ws
 etdurl.com
 eweri.com
@@ -755,6 +756,7 @@ srs.li
 srtn.me
 starts.com
 starturl.com
+stat-pulse.com
 stnx.at
 stump.ws
 su.ly
