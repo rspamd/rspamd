@@ -539,7 +539,7 @@ local function parse_string_limit(lim)
   local t = lpeg.match(grammar.limit, lim)
 
   if t and t[1] and t[2] and t[2] ~= 0 then
-    return t[1] / t[2]
+    return t[1] / t[2], t[1]
   end
 
   rspamd_logger.errx(rspamd_config, 'bad limit: %s', lim)
@@ -560,14 +560,11 @@ if opts then
     -- new way of setting limits
     fun.each(function(t, lim)
       if type(lim) == 'table' then
-        if type(lim[2]) == 'number' then
-          settings[t] = lim
-        elseif type(lim[2]) == 'string' then
-          settings[t] = lim
-          local plim = parse_string_limit(lim[2])
-          if plim then
-            settings[t][2] = plim
-          end
+        settings[t] = lim
+      elseif type(lim) == 'string' then
+        local plim, size = parse_string_limit(lim)
+        if plim then
+          settings[t] = {size, plim, 1}
         end
       end
     end, opts['rates'])
@@ -586,6 +583,7 @@ if opts then
   end, fun.filter(function(_, lim)
     return type(lim) == 'string' or
         (type(lim) == 'table' and type(lim[1]) == 'number' and lim[1] > 0)
+        or (type(lim) == 'table' and (lim[3]))
   end, settings)))
   rspamd_logger.infox(rspamd_config, 'enabled rate buckets: %s', enabled_limits)
 
