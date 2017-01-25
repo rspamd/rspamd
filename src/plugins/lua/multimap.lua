@@ -38,6 +38,9 @@ local value_types = {
   header = {
     get_value = function(val) return val end,
   },
+  subject = {
+    get_value = function(val) return val end,
+  },
   rcpt = {
     get_value = function(val) return val end,
   },
@@ -509,6 +512,10 @@ local function multimap_callback(task, rule)
     end
   end
 
+  local function match_subject(r, subject)
+    match_rule(r, subject)
+  end
+
   local function match_addr(r, addr)
     match_list(r, addr, {'addr'})
     match_list(r, addr, {'domain', function(d) return '@' .. d end})
@@ -583,6 +590,11 @@ local function multimap_callback(task, rule)
   elseif rt == 'header' then
     local hv = task:get_header_full(rule['header'])
     match_list(rule, hv, {'decoded'})
+  elseif rt == 'subject' then
+    local subject = task:get_header('subject')
+    if subject then
+        match_subject(rule, subject)
+    end
   elseif rt == 'rcpt' then
     if task:has_recipients('smtp') then
       local rcpts = task:get_recipients('smtp')
@@ -725,6 +737,7 @@ local function add_multimap_rule(key, newrule)
             newrule['map'])
         end
       elseif newrule['type'] == 'header'
+        or newrule['type'] == 'subject'
         or newrule['type'] == 'rcpt'
         or newrule['type'] == 'from'
         or newrule['type'] == 'filename'
