@@ -241,14 +241,9 @@ local function tags_save(task)
     local redis_args = {}
     for dom, v in pairs(tags) do
       table.insert(redis_keys, settings.key_prefix_tags .. dom)
-      local tmp, tmp2 = {}, {}
       for k, vv in pairs(v) do
-        table.insert(tmp, k)
-        for kk in pairs(vv) do
-          table.insert(tmp2, kk)
-        end
+        table.insert(redis_args, k .. '|' .. table.concat(vv, ','))
       end
-      table.insert(redis_args, table.concat(tmp, ',') .. '|' .. table.concat(tmp2, ','))
     end
     local redis_final = {redis_set_script_sha}
     table.insert(redis_final, #redis_keys)
