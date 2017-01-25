@@ -94,10 +94,14 @@ end
 local ip_score_set = function(task)
   local function new_score_set(score, old_score, old_total)
     local new_total
-    if old_total == -1 then
+    if old_total == -1 or old_total ~= old_total then
       new_total = 1
     else
       new_total = old_total + 1
+    end
+
+    if score ~= score then
+      score = 0
     end
 
     return old_score + score, new_total
