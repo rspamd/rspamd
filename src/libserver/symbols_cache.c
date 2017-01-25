@@ -77,6 +77,7 @@ struct symbols_cache {
 	struct rspamd_config *cfg;
 	rspamd_mempool_mutex_t *mtx;
 	gdouble reload_time;
+	gint peak_cb;
 };
 
 struct counter_data {
@@ -818,6 +819,20 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 	return TRUE;
 }
 
+void
+rspamd_symbols_cache_set_peak_callback (struct symbols_cache *cache,
+		gint cbref)
+{
+	g_assert (cache != NULL);
+
+	if (cache->peak_cb != -1) {
+		luaL_unref (cache->cfg->lua_state, LUA_REGISTRYINDEX,
+				cache->peak_cb);
+	}
+
+	cache->peak_cb = cbref;
+}
+
 gboolean
 rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 		const gchar *sym, lua_State *L, gint cbref)
@@ -929,6 +944,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->total_weight = 1.0;
 	cache->cfg = cfg;
 	cache->cksum = 0xdeadbabe;
+	cache->peak_cb = -1;
 
 	return cache;
 }
@@ -1839,6 +1855,33 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 }
 
 static void
+rspamd_symbols_cache_call_peak_cb (struct event_base *ev_base,
+		struct symbols_cache *cache,
+		struct cache_item *item,
+		gdouble cur_value,
+		gdouble cur_err)
+{
+	lua_State *L = cache->cfg->lua_state;
+	struct event_base **pbase;
+
+	lua_pushvalue (L, cache->peak_cb);
+	pbase = lua_newuserdata (L, sizeof (*pbase));
+	*pbase = ev_base;
+	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
+	lua_pushstring (L, item->symbol);
+	lua_pushnumber (L, item->st->avg_frequency);
+	lua_pushnumber (L, item->st->stddev_frequency);
+	lua_pushnumber (L, cur_value);
+	lua_pushnumber (L, cur_err);
+
+	if (lua_pcall (L, 6, 0, 0) != 0) {
+		msg_info_cache ("call to peak function for %s failed: %s",
+				item->symbol, lua_tostring (L, -1));
+		lua_pop (L, 1);
+	}
+}
+
+static void
 rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 {
 	struct timeval tv;
@@ -1901,6 +1944,12 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 						item->st->stddev_frequency,
 						cur_err,
 						item->frequency_peaks);
+
+					if (cache->peak_cb != -1) {
+						rspamd_symbols_cache_call_peak_cb (cbdata->ev_base,
+								cache, item,
+								cur_value, cur_err);
+					}
 				}
 			}
 

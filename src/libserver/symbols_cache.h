@@ -103,7 +103,13 @@ gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 gboolean rspamd_symbols_cache_add_condition (struct symbols_cache *cache,
 		gint id, lua_State *L, gint cbref);
 
-
+/**
+ * Add callback to be executed whenever symbol has peak value
+ * @param cache
+ * @param cbref
+ */
+void rspamd_symbols_cache_set_peak_callback (struct symbols_cache *cache,
+		gint cbref);
 /**
  * Add delayed condition to the specific symbol in cache. So symbol can be absent
  * to the moment of addition
