@@ -27,6 +27,7 @@
 #include "cryptobox.h"
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
+#include <math.h>
 
 /***
  * @module rspamd_task
@@ -3159,7 +3160,7 @@ lua_task_get_metric_score (lua_State *L)
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
 			lua_createtable (L, 2, 0);
-			lua_pushnumber (L, metric_res->score);
+			lua_pushnumber (L, isnan (metric_res->score) ? 0.0 : metric_res->score);
 			rs = rspamd_task_get_required_score (task, metric_res);
 			lua_rawseti (L, -2, 1);
 			lua_pushnumber (L, rs);
