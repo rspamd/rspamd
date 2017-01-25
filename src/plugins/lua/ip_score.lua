@@ -139,6 +139,11 @@ local ip_score_set = function(task)
     score_mult = options['actions'][action]
   end
   local score = task:get_metric_score(options['metric'])[1]
+  if score ~= score then
+    rspamd_logger.errx(task, 'Skipping ip score as metric score is NaN')
+    return
+  end
+
   if action == 'no action' and score > 0 then
     score_mult = 0
   end
