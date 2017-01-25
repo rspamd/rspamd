@@ -20,7 +20,7 @@ limitations under the License.
 local E = {}
 local N = 'url_reputation'
 
-local redis_params, redis_set_script_sha
+local redis_params, redis_set_script_sha, redis_incr_script_sha
 local category = {}
 local settings = {
   expire = 86400, -- 1 day
@@ -167,13 +167,26 @@ for i = 1, #res do
 end
 ]]
 
+local redis_incr_script = [[
+for _, k in ipairs(KEYS) do
+  redis.call('INCR', k)
+end
+]]
+
 -- Function to load the script
 local function load_scripts(cfg, ev_base)
   local function redis_set_script_cb(err, data)
     if err then
-      rspamd_logger.errx(cfg, 'Script loading failed: ' .. err)
+      rspamd_logger.errx(cfg, 'Set script loading failed: ' .. err)
     else
       redis_set_script_sha = tostring(data)
+    end
+  end
+  local function redis_incr_script_cb(err, data)
+    if err then
+      rspamd_logger.errx(cfg, 'Increment script loading failed: ' .. err)
+    else
+      redis_incr_script_sha = tostring(data)
     end
   end
   local set_script =
@@ -188,6 +201,14 @@ local function load_scripts(cfg, ev_base)
     redis_set_script_cb, --callback
     'SCRIPT', -- command
     {'LOAD', set_script}
+  )
+  redis_make_request(ev_base,
+    rspamd_config,
+    nil,
+    true, -- is write
+    redis_incr_script_cb, --callback
+    'SCRIPT', -- command
+    {'LOAD', redis_incr_script}
   )
 end
 
@@ -324,6 +345,8 @@ local function tags_save(task)
       if which then
         -- Update reputation for guilty domain only
         rk = {
+          redis_incr_script_sha,
+          2,
           settings.key_prefix_rep .. which .. '_total',
           settings.key_prefix_rep .. which .. '_' .. scale[reputation],
         }
@@ -367,7 +390,7 @@ local function tags_save(task)
           end
         end
 
-        rk = {}
+        rk = {redis_incr_script_sha, 0}
         local added = 0
         if most_relevant then
           tlds = {most_relevant}
@@ -383,14 +406,15 @@ local function tags_save(task)
           added = added + 1
         end
       end
-      for _, k in ipairs(rk) do
+      if rk[3] then
+        rk[2] = (#rk - 2)
         local ret = rspamd_redis_make_request(task,
           redis_params,
-          k,
-          false, -- is write
+          rk[3],
+          true, -- is write
           redis_incr_cb, --callback
-          'INCR', -- command
-          {k}
+          'EVALSHA', -- command
+          rk
         )
         if not ret then
           rspamd_logger.errx(task, 'couldnt schedule increment')
