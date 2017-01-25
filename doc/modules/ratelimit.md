@@ -17,6 +17,12 @@ In the default configuration, there are no cache servers specified, hence, **the
 
 `Ratelimit` module supports the following configuration options:
 
+- `servers` - list of servers where ratelimit data is stored; [global settings]({{ site.baseurl }}/doc/configuration/redis.html) used if not set
+- `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
+- `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
+the value of this option is 'postmaster, mailer-daemon'
+- `whitelisted_ip` - a map of ip addresses or networks whitelisted
+- `whitelisted_user` - a map of usernames which are excluded from user ratelimits
 - `max_delay` - maximum lifetime for any limit bucket (1 day by default)
 - `max_rcpts` - do not apply ratelimit if it contains more than this value of recipients (5 by default). This
 option allows to avoid too many work for setting buckets if there are a lot of recipients in a message).
@@ -37,22 +43,22 @@ Where `type` is one of:
 Both these attributes are floating point values.
 
 From version `1.5` it is also possible to define limits in a simplified form:
-  bounce_to = "2 / 5m";
+`bounce_to = "2 / 5m";`
 
-Where the first number is number of messages and the second is timeframe. For example, the line above defines a limit for bounce messages per recipient at level 2 message in 5 minutes.
+The line above defines a bucket with a size of 2 and a leak rate of 2 message in 5 minutes (so 2 messages will be allowed per 5 minute period).
 
-You can use other suffixes for both time and amount of messages:
+You can use suffixes for both time and amount of messages.
 
-  user = "1k / 1d"; # 1000 messages per day per authenticated user
-  to_ip_from = "100 / 1h"; # 100 messages per hour
+Valid suffixes for periods are:
+- `s`: seconds
+- `m`: minutes
+- `h`: hours
+- `d`: days
 
-
-- `servers` - list of servers where ratelimit data is stored; [global settings]({{ site.baseurl }}/doc/configuration/redis.html) used if not set
-- `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
-- `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
-the value of this option is 'postmaster, mailer-daemon'
-- `whitelisted_ip` - a map of ip addresses or networks whitelisted
-- `whitelisted_user` - a map of usernames which are excluded from user ratelimits
+Valid suffixes for amounts are:
+- `k`: thousands
+- `m`: millions
+- `g`: billions
 
 ## Principles of work
 
