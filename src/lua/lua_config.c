@@ -572,6 +572,26 @@ LUA_FUNCTION_DEF (config, register_monitored);
  */
 LUA_FUNCTION_DEF (config, add_doc);
 
+/***
+ * @method rspamd_config:set_peak_cb(function)
+ * Sets a function that will be called when frequency of some symbol goes out of
+ * stddev * 2 over the last period of refreshment.
+ *
+ * @example
+rspamd_config:set_peak_cb(function(ev_base, sym, mean, stddev, value, error)
+  -- ev_base: event base for async events (e.g. redis)
+  -- sym: symbol's name
+  -- mean: mean frequency value
+  -- stddev: standard deviation of frequency
+  -- value: current frequency value
+  -- error: squared error
+  local logger = require "rspamd_logger"
+  logger.infox(rspamd_config, "symbol %s has changed frequency significantly: %s(%s) over %s(%s)",
+      sym, value, error, mean, stddev)
+end)
+ */
+LUA_FUNCTION_DEF (config, set_peak_cb);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -613,6 +633,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
 	LUA_INTERFACE_DEF (config, add_doc),
+	LUA_INTERFACE_DEF (config, set_peak_cb),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1885,6 +1906,22 @@ lua_config_add_condition (lua_State *L)
 
 	lua_pushboolean (L, ret);
 	return 1;
+}
+
+static gint
+lua_config_set_peak_cb (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	gint condref;
+
+	if (cfg && lua_type (L, 2) == LUA_TFUNCTION) {
+		lua_pushvalue (L, 2);
+		condref = luaL_ref (L, LUA_REGISTRYINDEX);
+		rspamd_symbols_cache_set_peak_callback (cfg->cache,
+				condref);
+	}
+
+	return 0;
 }
 
 static gint

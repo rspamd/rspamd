@@ -920,6 +920,11 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
 		REF_RELEASE (cache->items_by_order);
+
+		if (cache->peak_cb != -1) {
+			luaL_unref (cache->cfg->lua_state, LUA_REGISTRYINDEX, cache->peak_cb);
+		}
+
 		g_slice_free1 (sizeof (*cache), cache);
 	}
 }
