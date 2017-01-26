@@ -1530,7 +1530,7 @@
         }
 
         $.ajaxSetup({
-            timeout: 1000,
+            timeout: 2000,
             jsonp: false
         })
         connectRSPAMD();
