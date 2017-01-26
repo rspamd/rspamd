@@ -854,7 +854,7 @@ rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
 
 gboolean
 rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
-		const void *data, gsize len, guchar *sig, gsize siglen,
+		const void *data, gsize len, const guchar *sig, gsize siglen,
 		GError **err)
 {
 	guint pklen;

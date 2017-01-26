@@ -258,7 +258,7 @@ gboolean rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
  * @return TRUE if signature is valid
  */
 gboolean rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
-		const void *data, gsize len, guchar *sig, gsize siglen,
+		const void *data, gsize len, const guchar *sig, gsize siglen,
 		GError **err);
 
 /**
