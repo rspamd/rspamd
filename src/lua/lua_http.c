@@ -18,6 +18,7 @@
 #include "http.h"
 #include "http_private.h"
 #include "utlist.h"
+#include "libcryptobox/keypair.h"
 #include "unix-std.h"
 
 /***
@@ -63,6 +64,8 @@ struct lua_http_cbdata {
 	struct event_base *ev_base;
 	struct rspamd_config *cfg;
 	struct timeval tv;
+	struct rspamd_cryptobox_keypair *local_kp;
+	struct rspamd_cryptobox_pubkey *peer_pk;
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
 	gchar *host;
@@ -113,6 +116,14 @@ lua_http_fin (gpointer arg)
 
 	if (cbd->host) {
 		g_free (cbd->host);
+	}
+
+	if (cbd->local_kp) {
+		rspamd_keypair_unref (cbd->local_kp);
+	}
+
+	if (cbd->peer_pk) {
+		rspamd_pubkey_unref (cbd->peer_pk);
 	}
 
 	g_slice_free1 (sizeof (struct lua_http_cbdata), cbd);
@@ -226,13 +237,25 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				NULL);
 	}
 
-	rspamd_http_connection_write_message (cbd->conn, cbd->msg,
-			cbd->host, cbd->mime_type, cbd, fd,
-			&cbd->tv, cbd->ev_base);
-	/* Message is now owned by a connection object */
-	cbd->msg = NULL;
+	if (cbd->conn) {
+		if (cbd->local_kp) {
+			rspamd_http_connection_set_key (cbd->conn, cbd->local_kp);
+		}
 
-	return TRUE;
+		if (cbd->peer_pk) {
+			rspamd_http_message_set_peer_key (cbd->msg, cbd->peer_pk);
+		}
+
+		rspamd_http_connection_write_message (cbd->conn, cbd->msg,
+				cbd->host, cbd->mime_type, cbd, fd,
+				&cbd->tv, cbd->ev_base);
+		/* Message is now owned by a connection object */
+		cbd->msg = NULL;
+
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static void
@@ -312,6 +335,8 @@ lua_http_request (lua_State *L)
 	struct rspamd_lua_text *t;
 	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
+	struct rspamd_cryptobox_pubkey *peer_key = NULL;
+	struct rspamd_cryptobox_keypair *local_kp = NULL;
 	gdouble timeout = default_http_timeout;
 	gchar *mime_type = NULL;
 
@@ -355,12 +380,12 @@ lua_http_request (lua_State *L)
 	}
 	else if (lua_type (L, 1) == LUA_TTABLE) {
 		lua_pushstring (L, "url");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		url = luaL_checkstring (L, -1);
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "callback");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (url == NULL || lua_type (L, -1) != LUA_TFUNCTION) {
 			lua_pop (L, 1);
 			msg_err ("http request has bad params");
@@ -370,7 +395,8 @@ lua_http_request (lua_State *L)
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 		lua_pushstring (L, "task");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
+
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
 			ev_base = task->ev_base;
@@ -382,7 +408,7 @@ lua_http_request (lua_State *L)
 
 		if (task == NULL) {
 			lua_pushstring (L, "ev_base");
-			lua_gettable (L, -2);
+			lua_gettable (L, 1);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
 				ev_base = *(struct event_base **)lua_touserdata (L, -1);
 			}
@@ -392,7 +418,7 @@ lua_http_request (lua_State *L)
 			lua_pop (L, 1);
 
 			lua_pushstring (L, "resolver");
-			lua_gettable (L, -2);
+			lua_gettable (L, 1);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{resolver}")) {
 				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
 			}
@@ -402,7 +428,7 @@ lua_http_request (lua_State *L)
 			lua_pop (L, 1);
 
 			lua_pushstring (L, "session");
-			lua_gettable (L, -2);
+			lua_gettable (L, 1);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{session}")) {
 				session = *(struct rspamd_async_session **)lua_touserdata (L, -1);
 			}
@@ -412,7 +438,7 @@ lua_http_request (lua_State *L)
 			lua_pop (L, 1);
 
 			lua_pushstring (L, "config");
-			lua_gettable (L, -2);
+			lua_gettable (L, 1);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{config}")) {
 				cfg = *(struct rspamd_config **)lua_touserdata (L, -1);
 			}
@@ -430,28 +456,28 @@ lua_http_request (lua_State *L)
 		}
 
 		lua_pushstring (L, "headers");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TTABLE) {
 			lua_http_push_headers (L, msg);
 		}
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "timeout");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
 			timeout = lua_tonumber (L, -1) * 1000.;
 		}
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "mime_type");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			mime_type = g_strdup (lua_tostring (L, -1));
 		}
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "body");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			lua_body = lua_tolstring (L, -1, &bodylen);
 			rspamd_http_message_set_body (msg, lua_body, bodylen);
@@ -462,6 +488,31 @@ lua_http_request (lua_State *L)
 			if (t) {
 				rspamd_http_message_set_body (msg, t->start, t->len);
 			}
+		}
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "peer_key");
+		lua_gettable (L, 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			const gchar *in;
+			gsize inlen;
+
+			in = lua_tolstring (L, -1, &inlen);
+			peer_key = rspamd_pubkey_from_base32 (in, inlen,
+					RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
+		}
+
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "keypair");
+		lua_gettable (L, 1);
+
+		if (lua_type (L, -1) == LUA_TTABLE) {
+			ucl_object_t *kp_ucl = ucl_object_lua_import (L, -1);
+
+			local_kp = rspamd_keypair_from_ucl (kp_ucl);
+			ucl_object_unref (kp_ucl);
 		}
 
 		lua_pop (L, 1);
@@ -482,6 +533,8 @@ lua_http_request (lua_State *L)
 	msec_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
 	cbd->cfg = cfg;
+	cbd->peer_pk = peer_key;
+	cbd->local_kp = local_kp;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
