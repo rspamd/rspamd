@@ -674,7 +674,7 @@ local function add_multimap_rule(key, newrule)
     return nil
   end
   -- Check cdb flag
-  if string.find(newrule['map'], '^cdb://.*$') then
+  if type(newrule['map']) == 'string' and string.find(newrule['map'], '^cdb://.*$') then
     newrule['cdb'] = cdb.create(newrule['map'])
     if newrule['cdb'] then
       ret = true
@@ -682,7 +682,7 @@ local function add_multimap_rule(key, newrule)
       rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
           newrule['map'])
     end
-  elseif string.find(newrule['map'], '^redis://.*$') then
+  elseif type(newrule['map']) == 'string' and string.find(newrule['map'], '^redis://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
         'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
@@ -695,18 +695,21 @@ local function add_multimap_rule(key, newrule)
       ret = true
     end
   else
-    local map = urls[newrule['map']]
-    if map and map['type'] == newrule['type']
+    if type(newrule['map']) == 'string' then
+      local map = urls[newrule['map']]
+      if map and map['type'] == newrule['type']
         and map['regexp'] == newrule['regexp'] then
-      if newrule['type'] == 'ip' then
-        newrule['radix'] = map['map']
-      else
-        newrule['hash'] = map['map']
+        if newrule['type'] == 'ip' then
+          newrule['radix'] = map['map']
+        else
+          newrule['hash'] = map['map']
+        end
+        rspamd_logger.infox(rspamd_config, 'reuse url for %s: "%s"',
+          newrule['symbol'], newrule['map'])
+        ret = true
       end
-      rspamd_logger.infox(rspamd_config, 'reuse url for %s: "%s"',
-            newrule['symbol'], newrule['map'])
-      ret = true
-    else
+    end
+    if not ret then
       if newrule['type'] == 'ip' then
         newrule['radix'] = rspamd_config:add_map ({
           url = newrule['map'],
@@ -715,11 +718,13 @@ local function add_multimap_rule(key, newrule)
         })
         if newrule['radix'] then
           ret = true
-          urls[newrule['map']] = {
-            type = 'ip',
-            map = newrule['radix'],
-            regexp = false
-          }
+          if type(newrule['map']) == 'string' then
+            urls[newrule['map']] = {
+              type = 'ip',
+              map = newrule['radix'],
+              regexp = false
+            }
+          end
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
             newrule['map'])
@@ -749,11 +754,13 @@ local function add_multimap_rule(key, newrule)
         end
         if newrule['hash'] then
           ret = true
-          urls[newrule['map']] = {
-            type = newrule['type'],
-            map = newrule['hash'],
-            regexp = newrule['regexp']
-          }
+          if type(newrule['map']) == 'string' then
+            urls[newrule['map']] = {
+              type = newrule['type'],
+              map = newrule['hash'],
+              regexp = newrule['regexp']
+            }
+          end
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
             newrule['map'])
