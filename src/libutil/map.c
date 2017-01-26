@@ -702,6 +702,9 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 			map->read_callback (bytes, len, &periodic->cbdata, TRUE);
 		}
 	}
+	else {
+		map->read_callback (NULL, 0, &periodic->cbdata, TRUE);
+	}
 
 	munmap (bytes, len);
 
