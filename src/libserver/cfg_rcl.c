@@ -3001,13 +3001,22 @@ rspamd_rcl_parse_struct_pubkey (rspamd_mempool_t *pool,
 	struct rspamd_cryptobox_pubkey **target, *pk;
 	gsize len;
 	const gchar *str;
+	gint keypair_type = RSPAMD_KEYPAIR_KEX,
+			keypair_mode = RSPAMD_CRYPTOBOX_MODE_25519;
+
+	if (pd->flags & RSPAMD_CL_FLAG_SIGNKEY) {
+		keypair_type = RSPAMD_KEYPAIR_SIGN;
+	}
+	if (pd->flags & RSPAMD_CL_FLAG_NISTKEY) {
+		keypair_mode = RSPAMD_CRYPTOBOX_MODE_NIST;
+	}
 
 	target = (struct rspamd_cryptobox_pubkey **)(((gchar *)pd->user_struct) +
 			pd->offset);
 	if (obj->type == UCL_STRING) {
 		str = ucl_object_tolstring (obj, &len);
-		pk = rspamd_pubkey_from_base32 (str, len, RSPAMD_KEYPAIR_KEX,
-				RSPAMD_CRYPTOBOX_MODE_25519);
+		pk = rspamd_pubkey_from_base32 (str, len, keypair_type,
+				keypair_mode);
 
 		if (pk != NULL) {
 			*target = pk;
