@@ -1493,11 +1493,91 @@ rspamd_fuzzy_collection_data_handler (struct rspamd_http_connection_entry *conn_
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_fuzzy_collection_session *session = conn_ent->ud;
-	rspamd_fstring_t *cookie;
+	const rspamd_ftok_t *sign_header;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	GList *cur;
+	struct fuzzy_peer_cmd *io_cmd;
+	rspamd_fstring_t *reply;
+	GError *err = NULL;
+	guchar *decoded_signature;
+	gsize dec_len;
+	guint32 cmdlen;
 
-	cookie = rspamd_fstring_new_init (session->ctx->cookie,
-			sizeof (session->ctx->cookie));
-	rspamd_fuzzy_collection_send_fstring (conn_ent, cookie);
+	sign_header = rspamd_http_message_find_header (msg, "Signature");
+
+	if (sign_header == NULL) {
+		rspamd_fuzzy_collection_send_error (conn_ent, 403, "Missing signature");
+
+		return 0;
+	}
+
+	ctx = session->ctx;
+
+	if (ctx->collection_sign_key == NULL) {
+		rspamd_fuzzy_collection_send_error (conn_ent, 500, "Misconfigured signature key");
+
+		return 0;
+	}
+
+	decoded_signature = g_malloc (sign_header->len * 2 + 1);
+	dec_len = rspamd_decode_hex_buf (sign_header->begin, sign_header->len,
+			decoded_signature, sign_header->len * 2 + 1);
+
+	if (dec_len == -1 || !rspamd_keypair_verify (ctx->collection_sign_key,
+			ctx->cookie, sizeof (ctx->cookie),
+			decoded_signature, dec_len, &err)) {
+		if (err) {
+			rspamd_fuzzy_collection_send_error (conn_ent, 403, "Signature verification error: %e",
+					err);
+			g_error_free (err);
+		}
+		else {
+			rspamd_fuzzy_collection_send_error (conn_ent, 403, "Signature verification error");
+		}
+
+		g_free (decoded_signature);
+
+		return 0;
+	}
+
+	g_free (decoded_signature);
+
+	/* Generate new cookie */
+	ottery_rand_bytes (ctx->cookie, sizeof (ctx->cookie));
+
+	/* Send&Clear updates */
+	cur = ctx->updates_pending->head;
+	reply = rspamd_fstring_sized_new (8192);
+
+	while (cur) {
+		io_cmd = cur->data;
+
+		if (io_cmd->is_shingle) {
+			cmdlen = sizeof (io_cmd->cmd.shingle);
+
+		}
+		else {
+			cmdlen = sizeof (io_cmd->cmd.normal);
+		}
+
+		cmdlen = GUINT32_TO_LE (cmdlen);
+		reply = rspamd_fstring_append (reply, (const gchar *)&cmdlen,
+				sizeof (cmdlen));
+		reply = rspamd_fstring_append (reply, (const gchar *)&io_cmd->cmd,
+				cmdlen);
+		g_slice_free1 (sizeof (*io_cmd), io_cmd);
+		cur = g_list_next (cur);
+	}
+
+	/* Last command */
+	cmdlen = 0;
+	reply = rspamd_fstring_append (reply, (const gchar *)&cmdlen,
+			sizeof (cmdlen));
+
+	g_queue_clear (ctx->updates_pending);
+	/* Clear failed attempts counter */
+	ctx->updates_failed = 0;
+	rspamd_fuzzy_collection_send_fstring (conn_ent, reply);
 
 	return 0;
 }
