@@ -9,7 +9,7 @@ The purpose of this module is to force an action to be applied if particular sym
 
 # Configuration
 
-Configuration should be added to [/etc/rspamd/rspamd.conf.local](({{ site.baseurl }}/doc/quickstart.html#configuring-rspamd).
+Configuration should be added to [/etc/rspamd/rspamd.conf.local]({{ site.baseurl }}/doc/quickstart.html#configuring-rspamd).
 
 ~~~ucl
 force_actions {
