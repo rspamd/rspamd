@@ -15,27 +15,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
--- A plugin that restores/persists URL reputation (tags)
+-- A plugin that restores/persists URL tags & calculates reputation
 
 local E = {}
 local N = 'url_reputation'
 
 local redis_params, redis_set_script_sha, redis_incr_script_sha
-local category = {}
 local settings = {
   expire = 86400, -- 1 day
   key_prefix_tags = 'Ut.',
   key_prefix_rep = 'Ur.',
-  tags = {
-    white = {
-      'white',
-    },
-    black = {
-      'surbl',
-    },
-    grey = {
-    },
-  },
   symbols = {
     white = 'URL_REPUTATION_WHITE',
     black = 'URL_REPUTATION_BLACK',
@@ -230,10 +219,13 @@ local function tags_save(task)
   local tld_count = 0
   local reputation = 2
   local which
+  local confidence
 
   -- Save tags to redis and insert symbol
   local function insert_results()
-    task:insert_result(settings.symbols[scale[reputation]], 1.0, which)
+    if which and confidence then
+      task:insert_result(settings.symbols[scale[reputation]], confidence, which)
+    end
     -- Don't populate old tags
     local old_tags = task:get_mempool():get_variable('urltags')
     if old_tags then
@@ -326,15 +318,19 @@ local function tags_save(task)
             if highest_k == 'black' then
               reputation = 4
               which = subset[x]
+              confidence = scores.black / scores.total
             elseif highest_k == 'grey' and reputation ~= 4 then
               reputation = 3
               which = subset[x]
+              confidence = scores.grey / scores.total
             elseif highest_k == 'white' and reputation == 2 then
               reputation = 1
               which = subset[x]
+              confidence = scores.white / scores.total
             elseif highest_k == 'neutral' and reputation <= 2 then
               reputation = 2
               which = subset[x]
+              confidence = scores.neutral / scores.total
             end
           end
         end
@@ -464,7 +460,6 @@ local function tags_save(task)
   end
 
   -- Figure out what tags are present for each URL
-  -- and calculate overall URL reputation
   for _, url in ipairs(task:get_urls(false)) do
     local tld = url:get_tld()
     if not tlds[tld] then
@@ -485,27 +480,12 @@ local function tags_save(task)
         else
           tags[dom][ut] = utv
         end
-        local cat = category[ut]
-        if cat == 'black' then
-          reputation = 4
-          which = dom
-        elseif cat == 'grey' and reputation ~= 4 then
-          reputation = 3
-          which = dom
-        elseif cat == 'white' and reputation == 2 then
-          reputation = 1
-          which = dom
-        end
       end
     end
   end
-  if reputation == 2 then
-    if next(tlds) then
-      dynamic_reputation()
-    end
-    return
+  if next(tlds) then
+    dynamic_reputation()
   end
-  insert_results()
 end
 
 local function tags_restore(task)
@@ -584,10 +564,9 @@ end
 for k, v in pairs(opts) do
   settings[k] = v
 end
-for k, v in pairs(settings.tags) do
-  for _, sv in ipairs(v) do
-    category[sv] = k
-  end
+if settings.threshold < 1 then
+  rspamd_logger.errx(rspamd_config, 'threshold should be >= 1, disabling module')
+  return
 end
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
