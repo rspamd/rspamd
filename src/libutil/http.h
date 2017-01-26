@@ -296,6 +296,14 @@ struct rspamd_http_message * rspamd_http_message_ref (struct rspamd_http_message
  * @param msg
  */
 void rspamd_http_message_unref (struct rspamd_http_message *msg);
+
+/**
+ * Sets a key for peer
+ * @param msg
+ * @param pk
+ */
+void rspamd_http_message_set_peer_key (struct rspamd_http_message *msg,
+		struct rspamd_cryptobox_pubkey *pk);
 /**
  * Create HTTP message from URL
  * @param url

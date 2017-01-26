@@ -1909,8 +1909,15 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 
-	if (priv->local_key != NULL && msg->peer_key != NULL) {
+	if (msg->peer_key != NULL) {
+		if (priv->local_key == NULL) {
+			/* Automatically generate a temporary keypair */
+			priv->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+					RSPAMD_CRYPTOBOX_MODE_25519);
+		}
+
 		encrypted = TRUE;
+
 		if (conn->cache) {
 			rspamd_keypair_cache_process (conn->cache,
 					priv->local_key, priv->msg->peer_key);
@@ -2685,6 +2692,22 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 	}
 
 	g_slice_free1 (sizeof (struct rspamd_http_message), msg);
+}
+
+void
+rspamd_http_message_set_peer_key (struct rspamd_http_message *msg,
+		struct rspamd_cryptobox_pubkey *pk)
+{
+	if (msg->peer_key != NULL) {
+		rspamd_pubkey_unref (msg->peer_key);
+	}
+
+	if (pk) {
+		msg->peer_key = rspamd_pubkey_ref (pk);
+	}
+	else {
+		msg->peer_key = NULL;
+	}
 }
 
 void
