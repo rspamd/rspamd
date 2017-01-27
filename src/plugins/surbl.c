@@ -1471,7 +1471,7 @@ surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
 		/* We know results for this URL */
 
 		DL_FOREACH (tag, cur) {
-			rspamd_task_insert_result (task, tag->data, 1, ftld);
+			rspamd_task_insert_result (task, cur->data, 1, ftld);
 		}
 
 		processed = TRUE;
