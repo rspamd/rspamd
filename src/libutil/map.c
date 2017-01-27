@@ -97,7 +97,8 @@ write_http_request (struct http_callback_data *cbd)
 		}
 
 		if (cbd->stage == map_load_file) {
-			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+			msg->url = rspamd_fstring_append (msg->url,
+					cbd->data->path, strlen (cbd->data->path));
 
 			if (cbd->check &&
 					cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
@@ -107,11 +108,13 @@ write_http_request (struct http_callback_data *cbd)
 			}
 		}
 		else if (cbd->stage == map_load_pubkey) {
-			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+			msg->url = rspamd_fstring_append (msg->url,
+					cbd->data->path, strlen (cbd->data->path));
 			msg->url = rspamd_fstring_append (msg->url, ".pub", 4);
 		}
 		else if (cbd->stage == map_load_signature) {
-			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+			msg->url = rspamd_fstring_append (msg->url,
+					cbd->data->path, strlen (cbd->data->path));
 			msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
 		}
 		else {
