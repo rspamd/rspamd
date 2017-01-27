@@ -1095,6 +1095,9 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 			return FALSE;
 		}
 	}
+	else {
+		g_assert_not_reached ();
+	}
 
 	if (io_cmd->is_shingle) {
 		if (cmd->cmd == FUZZY_WRITE) {
@@ -1164,6 +1167,9 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 					return FALSE;
 				}
 			}
+		}
+		else {
+			g_assert_not_reached ();
 		}
 	}
 

@@ -332,7 +332,7 @@ rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
 	g_assert (bk != NULL);
 	g_assert (updates != NULL);
 
-	if (g_queue_get_length (updates) > 0) {
+	if (updates) {
 		bk->subr->update (bk, updates, src, cb, ud, bk->subr_ud);
 	}
 	else if (cb) {
