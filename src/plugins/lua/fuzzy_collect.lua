@@ -17,7 +17,6 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local rspamd_http = require "rspamd_http"
-local upstream_list = require "rspamd_upstream_list"
 local rspamd_keypairlib = require "rspamd_cryptobox_keypair"
 local rspamd_cryptolib = require "rspamd_cryptobox"
 local fun = require "fun"
@@ -172,7 +171,7 @@ if opts and type(opts) == 'table' then
   end
 
   if sane_config then
-    rspamd_config:add_on_load(function(cfg, ev_base, worker)
+    rspamd_config:add_on_load(function(_, ev_base, worker)
       if worker:get_name() == 'controller' and worker:get_index() == 0 then
         rspamd_config:add_periodic(ev_base, 0.0,
           function(_cfg, _ev_base)
