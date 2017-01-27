@@ -131,19 +131,15 @@ for i = 1, #res do
   if not idx then
     return redis.error_reply('bad arguments')
   end
-  local t_str = string.sub(ARGV[i], 1, idx - 1)
+  local t = string.sub(ARGV[i], 1, idx - 1)
   local m_str = string.sub(ARGV[i], idx + 1)
-  local mm = string.gmatch(m_str, '[^,]+')
-  for t in string.gmatch(t_str, '[^,]+') do
-    if not tmp1[t] then
-      tmp1[t] = {now, {}}
-    else
-      tmp1[t][1] = now
-    end
-    local mt_str = mm()
-    for mt in string.gmatch(mt_str, '[^,]+') do
-      tmp1[t][2][mt] = true
-    end
+  if not tmp1[t] then
+    tmp1[t] = {now, {}}
+  else
+    tmp1[t][1] = now
+  end
+  for mt in string.gmatch(m_str, '[^,]+') do
+    tmp1[t][2][mt] = true
   end
   for k, v in pairs(tmp1) do
     local meta_list = {}
