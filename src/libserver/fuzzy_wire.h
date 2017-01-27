@@ -84,8 +84,8 @@ struct rspamd_fuzzy_stat_entry {
 	guint32 fuzzy_cnt;
 };
 
-struct fuzzy_peer_cmd {
-	gboolean is_shingle;
+RSPAMD_PACKED(fuzzy_peer_cmd) {
+	gint32 is_shingle;
 	union {
 		struct rspamd_fuzzy_cmd normal;
 		struct rspamd_fuzzy_shingle_cmd shingle;
