@@ -287,6 +287,10 @@ dns_resolver_init (rspamd_logger_t *logger,
 
 	rdns_resolver_init (dns_resolver->r);
 
+	if (cfg != NULL) {
+		cfg->dns_resolver = dns_resolver;
+	}
+
 	return dns_resolver;
 }
 

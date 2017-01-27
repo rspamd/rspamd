@@ -63,6 +63,12 @@ LUA_FUNCTION_DEF (config, get_all_opt);
  */
 LUA_FUNCTION_DEF (config, get_mempool);
 /***
+ * @method rspamd_config:get_resolver()
+ * Returns DNS resolver.
+ * @return {dns_resolver} opaque DNS resolver pointer if any
+ */
+LUA_FUNCTION_DEF (config, get_resolver);
+/***
  * @method rspamd_config:add_radix_map(mapline[, description])
  * Creates new dynamic map of IP/mask addresses.
  * @param {string} mapline URL for a map
@@ -595,6 +601,7 @@ LUA_FUNCTION_DEF (config, set_peak_cb);
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
+	LUA_INTERFACE_DEF (config, get_resolver),
 	LUA_INTERFACE_DEF (config, get_all_opt),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, radix_from_config),
@@ -712,6 +719,27 @@ lua_config_get_mempool (lua_State * L)
 		rspamd_lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = cfg->cfg_pool;
 	}
+	else {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
+static int
+lua_config_get_resolver (lua_State * L)
+{
+	struct rspamd_dns_resolver **pres;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL && cfg->dns_resolver) {
+		pres = lua_newuserdata (L, sizeof (*pres));
+		rspamd_lua_setclass (L, "rspamd{resolver}", -1);
+		*pres = cfg->dns_resolver;
+	}
+	else {
+		lua_pushnil (L);
+	}
+
 	return 1;
 }
 

@@ -32,6 +32,7 @@ struct module_s;
 struct worker_s;
 struct rspamd_external_libs_ctx;
 struct rspamd_cryptobox_pubkey;
+struct rspamd_dns_resolver;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
@@ -399,6 +400,7 @@ struct rspamd_config {
 	gdouble upstream_error_time;					/**< rate of upstream errors							*/
 	gdouble upstream_revive_time;					/**< revive timeout for upstreams						*/
 	struct upstream_ctx *ups_ctx;					/**< upstream context									*/
+	struct rspamd_dns_resolver *dns_resolver;		/**< dns resolver if loaded								*/
 
 	guint min_word_len;								/**< minimum length of the word to be considered		*/
 	guint max_word_len;								/**< maximum length of the word to be considered		*/
