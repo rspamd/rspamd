@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "libutil/util.h"
+#include "libutil/logger.h"
 #include "ssl_util.h"
 
 #include <openssl/ssl.h>
@@ -365,7 +366,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 				c->handler (fd, EV_WRITE, c->handler_data);
 			}
 			else {
-				g_assert (0);
+				return;
 			}
 		}
 		else {
@@ -703,6 +704,7 @@ void
 rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 {
 	if (conn) {
+		SSL_shutdown (conn->ssl);
 		SSL_free (conn->ssl);
 
 		if (conn->hostname) {
