@@ -560,17 +560,17 @@
             if (creds && creds[checked_server]) {
                 var data = creds[checked_server].data;
                 var new_data = [ {
-                    "color" : "#66cc00",
+                    "color" : "#66CC00",
                     "label" : "Clean",
                     "data" : data.clean,
                     "value" : data.clean
                 }, {
-                    "color" : "#cc9966",
+                    "color" : "#BF8040",
                     "label" : "Temporary rejected",
                     "data" : data.soft_reject,
                     "value" : data.soft_reject
                 }, {
-                    "color" : "#FFD700",
+                    "color" : "#FFAD00",
                     "label" : "Probable spam",
                     "data" : data.probable,
                     "value" : data.probable
@@ -719,19 +719,19 @@
                     color: "#FF0000"
                 }, {
                     label: "Temporary rejected",
-                    color: "#CC9966"
+                    color: "#BF8040"
                 }, {
                     label: "Subject rewrited",
                     color: "#FF6600"
                 }, {
                     label: "Probable spam",
-                    color: "#FFD700"
+                    color: "#FFAD00"
                 }, {
                     label: "Greylisted",
                     color: "#436EEE"
                 }, {
                     label: "Clean",
-                    color: "#66cc00"
+                    color: "#66CC00"
                 }]
             }
         };
