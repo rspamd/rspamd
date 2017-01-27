@@ -50,6 +50,10 @@ LUA_FUNCTION_DEF (cryptobox_signature, create);
 LUA_FUNCTION_DEF (cryptobox_signature, load);
 LUA_FUNCTION_DEF (cryptobox_signature, save);
 LUA_FUNCTION_DEF (cryptobox_signature, gc);
+LUA_FUNCTION_DEF (cryptobox_signature, hex);
+LUA_FUNCTION_DEF (cryptobox_signature, base32);
+LUA_FUNCTION_DEF (cryptobox_signature, base64);
+LUA_FUNCTION_DEF (cryptobox_signature, bin);
 LUA_FUNCTION_DEF (cryptobox_hash, create);
 LUA_FUNCTION_DEF (cryptobox_hash, create_specific);
 LUA_FUNCTION_DEF (cryptobox_hash, create_keyed);
@@ -105,6 +109,10 @@ static const struct luaL_reg cryptoboxsignlib_f[] = {
 
 static const struct luaL_reg cryptoboxsignlib_m[] = {
 	LUA_INTERFACE_DEF (cryptobox_signature, save),
+	LUA_INTERFACE_DEF (cryptobox_signature, hex),
+	LUA_INTERFACE_DEF (cryptobox_signature, base32),
+	LUA_INTERFACE_DEF (cryptobox_signature, base64),
+	LUA_INTERFACE_DEF (cryptobox_signature, bin),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_cryptobox_signature_gc},
 	{NULL, NULL}
@@ -381,36 +389,55 @@ lua_cryptobox_keypair_create (lua_State *L)
 	struct ucl_parser *parser;
 	ucl_object_t *obj;
 
-	buf = luaL_checklstring (L, 1, &len);
-	if (buf != NULL) {
-		parser = ucl_parser_new (0);
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		buf = luaL_checklstring (L, 1, &len);
+		if (buf != NULL) {
+			parser = ucl_parser_new (0);
 
-		if (!ucl_parser_add_chunk (parser, buf, len)) {
-			msg_err ("cannot open keypair from data: %s",
-				ucl_parser_get_error (parser));
-			ucl_parser_free (parser);
-			lua_pushnil (L);
-		}
-		else {
-			obj = ucl_parser_get_object (parser);
-			kp = rspamd_keypair_from_ucl (obj);
-			ucl_parser_free (parser);
-
-			if (kp == NULL) {
-				msg_err ("cannot load keypair from data");
-				ucl_object_unref (obj);
+			if (!ucl_parser_add_chunk (parser, buf, len)) {
+				msg_err ("cannot open keypair from data: %s",
+						ucl_parser_get_error (parser));
+				ucl_parser_free (parser);
 				lua_pushnil (L);
 			}
 			else {
-				pkp = lua_newuserdata (L, sizeof (gpointer));
-				*pkp = kp;
-				rspamd_lua_setclass (L, "rspamd{cryptobox_keypair}", -1);
-				ucl_object_unref (obj);
+				obj = ucl_parser_get_object (parser);
+				kp = rspamd_keypair_from_ucl (obj);
+				ucl_parser_free (parser);
+
+				if (kp == NULL) {
+					msg_err ("cannot load keypair from data");
+					ucl_object_unref (obj);
+					lua_pushnil (L);
+				}
+				else {
+					pkp = lua_newuserdata (L, sizeof (gpointer));
+					*pkp = kp;
+					rspamd_lua_setclass (L, "rspamd{cryptobox_keypair}", -1);
+					ucl_object_unref (obj);
+				}
 			}
+		}
+		else {
+			luaL_error (L, "bad input arguments");
 		}
 	}
 	else {
-		luaL_error (L, "bad input arguments");
+		/* Directly import from lua */
+		obj = ucl_object_lua_import (L, 1);
+		kp = rspamd_keypair_from_ucl (obj);
+
+		if (kp == NULL) {
+			msg_err ("cannot load keypair from data");
+			ucl_object_unref (obj);
+			lua_pushnil (L);
+		}
+		else {
+			pkp = lua_newuserdata (L, sizeof (gpointer));
+			*pkp = kp;
+			rspamd_lua_setclass (L, "rspamd{cryptobox_keypair}", -1);
+			ucl_object_unref (obj);
+		}
 	}
 
 	return 1;
@@ -588,6 +615,96 @@ lua_cryptobox_signature_create (lua_State *L)
 	}
 	else {
 		return luaL_error (L, "bad input arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method cryptobox_signature:hex()
+ * Return hex encoded signature string
+ * @return {string} raw value of signature
+ */
+static gint
+lua_cryptobox_signature_hex (lua_State *L)
+{
+	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
+	gchar *encoded;
+
+	if (sig) {
+		encoded = rspamd_encode_hex (sig->str, sig->len);
+		lua_pushstring (L, encoded);
+		g_free (encoded);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method cryptobox_signature:base32()
+ * Return base32 encoded signature string
+ * @return {string} raw value of signature
+ */
+static gint
+lua_cryptobox_signature_base32 (lua_State *L)
+{
+	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
+	gchar *encoded;
+
+	if (sig) {
+		encoded = rspamd_encode_base32 (sig->str, sig->len);
+		lua_pushstring (L, encoded);
+		g_free (encoded);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method cryptobox_signature:base64()
+ * Return base64 encoded signature string
+ * @return {string} raw value of signature
+ */
+static gint
+lua_cryptobox_signature_base64 (lua_State *L)
+{
+	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
+	gsize dlen;
+	gchar *encoded;
+
+	if (sig) {
+		encoded = rspamd_encode_base64 (sig->str, sig->len, 0, &dlen);
+		lua_pushlstring (L, encoded, dlen);
+		g_free (encoded);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method cryptobox_signature:bin()
+ * Return raw signature string
+ * @return {string} raw value of signature
+ */
+static gint
+lua_cryptobox_signature_bin (lua_State *L)
+{
+	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
+
+	if (sig) {
+		lua_pushlstring (L, sig->str, sig->len);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;

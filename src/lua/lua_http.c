@@ -417,15 +417,6 @@ lua_http_request (lua_State *L)
 			}
 			lua_pop (L, 1);
 
-			lua_pushstring (L, "resolver");
-			lua_gettable (L, 1);
-			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{resolver}")) {
-				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
-			}
-			else {
-				resolver = lua_http_global_resolver (ev_base);
-			}
-			lua_pop (L, 1);
 
 			lua_pushstring (L, "session");
 			lua_gettable (L, 1);
@@ -444,6 +435,23 @@ lua_http_request (lua_State *L)
 			}
 			else {
 				cfg = NULL;
+			}
+
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "resolver");
+			lua_gettable (L, 1);
+
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{resolver}")) {
+				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
+			}
+			else {
+				if (cfg && cfg->dns_resolver) {
+					resolver = cfg->dns_resolver;
+				}
+				else {
+					resolver = lua_http_global_resolver (ev_base);
+				}
 			}
 			lua_pop (L, 1);
 		}
