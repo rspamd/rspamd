@@ -32,10 +32,13 @@ local settings = {
   try_fallback = true,
   use_domain = 'header',
   use_esld = true,
+  use_redis = false,
+  key_prefix = 'dkim_keys', -- default hash name
 }
 
 local E = {}
 local N = 'dkim_signing'
+local redis_params
 
 local function dkim_signing_cb(task)
   local auser = task:get_user()
@@ -109,7 +112,9 @@ local function dkim_signing_cb(task)
     return false
   end
   if not p.key then
-    p.key = settings.path
+    if not settings.use_redis then
+      p.key = settings.path
+    end
   end
   if not p.selector then
     p.selector = settings.selector
@@ -117,7 +122,37 @@ local function dkim_signing_cb(task)
   p.key = string.gsub(p.key, '$selector', p.selector)
   p.key = string.gsub(p.key, '$domain', dkim_domain)
   p.domain = dkim_domain
-  return rspamd_plugins.dkim.sign(task, p)
+
+  if settings.use_redis then
+    p.key = nil
+    local rk = string.format('%s.%s', p.selector, p.domain)
+    local ret, upstream
+
+    local function redis_key_cb(err, data)
+      if err or type(data) ~= 'string' then
+        rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s: %s",
+          rk, err)
+      else
+        p.rawkey = data
+        rspamd_plugins.dkim.sign(task, p)
+      end
+    end
+
+    ret,_,upstream = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      rk, -- hash key
+      true, -- is write
+      redis_key_cb, --callback
+      'HGET', -- command
+      {settings.key_prefix, rk} -- arguments
+    )
+
+    if not ret then
+      rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
+    end
+  else
+    return rspamd_plugins.dkim.sign(task, p)
+  end
 end
 
 local opts =  rspamd_config:get_all_opt('dkim_signing')
@@ -127,6 +162,13 @@ for k,v in pairs(opts) do
     settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')
   else
     settings[k] = v
+  end
+end
+if settings.use_redis then
+  redis_params = rspamd_parse_redis_server('dkim_signing')
+
+  if not redis_params then
+    rspamd_logger.infox(rspamd_config, 'no servers are specified, disable redis')
   end
 end
 if settings.use_domain ~= 'header' and settings.use_domain ~= 'envelope' then
