@@ -772,8 +772,8 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 				elt2 = ucl_object_lookup (*o2, "frequency");
 
 				if (elt1 && elt2) {
-					order1 = ucl_object_toint (elt1);
-					order2 = ucl_object_toint (elt2);
+					order1 = ucl_object_todouble (elt1) * 100000;
+					order2 = ucl_object_todouble (elt2) * 100000;
 				}
 			}
 			else if (g_ascii_strcasecmp (args[0], "time") == 0) {
@@ -796,10 +796,11 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 static void
 rspamc_counters_output (FILE *out, ucl_object_t *obj)
 {
-	const ucl_object_t *cur, *sym, *weight, *freq, *tim;
+	const ucl_object_t *cur, *sym, *weight, *freq, *freq_dev, *tim;
 	ucl_object_iter_t iter = NULL;
 	gchar fmt_buf[64], dash_buf[82];
 	gint l, max_len = INT_MIN, i;
+	static const gint dashes = 44;
 
 	if (obj->type != UCL_ARRAY) {
 		rspamd_printf ("Bad output\n");
@@ -817,27 +818,29 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		if (sym != NULL) {
 			l = sym->len;
 			if (l > max_len) {
-				max_len = MIN (40, l);
+				max_len = MIN (sizeof (dash_buf) - dashes - 1, l);
 			}
 		}
 	}
 
 	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
-		"| %%3s | %%%ds | %%6s | %%9s | %%9s |\n", max_len);
-	memset (dash_buf, '-', 40 + max_len);
-	dash_buf[40 + max_len] = '\0';
+		"| %%3s | %%%ds | %%7s | %%13s | %%7s |\n", max_len);
+	memset (dash_buf, '-', dashes + max_len);
+	dash_buf[dashes + max_len] = '\0';
 
 	printf ("Symbols cache\n");
 	printf (" %s \n", dash_buf);
 	if (tty) {
 		printf ("\033[1m");
 	}
-	printf (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Avg. time");
+	printf (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Time");
+	printf (" %s \n", dash_buf);
+	printf (fmt_buf, "", "", "", "hits/sec", "usec");
 	if (tty) {
 		printf ("\033[0m");
 	}
 	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
-		"| %%3d | %%%ds | %%6.1f | %%9.3f | %%9.3f |\n", max_len);
+		"| %%3d | %%%ds | %%7.1f | %%6.3f(%%5.3f) | %%7.4f |\n", max_len);
 
 	iter = NULL;
 	i = 0;
@@ -846,12 +849,15 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		sym = ucl_object_lookup (cur, "symbol");
 		weight = ucl_object_lookup (cur, "weight");
 		freq = ucl_object_lookup (cur, "frequency");
+		freq_dev = ucl_object_lookup (cur, "frequency_stddev");
 		tim = ucl_object_lookup (cur, "time");
+
 		if (sym && weight && freq && tim) {
 			printf (fmt_buf, i,
 				ucl_object_tostring (sym),
 				ucl_object_todouble (weight),
 				ucl_object_todouble (freq),
+				ucl_object_todouble (freq_dev),
 				ucl_object_todouble (tim));
 		}
 		i++;

@@ -2086,6 +2086,7 @@ gboolean
 rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 		const gchar *name,
 		gdouble *frequency,
+		gdouble *freq_stddev,
 		gdouble *tm)
 {
 	struct cache_item *item;
@@ -2099,7 +2100,8 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 	item = g_hash_table_lookup (cache->items_by_symbol, name);
 
 	if (item != NULL) {
-		*frequency = item->st->frequency_counter.mean;
+		*frequency = item->st->avg_frequency;
+		*freq_stddev = item->st->stddev_frequency;
 		*tm = item->st->time_counter.mean;
 
 		return TRUE;
