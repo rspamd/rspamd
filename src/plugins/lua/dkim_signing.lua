@@ -126,7 +126,6 @@ local function dkim_signing_cb(task)
   if settings.use_redis then
     p.key = nil
     local rk = string.format('%s.%s', p.selector, p.domain)
-    local ret, upstream
 
     local function redis_key_cb(err, data)
       if err or type(data) ~= 'string' then
@@ -134,11 +133,13 @@ local function dkim_signing_cb(task)
           rk, err)
       else
         p.rawkey = data
-        rspamd_plugins.dkim.sign(task, p)
+        if rspamd_plugins.dkim.sign(task, p) then
+          task:insert_result(settings.symbol, 1.0)
+        end
       end
     end
 
-    ret,_,upstream = rspamd_redis_make_request(task,
+    local ret = rspamd_redis_make_request(task,
       redis_params, -- connect params
       rk, -- hash key
       true, -- is write
