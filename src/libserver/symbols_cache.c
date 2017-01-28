@@ -831,6 +831,7 @@ rspamd_symbols_cache_set_peak_callback (struct symbols_cache *cache,
 	}
 
 	cache->peak_cb = cbref;
+	msg_info_cache ("registered peak callback");
 }
 
 gboolean
