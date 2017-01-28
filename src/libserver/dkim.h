@@ -142,6 +142,15 @@ rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task
 rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *path, GError **err);
 
 /**
+ * Load dkim key from memory chunk
+ * @param path
+ * @param err
+ * @return
+ */
+rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_from_memory (const guchar *data,
+		gsize len, GError **err);
+
+/**
  * Make DNS request for specified context and obtain and parse key
  * @param ctx dkim context from signature
  * @param resolver dns resolver object

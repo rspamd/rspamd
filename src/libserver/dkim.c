@@ -2025,6 +2025,59 @@ rspamd_dkim_sign_key_load (const gchar *path, GError **err)
 	return nkey;
 }
 
+rspamd_dkim_sign_key_t*
+rspamd_dkim_sign_key_from_memory (const guchar *data,
+		gsize len, GError **err)
+{
+	rspamd_dkim_sign_key_t *nkey;
+	gpointer map;
+
+	map = mmap (NULL, len, PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANON, -1, 0);
+
+	if (map == MAP_FAILED) {
+		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+				"cannot map in-memory private key %s",
+				strerror (errno));
+
+		return NULL;
+	}
+
+	/* Initialize memory and set the appropriate access mode */
+	memcpy (map, data, len);
+	(void)mprotect (map, len, PROT_READ);
+	(void)mlock (map, len);
+
+	nkey = g_slice_alloc0 (sizeof (*nkey));
+	nkey->keydata = map;
+	nkey->keylen = len;
+	nkey->key_bio = BIO_new_mem_buf (map, len);
+
+	if (!PEM_read_bio_PrivateKey (nkey->key_bio, &nkey->key_evp, NULL, NULL)) {
+		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+				"cannot read private key from memory: %s",
+				ERR_error_string (ERR_get_error (), NULL));
+		rspamd_dkim_sign_key_free (nkey);
+
+		return NULL;
+	}
+
+	nkey->key_rsa = EVP_PKEY_get1_RSA (nkey->key_evp);
+	if (nkey->key_rsa == NULL) {
+		g_set_error (err,
+				DKIM_ERROR,
+				DKIM_SIGERROR_KEYFAIL,
+				"cannot extract rsa key from evp key");
+		rspamd_dkim_sign_key_free (nkey);
+
+		return NULL;
+	}
+
+	REF_INIT_RETAIN (nkey, rspamd_dkim_sign_key_free);
+
+	return nkey;
+}
+
 rspamd_dkim_sign_context_t *
 rspamd_create_dkim_sign_context (struct rspamd_task *task,
 		rspamd_dkim_sign_key_t *priv_key,
