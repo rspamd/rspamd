@@ -50,6 +50,18 @@ rspamd_ssl_quark (void)
 	return g_quark_from_static_string ("rspamd-ssl");
 }
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L) && !defined(LIBRESSL_VERSION_NUMBER)
+#ifndef X509_get_notBefore
+#define X509_get_notBefore(x) X509_get0_notBefore(x)
+#endif
+#ifndef X509_get_notAfter
+#define X509_get_notAfter(x) X509_get0_notAfter(x)
+#endif
+#ifndef ASN1_STRING_data
+#define ASN1_STRING_data(x) ASN1_STRING_get0_data(x)
+#endif
+#endif
+
 /* $OpenBSD: tls_verify.c,v 1.14 2015/09/29 10:17:04 deraadt Exp $ */
 /*
  * Copyright (c) 2014 Jeremie Courreges-Anglas <jca@openbsd.org>
@@ -173,13 +185,13 @@ rspamd_tls_check_subject_altname (X509 *cert, const char *name)
 		}
 
 		if (type == GEN_DNS) {
-			unsigned char *data;
+			const char *data;
 			int format, len;
 
 			format = ASN1_STRING_type (altname->d.dNSName);
 
 			if (format == V_ASN1_IA5STRING) {
-				data = ASN1_STRING_data (altname->d.dNSName);
+				data = (const char *)ASN1_STRING_data (altname->d.dNSName);
 				len = ASN1_STRING_length (altname->d.dNSName);
 
 				if (len < 0 || len != (gint)strlen (data)) {
@@ -204,11 +216,11 @@ rspamd_tls_check_subject_altname (X509 *cert, const char *name)
 			}
 		}
 		else if (type == GEN_IPADD) {
-			unsigned char *data;
+			const char *data;
 			int datalen;
 
 			datalen = ASN1_STRING_length (altname->d.iPAddress);
-			data = ASN1_STRING_data (altname->d.iPAddress);
+			data = (const char *)ASN1_STRING_data (altname->d.iPAddress);
 
 			if (datalen < 0) {
 				ret = FALSE;
