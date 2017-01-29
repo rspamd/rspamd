@@ -330,6 +330,7 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 
 	if (c->hostname) {
 		if (!rspamd_tls_check_name (server_cert, c->hostname)) {
+			X509_free (server_cert);
 			g_set_error (&err, rspamd_ssl_quark (), ver_err, "peer certificate fails "
 					"hostname verification for %s", c->hostname);
 			c->err_handler (c->handler_data, err);
@@ -338,6 +339,8 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 			return FALSE;
 		}
 	}
+
+	X509_free (server_cert);
 
 	return TRUE;
 }
