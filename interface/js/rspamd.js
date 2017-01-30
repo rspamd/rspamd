@@ -1337,7 +1337,7 @@
             });
         }
         // @upload edited actions
-        $(document).on('submit', '#actionsForm', function () {
+        $('#actionsForm').on('submit', function () {
             var inputs = $('#actionsForm :input[type="slider"]');
             var url = 'saveactions';
             var values = [];
@@ -1462,6 +1462,7 @@
                 displayUI();
                 return;
             }
+
             var nav = $('#navBar');
             var ui = $('#mainUI');
             var dialog = $('#connectDialog');
@@ -1469,13 +1470,19 @@
             var disconnect = $('#navBar .pull-right');
             $(ui).hide();
             $(dialog).show();
-            $('#connectHost').focus();
             $(backdrop).show();
-            document.getElementById("connectPassword").focus();
-            $('#connectForm').one('submit', function (e) {
+            $('#connectPassword').focus();
+            $('#connectForm').off('submit');
+
+            $('#connectForm').on('submit', function (e) {
                 e.preventDefault();
                 var password = $('#connectPassword').val();
-                document.getElementById('connectPassword').value = '';
+                if (!/^[\u0000-\u007f]*$/.test(password)) {
+                    alertMessage('alert-modal alert-error', 'Invalid characters in the password');
+                    $('#connectPassword').focus();
+                    return;
+                }
+
                 $.ajax({
                     global: false,
                     jsonp: false,
@@ -1486,10 +1493,9 @@
                         xhr.setRequestHeader('Password', password);
                     },
                     success: function (data) {
+                        $('#connectPassword').val('');
                         if (data.auth === 'failed') {
-                            $(form).each(function () {
-                                $('.form-group').addClass('error');
-                            });
+                            // Is actually never returned by Rspamd
                         } else {
                             if (data.read_only) {
                                 read_only = true;
@@ -1511,6 +1517,8 @@
                     },
                     error: function (data) {
                         alertMessage('alert-modal alert-error', data.statusText);
+                        $('#connectPassword').val('');
+                        $('#connectPassword').focus();
                     }
                 });
             });
