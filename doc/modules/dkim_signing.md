@@ -44,6 +44,10 @@ dkim_signing {
   use_domain = "header";
   # Whether to normalise domains to eSLD
   use_esld = true;
+  # Whether to get keys from Redis
+  use_redis = false;
+  # Hash for DKIM keys in Redis
+  hash_key = "DKIM_KEYS";
 
   # Domain specific settings
   domain {
@@ -56,3 +60,39 @@ dkim_signing {
   }
 } 
 ~~~
+
+## DKIM keys in Redis
+
+To use DKIM keys stored in Redis you should add the following to configuration:
+
+~~~ucl
+dkim_signing {
+  use_redis = true;
+  hash_key = "DKIM_KEYS";
+  selector = "myselector";
+}
+~~~
+
+... and populate the named hash with DKIM keys; for example the following Lua script could be run with `redis-cli --eval`:
+
+~~~lua
+local key = [[-----BEGIN PRIVATE KEY-----
+MIICdwIBADANBgkqhkiG9w0BAQEFAASCAmEwggJdAgEAAoGBANe3EETkiI1Exyrb
++VzbMSt90K8MXJA0GcyNs6MFCs9JPaTh90Zu2l7ki7m5LTUx6350AR/3hcvwjSHC
+ZjD6fvQ8/zfjN8kaLZ6DAaqtqSlpawIM+8glkuTEkIkpBED/OtDrba4Rd29iLFVu
+wQZXDtTjAAZKZPmtTZ5TXLrcCU6VAgMBAAECgYEA1BFvmBsIN8Gu/+6kNupya2xU
+NVM0yLu/xT5lpNV3LBO325oejAq8+d87kkl/LTW3a2jGFlQ0ICuLw+2mo24QUWRy
+v8if3oeBMlnLqHE+6wNjFVqo5sOjKzjO363xSXwXNUrBT7jDhnZcDN8w3/FecYKj
+ifGTVtUs1SLsYwhlc8ECQQDuCRymLZQ/imPn5eFVIydwUzg8ptZlvoA7bfIxUL9B
+QRX33s59kLCilA0tTed8Dd+GnxsT93XOj1ApIfBwmTSlAkEA5/63PDsN7fH+WInq
+VD8nU07M9S8LcGDlPbVVBr2S2I78/iwrSDAYtbkU2vEbhFK/JuKNML2j8OkzV3v1
+QulfMQJBALDzhx+l/HHr3+8RPhx7QKNIyiKUaAdEwbDsP8IXY8YPq1QThu9jM1v4
+sX7/TdkzuvoppwiFykbe1NlvCH279p0CQCmTg4Ee0DtBcCSr6rvYaZLLf329RZ6J
+LuwlMCy6ErQOxBZFEiiovfTrS2qFZToMnkc4uLbwdY36LQJTq7unGTECQCCok8Lz
+BeZtAw+TJofpOM3F2Rlm2qXiBVBeubhRedsiljG0hpvvLJBMppnQ6r27p5Jk39Sm
+aTRkxEKrxPWWLNM=
+-----END PRIVATE KEY-----]]
+redis.call('HMSET', 'DKIM_KEYS', 'myselector.example.com', key)
+~~~
+
+The selector will be chosen as per usual (a domain-specific selector will be used if configured, otherwise the global setting is used).
