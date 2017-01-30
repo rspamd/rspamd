@@ -357,6 +357,9 @@
               else {
                   glyph_status = "glyphicon glyphicon-remove-circle";
               }
+              if (!('config_id' in val.data)) {
+                 val.data.config_id = "";
+              }
               if (checked_server == key) {
                 $('#clusterTable tbody').append('<tr>' +
                     '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '" checked></td>' +
@@ -425,6 +428,7 @@
                         "use strict";
                         method = typeof method !== 'undefined' ? method : "GET";
                         var req_params = {
+                            type: method,
                             jsonp: false,
                             beforeSend: function (xhr) {
                                 xhr.setRequestHeader("Password", getPassword());
@@ -444,9 +448,6 @@
                                 } else {
                                     neighbours_status[ind].status = true; //serv does not work
                                     neighbours_status[ind].data = data;
-                                    if (!('config_id' in neighbours_status[ind].data)) {
-                                        neighbours_status[ind].data.config_id = "";
-                                    }
                                 }
                                 if (neighbours_status.every(function (elt) {return elt.checked;})) {
                                     on_success(neighbours_status);
@@ -468,7 +469,7 @@
                         };
                         if (params) {
                             $.each(params, function(k, v) {
-                                req_params.k = v;
+                                req_params[k] = v;
                             });
                         }
                         $.ajax(req_params);
@@ -559,13 +560,15 @@
             $(target).modal(show = true, backdrop = true, keyboard = show);
             if (editable === false) {
                 $('#modalSave').hide();
+                $('#modalSaveAll').hide();
             } else {
                 $('#modalSave').show();
+                $('#modalSaveAll').show();
             }
             return false;
         });
         // close modal without saving
-        $(document).on('click', '[data-dismiss="modal"]', function () {
+        $('[data-dismiss="modal"]').on('click', function () {
             $('#modalBody form').hide();
         });
 
@@ -1391,8 +1394,16 @@
                 $(this).closest('form').find('button').attr('disabled').addClass('disabled');
             }
         });
+        function save_map_success() {
+            alertMessage('alert-modal alert-success', 'Map data successfully saved');
+            $('#modalDialog').modal('hide');
+        }
+        function save_map_error(serv, jqXHR, textStatus, errorThrown) {
+            alertMessage('alert-modal alert-error', 'Save map error on ' +
+                    serv.name + ': ' + errorThrown);
+        }
         // @save forms from modal
-        $(document).on('click', '#modalSave', function () {
+        $('#modalSave').on('click', function () {
             var form = $('#modalBody').children().filter(':visible');
             // var map = $(form).data('map');
             // var type = $(form).data('type');
@@ -1400,13 +1411,19 @@
             var id = $(form).attr('id');
             saveMap(action, id);
         });
-        $(document).on('click', '#modalSaveAll', function () {
+        $('#modalSaveAll').on('click', function () {
             var form = $('#modalBody').children().filter(':visible');
             // var map = $(form).data('map');
             // var type = $(form).data('type');
             var action = $(form).attr('action');
             var id = $(form).attr('id');
-            saveMap(action, id);
+            var data = $('#' + id).find('textarea').val();
+            queryNeighbours(action, save_map_success, save_map_error, "POST", {
+                "Map": id,
+            }, {
+                data: data,
+                dataType: "text",
+            });
         });
         // @upload map from modal
         function saveMap(action, id) {
@@ -1423,14 +1440,12 @@
                     xhr.setRequestHeader('Debug', true);
                 },
                 error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
+                    save_map_error('local', null, null, data.statusText);
                 },
-                success: function () {
-                    alertMessage('alert-modal alert-success', 'Map data successfully saved');
-                    $('#modalDialog').modal('hide');
-                }
+                success: save_map_success,
             });
         }
+
         // @upload symbols from modal
         function saveSymbols(action, id) {
             var inputs = $('#' + id + ' :input[data-role="numerictextbox"]');
