@@ -55,6 +55,8 @@ static const struct luaL_reg httplib_m[] = {
 	{NULL, NULL}
 };
 
+#define RSPAMD_LUA_HTTP_FLAG_TEXT (1 << 0)
+
 struct lua_http_cbdata {
 	lua_State *L;
 	struct rspamd_http_connection *conn;
@@ -69,6 +71,7 @@ struct lua_http_cbdata {
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
 	gchar *host;
+	gint flags;
 	gint fd;
 	gint cbref;
 };
@@ -179,11 +182,22 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	/* Body */
 	body = rspamd_http_message_get_body (msg, &body_len);
 
-	if (body_len > 0) {
-		lua_pushlstring (cbd->L, body, body_len);
+	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TEXT) {
+		struct rspamd_lua_text *t;
+
+		t = lua_newuserdata (cbd->L, sizeof (*t));
+		rspamd_lua_setclass (cbd->L, "rspamd{text}", -1);
+		t->start = body;
+		t->len = body_len;
+		t->flags = 0;
 	}
 	else {
-		lua_pushnil (cbd->L);
+		if (body_len > 0) {
+			lua_pushlstring (cbd->L, body, body_len);
+		}
+		else {
+			lua_pushnil (cbd->L);
+		}
 	}
 	/* Headers */
 	lua_newtable (cbd->L);
@@ -338,6 +352,7 @@ lua_http_request (lua_State *L)
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
 	gdouble timeout = default_http_timeout;
+	gint flags = 0;
 	gchar *mime_type = NULL;
 
 	if (lua_gettop (L) >= 2) {
@@ -524,6 +539,15 @@ lua_http_request (lua_State *L)
 		}
 
 		lua_pop (L, 1);
+
+		lua_pushstring (L, "opaque_body");
+		lua_gettable (L, 1);
+
+		if (!!lua_toboolean (L, -1)) {
+			flags |= RSPAMD_LUA_HTTP_FLAG_TEXT;
+		}
+
+		lua_pop (L, 1);
 	}
 	else {
 		msg_err ("http request has bad params");
@@ -543,6 +567,7 @@ lua_http_request (lua_State *L)
 	cbd->cfg = cfg;
 	cbd->peer_pk = peer_key;
 	cbd->local_kp = local_kp;
+	cbd->flags = flags;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);

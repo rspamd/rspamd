@@ -53,6 +53,7 @@ local function collect_fuzzy_hashes(cfg, ev_base)
     if not body or err then
       rspamd_logger.errx(cfg, 'cannot load data: %s', err)
     else
+      -- Here, we actually copy body once for each mirror
       fun.each(function(_, v) send_data_mirror(v, cfg, ev_base, body) end,
         settings.mirrors)
     end
@@ -81,7 +82,8 @@ local function collect_fuzzy_hashes(cfg, ev_base)
             peer_key = settings.collect_pubkey,
             headers = {
               Signature = sig:hex()
-            }
+            },
+            opaque_body = true,
           }
         end
       else
