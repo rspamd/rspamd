@@ -1043,7 +1043,8 @@
                                 '" id="_sym_' + item.symbol + '"></span></td>' +
                                 '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
                                 '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
-                                '<td><button type="button" class="btn btn-primary btn-sm mb-disabled">Save</button></td></tr>');
+                                '<td><button type="button" class="btn btn-primary btn-sm mb-disabled">Save</button></td>' +
+                                '<td><button type="button" class="btn btn-primary btn-sm mb-disabled">Save cluster</button></td></tr>');
                         });
                     });
                     $('<tbody/>', {
@@ -1065,12 +1066,16 @@
                             {"width": "7%", "searchable": false, "orderable": true, "type": "num"},
                             {"searchable": false, "orderable": true, "type": "num"},
                             {"searchable": false, "orderable": true, "type": "num"},
-                            {"width": "5%", "searchable": false, "orderable": false, "type": "html"}
+                            {"width": "5%", "searchable": false, "orderable": false, "type": "html"},
+                            {"width": "7%", "searchable": false, "orderable": false, "type": "html"}
                         ],
                     });
                     symbols.columns.adjust().draw();
-                    $('#symbolsTable :button').on('click',
-                        function(){saveSymbols("./savesymbols", "symbolsTable");});
+                    $('#symbolsTable :button').on('click', function() {
+                        var value = $(this).attr("value");
+                        saveSymbols("./savesymbols", "symbolsTable",
+                                value == 'Save cluster');
+                    });
                   if (read_only) {
                     $( ".mb-disabled" ).attr('disabled', true);
                   }
@@ -1447,7 +1452,7 @@
         }
 
         // @upload symbols from modal
-        function saveSymbols(action, id) {
+        function saveSymbols(action, id, is_cluster) {
             var inputs = $('#' + id + ' :input[data-role="numerictextbox"]');
             var url = action;
             var values = [];
@@ -1457,24 +1462,36 @@
                     value: parseFloat($(this).val())
                 });
             });
-            $.ajax({
-                data: JSON.stringify(values),
-                dataType: 'json',
-                type: 'POST',
-                url: url,
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function () {
+            if (is_cluster) {
+                queryNeighbours(url, function () {
                     alertMessage('alert-modal alert-success', 'Symbols successfully saved');
-                },
-                error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
-                }
-            });
-            $('#modalDialog').modal('hide');
-            return false;
+                }, function (serv, qXHR, textStatus, errorThrown) {
+                    alertMessage('alert-modal alert-error',
+                            'Save symbols error on ' +
+                            serv.name + ': ' + errorThrown);
+                }, "POST", {}, {
+                    data: JSON.stringify(values),
+                    dataType: "json",
+                });
+            }
+            else {
+                $.ajax({
+                    data: JSON.stringify(values),
+                    dataType: 'json',
+                    type: 'POST',
+                    url: url,
+                    jsonp: false,
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader('Password', getPassword());
+                    },
+                    success: function () {
+                        alertMessage('alert-modal alert-success', 'Symbols successfully saved');
+                    },
+                    error: function (data) {
+                        alertMessage('alert-modal alert-error', data.statusText);
+                    }
+                });
+            }
         }
         // @connect to server
         function connectRSPAMD() {
