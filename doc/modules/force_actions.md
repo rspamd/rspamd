@@ -20,7 +20,7 @@ force_actions {
     # Nested lists include SMTP response messages
     "soft reject" = [ ["SYMBOL_FOUR", "Please try later"], "SYMBOL_SIX"];
     # Expressions are supported in addition to plain symbols
-    "no action" = ["IS_WHITELISTED & !CLAM_VIRUS & !FPROT_VIRUS)"];
+    "no action" = ["IS_WHITELISTED & !CLAM_VIRUS & !FPROT_VIRUS"];
     "add header" = ["SYMBOL_FIVE"];
   }
   # SMTP messages could be set here
