@@ -23,7 +23,7 @@
  THE SOFTWARE.
  */
 
-define('app/graph', ['jquery', 'd3evolution', 'datatables'],
+define(['jquery', 'd3evolution', 'datatables'],
 function($, D3Evolution, unused) {
     var rrd_pie_config = {
         header: {},

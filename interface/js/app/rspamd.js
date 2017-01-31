@@ -22,15 +22,16 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
-    function ($, d3pie, visibility, tab_stat, tab_graph) {
+define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config'],
+    function ($, d3pie, visibility, tab_stat, tab_graph, tab_config) {
         // begin
         var graphs = {};
         var tables = {};
-        var read_only = false;
         var neighbours = []; //list of clusters
         var checked_server = "All SERVERS";
-        var interface = {};
+        var interface = {
+            read_only: false,
+        };
 
         var timer_id = [];
         var selData; // Graph's dataset selector state
@@ -101,9 +102,8 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
                     });
                     break;
                 case "#configuration_nav":
-                    getActions();
-                    $('#modalBody').empty();
-                    getMaps();
+                    tab_config.getActions(interface);
+                    tab_config.getMaps(interface);
                     break;
                 case "#symbols_nav":
                     getSymbols();
@@ -195,6 +195,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
                     tabClick("#status_nav");
                 }
             });
+            tab_config.setup(interface);
         };
 
         interface.alertMessage = function (alertState, alertText) {
@@ -216,13 +217,13 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
                 var data = JSON.parse(sessionStorage.getItem('Credentials'));
 
                 if (data && data[checked_server].read_only) {
-                    read_only = true;
+                    interface.read_only = true;
                     $('#learning_nav').hide();
                     $('#resetHistory').attr('disabled', true);
                     $('#errors-history').hide();
                 }
                 else {
-                    read_only = false;
+                    interface.read_only = false;
                     $('#learning_nav').show();
                     $('#resetHistory').removeAttr('disabled', true);
                 }
@@ -263,13 +264,13 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
                             // Is actually never returned by Rspamd
                         } else {
                             if (data.read_only) {
-                                read_only = true;
+                                interface.read_only = true;
                                 $('#learning_nav').hide();
                                 $('#resetHistory').attr('disabled', true);
                                 $('#errors-history').hide();
                             }
                             else {
-                                read_only = false;
+                                interface.read_only = false;
                                 $('#learning_nav').show();
                                 $('#resetHistory').removeAttr('disabled', true);
                             }
@@ -473,112 +474,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
 
         // @alert popover
 
-        // @get maps id
-        function getMaps() {
-            var items = [];
-            $('#listMaps').closest('.widget-box').hide();
-            $.ajax({
-                dataType: 'json',
-                url: 'maps',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
-                },
-                success: function (data) {
-                    $('#listMaps').empty();
-                    saveMaps(data);
-                    getMapById();
-                    $.each(data, function (i, item) {
-                        var caption;
-                        var label;
-                        if ((item.editable === false || read_only)) {
-                            caption = 'View';
-                            label = '<span class="label label-default">Read</span>';
-                        } else {
-                            caption = 'Edit';
-                            label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
-                        }
-                        items.push('<tr>' +
-                            '<td class="col-md-2 maps-cell">' + label + '</td>' +
-                            '<td>' +
-                            '<span class="map-link" ' +
-                            'data-source="#' + item.map + '" ' +
-                            'data-editable="' + item.editable + '" ' +
-                            'data-target="#modalDialog" ' +
-                            'data-title="' + item.uri +
-                            '" data-toggle="modal">' + item.uri + '</span>' +
-                            '</td>' +
-                            '<td>' +
-                            item.description +
-                            '</td>' +
-                            '</tr>');
-                    });
-                    $('<tbody/>', {
-                        html: items.join('')
-                    }).appendTo('#listMaps');
-                    $('#listMaps').closest('.widget-box').show();
-                }
-            });
-        }
-        // @get map by id
-        function getMapById() {
-            var data = JSON.parse(sessionStorage.getItem('Maps'));
-            $('#modalBody').empty();
-
-            $.each(data, function (i, item) {
-                $.ajax({
-                    dataType: 'text',
-                    url: 'getmap',
-                    jsonp: false,
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader('Password', getPassword());
-                        xhr.setRequestHeader('Map', item.map);
-                    },
-                    error: function () {
-                        alertMessage('alert-error', 'Cannot receive maps data');
-                    },
-                    success: function (text) {
-                        var disabled = '';
-                        if ((item.editable === false || read_only)) {
-                            disabled = 'disabled="disabled"';
-                        }
-
-                        $('<form class="form-horizontal form-map" method="post "action="/savemap" data-type="map" id="' +
-                            item.map + '" style="display:none">' +
-                            '<textarea class="list-textarea"' + disabled + '>' + text +
-                            '</textarea>' +
-                            '</form').appendTo('#modalBody');
-                    }
-                });
-            });
-        }
-
         // @opem modal with target form enabled
-        $(document).on('click', '[data-toggle="modal"]', function () {
-            var source = $(this).data('source');
-            var editable = $(this).data('editable');
-            var title = $(this).data('title');
-            $('#modalTitle').html(title);
-            $('#modalBody ' + source).show();
-            var target = $(this).data('target');
-            $(target + ' .progress').hide();
-            $(target).modal(show = true, backdrop = true, keyboard = show);
-            if (editable === false) {
-                $('#modalSave').hide();
-                $('#modalSaveAll').hide();
-            } else {
-                $('#modalSave').show();
-                $('#modalSaveAll').show();
-            }
-            return false;
-        });
-        // close modal without saving
-        $('[data-dismiss="modal"]').on('click', function () {
-            $('#modalBody form').hide();
-        });
 
 
 
@@ -675,7 +571,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
         }
 
         function getErrors() {
-            if (read_only) return;
+            if (interface.read_only) return;
 
             if (errors) {
                 errors.destroy();
@@ -822,7 +718,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
                         saveSymbols("./savesymbols", "symbolsTable",
                                 value == 'Save cluster');
                     });
-                  if (read_only) {
+                  if (interface.read_only) {
                     $( ".mb-disabled" ).attr('disabled', true);
                   }
                 },
@@ -1043,100 +939,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
             $('#' + source + 'TextSource').val('');
         }
         // @get acions
-        function getActions() {
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'actions',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (data) {
-                    // Order of sliders greylist -> probable spam -> spam
-                    $('#actionsBody').empty();
-                    $('#actionsForm').empty();
-                    var items = [];
-                    var min = 0;
-                    var max = Number.MIN_VALUE;
-                    $.each(data, function (i, item) {
-                        var idx = -1;
-                        var label;
-                        if (item.action === 'add header') {
-                            label = 'Probably Spam';
-                            idx = 1;
-                        } else if (item.action === 'greylist') {
-                            label = 'Greylist';
-                            idx = 0;
-                        } else if (item.action === 'rewrite subject') {
-                            label = 'Rewrite subject';
-                            idx = 2;
-                        } else if (item.action === 'reject') {
-                            label = 'Spam';
-                            idx = 3;
-                        }
-                        if (idx >= 0) {
-                            items.push({
-                                idx: idx,
-                                html: '<div class="form-group">' +
-                                    '<label class="control-label col-sm-2">' + label + '</label>' +
-                                    '<div class="controls slider-controls col-sm-10">' +
-                                    '<input class="slider" type="slider" value="' + item.value + '">' +
-                                    '</div>' +
-                                    '</div>'
-                            });
-                        }
-                        if (item.value > max) {
-                            max = item.value * 2;
-                        }
-                        if (item.value < min) {
-                            min = item.value;
-                        }
-                    });
 
-                    items.sort(function (a, b) {
-                        return a.idx - b.idx;
-                    });
-
-                    $('#actionsBody').html('<form id="actionsForm"><fieldset id="actionsFormField">' +
-                        items.map(function (e) {
-                            return e.html;
-                        }).join('') +
-                        '<br><div class="form-group">' +
-                        '<button class="btn btn-primary" type="submit">Save actions</button></div></fieldset></form>');
-                    if (read_only) {
-                      $('#actionsFormField').attr('disabled', true);
-                    }
-                }
-            });
-        }
-        // @upload edited actions
-        $('#actionsForm').on('submit', function () {
-            var inputs = $('#actionsForm :input[type="slider"]');
-            var url = 'saveactions';
-            var values = [];
-            // Rspamd order: [spam,probable_spam,greylist]
-            values[0] = parseFloat(inputs[2].value);
-            values[1] = parseFloat(inputs[1].value);
-            values[2] = parseFloat(inputs[0].value);
-            $.ajax({
-                data: JSON.stringify(values),
-                dataType: 'json',
-                type: 'POST',
-                url: url,
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function () {
-                    alertMessage('alert-success', 'Actions successfully saved');
-                },
-                error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
-                }
-            });
-            return false;
-        });
         // @watch textarea changes
         $('textarea').change(function () {
             if ($(this).val().length !== '') {
@@ -1145,57 +948,6 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
                 $(this).closest('form').find('button').attr('disabled').addClass('disabled');
             }
         });
-        function save_map_success() {
-            alertMessage('alert-modal alert-success', 'Map data successfully saved');
-            $('#modalDialog').modal('hide');
-        }
-        function save_map_error(serv, jqXHR, textStatus, errorThrown) {
-            alertMessage('alert-modal alert-error', 'Save map error on ' +
-                    serv.name + ': ' + errorThrown);
-        }
-        // @save forms from modal
-        $('#modalSave').on('click', function () {
-            var form = $('#modalBody').children().filter(':visible');
-            // var map = $(form).data('map');
-            // var type = $(form).data('type');
-            var action = $(form).attr('action');
-            var id = $(form).attr('id');
-            saveMap(action, id);
-        });
-        $('#modalSaveAll').on('click', function () {
-            var form = $('#modalBody').children().filter(':visible');
-            // var map = $(form).data('map');
-            // var type = $(form).data('type');
-            var action = $(form).attr('action');
-            var id = $(form).attr('id');
-            var data = $('#' + id).find('textarea').val();
-            interface.queryNeighbours(action, save_map_success, save_map_error, "POST", {
-                "Map": id,
-            }, {
-                data: data,
-                dataType: "text",
-            });
-        });
-        // @upload map from modal
-        function saveMap(action, id) {
-            var data = $('#' + id).find('textarea').val();
-            $.ajax({
-                data: data,
-                dataType: 'text',
-                type: 'POST',
-                jsonp: false,
-                url: action,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                    xhr.setRequestHeader('Map', id);
-                    xhr.setRequestHeader('Debug', true);
-                },
-                error: function (data) {
-                    save_map_error('local', null, null, data.statusText);
-                },
-                success: save_map_success,
-            });
-        }
 
         // @upload symbols from modal
         function saveSymbols(action, id, is_cluster) {
