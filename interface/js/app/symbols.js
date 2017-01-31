@@ -26,6 +26,47 @@ define(['jquery', 'datatables'],
 function($) {
     var interface = {}
 
+    function saveSymbols(rspamd, action, id, is_cluster) {
+        var inputs = $('#' + id + ' :input[data-role="numerictextbox"]');
+        var url = action;
+        var values = [];
+        $(inputs).each(function () {
+            values.push({
+                name: $(this).attr('id').substring(5),
+                value: parseFloat($(this).val())
+            });
+        });
+        if (is_cluster) {
+            rspamd.queryNeighbours(url, function () {
+                rspamd.alertMessage('alert-modal alert-success', 'Symbols successfully saved');
+            }, function (serv, qXHR, textStatus, errorThrown) {
+                rspamd.alertMessage('alert-modal alert-error',
+                        'Save symbols error on ' +
+                        serv.name + ': ' + errorThrown);
+            }, "POST", {}, {
+                data: JSON.stringify(values),
+                dataType: "json",
+            });
+        }
+        else {
+            $.ajax({
+                data: JSON.stringify(values),
+                dataType: 'json',
+                type: 'POST',
+                url: url,
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', rspamd.getPassword());
+                },
+                success: function () {
+                    rspamd.alertMessage('alert-modal alert-success', 'Symbols successfully saved');
+                },
+                error: function (data) {
+                    rspamd.alertMessage('alert-modal alert-error', data.statusText);
+                }
+            });
+        }
+    }
     function decimalStep(number) {
         var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, '').length;
         if (digits === 0 || digits > 4) {
