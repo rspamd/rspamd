@@ -644,3 +644,18 @@ input.radio {
 #clusterTable .col3 {
 	width: 50%;
 }
+table.dataTable thead .sorting {
+background: url("../img/asc.png") no-repeat center right;
+}
+table.dataTable thead .sorting_asc {
+background: url("../img/asc.png") no-repeat center right;
+}
+table.dataTable thead .sorting_desc {
+background: url("../img/desc.png") no-repeat center right;
+}
+table.dataTable thead .sorting_asc_disabled {
+background: url("../img/asc.png") no-repeat center right;
+}
+table.dataTable thead .sorting_desc_disabled {
+background: url("../img/desc.png") no-repeat center right;
+}

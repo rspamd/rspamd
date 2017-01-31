@@ -10,14 +10,19 @@ requirejs.config({
         d3evolution: 'd3evolution.min',
         d3pie: 'd3pie.min',
         datatables: 'datatables.min',
-        bootstrap: 'bootstrap.min'
+        bootstrap: 'bootstrap.min',
     },
     shim: {
         d3: {exports: 'd3'},
         bootstrap: {exports: 'bootstrap', deps: ['jquery']},
         d3pie: {exports: 'd3pie', deps: ['d3', 'jquery']},
         d3evolution: {exports: 'D3Evolution', deps: ['d3', 'd3pie', 'jquery']},
-        datatables: {deps: ['bootstrap','jquery']},
+        datatables: {deps: ['bootstrap', 'jquery']},
+    },
+     map: {
+      '*': {
+        'datatables.net': 'datatables',
+      }
     }
 });
 

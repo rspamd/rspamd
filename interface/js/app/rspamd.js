@@ -22,8 +22,8 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-define(['jquery', 'd3pie', 'visibility', 'bootstrap'],
-    function ($, d3pie, visibility, DataTable) {
+define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph'],
+    function ($, d3pie, visibility, tab_stat, tab_graph) {
         // begin
         var graphs = {};
         var tables = {};
@@ -84,28 +84,20 @@ define(['jquery', 'd3pie', 'visibility', 'bootstrap'],
 
             switch (tab_id) {
                 case "#status_nav":
-                    require(['app/stats'], function(stats) {
-                        stats.statWidgets(interface, graphs, checked_server);
-                    });
+                    tab_stat.statWidgets(interface, graphs, checked_server);
                     timer_id.status = Visibility.every(10000, function () {
-                        require(['app/stats'], function(stats) {
-                            stats.statWidgets(interface, graphs, checked_server);
-                        });
+                        tab_stat.statWidgets(interface, graphs, checked_server);
                     });
                     break;
                 case "#throughput_nav":
-                    require(['app/graph'], function(graph) {
-                        graph.draw(interface, graphs, checked_server, selData);
-                    });
+                    tab_graph.draw(interface, graphs, checked_server, selData);
 
                     var autoRefresh = {
                         hourly: 60000,
                         daily: 300000
                     };
                     timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
-                        require(['app/graph'], function(graph) {
-                            graph.draw(interface, graphs, checked_server, selData);
-                        });
+                        tab_graph.draw(interface, graphs, checked_server, selData);
                     });
                     break;
                 case "#configuration_nav":
