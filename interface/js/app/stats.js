@@ -265,7 +265,7 @@ function($, d3pie, Humanize) {
 
     // Public API
     var interface = {
-        statWidgets: function(rspamd, pie, checked_server) {
+        statWidgets: function(rspamd, graphs, checked_server) {
             rspamd.queryNeighbours("/auth", function(neighbours_status) {
                 var neighbours_sum = {
                         version: neighbours_status[0].data.version,
@@ -311,7 +311,7 @@ function($, d3pie, Humanize) {
                 });
                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                 displayStatWidgets(checked_server);
-                pie.chart = getChart(pie.chart, checked_server);
+                graphs.chart = getChart(graphs.chart, checked_server);
             },
             function (serv, jqXHR, textStatus, errorThrown) {
                 var alert_status = serv.name + '_alerted';

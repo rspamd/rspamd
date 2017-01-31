@@ -22,36 +22,18 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
-    function ($, D3Evolution, d3pie, visibility, DataTable, Humanize) {
+define(['jquery', 'visibility', 'bootstrap'],
+    function ($, D3Evolution, d3pie, visibility, DataTable) {
         // begin
-        var pie;
-        var rrd_pie;
-        var history;
-        var errors;
-        var graph;
-        var symbols;
+        var graphs = {};
+        var tables = {};
         var read_only = false;
         var neighbours = []; //list of clusters
         var checked_server = "All SERVERS";
+        var interface = {};
 
         var timer_id = [];
         var selData; // Graph's dataset selector state
-
-        // Bind event handlers to selectors
-        $("#selData").change(function () {
-            selData = this.value;
-            tabClick("#throughput_nav");
-        });
-        $("#selConvert").change(function () {
-            graph.convert(this.value);
-        });
-        $("#selType").change(function () {
-            graph.type(this.value);
-        });
-        $("#selInterpolate").change(function () {
-            graph.interpolate(this.value);
-        });
 
         function stopTimers() {
             for (var key in timer_id) {
@@ -60,31 +42,34 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
         }
 
         function disconnect() {
-            if (pie) {
-                pie.destroy();
+            if (graphs.chart) {
+                graphs.chart.destroy();
+                graphs.chart = undefined;
             }
-            if (rrd_pie) {
-                rrd_pie.destroy();
+            if (graphs.rrd_pie) {
+                graphs.rrd_pie.destroy();
+                graphs.rrd_pie = undefined;
             }
-            if (graph) {
-                graph.destroy();
-                graph = undefined;
+            if (graphs.graph) {
+                graphs.graph.destroy();
+                graphs.graph = undefined;
             }
-            if (history) {
-                history.destroy();
+            if (tables.history) {
+                tables.history.destroy();
+                tables.history = undefined;
             }
-            if (errors) {
-                errors.destroy();
+            if (tables.errors) {
+                tables.errors.destroy();
+                tables.errors = undefined;
             }
-            if (symbols) {
-                symbols.destroy();
-                symbols = null;
+            if (tables.symbols) {
+                tables.symbols.destroy();
+                tables.symbols = undefined;
             }
+
             stopTimers();
             cleanCredentials();
-            connectRSPAMD();
-            // window.location.reload();
-            return false;
+            interface.connect();
         }
 
         function tabClick(tab_id) {
@@ -99,14 +84,18 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
 
             switch (tab_id) {
                 case "#status_nav":
-                    statWidgets();
+                    require(['app/stats'], function(stats) {
+                        stats.statWidgets(interface, graphs, checked_server);
+                    });
                     timer_id.status = Visibility.every(10000, function () {
-                        statWidgets();
+                        require(['app/stats'], function(stats) {
+                            stats.statWidgets(interface, graphs, checked_server);
+                        });
                     });
                     break;
                 case "#throughput_nav":
                     getGraphData(selData);
-                    const autoRefresh = {
+                    var autoRefresh = {
                         hourly: 60000,
                         daily: 300000
                     };
@@ -137,29 +126,16 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
             }, 1000);
         }
 
-        // @supports session storage
-        function supportsSessionStorage() {
-            return typeof (Storage) !== "undefined";
-        }
         // @return password
         function getPassword() {
           return sessionStorage.getItem('Password');
         }
 
-        // @detect session storate
-        supportsSessionStorage();
         // @save credentials
         function saveCredentials(password) {
           sessionStorage.setItem('Password', password);
         }
-        // @update credentials
-        function saveActions(data) {
-            sessionStorage.setItem('Actions', JSON.stringify(data));
-        }
-        // @update credentials
-        function saveMaps(data) {
-            sessionStorage.setItem('Maps', JSON.stringify(data));
-        }
+
         // @clean credentials
         function cleanCredentials() {
             sessionStorage.clear();
@@ -178,8 +154,62 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
             }
             return false;
         }
-        // @alert popover
-        function alertMessage(alertState, alertText) {
+
+        function displayUI() {
+            // @toggle auth and main
+            var disconnect = $('#navBar .pull-right');
+            $('#mainUI').show();
+            $('#progress').show();
+            $(disconnect).show();
+            tabClick("#refresh");
+            $('#progress').hide();
+        }
+
+        // Public functions
+        interface.setup = function() {
+            // Bind event handlers to selectors
+            $("#selData").change(function () {
+                selData = this.value;
+                tabClick("#throughput_nav");
+            });
+            $("#selConvert").change(function () {
+                graph.convert(this.value);
+            });
+            $("#selType").change(function () {
+                graph.type(this.value);
+            });
+            $("#selInterpolate").change(function () {
+                graph.interpolate(this.value);
+            });
+            $.ajaxSetup({
+                timeout: 2000,
+                jsonp: false
+            });
+
+            $(document).ajaxStart(function () {
+                $('#navBar').addClass('loading');
+            });
+            $(document).ajaxComplete(function () {
+                setTimeout(function () {
+                    $('#navBar').removeClass('loading');
+                }, 1000);
+            });
+
+            $('a[data-toggle="tab"]').on('click', function (e) {
+                var tab_id = "#" + $(e.target).attr("id");
+                tabClick(tab_id);
+            });
+
+            // Radio buttons
+            $(document).on('click', 'input:radio[name="clusterName"]', function () {
+                if (!this.disabled) {
+                    checked_server = this.value;
+                    tabClick("#status_nav");
+                }
+            });
+        };
+
+        interface.alertMessage = function (alertState, alertText) {
             if ($('.alert').is(':visible')) {
                 $(alert).hide().remove();
             }
@@ -192,6 +222,177 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
                 $(alert).remove();
             }, 3600);
         }
+
+        interface.connect = function() {
+            if (isLogged()) {
+                var data = JSON.parse(sessionStorage.getItem('Credentials'));
+
+                if (data && data[checked_server].read_only) {
+                    read_only = true;
+                    $('#learning_nav').hide();
+                    $('#resetHistory').attr('disabled', true);
+                    $('#errors-history').hide();
+                }
+                else {
+                    read_only = false;
+                    $('#learning_nav').show();
+                    $('#resetHistory').removeAttr('disabled', true);
+                }
+                displayUI();
+                return;
+            }
+
+            var ui = $('#mainUI');
+            var dialog = $('#connectDialog');
+            var backdrop = $('#backDrop');
+            $(ui).hide();
+            $(dialog).show();
+            $(backdrop).show();
+            $('#connectPassword').focus();
+            $('#connectForm').off('submit');
+
+            $('#connectForm').on('submit', function (e) {
+                e.preventDefault();
+                var password = $('#connectPassword').val();
+                if (!/^[\u0000-\u007f]*$/.test(password)) {
+                    alertMessage('alert-modal alert-error', 'Invalid characters in the password');
+                    $('#connectPassword').focus();
+                    return;
+                }
+
+                $.ajax({
+                    global: false,
+                    jsonp: false,
+                    dataType: 'json',
+                    type: 'GET',
+                    url: 'auth',
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader('Password', password);
+                    },
+                    success: function (data) {
+                        $('#connectPassword').val('');
+                        if (data.auth === 'failed') {
+                            // Is actually never returned by Rspamd
+                        } else {
+                            if (data.read_only) {
+                                read_only = true;
+                                $('#learning_nav').hide();
+                                $('#resetHistory').attr('disabled', true);
+                                $('#errors-history').hide();
+                            }
+                            else {
+                                read_only = false;
+                                $('#learning_nav').show();
+                                $('#resetHistory').removeAttr('disabled', true);
+                            }
+
+                            saveCredentials(password);
+                            $(dialog).hide();
+                            $(backdrop).hide();
+                            displayUI();
+                        }
+                    },
+                    error: function (data) {
+                        interface.alertMessage('alert-modal alert-error', data.statusText);
+                        $('#connectPassword').val('');
+                        $('#connectPassword').focus();
+                    }
+                });
+            });
+        };
+
+        interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params) {
+            $.ajax({
+                dataType: "json",
+                type: "GET",
+                url: "neighbours",
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader("Password", getPassword());
+                },
+                success: function (data) {
+                    if (jQuery.isEmptyObject(data)) {
+                        neighbours = {
+                                local:  {
+                                    host: window.location.host,
+                                    url: window.location.href
+                                }
+                        };
+                    }   else {
+                        neighbours = data;
+                    }
+                    var neighbours_status = [];
+                    $.each(neighbours, function (ind) {
+                        neighbours_status.push({
+                            name: ind,
+                            url: neighbours[ind].url,
+                            host: neighbours[ind].host,
+                            checked: false,
+                            data: {},
+                            status: false,
+                        });
+                    });
+                    $.each(neighbours_status, function (ind) {
+                        "use strict";
+                        method = typeof method !== 'undefined' ? method : "GET";
+                        var req_params = {
+                            type: method,
+                            jsonp: false,
+                            beforeSend: function (xhr) {
+                                xhr.setRequestHeader("Password", getPassword());
+
+                                if (headers) {
+                                    $.each(headers, function(hname, hvalue){
+                                        xhr.setRequestHeader(hname, hvalue);
+                                    });
+                                }
+                            },
+                            url: neighbours_status[ind].url + req_url,
+                            success: function (data) {
+                                neighbours_status[ind].checked = true;
+
+                                if (jQuery.isEmptyObject(data)) {
+                                    neighbours_status[ind].status = false; //serv does not work
+                                } else {
+                                    neighbours_status[ind].status = true; //serv does not work
+                                    neighbours_status[ind].data = data;
+                                }
+                                if (neighbours_status.every(function (elt) {return elt.checked;})) {
+                                    on_success(neighbours_status);
+                                }
+                            },
+                            error: function(jqXHR, textStatus, errorThrown) {
+                                neighbours_status[ind].status = false;
+                                neighbours_status[ind].checked = true;
+                                if (on_error) {
+                                    on_error(neighbours_status[ind],
+                                            jqXHR, textStatus, errorThrown);
+                                }
+                                if (neighbours_status.every(
+                                        function (elt) {return elt.checked;})) {
+                                    on_success(neighbours_status);
+                                }
+                            }
+                            //error display
+                        };
+                        if (params) {
+                            $.each(params, function(k, v) {
+                                req_params[k] = v;
+                            });
+                        }
+                        $.ajax(req_params);
+                    });
+                },
+                error: function () {
+                    interface.alertMessage('alert-error', 'Cannot receive neighbours data');
+                },
+            });
+        };
+
+        return interface;
+
+        // @alert popover
+
         // @get maps id
         function getMaps() {
             var items = [];
@@ -275,279 +476,6 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
             });
         }
 
-        // @ ms to date
-        function msToTime(seconds) {
-             years = seconds / 31536000 >> 0; // 3600*24*365
-             months = seconds % 31536000 / 2628000 >> 0; //3600*24*365/12
-             days = seconds % 31536000 % 2628000 / 86400 >> 0; //24*3600
-             hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
-             minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
-             if (years > 0) {
-               if (months > 0) {
-                 out = years + 'yr ' + months + 'mth';
-               } else {
-                 out = years + 'yr ' + days + 'd';
-               }
-             } else if (months > 0) {
-               out = months + 'mth ' + days + 'd';
-             } else if (days > 0) {
-               out = days + 'd ' + hours + 'hr';
-             } else if (hours > 0) {
-               out = hours + 'hr ' + minutes + 'min';
-             } else {
-               out = minutes + 'min';
-             }
-             return out;
-        }
-
-        function displayStatWidgets() {
-          var widgets = $('#statWidgets');
-          $(widgets).empty().hide();
-          var servers = JSON.parse(sessionStorage.getItem('Credentials'));
-
-          var data = {};
-
-          if (servers && servers[checked_server]) {
-              data = servers[checked_server].data;
-          }
-          var stat_w = [];
-
-          $.each(data, function (i, item) {
-              var widget = '';
-              if (i == 'auth') {}
-              else if (i == 'error') {}
-              else if (i == 'version') {
-                  widget = '<div class="left"><strong>' + item + '</strong>' +
-                      i + '</div>';
-                  $(widget).appendTo(widgets);
-              } else if (i == 'uptime') {
-                  widget = '<div class="right"><strong>' + msToTime(item) +
-                      '</strong>' + i + '</div>';
-                  $(widget).appendTo(widgets);
-              } else {
-                  widget = '<li class="stat-box"><div class="widget"><strong>' +
-                      Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
-                  if (i == 'scanned') {
-                      stat_w[0] = widget;
-                  } else if (i == 'clean') {
-                      stat_w[1] = widget;
-                  } else if (i == 'greylist') {
-                      stat_w[2] = widget;
-                  } else if (i == 'probable') {
-                      stat_w[3] = widget;
-                  } else if (i == 'reject') {
-                      stat_w[4] = widget;
-                  } else if (i == 'learned') {
-                      stat_w[5] = widget;
-                  }
-              }
-          });
-          $.each(stat_w, function (i, item) {
-              $(item).appendTo(widgets);
-          });
-          $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
-          $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
-
-          $("#clusterTable tbody").empty();
-          $.each(servers, function (key, val) {
-              var glyph_status;
-              if (val.status) {
-                  glyph_status = "glyphicon glyphicon-ok-circle";
-              }
-              else {
-                  glyph_status = "glyphicon glyphicon-remove-circle";
-              }
-              if (!('config_id' in val.data)) {
-                 val.data.config_id = "";
-              }
-              if (checked_server == key) {
-                $('#clusterTable tbody').append('<tr>' +
-                    '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '" checked></td>' +
-                    '<td class="col2" title="SNAme">' + key + '</td>' +
-                    '<td class="col3" title="SHost">' + val.host + '</td>' +
-                    '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                    '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
-              } else {
-                if (val.status) {
-                    $('#clusterTable tbody').append('<tr>' +
-                        '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
-                        '<td class="col2" title="SNAme">' + key + '</td>' +
-                        '<td class="col3" title="SHost">' + val.host + '</td>' +
-                        '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                        '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
-                }
-                else {
-                    $('#clusterTable tbody').append('<tr>' +
-                            '<td class="col1" title="Radio"><input type="radio" class="form-control radio disabled" disabled="disabled" name="clusterName" value="' + key + '"></td>' +
-                            '<td class="col2" title="SNAme">' + key + '</td>' +
-                            '<td class="col3" title="SHost">' + val.host + '</td>' +
-                            '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                            '<td class="col5" title="SId">???</td></tr>');
-                }
-
-              }
-          });
-          $(widgets).show();
-        }
-
-        // Query neighbours and call the specified function at the end,
-        // Data received will be pushed inside object:
-        // {server1: data, server2: data} and passed to a callback
-        function queryNeighbours(req_url, on_success, on_error, method, headers, params) {
-            $.ajax({
-                dataType: "json",
-                type: "GET",
-                url: "neighbours",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", getPassword());
-                },
-                success: function (data) {
-                    if (jQuery.isEmptyObject(data)) {
-                        neighbours = {
-                                local:  {
-                                    host: window.location.host,
-                                    url: window.location.href
-                                }
-                        };
-                    }   else {
-                        neighbours = data;
-                    }
-                    var neighbours_status = [];
-                    $.each(neighbours, function (ind) {
-                        neighbours_status.push({
-                            name: ind,
-                            url: neighbours[ind].url,
-                            host: neighbours[ind].host,
-                            checked: false,
-                            data: {},
-                            status: false,
-                        });
-                    });
-                    $.each(neighbours_status, function (ind) {
-                        "use strict";
-                        method = typeof method !== 'undefined' ? method : "GET";
-                        var req_params = {
-                            type: method,
-                            jsonp: false,
-                            beforeSend: function (xhr) {
-                                xhr.setRequestHeader("Password", getPassword());
-
-                                if (headers) {
-                                    $.each(headers, function(hname, hvalue){
-                                        xhr.setRequestHeader(hname, hvalue);
-                                    });
-                                }
-                            },
-                            url: neighbours_status[ind].url + req_url,
-                            success: function (data) {
-                                neighbours_status[ind].checked = true;
-
-                                if (jQuery.isEmptyObject(data)) {
-                                    neighbours_status[ind].status = false; //serv does not work
-                                } else {
-                                    neighbours_status[ind].status = true; //serv does not work
-                                    neighbours_status[ind].data = data;
-                                }
-                                if (neighbours_status.every(function (elt) {return elt.checked;})) {
-                                    on_success(neighbours_status);
-                                }
-                            },
-                            error: function(jqXHR, textStatus, errorThrown) {
-                                neighbours_status[ind].status = false;
-                                neighbours_status[ind].checked = true;
-                                if (on_error) {
-                                    on_error(neighbours_status[ind],
-                                            jqXHR, textStatus, errorThrown);
-                                }
-                                if (neighbours_status.every(
-                                        function (elt) {return elt.checked;})) {
-                                    on_success(neighbours_status);
-                                }
-                            }
-                            //error display
-                        };
-                        if (params) {
-                            $.each(params, function(k, v) {
-                                req_params[k] = v;
-                            });
-                        }
-                        $.ajax(req_params);
-                    });
-                },
-                error: function () {
-                    alertMessage('alert-error', 'Cannot receive neighbours data');
-                },
-            });
-        }
-
-        // @show widgets
-        function statWidgets() {
-            queryNeighbours("/auth", function(neighbours_status) {
-                var neighbours_sum = {
-                        version: neighbours_status[0].data.version,
-                        auth: "ok",
-                        uptime: 0,
-                        clean: 0,
-                        probable: 0,
-                        greylist: 0,
-                        reject: 0,
-                        soft_reject: 0,
-                        scanned: 0,
-                        learned: 0,
-                        read_only: neighbours_status[0].data.read_only,
-                        config_id: ""
-                };
-                var status_count = 0;
-                for(var e in neighbours_status) {
-                    if(neighbours_status[e].status === true) {
-                        // Remove alert status
-                        localStorage.removeItem(e + '_alerted');
-                        neighbours_sum.clean += neighbours_status[e].data.clean;
-                        neighbours_sum.probable += neighbours_status[e].data.probable;
-                        neighbours_sum.greylist += neighbours_status[e].data.greylist;
-                        neighbours_sum.reject += neighbours_status[e].data.reject;
-                        neighbours_sum.soft_reject += neighbours_status[e].data.soft_reject;
-                        neighbours_sum.scanned += neighbours_status[e].data.scanned;
-                        neighbours_sum.learned += neighbours_status[e].data.learned;
-                        neighbours_sum.uptime += neighbours_status[e].data.uptime;
-                        status_count++;
-                    }
-                }
-                neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
-                var to_Credentials = {};
-                to_Credentials["All SERVERS"] = { name: "All SERVERS",
-                        url: "",
-                        host: "",
-                        checked: true,
-                        data: neighbours_sum,
-                        status: true
-                };
-                neighbours_status.forEach(function (elmt) {
-                    to_Credentials[elmt.name] = elmt;
-                });
-                sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
-                displayStatWidgets();
-                getChart();
-            },
-            function (serv, jqXHR, textStatus, errorThrown) {
-                var alert_status = serv.name + '_alerted';
-
-                if (!(alert_status in sessionStorage)) {
-                    sessionStorage.setItem(alert_status, true);
-                    alertMessage('alert-error', 'Cannot receive stats data from: ' +
-                        serv.name + ', error: ' + errorThrown);
-                }
-            });
-        }
-
-        $(document).on('click', 'input:radio[name="clusterName"]', function () {
-            if (!this.disabled) {
-                checked_server = this.value;
-                tabClick("#status_nav");
-            }
-        });
-
         // @opem modal with target form enabled
         $(document).on('click', '[data-toggle="modal"]', function () {
             var source = $(this).data('source');
@@ -571,130 +499,6 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
         $('[data-dismiss="modal"]').on('click', function () {
             $('#modalBody form').hide();
         });
-
-        function getChart() {
-            var creds = JSON.parse(sessionStorage.getItem('Credentials'));
-            if (creds && creds[checked_server]) {
-                var data = creds[checked_server].data;
-                var new_data = [ {
-                    "color" : "#66CC00",
-                    "label" : "Clean",
-                    "data" : data.clean,
-                    "value" : data.clean
-                }, {
-                    "color" : "#BF8040",
-                    "label" : "Temporary rejected",
-                    "data" : data.soft_reject,
-                    "value" : data.soft_reject
-                }, {
-                    "color" : "#FFAD00",
-                    "label" : "Probable spam",
-                    "data" : data.probable,
-                    "value" : data.probable
-                }, {
-                    "color" : "#436EEE",
-                    "label" : "Greylisted",
-                    "data" : data.greylist,
-                    "value" : data.greylist
-                }, {
-                    "color" : "#FF0000",
-                    "label" : "Rejected",
-                    "data" : data.reject,
-                    "value" : data.reject
-                } ];
-                pie = drawPie(pie, "chart", new_data);
-            }
-        }
-
-        function drawPie(obj, id, data, conf) {
-            if (obj) {
-                obj.updateProp("data.content",
-                    data.filter(function (elt) {
-                        return elt.value > 0;
-                    })
-                );
-            } else {
-                obj = new d3pie(id,
-                    $.extend({}, {
-                        "header": {
-                            "title": {
-                                "text": "Rspamd filter stats",
-                                "fontSize": 24,
-                                "font": "open sans"
-                            },
-                            "subtitle": {
-                                "color": "#999999",
-                                "fontSize": 12,
-                                "font": "open sans"
-                            },
-                            "titleSubtitlePadding": 9
-                        },
-                        "footer": {
-                            "color": "#999999",
-                            "fontSize": 10,
-                            "font": "open sans",
-                            "location": "bottom-left"
-                        },
-                        "size": {
-                            "canvasWidth": 600,
-                            "canvasHeight": 400,
-                            "pieInnerRadius": "20%",
-                            "pieOuterRadius": "85%"
-                        },
-                        "data": {
-                            //"sortOrder": "value-desc",
-                            "content": data.filter(function (elt) {
-                                return elt.value > 0;
-                            })
-                        },
-                        "labels": {
-                            "outer": {
-                                "hideWhenLessThanPercentage": 1,
-                                "pieDistance": 30
-                            },
-                            "inner": {
-                                "hideWhenLessThanPercentage": 4
-                            },
-                            "mainLabel": {
-                                "fontSize": 14
-                            },
-                            "percentage": {
-                                "color": "#eeeeee",
-                                "fontSize": 14,
-                                "decimalPlaces": 0
-                            },
-                            "lines": {
-                                "enabled": true
-                            },
-                            "truncation": {
-                                "enabled": true
-                            }
-                        },
-                        "tooltips": {
-                            "enabled": true,
-                            "type": "placeholder",
-                            "string": "{label}: {value}, {percentage}%"
-                        },
-                        "effects": {
-                            "pullOutSegmentOnClick": {
-                                "effect": "back",
-                                "speed": 400,
-                                "size": 8
-                            },
-                            "load": {
-                                "speed": 500
-                            }
-                        },
-                        "misc": {
-                            "gradient": {
-                                "enabled": true,
-                                "percentage": 100
-                            }
-                        }
-                    }, conf));
-            }
-            return obj;
-        }
 
         var rrd_pie_config = {
             header: {},
@@ -770,8 +574,8 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
         }
 
         function getRrdSummary(json) {
-            const xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
-            const timeInterval = xExtents[1] - xExtents[0];
+            var xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
+            var timeInterval = xExtents[1] - xExtents[0];
 
             return json.map(function (curr, i) {
                 var avg = d3.mean(curr, function (d) { return d.y; });
@@ -1423,7 +1227,7 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
             var action = $(form).attr('action');
             var id = $(form).attr('id');
             var data = $('#' + id).find('textarea').val();
-            queryNeighbours(action, save_map_success, save_map_error, "POST", {
+            interface.queryNeighbours(action, save_map_success, save_map_error, "POST", {
                 "Map": id,
             }, {
                 data: data,
@@ -1463,7 +1267,7 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
                 });
             });
             if (is_cluster) {
-                queryNeighbours(url, function () {
+                interface.queryNeighbours(url, function () {
                     alertMessage('alert-modal alert-success', 'Symbols successfully saved');
                 }, function (serv, qXHR, textStatus, errorThrown) {
                     alertMessage('alert-modal alert-error',
@@ -1494,114 +1298,4 @@ define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
             }
         }
         // @connect to server
-        function connectRSPAMD() {
-            if (isLogged()) {
-                var data = JSON.parse(sessionStorage.getItem('Credentials'));
-
-                if (data && data[checked_server].read_only) {
-                    read_only = true;
-                    $('#learning_nav').hide();
-                    $('#resetHistory').attr('disabled', true);
-                    $('#errors-history').hide();
-                }
-                else {
-                    read_only = false;
-                    $('#learning_nav').show();
-                    $('#resetHistory').removeAttr('disabled', true);
-                }
-                displayUI();
-                return;
-            }
-
-            var ui = $('#mainUI');
-            var dialog = $('#connectDialog');
-            var backdrop = $('#backDrop');
-            $(ui).hide();
-            $(dialog).show();
-            $(backdrop).show();
-            $('#connectPassword').focus();
-            $('#connectForm').off('submit');
-
-            $('#connectForm').on('submit', function (e) {
-                e.preventDefault();
-                var password = $('#connectPassword').val();
-                if (!/^[\u0000-\u007f]*$/.test(password)) {
-                    alertMessage('alert-modal alert-error', 'Invalid characters in the password');
-                    $('#connectPassword').focus();
-                    return;
-                }
-
-                $.ajax({
-                    global: false,
-                    jsonp: false,
-                    dataType: 'json',
-                    type: 'GET',
-                    url: 'auth',
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader('Password', password);
-                    },
-                    success: function (data) {
-                        $('#connectPassword').val('');
-                        if (data.auth === 'failed') {
-                            // Is actually never returned by Rspamd
-                        } else {
-                            if (data.read_only) {
-                                read_only = true;
-                                $('#learning_nav').hide();
-                                $('#resetHistory').attr('disabled', true);
-                                $('#errors-history').hide();
-                            }
-                            else {
-                                read_only = false;
-                                $('#learning_nav').show();
-                                $('#resetHistory').removeAttr('disabled', true);
-                            }
-
-                            saveCredentials(password);
-                            $(dialog).hide();
-                            $(backdrop).hide();
-                            displayUI();
-                        }
-                    },
-                    error: function (data) {
-                        alertMessage('alert-modal alert-error', data.statusText);
-                        $('#connectPassword').val('');
-                        $('#connectPassword').focus();
-                    }
-                });
-            });
-        }
-
-        function displayUI() {
-            // @toggle auth and main
-            var disconnect = $('#navBar .pull-right');
-            $('#mainUI').show();
-            $('#progress').show();
-
-            initGraph();
-            tabClick("#refresh");
-
-            $('#progress').hide();
-            $(disconnect).show();
-        }
-
-        $.ajaxSetup({
-            timeout: 2000,
-            jsonp: false
-        });
-        connectRSPAMD();
-
-        $(document).ajaxStart(function () {
-            $('#navBar').addClass('loading');
-        });
-        $(document).ajaxComplete(function () {
-            setTimeout(function () {
-                $('#navBar').removeClass('loading');
-            }, 1000);
-        });
-
-        $('a[data-toggle="tab"]').on('click', function (e) {
-            const tab_id = "#" + $(e.target).attr("id");
-            tabClick(tab_id);
-        });
 });

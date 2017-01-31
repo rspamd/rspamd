@@ -27,7 +27,8 @@ function(domReady) {
     domReady(function () {
         require(['jquery', 'app/rspamd'],
             function ($, rspamd) {
-                // XXX: move logic from rspamd.js
+                rspamd.setup();
+                rspamd.connect();
             });
     });
 });
