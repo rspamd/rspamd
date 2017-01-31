@@ -23,8 +23,9 @@
  THE SOFTWARE.
  */
 define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
-    'app/symbols'],
-    function ($, d3pie, visibility, tab_stat, tab_graph, tab_config, tab_symbols) {
+    'app/symbols', 'app/history'],
+    function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
+        tab_symbols, tab_history) {
         // begin
         var graphs = {};
         var tables = {};
@@ -110,8 +111,8 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                     tab_symbols.getSymbols(interface, tables, checked_server);
                     break;
                 case "#history_nav":
-                    getHistory();
-                    getErrors();
+                    tab_history.getHistory(interface, tables, checked_server);
+                    tab_history.getErrors(interface, tables, checked_server);
                     break;
                 case "#disconnect":
                     disconnect();
@@ -198,6 +199,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             });
             tab_config.setup(interface);
             tab_symbols.setup(interface, tables);
+            tab_history.setup(interface, tables);
         };
 
         interface.alertMessage = function (alertState, alertText) {
@@ -474,194 +476,6 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
 
         return interface;
 
-        // @alert popover
-
-        // @opem modal with target form enabled
-
-
-
-        // @get history log
-        // function getChart() {
-        // //console.log(data)
-        // $.ajax({
-        // dataType: 'json',
-        // url: './pie',
-        // beforeSend: function(xhr) {
-        // xhr.setRequestHeader('Password', getPassword())
-        // },
-        // error: function() {
-        // alertMessage('alert-error', 'Cannot receive history');
-        // },
-        // success: function(data) {
-        // console.log(data);
-        // }
-        // });
-        // }
-        // @get history log
-        function getHistory() {
-
-            if (history) {
-                var history_length = document.getElementsByName('historyLog_length')[0];
-                if (history_length !== undefined) {
-                    history_length = parseInt(history_length.value);
-                } else {
-                    history_length = 10;
-                }
-                history.destroy();
-                $('#historyLog').children('tbody').remove();
-            }
-
-            var items = [];
-            $.ajax({
-                dataType: 'json',
-                url: 'history',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                error: function () {
-                    alertMessage('alert-error', 'Cannot receive history');
-                },
-                success: function (data) {
-                    $.each(data, function (i, item) {
-                        var action;
-
-                        if (item.action === 'clean' || item.action === 'no action') {
-                            action = 'label-success';
-                        } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
-                            action = 'label-warning';
-                        } else if (item.action === 'spam' || item.action === 'reject') {
-                            action = 'label-danger';
-                        } else {
-                            action = 'label-info';
-                        }
-
-                        var score;
-                        if (item.score < item.required_score) {
-                            score = 'label-success';
-                        } else {
-                            score = 'label-danger';
-                        }
-
-                        items.push(
-                            '<tr><td data-order="' + item.unix_time + '">' + item.time + '</td>' +
-                            '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</div></td>' +
-                            '<td data-order="' + item.ip + '"><div class="cell-overflow" tabindex="1" title="' + item.ip + '">' + item.ip + '</div></td>' +
-                            '<td data-order="' + item.action + '"><span class="label ' + action + '">' + item.action + '</span></td>' +
-                            '<td data-order="' + item.score + '"><span class="label ' + score + '">' + item.score.toFixed(2) + ' / ' + item.required_score.toFixed(2) + '</span></td>' +
-                            '<td data-order="' + item.symbols + '"><div class="cell-overflow" tabindex="1" title="' + item.symbols + '">' + item.symbols + '</div></td>' +
-                            '<td data-order="' + item.size + '">' + item.size + '</td>' +
-                            '<td data-order="' + item.scan_time + '">' + item.scan_time.toFixed(3) + '</td>' +
-                            '<td data-order="' + item.user + '"><div class="cell-overflow" tabindex="1" "title="' + item.user + '">' + item.user + '</div></td></tr>');
-                    });
-                    $('<tbody/>', {
-                        html: items.join('')
-                    }).insertAfter('#historyLog thead');
-                    history = $('#historyLog').DataTable({
-                        "aLengthMenu": [
-                            [100, 200, -1],
-                            [100, 200, "All"]
-                        ],
-                        "bStateSave": true,
-                        "order": [
-                            [0, "desc"]
-                        ],
-                        "pageLength": history_length
-                    });
-                }
-            });
-        }
-
-        function getErrors() {
-            if (interface.read_only) return;
-
-            if (errors) {
-                errors.destroy();
-                $('#errorsLog').children('tbody').remove();
-            }
-
-            var items = [];
-            $.ajax({
-                dataType: 'json',
-                url: 'errors',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                error: function () {
-                    alertMessage('alert-error', 'Cannot receive errors');
-                },
-                success: function (data) {
-                    $.each(data, function (i, item) {
-
-                        items.push(
-                            '<tr><td data-order="' + item.ts + '">' + new Date(item.ts * 1000) + '</td>' +
-                            '<td data-order="' + item.type + '">' + item.type + '</td>' +
-                            '<td data-order="' + item.pid + '">' + item.pid + '</td>' +
-                            '<td data-order="' + item.module + '">' + item.module + '</td>' +
-                            '<td data-order="' + item.id + '">' + item.id + '</td>' +
-                            '<td data-order="' + item.message + '"><div class="cell-overflow" tabindex="1" title="' + item.message + '">' + item.message + '</div></td></tr>'
-                        );
-                    });
-                    $('<tbody/>', {
-                        html: items.join('')
-                    }).insertAfter('#errorsLog thead');
-                    errors = $('#errorsLog').DataTable({
-                        "paging": true,
-                        "orderMulti": false,
-                        "order": [
-                            [0, "desc"],
-                        ],
-                        "info": false,
-                        "columns": [
-                            {"width": "15%", "searchable": true, "orderable": true, "type": "num"},
-                            {"width": "5%", "searchable": true, "orderable": true},
-                            {"width": "5%", "searchable": true, "orderable": true},
-                            {"width": "3%", "searchable": true, "orderable": true},
-                            {"width": "3%", "searchable": true, "orderable": true},
-                            {"width": "65%", "searchable": true, "orderable": true},
-                        ],
-                    });
-                    errors.columns.adjust().draw();
-                }
-            });
-        }
-
-        // @reset history log
-        $('#resetHistory').on('click', function () {
-            if (!confirm("Are you sure you want to reset history log?")) {
-                return;
-            }
-            if (history) {
-                history.destroy();
-                $('#historyLog').children('tbody').remove();
-            }
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                jsonp: false,
-                url: 'historyreset',
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function () {
-                    getHistory();
-                    getErrors();
-                },
-                error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
-                }
-            });
-        });
-
-        // @update history log
-        $('#updateHistory').on('click', function () {
-            getHistory();
-        });
-        $('#updateErrors').on('click', function () {
-            getErrors();
-        });
-
 
         // @upload text
         function uploadText(data, source, headers) {
@@ -845,48 +659,4 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                 $(this).closest('form').find('button').attr('disabled').addClass('disabled');
             }
         });
-
-        // @upload symbols from modal
-        function saveSymbols(action, id, is_cluster) {
-            var inputs = $('#' + id + ' :input[data-role="numerictextbox"]');
-            var url = action;
-            var values = [];
-            $(inputs).each(function () {
-                values.push({
-                    name: $(this).attr('id').substring(5),
-                    value: parseFloat($(this).val())
-                });
-            });
-            if (is_cluster) {
-                interface.queryNeighbours(url, function () {
-                    alertMessage('alert-modal alert-success', 'Symbols successfully saved');
-                }, function (serv, qXHR, textStatus, errorThrown) {
-                    alertMessage('alert-modal alert-error',
-                            'Save symbols error on ' +
-                            serv.name + ': ' + errorThrown);
-                }, "POST", {}, {
-                    data: JSON.stringify(values),
-                    dataType: "json",
-                });
-            }
-            else {
-                $.ajax({
-                    data: JSON.stringify(values),
-                    dataType: 'json',
-                    type: 'POST',
-                    url: url,
-                    jsonp: false,
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader('Password', getPassword());
-                    },
-                    success: function () {
-                        alertMessage('alert-modal alert-success', 'Symbols successfully saved');
-                    },
-                    error: function (data) {
-                        alertMessage('alert-modal alert-error', data.statusText);
-                    }
-                });
-            }
-        }
-        // @connect to server
 });
