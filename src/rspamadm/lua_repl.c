@@ -32,6 +32,7 @@
 
 static gchar **paths = NULL;
 static gchar **scripts = NULL;
+static gchar **lua_args = NULL;
 static gchar *histfile = NULL;
 static guint max_history = 2000;
 static gchar *serve = NULL;
@@ -109,6 +110,8 @@ static GOptionEntry entries[] = {
 				"Serve http lua server", NULL},
 		{"batch", 'b', 0, G_OPTION_ARG_NONE, &batch,
 				"Batch execution mode", NULL},
+		{"args", 'a', 0, G_OPTION_ARG_STRING_ARRAY, &lua_args,
+				"Arguments to pass to Lua", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -124,6 +127,7 @@ rspamadm_lua_help (gboolean full_help)
 				"-p: add additional lua paths (may be repeated)\n"
 				"-s: load scripts on start from specified files (may be repeated)\n"
 				"-S: listen on a specified address as HTTP server\n"
+				"-a: pass argument to lua (may be repeated)\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -680,6 +684,18 @@ rspamadm_lua (gint argc, gchar **argv)
 		for (elt = paths; *elt != NULL; elt ++) {
 			rspamadm_lua_add_path (L, *elt);
 		}
+	}
+
+	if (lua_args) {
+		int i = 1;
+		lua_newtable (L);
+		for (elt = lua_args; *elt != NULL; elt ++) {
+			lua_pushnumber(L, i);
+			lua_pushstring(L, *elt);
+			lua_settable (L, -3);
+			i++;
+		}
+		lua_setglobal (L, "arg");
 	}
 
 	if (scripts) {
