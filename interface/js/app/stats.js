@@ -139,7 +139,7 @@ function($, d3pie, Humanize) {
         $(widgets).show();
     }
 
-     function getChart(pie, checked_server) {
+     function getChart(rspamd, pie, checked_server) {
         var creds = JSON.parse(sessionStorage.getItem('Credentials'));
         if (creds && creds[checked_server]) {
             var data = creds[checked_server].data;
@@ -169,100 +169,10 @@ function($, d3pie, Humanize) {
                 "data" : data.reject,
                 "value" : data.reject
             } ];
-            return drawPie(pie, "chart", new_data);
+
+            return rspamd.drawPie(pie, "chart", new_data);
         }
     }
-
-    function drawPie(obj, id, data, conf) {
-        if (obj) {
-            obj.updateProp("data.content",
-                data.filter(function (elt) {
-                    return elt.value > 0;
-                })
-            );
-        } else {
-            obj = new d3pie(id,
-                $.extend({}, {
-                    "header": {
-                        "title": {
-                            "text": "Rspamd filter stats",
-                            "fontSize": 24,
-                            "font": "open sans"
-                        },
-                        "subtitle": {
-                            "color": "#999999",
-                            "fontSize": 12,
-                            "font": "open sans"
-                        },
-                        "titleSubtitlePadding": 9
-                    },
-                    "footer": {
-                        "color": "#999999",
-                        "fontSize": 10,
-                        "font": "open sans",
-                        "location": "bottom-left"
-                    },
-                    "size": {
-                        "canvasWidth": 600,
-                        "canvasHeight": 400,
-                        "pieInnerRadius": "20%",
-                        "pieOuterRadius": "85%"
-                    },
-                    "data": {
-                        //"sortOrder": "value-desc",
-                        "content": data.filter(function (elt) {
-                            return elt.value > 0;
-                        })
-                    },
-                    "labels": {
-                        "outer": {
-                            "hideWhenLessThanPercentage": 1,
-                            "pieDistance": 30
-                        },
-                        "inner": {
-                            "hideWhenLessThanPercentage": 4
-                        },
-                        "mainLabel": {
-                            "fontSize": 14
-                        },
-                        "percentage": {
-                            "color": "#eeeeee",
-                            "fontSize": 14,
-                            "decimalPlaces": 0
-                        },
-                        "lines": {
-                            "enabled": true
-                        },
-                        "truncation": {
-                            "enabled": true
-                        }
-                    },
-                    "tooltips": {
-                        "enabled": true,
-                        "type": "placeholder",
-                        "string": "{label}: {value}, {percentage}%"
-                    },
-                    "effects": {
-                        "pullOutSegmentOnClick": {
-                            "effect": "back",
-                            "speed": 400,
-                            "size": 8
-                        },
-                        "load": {
-                            "effect": "none"
-                        }
-                    },
-                    "misc": {
-                        "gradient": {
-                            "enabled": true,
-                            "percentage": 100
-                        }
-                    }
-                }, conf));
-        }
-        return obj;
-    }
-
     // Public API
     var interface = {
         statWidgets: function(rspamd, graphs, checked_server) {
@@ -311,7 +221,7 @@ function($, d3pie, Humanize) {
                 });
                 sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
                 displayStatWidgets(checked_server);
-                graphs.chart = getChart(graphs.chart, checked_server);
+                graphs.chart = getChart(rspamd, graphs.chart, checked_server);
             },
             function (serv, jqXHR, textStatus, errorThrown) {
                 var alert_status = serv.name + '_alerted';

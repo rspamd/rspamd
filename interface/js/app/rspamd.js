@@ -22,8 +22,8 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-define(['jquery', 'visibility', 'bootstrap'],
-    function ($, D3Evolution, d3pie, visibility, DataTable) {
+define(['jquery', 'd3pie', 'visibility', 'bootstrap'],
+    function ($, d3pie, visibility, DataTable) {
         // begin
         var graphs = {};
         var tables = {};
@@ -94,13 +94,18 @@ define(['jquery', 'visibility', 'bootstrap'],
                     });
                     break;
                 case "#throughput_nav":
-                    getGraphData(selData);
+                    require(['app/graph'], function(graph) {
+                        graph.draw(interface, graphs, checked_server, selData);
+                    });
+
                     var autoRefresh = {
                         hourly: 60000,
                         daily: 300000
                     };
                     timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
-                        getGraphData(selData);
+                        require(['app/graph'], function(graph) {
+                            graph.draw(interface, graphs, checked_server, selData);
+                        });
                     });
                     break;
                 case "#configuration_nav":
@@ -171,15 +176,6 @@ define(['jquery', 'visibility', 'bootstrap'],
             $("#selData").change(function () {
                 selData = this.value;
                 tabClick("#throughput_nav");
-            });
-            $("#selConvert").change(function () {
-                graph.convert(this.value);
-            });
-            $("#selType").change(function () {
-                graph.type(this.value);
-            });
-            $("#selInterpolate").change(function () {
-                graph.interpolate(this.value);
             });
             $.ajaxSetup({
                 timeout: 2000,
@@ -389,6 +385,98 @@ define(['jquery', 'visibility', 'bootstrap'],
             });
         };
 
+        interface.drawPie = function(obj, id, data, conf) {
+            if (obj) {
+                obj.updateProp("data.content",
+                    data.filter(function (elt) {
+                        return elt.value > 0;
+                    })
+                );
+            } else {
+                obj = new d3pie(id,
+                    $.extend({}, {
+                        "header": {
+                            "title": {
+                                "text": "Rspamd filter stats",
+                                "fontSize": 24,
+                                "font": "open sans"
+                            },
+                            "subtitle": {
+                                "color": "#999999",
+                                "fontSize": 12,
+                                "font": "open sans"
+                            },
+                            "titleSubtitlePadding": 9
+                        },
+                        "footer": {
+                            "color": "#999999",
+                            "fontSize": 10,
+                            "font": "open sans",
+                            "location": "bottom-left"
+                        },
+                        "size": {
+                            "canvasWidth": 600,
+                            "canvasHeight": 400,
+                            "pieInnerRadius": "20%",
+                            "pieOuterRadius": "85%"
+                        },
+                        "data": {
+                            //"sortOrder": "value-desc",
+                            "content": data.filter(function (elt) {
+                                return elt.value > 0;
+                            })
+                        },
+                        "labels": {
+                            "outer": {
+                                "hideWhenLessThanPercentage": 1,
+                                "pieDistance": 30
+                            },
+                            "inner": {
+                                "hideWhenLessThanPercentage": 4
+                            },
+                            "mainLabel": {
+                                "fontSize": 14
+                            },
+                            "percentage": {
+                                "color": "#eeeeee",
+                                "fontSize": 14,
+                                "decimalPlaces": 0
+                            },
+                            "lines": {
+                                "enabled": true
+                            },
+                            "truncation": {
+                                "enabled": true
+                            }
+                        },
+                        "tooltips": {
+                            "enabled": true,
+                            "type": "placeholder",
+                            "string": "{label}: {value}, {percentage}%"
+                        },
+                        "effects": {
+                            "pullOutSegmentOnClick": {
+                                "effect": "back",
+                                "speed": 400,
+                                "size": 8
+                            },
+                            "load": {
+                                "effect": "none"
+                            }
+                        },
+                        "misc": {
+                            "gradient": {
+                                "enabled": true,
+                                "percentage": 100
+                            }
+                        }
+                    }, conf));
+            }
+            return obj;
+        };
+
+        interface.getPassword = getPassword;
+
         return interface;
 
         // @alert popover
@@ -500,145 +588,7 @@ define(['jquery', 'visibility', 'bootstrap'],
             $('#modalBody form').hide();
         });
 
-        var rrd_pie_config = {
-            header: {},
-            size: {
-                canvasWidth: 400,
-                canvasHeight: 180,
-                pieInnerRadius: "20%",
-                pieOuterRadius: "80%"
-            },
-            labels: {
-                outer: {
-                    format: "none"
-                },
-                inner: {
-                    hideWhenLessThanPercentage: 8
-                },
-            },
-            misc: {
-                pieCenterOffset: {
-                    x: -120,
-                    y: 10,
-                },
-                gradient: {
-                    enabled: true,
-                },
-            },
-        };
 
-        var graph_options = {
-            title: "Rspamd throughput",
-            width: 1060,
-            height: 370,
-            yAxisLabel: "Message rate, msg/s",
-
-            legend: {
-                space: 140,
-                entries: [{
-                    label: "Rejected",
-                    color: "#FF0000"
-                }, {
-                    label: "Temporary rejected",
-                    color: "#BF8040"
-                }, {
-                    label: "Subject rewrited",
-                    color: "#FF6600"
-                }, {
-                    label: "Probable spam",
-                    color: "#FFAD00"
-                }, {
-                    label: "Greylisted",
-                    color: "#436EEE"
-                }, {
-                    label: "Clean",
-                    color: "#66CC00"
-                }]
-            }
-        };
-
-        function initGraph() {
-            // Get selectors' current state
-            function getSelector(id) {
-                var e = document.getElementById(id);
-                return e.options[e.selectedIndex].value;
-            }
-
-            selData = getSelector("selData");
-
-            graph = new D3Evolution("graph", $.extend({}, graph_options, {
-                type:        getSelector("selType"),
-                interpolate: getSelector("selInterpolate"),
-                convert:     getSelector("selConvert"),
-            }));
-        }
-
-        function getRrdSummary(json) {
-            var xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
-            var timeInterval = xExtents[1] - xExtents[0];
-
-            return json.map(function (curr, i) {
-                var avg = d3.mean(curr, function (d) { return d.y; });
-                var yExtents = d3.extent(curr, function (d) { return d.y; });
-
-                return {
-                    label: graph_options.legend.entries[i].label,
-                    value: avg && (avg * timeInterval) ^ 0,
-                    min: yExtents[0],
-                    avg: avg && avg.toFixed(6),
-                    max: yExtents[1],
-                    last: curr[curr.length - 1].y,
-                    color: graph_options.legend.entries[i].color,
-                };
-            }, []);
-        }
-
-        function drawRrdTable(data) {
-            $('#rrd-table').DataTable({
-                destroy: true,
-                paging: false,
-                searching: false,
-                info: false,
-                data: data,
-                columns: [
-                    { data: "label", title: "Action" },
-                    { data: "value", title: "Messages",       defaultContent: "" },
-                    { data: "min",   title: "Minimum, msg/s", defaultContent: "" },
-                    { data: "avg",   title: "Average, msg/s", defaultContent: "" },
-                    { data: "max",   title: "Maximum, msg/s", defaultContent: "" },
-                    { data: "last",  title: "Last, msg/s" },
-                ],
-
-                "fnRowCallback": function (nRow, aData) {
-                    $(nRow).css("color", aData.color);
-                }
-            });
-        }
-
-        function getGraphData(type) {
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'graph',
-                jsonp: false,
-                data: {
-                    "type": type
-                },
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (data) {
-                    const rrd_summary = getRrdSummary(data);
-                    graph.data(data);
-                    rrd_pie = drawPie(rrd_pie, "rrd-pie", rrd_summary, rrd_pie_config);
-                    drawRrdTable(rrd_summary);
-                },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    alertMessage('alert-error', 'Cannot receive throughput data: ' +
-                        textStatus + ' ' + jqXHR.status + ' ' + errorThrown);
-                }
-            });
-        }
 
         // @get history log
         // function getChart() {
