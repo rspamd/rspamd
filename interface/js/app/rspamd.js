@@ -22,8 +22,9 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config'],
-    function ($, d3pie, visibility, tab_stat, tab_graph, tab_config) {
+define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
+    'app/symbols'],
+    function ($, d3pie, visibility, tab_stat, tab_graph, tab_config, tab_symbols) {
         // begin
         var graphs = {};
         var tables = {};
@@ -106,7 +107,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config']
                     tab_config.getMaps(interface);
                     break;
                 case "#symbols_nav":
-                    getSymbols();
+                    tab_symbols.getSymbols(interface, tables, checked_server);
                     break;
                 case "#history_nav":
                     getHistory();
@@ -196,6 +197,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config']
                 }
             });
             tab_config.setup(interface);
+            tab_symbols.setup(interface, tables);
         };
 
         interface.alertMessage = function (alertState, alertText) {
@@ -625,108 +627,6 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config']
             });
         }
 
-        function decimalStep(number) {
-            var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, '').length;
-            if (digits === 0 || digits > 4) {
-                return 0.1;
-            } else {
-                return 1.0 / (Math.pow(10, digits));
-            }
-        }
-        // @get symbols into modal form
-        function getSymbols() {
-            if (symbols) {
-                symbols.destroy();
-                symbols = null;
-                $('#symbolsTable').children('tbody').remove();
-            }
-            var items = [];
-            $.ajax({
-                dataType: 'json',
-                type: 'GET',
-                url: 'symbols',
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (data) {
-                    $.each(data, function (i, group) {
-                        $.each(group.rules, function (i, item) {
-                            var max = 20;
-                            var min = -20;
-                            if (item.weight > max) {
-                                max = item.weight * 2;
-                            }
-                            if (item.weight < min) {
-                                min = item.weight * 2;
-                            }
-                            var label_class = '';
-                            if (item.weight < 0) {
-                                label_class = 'scorebar-ham';
-                            } else {
-                                label_class = 'scorebar-spam';
-                            }
-
-                            if (!item.time) {
-                                item.time = 0;
-                            }
-                            if (!item.frequency) {
-                                item.frequency = 0;
-                            }
-                            items.push('<tr>' +
-                                '<td data-order="' + group.group + '"><div class="cell-overflow" tabindex="1" title="' + group.group + '">' + group.group + '</div></td>' +
-                                '<td data-order="' + item.symbol + '"><strong>' + item.symbol + '</strong></td>' +
-                                '<td data-order="' + item.description + '"><div class="cell-overflow" tabindex="1" title="' + item.description + '">' + item.description + '</div></td>' +
-                                '<td data-order="' + item.weight + '"><input class="numeric mb-disabled ' + label_class +
-                                '" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
-                                min + '" max="' +
-                                max + '" step="' + decimalStep(item.weight) +
-                                '" tabindex="1" value="' + Number(item.weight).toFixed(3) +
-                                '" id="_sym_' + item.symbol + '"></span></td>' +
-                                '<td data-order="' + item.frequency + '">' + item.frequency + '</td>' +
-                                '<td data-order="' + item.time + '">' + Number(item.time).toFixed(2) + 'ms</td>' +
-                                '<td><button type="button" class="btn btn-primary btn-sm mb-disabled">Save</button></td>' +
-                                '<td><button type="button" class="btn btn-primary btn-sm mb-disabled">Save cluster</button></td></tr>');
-                        });
-                    });
-                    $('<tbody/>', {
-                        html: items.join('')
-                    }).insertAfter('#symbolsTable thead');
-                    symbols = $('#symbolsTable').DataTable({
-                        "paging": false,
-                        "orderMulti": true,
-                        "order": [
-                            [0, "asc"],
-                            [1, "asc"],
-                            [3, "desc"]
-                        ],
-                        "info": false,
-                        "columns": [
-                            {"width": "7%", "searchable": true, "orderable": true},
-                            {"width": "20%", "searchable": true, "orderable": true},
-                            {"width": "30%", "searchable": false, "orderable": false},
-                            {"width": "7%", "searchable": false, "orderable": true, "type": "num"},
-                            {"searchable": false, "orderable": true, "type": "num"},
-                            {"searchable": false, "orderable": true, "type": "num"},
-                            {"width": "5%", "searchable": false, "orderable": false, "type": "html"},
-                            {"width": "7%", "searchable": false, "orderable": false, "type": "html"}
-                        ],
-                    });
-                    symbols.columns.adjust().draw();
-                    $('#symbolsTable :button').on('click', function() {
-                        var value = $(this).attr("value");
-                        saveSymbols("./savesymbols", "symbolsTable",
-                                value == 'Save cluster');
-                    });
-                  if (interface.read_only) {
-                    $( ".mb-disabled" ).attr('disabled', true);
-                  }
-                },
-                error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
-                }
-            });
-        }
         // @reset history log
         $('#resetHistory').on('click', function () {
             if (!confirm("Are you sure you want to reset history log?")) {
@@ -762,9 +662,6 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config']
             getErrors();
         });
 
-        $('#updateSymbols').on('click', function () {
-            getSymbols();
-        });
 
         // @upload text
         function uploadText(data, source, headers) {
