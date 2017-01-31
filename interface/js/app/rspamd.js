@@ -22,8 +22,8 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-(function () {
-    $(document).ready(function () {
+define(['jquery', 'd3evolution','d3pie','visibility','datatables', 'humanize'],
+    function ($, D3Evolution, d3pie, visibility, DataTable, Humanize) {
         // begin
         var pie;
         var rrd_pie;
@@ -1604,5 +1604,4 @@
             const tab_id = "#" + $(e.target).attr("id");
             tabClick(tab_id);
         });
-    });
-})();
+});
