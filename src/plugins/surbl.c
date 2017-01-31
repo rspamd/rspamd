@@ -43,6 +43,23 @@
 #include "libutil/http_private.h"
 #include "unix-std.h"
 
+#define msg_err_surbl(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "surbl", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_surbl(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "surbl", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_surbl(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "surbl", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_surbl(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "surbl", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 static struct surbl_ctx *surbl_module_ctx = NULL;
 static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
 
@@ -1059,7 +1076,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		if (surbl_req == NULL) {
 			if (err != NULL) {
 				if (err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
-					msg_info_task ("cannot format url string for surbl %*s, %e",
+					msg_info_surbl ("cannot format url string for surbl %*s, %e",
 							url->urllen, url->string,
 							err);
 				}
@@ -1108,7 +1125,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	}
 	else if (err != NULL) {
 		if (err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
-			msg_info_task ("cannot format url string for surbl %*s, %e",
+			msg_info_surbl ("cannot format url string for surbl %*s, %e",
 					url->urllen,
 					url->string, err);
 		}
@@ -1133,7 +1150,7 @@ process_dns_results (struct rspamd_task *task,
 
 		bit = g_hash_table_lookup (suffix->ips, &addr);
 		if (bit != NULL) {
-			msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
+			msg_info_surbl ("<%s> domain [%s] is in surbl %s(%xd)",
 					task->message_id,
 					resolved_name, suffix->suffix,
 					bit->bit);
@@ -1153,7 +1170,7 @@ process_dns_results (struct rspamd_task *task,
 
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
 				got_result = TRUE;
-				msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
+				msg_info_surbl ("<%s> domain [%s] is in surbl %s(%xd)",
 						task->message_id,
 						resolved_name, suffix->suffix,
 						bit->bit);
@@ -1165,7 +1182,7 @@ process_dns_results (struct rspamd_task *task,
 	if (!got_result) {
 		if ((suffix->bits == NULL || suffix->bits->len == 0) &&
 				suffix->ips == NULL) {
-			msg_info_task ("<%s> domain [%s] is in surbl %s",
+			msg_info_surbl ("<%s> domain [%s] is in surbl %s",
 					task->message_id,
 					resolved_name, suffix->suffix);
 			rspamd_task_insert_result (task, suffix->symbol, 1, resolved_name);
@@ -1173,7 +1190,7 @@ process_dns_results (struct rspamd_task *task,
 		}
 		else {
 			ina.s_addr = addr;
-			msg_info_task ("<%s> domain [%s] is in surbl %s but at unknown result: %s",
+			msg_info_surbl ("<%s> domain [%s] is in surbl %s but at unknown result: %s",
 					task->message_id,
 					resolved_name, suffix->suffix,
 					inet_ntoa (ina));
@@ -1191,7 +1208,7 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 	task = param->task;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
-		msg_debug_task ("<%s> domain [%s] is in surbl %s",
+		msg_debug_surbl ("<%s> domain [%s] is in surbl %s",
 				param->task->message_id,
 			param->host_resolve, param->suffix->suffix);
 		elt = reply->entries;
@@ -1202,7 +1219,7 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 	else {
-		msg_debug_task ("<%s> domain [%s] is not in surbl %s",
+		msg_debug_surbl ("<%s> domain [%s] is not in surbl %s",
 			param->task->message_id, param->host_resolve,
 			param->suffix->suffix);
 	}
@@ -1237,7 +1254,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 						ip_addr >> 16 & 0xff,
 						ip_addr >> 8 & 0xff,
 						ip_addr & 0xff, param->suffix->suffix);
-				msg_debug_task (
+				msg_debug_surbl (
 						"<%s> domain [%s] send %v request to surbl",
 						param->task->message_id,
 						param->host_resolve,
@@ -1254,7 +1271,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 	else {
-		msg_debug_task ("<%s> domain [%s] cannot be resolved for SURBL check %s",
+		msg_debug_surbl ("<%s> domain [%s] cannot be resolved for SURBL check %s",
 				param->task->message_id, param->host_resolve,
 				param->suffix->suffix);
 
@@ -1280,7 +1297,7 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 	struct rspamd_task *task;
 
 	task = param->task;
-	msg_err_task ("connection with http server %s terminated incorrectly: %e",
+	msg_err_surbl ("connection with http server %s terminated incorrectly: %e",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
 		err);
 	rspamd_upstream_fail (param->redirector);
@@ -1305,7 +1322,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 		hdr = rspamd_http_message_find_header (msg, "Uri");
 
 		if (hdr != NULL) {
-			msg_info_task ("<%s> got reply from redirector: '%*s' -> '%T'",
+			msg_info_surbl ("<%s> got reply from redirector: '%*s' -> '%T'",
 					param->task->message_id,
 					param->url->urllen, param->url->string,
 					hdr);
@@ -1335,12 +1352,12 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 						task->task_pool);
 			}
 			else {
-				msg_info_task ("cannot parse redirector reply: %s", urlstr);
+				msg_info_surbl ("cannot parse redirector reply: %s", urlstr);
 			}
 		}
 	}
 	else {
-		msg_info_task ("<%s> could not resolve '%*s' on redirector",
+		msg_info_surbl ("<%s> could not resolve '%*s' on redirector",
 				param->task->message_id,
 				param->url->urllen, param->url->string);
 	}
@@ -1372,7 +1389,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	}
 
 	if (s == -1) {
-		msg_info_task ("<%s> cannot create tcp socket failed: %s",
+		msg_info_surbl ("<%s> cannot create tcp socket failed: %s",
 			task->message_id,
 			strerror (errno));
 		make_surbl_requests (url, task, suffix, FALSE, tree);
@@ -1408,7 +1425,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	rspamd_http_connection_write_message (param->conn, msg, NULL,
 			NULL, param, s, timeout, task->ev_base);
 
-	msg_info_task (
+	msg_info_surbl (
 		"<%s> registered redirector call for %*s to %s, according to rule: %s",
 		task->message_id,
 		url->urllen, url->string,
@@ -1574,7 +1591,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	struct rspamd_url *url;
 
 	if (!rspamd_monitored_alive (suffix->m)) {
-		msg_info_task ("disable surbl %s as it is reported to be offline",
+		msg_info_surbl ("disable surbl %s as it is reported to be offline",
 				suffix->suffix);
 		return;
 	}
@@ -1603,7 +1620,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 
 						if (url) {
 							surbl_tree_url_callback (url, url, &param);
-							msg_debug_task ("checked image url %s over %s",
+							msg_debug_surbl ("checked image url %s over %s",
 									img->src, suffix->suffix);
 						}
 					}
