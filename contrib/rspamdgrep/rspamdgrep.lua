@@ -1,15 +1,12 @@
 local rspamd_regexp = require 'rspamd_regexp'
-local rspamd_logger = require 'rspamd_logger'
 
-local BUF_SIZE = 10240
 local E = {}
 
 local buffer = {}
 local matches = {}
-local count = 0
 
 if type(arg) ~= 'table' then
-  io.stderr:write('No files specified for search\n')
+  io.stderr:write('Syntax: rspamdgrep <pattern> [sources]\n')
   os.exit(1)
 end
 
@@ -20,6 +17,10 @@ if not re then
   os.exit(1)
 end
 
+if not arg[1] then
+  arg = {'stdin'}
+end
+
 for _, n in ipairs(arg) do
   local h, err
   if string.match(n, '%.xz$') then
@@ -28,14 +29,16 @@ for _, n in ipairs(arg) do
     h, err = io.popen('bzcat ' .. n, 'r')
   elseif string.match(n, '%.gz$') then
     h, err = io.popen('zcat ' .. n, 'r')
-  elseif string.match(n, '%.log$') then
-    h, err = io.open(n, 'r')
+  elseif n == 'stdin' then
+    h = io.input()
   else
-    io.stderr:write("Couldn't identify log format: " .. n .. '\n')
+    h, err = io.open(n, 'r')
   end
   if not h then
     if err then
       io.stderr:write("Couldn't open file (" .. n .. '): ' .. err .. '\n')
+    else
+      io.stderr:write("Couldn't open file (" .. n .. '): no error')
     end
   else
     for line in h:lines() do
@@ -49,35 +52,39 @@ for _, n in ipairs(arg) do
           else
             buffer[hash] = {line}
           end
-          count = count + 1
-          if count >= BUF_SIZE then
-            local k = next(buffer)
-            buffer[k] = nil
-            count = count - 1
-          end
         end
       end
       if re:match(line) then
         if not hash then
-          hash = 'orphaned'
-        end
-        if matches[hash] then
-          table.insert(matches[hash], line)
+          print('*** orphaned ***')
+          print(line)
+          print()
         else
-          local old = buffer[hash] or E
-          table.insert(old, line)
-          matches[hash] = old
+          if matches[hash] then
+            table.insert(matches[hash], line)
+          else
+            local old = buffer[hash] or E
+            table.insert(old, line)
+            matches[hash] = old
+          end
         end
       end
       local is_end = string.match(line, '^%d+-%d+-%d+ %d+:%d+:%d+ #%d+%(%a+%) <%x+>; task; rspamd_protocol_http_reply:')
       if is_end then
         buffer[hash] = nil
+        if matches[hash] then
+          for _, v in ipairs(matches[hash]) do
+            print(v)
+          end
+          print()
+          matches[hash] = nil
+        end
       end
     end
   end
 end
-
-for k, v in pairs(matches) do
+for _, v in pairs(matches) do
+  print('*** partial ***')
   for _, vv in ipairs(v) do
     print(vv)
   end
