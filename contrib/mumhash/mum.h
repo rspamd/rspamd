@@ -62,7 +62,7 @@ typedef unsigned __int64 uint64_t;
 /* In GCC uint128_t is defined if HOST_BITS_PER_WIDE_INT >= 64.
    HOST_WIDE_INT is long if HOST_BITS_PER_LONG > HOST_BITS_PER_INT,
    otherwise int. */
-#if defined(__GNUC__) && UINT_MAX != ULONG_MAX
+#ifdef __SIZEOF_INT128__
 #define _MUM_USE_INT128 1
 #else
 #define _MUM_USE_INT128 0
@@ -73,7 +73,7 @@ typedef unsigned __int64 uint64_t;
 #define _MUM_FRESH_GCC
 #endif
 
-#if defined(__GNUC__) && !defined(__llvm__)
+#if !defined(__llvm__) && defined(_MUM_FRESH_GCC)
 #define _MUM_ATTRIBUTE_UNUSED  __attribute__((unused))
 #define _MUM_OPTIMIZE(opts) __attribute__((__optimize__ (opts)))
 #define _MUM_TARGET(opts) __attribute__((__target__ (opts)))
