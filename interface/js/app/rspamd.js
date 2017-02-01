@@ -23,9 +23,9 @@
  THE SOFTWARE.
  */
 define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
-    'app/symbols', 'app/history'],
+    'app/symbols', 'app/history', 'app/upload'],
     function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
-        tab_symbols, tab_history) {
+        tab_symbols, tab_history, tab_upload) {
         // begin
         var graphs = {};
         var tables = {};
@@ -200,6 +200,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             tab_config.setup(interface);
             tab_symbols.setup(interface, tables);
             tab_history.setup(interface, tables);
+            tab_upload.setup(interface)
         };
 
         interface.alertMessage = function (alertState, alertText) {
@@ -475,188 +476,4 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
         interface.getPassword = getPassword;
 
         return interface;
-
-
-        // @upload text
-        function uploadText(data, source, headers) {
-            var url;
-            if (source === 'spam') {
-                url = 'learnspam';
-            } else if (source === 'ham') {
-                url = 'learnham';
-            } else if (source == 'fuzzy') {
-                url = 'fuzzyadd';
-            } else if (source === 'scan') {
-                url = 'scan';
-            }
-            $.ajax({
-                data: data,
-                dataType: 'json',
-                type: 'POST',
-                url: url,
-                processData: false,
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                    $.each(headers, function (name, value) {
-                        xhr.setRequestHeader(name, value);
-                    });
-                },
-                success: function (data) {
-                    cleanTextUpload(source);
-                    if (data.success) {
-                        alertMessage('alert-success', 'Data successfully uploaded');
-                    }
-                },
-                error: function (xhr, textStatus, errorThrown) {
-                    var errorMsg;
-
-                    try {
-                        var json = $.parseJSON(xhr.responseText);
-                        errorMsg = $('<a>').text(json.error).html();
-                    } catch (err) {
-                        errorMsg = $('<a>').text("Error: [" + textStatus + "] " + errorThrown).html();
-                    }
-                    alertMessage('alert-error', errorMsg);
-                }
-            });
-        }
-        // @upload text
-        function scanText(data) {
-            var url = 'scan';
-            var items = [];
-            $.ajax({
-                data: data,
-                dataType: 'json',
-                type: 'POST',
-                url: url,
-                processData: false,
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', getPassword());
-                },
-                success: function (input) {
-                    var data = input['default'];
-                    if (data.action) {
-                        alertMessage('alert-success', 'Data successfully scanned');
-                        var action = '';
-
-                        if (data.action === 'clean' || 'no action') {
-                            action = 'label-success';
-                        }
-                        else if (data.action === 'rewrite subject' || 'add header' || 'probable spam') {
-                            action = 'label-warning';
-                        }
-                        else if (data.action === 'spam') {
-                            action = 'label-danger';
-                        }
-
-                        var score = '';
-                        if (data.score <= data.required_score) {
-                            score = 'label-success';
-                        }
-                        else if (data.score >= data.required_score) {
-                            score = 'label-danger';
-                        }
-                        $('<tbody id="tmpBody"><tr>' +
-                                '<td><span class="label ' + action + '">' + data.action + '</span></td>' +
-                                '<td><span class="label ' + score + '">' + data.score.toFixed(2) + '/' + data.required_score.toFixed(2) + '</span></td>' +
-                                '</tr></tbody>')
-                            .insertAfter('#scanOutput thead');
-                        var sym_desc = {};
-                        var nsym = 0;
-
-                        $.each(data, function (i, item) {
-                            if (typeof item == 'object') {
-                                var sym_id = "sym_" + nsym;
-                                if (item.description) {
-                                    sym_desc[sym_id] = item.description;
-                                }
-                                items.push('<div class="cell-overflow" tabindex="1"><abbr id="' + sym_id +
-                                    '">' + item.name + '</abbr>: ' + item.score.toFixed(2) + '</div>');
-                                nsym++;
-                            }
-                        });
-                        $('<td/>', {
-                            id: 'tmpSymbols',
-                            html: items.join('')
-                        }).appendTo('#scanResult');
-                        $('#tmpSymbols').insertAfter('#tmpBody td:last').removeAttr('id');
-                        $('#tmpBody').removeAttr('id');
-                        $('#scanResult').show();
-                        // Show tooltips
-                        $.each(sym_desc, function (k, v) {
-                            $('#' + k).tooltip({
-                                "placement": "bottom",
-                                "title": v
-                            });
-                        });
-                        $('html, body').animate({
-                            scrollTop: $('#scanResult').offset().top
-                        }, 1000);
-                    } else {
-                        alertMessage('alert-error', 'Cannot scan data');
-                    }
-                },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    alertMessage('alert-error', 'Cannot upload data: ' +
-                        textStatus + ", " + errorThrown);
-                },
-                statusCode: {
-                    404: function () {
-                        alertMessage('alert-error', 'Cannot upload data, no server found');
-                    },
-                    500: function () {
-                        alertMessage('alert-error', 'Cannot tokenize message: no text data');
-                    },
-                    503: function () {
-                        alertMessage('alert-error', 'Cannot tokenize message: no text data');
-                    }
-                }
-            });
-        }
-        // @close scan output
-        $('#scanClean').on('click', function () {
-            $('#scanTextSource').val("");
-            $('#scanResult').hide();
-            $('#scanOutput tbody').remove();
-            $('html, body').animate({scrollTop: 0}, 1000);
-            return false;
-        });
-        // @init upload
-        $('[data-upload]').on('click', function () {
-            var source = $(this).data('upload');
-            var data;
-            var headers = {};
-            data = $('#' + source + 'TextSource').val();
-            if (source == 'fuzzy') {
-                //To access the proper
-                headers.flag = $('#fuzzyFlagText').val();
-                headers.weigth = $('#fuzzyWeightText').val();
-            } else {
-                data = $('#' + source + 'TextSource').val();
-            }
-            if (data.length > 0) {
-                if (source == 'scan') {
-                    scanText(data);
-                } else {
-                    uploadText(data, source, headers);
-                }
-            }
-            return false;
-        });
-        // @empty textarea on upload complete
-        function cleanTextUpload(source) {
-            $('#' + source + 'TextSource').val('');
-        }
-        // @get acions
-
-        // @watch textarea changes
-        $('textarea').change(function () {
-            if ($(this).val().length !== '') {
-                $(this).closest('form').find('button').removeAttr('disabled').removeClass('disabled');
-            } else {
-                $(this).closest('form').find('button').attr('disabled').addClass('disabled');
-            }
-        });
 });
