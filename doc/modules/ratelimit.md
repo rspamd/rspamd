@@ -30,14 +30,16 @@ option allows to avoid too many work for setting buckets if there are a lot of r
 
     type = [burst,leak];
 
-Where `type` is one of:
+Where `type` could be one of the following:
 
 - `bounce_to`: limit bounces per recipient
 - `bounce_to_ip`: limit bounces per recipient per ip
-- `to`: limit per recipient for non-bounces
-- `to_ip`: limit per pair of recipient and sender's IP address§
+- `to`: limit per recipient
+- `to_ip`: limit per pair of recipient and sender's IP address
 - `to_ip_from`: limit per triplet: recipient, sender's envelope from and sender's IP
 - `user`: limit per authenticated user (useful for outbound limits)
+
+See [composable ratelimits](#composable-ratelimits) for more information on this topic.
 
 `burst` is a capacity of a bucket and `leak` is a rate in messages per second.
 Both these attributes are floating point values.
@@ -119,9 +121,25 @@ ratelimit {
 }
 ~~~
 
+### Composable ratelimits
+
+From 1.4.0 bucket names can be dynamically constructed - eg. `from` and `ip` are keywords which can be joined by underscores to form `from_ip` which will ratelimit based on SMTP sender/IP address pair.
+
+Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
+
+Valid keywords are:
+
+* `asn`: ASN of sender (requires [asn module]({{ site.baseurl }}/doc/modules/asn.html))
+* `bounce`: True if message appears to be bounce
+* `from`: SMTP sender address
+* `ip`: IP address of sender
+* `user`: SMTP authenticated username
+* `rip`: IP address of sender if not a reserved address
+* `to`: SMTP recipient
+
 ### User-defined ratelimits
 
-From 1.4.0 bucket names can be dynamically constructed - `to`, `ip`, `from`, `user`, `bounce` and `asn` (new in 1.4- requires [asn module]({{ site.baseurl }}/asn.html)) - are all keywords that can be rearranged freely joined by underscores to form new buckets, eg. `from_ip`. Furthermore the user can define their own keywords to use in construction of these buckets. Only ratelimits containing a keyword specified in the `user_keywords` setting are checked for authenticated users (by default only `user`).
+The user can define their own keywords to compose ratelimits with.
 
 To create a custom keyword, we add `custom_keywords` setting to config pointing at a Lua script which we will create:
 
