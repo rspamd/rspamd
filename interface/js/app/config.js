@@ -134,6 +134,17 @@ function($) {
         });
     }
 
+    function loadActionsFromForm() {
+        var values = [];
+        var inputs = $('#actionsForm :input[type="slider"]');
+        // Rspamd order: [spam,probable_spam,greylist]
+        values[0] = parseFloat(inputs[2].value);
+        values[1] = parseFloat(inputs[1].value);
+        values[2] = parseFloat(inputs[0].value);
+
+        return JSON.stringify(values);
+    }
+
     function getActions(rspamd) {
         $.ajax({
             dataType: 'json',
@@ -194,41 +205,35 @@ function($) {
                         return e.html;
                     }).join('') +
                     '<br><div class="form-group">' +
-                    '<button class="btn btn-primary" type="submit">Save actions</button></div></fieldset></form>');
+                    '<button class="btn btn-primary" id="saveActionsBtn">Save actions</button>' +
+                    '<button class="btn btn-primary" id="saveActionsClusterBtn">Save cluster</button>' +
+                    '</div></fieldset></form>');
                 if (rspamd.read_only) {
+                    $('#saveActionsClusterBtn').attr('disabled', true);
+                    $('#saveActionsBtn').attr('disabled', true);
                     $('#actionsFormField').attr('disabled', true);
                 }
-            }
+
+                var elts = loadActionsFromForm();
+
+                $('#saveActionsClusterBtn').on('click', function() {
+                    rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
+                        data: elts,
+                        dataType: "json",
+                    });
+                });
+                $('#saveActionsBtn').on('click', function() {
+                    rspamd.queryLocal('saveactions', null, null, "POST", {}, {
+                        data: elts,
+                        dataType: "json",
+                    });
+                });
+            },
         });
     }
+
     // @upload edited actions
     interface.setup = function(rspamd) {
-        $('#actionsForm').change('submit', function () {
-            var inputs = $('#actionsForm :input[type="slider"]');
-            var url = 'saveactions';
-            var values = [];
-            // Rspamd order: [spam,probable_spam,greylist]
-            values[0] = parseFloat(inputs[2].value);
-            values[1] = parseFloat(inputs[1].value);
-            values[2] = parseFloat(inputs[0].value);
-            $.ajax({
-                data: JSON.stringify(values),
-                dataType: 'json',
-                type: 'POST',
-                url: url,
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', rspamd.getPassword());
-                },
-                success: function () {
-                    alertMessage('alert-success', 'Actions successfully saved');
-                },
-                error: function (data) {
-                    alertMessage('alert-modal alert-error', data.statusText);
-                }
-            });
-            return false;
-        });
         // Modal form for maps
         $(document).on('click', '[data-toggle="modal"]', function () {
             var source = $(this).data('source');
