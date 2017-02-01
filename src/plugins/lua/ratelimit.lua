@@ -113,6 +113,13 @@ local keywords = {
       return nil
     end,
   },
+  ['rip'] = {
+    ['get_value'] = function(task)
+      local ip = task:get_ip()
+      if ip and ip:is_valid() and not ip:is_local() then return ip end
+      return nil
+    end,
+  },
   ['from'] = {
     ['get_value'] = function(task)
       local from = task:get_from(0)
