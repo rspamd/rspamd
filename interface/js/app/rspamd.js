@@ -164,7 +164,22 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             $('#progress').hide();
         }
 
+        function alertMessage (alertState, alertText) {
+            if ($('.alert').is(':visible')) {
+                $(alert).hide().remove();
+            }
+            var alert = $('<div class="alert ' + alertState + '" style="display:none">' +
+                    '<button type="button" class="close" data-dismiss="alert" tutle="Dismiss">&times;</button>' +
+                    '<strong>' + alertText + '</strong>')
+                .prependTo('body');
+            $(alert).show();
+            setTimeout(function () {
+                $(alert).remove();
+            }, 3600);
+        }
+
         // Public functions
+        interface.alertMessage = alertMessage;
         interface.setup = function() {
             // Bind event handlers to selectors
             $("#selData").change(function () {
@@ -202,20 +217,6 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             tab_history.setup(interface, tables);
             tab_upload.setup(interface)
         };
-
-        interface.alertMessage = function (alertState, alertText) {
-            if ($('.alert').is(':visible')) {
-                $(alert).hide().remove();
-            }
-            var alert = $('<div class="alert ' + alertState + '" style="display:none">' +
-                    '<button type="button" class="close" data-dismiss="alert" tutle="Dismiss">&times;</button>' +
-                    '<strong>' + alertText + '</strong>')
-                .prependTo('body');
-            $(alert).show();
-            setTimeout(function () {
-                $(alert).remove();
-            }, 3600);
-        }
 
         interface.connect = function() {
             if (isLogged()) {
@@ -295,6 +296,45 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             });
         };
 
+        interface.queryLocal = function(req_url, on_success, on_error, method, headers, params) {
+            var req_params = {
+                type: method,
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader("Password", getPassword());
+
+                    if (headers) {
+                        $.each(headers, function(hname, hvalue){
+                            xhr.setRequestHeader(hname, hvalue);
+                        });
+                    }
+                },
+                url: req_url,
+                success: function (data) {
+                    if (on_success) {
+                        on_success(data);
+                    }
+                    else {
+                        alertMessage('alert-success', 'Data saved');
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    if (on_error) {
+                        on_error('local', jqXHR, textStatus, errorThrown);
+                    }
+                    else {
+                         alertMessage('alert-error', 'Cannot receive data: ' + errorThrown);
+                    }
+                }
+            };
+            if (params) {
+                $.each(params, function(k, v) {
+                    req_params[k] = v;
+                });
+            }
+            $.ajax(req_params);
+        }
+
         interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params) {
             $.ajax({
                 dataType: "json",
@@ -352,7 +392,12 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                                     neighbours_status[ind].data = data;
                                 }
                                 if (neighbours_status.every(function (elt) {return elt.checked;})) {
-                                    on_success(neighbours_status);
+                                    if (on_success) {
+                                        on_success(neighbours_status);
+                                    }
+                                    else {
+                                        alertMessage('alert-success', 'Request completed');
+                                    }
                                 }
                             },
                             error: function(jqXHR, textStatus, errorThrown) {
@@ -362,9 +407,18 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                                     on_error(neighbours_status[ind],
                                             jqXHR, textStatus, errorThrown);
                                 }
+                                else {
+                                    alertMessage('alert-error', 'Cannot receive data from ' +
+                                       neighbours_status[ind] + ': ' + errorThrown);
+                                }
                                 if (neighbours_status.every(
                                         function (elt) {return elt.checked;})) {
-                                    on_success(neighbours_status);
+                                    if (on_success) {
+                                        on_success(neighbours_status);
+                                    }
+                                    else {
+                                        alertMessage('alert-success', 'Request completed');
+                                    }
                                 }
                             }
                             //error display
