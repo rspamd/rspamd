@@ -179,11 +179,11 @@ Rspamd requires several 3-rd party software to build and run:
 * [openssl](https://www.openssl.org/) - cryptography and SSL/TLS Toolkit
 * [libevent](http://libevent.org/) - asynchronous event library
 * [glib2](http://library.gnome.org/devel/glib/) - common purposes library
-* [gmime2](http://spruce.sourceforge.net/gmime/) - mime parser
-* [Luajit](http://www.luajit.org/) - jit compiler for [lua](http://lua.org) programming language
+* [gmime2](http://spruce.sourceforge.net/gmime/) - mime parser (untill `Rspamd 1.5`)
+* [ragel](http://www.colm.net/open-source/ragel/) - state machine compiler
+* [Luajit](http://www.luajit.org/) - jit compiler for [lua](http://lua.org) programming language. Plain lua will work as well.
 * [cmake](http://www.cmake.org/) - build system used to configure rspamd
 * [sqlite3](http://sqlite.org) - embedded database used to store some data by rspamd
-* [hiredis](https://github.com/redis/hiredis) - client library for [redis](http://redis.io) key-value storage
 * [libmagic](http://www.darwinsys.com/file/) - common library for detecting file types
 
 You can either install them from sources or (recommended) install using package manager of your system.
