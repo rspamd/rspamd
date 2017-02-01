@@ -185,6 +185,7 @@ Rspamd requires several 3-rd party software to build and run:
 * [cmake](http://www.cmake.org/) - build system used to configure rspamd
 * [sqlite3](http://sqlite.org) - embedded database used to store some data by rspamd
 * [libmagic](http://www.darwinsys.com/file/) - common library for detecting file types
+* [libfann](https://github.com/libfann/fann) - neural nets library (or pass `-DENABLE_FANN=OFF` to cmake)
 
 You can either install them from sources or (recommended) install using package manager of your system.
 
