@@ -5,6 +5,7 @@ SET(RSPAMADMSRC rspamadm.c
         configtest.c
         fuzzy_convert.c
         fuzzy_merge.c
+        grep.c
         configdump.c
         control.c
         confighelp.c
