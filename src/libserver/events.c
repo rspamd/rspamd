@@ -217,11 +217,13 @@ rspamd_session_destroy (struct rspamd_async_session *session)
 		return FALSE;
 	}
 
-	session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
-	rspamd_session_cleanup (session);
+	if (!(session->flags & RSPAMD_SESSION_FLAG_DESTROYING)) {
+		session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
+		rspamd_session_cleanup (session);
 
-	if (session->cleanup != NULL) {
-		session->cleanup (session->user_data);
+		if (session->cleanup != NULL) {
+			session->cleanup (session->user_data);
+		}
 	}
 
 	return TRUE;
