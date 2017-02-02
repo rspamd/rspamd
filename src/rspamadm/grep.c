@@ -39,12 +39,12 @@ struct rspamadm_command grep_command = {
 static GOptionEntry entries[] = {
 		{"string", 's', 0, G_OPTION_ARG_STRING, &string,
 				"Plain string to search (case-insensitive)", NULL},
-		{"sensitive", 'S', 0, G_OPTION_ARG_NONE, &sensitive,
-				"Enable case-sensitivity in string search", NULL},
 		{"pattern", 'p', 0, G_OPTION_ARG_STRING, &pattern,
 				"Pattern to search for (regex)", NULL},
                 {"input", 'i', 0, G_OPTION_ARG_STRING_ARRAY, &inputs,
-                                "Process specified inputs", NULL},
+                                "Process specified inputs (stdin if unspecified)", NULL},
+		{"sensitive", 'S', 0, G_OPTION_ARG_NONE, &sensitive,
+				"Enable case-sensitivity in string search", NULL},
 		{"orphans", 'o', 0, G_OPTION_ARG_NONE, &orphans,
 				"Print orphaned logs", NULL},
 		{"partial", 'P', 0, G_OPTION_ARG_NONE, &orphans,
@@ -60,13 +60,14 @@ rspamadm_grep_help (gboolean full_help)
 
 	if (full_help) {
 		help_str = "Search for patterns in rspamd logs\n\n"
-				"Usage: rspamadm grep <-s string | -p pattern> [-S] [-i input1 -i input2]\n"
+				"Usage: rspamadm grep <-s string | -p pattern> [-i input1 -i input2 -S -o -P]\n"
 				"Where options are:\n\n"
 				"-s: Plain string to search (case-insensitive)\n"
+				"-p: Pattern to search for (regex)\n"
+				"-i: Process specified inputs (stdin if unspecified)\n"
 				"-S: Enable case-sensitivity in string search\n"
 				"-o: Print orphaned logs\n"
-				"-p: Pattern to search for (regex)\n"
-				"-i: Process specified inputs\n";
+				"-P: Print partial logs\n";
 	}
 	else {
 		help_str = "Search for patterns in rspamd logs";
