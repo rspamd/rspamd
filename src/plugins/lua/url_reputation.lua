@@ -36,6 +36,11 @@ local settings = {
     dkim = 'R_DKIM_ALLOW',
     spf = 'R_SPF_ALLOW',
   },
+  ignore_surbl = {
+    URIBL_BLOCKED = true,
+    DBL_PROHIBIT = true,
+    SURBL_BLOCKED = true,
+  },
   -- how many messages to score reputation
   threshold = 5,
   -- set reputation for only so many TLDs
@@ -345,39 +350,68 @@ local function tags_save(task)
       else
         -- No reputation found, pick some URLs
         local most_relevant
+        if tld_count == 1 then
+          most_relevant = next(tlds)
+        end
         if settings.relevance then
-          -- XXX: blacklist for non-relevant identifiers (gmail etc)
-          local dmarc = ((task:get_symbol(settings.foreign_symbols['dmarc']) or E)[1] or E).options
-          local dkim = ((task:get_symbol(settings.foreign_symbols['dkim']) or E)[1] or E).options
-          local spf = task:get_symbol(settings.foreign_symbols['spf'])
-          local hostname = task:get_hostname()
-          if hostname then
-            hostname = rspamd_util.get_tld(hostname)
-          end
-          if spf then
-            local from = task:get_from(1)
-            if ((from or E)[1] or E).domain then
-              spf = rspamd_util.get_tld(from[1]['domain'])
-            else
-              local helo = task:get_helo()
-              if helo then
-                spf = rspamd_util.get_tld(helo)
+          if not most_relevant then
+            -- XXX: blacklist for non-relevant identifiers (gmail etc)
+            local dmarc = ((task:get_symbol(settings.foreign_symbols['dmarc']) or E)[1] or E).options
+            local dkim = ((task:get_symbol(settings.foreign_symbols['dkim']) or E)[1] or E).options
+            local spf = task:get_symbol(settings.foreign_symbols['spf'])
+            local hostname = task:get_hostname()
+            if hostname then
+              hostname = rspamd_util.get_tld(hostname)
+            end
+            if spf then
+              local from = task:get_from(1)
+              if ((from or E)[1] or E).domain then
+                spf = rspamd_util.get_tld(from[1]['domain'])
+              else
+                local helo = task:get_helo()
+                if helo then
+                  spf = rspamd_util.get_tld(helo)
+                end
               end
             end
-          end
-          for _, t in ipairs(tlds) do
-            if t == dmarc then
-              most_relevant = t
-              break
-            elseif t == dkim then
-              most_relevant = t
-              break
-            elseif t == spf then
-              most_relevant = t
-              break
-            elseif t == hostname then
-              most_relevant = t
-              break
+            for _, t in ipairs(tlds) do
+              if t == dmarc then
+                most_relevant = t
+                break
+              elseif t == dkim then
+                most_relevant = t
+                break
+              elseif t == spf then
+                most_relevant = t
+                break
+              elseif t == hostname then
+                most_relevant = t
+                break
+              end
+            end
+            if not most_relevant and reputation >= 3 then
+              -- no authenticated domain, count surbl tags
+              local max_surbl_guilt
+              for dom, tag in pairs(tags) do
+                local guilt = 0
+                local stags = tag['surbl']
+                if stags then
+                  for k in pairs(stags) do
+                    if not settings.ignore_surbl[k] then
+                      guilt = guilt + 1
+                    end
+                  end
+                  if guilt > 1 then
+                    if not most_relevant then
+                      most_relevant = dom
+                      max_surbl_guilt = guilt
+                    elseif guilt > max_surbl_guilt then
+                      most_relevant = dom
+                      max_surbl_guilt = guilt
+                    end
+                  end
+                end
+              end
             end
           end
         end
