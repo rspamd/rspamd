@@ -131,7 +131,8 @@ Additional keys which may be in the reply include:
 * `urls` - a list of URLs found in a message (only hostnames)
 * `emails` - a list of emails found in a message
 * `message-id` - ID of message (useful for logging)
-* `messages` - array of optional messages added by Rspamd filters (such as `SPF`)
+* `messages` - object containing optional messages added by Rspamd filters (such as `SPF`)
+        - The value of the `smtp_message` key is intended to be returned as SMTP response text by the MTA
 
 ## Rspamd JSON control block
 
