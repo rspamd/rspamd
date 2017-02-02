@@ -1,7 +1,7 @@
-local rspamd_regexp = require 'rspamd_regexp'
-local E = {}
-
 return function(_, res)
+
+  local rspamd_regexp = require 'rspamd_regexp'
+  local E = {}
 
   local buffer = {}
   local matches = {}
@@ -16,8 +16,10 @@ return function(_, res)
     end
   end
 
+  local orphans = res['orphans']
   local search_str = res['string']
   local sensitive = res['sensitive']
+  local partial = res['partial']
   if search_str and not sensitive then
     search_str = string.lower(search_str)
   end
@@ -67,9 +69,11 @@ return function(_, res)
         end
         if ismatch then
           if not hash then
-            print('*** orphaned ***')
-            print(line)
-            print()
+            if orphans then
+              print('*** orphaned ***')
+              print(line)
+              print()
+            end
           else
             if matches[hash] then
               table.insert(matches[hash], line)
@@ -92,13 +96,18 @@ return function(_, res)
           end
         end
       end
+      if partial then
+        for k, v in pairs(matches) do
+          print('*** partial ***')
+          for _, vv in ipairs(v) do
+            print(vv)
+          end
+          print()
+          matches[k] = nil
+        end
+      else
+        matches = {}
+      end
     end
-  end
-  for _, v in pairs(matches) do
-    print('*** partial ***')
-    for _, vv in ipairs(v) do
-      print(vv)
-    end
-    print()
   end
 end
