@@ -23,6 +23,8 @@ static gchar *string = NULL;
 static gchar *pattern = NULL;
 static gchar **inputs = NULL;
 static gboolean sensitive = FALSE;
+static gboolean orphans = FALSE;
+static gboolean partial = FALSE;
 
 static void rspamadm_grep (gint argc, gchar **argv);
 static const char *rspamadm_grep_help (gboolean full_help);
@@ -42,7 +44,11 @@ static GOptionEntry entries[] = {
 		{"pattern", 'p', 0, G_OPTION_ARG_STRING, &pattern,
 				"Pattern to search for (regex)", NULL},
                 {"input", 'i', 0, G_OPTION_ARG_STRING_ARRAY, &inputs,
-                                "Processed specified inputs", NULL},
+                                "Process specified inputs", NULL},
+		{"orphans", 'o', 0, G_OPTION_ARG_NONE, &orphans,
+				"Print orphaned logs", NULL},
+		{"partial", 'P', 0, G_OPTION_ARG_NONE, &orphans,
+				"Print partial logs", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -58,6 +64,7 @@ rspamadm_grep_help (gboolean full_help)
 				"Where options are:\n\n"
 				"-s: Plain string to search (case-insensitive)\n"
 				"-S: Enable case-sensitivity in string search\n"
+				"-o: Print orphaned logs\n"
 				"-p: Pattern to search for (regex)\n"
 				"-i: Process specified inputs\n";
 	}
@@ -126,6 +133,14 @@ rspamadm_grep (gint argc, gchar **argv)
 	if (sensitive) {
 		ucl_object_insert_key (obj, ucl_object_frombool (sensitive),
 				"sensitive", 0, false);
+	}
+	if (orphans) {
+		ucl_object_insert_key (obj, ucl_object_frombool (orphans),
+				"orphans", 0, false);
+	}
+	if (partial) {
+		ucl_object_insert_key (obj, ucl_object_frombool (partial),
+				"partial", 0, false);
 	}
 
 	rspamadm_execute_lua_ucl_subr (L,
