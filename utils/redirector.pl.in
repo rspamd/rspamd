@@ -24,7 +24,7 @@ use Digest;
 use Proc::Daemon;
 use Proc::PidUtil;
 use POE qw(@POE_LOOP@ Component::Server::TCP Filter::HTTPD Component::Client::HTTP);
-use Cache::Memcached::Fast;
+use Redis::Fast;
 
 my $with_swf = 1;
 my $swf_parser;
@@ -41,7 +41,7 @@ our %cfg = (
 	pidfile           => '/tmp/redirector.pid',
 	do_log            => 0,
 	debug             => 0,
-	memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, ],
+	redis_server      =>  'localhost:6379',
 
 	facility     => LOG_LOCAL3,         # syslog facility
 	log_level    => LOG_INFO,
@@ -53,7 +53,7 @@ our %cfg = (
 );
 
 our $do_reopen_log = 0;
-our $memd;
+our $redis_conn;
 
 ############################################ Subs ########################################
 
@@ -185,24 +185,24 @@ sub swf_tag_callback {
 	swf_check_tag($t);
 }
 
-# Check url from memcached cache first
-sub memcached_check_url {
+# Check url from redis cache first
+sub redis_check_url {
 	my ($url) = @_;
 
-	my $context = Digest->new("SHA-256");
+	my $context = Digest->new("SHA-512");
 	$context->add($url);
-	return $memd->get( $context->digest() );
+	return $redis_conn->get( $context->digest() );
 }
 
-# Write url to memcached key
-sub memcached_cache_url {
+# Write url to redis key
+sub redis_cache_url {
 	my ( $url, $url_real ) = @_;
 
 	if ( $url ne $url_real ) {
-		my $context = Digest->new("SHA-256");
+		my $context = Digest->new("SHA-512");
 		$context->add($url);
-		if (!$memd->set( $context->digest(), $url_real, $cfg{cache_expire} )) {
-			_log(LOG_INFO, "cannot save redirect from $url to $url_real in memcached");
+		if (!$redis_conn->setex( $context->digest(), $cfg{cache_expire}, $url_real)) {
+			_log(LOG_INFO, "cannot save redirect from $url to $url_real in redis");
 		}
 	}
 }
@@ -245,7 +245,7 @@ sub process_client {
 	else {
 
 		# Check cache for each url
-		my $redirect = memcached_check_url( $http_request->uri );
+		my $redirect = redis_check_url( $http_request->uri );
 		if ($redirect) {
 			_log( LOG_INFO,
 				"Memcached redirect from %s to %s for request from: %s",
@@ -271,7 +271,7 @@ sub process_client {
 			$rec, $base_url, $http_request->uri, $heap->{remote_ip} );
 
 		# Write to cache
-		memcached_cache_url( $base_url, $http_request->uri );
+		redis_cache_url( $base_url, $http_request->uri );
 		my $new_response = create_response( 200, $http_request->uri );
 
 		# Avoid sending the response if the client has gone away.
@@ -323,7 +323,7 @@ sub process_client {
 			$new_response = create_response( $http_response->code );
 		}
 		else {
-			memcached_cache_url( $base_url, $http_request->uri );
+		  redis_cache_url( $base_url, $http_request->uri );
 			$new_response = create_response( 200, $http_request->uri );
 		}
 
@@ -422,7 +422,7 @@ sub process_client {
 		$base_url, $http_request->uri, $heap->{remote_ip} );
 
 	# Write to cache
-	memcached_cache_url( $base_url, $http_request->uri );
+	redis_cache_url( $base_url, $http_request->uri );
 	my $new_response =
 	  create_response( $http_response->code, $http_request->uri );
 
@@ -470,7 +470,7 @@ sub process_input {
 	}
 
 	# Check cache first
-	my $redirect = memcached_check_url( $request->uri );
+	my $redirect = redis_check_url( $request->uri );
 	if ($redirect) {
 		_log( LOG_INFO, "Memcached redirect from %s to %s for request from: %s",
 			$request->uri, $redirect, $heap->{remote_ip} );
@@ -555,20 +555,13 @@ if ( !$DEBUG ) {
 	  or _log( LOG_ALERT, "Cannot write pidfile $cfg{pidfile}" );
 }
 
-# Init memcached connection
-_log( LOG_INFO, "Starting memcached connection" );
-$memd = new Cache::Memcached::Fast(
-	{
-		servers           => $cfg{memcached_servers},
-		connect_timeout   => 0.2,
-		io_timeout        => 0.5,
-		max_failures      => 3,
-		failure_timeout   => 2,
-		ketama_points     => 150,
-		hash_namespace    => 1,
-		serialize_methods => [ \&Storable::freeze, \&Storable::thaw ],
-		utf8              => ( $^V ge v5.8.1 ? 1 : 0 ),
-	}
+# Init redis connection
+_log( LOG_INFO, "Starting redis connection" );
+$redis_conn = Redis::Fast->new(
+		server    => $cfg{redis_server},
+		reconnect => 60,
+		every     => 500_000,
+		encoding  => undef,
 );
 
 # POE part
