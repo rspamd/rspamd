@@ -568,6 +568,42 @@ rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 	return FALSE;
 }
 
+/* Checks for ipv6 mapped address */
+static rspamd_inet_addr_t *
+rspamd_inet_address_v6_maybe_map (const struct sockaddr_in6 *sin6)
+{
+	rspamd_inet_addr_t *addr = NULL;
+	/* 10 zero bytes or 80 bits */
+	static const guint8 mask[] = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	};
+	const guint8 *p;
+
+	if (memcmp ((const guint8 *)&sin6->sin6_addr, mask, sizeof (mask)) == 0) {
+		p = (const guint8 *)&sin6->sin6_addr;
+
+		if ((p[11] == 0 && p[12] == 0) ||
+				(p[11] == 0xff && p[12] == 0xff)) {
+			addr = rspamd_inet_addr_create (AF_INET);
+			memcpy (&addr->u.in.addr.s4.sin_addr, &p[13],
+					sizeof (struct in_addr));
+		}
+		else {
+			/* Something strange but not mapped v4 address */
+			addr = rspamd_inet_addr_create (AF_INET6);
+			memcpy (&addr->u.in.addr.s6.sin6_addr, &sin6->sin6_addr,
+					sizeof (struct in6_addr));
+		}
+	}
+	else {
+		addr = rspamd_inet_addr_create (AF_INET6);
+		memcpy (&addr->u.in.addr.s6.sin6_addr, &sin6->sin6_addr,
+				sizeof (struct in6_addr));
+	}
+
+	return addr;
+}
+
 gboolean
 rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 		const char *src,
@@ -613,9 +649,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 		if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 				rspamd_parse_inet_address_ip6 (ipbuf, iplen,
 						&su.s6.sin6_addr)) {
-			addr = rspamd_inet_addr_create (AF_INET6);
-			memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
-					sizeof (struct in6_addr));
+			addr = rspamd_inet_address_v6_maybe_map (&su.s6);
 			ret = TRUE;
 		}
 
@@ -633,9 +667,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 			if (memchr (end + 1, ':', srclen - (end - src + 1)) &&
 					ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
-				addr = rspamd_inet_addr_create (AF_INET6);
-				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
-						sizeof (struct in6_addr));
+				addr = rspamd_inet_address_v6_maybe_map (&su.s6);
 				ret = TRUE;
 			}
 			else {
@@ -669,9 +701,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 			}
 			else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
-				addr = rspamd_inet_addr_create (AF_INET6);
-				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
-						sizeof (struct in6_addr));
+				addr = rspamd_inet_address_v6_maybe_map (&su.s6);
 				ret = TRUE;
 			}
 		}
