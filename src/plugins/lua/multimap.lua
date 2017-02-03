@@ -35,6 +35,9 @@ local value_types = {
   from = {
     get_value = function(val) return val end,
   },
+  helo = {
+    get_value = function(val) return val end,
+  },
   header = {
     get_value = function(val) return val end,
   },
@@ -327,6 +330,7 @@ end
 local multimap_filters = {
   from = apply_addr_filter,
   to = apply_addr_filter,
+  helo = apply_hostname_filter,
   header = apply_addr_filter,
   url = apply_url_filter,
   filename = apply_filename_filter,
@@ -593,6 +597,11 @@ local function multimap_callback(task, rule)
       local from = task:get_from('smtp')
       match_addr(rule, from)
     end
+  elseif rt == 'helo' then
+    local helo = task:get_helo()
+    if helo then
+      match_hostname(rule, helo)
+    end
   elseif rt == 'url' then
     if task:has_urls() then
       local msg_urls = task:get_urls()
@@ -732,6 +741,7 @@ local function add_multimap_rule(key, newrule)
       elseif newrule['type'] == 'header'
         or newrule['type'] == 'rcpt'
         or newrule['type'] == 'from'
+        or newrule['type'] == 'helo'
         or newrule['type'] == 'filename'
         or newrule['type'] == 'url'
         or newrule['type'] == 'content'
