@@ -582,10 +582,9 @@ rspamd_inet_address_v6_maybe_map (const struct sockaddr_in6 *sin6)
 	if (memcmp ((const guint8 *)&sin6->sin6_addr, mask, sizeof (mask)) == 0) {
 		p = (const guint8 *)&sin6->sin6_addr;
 
-		if ((p[11] == 0 && p[12] == 0) ||
-				(p[11] == 0xff && p[12] == 0xff)) {
+		if ((p[10] == 0xff && p[11] == 0xff)) {
 			addr = rspamd_inet_addr_create (AF_INET);
-			memcpy (&addr->u.in.addr.s4.sin_addr, &p[13],
+			memcpy (&addr->u.in.addr.s4.sin_addr, &p[12],
 					sizeof (struct in_addr));
 		}
 		else {
