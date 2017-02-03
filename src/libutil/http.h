@@ -67,15 +67,18 @@ struct rspamd_storage_shmem {
  * Body has been set for a message
  */
 #define RSPAMD_HTTP_FLAG_HAS_BODY (1 << 5)
-
+/**
+ * Do not verify server's certificate
+ */
+#define RSPAMD_HTTP_FLAG_SSL_NOVERIFY (1 << 6)
 /**
  * Options for HTTP connection
  */
 enum rspamd_http_options {
-	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions */
-	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */
-	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4, /**< Encrypt data for client */
-	RSPAMD_HTTP_CLIENT_SHARED = 0x8, /**< Store reply in shared memory */
+	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions *///!< RSPAMD_HTTP_BODY_PARTIAL
+	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */      //!< RSPAMD_HTTP_CLIENT_SIMPLE
+	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4, /**< Encrypt data for client */                //!< RSPAMD_HTTP_CLIENT_ENCRYPTED
+	RSPAMD_HTTP_CLIENT_SHARED = 0x8, /**< Store reply in shared memory */              //!< RSPAMD_HTTP_CLIENT_SHARED
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,

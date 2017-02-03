@@ -56,6 +56,7 @@ static const struct luaL_reg httplib_m[] = {
 };
 
 #define RSPAMD_LUA_HTTP_FLAG_TEXT (1 << 0)
+#define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 0)
 
 struct lua_http_cbdata {
 	lua_State *L;
@@ -258,6 +259,10 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 
 		if (cbd->peer_pk) {
 			rspamd_http_message_set_peer_key (cbd->msg, cbd->peer_pk);
+		}
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) {
+			cbd->msg->flags |= RSPAMD_HTTP_FLAG_SSL_NOVERIFY;
 		}
 
 		rspamd_http_connection_write_message (cbd->conn, cbd->msg,
@@ -545,6 +550,15 @@ lua_http_request (lua_State *L)
 
 		if (!!lua_toboolean (L, -1)) {
 			flags |= RSPAMD_LUA_HTTP_FLAG_TEXT;
+		}
+
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "no_ssl_verify");
+		lua_gettable (L, 1);
+
+		if (!!lua_toboolean (L, -1)) {
+			flags |= RSPAMD_LUA_HTTP_FLAG_NOVERIFY;
 		}
 
 		lua_pop (L, 1);

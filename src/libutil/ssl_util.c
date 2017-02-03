@@ -34,6 +34,7 @@ struct rspamd_ssl_connection {
 		ssl_next_read,
 		ssl_next_write
 	} state;
+	gboolean verify_peer;
 	SSL *ssl;
 	gchar *hostname;
 	struct event *ev;
@@ -373,7 +374,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		if (ret == 1) {
 			event_del (c->ev);
 			/* Verify certificate */
-			if (rspamd_ssl_peer_verify (c)) {
+			if ((!c->verify_peer) || rspamd_ssl_peer_verify (c)) {
 				c->state = ssl_conn_connected;
 				c->handler (fd, EV_WRITE, c->handler_data);
 			}
@@ -435,7 +436,8 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 }
 
 struct rspamd_ssl_connection *
-rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base)
+rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base,
+		gboolean verify_peer)
 {
 	struct rspamd_ssl_connection *c;
 
@@ -443,6 +445,7 @@ rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base)
 	c = g_slice_alloc0 (sizeof (*c));
 	c->ssl = SSL_new (ssl_ctx);
 	c->ev_base = ev_base;
+	c->verify_peer = verify_peer;
 
 	return c;
 }

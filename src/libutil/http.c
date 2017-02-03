@@ -2183,7 +2183,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				rspamd_ssl_connection_free (priv->ssl);
 			}
 
-			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx, base);
+			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx, base,
+					!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY));
 			g_assert (priv->ssl != NULL);
 
 			if (!rspamd_ssl_connect_fd (priv->ssl, fd, host, &priv->ev,
