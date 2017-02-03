@@ -592,7 +592,20 @@ if not redis_params then
   return
 end
 for k, v in pairs(opts) do
-  settings[k] = v
+  if k == 'ignore_surbl' then
+    if type(v) == 'table' then
+      if next(v) ~= 1 then
+        settings[k] = v
+      else
+        settings[k] = {}
+        for _, n in ipairs(v) do
+          settings[k][n] = true
+        end
+      end
+    end
+  else
+    settings[k] = v
+  end
 end
 if settings.threshold < 1 then
   rspamd_logger.errx(rspamd_config, 'threshold should be >= 1, disabling module')
