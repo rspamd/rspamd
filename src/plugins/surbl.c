@@ -42,6 +42,7 @@
 #include "libserver/html.h"
 #include "libutil/http_private.h"
 #include "unix-std.h"
+#include "lua/lua_common.h"
 
 #define msg_err_surbl(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "surbl", task->task_pool->tag.uid, \
@@ -69,7 +70,8 @@ static void surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg);
 static void process_dns_results (struct rspamd_task *task,
 	struct suffix_item *suffix, gchar *resolved_name,
 	guint32 addr, struct rspamd_url *url);
-
+static gint surbl_register_redirect_handler (lua_State *L);
+static gint surbl_continue_process_handler (lua_State *L);
 
 #define NO_REGEXP (gpointer) - 1
 
@@ -272,6 +274,8 @@ fin_redirectors_list (struct map_cb_data *data)
 gint
 surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
+	lua_State *L;
+
 	surbl_module_ctx = g_malloc0 (sizeof (struct surbl_ctx));
 
 	surbl_module_ctx->use_redirector = 0;
@@ -286,6 +290,7 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			surbl_module_ctx->whitelist);
 	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
 			surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+	surbl_module_ctx->redirector_cbid = -1;
 
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
@@ -444,6 +449,26 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+
+	/* Register global methods */
+	L = cfg->lua_state;
+	lua_getglobal (L, "rspamd_plugins");
+
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushstring (L, "surbl");
+		lua_createtable (L, 0, 2);
+		/* Set methods */
+		lua_pushstring (L, "register_redirect");
+		lua_pushcfunction (L, surbl_register_redirect_handler);
+		lua_settable (L, -3);
+		lua_pushstring (L, "continue_process");
+		lua_pushcfunction (L, surbl_continue_process_handler);
+		lua_settable (L, -3);
+		/* Finish fuzzy_check key */
+		lua_settable (L, -3);
+	}
+
+		lua_pop (L, 1); /* Remove global function */
 
 	return 0;
 }
@@ -1518,8 +1543,9 @@ static void
 surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param *param = data;
-	struct rspamd_task *task;
-	struct rspamd_url *url = value;
+	struct rspamd_task *task, **ptask;
+	struct rspamd_url *url = value, **purl;
+	lua_State *L;
 	rspamd_regexp_t *re;
 	rspamd_ftok_t srch;
 	gboolean found = FALSE;
@@ -1561,11 +1587,35 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 							found_tld);
 				}
 
-				register_redirector_call (url,
-						param->task,
-						param->suffix,
-						found_tld,
-						param->tree);
+				if (surbl_module_ctx->redirector_cbid != -1) {
+					L = task->cfg->lua_state;
+					lua_rawgeti (L, LUA_REGISTRYINDEX,
+							surbl_module_ctx->redirector_cbid);
+					ptask = lua_newuserdata (L, sizeof (*ptask));
+					*ptask = task;
+					rspamd_lua_setclass (L, "rspamd{task}", -1);
+					purl = lua_newuserdata (L, sizeof (*purl));
+					*purl = url;
+					rspamd_lua_setclass (L, "rspamd{url}", -1);
+					lua_pushlightuserdata (L, param);
+
+					if (lua_pcall (L, 3, 0, 0) != 0) {
+						msg_err_task ("cannot call for redirector script: %s",
+								lua_tostring (L, -1));
+						lua_pop (L, 1);
+					}
+					else {
+						param->w = rspamd_session_get_watcher (task->s);
+						rspamd_session_watcher_push (task->s);
+					}
+				}
+				else {
+					register_redirector_call (url,
+							param->task,
+							param->suffix,
+							found_tld,
+							param->tree);
+				}
 
 				return;
 			}
@@ -1628,4 +1678,99 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 			}
 		}
 	}
+}
+
+
+static gint
+surbl_register_redirect_handler (lua_State *L)
+{
+	if (surbl_module_ctx->redirector_cbid != -1) {
+		luaL_unref (L, LUA_REGISTRYINDEX, surbl_module_ctx->redirector_cbid);
+	}
+
+	lua_pushvalue (L, 1);
+
+	if (lua_type (L, -1) == LUA_TFUNCTION) {
+		surbl_module_ctx->redirector_cbid = luaL_ref (L, LUA_REGISTRYINDEX);
+	}
+	else {
+		lua_pop (L, 1);
+
+		return luaL_error (L, "argument must be a function");
+	}
+
+	return 0;
+}
+
+/*
+ * Accepts two arguments:
+ * url: string with a redirected URL, if url is nil, then it couldn't be resolved
+ * userdata: opaque pointer of `struct redirector_param *`
+ */
+static gint
+surbl_continue_process_handler (lua_State *L)
+{
+	struct redirector_param *param;
+	struct rspamd_task *task;
+	const gchar *nurl;
+	gint r;
+	gsize urllen;
+	struct rspamd_url *redirected_url;
+	gchar *urlstr;
+
+	nurl = lua_tolstring (L, 1, &urllen);
+	param = (struct redirector_param *)lua_topointer (L, 2);
+
+	if (param != NULL) {
+
+		task = param->task;
+		rspamd_session_watcher_pop (task->s, param->w);
+		param->w = NULL;
+
+		if (nurl != NULL) {
+			msg_info_surbl ("<%s> got reply from redirector: '%*s' -> '%*s'",
+					param->task->message_id,
+					param->url->urllen, param->url->string,
+					(gint)urllen, nurl);
+			urlstr = rspamd_mempool_alloc (task->task_pool,
+					urllen + 1);
+			redirected_url = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (*redirected_url));
+			rspamd_strlcpy (urlstr, nurl, urllen + 1);
+			r = rspamd_url_parse (redirected_url, urlstr, urllen,
+					task->task_pool);
+
+			if (r == URI_ERRNO_OK) {
+				if (!g_hash_table_lookup (task->urls, redirected_url)) {
+					g_hash_table_insert (task->urls, redirected_url,
+							redirected_url);
+					redirected_url->phished_url = param->url;
+					redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+				}
+
+				make_surbl_requests (redirected_url,
+						param->task,
+						param->suffix,
+						FALSE,
+						param->tree);
+				rspamd_url_add_tag (param->url, "redirector", urlstr,
+						task->task_pool);
+			}
+			else {
+				msg_info_surbl ("<%s> could not resolve '%*s' on redirector",
+						param->task->message_id,
+						param->url->urllen, param->url->string);
+			}
+		}
+		else {
+			msg_info_surbl ("<%s> could not resolve '%*s' on redirector",
+					param->task->message_id,
+					param->url->urllen, param->url->string);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }

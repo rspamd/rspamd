@@ -34,6 +34,7 @@ struct surbl_ctx {
 	void *redirector_map_data;
 	GHashTable *redirector_tlds;
 	guint use_redirector;
+	gint redirector_cbid;
 	struct upstream_list *redirectors;
 	rspamd_mempool_t *surbl_pool;
 };
@@ -62,9 +63,10 @@ struct redirector_param {
 	struct rspamd_task *task;
 	struct upstream *redirector;
 	struct rspamd_http_connection *conn;
-	gint sock;
 	GHashTable *tree;
 	struct suffix_item *suffix;
+	struct rspamd_async_watcher *w;
+	gint sock;
 };
 
 struct surbl_bit_item {
