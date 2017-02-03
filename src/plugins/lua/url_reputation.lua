@@ -20,7 +20,7 @@ limitations under the License.
 local E = {}
 local N = 'url_reputation'
 
-local redis_params, redis_set_script_sha, redis_incr_script_sha
+local whitelist, redis_params, redis_set_script_sha, redis_incr_script_sha
 local settings = {
   expire = 86400, -- 1 day
   key_prefix_tags = 'Ut.',
@@ -355,7 +355,6 @@ local function tags_save(task)
         end
         if settings.relevance then
           if not most_relevant then
-            -- XXX: blacklist for non-relevant identifiers (gmail etc)
             local dmarc = ((task:get_symbol(settings.foreign_symbols['dmarc']) or E)[1] or E).options
             local dkim = ((task:get_symbol(settings.foreign_symbols['dkim']) or E)[1] or E).options
             local spf = task:get_symbol(settings.foreign_symbols['spf'])
@@ -467,13 +466,15 @@ local function tags_save(task)
         rspamd_logger.warnx(task, 'not querying reputation for all TLDs')
         break
       end
-      added = added + 1
-      table.insert(subset, k)
-      table.insert(keys, settings.key_prefix_rep .. k .. '_total')
-      table.insert(keys, settings.key_prefix_rep .. k .. '_white')
-      table.insert(keys, settings.key_prefix_rep .. k .. '_black')
-      table.insert(keys, settings.key_prefix_rep .. k .. '_grey')
-      table.insert(keys, settings.key_prefix_rep .. k .. '_neutral')
+      if (not whitelist) or (not whitelist:get_key(k)) then
+        added = added + 1
+        table.insert(subset, k)
+        table.insert(keys, settings.key_prefix_rep .. k .. '_total')
+        table.insert(keys, settings.key_prefix_rep .. k .. '_white')
+        table.insert(keys, settings.key_prefix_rep .. k .. '_black')
+        table.insert(keys, settings.key_prefix_rep .. k .. '_grey')
+        table.insert(keys, settings.key_prefix_rep .. k .. '_neutral')
+      end
     end
 
     local key = keys[1]
@@ -611,6 +612,8 @@ if settings.threshold < 1 then
   rspamd_logger.errx(rspamd_config, 'threshold should be >= 1, disabling module')
   return
 end
+
+whitelist = rspamd_map_add(N, 'whitelist', 'map', 'URL reputation whitelist')
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
   load_scripts(cfg, ev_base)
