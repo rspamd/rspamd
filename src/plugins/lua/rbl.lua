@@ -25,6 +25,7 @@ local N = 'rbl'
 local rbls = {}
 local local_exclusions = nil
 
+local hash = require 'rspamd_cryptobox_hash'
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
@@ -49,6 +50,24 @@ local function validate_dns(lstr)
     end
   end
   return true
+end
+
+local hash_alg = {
+  sha1 = true,
+  md5 = true,
+  sha256 = true,
+  sha384 = true,
+  sha512 = true,
+}
+
+local function make_hash(data, specific)
+  local h
+  if not hash_alg[specific] then
+    h = hash.create(data)
+  else
+    h = hash.create_specific(specific, data)
+  end
+  return h:hex()
 end
 
 local function is_excluded_ip(rip)
@@ -180,10 +199,21 @@ local function rbl_cb (task)
         return false
       end
       if not havegot['helo'] then
-        havegot['helo'] = task:get_helo()
-        if havegot['helo'] == nil or not validate_dns(havegot['helo']) then
-          notgot['helo'] = true
-          return false
+        if rbl['hash'] then
+          havegot['helo'] = task:get_helo()
+          if havegot['helo'] then
+            havegot['helo'] = make_hash(havegot['helo'], rbl['hash'])
+          else
+            notgot['helo'] = true
+            return false
+          end
+        else
+          havegot['helo'] = task:get_helo()
+          if havegot['helo'] == nil or not validate_dns(havegot['helo']) then
+            havegot['helo'] = nil
+            notgot['helo'] = true
+            return false
+          end
         end
       end
     elseif rbl['dkim'] then
@@ -221,8 +251,12 @@ local function rbl_cb (task)
               cleanList[domainpart] = true
             end
           else
-            if validate_dns(localpart) and validate_dns(domainpart) then
-              table.insert(cleanList, localpart .. '.' .. domainpart)
+            if rbl['hash'] then
+              table.insert(cleanList, make_hash(tostring(e), rbl['hash']))
+            else
+              if validate_dns(localpart) and validate_dns(domainpart) then
+                table.insert(cleanList, localpart .. '.' .. domainpart)
+              end
             end
           end
         end
