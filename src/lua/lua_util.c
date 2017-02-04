@@ -362,6 +362,13 @@ LUA_FUNCTION_DEF (util, zstd_decompress);
  * @return {number} normalized number
  */
 LUA_FUNCTION_DEF (util, normalize_prob);
+/***
+ * @function util.count_non_ascii(str)
+ * Returns number of non ascii characters in a specified string counting merely alpha
+ * characters. A string can be in non-utf form.
+ * @return {number,number} number of non-ascii alphas and total number of alphas
+ */
+LUA_FUNCTION_DEF (util, count_non_ascii);
 
 /***
  * @function util.pack(fmt, ...)
@@ -485,6 +492,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, zstd_decompress),
 	LUA_INTERFACE_DEF (util, normalize_prob),
 	LUA_INTERFACE_DEF (util, caseless_hash),
+	LUA_INTERFACE_DEF (util, count_non_ascii),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
@@ -1823,6 +1831,40 @@ lua_util_caseless_hash (lua_State *L)
 	rspamd_lua_setclass (L, "rspamd{int64}", -1);
 
 	return 1;
+}
+
+static gint
+lua_util_count_non_ascii (lua_State *L)
+{
+	gsize len;
+	const gchar *str = lua_tolstring (L, 1, &len);
+	const gchar *p, *end;
+	gint ret = 0, total = 0;
+
+	if (str != NULL) {
+		end = str + len;
+		p = str;
+
+		while (p < end) {
+			if (*p & 0x80) {
+				ret ++;
+				total ++;
+			}
+			else if (g_ascii_isalpha (*p)) {
+				total ++;
+			}
+
+			p ++;
+		}
+
+		lua_pushnumber (L, ret);
+		lua_pushnumber (L, total);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 2;
 }
 
 /* Backport from Lua 5.3 */

@@ -757,3 +757,27 @@ local freemail_reply_neq_from_id = rspamd_config:register_symbol({
 })
 rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_REPLYTO')
 rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
+
+rspamd_config.OMOGRAPH_URL = {
+  callback = function(task)
+    local urls = task:get_urls()
+
+    if urls then
+      for _,u in ipairs(urls) do
+        local h = u:get_host()
+
+        if h then
+          local non_latin,total = util.count_non_ascii(h)
+
+          if non_latin ~= total and non_latin > 0 then
+            return true, 1.0, h
+          end
+        end
+      end
+    end
+
+    return false
+  end,
+  score = 5.0,
+  description = 'Url contains both latin and non-latin characters'
+}
