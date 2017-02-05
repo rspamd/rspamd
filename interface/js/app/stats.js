@@ -98,6 +98,7 @@ function($, d3pie, Humanize) {
         $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
 
         $("#clusterTable tbody").empty();
+        $("#selSrv").empty();
         $.each(servers, function (key, val) {
             var glyph_status;
             if (val.status) {
@@ -134,6 +135,13 @@ function($, d3pie, Humanize) {
                         '<td class="col5" title="SId">???</td></tr>');
             }
 
+            }
+
+            $("#selSrv").append( $('<option value="' + key + '">' + key + '</option>'));
+            if (checked_server == key) {
+                $('#selSrv [value="' + key + '"]').attr("selected", "selected");
+            } else if (!val.status) {
+                $('#selSrv [value="' + key + '"]').attr("disabled", "disabled");
             }
         });
         $(widgets).show();

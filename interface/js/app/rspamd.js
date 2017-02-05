@@ -205,6 +205,12 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                 tabClick(tab_id);
             });
 
+            $("#selSrv").change(function () {
+                checked_server = this.value;
+                $('#selSrv [value="' + checked_server + '"]').prop("checked", true);
+                tabClick("#" + $("#navBar ul li.active > a").attr("id"));
+            });
+
             // Radio buttons
             $(document).on('click', 'input:radio[name="clusterName"]', function () {
                 if (!this.disabled) {
