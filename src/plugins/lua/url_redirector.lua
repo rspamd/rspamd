@@ -25,9 +25,7 @@ local settings = {
 }
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_util = require "rspamd_util"
 local rspamd_http = require "rspamd_http"
-local fun = require "fun"
 local hash = require "rspamd_cryptobox_hash"
 
 local function cache_url(task, orig_url, url, key, param)
@@ -103,11 +101,7 @@ local function url_redirector_handler(task, url, param)
   local function redis_get_cb(err, data)
     if not err then
       if type(data) == 'string' then
-        if data == 'processing' then
-          -- We have already requested this url to be resolved, so just return
-          -- the original url
-
-        else
+        if data ~= 'processing' then
           -- Got cached result
           rspamd_logger.infox(task, 'found cached redirect from %s to %s',
             url, data)
@@ -116,10 +110,10 @@ local function url_redirector_handler(task, url, param)
         end
       end
     end
-    local function redis_reserve_cb(err, data)
-      if err then
-        rspamd_logger.errx(task, 'got error while setting redirect keys: %s', err)
-      elseif data == 1 then
+    local function redis_reserve_cb(nerr, ndata)
+      if nerr then
+        rspamd_logger.errx(task, 'got error while setting redirect keys: %s', nerr)
+      elseif ndata == 1 then
         resolve_url(task, url_str, url_str, key, param, 1)
       end
     end
@@ -132,6 +126,9 @@ local function url_redirector_handler(task, url, param)
       'SETNX', -- command
       {key, 'processing'} -- arguments
     )
+    if not ret then
+      rspamd_logger.errx(task, 'Couldnt schedule SETNX')
+    end
   end
   local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params

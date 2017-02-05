@@ -26,7 +26,7 @@ globals = {
 }
 
 ignore = {
-  'W212', -- unused argument
+  '212', -- unused argument
 }
 
 files['/**/src/plugins/lua/spamassassin.lua'].globals = {
