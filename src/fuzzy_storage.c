@@ -2859,10 +2859,13 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_fuzzy_backend_close (ctx->backend);
 	}
 	else if (worker->index == 0) {
-		rspamd_http_router_free (ctx->collection_rt);
-		/* Try to save collection id */
 		gint fd;
 
+		/* Steal keypairs cache... */
+		ctx->collection_rt->cache = NULL;
+		rspamd_http_router_free (ctx->collection_rt);
+
+		/* Try to save collection id */
 		fd = rspamd_file_xopen (ctx->collection_id_file,
 				O_WRONLY | O_CREAT | O_TRUNC, 00644);
 
