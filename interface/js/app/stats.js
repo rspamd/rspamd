@@ -101,47 +101,35 @@ function($, d3pie, Humanize) {
         $("#selSrv").empty();
         $.each(servers, function (key, val) {
             var glyph_status;
-            if (val.status) {
-                glyph_status = "glyphicon glyphicon-ok-circle";
-            }
-            else {
-                glyph_status = "glyphicon glyphicon-remove-circle";
-            }
+            var short_id;
             if (!('config_id' in val.data)) {
                 val.data.config_id = "";
             }
-            if (checked_server == key) {
+            if (val.status) {
+                glyph_status = "glyphicon glyphicon-ok-circle";
+                short_id = val.data.config_id.substring(0, 8);
+            }
+            else {
+                glyph_status = "glyphicon glyphicon-remove-circle";
+                short_id = "???";
+            }
+
             $('#clusterTable tbody').append('<tr>' +
-                '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '" checked></td>' +
+                '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
                 '<td class="col2" title="SNAme">' + key + '</td>' +
                 '<td class="col3" title="SHost">' + val.host + '</td>' +
                 '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
-            } else {
-            if (val.status) {
-                $('#clusterTable tbody').append('<tr>' +
-                    '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
-                    '<td class="col2" title="SNAme">' + key + '</td>' +
-                    '<td class="col3" title="SHost">' + val.host + '</td>' +
-                    '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                    '<td class="col5" title="SId">' + val.data.config_id.substring(0, 8) + '</td></tr>');
-            }
-            else {
-                $('#clusterTable tbody').append('<tr>' +
-                        '<td class="col1" title="Radio"><input type="radio" class="form-control radio disabled" disabled="disabled" name="clusterName" value="' + key + '"></td>' +
-                        '<td class="col2" title="SNAme">' + key + '</td>' +
-                        '<td class="col3" title="SHost">' + val.host + '</td>' +
-                        '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                        '<td class="col5" title="SId">???</td></tr>');
-            }
-
-            }
+                '<td class="col5" title="short_id">' + short_id + '</td></tr>');
 
             $("#selSrv").append( $('<option value="' + key + '">' + key + '</option>'));
+
             if (checked_server == key) {
-                $('#selSrv [value="' + key + '"]').attr("selected", "selected");
-            } else if (!val.status) {
-                $('#selSrv [value="' + key + '"]').attr("disabled", "disabled");
+                $('#clusterTable tbody [value="' + key + '"]').prop("checked", true);
+                $('#selSrv [value="' + key + '"]').prop("selected", true);
+            }
+            else if (!val.status) {
+                $('#clusterTable tbody [value="' + key + '"]').prop("disabled", true);
+                $('#selSrv [value="' + key + '"]').prop("disabled", true);
             }
         });
         $(widgets).show();
