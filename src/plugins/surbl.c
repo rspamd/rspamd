@@ -1542,7 +1542,7 @@ surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
 static void
 surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
-	struct redirector_param *param = data;
+	struct redirector_param *param = data, *nparam;
 	struct rspamd_task *task, **ptask;
 	struct rspamd_url *url = value, **purl;
 	lua_State *L;
@@ -1588,6 +1588,11 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 				}
 
 				if (surbl_module_ctx->redirector_cbid != -1) {
+					nparam = rspamd_mempool_alloc (task->task_pool,
+							sizeof (*nparam));
+					/* Copy to detach from the shared param */
+					memcpy (nparam, param, sizeof (*param));
+					nparam->url = url;
 					L = task->cfg->lua_state;
 					lua_rawgeti (L, LUA_REGISTRYINDEX,
 							surbl_module_ctx->redirector_cbid);
@@ -1597,7 +1602,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 					purl = lua_newuserdata (L, sizeof (*purl));
 					*purl = url;
 					rspamd_lua_setclass (L, "rspamd{url}", -1);
-					lua_pushlightuserdata (L, param);
+					lua_pushlightuserdata (L, nparam);
 
 					if (lua_pcall (L, 3, 0, 0) != 0) {
 						msg_err_task ("cannot call for redirector script: %s",
@@ -1605,7 +1610,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 						lua_pop (L, 1);
 					}
 					else {
-						param->w = rspamd_session_get_watcher (task->s);
+						nparam->w = rspamd_session_get_watcher (task->s);
 						rspamd_session_watcher_push (task->s);
 					}
 				}
@@ -1633,7 +1638,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 static void
 surbl_test_url (struct rspamd_task *task, void *user_data)
 {
-	struct redirector_param param;
+	struct redirector_param *param;
 	struct suffix_item *suffix = user_data;
 	guint i, j;
 	struct rspamd_mime_text_part *part;
@@ -1646,13 +1651,14 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 		return;
 	}
 
-	param.task = task;
-	param.suffix = suffix;
-	param.tree = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	param = rspamd_mempool_alloc0 (task->task_pool, sizeof (*param));
+	param->task = task;
+	param->suffix = suffix;
+	param->tree = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
-		param.tree);
-	g_hash_table_foreach (task->urls, surbl_tree_url_callback, &param);
+		param->tree);
+	g_hash_table_foreach (task->urls, surbl_tree_url_callback, param);
 
 	/* We also need to check and process img URLs */
 	if (suffix->options & SURBL_OPTION_CHECKIMAGES) {
@@ -1669,7 +1675,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 								img->src, strlen (img->src), NULL);
 
 						if (url) {
-							surbl_tree_url_callback (url, url, &param);
+							surbl_tree_url_callback (url, url, param);
 							msg_debug_surbl ("checked image url %s over %s",
 									img->src, suffix->suffix);
 						}
@@ -1692,6 +1698,7 @@ surbl_register_redirect_handler (lua_State *L)
 
 	if (lua_type (L, -1) == LUA_TFUNCTION) {
 		surbl_module_ctx->redirector_cbid = luaL_ref (L, LUA_REGISTRYINDEX);
+		surbl_module_ctx->use_redirector = TRUE;
 	}
 	else {
 		lua_pop (L, 1);

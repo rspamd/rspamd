@@ -56,7 +56,7 @@ static const struct luaL_reg httplib_m[] = {
 };
 
 #define RSPAMD_LUA_HTTP_FLAG_TEXT (1 << 0)
-#define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 0)
+#define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 1)
 
 struct lua_http_cbdata {
 	lua_State *L;
