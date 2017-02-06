@@ -2455,6 +2455,20 @@ rspamd_http_message_set_body (struct rspamd_http_message *msg,
 	return TRUE;
 }
 
+void
+rspamd_http_message_set_method (struct rspamd_http_message *msg,
+		const gchar *method)
+{
+	gint i;
+
+	/* Linear search: not very efficient method */
+	for (i = 0; i < HTTP_METHOD_MAX; i ++) {
+		if (g_ascii_strcasecmp (method, http_method_str (i)) == 0) {
+			msg->method = i;
+		}
+	}
+}
+
 gboolean
 rspamd_http_message_set_body_from_fd (struct rspamd_http_message *msg,
 		gint fd)

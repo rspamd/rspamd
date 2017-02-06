@@ -334,6 +334,13 @@ gboolean rspamd_http_message_set_body (struct rspamd_http_message *msg,
 		const gchar *data, gsize len);
 
 /**
+ * Set message's method by name
+ * @param msg
+ * @param method
+ */
+void rspamd_http_message_set_method (struct rspamd_http_message *msg,
+		const gchar *method);
+/**
  * Maps fd as message's body
  * @param msg
  * @param fd

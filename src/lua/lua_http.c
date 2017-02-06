@@ -578,6 +578,15 @@ lua_http_request (lua_State *L)
 		}
 
 		lua_pop (L, 1);
+
+		lua_pushstring (L, "method");
+		lua_gettable (L, 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			rspamd_http_message_set_method (msg, lua_tostring (L, -1));
+		}
+
+		lua_pop (L, 1);
 	}
 	else {
 		msg_err ("http request has bad params");
