@@ -72,9 +72,11 @@ struct lua_http_cbdata {
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
 	gchar *host;
+	gsize max_size;
 	gint flags;
 	gint fd;
 	gint cbref;
+	gint bodyref;
 };
 
 static const int default_http_timeout = 5000;
@@ -265,6 +267,10 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 			cbd->msg->flags |= RSPAMD_HTTP_FLAG_SSL_NOVERIFY;
 		}
 
+		if (cbd->max_size) {
+			rspamd_http_connection_set_max_size (cbd->conn, cbd->max_size);
+		}
+
 		rspamd_http_connection_write_message (cbd->conn, cbd->msg,
 				cbd->host, cbd->mime_type, cbd, fd,
 				&cbd->tv, cbd->ev_base);
@@ -359,6 +365,7 @@ lua_http_request (lua_State *L)
 	gdouble timeout = default_http_timeout;
 	gint flags = 0;
 	gchar *mime_type = NULL;
+	gsize max_size = 0;
 
 	if (lua_gettop (L) >= 2) {
 		/* url, callback and event_base format */
@@ -562,6 +569,15 @@ lua_http_request (lua_State *L)
 		}
 
 		lua_pop (L, 1);
+
+		lua_pushstring (L, "max_size");
+		lua_gettable (L, 1);
+
+		if (lua_type (L, -1) == LUA_TNUMBER) {
+			max_size = lua_tonumber (L, -1);
+		}
+
+		lua_pop (L, 1);
 	}
 	else {
 		msg_err ("http request has bad params");
@@ -582,6 +598,7 @@ lua_http_request (lua_State *L)
 	cbd->peer_pk = peer_key;
 	cbd->local_kp = local_kp;
 	cbd->flags = flags;
+	cbd->max_size = max_size;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
