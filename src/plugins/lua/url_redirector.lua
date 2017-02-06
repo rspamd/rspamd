@@ -22,6 +22,7 @@ local settings = {
   --proxy = "http://example.com:3128", -- Send request through proxy
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
+  max_size = 10 * 1024, -- maximum body to process
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -49,55 +50,55 @@ local function cache_url(task, orig_url, url, key, param)
   end
 end
 
-local function resolve_url(task, orig_url, url, key, param, ntries)
-  if ntries > settings.nested_limit then
-    -- We cannot resolve more, stop
-    rspamd_logger.infox(task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
+local function resolve_cached(task, orig_url, url, key, param, ntries)
+  local function resolve_url(task, orig_url, url, key, param, ntries)
+    if ntries > settings.nested_limit then
+      -- We cannot resolve more, stop
+      rspamd_logger.infox(task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
         orig_url, url, ntries)
-    cache_url(task, orig_url, url, key, param)
-  end
-
-  local function http_callback(err, code, body, headers)
-    if err then
-      rspamd_logger.infox(task, 'found redirect error from %s to %s, err message: %s',
-            orig_url, url, err)
       cache_url(task, orig_url, url, key, param)
-    else
-      if code == 200 then
-        rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-          orig_url, url)
+
+      return
+    end
+
+    local function http_callback(err, code, body, headers)
+      if err then
+        rspamd_logger.infox(task, 'found redirect error from %s to %s, err message: %s',
+          orig_url, url, err)
         cache_url(task, orig_url, url, key, param)
-      elseif code == 301 or code == 302 then
-        local loc = headers['Location']
-        rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-          orig_url, loc)
-        if loc then
-          resolve_url(task, orig_url, loc, key, param, ntries + 1)
+      else
+        if code == 200 then
+          rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
+            orig_url, url)
+          cache_url(task, orig_url, url, key, param)
+        elseif code == 301 or code == 302 then
+          local loc = headers['Location']
+          rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
+            orig_url, loc)
+          if loc then
+            resolve_cached(task, orig_url, loc, key, param, ntries + 1)
+          else
+            cache_url(task, orig_url, url, key, param)
+          end
         else
+          rspamd_logger.infox(task, 'found redirect error from %s to %s, err code: %s',
+            orig_url, url, code)
           cache_url(task, orig_url, url, key, param)
         end
-      else
-        rspamd_logger.infox(task, 'found redirect error from %s to %s, err code: %s',
-            orig_url, url, code)
-        cache_url(task, orig_url, url, key, param)
       end
     end
+
+    rspamd_http.request{
+      url = url,
+      task = task,
+      method = 'head',
+      max_size = settings.max_size,
+      timeout = settings.timeout,
+      opaque_body = true,
+      no_ssl_verify = not settings.check_ssl,
+      callback = http_callback
+    }
   end
-
-  rspamd_http.request{
-    url = url,
-    task = task,
-    timeout = settings.timeout,
-    opaque_body = true,
-    no_ssl_verify = not settings.check_ssl,
-    callback = http_callback
-  }
-end
-
-local function url_redirector_handler(task, url, param)
-  local url_str = tostring(url)
-  local key = settings.key_prefix .. hash.create(url_str):base32()
-
   local function redis_get_cb(err, data)
     if not err then
       if type(data) == 'string' then
@@ -114,21 +115,26 @@ local function url_redirector_handler(task, url, param)
       if nerr then
         rspamd_logger.errx(task, 'got error while setting redirect keys: %s', nerr)
       elseif ndata == 1 then
-        resolve_url(task, url_str, url_str, key, param, 1)
+        resolve_url(task, url, url, key, param, ntries)
       end
     end
 
-    local ret = rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      key, -- hash key
-      true, -- is write
-      redis_reserve_cb, --callback
-      'SETNX', -- command
-      {key, 'processing'} -- arguments
-    )
-    if not ret then
-      rspamd_logger.errx(task, 'Couldnt schedule SETNX')
+    if orig_url == url then
+      local ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        key, -- hash key
+        true, -- is write
+        redis_reserve_cb, --callback
+        'SETNX', -- command
+        {key, 'processing'} -- arguments
+      )
+      if not ret then
+        rspamd_logger.errx(task, 'Couldn\'t schedule SETNX')
+      end
+    else
+      resolve_url(task, orig_url, url, key, param, ntries)
     end
+
   end
   local ret = rspamd_redis_make_request(task,
     redis_params, -- connect params
@@ -141,6 +147,12 @@ local function url_redirector_handler(task, url, param)
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to check results')
   end
+end
+
+local function url_redirector_handler(task, url, param)
+  local url_str = tostring(url)
+  local key = settings.key_prefix .. hash.create(url_str):base32()
+  resolve_cached(task, url_str, url_str, key, param, 1)
 end
 
 local opts =  rspamd_config:get_all_opt('url_redirector')

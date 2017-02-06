@@ -113,6 +113,7 @@ typedef int (*http_cb) (http_parser*);
   /* SPAMC compatibility */			\
   XX(26, SYMBOLS,     SYMBOLS)      \
   XX(27, CHECK,       CHECK)        \
+  XX(28, METHOD_MAX,       METHOD_MAX)        \
   XX(-1, INVALID,     INVALID)      \
 
 enum http_method
