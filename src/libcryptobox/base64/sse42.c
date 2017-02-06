@@ -49,6 +49,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern const uint8_t base64_table_dec[256];
 
 #ifdef RSPAMD_HAS_TARGET_ATTR
+#pragma GCC push_options
+#pragma GCC target("sse4.2")
+#ifndef __SSE2__
+#define __SSE2__
+#endif
+#ifndef __SSE__
+#define __SSE__
+#endif
+#ifndef __SSE4_2__
+#define __SSE4_2__
+#endif
+#ifndef __SSE4_1__
+#define __SSE4_1__
+#endif
+#ifndef __SSEE3__
+#define __SSEE3__
+#endif
 #include <xmmintrin.h>
 #include <nmmintrin.h>
 
@@ -232,4 +249,6 @@ repeat:
 
 	return ret;
 }
+
+#pragma GCC pop_options
 #endif
