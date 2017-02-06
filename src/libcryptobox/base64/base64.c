@@ -57,8 +57,21 @@ typedef struct base64_impl {
 BASE64_DECLARE(ref);
 #define BASE64_REF BASE64_IMPL(0, "ref", ref)
 
+#ifdef RSPAMD_HAS_TARGET_ATTR
+# if defined(HAVE_SSE42)
+int base64_decode_sse42 (const char *in, size_t inlen,
+		unsigned char *out, size_t *outlen) __attribute__((__target__("sse4.2")));
+
+BASE64_DECLARE(sse42);
+#  define BASE64_SSE42 BASE64_IMPL(CPUID_SSE42, "sse42", sse42)
+# endif
+#endif
+
 static const base64_impl_t base64_list[] = {
 		BASE64_REF,
+#ifdef BASE64_SSE42
+		BASE64_SSE42,
+#endif
 };
 
 static const base64_impl_t *base64_opt = &base64_list[0];
