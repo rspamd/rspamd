@@ -360,6 +360,39 @@ rspamd_ssl_peer_verify (struct rspamd_ssl_connection *c)
 }
 
 static void
+rspamd_tls_set_error (gint retcode, const gchar *stage, GError **err)
+{
+	GString *reason;
+	gchar buf[120];
+	gint err_code, last_err;
+
+	reason = g_string_sized_new (sizeof (buf));
+
+	if (retcode == SSL_ERROR_SYSCALL) {
+		rspamd_printf_gstring (reason, "syscall fail: %s", strerror (errno));
+		err_code = errno;
+	}
+	else {
+		while ((err_code = ERR_get_error()) != 0) {
+			last_err = err_code;
+			ERR_error_string (err_code, buf);
+			rspamd_printf_gstring (reason, "ssl error: %s,", buf);
+		}
+
+		err_code = last_err;
+
+		if (reason->str[reason->len - 1] == ',') {
+			reason->str[reason->len - 1] = '\0';
+			reason->len --;
+		}
+	}
+
+	g_set_error (err, rspamd_ssl_quark (), err_code,
+			"ssl %s error: %s", stage, reason->str);
+	g_string_free (reason, TRUE);
+}
+
+static void
 rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_ssl_connection *c = ud;
@@ -392,8 +425,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 				what = EV_WRITE;
 			}
 			else {
-				g_set_error (&err, rspamd_ssl_quark (), ret,
-						"ssl connect error: %s", ERR_error_string (ret, NULL));
+				rspamd_tls_set_error (ret, "connect", &err);
 				c->err_handler (c->handler_data, err);
 				g_error_free (err);
 				return;
@@ -556,13 +588,12 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 	else if (ret == 0) {
 		ret = SSL_get_error (conn->ssl, ret);
 
-		if (ret == SSL_ERROR_ZERO_RETURN) {
+		if (ret == SSL_ERROR_ZERO_RETURN || ret == SSL_ERROR_SYSCALL) {
 			conn->state = ssl_conn_reset;
 			return 0;
 		}
 		else {
-			g_set_error (&err, rspamd_ssl_quark (), ret,
-					"ssl write error: %s", ERR_error_string (ret, NULL));
+			rspamd_tls_set_error (ret, "read", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
 			errno = EINVAL;
@@ -582,8 +613,7 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 			what |= EV_WRITE;
 		}
 		else {
-			g_set_error (&err, rspamd_ssl_quark (), ret,
-					"ssl read error: %s", ERR_error_string (ret, NULL));
+			rspamd_tls_set_error (ret, "read", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
 			errno = EINVAL;
@@ -628,8 +658,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 		ret = SSL_get_error (conn->ssl, ret);
 
 		if (ret == SSL_ERROR_ZERO_RETURN) {
-			g_set_error (&err, rspamd_ssl_quark (), ret,
-					"ssl write error: %s", ERR_error_string (ret, NULL));
+			rspamd_tls_set_error (ret, "write", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
 			errno = ECONNRESET;
@@ -638,8 +667,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 			return -1;
 		}
 		else {
-			g_set_error (&err, rspamd_ssl_quark (), ret,
-					"ssl write error: %s", ERR_error_string (ret, NULL));
+			rspamd_tls_set_error (ret, "write", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
 			errno = EINVAL;
@@ -658,8 +686,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 			what = EV_WRITE;
 		}
 		else {
-			g_set_error (&err, rspamd_ssl_quark (), ret,
-					"ssl fatal write error: %s", ERR_error_string (ret, NULL));
+			rspamd_tls_set_error (ret, "write", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
 			errno = EINVAL;
