@@ -1740,6 +1740,8 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
 		if (msg->method < HTTP_SYMBOLS) {
+			rspamd_ftok_t status;
+
 			ptm = gmtime (&msg->date);
 			t = *ptm;
 			rspamd_snprintf (datebuf, sizeof(datebuf),
@@ -1750,17 +1752,40 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 				mime_type =
 						encrypted ? "application/octet-stream" : "text/plain";
 			}
+
+			if (msg->status == NULL || msg->status->len == 0) {
+				if (msg->code == 200) {
+					RSPAMD_FTOK_ASSIGN (&status, "OK");
+				}
+				else if (msg->code == 404) {
+					RSPAMD_FTOK_ASSIGN (&status, "Not Found");
+				}
+				else if (msg->code == 403) {
+					RSPAMD_FTOK_ASSIGN (&status, "Forbidden");
+				}
+				else if (msg->code >= 500 && msg->code < 600) {
+					RSPAMD_FTOK_ASSIGN (&status, "Internal Server Error");
+				}
+				else {
+					RSPAMD_FTOK_ASSIGN (&status, "Undefined Error");
+				}
+			}
+			else {
+				status.begin = msg->status->str;
+				status.len = msg->status->len;
+			}
+
 			if (encrypted) {
 				/* Internal reply (encrypted) */
 				meth_len =
 						rspamd_snprintf (repbuf, replen,
-								"HTTP/1.1 %d %V\r\n"
+								"HTTP/1.1 %d %T\r\n"
 								"Connection: close\r\n"
 								"Server: %s\r\n"
 								"Date: %s\r\n"
 								"Content-Length: %z\r\n"
 								"Content-Type: %s", /* NO \r\n at the end ! */
-								msg->code, msg->status, "rspamd/" RVERSION, datebuf,
+								msg->code, &status, "rspamd/" RVERSION, datebuf,
 								bodylen, mime_type);
 				enclen += meth_len;
 				/* External reply */
@@ -1776,13 +1801,13 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 			else {
 				meth_len =
 						rspamd_printf_fstring (buf,
-								"HTTP/1.1 %d %V\r\n"
+								"HTTP/1.1 %d %T\r\n"
 								"Connection: close\r\n"
 								"Server: %s\r\n"
 								"Date: %s\r\n"
 								"Content-Length: %z\r\n"
 								"Content-Type: %s\r\n",
-								msg->code, msg->status, "rspamd/" RVERSION, datebuf,
+								msg->code, &status, "rspamd/" RVERSION, datebuf,
 								bodylen, mime_type);
 			}
 		}
