@@ -7,6 +7,7 @@
 #cmakedefine HAVE_AVX	1
 #cmakedefine HAVE_SSE2	1
 #cmakedefine HAVE_SSE41	1
+#cmakedefine HAVE_SSE42	1
 #cmakedefine HAVE_SSE3	1
 #cmakedefine HAVE_SSSE3	1
 #cmakedefine HAVE_SLASHMACRO 1

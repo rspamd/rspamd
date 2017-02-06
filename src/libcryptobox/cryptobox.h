@@ -42,7 +42,8 @@ struct rspamd_cryptobox_segment {
 #define CPUID_SSE3 0x8
 #define CPUID_SSSE3 0x10
 #define CPUID_SSE41 0x20
-#define CPUID_RDRAND 0x40
+#define CPUID_SSE42 0x40
+#define CPUID_RDRAND 0x80
 
 typedef guchar rspamd_pk_t[rspamd_cryptobox_MAX_PKBYTES];
 typedef guchar rspamd_sk_t[rspamd_cryptobox_MAX_SKBYTES];

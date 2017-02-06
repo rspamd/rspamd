@@ -177,6 +177,14 @@ rspamd_cryptobox_test_instr (gint instr)
 		__asm__ volatile ("pcmpeqq %xmm0, %xmm0");
 		break;
 #endif
+#ifdef HAVE_SSE42
+	case CPUID_SSE42:
+		__asm__ volatile ("pushq %rax\n"
+				"xorq %rax, %rax\n"
+				"crc32 %rax, %rax\n"
+				"popq %rax");
+		break;
+#endif
 #ifdef HAVE_AVX
 	case CPUID_AVX:
 		__asm__ volatile ("vpaddq %xmm0, %xmm0, %xmm0");
@@ -243,6 +251,11 @@ rspamd_cryptobox_init (void)
 				cpu_config |= CPUID_SSE41;
 			}
 		}
+		if ((cpu[2] & ((guint32)1 << 20))) {
+			if (rspamd_cryptobox_test_instr (CPUID_SSE42)) {
+				cpu_config |= CPUID_SSE42;
+			}
+		}
 		if ((cpu[2] & ((guint32)1 << 30))) {
 			if (rspamd_cryptobox_test_instr (CPUID_RDRAND)) {
 				cpu_config |= CPUID_RDRAND;
@@ -286,6 +299,9 @@ rspamd_cryptobox_init (void)
 				break;
 			case CPUID_SSE41:
 				rspamd_printf_gstring (buf, "sse4.1, ");
+				break;
+			case CPUID_SSE42:
+				rspamd_printf_gstring (buf, "sse4.2, ");
 				break;
 			case CPUID_AVX:
 				rspamd_printf_gstring (buf, "avx, ");
