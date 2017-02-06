@@ -51,7 +51,7 @@ local function cache_url(task, orig_url, url, key, param)
 end
 
 local function resolve_cached(task, orig_url, url, key, param, ntries)
-  local function resolve_url(task, orig_url, url, key, param, ntries)
+  local function resolve_url()
     if ntries > settings.nested_limit then
       -- We cannot resolve more, stop
       rspamd_logger.infox(task, 'cannot get more requests to resolve %s, stop on %s after %s attempts',
@@ -115,7 +115,8 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
       if nerr then
         rspamd_logger.errx(task, 'got error while setting redirect keys: %s', nerr)
       elseif ndata == 1 then
-        resolve_url(task, url, url, key, param, ntries)
+        orig_url = url
+        resolve_url()
       end
     end
 
@@ -132,7 +133,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
         rspamd_logger.errx(task, 'Couldn\'t schedule SETNX')
       end
     else
-      resolve_url(task, orig_url, url, key, param, ntries)
+      resolve_url()
     end
 
   end
