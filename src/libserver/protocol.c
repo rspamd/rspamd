@@ -101,6 +101,7 @@
 #define MLEN_HEADER "Message-Length"
 #define USER_AGENT_HEADER "User-Agent"
 #define MTA_TAG_HEADER "MTA-Tag"
+#define PROFILE_HEADER "Profile"
 
 
 static GQuark
@@ -403,6 +404,9 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 						task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 						debug_task ("pass all filters");
 					}
+				}
+				IF_HEADER (PROFILE_HEADER) {
+					task->flags |= RSPAMD_TASK_FLAG_PROFILE;
 				}
 				break;
 			case 's':
@@ -1032,6 +1036,32 @@ rspamd_ucl_tospamc_output (const ucl_object_t *top,
 	}
 }
 
+static void
+rspamd_protocol_output_profiling (struct rspamd_task *task,
+		ucl_object_t *top)
+{
+	GHashTable *tbl;
+	GHashTableIter it;
+	gpointer k, v;
+	ucl_object_t *prof;
+	gdouble val;
+
+	prof = ucl_object_typed_new (UCL_OBJECT);
+	tbl = rspamd_mempool_get_variable (task->task_pool, "profile");
+
+	if (tbl) {
+		g_hash_table_iter_init (&it, tbl);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			val = *(gdouble *)v;
+			ucl_object_insert_key (prof, ucl_object_fromdouble (val),
+					(const char *)k, 0, false);
+		}
+	}
+
+	ucl_object_insert_key (top, prof, "profile", 0, false);
+}
+
 ucl_object_t *
 rspamd_protocol_write_ucl (struct rspamd_task *task)
 {
@@ -1080,6 +1110,10 @@ rspamd_protocol_write_ucl (struct rspamd_task *task)
 			ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
 					"emails", 0, false);
 		}
+	}
+
+	if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
+		rspamd_protocol_output_profiling (task, top);
 	}
 
 	ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),

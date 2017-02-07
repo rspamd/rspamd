@@ -1473,3 +1473,50 @@ rspamd_task_add_request_header (struct rspamd_task *task,
 		g_hash_table_replace (task->request_headers, name, ret);
 	}
 }
+
+
+void
+rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
+		gdouble value)
+{
+	GHashTable *tbl;
+	gdouble *pval;
+
+	if (key == NULL) {
+		return;
+	}
+
+	tbl = rspamd_mempool_get_variable (task->task_pool, "profile");
+
+	if (tbl == NULL) {
+		tbl = g_hash_table_new (g_str_hash, g_str_equal);
+		rspamd_mempool_set_variable (task->task_pool, "profile", tbl,
+				(rspamd_mempool_destruct_t)g_hash_table_unref);
+	}
+
+	pval = g_hash_table_lookup (tbl, key);
+
+	if (pval == NULL) {
+		pval = rspamd_mempool_alloc (task->task_pool, sizeof (*pval));
+		*pval = value;
+		g_hash_table_insert (tbl, (void *)key, pval);
+	}
+	else {
+		*pval = value;
+	}
+}
+
+gdouble*
+rspamd_task_profile_get (struct rspamd_task *task, const gchar *key)
+{
+	GHashTable *tbl;
+	gdouble *pval = NULL;
+
+	tbl = rspamd_mempool_get_variable (task->task_pool, "profile");
+
+	if (tbl != NULL) {
+		pval = g_hash_table_lookup (tbl, key);
+	}
+
+	return pval;
+}

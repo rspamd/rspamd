@@ -1289,6 +1289,10 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			t2 = rspamd_get_ticks ();
 			diff = (t2 - t1) * 1e6;
 
+			if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
+				rspamd_task_profile_set (task, item->symbol, diff);
+			}
+
 			if (total_diff) {
 				*total_diff += diff;
 			}

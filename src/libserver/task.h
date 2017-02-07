@@ -103,6 +103,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_EMPTY (1 << 22)
 #define RSPAMD_TASK_FLAG_LOCAL_CLIENT (1 << 23)
 #define RSPAMD_TASK_FLAG_COMPRESSED (1 << 24)
+#define RSPAMD_TASK_FLAG_PROFILE (1 << 25)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -110,6 +111,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
 #define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
+#define RSPAMD_TASK_IS_PROFILING(task) (((task)->flags & RSPAMD_TASK_FLAG_PROFILE))
 
 struct rspamd_email_address;
 enum rspamd_newlines_type;
@@ -308,5 +310,22 @@ void rspamd_task_add_request_header (struct rspamd_task *task,
  * Write log line about the specified task if needed
  */
 void rspamd_task_write_log (struct rspamd_task *task);
+
+/**
+ * Set profiling value for a specific key
+ * @param task
+ * @param key
+ * @param value
+ */
+void rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
+		gdouble value);
+
+/**
+ * Get value for a specific profiling key
+ * @param task
+ * @param key
+ * @return
+ */
+gdouble* rspamd_task_profile_get (struct rspamd_task *task, const gchar *key);
 
 #endif /* TASK_H_ */

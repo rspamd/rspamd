@@ -59,6 +59,7 @@ static gboolean extended_urls = FALSE;
 static gboolean mime_output = FALSE;
 static gboolean empty_input = FALSE;
 static gboolean compressed = FALSE;
+static gboolean profile = FALSE;
 static gchar *key = NULL;
 static GList *children;
 
@@ -140,6 +141,8 @@ static GOptionEntry entries[] =
 	   "Learn the specified fuzzy symbol", NULL },
 	{ "compressed", 'z', 0, G_OPTION_ARG_NONE, &compressed,
 	   "Enable zstd compression", NULL },
+	{ "profile", '\0', 0, G_OPTION_ARG_NONE, &profile,
+	   "Profile symbols execution time", NULL },
 	{ "dictionary", 'D', 0, G_OPTION_ARG_FILENAME, &dictionary,
 	   "Use dictionary to compress data", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
@@ -519,6 +522,9 @@ add_options (GQueue *opts)
 	if (extended_urls) {
 		ADD_CLIENT_HEADER (opts, "URL-Format", "extended");
 	}
+	if (profile) {
+		ADD_CLIENT_HEADER (opts, "Profile", "true");
+	}
 
 	hdr = http_headers;
 
@@ -634,6 +640,39 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 	g_ptr_array_free (sym_ptr, TRUE);
 }
 
+static gint
+rspamc_profile_sort_func (gconstpointer a, gconstpointer b)
+{
+	ucl_object_t * const *ua = a, * const *ub = b;
+
+	return ucl_object_compare (*ua, *ub);
+}
+
+static void
+rspamc_profile_output (FILE *out, const ucl_object_t *obj)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+	guint i;
+	GPtrArray *ar;
+
+	ar = g_ptr_array_sized_new (obj->len);
+
+	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+		g_ptr_array_add (ar, (void *)cur);
+	}
+
+	g_ptr_array_sort (ar, rspamc_profile_sort_func);
+
+	for (i = 0; i < ar->len; i ++) {
+		cur = (const ucl_object_t *)g_ptr_array_index (ar, i);
+		rspamd_fprintf (out, "\t%s: %.3f usec\n",
+				ucl_object_key (cur), ucl_object_todouble (cur));
+	}
+
+	g_ptr_array_free (ar, TRUE);
+}
+
 static void
 rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 {
@@ -681,6 +720,10 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "dkim-signature") == 0) {
 			rspamd_fprintf (out, "DKIM-Signature: %s\n", ucl_object_tostring (
 					cur));
+		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "profile") == 0) {
+			rspamd_fprintf (out, "Profile data:\n");
+			rspamc_profile_output (out, cur);
 		}
 		else if (cur->type == UCL_OBJECT &&
 				g_ascii_strcasecmp (ucl_object_key (cur), "rmilter") != 0) {
