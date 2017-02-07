@@ -1128,7 +1128,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			param->suffix = suffix;
 			param->host_resolve =
 					rspamd_mempool_strdup (task->task_pool, surbl_req);
-			debug_task ("send surbl dns ip request %s to %s", surbl_req,
+			msg_debug_surbl ("send surbl dns ip request %s to %s", surbl_req,
 					suffix->suffix);
 
 			if (make_dns_request_task (task,
@@ -1148,7 +1148,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		param->suffix = suffix;
 		param->host_resolve =
 			rspamd_mempool_strdup (task->task_pool, surbl_req);
-		debug_task ("send surbl dns request %s", surbl_req);
+		msg_debug_surbl ("send surbl dns request %s", surbl_req);
 
 		if (make_dns_request_task (task,
 				surbl_dns_callback,
@@ -1197,7 +1197,7 @@ process_dns_results (struct rspamd_task *task,
 		for (i = 0; i < suffix->bits->len; i ++) {
 
 			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
-			debug_task ("got result(%d) AND bit(%d): %d",
+			msg_debug_surbl ("got result(%d) AND bit(%d): %d",
 				(gint)addr,
 				(gint)ntohl (bit->bit),
 				(gint)bit->bit & (gint)ntohl (addr));
@@ -1553,7 +1553,7 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 	gchar *found_tld;
 
 	task = param->task;
-	debug_task ("check url %*s", url->urllen, url->string);
+	msg_debug_surbl ("check url redirection %*s", url->urllen, url->string);
 
 	if (url->hostlen <= 0) {
 		return;
@@ -1628,10 +1628,14 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param *param = data;
 	struct rspamd_url *url = value;
+	struct rspamd_task *task;
 
 	if (url->hostlen <= 0) {
 		return;
 	}
+
+	task = param->task;
+	msg_debug_surbl ("check url %*s", url->urllen, url->string);
 
 	if (surbl_module_ctx->use_tags && surbl_test_tags (param->task, param, url)) {
 		return;
