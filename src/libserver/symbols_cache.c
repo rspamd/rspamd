@@ -776,7 +776,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	rspamd_mempool_add_destructor (cache->static_pool,
 			rspamd_ptr_array_free_hard, item->rdeps);
 
-	if (name != NULL && type != SYMBOL_TYPE_CALLBACK) {
+	if (name != NULL) {
 		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
 	}
 
@@ -1302,8 +1302,8 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 				rspamd_set_counter (item->cd, diff);
 			}
 
-			rspamd_session_watch_stop (task->s);
 			pending_after = rspamd_session_events_pending (task->s);
+			rspamd_session_watch_stop (task->s);
 
 			if (pending_before == pending_after) {
 				/* No new events registered */
