@@ -306,11 +306,19 @@ rspamd_session_watch_stop (struct rspamd_async_session *s)
 
 
 guint
-rspamd_session_events_pending (struct rspamd_async_session *session)
+rspamd_session_events_pending (struct rspamd_async_session *s)
 {
-	g_assert (session != NULL);
+	guint npending;
 
-	return g_hash_table_size (session->events);
+	g_assert (s != NULL);
+
+	npending = g_hash_table_size (s->events);
+
+	if (RSPAMD_SESSION_IS_WATCHING (s)) {
+		npending += s->cur_watcher->remain;
+	}
+
+	return npending;
 }
 
 void
