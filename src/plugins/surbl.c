@@ -1511,10 +1511,6 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 		return;
 	}
 
-	if (surbl_module_ctx->use_tags && surbl_test_tags (task, param, url)) {
-		return;
-	}
-
 	/* Search in trie */
 	srch.begin = url->tld;
 	srch.len = url->tldlen;
