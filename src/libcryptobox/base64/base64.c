@@ -18,6 +18,8 @@
 #include "cryptobox.h"
 #include "base64.h"
 #include "platform_config.h"
+#include "str_util.h"
+#include "contrib/libottery/ottery.h"
 
 extern unsigned long cpu_config;
 const uint8_t
@@ -99,4 +101,35 @@ rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
 		guchar *out, gsize *outlen)
 {
 	return base64_opt->decode (in, inlen, out, outlen);
+}
+
+size_t
+base64_test (bool generic, size_t niters, size_t len)
+{
+	size_t cycles;
+	guchar *in, *out, *tmp;
+	const base64_impl_t *impl;
+	gsize outlen;
+
+	g_assert (len > 0);
+	in = g_malloc (len);
+	tmp = g_malloc (len);
+	ottery_rand_bytes (in, len);
+
+	impl = generic ? &base64_list[0] : base64_opt;
+
+	out = rspamd_encode_base64 (in, len, 0, &outlen);
+	impl->decode (out, outlen, tmp, &len);
+
+	g_assert (memcmp (in, tmp, len) == 0);
+
+	for (cycles = 0; cycles < niters; cycles ++) {
+		impl->decode (out, outlen, in, &len);
+	}
+
+	g_free (in);
+	g_free (tmp);
+	g_free (out);
+
+	return cycles;
 }

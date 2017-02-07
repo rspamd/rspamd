@@ -2,36 +2,41 @@ context("Base64 encodning", function()
   local ffi = require("ffi")
   local util = require("rspamd_util")
   ffi.cdef[[
+    void rspamd_cryptobox_init (void);
     void ottery_rand_bytes(void *buf, size_t n);
     unsigned ottery_rand_unsigned(void);
     unsigned char* g_base64_decode (const char *in, size_t *outlen);
-    char * rspamd_encode_base64 (const unsigned char *in, size_t inlen, 
+    char * rspamd_encode_base64 (const unsigned char *in, size_t inlen,
       size_t str_len, size_t *outlen);
     void g_free(void *ptr);
     int memcmp(const void *a1, const void *a2, size_t len);
+    size_t base64_test (bool generic, size_t niters, size_t len);
+    double rspamd_get_ticks (void);
   ]]
-  
+
+  ffi.C.rspamd_cryptobox_init()
+
   local function random_buf(max_size)
     local l = ffi.C.ottery_rand_unsigned() % max_size + 1
     local buf = ffi.new("unsigned char[?]", l)
     ffi.C.ottery_rand_bytes(buf, l)
-    
+
     return buf, l
   end
-  
+
   local function random_safe_buf(max_size)
     local l = ffi.C.ottery_rand_unsigned() % max_size + 1
     local buf = ffi.new("unsigned char[?]", l)
-    
+
     for i = 0,l-1 do
       buf[i] = ffi.C.ottery_rand_unsigned() % 20 + string.byte('A')
-    end 
-    
+    end
+
     buf[l - 1] = 0;
-    
+
     return buf, l
   end
-  
+
   test("Base64 encode test", function()
     local cases = {
       {"", ""},
@@ -42,7 +47,7 @@ context("Base64 encodning", function()
       {"fooba", "Zm9vYmE="},
       {"foobar", "Zm9vYmFy"},
     }
-    
+
     local nl = ffi.new("size_t [1]")
     for _,c in ipairs(cases) do
       local b = ffi.C.rspamd_encode_base64(c[1], #c[1], 0, nl)
@@ -51,7 +56,7 @@ context("Base64 encodning", function()
       assert_equal(s, c[2], s .. " not equal " .. c[2])
     end
   end)
-  
+
   test("Base64 decode test", function()
     local cases = {
       {"", ""},
@@ -62,13 +67,13 @@ context("Base64 encodning", function()
       {"fooba", "Zm9vYmE="},
       {"foobar", "Zm9vYmFy"},
     }
-    
+
     for _,c in ipairs(cases) do
       local b = tostring(util.decode_base64(c[2]))
       assert_equal(b, c[1], b .. " not equal " .. c[1])
     end
   end)
-  
+
   test("Base64 line split encode test", function()
     local text = [[
 Man is distinguished, not only by his reason, but by this singular passion from
@@ -82,7 +87,7 @@ vehemence of any carnal pleasure.]]
     ffi.C.g_free(b)
     assert_equal(cmp, 0)
   end)
-  
+
   test("Base64 fuzz test", function()
     for i = 1,1000 do
       local b, l = random_safe_buf(4096)
@@ -102,11 +107,59 @@ vehemence of any carnal pleasure.]]
       local bs = ffi.string(ben)
       local ol = ffi.new("size_t [1]")
       local nb = ffi.C.g_base64_decode(ben, ol)
-      
+
       local cmp = ffi.C.memcmp(b, nb, l)
       ffi.C.g_free(ben)
       ffi.C.g_free(nb)
       assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
     end
+  end)
+  test("Base64 test reference vectors 1K", function()
+    local t1 = ffi.C.rspamd_get_ticks()
+    local res = ffi.C.base64_test(true, 1000000, 1024)
+    local t2 = ffi.C.rspamd_get_ticks()
+
+    print("Refrence base64 (1K): " .. tostring(t2 - t1) .. " sec")
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 1K", function()
+    local t1 = ffi.C.rspamd_get_ticks()
+    local res = ffi.C.base64_test(false, 1000000, 1024)
+    local t2 = ffi.C.rspamd_get_ticks()
+
+    print("Optimized base64 (1K): " .. tostring(t2 - t1) .. " sec")
+    assert_not_equal(res, 0)
+  end)
+    test("Base64 test reference vectors 512", function()
+    local t1 = ffi.C.rspamd_get_ticks()
+    local res = ffi.C.base64_test(true, 1000000, 512)
+    local t2 = ffi.C.rspamd_get_ticks()
+
+    print("Refrence base64 (512): " .. tostring(t2 - t1) .. " sec")
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 512", function()
+    local t1 = ffi.C.rspamd_get_ticks()
+    local res = ffi.C.base64_test(false, 1000000, 512)
+    local t2 = ffi.C.rspamd_get_ticks()
+
+    print("Optimized base64 (512): " .. tostring(t2 - t1) .. " sec")
+    assert_not_equal(res, 0)
+  end)
+    test("Base64 test reference vectors 10K", function()
+    local t1 = ffi.C.rspamd_get_ticks()
+    local res = ffi.C.base64_test(true, 100000, 10240)
+    local t2 = ffi.C.rspamd_get_ticks()
+
+    print("Refrence base64 (10K): " .. tostring(t2 - t1) .. " sec")
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 10K", function()
+    local t1 = ffi.C.rspamd_get_ticks()
+    local res = ffi.C.base64_test(false, 100000, 10240)
+    local t2 = ffi.C.rspamd_get_ticks()
+
+    print("Optimized base64 (10K): " .. tostring(t2 - t1) .. " sec")
+    assert_not_equal(res, 0)
   end)
 end)
