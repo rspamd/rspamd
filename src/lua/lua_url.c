@@ -327,9 +327,7 @@ lua_url_get_tag (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	guint i;
 	const gchar *tag = luaL_checkstring (L, 2);
-	GHashTableIter it;
 	struct rspamd_url_tag *tval, *cur;
-	gpointer k, v;
 
 	if (url != NULL && tag != NULL) {
 
@@ -373,7 +371,6 @@ lua_url_get_tags (lua_State *L)
 {
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	guint i;
-	const gchar *tag;
 	GHashTableIter it;
 	struct rspamd_url_tag *tval, *cur;
 	gpointer k, v;
