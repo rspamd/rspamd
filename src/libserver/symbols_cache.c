@@ -328,6 +328,7 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 static double
 rspamd_set_counter (struct counter_data *cd, gdouble value)
 {
+	gdouble cerr;
 
 	/* Cumulative moving average using per-process counter data */
 	if (cd->number == 0) {
@@ -336,7 +337,8 @@ rspamd_set_counter (struct counter_data *cd, gdouble value)
 	}
 
 	cd->mean += (value - cd->mean) / (gdouble)(++cd->number);
-	cd->stddev += (value - cd->mean) * (value - cd->mean);
+	cerr = (value - cd->mean) * (value - cd->mean);
+	cd->stddev += (cerr - cd->stddev) / (gdouble)(cd->number);
 
 	return cd->mean;
 }
@@ -1876,7 +1878,7 @@ rspamd_symbols_cache_call_peak_cb (struct event_base *ev_base,
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	lua_pushstring (L, item->symbol);
 	lua_pushnumber (L, item->st->avg_frequency);
-	lua_pushnumber (L, item->st->stddev_frequency);
+	lua_pushnumber (L, sqrt (item->st->stddev_frequency));
 	lua_pushnumber (L, cur_value);
 	lua_pushnumber (L, cur_err);
 
@@ -1941,7 +1943,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 				 * TODO: replace magic number
 				 */
 				if (item->st->frequency_counter.number > 10 &&
-						cur_err > item->st->stddev_frequency * 2) {
+						cur_err > sqrt (item->st->stddev_frequency) * 3) {
 					item->frequency_peaks ++;
 					msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
 							"stddev: %.2f, error: %.2f, peaks: %d",
@@ -2102,7 +2104,7 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 
 	if (item != NULL) {
 		*frequency = item->st->avg_frequency;
-		*freq_stddev = item->st->stddev_frequency;
+		*freq_stddev = sqrt (item->st->stddev_frequency);
 		*tm = item->st->time_counter.mean;
 
 		return TRUE;
