@@ -361,6 +361,7 @@ lua_ip_from_string (lua_State *L)
 
 		if (!rspamd_parse_inet_address (&ip->addr, ip_str, 0)) {
 			msg_warn ("cannot parse ip: %s", ip_str);
+			ip->addr = NULL;
 		}
 	}
 	else {
