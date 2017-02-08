@@ -1126,7 +1126,7 @@ lua_cryptobox_hash_bin (lua_State *L)
 			rspamd_cryptobox_hash_final (h->h, out);
 		}
 
-		lua_pushlstring (L, out, sizeof (out));
+		lua_pushlstring (L, out, dlen);
 		h->is_finished = TRUE;
 	}
 	else {
