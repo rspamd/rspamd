@@ -543,28 +543,34 @@ local function multimap_callback(task, rule)
       local max_pos = tonumber(r['max_pos'])
       if min_pos then
         if min_pos < 0 then
-          if (pos - (min_pos*-1)) < pos then
-            return
+          if min_pos == -1 then
+            if (pos ~= total) then
+              return
+            end
+          else
+            if pos <= (total - (min_pos*-1)) then
+              return
+            end
           end
-        else
-          if pos < min_pos then
-            return
-          end
+        elseif pos < min_pos then
+          return
         end
       end
       if max_pos then
-        if max_pos < 0 then
-          if (pos - (max_pos*-1)) > pos then
+        if max_pos < -1 then
+          if (total - (max_pos*-1)) >= pos then
             return
           end
-        else
+        elseif max_pos > 0 then
           if pos > max_pos then
             return
           end
         end
       end
       if filter == 'real_ip' or filter == 'from_ip' then
-        v = rspamd_ip.from_string(v)
+        if type(v) == 'string' then
+          v = rspamd_ip.from_string(v)
+        end
         if v and v:is_valid() then
           match_rule(r, v)
         end
@@ -706,7 +712,12 @@ local function multimap_callback(task, rule)
     received = function()
       local hdrs = task:get_received_headers()
       if hdrs and hdrs[1] then
-        local num_hdrs = #hdrs
+        local num_hdrs = 0
+        for i in ipairs(hdrs) do
+          if i > num_hdrs then
+            num_hdrs = i
+          end
+        end
         for pos, h in ipairs(hdrs) do
           match_received_header(rule, pos, num_hdrs, h)
         end
