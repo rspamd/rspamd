@@ -28,6 +28,8 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 {
 	guint64 h;
 	struct received_header *recv;
+	const gchar *p, *end;
+	gchar *id;
 
 	h = rspamd_icase_hash (rh->name, strlen (rh->name), 0xdeadbabe);
 
@@ -56,7 +58,6 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 				rh->value, strlen (rh->value), task->from_mime);
 		break;
 	case 0x43A558FC7C240226ULL:	/* message-id */ {
-		gchar *p, *end;
 
 		p = rh->decoded;
 		end = p + strlen (p);
@@ -64,14 +65,32 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		if (*p == '<') {
 			p ++;
 
-			if (end > p && *(end - 1) == '>') {
-				*(end - 1) = '\0';
-				p = rspamd_mempool_strdup (task->task_pool, p);
-				*(end - 1) = '>';
+			if (end > p) {
+				gchar *d;
+
+				if (*(end - 1) == '>') {
+					end --;
+				}
+
+				id = rspamd_mempool_alloc (task->task_pool, end - p + 1);
+				d = id;
+
+				while (p < end) {
+					if (g_ascii_isgraph (*p)) {
+						*d++ = *p++;
+					}
+					else {
+						*d++ = '?';
+						p++;
+					}
+				}
+
+				*d = '\0';
+
+				task->message_id = id;
 			}
 		}
 
-		task->message_id = p;
 		break;
 	}
 	case 0xB91D3910358E8212ULL:	/* subject */
