@@ -22,6 +22,7 @@ local cdb = require "rspamd_cdb"
 local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
+local rspamd_ip = require "rspamd_ip"
 local redis_params
 local fun = require "fun"
 local N = 'multimap'
@@ -66,6 +67,9 @@ local value_types = {
     get_value = function(val) return val end,
   },
   country = {
+    get_value = function(val) return val end,
+  },
+  received = {
     get_value = function(val) return val end,
   },
   mempool = {
@@ -531,6 +535,45 @@ local function multimap_callback(task, rule)
     match_rule(r, fn)
   end
 
+  local function match_received_header(r, pos, total, h)
+    local filter = r['filter'] or 'real_ip'
+    local v = h[filter]
+    if v then
+      local min_pos = tonumber(r['min_pos'])
+      local max_pos = tonumber(r['max_pos'])
+      if min_pos then
+        if min_pos < 0 then
+          if (pos - (min_pos*-1)) < pos then
+            return
+          end
+        else
+          if pos < min_pos then
+            return
+          end
+        end
+      end
+      if max_pos then
+        if max_pos < 0 then
+          if (pos - (max_pos*-1)) > pos then
+            return
+          end
+        else
+          if pos > max_pos then
+            return
+          end
+        end
+      end
+      if filter == 'real_ip' or filter == 'from_ip' then
+        v = rspamd_ip.from_string(v)
+        if v and v:is_valid() then
+          match_rule(r, v)
+        end
+      else
+        match_rule(r, v)
+      end
+    end
+  end
+
   local function match_content(r)
     local data
 
@@ -558,95 +601,124 @@ local function multimap_callback(task, rule)
   end
 
   local rt = rule['type']
-  if rt == 'ip' or rt == 'dnsbl' then
-    local ip = task:get_from_ip()
-    if ip:is_valid() then
-      if rt == 'ip' then
-        match_rule(rule, ip)
-      else
-        local cb = function (_, to_resolve, results, err)
-          task:inc_dns_req()
-          if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-            rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
-          end
-          if results then
-            task:insert_result(rule['symbol'], 1, rule['map'])
-
-            if pre_filter then
-              task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
+  local process_rule_funcs = {
+    dnsbl = function()
+      local ip = task:get_from_ip()
+      if ip:is_valid() then
+        if rt == 'ip' then
+          match_rule(rule, ip)
+        else
+          local cb = function (_, to_resolve, results, err)
+            task:inc_dns_req()
+            if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+              rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
             end
+            if results then
+              task:insert_result(rule['symbol'], 1, rule['map'])
+
+              if pre_filter then
+                task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
+              end
+            end
+          end
+
+          task:get_resolver():resolve_a({task = task,
+            name = ip_to_rbl(ip, rule['map']),
+            callback = cb,
+          })
+        end
+      end
+    end,
+    header = function()
+      local hv = task:get_header_full(rule['header'])
+      match_list(rule, hv, {'decoded'})
+    end,
+    rcpt = function()
+      if task:has_recipients('smtp') then
+        local rcpts = task:get_recipients('smtp')
+        match_addr(rule, rcpts)
+      end
+    end,
+    from = function()
+      if task:has_from('smtp') then
+        local from = task:get_from('smtp')
+        match_addr(rule, from)
+      end
+    end,
+    helo = function()
+      local helo = task:get_helo()
+      if helo then
+        match_hostname(rule, helo)
+      end
+    end,
+    url = function()
+      if task:has_urls() then
+        local msg_urls = task:get_urls()
+        for _,url in ipairs(msg_urls) do
+          match_url(rule, url)
+        end
+      end
+    end,
+    filename = function()
+      local parts = task:get_parts()
+      for _,p in ipairs(parts) do
+        if p:is_archive() then
+          local fnames = p:get_archive():get_files()
+
+          for _,fn in ipairs(fnames) do
+            match_filename(rule, fn)
           end
         end
 
-        task:get_resolver():resolve_a({task = task,
-          name = ip_to_rbl(ip, rule['map']),
-          callback = cb,
-        })
-      end
-    end
-  elseif rt == 'header' then
-    local hv = task:get_header_full(rule['header'])
-    match_list(rule, hv, {'decoded'})
-  elseif rt == 'rcpt' then
-    if task:has_recipients('smtp') then
-      local rcpts = task:get_recipients('smtp')
-      match_addr(rule, rcpts)
-    end
-  elseif rt == 'from' then
-    if task:has_from('smtp') then
-      local from = task:get_from('smtp')
-      match_addr(rule, from)
-    end
-  elseif rt == 'helo' then
-    local helo = task:get_helo()
-    if helo then
-      match_hostname(rule, helo)
-    end
-  elseif rt == 'url' then
-    if task:has_urls() then
-      local msg_urls = task:get_urls()
-      for _,url in ipairs(msg_urls) do
-        match_url(rule, url)
-      end
-    end
-  elseif rt == 'filename' then
-    local parts = task:get_parts()
-    for _,p in ipairs(parts) do
-      if p:is_archive() then
-        local fnames = p:get_archive():get_files()
-
-        for _,fn in ipairs(fnames) do
+        local fn = p:get_filename()
+        if fn then
           match_filename(rule, fn)
         end
       end
-
-      local fn = p:get_filename()
-      if fn then
-        match_filename(rule, fn)
+    end,
+    content = function()
+      match_content(rule)
+    end,
+    hostname = function()
+      local hostname = task:get_hostname()
+      if hostname and hostname ~= 'unknown' then
+        match_hostname(rule, hostname)
       end
-    end
-  elseif rt == 'content' then
-    match_content(rule)
-  elseif rt == 'hostname' then
-    local hostname = task:get_hostname()
-    if hostname and hostname ~= 'unknown' then
-      match_hostname(rule, hostname)
-    end
-  elseif rt == 'asn' then
-    local asn = task:get_mempool():get_variable('asn')
-    if asn then
-      match_rule(rule, asn)
-    end
-  elseif rt == 'country' then
-    local country = task:get_mempool():get_variable('country')
-    if country then
-      match_rule(rule, country)
-    end
-  elseif rt == 'mempool' then
-    local var = task:get_mempool():get_variable(rule['variable'])
-    if var then
-      match_rule(rule, var)
-    end
+    end,
+    asn = function()
+      local asn = task:get_mempool():get_variable('asn')
+      if asn then
+        match_rule(rule, asn)
+      end
+    end,
+    country = function()
+      local country = task:get_mempool():get_variable('country')
+      if country then
+        match_rule(rule, country)
+      end
+    end,
+    mempool = function()
+      local var = task:get_mempool():get_variable(rule['variable'])
+      if var then
+        match_rule(rule, var)
+      end
+    end,
+    received = function()
+      local hdrs = task:get_received_headers()
+      if hdrs and hdrs[1] then
+        local num_hdrs = #hdrs
+        for pos, h in ipairs(hdrs) do
+          match_received_header(rule, pos, num_hdrs, h)
+        end
+      end
+    end,
+  }
+  process_rule_funcs.ip = process_rule_funcs.dnsbl
+  local f = process_rule_funcs[rt]
+  if f then
+    f()
+  else
+    rspamd_logger.errx(task, 'Unrecognised rule type: %s', rt)
   end
 end
 
@@ -737,6 +809,45 @@ local function add_multimap_rule(key, newrule)
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
             newrule['map'])
+        end
+      elseif newrule['type'] == 'received' then
+        local filter = newrule['filter'] or 'real_ip'
+        if filter == 'real_ip' or filter == 'from_ip' then
+          newrule['radix'] = rspamd_config:add_map ({
+            url = newrule['map'],
+            description = newrule['description'],
+            type = 'radix'
+          })
+          if newrule['radix'] then
+            ret = true
+          end
+        else
+          if newrule['regexp'] then
+            newrule['hash'] = rspamd_config:add_map ({
+              url = newrule['map'],
+              description = newrule['description'],
+              type = 'regexp'
+            })
+          else
+            newrule['hash'] = rspamd_config:add_map ({
+              url = newrule['map'],
+              description = newrule['description'],
+              type = 'hash'
+            })
+          end
+          if newrule['hash'] then
+            ret = true
+            if type(newrule['map']) == 'string' then
+              urls[newrule['map']] = {
+                type = newrule['type'],
+                map = newrule['hash'],
+                regexp = newrule['regexp']
+              }
+            end
+          else
+            rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+              newrule['map'])
+          end
         end
       elseif newrule['type'] == 'header'
         or newrule['type'] == 'rcpt'
