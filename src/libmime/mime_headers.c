@@ -37,6 +37,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 	case 0x88705DC4D9D61ABULL:	/* received */
 		recv = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct received_header));
+		recv->hdr = rh;
 		rspamd_smtp_recieved_parse (task, rh->decoded,
 				strlen (rh->decoded), recv);
 		g_ptr_array_add (task->received, recv);

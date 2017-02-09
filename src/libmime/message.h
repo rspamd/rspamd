@@ -111,6 +111,7 @@ struct received_header {
 	gchar *by_hostname;
 	gchar *for_mbox;
 	rspamd_inet_addr_t *addr;
+	struct rspamd_mime_header *hdr;
 	time_t timestamp;
 	enum rspamd_received_type type;
 };

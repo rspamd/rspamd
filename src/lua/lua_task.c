@@ -1548,15 +1548,19 @@ lua_task_get_received_headers (lua_State * L)
 		for (i = 0; i < task->received->len; i ++) {
 			rh = g_ptr_array_index (task->received, i);
 
+			lua_createtable (L, 0, 9);
+			rspamd_lua_table_set (L, "raw", rh->hdr->decoded);
+
 			if (G_UNLIKELY (rh->from_ip == NULL &&
 					rh->real_ip == NULL &&
 					rh->real_hostname == NULL &&
 					rh->by_hostname == NULL && rh->timestamp == 0 &&
 					rh->for_mbox == NULL)) {
+				lua_rawseti (L, -2, k ++);
+
 				continue;
 			}
 
-			lua_createtable (L, 0, 8);
 			rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
 			rspamd_lua_table_set (L, "from_ip", rh->from_ip);
 			rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
@@ -1592,6 +1596,7 @@ lua_task_get_received_headers (lua_State * L)
 				proto = "unknown";
 				break;
 			}
+
 			lua_pushstring (L, proto);
 			lua_settable (L, -3);
 
