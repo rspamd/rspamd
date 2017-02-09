@@ -201,6 +201,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		GPtrArray *src)
 {
 	GPtrArray *res = src;
+	gboolean seen_at = FALSE;
 	struct rspamd_email_address addr;
 	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
 	GString *ns;
@@ -270,18 +271,26 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 					}
 					else {
 						/* Try heuristic */
-						if (rspamd_email_address_parse_heuristic (c, t - c + 1,
-								&addr)) {
+						if (seen_at &&
+								rspamd_email_address_parse_heuristic (c,
+										t - c + 1, &addr)) {
 							rspamd_email_address_add (pool, res, &addr, ns);
+						}
+						else {
+							rspamd_email_address_add (pool, res, NULL, ns);
 						}
 					}
 
 					/* Cleanup for the next use */
 					g_string_set_size (ns, 0);
+					seen_at = FALSE;
 				}
 
 				state = skip_spaces;
 				next_state = parse_name;
+			}
+			else if (*p == '@') {
+				seen_at = TRUE;
 			}
 			p ++;
 			break;
@@ -305,15 +314,19 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				}
 				else {
 					/* Try heuristic */
-					if (rspamd_email_address_parse_heuristic (c, p - c + 1,
-							&addr)) {
+					if (seen_at &&
+							rspamd_email_address_parse_heuristic (c,
+									p - c + 1, &addr)) {
 						rspamd_email_address_add (pool, res, &addr, ns);
+					}
+					else {
+						rspamd_email_address_add (pool, res, NULL, ns);
 					}
 				}
 
 				/* Cleanup for the next use */
 				g_string_set_size (ns, 0);
-
+				seen_at = FALSE;
 				state = skip_spaces;
 				next_state = parse_name;
 			}
@@ -340,8 +353,29 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				p --;
 			}
 
-			g_string_append_len (ns, c, p - c + 1);
-			rspamd_email_address_add (pool, res, NULL, ns);
+			if (seen_at) {
+				/* The whole email is likely address */
+				rspamd_smtp_addr_parse (c, p - c + 1, &addr);
+
+				if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
+					rspamd_email_address_add (pool, res, &addr, ns);
+				}
+				else {
+					/* Try heuristic */
+					if (rspamd_email_address_parse_heuristic (c,
+									p - c + 1, &addr)) {
+						rspamd_email_address_add (pool, res, &addr, ns);
+					}
+					else {
+						rspamd_email_address_add (pool, res, NULL, ns);
+					}
+				}
+			}
+			else {
+				/* No @ seen */
+				g_string_append_len (ns, c, p - c + 1);
+				rspamd_email_address_add (pool, res, NULL, ns);
+			}
 		}
 		break;
 	case parse_addr:
