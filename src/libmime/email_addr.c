@@ -355,7 +355,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 
 			if (seen_at) {
 				/* The whole email is likely address */
-				rspamd_smtp_addr_parse (c, p - c + 1, &addr);
+				rspamd_smtp_addr_parse (c, p - c, &addr);
 
 				if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
 					rspamd_email_address_add (pool, res, &addr, ns);
@@ -363,7 +363,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				else {
 					/* Try heuristic */
 					if (rspamd_email_address_parse_heuristic (c,
-									p - c + 1, &addr)) {
+									p - c, &addr)) {
 						rspamd_email_address_add (pool, res, &addr, ns);
 					}
 					else {
@@ -373,7 +373,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			}
 			else {
 				/* No @ seen */
-				g_string_append_len (ns, c, p - c + 1);
+				g_string_append_len (ns, c, p - c);
 				rspamd_email_address_add (pool, res, NULL, ns);
 			}
 		}
