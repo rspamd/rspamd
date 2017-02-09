@@ -712,14 +712,8 @@ local function multimap_callback(task, rule)
     received = function()
       local hdrs = task:get_received_headers()
       if hdrs and hdrs[1] then
-        local num_hdrs = 0
-        for i in ipairs(hdrs) do
-          if i > num_hdrs then
-            num_hdrs = i
-          end
-        end
         for pos, h in ipairs(hdrs) do
-          match_received_header(rule, pos, num_hdrs, h)
+          match_received_header(rule, pos, #hdrs, h)
         end
       end
     end,
