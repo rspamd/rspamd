@@ -124,7 +124,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	struct rspamd_email_address *elt;
 	guint nlen;
 
-	elt = g_slice_alloc (sizeof (*elt));
+	elt = g_slice_alloc0 (sizeof (*elt));
 
 	if (addr != NULL) {
 		memcpy (elt, addr, sizeof (*addr));
