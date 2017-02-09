@@ -125,7 +125,18 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	guint nlen;
 
 	elt = g_slice_alloc (sizeof (*elt));
-	memcpy (elt, addr, sizeof (*addr));
+
+	if (addr != NULL) {
+		memcpy (elt, addr, sizeof (*addr));
+	}
+	else {
+		elt->addr = "";
+		elt->domain = "";
+		elt->raw = "<>";
+		elt->raw_len = 2;
+		elt->user = "";
+		elt->flags |= RSPAMD_EMAIL_ADDR_EMPTY;
+	}
 
 	if ((elt->flags & RSPAMD_EMAIL_ADDR_QUOTED) && elt->addr[0] == '"') {
 		if (elt->flags & RSPAMD_EMAIL_ADDR_HAS_BACKSLASH) {
@@ -323,6 +334,16 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 	/* Handle leftover */
 	switch (state) {
 	case parse_name:
+		/* Assume the whole header as name (bad thing) */
+		if (p > c) {
+			while (p > c && g_ascii_isspace (*p)) {
+				p --;
+			}
+
+			g_string_append_len (ns, c, p - c + 1);
+			rspamd_email_address_add (pool, res, NULL, ns);
+		}
+		break;
 	case parse_addr:
 		if (p > c) {
 			rspamd_smtp_addr_parse (c, p - c, &addr);
