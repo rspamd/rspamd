@@ -867,6 +867,43 @@ lua_check_text (lua_State * L, gint pos)
 	return ud ? (struct rspamd_lua_text *)ud : NULL;
 }
 
+static void
+lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
+		gint pos)
+{
+	gpointer elt;
+	gint lua_ref;
+
+	lua_pushvalue (L, pos);
+
+	elt = g_hash_table_lookup (task->lua_cache, key);
+
+	if (G_UNLIKELY (elt != NULL)) {
+		/* Unref previous value */
+		lua_ref = GPOINTER_TO_INT (elt);
+		luaL_unref (L, LUA_REGISTRYINDEX, lua_ref);
+	}
+
+	lua_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+	g_hash_table_insert (task->lua_cache, (void *)key, GINT_TO_POINTER (lua_ref));
+}
+
+static gboolean
+lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key)
+{
+	gpointer elt;
+
+	elt = g_hash_table_lookup (task->lua_cache, key);
+
+	if (elt != NULL) {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, GPOINTER_TO_INT (elt));
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 /* Task methods */
 static int
 lua_task_process_message (lua_State *L)
@@ -1157,19 +1194,32 @@ lua_task_get_urls (lua_State * L)
 			need_emails = lua_toboolean (L, 2);
 		}
 
-		sz = g_hash_table_size (task->urls);
-
 		if (need_emails) {
-			sz += g_hash_table_size (task->emails);
+			if (!lua_task_get_cached (L, task, "emails+urls")) {
+				sz = g_hash_table_size (task->urls);
+				sz += g_hash_table_size (task->emails);
+
+				lua_createtable (L, sz, 0);
+				cb.i = 1;
+				cb.L = L;
+				g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
+				g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
+
+				lua_task_set_cached (L, task, "emails+urls", -1);
+			}
+
 		}
+		else {
+			if (!lua_task_get_cached (L, task, "urls")) {
+				sz = g_hash_table_size (task->urls);
 
-		lua_createtable (L, sz, 0);
-		cb.i = 1;
-		cb.L = L;
-		g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
+				lua_createtable (L, sz, 0);
+				cb.i = 1;
+				cb.L = L;
+				g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
 
-		if (need_emails) {
-			g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
+				lua_task_set_cached (L, task, "urls", -1);
+			}
 		}
 	}
 	else {
@@ -1283,15 +1333,20 @@ lua_task_get_text_parts (lua_State * L)
 	struct rspamd_mime_text_part *part, **ppart;
 
 	if (task != NULL) {
-		lua_createtable (L, task->text_parts->len, 0);
 
-		for (i = 0; i < task->text_parts->len; i ++) {
-			part = g_ptr_array_index (task->text_parts, i);
-			ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_text_part *));
-			*ppart = part;
-			rspamd_lua_setclass (L, "rspamd{textpart}", -1);
-			/* Make it array */
-			lua_rawseti (L, -2, i + 1);
+		if (!lua_task_get_cached (L, task, "text_parts")) {
+			lua_createtable (L, task->text_parts->len, 0);
+
+			for (i = 0; i < task->text_parts->len; i ++) {
+				part = g_ptr_array_index (task->text_parts, i);
+				ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_text_part *));
+				*ppart = part;
+				rspamd_lua_setclass (L, "rspamd{textpart}", -1);
+				/* Make it array */
+				lua_rawseti (L, -2, i + 1);
+			}
+
+			lua_task_set_cached (L, task, "text_parts", -1);
 		}
 	}
 	else {
@@ -1309,15 +1364,19 @@ lua_task_get_parts (lua_State * L)
 	struct rspamd_mime_part *part, **ppart;
 
 	if (task != NULL) {
-		lua_createtable (L, task->parts->len, 0);
+		if (!lua_task_get_cached (L, task, "mime_parts")) {
+			lua_createtable (L, task->parts->len, 0);
 
-		for (i = 0; i < task->parts->len; i ++) {
-			part = g_ptr_array_index (task->parts, i);
-			ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
-			*ppart = part;
-			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
-			/* Make it array */
-			lua_rawseti (L, -2, i + 1);
+			for (i = 0; i < task->parts->len; i ++) {
+				part = g_ptr_array_index (task->parts, i);
+				ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
+				*ppart = part;
+				rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+				/* Make it array */
+				lua_rawseti (L, -2, i + 1);
+			}
+
+			lua_task_set_cached (L, task, "mime_parts", -1);
 		}
 	}
 	else {
@@ -1543,70 +1602,77 @@ lua_task_get_received_headers (lua_State * L)
 	guint i, k = 1;
 
 	if (task) {
-		lua_createtable (L, task->received->len, 0);
+		if (!lua_task_get_cached (L, task, "received")) {
+			lua_createtable (L, task->received->len, 0);
 
-		for (i = 0; i < task->received->len; i ++) {
-			rh = g_ptr_array_index (task->received, i);
+			for (i = 0; i < task->received->len; i ++) {
+				rh = g_ptr_array_index (task->received, i);
 
-			lua_createtable (L, 0, 9);
-			rspamd_lua_table_set (L, "raw", rh->hdr->decoded);
+				lua_createtable (L, 0, 9);
 
-			if (G_UNLIKELY (rh->from_ip == NULL &&
-					rh->real_ip == NULL &&
-					rh->real_hostname == NULL &&
-					rh->by_hostname == NULL && rh->timestamp == 0 &&
-					rh->for_mbox == NULL)) {
+				if (rh->hdr && rh->hdr->decoded) {
+					rspamd_lua_table_set (L, "raw", rh->hdr->decoded);
+				}
+
+				if (G_UNLIKELY (rh->from_ip == NULL &&
+						rh->real_ip == NULL &&
+						rh->real_hostname == NULL &&
+						rh->by_hostname == NULL && rh->timestamp == 0 &&
+						rh->for_mbox == NULL)) {
+					lua_rawseti (L, -2, k ++);
+
+					continue;
+				}
+
+				rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
+				rspamd_lua_table_set (L, "from_ip", rh->from_ip);
+				rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
+				lua_pushstring (L, "real_ip");
+				rspamd_lua_ip_push (L, rh->addr);
+				lua_settable (L, -3);
+				lua_pushstring (L, "proto");
+
+				switch (rh->type) {
+				case RSPAMD_RECEIVED_SMTP:
+					proto = "smtp";
+					break;
+				case RSPAMD_RECEIVED_ESMTP:
+					proto = "esmtp";
+					break;
+				case RSPAMD_RECEIVED_ESMTPS:
+					proto = "esmtps";
+					break;
+				case RSPAMD_RECEIVED_ESMTPA:
+					proto = "esmtpa";
+					break;
+				case RSPAMD_RECEIVED_ESMTPSA:
+					proto = "esmtpsa";
+					break;
+				case RSPAMD_RECEIVED_LMTP:
+					proto = "lmtp";
+					break;
+				case RSPAMD_RECEIVED_IMAP:
+					proto = "imap";
+					break;
+				case RSPAMD_RECEIVED_UNKNOWN:
+				default:
+					proto = "unknown";
+					break;
+				}
+
+				lua_pushstring (L, proto);
+				lua_settable (L, -3);
+
+				lua_pushstring (L, "timestamp");
+				lua_pushnumber (L, rh->timestamp);
+				lua_settable (L, -3);
+
+				rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
+				rspamd_lua_table_set (L, "for", rh->for_mbox);
 				lua_rawseti (L, -2, k ++);
-
-				continue;
 			}
 
-			rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
-			rspamd_lua_table_set (L, "from_ip", rh->from_ip);
-			rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
-			lua_pushstring (L, "real_ip");
-			rspamd_lua_ip_push (L, rh->addr);
-			lua_settable (L, -3);
-			lua_pushstring (L, "proto");
-
-			switch (rh->type) {
-			case RSPAMD_RECEIVED_SMTP:
-				proto = "smtp";
-				break;
-			case RSPAMD_RECEIVED_ESMTP:
-				proto = "esmtp";
-				break;
-			case RSPAMD_RECEIVED_ESMTPS:
-				proto = "esmtps";
-				break;
-			case RSPAMD_RECEIVED_ESMTPA:
-				proto = "esmtpa";
-				break;
-			case RSPAMD_RECEIVED_ESMTPSA:
-				proto = "esmtpsa";
-				break;
-			case RSPAMD_RECEIVED_LMTP:
-				proto = "lmtp";
-				break;
-			case RSPAMD_RECEIVED_IMAP:
-				proto = "imap";
-				break;
-			case RSPAMD_RECEIVED_UNKNOWN:
-			default:
-				proto = "unknown";
-				break;
-			}
-
-			lua_pushstring (L, proto);
-			lua_settable (L, -3);
-
-			lua_pushstring (L, "timestamp");
-			lua_pushnumber (L, rh->timestamp);
-			lua_settable (L, -3);
-
-			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
-			rspamd_lua_table_set (L, "for", rh->for_mbox);
-			lua_rawseti (L, -2, k ++);
+			lua_task_set_cached (L, task, "received", -1);
 		}
 	}
 	else {
@@ -2248,17 +2314,21 @@ lua_task_get_images (lua_State *L)
 	struct rspamd_image **pimg;
 
 	if (task) {
-		lua_newtable (L);
+		if (!lua_task_get_cached (L, task, "images")) {
+			lua_createtable (L, task->parts->len, 0);
 
-		for (i = 0; i < task->parts->len; i ++) {
-			part = g_ptr_array_index (task->parts, i);
+			for (i = 0; i < task->parts->len; i ++) {
+				part = g_ptr_array_index (task->parts, i);
 
-			if (part->flags & RSPAMD_MIME_PART_IMAGE) {
-				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
-				rspamd_lua_setclass (L, "rspamd{image}", -1);
-				*pimg = part->specific.img;
-				lua_rawseti (L, -2, ++nelt);
+				if (part->flags & RSPAMD_MIME_PART_IMAGE) {
+					pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
+					rspamd_lua_setclass (L, "rspamd{image}", -1);
+					*pimg = part->specific.img;
+					lua_rawseti (L, -2, ++nelt);
+				}
 			}
+
+			lua_task_set_cached (L, task, "images", -1);
 		}
 	}
 	else {
@@ -2277,17 +2347,21 @@ lua_task_get_archives (lua_State *L)
 	struct rspamd_archive **parch;
 
 	if (task) {
-		lua_createtable (L, task->parts->len, 0);
+		if (!lua_task_get_cached (L, task, "archives")) {
+			lua_createtable (L, task->parts->len, 0);
 
-		for (i = 0; i < task->parts->len; i ++) {
-			part = g_ptr_array_index (task->parts, i);
+			for (i = 0; i < task->parts->len; i ++) {
+				part = g_ptr_array_index (task->parts, i);
 
-			if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
-				parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
-				rspamd_lua_setclass (L, "rspamd{archive}", -1);
-				*parch = part->specific.arch;
-				lua_rawseti (L, -2, ++nelt);
+				if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
+					parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
+					rspamd_lua_setclass (L, "rspamd{archive}", -1);
+					*parch = part->specific.arch;
+					lua_rawseti (L, -2, ++nelt);
+				}
 			}
+
+			lua_task_set_cached (L, task, "archives", -1);
 		}
 	}
 	else {

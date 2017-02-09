@@ -154,6 +154,7 @@ struct rspamd_task {
 	GHashTable *raw_headers;						/**< list of raw headers							*/
 	GHashTable *results;							/**< hash table of metric_result indexed by
 													 *    metric's name									*/
+	GHashTable *lua_cache;							/**< cache of lua objects							*/
 	GPtrArray *tokens;								/**< statistics tokens */
 
 	GPtrArray *rcpt_mime;

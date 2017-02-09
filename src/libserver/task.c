@@ -129,6 +129,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 
 	new_task->message_id = new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);
+	new_task->lua_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	return new_task;
 }
@@ -192,6 +193,9 @@ rspamd_task_free (struct rspamd_task *task)
 	struct rspamd_mime_part *p;
 	struct rspamd_mime_text_part *tp;
 	struct rspamd_email_address *addr;
+	GHashTableIter it;
+	gpointer k, v;
+	gint lua_ref;
 	guint i;
 
 	if (task) {
@@ -236,6 +240,7 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		ucl_object_unref (task->messages);
+		rspamd_re_cache_runtime_destroy (task->re_rt);
 
 		if (task->http_conn != NULL) {
 			rspamd_http_connection_reset (task->http_conn);
@@ -271,7 +276,18 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		if (task->cfg) {
-			rspamd_re_cache_runtime_destroy (task->re_rt);
+			if (task->lua_cache) {
+				g_hash_table_iter_init (&it, task->lua_cache);
+
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					lua_ref = GPOINTER_TO_INT (v);
+					luaL_unref (task->cfg->lua_state,
+							LUA_REGISTRYINDEX, lua_ref);
+				}
+
+				g_hash_table_unref (task->lua_cache);
+			}
+
 			REF_RELEASE (task->cfg);
 		}
 
@@ -1489,7 +1505,7 @@ rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
 	tbl = rspamd_mempool_get_variable (task->task_pool, "profile");
 
 	if (tbl == NULL) {
-		tbl = g_hash_table_new (g_str_hash, g_str_equal);
+		tbl = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		rspamd_mempool_set_variable (task->task_pool, "profile", tbl,
 				(rspamd_mempool_destruct_t)g_hash_table_unref);
 	}
