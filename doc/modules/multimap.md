@@ -111,6 +111,7 @@ Type attribute means what is matched with this map. The following types are supp
 * `hostname` - matches reverse DNS name of the host that performed message handoff
 * `ip` - matches IP of the host that performed message handoff (against radix map)
 * `mempool` - matches contents of a mempool variable (specified with `variable` parameter)
+* `received` - (new in 1.5) matches elements of `Received` headers
 * `rcpt` - matches any of envelope rcpt or header `To` if envelope info is missing
 * `url` - matches URLs in messages against maps
 
@@ -189,6 +190,28 @@ Filename maps support this filters set:
 ### Mempool filters
 
 * `regexp:/re/` - extract data from mempool variable according to some regular expression
+
+### Received filters
+
+If no filter is specified `real_ip` is used by default.
+
+* `from_hostname` - string that represents hostname provided by a peer
+* `from_ip` - string representation of IP address as provided by a peer
+* `real_hostname` - hostname as resolved by MTA
+* `real_ip` - string representation of IP as resolved by PTR request of MTA
+* `by_hostname` - MTA hostname
+* `proto` - protocol, e.g. ESMTP or ESMTPS
+* `timestamp` - received timetamp
+* `for` - for value (unparsed mailbox)
+
+If `real_ip` or `from_ip` is specified radix maps are used rather than hash maps.
+
+Additionally to these filters, Received maps support the following configuration settings:
+
+* `min_pos` - Minimum position of Received header to match
+* `max_pos` - Maximum position of Received header to match
+
+Negative values can be specified to match positions relative to the end of Received headers.
 
 ### URL filters
 
@@ -336,5 +359,11 @@ CONTENT_BLACKLISTED {
 ASN_BLACKLIST {
   type = "asn";
   map = "${LOCAL_CONFDIR}/asnlist.map";
+}
+LAST_RECEIVED_HEADER_IP {
+  type = "received";
+  map = "${LOCAL_CONFDIR}/rcvd_ip.map";
+  filter = "real_ip";
+  min_pos = -1;
 }
 ~~~
