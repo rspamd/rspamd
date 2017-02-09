@@ -91,6 +91,10 @@ Other parameters which can be set here are:
 
 Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be considered as local exclusions by exclude_local checks.
 
+- hash
+
+(new in 1.5) Valid for `helo` and `emails` RBL types - lookup hashes instead of literal strings. Possible values for this parameter are `sha1`, `sha256`, `sha384`, `sha512` and `md5` or any other value for the default hashing algorithm.
+
 RBL-specific subsection is structured as follows:
 
 ~~~ucl
