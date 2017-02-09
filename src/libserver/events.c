@@ -25,19 +25,19 @@
 #define RSPAMD_SESSION_IS_DESTROYING(s) ((s)->flags & RSPAMD_SESSION_FLAG_DESTROYING)
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
-        session->pool->tag.tagname, session->pool->tag.uid, \
+        "events", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        session->pool->tag.tagname, session->pool->tag.uid, \
+        "events", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        session->pool->tag.tagname, session->pool->tag.uid, \
+        "events", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        session->pool->tag.tagname, session->pool->tag.uid, \
+        "events", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 
@@ -192,13 +192,15 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 }
 
 static gboolean
-rspamd_session_destroy_callback (gpointer k, gpointer v, gpointer unused)
+rspamd_session_destroy_callback (gpointer k, gpointer v, gpointer d)
 {
 	struct rspamd_async_event *ev = v;
+	struct rspamd_async_session *session = d;
 
 	/* Call event's finalizer */
-	msg_debug ("removed event on destroy: %p, subsystem: %s", ev->user_data,
-		g_quark_to_string (ev->subsystem));
+	msg_debug_session ("removed event on destroy: %p, subsystem: %s",
+			ev->user_data,
+			g_quark_to_string (ev->subsystem));
 
 	if (ev->fin != NULL) {
 		ev->fin (ev->user_data);
@@ -249,8 +251,11 @@ rspamd_session_pending (struct rspamd_async_session *session)
 
 	if (g_hash_table_size (session->events) == 0) {
 		if (session->fin != NULL) {
+			msg_debug_session ("call fin handler, as no events are pending");
+
 			if (!session->fin (session->user_data)) {
 				/* Session finished incompletely, perform restoration */
+				msg_debug_session ("restore incomplete session");
 				if (session->restore != NULL) {
 					session->restore (session->user_data);
 				}
@@ -267,75 +272,79 @@ rspamd_session_pending (struct rspamd_async_session *session)
 }
 
 void
-rspamd_session_watch_start (struct rspamd_async_session *s,
+rspamd_session_watch_start (struct rspamd_async_session *session,
 		event_watcher_t cb,
 		gpointer ud)
 {
-	g_assert (s != NULL);
-	g_assert (!RSPAMD_SESSION_IS_WATCHING (s));
+	g_assert (session != NULL);
+	g_assert (!RSPAMD_SESSION_IS_WATCHING (session));
 
-	if (s->cur_watcher == NULL) {
-		s->cur_watcher = rspamd_mempool_alloc (s->pool, sizeof (*s->cur_watcher));
+	if (session->cur_watcher == NULL) {
+		session->cur_watcher = rspamd_mempool_alloc (session->pool,
+				sizeof (*session->cur_watcher));
 	}
 
-	s->cur_watcher->cb = cb;
-	s->cur_watcher->remain = 0;
-	s->cur_watcher->ud = ud;
-	s->flags |= RSPAMD_SESSION_FLAG_WATCHING;
+	session->cur_watcher->cb = cb;
+	session->cur_watcher->remain = 0;
+	session->cur_watcher->ud = ud;
+	session->flags |= RSPAMD_SESSION_FLAG_WATCHING;
 }
 
 guint
-rspamd_session_watch_stop (struct rspamd_async_session *s)
+rspamd_session_watch_stop (struct rspamd_async_session *session)
 {
 	guint remain;
 
-	g_assert (s != NULL);
-	g_assert (RSPAMD_SESSION_IS_WATCHING (s));
+	g_assert (session != NULL);
+	g_assert (RSPAMD_SESSION_IS_WATCHING (session));
 
-	remain = s->cur_watcher->remain;
+	remain = session->cur_watcher->remain;
 
 	if (remain > 0) {
 		/* Avoid reusing */
-		s->cur_watcher = NULL;
+		session->cur_watcher = NULL;
 	}
 
-	s->flags &= ~RSPAMD_SESSION_FLAG_WATCHING;
+	session->flags &= ~RSPAMD_SESSION_FLAG_WATCHING;
 
 	return remain;
 }
 
 
 guint
-rspamd_session_events_pending (struct rspamd_async_session *s)
+rspamd_session_events_pending (struct rspamd_async_session *session)
 {
 	guint npending;
 
-	g_assert (s != NULL);
+	g_assert (session != NULL);
 
-	npending = g_hash_table_size (s->events);
+	npending = g_hash_table_size (session->events);
+	msg_debug_session ("pending %d events", npending);
 
-	if (RSPAMD_SESSION_IS_WATCHING (s)) {
-		npending += s->cur_watcher->remain;
+	if (RSPAMD_SESSION_IS_WATCHING (session)) {
+		npending += session->cur_watcher->remain;
+		msg_debug_session ("pending %d watchers", session->cur_watcher->remain);
 	}
 
 	return npending;
 }
 
 void
-rspamd_session_watcher_push (struct rspamd_async_session *s)
+rspamd_session_watcher_push (struct rspamd_async_session *session)
 {
-	g_assert (s != NULL);
+	g_assert (session != NULL);
 
-	if (RSPAMD_SESSION_IS_WATCHING (s)) {
-		s->cur_watcher->remain ++;
+	if (RSPAMD_SESSION_IS_WATCHING (session)) {
+		session->cur_watcher->remain ++;
+		msg_debug_session ("push session, %d events", session->cur_watcher->remain);
 	}
 }
 
 void
-rspamd_session_watcher_push_specific (struct rspamd_async_session *s,
+rspamd_session_watcher_push_specific (struct rspamd_async_session *session,
 		struct rspamd_async_watcher *w)
 {
-	g_assert (s != NULL);
+	g_assert (session != NULL);
 
 	if (w) {
 		w->remain ++;
@@ -343,22 +352,24 @@ rspamd_session_watcher_push_specific (struct rspamd_async_session *s,
 }
 
 void
-rspamd_session_watcher_pop (struct rspamd_async_session *s,
+rspamd_session_watcher_pop (struct rspamd_async_session *session,
 		struct rspamd_async_watcher *w)
 {
-	g_assert (s != NULL);
+	g_assert (session != NULL);
 
 	if (w) {
+		msg_debug_session ("pop session, %d events", w->remain);
+
 		if (--w->remain == 0) {
-			w->cb (s->user_data, w->ud);
+			w->cb (session->user_data, w->ud);
 		}
 	}
 }
 
 struct rspamd_async_watcher*
-rspamd_session_get_watcher (struct rspamd_async_session *s)
+rspamd_session_get_watcher (struct rspamd_async_session *session)
 {
-	g_assert (s != NULL);
+	g_assert (session != NULL);
 
-	return s->cur_watcher;
+	return session->cur_watcher;
 }
