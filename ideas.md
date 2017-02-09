@@ -18,7 +18,7 @@ You should also be familiar with git version control system. Should you want to 
 
 We encourage picking projects which you feel you can **realistically** do within the **12-week** timeline. Some of the projects imply certain research work, however, we have placed the **approximate** evaluation criteria for the timeline specified by the summer of code programme. Taking such a project is a challenging task but it could improve your research skills and hence lead to a good research project.
 
-All code contributed must have either 2 clause BSD license or any license from [this list](https://github.com/vstakhov/rspamd/blob/master/CONTRIBUTIONS.md).
+All code contributed must be licensed under Apache 2 license.
 
 
 #### List of mentors available for the project via IRC and Google groups mailing list:
@@ -34,6 +34,16 @@ All code contributed must have either 2 clause BSD license or any license from [
 ## List of projects available
 
 Here is the list of projects that are desired for rspamd. However, students are encouraged to suggest their own project assuming they could provide reasonable motivation for it.
+
+- [List of projects available](#list-of-projects-available)
+  - [XMPP filtering support](#xmpp-filtering-support)
+  - [Dmarc reporting](#dmarc-reporting)
+  - [Fast neural network implementation](#fast-neural-network-implementation)
+  - [HTTPS server support](#https-server-support)
+  - [WebUI plugins improvements](#webui-plugins-improvements)
+  - [Tarantool support](#tarantool-support)
+  - [Libmilter fast alternative](#libmilter-fast-alternative)
+  - [Bayes signatures](#bayes-signatures)
 
 ### XMPP filtering support
 
