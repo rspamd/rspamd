@@ -366,12 +366,20 @@ local metafunctions = {
 function rspamd_gen_metatokens(task)
   local ipairs = ipairs
   local metatokens = {}
-  for _,mt in ipairs(metafunctions) do
-    local ct = mt.cb(task)
+  local cached = task:cache_get('metatokens')
 
-    for _,tok in ipairs(ct) do
-      table.insert(metatokens, tok)
+  if cached then
+    return cached
+  else
+    for _,mt in ipairs(metafunctions) do
+      local ct = mt.cb(task)
+
+      for _,tok in ipairs(ct) do
+        table.insert(metatokens, tok)
+      end
     end
+
+    task:cache_set('metatokens', metatokens)
   end
 
   return metatokens
