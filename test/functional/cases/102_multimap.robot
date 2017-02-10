@@ -111,7 +111,7 @@ MAP - MULSYM SYMBOL MISS
 
 MAP - MULSYM SYMBOL + SCORE
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user5@example.com
-  Check Rspamc  ${result}  SYM1 (-10.0
+  Check Rspamc  ${result}  SYM1 (-10.1
 
 MAP - UTF
   ${result} =  Scan Message With Rspamc  ${UTF_MESSAGE}
