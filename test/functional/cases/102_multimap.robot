@@ -69,6 +69,22 @@ MAP - FROM REGEXP MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.org
   Check Rspamc  ${result}  REGEXP_MAP  inverse=1
 
+MAP - RCPT DOMAIN HIT
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user@example.com
+  Check Rspamc  ${result}  RCPT_DOMAIN
+
+MAP - RCPT DOMAIN MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  example.com@user
+  Check Rspamc  ${result}  RCPT_DOMAIN  inverse=1
+
+MAP - RCPT USER HIT
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  bob@example.com
+  Check Rspamc  ${result}  RCPT_USER
+
+MAP - RCPT USER MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  example.com@bob
+  Check Rspamc  ${result}  RCPT_USER  inverse=1
+
 MAP - DEPENDS HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  5.9.155.182  --from  user123@rspamd.com
   Check Rspamc  ${result}  DEPS_MAP
