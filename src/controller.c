@@ -3558,10 +3558,12 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_controller_handle_plugins);
 	rspamd_controller_register_plugins_paths (ctx);
 
+#if 0
 	rspamd_regexp_t *lua_re = rspamd_regexp_new ("^/.*/.*\\.lua$", NULL, NULL);
 	rspamd_http_router_add_regexp (ctx->http, lua_re,
 			rspamd_controller_handle_lua);
 	rspamd_regexp_unref (lua_re);
+#endif
 	luaopen_controller (ctx->cfg->lua_state);
 
 	if (ctx->key) {
