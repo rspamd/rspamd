@@ -1832,13 +1832,26 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 			/* Fallback to HTTP/1.0 */
 			if (encrypted) {
 				rspamd_printf_fstring (buf,
-						"%s %s HTTP/1.0\r\nContent-Length: %z\r\n", "POST",
+						"%s %s HTTP/1.0\r\n"
+						"Content-Length: %z\r\n"
+						"Content-Type: application/octet-stream\r\n",
+						"POST",
 						"/post", enclen);
 			}
 			else {
 				rspamd_printf_fstring (buf,
-						"%s %V HTTP/1.0\r\nContent-Length: %z\r\n",
+						"%s %V HTTP/1.0\r\n"
+						"Content-Length: %z\r\n",
 						http_method_str (msg->method), msg->url, bodylen);
+				if (bodylen > 0) {
+					if (mime_type == NULL) {
+						mime_type = "text/plain";
+					}
+
+					rspamd_printf_fstring (buf,
+							"Content-Type: %s\r\n",
+							mime_type);
+				}
 			}
 		}
 		else {
@@ -1848,7 +1861,8 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 							"%s %s HTTP/1.1\r\n"
 							"Connection: close\r\n"
 							"Host: %s\r\n"
-							"Content-Length: %z\r\n",
+							"Content-Length: %z\r\n"
+							"Content-Type: application/octet-stream\r\n",
 							"POST", "/post", host, enclen);
 				}
 				else {
@@ -1856,14 +1870,17 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 							"%s %s HTTP/1.1\r\n"
 							"Connection: close\r\n"
 							"Host: %V\r\n"
-							"Content-Length: %z\r\n",
+							"Content-Length: %z\r\n"
+							"Content-Type: application/octet-stream\r\n",
 							"POST", "/post", msg->host, enclen);
 				}
 			}
 			else {
 				if (host != NULL) {
 					rspamd_printf_fstring (buf,
-							"%s %V HTTP/1.1\r\nConnection: close\r\nHost: %s\r\nContent-Length: %z\r\n",
+							"%s %V HTTP/1.1\r\nConnection: close\r\n"
+							"Host: %s\r\n"
+							"Content-Length: %z\r\n",
 							http_method_str (msg->method), msg->url, host,
 							bodylen);
 				}
@@ -1876,8 +1893,19 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 							http_method_str (msg->method), msg->url, msg->host,
 							bodylen);
 				}
+
+				if (bodylen > 0) {
+					if (mime_type == NULL) {
+						mime_type = "text/plain";
+					}
+
+					rspamd_printf_fstring (buf,
+							"Content-Type: %s\r\n",
+							mime_type);
+				}
 			}
 		}
+
 		if (encrypted) {
 			GString *b32_key, *b32_id;
 
@@ -2030,8 +2058,15 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			priv->outlen = 8;
 
 			if (bodylen > 0) {
+				if (mime_type == NULL) {
+					mime_type = "text/plain";
+				}
+
 				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n"
-						"Content-Length: %z\r\n\r\n", ENCRYPTED_VERSION, bodylen);
+						"Content-Length: %z\r\n"
+						"Content-Type: %s\r\n"
+						"\r\n", ENCRYPTED_VERSION, bodylen,
+						mime_type);
 			}
 			else {
 				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n\r\n",
