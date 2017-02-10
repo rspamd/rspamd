@@ -375,14 +375,14 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	const gchar *fmt,
 	va_list args)
 {
-	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], *p, *last, c;
-	const gchar *buf_start = fmt;
+	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[8], *p, *last, c;
+	const gchar *buf_start = fmt, *fmt_start = NULL;
 	gint d;
-	gdouble f, scale;
+	gdouble f;
 	glong written = 0, wr, slen;
 	gint64 i64;
 	guint64 ui64;
-	guint width, sign, hex, humanize, bytes, frac_width, i, b32;
+	guint width, sign, hex, humanize, bytes, frac_width, b32;
 	rspamd_fstring_t *v;
 	rspamd_ftok_t *tok;
 	GString *gs;
@@ -406,6 +406,8 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				}
 				written += wr;
 			}
+
+			fmt_start = fmt;
 
 			i64 = 0;
 			ui64 = 0;
@@ -700,77 +702,23 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 
 			case 'f':
-			case 'F':
-				if (*fmt == 'f') {
-					f = (gdouble) va_arg (args, double);
-				}
-				else {
-					f = (gdouble) va_arg (args, long double);
-				}
-
-				if (isfinite (f)) {
-					p = numbuf;
-					last = p + sizeof (numbuf);
-					if (f < 0) {
-						*p++ = '-';
-						f = -f;
-					}
-					if (frac_width == 0) {
-						frac_width = 6;
-					}
-
-					ui64 = (gint64) f;
-
-					p = rspamd_sprintf_num (p, last, ui64, zero, 0, width);
-
-					if (frac_width) {
-
-						if (p < last) {
-							*p++ = '.';
-						}
-
-						scale = 1.0;
-
-						for (i = 0; i < frac_width; i++) {
-							scale *= 10.0;
-						}
-
-						/*
-						 * (gint64) cast is required for msvc6:
-						 * it can not convert guint64 to double
-						 */
-						ui64 = (guint64) ((f - (gint64) ui64) * scale);
-
-						p = rspamd_sprintf_num (p, last, ui64, '0', 0, frac_width);
-					}
-
-					slen = p - numbuf;
-					RSPAMD_PRINTF_APPEND (numbuf, slen);
-				}
-				else if (isnan (f)) {
-					RSPAMD_PRINTF_APPEND ("NaN", 3);
-				}
-				else {
-					if (signbit (f)) {
-						RSPAMD_PRINTF_APPEND ("-Inf", 4);
-					}
-					else {
-						RSPAMD_PRINTF_APPEND ("+Inf", 4);
-					}
-				}
+			case 'g':
+				f = (gdouble) va_arg (args, double);
+				rspamd_strlcpy (dtoabuf, fmt_start, MIN (sizeof (dtoabuf),
+						(fmt - fmt_start + 2)));
+				g_ascii_formatd (numbuf, sizeof (numbuf), dtoabuf, (double)f);
+				slen = strlen (numbuf);
+				RSPAMD_PRINTF_APPEND (numbuf, slen);
 
 				continue;
 
-			case 'g':
+			case 'F':
 			case 'G':
-				if (*fmt == 'g') {
-					f = (gdouble) va_arg (args, double);
-				}
-				else {
-					f = (gdouble) va_arg (args, long double);
-				}
-
-				g_ascii_formatd (numbuf, sizeof (numbuf), "%g", (double)f);
+				f = (gdouble) va_arg (args, long double);
+				slen = rspamd_strlcpy (dtoabuf, fmt_start, MIN (sizeof (dtoabuf),
+						(fmt - fmt_start + 2)));
+				dtoabuf[slen - 1] = g_ascii_tolower (dtoabuf[slen - 1]);
+				g_ascii_formatd (numbuf, sizeof (numbuf), dtoabuf, (double)f);
 				slen = strlen (numbuf);
 				RSPAMD_PRINTF_APPEND (numbuf, slen);
 
