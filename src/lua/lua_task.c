@@ -598,11 +598,19 @@ LUA_FUNCTION_DEF (task, set_rmilter_reply);
  */
 LUA_FUNCTION_DEF (task, process_regexp);
 
-/*
- * Deprecated functions!
+/***
+ * @method task:cache_set(key, value)
+ * Store some value to the task cache
+ * @param {string} key key to use
+ * @param {any} value any value (including functions and tables)
  */
 LUA_FUNCTION_DEF (task, cache_set);
-
+/***
+ * @method task:cache_get(key)
+ * Returns cached value or nil if nothing is cached
+ * @param {string} key key to use
+ * @return {any} cached value
+ */
 LUA_FUNCTION_DEF (task, cache_get);
 
 /***
@@ -3143,12 +3151,16 @@ static gint
 lua_task_cache_get (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *key = luaL_checkstring (L, 2);
 
-	if (task) {
-		msg_err_task ("this function is deprecated and will return nothing");
+	if (task && key) {
+		if (!lua_task_get_cached (L, task, key)) {
+			lua_pushnil (L);
+		}
 	}
-
-	lua_pushnumber (L, -1);
+	else {
+		luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
@@ -3157,14 +3169,16 @@ static gint
 lua_task_cache_set (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *key = luaL_checkstring (L, 2);
 
-	if (task) {
-		msg_err_task ("this function is deprecated and will return nothing");
+	if (task && key && lua_gettop (L) >= 3) {
+		lua_task_set_cached (L, task, key, 3);
+	}
+	else {
+		luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, 0);
-
-	return 1;
+	return 0;
 }
 
 static gint
