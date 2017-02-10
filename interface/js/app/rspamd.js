@@ -93,14 +93,14 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                     });
                     break;
                 case "#throughput_nav":
-                    tab_graph.draw(interface, graphs, checked_server, selData);
+                    tab_graph.draw(interface, graphs, neighbours, checked_server, selData);
 
                     var autoRefresh = {
                         hourly: 60000,
                         daily: 300000
                     };
                     timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
-                        tab_graph.draw(interface, graphs, checked_server, selData);
+                        tab_graph.draw(interface, graphs, neighbours, checked_server, selData);
                     });
                     break;
                 case "#configuration_nav":

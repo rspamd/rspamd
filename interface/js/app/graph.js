@@ -150,7 +150,7 @@ function($, D3Evolution, unused) {
 
     var interface = {};
 
-    interface.draw = function(rspamd, graphs, checked_server, type) {
+    interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
         if (graphs.graph === undefined) {
             graphs.graph = initGraph();
         }
@@ -163,10 +163,18 @@ function($, D3Evolution, unused) {
             type = getSelector("selData");
         }
 
+        if (checked_server === "All SERVERS") {
+            rspamd.alertMessage('alert-error', 'Data consolidation is not implemented yet');
+            graphs.graph.data();
+            graphs.rrd_pie.destroy();
+            drawRrdTable([]);
+            return;
+        }
+
         $.ajax({
             dataType: 'json',
             type: 'GET',
-            url: 'graph',
+            url: neighbours[checked_server].url + 'graph',
             jsonp: false,
             data: {
                 "type": type
