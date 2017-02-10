@@ -333,7 +333,7 @@ end
 
 local multimap_filters = {
   from = apply_addr_filter,
-  to = apply_addr_filter,
+  rcpt = apply_addr_filter,
   helo = apply_hostname_filter,
   header = apply_addr_filter,
   url = apply_url_filter,
@@ -519,8 +519,8 @@ local function multimap_callback(task, rule)
 
   local function match_addr(r, addr)
     match_list(r, addr, {'addr'})
-    match_list(r, addr, {'domain', function(d) return '@' .. d end})
-    match_list(r, addr, {'user', function(d) return d .. '@' end})
+    match_list(r, addr, {'domain'})
+    match_list(r, addr, {'user'})
   end
 
   local function match_url(r, url)
