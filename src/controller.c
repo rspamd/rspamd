@@ -1150,7 +1150,7 @@ rspamd_controller_graph_point (gulong t, gulong step,
 
 		for (j = 0; j < step; j++) {
 			yval = acc[i + j * rrd_result->ds_count];
-			if (!isnormal (yval)) {
+			if (!isfinite (yval)) {
 				nan_cnt++;
 			}
 			else {
