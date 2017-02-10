@@ -453,6 +453,15 @@ LUA_FUNCTION_DEF (util, unpack);
  */
 LUA_FUNCTION_DEF (util, caseless_hash);
 
+/***
+ *  @function util.caseless_hash_fast(str[, seed])
+ * Calculates caseless non-crypto hash from a string or rspamd text
+ * @param str string or lua_text
+ * @param seed mandatory seed (0xdeadbabe by default)
+ * @return {number} number from int64_t
+ */
+LUA_FUNCTION_DEF (util, caseless_hash_fast);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -492,6 +501,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, zstd_decompress),
 	LUA_INTERFACE_DEF (util, normalize_prob),
 	LUA_INTERFACE_DEF (util, caseless_hash),
+	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, count_non_ascii),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -1829,6 +1839,49 @@ lua_util_caseless_hash (lua_State *L)
 	r = lua_newuserdata (L, sizeof (*r));
 	*r = h;
 	rspamd_lua_setclass (L, "rspamd{int64}", -1);
+
+	return 1;
+}
+
+static gint
+lua_util_caseless_hash_fast (lua_State *L)
+{
+	guint64 seed = 0xdeadbabe, h;
+	struct rspamd_lua_text *t = NULL;
+	gsize sz;
+	union {
+		guint64 i;
+		double d;
+	} u;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		t = g_alloca (sizeof (*t));
+		t->start = lua_tolstring (L, 1, &sz);
+		t->len = sz;
+	}
+	else {
+		t = lua_check_text (L, 1);
+	}
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		seed = lua_tonumber (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TUSERDATA) {
+		seed = lua_check_int64 (L, 2);
+	}
+
+	/*
+	 * Here, we loose entropy from 64 bits to 52 bits roughly, however,
+	 * it is still fine for practical applications
+	 */
+
+	h = rspamd_icase_hash (t->start, t->len, seed);
+	u.i = G_GUINT64_CONSTANT(0x3FF) << 52 | h >> 12;
+	lua_pushnumber (L, u.d - 1.0);
 
 	return 1;
 }
