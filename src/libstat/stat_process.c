@@ -78,6 +78,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	rspamd_ftok_t elt;
 	guint i;
 	gchar tmpbuf[128];
+	lua_State *L = task->cfg->lua_state;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
 
@@ -168,21 +169,44 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		cur = g_list_next (cur);
 	}
 
-	/* Size meta-token */
-	if (task->msg.len > 1) {
-		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "size%dlog",
-				(gint)log2 (task->msg.len));
-		elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
-		elt.len = strlen (elt.begin);
-		g_array_append_val (ar, elt);
+	/* Use global metatokens from lua */
+	lua_getglobal (L, "rspamd_gen_metatokens");
+
+	if (lua_type (L, -1) == LUA_TFUNCTION) {
+		struct rspamd_task **ptask;
+
+		ptask = lua_newuserdata (L, sizeof (*ptask));
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
+		*ptask = task;
+
+		if (lua_pcall (L, 1, 1, 0) != 0) {
+			msg_err_task ("rspamd_gen_metatokens failed: %s",
+					lua_tostring (L, -1));
+			lua_pop (L, 1);
+		}
+		else {
+			/* Iterate over table of tables */
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				if (lua_isnumber (L, -1)) {
+					gdouble num = lua_tonumber (L, -1);
+					guint8 *pnum = rspamd_mempool_alloc (task->task_pool,
+							sizeof (num));
+
+					msg_debug_task ("got metatoken number: %.2f", num);
+					memcpy (pnum, &num, sizeof (num));
+					elt.begin = (gchar *)pnum;
+					elt.len = sizeof (num);
+					g_array_append_val (ar, elt);
+				}
+			}
+
+			lua_pop (L, 1);
+		}
 	}
-	/* Number recipients */
-	if (task->rcpt_mime && task->rcpt_mime->len > 0) {
-		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "recipients%d",
-				(gint)task->rcpt_mime->len);
-		elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
-		elt.len = strlen (elt.begin);
-		g_array_append_val (ar, elt);
+	else {
+		/* Not a function */
+		msg_info_task ("rspamd_gen_metatokens is not defined");
+		lua_pop (L, 1);
 	}
 
 	st_ctx->tokenizer->tokenize_func (st_ctx,
