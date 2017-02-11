@@ -33,6 +33,7 @@ struct rspamd_mime_header {
 	gsize raw_len;
 	gboolean tab_separated;
 	gboolean empty_separator;
+	guint order;
 	gchar *separator;
 	gchar *decoded;
 };

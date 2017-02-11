@@ -141,12 +141,13 @@ void
 rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		const gchar *in, gsize len, gboolean check_newlines)
 {
-	struct rspamd_mime_header *new = NULL;
+	struct rspamd_mime_header *nh = NULL;
 	const gchar *p, *c, *end;
 	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
 	guint nlines_count[RSPAMD_TASK_NEWLINES_MAX];
+	guint order = 0;
 
 	p = in;
 	end = p + len;
@@ -172,16 +173,16 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		case 1:
 			/* We got something like header's name */
 			if (*p == ':') {
-				new =
+				nh =
 					rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct rspamd_mime_header));
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
-				new->name = tmp;
-				new->empty_separator = TRUE;
-				new->raw_value = c;
-				new->raw_len = p - c; /* Including trailing ':' */
+				nh->name = tmp;
+				nh->empty_separator = TRUE;
+				nh->raw_value = c;
+				nh->raw_len = p - c; /* Including trailing ':' */
 				p++;
 				state = 2;
 				c = p;
@@ -199,12 +200,12 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		case 2:
 			/* We got header's name, so skip any \t or spaces */
 			if (*p == '\t') {
-				new->tab_separated = TRUE;
-				new->empty_separator = FALSE;
+				nh->tab_separated = TRUE;
+				nh->empty_separator = FALSE;
 				p++;
 			}
 			else if (*p == ' ') {
-				new->empty_separator = FALSE;
+				nh->empty_separator = FALSE;
 				p++;
 			}
 			else if (*p == '\n' || *p == '\r') {
@@ -227,7 +228,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 				if (l > 0) {
 					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
-					new->separator = tmp;
+					nh->separator = tmp;
 				}
 				next_state = 3;
 				err_state = 5;
@@ -239,7 +240,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 				if (l >= 0) {
 					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
-					new->separator = tmp;
+					nh->separator = tmp;
 				}
 				c = p;
 				state = 3;
@@ -311,30 +312,32 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 			}
 
 			if (p + 1 == end) {
-				new->raw_len = end - new->raw_value;
+				nh->raw_len = end - nh->raw_value;
 			}
 			else {
-				new->raw_len = p - new->raw_value;
+				nh->raw_len = p - nh->raw_value;
 			}
 
-			new->value = tmp;
-			new->decoded = rspamd_mime_header_decode (task->task_pool,
-					new->value, strlen (tmp));
+			nh->value = tmp;
+			nh->decoded = rspamd_mime_header_decode (task->task_pool,
+					nh->value, strlen (tmp));
 
-			if (new->decoded == NULL) {
-				new->decoded = "";
+			if (nh->decoded == NULL) {
+				nh->decoded = "";
 			}
 
 			/* We also validate utf8 and replace all non-valid utf8 chars */
-			rspamd_mime_charset_utf_enforce (new->decoded, strlen (new->decoded));
-			rspamd_mime_header_add (task, target, new, check_newlines);
+			rspamd_mime_charset_utf_enforce (nh->decoded, strlen (nh->decoded));
+			rspamd_mime_header_add (task, target, nh, check_newlines);
+			nh->order = order ++;
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
-			new->value = "";
-			new->decoded = "";
-			rspamd_mime_header_add (task, target, new, check_newlines);
+			nh->value = "";
+			nh->decoded = "";
+			rspamd_mime_header_add (task, target, nh, check_newlines);
+			nh->order = order ++;
 			state = 0;
 			break;
 		case 99:

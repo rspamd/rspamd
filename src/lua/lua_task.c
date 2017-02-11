@@ -1495,7 +1495,7 @@ rspamd_lua_push_header (lua_State * L,
 	PTR_ARRAY_FOREACH (ar, i, rh) {
 		if (full) {
 			/* Create new associated table for a header */
-			lua_createtable (L, 0, 6);
+			lua_createtable (L, 0, 7);
 			rspamd_lua_table_set (L, "name",	 rh->name);
 
 			if (rh->value) {
@@ -1513,6 +1513,9 @@ rspamd_lua_push_header (lua_State * L,
 			lua_pushboolean (L, rh->empty_separator);
 			lua_settable (L, -3);
 			rspamd_lua_table_set (L, "separator", rh->separator);
+			lua_pushstring (L, "order");
+			lua_pushnumber (L, rh->order);
+			lua_settable (L, -3);
 			lua_rawseti (L, -2, i + 1);
 		}
 		else {
