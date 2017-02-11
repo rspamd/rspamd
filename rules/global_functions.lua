@@ -197,7 +197,7 @@ local function meta_size_function(task)
   local size = task:get_size()
   for i = 1,#sizes do
     if sizes[i] >= size then
-      return {i / #sizes}
+      return {(1.0 * i) / #sizes}
     end
   end
 
@@ -235,10 +235,10 @@ local function meta_images_function(task)
     end
   end
   if ntotal > 0 then
-    njpg = njpg / ntotal
-    npng = npng / ntotal
-    nlarge = nlarge / ntotal
-    nsmall = nsmall / ntotal
+    njpg = 1.0 * njpg / ntotal
+    npng = 1.0 * npng / ntotal
+    nlarge = 1.0 * nlarge / ntotal
+    nsmall = 1.0 * nsmall / ntotal
   end
   return {ntotal,njpg,npng,nlarge,nsmall}
 end
@@ -264,7 +264,7 @@ local function meta_nparts_function(task)
     end
   end
 
-  return {ntextparts/totalparts, nattachments/totalparts}
+  return {(1.0 * ntextparts)/totalparts, (1.0 * nattachments)/totalparts}
 end
 
 local function meta_encoding_function(task)
@@ -303,14 +303,42 @@ local function meta_recipients_function(task)
 end
 
 local function meta_received_function(task)
-  local ret = 0
+  local count_factor = 0
+  local invalid_factor = 0
   local rh = task:get_received_headers()
+  local time_factor = 0
+  local tls_factor = 0
 
   if rh and #rh > 0 then
-    ret = 1 / #rh
+
+    local ntotal = 1.0 * #rh
+    count_factor = 1.0 / ntotal
+    local init_time = 0
+
+    for _,rc in ipairs(rh) do
+      if not rc.by_hostname then
+        invalid_factor = invalid_factor + 1
+      end
+      if init_time == 0 and rc.timestamp then
+        init_time = rc.timestamp
+      elseif rc.timestamp then
+        time_factor = time_factor + math.abs(init_time - rc.timestamp)
+        init_time = rc.timestamp
+      end
+      if rc.proto and (rc.proto == 'esmtps') then
+        tls_factor = tls_factor + 1
+      end
+    end
+
+    invalid_factor = invalid_factor / ntotal
+    tls_factor = tls_factor / ntotal
+
+    if time_factor ~= 0 then
+      time_factor = 1.0 / time_factor
+    end
   end
 
-  return {ret}
+  return {count_factor, invalid_factor, time_factor, tls_factor}
 end
 
 local function meta_urls_function(task)
@@ -355,7 +383,7 @@ local metafunctions = {
   },
   {
     cb = meta_received_function,
-    ninputs = 1,
+    ninputs = 4,
   },
   {
     cb = meta_urls_function,
