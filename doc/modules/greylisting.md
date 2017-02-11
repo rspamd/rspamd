@@ -27,7 +27,7 @@ This module produces `soft reject` action on greylisting which **SHOULD** be tre
 
 ## Module configuration
 
-First of all, you need to setup Redis server for storing hashes. This procedure is described in detail in the [following document]({{ site.baseurl }}/doc/configuration/redis.html). Thereafter, you can modify a couple of options specific for greylisting module. It is recommended to define these options in `rspamd.conf.local`:
+First of all, you need to setup Redis server for storing hashes. This procedure is described in detail in the [following document]({{ site.baseurl }}/doc/configuration/redis.html). Thereafter, you can modify a couple of options specific for greylisting module. It is recommended to define these options in `local.d/greylist.conf`:
 
 * **`expire`**: setup hashes expire time (1 day by default)
 * **`ipv4_mask`**: mask to apply for IPv4 addresses (19 by default)
@@ -41,9 +41,11 @@ First of all, you need to setup Redis server for storing hashes. This procedure 
 
 If you need to skip greylisting based on other conditions disabling the `GREYLIST_CHECK` and `GREYLIST_SAVE` symbols with [settings module]({{ site.baseurl }}/doc/configuration/settings.html) might suffice.
 
-To enable the module with default settings you could define an empty configuration as shown below:
+To enable the module with default settings you need to define at least [redis]({{ site.baseurl }}/doc/configuration/redis.html) servers to store greylisting data:
 
 ~~~ucl
-greylist {
-}
+# local.d/greylist.conf
+servers = "127.0.0.1:6379";
 ~~~
+
+Adding servers to store greylisting data enables greylisting in Rspamd.
