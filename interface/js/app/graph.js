@@ -151,6 +151,21 @@ function($, D3Evolution, unused) {
     var interface = {};
 
     interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
+        function updateWidgets(data) {
+            graphs.graph.data(data);
+            if (!data) {
+                graphs.rrd_pie.destroy();
+                drawRrdTable([]);
+                return;
+            }
+            var rrd_summary = getRrdSummary(data);
+            graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
+                "rrd-pie",
+                rrd_summary,
+                rrd_pie_config);
+            drawRrdTable(rrd_summary);
+        }
+
         if (graphs.graph === undefined) {
             graphs.graph = initGraph();
         }
@@ -164,10 +179,44 @@ function($, D3Evolution, unused) {
         }
 
         if (checked_server === "All SERVERS") {
-            rspamd.alertMessage('alert-error', 'Data consolidation is not implemented yet');
-            graphs.graph.data();
-            graphs.rrd_pie.destroy();
-            drawRrdTable([]);
+            rspamd.queryNeighbours("graph", function (neighbours_data) {
+                neighbours_data
+                    .filter(function (d) { return d.status }) // filter out unavailable neighbours
+                    .map(function (d){ return d.data; })
+                    .reduce(function (res, curr) {
+                        if ((curr[0][0].x !== res[0][0].x) ||
+                            (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
+                            rspamd.alertMessage('alert-error',
+                                'Neighbours time extents do not match. Check if time is synchronized on all servers.');
+                            updateWidgets();
+                            return;
+                        }
+
+                        let data = [];
+                        curr.forEach(function (action, j) {
+                            data.push(
+                                action.map(function (d, i) {
+                                    return {
+                                        x: d.x,
+                                        y: ((res[j][i].y === null) ? d.y : res[j][i].y + d.y)
+                                    };
+                                })
+                            );
+                        });
+                        updateWidgets(data);
+                    });
+            },
+            function (serv, jqXHR, textStatus, errorThrown) {
+                var alert_status = serv.name + '_alerted';
+
+                if (!(alert_status in sessionStorage)) {
+                    sessionStorage.setItem(alert_status, true);
+                    rspamd.alertMessage('alert-error', 'Cannot receive RRD data from: ' +
+                        serv.name + ', error: ' + errorThrown);
+                }
+            }, "GET", {}, {}, {
+                type: type
+            });
             return;
         }
 
@@ -183,13 +232,7 @@ function($, D3Evolution, unused) {
                 xhr.setRequestHeader('Password', rspamd.getPassword());
             },
             success: function (data) {
-                var rrd_summary = getRrdSummary(data);
-                graphs.graph.data(data);
-                graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
-                    "rrd-pie",
-                    rrd_summary,
-                    rrd_pie_config);
-                drawRrdTable(rrd_summary);
+                updateWidgets(data);
             },
             error: function (jqXHR, textStatus, errorThrown) {
                 rspamd.alertMessage('alert-error', 'Cannot receive throughput data: ' +
@@ -197,7 +240,6 @@ function($, D3Evolution, unused) {
             }
         });
     };
-
 
     return interface;
 });

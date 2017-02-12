@@ -341,7 +341,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             $.ajax(req_params);
         }
 
-        interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params) {
+        interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params, req_data) {
             $.ajax({
                 dataType: "json",
                 type: "GET",
@@ -378,6 +378,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                         var req_params = {
                             type: method,
                             jsonp: false,
+                            data: req_data,
                             beforeSend: function (xhr) {
                                 xhr.setRequestHeader("Password", getPassword());
 
