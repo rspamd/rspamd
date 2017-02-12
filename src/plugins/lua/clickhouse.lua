@@ -28,7 +28,6 @@ local nrows = 0
 
 local settings = {
   limit = 1000,
-  server = "localhost:8123",
   timeout = 5.0,
   bayes_spam_symbols = {'BAYES_SPAM'},
   bayes_ham_symbols = {'BAYES_HAM'},

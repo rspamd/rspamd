@@ -105,6 +105,7 @@ local function check_dcc (task)
     task = task,
     host = opts['host'],
     port = opts['port'] or 1,
+    timeout = opts['timeout'] or 2.0,
     shutdown = true,
     data = data,
     callback = cb
