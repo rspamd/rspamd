@@ -788,30 +788,37 @@ rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
 
 rspamd_config.OMOGRAPH_URL = {
   callback = function(task)
+    local fun = require "fun"
     local urls = task:get_urls()
 
     if urls then
-      for _,u in ipairs(urls) do
-        local h = u:get_host()
+      local bad_omographs = 0
+      local bad_urls = {}
 
+      fun.each(function(u)
+        local h = u:get_host()
         if h then
           local parts = rspamd_str_split(h, '.')
-
-          local bad_omographs = 0
+          local found = false
 
           for _,p in ipairs(parts) do
             local cnlat,ctot = util.count_non_ascii(p)
 
             if cnlat > 0 and cnlat ~= ctot then
               bad_omographs = bad_omographs + 1.0 / cnlat
+              found = true
             end
           end
 
-          if bad_omographs > 0 then
-            if bad_omographs > 1 then bad_omographs = 1.0 end
-            return true, bad_omographs, h
+          if found then
+            table.insert(bad_urls, h)
           end
         end
+      end, fun.filter(function(u) return not u:is_html_displayed() end, urls))
+
+      if bad_omographs > 0 then
+        if bad_omographs > 1 then bad_omographs = 1.0 end
+        return true, bad_omographs, bad_urls
       end
     end
 
