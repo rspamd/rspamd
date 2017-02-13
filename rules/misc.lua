@@ -767,10 +767,21 @@ rspamd_config.OMOGRAPH_URL = {
         local h = u:get_host()
 
         if h then
-          local non_latin,total = util.count_non_ascii(h)
+          local parts = rspamd_str_split(h, '.')
 
-          if non_latin ~= total and non_latin > 0 then
-            return true, 1.0, h
+          local bad_omographs = 0
+
+          for _,p in ipairs(parts) do
+            local cnlat,ctot = util.count_non_ascii(p)
+
+            if cnlat > 0 and cnlat ~= ctot then
+              bad_omographs = bad_omographs + 1.0 / cnlat
+            end
+          end
+
+          if bad_omographs > 0 then
+            if bad_omographs > 1 then bad_omographs = 1.0 end
+            return true, bad_omographs, h
           end
         end
       end

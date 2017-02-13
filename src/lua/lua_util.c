@@ -1891,7 +1891,7 @@ lua_util_count_non_ascii (lua_State *L)
 {
 	gsize len;
 	const gchar *str = lua_tolstring (L, 1, &len);
-	const gchar *p, *end;
+	const gchar *p, *end, *np;
 	gint ret = 0, total = 0;
 
 	if (str != NULL) {
@@ -1900,8 +1900,13 @@ lua_util_count_non_ascii (lua_State *L)
 
 		while (p < end) {
 			if (*p & 0x80) {
+				np = g_utf8_find_next_char (p, end);
 				ret ++;
 				total ++;
+
+				p = (np != p) ? np : p + 1;
+
+				continue;
 			}
 			else if (g_ascii_isalpha (*p)) {
 				total ++;
