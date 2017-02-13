@@ -180,6 +180,7 @@ void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
 		rspamd_mempool_t *pool);
 
 guint rspamd_url_hash (gconstpointer u);
+guint rspamd_email_hash (gconstpointer u);
 
 /* Compare two emails for building emails hash */
 gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);

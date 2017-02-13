@@ -2150,7 +2150,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							}
 
 							if (displayed_url) {
-								if (url->protocol == PROTOCOL_MAILTO) {
+								if (displayed_url->protocol == PROTOCOL_MAILTO) {
 									target_tbl = emails;
 								}
 								else {
@@ -2158,7 +2158,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 								}
 
 								if (target_tbl != NULL) {
-									turl = g_hash_table_lookup (target_tbl, url);
+									turl = g_hash_table_lookup (target_tbl,
+											displayed_url);
 
 									if (turl != NULL) {
 										/* Here, we assume the following:
@@ -2171,6 +2172,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 											turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 											turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
 										}
+									}
+									else {
+										g_hash_table_insert (target_tbl,
+												displayed_url, displayed_url);
 									}
 								}
 							}

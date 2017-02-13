@@ -2584,7 +2584,24 @@ rspamd_url_hash (gconstpointer u)
 		rspamd_cryptobox_fast_hash_update (&st, url->string, url->urllen);
 	}
 
-	rspamd_cryptobox_fast_hash_update (&st, &url->flags, sizeof (url->flags));
+	return rspamd_cryptobox_fast_hash_final (&st);
+}
+
+guint
+rspamd_email_hash (gconstpointer u)
+{
+	const struct rspamd_url *url = u;
+	rspamd_cryptobox_fast_hash_state_t st;
+
+	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+
+	if (url->hostlen > 0) {
+		rspamd_cryptobox_fast_hash_update (&st, url->host, url->hostlen);
+	}
+
+	if (url->userlen > 0) {
+		rspamd_cryptobox_fast_hash_update (&st, url->user, url->userlen);
+	}
 
 	return rspamd_cryptobox_fast_hash_final (&st);
 }
@@ -2621,17 +2638,13 @@ gboolean
 rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_url *u1 = a, *u2 = b;
-	int r;
+	int r = 0;
 
 	if (u1->urllen != u2->urllen) {
 		return FALSE;
 	}
 	else {
 		r = memcmp (u1->string, u2->string, u1->urllen);
-		if (r == 0 && u1->flags != u2->flags) {
-			/* Always insert phished urls to the tree */
-			return FALSE;
-		}
 	}
 
 	return r == 0;

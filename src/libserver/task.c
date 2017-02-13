@@ -105,7 +105,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->raw_headers);
-	new_task->emails = g_hash_table_new (rspamd_url_hash, rspamd_emails_cmp);
+	new_task->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->emails);
