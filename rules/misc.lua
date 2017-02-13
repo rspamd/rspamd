@@ -477,8 +477,14 @@ local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
       task:insert_result('FROM_HAS_DN', 1.0)
       -- Look for Mr/Mrs/Dr titles
       local n = from[1].name:lower()
-      if (n:find('^mrs?[%.%s]') or n:find('^dr[%.%s]')) then
-        task:insert_result('FROM_NAME_HAS_TITLE', 1.0)
+      local match, match_end
+      match, match_end = n:find('^mrs?[%.%s]')
+      if match then
+        task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+      end
+      match, match_end = n:find('^dr[%.%s]')
+      if match then
+        task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
       end
     end
     if (envfrom and from and envfrom[1] and from[1] and
