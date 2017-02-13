@@ -131,8 +131,8 @@ local function phishing_cb(task)
         end
 
         -- Now we can safely remove the last dot component if it is the same
-        local b,e = string.find(tld, '%.[^%.]+$')
-        local b1,e1 = string.find(ptld, '%.[^%.]+$')
+        local b,_ = string.find(tld, '%.[^%.]+$')
+        local b1,_ = string.find(ptld, '%.[^%.]+$')
 
         if b1 and b then
           if string.sub(tld, b) == string.sub(ptld, b1) then
