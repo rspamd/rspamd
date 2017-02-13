@@ -14,6 +14,8 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_NUMERIC = 1 << 1,
 	RSPAMD_URL_FLAG_OBSCURED = 1 << 2,
 	RSPAMD_URL_FLAG_REDIRECTED = 1 << 3,
+	RSPAMD_URL_FLAG_HTML_DISPLAYED = 1 << 4,
+	RSPAMD_URL_FLAG_FROM_TEXT = 1 << 5,
 };
 
 struct rspamd_url_tag {

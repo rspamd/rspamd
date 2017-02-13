@@ -2364,6 +2364,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
 			if (!g_hash_table_lookup (task->emails, url)) {
+				url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 				g_hash_table_insert (task->emails, url,
 						url);
 			}
@@ -2371,6 +2372,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	}
 	else {
 		if (!g_hash_table_lookup (task->urls, url)) {
+			url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 			g_hash_table_insert (task->urls, url, url);
 		}
 	}
@@ -2401,6 +2403,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 				if (!g_hash_table_lookup (task->urls,
 						query_url)) {
+					query_url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 					g_hash_table_insert (task->urls,
 							query_url,
 							query_url);
