@@ -130,6 +130,21 @@ local function phishing_cb(task)
           return
         end
 
+        -- Now we can safely remove the last dot component if it is the same
+        local b,e = string.find(tld, '%.[^%.]+$')
+        local b1,e1 = string.find(ptld, '%.[^%.]+$')
+
+        if b1 and b then
+          if string.sub(tld, b) == string.sub(ptld, b1) then
+            ptld = string.gsub(ptld, '%.[^%.]+$', '')
+            tld = string.gsub(tld, '%.[^%.]+$', '')
+          end
+
+          if #ptld == 0 or #tld == 0 then
+            return false
+          end
+        end
+
         local weight = 1.0
         local dist = util.levenshtein_distance(tld, ptld, 2)
         dist = 2 * dist / (#tld + #ptld)
@@ -137,6 +152,10 @@ local function phishing_cb(task)
         if dist > 0.3 and dist <= 1.0 then
           -- Use distance to penalize the total weight
           weight = util.tanh(3 * (1 - dist + 0.1))
+        elseif dist > 1 then
+          -- We have totally different strings in tld, so penalize it significantly
+          if dist > 2 then dist = 2 end
+          weight = util.tanh((2 - dist) * 0.5)
         end
         rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
 
