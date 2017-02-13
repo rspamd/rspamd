@@ -229,6 +229,9 @@ local ip_score_check = function(task)
       local rep = tonumber(parts[1])
       local total = tonumber(parts[2])
 
+      if rep ~= rep then rep = 0 end
+      if total ~= total then total = 0 end
+
       return rep, total
     end
 
