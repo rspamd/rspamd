@@ -16,6 +16,7 @@ limitations under the License.
 
 -- This is main lua config file for rspamd
 
+local E = {}
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
 
@@ -628,6 +629,18 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
       return false
     else
       task:insert_result('HAS_REPLYTO', 1.0)
+      local rta = rt[1].addr
+      if rta then
+        -- Check if Reply-To address starts with title seen in display name
+        local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
+        local title = (((sym or E)[1] or E).options or E)[1]
+        if title then
+          rta = rta:lower()
+          if rta:find('^' .. title) then
+            task:insert_result('REPLYTO_EMAIL_HAS_TITLE', 1.0)
+          end
+        end
+      end
     end
 
     -- See if Reply-To matches From in some way
@@ -672,6 +685,9 @@ rspamd_config:register_virtual_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 1.0, check_rep
 rspamd_config:set_metric_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 0, 'Reply-To domain does not match the From domain')
 rspamd_config:register_virtual_symbol('REPLYTO_DN_EQ_FROM_DN', 1.0, check_replyto_id)
 rspamd_config:set_metric_symbol('REPLYTO_DN_EQ_FROM_DN', 0, 'Reply-To display name matches From')
+rspamd_config:register_virtual_symbol('REPLYTO_EMAIL_HAS_TITLE', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_EMAIL_HAS_TITLE', 2.0, check_replyto_id)
+rspamd_config:register_dependency(check_replyto_id, check_from_id)
 
 local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
   function (task)
