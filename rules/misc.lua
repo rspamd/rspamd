@@ -693,7 +693,7 @@ rspamd_config:register_virtual_symbol('REPLYTO_DN_EQ_FROM_DN', 1.0, check_replyt
 rspamd_config:set_metric_symbol('REPLYTO_DN_EQ_FROM_DN', 0, 'Reply-To display name matches From')
 rspamd_config:register_virtual_symbol('REPLYTO_EMAIL_HAS_TITLE', 1.0, check_replyto_id)
 rspamd_config:set_metric_symbol('REPLYTO_EMAIL_HAS_TITLE', 2.0, check_replyto_id)
-rspamd_config:register_dependency(check_replyto_id, check_from_id)
+rspamd_config:register_dependency(check_replyto_id, 'FROM_NAME_HAS_TITLE')
 
 local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
   function (task)
