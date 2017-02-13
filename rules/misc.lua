@@ -487,6 +487,10 @@ local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
       if match then
         task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
       end
+      -- Check for excess spaces
+      if n:find('%s%s') then
+        task:insert_result('FROM_NAME_EXCESS_SPACE', 1.0)
+      end
     end
     if (envfrom and from and envfrom[1] and from[1] and
         envfrom[1].addr:lower() == from[1].addr:lower())
@@ -514,6 +518,8 @@ rspamd_config:register_virtual_symbol('FROM_DN_EQ_ADDR', 1.0, check_from_id)
 rspamd_config:set_metric_symbol('FROM_DN_EQ_ADDR', 1.0, 'From header display name is the same as the address')
 rspamd_config:register_virtual_symbol('FROM_HAS_DN', 1.0, check_from_id)
 rspamd_config:set_metric_symbol('FROM_HAS_DN', 0, 'From header has a display name')
+rspamd_config:register_virtual_symbol('FROM_NAME_EXCESS_SPACE', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NAME_EXCESS_SPACE', 1.0, 'From header display name contains excess whitespace')
 rspamd_config:register_virtual_symbol('FROM_NAME_HAS_TITLE', 1.0, check_from_id)
 rspamd_config:set_metric_symbol('FROM_NAME_HAS_TITLE', 1.0, 'From header display name has a title (Mr/Mrs/Dr)')
 rspamd_config:register_virtual_symbol('FROM_EQ_ENVFROM', 1.0, check_from_id)
