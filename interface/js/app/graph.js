@@ -179,11 +179,13 @@ function($, D3Evolution, unused) {
         }
 
         if (checked_server === "All SERVERS") {
-            rspamd.queryNeighbours("graph", function (neighbours_data) {
-                neighbours_data
+            rspamd.queryNeighbours("graph", function (req_data) {
+                let neighbours_data = req_data
                     .filter(function (d) { return d.status }) // filter out unavailable neighbours
                     .map(function (d){ return d.data; })
-                    .reduce(function (res, curr) {
+
+                if (neighbours_data.length > 1) {
+                    neighbours_data.reduce(function (res, curr) {
                         if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
                             rspamd.alertMessage('alert-error',
@@ -205,6 +207,10 @@ function($, D3Evolution, unused) {
                         });
                         updateWidgets(data);
                     });
+                }
+                else {
+                    updateWidgets(neighbours_data[0]);
+                }
             },
             function (serv, jqXHR, textStatus, errorThrown) {
                 var alert_status = serv.name + '_alerted';
