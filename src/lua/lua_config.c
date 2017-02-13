@@ -943,6 +943,17 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 							rspamd_task_add_result_option (task, s, opt);
 						}
+						else if (lua_type (L, i) == LUA_TTABLE) {
+							lua_pushvalue (L, i);
+
+							for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+								const char *opt = lua_tostring (L, -1);
+
+								rspamd_task_add_result_option (task, s, opt);
+							}
+
+							lua_pop (L, 1);
+						}
 					}
 				}
 
