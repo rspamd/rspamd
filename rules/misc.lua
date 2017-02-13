@@ -16,6 +16,7 @@ limitations under the License.
 
 -- This is main lua config file for rspamd
 
+local E = {}
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
 
@@ -477,8 +478,18 @@ local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
       task:insert_result('FROM_HAS_DN', 1.0)
       -- Look for Mr/Mrs/Dr titles
       local n = from[1].name:lower()
-      if (n:find('^mrs?[%.%s]') or n:find('^dr[%.%s]')) then
-        task:insert_result('FROM_NAME_HAS_TITLE', 1.0)
+      local match, match_end
+      match, match_end = n:find('^mrs?[%.%s]')
+      if match then
+        task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+      end
+      match, match_end = n:find('^dr[%.%s]')
+      if match then
+        task:insert_result('FROM_NAME_HAS_TITLE', 1.0, n:sub(match, match_end-1))
+      end
+      -- Check for excess spaces
+      if n:find('%s%s') then
+        task:insert_result('FROM_NAME_EXCESS_SPACE', 1.0)
       end
     end
     if (envfrom and from and envfrom[1] and from[1] and
@@ -507,6 +518,8 @@ rspamd_config:register_virtual_symbol('FROM_DN_EQ_ADDR', 1.0, check_from_id)
 rspamd_config:set_metric_symbol('FROM_DN_EQ_ADDR', 1.0, 'From header display name is the same as the address')
 rspamd_config:register_virtual_symbol('FROM_HAS_DN', 1.0, check_from_id)
 rspamd_config:set_metric_symbol('FROM_HAS_DN', 0, 'From header has a display name')
+rspamd_config:register_virtual_symbol('FROM_NAME_EXCESS_SPACE', 1.0, check_from_id)
+rspamd_config:set_metric_symbol('FROM_NAME_EXCESS_SPACE', 1.0, 'From header display name contains excess whitespace')
 rspamd_config:register_virtual_symbol('FROM_NAME_HAS_TITLE', 1.0, check_from_id)
 rspamd_config:set_metric_symbol('FROM_NAME_HAS_TITLE', 1.0, 'From header display name has a title (Mr/Mrs/Dr)')
 rspamd_config:register_virtual_symbol('FROM_EQ_ENVFROM', 1.0, check_from_id)
@@ -622,6 +635,18 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
       return false
     else
       task:insert_result('HAS_REPLYTO', 1.0)
+      local rta = rt[1].addr
+      if rta then
+        -- Check if Reply-To address starts with title seen in display name
+        local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
+        local title = (((sym or E)[1] or E).options or E)[1]
+        if title then
+          rta = rta:lower()
+          if rta:find('^' .. title) then
+            task:insert_result('REPLYTO_EMAIL_HAS_TITLE', 1.0)
+          end
+        end
+      end
     end
 
     -- See if Reply-To matches From in some way
@@ -666,6 +691,9 @@ rspamd_config:register_virtual_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 1.0, check_rep
 rspamd_config:set_metric_symbol('REPLYTO_DOM_NEQ_FROM_DOM', 0, 'Reply-To domain does not match the From domain')
 rspamd_config:register_virtual_symbol('REPLYTO_DN_EQ_FROM_DN', 1.0, check_replyto_id)
 rspamd_config:set_metric_symbol('REPLYTO_DN_EQ_FROM_DN', 0, 'Reply-To display name matches From')
+rspamd_config:register_virtual_symbol('REPLYTO_EMAIL_HAS_TITLE', 1.0, check_replyto_id)
+rspamd_config:set_metric_symbol('REPLYTO_EMAIL_HAS_TITLE', 2.0, check_replyto_id)
+rspamd_config:register_dependency(check_replyto_id, check_from_id)
 
 local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
   function (task)
