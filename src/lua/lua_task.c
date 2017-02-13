@@ -1619,11 +1619,43 @@ lua_task_get_received_headers (lua_State * L)
 			for (i = 0; i < task->received->len; i ++) {
 				rh = g_ptr_array_index (task->received, i);
 
-				lua_createtable (L, 0, 9);
+				lua_createtable (L, 0, 10);
 
 				if (rh->hdr && rh->hdr->decoded) {
 					rspamd_lua_table_set (L, "raw", rh->hdr->decoded);
 				}
+
+				lua_pushstring (L, "flags");
+				lua_createtable (L, 0, 3);
+
+				lua_pushstring (L, "artificial");
+				if (rh->flags & RSPAMD_RECEIVED_FLAG_ARTIFICIAL) {
+					lua_pushboolean (L, true);
+				}
+				else {
+					lua_pushboolean (L, false);
+				}
+				lua_settable (L, -3);
+
+				lua_pushstring (L, "authenticated");
+				if (rh->flags & RSPAMD_RECEIVED_FLAG_AUTHENTICATED) {
+					lua_pushboolean (L, true);
+				}
+				else {
+					lua_pushboolean (L, false);
+				}
+				lua_settable (L, -3);
+
+				lua_pushstring (L, "ssl");
+				if (rh->flags & RSPAMD_RECEIVED_FLAG_SSL) {
+					lua_pushboolean (L, true);
+				}
+				else {
+					lua_pushboolean (L, false);
+				}
+				lua_settable (L, -3);
+
+				lua_settable (L, -3);
 
 				if (G_UNLIKELY (rh->from_ip == NULL &&
 						rh->real_ip == NULL &&

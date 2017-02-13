@@ -725,6 +725,7 @@ rspamd_message_parse (struct rspamd_task *task)
 
 			trecv = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct received_header));
+			trecv->flags |= RSPAMD_RECEIVED_FLAG_ARTIFICIAL;
 			trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
 					rspamd_inet_address_to_string (task->from_addr));
 			trecv->from_ip = trecv->real_ip;

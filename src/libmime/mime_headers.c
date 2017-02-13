@@ -40,6 +40,16 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		recv->hdr = rh;
 		rspamd_smtp_recieved_parse (task, rh->decoded,
 				strlen (rh->decoded), recv);
+		/* Set flags */
+		if (recv->type == RSPAMD_RECEIVED_ESMTPA ||
+				recv->type == RSPAMD_RECEIVED_ESMTPSA) {
+			recv->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
+		}
+		if (recv->type == RSPAMD_RECEIVED_ESMTPS ||
+				recv->type == RSPAMD_RECEIVED_ESMTPSA) {
+			recv->flags |= RSPAMD_RECEIVED_FLAG_SSL;
+		}
+
 		g_ptr_array_add (task->received, recv);
 		break;
 	case 0x76F31A09F4352521ULL:	/* to */

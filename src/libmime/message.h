@@ -103,6 +103,10 @@ enum rspamd_received_type {
 	RSPAMD_RECEIVED_UNKNOWN
 };
 
+#define RSPAMD_RECEIVED_FLAG_ARTIFICIAL (1 << 0)
+#define RSPAMD_RECEIVED_FLAG_SSL (1 << 1)
+#define RSPAMD_RECEIVED_FLAG_AUTHENTICATED (1 << 2)
+
 struct received_header {
 	gchar *from_hostname;
 	gchar *from_ip;
@@ -114,6 +118,7 @@ struct received_header {
 	struct rspamd_mime_header *hdr;
 	time_t timestamp;
 	enum rspamd_received_type type;
+	gint flags;
 };
 
 /**

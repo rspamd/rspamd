@@ -307,17 +307,19 @@ local function meta_received_function(task)
   local invalid_factor = 0
   local rh = task:get_received_headers()
   local time_factor = 0
-  local tls_factor = 0
+  local secure_factor = 0
+  local fun = require "fun"
 
   if rh and #rh > 0 then
 
-    local ntotal = 1.0 * #rh
-    count_factor = 1.0 / ntotal
+    local ntotal = 0.0
     local init_time = 0
 
-    for _,rc in ipairs(rh) do
+    fun.each(function(rc)
+      ntotal = ntotal + 1.0
+
       if not rc.by_hostname then
-        invalid_factor = invalid_factor + 1
+        invalid_factor = invalid_factor + 1.0
       end
       if init_time == 0 and rc.timestamp then
         init_time = rc.timestamp
@@ -325,20 +327,22 @@ local function meta_received_function(task)
         time_factor = time_factor + math.abs(init_time - rc.timestamp)
         init_time = rc.timestamp
       end
-      if rc.proto and (rc.proto == 'esmtps') then
-        tls_factor = tls_factor + 1
+      if rc.flags and (rc.flags['ssl'] or rc.flags['authenticated']) then
+        secure_factor = secure_factor + 1.0
       end
-    end
+    end,
+    fun.filter(function(rc) return not rc.flags or not rc.flags['artificial'] end, rh))
 
     invalid_factor = invalid_factor / ntotal
-    tls_factor = tls_factor / ntotal
+    secure_factor = secure_factor / ntotal
+    count_factor = 1.0 / ntotal
 
     if time_factor ~= 0 then
       time_factor = 1.0 / time_factor
     end
   end
 
-  return {count_factor, invalid_factor, time_factor, tls_factor}
+  return {count_factor, invalid_factor, time_factor, secure_factor}
 end
 
 local function meta_urls_function(task)
