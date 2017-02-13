@@ -17,6 +17,7 @@ limitations under the License.
 -- This is main lua config file for rspamd
 
 local E = {}
+local fun = require "fun"
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
 
@@ -610,6 +611,9 @@ rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_SOME', 0, 'Some of the recipie
 rspamd_config.CHECK_RECEIVED = {
   callback = function (task)
     local received = task:get_received_headers()
+    received = fun.filter(function(h)
+      return not h['artificial']
+    end, received):totable()
     task:insert_result('RCVD_COUNT_' .. #received, 1.0)
   end
 }
@@ -788,7 +792,6 @@ rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
 
 rspamd_config.OMOGRAPH_URL = {
   callback = function(task)
-    local fun = require "fun"
     local urls = task:get_urls()
 
     if urls then
