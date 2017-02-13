@@ -712,6 +712,11 @@ local function multimap_callback(task, rule)
     received = function()
       local hdrs = task:get_received_headers()
       if hdrs and hdrs[1] then
+        if not rule['artificial'] then
+          hdrs = fun.filter(function(h)
+            return not h['artificial']
+          end, hdrs):totable()
+        end
         for pos, h in ipairs(hdrs) do
           match_received_header(rule, pos, #hdrs, h)
         end
