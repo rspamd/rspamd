@@ -1904,6 +1904,10 @@ lua_util_count_non_ascii (lua_State *L)
 				ret ++;
 				total ++;
 
+				if (np == NULL) {
+					break;
+				}
+
 				p = (np != p) ? np : p + 1;
 
 				continue;
