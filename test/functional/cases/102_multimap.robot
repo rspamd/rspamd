@@ -11,6 +11,8 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 ${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
+${RCVD1}        ${TESTDIR}/messages/received1.eml
+${RCVD2}        ${TESTDIR}/messages/received2.eml
 ${URL1}         ${TESTDIR}/messages/url1.eml
 ${URL2}         ${TESTDIR}/messages/url2.eml
 ${URL3}         ${TESTDIR}/messages/url3.eml
@@ -253,6 +255,16 @@ MAP - REDIS - ASN FILTERED - HIT
 MAP - REDIS - ASN FILTERED - MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  46.228.47.114
   Check Rspamc  ${result}  REDIS_ASN_FILTERED  inverse=1
+
+MAP - RECEIVED - IP MINMAX POS - ONE
+  ${result} =  Scan Message With Rspamc  ${RCVD1}
+  Check Rspamc  ${result}  RCVD_TEST_01
+  Check Rspamc  ${result}  RCVD_TEST_02  inverse=1
+
+MAP - RECEIVED - IP MINMAX POS - TWO
+  ${result} =  Scan Message With Rspamc  ${RCVD2}
+  Check Rspamc  ${result}  RCVD_TEST_02
+  Check Rspamc  ${result}  RCVD_TEST_01  inverse=1
 
 *** Keywords ***
 Multimap Setup
