@@ -30,7 +30,7 @@
 
 ### Actual results:
 
-### Debugging information (see details [here] (https://rspamd.com/doc/faq.html#how-to-figure-out-why-rspamd-process-crashed)):
+### Debugging information (see details [here](https://rspamd.com/doc/faq.html#how-to-figure-out-why-rspamd-process-crashed)):
 
 ### Configuration:
 
