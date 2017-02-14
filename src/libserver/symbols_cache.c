@@ -1652,7 +1652,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		for (i = 0; i < (gint)checkpoint->version; i ++) {
 			item = g_ptr_array_index (checkpoint->order->d, i);
 
-			if (!(item->type & SYMBOL_TYPE_FINE)) {
+			if (!(item->type & SYMBOL_TYPE_FINE) &&
+					rspamd_session_events_pending (task->s) == 0) {
 				if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
 					msg_info_task ("<%s> has already scored more than %.2f, so do "
 							"not "
