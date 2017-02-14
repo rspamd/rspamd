@@ -17,6 +17,7 @@
 #include "fstring.h"
 #include "cryptobox.h"
 #include "images.h"
+#include "libstat/stat_api.h"
 
 #define SHINGLES_WINDOW 3
 
@@ -34,7 +35,7 @@ rspamd_shingles_from_text (GArray *input,
 	guchar shabuf[rspamd_cryptobox_HASHBYTES], *out_key;
 	const guchar *cur_key;
 	rspamd_fstring_t *row;
-	rspamd_ftok_t *word;
+	rspamd_stat_token_t *word;
 	rspamd_cryptobox_hash_state_t bs;
 	guint64 val;
 	gint i, j, k;
@@ -81,7 +82,7 @@ rspamd_shingles_from_text (GArray *input,
 		for (i = 0; i <= (gint)input->len; i ++) {
 			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 				for (j = beg; j < i; j ++) {
-					word = &g_array_index (input, rspamd_ftok_t, j);
+					word = &g_array_index (input, rspamd_stat_token_t, j);
 					row = rspamd_fstring_append (row, word->begin, word->len);
 				}
 
@@ -125,7 +126,7 @@ rspamd_shingles_from_text (GArray *input,
 								res[j * SHINGLES_WINDOW + k + 1];
 					}
 
-					word = &g_array_index (input, rspamd_ftok_t, beg);
+					word = &g_array_index (input, rspamd_stat_token_t, beg);
 					/* Insert the last element to the pipe */
 					memcpy (&seed, keys[j], sizeof (seed));
 					res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =

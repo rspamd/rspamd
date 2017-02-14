@@ -254,7 +254,8 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		}
 	}
 
-	msg_debug_chartable ("word %T, badness: %.2f", w, badness);
+	msg_debug_chartable ("word %*s, badness: %.2f", (gint)w->len, w->begin,
+			badness);
 
 	return badness;
 }
@@ -337,7 +338,8 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 		badness = 4.0;
 	}
 
-	msg_debug_chartable ("word %T, badness: %.2f", w, badness);
+	msg_debug_chartable ("word %*s, badness: %.2f", (gint)w->len, w->begin,
+			badness);
 
 	return badness;
 }
