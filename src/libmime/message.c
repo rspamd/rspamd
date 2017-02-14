@@ -204,7 +204,7 @@ rspamd_extract_words (struct rspamd_task *task,
 #ifdef WITH_SNOWBALL
 	struct sb_stemmer *stem = NULL;
 #endif
-	rspamd_ftok_t *w;
+	rspamd_stat_token_t *w;
 	gchar *temp_word;
 	const guchar *r;
 	guint i, nlen;
@@ -231,7 +231,7 @@ rspamd_extract_words (struct rspamd_task *task,
 		for (i = 0; i < part->normalized_words->len; i ++) {
 			guint64 h;
 
-			w = &g_array_index (part->normalized_words, rspamd_ftok_t, i);
+			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 			r = NULL;
 #ifdef WITH_SNOWBALL
 			if (stem) {
@@ -239,7 +239,7 @@ rspamd_extract_words (struct rspamd_task *task,
 			}
 #endif
 
-			if (w->len > 0 && !(w->len == 6 && memcmp (w->begin, "!!EX!!", 6) == 0)) {
+			if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 				if (r != NULL) {
 					nlen = strlen (r);
 					nlen = MIN (nlen, w->len);
@@ -268,7 +268,8 @@ rspamd_extract_words (struct rspamd_task *task,
 				 * We use static hash seed if we would want to use that in shingles
 				 * computation in future
 				 */
-				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+				h = rspamd_cryptobox_fast_hash_specific (
+						RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
 						w->begin, w->len, words_hash_seed);
 				g_array_append_val (part->normalized_hashes, h);
 			}

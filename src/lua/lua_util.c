@@ -895,7 +895,7 @@ lua_util_tokenize_text (lua_State *L)
 	struct rspamd_lua_text *t;
 	struct rspamd_process_exception *ex;
 	GArray *res;
-	rspamd_ftok_t *w;
+	rspamd_stat_token_t *w;
 	gboolean compat = FALSE;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
@@ -959,7 +959,7 @@ lua_util_tokenize_text (lua_State *L)
 		lua_createtable (L, res->len, 0);
 
 		for (i = 0; i < res->len; i ++) {
-			w = &g_array_index (res, rspamd_ftok_t, i);
+			w = &g_array_index (res, rspamd_stat_token_t, i);
 			lua_pushlstring (L, w->begin, w->len);
 			lua_rawseti (L, -2, i + 1);
 		}

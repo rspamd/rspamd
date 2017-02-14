@@ -25,6 +25,7 @@
 #include "config.h"
 #include "libmime/message.h"
 #include "rspamd.h"
+#include "libstat/stat_api.h"
 
 #define DEFAULT_SYMBOL "R_MIXED_CHARSET"
 #define DEFAULT_URL_SYMBOL "R_MIXED_CHARSET_URL"
@@ -163,7 +164,8 @@ chartable_module_reconfig (struct rspamd_config *cfg)
 }
 
 static gdouble
-rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w,
+rspamd_chartable_process_word_utf (struct rspamd_task *task,
+		rspamd_stat_token_t *w,
 		gboolean is_url)
 {
 	const gchar *p, *end, *c;
@@ -258,7 +260,8 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task, rspamd_ftok_t *w,
 }
 
 static gdouble
-rspamd_chartable_process_word_ascii (struct rspamd_task *task, rspamd_ftok_t *w,
+rspamd_chartable_process_word_ascii (struct rspamd_task *task,
+		rspamd_stat_token_t *w,
 		gboolean is_url)
 {
 	const guchar *p, *end, *c;
@@ -343,7 +346,7 @@ static void
 rspamd_chartable_process_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
-	rspamd_ftok_t *w;
+	rspamd_stat_token_t *w;
 	guint i;
 	gdouble cur_score = 0.0;
 
@@ -353,9 +356,9 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	}
 
 	for (i = 0; i < part->normalized_words->len; i++) {
-		w = &g_array_index (part->normalized_words, rspamd_ftok_t, i);
+		w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 
-		if (w->len > 0) {
+		if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 
 			if (IS_PART_UTF (part)) {
 				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE);
@@ -397,7 +400,7 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 	struct rspamd_url *u;
 	GHashTableIter it;
 	gpointer k, v;
-	rspamd_ftok_t w;
+	rspamd_stat_token_t w;
 	gdouble cur_score = 0.0;
 
 	g_hash_table_iter_init (&it, task->urls);

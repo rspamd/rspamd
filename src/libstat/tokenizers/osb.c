@@ -264,12 +264,12 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		GPtrArray *result)
 {
 	rspamd_token_t *new_tok = NULL;
-	rspamd_ftok_t *token;
+	rspamd_stat_token_t *token;
 	struct rspamd_osb_tokenizer_config *osb_cf;
 	guint64 *hashpipe, cur, seed;
 	guint32 h1, h2;
 	gsize token_size;
-	guint processed = 0, i, w, window_size;
+	guint processed = 0, i, w, window_size, token_flags = 0;
 
 	if (words == NULL) {
 		return FALSE;
@@ -292,10 +292,15 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	g_assert (token_size > 0);
 
 	for (w = 0; w < words->len; w ++) {
-		token = &g_array_index (words, rspamd_ftok_t, w);
+		token = &g_array_index (words, rspamd_stat_token_t, w);
+		token_flags = token->flags;
 
 		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
-			cur = rspamd_fstrhash_lc (token, is_utf);
+			rspamd_ftok_t ftok;
+
+			ftok.begin = token->begin;
+			ftok.len = token->len;
+			cur = rspamd_fstrhash_lc (&ftok, is_utf);
 		}
 		else {
 			/* We know that the words are normalized */
@@ -316,6 +321,7 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 #define ADD_TOKEN do {\
     new_tok = rspamd_mempool_alloc0 (pool, token_size); \
     new_tok->datalen = sizeof (gint64); \
+    new_tok->flags = token_flags; \
     if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) { \
         h1 = ((guint32)hashpipe[0]) * primes[0] + \
             ((guint32)hashpipe[i]) * primes[i << 1]; \

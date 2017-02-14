@@ -38,9 +38,10 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 	struct rspamd_mime_header *cur;
 	GPtrArray *hdrs;
 	guint i;
-	rspamd_ftok_t str;
+	rspamd_stat_token_t str;
 
 	hdrs = g_hash_table_lookup (task->raw_headers, name);
+	str.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
 	if (hdrs != NULL) {
 
@@ -75,12 +76,13 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_mime_text_part *tp;
 	GList *cur;
 	GArray *ar;
-	rspamd_ftok_t elt;
+	rspamd_stat_token_t elt;
 	guint i;
 	gchar tmpbuf[128];
 	lua_State *L = task->cfg->lua_state;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
+	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
 	/* Insert images */
 	for (i = 0; i < task->parts->len; i ++) {
@@ -171,6 +173,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 	/* Use global metatokens from lua */
 	lua_getglobal (L, "rspamd_gen_metatokens");
+	elt.flags |= RSPAMD_STAT_TOKEN_FLAG_LUA_META;
 
 	if (lua_type (L, -1) == LUA_TFUNCTION) {
 		struct rspamd_task **ptask;
@@ -227,6 +230,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
 	struct rspamd_mime_text_part *part;
+	rspamd_stat_token_t *tok;
 	GArray *words;
 	gchar *sub = NULL;
 	guint i, reserved_len = 0;
@@ -272,6 +276,12 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, NULL, NULL, FALSE,
 				NULL);
 		if (words != NULL) {
+
+			for (i = 0; i < words->len; i ++) {
+				tok = &g_array_index (words, rspamd_stat_token_t, i);
+				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_SUBJECT;
+			}
+
 			st_ctx->tokenizer->tokenize_func (st_ctx,
 					task->task_pool,
 					words,

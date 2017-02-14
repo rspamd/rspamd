@@ -26,6 +26,18 @@
  * High level statistics API
  */
 
+#define RSPAMD_STAT_TOKEN_FLAG_TEXT (1 << 0)
+#define RSPAMD_STAT_TOKEN_FLAG_META (1 << 1)
+#define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1 << 2)
+#define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1 << 3)
+#define RSPAMD_STAT_TOKEN_FLAG_SUBJECT (1 << 4)
+
+typedef struct rspamd_stat_token_s {
+	const gchar *begin;
+	gsize len;
+	guint flags;
+} rspamd_stat_token_t;
+
 /**
  * The results of statistics processing:
  * - error

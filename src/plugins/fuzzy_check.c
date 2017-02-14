@@ -43,6 +43,7 @@
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include "libutil/http_private.h"
+#include "libstat/stat_api.h"
 #include <math.h>
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
@@ -1266,7 +1267,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	struct rspamd_shingle *sh;
 	guint i;
 	rspamd_cryptobox_hash_state_t st;
-	rspamd_ftok_t *word;
+	rspamd_stat_token_t *word;
 	GArray *words;
 	struct fuzzy_cmd_io *io;
 
@@ -1289,7 +1290,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		words = fuzzy_preprocess_words (part, pool);
 
 		for (i = 0; i < words->len; i ++) {
-			word = &g_array_index (words, rspamd_ftok_t, i);
+			word = &g_array_index (words, rspamd_stat_token_t, i);
 			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
 		}
 		rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);

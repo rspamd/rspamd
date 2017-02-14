@@ -22,8 +22,8 @@
 #include "stat_internal.h"
 #include "../../../contrib/mumhash/mum.h"
 
-typedef gboolean (*token_get_function) (rspamd_ftok_t * buf, gchar const **pos,
-		rspamd_ftok_t * token,
+typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const **pos,
+		rspamd_stat_token_t * token,
 		GList **exceptions, gboolean is_utf, gsize *rl, gboolean check_signature);
 
 const gchar t_delimiters[255] = {
@@ -69,8 +69,8 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 
 /* Get next word from specified f_str_t buf */
 static gboolean
-rspamd_tokenizer_get_word_compat (rspamd_ftok_t * buf,
-		gchar const **cur, rspamd_ftok_t * token,
+rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,
+		gchar const **cur, rspamd_stat_token_t * token,
 		GList **exceptions, gboolean is_utf, gsize *rl, gboolean unused)
 {
 	gsize remain, pos;
@@ -92,6 +92,7 @@ rspamd_tokenizer_get_word_compat (rspamd_ftok_t * buf,
 			if (ex->pos == 0) {
 				token->begin = buf->begin + ex->len;
 				token->len = ex->len;
+				token->flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 			}
 			else {
 				token->begin = buf->begin;
@@ -155,14 +156,16 @@ rspamd_tokenizer_get_word_compat (rspamd_ftok_t * buf,
 		}
 	}
 
+	token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
+
 	*cur = p;
 
 	return TRUE;
 }
 
 static gboolean
-rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
-		gchar const **cur, rspamd_ftok_t * token,
+rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
+		gchar const **cur, rspamd_stat_token_t * token,
 		GList **exceptions, gboolean is_utf, gsize *rl,
 		gboolean check_signature)
 {
@@ -219,6 +222,7 @@ rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
 				if (ex->type == RSPAMD_EXCEPTION_URL) {
 					token->begin = "!!EX!!";
 					token->len = sizeof ("!!EX!!") - 1;
+					token->flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 					processed = token->len;
 				}
 				state = skip_exception;
@@ -240,9 +244,11 @@ rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
 			break;
 		case feed_token:
 			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
+				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
 			else if (!g_unichar_isgraph (uc) || g_unichar_ispunct (uc)) {
+				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
 			processed ++;
@@ -288,7 +294,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		struct rspamd_config *cfg, GList *exceptions, gboolean compat,
 		guint64 *hash)
 {
-	rspamd_ftok_t token, buf;
+	rspamd_stat_token_t token, buf;
 	const gchar *pos = NULL;
 	gsize l;
 	GArray *res;
@@ -322,7 +328,8 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		initial_size = word_decay * 2;
 	}
 
-	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_ftok_t), initial_size);
+	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_stat_token_t),
+			initial_size);
 
 	while (func (&buf, &pos, &token, &cur, is_utf, &l, FALSE)) {
 		if (l == 0 || (min_len > 0 && l < min_len) ||
