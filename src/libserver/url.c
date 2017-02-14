@@ -2499,6 +2499,9 @@ rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
 	struct rspamd_url *query_url;
 	gint rc;
 
+	/* It is just a displayed URL, we should not check it for certain things */
+	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
 			if (!g_hash_table_lookup (task->emails, url)) {
