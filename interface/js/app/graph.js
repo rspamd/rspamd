@@ -180,7 +180,7 @@ function($, D3Evolution, unused) {
 
         if (checked_server === "All SERVERS") {
             rspamd.queryNeighbours("graph", function (req_data) {
-                let neighbours_data = req_data
+                var neighbours_data = req_data
                     .filter(function (d) { return d.status }) // filter out unavailable neighbours
                     .map(function (d){ return d.data; })
 
@@ -194,7 +194,7 @@ function($, D3Evolution, unused) {
                             return;
                         }
 
-                        let data = [];
+                        var data = [];
                         curr.forEach(function (action, j) {
                             data.push(
                                 action.map(function (d, i) {
