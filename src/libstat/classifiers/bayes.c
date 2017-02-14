@@ -112,6 +112,11 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 
 	task = cl->task;
 
+	if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_LUA_META) {
+		/* Ignore lua metatokens for now */
+		return;
+	}
+
 	for (i = 0; i < ctx->statfiles_ids->len; i++) {
 		id = g_array_index (ctx->statfiles_ids, gint, i);
 		st = g_ptr_array_index (ctx->ctx->statfiles, id);
