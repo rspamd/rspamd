@@ -22,6 +22,8 @@ force_actions {
     # Expressions are supported in addition to plain symbols
     "no action" = ["IS_WHITELISTED & !CLAM_VIRUS & !FPROT_VIRUS"];
     "add header" = ["SYMBOL_FIVE"];
+    # Third element in nested list can be used to set subjects for "rewrite subject" action
+    "rewrite subject" = [ ["THING", null, "[THING] %s"] ];
   }
   # SMTP messages could be set here
   messages {
