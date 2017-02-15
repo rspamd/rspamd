@@ -25,7 +25,7 @@ local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 
-local function gen_cb(expr, act, pool, message)
+local function gen_cb(expr, act, pool, message, subject)
 
   local function parse_atom(str)
     local atom = table.concat(fun.totable(fun.take_while(function(c)
@@ -54,6 +54,9 @@ local function gen_cb(expr, act, pool, message)
   return function(task)
 
     if e:process(task) == 1 then
+      if subject then
+        task:set_metric_subject(subject)
+      end
       if message then
         task:set_pre_result(act, message)
       else
@@ -77,15 +80,16 @@ local function configure_module()
   for action, expressions in pairs(opts.actions) do
     if type(expressions) == 'table' then
       for _, expr in ipairs(expressions) do
-        local message
+        local message, subject
         if type(expr) == 'table' then
+          subject = expr[3]
           message = expr[2]
           expr = expr[1]
         else
           message = (opts.messages or E)[expr]
         end
         if type(expr) == 'string' then
-          local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(), message)
+          local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(), message, subject)
           if cb and atoms then
             local h = rspamd_cryptobox_hash.create()
             h:update(expr)
