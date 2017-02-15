@@ -110,7 +110,7 @@ rspamd_roll_history_update (struct roll_history *history,
 	rspamd_strlcpy (row->message_id, task->message_id,
 		sizeof (row->message_id));
 	if (task->user) {
-		rspamd_strlcpy (row->user, task->user, sizeof (row->message_id));
+		rspamd_strlcpy (row->user, task->user, sizeof (row->user));
 	}
 	else {
 		row->user[0] = '\0';
