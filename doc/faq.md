@@ -31,26 +31,34 @@ sysctl kern.corefile=/coreland/%N.core
 or a separate core for each crash (that includes PID of process):
 
 ```
-sysctl kern.corefile=/coreland/%N-%p.core
+sysctl kern.corefile=/coreland/%N-%P.core
 ```
 
 For Linux this setting is slightly different:
 
 ```
-sysctl kernel.core_pattern = /coreland/%e.core
+sysctl kernel.core_pattern=/coreland/%e.core
 ```
 
 or (with PID)
 
 ```
-sysctl kernel.core_pattern = /coreland/%e-%p.core
+sysctl kernel.core_pattern=/coreland/%e-%p.core
 ```
 
 Additional settings:
 
+Linux:
+
 ```
-sysctl kernel.core_uses_pid = 1
-sysctl fs.suid_dumpable = 2
+sysctl kernel.core_uses_pid=1
+sysctl fs.suid_dumpable=2
+```
+
+FreeBSD:
+
+```
+sysctl kern.sugid_coredump=1
 ```
 
 The first one adds the PID to core file name, and the second allows setuid processes to be dumped. A good idea is to add these settings to `/etc/sysctl.conf` and then run `sysctl -p` to apply them.
