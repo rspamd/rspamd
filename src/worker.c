@@ -80,11 +80,15 @@ rspamd_worker_finalize (gpointer user_data)
 	struct rspamd_task *task = user_data;
 	struct timeval tv = {.tv_sec = 0, .tv_usec = 0};
 
-	msg_info_task ("finishing actions has been processed, terminating");
-	event_base_loopexit (task->ev_base, &tv);
-	rspamd_session_destroy (task->s);
+	if (!(task->flags & RSPAMD_TASK_FLAG_PROCESSING)) {
+		msg_info_task ("finishing actions has been processed, terminating");
+		event_base_loopexit (task->ev_base, &tv);
+		rspamd_session_destroy (task->s);
 
-	return TRUE;
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static gboolean
