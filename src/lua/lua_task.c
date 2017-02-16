@@ -3425,7 +3425,7 @@ lua_task_set_metric_subject (lua_State *L)
 	subject = luaL_checkstring (L, 2);
 
 	if (task && metric && subject) {
-		metric->subject = subject;
+		metric->subject = rspamd_mempool_strdup (task->task_pool, subject);
 		lua_pushboolean (L, true);
 	}
 	else {
