@@ -23,7 +23,7 @@ metadata_exporter {
       return true
       -- Returns true/false: if message is of interest
     end
-<<EOD;
+EOD;
   # If 'selector' is set it should be the name of a library function
   # to be used as the 'select' function. Possible values are described later
   # selector = "is_spam_authed";
@@ -36,7 +36,7 @@ metadata_exporter {
       -- Returns text to push to pubsub.
       -- If nil nothing is pushed.
     end
-<<EOD;
+EOD;
   # If 'formatter' is set it should be the name of a library function
   # to be used as the 'format' function. Possible values are described later
   # formatter = "email_alert";
@@ -80,7 +80,7 @@ metadata_exporter {
 #Content-type: text/plain; charset=us-ascii
 #
 #Spam received from user %s on IP %s - queue ID %s
-#<<EOD;
+#EOD;
 }
 ~~~
 
