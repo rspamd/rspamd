@@ -1,3 +1,13 @@
+1.4.4:
+	* [CritFix] Fix bad memory leak in TLS certificates validation
+	* [Fix] Fix memory leak in HTTP maps
+	* [Fix] Replies module: fix symbol weight
+	* [Minor] Add missing macro
+	* [Minor] Do not treat IDN urls as bad URLs
+	* [Minor] Fix build with gcc 4.2
+	* [Minor] Fix cast
+	* [Minor] One more definition missed on Linux
+
 1.4.3:
 	* [CritFix] Backport PTR_ARRAY_FOREACH fix
 	* [CritFix] Fix descriptors leak on reload
