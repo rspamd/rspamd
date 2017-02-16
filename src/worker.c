@@ -101,6 +101,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 		task = rspamd_task_new (worker, cfg);
 		task->resolver = ctx->resolver;
 		task->ev_base = ctx->ev_base;
+		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
 		task->s = rspamd_session_create (task->task_pool,
 				rspamd_worker_finalize,
 				NULL,
@@ -110,6 +111,8 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 		DL_FOREACH (cfg->finish_callbacks, sc) {
 			lua_call_finish_script (cfg->lua_state, sc, task);
 		}
+
+		task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;
 
 		if (rspamd_session_pending (task->s)) {
 			return TRUE;
