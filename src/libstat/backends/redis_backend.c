@@ -767,8 +767,9 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 			else {
 				if (reply->type != REDIS_REPLY_NIL) {
-					msg_err_task ("bad learned type for %s: %d",
-						rt->stcf->symbol, reply->type);
+					msg_err_task ("bad learned type for %s: %s, nil expected",
+						rt->stcf->symbol,
+						rspamd_redis_type_to_string (reply->type));
 				}
 
 				val = 0;
@@ -856,8 +857,8 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 				}
 			}
 			else {
-				msg_err_task_check ("got invalid reply from redis: %d",
-						reply->type);
+				msg_err_task_check ("got invalid reply from redis: %s, array expected",
+						rspamd_redis_type_to_string (reply->type));
 			}
 
 			msg_debug_task_check ("received tokens for %s: %d processed, %d found",

@@ -67,4 +67,11 @@ void rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
  */
 void rspamd_redis_pool_destroy (struct rspamd_redis_pool *pool);
 
+/**
+ * Missing in hiredis
+ * @param type
+ * @return
+ */
+const gchar* rspamd_redis_type_to_string (int type);
+
 #endif /* SRC_LIBSERVER_REDIS_POOL_H_ */

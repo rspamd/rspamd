@@ -455,3 +455,34 @@ rspamd_redis_pool_destroy (struct rspamd_redis_pool *pool)
 
 	g_slice_free1 (sizeof (*pool), pool);
 }
+
+const gchar*
+rspamd_redis_type_to_string (int type)
+{
+	const gchar *ret = "unknown";
+
+	switch (type) {
+	case REDIS_REPLY_STRING:
+		ret = "string";
+		break;
+	case REDIS_REPLY_ARRAY:
+		ret = "array";
+		break;
+	case REDIS_REPLY_INTEGER:
+		ret = "int";
+		break;
+	case REDIS_REPLY_STATUS:
+		ret = "status";
+		break;
+	case REDIS_REPLY_NIL:
+		ret = "nil";
+		break;
+	case REDIS_REPLY_ERROR:
+		ret = "error";
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
