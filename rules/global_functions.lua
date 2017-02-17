@@ -3,7 +3,7 @@ local logger = require "rspamd_logger"
 -- This function parses redis server definition using either
 -- specific server string for this module or global
 -- redis section
-function rspamd_parse_redis_server(module_name)
+function rspamd_parse_redis_server(module_name, result)
 
   local default_port = 6379
   local default_timeout = 1.0
@@ -33,54 +33,63 @@ function rspamd_parse_redis_server(module_name)
       end
     end
 
-    if upstreams_write and upstreams_read then
-      local ret = {
-        read_servers = upstreams_read,
-        write_servers = upstreams_write,
-      }
-      ret['timeout'] = default_timeout
-      if options['timeout'] then
-        ret['timeout'] = tonumber(options['timeout'])
-      end
-      if options['prefix'] then
-        ret['prefix'] = options['prefix']
-      end
+    -- Store options
+    if not result['timeout'] then
+      result['timeout'] = default_timeout
+    end
+    if options['timeout'] and not result['timeout'] then
+      result['timeout'] = tonumber(options['timeout'])
+    end
+    if options['prefix'] and not result['prefix'] then
+      result['prefix'] = options['prefix']
+    end
+    if not result['db'] then
       if options['db'] then
-        ret['db'] = options['db']
+        result['db'] = options['db']
       elseif options['dbname'] then
-        ret['db'] = options['dbname']
+        result['db'] = options['dbname']
       end
-      if options['password'] then
-        ret['password'] = options['password']
-      end
-      return ret
+    end
+    if options['password'] and not result['password'] then
+      result['password'] = options['password']
     end
 
-    return nil
+    if upstreams_write and upstreams_read then
+      result.read_servers = upstreams_read
+      result.write_servers = upstreams_write
+
+      return true
+    end
+
+    return false
   end
 
+  -- Try local options
   local opts = rspamd_config:get_all_opt(module_name)
-  local ret
+  local result = {}
+  local ret = false
 
   if opts then
-    ret = try_load_redis_servers(opts)
+    ret = try_load_redis_servers(opts, result)
   end
 
   if ret then
-    return ret
+    return result
   end
 
+  -- Try global options
   opts = rspamd_config:get_all_opt('redis')
 
   if opts then
     if opts[module_name] then
-      ret = try_load_redis_servers(opts[module_name])
+      ret = try_load_redis_servers(opts[module_name], result)
       if ret then
-        return ret
+        return result
       end
     else
-      ret = try_load_redis_servers(opts)
+      ret = try_load_redis_servers(opts, result)
 
+      -- Exclude disabled
       if opts['disabled_modules'] then
         for _,v in ipairs(opts['disabled_modules']) do
           if v == module_name then
@@ -99,7 +108,7 @@ function rspamd_parse_redis_server(module_name)
     end
   end
 
-  return ret
+  return result
 end
 
 -- Performs async call to redis hiding all complexity inside function
