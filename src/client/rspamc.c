@@ -328,9 +328,36 @@ rspamc_password_callback (const gchar *option_name,
 		GError **error)
 {
 	guint plen = 8192;
+	guint8 *map, *end;
+	gsize sz;
 
 	if (value != NULL) {
-		password = g_strdup (value);
+		if (value[0] == '/' || value[0] == '.') {
+			/* Try to open file */
+			map = rspamd_file_xmap (value, PROT_READ, &sz);
+
+			if (map == NULL) {
+				/* Just use it as a string */
+				password = g_strdup (value);
+			}
+			else {
+				/* Strip trailing spaces */
+				g_assert (sz > 0);
+				end = map + sz - 1;
+
+				while (g_ascii_isspace (*end) && end > map) {
+					end --;
+				}
+
+				end ++;
+				password = g_malloc (end - map + 1);
+				rspamd_strlcpy (password, map, end - map + 1);
+				munmap (map, sz);
+			}
+		}
+		else {
+			password = g_strdup (value);
+		}
 	}
 	else {
 		/* Read password from console */
