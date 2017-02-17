@@ -9,9 +9,17 @@ Metadata exporter selects messages of interest, extracts some information from t
 
 Possible applications for this include quarantines, generating alerts & feedback loops.
 
-### Configuration
+### Theory of operation
 
 Metadata exporter is configured either through setting of custom Lua functions or use of library functions.
+
+The `selector` or `select` function identifies messages that we want to export metadata from (default selector selects all messages).
+
+The `formatter` or `format` function extracts formatted metadata from the message (default formatter returns full message content).
+
+The formatted metadata is then pushed to any configured backends.
+
+### Configuration
 
 ~~~ucl
 metadata_exporter {
