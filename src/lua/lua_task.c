@@ -705,6 +705,19 @@ LUA_FUNCTION_DEF (task, get_flags);
  */
 LUA_FUNCTION_DEF (task, get_digest);
 
+/***
+ * @method task:store_in_file([mode])
+ * If task was loaded using file scan, then this method just returns its name,
+ * otherwise, a fresh temporary file is created and its name is returned. Default
+ * mode is 0600. To convert lua number to the octal mode you can use the following
+ * trick: `tonumber("0644", 8)`. The file is automatically removed when task is
+ * destroyed.
+ *
+ * @param {number} mode mode for new file
+ * @return {string} file name with task content
+ */
+LUA_FUNCTION_DEF (task, store_in_file);
+
 static const struct luaL_reg tasklib_f[] = {
 	{NULL, NULL}
 };
@@ -785,6 +798,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, has_flag),
 	LUA_INTERFACE_DEF (task, set_rmilter_reply),
 	LUA_INTERFACE_DEF (task, get_digest),
+	LUA_INTERFACE_DEF (task, store_in_file),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -3221,6 +3235,75 @@ lua_task_cache_set (lua_State *L)
 	}
 
 	return 0;
+}
+
+struct lua_file_cbdata {
+	gchar *fname;
+	gint fd;
+};
+
+static void
+lua_tmp_file_dtor (gpointer p)
+{
+	struct lua_file_cbdata *cbdata = p;
+
+	unlink (cbdata->fname);
+	close (cbdata->fd);
+}
+
+static gint
+lua_task_store_in_file (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gchar fpath[PATH_MAX];
+	guint mode = 00600;
+	gint fd;
+	struct lua_file_cbdata *cbdata;
+
+	if (task) {
+		if ((task->flags & RSPAMD_TASK_FLAG_FILE) && task->msg.fpath) {
+			lua_pushstring (L, task->msg.fpath);
+		}
+		else {
+			if (lua_isnumber (L, 2)) {
+				mode = lua_tonumber (L, 2);
+			}
+
+			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s", task->cfg->temp_dir,
+					G_DIR_SEPARATOR, "rmsg-XXXXXXXXXX");
+			fd = mkstemp (fpath);
+
+			if (fd == -1) {
+				msg_err_task ("cannot save file: %s", strerror (errno));
+				lua_pushnil (L);
+			}
+			else {
+				fchmod (fd, mode);
+
+				if (write (fd, task->msg.begin, task->msg.len) == -1) {
+					msg_err_task ("cannot write file %s: %s", fpath,
+							strerror (errno));
+					unlink (fpath);
+					close (fd);
+					lua_pushnil (L);
+
+					return 1;
+				}
+
+				cbdata = rspamd_mempool_alloc (task->task_pool, sizeof (*cbdata));
+				cbdata->fd = fd;
+				cbdata->fname = rspamd_mempool_strdup (task->task_pool, fpath);
+				lua_pushstring (L, cbdata->fname);
+				rspamd_mempool_add_destructor (task->task_pool,
+						lua_tmp_file_dtor, cbdata);
+			}
+		}
+	}
+	else {
+		luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint

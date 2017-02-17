@@ -138,7 +138,11 @@ struct rspamd_task {
 	gchar *hostname;								/**< hostname reported by MTA						*/
 	GHashTable *request_headers;					/**< HTTP headers in a request						*/
 	GHashTable *reply_headers;						/**< Custom reply headers							*/
-	rspamd_ftok_t msg;								/**< message buffer									*/
+	struct {
+		const gchar *begin;
+		gsize len;
+		gchar *fpath;
+	} msg;											/**< message buffer									*/
 	struct rspamd_http_connection *http_conn;		/**< HTTP server connection							*/
 	struct rspamd_async_session * s;				/**< async session object							*/
 	GPtrArray *parts;								/**< list of parsed parts							*/

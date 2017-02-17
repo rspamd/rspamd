@@ -415,7 +415,6 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 		task->msg.begin = ((guchar *)map) + offset;
 		task->msg.len = shmem_size;
-		task->flags |= RSPAMD_TASK_FLAG_FILE;
 		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
 		m->begin = map;
 		m->len = st.st_size;
@@ -479,6 +478,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		close (fd);
 		task->msg.begin = map;
 		task->msg.len = st.st_size;
+		task->msg.fpath = rspamd_mempool_strdup (task->task_pool, fp);
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
 
 		msg_info_task ("loaded message from file %s", fp);
