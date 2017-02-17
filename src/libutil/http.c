@@ -1198,20 +1198,19 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		}
 		else if (r == 0) {
 			/* We can still call http parser */
-			if (http_parser_execute (&priv->parser, &priv->parser_cb, d, r)
-					!= (size_t)r) {
-				if (!conn->finished) {
-					err = g_error_new (HTTP_ERROR,
-							errno,
-							"IO read error: unexpected EOF");
-					conn->error_handler (conn, err);
-					g_error_free (err);
-				}
-				REF_RELEASE (pbuf);
-				rspamd_http_connection_unref (conn);
+			http_parser_execute (&priv->parser, &priv->parser_cb, d, r);
 
-				return;
+			if (!conn->finished) {
+				err = g_error_new (HTTP_ERROR,
+						errno,
+						"IO read error: unexpected EOF");
+				conn->error_handler (conn, err);
+				g_error_free (err);
 			}
+			REF_RELEASE (pbuf);
+			rspamd_http_connection_unref (conn);
+
+			return;
 		}
 		else {
 			if (!priv->ssl) {
