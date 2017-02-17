@@ -1959,6 +1959,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 		return_finished
 	} ret = return_want_more;
 	guint i, nreplied;
+	const gchar *op = "process";
 
 	task = session->task;
 
@@ -2005,9 +2006,17 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					ftype = "txt";
 				}
 
+				if (io->cmd.cmd == FUZZY_WRITE) {
+					op = "added";
+				}
+				else if (io->cmd.cmd == FUZZY_DEL) {
+					op = "deleted";
+				}
+
 				if (rep->prob > 0.5) {
-					msg_info_task ("processed fuzzy hash (%s) %*xs, list: %s:%d for "
-									"message <%s>",
+					msg_info_task ("%s fuzzy hash (%s) %*xs, list: %s:%d for "
+							"message <%s>",
+							op,
 							ftype,
 							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
@@ -2015,10 +2024,11 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 							session->task->message_id);
 				}
 				else {
-					msg_info_task ("cannot process fuzzy hash (%s) for message "
+					msg_info_task ("fuzzy hash (%s) for message cannot be %s"
 							"<%s>, %*xs, "
 							"list %s:%d, error: %d",
 							ftype,
+							op,
 							session->task->message_id,
 							(gint)sizeof (cmd->digest), cmd->digest,
 							symbol,
