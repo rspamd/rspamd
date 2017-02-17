@@ -3,8 +3,9 @@ local logger = require "rspamd_logger"
 -- This function parses redis server definition using either
 -- specific server string for this module or global
 -- redis section
-function rspamd_parse_redis_server(module_name, result)
+function rspamd_parse_redis_server(module_name)
 
+  local result = {}
   local default_port = 6379
   local default_timeout = 1.0
   local upstream_list = require "rspamd_upstream_list"
@@ -66,7 +67,6 @@ function rspamd_parse_redis_server(module_name, result)
 
   -- Try local options
   local opts = rspamd_config:get_all_opt(module_name)
-  local result = {}
   local ret = false
 
   if opts then
