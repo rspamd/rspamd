@@ -17,44 +17,33 @@ The `selector` or `select` function identifies messages that we want to export m
 
 The `formatter` or `format` function extracts formatted metadata from the message (default formatter returns full message content).
 
-The formatted metadata is then pushed to any configured backends.
+One or more `pushers` or the `push` function pushes formatted data to a backend.
+
+Pusher-specific selectors and formatters can be used.
 
 ### Configuration
 
 ~~~ucl
 metadata_exporter {
-  # The 'select' function selects messages of interest
-  # If unset all messages are selected
-  select = <<EOD
-    function(task)
-      -- Select all messages
-      return true
-      -- Returns true/false: if message is of interest
-    end
-EOD;
-  # If 'selector' is set it should be the name of a library function
-  # to be used as the 'select' function. Possible values are described later
-  # selector = "is_spam_authed";
-  # This function selects the information to push
-  # If unset default function shown below is used
-  format = <<EOD
-    function(task)
-      -- Push full message content
-      return task:get_content()
-      -- Returns text to push to pubsub.
-      -- If nil nothing is pushed.
-    end
-EOD;
-  # If 'formatter' is set it should be the name of a library function
-  # to be used as the 'format' function. Possible values are described later
-  # formatter = "email_alert";
+  # To enable a pusher from the library, add it to this list
+  # and configure any required pusher-specific settings
+  #pushers_enabled = ["http", "redis_pubsub", "send_mail"];
+  pushers_enabled = [];
+
+  # The pusher_format and pusher_select sections specify
+  # pusher-specific format and select functions.
+  pusher_format {
+  #  http = "default";
+  #  send_mail = "email_alert";
+  }
+  pusher_select {
+  #  http = "default";
+  #  send_mail = "is_reject_authed";
+  }
 
   # If 'defer' is true, 'soft reject' action will be forced when message
-  # could not be pushed to backend. (default false)
+  # could not be pushed to any backend. (default false)
   defer = false;
-
-  # If 'force_action' is set, chosen action is forced on successful processing
-  # force_action = "no action";
 
   ## Redis backend specific settings
   # Redis pubsub channel to use (no default, required)
@@ -92,10 +81,19 @@ EOD;
 }
 ~~~
 
-At least one of `channel` or `url` or `mail_to` and `smtp` should be set. If multiple backends are configured all will be used. See [here]({{ site.baseurl }}/doc/configuration/redis.html) for information on configuring Redis.
+See [here]({{ site.baseurl }}/doc/configuration/redis.html) for information on configuring Redis.
+
+### Stock pushers
+
+ - `custom`: use custom `push` function if defined
+ - `http`: sends content over HTTP POST
+ - `redis_pubsub`: sends content over Redis Pubsub
+ - `send_mail`: sends content over SMTP
 
 ### Stock selectors
 
+ - `custom`: use custom `select` function if defined
+ - `default`: selects all mail
  - `is_spam`: matches messages with `reject` or `add header` action
  - `is_spam_authed`: matches messages with `reject` or `add header` action from authenticated users
  - `is_reject`: matches messages with `reject` action
@@ -103,4 +101,46 @@ At least one of `channel` or `url` or `mail_to` and `smtp` should be set. If mul
 
 ### Stock formatters
 
+ - `custom`: use custom `format` function if defined
+ - `default`: returns full message content
  - `email_alert`: generates an e-Mail report about the message
+
+### Custom functions
+
+It is possible to define custom functions for `select`/`format`/`push` and reference these using `custom`:
+
+~~~ucl
+metadata_exporter {
+  # Use custom pusher
+  pushers_enabled = ["custom"];
+  # Use custom selector for custom pusher
+  pusher_select {
+    custom = "custom";
+  }
+  # Use custom formatter for custom pusher
+  pusher_format {
+    custom = "custom";
+  }
+  # Define select function
+  select = <<EOD
+    function(task)
+      -- Select all messages
+      return true
+    end
+EOD;
+  # Define custom formatter
+  format = <<EOD
+    function(task)
+      -- Push message ID
+      return task:get_message_id()
+    end
+EOD;
+  # Define custom pusher
+  push = <<EOD
+    return function(task, data)
+      local rspamd_logger = require "rspamd_logger"
+      rspamd_logger.infox(task, 'METATEST %s', data)
+    end
+EOD;
+}
+~~~
