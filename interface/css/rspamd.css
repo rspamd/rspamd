@@ -549,19 +549,30 @@ td.maps-cell {
 }
 
 /* RRD summary */
+#summary-row {
+    padding-left: 80px;
+    padding-right: 80px;
+}
 .col-fixed,
 .col-fluid {
     position: relative;
     float: left;
-    padding-left: 80px;
-    padding-right: 80px;
 }
 .col-fixed {
     width: 200px;
-    z-index: 1;
+    min-height: 1px; /* make an empty div take space */
 }
 .col-fluid {
     width: calc(100% - 200px);
+}
+#rrd-table_toggle {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 100%;
+}
+#rrd-table_wrapper {
+    z-index: 100;
 }
 #rrd-table {
     width: 100% !important;
