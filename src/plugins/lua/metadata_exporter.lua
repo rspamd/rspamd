@@ -95,13 +95,6 @@ local function maybe_defer(task)
   end
 end
 
-local function maybe_force_action(task)
-  if settings.force_action then
-    rspamd_logger.warnx(task, 'forcing action: %s', settings.force_action)
-    task:set_metric_action('default', settings.force_action)
-  end
-end
-
 local pushers = {
   redis_pubsub = function(task, formatted)
     local _,ret,upstream
@@ -111,7 +104,7 @@ local pushers = {
             err, upstream:get_addr())
         return maybe_defer(task)
       end
-      maybe_force_action(task)
+      return true
     end
     ret,_,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -136,7 +129,7 @@ local pushers = {
         rspamd_logger.errx(task, 'got unexpected http status: %s', code)
         return maybe_defer(task)
       end
-      maybe_force_action(task)
+      return true
     end
     rspamd_http.request({
       task=task,
@@ -181,10 +174,10 @@ local pushers = {
         return true
       end
       local function all_done_cb(merr, mdata)
-        maybe_force_action(task)
         if conn then
           conn:close()
         end
+        return true
       end
       local function quit_done_cb(merr, mdata)
         conn:add_read(all_done_cb, '\r\n')
@@ -221,7 +214,7 @@ local pushers = {
       end
       local function from_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(rcpt_cb, 'RCPT TO: <' .. settings.mail_to .. '>\r\n')
+          conn:add_write(rcpt_cb, {'RCPT TO: <', settings.mail_to, '>\r\n'})
         end
       end
       local function from_cb(merr, mdata)
@@ -231,7 +224,7 @@ local pushers = {
       end
         local function hello_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(from_cb, 'MAIL FROM: <' .. settings.mail_from .. '>\r\n')
+          conn:add_write(from_cb, {'MAIL FROM: <', settings.mail_from, '>\r\n'})
         end
       end
       local function hello_cb(merr)
@@ -240,7 +233,7 @@ local pushers = {
         end
       end
       if no_error(err, data) then
-        conn:add_write(hello_cb, 'HELO ' .. settings.helo .. '\r\n')
+        conn:add_write(hello_cb, {'HELO ', settings.helo, '\r\n'})
       end
     end
     rspamd_tcp.request({
@@ -306,7 +299,7 @@ if not next(settings.pusher_enabled) then
       settings.pusher_enabled.redis_pubsub = true
     end
     if settings.smtp and settings.mail_to then
-      rspamd_logger.warnx(rspamd_config, 'Redis Pubsub pusher implicitly enabled')
+      rspamd_logger.warnx(rspamd_config, 'SMTP pusher implicitly enabled')
       settings.pusher_enabled.send_mail = true
     end
   end
@@ -375,13 +368,13 @@ if not next(settings.pusher_enabled) then
   return
 end
 
-local function metadata_exporter(task)
-  local results = {
-    select = {},
-    format = {},
-  }
-  for k in pairs(settings.pusher_enabled) do
-    local selector = settings.pusher_select[k] or 'default'
+local function gen_exporter(backend)
+  return function (task)
+    local results = {
+      select = {},
+      format = {},
+    }
+    local selector = settings.pusher_select[backend] or 'default'
     local selected = results.select[selector]
     if selected == nil then
       results.select[selector] = selectors[selector](task)
@@ -389,26 +382,32 @@ local function metadata_exporter(task)
     end
     if selected then
       rspamd_logger.debugm(N, task, 'Message selected for processing')
-      local formatter = settings.pusher_format[k]
-      local formatted = results.format[k]
+      local formatter = settings.pusher_format[backend]
+      local formatted = results.format[backend]
       if formatted == nil then
         results.format[formatter] = formatters[formatter](task)
         formatted = results.format[formatter]
       end
       if formatted then
-        pushers[k](task, formatted)
+        pushers[backend](task, formatted)
       elseif formatted == nil then
         rspamd_logger.warnx(task, 'Formatter [%s] returned NIL', formatter)
       else
         rspamd_logger.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
       end
+    elseif selected == nil then
+      rspamd_logger.warnx(task, 'Selector [%s] returned NIL', selector)
+    else
+      rspamd_logger.debugm(N, task, 'Selector [%s] returned non-truthy value [%s]', selector, selected)
     end
   end
 end
 
-rspamd_config:register_symbol({
-  name = 'EXPORT_METADATA',
-  type = 'postfilter',
-  callback = metadata_exporter,
-  priority = 10
-})
+for k in pairs(settings.pusher_enabled) do
+  rspamd_config:register_symbol({
+    name = 'EXPORT_METADATA_' .. k:upper(),
+    type = 'postfilter',
+    callback = gen_exporter(k),
+    priority = 10
+  })
+end
