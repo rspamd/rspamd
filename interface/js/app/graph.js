@@ -148,6 +148,16 @@ function($, D3Evolution, unused) {
         });
     }
 
+    // Handling mouse events on overlapping elements
+    $("#rrd-pie").mouseover(function () {
+        $("#rrd-pie").css("z-index", "200");
+        $("#rrd-table_toggle").css("z-index", "300");
+    });
+    $("#rrd-table_toggle").mouseover(function () {
+        $("#rrd-pie").css("z-index", "0");
+        $("#rrd-table_toggle").css("z-index", "0");
+    });
+
     var interface = {};
 
     interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
