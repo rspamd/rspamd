@@ -65,20 +65,38 @@ local settings = {
     ace = 1,
     ['7z'] = 1,
     cab = 1,
-  }
+  },
+
+  -- Not really archives
+  archive_exceptions = {
+    odt = true,
+    ods = true,
+    odp = true,
+    docx = true,
+    xlsx = true,
+    pptx = true,
+    vsdx = true,
+    -- jar = true,
+  },
 }
 
 local map = nil
 
 local function check_mime_type(task)
-  local function check_filename(fname, ct, is_archive)
+  local function gen_extension(fname)
     local parts = rspamd_str_split(fname, '.')
 
     local ext
     if #parts > 1 then
-      ext = parts[#parts]
+      ext = string.lower(parts[#parts])
+    else
+      ext = nil
     end
 
+    return ext
+  end
+  local function check_filename(fname, ct, is_archive)
+    local ext = gen_extension(fname)
     local function check_extension(badness_mult)
       if badness_mult then
         if #parts > 2
@@ -111,7 +129,7 @@ local function check_mime_type(task)
         end
       end
 
-      local mt = settings['extension_map'][ext:lower()]
+      local mt = settings['extension_map'][ext]
       if mt and ct then
         local found = nil
         if (type(mt) == "table") then
@@ -153,26 +171,38 @@ local function check_mime_type(task)
         end
 
         if p:is_archive() then
+
+          local check = true
+
+          if filename then
+            local ext = gen_extension(filename)
+
+            if ext and settings.archive_exceptions[ext] then
+              check = false
+            end
+          end
           local arch = p:get_archive()
 
           if arch:is_encrypted() then
             task:insert_result(settings['symbol_encrypted_archive'], 1.0, filename)
           end
 
-          local fl = arch:get_files_full()
+          if check then
+            local fl = arch:get_files_full()
 
-          for _,f in ipairs(fl) do
-            -- Strip bad characters
-            if f['name'] then
-              f['name'] = f['name']:gsub('[^%s%g]', '?')
-            end
+            for _,f in ipairs(fl) do
+              -- Strip bad characters
+              if f['name'] then
+                f['name'] = f['name']:gsub('[^%s%g]', '?')
+              end
 
-            if f['encrypted'] then
-              task:insert_result(settings['symbol_encrypted_archive'], 1.0, f['name'])
-            end
+              if f['encrypted'] then
+                task:insert_result(settings['symbol_encrypted_archive'], 1.0, f['name'])
+              end
 
-            if f['name'] then
-              check_filename(f['name'], nil, true)
+              if f['name'] then
+                check_filename(f['name'], nil, true)
+              end
             end
           end
         end
