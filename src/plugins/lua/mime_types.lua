@@ -93,10 +93,11 @@ local function check_mime_type(task)
       ext = nil
     end
 
-    return ext
+    return ext,parts
   end
   local function check_filename(fname, ct, is_archive)
-    local ext = gen_extension(fname)
+    local ext,parts = gen_extension(fname)
+
     local function check_extension(badness_mult)
       if badness_mult then
         if #parts > 2
