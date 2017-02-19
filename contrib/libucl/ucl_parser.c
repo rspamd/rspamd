@@ -2461,8 +2461,10 @@ ucl_parser_new (int flags)
 		parser->comments = ucl_object_typed_new (UCL_OBJECT);
 	}
 
-	/* Initial assumption about filevars */
-	ucl_parser_set_filevars (parser, NULL, false);
+	if (!(flags & UCL_PARSER_NO_FILEVARS)) {
+		/* Initial assumption about filevars */
+		ucl_parser_set_filevars (parser, NULL, false);
+	}
 
 	return parser;
 }
