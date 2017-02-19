@@ -15,7 +15,7 @@ limitations under the License.
 ]]--
 
 -- This plugin implements mime types checks for mail messages
-
+local logger = require "rspamd_logger"
 local settings = {
   file = '',
   symbol_unknown = 'MIME_UNKNOWN',
@@ -180,6 +180,8 @@ local function check_mime_type(task)
 
             if ext and settings.archive_exceptions[ext] then
               check = false
+              logger.debugm("mime_types", task, "skip checking of %s as archive, %s is whitelisted",
+                filename, ext)
             end
           end
           local arch = p:get_archive()
