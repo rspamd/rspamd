@@ -29,7 +29,6 @@
 #include "ucl_internal.h"
 #include "lua_ucl.h"
 #include <strings.h>
-#include <zconf.h>
 
 /***
  * @module ucl
@@ -484,7 +483,7 @@ static int
 lua_ucl_parser_init (lua_State *L)
 {
 	struct ucl_parser *parser, **pparser;
-	int flags = 0;
+	int flags = UCL_PARSER_NO_FILEVARS;
 
 	if (lua_gettop (L) >= 1) {
 		flags = lua_tonumber (L, 1);
