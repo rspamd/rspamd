@@ -271,7 +271,7 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 		ascii = 1,
 		non_ascii
 	} sc, last_sc;
-	gint same_script_count = 0;
+	gint same_script_count = 0, seen_alpha = FALSE;
 	enum {
 		start_process = 0,
 		got_alpha,
@@ -294,7 +294,7 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 
 			if (state == got_digit) {
 				/* Penalize digit -> alpha translations */
-				if (!is_url && !g_ascii_isxdigit (*p)) {
+				if (seen_alpha && !is_url && !g_ascii_isxdigit (*p)) {
 					badness += 1.0;
 				}
 			}
@@ -318,6 +318,7 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 				}
 			}
 
+			seen_alpha = TRUE;
 			state = got_alpha;
 
 		}
