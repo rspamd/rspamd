@@ -119,7 +119,6 @@ local function get_general_metadata(task, flatten)
 end
 
 local function simple_template(tmpl, keys)
-  local r = {}
   local lpeg = require "lpeg"
 
   local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
