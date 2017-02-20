@@ -33,6 +33,7 @@ local settings = {
   mime_type = 'text/plain',
   defer = false,
   mail_from = '',
+  mail_to = 'postmaster@localhost',
   helo = 'rspamd',
   email_template = [[From: "Rspamd" <$mail_from>
 To: <$mail_to>
@@ -119,41 +120,15 @@ end
 
 local function simple_template(tmpl, keys)
   local r = {}
-  local key
-  local last = 1
-  local readkey = false
-  local tlen = string.len(tmpl)
-  for i = 1, tlen do
-    if not readkey then
-      if string.sub(tmpl, i, i) == '$'
-        and string.match(string.sub(tmpl, i+1, i+1), '[%w_]') then
-        readkey = true
-        key = {}
-        table.insert(r, string.sub(tmpl, last, i-1))
-        last = i
-      end
-    else
-      if not string.match(string.sub(tmpl, i, i), '[%w_]') then
-        readkey = false
-        table.insert(r, keys[table.concat(key)] or string.sub(tmpl, last, i-1))
-        last = i
-      else
-        table.insert(key, string.sub(tmpl, i, i))
-      end
-    end
-  end
-  if r[1] then
-    if last <= tlen then
-      if not readkey then
-        table.insert(r, string.sub(tmpl, last))
-      else
-        table.insert(r, keys[table.concat(key)] or string.sub(tmpl, last))
-      end
-    end
-    return table.concat(r)
-  else
-    return tmpl
-  end
+  local lpeg = require "lpeg"
+
+  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
+  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
+  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
+
+  local rep = lpeg.Cs((var + var_braced + 1)^0)
+
+  return lpeg.match(rep, tmpl)
 end
 
 local formatters = {
