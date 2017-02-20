@@ -567,7 +567,7 @@ reconf['FORGED_MUA_THEBAT_BOUN'] = {
 
 -- Detect Mail.Ru web-mail
 local xm_mail_ru_mailer_1_0 = 'X-Mailer=/^Mail\\.Ru Mailer 1\\.0$/H'
-local rcvd_e_mail_ru = 'Received=/^from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by e\\.mail\\.ru with HTTP;/mH'
+local rcvd_e_mail_ru = 'Received=/^(?:from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] )?by e\\.mail\\.ru with HTTP;/mH'
 reconf['MAIL_RU_MAILER'] = {
   re = string.format('(%s) & (%s)', xm_mail_ru_mailer_1_0, rcvd_e_mail_ru),
   score = 0.0,
