@@ -5,94 +5,69 @@ title: Metadata exporter
 
 # Metadata exporter
 
-Metadata exporter selects messages of interest, extracts some information from these and pushes this information to one or more external services (Currently supported are Redis Pubsub, HTTP POST & e-Mail).
+Metadata exporter processes a set of rules which identify interesting messages & and push information based on these to an external service (Currently supported are Redis Pubsub, HTTP POST & SMTP; user-defined backends can also be used).
 
-Possible applications for this include quarantines, generating alerts & feedback loops.
+Possible applications include quarantines, logging, alerting & feedback loops.
 
 ### Theory of operation
 
-Metadata exporter is configured either through setting of custom Lua functions or use of library functions.
+For each rule defined in configuration:
 
-The `selector` or `select` function identifies messages that we want to export metadata from (default selector selects all messages).
+ - A `selector` function identifies messages that we want to export metadata from (default selector selects all messages).
+ - A `formatter` function extracts formatted metadata from the message (default formatter returns full message content).
+ - A `pusher` function (defined by the `backend` setting) pushes the formatted metadata somewhere
 
-The `formatter` or `format` function extracts formatted metadata from the message (default formatter returns full message content).
-
-One or more `pushers` or the `push` function pushes formatted data to a backend.
-
-Pusher-specific selectors and formatters can be used.
+A number of such functions are defined in the plugin which can be used in addition to user-defined functions.
 
 ### Configuration
 
 ~~~ucl
 metadata_exporter {
-  # To enable a pusher from the library, add it to this list
-  # and configure any required pusher-specific settings
-  #pushers_enabled = ["http", "redis_pubsub", "send_mail"];
-  pushers_enabled = [];
 
-  # The pusher_format and pusher_select sections specify
-  # pusher-specific format and select functions.
-  pusher_format {
-  #  http = "default";
-  #  send_mail = "email_alert";
+  # Each rule defines some export process
+
+  rules {
+
+    # The following rule posts JSON-formatted metadata at the defined URL
+    # when it sees a rejected mail from an authenticated user
+    MY_HTTP_ALERT_1 {
+      backend = "http";
+      url = "http://127.0.0.1:8080/foo";
+      # More about selectors and formatters later
+      selector = "is_reject_authed";
+      formatter = "json";
+    }
+
+    # This rule posts all messages to a Redis pubsub channel
+    MY_REDIS_PUBSUB_1 {
+      backend = "redis_pubsub";
+      channel = "foo";
+      # Defalt formatter and selector is used
+    }
+
+    # This rule sends an e-Mail alert over SMTP containing message metadata
+    # when it sees a rejected mail from an authenticated user
+    MY_EMAIL_1 {
+      backend = "send_mail";
+      smtp = "127.0.0.1";
+      mail_to = "user@example.com";
+      selector = "is_reject_authed";
+      formatter = "email_alert";
+    }
+
   }
-  pusher_select {
-  #  http = "default";
-  #  send_mail = "is_reject_authed";
-  }
 
-  # If 'defer' is true, 'soft reject' action will be forced when message
-  # could not be pushed to any backend. (default false)
-  defer = false;
-
-  ## Redis backend specific settings
-  # Redis pubsub channel to use (no default, required)
-  # channel = "foobar";
-
-  ## HTTP backend specific settings
-  # URL to post to (no default, required)
-  # url = "http://example.net/post";
-  # Mime type for HTTP POST (text/plain if unset)
-  # mime_type = "text/plain";
-
-  ## e-Mail backend specific settings
-  # This is the SMTP server to use (no default, required)
-  # smtp = "127.0.0.1";
-  # This is the SMTP port to use (default 25)
-  # smtp_port = 25;
-  # This is the recipient of the alert (no default, required)
-  # mail_to = "recipient@example.com";
-  # This is the sender of the e-Mail (default empty)
-  # mail_from = "sender@example.com";
-  # SMTP HELO to use (default "rspamd")
-  # helo = "rspamd";
-  # This is the template used for the e-mail (default as shown)
-  # email_template = <<EOD
-#From: "Rspamd" <%s>
-#To: <%s>
-#Subject: Spam alert
-#Date: %s
-#MIME-Version: 1.0
-#Message-ID: <%s>
-#Content-type: text/plain; charset=us-ascii
-#
-#Spam received from user %s on IP %s - queue ID %s
-#EOD;
 }
 ~~~
 
-See [here]({{ site.baseurl }}/doc/configuration/redis.html) for information on configuring Redis.
+### Stock pushers (backends)
 
-### Stock pushers
-
- - `custom`: use custom `push` function if defined
  - `http`: sends content over HTTP POST
  - `redis_pubsub`: sends content over Redis Pubsub
  - `send_mail`: sends content over SMTP
 
 ### Stock selectors
 
- - `custom`: use custom `select` function if defined
  - `default`: selects all mail
  - `is_spam`: matches messages with `reject` or `add header` action
  - `is_spam_authed`: matches messages with `reject` or `add header` action from authenticated users
@@ -101,46 +76,129 @@ See [here]({{ site.baseurl }}/doc/configuration/redis.html) for information on c
 
 ### Stock formatters
 
- - `custom`: use custom `format` function if defined
  - `default`: returns full message content
  - `email_alert`: generates an e-Mail report about the message
+ - `json`: returns json-formatted metadata about a message
+
+### Settings: general
+
+The following settings can be defined on any rule:
+
+ - `selector`: defines selector for the rule
+ - `formatter`: defines formatter for the rule
+ - `backend`: defines backend (pusher) for the rule
+ - `defer`: if true, `soft reject` action is forced on failed processing
+
+### Settings: `http` backend
+
+ - `url` (required): defines URL to post content to
+ - `mime_type`: defines mime type of content sent in HTTP POST
+
+### Settings: `redis_pubsub` backend
+
+ - `channel` (required): defines pubsub channel to post content to
+
+See [here]({{ site.baseurl }}/doc/configuration/redis.html) for information on configuring Redis servers.
+
+### Settings: `send_mail` backend
+
+ - `smtp` (required): hostname of SMTP server
+ - `mail_to` (required): recipient of e-mail alert
+ - `mail_from`: Sender address (default empty)
+ - `helo`: HELO to send (default 'rspamd')
+ - `smtp_port`: SMTP port if not 25
+ - `email_template`: template used for alert (default shown below):
+
+~~~
+From: "Rspamd" <$mail_from>
+To: <$mail_to>
+Subject: Spam alert
+Date: $date
+MIME-Version: 1.0
+Message-ID: <$our_message_id>
+Content-type: text/plain; charset=us-ascii
+
+Authenticated username: $user
+IP: $ip
+Queue ID: $qid
+SMTP FROM: $from
+SMTP RCPT: $rcpt
+MIME From: $header_from
+MIME To: $header_to
+MIME Date: $header_date
+Subject: $header_subject
+Message-ID: $message_id
+Action: $action
+Symbols: $symbols
+~~~
+
+Variables can be substituted according to general metadata keys described in the next section.
+
+### General metadata
+
+Metadata as returned by the `json` formatter can be referenced by key in `email_template`. The following keys are defined:
+
+- `action`: metric action for message
+- `from`: SMTP FROM
+- `header_date`: Contents of Date header(s)
+- `header_from`: Contents of From header(s)
+- `header_subject`: Contents of Subject header(s)
+- `header_to`: Contents of To header(s)
+- `ip`: IP of message sender
+- `message_id`: Message-ID of original message
+- `our_message_id` (`email_template` only): message-ID generated for alert
+- `qid`: Queue-ID of message provided by MTA
+- `rcpt`: SMTP RCPT
+- `symbols`: Symbols in metric
+- `user`: authenticated username of message sender
 
 ### Custom functions
 
-It is possible to define custom functions for `select`/`format`/`push` and reference these using `custom`:
+It is possible to define custom selectors/pushers/backends. Functions are defined in the `custom_select`/`custom_format`/`custom_push` groups and referenced by name in the `selector`/`formatter`/`backend` settings:
 
 ~~~ucl
 metadata_exporter {
-  # Use custom pusher
-  pushers_enabled = ["custom"];
-  # Use custom selector for custom pusher
-  pusher_select {
-    custom = "custom";
+
+  # Define custom selector(s)
+  custom_select {
+    mine = <<EOD
+function(task)
+  -- Select all messages
+  return true
+end
+EOD;
   }
-  # Use custom formatter for custom pusher
-  pusher_format {
-    custom = "custom";
+
+  # Define custom formatter(s)
+  custom_format {
+    mine = <<EOD
+function(task)
+  -- Push message ID
+  return task:get_message_id()
+end
+EOD;
   }
-  # Define select function
-  select = <<EOD
-    function(task)
-      -- Select all messages
-      return true
-    end
+
+  # Define custom backend(s)
+  custom_push {
+    mine = <<EOD
+return function (task, data, rule)
+  -- Log payload
+  local rspamd_logger = require "rspamd_logger"
+  rspamd_logger.infox(task, 'METATEST %s', data)
+end
 EOD;
-  # Define custom formatter
-  format = <<EOD
-    function(task)
-      -- Push message ID
-      return task:get_message_id()
-    end
-EOD;
-  # Define custom pusher
-  push = <<EOD
-    return function(task, data)
-      local rspamd_logger = require "rspamd_logger"
-      rspamd_logger.infox(task, 'METATEST %s', data)
-    end
-EOD;
+  }
+
+  rules {
+
+    CUSTOM_EXPORT {
+      selector = "mine";
+      formatter = "mine";
+      backend = "mine";
+    }
+
+  }
+
 }
 ~~~
