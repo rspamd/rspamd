@@ -22,6 +22,8 @@ local rspamd_http = require "rspamd_http"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
+local ucl = require "ucl"
+local E = {}
 local N = 'metadata_exporter'
 
 local settings = {
@@ -32,32 +34,143 @@ local settings = {
   defer = false,
   mail_from = '',
   helo = 'rspamd',
-  email_template = [[From: "Rspamd" <%s>
-To: <%s>
+  email_template = [[From: "Rspamd" <$mail_from>
+To: <$mail_to>
 Subject: Spam alert
-Date: %s
+Date: $date
 MIME-Version: 1.0
-Message-ID: <%s>
+Message-ID: <$our_message_id>
 Content-type: text/plain; charset=us-ascii
 
-Spam received from user %s on IP %s - queue ID %s]],
+Authenticated username: $user
+IP: $ip
+Queue ID: $qid
+SMTP FROM: $from
+SMTP RCPT: $rcpt
+MIME From: $header_from
+MIME To: $header_to
+MIME Date: $header_date
+Subject: $header_subject
+Message-ID: $message_id
+Action: $action
+Symbols: $symbols]],
 }
+
+local function get_general_metadata(task, flatten)
+  local r = {}
+  r.ip = tostring(task:get_from_ip())
+  r.user = task:get_user()
+  r.qid = task:get_queue_id()
+  r.action = task:get_metric_action('default')
+  local rcpt = task:get_recipients('smtp')
+  if rcpt then
+    local l = {}
+    for _, a in ipairs(rcpt) do
+      table.insert(l, a['addr'])
+    end
+    if not flatten then
+      r.rcpt = l
+    else
+      r.rcpt = table.concat(l, ', ')
+    end
+  end
+  local from = task:get_from('smtp')
+  if ((from or E)[1] or E).addr then
+    r.from = from[1].addr
+  end
+  local symbols, scores = task:get_symbols()
+  if not flatten then
+    local symscore = {}
+    for i = 1, #symbols do
+      local s = {}
+      s.name = symbols[i]
+      s.score = scores[i]
+      table.insert(symscore, s)
+    end
+    r.symbols = symscore
+  else
+    local l = {}
+    for i = 1, #symbols do
+      table.insert(l, symbols[i] .. '(' .. scores[i] .. ')')
+    end
+    r.symbols = table.concat(l, '\n')
+  end
+  local function process_header(name)
+    local hdr = task:get_header_full(name)
+    if hdr then
+      local l = {}
+      for _, h in ipairs(hdr) do
+        table.insert(l, h.decoded)
+      end
+      if not flatten then
+        return l
+      else
+        return table.concat(l, '\n')
+      end
+    end
+  end
+  r.header_from = process_header('from')
+  r.header_to = process_header('to')
+  r.header_subject = process_header('subject')
+  r.header_date = process_header('date')
+  r.message_id = task:get_message_id()
+  return r
+end
+
+local function simple_template(tmpl, keys)
+  local r = {}
+  local key
+  local last = 1
+  local readkey = false
+  local tlen = string.len(tmpl)
+  for i = 1, tlen do
+    if not readkey then
+      if string.sub(tmpl, i, i) == '$'
+        and string.match(string.sub(tmpl, i+1, i+1), '[%w_]') then
+        readkey = true
+        key = {}
+        table.insert(r, string.sub(tmpl, last, i-1))
+        last = i
+      end
+    else
+      if not string.match(string.sub(tmpl, i, i), '[%w_]') then
+        readkey = false
+        table.insert(r, keys[table.concat(key)] or string.sub(tmpl, last, i-1))
+        last = i
+      else
+        table.insert(key, string.sub(tmpl, i, i))
+      end
+    end
+  end
+  if r[1] then
+    if last <= tlen then
+      if not readkey then
+        table.insert(r, string.sub(tmpl, last))
+      else
+        table.insert(r, keys[table.concat(key)] or string.sub(tmpl, last))
+      end
+    end
+    return table.concat(r)
+  else
+    return tmpl
+  end
+end
 
 local formatters = {
   default = function(task)
     return task:get_content()
   end,
   email_alert = function(task)
-    local auser = task:get_user() or '[not applicable]'
-    local fip = task:get_from_ip() or '[unknown]'
-    local qid = task:get_queue_id() or '[unknown]'
-    return rspamd_logger.slog(settings.email_template,
-      settings.mail_from, settings.mail_to,
-      rspamd_util.time_to_string(rspamd_util.get_time()),
-      rspamd_util.random_hex(12) .. '@rspamd',
-      auser, tostring(fip), qid
-    )
+    local meta = get_general_metadata(task, true)
+    meta.mail_from = settings.mail_from
+    meta.mail_to = settings.mail_to
+    meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
+    meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
+    return simple_template(settings.email_template, meta)
   end,
+  json = function(task)
+    return ucl.to_format(get_general_metadata(task), 'json-compact')
+  end
 }
 
 local selectors = {
@@ -88,21 +201,21 @@ local selectors = {
   end,
 }
 
-local function maybe_defer(task)
-  if settings.defer then
+local function maybe_defer(task, rule)
+  if rule.defer then
     rspamd_logger.warnx(task, 'deferring message')
     task:set_metric_action('default', 'soft reject')
   end
 end
 
 local pushers = {
-  redis_pubsub = function(task, formatted)
+  redis_pubsub = function(task, formatted, rule)
     local _,ret,upstream
     local function redis_pub_cb(err)
       if err then
         rspamd_logger.errx(task, 'got error %s when publishing on server %s',
             err, upstream:get_addr())
-        return maybe_defer(task)
+        return maybe_defer(task, rule)
       end
       return true
     end
@@ -112,34 +225,34 @@ local pushers = {
       true, -- is write
       redis_pub_cb, --callback
       'PUBLISH', -- command
-      {settings.channel, formatted} -- arguments
+      {rule.channel, formatted} -- arguments
     )
     if not ret then
       rspamd_logger.errx(task, 'error connecting to redis')
-      maybe_defer(task)
+      maybe_defer(task, rule)
     end
   end,
-  http = function(task, formatted)
+  http = function(task, formatted, rule)
     local function http_callback(err, code)
       if err then
         rspamd_logger.errx(task, 'got error %s in http callback', err)
-        return maybe_defer(task)
+        return maybe_defer(task, rule)
       end
       if code ~= 200 then
         rspamd_logger.errx(task, 'got unexpected http status: %s', code)
-        return maybe_defer(task)
+        return maybe_defer(task, rule)
       end
       return true
     end
     rspamd_http.request({
       task=task,
-      url=settings.url,
+      url=rule.url,
       body=formatted,
       callback=http_callback,
-      mime_type=settings['mime_type'],
+      mime_type=rule.mime_type,
     })
   end,
-  send_mail = function(task, formatted)
+  send_mail = function(task, formatted, rule)
     local function mail_cb(err, data, conn)
       local function no_error(merr, mdata, wantcode)
         wantcode = wantcode or '2'
@@ -148,7 +261,7 @@ local pushers = {
           if conn then
             conn:close()
           end
-          maybe_defer(task)
+          maybe_defer(task, rule)
           return false
         end
         if mdata then
@@ -160,7 +273,7 @@ local pushers = {
             if conn then
               conn:close()
             end
-            maybe_defer(task)
+            maybe_defer(task, rule)
             return false
             end
         else
@@ -168,7 +281,7 @@ local pushers = {
           if conn then
             conn:close()
           end
-          maybe_defer(task)
+          maybe_defer(task, rule)
           return false
         end
         return true
@@ -214,7 +327,7 @@ local pushers = {
       end
       local function from_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(rcpt_cb, {'RCPT TO: <', settings.mail_to, '>\r\n'})
+          conn:add_write(rcpt_cb, {'RCPT TO: <', rule.mail_to, '>\r\n'})
         end
       end
       local function from_cb(merr, mdata)
@@ -224,7 +337,7 @@ local pushers = {
       end
         local function hello_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(from_cb, {'MAIL FROM: <', settings.mail_from, '>\r\n'})
+          conn:add_write(from_cb, {'MAIL FROM: <', rule.mail_from, '>\r\n'})
         end
       end
       local function hello_cb(merr)
@@ -233,15 +346,15 @@ local pushers = {
         end
       end
       if no_error(err, data) then
-        conn:add_write(hello_cb, {'HELO ', settings.helo, '\r\n'})
+        conn:add_write(hello_cb, {'HELO ', rule.helo, '\r\n'})
       end
     end
     rspamd_tcp.request({
       task = task,
       callback = mail_cb,
       stop_pattern = '\r\n',
-      host = settings.smtp,
-      port = settings.smtp_port or 25,
+      host = rule.smtp,
+      port = rule.smtp_port or 25,
     })
   end,
 }
@@ -255,8 +368,29 @@ local process_settings = {
   format = function(val)
     formatters.custom = assert(load(val))()
   end,
-  push = function(key, val)
+  push = function(val)
     pushers.custom = assert(load(val))()
+  end,
+  custom_push = function(val)
+    if type(val) == 'table' then
+      for k, v in pairs(table) do
+        pushers[k] = assert(load(v))()
+      end
+    end
+  end,
+  custom_select = function(val)
+    if type(val) == 'table' then
+      for k, v in pairs(table) do
+        selectors[k] = assert(load(v))()
+      end
+    end
+  end,
+  custom_format = function(val)
+    if type(val) == 'table' then
+      for k, v in pairs(table) do
+        formatters[k] = assert(load(v))()
+      end
+    end
   end,
   pusher_enabled = function(val)
     if type(val) == 'string' then
@@ -284,130 +418,240 @@ for k, v in pairs(opts) do
     settings[k] = v
   end
 end
-if not next(settings.pusher_enabled) then
-  if pushers.custom then
-    rspamd_logger.infox(rspamd_config, 'Custom pusher implicitly enabled')
-    settings.pusher_enabled.custom = true
-  else
-    -- Check legacy options
-    if settings.url then
-      rspamd_logger.warnx(rspamd_config, 'HTTP pusher implicitly enabled')
-      settings.pusher_enabled.http = true
-    end
-    if settings.channel then
-      rspamd_logger.warnx(rspamd_config, 'Redis Pubsub pusher implicitly enabled')
-      settings.pusher_enabled.redis_pubsub = true
-    end
-    if settings.smtp and settings.mail_to then
-      rspamd_logger.warnx(rspamd_config, 'SMTP pusher implicitly enabled')
-      settings.pusher_enabled.send_mail = true
+if type(settings.rules) ~= 'table' then
+  -- Legacy config
+  settings.rules = {}
+  if not next(settings.pusher_enabled) then
+    if pushers.custom then
+      rspamd_logger.infox(rspamd_config, 'Custom pusher implicitly enabled')
+      settings.pusher_enabled.custom = true
+    else
+      -- Check legacy options
+      if settings.url then
+        rspamd_logger.warnx(rspamd_config, 'HTTP pusher implicitly enabled')
+        settings.pusher_enabled.http = true
+      end
+      if settings.channel then
+        rspamd_logger.warnx(rspamd_config, 'Redis Pubsub pusher implicitly enabled')
+        settings.pusher_enabled.redis_pubsub = true
+      end
+      if settings.smtp and settings.mail_to then
+        rspamd_logger.warnx(rspamd_config, 'SMTP pusher implicitly enabled')
+        settings.pusher_enabled.send_mail = true
+      end
     end
   end
+  if not next(settings.pusher_enabled) then
+    rspamd_logger.errx(rspamd_config, 'No push backend enabled')
+    return
+  end
+  if settings.formatter then
+    settings.format = formatters[settings.formatter]
+    if not settings.format then
+      rspamd_logger.errx(rspamd_config, 'No such formatter: %s', settings.formatter)
+      return
+    end
+  end
+  if settings.selector then
+    settings.select = selectors[settings.selector]
+    if not settings.select then
+      rspamd_logger.errx(rspamd_config, 'No such selector: %s', settings.selector)
+      return
+    end
+  end
+  for k in pairs(settings.pusher_enabled) do
+    local formatter = settings.pusher_format[k]
+    local selector = settings.pusher_select[k]
+    if not formatter then
+      settings.pusher_format[k] = settings.formatter or 'default'
+      rspamd_logger.infox(rspamd_config, 'Using default formatter for %s pusher', k)
+    else
+      if not formatters[formatter] then
+        rspamd_logger.errx(rspamd_config, 'No such formatter: %s - disabling %s', formatter, k)
+        settings.pusher_enabled.k = nil
+      end
+    end
+    if not selector then
+      settings.pusher_select[k] = settings.selector or 'default'
+      rspamd_logger.infox(rspamd_config, 'Using default selector for %s pusher', k)
+    else
+      if not selectors[selector] then
+        rspamd_logger.errx(rspamd_config, 'No such selector: %s - disabling %s', selector, k)
+        settings.pusher_enabled.k = nil
+      end
+    end
+  end
+  if settings.pusher_enabled.redis_pubsub then
+    redis_params = rspamd_parse_redis_server(N)
+    if not redis_params then
+      rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
+      settings.pusher_enabled.redis_pubsub = nil
+    else
+      local r = {}
+      r.backend = 'redis_pubsub'
+      r.channel = settings.channel
+      r.defer = settings.defer
+      r.selector = settings.pusher_select.redis_pubsub
+      r.formatter = settings.pusher_format.redis_pubsub
+      settings.rules[r.backend:upper()] = r
+    end
+  end
+  if settings.pusher_enabled.http then
+    if not settings.url then
+      rspamd_logger.errx(rspamd_config, 'No URL is specified')
+      settings.pusher_enabled.http = nil
+    else
+      local r = {}
+      r.backend = 'http'
+      r.url = settings.url
+      r.mime_type = settings.mime_type
+      r.defer = settings.defer
+      r.selector = settings.pusher_select.http
+      r.formatter = settings.pusher_format.http
+      settings.rules[r.backend:upper()] = r
+    end
+  end
+  if settings.pusher_enabled.send_mail then
+    if not (settings.mail_to and settings.smtp) then
+      rspamd_logger.errx(rspamd_config, 'No mail_to and/or smtp setting is specified')
+      settings.pusher_enabled.send_mail = nil
+    else
+      local r = {}
+      r.backend = 'send_mail'
+      r.mail_to = settings.mail_to
+      r.mail_from = settings.mail_from
+      r.helo = settings.hello
+      r.smtp = settings.smtp
+      r.smtp_port = settings.smtp_port
+      r.email_template = settings.email_template
+      r.defer = settings.defer
+      r.selector = settings.pusher_select.send_mail
+      r.formatter = settings.pusher_format.send_mail
+      settings.rules[r.backend:upper()] = r
+    end
+  end
+  if not next(settings.pusher_enabled) then
+    rspamd_logger.errx(rspamd_config, 'No push backend enabled')
+    return
+  end
 end
-if not next(settings.pusher_enabled) then
-  rspamd_logger.errx(rspamd_config, 'No push backend enabled')
+if not settings.rules or not next(settings.rules) then
+  rspamd_logger.errx(rspamd_config, 'No rules enabled')
   return
 end
-if settings.formatter then
-  settings.format = formatters[settings.formatter]
-  if not settings.format then
-    rspamd_logger.errx(rspamd_config, 'No such formatter: %s', settings.formatter)
-    return
-  end
-end
-if settings.selector then
-  settings.select = selectors[settings.selector]
-  if not settings.select then
-    rspamd_logger.errx(rspamd_config, 'No such selector: %s', settings.selector)
-    return
-  end
-end
-for k in pairs(settings.pusher_enabled) do
-  local formatter = settings.pusher_format[k]
-  local selector = settings.pusher_select[k]
-  if not formatter then
-    settings.pusher_format[k] = 'default'
-    rspamd_logger.infox(rspamd_config, 'Using default formatter for %s pusher', k)
-  else
-    if not formatters[formatter] then
-      rspamd_logger.errx(rspamd_config, 'No such formatter: %s - disabling %s', formatter, k)
-      settings.pusher_enabled.k = nil
+local backend_required_elements = {
+  http = {
+    'url',
+  },
+  smtp = {
+    'mail_to',
+    'smtp',
+  },
+  redis_pubsub = {
+    'channel',
+  },
+}
+local check_element = {
+  selector = function(k, v)
+    if not selectors[v] then
+      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid selector %s', k, v)
+      return false
+    else
+      return true
     end
-  end
-  if not selector then
-    settings.pusher_select[k] = 'default'
-    rspamd_logger.infox(rspamd_config, 'Using default selector for %s pusher', k)
-  else
-    if not selectors[selector] then
-      rspamd_logger.errx(rspamd_config, 'No such selector: %s - disabling %s', selector, k)
-      settings.pusher_enabled.k = nil
+  end,
+  formatter = function(k, v)
+    if not formatters[v] then
+      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid formatter %s', k, v)
+      return false
+    else
+      return true
     end
+  end,
+}
+local backend_check = {
+  default = function(k, rule)
+    local reqset = backend_required_elements[rule.backend]
+    if reqset then
+      for _, e in ipairs(reqset) do
+        if not rule[e] then
+          rspamd_logger.errx(rspamd_config, 'Rule %s misses required setting %s', k, e)
+          settings.rules[k] = nil
+        end
+      end
+    end
+    for sett, v in pairs(rule) do
+      local f = check_element[sett]
+      if f then
+        if not f(sett, v) then
+          settings.rules[k] = nil
+        end
+      end
+    end
+  end,
+}
+backend_check.redis_pubsub = function(k, rule)
+  if not redis_params then
+    redis_params = rspamd_parse_redis_server(N)
   end
-end
-if settings.pusher_enabled.redis_pubsub then
-  redis_params = rspamd_parse_redis_server(N)
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'No redis servers are specified')
-    settings.pusher_enabled.redis_pubsub = nil
+    settings.rules[k] = nil
+  else
+    backend_check.default(k, rule)
   end
 end
-if settings.pusher_enabled.http then
-  if not settings.url then
-    rspamd_logger.errx(rspamd_config, 'No URL is specified')
-    settings.pusher_enabled.http = nil
+setmetatable(backend_check, {
+  __index = function()
+    return backend_check.default
+  end,
+})
+for k, v in pairs(settings.rules) do
+  if type(v) == 'table' then
+    local backend = v.backend
+    if not backend then
+      rspamd_logger.errx(rspamd_config, 'Rule %s has no backend', k)
+      settings.rules[k] = nil
+    elseif not pushers[backend] then
+      rspamd_logger.errx(rspamd_config, 'Rule %s has invalid backend %s', k, backend)
+      settings.rules[k] = nil
+    else
+      local f = backend_check[backend]
+      f(k, v)
+    end
+  else
+    rspamd_logger.errx(rspamd_config, 'Rule %s has bad type: %s', k, type(v))
+    settings.rules[k] = nil
   end
-end
-if settings.pusher_enabled.send_mail then
-  if not (settings.mail_to and settings.smtp) then
-    rspamd_logger.errx(rspamd_config, 'No mail_to and/or smtp setting is specified')
-    settings.pusher_enabled.send_mail = nil
-  end
-end
-if not next(settings.pusher_enabled) then
-  rspamd_logger.errx(rspamd_config, 'No push backend enabled')
-  return
 end
 
-local function gen_exporter(backend)
+local function gen_exporter(rule)
   return function (task)
-    local results = {
-      select = {},
-      format = {},
-    }
-    local selector = settings.pusher_select[backend] or 'default'
-    local selected = results.select[selector]
-    if selected == nil then
-      results.select[selector] = selectors[selector](task)
-      selected = results.select[selector]
-    end
+    local selector = rule.selector or 'default'
+    local selected = selectors[selector](task)
     if selected then
       rspamd_logger.debugm(N, task, 'Message selected for processing')
-      local formatter = settings.pusher_format[backend]
-      local formatted = results.format[backend]
-      if formatted == nil then
-        results.format[formatter] = formatters[formatter](task)
-        formatted = results.format[formatter]
-      end
+      local formatter = rule.formatter or 'default'
+      local formatted = formatters[formatter](task)
       if formatted then
-        pushers[backend](task, formatted)
-      elseif formatted == nil then
-        rspamd_logger.warnx(task, 'Formatter [%s] returned NIL', formatter)
+        pushers[rule.backend](task, formatted, rule)
       else
         rspamd_logger.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
       end
-    elseif selected == nil then
-      rspamd_logger.warnx(task, 'Selector [%s] returned NIL', selector)
     else
       rspamd_logger.debugm(N, task, 'Selector [%s] returned non-truthy value [%s]', selector, selected)
     end
   end
 end
 
-for k in pairs(settings.pusher_enabled) do
+if not next(settings.rules) then
+  rspamd_logger.errx(rspamd_config, 'No rules enabled')
+end
+for k, r in pairs(settings.rules) do
   rspamd_config:register_symbol({
-    name = 'EXPORT_METADATA_' .. k:upper(),
+    name = 'EXPORT_METADATA_' .. k,
     type = 'postfilter',
-    callback = gen_exporter(k),
+    callback = gen_exporter(r),
     priority = 10
   })
 end
