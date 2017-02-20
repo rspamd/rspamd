@@ -668,7 +668,7 @@ local function multimap_callback(task, rule)
     filename = function()
       local parts = task:get_parts()
       for _,p in ipairs(parts) do
-        if p:is_archive() then
+        if p:is_archive() and not rule['skip_archives'] then
           local fnames = p:get_archive():get_files()
 
           for _,fn in ipairs(fnames) do
