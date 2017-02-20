@@ -638,6 +638,7 @@ reallytinyurl.com
 redir.ec
 redirectingat.com
 redirects.ca
+redirect.subscribe.ru
 redire.ru
 redirx.com
 reduc.in
