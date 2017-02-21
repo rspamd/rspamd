@@ -21,6 +21,8 @@ local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local redis_params
 
+local N = "antivirus"
+
 local function match_patterns(default_sym, found, patterns)
   if not patterns then return default_sym end
   for sym, pat in pairs(patterns) do
@@ -162,6 +164,47 @@ local function sophos_config(opts)
 
   rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
     sophos_conf['servers'])
+  return nil
+end
+
+local function savapi_config(opts)
+  local savapi_conf = {
+    attachments_only = true,
+    default_port = 4444, -- note: You must set ListenAddress in savapi.conf
+    product_id = 0,
+    timeout = 15.0,
+    retransmits = 2,
+    cache_expire = 3600, -- expire redis in one hour
+  }
+
+  for k,v in pairs(opts) do
+    savapi_conf[k] = v
+  end
+
+  if redis_params and not redis_params['prefix'] then
+    if savapi_conf.prefix then
+      redis_params['prefix'] = savapi_conf.prefix
+    else
+      redis_params['prefix'] = 'rs_ap'
+    end
+  end
+
+  if not savapi_conf['servers'] then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  savapi_conf['upstreams'] = upstream_list.create(rspamd_config,
+    savapi_conf['servers'],
+    savapi_conf.default_port)
+
+  if savapi_conf['upstreams'] then
+    return savapi_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+    savapi_conf['servers'])
   return nil
 end
 
@@ -442,6 +485,118 @@ local function sophos_check(task, rule)
   end
 end
 
+local function savapi_check(task, rule)
+  local function savapi_check_uncached ()
+    local upstream = rule.upstreams:get_upstream_round_robin()
+    local addr = upstream:get_addr()
+    local retransmits = rule.retransmits
+    local message_file = task:store_in_file(tonumber("0644", 8))
+
+    local function savapi_fin_cb(err, conn)
+      rspamd_logger.debugm(N, task, 'savapi_fin_cb called')
+      if conn then
+        conn:close()
+      end
+    end
+
+    local function savapi_scan2_cb(err, data, conn)
+      rspamd_logger.debugm(N, task, 'savapi_scan2_cb called')
+      local result = tostring(data)
+      rspamd_logger.debugm(N, task, "got reply: %s", result)
+
+      if string.find(result, '200') or string.find(result, '210') then
+        -- clean message
+        rspamd_logger.debugm(N, task, 'clean message')
+        save_av_cache(task, rule, 'OK')
+
+      elseif string.find(result, '310') then
+        -- infected message
+        rspamd_logger.debugm(N, task, 'infected message')
+        local parts = rspamd_str_split(result, ' ')
+        local message = parts[2]
+        -- A message: <alert> ; <type> ; <description>
+        local vname = rspamd_str_split(message, ';')[1]
+        rspamd_logger.infox(task, 'virus found: %s', vname)
+        yield_result(task, rule, vname)
+        save_av_cache(task, rule, vname)
+      end
+      conn:add_write(savapi_fin_cb, 'QUIT\n')
+    end
+
+    local function savapi_scan1_cb(err, conn)
+      rspamd_logger.debugm(N, task, 'savapi_scan1_cb called')
+      conn:add_read(savapi_scan2_cb, '\n')
+    end
+
+    -- 100 PRODUCT:xyz
+    local function savapi_greet2_cb(err, data, conn)
+      local result = tostring(data)
+      rspamd_logger.debugm(N, task, 'savapi_greet2_cb called')
+      rspamd_logger.debugm(N, task, "got reply: %s", result)
+      if string.find(result, '100 PRODUCT') then
+        conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n', message_file)})
+      else
+        rspamd_logger.errx(task, 'invalid product id %s', rule['product_id'])
+        conn:add_write(savapi_fin_cb, 'QUIT\n')
+      end
+    end
+
+    local function savapi_greet1_cb(err, conn)
+      rspamd_logger.debugm(N, task, 'savapi_greet1_cb called')
+      conn:add_read(savapi_greet2_cb, '\n')
+    end
+
+    local function savapi_callback_init(err, data, conn)
+      rspamd_logger.debugm(N, task, 'savapi_callback_init called')
+
+      if err then
+        if err == 'IO timeout' then
+          if retransmits > 0 then
+            retransmits = retransmits - 1
+            tcp.request({
+              task = task,
+              host = addr:to_string(),
+              port = addr:get_port(),
+              timeout = rule['timeout'],
+              callback = savapi_callback_init,
+              stop_pattern = {'\n'},
+            })
+          else
+            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+          end
+        else
+          rspamd_logger.errx(task, 'failed to scan: %s', err)
+        end
+      else
+
+        local result = tostring(data)
+
+        -- 100 SAVAPI:4.0 greeting
+        if string.find(result, '100') then
+          rspamd_logger.debugm(N, task, "got reply: %s", result)
+          conn:add_write(savapi_greet1_cb, {string.format('SET PRODUCT %s\n', rule['product_id'])})
+        end
+      end
+    end
+
+    tcp.request({
+      task = task,
+      host = addr:to_string(),
+      port = addr:get_port(),
+      timeout = rule['timeout'],
+      callback = savapi_callback_init,
+      stop_pattern = {'\n'},
+    })
+  end
+
+  if need_av_check(task, rule) then
+    if check_av_cache(task, rule, savapi_check_uncached) then
+      return
+    else
+      savapi_check_uncached()
+    end
+  end
+end
 
 local av_types = {
   clamav = {
@@ -455,6 +610,10 @@ local av_types = {
   sophos = {
     configure = sophos_config,
     check = sophos_check
+  },
+  savapi = {
+    configure = savapi_config,
+    check = savapi_check
   },
 }
 
