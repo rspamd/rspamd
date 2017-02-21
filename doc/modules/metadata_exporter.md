@@ -92,6 +92,8 @@ The following settings can be defined on any rule:
 ### Settings: `http` backend
 
  - `url` (required): defines URL to post content to
+ - `meta_header_prefix`: prefix for meta headers (default 'X-Rspamd-')
+ - `meta_headers`: if set true general metainformation is added to HTTP request headers (default false)
  - `mime_type`: defines mime type of content sent in HTTP POST
 
 ### Settings: `redis_pubsub` backend
@@ -145,10 +147,13 @@ Metadata as returned by the `json` formatter can be referenced by key in `email_
 - `header_subject`: Contents of Subject header(s)
 - `header_to`: Contents of To header(s)
 - `ip`: IP of message sender
+- `mail_from` (`email_template` only): sender of alert
+- `mail_to` (`email_template` only): recipient of alert
 - `message_id`: Message-ID of original message
 - `our_message_id` (`email_template` only): message-ID generated for alert
 - `qid`: Queue-ID of message provided by MTA
 - `rcpt`: SMTP RCPT
+- `score`: Metric score of the message
 - `symbols`: Symbols in metric
 - `user`: authenticated username of message sender
 
@@ -162,7 +167,7 @@ metadata_exporter {
   # Define custom selector(s)
   custom_select {
     mine = <<EOD
-function(task)
+return function(task)
   -- Select all messages
   return true
 end
@@ -172,7 +177,7 @@ EOD;
   # Define custom formatter(s)
   custom_format {
     mine = <<EOD
-function(task)
+return function(task)
   -- Push message ID
   return task:get_message_id()
 end
