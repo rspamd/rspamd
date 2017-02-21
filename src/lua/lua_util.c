@@ -462,6 +462,13 @@ LUA_FUNCTION_DEF (util, caseless_hash);
  */
 LUA_FUNCTION_DEF (util, caseless_hash_fast);
 
+/***
+ *  @function util.get_hostname()
+ * Returns hostname for this machine
+ * @return {string} hostname
+ */
+LUA_FUNCTION_DEF (util, get_hostname);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -503,6 +510,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, count_non_ascii),
+	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
@@ -1927,6 +1935,30 @@ lua_util_count_non_ascii (lua_State *L)
 	}
 
 	return 2;
+}
+
+static gint
+lua_util_get_hostname (lua_State *L)
+{
+	gchar *hostbuf;
+	gsize hostlen;
+
+	hostlen = sysconf (_SC_HOST_NAME_MAX);
+
+	if (hostlen <= 0) {
+		hostlen = 256;
+	}
+	else {
+		hostlen ++;
+	}
+
+	hostbuf = g_alloca (hostlen);
+	memset (hostbuf, 0, hostlen);
+	gethostname (hostbuf, hostlen - 1);
+
+	lua_pushstring (L, hostbuf);
+
+	return 1;
 }
 
 /* Backport from Lua 5.3 */
