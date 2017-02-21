@@ -780,7 +780,7 @@ local function maybe_train_fanns(cfg, ev_base)
           if _err then
             rspamd_logger.errx(rspamd_config, 'cannot get FANN trains %s from redis: %s', prefix, _err)
           elseif _data and type(_data) == 'number' or type(_data) == 'string' then
-            if tonumber(_data) and tonumber(_data) > max_trains then
+            if tonumber(_data) and tonumber(_data) >= max_trains then
               rspamd_logger.infox(rspamd_config, 'need to learn ANN %s after %s learn vectors (%s required)',
                 prefix, tonumber(_data), max_trains)
               train_fann(cfg, ev_base, elt)
