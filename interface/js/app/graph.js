@@ -82,12 +82,13 @@ function($, D3Evolution, unused) {
         }
     };
 
+    // Get selectors' current state
+    function getSelector(id) {
+        var e = document.getElementById(id);
+        return e.options[e.selectedIndex].value;
+    }
+
     function initGraph() {
-        // Get selectors' current state
-        function getSelector(id) {
-            var e = document.getElementById(id);
-            return e.options[e.selectedIndex].value;
-        }
         var graph = new D3Evolution("graph", $.extend({}, graph_options, {
             type:        getSelector("selType"),
             interpolate: getSelector("selInterpolate"),
@@ -148,16 +149,6 @@ function($, D3Evolution, unused) {
         });
     }
 
-    // Handling mouse events on overlapping elements
-    $("#rrd-pie").mouseover(function () {
-        $("#rrd-pie").css("z-index", "200");
-        $("#rrd-table_toggle").css("z-index", "300");
-    });
-    $("#rrd-table_toggle").mouseover(function () {
-        $("#rrd-pie").css("z-index", "0");
-        $("#rrd-table_toggle").css("z-index", "0");
-    });
-
     var interface = {};
 
     interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
@@ -178,14 +169,6 @@ function($, D3Evolution, unused) {
 
         if (graphs.graph === undefined) {
             graphs.graph = initGraph();
-        }
-
-        if (type === undefined) {
-            function getSelector(id) {
-                var e = document.getElementById(id);
-                return e.options[e.selectedIndex].value;
-            }
-            type = getSelector("selData");
         }
 
         if (checked_server === "All SERVERS") {
@@ -255,6 +238,20 @@ function($, D3Evolution, unused) {
                     textStatus + ' ' + jqXHR.status + ' ' + errorThrown);
             }
         });
+    };
+
+    interface.setup = function() {
+        // Handling mouse events on overlapping elements
+        $("#rrd-pie").mouseover(function () {
+            $("#rrd-pie").css("z-index", "200");
+            $("#rrd-table_toggle").css("z-index", "300");
+        });
+        $("#rrd-table_toggle").mouseover(function () {
+            $("#rrd-pie").css("z-index", "0");
+            $("#rrd-table_toggle").css("z-index", "0");
+        });
+
+        return getSelector("selData");
     };
 
     return interface;

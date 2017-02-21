@@ -181,7 +181,6 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
         // Public functions
         interface.alertMessage = alertMessage;
         interface.setup = function() {
-            // Bind event handlers to selectors
             $("#selData").change(function () {
                 selData = this.value;
                 tabClick("#throughput_nav");
@@ -221,7 +220,8 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             tab_config.setup(interface);
             tab_symbols.setup(interface, tables);
             tab_history.setup(interface, tables);
-            tab_upload.setup(interface)
+            tab_upload.setup(interface);
+            selData = tab_graph.setup();
         };
 
         interface.connect = function() {
