@@ -118,6 +118,7 @@ local redis_locked_invalidate_sha = nil
 -- key1 - prefix for keys
 -- key2 - current time
 -- key3 - key expire
+-- key4 - hostname
 local redis_lua_script_maybe_lock = [[
   local locked = redis.call('GET', KEYS[1] .. '_locked')
   if locked then
@@ -126,6 +127,7 @@ local redis_lua_script_maybe_lock = [[
     end
   end
   redis.call('SET', KEYS[1] .. '_locked', tostring(tonumber(KEYS[2]) + tonumber(KEYS[3])))
+  redis.call('SET', KEYS[1] .. '_hostname', KEYS[4])
   return 1
 ]]
 local redis_maybe_lock_sha = nil
@@ -755,8 +757,8 @@ local function train_fann(_, ev_base, elt)
     true, -- is write
     redis_lock_cb, --callback
     'EVALSHA', -- command
-    {redis_maybe_lock_sha, '3', gen_fann_prefix(elt), tostring(os.time()),
-      tostring(lock_expire)}
+    {redis_maybe_lock_sha, '4', gen_fann_prefix(elt), tostring(os.time()),
+      tostring(lock_expire), rspamd_util.get_hostname()}
   )
 end
 
