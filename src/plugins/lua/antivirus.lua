@@ -533,7 +533,12 @@ local function savapi_check(task, rule)
       local result = tostring(data)
       rspamd_logger.debugm(N, task, 'savapi_greet2_cb called')
       rspamd_logger.debugm(N, task, "got reply: %s", result)
-      conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n', message_file)})
+      if string.find(result, '100 PRODUCT') then
+        conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n', message_file)})
+      else
+        rspamd_logger.errx(task, 'invalid product id %s', rule['product_id'])
+        conn:add_write(savapi_fin_cb, 'QUIT\n')
+      end
     end
 
     local function savapi_greet1_cb(err, conn)
@@ -554,7 +559,7 @@ local function savapi_check(task, rule)
               port = addr:get_port(),
               timeout = rule['timeout'],
               callback = savapi_callback_init,
-              data = {'\n'},
+              stop_pattern = {'\n'},
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
@@ -580,7 +585,7 @@ local function savapi_check(task, rule)
       port = addr:get_port(),
       timeout = rule['timeout'],
       callback = savapi_callback_init,
-      data = {'\n'},
+      stop_pattern = {'\n'},
     })
   end
 
