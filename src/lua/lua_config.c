@@ -879,7 +879,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
-	gint level = lua_gettop (cd->L), nresults, err_idx;
+	gint level = lua_gettop (cd->L), nresults, err_idx, ret;
 	lua_State *L = cd->L;
 	GString *tb;
 	struct rspamd_symbol_result *s;
@@ -900,11 +900,14 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	rspamd_lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 
-	if (lua_pcall (L, 1, LUA_MULTRET, err_idx) != 0) {
+	if ((ret = lua_pcall (L, 1, LUA_MULTRET, err_idx)) != 0) {
 		tb = lua_touserdata (L, -1);
-		msg_err_task ("call to (%s) failed: %v", cd->symbol, tb);
-		g_string_free (tb, TRUE);
-		lua_pop (L, 1);
+		msg_err_task ("call to (%s) failed (%d): %v", cd->symbol, ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+			lua_pop (L, 1);
+		}
 	}
 	else {
 		nresults = lua_gettop (L) - level;
