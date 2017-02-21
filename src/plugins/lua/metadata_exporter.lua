@@ -57,12 +57,13 @@ Action: $action
 Symbols: $symbols]],
 }
 
-local function get_general_metadata(task, flatten)
+local function get_general_metadata(task, flatten, no_content)
   local r = {}
   r.ip = tostring(task:get_from_ip())
   r.user = task:get_user()
   r.qid = task:get_queue_id()
   r.action = task:get_metric_action('default')
+  r.score = task:get_metric_score('default')[1]
   local rcpt = task:get_recipients('smtp')
   if rcpt then
     local l = {}
@@ -110,11 +111,13 @@ local function get_general_metadata(task, flatten)
       end
     end
   end
-  r.header_from = process_header('from')
-  r.header_to = process_header('to')
-  r.header_subject = process_header('subject')
-  r.header_date = process_header('date')
-  r.message_id = task:get_message_id()
+  if not no_content then
+    r.header_from = process_header('from')
+    r.header_to = process_header('to')
+    r.header_subject = process_header('subject')
+    r.header_date = process_header('date')
+    r.message_id = task:get_message_id()
+  end
   return r
 end
 
@@ -218,12 +221,21 @@ local pushers = {
       end
       return true
     end
+    local hdrs = {}
+    if rule.meta_headers then
+      local gm = get_general_metadata(task, true, true)
+      local pfx = rule.meta_header_prefix or 'X-Rspamd-'
+      for k, v in pairs(gm) do
+        hdrs[pfx .. k] = v
+      end
+    end
     rspamd_http.request({
       task=task,
       url=rule.url,
       body=formatted,
       callback=http_callback,
       mime_type=rule.mime_type,
+      headers=hdrs,
     })
   end,
   send_mail = function(task, formatted, rule)
@@ -347,21 +359,21 @@ local process_settings = {
   end,
   custom_push = function(val)
     if type(val) == 'table' then
-      for k, v in pairs(table) do
+      for k, v in pairs(val) do
         pushers[k] = assert(load(v))()
       end
     end
   end,
   custom_select = function(val)
     if type(val) == 'table' then
-      for k, v in pairs(table) do
+      for k, v in pairs(val) do
         selectors[k] = assert(load(v))()
       end
     end
   end,
   custom_format = function(val)
     if type(val) == 'table' then
-      for k, v in pairs(table) do
+      for k, v in pairs(val) do
         formatters[k] = assert(load(v))()
       end
     end
