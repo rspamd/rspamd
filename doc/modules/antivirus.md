@@ -5,7 +5,7 @@ title: Antivirus module
 
 # Antivirus module
 
-Antivirus module (new in Rspamd 1.4) provides integration with virus scanners. Currently supported are [ClamAV](http://www.clamav.net), [F-Prot](http://www.f-prot.com/products/corporate_users/unix/linux/mailserver.html) and [Sophos](https://www.sophos.com/en-us/medialibrary/PDFs/partners/sophossavdidsna.pdf) (via SAVDI).
+Antivirus module (new in Rspamd 1.4) provides integration with virus scanners. Currently supported are [ClamAV](http://www.clamav.net), [F-Prot](http://www.f-prot.com/products/corporate_users/unix/linux/mailserver.html), [Sophos](https://www.sophos.com/en-us/medialibrary/PDFs/partners/sophossavdidsna.pdf) (via SAVDI) and [Avira](https://www.avira.com/de/oem-antivirus) (via SAVAPI).
 
 ### Configuration
 
@@ -25,8 +25,10 @@ antivirus {
     #max_size = 20000000;
     # symbol to add (add it to metric if you want non-zero weight)
     symbol = "CLAM_VIRUS";
-    # type of scanner: "clamav", "fprot" or "sophos"
+    # type of scanner: "clamav", "fprot", "sophos" or "savapi"
     type = "clamav";
+    # For "savapi" you must also specify the following variable
+    #product_id = 12345;
     # servers to query (if port is unspecified, scanner-specific default is used)
     # can be specified multiple times to pool servers
     # can be set to a path to a unix socket
@@ -42,3 +44,9 @@ antivirus {
   }
 }
 ~~~
+
+### SAVAPI specific details ###
+
+The default SAVAPI configuration has a listening unix socket. You must change this to a TCP socket. The option "ListenAddress" in savapi.conf shows some examples. Per default this module expects the socket at 127.0.0.1:4444. You can change this by setting it in the "servers" variable as seen above.
+
+You must also set the "product_id" which must match with the id for your HBEDV.key file. If you leave this, the default value is "0" and checking will fail with a log message that the given id was invalid.
