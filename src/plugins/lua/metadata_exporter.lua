@@ -223,10 +223,14 @@ local pushers = {
     end
     local hdrs = {}
     if rule.meta_headers then
-      local gm = get_general_metadata(task, true, true)
+      local gm = get_general_metadata(task, false, true)
       local pfx = rule.meta_header_prefix or 'X-Rspamd-'
       for k, v in pairs(gm) do
-        hdrs[pfx .. k] = v
+        if type(v) == 'table' then
+          hdrs[pfx .. k] = ucl.to_format(v, 'json-compact')
+        else
+          hdrs[pfx .. k] = v
+        end
       end
     end
     rspamd_http.request({
