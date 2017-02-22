@@ -775,6 +775,7 @@ tagiturl.com
 taourl.com
 tbd.ly
 t.cn
+t.co
 tcrn.ch
 techto.us
 tez.co
