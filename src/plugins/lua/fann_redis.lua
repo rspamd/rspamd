@@ -48,6 +48,7 @@ local redis_lua_script_can_train = [[
   local nspam = 0
   local nham = 0
   local lim = tonumber(KEYS[4])
+  lim = lim + lim * 0.1
 
   local exists = redis.call('SISMEMBER', KEYS[1], KEYS[2])
   if not exists or exists == 0 then
