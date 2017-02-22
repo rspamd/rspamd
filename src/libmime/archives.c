@@ -46,7 +46,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	const guchar *p, *start, *end, *eocd = NULL, *cd;
 	const guint32 eocd_magic = 0x06054b50, cd_basic_len = 46;
 	const guchar cd_magic[] = {0x50, 0x4b, 0x01, 0x02};
-	guint32 cd_offset, cd_size, comp_size, uncomp_size;
+	const guint max_processed = 1024;
+	guint32 cd_offset, cd_size, comp_size, uncomp_size, processed = 0;
 	guint16 extra_len, fname_len, comment_len;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
@@ -65,6 +66,10 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 	while (p > start + sizeof (guint32)) {
 		guint32 t;
 
+		if (processed > max_processed) {
+			break;
+		}
+
 		/* XXX: not an efficient approach */
 		memcpy (&t, p, sizeof (t));
 
@@ -74,6 +79,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		}
 
 		p --;
+		processed ++;
 	}
 
 
