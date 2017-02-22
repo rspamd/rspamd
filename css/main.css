@@ -1,0 +1,302 @@
+---
+# Front matter added to ensure Jekyll processes file.
+---
+
+/* Set some basic padding to keep content from hitting the edges */
+.body-content {
+  padding-left: 15px;
+  padding-right: 15px;
+}
+body {
+  position: relative;
+  padding-top: 50px;
+}
+.affix {
+  width: auto;
+  position: static;
+}
+/* Responsive: Portrait tablets and up */
+@media screen and (min-width: 1024px) {
+  /* Remove padding from wrapping element since we kick in the grid classes here */
+  .body-content {
+    padding: 0;
+  }
+  .affix {
+    position: fixed;
+    top: 50px;
+    width: auto;
+	  margin-top: 50px;
+  }
+}
+.tab-content {
+    border-bottom: 1px solid #ddd;
+    padding: 20px;
+    margin-bottom: 50px;
+}
+.nav-tabs {
+    margin-top: 10px;
+}
+pre{
+  /* code aria */
+  background-color: #ffffff;
+  color: #000000;
+}
+a.undecor {
+  text-decoration: none;
+  color: black;
+}
+hr {
+    /* simple hr */
+    display: block;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    margin-left: auto;
+    margin-right: auto;
+    border-top: 1px solid #ddd;
+}
+.row-footer{
+    position: relative;
+    bottom: 0;
+    left: 0;
+    background-color: #E8E8E8;
+    padding: 10px 0px 30px 0px;
+}
+.jumbotron {
+  padding-top: 10px;
+  padding-bottom: 15px;
+  margin-bottom: 0;
+
+}
+.btn-code{
+  background-color: #333333 !important;
+  color: #eeeeee;
+  border: none;
+  font-family: monospace;
+  text-decoration: none;
+}
+code {
+  background-color: rgba(0,0,0,0.04) !important;
+  color: inherit;
+}
+div.short-news {height: 200px;	overflow-y: hidden;}
+short-news p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.main-small-text{
+  text-align: center;
+  padding: 10px;
+}
+.main-small-text-block{
+  padding-top: 10px;
+  padding-bottom: 20px;
+}
+.thumbnail{
+  height: 240px;
+  padding: 8px;
+  margin: 0;
+}
+div.caption h2{
+  margin-top: 0;
+}
+h2{
+  font-size: 32px;
+}
+#gh-btn{/*for git like counter*/
+  padding-top: 8px;
+  height:25px;
+}
+#gh-count{/*for git like counter*/
+  padding-top: 8px;
+  height:25px;
+}
+#jumbo-features{
+  background: url({{ site.baseurl }}/img/rspamd_jumbotron_features.png);
+  background-size: cover;
+}
+#jumbo-performance{
+  background: url({{ site.baseurl }}/img/rspamd_jumbotron_performance.png);
+  background-size: cover;
+}
+#jumbo-head{
+  background: url({{ site.baseurl }}/img/rspamd_jumbotron.png);
+  background-size: cover;
+}
+#jumbo-rmilter{
+  background: url({{ site.baseurl }}/img/rmilter_jumbotron.png);
+  background-size: cover;
+}
+.support-block {
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  padding-right: 5px;
+  padding-left: 5px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  margin-right: 0px;
+  margin-left: 0px;
+}
+#wrapper {/*for removing wite space after footer*/
+    min-height: 100%;
+    height: auto !important;
+    height: 100%;
+    margin: 0 auto -78px;
+}
+.push {/*add a wite space before footer*/
+    height: 78px;
+}
+.breadcrumb{
+  background-color: transparent;
+  padding-left: 0;
+}
+ul.nav-stacked li a{
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.compare-table span.icon-red {
+    color: rgb(250, 57, 57);
+}
+
+.compare-table span.icon-green {
+    color: #00E025;
+}
+
+table {
+  border-radius: 4px;
+  border-collapse: collapse;
+  border-spacing: 0;
+  box-shadow: 2px 2px 8px #ddd;
+  margin: 0 0 10px;
+}
+tr:nth-child(2n) {
+  background-color: #f8f8f8;
+}
+th, td {
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  padding: 6px 13px;
+}
+td:last-child {
+  border-right: none;
+}
+table tr:last-child td {
+  border-bottom: none;
+}
+thead th:first-child {
+  border-radius: 4px 0 0 0;
+}
+thead th:last-child {
+  border-radius: 0 4px 0 0;
+  border-right: medium none;
+}
+tr:last-child td:first-child {
+  border-radius: 0 0 0 4px;
+}
+tr:last-child td:last-child {
+  border-radius: 0 0 4px 0;
+}
+
+.table-responsive{
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+tr.info th{
+  padding-left: 30px !important;
+  background-color: #E8E8E8 !important;
+}
+.table-responsive thead tr th{
+  border-bottom: 0 !important;
+}
+table.table{
+  margin-bottom: 0 !important;
+}
+
+/* Offsetting anchors to adjust for fixed navbar */
+*[id]:before {
+  content: "";
+  display: block;
+  height: 60px;
+  margin-top: -60px;
+}
+
+/* Anchors for headings */
+.header-link {
+  position: relative;
+  left: 0.6em;
+  opacity: 0;
+  font-size: 0.8em;
+
+  -webkit-transition: opacity 0.2s ease-in-out 0.1s;
+  -moz-transition: opacity 0.2s ease-in-out 0.1s;
+  -ms-transition: opacity 0.2s ease-in-out 0.1s;
+}
+h2:hover .header-link,
+h3:hover .header-link,
+h4:hover .header-link,
+h5:hover .header-link,
+h6:hover .header-link {
+  opacity: 1;
+}
+#text-carousel {
+  width: 100%;
+  height: auto;
+  padding: 50px;
+  margin-bottom: 50px;
+}
+.carousel-control {
+  width: 10%;
+  border-radius: 4px;
+}
+.who-uses{
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.carousel-control.right{background-image: linear-gradient(to right, white 0%, #E8E8E8 60%); opacity: 1;;}
+.carousel-control.left{background-image: linear-gradient(to left, white 0%, #E8E8E8 60%); opacity: 1;}
+blockquote {
+  font-size: 14px;
+  border-left: solid #E8E8E8 3px;
+}
+.carousel-content img{
+  margin-bottom: 2px;
+}
+.btn-pp{
+  background-color: #ffcc66;
+  border: 1px solid #ff9933;
+  color: #003366;
+}
+.btn-pp:hover{
+  background-color:#feb74b;
+  color: #003366;
+}
+.support-block p{
+  margin-bottom: 0px;
+}
+@media (max-width: 768px) {
+  .support-block p{
+    margin-top: 10px;
+  }
+  .who-uses blockquote{
+    font-size: 10px;
+  }
+}
+.news_row{
+  background-image: linear-gradient(to right, #E8E8E8 0%, white 10%, white 90%, #E8E8E8 100%);
+  border-radius: 4px;
+  margin-right: -5px;
+  margin-left: -5px;
+  margin-top: 20px;
+  padding: 10px;
+}
+@media (min-width: 768px) {
+  .bottom-right {
+    position: absolute;
+    bottom: 15px;
+    right: 10px;
+  }
+}

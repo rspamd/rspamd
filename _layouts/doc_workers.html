@@ -1,0 +1,32 @@
+{% include top.html %}
+<div class="container">
+
+	<div class="row">
+		<div class="col-sm-3">
+			<!-- Docs navigation -->
+			<ul data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation">
+				<li class="nav-header">
+					<h4>Rspamd documentation</h4></li>
+				<li><a href="{{ site.baseurl }}/doc/index.html">Documentation index</a></li>
+				<li class="divider"></li>
+				<li class="nav-header">Rspamd workers</li>
+				<li><a href="{{ site.baseurl }}/doc/workers/index.html">Overview</a></li>
+				<li class="divider"></li>
+				<li><a href="{{ site.baseurl }}/doc/workers/normal.html">Normal worker (scanner)</a></li>
+				<li><a href="{{ site.baseurl }}/doc/workers/controller.html">Controller worker</a></li>
+				<li><a href="{{ site.baseurl }}/doc/workers/fuzzy_storage.html">Fuzzy hashes storage</a></li>
+			</ul>
+		</div>
+
+		<div class="col-sm-9">
+			<div class="body-content doc-content">
+				{{ content }}
+			</div>
+		</div>
+
+	</div>
+	<!-- row -->
+
+</div>
+<!-- /container -->
+{% include bottom.html %}
