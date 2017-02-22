@@ -172,6 +172,7 @@ local function savapi_config(opts)
     attachments_only = true,
     default_port = 4444, -- note: You must set ListenAddress in savapi.conf
     product_id = 0,
+    log_clean = false,
     timeout = 15.0,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
@@ -507,6 +508,9 @@ local function savapi_check(task, rule)
       if string.find(result, '200') or string.find(result, '210') then
         -- clean message
         rspamd_logger.debugm(N, task, 'clean message')
+	if rule['log_clean'] then
+          rspamd_logger.infox(task, 'SAVAPI: message is clean')
+        end
         save_av_cache(task, rule, 'OK')
 
       elseif string.find(result, '310') then
@@ -516,7 +520,7 @@ local function savapi_check(task, rule)
         local message = parts[2]
         -- A message: <alert> ; <type> ; <description>
         local vname = rspamd_str_split(message, ';')[1]
-        rspamd_logger.infox(task, 'virus found: %s', vname)
+        rspamd_logger.infox(task, 'SAVAPI: virus found: %s', vname)
         yield_result(task, rule, vname)
         save_av_cache(task, rule, vname)
       end
