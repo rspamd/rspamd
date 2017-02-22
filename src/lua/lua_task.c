@@ -843,12 +843,14 @@ static const struct luaL_reg archivelib_m[] = {
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 LUA_FUNCTION_DEF (text, ptr);
+LUA_FUNCTION_DEF (text, save_in_file);
 LUA_FUNCTION_DEF (text, gc);
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
 	LUA_INTERFACE_DEF (text, str),
 	LUA_INTERFACE_DEF (text, ptr),
+	LUA_INTERFACE_DEF (text, save_in_file),
 	{"__len", lua_text_len},
 	{"__tostring", lua_text_str},
 	{"__gc", lua_text_gc},
@@ -3761,6 +3763,46 @@ lua_text_ptr (lua_State *L)
 
 	if (t != NULL) {
 		lua_pushlightuserdata (L, (gpointer)t->start);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_save_in_file (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	const gchar *fname = luaL_checkstring (L, 2);
+	guint mode = 00644;
+	gint fd;
+
+	if (t != NULL && fname != NULL) {
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			mode = lua_tonumber (L, 3);
+		}
+
+		fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode);
+
+		if (fd == -1) {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		if (write (fd, t->start, t->len) == -1) {
+			close (fd);
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		close (fd);
+		lua_pushboolean (L, true);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
