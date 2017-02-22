@@ -237,7 +237,9 @@ local function rmilter_headers(task)
 	    local t = rspamd_str_split(common.symbols[auth_types['dmarc'][key]][1]['options'][1], ' : ')
 	    local dom = t[1]
 	    local rsn = t[2]
-	    hdr = hdr .. ' reason="' .. rsn .. '"'
+	    if rsn then
+              hdr = hdr .. ' reason="' .. rsn .. '"'
+            end
 	    hdr = hdr .. ' header.from=' .. dom
 	    if key == 'softfail' then
 	      hdr = hdr .. ' policy=none'
