@@ -566,6 +566,7 @@ rspamd_multipart_boundaries_filter (struct rspamd_task *task,
 				else if (cb->bhash == cur->closed_hash) {
 					/* Not a closing element in fact */
 					cur->flags &= ~(RSPAMD_MIME_BOUNDARY_FLAG_CLOSED);
+					cur->hash = cur->closed_hash;
 					sel = i;
 					break;
 				}
@@ -591,10 +592,16 @@ rspamd_multipart_boundaries_filter (struct rspamd_task *task,
 			break;
 		}
 
-		if (cur->hash == cb->bhash) {
+		if (cur->hash == cb->bhash || cur->closed_hash == cb->bhash) {
 			if (!rspamd_mime_parse_multipart_cb (task, multipart, st,
 					cb, cur)) {
 				return FALSE;
+			}
+
+			if (cur->closed_hash == cb->bhash) {
+				/* We have again fake closed hash */
+				cur->flags &= ~(RSPAMD_MIME_BOUNDARY_FLAG_CLOSED);
+				cur->hash = cur->closed_hash;
 			}
 
 			if (RSPAMD_BOUNDARY_IS_CLOSED (cur)) {
@@ -604,6 +611,12 @@ rspamd_multipart_boundaries_filter (struct rspamd_task *task,
 							struct rspamd_mime_boundary, i + 1);
 
 					if (cur->hash == cb->bhash) {
+						continue;
+					}
+					else if (cur->closed_hash == cb->bhash) {
+						/* We have again fake closed hash */
+						cur->flags &= ~(RSPAMD_MIME_BOUNDARY_FLAG_CLOSED);
+						cur->hash = cur->closed_hash;
 						continue;
 					}
 				}
@@ -729,16 +742,24 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 			b.boundary = p - st->start - 3;
 			b.start = bend - st->start;
 
-			lc_copy = g_malloc (blen);
-			memcpy (lc_copy, p, blen);
-			rspamd_str_lc (lc_copy, blen);
+			if (closing) {
+				lc_copy = g_malloc (blen + 2);
+				memcpy (lc_copy, p, blen + 2);
+				rspamd_str_lc (lc_copy, blen + 2);
+			}
+			else {
+				lc_copy = g_malloc (blen);
+				memcpy (lc_copy, p, blen);
+				rspamd_str_lc (lc_copy, blen);
+			}
+
 			rspamd_cryptobox_siphash ((guchar *)&b.hash, lc_copy, blen,
 					lib_ctx->hkey);
-			g_free (lc_copy);
 
 			if (closing) {
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
-				rspamd_cryptobox_siphash ((guchar *)&b.closed_hash, p, blen + 2,
+				rspamd_cryptobox_siphash ((guchar *)&b.closed_hash, lc_copy,
+						blen + 2,
 						lib_ctx->hkey);
 			}
 			else {
@@ -746,6 +767,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				b.closed_hash = 0;
 			}
 
+			g_free (lc_copy);
 			g_array_append_val (st->boundaries, b);
 		}
 	}
