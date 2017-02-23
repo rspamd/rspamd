@@ -443,6 +443,10 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 
 		part_content = rspamd_mime_text_part_maybe_convert (task, text_part);
 
+		if (part_content == NULL) {
+			return;
+		}
+
 		text_part->html = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (*text_part->html));
 		text_part->mime_part = mime_part;
@@ -485,7 +489,14 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 
 		text_part->content = rspamd_mime_text_part_maybe_convert (task,
 				text_part);
-		g_ptr_array_add (task->text_parts, text_part);
+
+		if (text_part->content == NULL) {
+			/*
+			 * We ignore unconverted parts from now as it is dangerous
+			 * to treat them as text parts
+			 */
+			g_ptr_array_add (task->text_parts, text_part);
+		}
 	}
 
 
