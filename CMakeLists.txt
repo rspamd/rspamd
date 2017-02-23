@@ -681,7 +681,11 @@ ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/e
 	ROOT ${LIBEVENT_ROOT_DIR} MODULES event libevent)
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite
 	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
-ProcessPackage(ICU LIBRARY icui18n icuuc icudata INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
+ProcessPackage(ICU LIBRARY icuuc INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
+	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
+ProcessPackage(ICU LIBRARY icudata INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
+	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
+ProcessPackage(ICU LIBRARY icui18n INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
 	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
 ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE err.h INCLUDE_SUFFIXES include/openssl
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libcrypt)
