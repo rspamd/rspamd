@@ -89,6 +89,9 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
     end
 
     rspamd_http.request{
+      headers = {
+        ['User-Agent'] = 'Mozilla/5.0 (Maemo; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1',
+      },
       url = url,
       task = task,
       method = 'head',
