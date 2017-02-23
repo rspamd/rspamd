@@ -439,6 +439,7 @@ end
 -- Plugin defaults should not be changed - override these in config
 -- New defaults should not alter behaviour
 local default_defaults = {
+  ['default_enabled'] = {[1] = true, [2] = 'enabled'},
   ['default_ipv4'] = {[1] = true, [2] = 'ipv4'},
   ['default_ipv6'] = {[1] = false, [2] = 'ipv6'},
   ['default_received'] = {[1] = true, [2] = 'received'},
@@ -484,6 +485,7 @@ for key,rbl in pairs(opts['rbls']) do
         rbl[default_v[2]] = opts[default]
       end
     end
+    if not rbl['enabled'] then return end
     if type(rbl['returncodes']) == 'table' then
       for s,_ in pairs(rbl['returncodes']) do
         if type(rspamd_config.get_api_version) ~= 'nil' then
