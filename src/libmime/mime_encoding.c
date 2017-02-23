@@ -20,7 +20,7 @@
 #include "libserver/task.h"
 #include "mime_encoding.h"
 #include "message.h"
-#include <iconv.h>
+#include <unicode/ucnv.h>
 
 #define UTF8_CHARSET "UTF-8"
 
@@ -31,6 +31,7 @@
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 
 static rspamd_regexp_t *utf_compatible_re = NULL;
+UConverter *utf8_converter = NULL;
 
 struct rspamd_charset_substitution {
 	const gchar *input;
@@ -136,68 +137,89 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 		gchar *input, gsize len, const gchar *in_enc,
 		gsize *olen, GError **err)
 {
-	gchar *s, *d;
-	gsize outlen;
-	iconv_t ic;
-	rspamd_fstring_t *dst;
-	gsize remain, ret, inremain = len;
+	gchar *d;
+	gint32 r, clen, dlen;
+	UChar *tmp_buf;
 
-	ic = iconv_open (UTF8_CHARSET, in_enc);
+	UErrorCode uc_err = U_ZERO_ERROR;
+	UConverter *conv;
 
-	if (ic == (iconv_t)-1) {
+	if (utf8_converter == NULL) {
+		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
+
+		if (uc_err != U_ZERO_ERROR) {
+			g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+					"cannot open convertor for utf8: %s",
+					u_errorName (uc_err));
+
+			return NULL;
+		}
+
+		ucnv_setFromUCallBack (utf8_converter,
+				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
+				UCNV_SUB_STOP_ON_ILLEGAL,
+				NULL,
+				NULL,
+				&uc_err);
+	}
+
+	conv = ucnv_open (in_enc, &uc_err);
+
+	if (conv == NULL) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
-				"cannot open iconv for: %s", in_enc);
+				"cannot open convertor for %s: %s",
+				in_enc, u_errorName (uc_err));
 
 		return NULL;
 	}
 
-	/* Preallocate for half of characters to be converted */
-	outlen = len + len / 2 + 1;
-	dst = rspamd_fstring_sized_new (outlen);
-	s = input;
-	d = dst->str;
-	remain = outlen - 1;
+	ucnv_setToUCallBack (conv,
+			UCNV_TO_U_CALLBACK_SUBSTITUTE,
+			UCNV_SUB_STOP_ON_ILLEGAL,
+			NULL,
+			NULL,
+			&uc_err);
 
-	while (inremain > 0 && remain > 0) {
-		ret = iconv (ic, &s, &inremain, &d, &remain);
-		dst->len = d - dst->str;
+	tmp_buf = g_new (UChar, len + 1);
+	uc_err = U_ZERO_ERROR;
+	r = ucnv_toUChars (conv, tmp_buf, len + 1, input, len, &uc_err);
 
-		if (ret == (gsize)-1) {
-			switch (errno) {
-			case E2BIG:
-				/* Enlarge string */
-				if (inremain > 0) {
-					dst = rspamd_fstring_grow (dst, inremain * 2);
-					d = dst->str + dst->len;
-					remain = dst->allocated - dst->len - 1;
-				}
-				break;
-			case EILSEQ:
-			case EINVAL:
-				/* Ignore bad characters */
-				if (remain > 0 && inremain > 0) {
-					*d++ = '?';
-					s++;
-					inremain --;
-					remain --;
-				}
-				break;
-			}
-		}
-		else if (ret == 0) {
-			break;
-		}
+	if (uc_err != U_ZERO_ERROR) {
+		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+					"cannot convert data to unicode from %s: %s",
+					in_enc, u_errorName (uc_err));
+		g_free (tmp_buf);
+		ucnv_close (conv);
+
+		return NULL;
 	}
 
-	*d = '\0';
-	*olen = dst->len;
-	iconv_close (ic);
-	rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t)rspamd_fstring_free, dst);
-	msg_info_pool ("converted from %s to UTF-8 inlen: %z, outlen: %z",
-			in_enc, len, dst->len);
+	/* Now, convert to utf8 */
+	clen = ucnv_getMaxCharSize (utf8_converter);
+	dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
+	d = rspamd_mempool_alloc (pool, dlen);
+	r = ucnv_fromUChars (utf8_converter, d, dlen, tmp_buf, r, &uc_err);
 
-	return dst->str;
+	if (uc_err != U_ZERO_ERROR) {
+		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+				"cannot convert data from unicode from %s: %s",
+				in_enc, u_errorName (uc_err));
+		g_free (tmp_buf);
+		ucnv_close (conv);
+
+		return NULL;
+	}
+
+	msg_info_pool ("converted from %s to UTF-8 inlen: %z, outlen: %d",
+			in_enc, len, r);
+	g_free (tmp_buf);
+	ucnv_close (conv);
+
+	if (olen) {
+		*olen = r;
+	}
+
+	return d;
 }
 
 gboolean
@@ -205,10 +227,10 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 		GByteArray *out,
 		const gchar *enc)
 {
-	guchar *s, *d;
-	gsize outlen, pos;
-	iconv_t ic;
-	gsize remain, ret, inremain = in->len;
+	gint32 r, clen, dlen;
+	UChar *tmp_buf;
+	UErrorCode uc_err = U_ZERO_ERROR;
+	UConverter *conv;
 	rspamd_ftok_t charset_tok;
 
 	RSPAMD_FTOK_FROM_STR (&charset_tok, enc);
@@ -220,66 +242,64 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 		return TRUE;
 	}
 
-	ic = iconv_open (UTF8_CHARSET, enc);
+	if (utf8_converter == NULL) {
+		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
 
-	if (ic == (iconv_t)-1) {
+		if (uc_err != U_ZERO_ERROR) {
+			msg_err ("cannot open convertor for utf8: %s",
+					u_errorName (uc_err));
+
+			return FALSE;
+		}
+
+		ucnv_setFromUCallBack (utf8_converter,
+				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
+				UCNV_SUB_STOP_ON_ILLEGAL,
+				NULL,
+				NULL,
+				&uc_err);
+	}
+
+	conv = ucnv_open (enc, &uc_err);
+
+	if (conv == NULL) {
 		return FALSE;
 	}
 
-	/* Preallocate for half of characters to be converted */
-	outlen = inremain * 2 + 1;
-	g_byte_array_set_size (out, outlen);
-	s = in->data;
-	d = out->data;
-	remain = outlen;
+	ucnv_setToUCallBack (conv,
+			UCNV_TO_U_CALLBACK_SUBSTITUTE,
+			UCNV_SUB_STOP_ON_ILLEGAL,
+			NULL,
+			NULL,
+			&uc_err);
 
-	while (inremain > 0 && remain > 0) {
-		ret = iconv (ic, (gchar **)&s, &inremain, (gchar **)&d, &remain);
-		out->len = d - out->data;
+	tmp_buf = g_new (UChar, in->len + 1);
+	uc_err = U_ZERO_ERROR;
+	r = ucnv_toUChars (conv, tmp_buf, in->len + 1, in->data, in->len, &uc_err);
 
-		if (ret == (gsize)-1) {
-			switch (errno) {
-			case E2BIG:
-				/* Enlarge string */
-				if (inremain > 0) {
-					pos = outlen;
-					outlen += inremain * 4;
-					remain += inremain * 4;
-					/* May cause reallocate, so store previous len in pos */
-					g_byte_array_set_size (out, outlen);
-					d = out->data + pos;
-				}
-				break;
-			case EILSEQ:
-			case EINVAL:
-				/* Replace bad characters with U+FFFD */
-				if (inremain > 0) {
-					if (remain < 3) {
-						pos = outlen;
-						outlen += inremain * 4;
-						remain += inremain * 4;
-						/* May cause reallocate, so store previous len in pos */
-						g_byte_array_set_size (out, outlen);
-						d = out->data + pos;
-					}
+	if (uc_err != U_ZERO_ERROR) {
+		g_free (tmp_buf);
+		ucnv_close (conv);
 
-					*d++ = 0xEF;
-					*d++ = 0xBF;
-					*d++ = 0xBD;
-					s++;
-					inremain --;
-					remain -= 3;
-				}
-				break;
-			}
-		}
-		else if (ret == 0) {
-			break;
-		}
+		return FALSE;
 	}
 
-	out->len = d - out->data;
-	iconv_close (ic);
+	/* Now, convert to utf8 */
+	clen = ucnv_getMaxCharSize (utf8_converter);
+	dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
+	g_byte_array_set_size (out, dlen);
+	r = ucnv_fromUChars (utf8_converter, out->data, dlen, tmp_buf, r, &uc_err);
+
+	if (uc_err != U_ZERO_ERROR) {
+		g_free (tmp_buf);
+		ucnv_close (conv);
+
+		return FALSE;
+	}
+
+	g_free (tmp_buf);
+	ucnv_close (conv);
+	out->len = r;
 
 	return TRUE;
 }
