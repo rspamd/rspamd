@@ -392,6 +392,17 @@ rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
 		g_assert (csd != NULL);
 	}
 
+	/* If text is ascii, then we can treat it as utf8 data */
+	for (i = 0; i < inlen; i++) {
+		if ((((guchar)in[i]) & 0x80) != 0) {
+			goto detect;
+		}
+	}
+
+	return UTF8_CHARSET;
+
+detect:
+
 	ucsdet_setText (csd, in, inlen, &uc_err);
 	csm = ucsdet_detectAll(csd, &matches, &uc_err);
 
