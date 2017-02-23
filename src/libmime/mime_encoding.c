@@ -17,6 +17,7 @@
 #include "config.h"
 #include "libutil/mem_pool.h"
 #include "libutil/regexp.h"
+#include "libutil/hash.h"
 #include "libserver/task.h"
 #include "mime_encoding.h"
 #include "message.h"
@@ -26,6 +27,8 @@
 
 #define RSPAMD_CHARSET_FLAG_UTF (1 << 0)
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
+
+#define RSPAMD_CHARSET_CACHE_SIZE 32
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -48,6 +51,44 @@ static GQuark
 rspamd_iconv_error_quark (void)
 {
 	return g_quark_from_static_string ("iconv error");
+}
+
+static UConverter *
+rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
+{
+	const gchar *canon_name;
+	static rspamd_lru_hash_t *cache;
+	UConverter *conv;
+
+	if (cache == NULL) {
+		cache = rspamd_lru_hash_new_full (RSPAMD_CHARSET_CACHE_SIZE, g_free,
+				(GDestroyNotify)ucnv_close, rspamd_str_hash,
+				rspamd_str_equal);
+	}
+
+	canon_name = ucnv_getStandardName (enc, "IANA", err);
+
+	if (canon_name == NULL) {
+		return NULL;
+	}
+
+	conv = rspamd_lru_hash_lookup (cache, (gpointer)canon_name, 0);
+
+	if (conv == NULL) {
+		conv = ucnv_open (canon_name, err);
+
+		if (conv != NULL) {
+			ucnv_setToUCallBack (conv,
+					UCNV_TO_U_CALLBACK_SUBSTITUTE,
+					UCNV_SUB_STOP_ON_ILLEGAL,
+					NULL,
+					NULL,
+					err);
+			rspamd_lru_hash_insert (cache, g_strdup (canon_name), conv, 0, 0);
+		}
+	}
+
+	return conv;
 }
 
 static void
@@ -163,7 +204,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 				&uc_err);
 	}
 
-	conv = ucnv_open (in_enc, &uc_err);
+	conv = rspamd_mime_get_converter_cached (in_enc, &uc_err);
 
 	if (conv == NULL) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
@@ -172,13 +213,6 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 
 		return NULL;
 	}
-
-	ucnv_setToUCallBack (conv,
-			UCNV_TO_U_CALLBACK_SUBSTITUTE,
-			UCNV_SUB_STOP_ON_ILLEGAL,
-			NULL,
-			NULL,
-			&uc_err);
 
 	tmp_buf = g_new (UChar, len + 1);
 	uc_err = U_ZERO_ERROR;
@@ -189,7 +223,6 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 					"cannot convert data to unicode from %s: %s",
 					in_enc, u_errorName (uc_err));
 		g_free (tmp_buf);
-		ucnv_close (conv);
 
 		return NULL;
 	}
@@ -205,7 +238,6 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 				"cannot convert data from unicode from %s: %s",
 				in_enc, u_errorName (uc_err));
 		g_free (tmp_buf);
-		ucnv_close (conv);
 
 		return NULL;
 	}
@@ -213,7 +245,6 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	msg_info_pool ("converted from %s to UTF-8 inlen: %z, outlen: %d",
 			in_enc, len, r);
 	g_free (tmp_buf);
-	ucnv_close (conv);
 
 	if (olen) {
 		*olen = r;
@@ -260,18 +291,11 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 				&uc_err);
 	}
 
-	conv = ucnv_open (enc, &uc_err);
+	conv = rspamd_mime_get_converter_cached (enc, &uc_err);
 
 	if (conv == NULL) {
 		return FALSE;
 	}
-
-	ucnv_setToUCallBack (conv,
-			UCNV_TO_U_CALLBACK_SUBSTITUTE,
-			UCNV_SUB_STOP_ON_ILLEGAL,
-			NULL,
-			NULL,
-			&uc_err);
 
 	tmp_buf = g_new (UChar, in->len + 1);
 	uc_err = U_ZERO_ERROR;
@@ -279,7 +303,6 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 
 	if (uc_err != U_ZERO_ERROR) {
 		g_free (tmp_buf);
-		ucnv_close (conv);
 
 		return FALSE;
 	}
@@ -292,13 +315,11 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 
 	if (uc_err != U_ZERO_ERROR) {
 		g_free (tmp_buf);
-		ucnv_close (conv);
 
 		return FALSE;
 	}
 
 	g_free (tmp_buf);
-	ucnv_close (conv);
 	out->len = r;
 
 	return TRUE;
