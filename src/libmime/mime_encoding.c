@@ -22,6 +22,7 @@
 #include "mime_encoding.h"
 #include "message.h"
 #include <unicode/ucnv.h>
+#include <unicode/ucsdet.h>
 
 #define UTF8_CHARSET "UTF-8"
 
@@ -29,6 +30,7 @@
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
 
 #define RSPAMD_CHARSET_CACHE_SIZE 32
+#define RSPAMD_CHARSET_MAX_CONTENT 512
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -139,6 +141,7 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 {
 	gchar *ret = NULL, *h, *t;
 	struct rspamd_charset_substitution *s;
+	UErrorCode uc_err = U_ZERO_ERROR;
 
 	if (sub_hash == NULL) {
 		rspamd_mime_encoding_substitute_init ();
@@ -167,10 +170,10 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 	s = g_hash_table_lookup (sub_hash, ret);
 
 	if (s) {
-		return s->canon;
+		return ucnv_getStandardName (s->canon, "IANA", &uc_err);
 	}
 
-	return ret;
+	return ucnv_getStandardName (ret, "IANA", &uc_err);
 }
 
 gchar *
@@ -375,6 +378,37 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 	return FALSE;
 }
 
+static const char *
+rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
+{
+	static UCharsetDetector *csd;
+	const UCharsetMatch **csm, *sel = NULL;
+	UErrorCode uc_err = U_ZERO_ERROR;
+	gint32 matches, i, max_conf = G_MININT32, conf;
+
+	if (csd == NULL) {
+		csd = ucsdet_open (&uc_err);
+
+		g_assert (csd != NULL);
+	}
+
+	ucsdet_setText (csd, in, inlen, &uc_err);
+	csm = ucsdet_detectAll(csd, &matches, &uc_err);
+
+	for (i = 0; i < matches; i ++) {
+		if ((conf = ucsdet_getConfidence (csm[i], &uc_err)) > max_conf) {
+			max_conf = conf;
+			sel = csm[i];
+		}
+	}
+
+	if (sel && max_conf > 50) {
+		return ucsdet_getName (sel, &uc_err);
+	}
+
+	return NULL;
+}
+
 GByteArray *
 rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part)
@@ -397,11 +431,23 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	}
 
 	if (part->ct->charset.len == 0) {
-		SET_PART_RAW (text_part);
-		return part_content;
-	}
+		charset = rspamd_mime_charset_find_by_content (part_content->data,
+				MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
 
-	charset = rspamd_mime_detect_charset (&part->ct->charset, task->task_pool);
+		if (charset != NULL) {
+			msg_info_task ("detected charset %s", charset);
+		}
+	}
+	else {
+		charset = rspamd_mime_detect_charset (&part->ct->charset,
+				task->task_pool);
+
+		if (charset == NULL) {
+			charset = rspamd_mime_charset_find_by_content (part_content->data,
+					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
+			msg_info_task ("detected charset: %s", charset);
+		}
+	}
 
 	if (charset == NULL) {
 		msg_info_task ("<%s>: has invalid charset", task->message_id);
@@ -433,7 +479,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			SET_PART_RAW (text_part);
 			g_error_free (err);
 
-			return part_content;
+			return NULL;
 		}
 	}
 
