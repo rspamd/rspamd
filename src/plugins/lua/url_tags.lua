@@ -88,41 +88,42 @@ local redis_set_script_head = 'local expiry = '
 local redis_set_script_tail = [[
 local now = math.floor(table.remove(ARGV))
 local res = redis.call('MGET', unpack(KEYS))
+local data = {}
 for i = 1, #res do
-  local tmp1, tmp2, metatags = {}, {}, {}
-  if res[i] then
+  local which = KEYS[i]
+  if type(res[i]) == 'string' then
+    data[which] = {}
     for goo in string.gmatch(res[i], '[^/]+') do
+      local metatags = {}
       local time, tag, meta = string.match(goo, '(%d+)|([^|]+)|(.+)')
       if (time + expiry) > now then
         for m in string.gmatch(meta, '[^,]+') do
            metatags[m] = true
         end
-        tmp1[tag] = {time, metatags}
+        data[which][tag] = {time, metatags}
       end
     end
   end
-  local idx = string.find(ARGV[i], '|')
-  if not idx then
-    return redis.error_reply('bad arguments')
+  for goo in string.gmatch(ARGV[i], '[^/]+') do
+    local metatags = {}
+    if not data[which] then
+      data[which] = {}
+    end
+    local tag, meta = string.match(goo, '([^|]+)|(.+)')
+    for m in string.gmatch(meta, '[^,]+') do
+       metatags[m] = true
+    end
+    data[which][tag] = {now, metatags}
   end
-  local t = string.sub(ARGV[i], 1, idx - 1)
-  local m_str = string.sub(ARGV[i], idx + 1)
-  if not tmp1[t] then
-    tmp1[t] = {now, {}}
-  else
-    tmp1[t][1] = now
-  end
-  for mt in string.gmatch(m_str, '[^,]+') do
-    tmp1[t][2][mt] = true
-  end
-  for k, v in pairs(tmp1) do
+  local tmp2 = {}
+  for k, v in pairs(data[which]) do
     local meta_list = {}
     for kk in pairs(v[2]) do
       table.insert(meta_list, kk)
     end
     table.insert(tmp2, v[1] .. '|' .. k .. '|' .. table.concat(meta_list, ','))
   end
-  redis.call('SETEX', KEYS[i], expiry, table.concat(tmp2, '/'))
+  redis.call('SETEX', which, expiry, table.concat(tmp2, '/'))
 end
 ]]
 
