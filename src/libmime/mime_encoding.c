@@ -453,7 +453,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		msg_info_task ("<%s>: has invalid charset", task->message_id);
 		SET_PART_RAW (text_part);
 
-		return part_content;
+		return NULL;
 	}
 
 	RSPAMD_FTOK_FROM_STR (&charset_tok, charset);

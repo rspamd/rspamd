@@ -490,12 +490,15 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		text_part->content = rspamd_mime_text_part_maybe_convert (task,
 				text_part);
 
-		if (text_part->content == NULL) {
+		if (text_part->content != NULL) {
 			/*
 			 * We ignore unconverted parts from now as it is dangerous
 			 * to treat them as text parts
 			 */
 			g_ptr_array_add (task->text_parts, text_part);
+		}
+		else {
+			return;
 		}
 	}
 
