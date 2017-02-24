@@ -283,22 +283,24 @@ local function tags_restore(task)
     for i = 1, d_len do
       if type(data[i]) == 'string' then
         local tld = tld_reverse[i]
-        for time, tag, meta in string.gmatch(data[i], '(%d+)|([^|]+)|(.+)') do
-          if (time + settings.expire) > now then
-            local metatags = {}
-            for m in string.gmatch(meta, '[^,]+') do
-              table.insert(metatags, m)
-            end
-            for _, idx in ipairs(tlds[tld]) do
-              if not tracking[tld] then
-                tracking[tld] = {}
+        for goo in string.gmatch(data[i], '[^/]+') do
+          for time, tag, meta in string.gmatch(goo, '(%d+)|([^|]+)|(.+)') do
+            if (time + settings.expire) > now then
+              local metatags = {}
+              for m in string.gmatch(meta, '[^,]+') do
+                table.insert(metatags, m)
               end
-              if not tracking[tld][tag] then
-                tracking[tld][tag] = {}
-              end
-              for _, ttag in ipairs(metatags) do
-                urls[idx]:add_tag(tag, ttag, mpool)
-                tracking[tld][tag][ttag] = true
+              for _, idx in ipairs(tlds[tld]) do
+                if not tracking[tld] then
+                  tracking[tld] = {}
+                end
+                if not tracking[tld][tag] then
+                  tracking[tld][tag] = {}
+                end
+                for _, ttag in ipairs(metatags) do
+                  urls[idx]:add_tag(tag, ttag, mpool)
+                  tracking[tld][tag][ttag] = true
+                end
               end
             end
           end
