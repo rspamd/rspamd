@@ -25,6 +25,8 @@ local settings = {
   expire = 3600, -- 1 hour
   -- prefix for redis keys
   key_prefix = 'Ut.',
+  -- tags in this list are not persisted
+  ignore_tags = {},
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -174,11 +176,13 @@ local function tags_save(task)
         tags[tld] = {}
       end
       for ut, utv in pairs(utags) do
-        if not tags[tld][ut] then
-          tags[tld][ut] = {}
-        end
-        for _, e in ipairs(utv) do
-          tags[tld][ut][e] = true
+        if not settings.ignore_tags[ut] then
+          if not tags[tld][ut] then
+            tags[tld][ut] = {}
+          end
+          for _, e in ipairs(utv) do
+            tags[tld][ut][e] = true
+          end
         end
       end
     end
@@ -285,21 +289,23 @@ local function tags_restore(task)
         local tld = tld_reverse[i]
         for goo in string.gmatch(data[i], '[^/]+') do
           for time, tag, meta in string.gmatch(goo, '(%d+)|([^|]+)|(.+)') do
-            if (time + settings.expire) > now then
-              local metatags = {}
-              for m in string.gmatch(meta, '[^,]+') do
-                table.insert(metatags, m)
-              end
-              for _, idx in ipairs(tlds[tld]) do
-                if not tracking[tld] then
-                  tracking[tld] = {}
+            if not settings.ignore_tags[tag] then
+              if (time + settings.expire) > now then
+                local metatags = {}
+                for m in string.gmatch(meta, '[^,]+') do
+                  table.insert(metatags, m)
                 end
-                if not tracking[tld][tag] then
-                  tracking[tld][tag] = {}
-                end
-                for _, ttag in ipairs(metatags) do
-                  urls[idx]:add_tag(tag, ttag, mpool)
-                  tracking[tld][tag][ttag] = true
+                for _, idx in ipairs(tlds[tld]) do
+                  if not tracking[tld] then
+                    tracking[tld] = {}
+                  end
+                  if not tracking[tld][tag] then
+                    tracking[tld][tag] = {}
+                  end
+                  for _, ttag in ipairs(metatags) do
+                    urls[idx]:add_tag(tag, ttag, mpool)
+                    tracking[tld][tag][ttag] = true
+                  end
                 end
               end
             end
@@ -346,6 +352,26 @@ end
 for k, v in pairs(opts) do
   settings[k] = v
 end
+local function list_to_hash(list)
+  if type(list) == 'table' then
+    if list[1] then
+      local h = {}
+      for _, e in ipairs(list) do
+        h[e] = true
+      end
+      return h
+    else
+      return list
+    end
+  elseif type(list) == 'string' then
+    local h = {}
+    h[list] = true
+    return h
+  else
+    return {}
+  end
+end
+settings.ignore_tags = list_to_hash(settings.ignore_tags)
 
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
