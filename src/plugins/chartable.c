@@ -26,6 +26,8 @@
 #include "libmime/message.h"
 #include "rspamd.h"
 #include "libstat/stat_api.h"
+#include "unicode/utf8.h"
+#include "unicode/uchar.h"
 
 #define DEFAULT_SYMBOL "R_MIXED_CHARSET"
 #define DEFAULT_URL_SYMBOL "R_MIXED_CHARSET_URL"
@@ -170,9 +172,9 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 {
 	const gchar *p, *end, *c;
 	gdouble badness = 0.0;
-	gunichar uc;
-	gint sc, last_sc;
-	guint same_script_count = 0, nsym = 0;
+	UChar32 uc;
+	UBlockCode sc, last_sc;
+	guint same_script_count = 0, nsym = 0, i = 0;
 	enum {
 		start_process = 0,
 		got_alpha,
@@ -187,16 +189,21 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 
 	/* We assume that w is normalized */
 
-	while (p < end) {
-		uc = g_utf8_get_char (p);
+	while (p + i < end) {
+		U8_NEXT_UNSAFE (p, i, uc);
 
-		if (g_unichar_isalpha (uc)) {
-			sc = g_unichar_get_script (uc);
+		if (u_isalpha (uc)) {
+			sc = ublock_getCode (uc);
+
+			if (sc <= UBLOCK_LATIN_EXTENDED_B) {
+				/* Assume all latin characters as basic latin */
+				sc = UBLOCK_BASIC_LATIN;
+			}
 
 			if (state == got_digit) {
 				/* Penalize digit -> alpha translations */
-				if (!is_url && sc != G_UNICODE_SCRIPT_COMMON &&
-						sc != G_UNICODE_SCRIPT_LATIN && prev_state != start_process) {
+				if (!is_url && sc != UBLOCK_BASIC_LATIN &&
+						prev_state != start_process) {
 					badness += 1.0;
 				}
 			}
@@ -222,7 +229,7 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 			state = got_alpha;
 
 		}
-		else if (g_unichar_isdigit (uc)) {
+		else if (u_isdigit (uc)) {
 			if (state != got_digit) {
 				prev_state = state;
 			}
