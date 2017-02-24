@@ -1899,7 +1899,7 @@ static gint
 lua_util_is_utf_spoofed (lua_State *L)
 {
 	gsize l1, l2;
-	gint ret;
+	gint ret, nres = 2;
 	const gchar *s1 = lua_tolstring (L, 1, &l1), *s2 = lua_tolstring (L, 2, &l2);
 	static USpoofChecker *spc;
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -1918,12 +1918,31 @@ lua_util_is_utf_spoofed (lua_State *L)
 
 		ret = uspoof_areConfusableUTF8 (spc, s1, l1, s2, l2, &uc_err);
 		lua_pushboolean (L, !!(ret != 0));
+		msg_err ("ret: %d", ret);
+
+		switch (ret) {
+		case 0:
+			nres = 1;
+			break;
+		case USPOOF_SINGLE_SCRIPT_CONFUSABLE:
+			lua_pushstring (L, "single");
+			break;
+		case USPOOF_MIXED_SCRIPT_CONFUSABLE:
+			lua_pushstring (L, "multiple");
+			break;
+		case USPOOF_WHOLE_SCRIPT_CONFUSABLE:
+			lua_pushstring (L, "whole");
+			break;
+		default:
+			lua_pushstring (L, "unknown");
+			break;
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return nres;
 }
 
 static gint
