@@ -232,7 +232,7 @@ local function tags_save(task)
     for tag, mtags in pairs(domtags) do
       local tmp2 = {}
       for k in pairs(mtags) do
-        table.insert(tmp2, k)
+        table.insert(tmp2, tostring(rspamd_util.encode_base32(k)))
       end
       tmp[tag] = tmp2
     end
@@ -303,7 +303,7 @@ local function tags_restore(task)
                     tracking[tld][tag] = {}
                   end
                   for _, ttag in ipairs(metatags) do
-                    urls[idx]:add_tag(tag, ttag, mpool)
+                    urls[idx]:add_tag(tag, tostring(rspamd_util.decode_base32(ttag)), mpool)
                     tracking[tld][tag][ttag] = true
                   end
                 end
