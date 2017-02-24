@@ -799,25 +799,15 @@ rspamd_config.OMOGRAPH_URL = {
       local bad_urls = {}
 
       fun.each(function(u)
-        local h = u:get_host()
-        if h then
-          local parts = rspamd_str_split(h, '.')
-          local found = false
-
-          for _,p in ipairs(parts) do
-            local cnlat,ctot = util.count_non_ascii(p)
-
-            if cnlat > 0 and cnlat ~= ctot then
-              bad_omographs = bad_omographs + 1.0 / cnlat
-              found = true
-            end
-          end
-
-          if found then
-            table.insert(bad_urls, h)
+        local h1 = u:get_host()
+        local h2 = u:get_phished():get_host()
+        if h1 and h2 then
+          if util.is_utf_spoofed(h1, h2) then
+            table.insert(bad_urls, string.format('%s->%s', h1, h2))
+            bad_omographs = bad_omographs + 1
           end
         end
-      end, fun.filter(function(u) return not u:is_html_displayed() end, urls))
+      end, fun.filter(function(u) return u:is_phished() end, urls))
 
       if bad_omographs > 0 then
         if bad_omographs > 1 then bad_omographs = 1.0 end
