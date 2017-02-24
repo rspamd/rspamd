@@ -719,7 +719,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 
 	monitored_opts = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("facebook"),
+	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("facebook.com"),
 			"prefix", 0, false);
 	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("nxdomain"),
 			"rcode", 0, false);
