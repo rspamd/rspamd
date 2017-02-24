@@ -26,6 +26,8 @@
 #include <math.h>
 #include <glob.h>
 
+#include "unicode/uspoof.h"
+
 /***
  * @module rspamd_util
  * This module contains some generic purpose utilities that could be useful for
@@ -363,12 +365,11 @@ LUA_FUNCTION_DEF (util, zstd_decompress);
  */
 LUA_FUNCTION_DEF (util, normalize_prob);
 /***
- * @function util.count_non_ascii(str)
- * Returns number of non ascii characters in a specified string counting merely alpha
- * characters. A string can be in non-utf form.
- * @return {number,number} number of non-ascii alphas and total number of alphas
+ * @function util.is_utf_spoofed(str)
+ * Returns true if a string is spoofed
+ * @return {boolean} true if a string is spoofed
  */
-LUA_FUNCTION_DEF (util, count_non_ascii);
+LUA_FUNCTION_DEF (util, is_utf_spoofed);
 
 /***
  * @function util.pack(fmt, ...)
@@ -509,7 +510,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, normalize_prob),
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
-	LUA_INTERFACE_DEF (util, count_non_ascii),
+	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -1895,46 +1896,34 @@ lua_util_caseless_hash_fast (lua_State *L)
 }
 
 static gint
-lua_util_count_non_ascii (lua_State *L)
+lua_util_is_utf_spoofed (lua_State *L)
 {
-	gsize len;
-	const gchar *str = lua_tolstring (L, 1, &len);
-	const gchar *p, *end, *np;
-	gint ret = 0, total = 0;
+	gsize l1, l2;
+	gint ret;
+	const gchar *s1 = lua_tolstring (L, 1, &l1), *s2 = lua_tolstring (L, 2, &l2);
+	static USpoofChecker *spc;
+	UErrorCode uc_err = U_ZERO_ERROR;
 
-	if (str != NULL) {
-		end = str + len;
-		p = str;
+	if (s1 && s2) {
+		if (spc == NULL) {
+			spc = uspoof_open (&uc_err);
 
-		while (p < end) {
-			if (*p & 0x80) {
-				np = g_utf8_find_next_char (p, end);
-				ret ++;
-				total ++;
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
 
-				if (np == NULL) {
-					break;
-				}
-
-				p = (np != p) ? np : p + 1;
-
-				continue;
+				return 1;
 			}
-			else if (g_ascii_isalpha (*p)) {
-				total ++;
-			}
-
-			p ++;
 		}
 
-		lua_pushnumber (L, ret);
-		lua_pushnumber (L, total);
+		ret = uspoof_areConfusableUTF8 (spc, s1, l1, s2, l2, &uc_err);
+		lua_pushboolean (L, !!(ret != 0));
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 2;
+	return 1;
 }
 
 static gint
