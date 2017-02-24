@@ -76,7 +76,7 @@ GByteArray * rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
-		gchar *in, gsize len);
+		gchar *in, gsize len, gboolean content_check);
 
 /**
  * Ensure that all characters in string are valid utf8 chars or replace them

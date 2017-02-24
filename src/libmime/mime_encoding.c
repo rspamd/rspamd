@@ -269,7 +269,8 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 
 	RSPAMD_FTOK_FROM_STR (&charset_tok, enc);
 
-	if (rspamd_mime_charset_utf_check (&charset_tok, (gchar *)in->data, in->len)) {
+	if (rspamd_mime_charset_utf_check (&charset_tok, (gchar *)in->data, in->len,
+			FALSE)) {
 		g_byte_array_set_size (out, in->len);
 		memcpy (out->data, in->data, out->len);
 
@@ -357,27 +358,6 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 	}
 }
 
-gboolean
-rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
-		gchar *in, gsize len)
-{
-	if (utf_compatible_re == NULL) {
-		utf_compatible_re = rspamd_regexp_new (
-				"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
-				"(?:latin.*)|(?:CSASCII)$",
-				"i", NULL);
-	}
-
-	if (rspamd_regexp_match (utf_compatible_re, charset->begin, charset->len,
-			TRUE)) {
-		rspamd_mime_charset_utf_enforce (in, len);
-
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
 static const char *
 rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
 {
@@ -420,6 +400,45 @@ detect:
 	return NULL;
 }
 
+gboolean
+rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
+		gchar *in, gsize len, gboolean content_check)
+{
+	const gchar *real_charset;
+
+	if (utf_compatible_re == NULL) {
+		utf_compatible_re = rspamd_regexp_new (
+				"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
+				"(?:latin.*)|(?:CSASCII)$",
+				"i", NULL);
+	}
+
+	if (rspamd_regexp_match (utf_compatible_re, charset->begin, charset->len,
+			TRUE)) {
+		/*
+		 * In case of UTF8 charset we still can check the content to find
+		 * corner cases
+		 */
+		if (content_check) {
+			real_charset = rspamd_mime_charset_find_by_content (in,
+					MIN (RSPAMD_CHARSET_MAX_CONTENT, len));
+
+			if (real_charset && strcmp (real_charset, UTF8_CHARSET) != 0) {
+				charset->begin = real_charset;
+				charset->len = strlen (real_charset);
+
+				return FALSE;
+			}
+		}
+
+		rspamd_mime_charset_utf_enforce (in, len);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 GByteArray *
 rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part)
@@ -427,6 +446,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	GError *err = NULL;
 	gsize write_bytes;
 	const gchar *charset;
+	gboolean checked = FALSE;
 	gchar *res_str;
 	GByteArray *result_array, *part_content;
 	rspamd_ftok_t charset_tok;
@@ -448,6 +468,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		if (charset != NULL) {
 			msg_info_task ("detected charset %s", charset);
 		}
+
+		checked = TRUE;
 	}
 	else {
 		charset = rspamd_mime_detect_charset (&part->ct->charset,
@@ -457,6 +479,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			charset = rspamd_mime_charset_find_by_content (part_content->data,
 					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
 			msg_info_task ("detected charset: %s", charset);
+			checked = TRUE;
 		}
 	}
 
@@ -470,12 +493,13 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	RSPAMD_FTOK_FROM_STR (&charset_tok, charset);
 
 	if (rspamd_mime_charset_utf_check (&charset_tok, part_content->data,
-			part_content->len)) {
+			part_content->len, !checked)) {
 		SET_PART_UTF (text_part);
 
 		return part_content;
 	}
 	else {
+		charset = charset_tok.begin;
 		res_str = rspamd_mime_text_to_utf8 (task->task_pool, part_content->data,
 				part_content->len,
 				charset,
