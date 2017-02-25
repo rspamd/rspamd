@@ -146,18 +146,25 @@ local function phishing_cb(task)
         end
 
         local weight = 1.0
-        local dist = util.levenshtein_distance(tld, ptld, 2)
-        dist = 2 * dist / (#tld + #ptld)
+        local spoofed,why = util.is_utf_spoofed(tld, ptld)
+        if spoofed then
+          rspamd_logger.debugm(N, task, "confusable: %1 -> %2: %3", tld, ptld, why)
+          weight = 1.0
+        else
+          local dist = util.levenshtein_distance(tld, ptld, 2)
+          dist = 2 * dist / (#tld + #ptld)
 
-        if dist > 0.3 and dist <= 1.0 then
-          -- Use distance to penalize the total weight
-          weight = util.tanh(3 * (1 - dist + 0.1))
-        elseif dist > 1 then
-          -- We have totally different strings in tld, so penalize it significantly
-          if dist > 2 then dist = 2 end
-          weight = util.tanh((2 - dist) * 0.5)
+          if dist > 0.3 and dist <= 1.0 then
+            -- Use distance to penalize the total weight
+            weight = util.tanh(3 * (1 - dist + 0.1))
+          elseif dist > 1 then
+            -- We have totally different strings in tld, so penalize it significantly
+            if dist > 2 then dist = 2 end
+            weight = util.tanh((2 - dist) * 0.5)
+          end
+
+          rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
         end
-        rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
 
         local function found_in_map(map)
           if #map > 0 then
