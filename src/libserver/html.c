@@ -770,7 +770,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	struct rspamd_url **ptext_url)
 {
 	struct rspamd_url *text_url;
-	rspamd_ftok_t phished_tld, disp_host_tok, href_host_tok;
+	rspamd_ftok_t phished_tld, disp_tok, href_tok;
 	gint rc;
 	gchar *url_str = NULL, *idn_hbuf;
 	const guchar *end = url_text + len;
@@ -798,56 +798,98 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool);
 
 		if (rc == URI_ERRNO_OK) {
-			disp_host_tok.len = text_url->hostlen;
-			disp_host_tok.begin = text_url->host;
+			disp_tok.len = text_url->hostlen;
+			disp_tok.begin = text_url->host;
 
 			if (rspamd_substring_search_caseless (text_url->host,
 					text_url->hostlen, "xn--", 4) != -1) {
 				idn_hbuf = rspamd_mempool_alloc (pool, text_url->hostlen * 2 + 1);
 				/* We need to convert it to the normal value first */
-				disp_host_tok.len = uidna_nameToUnicodeUTF8 (udn,
+				disp_tok.len = uidna_nameToUnicodeUTF8 (udn,
 						text_url->host, text_url->hostlen,
 						idn_hbuf, text_url->hostlen * 2 + 1, &uinfo, &uc_err);
 
 				if (uc_err != U_ZERO_ERROR) {
 					msg_err_pool ("cannot convert to IDN: %s",
 							u_errorName (uc_err));
-					disp_host_tok.len = text_url->hostlen;
+					disp_tok.len = text_url->hostlen;
 				}
 				else {
-					disp_host_tok.begin = idn_hbuf;
+					disp_tok.begin = idn_hbuf;
 				}
 			}
 
-			href_host_tok.len = href_url->hostlen;
-			href_host_tok.begin = href_url->host;
+			href_tok.len = href_url->hostlen;
+			href_tok.begin = href_url->host;
 
 			if (rspamd_substring_search_caseless (href_url->host,
 					href_url->hostlen, "xn--", 4) != -1) {
 				idn_hbuf = rspamd_mempool_alloc (pool, href_url->hostlen * 2 + 1);
 				/* We need to convert it to the normal value first */
-				href_host_tok.len = uidna_nameToUnicodeUTF8 (udn,
+				href_tok.len = uidna_nameToUnicodeUTF8 (udn,
 						href_url->host, href_url->hostlen,
 						idn_hbuf, href_url->hostlen * 2 + 1, &uinfo, &uc_err);
 
 				if (uc_err != U_ZERO_ERROR) {
 					msg_err_pool ("cannot convert to IDN: %s",
 							u_errorName (uc_err));
-					href_host_tok.len = href_url->hostlen;
+					href_tok.len = href_url->hostlen;
 				}
 				else {
-					href_host_tok.begin = idn_hbuf;
+					href_tok.begin = idn_hbuf;
 				}
 			}
 
-			if (rspamd_ftok_casecmp (&disp_host_tok, &href_host_tok) != 0) {
+			if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
 
-				if (href_url->tldlen != text_url->tldlen || memcmp (href_url->tld,
-						text_url->tld, href_url->tldlen) != 0) {
+				/* Apply the same logic for TLD */
+				disp_tok.len = text_url->tldlen;
+				disp_tok.begin = text_url->tld;
+
+				if (rspamd_substring_search_caseless (text_url->tld,
+						text_url->tldlen, "xn--", 4) != -1) {
+					idn_hbuf = rspamd_mempool_alloc (pool, text_url->tldlen * 2 + 1);
+					/* We need to convert it to the normal value first */
+					disp_tok.len = uidna_nameToUnicodeUTF8 (udn,
+							text_url->tld, text_url->tldlen,
+							idn_hbuf, text_url->tldlen * 2 + 1, &uinfo, &uc_err);
+
+					if (uc_err != U_ZERO_ERROR) {
+						msg_err_pool ("cannot convert to IDN: %s",
+								u_errorName (uc_err));
+						disp_tok.len = text_url->tldlen;
+					}
+					else {
+						disp_tok.begin = idn_hbuf;
+					}
+				}
+
+				href_tok.len = href_url->tldlen;
+				href_tok.begin = href_url->tld;
+
+				if (rspamd_substring_search_caseless (href_url->tld,
+						href_url->tldlen, "xn--", 4) != -1) {
+					idn_hbuf = rspamd_mempool_alloc (pool, href_url->tldlen * 2 + 1);
+					/* We need to convert it to the normal value first */
+					href_tok.len = uidna_nameToUnicodeUTF8 (udn,
+							href_url->tld, href_url->tldlen,
+							idn_hbuf, href_url->tldlen * 2 + 1, &uinfo, &uc_err);
+
+					if (uc_err != U_ZERO_ERROR) {
+						msg_err_pool ("cannot convert to IDN: %s",
+								u_errorName (uc_err));
+						href_tok.len = href_url->tldlen;
+					}
+					else {
+						href_tok.begin = idn_hbuf;
+					}
+				}
+
+				if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
 					href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 					href_url->phished_url = text_url;
-					phished_tld.begin = href_url->tld;
-					phished_tld.len = href_url->tldlen;
+					phished_tld.begin = href_tok.begin;
+					phished_tld.len = href_tok.len;
 					rspamd_url_add_tag (text_url, "phishing",
 							rspamd_mempool_ftokdup (pool, &phished_tld),
 							pool);
