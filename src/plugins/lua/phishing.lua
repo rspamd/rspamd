@@ -158,9 +158,21 @@ local function phishing_cb(task)
             -- Use distance to penalize the total weight
             weight = util.tanh(3 * (1 - dist + 0.1))
           elseif dist > 1 then
-            -- We have totally different strings in tld, so penalize it significantly
-            if dist > 2 then dist = 2 end
-            weight = util.tanh((2 - dist) * 0.5)
+            -- We also check if two labels are in the same ascii/non-ascii representation
+            local a1, a2 = false,false
+
+            if string.match(tld, '^[\001-\127]*$') then a1 = true end
+            if string.match(ptld, '^[\001-\127]*$') then a2 = true end
+
+            if a1 ~= a2 then
+              weight = 1
+              rspamd_logger.debugm(N, task, "confusable: %1 -> %2: different characters",
+                tld, ptld, why)
+            else
+              -- We have totally different strings in tld, so penalize it significantly
+              if dist > 2 then dist = 2 end
+              weight = util.tanh((2 - dist) * 0.5)
+            end
           end
 
           rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
