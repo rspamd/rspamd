@@ -21,6 +21,8 @@
 #include "tokenizers.h"
 #include "stat_internal.h"
 #include "../../../contrib/mumhash/mum.h"
+#include "unicode/utf8.h"
+#include "unicode/uchar.h"
 
 typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const **pos,
 		rspamd_stat_token_t * token,
@@ -169,10 +171,10 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 		GList **exceptions, gboolean is_utf, gsize *rl,
 		gboolean check_signature)
 {
-	gsize remain, siglen = 0;
+	gint32 i, siglen = 0, remain;
 	goffset pos;
-	const gchar *p, *next_p, *sig = NULL;
-	gunichar uc;
+	const gchar *p, *s, *sig = NULL;
+	UChar32 uc;
 	guint processed = 0;
 	struct rspamd_process_exception *ex = NULL;
 	enum {
@@ -205,15 +207,20 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 	}
 
 	remain = buf->len - pos;
-	p = *cur;
-	token->begin = p;
+	s = *cur;
+	token->begin = s;
 
-	while (remain > 0) {
-		uc = g_utf8_get_char (p);
-		next_p = g_utf8_next_char (p);
+	for (i = 0; i < remain; ) {
+		p = &s[i];
+		U8_NEXT (s, i, remain, uc);
 
-		if (next_p - p > (gint)remain) {
-			return FALSE;
+		if (uc < 0) {
+			if (i < remain) {
+				uc = 0xFFFD;
+			}
+			else {
+				return FALSE;
+			}
 		}
 
 		switch (state) {
@@ -228,15 +235,15 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 				state = skip_exception;
 				continue;
 			}
-			else if (g_unichar_isgraph (uc)) {
-				if (!g_unichar_ispunct (uc)) {
+			else if (u_isgraph (uc)) {
+				if (!u_ispunct (uc)) {
 					state = feed_token;
 					token->begin = p;
 					continue;
 				}
 				else if (check_signature && pos != 0 && (*p == '_' || *p == '-')) {
 					sig = p;
-					siglen = remain;
+					siglen = remain - i;
 					state = process_signature;
 					continue;
 				}
@@ -247,7 +254,7 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
-			else if (!g_unichar_isgraph (uc) || g_unichar_ispunct (uc)) {
+			else if (!u_isgraph (uc) || u_ispunct (uc)) {
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
@@ -269,9 +276,6 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 			}
 			break;
 		}
-
-		remain -= next_p - p;
-		p = next_p;
 	}
 
 set_token:
@@ -284,7 +288,7 @@ set_token:
 		g_assert (token->len > 0);
 	}
 
-	*cur = p;
+	*cur = &s[i];
 
 	return TRUE;
 }
