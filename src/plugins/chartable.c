@@ -248,7 +248,6 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		}
 
 		nsym ++;
-		p = g_utf8_next_char (p);
 	}
 
 	/* Try to avoid FP for long words */
