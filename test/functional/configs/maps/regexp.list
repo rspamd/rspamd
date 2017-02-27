@@ -1,2 +1,5 @@
 /^.*@example.com/i
 /^user.*@.*com/i
+/foo/ bar
+/asdf\.example\.com/ value
+/^asdf$/

@@ -6,7 +6,10 @@ Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/lua_test.conf
+${MAP_MAP}      ${TESTDIR}/configs/maps/map.list
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${RADIX_MAP}    ${TESTDIR}/configs/maps/ip2.list
+${REGEXP_MAP}   ${TESTDIR}/configs/maps/regexp.list
 ${RSPAMD_SCOPE}  Test
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
@@ -45,11 +48,31 @@ Hashes
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  TEST_HASHES (1.00)[no worry]
 
+Maps Key Values
+  [Setup]  Lua Replace Setup  ${TESTDIR}/lua/maps_kv.lua
+  [Teardown]  Lua Replace Teardown
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  RADIX_KV (1.00)[no worry]
+  Should Contain  ${result.stdout}  REGEXP_KV (1.00)[no worry]
+  Should Contain  ${result.stdout}  MAP_KV (1.00)[no worry]
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
   Set Test Variable  ${LUA_SCRIPT}
   Generic Setup
+
+Lua Replace Setup
+  [Arguments]  ${LUA_SCRIPT_UNESC}
+  ${LUA_SCRIPT} =  Make Temporary File
+  ${lua} =  Get File  ${LUA_SCRIPT_UNESC}
+  ${lua} =  Replace Variables  ${lua}
+  Create File  ${LUA_SCRIPT}  ${lua}
+  Lua Setup  ${LUA_SCRIPT}
+
+Lua Replace Teardown
+  Remove File  ${LUA_SCRIPT}
+  Normal Teardown
 
 TLD Setup
   [Arguments]  ${LUA_SCRIPT}
