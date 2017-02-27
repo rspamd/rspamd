@@ -30,7 +30,7 @@
 #define RSPAMD_CHARSET_FLAG_ASCII (1 << 1)
 
 #define RSPAMD_CHARSET_CACHE_SIZE 32
-#define RSPAMD_CHARSET_MAX_CONTENT 512
+#define RSPAMD_CHARSET_MAX_CONTENT 128
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -408,13 +408,13 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 
 	if (utf_compatible_re == NULL) {
 		utf_compatible_re = rspamd_regexp_new (
-				"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi)|(?:us)|(?:ISO-8859-1)|"
-				"(?:latin.*)|(?:CSASCII)$",
+				"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:ansi.*)|(?:CSASCII)$",
 				"i", NULL);
 	}
 
-	if (rspamd_regexp_match (utf_compatible_re, charset->begin, charset->len,
-			TRUE)) {
+	if (charset->len == 0 ||
+			rspamd_regexp_match (utf_compatible_re,
+					charset->begin, charset->len, TRUE)) {
 		/*
 		 * In case of UTF8 charset we still can check the content to find
 		 * corner cases
@@ -423,11 +423,20 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 			real_charset = rspamd_mime_charset_find_by_content (in,
 					MIN (RSPAMD_CHARSET_MAX_CONTENT, len));
 
-			if (real_charset && strcmp (real_charset, UTF8_CHARSET) != 0) {
-				charset->begin = real_charset;
-				charset->len = strlen (real_charset);
+			if (real_charset) {
 
-				return FALSE;
+				if (rspamd_regexp_match (utf_compatible_re,
+						real_charset, strlen (real_charset), TRUE)) {
+					RSPAMD_FTOK_ASSIGN (charset, UTF8_CHARSET);
+
+					return TRUE;
+				}
+				else {
+					charset->begin = real_charset;
+					charset->len = strlen (real_charset);
+
+					return FALSE;
+				}
 			}
 		}
 
