@@ -163,6 +163,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 	struct in_addr ina;
 	struct in6_addr ina6;
 	guint k = G_MAXINT;
+	gpointer key;
 	gint af;
 	gint res = 0, r;
 	struct addrinfo hints, *ai_res, *cur_ai;
@@ -246,8 +247,12 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 									k = 32;
 								}
 
+								key = rspamd_mempool_alloc (tree->pool,
+										sizeof (sin->sin_addr));
+								memcpy (key, &sin->sin_addr,
+										sizeof (sin->sin_addr));
 								radix_insert_compressed (tree,
-										(guint8 *)&sin->sin_addr,
+										key,
 										sizeof (sin->sin_addr),
 										32 - k, (uintptr_t)value);
 								res ++;
@@ -260,8 +265,13 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 									k = 128;
 								}
 
+
+								key = rspamd_mempool_alloc (tree->pool,
+										sizeof (sin6->sin6_addr));
+								memcpy (key, &sin6->sin6_addr,
+										sizeof (sin6->sin6_addr));
 								radix_insert_compressed (tree,
-										(guint8 *)&sin6->sin6_addr,
+										key,
 										sizeof (sin6->sin6_addr),
 										128 - k, (uintptr_t)value);
 								res ++;
@@ -292,7 +302,10 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				k = 32;
 			}
 
-			radix_insert_compressed (tree, (guint8 *)&ina, sizeof (ina),
+
+			key = rspamd_mempool_alloc (tree->pool, sizeof (ina));
+			memcpy (key, &ina, sizeof (ina));
+			radix_insert_compressed (tree, key, sizeof (ina),
 					32 - k, (uintptr_t)value);
 			res ++;
 		}
@@ -300,6 +313,9 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			if (k > 128) {
 				k = 128;
 			}
+
+			key = rspamd_mempool_alloc (tree->pool, sizeof (ina6));
+			memcpy (key, &ina6, sizeof (ina6));
 			radix_insert_compressed (tree, (guint8 *)&ina6, sizeof (ina6),
 					128 - k, (uintptr_t)value);
 			res ++;

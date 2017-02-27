@@ -2069,8 +2069,12 @@ static void
 radix_tree_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
 {
 	radix_compressed_t *tree = (radix_compressed_t *)st;
+	rspamd_mempool_t *pool;
+	gpointer nvalue;
 
-	rspamd_radix_add_iplist ((gchar *)key, ",", tree, value, FALSE);
+	pool = radix_get_pool (tree);
+	nvalue = rspamd_mempool_strdup (pool, value);
+	rspamd_radix_add_iplist (key, ",", tree, nvalue, FALSE);
 }
 
 static void
