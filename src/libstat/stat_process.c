@@ -318,6 +318,12 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			continue;
 		}
 
+		if (!rspamd_symbols_cache_is_symbol_enabled (task, task->cfg->cache,
+				st->stcf->symbol)) {
+			g_ptr_array_index (task->stat_runtimes, i) = NULL;
+			continue;
+		}
+
 		bk_run = st->backend->runtime (task, st->stcf, learn, st->bkcf);
 
 		if (bk_run == NULL) {
@@ -349,7 +355,6 @@ rspamd_stat_backends_process (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		bk_run = g_ptr_array_index (task->stat_runtimes, i);
-		g_assert (st != NULL);
 
 		if (bk_run != NULL) {
 			st->backend->process_tokens (task, task->tokens, i, bk_run);
@@ -377,7 +382,6 @@ rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		bk_run = g_ptr_array_index (task->stat_runtimes, i);
-		g_assert (st != NULL);
 
 		if (bk_run != NULL) {
 			st->backend->finalize_process (task, bk_run, st_ctx);
@@ -389,10 +393,11 @@ static void
 rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
-	guint i;
+	guint i, j, id;
 	struct rspamd_classifier *cl;
 	struct rspamd_statfile *st;
 	gpointer bk_run;
+	gboolean skip;
 
 	if (st_ctx->classifiers->len == 0) {
 		return;
@@ -442,28 +447,45 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 
 		g_assert (cl != NULL);
 
-		if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {
-			msg_debug_task (
-					"<%s> contains less tokens than required for %s classifier: "
-					"%ud < %ud",
-					task->message_id,
-					cl->cfg->name,
-					task->tokens->len,
-					cl->cfg->min_tokens);
-			continue;
-		}
-		else if (cl->cfg->max_tokens > 0 && task->tokens->len > cl->cfg->max_tokens) {
-			msg_debug_task (
-					"<%s> contains more tokens than allowed for %s classifier: "
-					"%ud > %ud",
-					task->message_id,
-					cl->cfg->name,
-					task->tokens->len,
-					cl->cfg->max_tokens);
-			continue;
+		/* Ensure that all symbols enabled */
+		skip = FALSE;
+
+		if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
+			for (j = 0; j < cl->statfiles_ids->len; i++) {
+				id = g_array_index (cl->statfiles_ids, gint, i);
+				bk_run =  g_ptr_array_index (task->stat_runtimes, id);
+
+				if (bk_run == NULL) {
+					skip = TRUE;
+					break;
+				}
+			}
 		}
 
-		cl->subrs->classify_func (cl, task->tokens, task);
+		if (!skip) {
+			if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {
+				msg_debug_task (
+						"<%s> contains less tokens than required for %s classifier: "
+						"%ud < %ud",
+						task->message_id,
+						cl->cfg->name,
+						task->tokens->len,
+						cl->cfg->min_tokens);
+				continue;
+			}
+			else if (cl->cfg->max_tokens > 0 && task->tokens->len > cl->cfg->max_tokens) {
+				msg_debug_task (
+						"<%s> contains more tokens than allowed for %s classifier: "
+						"%ud > %ud",
+						task->message_id,
+						cl->cfg->name,
+						task->tokens->len,
+						cl->cfg->max_tokens);
+				continue;
+			}
+
+			cl->subrs->classify_func (cl, task->tokens, task);
+		}
 	}
 }
 

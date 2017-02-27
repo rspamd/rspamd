@@ -2363,3 +2363,58 @@ rspamd_symbols_cache_get_cksum (struct symbols_cache *cache)
 
 	return cache->cksum;
 }
+
+
+gboolean
+rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol)
+{
+	gint id;
+	struct cache_savepoint *checkpoint;
+	struct cache_item *item;
+	lua_State *L;
+	struct rspamd_task **ptask;
+	gboolean ret = TRUE;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+
+	if (id < 0) {
+		return FALSE;
+	}
+
+	checkpoint = task->checkpoint;
+	item = g_ptr_array_index (cache->items_by_id, id);
+
+	if (checkpoint) {
+		if (isset (checkpoint->processed_bits, id * 2)) {
+			return FALSE;
+		}
+		else {
+			if (item->condition_cb != -1) {
+				/* We also executes condition callback to check if we need this symbol */
+				L = task->cfg->lua_state;
+				lua_rawgeti (L, LUA_REGISTRYINDEX, item->condition_cb);
+				ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+				rspamd_lua_setclass (L, "rspamd{task}", -1);
+				*ptask = task;
+
+				if (lua_pcall (L, 1, 1, 0) != 0) {
+					msg_info_task ("call to condition for %s failed: %s",
+							item->symbol, lua_tostring (L, -1));
+					lua_pop (L, 1);
+				}
+				else {
+					ret = lua_toboolean (L, -1);
+					lua_pop (L, 1);
+				}
+			}
+
+			return ret;
+		}
+	}
+
+	return FALSE;
+}

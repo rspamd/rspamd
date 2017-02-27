@@ -282,4 +282,14 @@ gboolean rspamd_symbols_cache_is_checked (struct rspamd_task *task,
  * @return
  */
 guint64 rspamd_symbols_cache_get_cksum (struct symbols_cache *cache);
+
+/**
+ * Checks if a symbols is enabled (not checked and conditions return true if present)
+ * @param task
+ * @param cache
+ * @param symbol
+ * @return
+ */
+gboolean rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol);
 #endif
