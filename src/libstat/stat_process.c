@@ -451,8 +451,8 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		skip = FALSE;
 
 		if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
-			for (j = 0; j < cl->statfiles_ids->len; i++) {
-				id = g_array_index (cl->statfiles_ids, gint, i);
+			for (j = 0; j < cl->statfiles_ids->len; j++) {
+				id = g_array_index (cl->statfiles_ids, gint, j);
 				bk_run =  g_ptr_array_index (task->stat_runtimes, id);
 
 				if (bk_run == NULL) {

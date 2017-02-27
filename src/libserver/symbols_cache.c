@@ -357,7 +357,8 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 		it = g_ptr_array_index (cache->items_by_id, i);
 		total_hits += it->st->total_hits;
 
-		if (!(it->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_COMPOSITE))) {
+		if (!(it->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER
+				|SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER))) {
 			g_ptr_array_add (ord->d, it);
 		}
 	}
