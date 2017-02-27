@@ -86,7 +86,7 @@ sub rspamd_scan {
             $file, $id, $def->{'score'}, $def->{'required_score'}, $symbols;
 
           if ( $action eq 'reject' ) {
-            print "$tag ERROR " . cgp_string($reject_message) . "\n";
+            print "$tag DISCARD\n";
           }
           elsif ( $action eq 'add header' || $action eq 'rewrite subject' ) {
             print "$tag ADDHEADER " . cgp_string($header) . " OK\n";
