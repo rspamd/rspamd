@@ -1723,14 +1723,17 @@ err:
  */
 
 #define MAP_STORE_KEY do { \
+	while (g_ascii_isspace (*c) && p > c) { c ++; } \
 	key = g_malloc (p - c + 1); \
 	rspamd_strlcpy (key, c, p - c + 1); \
+	key = g_strchomp (key); \
 } while (0)
 
 #define MAP_STORE_VALUE do { \
+	while (g_ascii_isspace (*c) && p > c) { c ++; } \
 	value = g_malloc (p - c + 1); \
 	rspamd_strlcpy (value, c, p - c + 1); \
-	value = g_strstrip (value); \
+	value = g_strchomp (value); \
 } while (0)
 
 gchar *
@@ -2067,7 +2070,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
 {
 	radix_compressed_t *tree = (radix_compressed_t *)st;
 
-	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree, value, FALSE);
+	rspamd_radix_add_iplist ((gchar *)key, ",", tree, value, FALSE);
 }
 
 static void
