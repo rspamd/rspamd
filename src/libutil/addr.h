@@ -92,6 +92,16 @@ gboolean rspamd_parse_inet_address_ip4 (const guchar *text, gsize len,
 		gpointer target);
 
 /**
+ * Parse ipv4 or ipv6 address to a static buffer `target`. Does not support Unix sockets
+ * @param src
+ * @param srclen
+ * @param target
+ * @return
+ */
+gboolean rspamd_parse_inet_address_ip (const char *src,
+		gsize srclen, rspamd_inet_addr_t *target);
+
+/**
  * Try to parse address from string
  * @param target target to fill
  * @param src IP string representation
@@ -265,5 +275,11 @@ gboolean rspamd_inet_address_equal (gconstpointer a, gconstpointer b);
  * Returns TRUE if an address belongs to some local address
  */
 gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr);
+
+/**
+ * Returns size of storage required to store a complete IP address
+ * @return
+ */
+gsize rspamd_inet_address_storage_size (void);
 
 #endif /* ADDR_H_ */

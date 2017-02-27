@@ -291,6 +291,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			if (k > 32) {
 				k = 32;
 			}
+
 			radix_insert_compressed (tree, (guint8 *)&ina, sizeof (ina),
 					32 - k, (uintptr_t)value);
 			res ++;

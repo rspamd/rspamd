@@ -603,6 +603,41 @@ rspamd_inet_address_v6_maybe_map (const struct sockaddr_in6 *sin6)
 	return addr;
 }
 
+static void
+rspamd_inet_address_v6_maybe_map_static (const struct sockaddr_in6 *sin6,
+		rspamd_inet_addr_t *addr)
+{
+	/* 10 zero bytes or 80 bits */
+	static const guint8 mask[] = {
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	};
+	const guint8 *p;
+
+	if (memcmp ((const guint8 *)&sin6->sin6_addr, mask, sizeof (mask)) == 0) {
+		p = (const guint8 *)&sin6->sin6_addr;
+
+		if ((p[10] == 0xff && p[11] == 0xff)) {
+			memcpy (&addr->u.in.addr.s4.sin_addr, &p[12],
+					sizeof (struct in_addr));
+			addr->af = AF_INET;
+			addr->slen = sizeof (addr->u.in.addr.s4);
+		}
+		else {
+			/* Something strange but not mapped v4 address */
+			memcpy (&addr->u.in.addr.s6.sin6_addr, &sin6->sin6_addr,
+					sizeof (struct in6_addr));
+			addr->af = AF_INET6;
+			addr->slen = sizeof (addr->u.in.addr.s6);
+		}
+	}
+	else {
+		memcpy (&addr->u.in.addr.s6.sin6_addr, &sin6->sin6_addr,
+				sizeof (struct in6_addr));
+		addr->af = AF_INET6;
+		addr->slen = sizeof (addr->u.in.addr.s6);
+	}
+}
+
 gboolean
 rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 		const char *src,
@@ -708,6 +743,100 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 
 	if (ret && target) {
 		*target = addr;
+	}
+
+	return ret;
+}
+
+gboolean
+rspamd_parse_inet_address_ip (const char *src, gsize srclen,
+		rspamd_inet_addr_t *target)
+{
+	const char *end;
+	char ipbuf[INET6_ADDRSTRLEN + 1];
+	guint iplen;
+	gulong portnum;
+	gboolean ret = FALSE;
+	union sa_inet su;
+
+	g_assert (target != NULL);
+	g_assert (src != NULL);
+
+	if (src[0] == '[') {
+		/* Ipv6 address in format [::1]:port or just [::1] */
+		end = memchr (src + 1, ']', srclen - 1);
+
+		if (end == NULL) {
+			return FALSE;
+		}
+
+		iplen = end - src - 1;
+
+		if (iplen == 0 || iplen >= sizeof (ipbuf)) {
+			return FALSE;
+		}
+
+		rspamd_strlcpy (ipbuf, src + 1, iplen + 1);
+
+		if (rspamd_parse_inet_address_ip6 (ipbuf, iplen,
+						&su.s6.sin6_addr)) {
+			rspamd_inet_address_v6_maybe_map_static (&su.s6, target);
+			ret = TRUE;
+		}
+
+		if (ret && end[1] == ':') {
+			/* Port part */
+			rspamd_strtoul (end + 1, srclen - iplen - 3, &portnum);
+			rspamd_inet_address_set_port (target, portnum);
+		}
+	}
+	else {
+
+		if ((end = memchr (src, ':', srclen)) != NULL) {
+			/* This is either port number and ipv4 addr or ipv6 addr */
+			/* Search for another semicolon */
+			if (memchr (end + 1, ':', srclen - (end - src + 1)) &&
+					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
+				rspamd_inet_address_v6_maybe_map_static (&su.s6, target);
+				ret = TRUE;
+			}
+			else {
+				/* Not ipv6, so try ip:port */
+				iplen = end - src;
+
+				if (iplen >= sizeof (ipbuf) || iplen <= 1) {
+					return FALSE;
+				}
+				else {
+					rspamd_strlcpy (ipbuf, src, iplen + 1);
+				}
+
+				if (rspamd_parse_inet_address_ip4 (ipbuf, iplen,
+						&su.s4.sin_addr)) {
+					memcpy (&target->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
+							sizeof (struct in_addr));
+					target->af = AF_INET;
+					target->slen = sizeof (target->u.in.addr.s4);
+					rspamd_strtoul (end + 1, srclen - iplen - 1, &portnum);
+					rspamd_inet_address_set_port (target, portnum);
+					ret = TRUE;
+				}
+			}
+		}
+		else {
+			if (rspamd_parse_inet_address_ip4 (src, srclen, &su.s4.sin_addr)) {
+				memcpy (&target->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
+						sizeof (struct in_addr));
+				target->af = AF_INET;
+				target->slen = sizeof (target->u.in.addr.s4);
+				ret = TRUE;
+			}
+			else if (rspamd_parse_inet_address_ip6 (src, srclen,
+					&su.s6.sin6_addr)) {
+				rspamd_inet_address_v6_maybe_map_static (&su.s6, target);
+				ret = TRUE;
+			}
+		}
 	}
 
 	return ret;
@@ -1582,4 +1711,10 @@ rspamd_inet_library_destroy (void)
 	if (local_addrs != NULL) {
 		radix_destroy_compressed (local_addrs);
 	}
+}
+
+gsize
+rspamd_inet_address_storage_size (void)
+{
+	return sizeof (rspamd_inet_addr_t);
 }
