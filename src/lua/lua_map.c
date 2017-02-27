@@ -540,9 +540,18 @@ lua_map_get_key (lua_State * L)
 		if (map->type == RSPAMD_LUA_MAP_RADIX) {
 			radix = map->data.radix;
 
-			if (lua_type (L, 2) == LUA_TNUMBER) {
-				key_num = luaL_checknumber (L, 2);
-				key_num = htonl (key_num);
+			if (lua_type (L, 2) == LUA_TSTRING) {
+				const gchar *addr_str;
+				gsize len;
+
+				addr_str = luaL_checklstring (L, 2, &len);
+				addr = g_alloca (sizeof (*addr));
+				addr->addr = g_alloca (rspamd_inet_address_storage_size ());
+
+				if (!rspamd_parse_inet_address_ip (addr_str, len, addr->addr)) {
+					addr = NULL;
+					msg_err ("invalid ip address: %*s", (gint)len, addr_str);
+				}
 			}
 			else if (lua_type (L, 2) == LUA_TUSERDATA) {
 				ud = rspamd_lua_check_udata (L, 2, "rspamd{ip}");
@@ -556,6 +565,10 @@ lua_map_get_key (lua_State * L)
 				else {
 					msg_err ("invalid userdata type provided, rspamd{ip} expected");
 				}
+			}
+			else if (lua_type (L, 2) == LUA_TNUMBER) {
+				key_num = luaL_checknumber (L, 2);
+				key_num = htonl (key_num);
 			}
 
 			if (radix) {
