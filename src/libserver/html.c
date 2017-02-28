@@ -21,7 +21,7 @@
 #include "html_tags.h"
 #include "html_colors.h"
 #include "url.h"
-#include <unicode/uvernum.h>
+#include <unicode/uversion.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 46
 #include <unicode/uidna.h>
 #endif
