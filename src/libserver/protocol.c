@@ -327,6 +327,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							hv->len);
 					if (!task->from_envelope) {
 						msg_err_task ("bad from header: '%V'", hv);
+						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 					}
 				}
 				else {
@@ -373,6 +374,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					}
 					else {
 						msg_err_task ("bad from header: '%T'", h->value);
+						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 					}
 					debug_task ("read rcpt header, value: %V", hv);
 				}
