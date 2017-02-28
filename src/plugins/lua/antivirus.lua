@@ -321,12 +321,14 @@ local function fprot_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          upstream:fail()
         end
       else
-
+        upstream:ok()
         data = tostring(data)
         local found = (string.sub(data, 1, 1) == '1')
         local cached = 'OK'
@@ -385,12 +387,14 @@ local function clamav_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          upstream:fail()
         end
       else
-
+        upstream:ok()
         data = tostring(data)
         local s = string.find(data, ' FOUND')
         local cached = 'OK'
@@ -448,12 +452,14 @@ local function sophos_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          upstream:fail()
         end
       else
-
+        upstream:ok()
         data = tostring(data)
         local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
@@ -567,12 +573,14 @@ local function savapi_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          upstream:fail()
         end
       else
-
+        upstream:ok()
         local result = tostring(data)
 
         -- 100 SAVAPI:4.0 greeting
