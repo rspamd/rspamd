@@ -144,14 +144,19 @@ local backends = {
 
 local function configure_metric_exporter()
   local opts = rspamd_config:get_all_opt(N)
-  if not backends[opts['backend']] then
-    logger.errx(rspamd_config, 'Backend is invalid or unspecified')
+  local be = opts['backend']
+  if not be then
+    logger.debugm(N, rspamd_config, 'Backend is unspecified')
+    return
+  end
+  if not backends[be] then
+    logger.errx(rspamd_config, 'Backend is invalid: ' .. be)
     return false
   end
   for k, v in pairs(opts) do
     settings[k] = v
   end
-  return backends[opts['backend']]['configure']()
+  return backends[be]['configure']()
 end
 
 if not configure_metric_exporter() then return end

@@ -322,6 +322,9 @@ local opts = rspamd_config:get_all_opt(N)
 if not opts then return end
 if type(opts['use']) == 'string' then
   opts['use'] = {opts['use']}
+elseif (type(opts['use']) == 'table' and not opts['use'][1]) then
+  logger.debugm(N, rspamd_config, 'no functions are enabled')
+  return
 end
 if type(opts['use']) ~= 'table' then
   logger.errx(rspamd_config, 'unexpected type for "use" option: %s', type(opts['use']))
