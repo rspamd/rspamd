@@ -21,7 +21,10 @@
 #include "html_tags.h"
 #include "html_colors.h"
 #include "url.h"
+#include <unicode/uvernum.h>
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 #include <unicode/uidna.h>
+#endif
 
 static sig_atomic_t tags_sorted = 0;
 static sig_atomic_t entities_sorted = 0;
@@ -774,12 +777,14 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	gint rc;
 	gchar *url_str = NULL, *idn_hbuf;
 	const guchar *end = url_text + len;
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 	static UIDNA *udn;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UIDNAInfo uinfo = UIDNA_INFO_INITIALIZER;
+#endif
 
 	*url_found = FALSE;
-
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 	if (udn == NULL) {
 		udn = uidna_openUTS46 (UIDNA_DEFAULT, &uc_err);
 
@@ -787,6 +792,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 			msg_err_pool ("cannot init idna convertor: %s", u_errorName (uc_err));
 		}
 	}
+#endif
 
 	while (url_text < end && g_ascii_isspace (*url_text)) {
 		url_text ++;
@@ -800,7 +806,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 		if (rc == URI_ERRNO_OK) {
 			disp_tok.len = text_url->hostlen;
 			disp_tok.begin = text_url->host;
-
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 			if (rspamd_substring_search_caseless (text_url->host,
 					text_url->hostlen, "xn--", 4) != -1) {
 				idn_hbuf = rspamd_mempool_alloc (pool, text_url->hostlen * 2 + 1);
@@ -818,10 +824,10 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 					disp_tok.begin = idn_hbuf;
 				}
 			}
-
+#endif
 			href_tok.len = href_url->hostlen;
 			href_tok.begin = href_url->host;
-
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 			if (rspamd_substring_search_caseless (href_url->host,
 					href_url->hostlen, "xn--", 4) != -1) {
 				idn_hbuf = rspamd_mempool_alloc (pool, href_url->hostlen * 2 + 1);
@@ -839,13 +845,13 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 					href_tok.begin = idn_hbuf;
 				}
 			}
-
+#endif
 			if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
 
 				/* Apply the same logic for TLD */
 				disp_tok.len = text_url->tldlen;
 				disp_tok.begin = text_url->tld;
-
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 				if (rspamd_substring_search_caseless (text_url->tld,
 						text_url->tldlen, "xn--", 4) != -1) {
 					idn_hbuf = rspamd_mempool_alloc (pool, text_url->tldlen * 2 + 1);
@@ -863,10 +869,10 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 						disp_tok.begin = idn_hbuf;
 					}
 				}
-
+#endif
 				href_tok.len = href_url->tldlen;
 				href_tok.begin = href_url->tld;
-
+#if U_ICU_VERSION_MAJOR_NUM >= 46
 				if (rspamd_substring_search_caseless (href_url->tld,
 						href_url->tldlen, "xn--", 4) != -1) {
 					idn_hbuf = rspamd_mempool_alloc (pool, href_url->tldlen * 2 + 1);
@@ -884,7 +890,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 						href_tok.begin = idn_hbuf;
 					}
 				}
-
+#endif
 				if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
 					href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 					href_url->phished_url = text_url;
