@@ -5507,6 +5507,9 @@ net.om
 org.om
 pro.om
 
+// onion : https://tools.ietf.org/html/rfc7686
+onion
+
 // org : https://en.wikipedia.org/wiki/.org
 org
 
@@ -6088,38 +6091,6 @@ store.st
 
 // su : https://en.wikipedia.org/wiki/.su
 su
-adygeya.su
-arkhangelsk.su
-balashov.su
-bashkiria.su
-bryansk.su
-dagestan.su
-grozny.su
-ivanovo.su
-kalmykia.su
-kaluga.su
-karelia.su
-khakassia.su
-krasnodar.su
-kurgan.su
-lenug.su
-mordovia.su
-msk.su
-murmansk.su
-nalchik.su
-nov.su
-obninsk.su
-penza.su
-pokrovsk.su
-sochi.su
-spb.su
-togliatti.su
-troitsk.su
-tula.su
-tuva.su
-vladikavkaz.su
-vladimir.su
-vologda.su
 
 // sv : http://www.svnet.org.sv/niveldos.pdf
 sv
@@ -7118,7 +7089,7 @@ sch.zm
 *.zw
 
 
-// List of new gTLDs imported from https://newgtlds.icann.org/newgtlds.csv on 2016-11-29T01:06:51Z
+// List of new gTLDs imported from https://newgtlds.icann.org/newgtlds.csv on 2017-02-23T00:46:09Z
 
 // aaa : 2015-02-26 American Automobile Association, Inc.
 aaa
@@ -8050,9 +8021,6 @@ dvag
 // dvr : 2016-05-26 Hughes Satellite Systems Corporation
 dvr
 
-// dwg : 2015-07-23 Autodesk, Inc.
-dwg
-
 // earth : 2014-12-04 Interlink Co., Ltd.
 earth
 
@@ -8619,9 +8587,6 @@ ieee
 
 // ifm : 2014-01-30 ifm electronic gmbh
 ifm
-
-// iinet : 2014-07-03 Connect West Pty. Ltd.
-iinet
 
 // ikano : 2015-07-09 Ikano S.A.
 ikano
@@ -9190,9 +9155,6 @@ mtr
 // mutual : 2015-04-02 Northwestern Mutual MU TLD Registry, LLC
 mutual
 
-// mutuelle : 2015-06-18 Fédération Nationale de la Mutualité Française
-mutuelle
-
 // nab : 2015-08-20 National Australia Bank Limited
 nab
 
@@ -9691,6 +9653,9 @@ room
 // rsvp : 2014-05-08 Charleston Road Registry Inc.
 rsvp
 
+// rugby : 2016-12-15 World Rugby Strategic Developments Limited
+rugby
+
 // ruhr : 2013-10-02 regiodot GmbH & Co. KG
 ruhr
 
@@ -10117,9 +10082,6 @@ theater
 // theatre : 2015-05-07
 theatre
 
-// theguardian : 2015-04-30 Guardian News and Media Limited
-theguardian
-
 // tiaa : 2015-07-23 Teachers Insurance and Annuity Association of America
 tiaa
 
@@ -10267,7 +10229,7 @@ ventures
 // verisign : 2015-08-13 VeriSign, Inc.
 verisign
 
-// versicherung : 2014-03-20 dotversicherung-registry GmbH
+// versicherung : 2014-03-20
 versicherung
 
 // vet : 2014-03-06
@@ -10503,10 +10465,6 @@ xn--45q11c
 xn--4gbrim
 موقع
 
-// xn--4gq48lf9j : 2015-07-31 Wal-Mart Stores, Inc.
-xn--4gq48lf9j
-一号店
-
 // xn--55qw42g : 2013-11-08 China Organizational Name Administration Center
 xn--55qw42g
 公益
@@ -10587,7 +10545,7 @@ xn--cck2b3b
 xn--cg4bki
 삼성
 
-// xn--czr694b : 2014-01-16 Dot Trademark TLD Holding Company Limted
+// xn--czr694b : 2014-01-16 Dot Trademark TLD Holding Company Limited
 xn--czr694b
 商标
 
@@ -10663,7 +10621,7 @@ xn--hxt814e
 xn--i1b6b1a6a2e
 संगठन
 
-// xn--imr513n : 2014-12-11 Dot Trademark TLD Holding Company Limted
+// xn--imr513n : 2014-12-11 Dot Trademark TLD Holding Company Limited
 xn--imr513n
 餐厅
 
@@ -10937,7 +10895,7 @@ elasticbeanstalk.cn-north-1.amazonaws.com.cn
 
 // Amazon S3 : https://aws.amazon.com/s3/
 // Submitted by Luke Wells <psl-maintainers@amazon.com>
-*.s3.amazonaws.com
+s3.amazonaws.com
 s3-ap-northeast-1.amazonaws.com
 s3-ap-northeast-2.amazonaws.com
 s3-ap-south-1.amazonaws.com
@@ -10946,6 +10904,7 @@ s3-ap-southeast-2.amazonaws.com
 s3-ca-central-1.amazonaws.com
 s3-eu-central-1.amazonaws.com
 s3-eu-west-1.amazonaws.com
+s3-eu-west-2.amazonaws.com
 s3-external-1.amazonaws.com
 s3-fips-us-gov-west-1.amazonaws.com
 s3-sa-east-1.amazonaws.com
@@ -10958,6 +10917,7 @@ s3.ap-south-1.amazonaws.com
 s3.cn-north-1.amazonaws.com.cn
 s3.ca-central-1.amazonaws.com
 s3.eu-central-1.amazonaws.com
+s3.eu-west-2.amazonaws.com
 s3.us-east-2.amazonaws.com
 s3.dualstack.ap-northeast-1.amazonaws.com
 s3.dualstack.ap-northeast-2.amazonaws.com
@@ -10967,6 +10927,7 @@ s3.dualstack.ap-southeast-2.amazonaws.com
 s3.dualstack.ca-central-1.amazonaws.com
 s3.dualstack.eu-central-1.amazonaws.com
 s3.dualstack.eu-west-1.amazonaws.com
+s3.dualstack.eu-west-2.amazonaws.com
 s3.dualstack.sa-east-1.amazonaws.com
 s3.dualstack.us-east-1.amazonaws.com
 s3.dualstack.us-east-2.amazonaws.com
@@ -10982,6 +10943,7 @@ s3-website.ap-northeast-2.amazonaws.com
 s3-website.ap-south-1.amazonaws.com
 s3-website.ca-central-1.amazonaws.com
 s3-website.eu-central-1.amazonaws.com
+s3-website.eu-west-2.amazonaws.com
 s3-website.us-east-2.amazonaws.com
 
 // Amune : https://amune.org/
@@ -11590,6 +11552,82 @@ us-2.evennode.com
 // Facebook, Inc.
 // Submitted by Peter Ruibal <public-suffix@fb.com>
 apps.fbsbx.com
+
+// FAITID : https://faitid.org/
+// Submitted by Maxim Alzoba <tech.contact@faitid.org>
+// https://www.flexireg.net/stat_info
+ru.net
+adygeya.ru
+bashkiria.ru
+bir.ru
+cbg.ru
+com.ru
+dagestan.ru
+grozny.ru
+kalmykia.ru
+kustanai.ru
+marine.ru
+mordovia.ru
+msk.ru
+mytis.ru
+nalchik.ru
+nov.ru
+pyatigorsk.ru
+spb.ru
+vladikavkaz.ru
+vladimir.ru
+abkhazia.su
+adygeya.su
+aktyubinsk.su
+arkhangelsk.su
+armenia.su
+ashgabad.su
+azerbaijan.su
+balashov.su
+bashkiria.su
+bryansk.su
+bukhara.su
+chimkent.su
+dagestan.su
+east-kazakhstan.su
+exnet.su
+georgia.su
+grozny.su
+ivanovo.su
+jambyl.su
+kalmykia.su
+kaluga.su
+karacol.su
+karaganda.su
+karelia.su
+khakassia.su
+krasnodar.su
+kurgan.su
+kustanai.su
+lenug.su
+mangyshlak.su
+mordovia.su
+msk.su
+murmansk.su
+nalchik.su
+navoi.su
+north-kazakhstan.su
+nov.su
+obninsk.su
+penza.su
+pokrovsk.su
+sochi.su
+spb.su
+tashkent.su
+termez.su
+togliatti.su
+troitsk.su
+tselinograd.su
+tula.su
+tuva.su
+vladikavkaz.su
+vladimir.su
+vologda.su
 
 // Fastly Inc. : http://www.fastly.com/
 // Submitted by Fastly Security <security@fastly.com>
