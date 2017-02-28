@@ -1023,6 +1023,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 				msg_info_cache ("adding unknown symbol %s to metric %s", item->symbol,
 						m->name);
+				ghost = FALSE;
 			}
 
 			cur = g_list_next (cur);
@@ -2391,7 +2392,7 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 
 	if (checkpoint) {
 		if (isset (checkpoint->processed_bits, id * 2)) {
-			return FALSE;
+			ret = FALSE;
 		}
 		else {
 			if (item->condition_cb != -1) {
@@ -2412,10 +2413,8 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 					lua_pop (L, 1);
 				}
 			}
-
-			return ret;
 		}
 	}
 
-	return FALSE;
+	return ret;
 }
