@@ -524,6 +524,9 @@ if type(settings.rules) ~= 'table' then
     rspamd_logger.errx(rspamd_config, 'No push backend enabled')
     return
   end
+elseif not next(settings.rules) then
+  rspamd_logger.debugm(N, rspamd_config, 'No rules enabled')
+  return
 end
 if not settings.rules or not next(settings.rules) then
   rspamd_logger.errx(rspamd_config, 'No rules enabled')
