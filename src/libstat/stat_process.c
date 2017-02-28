@@ -454,9 +454,12 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 			for (j = 0; j < cl->statfiles_ids->len; j++) {
 				id = g_array_index (cl->statfiles_ids, gint, j);
 				bk_run =  g_ptr_array_index (task->stat_runtimes, id);
+				st = g_ptr_array_index (st_ctx->statfiles, id);
 
 				if (bk_run == NULL) {
 					skip = TRUE;
+					msg_debug_task ("disable classifier %s as statfile symbol %s is disabled",
+							cl->cfg->name, st->stcf->symbol);
 					break;
 				}
 			}
