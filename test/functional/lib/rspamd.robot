@@ -53,8 +53,8 @@ Follow Rspamd Log
   ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
 
 Generic Setup
-  [Arguments]  @{vargs}
-  &{d} =  Run Rspamd  @{vargs}
+  [Arguments]  @{vargs}  &{kwargs}
+  &{d} =  Run Rspamd  @{vargs}  &{kwargs}
   ${keys} =  Get Dictionary Keys  ${d}
   : FOR  ${i}  IN  @{keys}
   \  Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  &{d}[${i}]
@@ -111,9 +111,11 @@ Run Rspamc
 Run Rspamd
   [Arguments]  @{vargs}  &{kwargs}
   ${has_CONFIG} =  Evaluate  'CONFIG' in $kwargs
-  ${CONFIG} =  Set Variable If  ${has_CONFIG} == True  &{kwargs}[CONFIG]  ${CONFIG}
+  ${has_TMPDIR} =  Evaluate  'TMPDIR' in $kwargs
+  ${CONFIG} =  Set Variable If  '${has_CONFIG}' == 'True'  &{kwargs}[CONFIG]  ${CONFIG}
   &{d} =  Create Dictionary
-  ${tmpdir} =  Make Temporary Directory
+  ${tmpdir} =  Run Keyword If  '${has_TMPDIR}' == 'True'  Set Variable  &{kwargs}[TMPDIR]
+  ...  ELSE  Make Temporary Directory
   Set Directory Ownership  ${tmpdir}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
   ${template} =  Get File  ${CONFIG}
   : FOR  ${i}  IN  @{vargs}
