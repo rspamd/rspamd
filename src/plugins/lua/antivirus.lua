@@ -529,10 +529,7 @@ local function savapi_check(task, rule)
       elseif string.find(result, '310') then
         -- infected message
         rspamd_logger.debugm(N, task, 'infected message')
-        local parts = rspamd_str_split(result, ' ')
-        local message = parts[2]
-        -- A message: <alert> ; <type> ; <description>
-        local vname = rspamd_str_split(message, ';')[1]
+        local vname = rspamd_str_split(result, ' ')[4]
         rspamd_logger.infox(task, 'SAVAPI: virus found: %s', vname)
         yield_result(task, rule, vname)
         save_av_cache(task, rule, vname)
