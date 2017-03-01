@@ -1,3 +1,371 @@
+1.5.0:
+	* [Conf] Add configurations for asn, clickhouse and dcc
+	* [Conf] Add default config for url redirector plugin
+	* [Conf] Add the default config for greylist module
+	* [Conf] Allow to edit all local maps from WebUI by default
+	* [CritFix] Deal with absent headers in DKIM
+	* [CritFix] Do not trust remote shingles count
+	* [CritFix] Fix bad memory leak in TLS certificates validation
+	* [CritFix] Fix critical memory issues with radix maps
+	* [CritFix] Fix descriptors leak on reload
+	* [CritFix] Fix headers selection in DKIM verification
+	* [CritFix] Fix parsing of boundaries that end with `--`
+	* [CritFix] Repair PTR_ARRAY_FOREACH macro
+	* [Feature] Add CORS support to the controller
+	* [Feature] Add FROM_NAME_EXCESS_SPACE rule
+	* [Feature] Add REPLYTO_EMAIL_HAS_TITLE rule
+	* [Feature] Add `caseless_hash` method to `lua_util`
+	* [Feature] Add `rip` keyword to ratelimit module
+	* [Feature] Add a simple benchmark for content type parsing
+	* [Feature] Add boundaries parsing in content type
+	* [Feature] Add charset detection for text parts
+	* [Feature] Add content disposition parser
+	* [Feature] Add fallback if too many updates are failing
+	* [Feature] Add function to convert struct tm to time using timezone
+	* [Feature] Add function to normalize HTTP paths
+	* [Feature] Add fuzzy collection plugin
+	* [Feature] Add fuzzy logic for images
+	* [Feature] Add gmime parser to mime_tool
+	* [Feature] Add heuristic to detect broken messages
+	* [Feature] Add heuristic to find displayed URLs
+	* [Feature] Add heuristic to process broken email addresses
+	* [Feature] Add images normalization
+	* [Feature] Add mechanism for disabling composites (Fixes #1270)
+	* [Feature] Add method to create regexp from a glob pattern
+	* [Feature] Add mime encoding manipulation routines
+	* [Feature] Add mime tool to explore messages
+	* [Feature] Add more meta tokens from received headers
+	* [Feature] Add neighbours option to support Rspamd cluster in WebUI
+	* [Feature] Add new function to parse mime addresses
+	* [Feature] Add new methods for lua_tcp
+	* [Feature] Add own headers decoding routine
+	* [Feature] Add own routine to generate a message id
+	* [Feature] Add parser for SMTP date
+	* [Feature] Add per-task lua cache to reuse 'heavy' objects
+	* [Feature] Add plugins list path in WebUI
+	* [Feature] Add preliminary multipart support
+	* [Feature] Add preliminary version of DKIM signing module
+	* [Feature] Add profiling support in client output
+	* [Feature] Add rfc2047 grammar
+	* [Feature] Add rfc2047 variant for QP decoding
+	* [Feature] Add rmilter_headers module (Fixes #1227)
+	* [Feature] Add sse42 version of base64 decoding
+	* [Feature] Add ssse3 and avx2 base64 decoders
+	* [Feature] Add support of libgd
+	* [Feature] Add the preliminary version of redirects resolver in Lua
+	* [Feature] Add ucl_object_iterate_full function
+	* [Feature] Add url encoding function
+	* [Feature] Allow SOA requests in lua dns
+	* [Feature] Allow custom parse types in lua ucl
+	* [Feature] Allow plugins to register webui handlers
+	* [Feature] Allow to add options explicitly to symbols
+	* [Feature] Allow to call a callback when symbol frequency is on peak
+	* [Feature] Allow to call redirector script from SURBL
+	* [Feature] Allow to create variable length dkim keys
+	* [Feature] Allow to have module specific options for Redis in plugins
+	* [Feature] Allow to pass sign key directly from Lua
+	* [Feature] Allow to register configuration docs from Lua API
+	* [Feature] Allow to return options as a table
+	* [Feature] Allow to set peak callbacks from Lua
+	* [Feature] Allow to specify custom method for a message
+	* [Feature] Allow to store dkim keys in Redis
+	* [Feature] Allow to store messages in files
+	* [Feature] Apply DCT using AAN for fuzzy signature
+	* [Feature] Avira SAVAPI support
+	* [Feature] Cache and simplify DCT and jpeg decode
+	* [Feature] Cache libicu convertors
+	* [Feature] Detect URLs with suspicious omographs
+	* [Feature] Do not increase score for duplicate options
+	* [Feature] Do not trust CTE, check base64 and qp strictly
+	* [Feature] Dynamic reputation in URL reputation plugin
+	* [Feature] Extend redis lock when learning spawned
+	* [Feature] Filter non-utf chars from all decoded headers
+	* [Feature] Fix phishing detection for IDNA urls
+	* [Feature] Ignore bad symbols on base64 decoding
+	* [Feature] Ignore too wide elements in SPF
+	* [Feature] Implement fuzzy collection mode
+	* [Feature] Implement helo maps in multimap
+	* [Feature] Implement human readable buckets configuration
+	* [Feature] Implement min-hash shingles for DCT data from images
+	* [Feature] Implement new algorithm for fuzzy hashes of images
+	* [Feature] Implement new unicode normalizer
+	* [Feature] Implement quoted printable decoding
+	* [Feature] Implement received headers flags
+	* [Feature] Implement rspamdgrep tool
+	* [Feature] Implement sane checksum for config file
+	* [Feature] Implement url tags concept
+	* [Feature] Improve detection of omographs using libicu
+	* [Feature] Improve url redirector module
+	* [Feature] Multimap: Received header processing
+	* [Feature] Multiple improvements in the maps
+	* [Feature] New URL filters in multimap
+	* [Feature] Plugin to force actions on selected symbols
+	* [Feature] RBL module: support hashing for emails and helo RBL
+	* [Feature] Reuse URL tags in SURBL module
+	* [Feature] Rework RRD ds count, add conversion path
+	* [Feature] Rework surbl module to avoid extra redirector calls
+	* [Feature] Send config id to the WebUI
+	* [Feature] Simplify HTTPCrypt client support
+	* [Feature] Skip processing for large images
+	* [Feature] Start collection only mode implementation for fuzzy storage
+	* [Feature] Start import of the optimized base64 decode
+	* [Feature] Store all received headers in lua
+	* [Feature] Store relational order of all headers in a message
+	* [Feature] Support DKIM signing in Lua plugins
+	* [Feature] Support HTTPCrypt client in lua_http
+	* [Feature] Support setting SMTP message in multimap
+	* [Feature] Support setting metric subject from Lua
+	* [Feature] Support setting subject in force actions module
+	* [Feature] Treat v6 mapped addresses as v4 addresses
+	* [Feature] URL reputation plugin
+	* [Feature] Use Redis instead of memcached in URLs redirector
+	* [Feature] Use Rspamd rfc2047 decoder instead of gmime one
+	* [Feature] Use a different normalization for fuzzy images
+	* [Feature] Use normalized images in fuzzy hashes
+	* [Feature] Use own code for parsing of date
+	* [Feature] Use shingles for images fuzzying
+	* [Feature] Use t1ha for hashes, allow inlining
+	* [Feature] Use t1ha instead of metrohash and xxhash32
+	* [Feature] Various new features in metadata exporter module
+	* [Feature] rmilter_headers: authentication-results (#78)
+	* [Fix] Add additional check to mark redis connection inactive
+	* [Fix] Add packed attribute for protocol structure
+	* [Fix] Adopt OMOGRAPH_URL rule
+	* [Fix] Allow static maps
+	* [Fix] Allow to disable classifiers checks using settings and conditions
+	* [Fix] Another try to fix 0 length maps
+	* [Fix] Another try to fix corruption during maps reload
+	* [Fix] Another try to fix descriptors leak
+	* [Fix] Another try to fix reload and logger
+	* [Fix] Antivirus module: register virtual symbols for patterns
+	* [Fix] Avoid extensive reallocs
+	* [Fix] Avoid mempool leak in SA plugin on reload
+	* [Fix] Avoid race condition on saving cache and reload
+	* [Fix] Avoid reusing g_error (Fixes #1262)
+	* [Fix] Break pool connection on fatal redis errors
+	* [Fix] Check for NaN properly
+	* [Fix] Couple of fixes for date parsing
+	* [Fix] Date header timezone adjustments (#1279)
+	* [Fix] Deal with EOF properly
+	* [Fix] Decode filename in content disposition
+	* [Fix] Disable fuzzy images by default
+	* [Fix] Disable zero-copy mode for text parts to avoid crashes
+	* [Fix] Do not destroy session when not all finish scripts are done
+	* [Fix] Do not greyscale images
+	* [Fix] Do not leave parent-less workers processes on fatal errors
+	* [Fix] Do not lowercase Content-Disposition to perform decoding
+	* [Fix] Do not penalize characters just after numeric prefix
+	* [Fix] Do not refork workers that are intended to die
+	* [Fix] Do not set pre-result and update records for no `Queue-ID` messages
+	* [Fix] Do not skip post-filters when pre-filters have set some results
+	* [Fix] Do not stop symbols planning if async events are pending
+	* [Fix] Do not try to set keys for unencrypted requests in proxy
+	* [Fix] Encode URLs according to rfc3986
+	* [Fix] Encode URLs before sending them to the protocol
+	* [Fix] Filter bad characters from message id
+	* [Fix] Fix CTE detection heuristic
+	* [Fix] Fix Content-Type in HTTP requests
+	* [Fix] Fix IDN eslds phishing checks
+	* [Fix] Fix adding maps from config in Lua
+	* [Fix] Fix another reload memory issue
+	* [Fix] Fix argument returned on redis backend errors
+	* [Fix] Fix assertion in graph handling
+	* [Fix] Fix body trie matching
+	* [Fix] Fix build
+	* [Fix] Fix byte array expansion during toutf8 conversion
+	* [Fix] Fix charset normalisation
+	* [Fix] Fix checking of DKIM bodies that needs just `\n` to be added
+	* [Fix] Fix couple of cornercases with email addresses
+	* [Fix] Fix couple of issues
+	* [Fix] Fix dependencies tracking for callback symbols
+	* [Fix] Fix detection of jpeg size
+	* [Fix] Fix errors handling in fuzzy backend initialization
+	* [Fix] Fix fuzzy hashes count
+	* [Fix] Fix globbing and convert lists to arrays in fuzzy_check
+	* [Fix] Fix heuristical CTE detection for QP encoding
+	* [Fix] Fix ignoring of bad text parts
+	* [Fix] Fix indexes in array access, interleave loop
+	* [Fix] Fix int64 -> double conversion
+	* [Fix] Fix invalid memory access on reload
+	* [Fix] Fix issues with empty updates
+	* [Fix] Fix issues with quoted-printable encoding
+	* [Fix] Fix keys names
+	* [Fix] Fix lots of issues in mime parser code
+	* [Fix] Fix lua maps load
+	* [Fix] Fix macro name
+	* [Fix] Fix mas group score calculations
+	* [Fix] Fix matching of the same patterns from different tries
+	* [Fix] Fix memory corruprtion and leak
+	* [Fix] Fix memory leak in HTTP maps
+	* [Fix] Fix memory leak in expression destroying
+	* [Fix] Fix memory leak in parsing of mime names
+	* [Fix] Fix memory leak in safe ucl iterators
+	* [Fix] Fix memory leak on reload in plugins
+	* [Fix] Fix modules reconfigure on reload
+	* [Fix] Fix monitored setup fro URLBLs with IP addresses
+	* [Fix] Fix name of var
+	* [Fix] Fix new rrd updates
+	* [Fix] Fix out of bounds access
+	* [Fix] Fix parsing messages with no body
+	* [Fix] Fix parsing of '=' character in headers
+	* [Fix] Fix parsing of messages with no content type
+	* [Fix] Fix plugins callbacks in webui
+	* [Fix] Fix possible memory corruption in redis pool
+	* [Fix] Fix probability calculations for fuzzy redis backend
+	* [Fix] Fix processing errors in lua_tcp
+	* [Fix] Fix processing of emails with name only
+	* [Fix] Fix processing of non-multipart messages
+	* [Fix] Fix processing of parts with no valid content type
+	* [Fix] Fix race condition in SIGUSR2 handler
+	* [Fix] Fix redis options parsing when no redis servers are defined
+	* [Fix] Fix reload and hyperscan ready event
+	* [Fix] Fix reload memory issue
+	* [Fix] Fix rra_ptr conversion
+	* [Fix] Fix rrd file conversion
+	* [Fix] Fix setting of content-type attributes
+	* [Fix] Fix signing headers creation in DKIM
+	* [Fix] Fix stddev calculations
+	* [Fix] Fix surbl plugin to work with composite maps
+	* [Fix] Fix timezones parsing
+	* [Fix] Fix tokens usage
+	* [Fix] Fix urls and emails hashes
+	* [Fix] Fix usage of unsafe ucl iterators
+	* [Fix] Fix work with broken utf8 tokens
+	* [Fix] Fix writing of user to roll history
+	* [Fix] Forgotten worker
+	* [Fix] Further memory leaks fixes
+	* [Fix] Ignore lua metatokens in bayes for now
+	* [Fix] Improve OMOGRAPH_URL rule
+	* [Fix] Lua IP from string should be invalid if parsing failed
+	* [Fix] Miltiple fixes to new lua_tcp, add debugging
+	* [Fix] More fixes for iterators cleanup
+	* [Fix] More fixes to logger initialization
+	* [Fix] More heuristic fixes for phishing detection
+	* [Fix] More leaks eliminated
+	* [Fix] More leaks...
+	* [Fix] More random fixes for reload...
+	* [Fix] Multimap: Fixes for email filters
+	* [Fix] Multiple fixes for fann module
+	* [Fix] Multiple memory corruption fixes
+	* [Fix] Normalize path in HTTP router
+	* [Fix] Plug memory leak
+	* [Fix] Plug memory leak in adding radix trees
+	* [Fix] Plug memory leak in configuration parser
+	* [Fix] Plug memory leak in expressions parsing during reload
+	* [Fix] Plug memory leak in learning fuzzy storage
+	* [Fix] Plug memory leak in lua_tcp
+	* [Fix] Plug reload leaks
+	* [Fix] Plug termination memory leaks
+	* [Fix] Really increase lock lifetime
+	* [Fix] Replies module: fix symbol weight
+	* [Fix] Restore content type params related functions
+	* [Fix] Set task's subject from mime subject
+	* [Fix] Sigh, one more reload leak
+	* [Fix] Simplify images shingles
+	* [Fix] Some more memory issues are fixed
+	* [Fix] Stop hardcoding of lua in C
+	* [Fix] Stop processing of bad parts as text parts
+	* [Fix] Strictly filter bad characters when emittin json
+	* [Fix] Strings returned from lua are ephemeral
+	* [Fix] Support unix sockets for lua redis
+	* [Fix] Try to fix issues with reloading config
+	* [Fix] Try to fix race condition in redis_pool
+	* [Fix] Use checksum to avoid intersection between different ANNs
+	* [Fix] Use rspamd hashes in embedded ucl
+	* [Fix] Use sane default rewrite subject (*** SPAM *** %s)
+	* [Fix] Various collection mode fixes
+	* [Fix] Various fixes to mime parser
+	* [Fix] Various reload leak fixing
+	* [Fix] Whitelist certain extensions from archive checks
+	* [Rework] Add preliminary implementation of the mime parser
+	* [Rework] Adopt code for the new options
+	* [Rework] Change logger setup interface
+	* [Rework] Composite configuration (#1270)
+	* [Rework] Finally remove gmime dependency from Rspamd
+	* [Rework] Further fixes to symbols frequencies
+	* [Rework] Implement content type parser for mime
+	* [Rework] Kill all InternetAddressList usages
+	* [Rework] Multiple fixes for symbols cache statistics
+	* [Rework] Refactor struct names
+	* [Rework] Rework images fuzzy hashes algorithm
+	* [Rework] Rework lua_tcp to allow TCP dialog
+	* [Rework] Start massive rework to get rid of gmime
+	* [Rework] Start new approach for multiparts parsing
+	* [Rework] Start rework of mime addresses
+	* [Rework] Start rework of symbols cache updates
+	* [Rework] Start switching to libicu
+	* [Rework] Use a special structure for stats tokens
+	* [Rework] Use hash tables for symbols options
+	* [Rework] Use libicu instead of iconv for conversions
+	* [Rework] Use new scheme to parse mime parts
+	* [WebUI] Add Access-Control-Allow-Origin for cluster management
+	* [WebUI] Add Throughput graph autorefreshing (#820)
+	* [WebUI] Add Visibility.js library
+	* [WebUI] Add basic cluster support to Throughput tab
+	* [WebUI] Add graph legend entries for new DSes
+	* [WebUI] Add graph tab
+	* [WebUI] Add neighbours RRD data consolidation
+	* [WebUI] Add preliminary save symbols clustering
+	* [WebUI] Add server selector to navbar
+	* [WebUI] Add soft reject to auth stats
+	* [WebUI] Add summary to the Throughput tab
+	* [WebUI] Allow to save maps on the cluster
+	* [WebUI] Avoid extra graph redraw and alerts glitching
+	* [WebUI] Be more generous with AJAX timeout
+	* [WebUI] Disable error ring loading in `read only` mode
+	* [WebUI] Enclose table header cells with `tr`s
+	* [WebUI] Finish interface rework
+	* [WebUI] Fix RRD summary pie chart position
+	* [WebUI] Fix `All SERVERS` graph fot just one available server
+	* [WebUI] Fix case when no cluster is defined
+	* [WebUI] Fix compatibility with non-ES6 compliant browsers
+	* [WebUI] Fix config ID
+	* [WebUI] Fix configuration page partially
+	* [WebUI] Fix disabled state
+	* [WebUI] Fix graph dataset selector initialization
+	* [WebUI] Fix graph selectors state resetting
+	* [WebUI] Fix mouse events on throughput summary table area
+	* [WebUI] Fix multiple JS issues
+	* [WebUI] Fix pie chart displaying
+	* [WebUI] Fix read only
+	* [WebUI] Fix read only2
+	* [WebUI] Fix retarded datatables
+	* [WebUI] Fix soft reject in pie chart
+	* [WebUI] Fix stat widgets timers multiplication on `Refresh` click
+	* [WebUI] Fix symbols config
+	* [WebUI] Fix various errors with login form
+	* [WebUI] Further fixes
+	* [WebUI] Hide learning tab in read-only mode
+	* [WebUI] Initial clusters support
+	* [WebUI] Make legend entry colours more contrast
+	* [WebUI] Move configuration tab to a separate module
+	* [WebUI] Move history tab
+	* [WebUI] Move symbols config as well
+	* [WebUI] New sec to time function
+	* [WebUI] Prevent multiple clicks on `Refresh`
+	* [WebUI] RRD summary: Hide inner labels of tiny pie sectors
+	* [WebUI] RRD summary: Respect undefined values
+	* [WebUI] Reduce font size of graph's legend
+	* [WebUI] Remove orphaned font duplicates
+	* [WebUI] Remove unused code
+	* [WebUI] Replace spinner with animated glyphicon
+	* [WebUI] Reset refresh timer on server switching
+	* [WebUI] Rework interface to use requirejs
+	* [WebUI] Rework neighbours query function
+	* [WebUI] Separate attributes by space
+	* [WebUI] Set focus to password field (#1230)
+	* [WebUI] Simplify neighbours table populating
+	* [WebUI] Start rework of modules
+	* [WebUI] Stop stats refreshing if the page is hidden
+	* [WebUI] Turn d3pie's stuff into a reusable function,
+	* [WebUI] Unify send data functions
+	* [WebUI] Update D3Evolution to 0.0.1
+	* [WebUI] Update d3.js
+	* [WebUI] Update datatables to work with the requirejs
+	* [WebUI] Use unified tab click event handler,
+	* [WebUI] clusters for the chart
+	* [WebUI] fix uptime
+
 1.4.2:
 	* [CritFix] Deal with absent headers in DKIM
 	* [CritFix] Do not trust remote shingles count
