@@ -108,7 +108,11 @@ function rspamd_parse_redis_server(module_name)
     end
   end
 
-  return result
+  if result.read_servers then
+    return result
+  else
+    return nil
+  end
 end
 
 -- Performs async call to redis hiding all complexity inside function
