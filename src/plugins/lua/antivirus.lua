@@ -677,11 +677,20 @@ if opts and type(opts) == 'table' then
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
-        rspamd_config:register_symbol({
+        local id = rspamd_config:register_symbol({
           type = 'normal',
           name = m['symbol'],
           callback = cb,
         })
+        if m['patterns'] then
+          for sym in pairs(m['patterns']) do
+            rspamd_config:register_symbol({
+              type = 'virtual',
+              name = sym,
+              parent = id
+            })
+          end
+        end
         if m['score'] then
           -- Register metric symbol
           local description = 'antivirus symbol'
