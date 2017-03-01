@@ -1,0 +1,100 @@
+
+<!-- Site footer -->
+
+<footer class="row-footer">
+  <div class="container">
+    <div class="body-content">
+      <div class="pull-left">
+        <!-- Social buttons -->
+        <div class="nav navbar-nav" style="margin-top: 10px;">
+          <a class="btn btn-xs btn-social-icon btn-primary" href="https://groups.google.com/forum/#!forum/rspamd"><i class="fa fa-envelope-o"></i></a>&nbsp;
+          <a class="btn btn-xs btn-social-icon btn-reddit" href="http://freenode.net" data-toggle="tooltip" data-placement="top" title="channel #rspamd">
+            <p style="font-size:80%">IRC</p>
+          </a>&nbsp;
+          <a class="btn btn-xs btn-social-icon btn-twitter" href="https://twitter.com/rspamd"><i class="fa fa-twitter"></i></a>&nbsp;
+          <a class="btn btn-xs btn-social-icon btn-github" href="https://github.com/vstakhov/rspamd"><i class="fa fa-github"></i></a>
+        </div>
+      </div>
+      <div class="pull-right">
+        <!-- Back to top -->
+        <a class="btn btn-link" href="#top"><i class="fa fa-arrow-up"></i> Back to top</a>
+      </div>
+    </div>
+  </div>
+</footer>
+</div> <!-- wrapper -->
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+<script>
+  var anchorForId = function(id) {
+    var anchor = document.createElement("a");
+    anchor.className = "header-link";
+    anchor.href = "#" + id;
+    anchor.innerHTML = "<i class=\"fa fa-link\"></i>";
+    return anchor;
+  };
+
+  var linkifyAnchors = function(level, containingElement) {
+    var headers = containingElement.getElementsByTagName("h" + level);
+    for (var h = 0; h < headers.length; h++) {
+      var header = headers[h];
+
+      if (typeof header.id !== "undefined" && header.id !== "") {
+        header.appendChild(anchorForId(header.id));
+      }
+    }
+  };
+
+  //For stop video in closed pills
+  var youtube1_url = $('#youtube1').attr('src');
+  var youtube2_url = $('#youtube2').attr('src');
+  var youtube3_url = $('#youtube3').attr('src');
+  var stop_video = function(){
+    $('#youtube1').attr('src', '');
+    $('#youtube2').attr('src', '');
+    $('#youtube3').attr('src', '');
+
+    $('#youtube1').attr('src', youtube1_url);
+    $('#youtube2').attr('src', youtube2_url);
+    $('#youtube3').attr('src', youtube3_url);
+  };
+
+  $(document).ready(
+    function() {
+      var contentBlock = document.getElementsByClassName("doc-content")[0] || document.getElementsByClassName("news")[0];
+      if (!contentBlock) {
+        return;
+      }
+      for (var level = 1; level <= 6; level++) {
+        linkifyAnchors(level, contentBlock);
+      }
+
+      $('body').scrollspy({
+        target: '#navbar-spy',
+        offset: 1
+      });
+
+      $('[data-toggle="tooltip"]').tooltip(); // tooltips for buttons
+
+      //change icon inside collapse btn
+      $(".collapse-block").on("hide.bs.collapse", function() {
+        $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
+      });
+      $(".collapse-block").on("show.bs.collapse", function() {
+        $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-up fa-pull-right"></i>');
+      });
+      //change icon inside collapse link
+      $(".collapse-link").on("hide.bs.collapse", function() {
+        $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-down"></i>');
+      });
+      $(".collapse-link").on("show.bs.collapse", function() {
+        $(this).prev().children(":last").children(":last").replaceWith('<i class="fa fa-caret-square-o-up"></i>');
+      });
+    }
+  );
+</script>
+
+</body>
+
+</html>

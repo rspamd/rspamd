@@ -1,0 +1,28 @@
+{% include top.html %}
+<div class="container">
+		<ol class="breadcrumb">
+				<li><a href="{{ site.baseurl }}/">Home</a></li>
+				<li><a href="{{ site.baseurl }}/doc/index.html">Documentation</a></li>
+				<li class="active">{{ page.title }}</li>
+		</ol>
+		<div class="row">
+				<div class="col-sm-3" id="navbar-spy">
+						<!-- Docs navigation -->
+						<ul  data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation">
+								<li><a href="#general-questions">General questions</a></li>
+								<li><a href="#configuration-questions">Configuration questions</a></li>
+								<li><a href="#administration-questions">Administration questions</a></li>
+								<li><a href="#plugin-questions">Plugins questions</a></li>
+								<li><a href="#webui-questions">WebUI questions</a></li>
+								<li><a href="#lua-questions">LUA questions</a></li>
+								<li><a href="#rmilter-questions">Rmilter questions</a></li>
+						</ul>
+				</div>
+				<div class="col-sm-9">
+						<div class="body-content doc-content">
+								{{ content }}
+						</div>
+				</div>
+		 	</div> <!-- row -->
+</div> <!-- /container -->
+{% include bottom.html %}

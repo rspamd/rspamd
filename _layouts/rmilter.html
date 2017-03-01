@@ -1,0 +1,32 @@
+{% include top.html %}
+		<div class="container">
+				<ol class="breadcrumb">
+						<li><a href="{{ site.baseurl }}/">Home</a></li>
+						<li><a href="./index.html">Rmilter</a></li>
+						<li class="active">{{ page.title }}</li>
+				</ol>
+				<div class="row">
+						<div class="col-sm-3" id="navbar-spy">
+						<!-- Docs navigation -->
+								<ul  data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation">
+									<li><a href="#configuration-format">Configuration format</a></li>
+									<li><a href="#common-sections">Common sections</a></li>
+									<li><a href="#global-section">Global section</a></li>
+									<li><a href="#clamav-section">Clamav section</a></li>
+									<li><a href="#spamd-section">Spamd section</a></li>
+									<li><a href="#redis-section">Redis section</a></li>
+									<li><a href="#greylisting-section">Greylisting section</a></li>
+									<li><a href="#limits-section">Limits section</a></li>
+									<li><a href="#dkim-section">DKIM section</a></li>
+									<li><a href="#the-order-of-checks">The order of checks</a></li>
+									<li><a href="#keys-used-in-redis">Keys used in redis</a></li>
+								</ul>
+						</div>
+						<div class="col-sm-9">
+								<div class="body-content doc-content">
+								          {{ content }}
+								</div>
+						</div>
+				</div> <!-- row -->
+		</div> <!-- /container -->
+{% include bottom.html %}

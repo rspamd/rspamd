@@ -1,0 +1,61 @@
+---
+layout: default
+title: Rspamd Blog
+---
+
+<!-- This loops through the paginated posts -->
+{% for post in paginator.posts %}
+  <h1><a href="{{ site.baseurl }}{{ post.url }}">{{ post.title }}</a></h1>
+  <p class="author">
+    <span class="date">{{ post.date }}</span>
+  </p>
+  <div class="content">
+    {{ post.content }}
+  </div>
+{% endfor %}
+
+<!-- Ubuntu Pagination links -->
+<ul id="post-pagination" class="pagination pagination-sm">
+  {% if paginator.previous_page %}
+    <li class="previous">
+      {% if paginator.previous_page == 1 %}
+        <a href="{{ site.baseurl }}/blog/">&laquo;</a>
+      {% else %}
+        <a href="{{ site.baseurl }}{{ paginator.previous_page_path }}">&laquo;</a>
+      {% endif %}
+    </li>
+  {% else %}
+    <li class="previous disabled">
+      <span>&laquo;</span>
+    </li>
+  {% endif %}
+
+    <li class="page active">
+      {% if paginator.page == 1 %}
+        <span class="current-page">1</span>
+      {% else %}
+        <a href="{{ site.baseurl }}/blog/">1</a>
+      {% endif %}
+    </li>
+
+    {% for count in (2..paginator.total_pages) %}
+      <li class="page">
+        {% if count == paginator.page %}
+          <span class="current-page">{{ count }}</span>
+        {% else %}
+          <a href="{{ site.baseurl }}/blog/page{{ count }}">{{ count }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+
+  {% if paginator.next_page %}
+    <li class="next">
+      <a href="{{ site.baseurl }}{{ paginator.next_page_path }}">&raquo;</a>
+    </li>
+  {% else %}
+    <li class="next disabled">
+      <span>&raquo;</span>
+    </li>
+  {% endif %}
+
+</ul>
