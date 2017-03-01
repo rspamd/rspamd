@@ -1067,9 +1067,11 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				session->ctx->keys_cache,
 				NULL);
 
-		rspamd_http_connection_set_key (bk_conn->backend_conn,
-				session->ctx->local_key);
-		msg->peer_key = rspamd_pubkey_ref (m->key);
+		if (m->key) {
+			rspamd_http_connection_set_key (bk_conn->backend_conn,
+					session->ctx->local_key);
+			msg->peer_key = rspamd_pubkey_ref (m->key);
+		}
 
 		if (m->local ||
 				rspamd_inet_address_is_local (rspamd_upstream_addr (bk_conn->up))) {
@@ -1267,9 +1269,12 @@ retry:
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
 
 		msg = rspamd_http_connection_copy_msg (session->client_message);
-		rspamd_http_connection_set_key (session->master_conn->backend_conn,
-				session->ctx->local_key);
-		msg->peer_key = rspamd_pubkey_ref (backend->key);
+
+		if (backend->key) {
+			msg->peer_key = rspamd_pubkey_ref (backend->key);
+			rspamd_http_connection_set_key (session->master_conn->backend_conn,
+					session->ctx->local_key);
+		}
 
 		if (backend->local ||
 				rspamd_inet_address_is_local (
