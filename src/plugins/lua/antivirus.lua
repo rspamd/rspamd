@@ -231,11 +231,16 @@ local function need_av_check(task, rule)
 end
 
 local function check_av_cache(task, rule, fn)
+  local key = task:get_digest()
+
   local function redis_av_cb(err, data)
     if data and type(data) == 'string' then
       -- Cached
       if data ~= 'OK' then
+        rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
         yield_result(task, rule, data)
+      else
+        rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
       end
     else
       if err then
@@ -246,7 +251,7 @@ local function check_av_cache(task, rule, fn)
   end
 
   if redis_params then
-    local key = task:get_digest()
+
     if redis_params['prefix'] then
       key = redis_params['prefix'] .. key
     end
@@ -274,6 +279,8 @@ local function save_av_cache(task, rule, to_save)
     if err then
       rspamd_logger.errx(task, 'failed to save virus cache for %s -> "%s": %s',
         to_save, key, err)
+    else
+      rspamd_logger.debugm(N, task, 'saved cached result for %s: %s', key, to_save)
     end
   end
 
@@ -522,10 +529,7 @@ local function savapi_check(task, rule)
       elseif string.find(result, '310') then
         -- infected message
         rspamd_logger.debugm(N, task, 'infected message')
-        local parts = rspamd_str_split(result, ' ')
-        local message = parts[2]
-        -- A message: <alert> ; <type> ; <description>
-        local vname = rspamd_str_split(message, ';')[1]
+        local vname = rspamd_str_split(result, ' ')[4]
         rspamd_logger.infox(task, 'SAVAPI: virus found: %s', vname)
         yield_result(task, rule, vname)
         save_av_cache(task, rule, vname)
@@ -677,11 +681,20 @@ if opts and type(opts) == 'table' then
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
-        rspamd_config:register_symbol({
+        local id = rspamd_config:register_symbol({
           type = 'normal',
           name = m['symbol'],
           callback = cb,
         })
+        if m['patterns'] then
+          for sym in pairs(m['patterns']) do
+            rspamd_config:register_symbol({
+              type = 'virtual',
+              name = sym,
+              parent = id
+            })
+          end
+        end
         if m['score'] then
           -- Register metric symbol
           local description = 'antivirus symbol'
