@@ -685,14 +685,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		return TRUE;
 	}
 
-	if (task->pre_result.action != METRIC_ACTION_MAX) {
-		/* Skip all if we have result here */
-		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
-		msg_info_task ("skip filters, as pre-filter returned %s action",
-				rspamd_action_to_str (task->pre_result.action));
-		return TRUE;
-	}
-
 	task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
 
 	st = rspamd_task_select_processing_stage (task, stages);
