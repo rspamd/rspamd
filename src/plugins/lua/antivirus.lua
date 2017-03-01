@@ -231,11 +231,16 @@ local function need_av_check(task, rule)
 end
 
 local function check_av_cache(task, rule, fn)
+  local key = task:get_digest()
+
   local function redis_av_cb(err, data)
     if data and type(data) == 'string' then
       -- Cached
       if data ~= 'OK' then
+        rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
         yield_result(task, rule, data)
+      else
+        rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
       end
     else
       if err then
@@ -246,7 +251,7 @@ local function check_av_cache(task, rule, fn)
   end
 
   if redis_params then
-    local key = task:get_digest()
+
     if redis_params['prefix'] then
       key = redis_params['prefix'] .. key
     end
@@ -274,6 +279,8 @@ local function save_av_cache(task, rule, to_save)
     if err then
       rspamd_logger.errx(task, 'failed to save virus cache for %s -> "%s": %s',
         to_save, key, err)
+    else
+      rspamd_logger.debugm(N, task, 'saved cached result for %s: %s', key, to_save)
     end
   end
 
