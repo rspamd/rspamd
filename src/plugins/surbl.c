@@ -525,6 +525,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 	struct suffix_item* new_suffix;
 	const gchar* ip_val;
 	struct surbl_bit_item* new_bit;
+	ucl_object_t *ropts = monitored_opts;
 
 	LL_FOREACH(value, cur_rule) {
 		cur = ucl_object_lookup (cur_rule, "enabled");
@@ -548,7 +549,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 		new_suffix->options = 0;
 		new_suffix->bits = g_array_new (FALSE, FALSE,
 				sizeof(struct surbl_bit_item));
-		rspamd_mempool_add_destructor(surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 				(rspamd_mempool_destruct_t )rspamd_array_free_hard,
 				new_suffix->bits);
 
@@ -590,6 +591,18 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (ucl_object_toboolean(cur)) {
 				new_suffix->options |= SURBL_OPTION_RESOLVEIP;
+
+				/* We need to adjust monitored config */
+				ropts = ucl_object_typed_new (UCL_OBJECT);
+				ucl_object_insert_key (monitored_opts,
+						ucl_object_fromstring ("1.0.0.127"),
+						"prefix", 0, false);
+				ucl_object_insert_key (monitored_opts,
+						ucl_object_fromstring ("nxdomain"),
+						"rcode", 0, false);
+				rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+						(rspamd_mempool_destruct_t )ucl_object_unref,
+						ropts);
 			}
 		}
 
@@ -696,7 +709,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 
 		new_suffix->m = rspamd_monitored_create (cfg->monitored_ctx,
 				new_suffix->suffix, RSPAMD_MONITORED_DNS,
-				RSPAMD_MONITORED_DEFAULT, monitored_opts);
+				RSPAMD_MONITORED_DEFAULT, ropts);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes,
 				new_suffix);
 	}
