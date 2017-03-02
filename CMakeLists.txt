@@ -662,7 +662,7 @@ IF(ENABLE_JEMALLOC MATCHES "ON")
 		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
 	SET(WITH_JEMALLOC "1")
 ENDIF()
-ProcessPackage(GTHREAD2 LIBRARY ghtread-2.0 INCLUDE glib.h
+ProcessPackage(GTHREAD2 LIBRARY gthread-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES gthread-2.0>=2.28)
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
