@@ -106,6 +106,7 @@ atiny.me
 atto.co.za
 atu.ca
 autodesk.com
+avast.com
 avoo.net
 azc.cc
 b23.ru
