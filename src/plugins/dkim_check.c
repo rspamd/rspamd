@@ -275,22 +275,6 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			NULL,
 			0);
 
-        /* Register global methods */
-	lua_getglobal (cfg->lua_state, "rspamd_plugins");
-
-	if (lua_type (cfg->lua_state, -1) == LUA_TTABLE) {
-		lua_pushstring (cfg->lua_state, "dkim");
-		lua_createtable (cfg->lua_state, 0, 1);
-		/* Set methods */
-		lua_pushstring (cfg->lua_state, "sign");
-		lua_pushcfunction (cfg->lua_state, lua_dkim_sign_handler);
-		lua_settable (cfg->lua_state, -3);
-                /* Finish dkim key */
-		lua_settable (cfg->lua_state, -3);
-	}
-
-	lua_pop (cfg->lua_state, 1); /* Remove global function */
-
 	return 0;
 }
 
@@ -302,14 +286,35 @@ dkim_module_config (struct rspamd_config *cfg)
 	guint cache_size;
 	gboolean got_trusted = FALSE;
 
+	/* Register global methods */
+	lua_getglobal (cfg->lua_state, "rspamd_plugins");
+
+	if (lua_type (cfg->lua_state, -1) == LUA_TTABLE) {
+		lua_pushstring (cfg->lua_state, "dkim");
+		lua_createtable (cfg->lua_state, 0, 1);
+		/* Set methods */
+		lua_pushstring (cfg->lua_state, "sign");
+		lua_pushcfunction (cfg->lua_state, lua_dkim_sign_handler);
+		lua_settable (cfg->lua_state, -3);
+		/* Finish dkim key */
+		lua_settable (cfg->lua_state, -3);
+	}
+
+	lua_pop (cfg->lua_state, 1); /* Remove global function */
+
+	dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
+			128,
+			g_free, /* Keys are just C-strings */
+			(GDestroyNotify)rspamd_dkim_sign_key_unref);
+
 	if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
 		return TRUE;
 	}
 
 	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
 
-        if ((value =
-		rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
 		dkim_module_ctx->check_local = ucl_obj_toboolean (value);
 	}
 	else {
@@ -506,10 +511,6 @@ dkim_module_config (struct rspamd_config *cfg)
 							dkim_module_ctx->dkim_pool,
 							dkim_module_ctx->sign_condition_ref);
 
-					dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
-									128,
-									g_free, /* Keys are just C-strings */
-									(GDestroyNotify)rspamd_dkim_sign_key_unref);
 					check_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 							"DKIM_SIGN",
 							0,

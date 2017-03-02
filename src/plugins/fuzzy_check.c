@@ -649,8 +649,6 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 gint
 fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	lua_State *L = cfg->lua_state;
-
 	if (fuzzy_module_ctx == NULL) {
 		fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
 
@@ -885,25 +883,6 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			NULL,
 			0);
 
-	/* Register global methods */
-	lua_getglobal (L, "rspamd_plugins");
-
-	if (lua_type (L, -1) == LUA_TTABLE) {
-		lua_pushstring (L, "fuzzy_check");
-		lua_createtable (L, 0, 2);
-		/* Set methods */
-		lua_pushstring (L, "unlearn");
-		lua_pushcfunction (L, fuzzy_lua_unlearn_handler);
-		lua_settable (L, -3);
-		lua_pushstring (L, "learn");
-		lua_pushcfunction (L, fuzzy_lua_learn_handler);
-		lua_settable (L, -3);
-		/* Finish fuzzy_check key */
-		lua_settable (L, -3);
-	}
-
-	lua_pop (L, 1); /* Remove global function */
-
 	return 0;
 }
 
@@ -913,6 +892,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value, *cur, *elt;
 	ucl_object_iter_t it;
 	gint res = TRUE, cb_id, nrules = 0;
+	lua_State *L = cfg->lua_state;
 
 	if (!rspamd_config_is_module_enabled (cfg, "fuzzy_check")) {
 		return TRUE;
@@ -1048,6 +1028,25 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 
 	msg_info_config ("init internal fuzzy_check module, %d rules loaded",
 			nrules);
+
+	/* Register global methods */
+	lua_getglobal (L, "rspamd_plugins");
+
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushstring (L, "fuzzy_check");
+		lua_createtable (L, 0, 2);
+		/* Set methods */
+		lua_pushstring (L, "unlearn");
+		lua_pushcfunction (L, fuzzy_lua_unlearn_handler);
+		lua_settable (L, -3);
+		lua_pushstring (L, "learn");
+		lua_pushcfunction (L, fuzzy_lua_learn_handler);
+		lua_settable (L, -3);
+		/* Finish fuzzy_check key */
+		lua_settable (L, -3);
+	}
+
+	lua_pop (L, 1); /* Remove global function */
 
 	return res;
 }

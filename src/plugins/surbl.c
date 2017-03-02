@@ -277,8 +277,6 @@ fin_redirectors_list (struct map_cb_data *data)
 gint
 surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	lua_State *L;
-
 	surbl_module_ctx = g_malloc0 (sizeof (struct surbl_ctx));
 
 	surbl_module_ctx->use_redirector = 0;
@@ -452,26 +450,6 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
-
-	/* Register global methods */
-	L = cfg->lua_state;
-	lua_getglobal (L, "rspamd_plugins");
-
-	if (lua_type (L, -1) == LUA_TTABLE) {
-		lua_pushstring (L, "surbl");
-		lua_createtable (L, 0, 2);
-		/* Set methods */
-		lua_pushstring (L, "register_redirect");
-		lua_pushcfunction (L, surbl_register_redirect_handler);
-		lua_settable (L, -3);
-		lua_pushstring (L, "continue_process");
-		lua_pushcfunction (L, surbl_continue_process_handler);
-		lua_settable (L, -3);
-		/* Finish fuzzy_check key */
-		lua_settable (L, -3);
-	}
-
-		lua_pop (L, 1); /* Remove global function */
 
 	return 0;
 }
@@ -726,6 +704,27 @@ surbl_module_config (struct rspamd_config *cfg)
 	const gchar *redir_val;
 	gint nrules = 0;
 	ucl_object_t *monitored_opts;
+	lua_State *L;
+
+	/* Register global methods */
+	L = cfg->lua_state;
+	lua_getglobal (L, "rspamd_plugins");
+
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushstring (L, "surbl");
+		lua_createtable (L, 0, 2);
+		/* Set methods */
+		lua_pushstring (L, "register_redirect");
+		lua_pushcfunction (L, surbl_register_redirect_handler);
+		lua_settable (L, -3);
+		lua_pushstring (L, "continue_process");
+		lua_pushcfunction (L, surbl_continue_process_handler);
+		lua_settable (L, -3);
+		/* Finish fuzzy_check key */
+		lua_settable (L, -3);
+	}
+
+	lua_pop (L, 1); /* Remove global function */
 
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
 		return TRUE;
