@@ -661,6 +661,7 @@ IF(ENABLE_JEMALLOC MATCHES "ON")
 	ProcessPackage(JEMALLOC LIBRARY jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
 		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
 	SET(WITH_JEMALLOC "1")
+	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lpthread")
 ENDIF()
 ProcessPackage(GTHREAD2 LIBRARY gthread-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
@@ -670,8 +671,8 @@ ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
 	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
 
 IF(ENABLE_PCRE2 MATCHES "ON")
-	ProcessPackage(PCRE LIBRARY pcre2 INCLUDE pcre2.h INCLUDE_SUFFIXES include/pcre2
-		ROOT ${PCRE_ROOT_DIR} MODULES pcre2 libpcre2 libpcre2-8)
+	ProcessPackage(PCRE LIBRARY pcre2 pcre2-8 INCLUDE pcre2.h INCLUDE_SUFFIXES include/pcre2
+		ROOT ${PCRE_ROOT_DIR} MODULES pcre2 pcre2-8 libpcre2 libpcre2-8)
 ELSE()
 	ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre
 		ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
