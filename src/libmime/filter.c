@@ -357,21 +357,29 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	}
 	else {
 		i = task->pre_result.action;
-		selected_action = &mres->metric->actions[i];
-		sc = mres->actions_limits[i];
 
-		while (isnan (sc)) {
-			i = (i + 1) % METRIC_ACTION_MAX;
+		for (i = task->pre_result.action; i < METRIC_ACTION_MAX; i ++) {
+			selected_action = &mres->metric->actions[i];
 			sc = mres->actions_limits[i];
 
-			if (i == task->pre_result.action) {
-				/* No scores defined, just avoid NaN */
-				sc = 0;
+			if (isnan (sc)) {
+				if (i == task->pre_result.action) {
+					/* No scores defined, just avoid NaN */
+					sc = 0;
+					break;
+				}
+			}
+			else {
 				break;
 			}
 		}
 
-		mres->score = sc;
+		if (!isnan (sc)) {
+			mres->score = sc;
+		}
+		else {
+			mres->score = 0;
+		}
 	}
 
 	if (selected_action) {
