@@ -151,6 +151,7 @@ static const struct luaL_reg tcp_libm[] = {
 
 struct lua_tcp_read_handler {
 	gchar *stop_pattern;
+	guint plen;
 	gint cbref;
 };
 
@@ -544,7 +545,7 @@ lua_tcp_process_read_handler (struct lua_tcp_cbdata *cbd,
 	goffset pos;
 
 	if (rh->stop_pattern) {
-		slen = strlen (rh->stop_pattern);
+		slen = rh->plen;
 
 		if (cbd->in->len >= slen) {
 			if ((pos = rspamd_substring_search (cbd->in->data, cbd->in->len,
@@ -914,6 +915,7 @@ lua_tcp_request (lua_State *L)
 	gchar *stop_pattern = NULL;
 	guint port;
 	gint cbref, tp, conn_cbref = -1;
+	gsize plen = 0;
 	struct event_base *ev_base;
 	struct lua_tcp_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
@@ -1007,7 +1009,14 @@ lua_tcp_request (lua_State *L)
 		lua_pushstring (L, "stop_pattern");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TSTRING) {
-			stop_pattern = g_strdup (lua_tostring (L, -1));
+			const gchar *p;
+
+			p = lua_tolstring (L, -1, &plen);
+
+			if (p && plen > 0) {
+				stop_pattern = g_malloc (plen);
+				memcpy (stop_pattern, p, plen);
+			}
 		}
 		lua_pop (L, 1);
 
@@ -1159,6 +1168,7 @@ lua_tcp_request (lua_State *L)
 		rh->type = LUA_WANT_READ;
 		rh->h.r.cbref = cbref;
 		rh->h.r.stop_pattern = stop_pattern;
+		rh->h.r.plen = plen;
 		g_queue_push_tail (cbd->handlers, rh);
 	}
 
@@ -1242,6 +1252,8 @@ lua_tcp_add_read (lua_State *L)
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
 	struct lua_tcp_handler *rh;
 	gchar *stop_pattern = NULL;
+	const gchar *p;
+	gsize plen = 0;
 	gint cbref = -1;
 
 	if (cbd == NULL) {
@@ -1254,13 +1266,19 @@ lua_tcp_add_read (lua_State *L)
 	}
 
 	if (lua_type (L, 3) == LUA_TSTRING) {
-		stop_pattern = g_strdup (lua_tostring (L, 3));
+		p = lua_tolstring (L, 3, &plen);
+
+		if (p && plen > 0) {
+			stop_pattern = g_malloc (plen);
+			memcpy (stop_pattern, p, plen);
+		}
 	}
 
 	rh = g_slice_alloc0 (sizeof (*rh));
 	rh->type = LUA_WANT_READ;
 	rh->h.r.cbref = cbref;
 	rh->h.r.stop_pattern = stop_pattern;
+	rh->h.r.plen = plen;
 	msg_debug_tcp ("added read event, cbref: %d", cbref);
 
 	g_queue_push_tail (cbd->handlers, rh);
