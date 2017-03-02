@@ -1,3 +1,12 @@
+1.5.1:
+	* [CritFix] Fix processing of stop_patterns with `\0` character
+	* [CritFix] Fix setting of raw key for signing
+	* [Fix] Fix lua exports from plugins during reload
+	* [Fix] Fix prefilters action scores
+	* [Fix] Fix symbols processing order
+	* [Minor] Help cmake find gthread
+	* [Minor] Some cmake fixes
+
 1.5.0:
 	* [Conf] Add configurations for asn, clickhouse and dcc
 	* [Conf] Add default config for url redirector plugin
