@@ -1641,7 +1641,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done || stage == RSPAMD_TASK_STAGE_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_FILTERS;
+		}
 
+		if (stage == RSPAMD_TASK_STAGE_FILTERS) {
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 		break;
