@@ -168,7 +168,7 @@ rspamd_config.R_SUSPICIOUS_URL = {
     end
     return false
   end,
-  score = 6.0,
+  score = 5.0,
   one_shot = true,
   description = 'Obfusicated or suspicious URL has been found in a message',
   group = 'url'
@@ -181,6 +181,16 @@ rspamd_config.BROKEN_HEADERS = {
   score = 10.0,
   group = 'header',
   description = 'Headers structure is likely broken'
+}
+
+rspamd_config.BROKEN_CONTENT_TYPE = {
+  callback = function(task)
+    return fun.any(function(p) return p:is_broken() end,
+      task:get_parts())
+  end,
+  score = 3.0,
+  group = 'header',
+  description = 'Message has part with broken content type'
 }
 
 rspamd_config.HEADER_RCONFIRM_MISMATCH = {

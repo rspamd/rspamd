@@ -288,6 +288,12 @@ LUA_FUNCTION_DEF (mimepart, get_text);
  * @return {string} 128 characters hex string with digest of the part
  */
 LUA_FUNCTION_DEF (mimepart, get_digest);
+/***
+ * @method mime_part:is_broken()
+ * Returns true if mime part has incorrectly specified content type
+ * @return {bool} true if a part has bad content type
+ */
+LUA_FUNCTION_DEF (mimepart, is_broken);
 
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
@@ -302,6 +308,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, is_archive),
 	LUA_INTERFACE_DEF (mimepart, get_archive),
 	LUA_INTERFACE_DEF (mimepart, is_text),
+	LUA_INTERFACE_DEF (mimepart, is_broken),
 	LUA_INTERFACE_DEF (mimepart, get_text),
 	LUA_INTERFACE_DEF (mimepart, get_digest),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -734,6 +741,26 @@ lua_mimepart_is_text (lua_State * L)
 	}
 
 	lua_pushboolean (L, (part->flags & RSPAMD_MIME_PART_TEXT) ? true : false);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_is_broken (lua_State * L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (part->ct) {
+		lua_pushboolean (L, (part->ct->flags & RSPAMD_CONTENT_TYPE_BROKEN) ?
+				true : false);
+	}
+	else {
+		lua_pushboolean (L, true);
+	}
 
 	return 1;
 }
