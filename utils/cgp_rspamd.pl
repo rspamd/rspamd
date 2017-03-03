@@ -63,7 +63,8 @@ sub rspamd_scan {
         print "$tag FAILURE\n";
       }
       else {
-        my $def = $js->{'default'};
+        my $def     = $js->{'default'};
+        my $headers = "";
 
         if ( !$def ) {
           print
@@ -85,17 +86,47 @@ sub rspamd_scan {
 "* Rspamd: Scanned %s; id: <%s>; Score: %.2f / %.2f; Symbols: [%s]\n",
             $file, $id, $def->{'score'}, $def->{'required_score'}, $symbols;
 
+          if ( $js->{'dkim-signature'} ) {
+            $headers .= "DKIM-Signature: " . $js->{'dkim-signature'};
+          }
+
+          if ( $js->{'rmilter'} ) {
+            my $block = $js->{'rmilter'};
+
+            if ( $block->{'add_headers'} ) {
+              while ( my ( $h, $v ) = each( %{ $block->{'add_headers'} } ) ) {
+                if ( $headers eq "" ) {
+                  $headers .= "$h: $v";
+                }
+                else {
+                  $headers .= "\\e$h: $v";
+                }
+              }
+            }
+          }
+
           if ( $action eq 'reject' ) {
             print "$tag DISCARD\n";
+            return;
           }
           elsif ( $action eq 'add header' || $action eq 'rewrite subject' ) {
-            print "$tag ADDHEADER " . cgp_string($header) . " OK\n";
+            if ( $headers eq "" ) {
+              $headers .= "$header";
+            }
+            else {
+              $headers .= "\\e$header";
+            }
           }
           elsif ( $action eq 'soft reject' ) {
             print "$tag REJECT Try again later\n";
+            return;
+          }
+
+          if ( $headers eq "" ) {
+            print "$tag OK\n";
           }
           else {
-            print "$tag OK\n";
+            print "$tag ADDHEADER " . cgp_string($headers) . " OK\n";
           }
         }
       }
