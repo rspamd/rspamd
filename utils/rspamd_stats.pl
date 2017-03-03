@@ -8,6 +8,7 @@ use warnings;
 use strict;
 
 my @symbols_search;
+my @symbols_exclude;
 my $reject_score = 15.0;
 my $junk_score = 6.0;
 my $diff_alpha = 0.1;
@@ -32,6 +33,7 @@ GetOptions(
   "reject-score|r=f" => \$reject_score,
   "junk-score|j=f" => \$junk_score,
   "symbol|s=s@" => \@symbols_search,
+  "exclude|s=s@" => \@symbols_exclude,
   "log|l=s" => \$log_file,
   "alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
@@ -208,17 +210,33 @@ sub ProcessLog {
         next;
       }
 
+      my @symbols = split /(?:\{[^}]*\})?(?:$|,)/, $4;
+      my $scan_time = $5;
+      my $act = $1;
+      my $score = $2 * 1.0;
+      my $skip = 0;
+
+      foreach my $ex (@symbols_exclude) {
+        my @found = grep {/^$ex/} @symbols;
+
+        if (scalar(@found) > 0) {
+          $skip = 1;
+          last;
+        }
+      }
+
+      next if ( $skip != 0 );
+
       $timeStamp{'end'} = $ts;
       $timeStamp{'start'} //= $timeStamp{'end'};
-      $scanTime{'min'} = $5
-        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $5 );
-      $scanTime{'max'} = $5
-        if ( $scanTime{'max'} < $5 );
-      $scanTime{'total'} += $5;
+      $scanTime{'min'} = $scan_time
+        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $scan_time );
+      $scanTime{'max'} = $scan_time
+        if ( $scanTime{'max'} < $scan_time );
+      $scanTime{'total'} += $scan_time;
 
-      $action{$1}++;
+      $action{$act}++;
       $total ++;
-      my $score = $2 * 1.0;
 
       if ($score >= $reject_score) {
         $total_spam ++;
@@ -227,8 +245,6 @@ sub ProcessLog {
         $total_junk ++;
       }
 
-      # Symbols
-      my @symbols = split /(?:\{[^}]*\})?(?:$|,)/, $4;
       my @sym_names;
 
       foreach my $s (@symbols_search) {
@@ -435,6 +451,10 @@ Additionaly print correlation rate for each symbol displayed. This routine calcu
 =item B<--search-pattern>
 
 Do not process input unless finding the specified regular expression. Useful to skip logs to a certain position.
+
+=item  B<--exclude>
+
+Exclude log lines if certain symbols are fired (e.g. GTUBE). You may specify this option multiple time to skip multiple symbols.
 
 =item B<--start>
 
