@@ -410,22 +410,60 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 	struct rspamd_mime_text_part *text_part;
 	rspamd_ftok_t html_tok, xhtml_tok;
 	GByteArray *part_content;
+	gboolean found_html = FALSE, found_txt = FALSE;
+
+	if (IS_CT_TEXT (mime_part->ct)) {
+		html_tok.begin = "html";
+		html_tok.len = 4;
+		xhtml_tok.begin = "xhtml";
+		xhtml_tok.len = 5;
+
+		if (rspamd_ftok_cmp (&mime_part->ct->subtype, &html_tok) == 0 ||
+				rspamd_ftok_cmp (&mime_part->ct->subtype, &xhtml_tok) == 0) {
+			found_html = TRUE;
+		}
+		else {
+			found_txt = TRUE;
+		}
+	}
+	else {
+		/* Apply heuristic */
+
+		if (mime_part->cd && mime_part->cd->filename.len > 4) {
+			const gchar *pos = mime_part->cd->filename.begin +
+					mime_part->cd->filename.len - sizeof (".htm") + 1;
+
+			if (rspamd_lc_cmp (pos, ".htm", sizeof (".htm") - 1) == 0) {
+				found_html = TRUE;
+			}
+			else if (rspamd_lc_cmp (pos, ".txt", sizeof ("txt") - 1) == 0) {
+				found_txt = TRUE;
+			}
+			else if ( mime_part->cd->filename.len > 5) {
+				pos = mime_part->cd->filename.begin +
+						mime_part->cd->filename.len - sizeof (".html") + 1;
+				if (rspamd_lc_cmp (pos, ".html", sizeof (".html") - 1) == 0) {
+					found_html = TRUE;
+				}
+			}
+		}
+
+		if (found_txt || found_html) {
+			msg_info_task ("found text part with incorrect content-type: %T/%T",
+					&mime_part->ct->type, &mime_part->ct->subtype);
+			mime_part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+		}
+	}
 
 	/* Skip attachments */
-	if (mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT &&
-		(task->cfg && !task->cfg->check_text_attachements)) {
+	if ((found_txt || found_html) &&
+			mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT &&
+			(task->cfg && !task->cfg->check_text_attachements)) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
 
-	html_tok.begin = "html";
-	html_tok.len = 4;
-	xhtml_tok.begin = "xhtml";
-	xhtml_tok.len = 5;
-
-	if (rspamd_ftok_cmp (&mime_part->ct->subtype, &html_tok) == 0 ||
-			rspamd_ftok_cmp (&mime_part->ct->subtype, &xhtml_tok) == 0) {
-
+	if (found_html) {
 		text_part = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_text_part));
 		text_part->raw.begin = mime_part->raw_data.begin;
@@ -469,8 +507,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			text_part->content);
 		g_ptr_array_add (task->text_parts, text_part);
 	}
-	else {
-
+	else if (found_txt) {
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_text_part));
@@ -500,6 +537,9 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		else {
 			return;
 		}
+	}
+	else {
+		return;
 	}
 
 
@@ -698,10 +738,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		struct rspamd_mime_part *part;
 
 		part = g_ptr_array_index (task->parts, i);
-
-		if (IS_CT_TEXT (part->ct)) {
-			rspamd_message_process_text_part (task, part);
-		}
+		rspamd_message_process_text_part (task, part);
 	}
 
 	rspamd_images_process (task);
