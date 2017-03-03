@@ -144,7 +144,14 @@ rspamd_content_type_parse (const gchar *in,
 				RSPAMD_FTOK_ASSIGN (&srch, "message");
 
 				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
-					res->flags |= RSPAMD_CONTENT_TYPE_MESSAGE;
+					RSPAMD_FTOK_ASSIGN (&srch, "delivery-status");
+
+					if (rspamd_ftok_cmp (&res->subtype, &srch) == 0) {
+						res->flags |= RSPAMD_CONTENT_TYPE_TEXT|RSPAMD_CONTENT_TYPE_DSN;
+					}
+					else {
+						res->flags |= RSPAMD_CONTENT_TYPE_MESSAGE;
+					}
 				}
 			}
 		}

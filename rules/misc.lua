@@ -188,7 +188,7 @@ rspamd_config.BROKEN_CONTENT_TYPE = {
     return fun.any(function(p) return p:is_broken() end,
       task:get_parts())
   end,
-  score = 3.0,
+  score = 1.5,
   group = 'header',
   description = 'Message has part with broken content type'
 }
