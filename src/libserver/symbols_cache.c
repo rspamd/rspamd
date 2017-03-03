@@ -357,8 +357,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 		it = g_ptr_array_index (cache->items_by_id, i);
 		total_hits += it->st->total_hits;
 
-		if (!(it->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER
-				|SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER))) {
+		if (!(it->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_COMPOSITE))) {
 			g_ptr_array_add (ord->d, it);
 		}
 	}
@@ -1655,6 +1654,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 */
 		for (i = 0; i < (gint)checkpoint->version; i ++) {
 			item = g_ptr_array_index (checkpoint->order->d, i);
+
+			if (item->type & SYMBOL_TYPE_CLASSIFIER) {
+				continue;
+			}
 
 			if (!(item->type & SYMBOL_TYPE_FINE) &&
 					rspamd_session_events_pending (task->s) == 0) {
