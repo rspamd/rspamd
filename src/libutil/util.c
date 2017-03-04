@@ -2631,7 +2631,7 @@ rspamd_tm_to_time (const struct tm *tm, glong tz)
 	}
 
 	/* Now convert months to seconds */
-	result += secs_through_month[tm->tm_mon];
+	result -= secs_through_month[tm->tm_mon];
 	/* One more day */
 	if (is_leap && tm->tm_mon >= 2) {
 		result += 86400;
