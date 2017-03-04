@@ -803,6 +803,11 @@ lua_cryptobox_hash_create (lua_State *L)
 
 	h = rspamd_lua_hash_create (NULL);
 
+	if (lua_gettop (L) == 0) {
+		rspamd_lua_hash_update (h, s, len);
+		return 1;
+	}
+
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		s = lua_tolstring (L, 1, &len);
 	}
@@ -815,6 +820,9 @@ lua_cryptobox_hash_create (lua_State *L)
 
 		s = t->start;
 		len = t->len;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	if (s) {
