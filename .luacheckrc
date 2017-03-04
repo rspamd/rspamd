@@ -27,6 +27,7 @@ globals = {
 
 ignore = {
   '212', -- unused argument
+  '631', -- line is too long
 }
 
 files['/**/src/plugins/lua/spamassassin.lua'].globals = {
