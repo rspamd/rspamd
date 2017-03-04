@@ -357,6 +357,22 @@ LUA_FUNCTION_DEF (task, has_from);
  * @return {address} sender or `nil`
  */
 LUA_FUNCTION_DEF (task, get_from);
+
+/***
+ * @method task:set_from(type, addr)
+ * Sets sender for a task. This function accepts table that will be converted to the address.
+ * If some fields are missing they are subsequently reconstructed by this function. E.g. if you
+ * specify 'user' and 'domain', then address and raw string will be reconstructed
+ *
+ * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
+ * - `addr` - address part of the address
+ * - `user` - user part (if present) of the address, e.g. `blah`
+ * - `domain` - domain part (if present), e.g. `foo.com`
+ * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only
+ * @param {table
+ * @return {boolean} success or not
+ */
+LUA_FUNCTION_DEF (task, set_from);
 /***
  * @method task:get_user()
  * Returns authenticated user name for this task if specified by an MTA.
@@ -757,6 +773,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, has_from),
 	LUA_INTERFACE_DEF (task, get_from),
+	LUA_INTERFACE_DEF (task, set_from),
 	LUA_INTERFACE_DEF (task, get_user),
 	LUA_INTERFACE_DEF (task, set_user),
 	{"get_addr", lua_task_get_from_ip},
@@ -1964,6 +1981,112 @@ lua_push_emails_address_list (lua_State *L, GPtrArray *addrs)
 	}
 }
 
+static gboolean
+lua_import_email_address (lua_State *L, struct rspamd_task *task,
+		gint pos,
+		struct rspamd_email_address **paddr)
+{
+	struct rspamd_email_address *addr;
+	const gchar *p;
+	gsize len;
+
+	g_assert (paddr != NULL);
+
+	if (!lua_istable (L, pos)) {
+		return FALSE;
+	}
+
+	addr = rspamd_mempool_alloc0 (task->task_pool, sizeof (*addr));
+
+	lua_pushstring (L, "name");
+	lua_gettable (L, pos);
+
+	if (lua_type (L, -1) == LUA_TSTRING) {
+		p = lua_tolstring (L, -1, &len);
+		addr->name = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		memcpy ((gchar *)addr->name, p, len);
+		addr->addr_len = len;
+	}
+
+	lua_pop (L, 1);
+
+	lua_pushstring (L, "user");
+	lua_gettable (L, pos);
+
+	if (lua_type (L, -1) == LUA_TSTRING) {
+		p = lua_tolstring (L, -1, &len);
+		addr->user = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		memcpy ((gchar *)addr->user, p, len);
+		addr->user_len = len;
+	}
+
+	lua_pop (L, 1);
+
+	lua_pushstring (L, "domain");
+	lua_gettable (L, pos);
+
+	if (lua_type (L, -1) == LUA_TSTRING) {
+		p = lua_tolstring (L, -1, &len);
+		addr->domain = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		memcpy ((gchar *)addr->domain, p, len);
+		addr->domain_len = len;
+	}
+
+	lua_pop (L, 1);
+
+	lua_pushstring (L, "addr");
+	lua_gettable (L, pos);
+
+	if (lua_type (L, -1) == LUA_TSTRING) {
+		p = lua_tolstring (L, -1, &len);
+		addr->addr = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		memcpy ((gchar *)addr->addr, p, len);
+		addr->addr_len = len;
+	}
+	else {
+		/* Construct addr */
+		len = addr->domain_len + addr->user_len + 1;
+		addr->addr = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		addr->addr_len = rspamd_snprintf ((gchar *)addr->addr, len, "%*s@%*s",
+					(int)addr->user_len, addr->user,
+					(int)addr->domain_len, addr->domain);
+	}
+
+	lua_pop (L, 1);
+
+	lua_pushstring (L, "raw");
+	lua_gettable (L, pos);
+
+	if (lua_type (L, -1) == LUA_TSTRING) {
+		p = lua_tolstring (L, -1, &len);
+		addr->raw = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		memcpy ((gchar *)addr->raw, p, len);
+		addr->raw_len = len;
+	}
+	else {
+		/* Construct raw addr */
+		len = addr->addr_len + addr->name_len + 3;
+		addr->raw = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
+		if (addr->name_len > 0) {
+			addr->raw_len = rspamd_snprintf ((gchar *)addr->raw, len, "%*s <%*s>",
+					(int)addr->name_len, addr->name,
+					(int)addr->addr_len, addr->addr);
+
+		}
+		else {
+			addr->raw_len = rspamd_snprintf ((gchar *)addr->raw, len, "<%*s@%*s>",
+					(int)addr->name_len, addr->name,
+					(int)addr->addr_len, addr->addr);
+		}
+	}
+
+	lua_pop (L, 1);
+
+	*paddr = addr;
+
+	return TRUE;
+}
+
 static gint
 lua_task_get_recipients (lua_State *L)
 {
@@ -2161,6 +2284,72 @@ lua_task_get_from (lua_State *L)
 		}
 		else {
 			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_set_from (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	GPtrArray *addrs = NULL;
+	struct rspamd_email_address **paddr = NULL, *addr;
+	gint what = 0, pos = 3;
+
+	if (task) {
+		if (lua_isstring (L, 2)) {
+			/* Get what value */
+			what = lua_task_str_to_get_type (L, 2);
+		}
+		else if (lua_istable (L, 2)) {
+			pos = 2;
+		}
+
+		switch (what) {
+		case RSPAMD_ADDRESS_SMTP:
+			/* Here we check merely envelope rcpt */
+			paddr = &task->from_envelope;
+			break;
+		case RSPAMD_ADDRESS_MIME:
+			/* Here we check merely mime rcpt */
+			addrs = task->from_mime;
+			break;
+		case RSPAMD_ADDRESS_ANY:
+		default:
+			if (task->from_envelope) {
+				paddr = &task->from_envelope;
+			}
+			else {
+				addrs = task->from_mime;
+			}
+			break;
+		}
+
+		if (addrs) {
+			if (lua_import_email_address (L, task, pos, &addr)) {
+				g_ptr_array_set_size (addrs, 0);
+				g_ptr_array_add (addrs, addr);
+				lua_pushboolean (L, true);
+			}
+			else {
+				lua_pushboolean (L, false);
+			}
+		}
+		else if (paddr) {
+			if (lua_import_email_address (L, task, pos, paddr)) {
+				lua_pushboolean (L, true);
+			}
+			else {
+				lua_pushboolean (L, false);
+			}
+		}
+		else {
+			lua_pushboolean (L, false);
 		}
 	}
 	else {
