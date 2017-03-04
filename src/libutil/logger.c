@@ -136,68 +136,66 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 		fd = rspamd_log->fd;
 	}
 
-	if (rspamd_log->enabled) {
-		if (!rspamd_log->no_lock) {
+	if (!rspamd_log->no_lock) {
 #ifndef DISABLE_PTHREAD_MUTEX
-			if (rspamd_log->mtx) {
-				rspamd_mempool_lock_mutex (rspamd_log->mtx);
-			}
-			else {
-				rspamd_file_lock (fd, FALSE);
-			}
-#else
-			rspamd_file_lock (fd, FALSE);
-#endif
-		}
-
-		if (is_iov) {
-			iov = (struct iovec *) data;
-			r = writev (fd, iov, count);
+		if (rspamd_log->mtx) {
+			rspamd_mempool_lock_mutex (rspamd_log->mtx);
 		}
 		else {
-			line = (const gchar *) data;
-			r = write (fd, line, count);
+			rspamd_file_lock (fd, FALSE);
 		}
-
-		if (!rspamd_log->no_lock) {
-#ifndef DISABLE_PTHREAD_MUTEX
-			if (rspamd_log->mtx) {
-				rspamd_mempool_unlock_mutex (rspamd_log->mtx);
-			}
-			else {
-				rspamd_file_unlock (fd, FALSE);
-			}
 #else
-			rspamd_file_unlock (fd, FALSE);
+		rspamd_file_lock (fd, FALSE);
 #endif
+	}
+
+	if (is_iov) {
+		iov = (struct iovec *) data;
+		r = writev (fd, iov, count);
+	}
+	else {
+		line = (const gchar *) data;
+		r = write (fd, line, count);
+	}
+
+	if (!rspamd_log->no_lock) {
+#ifndef DISABLE_PTHREAD_MUTEX
+		if (rspamd_log->mtx) {
+			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+		}
+		else {
+			rspamd_file_unlock (fd, FALSE);
+		}
+#else
+		rspamd_file_unlock (fd, FALSE);
+#endif
+	}
+
+	if (r == -1) {
+		/* We cannot write message to file, so we need to detect error and make decision */
+		if (errno == EINTR) {
+			/* Try again */
+			direct_write_log_line (rspamd_log, data, count, is_iov);
+			return;
 		}
 
-		if (r == -1) {
-			/* We cannot write message to file, so we need to detect error and make decision */
-			if (errno == EINTR) {
-				/* Try again */
-				direct_write_log_line (rspamd_log, data, count, is_iov);
-				return;
-			}
-
-			r = rspamd_snprintf (errmsg,
-					sizeof (errmsg),
-					"direct_write_log_line: cannot write log line: %s",
-					strerror (errno));
-			if (errno == EFAULT || errno == EINVAL || errno == EFBIG ||
+		r = rspamd_snprintf (errmsg,
+				sizeof (errmsg),
+				"direct_write_log_line: cannot write log line: %s",
+				strerror (errno));
+		if (errno == EFAULT || errno == EINVAL || errno == EFBIG ||
 				errno == ENOSPC) {
-				/* Rare case */
-				rspamd_log->throttling = TRUE;
-				rspamd_log->throttling_time = time (NULL);
-			}
-			else if (errno == EPIPE || errno == EBADF) {
-				/* We write to some pipe and it disappears, disable logging or we has opened bad file descriptor */
-				rspamd_log->enabled = FALSE;
-			}
+			/* Rare case */
+			rspamd_log->throttling = TRUE;
+			rspamd_log->throttling_time = time (NULL);
 		}
-		else if (rspamd_log->throttling) {
-			rspamd_log->throttling = FALSE;
+		else if (errno == EPIPE || errno == EBADF) {
+			/* We write to some pipe and it disappears, disable logging or we has opened bad file descriptor */
+			rspamd_log->enabled = FALSE;
 		}
+	}
+	else if (rspamd_log->throttling) {
+		rspamd_log->throttling = FALSE;
 	}
 }
 
@@ -807,7 +805,7 @@ syslog_log_function (const gchar *module, const gchar *id,
 	unsigned i;
 	gint syslog_level;
 
-	if (!rspamd_log->enabled) {
+	if (!(level_flags & RSPAMD_LOG_FORCED) && !rspamd_log->enabled) {
 		return;
 	}
 	/* Detect level */
@@ -850,12 +848,12 @@ file_log_function (const gchar *module, const gchar *id,
 	gboolean got_time = FALSE;
 	rspamd_logger_t *rspamd_log = arg;
 
-	if (!rspamd_log->enabled) {
+	if (!(level_flags & RSPAMD_LOG_FORCED) && !rspamd_log->enabled) {
 		return;
 	}
 
 	/* Check throttling due to write errors */
-	if (rspamd_log->throttling) {
+	if (!(level_flags & RSPAMD_LOG_FORCED) && rspamd_log->throttling) {
 		now = time (NULL);
 		if (rspamd_log->throttling_time != now) {
 			rspamd_log->throttling_time = now;

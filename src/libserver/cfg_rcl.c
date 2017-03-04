@@ -3521,18 +3521,18 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	struct ucl_emitter_functions f;
 
 	if (stat (filename, &st) == -1) {
-		msg_err_config ("cannot stat %s: %s", filename, strerror (errno));
+		msg_err_config_forced ("cannot stat %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_err_config ("cannot open %s: %s", filename, strerror (errno));
+		msg_err_config_forced ("cannot open %s: %s", filename, strerror (errno));
 		return FALSE;
 
 	}
 	/* Now mmap this file to simplify reading process */
 	if ((data =
 		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err_config ("cannot mmap %s: %s", filename, strerror (errno));
+		msg_err_config_forced ("cannot mmap %s: %s", filename, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -3545,7 +3545,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	rspamd_ucl_add_conf_macros (parser, cfg);
 
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
-		msg_err_config ("ucl parser error: %s", ucl_parser_get_error (parser));
+		msg_err_config_forced ("ucl parser error: %s", ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
 		munmap (data, st.st_size);
 		return FALSE;
