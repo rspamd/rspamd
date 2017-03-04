@@ -830,3 +830,74 @@ rspamd_config.OMOGRAPH_URL = {
   score = 5.0,
   description = 'Url contains both latin and non-latin characters'
 }
+
+rspamd_config:register_symbol{
+  type = 'prefilter',
+  name = 'EMAIL_PLUS_ALIASES',
+  callback = function(task)
+    local function check_address(addr)
+      if addr.user then
+        local cap = string.match(addr.user, '^([^%+][^%+]*)%+.*$')
+        if cap then
+          return cap
+        end
+      end
+
+      return nil
+    end
+
+    local function set_addr(addr, new_user)
+      addr.user = new_user
+
+      if addr.domain then
+        addr.addr = string.format('%s@%s', addr.user, addr.domain)
+      else
+        addr.addr = string.format('%s@', addr.user)
+      end
+
+      if addr.name then
+        addr.raw = string.format('%s <%s>', addr.name, addr.addr)
+      else
+        addr.raw = string.format('<%s>', addr.addr)
+      end
+    end
+
+    local function check_from(type)
+      if task:has_from(type) then
+        local addr = task:get_from(type)[1]
+        local na = check_address(addr)
+        if na then
+          set_addr(addr, na)
+          task:set_from(type, addr)
+        end
+      end
+    end
+
+    check_from('smtp')
+    check_from('mime')
+
+    local function check_rcpt(type)
+      if task:has_recipients(type) then
+        local modified = false
+        local addrs = task:get_recipients(type)
+
+        for i,addr in ipairs(addrs) do
+          local na = check_address(addr)
+          if na then
+            set_addr(addr, na)
+            modified = true
+          end
+        end
+
+        if modified then
+          task:set_recipients(type, addrs)
+        end
+      end
+    end
+
+    check_rcpt('smtp')
+    check_rcpt('mime')
+  end,
+  priority = 150,
+  description = 'Removes plus aliases from the email',
+}
