@@ -107,7 +107,7 @@ function($, D3Evolution, unused) {
         return graph;
     }
 
-    function getRrdSummary(json) {
+    function getRrdSummary(json, scaleFactor) {
         var xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
         var timeInterval = xExtents[1] - xExtents[0];
 
@@ -117,7 +117,7 @@ function($, D3Evolution, unused) {
 
             return {
                 label: graph_options.legend.entries[i].label,
-                value: avg && (avg * timeInterval) ^ 0,
+                value: avg && (avg * timeInterval / scaleFactor) ^ 0,
                 min: yExtents[0],
                 avg: avg && avg.toFixed(6),
                 max: yExtents[1],
@@ -127,7 +127,7 @@ function($, D3Evolution, unused) {
         }, []);
     }
 
-    function drawRrdTable(data) {
+    function drawRrdTable(data, unit) {
         $('#rrd-table').DataTable({
             destroy: true,
             paging: false,
@@ -137,10 +137,10 @@ function($, D3Evolution, unused) {
             columns: [
                 { data: "label", title: "Action" },
                 { data: "value", title: "Messages",       defaultContent: "" },
-                { data: "min",   title: "Minimum, msg/s", defaultContent: "" },
-                { data: "avg",   title: "Average, msg/s", defaultContent: "" },
-                { data: "max",   title: "Maximum, msg/s", defaultContent: "" },
-                { data: "last",  title: "Last, msg/s" },
+                { data: "min",   title: "Minimum, " + unit, defaultContent: "" },
+                { data: "avg",   title: "Average, " + unit, defaultContent: "" },
+                { data: "max",   title: "Maximum, " + unit, defaultContent: "" },
+                { data: "last",  title: "Last, " + unit },
             ],
 
             "fnRowCallback": function (nRow, aData) {
@@ -150,21 +150,40 @@ function($, D3Evolution, unused) {
     }
 
     var interface = {};
+    var prevUnit = "msg/s";
 
     interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
+
         function updateWidgets(data) {
+            // Autoranging
+            var scaleFactor = 1;
+            var unit = "msg/s";
+            const yMax = d3.max(d3.merge(data), function (d) { return d.y; });
+            if (yMax < 1) {
+                scaleFactor = 60;
+                unit = "msg/min";
+                data.forEach(function (s) {
+                    s.forEach(function (d) { d.y *= scaleFactor; });
+                });
+            }
+
             graphs.graph.data(data);
+            if (unit != prevUnit) {
+                graphs.graph.yAxisLabel("Message rate, " + unit);
+                prevUnit = unit;
+            }
+
             if (!data) {
                 graphs.rrd_pie.destroy();
                 drawRrdTable([]);
                 return;
             }
-            var rrd_summary = getRrdSummary(data);
+            var rrd_summary = getRrdSummary(data, scaleFactor);
             graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
                 "rrd-pie",
                 rrd_summary,
                 rrd_pie_config);
-            drawRrdTable(rrd_summary);
+            drawRrdTable(rrd_summary, unit);
         }
 
         if (graphs.graph === undefined) {
