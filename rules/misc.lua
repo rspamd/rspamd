@@ -881,7 +881,7 @@ rspamd_config:register_symbol{
         local modified = false
         local addrs = task:get_recipients(type)
 
-        for i,addr in ipairs(addrs) do
+        for _, addr in ipairs(addrs) do
           local na = check_address(addr)
           if na then
             set_addr(addr, na)
