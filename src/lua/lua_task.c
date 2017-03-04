@@ -338,6 +338,22 @@ LUA_FUNCTION_DEF (task, has_recipients);
 LUA_FUNCTION_DEF (task, get_recipients);
 
 /***
+ * @method task:set_recipients([type], {rcpt1, rcpt2...})
+ * Sets sender for a task. This function accepts table that will be converted to the address.
+ * If some fields are missing they are subsequently reconstructed by this function. E.g. if you
+ * specify 'user' and 'domain', then address and raw string will be reconstructed
+ *
+ * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
+ * - `addr` - address part of the address
+ * - `user` - user part (if present) of the address, e.g. `blah`
+ * - `domain` - domain part (if present), e.g. `foo.com`
+ * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
+ * @param {list of tables} recipients recipients to set
+ * @return {boolean} result of the operation
+ */
+LUA_FUNCTION_DEF (task, set_recipients);
+
+/***
  * @method task:has_from([type])
  * Return true if there is SMTP or MIME sender for a task.
  * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
@@ -771,6 +787,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_dns_req),
 	LUA_INTERFACE_DEF (task, has_recipients),
 	LUA_INTERFACE_DEF (task, get_recipients),
+	LUA_INTERFACE_DEF (task, set_recipients),
 	LUA_INTERFACE_DEF (task, has_from),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, set_from),
@@ -2124,6 +2141,67 @@ lua_task_get_recipients (lua_State *L)
 		}
 		else {
 			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_set_recipients (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	GPtrArray *ptrs = NULL;
+	struct rspamd_email_address *addr = NULL;
+	gint what = 0, pos = 3;
+
+	if (task) {
+		if (lua_isstring (L, 2)) {
+			/* Get what value */
+			what = lua_task_str_to_get_type (L, 2);
+		}
+		else if (lua_istable (L, 2)) {
+			pos = 2;
+		}
+
+		switch (what) {
+		case RSPAMD_ADDRESS_SMTP:
+			/* Here we check merely envelope rcpt */
+			ptrs = task->rcpt_envelope;
+			break;
+		case RSPAMD_ADDRESS_MIME:
+			/* Here we check merely mime rcpt */
+			ptrs = task->rcpt_mime;
+			break;
+		case RSPAMD_ADDRESS_ANY:
+		default:
+			if (task->rcpt_envelope) {
+				ptrs = task->rcpt_envelope;
+			}
+			else {
+				ptrs = task->rcpt_mime;
+			}
+			break;
+		}
+		if (ptrs) {
+			lua_pushvalue (L, pos);
+			g_ptr_array_set_size (ptrs, 0);
+
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				if (lua_import_email_address (L, task, -1, &addr)) {
+					g_ptr_array_add (ptrs, addr);
+					addr = NULL;
+				}
+			}
+
+			lua_pop (L, 1);
+			lua_pushboolean (L, true);
+		}
+		else {
+			lua_pushboolean (L, false);
 		}
 	}
 	else {
