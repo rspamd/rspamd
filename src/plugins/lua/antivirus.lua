@@ -236,7 +236,9 @@ local function check_av_cache(task, rule, fn)
 
   if redis_params then
 
-    key = rule['prefix'] .. key
+    if rule['prefix'] then
+      key = rule['prefix'] .. key
+    end
 
     if rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -267,7 +269,9 @@ local function save_av_cache(task, rule, to_save)
   end
 
   if redis_params then
-    key = rule['prefix'] .. key
+    if rule['prefix'] then
+      key = rule['prefix'] .. key
+    end
 
     rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -487,32 +491,26 @@ local function savapi_check(task, rule)
     local message_file = task:store_in_file(tonumber("0644", 8))
 
     local function savapi_fin_cb(err, conn)
-      rspamd_logger.debugm(N, task, 'savapi_fin_cb called')
       if conn then
         conn:close()
       end
     end
 
     local function savapi_scan2_cb(err, data, conn)
-      rspamd_logger.debugm(N, task, 'savapi_scan2_cb called')
       local result = tostring(data)
-      rspamd_logger.debugm(N, task, "got reply: %s", result)
+      rspamd_logger.debugm(N, task, "%s: got reply: %s", rule['type'], result)
 
       if string.find(result, '200') or string.find(result, '210') then
-        -- clean message
-        rspamd_logger.debugm(N, task, 'clean message')
 	if rule['log_clean'] then
-          rspamd_logger.infox(task, 'SAVAPI: message is clean')
+          rspamd_logger.infox(task, '%s: message is clean', rule['type'])
         end
         save_av_cache(task, rule, 'OK')
 
       elseif string.find(result, '310') then
-        -- infected message
-        rspamd_logger.debugm(N, task, 'infected message')
 	-- Recursive result
 	local parts = rspamd_str_split(result, ' <<< ')
         local vname = rspamd_str_split(parts[2], ';')[1]:match "^%s*(.-)%s*$"
-        rspamd_logger.infox(task, 'SAVAPI: virus found: %s', vname)
+        rspamd_logger.infox(task, '%s: virus found: %s', rule['type'], vname)
         yield_result(task, rule, vname)
         save_av_cache(task, rule, vname)
       end
@@ -520,31 +518,26 @@ local function savapi_check(task, rule)
     end
 
     local function savapi_scan1_cb(err, conn)
-      rspamd_logger.debugm(N, task, 'savapi_scan1_cb called')
       conn:add_read(savapi_scan2_cb, '\n')
     end
 
     -- 100 PRODUCT:xyz
     local function savapi_greet2_cb(err, data, conn)
       local result = tostring(data)
-      rspamd_logger.debugm(N, task, 'savapi_greet2_cb called')
-      rspamd_logger.debugm(N, task, "got reply: %s", result)
       if string.find(result, '100 PRODUCT') then
+        rspamd_logger.debugm(N, task, "%s: scanning file: %s", rule['type'], message_file)
         conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n', message_file)})
       else
-        rspamd_logger.errx(task, 'invalid product id %s', rule['product_id'])
+        rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'], rule['product_id'])
         conn:add_write(savapi_fin_cb, 'QUIT\n')
       end
     end
 
     local function savapi_greet1_cb(err, conn)
-      rspamd_logger.debugm(N, task, 'savapi_greet1_cb called')
       conn:add_read(savapi_greet2_cb, '\n')
     end
 
     local function savapi_callback_init(err, data, conn)
-      rspamd_logger.debugm(N, task, 'savapi_callback_init called')
-
       if err then
         if err == 'IO timeout' then
           if retransmits > 0 then
@@ -571,7 +564,6 @@ local function savapi_check(task, rule)
 
         -- 100 SAVAPI:4.0 greeting
         if string.find(result, '100') then
-          rspamd_logger.debugm(N, task, "got reply: %s", result)
           conn:add_write(savapi_greet1_cb, {string.format('SET PRODUCT %s\n', rule['product_id'])})
         end
       end
