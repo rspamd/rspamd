@@ -60,12 +60,8 @@ local function clamav_config(opts)
     clamav_conf[k] = v
   end
 
-  if redis_params and not redis_params['prefix'] then
-    if clamav_conf.prefix then
-        redis_params['prefix'] = clamav_conf.prefix
-    else
-      redis_params['prefix'] = 'rs_cl'
-    end
+  if not clamav_conf.prefix then
+    clamav_conf.prefix = 'rs_cl'
   end
 
   if not clamav_conf['servers'] then
@@ -100,12 +96,8 @@ local function fprot_config(opts)
     fprot_conf[k] = v
   end
 
-  if redis_params and not redis_params['prefix'] then
-    if fprot_conf.prefix then
-        redis_params['prefix'] = fprot_conf.prefix
-    else
-      redis_params['prefix'] = 'rs_fp'
-    end
+  if not fprot_conf.prefix then
+    fprot_conf.prefix = 'rs_fp'
   end
 
   if not fprot_conf['servers'] then
@@ -140,12 +132,8 @@ local function sophos_config(opts)
     sophos_conf[k] = v
   end
 
-  if redis_params and not redis_params['prefix'] then
-    if sophos_conf.prefix then
-        redis_params['prefix'] = sophos_conf.prefix
-    else
-      redis_params['prefix'] = 'rs_sp'
-    end
+  if not sophos_conf.prefix then
+    sophos_conf.prefix = 'rs_sp'
   end
 
   if not sophos_conf['servers'] then
@@ -182,12 +170,8 @@ local function savapi_config(opts)
     savapi_conf[k] = v
   end
 
-  if redis_params and not redis_params['prefix'] then
-    if savapi_conf.prefix then
-      redis_params['prefix'] = savapi_conf.prefix
-    else
-      redis_params['prefix'] = 'rs_ap'
-    end
+  if not savapi_conf.prefix then
+    savapi_conf.prefix = 'rs_ap'
   end
 
   if not savapi_conf['servers'] then
@@ -252,9 +236,7 @@ local function check_av_cache(task, rule, fn)
 
   if redis_params then
 
-    if redis_params['prefix'] then
-      key = redis_params['prefix'] .. key
-    end
+    key = rule['prefix'] .. key
 
     if rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -285,9 +267,7 @@ local function save_av_cache(task, rule, to_save)
   end
 
   if redis_params then
-    if redis_params['prefix'] then
-      key = redis_params['prefix'] .. key
-    end
+    key = rule['prefix'] .. key
 
     rspamd_redis_make_request(task,
       redis_params, -- connect params
