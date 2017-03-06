@@ -236,7 +236,9 @@ local function check_av_cache(task, rule, fn)
 
   if redis_params then
 
-    key = rule['prefix'] .. key
+    if rule['prefix'] then
+      key = rule['prefix'] .. key
+    end
 
     if rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -267,7 +269,9 @@ local function save_av_cache(task, rule, to_save)
   end
 
   if redis_params then
-    key = rule['prefix'] .. key
+    if rule['prefix'] then
+      key = rule['prefix'] .. key
+    end
 
     rspamd_redis_make_request(task,
       redis_params, -- connect params
