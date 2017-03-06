@@ -149,8 +149,8 @@ static enum rspamd_cte
 rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		struct rspamd_mime_part *part)
 {
-	const guint check_len = 80;
-	guint real_len, nspaces = 0, neqsign = 0, n8bit = 0;
+	const guint check_len = 128;
+	guint real_len, nspaces = 0, neqsign = 0, n8bit = 0, nqpencoded = 0;
 	gboolean b64_chars = TRUE;
 	const guchar *p, *end;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
@@ -161,6 +161,18 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 
 	while (p < end && g_ascii_isspace (*p)) {
 		p ++;
+	}
+
+	if (end > p + 2) {
+		if (*(end - 1) == '=') {
+			neqsign ++;
+			end --;
+		}
+
+		if (*(end - 1) == '=') {
+			neqsign ++;
+			end --;
+		}
 	}
 
 	if (end - p > real_len) {
@@ -178,6 +190,14 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		}
 		else if (*p == '=') {
 			neqsign ++;
+			p ++;
+
+			if (p + 2 < end && g_ascii_isxdigit (*p) && g_ascii_isxdigit (*(p + 1))) {
+				p ++;
+				nqpencoded ++;
+			}
+
+			continue;
 		}
 		else if (*p >= 0x80) {
 			n8bit ++;
@@ -194,7 +214,7 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 		ret = RSPAMD_CTE_B64;
 	}
 	else if (n8bit == 0) {
-		if (neqsign > 2 && nspaces > 2) {
+		if (neqsign > 2 && nqpencoded > 2) {
 			ret = RSPAMD_CTE_QP;
 		}
 		else {
