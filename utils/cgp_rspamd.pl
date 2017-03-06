@@ -41,9 +41,10 @@ $| = 1;
 sub cgp_string {
   my ($in) = @_;
 
-  $in =~ s/\"/\\"/;
-  $in =~ s/\n/\\n/;
-  $in =~ s/\r/\\r/;
+  $in =~ s/\"/\\"/g;
+  $in =~ s/\n/\\n/gms;
+  $in =~ s/\r/\\r/mgs;
+  $in =~ s/\t/  /g;
 
   return "\"$in\"";
 }
