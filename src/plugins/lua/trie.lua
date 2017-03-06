@@ -158,7 +158,7 @@ if opts then
       callback = tries_callback
     })
   else
-    rspamd_logger.errx(rspamd_config, 'no tries defined')
+    rspamd_logger.infox(rspamd_config, 'no tries defined')
   end
 
   if id ~= -1 then
