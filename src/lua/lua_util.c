@@ -530,6 +530,14 @@ static const struct luaL_reg int64lib_m[] = {
 	{NULL, NULL}
 };
 
+LUA_FUNCTION_DEF (ev_base, loop);
+
+static const struct luaL_reg ev_baselib_m[] = {
+	LUA_INTERFACE_DEF (ev_base, loop),
+	{"__tostring", rspamd_lua_class_tostring},
+	{NULL, NULL}
+};
+
 static gint64
 lua_check_int64 (lua_State * L, gint pos)
 {
@@ -2692,6 +2700,8 @@ lua_load_util (lua_State * L)
 void
 luaopen_util (lua_State * L)
 {
+	rspamd_lua_new_class (L, "rspamd{ev_base}", ev_baselib_m);
+	lua_pop (L, 1);
 	rspamd_lua_new_class (L, "rspamd{int64}", int64lib_m);
 	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_util", lua_load_util);
@@ -2729,6 +2739,23 @@ lua_int64_hex (lua_State *L)
 
 	rspamd_snprintf (buf, sizeof (buf), "%XL", n);
 	lua_pushstring (L, buf);
+
+	return 1;
+}
+
+static int
+lua_ev_base_loop (lua_State *L)
+{
+	int flags = 0;
+	struct event_base *ev_base;
+
+	ev_base = lua_check_ev_base (L, 1);
+	if (lua_isnumber (L, 2)) {
+		flags = lua_tonumber (L, 2);
+	}
+
+	int ret = event_base_loop (ev_base, flags);
+	lua_pushnumber (L, ret);
 
 	return 1;
 }
