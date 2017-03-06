@@ -158,6 +158,10 @@ end
 
 local opts =  rspamd_config:get_all_opt('dkim_signing')
 if not opts then return end
+if not (opts['use_redis'] or opts['path'] or opts['domain']) then
+  rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
+  return
+end
 for k,v in pairs(opts) do
   if k == 'sign_networks' then
     settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')
