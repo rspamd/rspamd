@@ -243,7 +243,9 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 
 	if (hdrs == NULL) {
 		part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
-		part->flags |= RSPAMD_MIME_PART_BAD_CTE;
+		msg_info_task ("detected missing CTE for part as: %s",
+				rspamd_cte_to_string (part->cte));
+		part->flags |= RSPAMD_MIME_PART_MISSING_CTE;
 	}
 	else {
 		for (i = 0; i < hdrs->len; i ++) {
@@ -262,6 +264,9 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 
 		if (part->cte == RSPAMD_CTE_UNKNOWN) {
 			part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
+
+			msg_info_task ("corrected bad CTE for part to: %s",
+					rspamd_cte_to_string (part->cte));
 		}
 		else if (part->cte == RSPAMD_CTE_B64 || part->cte == RSPAMD_CTE_QP) {
 			/* Additionally check sanity */
@@ -357,6 +362,19 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 	case RSPAMD_CTE_7BIT:
 	case RSPAMD_CTE_8BIT:
 	case RSPAMD_CTE_UNKNOWN:
+		if (part->ct->flags & RSPAMD_CONTENT_TYPE_MISSING) {
+			if (part->cte != RSPAMD_CTE_7BIT) {
+				/* We have something that has a missing content-type,
+				 * but it has non-7bit characters.
+				 *
+				 * In theory, it is very unsafe to process it as a text part
+				 * as we unlikely get some sane result
+				 */
+				part->ct->flags &= ~RSPAMD_CONTENT_TYPE_TEXT;
+				part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			}
+		}
+
 		if (IS_CT_TEXT (part->ct)) {
 			/* Need to copy text as we have couple of in-place change functions */
 			parsed = rspamd_fstring_sized_new (part->raw_data.len);
@@ -1059,7 +1077,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		/* For messages we automatically assume plaintext */
 		msg_info_task ("cannot find content-type for a message, assume text/plain");
 		sel = rspamd_mempool_alloc0 (task->task_pool, sizeof (*sel));
-		sel->flags = RSPAMD_CONTENT_TYPE_TEXT|RSPAMD_CONTENT_TYPE_BROKEN;
+		sel->flags = RSPAMD_CONTENT_TYPE_TEXT|RSPAMD_CONTENT_TYPE_MISSING;
 		RSPAMD_FTOK_ASSIGN (&sel->type, "text");
 		RSPAMD_FTOK_ASSIGN (&sel->subtype, "plain");
 	}
