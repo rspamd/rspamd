@@ -497,6 +497,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 				&text_part->exceptions,
 				task->urls,
 				task->emails);
+		text_part->utf_raw_content = part_content;
 
 		if (text_part->content->len == 0) {
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
@@ -526,6 +527,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 
 		text_part->content = rspamd_mime_text_part_maybe_convert (task,
 				text_part);
+		text_part->utf_raw_content = text_part->content;
 
 		if (text_part->content != NULL) {
 			/*

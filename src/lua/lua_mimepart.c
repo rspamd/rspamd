@@ -46,8 +46,13 @@ end
  */
 LUA_FUNCTION_DEF (textpart, is_utf);
 /***
- * @method text_part:get_content()
- * Get the text of the part (html tags stripped)
+ * @method text_part:get_content([type])
+ * Get the text of the part (html tags stripped). Optional `type` defines type of content to get:
+ * - `content` (default): utf8 content with HTML tags stripped and newlines preserved
+ * - `content_oneline`: utf8 content with HTML tags and newlines stripped
+ * - `raw`: raw content, not mime decoded nor utf8 converted
+ * - `raw_parsed`: raw content, mime decoded, not utf8 converted
+ * - `raw_utf`: raw content, mime decoded, utf8 converted (but with HTML tags and newlines)
  * @return {text} `UTF8` encoded content of the part (zero-copy if not converted to a lua string)
  */
 LUA_FUNCTION_DEF (textpart, get_content);
@@ -354,16 +359,51 @@ lua_textpart_get_content (lua_State * L)
 {
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 	struct rspamd_lua_text *t;
+	gsize len;
+	const gchar *start, *type = NULL;
 
 	if (part == NULL || IS_PART_EMPTY (part)) {
 		lua_pushnil (L);
 		return 1;
 	}
 
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		type = lua_tostring (L, 2);
+	}
+
 	t = lua_newuserdata (L, sizeof (*t));
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
-	t->start = part->content->data;
-	t->len = part->content->len;
+
+	if (!type) {
+		start = part->content->data;
+		len = part->content->len;
+	}
+	else if (strcmp (type, "content") == 0) {
+		start = part->content->data;
+		len = part->content->len;
+	}
+	else if (strcmp (type, "content_oneline") == 0) {
+		start = part->stripped_content->data;
+		len = part->stripped_content->len;
+	}
+	else if (strcmp (type, "raw_parsed") == 0) {
+		start = part->parsed.begin;
+		len = part->parsed.len;
+	}
+	else if (strcmp (type, "raw_utf") == 0) {
+		start = part->utf_raw_content->data;
+		len = part->utf_raw_content->len;
+	}
+	else if (strcmp (type, "raw") == 0) {
+		start = part->raw.begin;
+		len = part->raw.len;
+	}
+	else {
+		return luaL_error (L, "invalid content type: %s", type);
+	}
+
+	t->start = start;
+	t->len = len;
 	t->flags = 0;
 
 	return 1;

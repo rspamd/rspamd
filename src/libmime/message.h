@@ -82,6 +82,7 @@ struct rspamd_mime_text_part {
 	rspamd_ftok_t raw;
 	rspamd_ftok_t parsed;
 	GByteArray *content;
+	GByteArray *utf_raw_content;
 	GByteArray *stripped_content;
 	GPtrArray *newlines;	/**< positions of newlines in text					*/
 	struct html_content *html;
