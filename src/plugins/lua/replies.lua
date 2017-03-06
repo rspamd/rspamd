@@ -25,6 +25,7 @@ local settings = {
   key_prefix = 'rr',
   message = 'Message is reply to one we originated',
   symbol = 'REPLY',
+  score = -2, -- Default score
 }
 
 local rspamd_logger = require 'rspamd_logger'
@@ -136,7 +137,8 @@ if opts then
     rspamd_config:register_symbol({
       name = settings['symbol'],
       parent = id,
-      type = 'virtual'
+      type = 'virtual',
+      score = settings.score,
     })
   end
 
