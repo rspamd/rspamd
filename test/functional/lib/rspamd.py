@@ -177,5 +177,5 @@ def wait_for_port(proto, addr, num):
             break
         except:
             pass
-            time.sleep(0.1)
+            time.sleep(0.01)
     s.close()
