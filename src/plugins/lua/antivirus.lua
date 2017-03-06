@@ -646,7 +646,7 @@ local opts = rspamd_config:get_all_opt('antivirus')
 if opts and type(opts) == 'table' then
   redis_params = rspamd_parse_redis_server('antivirus')
   for k, m in pairs(opts) do
-    if type(m) == 'table' and m['type'] then
+    if type(m) == 'table' and m['type'] and m['servers'] then
       local cb = add_antivirus_rule(k, m)
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
