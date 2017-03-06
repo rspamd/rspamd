@@ -78,13 +78,13 @@ local function dkim_signing_cb(task)
   end
   if settings.use_esld then
     dkim_domain = rspamd_util.get_tld(dkim_domain)
-    if settings.use_domain == 'envelope' then
+    if settings.use_domain == 'envelope' and hdom then
       hdom = rspamd_util.get_tld(hdom)
-    elseif settings.use_domain == 'header' then
+    elseif settings.use_domain == 'header' and edom then
       edom = rspamd_util.get_tld(edom)
     end
   end
-  if not settings.allow_hdrfrom_mismatch and hdom ~= edom then
+  if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom then
     rspamd_logger.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
     return false
   end
