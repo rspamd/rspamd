@@ -747,9 +747,7 @@ local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
     end
 
     if missing_mime then
-      if not found_ma and ((found_plain or found_html) and cte_7bit) then
-        -- Skip symbol insertion
-      else
+      if not (not found_ma and ((found_plain or found_html) and cte_7bit)) then
         task:insert_result('MISSING_MIME_VERSION', 1.0)
       end
     end
