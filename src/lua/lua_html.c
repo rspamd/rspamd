@@ -354,6 +354,7 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 	if (bl->style.len > 0) {
 		lua_pushstring (L, "style");
 		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = bl->style.start;
 		t->len = bl->style.len;
 		t->flags = 0;
