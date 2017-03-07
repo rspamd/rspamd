@@ -51,6 +51,7 @@ local function clamav_config(opts)
   local clamav_conf = {
     attachments_only = true,
     default_port = 3310,
+    log_clean = false,
     timeout = 15.0,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
@@ -88,6 +89,7 @@ local function fprot_config(opts)
     attachments_only = true,
     default_port = 10200,
     timeout = 15.0,
+    log_clean = false,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
   }
@@ -124,6 +126,7 @@ local function sophos_config(opts)
     attachments_only = true,
     default_port = 4010,
     timeout = 15.0,
+    log_clean = false,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
   }
@@ -317,15 +320,25 @@ local function fprot_check(task, rule)
       else
         upstream:ok()
         data = tostring(data)
-        local found = (string.sub(data, 1, 1) == '1')
-        local cached = 'OK'
-        if found then
+        local cached
+        local clean = string.match(data, '^0 <clean>')
+        if clean then
+          cached = 'OK'
+          if rule['log_clean'] then
+            rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+          end
+        else
           local vname = string.match(data, '^1 <infected: (.+)>')
-          yield_result(task, rule, vname)
-          cached = vname
+          if not vname then
+            rspamd_logger.errx(task, 'Unhandled response: %s', data)
+          else
+            yield_result(task, rule, vname)
+            cached = vname
+          end
         end
-
-        save_av_cache(task, rule, cached)
+        if cached then
+          save_av_cache(task, rule, cached)
+        end
       end
     end
 
@@ -383,15 +396,24 @@ local function clamav_check(task, rule)
       else
         upstream:ok()
         data = tostring(data)
-        local s = string.find(data, ' FOUND')
-        local cached = 'OK'
-        if s then
-          local vname = string.match(data:sub(1, s - 1), 'stream: (.+)')
-          yield_result(task, rule, vname)
-          cached = vname
+        local cached
+        if data == 'stream: OK' then
+          cached = 'OK'
+          if rule['log_clean'] then
+            rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+          end
+        else
+          local vname = string.match(data, 'stream: (.+) FOUND')
+          if vname then
+            yield_result(task, rule, vname)
+            cached = vname
+          else
+            rspamd_logger.errx(task, 'unhandled response: %s', data)
+          end
         end
-
-        save_av_cache(task, rule, cached)
+        if cached then
+          save_av_cache(task, rule, cached)
+        end
       end
     end
 
@@ -454,7 +476,12 @@ local function sophos_check(task, rule)
           save_av_cache(task, rule, vname)
         else
           if string.find(data, 'DONE OK') then
+            if rule['log_clean'] then
+              rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+            end
             save_av_cache(task, rule, 'OK')
+          else
+            rspamd_logger.errx(task, 'unhandled response: %s', data)
           end
         end
       end
@@ -497,14 +524,14 @@ local function savapi_check(task, rule)
       rspamd_logger.debugm(N, task, "%s: got reply: %s", rule['type'], result)
 
       if string.find(result, '200') or string.find(result, '210') then
-	if rule['log_clean'] then
+        if rule['log_clean'] then
           rspamd_logger.infox(task, '%s: message is clean', rule['type'])
         end
         save_av_cache(task, rule, 'OK')
 
       elseif string.find(result, '310') then
-	-- Recursive result
-	local parts = rspamd_str_split(result, ' <<< ')
+        -- Recursive result
+        local parts = rspamd_str_split(result, ' <<< ')
         local vname = rspamd_str_split(parts[2], ';')[1]:match "^%s*(.-)%s*$"
         rspamd_logger.infox(task, '%s: virus found: %s', rule['type'], vname)
         yield_result(task, rule, vname)
