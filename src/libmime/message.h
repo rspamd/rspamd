@@ -163,4 +163,19 @@ GPtrArray *rspamd_message_get_header_from_hash (GHashTable *htb,
 		const gchar *field,
 		gboolean strong);
 
+
+/**
+ * Converts string to cte
+ * @param str
+ * @return
+ */
+enum rspamd_cte rspamd_cte_from_string (const gchar *str);
+
+/**
+ * Converts cte to string
+ * @param ct
+ * @return
+ */
+const gchar* rspamd_cte_to_string (enum rspamd_cte ct);
+
 #endif

@@ -81,7 +81,7 @@ rspamd_mime_parser_quark (void)
 	return g_quark_from_static_string ("mime-parser");
 }
 
-static const gchar*
+const gchar*
 rspamd_cte_to_string (enum rspamd_cte ct)
 {
 	const gchar *ret = "unknown";
@@ -101,6 +101,29 @@ rspamd_cte_to_string (enum rspamd_cte ct)
 		break;
 	default:
 		break;
+	}
+
+	return ret;
+}
+
+enum rspamd_cte
+rspamd_cte_from_string (const gchar *str)
+{
+	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
+
+	g_assert (str != NULL);
+
+	if (strcmp (str, "7bit") == 0) {
+		ret = RSPAMD_CTE_7BIT;
+	}
+	else if (strcmp (str, "8bit") == 0) {
+		ret = RSPAMD_CTE_8BIT;
+	}
+	else if (strcmp (str, "quoted-printable") == 0) {
+		ret = RSPAMD_CTE_QP;
+	}
+	else if (strcmp (str, "base64") == 0) {
+		ret = RSPAMD_CTE_B64;
 	}
 
 	return ret;

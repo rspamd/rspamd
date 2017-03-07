@@ -1252,11 +1252,10 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	GPtrArray *headerlist;
 	struct expression_argument *arg;
 	guint i;
-	struct rspamd_mime_header *rh;
-	static const char *hname = "Content-Transfer-Encoding";
+	struct rspamd_mime_part *part;
+	enum rspamd_cte cte;
 
 	if (args == NULL) {
 		msg_warn_task ("no parameters to function");
@@ -1269,39 +1268,16 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 		return FALSE;
 	}
 
-	headerlist = rspamd_message_get_header_array (task, hname, FALSE);
+	cte = rspamd_cte_from_string (arg->data);
 
-	if (headerlist) {
-		for (i = 0; i < headerlist->len; i ++) {
-			rh = g_ptr_array_index (headerlist, i);
-
-			if (rh->decoded == NULL) {
-				continue;
-			}
-
-			if (g_ascii_strcasecmp (rh->decoded, arg->data) == 0) {
-				return TRUE;
-			}
-		}
+	if (cte == RSPAMD_CTE_UNKNOWN) {
+		msg_warn_task ("unknown cte: %s", arg->data);
+		return FALSE;
 	}
 
-	/*
-	 * In fact, we need to check 'Content-Transfer-Encoding' for each part
-	 * as gmime has 'strange' assumptions
-	 */
-	headerlist = rspamd_message_get_mime_header_array (task,
-			arg->data,
-			FALSE);
-
-	if (headerlist) {
-		for (i = 0; i < headerlist->len; i ++) {
-			rh = g_ptr_array_index (headerlist, i);
-
-			if (rh->decoded == NULL) {
-				continue;
-			}
-
-			if (g_ascii_strcasecmp (rh->decoded, arg->data) == 0) {
+	PTR_ARRAY_FOREACH (task->parts, i, part) {
+		if (IS_CT_TEXT (part->ct)) {
+			if (part->cte == cte) {
 				return TRUE;
 			}
 		}

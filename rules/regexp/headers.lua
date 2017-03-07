@@ -107,7 +107,8 @@ reconf['R_RCVD_SPAMBOTS'] = {
 
 -- Charset is missing in message
 reconf['R_MISSING_CHARSET'] = {
-  re = string.format('content_type_is_type(text) & !content_type_has_param(charset) & !%s', r_cte_7bit),
+  re = string.format('content_type_is_type(text) & !content_type_has_param(charset) & !%s',
+    r_cte_7bit),
   score = 2.5,
   description = 'Charset is missing in a message',
   group = 'header'
