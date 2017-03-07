@@ -716,13 +716,15 @@ local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
 
     -- Make sure there is a MIME-Version header
     local mv = task:get_header('MIME-Version')
+    local missing_mime = false
     if (not mv) then
-      task:insert_result('MISSING_MIME_VERSION', 1.0)
+      missing_mime = true
     end
 
     local found_ma = false
     local found_plain = false
     local found_html = false
+    local cte_7bit = false
 
     for _,p in ipairs(parts) do
       local mtype,subtype = p:get_type()
@@ -731,10 +733,24 @@ local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
         found_ma = true
       end
       if (ctype == 'text/plain') then
+        if p:get_cte() == '7bit' then
+          cte_7bit = true
+        end
         found_plain = true
       end
       if (ctype == 'text/html') then
+        if p:get_cte() == '7bit' then
+          cte_7bit = true
+        end
         found_html = true
+      end
+    end
+
+    if missing_mime then
+      if not found_ma and ((found_plain or found_html) and cte_7bit) then
+        -- Skip symbol insertion
+      else
+        task:insert_result('MISSING_MIME_VERSION', 1.0)
       end
     end
 
