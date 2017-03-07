@@ -47,7 +47,7 @@ static GOptionEntry entries[] = {
 				"Enable case-sensitivity in string search", NULL},
 		{"orphans", 'o', 0, G_OPTION_ARG_NONE, &orphans,
 				"Print orphaned logs", NULL},
-		{"partial", 'P', 0, G_OPTION_ARG_NONE, &orphans,
+		{"partial", 'P', 0, G_OPTION_ARG_NONE, &partial,
 				"Print partial logs", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
@@ -93,7 +93,7 @@ rspamadm_grep (gint argc, gchar **argv)
 					"\n  Release id: "
 					RID);
 	g_option_context_add_main_entries (context, entries, NULL);
-	g_option_context_set_ignore_unknown_options (context, TRUE);
+	g_option_context_set_ignore_unknown_options (context, FALSE);
 
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
@@ -131,18 +131,12 @@ rspamadm_grep (gint argc, gchar **argv)
 		}
 	}
 	ucl_object_insert_key (obj, nobj, "inputs", 0, false);
-	if (sensitive) {
-		ucl_object_insert_key (obj, ucl_object_frombool (sensitive),
-				"sensitive", 0, false);
-	}
-	if (orphans) {
-		ucl_object_insert_key (obj, ucl_object_frombool (orphans),
-				"orphans", 0, false);
-	}
-	if (partial) {
-		ucl_object_insert_key (obj, ucl_object_frombool (partial),
-				"partial", 0, false);
-	}
+	ucl_object_insert_key (obj, ucl_object_frombool (sensitive),
+			"sensitive", 0, false);
+	ucl_object_insert_key (obj, ucl_object_frombool (orphans),
+			"orphans", 0, false);
+	ucl_object_insert_key (obj, ucl_object_frombool (partial),
+			"partial", 0, false);
 
 	rspamadm_execute_lua_ucl_subr (L,
 			argc,
