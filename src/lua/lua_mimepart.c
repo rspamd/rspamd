@@ -226,9 +226,17 @@ LUA_FUNCTION_DEF (mimepart, get_length);
 /***
  * @method mime_part:get_type()
  * Extract content-type string of the mime part
- * @return {string} content type in form 'type/subtype'
+ * @return {string,string} content type in form 'type','subtype'
  */
 LUA_FUNCTION_DEF (mimepart, get_type);
+
+/***
+ * @method mime_part:get_cte()
+ * Extract content-transfer-encoding for a part
+ * @return {string} content transfer encoding (e.g. `base64` or `7bit`)
+ */
+LUA_FUNCTION_DEF (mimepart, get_cte);
+
 /***
  * @method mime_part:get_filename()
  * Extract filename associated with mime part if it is an attachement
@@ -304,6 +312,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
+	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
 	LUA_INTERFACE_DEF (mimepart, get_header),
 	LUA_INTERFACE_DEF (mimepart, get_header_raw),
@@ -686,6 +695,21 @@ lua_mimepart_get_type (lua_State * L)
 	lua_pushlstring (L, part->ct->subtype.begin, part->ct->subtype.len);
 
 	return 2;
+}
+
+static gint
+lua_mimepart_get_cte (lua_State * L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	lua_pushstring (L, rspamd_cte_to_string (part->cte));
+
+	return 1;
 }
 
 static gint
