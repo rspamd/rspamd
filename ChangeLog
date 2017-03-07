@@ -1,3 +1,32 @@
+1.5.2:
+	* [Conf] Add default config for spamassasssin plugin
+	* [Conf] Add default configuration for antivirus module
+	* [Conf] Add dkim signing docs
+	* [Conf] Add mx_check default config
+	* [Conf] Add replies config
+	* [Conf] Add trie default config
+	* [Feature] Add heuristic to find text parts in files
+	* [Feature] Add rule to detect broken content type
+	* [Feature] Allow to extract CTE in Lua API
+	* [Feature] Allow to set from address for a lua_task
+	* [Feature] Allow to set recipients of a task from Lua
+	* [Feature] Enchance text_part:get_content method
+	* [Feature] Remove + aliases from emails
+	* [Feature] Support rmilter block and dkim signature in CGP helper
+	* [Feature] Support running event loop from Lua
+	* [Fix] Antivirus: use scanner-specific redis prefix
+	* [Fix] Couple of fixes for DKIM signing module
+	* [Fix] Distinguish missing and broken mandatory headers
+	* [Fix] Do more heuristical detection for missing CTE
+	* [Fix] Do not resort cache on each check
+	* [Fix] Fix CGP escaping
+	* [Fix] Fix MISSING_MIME_VERSION rule for plain messages
+	* [Fix] Fix parsing of cte in expressions
+	* [Fix] Fix partial matches in rspamadm grep
+	* [Fix] Fix setting class on style field
+	* [WebUI] Auto-switch Throughput units to `msg/min` for very low rate
+	* [WebUI] Update D3Evolution to 0.0.2
+
 1.5.1:
 	* [CritFix] Fix processing of stop_patterns with `\0` character
 	* [CritFix] Fix setting of raw key for signing
