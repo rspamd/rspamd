@@ -2718,7 +2718,7 @@ lua_push_symbol_result (lua_State *L,
 	if (metric_res) {
 		if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 			j = 1;
-			lua_newtable (L);
+			lua_createtable (L, 0, 5);
 			lua_pushstring (L, "metric");
 			lua_pushstring (L, metric->name);
 			lua_settable (L, -3);
@@ -2775,7 +2775,7 @@ lua_task_get_symbol (lua_State *L)
 	if (task && symbol) {
 		metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
 		if (metric_list) {
-			lua_newtable (L);
+			lua_createtable (L, 1, 0);
 			cur = metric_list;
 		}
 		else {
@@ -2783,9 +2783,14 @@ lua_task_get_symbol (lua_State *L)
 		}
 
 		if (!cur && metric) {
+			lua_createtable (L, 1, 0);
+
 			if ((found = lua_push_symbol_result (L, task, metric, symbol))) {
-				lua_newtable (L);
 				lua_rawseti (L, -2, i++);
+			}
+			else {
+				/* Pop table */
+				lua_pop (L, 1);
 			}
 		}
 		else {
