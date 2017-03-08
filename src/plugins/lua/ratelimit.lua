@@ -467,7 +467,11 @@ local function rate_test(task)
 end
 --- Update limit
 local function rate_set(task)
-  rate_test_set(task, set_limits)
+  local action = task:get_metric_action('default')
+
+  if action ~= 'soft reject' then
+    rate_test_set(task, set_limits)
+  end
 end
 
 
