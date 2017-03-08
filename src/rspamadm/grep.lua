@@ -1,7 +1,6 @@
 return function(_, res)
 
   local rspamd_regexp = require 'rspamd_regexp'
-  local E = {}
 
   local buffer = {}
   local matches = {}
@@ -47,9 +46,11 @@ return function(_, res)
     else
       for line in h:lines() do
         local hash = string.match(line, '^%d+-%d+-%d+ %d+:%d+:%d+ #%d+%(%a+%) <(%x+)>')
+        local already_matching = false
         if hash then
           if matches[hash] then
             table.insert(matches[hash], line)
+            already_matching = true
           else
             if buffer[hash] then
               table.insert(buffer[hash], line)
@@ -74,14 +75,8 @@ return function(_, res)
               print(line)
               print()
             end
-          else
-            if matches[hash] then
-              table.insert(matches[hash], line)
-            else
-              local cur = buffer[hash] or E
-              table.insert(cur, line)
-              matches[hash] = cur
-            end
+          elseif not already_matching then
+            matches[hash] = buffer[hash]
           end
         end
         local is_end = string.match(line, '^%d+-%d+-%d+ %d+:%d+:%d+ #%d+%(%a+%) <%x+>; task; rspamd_protocol_http_reply:')
