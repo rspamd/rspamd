@@ -142,6 +142,10 @@ struct fuzzy_learn_session {
 #define FUZZY_CMD_FLAG_SENT (1 << 1)
 #define FUZZY_CMD_FLAG_IMAGE (1 << 2)
 
+#define FUZZY_CHECK_FLAG_NOIMAGES (1 << 0)
+#define FUZZY_CHECK_FLAG_NOATTACHMENTS (1 << 1)
+#define FUZZY_CHECK_FLAG_NOTEXT (1 << 2)
+
 struct fuzzy_cmd_io {
 	guint32 tag;
 	guint32 flags;
@@ -2243,7 +2247,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 
 static GPtrArray *
 fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
-		gint c, gint flag, guint32 value)
+		gint c, gint flag, guint32 value, guint flags)
 {
 	struct rspamd_mime_text_part *part;
 	struct rspamd_mime_part *mime_part;
@@ -2263,41 +2267,43 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		goto end;
 	}
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		part = g_ptr_array_index (task->text_parts, i);
+	if (G_LIKELY (!(flags & FUZZY_CHECK_FLAG_NOTEXT))) {
+		for (i = 0; i < task->text_parts->len; i ++) {
+			part = g_ptr_array_index (task->text_parts, i);
 
-		if (IS_PART_EMPTY (part)) {
-			continue;
-		}
+			if (IS_PART_EMPTY (part)) {
+				continue;
+			}
 
-		/* Check length of part */
-		if (fuzzy_module_ctx->min_bytes > part->content->len) {
-			msg_info_task ("<%s>, part is shorter than %d bytes (%d bytes), "
-					"skip fuzzy check",
-					task->message_id, fuzzy_module_ctx->min_bytes,
-					part->content->len);
-			continue;
-		}
+			/* Check length of part */
+			if (fuzzy_module_ctx->min_bytes > part->content->len) {
+				msg_info_task ("<%s>, part is shorter than %d bytes (%d bytes), "
+						"skip fuzzy check",
+						task->message_id, fuzzy_module_ctx->min_bytes,
+						part->content->len);
+				continue;
+			}
 
-		if (part->normalized_words == NULL || part->normalized_words->len == 0) {
-			msg_info_task ("<%s>, part hash empty, skip fuzzy check",
-				task->message_id);
-			continue;
-		}
+			if (part->normalized_words == NULL || part->normalized_words->len == 0) {
+				msg_info_task ("<%s>, part hash empty, skip fuzzy check",
+						task->message_id);
+				continue;
+			}
 
-		if (fuzzy_module_ctx->min_hash_len != 0 &&
-			part->normalized_words->len < fuzzy_module_ctx->min_hash_len) {
-			msg_info_task (
-				"<%s>, part hash is shorter than %d symbols, skip fuzzy check",
-				task->message_id,
-				fuzzy_module_ctx->min_hash_len);
-			continue;
-		}
+			if (fuzzy_module_ctx->min_hash_len != 0 &&
+					part->normalized_words->len < fuzzy_module_ctx->min_hash_len) {
+				msg_info_task (
+						"<%s>, part hash is shorter than %d symbols, skip fuzzy check",
+						task->message_id,
+						fuzzy_module_ctx->min_hash_len);
+				continue;
+			}
 
-		io = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
-				part);
-		if (io) {
-			g_ptr_array_add (res, io);
+			io = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
+					part);
+			if (io) {
+				g_ptr_array_add (res, io);
+			}
 		}
 	}
 
@@ -2305,50 +2311,58 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	for (i = 0; i < task->parts->len; i ++) {
 		mime_part = g_ptr_array_index (task->parts, i);
 
+
 		if (mime_part->flags & RSPAMD_MIME_PART_IMAGE) {
-			image = mime_part->specific.img;
 
-			if (image->data->len > 0) {
-				if (fuzzy_module_ctx->min_height <= 0 || image->height >=
-						fuzzy_module_ctx->min_height) {
-					if (fuzzy_module_ctx->min_width <= 0 || image->width >=
-							fuzzy_module_ctx->min_width) {
-						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
-								task->task_pool,
-								image->parent->digest);
-						if (io) {
-							g_ptr_array_add (res, io);
-						}
+			if (G_LIKELY (!(flags & FUZZY_CHECK_FLAG_NOIMAGES))) {
+				image = mime_part->specific.img;
 
-						if (rule->fuzzy_images) {
-							/* Try to normalize image */
-							if (!image->is_normalized) {
-								rspamd_image_normalize (task, image);
-							}
-						}
-
-						if (image->is_normalized) {
-							io = fuzzy_cmd_from_image_part (rule, c, flag, value,
+				if (image->data->len > 0) {
+					if (fuzzy_module_ctx->min_height <= 0 || image->height >=
+							fuzzy_module_ctx->min_height) {
+						if (fuzzy_module_ctx->min_width <= 0 || image->width >=
+								fuzzy_module_ctx->min_width) {
+							io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 									task->task_pool,
-									image);
+									image->parent->digest);
 							if (io) {
 								g_ptr_array_add (res, io);
+							}
+
+							if (rule->fuzzy_images) {
+								/* Try to normalize image */
+								if (!image->is_normalized) {
+									rspamd_image_normalize (task, image);
+								}
+							}
+
+							if (image->is_normalized) {
+								io = fuzzy_cmd_from_image_part (rule, c, flag, value,
+										task->task_pool,
+										image);
+								if (io) {
+									g_ptr_array_add (res, io);
+								}
 							}
 						}
 					}
 				}
 			}
+
+			continue;
 		}
 
-		if (mime_part->parsed_data.len > 0 &&
-			fuzzy_check_content_type (rule, mime_part->ct)) {
-			if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->parsed_data.len >=
-				fuzzy_module_ctx->min_bytes) {
-				io = fuzzy_cmd_from_data_part (rule, c, flag, value,
-						task->task_pool,
-						mime_part->digest);
-				if (io) {
-					g_ptr_array_add (res, io);
+		if (G_LIKELY (!(flags & FUZZY_CHECK_FLAG_NOIMAGES))) {
+			if (mime_part->parsed_data.len > 0 &&
+					fuzzy_check_content_type (rule, mime_part->ct)) {
+				if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->parsed_data.len >=
+						fuzzy_module_ctx->min_bytes) {
+					io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+							task->task_pool,
+							mime_part->digest);
+					if (io) {
+						g_ptr_array_add (res, io);
+					}
 				}
 			}
 		}
@@ -2452,7 +2466,7 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	}
 
 	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
-		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0);
+		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0, 0);
 
 		if (commands != NULL) {
 			register_fuzzy_client_call (task, rule, commands);
@@ -2472,7 +2486,7 @@ fuzzy_stat_command (struct rspamd_task *task)
 	}
 
 	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
-		commands = fuzzy_generate_commands (task, rule, FUZZY_STAT, 0, 0);
+		commands = fuzzy_generate_commands (task, rule, FUZZY_STAT, 0, 0, 0);
 		if (commands != NULL) {
 			register_fuzzy_client_call (task, rule, commands);
 		}
@@ -2543,7 +2557,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 static void
 fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg, gint cmd, gint value, gint flag,
-	struct fuzzy_ctx *ctx, gboolean is_hash)
+	struct fuzzy_ctx *ctx, gboolean is_hash, guint flags)
 {
 	struct fuzzy_rule *rule;
 	struct rspamd_controller_session *session = conn_ent->ud;
@@ -2679,7 +2693,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			}
 		}
 		else {
-			commands = fuzzy_generate_commands (task, rule, cmd, flag, value);
+			commands = fuzzy_generate_commands (task, rule, cmd, flag, value,
+					flags);
 			if (commands != NULL) {
 				res = register_fuzzy_controller_call (conn_ent,
 						rule,
@@ -2733,7 +2748,7 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 	gboolean is_hash)
 {
 	const rspamd_ftok_t *arg;
-	glong value = 1, flag = 0;
+	glong value = 1, flag = 0, send_flags = 0;
 
 	if (!fuzzy_module_ctx->enabled) {
 		msg_err ("fuzzy_check module is not enabled");
@@ -2804,8 +2819,23 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
+	arg = rspamd_http_message_find_header (msg, "Skip-Images");
+	if (arg) {
+		send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
+	}
+
+	arg = rspamd_http_message_find_header (msg, "Skip-Attachments");
+	if (arg) {
+		send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
+	}
+
+	arg = rspamd_http_message_find_header (msg, "Skip-Text");
+	if (arg) {
+		send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
+	}
+
 	fuzzy_process_handler (conn_ent, msg, cmd, value, flag,
-		(struct fuzzy_ctx *)ctx, is_hash);
+		(struct fuzzy_ctx *)ctx, is_hash, send_flags);
 
 	return 0;
 }
@@ -2874,7 +2904,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 
 static gboolean
 fuzzy_check_lua_process_learn (struct rspamd_task *task,
-		gint cmd, gint value, gint flag)
+		gint cmd, gint value, gint flag, guint send_flags)
 {
 	struct fuzzy_rule *rule;
 	gboolean processed = FALSE, res = TRUE;
@@ -2905,7 +2935,9 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 		rules ++;
 
 		res = 0;
-		commands = fuzzy_generate_commands (task, rule, cmd, flag, value);
+		commands = fuzzy_generate_commands (task, rule, cmd, flag,
+				value, send_flags);
+
 		if (commands != NULL) {
 			res = fuzzy_check_send_lua_learn (rule, task, commands,
 					saved, err);
@@ -2944,9 +2976,8 @@ static gint
 fuzzy_lua_learn_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	guint flag = 0, weight = 1.0;
+	guint flag = 0, weight = 1.0, send_flags = 0;
 	const gchar *symbol;
-
 
 	if (task) {
 		if (lua_type (L, 2) == LUA_TNUMBER) {
@@ -2987,8 +3018,29 @@ fuzzy_lua_learn_handler (lua_State *L)
 			weight = lua_tonumber (L, 3);
 		}
 
+		if (lua_type (L, 4) == LUA_TTABLE) {
+			const gchar *sf;
+
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				sf = lua_tostring (L, -1);
+
+				if (sf) {
+					if (g_ascii_strcasecmp (sf, "noimages") == 0) {
+						send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
+					}
+					else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
+						send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
+					}
+					else if (g_ascii_strcasecmp (sf, "notext") == 0) {
+						send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
+					}
+				}
+			}
+		}
+
 		lua_pushboolean (L,
-				fuzzy_check_lua_process_learn (task, FUZZY_WRITE, weight, flag));
+				fuzzy_check_lua_process_learn (task, FUZZY_WRITE, weight, flag,
+						send_flags));
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3001,7 +3053,7 @@ static gint
 fuzzy_lua_unlearn_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	guint flag = 0, weight = 1.0;
+	guint flag = 0, weight = 1.0, send_flags = 0;
 	const gchar *symbol;
 
 	if (task) {
@@ -3044,8 +3096,29 @@ fuzzy_lua_unlearn_handler (lua_State *L)
 			weight = lua_tonumber (L, 3);
 		}
 
+		if (lua_type (L, 4) == LUA_TTABLE) {
+			const gchar *sf;
+
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				sf = lua_tostring (L, -1);
+
+				if (sf) {
+					if (g_ascii_strcasecmp (sf, "noimages") == 0) {
+						send_flags |= FUZZY_CHECK_FLAG_NOIMAGES;
+					}
+					else if (g_ascii_strcasecmp (sf, "noattachments") == 0) {
+						send_flags |= FUZZY_CHECK_FLAG_NOATTACHMENTS;
+					}
+					else if (g_ascii_strcasecmp (sf, "notext") == 0) {
+						send_flags |= FUZZY_CHECK_FLAG_NOTEXT;
+					}
+				}
+			}
+		}
+
 		lua_pushboolean (L,
-				fuzzy_check_lua_process_learn (task, FUZZY_DEL, weight, flag));
+				fuzzy_check_lua_process_learn (task, FUZZY_DEL, weight, flag,
+						send_flags));
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
