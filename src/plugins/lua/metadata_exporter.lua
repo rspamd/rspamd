@@ -80,22 +80,22 @@ local function get_general_metadata(task, flatten, no_content)
   if ((from or E)[1] or E).addr then
     r.from = from[1].addr
   end
-  local symbols, scores = task:get_symbols()
-  if not flatten then
-    local symscore = {}
-    for i = 1, #symbols do
-      local s = {}
-      s.name = symbols[i]
-      s.score = scores[i]
-      table.insert(symscore, s)
-    end
-    r.symbols = symscore
-  else
+  local syminf = task:get_symbols_all()
+  if flatten then
     local l = {}
-    for i = 1, #symbols do
-      table.insert(l, symbols[i] .. '(' .. scores[i] .. ')')
+    for _, sym in ipairs(syminf) do
+      local txt
+      if sym.options then
+        local topt = table.concat(sym.options, ', ')
+        txt = sym.name .. '(' .. sym.score .. ')' .. ' [' .. topt .. ']'
+      else
+        txt = sym.name .. '(' .. sym.score .. ')'
+      end
+      table.insert(l, txt)
     end
     r.symbols = table.concat(l, '\n')
+  else
+    r.symbols = syminf
   end
   local function process_header(name)
     local hdr = task:get_header_full(name)
