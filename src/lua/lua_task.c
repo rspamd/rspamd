@@ -2933,8 +2933,6 @@ lua_task_get_symbols_all (lua_State *L)
 				lua_push_symbol_result (L, task, metric, k, v, FALSE, TRUE);
 				lua_rawseti (L, -2, i++);
 			}
-		} else {
-			return luaL_error (L, "no metric result");
 		}
 	}
 	else {
