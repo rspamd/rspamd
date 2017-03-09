@@ -60,6 +60,8 @@ static gboolean mime_output = FALSE;
 static gboolean empty_input = FALSE;
 static gboolean compressed = FALSE;
 static gboolean profile = FALSE;
+static gboolean skip_images = FALSE;
+static gboolean skip_attachments = FALSE;
 static gchar *key = NULL;
 static GList *children;
 
@@ -145,6 +147,10 @@ static GOptionEntry entries[] =
 	   "Profile symbols execution time", NULL },
 	{ "dictionary", 'D', 0, G_OPTION_ARG_FILENAME, &dictionary,
 	   "Use dictionary to compress data", NULL },
+	{ "skip-images", '\0', 0, G_OPTION_ARG_NONE, &skip_images,
+	   "Skip images when learning/unlearning fuzzy", NULL },
+	{ "skip-attachments", '\0', 0, G_OPTION_ARG_NONE, &skip_attachments,
+	   "Skip attachments when learning/unlearning fuzzy", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -551,6 +557,12 @@ add_options (GQueue *opts)
 	}
 	if (profile) {
 		ADD_CLIENT_HEADER (opts, "Profile", "true");
+	}
+	if (skip_images) {
+		ADD_CLIENT_HEADER (opts, "Skip-Images", "true");
+	}
+	if (skip_attachments) {
+		ADD_CLIENT_HEADER (opts, "Skip-Attachments", "true");
 	}
 
 	hdr = http_headers;
