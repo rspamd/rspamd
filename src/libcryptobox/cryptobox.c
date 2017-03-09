@@ -151,7 +151,7 @@ rspamd_cryptobox_test_instr (gint instr)
 	switch (instr) {
 #ifdef HAVE_SSE2
 	case CPUID_SSE2:
-		__asm__ volatile ("pmuludq %xmm0, %xmm0");
+		__asm__ volatile ("psubb %xmm0, %xmm0");
 		break;
 	case CPUID_RDRAND:
 		/* Use byte code here for compatibility */
