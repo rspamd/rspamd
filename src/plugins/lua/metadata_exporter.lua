@@ -137,13 +137,13 @@ local formatters = {
   default = function(task)
     return task:get_content()
   end,
-  email_alert = function(task)
+  email_alert = function(task, rule)
     local meta = get_general_metadata(task, true)
-    meta.mail_from = settings.mail_from
-    meta.mail_to = settings.mail_to
+    meta.mail_from = rule.mail_from or settings.mail_from
+    meta.mail_to = rule.mail_to or settings.mail_to
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return simple_template(settings.email_template, meta)
+    return simple_template(rule.email_template or settings.email_template, meta)
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -625,7 +625,7 @@ local function gen_exporter(rule)
     if selected then
       rspamd_logger.debugm(N, task, 'Message selected for processing')
       local formatter = rule.formatter or 'default'
-      local formatted = formatters[formatter](task)
+      local formatted = formatters[formatter](task, rule)
       if formatted then
         pushers[rule.backend](task, formatted, rule)
       else
