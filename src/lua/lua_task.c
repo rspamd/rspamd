@@ -2166,7 +2166,7 @@ lua_task_set_recipients (lua_State *L)
 	gint what = 0, pos = 3;
 
 	if (task) {
-		if (lua_isstring (L, 2)) {
+		if (lua_isstring (L, 2) || lua_isnumber (L, 2)) {
 			/* Get what value */
 			what = lua_task_str_to_get_type (L, 2);
 		}
@@ -2198,7 +2198,7 @@ lua_task_set_recipients (lua_State *L)
 			g_ptr_array_set_size (ptrs, 0);
 
 			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-				if (lua_import_email_address (L, task, -1, &addr)) {
+				if (lua_import_email_address (L, task, lua_gettop (L), &addr)) {
 					g_ptr_array_add (ptrs, addr);
 					addr = NULL;
 				}
@@ -2387,7 +2387,7 @@ lua_task_set_from (lua_State *L)
 	gint what = 0, pos = 3;
 
 	if (task) {
-		if (lua_isstring (L, 2)) {
+		if (lua_isstring (L, 2) || lua_isnumber (L, 2)) {
 			/* Get what value */
 			what = lua_task_str_to_get_type (L, 2);
 		}
@@ -2721,7 +2721,7 @@ lua_push_symbol_result (lua_State *L,
 	const gboolean add_name)
 {
 	struct rspamd_metric_result *metric_res;
-	struct rspamd_symbol_result *s;
+	struct rspamd_symbol_result *s = NULL;
 	gint j, e;
 
 	if (!symbol_result) {
