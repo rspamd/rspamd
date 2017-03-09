@@ -473,6 +473,12 @@ LUA_FUNCTION_DEF (task, get_archives);
  */
 LUA_FUNCTION_DEF (task, get_symbol);
 /***
+ * @method task:get_symbols_all()
+ * Returns array of symbols matched in default metric with all metadata
+ * @return {table} table of tables formatted as in `task:get_symbol()` except that `metric` is absent and `name` is added
+ */
+LUA_FUNCTION_DEF (task, get_symbols_all);
+/***
  * @method task:get_symbols()
  * Returns array of all symbols matched for this task
  * @return {table, table} table of strings with symbols names + table of theirs scores
@@ -808,6 +814,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_archives),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_symbols),
+	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
@@ -2708,53 +2715,77 @@ static inline gboolean
 lua_push_symbol_result (lua_State *L,
 	struct rspamd_task *task,
 	struct rspamd_metric *metric,
-	const gchar *symbol)
+	const gchar *symbol,
+	struct rspamd_symbol_result *symbol_result,
+	const gboolean add_metric,
+	const gboolean add_name)
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s;
-	gint j;
+	gint j, e;
 
-	metric_res = g_hash_table_lookup (task->results, metric->name);
-	if (metric_res) {
-		if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
-			j = 1;
-			lua_createtable (L, 0, 5);
+	if (!symbol_result) {
+		metric_res = g_hash_table_lookup (task->results, metric->name);
+		if (metric_res) {
+			s = g_hash_table_lookup (metric_res->symbols, symbol);
+		}
+	}
+	else {
+		s = symbol_result;
+	}
+
+	if (s) {
+		j = 1;
+		e = 4;
+		if (add_metric) {
+			e++;
+		}
+		if (add_name) {
+			e++;
+		}
+		lua_createtable (L, 0, e);
+		if (add_metric) {
 			lua_pushstring (L, "metric");
 			lua_pushstring (L, metric->name);
 			lua_settable (L, -3);
-			lua_pushstring (L, "score");
-			lua_pushnumber (L, s->score);
-			lua_settable (L, -3);
-
-			if (s->sym && s->sym->gr) {
-				lua_pushstring (L, "group");
-				lua_pushstring (L, s->sym->gr->name);
-				lua_settable (L, -3);
-			}
-			else {
-				lua_pushstring (L, "group");
-				lua_pushstring (L, "ungrouped");
-				lua_settable (L, -3);
-			}
-
-			if (s->options) {
-				GHashTableIter it;
-				gpointer k, v;
-
-				lua_pushstring (L, "options");
-				lua_createtable (L, g_hash_table_size (s->options), 0);
-				g_hash_table_iter_init (&it, s->options);
-
-				while (g_hash_table_iter_next (&it, &k, &v)) {
-					lua_pushstring (L, (const char*)v);
-					lua_rawseti (L, -2, j++);
-				}
-
-				lua_settable (L, -3);
-			}
-
-			return TRUE;
 		}
+		if (add_name) {
+			lua_pushstring (L, "name");
+			lua_pushstring (L, symbol);
+			lua_settable (L, -3);
+		}
+		lua_pushstring (L, "score");
+		lua_pushnumber (L, s->score);
+		lua_settable (L, -3);
+
+		if (s->sym && s->sym->gr) {
+			lua_pushstring (L, "group");
+			lua_pushstring (L, s->sym->gr->name);
+			lua_settable (L, -3);
+		}
+		else {
+			lua_pushstring (L, "group");
+			lua_pushstring (L, "ungrouped");
+			lua_settable (L, -3);
+		}
+
+		if (s->options) {
+			GHashTableIter it;
+			gpointer k, v;
+
+			lua_pushstring (L, "options");
+			lua_createtable (L, g_hash_table_size (s->options), 0);
+			g_hash_table_iter_init (&it, s->options);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				lua_pushstring (L, (const char*)v);
+				lua_rawseti (L, -2, j++);
+			}
+
+			lua_settable (L, -3);
+		}
+
+		return TRUE;
 	}
 
 	return FALSE;
@@ -2785,7 +2816,7 @@ lua_task_get_symbol (lua_State *L)
 		if (!cur && metric) {
 			lua_createtable (L, 1, 0);
 
-			if ((found = lua_push_symbol_result (L, task, metric, symbol))) {
+			if ((found = lua_push_symbol_result (L, task, metric, symbol, NULL, TRUE, FALSE))) {
 				lua_rawseti (L, -2, i++);
 			}
 			else {
@@ -2796,7 +2827,7 @@ lua_task_get_symbol (lua_State *L)
 		else {
 			while (cur) {
 				metric = cur->data;
-				if (lua_push_symbol_result (L, task, metric, symbol)) {
+				if (lua_push_symbol_result (L, task, metric, symbol, NULL, TRUE, FALSE)) {
 					lua_rawseti (L, -2, i++);
 					found = TRUE;
 				}
@@ -2879,6 +2910,44 @@ lua_task_get_symbols (lua_State *L)
 
 	return 2;
 }
+
+static gint
+lua_task_get_symbols_all (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_metric *metric;
+	struct rspamd_metric_result *mres;
+	GHashTableIter it;
+	gpointer k, v;
+	gboolean found = FALSE;
+	gint i = 1;
+
+	if (task) {
+		metric = task->cfg->default_metric;
+		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		if (mres) {
+			found = TRUE;
+			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
+			g_hash_table_iter_init (&it, mres->symbols);
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				lua_push_symbol_result (L, task, metric, k, v, FALSE, TRUE);
+				lua_rawseti (L, -2, i++);
+			}
+		} else {
+			return luaL_error (L, "no metric result");
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!found) {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_task_get_symbols_numeric (lua_State *L)
