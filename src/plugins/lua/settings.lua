@@ -225,6 +225,19 @@ local function check_settings(task)
       end
     end
 
+    if rule['request_header'] then
+      for k, v in pairs(rule['request_header']) do
+        local h = task:get_request_header(k)
+        res = (h and v:match(h))
+        if res then
+          break
+        end
+      end
+      if not res then
+        return nil
+      end
+    end
+
     if res then
       if rule['whitelist'] then
         rule['apply'] = {whitelist = true}
@@ -444,6 +457,19 @@ local function process_settings_table(tbl)
     end
     if elt['authenticated'] then
       out['authenticated'] = true
+    end
+    if elt['request_header'] then
+      local rho = {}
+      for k, v in pairs(elt['request_header']) do
+        local re = rspamd_regexp.get_cached(v)
+        if not re then
+          re = rspamd_regexp.create_cached(v)
+        end
+        if re then
+          rho[k] = re
+        end
+      end
+      out['request_header'] = rho
     end
 
     -- Now we must process actions
