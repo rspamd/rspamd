@@ -238,7 +238,7 @@ local pushers = {
       url=rule.url,
       body=formatted,
       callback=http_callback,
-      mime_type=rule.mime_type,
+      mime_type=rule.mime_type or settings.mime_type,
       headers=hdrs,
     })
   end,
@@ -327,7 +327,7 @@ local pushers = {
       end
         local function hello_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(from_cb, {'MAIL FROM: <', rule.mail_from, '>\r\n'})
+          conn:add_write(from_cb, {'MAIL FROM: <', rule.mail_from or settings.mail_from, '>\r\n'})
         end
       end
       local function hello_cb(merr)
@@ -336,7 +336,7 @@ local pushers = {
         end
       end
       if no_error(err, data) then
-        conn:add_write(hello_cb, {'HELO ', rule.helo, '\r\n'})
+        conn:add_write(hello_cb, {'HELO ', rule.helo or settings.helo, '\r\n'})
       end
     end
     rspamd_tcp.request({
@@ -344,7 +344,7 @@ local pushers = {
       callback = mail_cb,
       stop_pattern = '\r\n',
       host = rule.smtp,
-      port = rule.smtp_port or 25,
+      port = rule.smtp_port or settings.smtp_port or 25,
     })
   end,
 }
