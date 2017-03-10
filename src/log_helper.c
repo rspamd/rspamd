@@ -64,6 +64,7 @@ init_log_helper (struct rspamd_config *cfg)
 	GQuark type;
 
 	type = g_quark_try_string ("log_helper");
+	(void)type;
 	ctx = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*ctx));
 
 	ctx->magic = rspamd_log_helper_magic;

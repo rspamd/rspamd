@@ -62,12 +62,10 @@ rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
   const gchar **charset, gsize *charset_len,
   const gchar **encoded, gsize *encoded_len)
 {
-  const char *p = in, *pe = in + len, *eof,
+  const char *p = in, *pe = in + len,
     *encoded_start = NULL, *encoded_end = NULL,
     *charset_start = NULL, *charset_end = NULL;
   gint encoding = RSPAMD_RFC2047_QP, cs = 0;
-
-  eof = pe;
 
   %% write init;
   %% write exec;

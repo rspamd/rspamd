@@ -1800,7 +1800,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task)
 {
-	const gchar *p, *body_end, *body_start;
+	const gchar *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
 	EVP_MD_CTX *cpy_ctx;
 	gsize dlen;
@@ -1814,7 +1814,6 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	g_return_val_if_fail (task->msg.len > 0, DKIM_ERROR);
 
 	/* First of all find place of body */
-	p = task->msg.begin;
 	body_end = task->msg.begin + task->msg.len;
 	body_start = task->raw_headers_content.body_start;
 
@@ -2161,7 +2160,7 @@ rspamd_dkim_sign (struct rspamd_task *task,
 {
 	GString *hdr;
 	struct rspamd_dkim_header *dh;
-	const gchar *p, *body_end, *body_start;
+	const gchar *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
 	gsize dlen;
 	guint i, j;
@@ -2172,7 +2171,6 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	g_assert (ctx != NULL);
 
 	/* First of all find place of body */
-	p = task->msg.begin;
 	body_end = task->msg.begin + task->msg.len;
 	body_start = task->raw_headers_content.body_start;
 

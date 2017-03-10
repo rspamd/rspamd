@@ -1531,11 +1531,9 @@ static gboolean
 rspamd_controller_lua_fin_task (void *ud)
 {
 	struct rspamd_task *task = ud;
-	struct rspamd_controller_session *session;
 	struct rspamd_http_connection_entry *conn_ent;
 
 	conn_ent = task->fin_arg;
-	session = conn_ent->ud;
 
 	if (task->err != NULL) {
 		rspamd_controller_send_error (conn_ent, task->err->code, "%s",

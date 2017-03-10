@@ -170,7 +170,7 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		rspamd_stat_token_t *w,
 		gboolean is_url)
 {
-	const gchar *p, *end, *c;
+	const gchar *p, *end;
 	gdouble badness = 0.0;
 	UChar32 uc;
 	UBlockCode sc, last_sc;
@@ -184,7 +184,6 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 
 	p = w->begin;
 	end = p + w->len;
-	c = p;
 	last_sc = 0;
 
 	/* We assume that w is normalized */
@@ -271,7 +270,7 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 		rspamd_stat_token_t *w,
 		gboolean is_url)
 {
-	const guchar *p, *end, *c;
+	const guchar *p, *end;
 	gdouble badness = 0.0;
 	enum {
 		ascii = 1,
@@ -287,7 +286,6 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 
 	p = w->begin;
 	end = p + w->len;
-	c = p;
 	last_sc = 0;
 
 	if (w->len > chartable_module_ctx->max_word_len) {

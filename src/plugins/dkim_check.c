@@ -282,7 +282,7 @@ gint
 dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
-	gint res = TRUE, cb_id = -1, check_id = -1;
+	gint res = TRUE, cb_id = -1;
 	guint cache_size;
 	gboolean got_trusted = FALSE;
 
@@ -511,7 +511,7 @@ dkim_module_config (struct rspamd_config *cfg)
 							dkim_module_ctx->dkim_pool,
 							dkim_module_ctx->sign_condition_ref);
 
-					check_id = rspamd_symbols_cache_add_symbol (cfg->cache,
+					rspamd_symbols_cache_add_symbol (cfg->cache,
 							"DKIM_SIGN",
 							0,
 							dkim_sign_callback,

@@ -25,7 +25,7 @@ struct rspamd_html_colorname {
 	const gchar *name;
 };
 
-const static struct rspamd_html_colorname html_colornames[] = {
+static const struct rspamd_html_colorname html_colornames[] = {
 		{ {240, 248, 255}, "aliceblue"},
 		{ {250, 235, 215}, "antiquewhite"},
 		{ {255, 239, 219}, "antiquewhite1"},

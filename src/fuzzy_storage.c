@@ -747,26 +747,21 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	struct fuzzy_session *session = ud;
 	gboolean encrypted = FALSE, is_shingle = FALSE;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
-	gsize up_len = 0;
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
 		cmd = &session->cmd.normal;
-		up_len = sizeof (session->cmd.normal);
 		break;
 	case CMD_SHINGLE:
 		cmd = &session->cmd.shingle.basic;
-		up_len = sizeof (session->cmd.shingle);
 		is_shingle = TRUE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
 		cmd = &session->cmd.enc_normal.cmd;
-		up_len = sizeof (session->cmd.normal);
 		encrypted = TRUE;
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
 		cmd = &session->cmd.enc_shingle.cmd.basic;
-		up_len = sizeof (session->cmd.shingle);
 		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;

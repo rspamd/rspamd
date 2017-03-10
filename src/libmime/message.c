@@ -287,7 +287,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 
-	const guchar *p, *c, *end;
+	const guchar *p, *end;
 	guint i;
 	goffset off;
 	struct rspamd_process_exception *ex;
@@ -296,7 +296,6 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	part->stripped_content = g_byte_array_sized_new (part->content->len);
 	part->newlines = g_ptr_array_sized_new (128);
 	p = part->content->data;
-	c = p;
 	end = p + part->content->len;
 
 	rspamd_strip_newlines_parse (p, end, part->stripped_content,
