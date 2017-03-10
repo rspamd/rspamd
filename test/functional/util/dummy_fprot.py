@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+PID = "/tmp/dummy_fprot.pid"
+
 import os
 import sys
 try:
@@ -10,6 +12,7 @@ except:
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
+        os.remove(PID)
         self.data = self.request.recv(1024).strip()
         if self.server.foundvirus:
             self.request.sendall(b"1 <infected: EICAR_Test_File> FOO\n")
@@ -40,6 +43,7 @@ if __name__ == "__main__":
     server.foundvirus = foundvirus
     server.server_bind()
     server.server_activate()
+    open(PID, 'w').close()
     server.handle_request()
     server.server_close()
     os.exit(0)
