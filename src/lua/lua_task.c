@@ -2713,16 +2713,16 @@ lua_task_get_archives (lua_State *L)
 
 static inline gboolean
 lua_push_symbol_result (lua_State *L,
-	struct rspamd_task *task,
-	struct rspamd_metric *metric,
-	const gchar *symbol,
-	struct rspamd_symbol_result *symbol_result,
-	const gboolean add_metric,
-	const gboolean add_name)
+		struct rspamd_task *task,
+		struct rspamd_metric *metric,
+		const gchar *symbol,
+		struct rspamd_symbol_result *symbol_result,
+		gboolean add_metric,
+		gboolean add_name)
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
-	gint j, e;
+	gint j = 1, e = 4;
 
 	if (!symbol_result) {
 		metric_res = g_hash_table_lookup (task->results, metric->name);
@@ -2735,15 +2735,15 @@ lua_push_symbol_result (lua_State *L,
 	}
 
 	if (s) {
-		j = 1;
-		e = 4;
 		if (add_metric) {
 			e++;
 		}
 		if (add_name) {
 			e++;
 		}
+
 		lua_createtable (L, 0, e);
+
 		if (add_metric) {
 			lua_pushstring (L, "metric");
 			lua_pushstring (L, metric->name);
@@ -2816,7 +2816,8 @@ lua_task_get_symbol (lua_State *L)
 		if (!cur && metric) {
 			lua_createtable (L, 1, 0);
 
-			if ((found = lua_push_symbol_result (L, task, metric, symbol, NULL, TRUE, FALSE))) {
+			if ((found = lua_push_symbol_result (L, task, metric, symbol,
+					NULL, TRUE, FALSE))) {
 				lua_rawseti (L, -2, i++);
 			}
 			else {
@@ -2827,7 +2828,8 @@ lua_task_get_symbol (lua_State *L)
 		else {
 			while (cur) {
 				metric = cur->data;
-				if (lua_push_symbol_result (L, task, metric, symbol, NULL, TRUE, FALSE)) {
+				if (lua_push_symbol_result (L, task, metric, symbol,
+						NULL, TRUE, FALSE)) {
 					lua_rawseti (L, -2, i++);
 					found = TRUE;
 				}
@@ -2929,6 +2931,7 @@ lua_task_get_symbols_all (lua_State *L)
 			found = TRUE;
 			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
 			g_hash_table_iter_init (&it, mres->symbols);
+
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				lua_push_symbol_result (L, task, metric, k, v, FALSE, TRUE);
 				lua_rawseti (L, -2, i++);

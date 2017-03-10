@@ -94,7 +94,7 @@ local function get_general_metadata(task, flatten, no_content)
       end
       table.insert(l, txt)
     end
-    r.symbols = table.concat(l, '\n')
+    r.symbols = table.concat(l, '\n\t')
   else
     r.symbols = syminf
   end
