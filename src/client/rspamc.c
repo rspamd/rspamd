@@ -1165,7 +1165,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 {
 	const ucl_object_t *cur, *metric, *res;
 	ucl_object_iter_t it = NULL;
-	const gchar *action = "no action";
+	const gchar *action = "no action", *line_end = "\r\n", *p;
 	gchar scorebuf[32];
 	GString *symbuf, *folded_symbuf, *added_headers;
 	gint act = 0;
@@ -1173,12 +1173,30 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 	gdouble score = 0.0, required_score = 0.0;
 	gboolean is_spam = FALSE;
 	gchar *json_header, *json_header_encoded, *sc;
+	enum rspamd_newlines_type nl_type = RSPAMD_TASK_NEWLINES_CRLF;
 
 	headers_pos = rspamd_string_find_eoh (input, NULL);
 
 	if (headers_pos == -1) {
 		rspamd_fprintf (stderr,"cannot find end of headers position");
 		return;
+	}
+
+	p = input->str + headers_pos;
+
+	if (headers_pos > 1 && *(p - 1) == '\n') {
+		if (headers_pos > 2 && *(p - 2) == '\r') {
+			line_end = "\r\n";
+			nl_type = RSPAMD_TASK_NEWLINES_CRLF;
+		}
+		else {
+			line_end = "\n";
+			nl_type = RSPAMD_TASK_NEWLINES_LF;
+		}
+	}
+	else if (headers_pos > 1 && *(p - 1) == '\r') {
+		line_end = "\r";
+		nl_type = RSPAMD_TASK_NEWLINES_CR;
 	}
 
 	added_headers = g_string_sized_new (127);
@@ -1210,19 +1228,19 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			is_spam = TRUE;
 		}
 
-		rspamd_printf_gstring (added_headers, "X-Spam-Scanner: %s\r\n",
-				"rspamc " RVERSION);
-		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f\r\n",
-				time);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scanner: %s%s",
+				"rspamc " RVERSION, line_end);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f%s",
+				time, line_end);
 
 		if (is_spam) {
-			rspamd_printf_gstring (added_headers, "X-Spam: yes\r\n");
+			rspamd_printf_gstring (added_headers, "X-Spam: yes%s", line_end);
 		}
 
-		rspamd_printf_gstring (added_headers, "X-Spam-Action: %s\r\n",
-				action);
-		rspamd_printf_gstring (added_headers, "X-Spam-Score: %.2f / %.2f\r\n",
-				score, required_score);
+		rspamd_printf_gstring (added_headers, "X-Spam-Action: %s%s",
+				action, line_end);
+		rspamd_printf_gstring (added_headers, "X-Spam-Score: %.2f / %.2f%s",
+				score, required_score, line_end);
 
 		/* SA style stars header */
 		for (sc = scorebuf; sc < scorebuf + sizeof (scorebuf) - 1 && score > 0;
@@ -1231,8 +1249,8 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		}
 
 		*sc = '\0';
-		rspamd_printf_gstring (added_headers, "X-Spam-Level: %s\r\n",
-				scorebuf);
+		rspamd_printf_gstring (added_headers, "X-Spam-Level: %s%s",
+				scorebuf, line_end);
 
 		/* Short description of all symbols */
 		symbuf = g_string_sized_new (64);
@@ -1250,16 +1268,18 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 
 		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols",
 				symbuf->str,
-				0, RSPAMD_TASK_NEWLINES_CRLF);
-		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v\r\n",
-				folded_symbuf);
+				0, nl_type);
+		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v%s",
+				folded_symbuf, line_end);
 
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
 
 		if (ucl_object_lookup (result, "dkim-signature")) {
-			rspamd_printf_gstring (added_headers, "DKIM-Signature: %s\r\n",
-					ucl_object_tostring (ucl_object_lookup (result, "dkim-signature")));
+			rspamd_printf_gstring (added_headers, "DKIM-Signature: %s%s",
+					ucl_object_tostring (
+							ucl_object_lookup (result, "dkim-signature")),
+					line_end);
 		}
 
 		if (json || raw || compact) {
@@ -1274,23 +1294,23 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			}
 
 			json_header_encoded = rspamd_encode_base64_fold (json_header,
-					strlen (json_header), 60, NULL, RSPAMD_TASK_NEWLINES_CRLF);
+					strlen (json_header), 60, NULL, nl_type);
 			free (json_header);
 			rspamd_printf_gstring (added_headers,
-					"X-Spam-Result: %s\r\n",
-					json_header_encoded);
+					"X-Spam-Result: %s%s",
+					json_header_encoded, line_end);
 			g_free (json_header_encoded);
 		}
 
 		ucl_object_unref (result);
 	}
 	else {
-		rspamd_printf_gstring (added_headers, "X-Spam-Scanner: %s\r\n",
-				"rspamc " RVERSION);
-		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f\r\n",
-				time);
-		rspamd_printf_gstring (added_headers, "X-Spam-Error: %e\r\n",
-				err);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scanner: %s%s",
+				"rspamc " RVERSION, line_end);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f%s",
+				time, line_end);
+		rspamd_printf_gstring (added_headers, "X-Spam-Error: %e%s",
+				err, line_end);
 	}
 
 	/* Write message */
