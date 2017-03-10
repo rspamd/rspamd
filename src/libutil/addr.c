@@ -1664,7 +1664,8 @@ rspamd_inet_address_equal (gconstpointer a, gconstpointer b)
 #endif
 
 gboolean
-rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
+rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
+		gboolean check_laddrs)
 {
 	if (addr == NULL) {
 		return FALSE;
@@ -1689,7 +1690,7 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
 			}
 		}
 
-		if (local_addrs) {
+		if (check_laddrs && local_addrs) {
 			if (radix_find_compressed_addr (local_addrs, addr) != RADIX_NO_VALUE) {
 				return TRUE;
 			}

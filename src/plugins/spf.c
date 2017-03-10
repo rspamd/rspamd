@@ -557,7 +557,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	}
 
 	if ((!spf_module_ctx->check_authed && task->user != NULL)
-			|| (!spf_module_ctx->check_local && rspamd_inet_address_is_local (task->from_addr))) {
+			|| (!spf_module_ctx->check_local &&
+					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip SPF checks for local networks and authorized users");
 		return;
 	}

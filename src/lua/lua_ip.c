@@ -496,9 +496,16 @@ static gint
 lua_ip_is_local (lua_State *L)
 {
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
+	gboolean check_laddrs = TRUE;
 
 	if (ip && ip->addr) {
-		lua_pushboolean (L, rspamd_inet_address_is_local (ip->addr));
+
+		if (lua_type (L, 2) == LUA_TBOOLEAN) {
+			check_laddrs = lua_toboolean (L, 2);
+		}
+
+		lua_pushboolean (L, rspamd_inet_address_is_local (ip->addr,
+				check_laddrs));
 	}
 	else {
 		lua_pushnil (L);

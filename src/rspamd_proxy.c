@@ -1074,7 +1074,8 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 		}
 
 		if (m->local ||
-				rspamd_inet_address_is_local (rspamd_upstream_addr (bk_conn->up))) {
+				rspamd_inet_address_is_local (
+						rspamd_upstream_addr (bk_conn->up), FALSE)) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header (msg, "File", session->fname);
@@ -1278,7 +1279,7 @@ retry:
 
 		if (backend->local ||
 				rspamd_inet_address_is_local (
-						rspamd_upstream_addr (session->master_conn->up))) {
+						rspamd_upstream_addr (session->master_conn->up), FALSE)) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header (msg, "File", session->fname);

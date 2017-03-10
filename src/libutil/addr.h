@@ -274,7 +274,8 @@ gboolean rspamd_inet_address_equal (gconstpointer a, gconstpointer b);
 /**
  * Returns TRUE if an address belongs to some local address
  */
-gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr);
+gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
+		gboolean check_laddrs);
 
 /**
  * Returns size of storage required to store a complete IP address
