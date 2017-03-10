@@ -41,7 +41,8 @@ Subject: Spam alert
 Date: $date
 MIME-Version: 1.0
 Message-ID: <$our_message_id>
-Content-type: text/plain; charset=us-ascii
+Content-type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
 
 Authenticated username: $user
 IP: $ip
