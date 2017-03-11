@@ -419,8 +419,10 @@ rspamd_config.FAKE_REPLY = {
   score = 1.0
 }
 
-local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
-  function(task)
+local check_from_id = rspamd_config:register_symbol{
+  name = 'CHECK_FROM',
+  type = 'callback',
+  callback = function(task)
     local envfrom = task:get_from(1)
     local from = task:get_from(2)
     if (from and from[1] and not from[1].name) then
@@ -464,29 +466,85 @@ local check_from_id = rspamd_config:register_callback_symbol('CHECK_FROM', 1.0,
       task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
     end
   end
-)
+}
 
-rspamd_config:register_virtual_symbol('FROM_NO_DN', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_NO_DN', 0, 'From header does not have a display name')
-rspamd_config:register_virtual_symbol('FROM_DN_EQ_ADDR', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_DN_EQ_ADDR', 1.0, 'From header display name is the same as the address')
-rspamd_config:register_virtual_symbol('FROM_HAS_DN', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_HAS_DN', 0, 'From header has a display name')
-rspamd_config:register_virtual_symbol('FROM_NAME_EXCESS_SPACE', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_NAME_EXCESS_SPACE', 1.0, 'From header display name contains excess whitespace')
-rspamd_config:register_virtual_symbol('FROM_NAME_HAS_TITLE', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_NAME_HAS_TITLE', 1.0, 'From header display name has a title (Mr/Mrs/Dr)')
-rspamd_config:register_virtual_symbol('FROM_EQ_ENVFROM', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_EQ_ENVFROM', 0, 'From address is the same as the envelope')
-rspamd_config:register_virtual_symbol('FROM_NEQ_ENVFROM', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('FROM_NEQ_ENVFROM', 0, 'From address is different to the envelope')
-rspamd_config:register_virtual_symbol('TO_EQ_FROM', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('TO_EQ_FROM', 0, 'To address matches the From address')
-rspamd_config:register_virtual_symbol('TO_DOM_EQ_FROM_DOM', 1.0, check_from_id)
-rspamd_config:set_metric_symbol('TO_DOM_EQ_FROM_DOM', 0, 'To domain is the same as the From domain')
+rspamd_config:register_symbol{
+  name = 'FROM_NO_DN',
+  score = 0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header does not have a display name',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_DN_EQ_ADDR',
+  score = 1.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header display name is the same as the address',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_HAS_DN',
+  score = 0.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header has a display name',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_NAME_EXCESS_SPACE',
+  score = 1.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header display name contains excess whitespace',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_NAME_HAS_TITLE',
+  score = 1.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From header display name has a title (Mr/Mrs/Dr)',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_EQ_ENVFROM',
+  score = 0.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From address is the same as the envelope',
+}
+rspamd_config:register_symbol{
+  name = 'FROM_NEQ_ENVFROM',
+  score = 0.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'From address is different to the envelope',
+}
+rspamd_config:register_symbol{
+  name = 'TO_EQ_FROM',
+  score = 0.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'To address matches the From address',
+}
+rspamd_config:register_symbol{
+  name = 'TO_DOM_EQ_FROM_DOM',
+  score = 0.0,
+  group = 'header',
+  parent = check_from_id,
+  type = 'virtual',
+  description = 'To domain is the same as the From domain',
+}
 
-local check_to_cc_id = rspamd_config:register_callback_symbol('CHECK_TO_CC', 1.0,
-  function(task)
+local check_to_cc_id = rspamd_config:register_symbol{
+  name = 'CHECK_TO_CC',
+  type = 'callback',
+  callback = function(task)
     local rcpts = task:get_recipients(1)
     local to = task:get_recipients(2)
     local to_match_envrcpt = 0
@@ -542,21 +600,69 @@ local check_to_cc_id = rspamd_config:register_callback_symbol('CHECK_TO_CC', 1.0
       task:insert_result('TO_MATCH_ENVRCPT_SOME', 1.0)
     end
   end
-)
+}
 
-rspamd_config:register_virtual_symbol('TO_DN_RECIPIENTS', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_DN_RECIPIENTS', 2.0, 'To header display name is "Recipients"')
-rspamd_config:register_virtual_symbol('TO_DN_NONE', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_DN_NONE', 0, 'None of the recipients have display names')
-rspamd_config:register_virtual_symbol('TO_DN_ALL', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_DN_ALL', 0, 'All of the recipients have display names')
-rspamd_config:register_virtual_symbol('TO_DN_SOME', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_DN_SOME', 0, 'Some of the recipients have display names')
-rspamd_config:register_virtual_symbol('TO_DN_EQ_ADDR_ALL', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_DN_EQ_ADDR_ALL', 0, 'All of the recipients have display names that are the same as their address')
-rspamd_config:register_virtual_symbol('TO_DN_EQ_ADDR_SOME', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_DN_EQ_ADDR_SOME', 0, 'Some of the recipients have display names that are the same as their address')
-rspamd_config:register_virtual_symbol('TO_MATCH_ENVRCPT_ALL', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_ALL', 0, 'All of the recipients match the envelope')
-rspamd_config:register_virtual_symbol('TO_MATCH_ENVRCPT_SOME', 1.0, check_to_cc_id)
-rspamd_config:set_metric_symbol('TO_MATCH_ENVRCPT_SOME', 0, 'Some of the recipients match the envelope')
+rspamd_config:register_symbol{
+  name = 'TO_DN_RECIPIENTS',
+  score = 2.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'To header display name is "Recipients"',
+}
+rspamd_config:register_symbol{
+  name = 'TO_DN_NONE',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'None of the recipients have display names',
+}
+rspamd_config:register_symbol{
+  name = 'TO_DN_ALL',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'All the recipients have display names',
+}
+rspamd_config:register_symbol{
+  name = 'TO_DN_SOME',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'Some of the recipients have display names',
+}
+rspamd_config:register_symbol{
+  name = 'TO_DN_EQ_ADDR_ALL',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'All of the recipients have display names that are the same as their address',
+}
+rspamd_config:register_symbol{
+  name = 'TO_DN_EQ_ADDR_SOME',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'Some of the recipients have display names that are the same as their address',
+}
+rspamd_config:register_symbol{
+  name = 'TO_MATCH_ENVRCPT_ALL',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'All of the recipients match the envelope',
+}
+rspamd_config:register_symbol{
+  name = 'TO_MATCH_ENVRCPT_SOME',
+  score = 0.0,
+  group = 'header',
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'Some of the recipients match the envelope',
+}

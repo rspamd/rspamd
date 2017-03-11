@@ -191,26 +191,26 @@ rspamd_config.ENVFROM_VERP = {
 }
 
 rspamd_config.RCVD_TLS_ALL = {
-    callback = function (task)
-        local rcvds = task:get_header_full('Received')
-        if not rcvds then return false end
-        local count = 0
-        local encrypted = 0
-        for _, rcvd in ipairs(rcvds) do
-            count = count + 1
-            local r = rcvd['decoded']:lower()
-            local with = r:match('%swith%s+(e?smtps?a?)')
-            if with and with:match('esmtps') then
-                encrypted = encrypted + 1
-            end
-        end
-        if (count > 0 and count == encrypted) then
-            return true
-        end
-    end,
-    score = 0.0,
-    description = "All hops used encrypted transports",
-    group = "encryption"
+  callback = function (task)
+    local rcvds = task:get_header_full('Received')
+    if not rcvds then return false end
+    local count = 0
+    local encrypted = 0
+    for _, rcvd in ipairs(rcvds) do
+      count = count + 1
+      local r = rcvd['decoded']:lower()
+      local with = r:match('%swith%s+(e?smtps?a?)')
+      if with and with:match('esmtps') then
+        encrypted = encrypted + 1
+      end
+    end
+    if (count > 0 and count == encrypted) then
+      return true
+    end
+  end,
+  score = 0.0,
+  description = "All hops used encrypted transports",
+  group = "encryption"
 }
 
 rspamd_config.RCVD_HELO_USER = {
