@@ -16,7 +16,10 @@ limitations under the License.
 
 local util = require "rspamd_util"
 local ipairs = ipairs
+local pairs = pairs
 local table = table
+local tostring = tostring
+local tonumber = tonumber
 local fun = require "fun"
 local E = {}
 
@@ -682,13 +685,25 @@ local check_to_cc_id = rspamd_config:register_symbol{
     local rcpts = task:get_recipients(1)
     local to = task:get_recipients(2)
     local to_match_envrcpt = 0
+    local cnts = {
+      [1] = 'ONE',
+      [2] = 'TWO',
+      [3] = 'THREE',
+      [5] = 'FIVE',
+      [7] = 'SEVEN',
+      [12] = 'TWELVE',
+      [50] = 'GT_50'
+    }
+    local def = 'ZERO'
     if (not to) then return false end
     -- Add symbol for recipient count
-    if (#to > 50) then
-      task:insert_result('RCPT_COUNT_GT_50', 1.0)
-    else
-      task:insert_result('RCPT_COUNT_' .. #to, 1.0)
+    local nrcpt = #to
+    for k,v in pairs(cnts) do
+      if nrcpt >= tonumber(k) then
+        def = v
+      end
     end
+    task:insert_result('RCPT_COUNT_' .. def, 1.0, tostring(nrcpt))
     -- Check for display names
     local to_dn_count = 0
     local to_dn_eq_addr_count = 0
@@ -734,6 +749,71 @@ local check_to_cc_id = rspamd_config:register_symbol{
       task:insert_result('TO_MATCH_ENVRCPT_SOME', 1.0)
     end
   end
+}
+
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_ZERO',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'No recipients',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_ONE',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'One recipient',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_TWO',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = 'Two recipients',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_THREE',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '3-5 recipients',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_FIVE',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '5-7 recipients',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_SEVEN',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '7-11 recipients',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_TWELVE',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '12-50 recipients',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCPT_COUNT_GT_50',
+  score = 0.0,
+  parent = check_to_cc_id,
+  type = 'virtual',
+  description = '50+ recipients',
+  group = 'header',
 }
 
 rspamd_config:register_symbol{

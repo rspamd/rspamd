@@ -235,7 +235,7 @@ rspamd_config.URI_COUNT_ODD = {
     if (ct and ct:lower():find('^multipart/alternative')) then
       local urls = task:get_urls()
       if (urls and (#urls % 2 == 1)) then
-        return true
+        return true, 1.0, tostring(#urls % 2)
       end
     end
   end,
