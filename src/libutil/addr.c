@@ -1232,7 +1232,10 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 			msg_err_pool_check ("address resolution for %s failed: %s",
 					addr_cpy,
 					gai_strerror (r));
-			g_free (addr_cpy);
+
+			if (pool == NULL) {
+				g_free (addr_cpy);
+			}
 
 			return FALSE;
 		}
