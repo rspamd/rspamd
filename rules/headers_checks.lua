@@ -20,14 +20,91 @@ local table = table
 local fun = require "fun"
 local E = {}
 
-rspamd_config.CHECK_RECEIVED = {
-  callback = function (task)
+local rcvd_cb_id = rspamd_config:register_symbol{
+  name = 'CHECK_RECEIVED',
+  type = 'callback',
+  callback = function(task)
+    local cnts = {
+      [1] = 'ONE',
+      [2] = 'TWO',
+      [3] = 'THREE',
+      [5] = 'FIVE',
+      [7] = 'SEVEN',
+      [12] = 'TWELVE'
+    }
+    local def = 'ZERO'
     local received = task:get_received_headers()
-    received = fun.filter(function(h)
-      return not h['artificial']
-    end, received):totable()
-    task:insert_result('RCVD_COUNT_' .. #received, 1.0)
+    local nreceived = fun.reduce(function(acc, rcvd)
+        return acc + 1
+      end, 0, fun.filter(function(h)
+        return not h['artificial']
+      end, received))
+
+    for k,v in pairs(cnts) do
+      if nreceived >= tonumber(k) then
+        def = v
+      end
+    end
+
+    task:insert_result('RCVD_COUNT_' .. def, 1.0, tostring(nreceived))
   end
+}
+
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_ZERO',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = 'No received',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_ONE',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = 'One received',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_TWO',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = 'Two received',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_THREE',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = '3-5 received',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_FIVE',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = '5-7 received',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_SEVEN',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = '7-11 received',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'RCVD_COUNT_TWELVE',
+  score = 0.0,
+  parent = rcvd_cb_id,
+  type = 'virtual',
+  description = '12+ received',
+  group = 'header',
 }
 
 rspamd_config.HAS_X_PRIO = {
@@ -149,6 +226,7 @@ rspamd_config:register_symbol{
   description = 'Reply-To display name matches From',
   group = 'header',
 }
+-- XXX: fix it
 rspamd_config:register_symbol{
   name = 'FROM_NAME_HAS_TITLE',
   score = 2.0,
@@ -159,8 +237,10 @@ rspamd_config:register_symbol{
 }
 rspamd_config:register_dependency(check_replyto_id, 'FROM_NAME_HAS_TITLE')
 
-local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
-  function (task)
+local check_mime_id = rspamd_config:register_symbol{
+  name = 'CHECK_MIME',
+  type = 'callback',
+  callback = function(task)
     local parts = task:get_parts()
     if not parts then return false end
 
@@ -211,7 +291,7 @@ local check_mime_id = rspamd_config:register_callback_symbol('CHECK_MIME', 1.0,
       end
     end
   end
-)
+}
 
 rspamd_config:register_symbol{
   name = 'MISSING_MIME_VERSION',
