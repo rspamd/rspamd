@@ -67,6 +67,7 @@ rspamd_config.MISSING_DATE = {
   description = 'Message date is missing',
   group = 'date'
 }
+
 rspamd_config.DATE_IN_FUTURE = {
   callback = function(task)
     if rspamd_config:get_api_version() >= 5 then
@@ -83,6 +84,7 @@ rspamd_config.DATE_IN_FUTURE = {
   description = 'Message date is in future',
   group = 'date'
 }
+
 rspamd_config.DATE_IN_PAST = {
   callback = function(task)
     if rspamd_config:get_api_version() >= 5 then
@@ -121,8 +123,8 @@ rspamd_config.R_SUSPICIOUS_URL = {
 
 
 rspamd_config.ENVFROM_PRVS = {
-    callback = function (task)
-        --[[
+  callback = function (task)
+    --[[
         Detect PRVS/BATV addresses to avoid FORGED_SENDER
         https://en.wikipedia.org/wiki/Bounce_Address_Tag_Validation
 
@@ -133,80 +135,73 @@ rspamd_config.ENVFROM_PRVS = {
         btv1==TAG==USER@example.com     Barracuda appliance
         msprvs1=TAG=USER@example.com    Sparkpost email delivery service
         ]]--
-        if not (task:has_from(1) and task:has_from(2)) then
-            return false
-        end
-        local envfrom = task:get_from(1)
-        local re_text = '^(?:(prvs|msprvs1)=([^=]+)=|btv1==[^=]+==)(.+@(.+))$'
-        local re = rspamd_regexp.create_cached(re_text)
-        local c = re:search(envfrom[1].addr:lower(), false, true)
-        if not c then return false end
-        local ef = c[1][4]
-        -- See if it matches the From header
-        local from = task:get_from(2)
-        if ef == from[1].addr:lower() then
-            return true
-        end
-        -- Check for prvs=USER=TAG@example.com
-        local t = c[1][2]
-        if t == 'prvs' then
-            local efr = c[1][3] .. '@' .. c[1][5]
-            if efr == from[1].addr:lower() then
-                return true
-            end
-        end
-        return false
-    end,
-    score = 0.0,
-    description = "Envelope From is a PRVS address that matches the From address",
-    group = 'prvs'
+    if not (task:has_from(1) and task:has_from(2)) then
+      return false
+    end
+    local envfrom = task:get_from(1)
+    local re_text = '^(?:(prvs|msprvs1)=([^=]+)=|btv1==[^=]+==)(.+@(.+))$'
+    local re = rspamd_regexp.create_cached(re_text)
+    local c = re:search(envfrom[1].addr:lower(), false, true)
+    if not c then return false end
+    local ef = c[1][4]
+    -- See if it matches the From header
+    local from = task:get_from(2)
+    if ef == from[1].addr:lower() then
+      return true
+    end
+    -- Check for prvs=USER=TAG@example.com
+    local t = c[1][2]
+    if t == 'prvs' then
+      local efr = c[1][3] .. '@' .. c[1][5]
+      if efr == from[1].addr:lower() then
+        return true
+      end
+    end
+    return false
+  end,
+  score = 0.0,
+  description = "Envelope From is a PRVS address that matches the From address",
+  group = 'prvs'
 }
 
 rspamd_config.ENVFROM_VERP = {
-    callback = function (task)
-        if not (task:has_from(1) and task:has_recipients(1)) then
-            return false
-        end
-        local envfrom = task:get_from(1)
-        local envrcpts = task:get_recipients(1)
-        -- VERP only works for single recipient messages
-        if #envrcpts > 1 then return false end
-        -- Get recipient and compute VERP address
-        local rcpt = envrcpts[1].addr:lower()
-        local verp = rcpt:gsub('@','=')
-        -- Get the user portion of the envfrom
-        local ef_user = envfrom[1].user:lower()
-        -- See if the VERP representation of the recipient appears in it
-        if ef_user:find(verp, 1, true)
-           and not ef_user:find('+caf_=' .. verp, 1, true) -- Google Forwarding
-           and not ef_user:find('^srs[01]=')               -- SRS
-        then
-            return true
-        end
-        return false
-    end,
-    score = 0.0,
-    description = "Envelope From is a VERP address",
-    group = "mailing_list"
+  callback = function (task)
+    if not (task:has_from(1) and task:has_recipients(1)) then
+      return false
+    end
+    local envfrom = task:get_from(1)
+    local envrcpts = task:get_recipients(1)
+    -- VERP only works for single recipient messages
+    if #envrcpts > 1 then return false end
+    -- Get recipient and compute VERP address
+    local rcpt = envrcpts[1].addr:lower()
+    local verp = rcpt:gsub('@','=')
+    -- Get the user portion of the envfrom
+    local ef_user = envfrom[1].user:lower()
+    -- See if the VERP representation of the recipient appears in it
+    if ef_user:find(verp, 1, true)
+      and not ef_user:find('+caf_=' .. verp, 1, true) -- Google Forwarding
+      and not ef_user:find('^srs[01]=')               -- SRS
+    then
+      return true
+    end
+    return false
+  end,
+  score = 0.0,
+  description = "Envelope From is a VERP address",
+  group = "mailing_list"
 }
 
 rspamd_config.RCVD_TLS_ALL = {
   callback = function (task)
     local rcvds = task:get_header_full('Received')
     if not rcvds then return false end
-    local count = 0
-    local encrypted = 0
-    for _, rcvd in ipairs(rcvds) do
-      count = count + 1
-      local r = rcvd['decoded']:lower()
-      local with = r:match('%swith%s+(e?smtps?a?)')
-      if with and with:match('esmtps') then
-        encrypted = encrypted + 1
-      end
-    end
-    if (count > 0 and count == encrypted) then
-      return true
-    end
+
+    local ret = fun.all(function(rc)
+      return rc.flags and (rc.flags['ssl'] or rc.flags['authenticated'])
+    end, rcvds)
+
+    return ret
   end,
   score = 0.0,
   description = "All hops used encrypted transports",
