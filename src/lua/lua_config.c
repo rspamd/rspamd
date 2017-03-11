@@ -1203,17 +1203,18 @@ lua_config_register_symbol (lua_State * L)
 	const gchar *name = NULL, *flags_str = NULL, *type_str = NULL,
 			*description = NULL, *group = NULL;
 	double weight = 0, score = NAN;
-	gint ret = -1, cbref = -1, type;
+	gboolean one_shot = FALSE;
+	gint ret = -1, cbref = -1, type, flags = 0;
 	gint64 parent = 0, priority = 0;
 	GError *err = NULL;
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=I;"
-				"score=D;description=S;group=S",
+				"score=D;description=S;group=S;one_shot=B",
 				&name, &weight, &cbref, &flags_str, &type_str,
 				&priority, &parent,
-				&score, &description, &group)) {
+				&score, &description, &group, &one_shot)) {
 			msg_err_config ("bad arguments: %e", err);
 			g_error_free (err);
 
@@ -1242,8 +1243,12 @@ lua_config_register_symbol (lua_State * L)
 				FALSE);
 
 		if (!isnan (score)) {
+			if (one_shot) {
+				flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+			}
+
 			rspamd_config_add_metric_symbol (cfg, DEFAULT_METRIC, name,
-					score, description, group, 0, (guint)priority);
+					score, description, group, flags, (guint)priority);
 		}
 	}
 	else {
