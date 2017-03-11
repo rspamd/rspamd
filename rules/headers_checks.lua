@@ -281,9 +281,8 @@ rspamd_config:register_symbol{
   description = 'Reply-To display name matches From',
   group = 'header',
 }
--- XXX: fix it
 rspamd_config:register_symbol{
-  name = 'FROM_NAME_HAS_TITLE',
+  name = 'REPLYTO_EMAIL_HAS_TITLE',
   score = 2.0,
   parent = check_replyto_id,
   type = 'virtual',
