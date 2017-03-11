@@ -19,6 +19,7 @@ limitations under the License.
 local E = {}
 local fun = require "fun"
 local util = require "rspamd_util"
+local rspamd_regexp = require "rspamd_regexp"
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = {

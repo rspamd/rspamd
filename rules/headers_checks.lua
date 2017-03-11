@@ -107,15 +107,70 @@ rspamd_config:register_symbol{
   group = 'header',
 }
 
-rspamd_config.HAS_X_PRIO = {
+local prio_cb_id = rspamd_config:register_symbol {
+  name = 'HAS_X_PRIO',
+  type = 'callback',
   callback = function (task)
+     local cnts = {
+      [1] = 'ONE',
+      [2] = 'TWO',
+      [3] = 'THREE',
+      [5] = 'FIVE',
+    }
+    local def = 'ZERO'
     local xprio = task:get_header('X-Priority');
     if not xprio then return false end
     local _,_,x = xprio:find('^%s?(%d+)');
     if (x) then
-      task:insert_result('HAS_X_PRIO_' .. x, 1.0)
+      x = tonumber(x)
+      for k,v in pairs(cnts) do
+        if x >= tonumber(k) then
+          def = v
+        end
+      end
+      task:insert_result('HAS_X_PRIO_' .. def, 1.0, tostring(x))
     end
   end
+}
+rspamd_config:register_symbol{
+  name = 'HAS_X_PRIO_ZERO',
+  score = 0.0,
+  parent = prio_cb_id,
+  type = 'virtual',
+  description = 'Priority 0',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'HAS_X_PRIO_ONE',
+  score = 0.0,
+  parent = prio_cb_id,
+  type = 'virtual',
+  description = 'Priority 1',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'HAS_X_PRIO_TWO',
+  score = 0.0,
+  parent = prio_cb_id,
+  type = 'virtual',
+  description = 'Priority 2',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'HAS_X_PRIO_THREE',
+  score = 0.0,
+  parent = prio_cb_id,
+  type = 'virtual',
+  description = 'Priority 3-4',
+  group = 'header',
+}
+rspamd_config:register_symbol{
+  name = 'HAS_X_PRIO_FIVE',
+  score = 0.0,
+  parent = prio_cb_id,
+  type = 'virtual',
+  description = 'Priority 5+',
+  group = 'header',
 }
 
 local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
