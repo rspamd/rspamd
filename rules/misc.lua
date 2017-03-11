@@ -845,15 +845,15 @@ rspamd_config.OMOGRAPH_URL = {
   description = 'Url contains both latin and non-latin characters'
 }
 
-rspamd_config:register_symbol{
+local aliases_id = rspamd_config:register_symbol{
   type = 'prefilter',
   name = 'EMAIL_PLUS_ALIASES',
   callback = function(task)
     local function check_address(addr)
       if addr.user then
-        local cap = string.match(addr.user, '^([^%+][^%+]*)%+.*$')
+        local cap, pluses = string.match(addr.user, '^([^%+][^%+]*)(%+.*)$')
         if cap then
-          return cap
+          return cap, rspamd_str_split(pluses, '+')
         end
       end
 
@@ -879,10 +879,12 @@ rspamd_config:register_symbol{
     local function check_from(type)
       if task:has_from(type) then
         local addr = task:get_from(type)[1]
-        local na = check_address(addr)
+        local na,tags = check_address(addr)
         if na then
           set_addr(addr, na)
           task:set_from(type, addr)
+          task:insert_result('TAGGED_FROM', 1.0, fun.totable(
+            fun.filter(function(t) return t and #t > 0 end, tags)))
         end
       end
     end
@@ -893,18 +895,22 @@ rspamd_config:register_symbol{
     local function check_rcpt(type)
       if task:has_recipients(type) then
         local modified = false
+        local all_tags = {}
         local addrs = task:get_recipients(type)
 
         for _, addr in ipairs(addrs) do
-          local na = check_address(addr)
+          local na,tags = check_address(addr)
           if na then
             set_addr(addr, na)
             modified = true
+            fun.each(function(t) table.insert(all_tags, t) end,
+              fun.filter(function(t) return t and #t > 0 end, tags))
           end
         end
 
         if modified then
           task:set_recipients(type, addrs)
+          task:insert_result('TAGGED_RCPT', 1.0, all_tags)
         end
       end
     end
@@ -914,4 +920,19 @@ rspamd_config:register_symbol{
   end,
   priority = 150,
   description = 'Removes plus aliases from the email',
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = aliases_id,
+  name = 'TAGGED_RCPT',
+  description = 'SMTP recipients have plus tags',
+  score = 0,
+}
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = aliases_id,
+  name = 'TAGGED_FROM',
+  description = 'SMTP from has plus tags',
+  score = 0,
 }
