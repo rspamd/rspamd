@@ -60,9 +60,9 @@ Symbols: $symbols]],
 
 local function get_general_metadata(task, flatten, no_content)
   local r = {}
-  r.ip = tostring(task:get_from_ip())
-  r.user = task:get_user()
-  r.qid = task:get_queue_id()
+  r.ip = tostring(task:get_from_ip()) or 'unknown'
+  r.user = task:get_user() or 'unknown'
+  r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
   r.score = task:get_metric_score('default')[1]
   local rcpt = task:get_recipients('smtp')
@@ -76,10 +76,14 @@ local function get_general_metadata(task, flatten, no_content)
     else
       r.rcpt = table.concat(l, ', ')
     end
+  else
+    r.rcpt = 'unknown'
   end
   local from = task:get_from('smtp')
   if ((from or E)[1] or E).addr then
     r.from = from[1].addr
+  else
+    r.from = 'unknown'
   end
   local syminf = task:get_symbols_all()
   if flatten then
@@ -110,6 +114,8 @@ local function get_general_metadata(task, flatten, no_content)
       else
         return table.concat(l, '\n')
       end
+    else
+      return 'unknown'
     end
   end
   if not no_content then
