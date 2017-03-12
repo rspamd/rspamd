@@ -116,11 +116,11 @@ rspamd_config.FORWARDED = {
         local to = task:get_recipients(2)
         local matches = 0
         -- Retrieve and loop through all Received headers
-        local rcvds = task:get_header_full('Received')
+        local rcvds = task:get_received_headers()
 
         if rcvds then
           for _, rcvd in ipairs(rcvds) do
-            local _,_,addr = rcvd['decoded']:lower():find("%sfor%s<(.-)>")
+            local _,_,addr = rcvd['for']
             if addr then
               matches = matches + 1
               -- Check that it doesn't match the envrcpt
