@@ -756,6 +756,26 @@ LUA_FUNCTION_DEF (task, get_digest);
  */
 LUA_FUNCTION_DEF (task, store_in_file);
 
+/***
+ * @method task:get_protocol_reply([flags])
+ * This method being called from a **postfilter** will return reply for a message
+ * as it is returned to a client. This method returns the Lua table corresponding
+ * to the UCL object. Flags is a table that specify which information should be
+ * there in a reply:
+ *
+ * - `basic`: basic info, such as message-id
+ * - `metrics`: metrics and symbols
+ * - `messages`: messages
+ * - `dkim`: dkim signature
+ * - `rmilter`: rmilter control block
+ * - `extra`: extra data, such as profiling
+ * - `urls`: list of all urls in a message
+ *
+ * @param {table} flags table of flags (default is all flags but `urls`)
+ * @return {table} ucl object corresponding to the reply
+ */
+LUA_FUNCTION_DEF (task, get_protocol_reply);
+
 static const struct luaL_reg tasklib_f[] = {
 	{NULL, NULL}
 };
@@ -840,6 +860,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_rmilter_reply),
 	LUA_INTERFACE_DEF (task, get_digest),
 	LUA_INTERFACE_DEF (task, store_in_file),
+	LUA_INTERFACE_DEF (task, get_protocol_reply),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -3857,6 +3878,69 @@ lua_task_set_metric_subject (lua_State *L)
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_protocol_reply (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint flags = 0;
+	ucl_object_t *obj;
+
+	if (!task) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!(task->processed_stages & (RSPAMD_TASK_STAGE_POST_FILTERS >> 1))) {
+		return luaL_error (L, "must not be called before post-filters");
+	}
+
+	if (lua_istable (L, 2)) {
+		for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
+			if (lua_isstring (L, -1)) {
+				const gchar *str = lua_tostring (L, -1);
+
+				if (strcmp (str, "default") == 0) {
+					flags |= RSPAMD_PROTOCOL_DEFAULT;
+				}
+				else if (strcmp (str, "basic") == 0) {
+					flags |= RSPAMD_PROTOCOL_BASIC;
+				}
+				else if (strcmp (str, "metrics") == 0) {
+					flags |= RSPAMD_PROTOCOL_METRICS;
+				}
+				else if (strcmp (str, "messages") == 0) {
+					flags |= RSPAMD_PROTOCOL_MESSAGES;
+				}
+				else if (strcmp (str, "rmilter") == 0) {
+					flags |= RSPAMD_PROTOCOL_RMILTER;
+				}
+				else if (strcmp (str, "dkim") == 0) {
+					flags |= RSPAMD_PROTOCOL_DKIM;
+				}
+				else if (strcmp (str, "extra") == 0) {
+					flags |= RSPAMD_PROTOCOL_EXTRA;
+				}
+				else {
+					msg_err_task ("invalid protocol flag: %s", str);
+				}
+			}
+		}
+	}
+	else {
+		flags = RSPAMD_PROTOCOL_DEFAULT;
+	}
+
+	obj = rspamd_protocol_write_ucl (task, flags);
+
+	if (obj) {
+		ucl_object_push_lua (L, obj, true);
+	}
+	else {
+		lua_pushnil (L);
 	}
 
 	return 1;
