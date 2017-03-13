@@ -46,11 +46,13 @@ local function whitelist_cb(symbol, rule, task)
         return true,mult
       end
     elseif rule['maps'] then
-      for map, mult in pairs(rule['maps']) do
+      for map, mmult in pairs(rule['maps']) do
         local val = map:get_key(dom)
         if val then
           if #val > 0 then
             mult = tonumber(val)
+          else
+            mult = mmult
           end
           table.insert(domains, dom)
           return true,mult
