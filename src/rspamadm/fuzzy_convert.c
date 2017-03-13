@@ -56,7 +56,7 @@ rspamadm_fuzzyconvert_help (gboolean full_help)
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Convert statistics from sqlite3 to redis\n\n"
+		help_str = "Convert fuzzy hashes from sqlite3 to redis\n\n"
 				"Usage: rspamadm fuzzyconvert -d <sqlite_db> -h <redis_ip>\n"
 				"Where options are:\n\n"
 				"-d: input sqlite\n"
@@ -65,7 +65,7 @@ rspamadm_fuzzyconvert_help (gboolean full_help)
 				"-p: redis password\n";
 	}
 	else {
-		help_str = "Convert statistics from sqlite3 to redis";
+		help_str = "Convert fuzzy hashes from sqlite3 to redis";
 	}
 
 	return help_str;
@@ -80,7 +80,7 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv)
 	ucl_object_t *obj;
 
 	context = g_option_context_new (
-			"fuzzyconvert - converts statistics from sqlite3 to redis");
+			"fuzzyconvert - converts fuzzy hashes from sqlite3 to redis");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd administration utility version "
 					RVERSION
