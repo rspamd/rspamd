@@ -40,7 +40,6 @@ static inline int bitwid(unsigned u)
 static void   fill_symv(ac_trie_t*, ac_trie_pat_t const*, int ns);
 static int    create_tree(TNODE*, SYMBOL const*symv, ac_trie_pat_t const*strv, int nstrs);
 static void   add_backlinks(TNODE*, TNODE**, TNODE**);
-static void   prune_backlinks(TNODE*);
 static int    interleave(TNODE*, int nnodes, int nsyms, TNODE**, TNODE**);
 static void   fill_tranv(ac_trie_t*, TNODE const*);
 static void   fill_hashv(ac_trie_t*, TNODE const*, int nn);
@@ -72,22 +71,23 @@ ac_trie_t*
 acism_create(ac_trie_pat_t const* strv, int nstrs)
 {
     TNODE *tp, **v1 = NULL, **v2 = NULL;
-    ac_trie_t *psp = calloc(1, sizeof*psp);
+    ac_trie_t *psp = g_malloc0(sizeof(*psp));
 
     fill_symv(psp, strv, nstrs);
-    TNODE *troot = calloc(psp->nchars + 1, sizeof*troot);
+    TNODE *troot = g_new0(TNODE, psp->nchars + 1);
 
     int nnodes = create_tree(troot, psp->symv, strv, nstrs);
     NOTE(nnodes);
 
     // v1, v2: breadth-first work vectors for add_backlink and interleave.
-    int nhash, i = (nstrs + 1) * sizeof*tp;
-    add_backlinks(troot, v1 = malloc(i), v2 = malloc(i));
+    int nhash = 0, i = (nstrs + 1) * sizeof*tp;
 
-    for (tp = troot + nnodes, nhash = 0; --tp > troot;) {
-        prune_backlinks(tp);
+    for (tp = troot + nnodes; --tp > troot;) {
         nhash += tp->match && tp->child;
     }
+    v1 = g_malloc(i);
+    v2 = g_malloc(i);
+    add_backlinks(troot, v1, v2);
 
     // Calculate each node's offset in tranv[]:
     psp->tran_size = interleave(troot, nnodes, psp->nsyms, v1, v2);
@@ -102,7 +102,7 @@ acism_create(ac_trie_pat_t const* strv, int nstrs)
         psp->hash_size = psp->hash_mod + nhash;
     }
 
-    set_tranv(psp, calloc(p_size(psp), 1));
+    set_tranv(psp, g_malloc0(p_size(psp)));
     if (!psp->tranv) goto FAIL;
     fill_tranv(psp, troot);
     // The root state (0) must not look like a valid backref.
@@ -116,7 +116,7 @@ acism_create(ac_trie_pat_t const* strv, int nstrs)
         psp->hash_size = psp->hash_mod;
         while ( psp->hashv[psp->hash_size].state)     ++psp->hash_size;
         while (!psp->hashv[psp->hash_size - 1].state) --psp->hash_size;
-        set_tranv(psp, realloc(psp->tranv, p_size(psp)));
+        set_tranv(psp, g_realloc(psp->tranv, p_size(psp)));
     }
 
         // Diagnostics/statistics only:
@@ -126,7 +126,7 @@ acism_create(ac_trie_pat_t const* strv, int nstrs)
 
     goto DONE;
 FAIL: acism_destroy(psp), psp = NULL;
-DONE: free(troot), free(v1), free(v2);
+DONE: g_free(troot), g_free(v1), g_free(v2);
     return psp;
 }
 
@@ -151,7 +151,7 @@ fill_symv(ac_trie_t *psp, ac_trie_pat_t const *strv, int nstrs)
     ++psp->nsyms;
 #if ACISM_SIZE < 8
     psp->sym_bits = bitwid(psp->nsyms);
-    psp->sym_mask = ~(-1 << psp->sym_bits);
+    psp->sym_mask = ~(((TRAN)-1) << psp->sym_bits);
 #endif
 }
 
@@ -214,7 +214,7 @@ add_backlinks(TNODE *troot, TNODE **v1, TNODE **v2)
                 TNODE *bp = NULL;
                 *dpp++ = dstp;
                 for (tp = srcp->back; tp; tp = tp->back)
-                   if ((bp = find_child(tp, dstp->sym))) break;
+                   if ((bp = find_child(tp, dstp->sym)) && bp->child) break;
                 if (!bp)
                     bp = troot;
 
@@ -228,45 +228,11 @@ add_backlinks(TNODE *troot, TNODE **v1, TNODE **v2)
     }
 }
 
-static void
-prune_backlinks(TNODE *tp)
-{
-    if (tp->x.nrefs || !tp->child)
-        return;
-
-    TNODE *bp;
-        // (bp != bp->back IFF bp != troot)
-    while ((bp = tp->back) && !bp->match && bp != bp->back) {
-        HIT("backlinks");
-        TNODE *cp = tp->child, *pp = bp->child;
-
-        // Search for a child of bp that's not a child of tp
-        for (; cp && pp && pp->sym >= cp->sym; cp = cp->next) {
-            if (pp->sym == cp->sym) {
-                if (pp->match && cp->is_suffix) break;
-                pp = pp->next;
-            }
-        }
-
-        if (pp) break;
-
-        // So, target of back link is not a suffix match
-        // of this node, and its children are a subset
-        // of this node's children: prune it.
-        HIT("pruned");
-        if ((tp->back = bp->back)) {
-            tp->back->x.nrefs++;
-            if (!--bp->x.nrefs)
-                prune_backlinks(bp);
-        }
-    }
-}
-
 static int
 interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
 {
     unsigned usev_size = nnodes + nsyms;
-    char *usev = calloc(usev_size, sizeof*usev);
+    char *usev = g_new0(char, usev_size);
     STATE last_trans = 0, startv[nsyms][2];
     TNODE *cp, **tmp;
 
@@ -323,13 +289,13 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
             if (last_trans < last) {
                 last_trans = last;
                 if (last + nsyms >= usev_size) {
-                    char *tmp = realloc(usev, usev_size << 1);
+                    char *tmp = g_realloc(usev, usev_size << 1);
                     if (tmp != NULL) {
                         usev = tmp;
                         memset(usev + usev_size, 0, usev_size);
                         usev_size <<= 1;
                     } else {
-                        free(usev);
+                        g_free(usev);
                         /* And handle error */
                     }
                 }
@@ -339,14 +305,14 @@ interleave(TNODE *troot, int nnodes, int nsyms, TNODE **v1, TNODE **v2)
         *dstp = NULL;
     }
 
-    free(usev);
+    g_free(usev);
     return last_trans + 1;
 }
 
 static void
 fill_hashv(ac_trie_t *psp, TNODE const treev[], int nnodes)
 {
-    STRASH *sv = malloc(psp->hash_mod * sizeof*sv), *sp = sv;
+    STRASH *sv = g_malloc(psp->hash_mod * sizeof*sv), *sp = sv;
     int i;
 
     // First pass: insert without resolving collisions.
@@ -369,7 +335,7 @@ fill_hashv(ac_trie_t *psp, TNODE const treev[], int nnodes)
         psp->hashv[i] = *sp;
     }
 
-    free(sv);
+    g_free(sv);
 }
 
 static void
