@@ -1064,80 +1064,133 @@ rspamd_protocol_output_profiling (struct rspamd_task *task,
 	ucl_object_insert_key (top, prof, "profile", 0, false);
 }
 
+struct rspamd_saved_protocol_reply {
+	ucl_object_t *obj;
+	enum rspamd_protocol_flags flags;
+};
+
+static void
+rspamd_protocol_cached_dtor (gpointer p)
+{
+	struct rspamd_saved_protocol_reply *cached = p;
+
+	ucl_object_unref (cached->obj);
+}
+
 ucl_object_t *
-rspamd_protocol_write_ucl (struct rspamd_task *task)
+rspamd_protocol_write_ucl (struct rspamd_task *task,
+		enum rspamd_protocol_flags flags)
 {
 	struct rspamd_metric_result *metric_res;
 	ucl_object_t *top = NULL, *obj;
 	GHashTableIter hiter;
 	GString *dkim_sig;
 	const ucl_object_t *rmilter_reply;
+	struct rspamd_saved_protocol_reply *cached;
+	static const gchar *varname = "cached_reply";
 	gpointer h, v;
 
-	g_hash_table_iter_init (&hiter, task->results);
-	top = ucl_object_typed_new (UCL_OBJECT);
-	/* Convert results to an ucl object */
-	while (g_hash_table_iter_next (&hiter, &h, &v)) {
-		metric_res = (struct rspamd_metric_result *)v;
-		obj = rspamd_metric_result_ucl (task, metric_res);
-		ucl_object_insert_key (top, obj, h, 0, false);
-	}
+	/* Check for cached reply */
+	cached = rspamd_mempool_get_variable (task->task_pool, varname);
 
-	if (G_UNLIKELY (task->cfg->compat_messages)) {
-		const ucl_object_t *cur;
-		ucl_object_t *msg_object;
-		ucl_object_iter_t iter = NULL;
+	if (cached) {
+		top = cached->obj;
+		/*
+		 * Update flags: we don't need to set more flags than we need,
+		 * so just xor previous flags and current flags and then or them
+		 * to the cached one
+		 */
+		flags ^= cached->flags;
+		cached->flags |= flags;
 
-		msg_object = ucl_object_typed_new (UCL_ARRAY);
-
-		while ((cur = ucl_object_iterate (task->messages, &iter, true)) != NULL) {
-			if (cur->type == UCL_STRING) {
-				ucl_array_append (msg_object, ucl_object_ref (cur));
-			}
-		}
-
-		ucl_object_insert_key (top, msg_object, "messages", 0, false);
 	}
 	else {
-		ucl_object_insert_key (top, ucl_object_ref (task->messages),
-			"messages", 0, false);
+		top = ucl_object_typed_new (UCL_OBJECT);
+		cached = rspamd_mempool_alloc (task->task_pool, sizeof (*cached));
+		cached->obj = top;
+		cached->flags = flags;
+		rspamd_mempool_set_variable (task->task_pool, varname,
+				cached, rspamd_protocol_cached_dtor);
 	}
 
-	if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
-		if (g_hash_table_size (task->urls) > 0) {
-			ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls,
-					task), "urls", 0, false);
+	if (flags & RSPAMD_PROTOCOL_METRICS) {
+		g_hash_table_iter_init (&hiter, task->results);
+		/* Convert results to an ucl object */
+		while (g_hash_table_iter_next (&hiter, &h, &v)) {
+			metric_res = (struct rspamd_metric_result *)v;
+			obj = rspamd_metric_result_ucl (task, metric_res);
+			ucl_object_insert_key (top, obj, h, 0, false);
 		}
-		if (g_hash_table_size (task->emails) > 0) {
-			ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
-					"emails", 0, false);
+	}
+
+	if (flags & RSPAMD_PROTOCOL_MESSAGES) {
+		if (G_UNLIKELY (task->cfg->compat_messages)) {
+			const ucl_object_t *cur;
+			ucl_object_t *msg_object;
+			ucl_object_iter_t iter = NULL;
+
+			msg_object = ucl_object_typed_new (UCL_ARRAY);
+
+			while ((cur = ucl_object_iterate (task->messages, &iter, true)) != NULL) {
+				if (cur->type == UCL_STRING) {
+					ucl_array_append (msg_object, ucl_object_ref (cur));
+				}
+			}
+
+			ucl_object_insert_key (top, msg_object, "messages", 0, false);
+		}
+		else {
+			ucl_object_insert_key (top, ucl_object_ref (task->messages),
+					"messages", 0, false);
 		}
 	}
 
-	if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
-		rspamd_protocol_output_profiling (task, top);
+	if (flags & RSPAMD_PROTOCOL_URLS) {
+		if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
+			if (g_hash_table_size (task->urls) > 0) {
+				ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls,
+						task), "urls", 0, false);
+			}
+			if (g_hash_table_size (task->emails) > 0) {
+				ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
+						"emails", 0, false);
+			}
+		}
 	}
 
-	ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
-			"message-id", 0, false);
-
-	dkim_sig = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
-
-	if (dkim_sig) {
-		GString *folded_header = rspamd_header_value_fold ("DKIM-Signature",
-				dkim_sig->str, 80, task->nlines_type);
-		ucl_object_insert_key (top,
-				ucl_object_fromstring_common (folded_header->str,
-						folded_header->len, UCL_STRING_RAW),
-				"dkim-signature", 0, false);
-		g_string_free (folded_header, TRUE);
+	if (flags & RSPAMD_PROTOCOL_EXTRA) {
+		if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
+			rspamd_protocol_output_profiling (task, top);
+		}
 	}
 
-	rmilter_reply = rspamd_mempool_get_variable (task->task_pool, "rmilter-reply");
+	if (flags & RSPAMD_PROTOCOL_BASIC) {
+		ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
+				"message-id", 0, false);
+	}
 
-	if (rmilter_reply) {
-		ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
-				"rmilter", 0, false);
+	if (flags & RSPAMD_PROTOCOL_DKIM) {
+		dkim_sig = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
+
+		if (dkim_sig) {
+			GString *folded_header = rspamd_header_value_fold ("DKIM-Signature",
+					dkim_sig->str, 80, task->nlines_type);
+			ucl_object_insert_key (top,
+					ucl_object_fromstring_common (folded_header->str,
+							folded_header->len, UCL_STRING_RAW),
+							"dkim-signature", 0, false);
+			g_string_free (folded_header, TRUE);
+		}
+	}
+
+	if (flags & RSPAMD_PROTOCOL_RMILTER) {
+		rmilter_reply = rspamd_mempool_get_variable (task->task_pool,
+				"rmilter-reply");
+
+		if (rmilter_reply) {
+			ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
+					"rmilter", 0, false);
+		}
 	}
 
 	return top;
@@ -1153,7 +1206,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	gpointer h, v;
 	ucl_object_t *top = NULL;
 	rspamd_fstring_t *reply;
-	gint action;
+	gint action, flags = RSPAMD_PROTOCOL_DEFAULT;
 
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
@@ -1163,7 +1216,11 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		rspamd_http_message_add_header (msg, hn->begin, hv->begin);
 	}
 
-	top = rspamd_protocol_write_ucl (task);
+	if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
+		flags |= RSPAMD_PROTOCOL_URLS;
+	}
+
+	top = rspamd_protocol_write_ucl (task, flags);
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
@@ -1199,8 +1256,6 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 			rspamd_ucl_torspamc_output (top, &reply);
 		}
 	}
-
-	ucl_object_unref (top);
 
 	if ((task->flags & RSPAMD_TASK_FLAG_COMPRESSED) &&
 			rspamd_libs_reset_compression (task->cfg->libs_ctx)) {

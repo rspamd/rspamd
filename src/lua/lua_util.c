@@ -624,7 +624,7 @@ lua_util_task_fin (struct rspamd_task *task, void *ud)
 {
 	ucl_object_t **target = ud;
 
-	*target = rspamd_protocol_write_ucl (task);
+	*target = rspamd_protocol_write_ucl (task, RSPAMD_PROTOCOL_DEFAULT);
 	rdns_resolver_release (task->resolver->r);
 
 	return TRUE;
@@ -669,7 +669,8 @@ lua_util_process_message (lua_State *L)
 					ucl_object_unref (res);
 				}
 				else {
-					ucl_object_push_lua (L, rspamd_protocol_write_ucl (task),
+					ucl_object_push_lua (L,
+							rspamd_protocol_write_ucl (task, RSPAMD_PROTOCOL_DEFAULT),
 							true);
 					rdns_resolver_release (task->resolver->r);
 					rspamd_session_destroy (task->s);

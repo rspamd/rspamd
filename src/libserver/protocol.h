@@ -68,13 +68,30 @@ gboolean rspamd_protocol_handle_request (struct rspamd_task *task,
 void rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	struct rspamd_task *task);
 
+enum rspamd_protocol_flags {
+	RSPAMD_PROTOCOL_BASIC = 1 << 0,
+	RSPAMD_PROTOCOL_METRICS = 1 << 1,
+	RSPAMD_PROTOCOL_MESSAGES = 1 << 2,
+	RSPAMD_PROTOCOL_RMILTER = 1 << 3,
+	RSPAMD_PROTOCOL_DKIM = 1 << 4,
+	RSPAMD_PROTOCOL_URLS = 1 << 5,
+	RSPAMD_PROTOCOL_EXTRA = 1 << 6,
+};
+
+#define RSPAMD_PROTOCOL_DEFAULT (RSPAMD_PROTOCOL_BASIC| \
+		RSPAMD_PROTOCOL_METRICS| \
+		RSPAMD_PROTOCOL_MESSAGES| \
+		RSPAMD_PROTOCOL_RMILTER| \
+		RSPAMD_PROTOCOL_DKIM| \
+		RSPAMD_PROTOCOL_EXTRA)
 /**
  * Write reply to ucl object filling log buffer
  * @param task
  * @param logbuf
  * @return
  */
-ucl_object_t * rspamd_protocol_write_ucl (struct rspamd_task *task);
+ucl_object_t * rspamd_protocol_write_ucl (struct rspamd_task *task,
+		enum rspamd_protocol_flags flags);
 
 /**
  * Write reply for specified task command
