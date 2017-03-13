@@ -16,7 +16,6 @@ limitations under the License.
 
 -- This is main lua config file for rspamd
 
-local E = {}
 local fun = require "fun"
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
