@@ -120,7 +120,7 @@ rspamd_config.FORWARDED = {
 
         if rcvds then
           for _, rcvd in ipairs(rcvds) do
-            local _,_,addr = rcvd['for']
+            local addr = rcvd['for']
             if addr then
               matches = matches + 1
               -- Check that it doesn't match the envrcpt
