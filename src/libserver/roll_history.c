@@ -17,6 +17,7 @@
 #include "rspamd.h"
 #include "roll_history.h"
 #include "ucl.h"
+#include "lua/lua_common.h"
 #include "unix-std.h"
 
 static const gchar rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
@@ -27,20 +28,43 @@ static const gchar rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
  * @return new structure
  */
 struct roll_history *
-rspamd_roll_history_new (rspamd_mempool_t *pool, guint max_rows)
+rspamd_roll_history_new (rspamd_mempool_t *pool, guint max_rows,
+		struct rspamd_config *cfg)
 {
-	struct roll_history *new;
+	struct roll_history *history;
+	lua_State *L = cfg->lua_state;
 
 	if (pool == NULL || max_rows == 0) {
 		return NULL;
 	}
 
-	new = rspamd_mempool_alloc0_shared (pool, sizeof (struct roll_history));
-	new->rows = rspamd_mempool_alloc0_shared (pool,
-			sizeof (struct roll_history_row) * max_rows);
-	new->nrows = max_rows;
+	history = rspamd_mempool_alloc0_shared (pool, sizeof (struct roll_history));
 
-	return new;
+	/*
+	 * Here, we check if there is any plugin that handles history,
+	 * in this case, we disable this code completely
+	 */
+	lua_getglobal (L, "plugins");
+	if (lua_istable (L, -1)) {
+		lua_pushstring (L, "history");
+		lua_gettable (L, -2);
+
+		if (lua_istable (L, -1)) {
+			history->disabled = TRUE;
+		}
+
+		lua_pop (L, 1);
+	}
+
+	lua_pop (L, 1);
+
+	if (!history->disabled) {
+		history->rows = rspamd_mempool_alloc0_shared (pool,
+				sizeof (struct roll_history_row) * max_rows);
+		history->nrows = max_rows;
+	}
+
+	return history;
 }
 
 struct history_metric_callback_data {
@@ -75,6 +99,10 @@ rspamd_roll_history_update (struct roll_history *history,
 	struct roll_history_row *row;
 	struct rspamd_metric_result *metric_res;
 	struct history_metric_callback_data cbdata;
+
+	if (history->disabled) {
+		return;
+	}
 
 	/* First of all obtain check and obtain row number */
 	g_atomic_int_compare_and_exchange (&history->cur_row, history->nrows, 0);
@@ -163,6 +191,9 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 	guint n, i;
 
 	g_assert (history != NULL);
+	if (history->disabled) {
+		return TRUE;
+	}
 
 	if (stat (filename, &st) == -1) {
 		msg_info ("cannot load history from %s: %s", filename,
@@ -329,6 +360,10 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 	struct ucl_emitter_functions *emitter_func;
 
 	g_assert (history != NULL);
+
+	if (history->disabled) {
+		return TRUE;
+	}
 
 	if ((fd = open (filename, O_WRONLY | O_CREAT | O_TRUNC, 00600)) == -1) {
 		msg_info ("cannot save history to %s: %s", filename, strerror (errno));

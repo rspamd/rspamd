@@ -30,6 +30,7 @@
 #define HISTORY_MAX_ADDR 32
 
 struct rspamd_task;
+struct rspamd_config;
 
 struct roll_history_row {
 	struct timeval tv;
@@ -47,6 +48,7 @@ struct roll_history_row {
 
 struct roll_history {
 	struct roll_history_row *rows;
+	gboolean disabled;
 	guint nrows;
 	guint cur_row;
 };
@@ -57,7 +59,7 @@ struct roll_history {
  * @return new structure
  */
 struct roll_history * rspamd_roll_history_new (rspamd_mempool_t *pool,
-		guint max_rows);
+		guint max_rows, struct rspamd_config *cfg);
 
 /**
  * Update roll history with data from task

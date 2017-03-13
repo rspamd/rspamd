@@ -1259,7 +1259,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Create rolling history */
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool,
-			rspamd_main->cfg->history_rows);
+			rspamd_main->cfg->history_rows, rspamd_main->cfg);
 
 	gperf_profiler_init (rspamd_main->cfg, "main");
 
