@@ -45,6 +45,17 @@ local function whitelist_cb(symbol, rule, task)
         table.insert(domains, dom)
         return true,mult
       end
+    elseif rule['maps'] then
+      for map, mult in pairs(rule['maps']) do
+        local val = map:get_key(dom)
+        if val then
+          if #val > 0 then
+            mult = tonumber(val)
+          end
+          table.insert(domains, dom)
+          return true,mult
+        end
+      end
     else
       mult = rule['domains'][dom]
       if mult then
@@ -190,16 +201,26 @@ local configure_whitelist_module = function()
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
           -- {'domain1' = 1, 'domain2' = 1 ...]
-          rule['domains'] = fun.tomap(fun.map(function(d)
-            local name = d
+          rule['maps'] = fun.tomap(fun.map(function(d)
+            local name
             local value = 1
 
             if type(d) == 'table' then
-              name = d[1]
+              name = rspamd_config:add_map({
+                url = d[1],
+                type = 'map',
+              })
               value = tonumber(d[2])
+            else
+              name = rspamd_config:add_map({
+                url = d,
+                type = 'map',
+              })
             end
 
-            return name,value
+            if name and value then
+              return name,value
+            end
           end, rule['domains']))
         else
           rspamd_logger.errx(rspamd_config, 'whitelist %s has bad "domains" value',
