@@ -1276,13 +1276,14 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		var.begin = numbuf;
 		break;
 	case RSPAMD_LOG_TIME_REAL:
-		var.begin = rspamd_log_check_time (task->time_real, rspamd_get_ticks (),
+		var.begin = rspamd_log_check_time (task->time_real,
+				task->time_real_finish,
 				task->cfg->clock_res);
 		var.len = strlen (var.begin);
 		break;
 	case RSPAMD_LOG_TIME_VIRTUAL:
 		var.begin = rspamd_log_check_time (task->time_virtual,
-				rspamd_get_virtual_ticks (),
+				task->time_virtual_finish,
 				task->cfg->clock_res);
 		var.len = strlen (var.begin);
 		break;

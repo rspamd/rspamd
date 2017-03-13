@@ -1111,6 +1111,10 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		cached->flags = flags;
 		rspamd_mempool_set_variable (task->task_pool, varname,
 				cached, rspamd_protocol_cached_dtor);
+
+		/* We also set scan time here */
+		task->time_real_finish = rspamd_get_ticks ();
+		task->time_virtual_finish = rspamd_get_virtual_ticks ();
 	}
 
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
@@ -1167,6 +1171,12 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	if (flags & RSPAMD_PROTOCOL_BASIC) {
 		ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
 				"message-id", 0, false);
+		ucl_object_insert_key (top,
+				ucl_object_fromdouble (task->time_real_finish - task->time_real),
+				"time-real", 0, false);
+		ucl_object_insert_key (top,
+				ucl_object_fromdouble (task->time_virtual_finish - task->time_virtual),
+				"time-virtual", 0, false);
 	}
 
 	if (flags & RSPAMD_PROTOCOL_DKIM) {

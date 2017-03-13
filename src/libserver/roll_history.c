@@ -139,7 +139,7 @@ rspamd_roll_history_update (struct roll_history *history,
 		}
 	}
 
-	row->scan_time = rspamd_get_ticks () - task->time_real;
+	row->scan_time = task->time_real_finish - task->time_real;
 	row->len = task->msg.len;
 	g_atomic_int_set (&row->completed, TRUE);
 }
