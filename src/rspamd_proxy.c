@@ -674,7 +674,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			"Compare script to be executed");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
-			"timeout",
+			"max_retries",
 			rspamd_rcl_parse_struct_integer,
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, max_retries),
