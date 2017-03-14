@@ -44,7 +44,7 @@ rspamd_roll_history_new (rspamd_mempool_t *pool, guint max_rows,
 	 * Here, we check if there is any plugin that handles history,
 	 * in this case, we disable this code completely
 	 */
-	lua_getglobal (L, "plugins");
+	lua_getglobal (L, "rspamd_plugins");
 	if (lua_istable (L, -1)) {
 		lua_pushstring (L, "history");
 		lua_gettable (L, -2);

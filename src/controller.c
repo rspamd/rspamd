@@ -1325,33 +1325,18 @@ rspamd_controller_handle_graph (
 	return 0;
 }
 
-/*
- * History command handler:
- * request: /history
- * headers: Password
- * reply: json [
- *      { label: "Foo", data: 11 },
- *      { label: "Bar", data: 20 },
- *      {...}
- * ]
- */
-static int
-rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
-	struct rspamd_http_message *msg)
+static void
+rspamd_controller_handle_legacy_history (
+		struct rspamd_controller_session *session,
+		struct rspamd_controller_worker_ctx *ctx,
+		struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_controller_worker_ctx *ctx;
 	struct roll_history_row *row, *copied_rows;
 	guint i, rows_proc, row_num;
 	struct tm *tm;
 	gchar timebuf[32];
 	ucl_object_t *top, *obj;
-
-	ctx = session->ctx;
-
-	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
-		return 0;
-	}
 
 	top = ucl_object_typed_new (UCL_ARRAY);
 
@@ -1382,8 +1367,8 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 			ucl_object_insert_key (obj, ucl_object_fromstring (row->from_addr),
 					"ip", 0, false);
 			ucl_object_insert_key (obj,
-				ucl_object_fromstring (rspamd_action_to_str (
-					row->action)), "action", 0, false);
+					ucl_object_fromstring (rspamd_action_to_str (
+							row->action)), "action", 0, false);
 
 			if (!isnan (row->score)) {
 				ucl_object_insert_key (obj, ucl_object_fromdouble (
@@ -1425,6 +1410,156 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 
 	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
+}
+
+static gboolean
+rspamd_controller_history_lua_fin_task (void *ud)
+{
+	return TRUE;
+}
+
+static void
+rspamd_controller_handle_lua_history (lua_State *L,
+		struct rspamd_controller_session *session,
+		struct rspamd_controller_worker_ctx *ctx,
+		struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg,
+		gboolean reset)
+{
+	struct rspamd_task *task, **ptask;
+	struct rspamd_http_connection_entry **pconn_ent;
+	GHashTable *params;
+	rspamd_ftok_t srch, *found;
+	glong from = 0, to = -1;
+
+	params = rspamd_http_message_parse_query (msg);
+
+	if (params) {
+		/* Check from and to */
+		RSPAMD_FTOK_ASSIGN (&srch, "from");
+		found = g_hash_table_lookup (params, &srch);
+
+		if (found) {
+			rspamd_strtol (found->begin, found->len, &from);
+		}
+		RSPAMD_FTOK_ASSIGN (&srch, "to");
+		found = g_hash_table_lookup (params, &srch);
+
+		if (found) {
+			rspamd_strtol (found->begin, found->len, &to);
+		}
+
+		g_hash_table_unref (params);
+	}
+
+	lua_getglobal (L, "rspamd_plugins");
+
+	if (lua_istable (L, -1)) {
+		lua_pushstring (L, "history");
+		lua_gettable (L, -2);
+
+		if (lua_istable (L, -1)) {
+			lua_pushstring (L, "handler");
+			lua_gettable (L, -2);
+
+			if (lua_isfunction (L, -1)) {
+				task = rspamd_task_new (session->ctx->worker, session->cfg);
+
+				task->resolver = ctx->resolver;
+				task->ev_base = ctx->ev_base;
+				task->s = rspamd_session_create (session->pool,
+						rspamd_controller_history_lua_fin_task,
+						NULL,
+						(event_finalizer_t )rspamd_task_free,
+						task);
+				task->fin_arg = conn_ent;
+
+				ptask = lua_newuserdata (L, sizeof (*ptask));
+				*ptask = task;
+				rspamd_lua_setclass (L, "rspamd{task}", -1);
+				pconn_ent = lua_newuserdata (L, sizeof (*pconn_ent));
+				*pconn_ent = conn_ent;
+				rspamd_lua_setclass (L, "rspamd{csession}", -1);
+				lua_pushnumber (L, from);
+				lua_pushnumber (L, to);
+				lua_pushboolean (L, reset);
+
+				if (lua_pcall (L, 5, 0, 0) != 0) {
+					msg_err_session ("call to history function failed: %s",
+							lua_tostring (L, -1));
+					lua_settop (L, 0);
+					rspamd_task_free (task);
+
+					goto err;
+				}
+
+				task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
+				task->sock = -1;
+				session->task = task;
+
+				rspamd_session_pending (task->s);
+			}
+			else {
+				msg_err_session ("rspamd_plugins.history.handler is not a function");
+				lua_pop (L, 3);
+				goto err;
+			}
+
+			lua_pop (L, 1); /* Function */
+		}
+		else {
+			msg_err_session ("rspamd_plugins.history is not a table");
+			lua_pop (L, 2);
+			goto err;
+		}
+
+		lua_pop (L, 1); /* plugins.history */
+	}
+	else {
+		msg_err_session ("rspamd_plugins is absent or has incorrect type");
+		lua_pop (L, 1);
+		goto err;
+	}
+
+	lua_pop (L, 1); /* plugins global */
+
+	return;
+err:
+	rspamd_controller_send_error (conn_ent, 500, "Internal error");
+}
+
+/*
+ * History command handler:
+ * request: /history
+ * headers: Password
+ * reply: json [
+ *      { label: "Foo", data: 11 },
+ *      { label: "Bar", data: 20 },
+ *      {...}
+ * ]
+ */
+static int
+rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	lua_State *L;
+	ctx = session->ctx;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	L = ctx->cfg->lua_state;
+
+	if (!ctx->srv->history->disabled) {
+		rspamd_controller_handle_legacy_history (session, ctx, conn_ent, msg);
+	}
+	else {
+		rspamd_controller_handle_lua_history (L, session, ctx, conn_ent, msg,
+				FALSE);
+	}
 
 	return 0;
 }
@@ -1492,37 +1627,45 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 	struct rspamd_controller_worker_ctx *ctx;
 	struct roll_history_row *row;
 	guint start_row, i, t;
+	lua_State *L;
 
 	ctx = session->ctx;
+	L = ctx->cfg->lua_state;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
 	}
 
-	/* Clean from start to the current row */
-	start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
+	if (!ctx->srv->history->disabled) {
+		/* Clean from start to the current row */
+		start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
 
-	for (i = 0; i < start_row; i ++) {
-		t = g_atomic_int_get (&ctx->srv->history->cur_row);
+		for (i = 0; i < start_row; i ++) {
+			t = g_atomic_int_get (&ctx->srv->history->cur_row);
 
-		/* We somehow come to the race condition */
-		if (i >= t) {
-			break;
+			/* We somehow come to the race condition */
+			if (i >= t) {
+				break;
+			}
+
+			row = &ctx->srv->history->rows[i];
+			memset (row, 0, sizeof (*row));
 		}
 
-		row = &ctx->srv->history->rows[i];
-		memset (row, 0, sizeof (*row));
+		start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
+		/* Optimistically set all bytes to zero (might cause race) */
+		memset (ctx->srv->history->rows,
+				0,
+				sizeof (*row) * (ctx->srv->history->nrows - start_row));
+
+		msg_info_session ("<%s> reseted history",
+				rspamd_inet_address_to_string (session->from_addr));
+		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 	}
-
-	start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
-	/* Optimistically set all bytes to zero (might cause race) */
-	memset (ctx->srv->history->rows,
-			0,
-			sizeof (*row) * (ctx->srv->history->nrows - start_row));
-
-	msg_info_session ("<%s> reseted history",
-			rspamd_inet_address_to_string (session->from_addr));
-	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	else {
+		rspamd_controller_handle_lua_history (L, session, ctx, conn_ent, msg,
+				TRUE);
+	}
 
 	return 0;
 }
