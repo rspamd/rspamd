@@ -7,3 +7,8 @@ Config Test
   Should Match Regexp  ${result.stderr}  ^$
   Should Match Regexp  ${result.stdout}  ^syntax OK$
   Should Be Equal As Integers  ${result.rc}  0
+
+Config Help
+  ${result} =  Run Process  ${RSPAMADM}  confighelp
+  Should Match Regexp  ${result.stderr}  ^$
+  Should Be Equal As Integers  ${result.rc}  0
