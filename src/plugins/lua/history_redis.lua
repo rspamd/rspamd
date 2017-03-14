@@ -63,6 +63,9 @@ local function normalise_results(tbl, task)
   tbl.messages = nil
   tbl.urls = nil
 
+  local seconds = task:get_timeval()['tv_sec']
+  tbl.unix_time = seconds
+
   tbl.subject = task:get_header('subject') or 'unknown'
 end
 
