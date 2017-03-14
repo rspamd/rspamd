@@ -69,7 +69,7 @@ end
 local function history_save(task)
   local function redis_llen_cb(err, _)
     if err then
-      rspamd_logger.errx(task, 'got error %s when writing history row',
+      rspamd_logger.errx(task, 'got error %s when writing history row: %s',
           err)
     end
   end
@@ -100,14 +100,76 @@ local function history_save(task)
   local ret, conn, _ = rspamd_redis_make_request(task,
     redis_params, -- connect params
     nil, -- hash key
-    false, -- is write
+    true, -- is write
     redis_llen_cb, --callback
     'LPUSH', -- command
     {prefix, json} -- arguments
   )
 
   if ret then
-    conn:add_cmd('LTRIM', {settings.key_prefix, '0', tostring(settings.nrows)})
+    conn:add_cmd('LTRIM', {prefix, '0', tostring(settings.nrows)})
+  end
+end
+
+local function handle_history_request(task, conn, from, to, reset)
+  local prefix = settings.key_prefix
+  if settings.compress then
+    -- Distinguish between compressed and non-compressed options
+    prefix = prefix .. '_zst'
+  end
+
+  if reset then
+    local function redis_ltrim_cb(err, _)
+      if err then
+        rspamd_logger.errx(task, 'got error %s when resetting history: %s',
+          err)
+        conn:send_error(504, '{"error": "' .. err .. '"}')
+      else
+        conn:send_string('{"success":true}')
+      end
+    end
+    rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      nil, -- hash key
+      true, -- is write
+      redis_ltrim_cb, --callback
+      'LTRIM', -- command
+      {prefix, '0', '0'} -- arguments
+    )
+  else
+    local function redis_lrange_cb(err, data)
+      if data then
+        local reply = {
+          version = 2,
+        }
+
+        if settings.compress then
+          reply.rows = fun.totable(fun.filter(function(e) return e ~= nil end,
+            fun.map(function(e)
+              local _,dec = rspamd_util.zstd_decompress(e)
+              if dec then
+                return tostring(dec)
+              end
+              return nil
+            end, data)))
+        else
+          reply.rows = data
+        end
+        conn:send_ucl(reply)
+      else
+       rspamd_logger.errx(task, 'got error %s when getting history: %s',
+          err)
+        conn:send_error(504, '{"error": "' .. err .. '"}')
+      end
+    end
+    rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      nil, -- hash key
+      false, -- is write
+      redis_lrange_cb, --callback
+      'LRANGE', -- command
+      {prefix, tostring(from), tostring(to)} -- arguments
+    )
   end
 end
 
@@ -127,5 +189,8 @@ if opts then
       callback = history_save,
       priority = 150
     })
+    rspamd_plugins['history'] = {
+      handler = handle_history_request
+    }
   end
 end
