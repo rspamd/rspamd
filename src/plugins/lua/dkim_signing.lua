@@ -104,8 +104,8 @@ local function dkim_signing_cb(task)
   end
   local p = {}
   if settings.domain[dkim_domain] then
-    p.selector = (settings.domain[dkim_domain] or E).selector
-    p.key = (settings.domain[dkim_domain] or E).key
+    p.selector = settings.domain[dkim_domain].selector
+    p.key = settings.domain[dkim_domain].path
   end
   if not (p.key and p.selector) and not settings.try_fallback then
     rspamd_logger.debugm(N, task, 'dkim unconfigured and fallback disabled')
