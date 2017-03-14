@@ -4,7 +4,8 @@ filters = "chartable,dkim,spf,surbl,regexp,fuzzy_check";
 raw_mode = false;
 one_shot = false;
 cache_file = "$DBDIR/symbols.cache";
-map_watch_interval = 1min;
+# How often maps are checked (
+map_watch_interval = 5min;
 dynamic_conf = "$DBDIR/rspamd_dynamic";
 history_file = "$DBDIR/rspamd.history";
 check_all_filters = false;
