@@ -110,7 +110,7 @@ local function history_save(task)
   )
 
   if ret then
-    conn:add_cmd('LTRIM', {prefix, '0', tostring(settings.nrows)})
+    conn:add_cmd('LTRIM', {prefix, '0', tostring(settings.nrows-1)})
   end
 end
 
