@@ -2026,6 +2026,9 @@ rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
 	event_base_set (ev_base, &cbdata->resort_ev);
 	double_to_tv (tm, &tv);
 	event_add (&cbdata->resort_ev, &tv);
+	rspamd_mempool_add_destructor (cache->static_pool,
+			(rspamd_mempool_destruct_t)event_del,
+			&cbdata->resort_ev);
 }
 
 void
