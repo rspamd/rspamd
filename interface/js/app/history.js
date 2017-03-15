@@ -26,6 +26,76 @@ define(['jquery', 'datatables'],
 function($) {
     var interface = {};
 
+    function unix_time_format(tm) {
+
+    }
+
+    function process_history_v2(data) {
+        var items = [];
+
+        $.each(data.rows, function (i, item) {
+
+        });
+
+        return items;
+    }
+
+    function process_history_legacy(data) {
+        var items = [];
+
+        $.each(data, function (i, item) {
+            var action;
+
+            if (item.action === 'clean' || item.action === 'no action') {
+                action = 'label-success';
+            } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
+                action = 'label-warning';
+            } else if (item.action === 'spam' || item.action === 'reject') {
+                action = 'label-danger';
+            } else {
+                action = 'label-info';
+            }
+
+            var score;
+            if (item.score < item.required_score) {
+                score = 'label-success';
+            } else {
+                score = 'label-danger';
+            }
+
+            items.push(
+                    '<tr><td data-order="' + item.unix_time + '">' + item.time + '</td>' +
+                    '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</div></td>' +
+                    '<td data-order="' + item.ip + '"><div class="cell-overflow" tabindex="1" title="' + item.ip + '">' + item.ip + '</div></td>' +
+                    '<td data-order="' + item.action + '"><span class="label ' + action + '">' + item.action + '</span></td>' +
+                    '<td data-order="' + item.score + '"><span class="label ' + score + '">' + item.score.toFixed(2) + ' / ' + item.required_score.toFixed(2) + '</span></td>' +
+                    '<td data-order="' + item.symbols + '"><div class="cell-overflow" tabindex="1" title="' + item.symbols + '">' + item.symbols + '</div></td>' +
+                    '<td data-order="' + item.size + '">' + item.size + '</td>' +
+                    '<td data-order="' + item.scan_time + '">' + item.scan_time.toFixed(3) + '</td>' +
+                    '<td data-order="' + item.user + '"><div class="cell-overflow" tabindex="1" "title="' + item.user + '">' + item.user + '</div></td></tr>');
+        });
+
+        return items;
+    }
+
+    var process_functions = {
+       "2": process_history_v2,
+       "legacy": process_history_legacy
+    }
+
+    function process_history_data(data) {
+        var pf = process_functions.legacy;
+
+        if (data.version) {
+           var strkey = data.version.toString();
+           if (process_functions[strkey]) {
+               pf = process_functions[strkey];
+           }
+        }
+
+        return pf(data);
+    }
+
     interface.getHistory = function (rspamd, tables) {
         if (tables.history !== undefined) {
             var history_length = document.getElementsByName('historyLog_length')[0];
@@ -39,7 +109,6 @@ function($) {
             $('#historyLog').children('tbody').remove();
         }
 
-        var items = [];
         $.ajax({
             dataType: 'json',
             url: 'history',
@@ -51,37 +120,8 @@ function($) {
                 rspamd.alertMessage('alert-error', 'Cannot receive history');
             },
             success: function (data) {
-                $.each(data, function (i, item) {
-                    var action;
+                var items = process_history_data(data);
 
-                    if (item.action === 'clean' || item.action === 'no action') {
-                        action = 'label-success';
-                    } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
-                        action = 'label-warning';
-                    } else if (item.action === 'spam' || item.action === 'reject') {
-                        action = 'label-danger';
-                    } else {
-                        action = 'label-info';
-                    }
-
-                    var score;
-                    if (item.score < item.required_score) {
-                        score = 'label-success';
-                    } else {
-                        score = 'label-danger';
-                    }
-
-                    items.push(
-                        '<tr><td data-order="' + item.unix_time + '">' + item.time + '</td>' +
-                        '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</div></td>' +
-                        '<td data-order="' + item.ip + '"><div class="cell-overflow" tabindex="1" title="' + item.ip + '">' + item.ip + '</div></td>' +
-                        '<td data-order="' + item.action + '"><span class="label ' + action + '">' + item.action + '</span></td>' +
-                        '<td data-order="' + item.score + '"><span class="label ' + score + '">' + item.score.toFixed(2) + ' / ' + item.required_score.toFixed(2) + '</span></td>' +
-                        '<td data-order="' + item.symbols + '"><div class="cell-overflow" tabindex="1" title="' + item.symbols + '">' + item.symbols + '</div></td>' +
-                        '<td data-order="' + item.size + '">' + item.size + '</td>' +
-                        '<td data-order="' + item.scan_time + '">' + item.scan_time.toFixed(3) + '</td>' +
-                        '<td data-order="' + item.user + '"><div class="cell-overflow" tabindex="1" "title="' + item.user + '">' + item.user + '</div></td></tr>');
-                });
                 $('<tbody/>', {
                     html: items.join('')
                 }).insertAfter('#historyLog thead');
