@@ -27,7 +27,7 @@ function($) {
     var interface = {};
 
     function unix_time_format(tm) {
-        var date = new Date(tm*1000);
+        var date = new Date(tm ? tm * 1000 : 0);
 
         return date.toLocaleString();
     }
@@ -41,7 +41,9 @@ function($) {
 
             if (item.action === 'clean' || item.action === 'no action') {
                 action = 'label-success';
-            } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
+            } else if (item.action === 'rewrite subject' ||
+                    item.action === 'add header' ||
+                    item.action === 'probable spam') {
                 action = 'label-warning';
             } else if (item.action === 'spam' || item.action === 'reject') {
                 action = 'label-danger';
@@ -57,17 +59,37 @@ function($) {
             }
 
             console.log(item)
+            var nitem = [];
+            nitem.push('<tr><td data-order="' +
+                item.unix_time + '">' +
+                unix_time_format(item.unix_time) + '</td>');
+            nitem.push('<td data-order="' + item['message-id'] +
+                    '"><div class="cell-overflow" tabindex="1" title="' +
+                    item['message-id'] + '">' + item['message-id'] +
+                    '</div></td>');
+            nitem.push('<td data-order="' + item.ip +
+                    '"><div class="cell-overflow" tabindex="1" title="' +
+                    item.ip + '">' + item.ip + '</div></td>');
+            nitem.push('<td data-order="' + item.action +
+                    '"><span class="label ' + action + '">' + item.action +
+                    '</span></td>');
+            nitem.push('<td data-order="' + item.score +
+                    '"><span class="label ' + score + '">'
+                    + item.score.toFixed(2) + ' / ' +
+                    item.required_score.toFixed(2) + '</span></td>');
+            nitem.push( '<td data-order="' + item.symbols +
+                    '"><div class="cell-overflow" tabindex="1" title="' +
+                    item.symbols + '">' + item.symbols + '</div></td>');
+            nitem.push('<td data-order="' + item.size + '">' +
+                    item.size + '</td>');
+            nitem.push('<td data-order="' + item.time_real + '">' +
+                    item.time_real.toFixed(3) + '/' +
+                    item.time_virtual.toFixed(3) + '</td>');
+            nitem.push('<td data-order="' + item.user +
+                    '"><div class="cell-overflow" tabindex="1" "title="' +
+                    item.user + '">' + item.user + '</div></td></tr>');
 
-            items.push(
-                    '<tr><td data-order="' + item.unix_time + '">' + unix_time_format(item.unix_time) + '</td>' +
-                    '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</div></td>' +
-                    '<td data-order="' + item.ip + '"><div class="cell-overflow" tabindex="1" title="' + item.ip + '">' + item.ip + '</div></td>' +
-                    '<td data-order="' + item.action + '"><span class="label ' + action + '">' + item.action + '</span></td>' +
-                    '<td data-order="' + item.score + '"><span class="label ' + score + '">' + item.score.toFixed(2) + ' / ' + item.required_score.toFixed(2) + '</span></td>' +
-                    '<td data-order="' + item.symbols + '"><div class="cell-overflow" tabindex="1" title="' + item.symbols + '">' + item.symbols + '</div></td>' +
-                    '<td data-order="' + item.size + '">' + item.size + '</td>' +
-                    '<td data-order="' + item['time-real'] + '">' + item['time-real'].toFixed(3) + '/' + item['time-virtual'].toFixed(3) + '</td>' +
-                    '<td data-order="' + item.user + '"><div class="cell-overflow" tabindex="1" "title="' + item.user + '">' + item.user + '</div></td></tr>');
+            items.push(nitem.join("\n"));
         });
 
         return items;
@@ -156,7 +178,7 @@ function($) {
                 var items = process_history_data(data);
 
                 $('<tbody/>', {
-                    html: items.join('')
+                    html: items.join("\n")
                 }).insertAfter('#historyLog thead');
                 tables.history = $('#historyLog').DataTable({
                     "aLengthMenu": [
