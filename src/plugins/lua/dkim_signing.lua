@@ -40,6 +40,18 @@ local E = {}
 local N = 'dkim_signing'
 local redis_params
 
+local function simple_template(tmpl, keys)
+  local lpeg = require "lpeg"
+
+  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
+  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
+  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
+
+  local rep = lpeg.Cs((var + var_braced + 1)^0)
+
+  return lpeg.match(rep, tmpl)
+end
+
 local function dkim_signing_cb(task)
   local auser = task:get_user()
   if settings.auth_only and not auser then
@@ -120,8 +132,6 @@ local function dkim_signing_cb(task)
   if not p.selector then
     p.selector = settings.selector
   end
-  p.key = string.gsub(p.key, '$selector', p.selector)
-  p.key = string.gsub(p.key, '$domain', dkim_domain)
   p.domain = dkim_domain
 
   if settings.selector_map then
@@ -171,6 +181,7 @@ local function dkim_signing_cb(task)
     end
   else
     if (p.key and p.selector) then
+      p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
       return rspamd_plugins.dkim.sign(task, p)
     else
       rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
