@@ -378,7 +378,7 @@ if opts then
   whitelisted_ip = rspamd_map_add('greylist', 'whitelisted_ip', 'radix',
     'Greylist whitelist ip map')
   whitelist_domains_map = rspamd_map_add('greylist', 'whitelist_domains_url',
-    'map', 'Greylist whitelist domains map')
+    'regexp', 'Greylist whitelist domains map')
 
   redis_params = rspamd_parse_redis_server('greylist')
   if not redis_params then
