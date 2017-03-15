@@ -1501,27 +1501,23 @@ rspamd_controller_handle_lua_history (lua_State *L,
 			}
 			else {
 				msg_err_session ("rspamd_plugins.history.handler is not a function");
-				lua_pop (L, 3);
+				lua_settop (L, 0);
 				goto err;
 			}
-
-			lua_pop (L, 1); /* Function */
 		}
 		else {
 			msg_err_session ("rspamd_plugins.history is not a table");
-			lua_pop (L, 2);
+			lua_settop (L, 0);
 			goto err;
 		}
-
-		lua_pop (L, 1); /* plugins.history */
 	}
 	else {
 		msg_err_session ("rspamd_plugins is absent or has incorrect type");
-		lua_pop (L, 1);
+		lua_settop (L, 0);
 		goto err;
 	}
 
-	lua_pop (L, 1); /* plugins global */
+	lua_settop (L, 0);
 
 	return;
 err:
