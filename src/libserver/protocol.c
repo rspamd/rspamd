@@ -1173,10 +1173,10 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				"message-id", 0, false);
 		ucl_object_insert_key (top,
 				ucl_object_fromdouble (task->time_real_finish - task->time_real),
-				"time-real", 0, false);
+				"time_real", 0, false);
 		ucl_object_insert_key (top,
 				ucl_object_fromdouble (task->time_virtual_finish - task->time_virtual),
-				"time-virtual", 0, false);
+				"time_virtual", 0, false);
 	}
 
 	if (flags & RSPAMD_PROTOCOL_DKIM) {
