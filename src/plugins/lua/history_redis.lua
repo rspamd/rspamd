@@ -67,6 +67,9 @@ local function normalise_results(tbl, task)
   tbl.unix_time = seconds
 
   tbl.subject = task:get_header('subject') or 'unknown'
+  tbl.size = task:get_size()
+  tbl.ip = tostring(task:get_from_ip() or 'unknown')
+  tbl.user = task:get_user() or 'unknown'
 end
 
 local function history_save(task)
