@@ -107,7 +107,8 @@ local function dkim_signing_cb(task)
     p.selector = settings.domain[dkim_domain].selector
     p.key = settings.domain[dkim_domain].path
   end
-  if not (p.key and p.selector) and not settings.try_fallback then
+  if not (p.key and p.selector) and not
+    (settings.try_fallback or settings.use_redis or settings.selector_map or settings.path_map) then
     rspamd_logger.debugm(N, task, 'dkim unconfigured and fallback disabled')
     return false
   end
@@ -123,7 +124,24 @@ local function dkim_signing_cb(task)
   p.key = string.gsub(p.key, '$domain', dkim_domain)
   p.domain = dkim_domain
 
+  if settings.selector_map then
+    local data = settings.selector_map:get_key(dkim_domain)
+    if data then
+      p.selector = data
+    end
+  end
+  if settings.path_map then
+    local data = settings.path_map:get_key(dkim_domain)
+    if data then
+      p.key = data
+    end
+  end
+
   if settings.use_redis then
+    if not p.selector then
+      rspamd_logger.errx(task, 'No selector specified')
+      return false
+    end
     p.key = nil
     local rk = string.format('%s.%s', p.selector, p.domain)
 
@@ -152,22 +170,31 @@ local function dkim_signing_cb(task)
       rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
     end
   else
-    return rspamd_plugins.dkim.sign(task, p)
+    if (p.key and p.selector) then
+      return rspamd_plugins.dkim.sign(task, p)
+    else
+      rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
+      return false
+    end
   end
 end
 
 local opts =  rspamd_config:get_all_opt('dkim_signing')
 if not opts then return end
-if not (opts['use_redis'] or opts['path'] or opts['domain']) then
-  rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
-  return
-end
 for k,v in pairs(opts) do
   if k == 'sign_networks' then
     settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')
+  elseif k == 'path_map' then
+    settings[k] = rspamd_map_add(N, k, 'map', 'Paths to DKIM signing keys')
+  elseif k == 'selector_map' then
+    settings[k] = rspamd_map_add(N, k, 'map', 'DKIM selectors')
   else
     settings[k] = v
   end
+end
+if not (settings.use_redis or settings.path or settings.domain or settings.path_map or settings.selector_map) then
+  rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
+  return
 end
 if settings.use_redis then
   redis_params = rspamd_parse_redis_server('dkim_signing')
