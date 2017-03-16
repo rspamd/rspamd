@@ -185,6 +185,7 @@ struct lua_tcp_dtor {
 #define LUA_TCP_FLAG_PARTIAL (1 << 0)
 #define LUA_TCP_FLAG_SHUTDOWN (1 << 2)
 #define LUA_TCP_FLAG_CONNECTED (1 << 3)
+#define LUA_TCP_FLAG_FINISHED (1 << 4)
 
 struct lua_tcp_cbdata {
 	lua_State *L;
@@ -725,9 +726,12 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 	hdl = g_queue_peek_head (cbd->handlers);
 
 	if (hdl == NULL) {
-		/* We are finished with a connection */
-		msg_debug_tcp ("no handlers left, finish session");
-		REF_RELEASE (cbd);
+		if (!(cbd->flags & LUA_TCP_FLAG_FINISHED)) {
+			/* We are finished with a connection */
+			msg_debug_tcp ("no handlers left, finish session");
+			REF_RELEASE (cbd);
+			cbd->flags |= LUA_TCP_FLAG_FINISHED;
+		}
 	}
 	else {
 		if (hdl->type == LUA_WANT_READ) {
@@ -1225,6 +1229,7 @@ lua_tcp_close (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
+	cbd->flags |= LUA_TCP_FLAG_FINISHED;
 	REF_RELEASE (cbd);
 
 	return 0;
