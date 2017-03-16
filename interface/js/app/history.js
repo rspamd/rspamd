@@ -58,7 +58,7 @@ function($) {
                 score = 'label-danger';
             }
 
-            console.log(item)
+            var symbols = Object.keys(item.symbols);
             var nitem = [];
             nitem.push('<tr><td data-order="' +
                 item.unix_time + '">' +
@@ -77,9 +77,9 @@ function($) {
                     '"><span class="label ' + score + '">'
                     + item.score.toFixed(2) + ' / ' +
                     item.required_score.toFixed(2) + '</span></td>');
-            nitem.push( '<td data-order="' + item.symbols +
+            nitem.push( '<td data-order="' + symbols +
                     '"><div class="cell-overflow" tabindex="1" title="' +
-                    item.symbols + '">' + item.symbols + '</div></td>');
+                    symbols + '">' + symbols + '</div></td>');
             nitem.push('<td data-order="' + item.size + '">' +
                     item.size + '</td>');
             nitem.push('<td data-order="' + item.time_real + '">' +
