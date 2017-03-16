@@ -812,6 +812,7 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 
 			p += 2;
 			c = p;
+			continue;
 		}
 
 		p ++;
