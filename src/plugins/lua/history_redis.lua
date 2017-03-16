@@ -98,7 +98,7 @@ local function history_save(task)
   local json = ucl.to_format(data, 1)
 
   if settings.compress then
-    json = tostring(rspamd_util.zstd_compress(json))
+    json = rspamd_util.zstd_compress(json)
     -- Distinguish between compressed and non-compressed options
     prefix = prefix .. '_zst'
   end
@@ -113,7 +113,7 @@ local function history_save(task)
   )
 
   if ret then
-    conn:add_cmd('LTRIM', {prefix, '0', tostring(settings.nrows-1)})
+    conn:add_cmd('LTRIM', {prefix, '0', string.format('%d', settings.nrows-1)})
   end
 end
 
@@ -174,7 +174,7 @@ local function handle_history_request(task, conn, from, to, reset)
       false, -- is write
       redis_lrange_cb, --callback
       'LRANGE', -- command
-      {prefix, tostring(from), tostring(to)} -- arguments
+      {prefix, string.format('%d', from), string.format('%d', to)} -- arguments
     )
   end
 end
