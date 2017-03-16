@@ -244,7 +244,7 @@ repeat:
 
 	if (!ret && inlen > 0) {
 		/* Skip to the next valid character in input */
-		while (base64_table_dec[*c] >= 254 && inlen > 0) {
+		while (inlen > 0 && base64_table_dec[*c] >= 254) {
 			c ++;
 			inlen --;
 		}
