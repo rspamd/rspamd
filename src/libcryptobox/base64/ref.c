@@ -174,6 +174,9 @@ repeat:
 						break;
 					}
 				}
+				else {
+					leftover --;
+				}
 				/* If we get here, there was an error: */
 				break;
 			}
@@ -188,12 +191,18 @@ repeat:
 				break;
 			}
 			if ((q = base64_table_dec[*c++]) >= 254) {
-				leftover = 0;
 				/*
 				 * When q == 254, the input char is '='. Return 1 and EOF.
 				 * When q == 255, the input char is invalid. Return 0 and EOF.
 				 */
-				ret = ((q == 254) && (inlen == 0)) ? 1 : 0;
+				if (q == 254 && inlen == 0) {
+					ret = 1;
+					leftover = 0;
+				}
+				else {
+					ret = 0;
+				}
+
 				break;
 			}
 
