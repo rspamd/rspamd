@@ -102,6 +102,13 @@ typedef struct rspamd_dkim_sign_key_s rspamd_dkim_sign_key_t;
 
 struct rspamd_task;
 
+enum rspamd_dkim_sign_key_type {
+	RSPAMD_DKIM_SIGN_KEY_FILE = 0,
+	RSPAMD_DKIM_SIGN_KEY_PEM,
+	RSPAMD_DKIM_SIGN_KEY_BASE64,
+	RSPAMD_DKIM_SIGN_KEY_DER
+};
+
 /* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
 typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
 	rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
@@ -134,21 +141,14 @@ rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task
 		GError **err);
 
 /**
- * Load dkim key from a file
+ * Load dkim key
  * @param path
  * @param err
  * @return
  */
-rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *path, GError **err);
-
-/**
- * Load dkim key from memory chunk
- * @param path
- * @param err
- * @return
- */
-rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_from_memory (const guchar *data,
-		gsize len, GError **err);
+rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *what, gsize len,
+		enum rspamd_dkim_sign_key_type type,
+		GError **err);
 
 /**
  * Make DNS request for specified context and obtain and parse key

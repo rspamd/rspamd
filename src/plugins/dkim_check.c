@@ -587,7 +587,8 @@ lua_dkim_sign_handler (lua_State *L)
 				key, time (NULL));
 
 		if (dkim_key == NULL) {
-			dkim_key = rspamd_dkim_sign_key_load (key, &err);
+			dkim_key = rspamd_dkim_sign_key_load (key, strlen (key),
+					RSPAMD_DKIM_SIGN_KEY_FILE, &err);
 
 			if (dkim_key == NULL) {
 				msg_err_task ("cannot load dkim key %s: %e",
@@ -614,7 +615,8 @@ lua_dkim_sign_handler (lua_State *L)
 				hex_hash, time (NULL));
 
 		if (dkim_key == NULL) {
-			dkim_key = rspamd_dkim_sign_key_from_memory (rawkey, rawlen, &err);
+			dkim_key = rspamd_dkim_sign_key_load (rawkey, rawlen,
+					RSPAMD_DKIM_SIGN_KEY_PEM, &err);
 
 			if (dkim_key == NULL) {
 				msg_err_task ("cannot load dkim key %s: %e",
@@ -996,11 +998,16 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 	struct rspamd_task **ptask;
 	gboolean sign = FALSE;
 	gint err_idx;
+	gsize len;
 	GString *tb, *hdr;
 	GError *err = NULL;
-	const gchar *selector = NULL, *domain = NULL, *key = NULL;
+	const gchar *selector = NULL, *domain = NULL, *key = NULL, *type = NULL,
+			*lru_key;
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
+	enum rspamd_dkim_sign_key_type sign_type = RSPAMD_DKIM_SIGN_KEY_FILE;
+	guchar h[rspamd_cryptobox_HASHBYTES],
+		hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 
 	if (dkim_module_ctx->sign_condition_ref != -1) {
 		sign = FALSE;
@@ -1027,8 +1034,8 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 				 * - key
 				 */
 				if (!rspamd_lua_parse_table_arguments (L, -1, &err,
-						"*key=S;*domain=S;*selector=S",
-						&key, &domain, &selector)) {
+						"*key=V;*domain=S;*selector=S;type=S",
+						&len, &key, &domain, &selector, &type)) {
 					msg_err_task ("invalid return value from sign condition: %e",
 							err);
 					g_error_free (err);
@@ -1036,11 +1043,44 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					return;
 				}
 
-				dkim_key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
-						key, time (NULL));
+				if (type) {
+					if (strcmp (type, "file") == 0) {
+						sign_type = RSPAMD_DKIM_SIGN_KEY_FILE;
+					}
+					else if (strcmp (type, "base64") == 0) {
+						sign_type = RSPAMD_DKIM_SIGN_KEY_BASE64;
+					}
+					else if (strcmp (type, "pem") == 0) {
+						sign_type = RSPAMD_DKIM_SIGN_KEY_PEM;
+					}
+					else if (strcmp (type, "der") == 0 ||
+							strcmp (type, "raw") == 0) {
+						sign_type = RSPAMD_DKIM_SIGN_KEY_DER;
+					}
+				}
+
+				if (sign_type == RSPAMD_DKIM_SIGN_KEY_FILE) {
+
+					dkim_key = rspamd_lru_hash_lookup (
+							dkim_module_ctx->dkim_sign_hash,
+							key, time (NULL));
+					lru_key = key;
+				}
+				else {
+					/* Prehash */
+					memset (hex_hash, 0, sizeof (hex_hash));
+					rspamd_cryptobox_hash (h, key, len, NULL, 0);
+					rspamd_encode_hex_buf (h, sizeof (h),
+							hex_hash, sizeof (hex_hash));
+					dkim_key = rspamd_lru_hash_lookup (
+							dkim_module_ctx->dkim_sign_hash,
+							hex_hash, time (NULL));
+					lru_key = hex_hash;
+				}
 
 				if (dkim_key == NULL) {
-					dkim_key = rspamd_dkim_sign_key_load (key, &err);
+					dkim_key = rspamd_dkim_sign_key_load (key, len,
+							sign_type, &err);
 
 					if (dkim_key == NULL) {
 						msg_err_task ("cannot load dkim key %s: %e",
@@ -1051,7 +1091,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					}
 
 					rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-							g_strdup (key), dkim_key,
+							g_strdup (lru_key), dkim_key,
 							time (NULL), 0);
 				}
 
@@ -1070,7 +1110,8 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, ctx);
 
 				if (hdr) {
-					rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+					rspamd_mempool_set_variable (task->task_pool,
+							"dkim-signature",
 							hdr, rspamd_gstring_free_hard);
 				}
 
