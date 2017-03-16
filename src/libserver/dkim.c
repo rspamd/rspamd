@@ -90,9 +90,9 @@ struct rspamd_dkim_common_ctx {
 struct rspamd_dkim_context_s {
 	struct rspamd_dkim_common_ctx common;
 	rspamd_mempool_t *pool;
+	gsize blen;
+	gsize bhlen;
 	gint sig_alg;
-	guint bhlen;
-	guint blen;
 	guint ver;
 	time_t timestamp;
 	time_t expiration;
@@ -221,18 +221,9 @@ rspamd_dkim_parse_signature (rspamd_dkim_context_t * ctx,
 	gsize len,
 	GError **err)
 {
-	ctx->b = rspamd_mempool_alloc (ctx->pool, len + 1);
-	rspamd_strlcpy (ctx->b, param, len + 1);
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
-	gchar *tmp;
-	gsize tmp_len = len;
-	tmp = g_base64_decode (ctx->b, &tmp_len);
-	rspamd_strlcpy (ctx->b, tmp, tmp_len + 1);
-	g_free (tmp);
-#else
-	g_base64_decode_inplace (ctx->b, &len);
-#endif
-	ctx->blen = len;
+	ctx->b = rspamd_mempool_alloc0 (ctx->pool, len);
+	(void)rspamd_cryptobox_base64_decode (param, len, ctx->b, &ctx->blen);
+
 	return TRUE;
 }
 
@@ -530,18 +521,9 @@ rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t * ctx,
 	gsize len,
 	GError **err)
 {
-	ctx->bh = rspamd_mempool_alloc (ctx->pool, len + 1);
-	rspamd_strlcpy (ctx->bh, param, len + 1);
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
-	gchar *tmp;
-	gsize tmp_len = len;
-	tmp = g_base64_decode (ctx->bh, &tmp_len);
-	rspamd_strlcpy (ctx->bh, tmp, tmp_len + 1);
-	g_free (tmp);
-#else
-	g_base64_decode_inplace (ctx->bh, &len);
-#endif
-	ctx->bhlen = len;
+	ctx->bh = rspamd_mempool_alloc0 (ctx->pool, len);
+	(void)rspamd_cryptobox_base64_decode (param, len, ctx->bh, &ctx->bhlen);
+
 	return TRUE;
 }
 
@@ -785,7 +767,8 @@ rspamd_create_dkim_context (const gchar *sig,
 				return NULL;
 			}
 			else {
-				msg_info_dkim ("dkim parse failed: unknown error");
+				msg_info_dkim ("dkim parse failed: unknown error when parsing %c tag",
+						*tag);
 				return NULL;
 			}
 			break;
@@ -848,7 +831,7 @@ rspamd_create_dkim_context (const gchar *sig,
 			g_set_error (err,
 				DKIM_ERROR,
 				DKIM_SIGERROR_BADSIG,
-				"signature has incorrect length: %u",
+				"signature has incorrect length: %zu",
 				ctx->bhlen);
 			return NULL;
 		}
@@ -860,7 +843,7 @@ rspamd_create_dkim_context (const gchar *sig,
 			g_set_error (err,
 				DKIM_ERROR,
 				DKIM_SIGERROR_BADSIG,
-				"signature has incorrect length: %u",
+				"signature has incorrect length: %zu",
 				ctx->bhlen);
 			return NULL;
 		}
@@ -951,23 +934,16 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 	}
 
 	key = g_slice_alloc0 (sizeof (rspamd_dkim_key_t));
-	key->keydata = g_slice_alloc (keylen + 1);
-	rspamd_strlcpy (key->keydata, keydata, keylen + 1);
-	key->keylen = keylen + 1;
-	key->decoded_len = keylen + 1;
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 20))
-	gchar *tmp;
-	gsize tmp_len = keylen;
-	tmp = g_base64_decode (key->keydata, &tmp_len);
-	rspamd_strlcpy (key->keydata, tmp, tmp_len + 1);
-	g_free (tmp);
-	key->decoded_len = tmp_len;
-#else
-	g_base64_decode_inplace (key->keydata, &key->decoded_len);
-#endif
 	REF_INIT_RETAIN (key, rspamd_dkim_key_free);
+	key->keydata = g_slice_alloc0 (keylen + 1);
+	key->decoded_len = keylen;
+	key->keylen = keylen;
+
+	rspamd_cryptobox_base64_decode (keydata, keylen, key->keydata,
+			&key->decoded_len);
 
 	key->key_bio = BIO_new_mem_buf (key->keydata, key->decoded_len);
+
 	if (key->key_bio == NULL) {
 		g_set_error (err,
 			DKIM_ERROR,
@@ -979,6 +955,7 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 	}
 
 	key->key_evp = d2i_PUBKEY_bio (key->key_bio, NULL);
+
 	if (key->key_evp == NULL) {
 		g_set_error (err,
 			DKIM_ERROR,
@@ -990,6 +967,7 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 	}
 
 	key->key_rsa = EVP_PKEY_get1_RSA (key->key_evp);
+
 	if (key->key_rsa == NULL) {
 		g_set_error (err,
 			DKIM_ERROR,
@@ -1990,7 +1968,6 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 	gpointer map;
 	gsize map_len = 0;
 	rspamd_dkim_sign_key_t *nkey;
-	guint tmp;
 
 	if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
 		gchar fpath[PATH_MAX];
@@ -2019,15 +1996,8 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 	case RSPAMD_DKIM_SIGN_KEY_BASE64:
 		nkey->keydata = g_malloc (len);
 		nkey->keylen = len;
-
-		if (!rspamd_cryptobox_base64_decode (what, len, nkey->keydata,
-				&nkey->keylen)) {
-			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-					"cannot decode base64 encoded private key");
-			rspamd_dkim_sign_key_free (nkey);
-
-			return NULL;
-		}
+		rspamd_cryptobox_base64_decode (what, len, nkey->keydata,
+				&nkey->keylen);
 		break;
 	case RSPAMD_DKIM_SIGN_KEY_DER:
 	case RSPAMD_DKIM_SIGN_KEY_PEM:
