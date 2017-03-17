@@ -87,6 +87,8 @@ local function dkim_signing_cb(task)
   if not dkim_domain then
     rspamd_logger.debugm(N, task, 'could not extract dkim domain')
     return false
+  else
+    dkim_domain = dkim_domain:lower()
   end
   if settings.use_esld then
     dkim_domain = rspamd_util.get_tld(dkim_domain)
