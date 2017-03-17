@@ -1,13 +1,16 @@
 ---
 --- Lua Fun - a high-performance functional programming library for LuaJIT
 ---
---- Copyright (c) 2013-2014 Roman Tsisyk <roman@tsisyk.com>
+--- Copyright (c) 2013-2017 Roman Tsisyk <roman@tsisyk.com>
 ---
 --- Distributed under the MIT/X11 License. See COPYING.md for more details.
 ---
 
 local exports = {}
 local methods = {}
+
+-- compatibility with Lua 5.1/5.2
+local unpack = rawget(table, "unpack") or unpack
 
 --------------------------------------------------------------------------------
 -- Tools
@@ -83,6 +86,8 @@ local string_gen = function(param, state)
     local r = string.sub(param, state, state)
     return state, r
 end
+
+local ipairs_gen = ipairs({}) -- get the generating function from ipairs
 
 local pairs_gen = pairs({ a = 0 }) -- get the generating function from pairs
 local map_gen = function(tab, key)
@@ -293,10 +298,10 @@ exports.rands = rands
 local nth = function(n, gen_x, param_x, state_x)
     assert(n > 0, "invalid first argument to nth")
     -- An optimization for arrays and strings
-    if gen_x == ipairs then
+    if gen_x == ipairs_gen then
         return param_x[n]
     elseif gen_x == string_gen then
-        if n < #param_x then
+        if n <= #param_x then
             return string.sub(param_x, n, n)
         else
             return nil
@@ -593,7 +598,7 @@ methods.reduce = methods.foldl
 exports.reduce = exports.foldl
 
 local length = function(gen, param, state)
-    if gen == ipairs or gen == string_gen then
+    if gen == ipairs_gen or gen == string_gen then
         return #param
     end
     local len = 0
@@ -938,7 +943,7 @@ local chain_gen_r2 = function(param, state, state_x, ...)
     if state_x == nil then
         local i = state[1]
         i = i + 1
-        if i > #param / 3 then
+        if param[3 * i - 1] == nil then
             return nil
         end
         local state_x = param[3 * i]
@@ -978,7 +983,7 @@ exports.chain = chain
 -- Operators
 --------------------------------------------------------------------------------
 
-operator = {
+local operator = {
     ----------------------------------------------------------------------------
     -- Comparison operators
     ----------------------------------------------------------------------------
@@ -1033,8 +1038,20 @@ methods.op = operator
 
 -- a special syntax sugar to export all functions to the global table
 setmetatable(exports, {
-    __call = function(t)
-        for k, v in pairs(t) do _G[k] = v end
+    __call = function(t, override)
+        for k, v in pairs(t) do
+            if _G[k] ~= nil then
+                local msg = 'function ' .. k .. ' already exists in global scope.'
+                if override then
+                    _G[k] = v
+                    print('WARNING: ' .. msg .. ' Overwritten.')
+                else
+                    print('NOTICE: ' .. msg .. ' Skipped.')
+                end
+            else
+                _G[k] = v
+            end
+        end
     end,
 })
 
