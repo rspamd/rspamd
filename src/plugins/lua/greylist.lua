@@ -230,6 +230,19 @@ local function greylist_set(task)
   local action = task:get_metric_action('default')
   local ip = task:get_ip()
 
+  if settings.greylist_min_score then
+    local score = task:get_metric_score('default')
+    if score < settings.greylist_min_score then
+      rspamd_logger.infox(task, 'Score too low - skip greylisting')
+      if action == 'greylist' then
+        -- We are going to accept message
+        rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
+        task:set_metric_action('default', 'no action')
+      end
+      return
+    end
+  end
+
   if task:get_user() or (ip and ip:is_local()) then
     if action == 'greylist' then
       -- We are going to accept message
