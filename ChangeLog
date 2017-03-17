@@ -1,3 +1,53 @@
+1.5.3:
+	* [Conf] Add composite for hacked wordpress phishing
+	* [CritFix] Fix base64 decoding when there are unparseable characters
+	* [Feature] Additional symbol metadata in metadata exporter
+	* [Feature] Add method to get protocol reply from Lua
+	* [Feature] Add symbols when tagged rcpt/sender are normalised
+	* [Feature] Add task:get_symbols_all() function
+	* [Feature] Allow multiple formats of DKIM signing key
+	* [Feature] Allow to cache and use flexible protocol reply
+	* [Feature] Allow to set one_shot flag from register_symbol
+	* [Feature] Allow to skip certain types of hashes when learning fuzzy
+	* [Feature] Cache and insert scan time into the protocol
+	* [Feature] Detect newlines in rspamc --mime
+	* [Feature] DKIM signing: support use of maps
+	* [Feature] Greylist: Support excluding low-scoring messages from greylisting
+	* [Feature] Implement lua history in controller
+	* [Feature] Implement redis history querying
+	* [Feature] Preliminary implementation of redis history plugin
+	* [Feature] Support using request headers in settings
+	* [Fix] Change default template to deal with non-ASCII characters
+	* [Fix] Deal with lists of maps in whitelist module
+	* [Fix] DKIM signing: use domain-specific signing key
+	* [Fix] Do not reallocate completed zstd buffer
+	* [Fix] Do not use local_addrs in proxy
+	* [Fix] Fix crash when resolver is undefined
+	* [Fix] Fix double free when closing lua_tcp connections
+	* [Fix] Fix for lua 5.3
+	* [Fix] Fix freeing of arrays iterators
+	* [Fix] Fix issue with task:get_symbol and symbols with no metric
+	* [Fix] Fix log line duplication in `rspamadm grep`
+	* [Fix] Fix memory corruption on termination
+	* [Fix] Fix out-of-bound access in base64 decode
+	* [Fix] Fix ratelimit + greylisting
+	* [Fix] Fix subject rewriting
+	* [Fix] Fix task:set_recipients function
+	* [Fix] Fix URI_COUNT_ODD rule
+	* [Fix] Follow the traditional symbols conventions in RCPT_COUNT rule
+	* [Fix] Greylist: Suppress greylist action for whitelisted hosts too
+	* [Fix] Metadata exporter: use rule-specific settings for emails
+	* [Fix] Properly set missing fields in exporter
+	* [Fix] Proxy: max_retries option
+	* [Fix] RCPT_COUNT fixes
+	* [Fix] Rework HAS_X_PRIO rule to match symbols conventions
+	* [Fix] Update issues in ac-trie
+	* [Fix] Use optimised base64 decoding in DKIM
+	* [WebUI] Add preliminary v2 history parser
+	* [WebUI] Allow different history parsers
+	* [WebUI] Display symbols
+	* [WebUI] Rework history v2 function
+
 1.5.2:
 	* [Conf] Add default config for spamassasssin plugin
 	* [Conf] Add default configuration for antivirus module
