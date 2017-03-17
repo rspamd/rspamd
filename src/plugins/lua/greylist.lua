@@ -231,7 +231,7 @@ local function greylist_set(task)
   local ip = task:get_ip()
 
   if settings.greylist_min_score then
-    local score = task:get_metric_score('default')
+    local score = task:get_metric_score('default')[1]
     if score < settings.greylist_min_score then
       rspamd_logger.infox(task, 'Score too low - skip greylisting')
       if action == 'greylist' then
@@ -387,6 +387,9 @@ if opts then
     if k ~= 'message_func' then
       settings[k] = v
     end
+  end
+  if settings['greylist_min_score'] then
+    settings['greylist_min_score'] = tonumber(settings['greylist_min_score'])
   end
   whitelisted_ip = rspamd_map_add('greylist', 'whitelisted_ip', 'radix',
     'Greylist whitelist ip map')
