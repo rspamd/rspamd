@@ -79,6 +79,12 @@ local function dkim_signing_cb(task)
   local dkim_domain
   local hdom = ((hfrom or E)[1] or E).domain
   local edom = ((efrom or E)[1] or E).domain
+  if hdom then
+    hdom = hdom:lower()
+  end
+  if edom then
+    edom = edom:lower()
+  end
   if settings.use_domain == 'header' then
     dkim_domain = hdom
   else
@@ -87,8 +93,6 @@ local function dkim_signing_cb(task)
   if not dkim_domain then
     rspamd_logger.debugm(N, task, 'could not extract dkim domain')
     return false
-  else
-    dkim_domain = dkim_domain:lower()
   end
   if settings.use_esld then
     dkim_domain = rspamd_util.get_tld(dkim_domain)
