@@ -115,6 +115,7 @@ local function dkim_signing_cb(task)
     end
   end
   local p = {}
+  dkim_domain = dkim_domain:lower()
   if settings.domain[dkim_domain] then
     p.selector = settings.domain[dkim_domain].selector
     p.key = settings.domain[dkim_domain].path
