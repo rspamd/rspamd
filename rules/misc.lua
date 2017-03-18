@@ -404,3 +404,57 @@ rspamd_config:register_symbol{
   description = 'SMTP from has plus tags',
   score = 0,
 }
+
+rspamd_config.SPOOF_DISPLAY_NAME = {
+  callback = function (task)
+    local from = task:get_from(2)
+    if not (from and from[1] and from[1].name) then return false end
+    -- See if we can parse an email address from the name
+    local parsed = util.parse_mail_address(from[1].name)
+    if not parsed then return false end
+    if not (parsed[1] and parsed[1]['addr']) then return false end
+    -- See if the parsed domains differ
+    if not util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
+      -- See if the destination domain is the same as the spoof
+      local to = task:get_recipients(2)
+      -- Be careful with undisclosed-recipients:; as domain will be an empty string
+      if not (to and to[1] and to[1]['domain'] and to[1]['domain'] ~= '') then
+        return false
+      end
+      if util.strequal_caseless(to[1]['domain'], parsed[1]['domain']) then
+          return true,from[1]['domain'],parsed[1]['domain']
+      end
+    end
+    return false
+  end,
+  description = 'Display name is being used to spoof and trick the recipient',
+  score = 8.0
+}
+
+rspamd_config.SPOOF_REPLYTO = {
+  callback = function (task)
+    -- First check for a Reply-To header
+    local rt = task:get_header('Reply-To')
+    if not rt then return false end
+    -- Get From header
+    local from = task:get_from(2)
+    if not (from and from[1] and from[1]['domain']) then return false end
+    -- Get To header
+    local to = task:get_recipients(2)
+    if not (to and to[1] and to[1]['domain']) then return false end
+    -- From and To domains must be matching
+    if not util.strequal_caseless(from[1]['domain'], to[1]['domain']) then
+      return false
+    end
+    -- Parse Reply-To header
+    local parsed = util.parse_mail_address(rt)
+    if not (parsed and parsed[1] and parsed[1]['domain']) then return false end
+    -- Reply-To domain must be different to From domain
+    if not util.strequal_caseless(parsed[1]['domain'], from[1]['domain']) then
+      return true, from[1]['domain'], parsed[1]['domain']
+    end
+    return false
+  end,
+  description = 'Reply-To is being used to spoof and trick the recipient to send an off-domain reply',
+  score = 6.0
+}
