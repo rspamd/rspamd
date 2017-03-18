@@ -417,16 +417,29 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		parsed = rspamd_fstring_sized_new (part->raw_data.len);
 		r = rspamd_decode_qp_buf (part->raw_data.begin, part->raw_data.len,
 				parsed->str, parsed->allocated);
-		g_assert (r != -1);
-		parsed->len = r;
-		part->parsed_data.begin = parsed->str;
-		part->parsed_data.len = parsed->len;
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)rspamd_fstring_free, parsed);
+		if (r != -1) {
+			parsed->len = r;
+			part->parsed_data.begin = parsed->str;
+			part->parsed_data.len = parsed->len;
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)rspamd_fstring_free, parsed);
+		}
+		else {
+			msg_err_task ("invalid quoted-printable encoded part, assume 8bit");
+			part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			part->cte = RSPAMD_CTE_8BIT;
+			memcpy (parsed->str, part->raw_data.begin, part->raw_data.len);
+			parsed->len = part->raw_data.len;
+			part->parsed_data.begin = parsed->str;
+			part->parsed_data.len = parsed->len;
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)rspamd_fstring_free, parsed);
+		}
 		break;
 	case RSPAMD_CTE_B64:
 		parsed = rspamd_fstring_sized_new (part->raw_data.len / 4 * 3 + 12);
-		rspamd_cryptobox_base64_decode (part->raw_data.begin, part->raw_data.len,
+		rspamd_cryptobox_base64_decode (part->raw_data.begin,
+				part->raw_data.len,
 				parsed->str, &parsed->len);
 		part->parsed_data.begin = parsed->str;
 		part->parsed_data.len = parsed->len;
