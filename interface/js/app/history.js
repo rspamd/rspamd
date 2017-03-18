@@ -22,7 +22,7 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'datatables'],
+define(['jquery', 'datatables', 'footable'],
 function($) {
     var interface = {};
 
@@ -37,59 +37,33 @@ function($) {
 
         $.each(data.rows.map(function(elt) { return JSON.parse(elt);}),
           function (i, item) {
-            var action;
-
             if (item.action === 'clean' || item.action === 'no action') {
-                action = 'label-success';
-            } else if (item.action === 'rewrite subject' ||
-                    item.action === 'add header' ||
-                    item.action === 'probable spam') {
-                action = 'label-warning';
+                item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
+            } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
+                item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
             } else if (item.action === 'spam' || item.action === 'reject') {
-                action = 'label-danger';
+                item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
             } else {
-                action = 'label-info';
+                item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
             }
 
-            var score;
             if (item.score < item.required_score) {
-                score = 'label-success';
+                item.score = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
             } else {
-                score = 'label-danger';
+                item.score = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
+            }
+
+            if (item.user == null) {
+                item.user = "none";
             }
 
             var symbols = Object.keys(item.symbols);
-            var nitem = [];
-            nitem.push('<tr><td data-order="' +
-                item.unix_time + '">' +
-                unix_time_format(item.unix_time) + '</td>');
-            nitem.push('<td data-order="' + item['message-id'] +
-                    '"><div class="cell-overflow" tabindex="1" title="' +
-                    item['message-id'] + '">' + item['message-id'] +
-                    '</div></td>');
-            nitem.push('<td data-order="' + item.ip +
-                    '"><div class="cell-overflow" tabindex="1" title="' +
-                    item.ip + '">' + item.ip + '</div></td>');
-            nitem.push('<td data-order="' + item.action +
-                    '"><span class="label ' + action + '">' + item.action +
-                    '</span></td>');
-            nitem.push('<td data-order="' + item.score +
-                    '"><span class="label ' + score + '">'
-                    + item.score.toFixed(2) + ' / ' +
-                    item.required_score.toFixed(2) + '</span></td>');
-            nitem.push( '<td data-order="' + symbols +
-                    '"><div class="cell-overflow" tabindex="1" title="' +
-                    symbols + '">' + symbols + '</div></td>');
-            nitem.push('<td data-order="' + item.size + '">' +
-                    item.size + '</td>');
-            nitem.push('<td data-order="' + item.time_real + '">' +
-                    item.time_real.toFixed(3) + '/' +
-                    item.time_virtual.toFixed(3) + '</td>');
-            nitem.push('<td data-order="' + item.user +
-                    '"><div class="cell-overflow" tabindex="1" "title="' +
-                    item.user + '">' + item.user + '</div></td></tr>');
-
-            items.push(nitem.join("\n"));
+            item.symbols = symbols
+            item.time = unix_time_format(item.unix_time);
+            item.scan_time = item.time_real.toFixed(3) + '/' +
+                item.time_virtual.toFixed(3);
+            item.id = item['message-id'];
+            items.push(item);
         });
 
         return items;
@@ -99,35 +73,27 @@ function($) {
         var items = [];
 
         $.each(data, function (i, item) {
-            var action;
-
             if (item.action === 'clean' || item.action === 'no action') {
-                action = 'label-success';
+                item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
             } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
-                action = 'label-warning';
+                item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
             } else if (item.action === 'spam' || item.action === 'reject') {
-                action = 'label-danger';
+                item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
             } else {
-                action = 'label-info';
+                item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
             }
 
-            var score;
             if (item.score < item.required_score) {
-                score = 'label-success';
+                item.score = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
             } else {
-                score = 'label-danger';
+                item.score = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
             }
 
-            items.push(
-                    '<tr><td data-order="' + item.unix_time + '">' + item.time + '</td>' +
-                    '<td data-order="' + item.id + '"><div class="cell-overflow" tabindex="1" title="' + item.id + '">' + item.id + '</div></td>' +
-                    '<td data-order="' + item.ip + '"><div class="cell-overflow" tabindex="1" title="' + item.ip + '">' + item.ip + '</div></td>' +
-                    '<td data-order="' + item.action + '"><span class="label ' + action + '">' + item.action + '</span></td>' +
-                    '<td data-order="' + item.score + '"><span class="label ' + score + '">' + item.score.toFixed(2) + ' / ' + item.required_score.toFixed(2) + '</span></td>' +
-                    '<td data-order="' + item.symbols + '"><div class="cell-overflow" tabindex="1" title="' + item.symbols + '">' + item.symbols + '</div></td>' +
-                    '<td data-order="' + item.size + '">' + item.size + '</td>' +
-                    '<td data-order="' + item.scan_time + '">' + item.scan_time.toFixed(3) + '</td>' +
-                    '<td data-order="' + item.user + '"><div class="cell-overflow" tabindex="1" "title="' + item.user + '">' + item.user + '</div></td></tr>');
+            if (item.user == null) {
+                item.user = "none";
+            }
+
+            items.push(item)
         });
 
         return items;
@@ -164,6 +130,57 @@ function($) {
             $('#historyLog').children('tbody').remove();
         }
 
+
+        FooTable.actionFilter = FooTable.Filtering.extend({
+        construct : function(instance) {
+            this._super(instance);
+            this.actions = [ 'reject', 'add_header', 'greylist',
+                    'no action', 'soft reject' ];
+            this.def = 'Any action';
+            this.$action = null;
+        },
+        $create : function() {
+            this._super();
+            var self = this, $form_grp = $('<div/>', {
+                'class' : 'form-group'
+            }).append($('<label/>', {
+                'class' : 'sr-only',
+                text : 'Action'
+            })).prependTo(self.$form);
+
+            self.$action = $('<select/>', {
+                'class' : 'form-control'
+            }).on('change', {
+                self : self
+            }, self._onStatusDropdownChanged).append(
+                    $('<option/>', {
+                        text : self.def
+                    })).appendTo($form_grp);
+
+            $.each(self.actions, function(i, action) {
+                self.$action.append($('<option/>').text(action));
+            });
+        },
+        _onStatusDropdownChanged : function(e) {
+            var self = e.data.self, selected = $(this).val();
+            if (selected !== self.def) {
+                self.addFilter('action', selected, [ 'action' ]);
+            } else {
+                self.removeFilter('action');
+            }
+            self.filter();
+        },
+        draw : function() {
+            this._super();
+            var action = this.find('action');
+            if (action instanceof FooTable.Filter) {
+                this.$action.val(action.query.val());
+            } else {
+                this.$action.val(this.def);
+            }
+        }
+        });
+
         $.ajax({
             dataType: 'json',
             url: 'history',
@@ -177,19 +194,34 @@ function($) {
             success: function (data) {
                 var items = process_history_data(data);
 
-                $('<tbody/>', {
-                    html: items.join("\n")
-                }).insertAfter('#historyLog thead');
-                tables.history = $('#historyLog').DataTable({
-                    "aLengthMenu": [
-                        [100, 200, -1],
-                        [100, 200, "All"]
+                $('#historyTable').footable({
+                    "columns": [
+                      {"name":"id","title":"ID","style":{"font-size":"11px","width":300,"maxWidth":300,"overflow":"hidden","textOverflow":"ellipsis","wordBreak":"keep-all","whiteSpace":"nowrap"}},
+                      {"name":"ip","title":"IP address","breakpoints":"xs sm","style":{"font-size":"11px","width":150,"maxWidth":150}},
+                      {"name":"action","title":"Action","style":{"font-size":"11px","width":110,"maxWidth":110}},
+                      {"name":"score","title":"Score","style":{"font-size":"11px","maxWidth":110}},
+                      {"name":"symbols","title":"Symbols","breakpoints":"all","style":{"font-size":"11px","width":550,"maxWidth":550}},
+                      {"name":"size","title":"Message size","breakpoints":"xs sm","style":{"font-size":"11px","width":120,"maxWidth":120}},
+                      {"name":"scan_time","title":"Scan time","breakpoints":"xs sm","style":{"font-size":"11px","maxWidth":80}},
+                      {"sorted": true,"direction": "DESC","name":"time","title":"Time","style":{"font-size":"11px"}},
+                      {"name":"user","title":"Authenticated user","breakpoints":"xs sm","style":{"font-size":"11px","width":200,"maxWidth":200}}
                     ],
-                    "bStateSave": true,
-                    "order": [
-                        [0, "desc"]
-                    ],
-                    "pageLength": history_length
+                    "rows": items,
+                    "paging": {
+                      "enabled": true,
+                      "limit": 5,
+                      "size": 25
+                    },
+                    "filtering": {
+                      "enabled": true,
+                      "position": "left"
+                    },
+                    "sorting": {
+                      "enabled": true
+                    },
+                    components: {
+                      filtering: FooTable.actionFilter
+                    }
                 });
             }
         });

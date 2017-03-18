@@ -8,6 +8,7 @@
 	<meta name="author" content="">
 	<link href="./css/bootstrap.min.css" rel="stylesheet">
 	<link rel="stylesheet" type="text/css" href="./css/datatables.min.css"/>
+	<link rel="stylesheet" type="text/css" href="./css/footable.bootstrap.min.css"/>
 	<link rel="stylesheet" type="text/css" href="./css/d3evolution.css">
 	<link href="./css/rspamd.css" rel="stylesheet">
 </head>
@@ -302,21 +303,9 @@
 						<h5>History</h5>
 					</div>
 					<div class="widget-content nopadding">
-						<table class="table table-log table-hover" id="historyLog">
-							<thead>
-								<tr>
-									<th class="col1" title="Time">Time</th>
-									<th class="col2" title="ID">ID</th>
-									<th class="col3" title="IP">IP</th>
-									<th class="col4" title="Action">Action</th>
-									<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
-									<th class="col6" title="Symbols">Symbols</th>
-									<th class="col7" title="Size">Size</th>
-									<th class="col8" title="Scan Time (s)"><div class="cell-overflow">Scan Time (s)</div></th>
-									<th class="col9" title="User">User</th>
-								</tr>
-							</thead>
-						</table>
+						<div id="historyLog">
+							<table class="table" id="historyTable"></table>
+						</div>
 					</div>
 				</div>
 				<div class="widget-box" id="errors-history">
