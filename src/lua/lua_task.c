@@ -906,12 +906,14 @@ LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 LUA_FUNCTION_DEF (text, ptr);
 LUA_FUNCTION_DEF (text, save_in_file);
+LUA_FUNCTION_DEF (text, take_ownership);
 LUA_FUNCTION_DEF (text, gc);
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
 	LUA_INTERFACE_DEF (text, str),
 	LUA_INTERFACE_DEF (text, ptr),
+	LUA_INTERFACE_DEF (text, take_ownership),
 	LUA_INTERFACE_DEF (text, save_in_file),
 	{"__len", lua_text_len},
 	{"__tostring", lua_text_str},
@@ -4189,6 +4191,32 @@ lua_text_ptr (lua_State *L)
 
 	if (t != NULL) {
 		lua_pushlightuserdata (L, (gpointer)t->start);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_take_ownership (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gchar *dest;
+
+	if (t != NULL) {
+		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			/* We already own it */
+			lua_pushboolean (L, true);
+		}
+		else {
+			dest = g_malloc (t->len);
+			memcpy (dest, t->start, t->len);
+			t->start = dest;
+			t->flags |= RSPAMD_TEXT_FLAG_OWN;
+			lua_pushboolean (L, true);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
