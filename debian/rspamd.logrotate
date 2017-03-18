@@ -4,6 +4,7 @@
        delaycompress
        compress
        notifempty
+       copytruncate
        missingok
        postrotate
           service rspamd reopenlog >/dev/null 2>&1 || true
