@@ -69,27 +69,15 @@ textarea {
 	display:inline;
 	}
 
-.form-sliders .control-label {
-	width:340px;
-	}
-	.form-sliders .controls {
-		margin-left:280px;
-		}
-.slider-controls {
-	padding-right:8em !important;
-	}
-	.jslider {
-		top:13px !important;
-		}
-	input.slider {
-		width:4em;
-		margin:5px -7em 5px 0;
-		padding:2px 0;
-		text-align:center;
-		}
-	.symbols-label {
-		font-size:11px !important;
-		}
+input.action-scores {
+  width:4em;
+  margin:5px -7em 5px 0;
+  padding:2px 0;
+  text-align:center;
+}
+.symbols-label {
+  font-size:11px !important;
+}
 
 /* history table */
 .table-log {
@@ -286,7 +274,7 @@ td.maps-cell {
 	}
 .widget-title .buttons {
 	float:left;
-	margin:0px 0px 0 0;
+	margin:2px 2px 0 0;
 	}
 .widget-title .label {
 	padding:3px 5px 2px;
@@ -594,10 +582,12 @@ td.maps-cell {
 
 .scorebar-spam {
 	background-color: rgba(240, 0, 0, 0.1);
+  font-size:11px;
 }
 
 .scorebar-ham {
-	background: rgba(100, 230, 80, 0.1)
+	background: rgba(100, 230, 80, 0.1);
+  font-size:11px;
 }
 /*btn-file for upload file button*/
 .btn-file {
