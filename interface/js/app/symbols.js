@@ -114,7 +114,7 @@ function($) {
                         } else {
                             label_class = 'scorebar-spam';
                         }
-                        item.weight = '<input class="form-control numeric mb-disabled ' + label_class +
+                        item.weight = '<input class="form-control input-sm mb-disabled ' + label_class +
                             '" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
                             min + '" max="' +
                             max + '" step="' + decimalStep(item.weight) +
@@ -188,13 +188,13 @@ function($) {
 
                 $('#symbolsTable').footable({
                     "columns": [
-                      {"sorted": true,"direction": "ASC", "name":"group","title":"Group","style":{"font-size":"11px","width":300,"maxWidth":300,"overflow":"hidden","textOverflow":"ellipsis","wordBreak":"keep-all","whiteSpace":"nowrap"}},
-                      {"name":"symbol","title":"Symbol","style":{"font-size":"11px","width":150,"maxWidth":150}},
-                      {"name":"description","title":"Description","breakpoints":"xs sm","style":{"font-size":"11px","width":110,"maxWidth":110}},
-                      {"name":"weight","title":"Score","style":{"font-size":"11px","maxWidth":110}},
-                      {"name":"frequency","title":"Frequency","breakpoints":"xs sm","style":{"font-size":"11px","width":550,"maxWidth":550}},
+                      {"sorted": true,"direction": "ASC", "name":"group","title":"Group","style":{"font-size":"11px"}},
+                      {"name":"symbol","title":"Symbol","style":{"font-size":"11px"}},
+                      {"name":"description","title":"Description","breakpoints":"xs sm","style":{"font-size":"11px"}},
+                      {"name":"weight","title":"Score","style":{"font-size":"11px"}},
+                      {"name":"frequency","title":"Frequency","breakpoints":"xs sm","style":{"font-size":"11px"}},
                       {"name":"time","title":"Avg. time","breakpoints":"xs sm","style":{"font-size":"11px"}},
-                      {"name":"save","title":"Save","style":{"font-size":"11px","width":90,"maxWidth":90}},
+                      {"name":"save","title":"Save","style":{"font-size":"11px"}},
                     ],
                     "rows": items,
                     "paging": {
