@@ -958,6 +958,10 @@ rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
 	struct rspamd_stat_ctx *st_ctx;
 	gboolean is_spam;
 
+	if (mres == NULL) {
+		return FALSE;
+	}
+
 	st_ctx = rspamd_stat_get_ctx ();
 	is_spam = !!(task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM);
 
