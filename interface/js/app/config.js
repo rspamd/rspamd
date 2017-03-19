@@ -136,7 +136,7 @@ function($) {
 
     function loadActionsFromForm() {
         var values = [];
-        var inputs = $('#actionsForm :input[type="slider"]');
+        var inputs = $('#actionsForm :input[data-id="action"]');
         // Rspamd order: [spam,probable_spam,greylist]
         values[0] = parseFloat(inputs[2].value);
         values[1] = parseFloat(inputs[1].value);
@@ -183,7 +183,7 @@ function($) {
                             html: '<div class="form-group">' +
                                 '<label class="control-label col-sm-2">' + label + '</label>' +
                                 '<div class="controls slider-controls col-sm-10">' +
-                                '<input class="slider" type="slider" value="' + item.value + '">' +
+                                '<input class="action-scores form-control" data-id="action" type="number" value="' + item.value + '">' +
                                 '</div>' +
                                 '</div>'
                         });
@@ -205,9 +205,10 @@ function($) {
                         return e.html;
                     }).join('') +
                     '<br><div class="form-group">' +
+                    '<div class="btn-group">' +
                     '<button class="btn btn-primary" id="saveActionsBtn">Save actions</button>' +
                     '<button class="btn btn-primary" id="saveActionsClusterBtn">Save cluster</button>' +
-                    '</div></fieldset></form>');
+                    '</div></div></fieldset></form>');
                 if (rspamd.read_only) {
                     $('#saveActionsClusterBtn').attr('disabled', true);
                     $('#saveActionsBtn').attr('disabled', true);
