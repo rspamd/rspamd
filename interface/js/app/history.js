@@ -68,8 +68,21 @@ function($, _, Humanize) {
           function (i, item) {
 
             preprocess_item(item);
-            var symbols = Object.keys(item.symbols);
-            item.symbols = symbols
+            Object.keys(item.symbols).map(function(key) {
+                var sym = item.symbols[key];
+                var str = '<strong>' + key + '</strong>' + "(" + sym.score + ")";
+
+               if (sym.options) {
+                   str += '[' + sym.options.join(",") + "]";
+               }
+               item.symbols[key].str = str;
+            });
+            item.symbols = Object.values(item.symbols).
+                sort(function(e1, e2) {
+                    return Math.abs(e1.score) < Math.abs(e2.score);
+                }).
+                map(function(e) { return e.str; }).
+                join("<br>\n");
             item.time = {
                 "value": unix_time_format(item.unix_time),
                 "options": {
