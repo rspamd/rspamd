@@ -1499,7 +1499,7 @@ lua_config_set_metric_symbol (lua_State * L)
 					"nshots=I",
 					&name, &weight, &description,
 					&group, &one_shot, &one_param,
-					&metric_name, &priority, &flags_str)) {
+					&metric_name, &priority, &flags_str, &nshots)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 

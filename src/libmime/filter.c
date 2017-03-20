@@ -159,48 +159,57 @@ insert_metric_result (struct rspamd_task *task,
 			single = TRUE;
 		}
 
-		s->nshots ++;
+		/* Now check for the duplicate options */
+		if (opt && s->options && g_hash_table_lookup (s->options, opt)) {
+			single = TRUE;
+		}
+		else {
+			s->nshots ++;
+		}
 
-		if (rspamd_task_add_result_option (task, s, opt)) {
-			if (!single) {
-				diff = w;
+		if (!single) {
+			rspamd_task_add_result_option (task, s, opt);
+		}
+
+		/* Adjust diff */
+		if (!single) {
+			diff = w;
+		}
+		else {
+			if (fabs (s->score) < fabs (w)) {
+				/* Replace less weight with a bigger one */
+				diff = metric_res->score - s->score + w;
 			}
 			else {
-				if (fabs (s->score) < fabs (w)) {
-					/* Replace less weight with a bigger one */
-					diff = metric_res->score - s->score + w;
-				}
-				else {
-					diff = 0;
-				}
+				diff = 0;
+			}
+		}
+
+		if (diff) {
+			/* Handle grow factor */
+			if (metric_res->grow_factor && diff > 0) {
+				diff *= metric_res->grow_factor;
+				next_gf *= metric->grow_factor;
+			}
+			else if (diff > 0) {
+				next_gf = metric->grow_factor;
 			}
 
-			if (diff) {
-				/* Handle grow factor */
-				if (metric_res->grow_factor && diff > 0) {
-					diff *= metric_res->grow_factor;
-					next_gf *= metric->grow_factor;
+			diff = rspamd_check_group_score (task, symbol, gr, gr_score, diff);
+
+			if (!isnan (diff)) {
+				metric_res->score += diff;
+				metric_res->grow_factor = next_gf;
+
+				if (gr_score) {
+					*gr_score += diff;
 				}
-				else if (diff > 0) {
-					next_gf = metric->grow_factor;
+
+				if (single) {
+					s->score = w;
 				}
-
-				diff = rspamd_check_group_score (task, symbol, gr, gr_score, diff);
-
-				if (!isnan (diff)) {
-					metric_res->score += diff;
-					metric_res->grow_factor = next_gf;
-
-					if (gr_score) {
-						*gr_score += diff;
-					}
-
-					if (single) {
-						s->score = w;
-					}
-					else {
-						s->score += diff;
-					}
+				else {
+					s->score += diff;
 				}
 			}
 		}
