@@ -97,6 +97,8 @@ function($) {
             success: function (data) {
                 var distinct_groups = [];
                 var lookup = {};
+                var freqs = [];
+
                 $.each(data, function (i, group) {
                     $.each(group.rules, function (i, item) {
                         var max = 20;
@@ -127,6 +129,7 @@ function($) {
                         if (!item.frequency) {
                             item.frequency = 0;
                         }
+                        freqs.push(item.frequency);
                         item.frequency = Number(item.frequency).toFixed(2)
                         if (!(item.group in lookup)) {
                           lookup[item.group] = 1;
@@ -136,6 +139,31 @@ function($) {
                         '&nbsp;<button data-save="cluster" type="button" class="btn btn-primary btn-sm mb-disabled">Save in cluster</button>';
                         items.push(item)
                     });
+                });
+                // For better mean calculations
+                var avg_freq = freqs.sort(function(a, b) {
+                    return Number(a) < Number(b);
+                }).reduce(function(f1, acc) {
+                    return f1 + acc;
+                  }) / (freqs.length != 0 ? freqs.length : 1.0);
+                var mult = 1.0;
+                var exp = 0.0;
+
+                if (avg_freq > 0.0) {
+                    while (mult * avg_freq < 1.0) {
+                        mult *= 10;
+                        exp ++;
+                    }
+                }
+                $.each(items, function (i, item) {
+                    item.frequency = Number(item.frequency) * mult;
+
+                    if (exp > 0) {
+                        item.frequency = item.frequency.toFixed(2) + 'e-' + exp;
+                    }
+                    else {
+                        item.frequency = item.frequency.toFixed(2);
+                    }
                 });
                 FooTable.groupFilter = FooTable.Filtering.extend({
                 construct : function(instance) {
