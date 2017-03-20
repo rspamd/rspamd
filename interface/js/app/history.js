@@ -98,6 +98,7 @@ function($, _, Humanize) {
                 "value": scan_time
             }
             item.id = item['message-id'];
+            item.rcpt_mime = item.rcpt_mime.join(",");
             items.push(item);
         });
 
@@ -152,6 +153,33 @@ function($, _, Humanize) {
                     "maxWidth": 150
                 }
             }, {
+                "name": "sender_mime",
+                "title": "From",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 150,
+                    "maxWidth": 150
+                }
+            }, {
+                "name": "rcpt_mime",
+                "title": "To",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 150,
+                    "maxWidth": 150
+                }
+            }, {
+                "name": "subject",
+                "title": "Subject",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 150,
+                    "maxWidth": 150
+                }
+            }, {
                 "name": "action",
                 "title": "Action",
                 "style": {
@@ -182,8 +210,8 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm",
                 "style": {
                     "font-size": "11px",
-                    "width": 120,
-                    "maxWidth": 120
+                    "width": 90,
+                    "maxWidth": 110
                 },
                 "formatter": Humanize.compactInteger
             }, {
@@ -210,8 +238,8 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm",
                 "style": {
                     "font-size": "11px",
-                    "width": 200,
-                    "maxWidth": 200
+                    "width": 100,
+                    "maxWidth": 150
                 }
             }];
     }
