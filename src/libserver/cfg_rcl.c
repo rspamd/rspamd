@@ -352,15 +352,23 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const gchar *description = NULL;
 	gdouble score = 0.0;
 	guint priority = 1, flags = 0;
+	gint nshots;
 
 	g_assert (key != NULL);
 	metric = sd->metric;
 	g_assert (metric != NULL);
 	cfg = sd->cfg;
+	nshots = cfg->default_max_shots;
 
 	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
 		if (ucl_object_toboolean (elt)) {
-			flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+			nshots = 1;
+		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "any_shot")) != NULL) {
+		if (ucl_object_toboolean (elt)) {
+			nshots = -1;
 		}
 	}
 
@@ -374,6 +382,10 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		if (ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
 		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "nshots")) != NULL) {
+		nshots = ucl_object_toint (elt);
 	}
 
 	elt = ucl_object_lookup_any (obj, "score", "weight", NULL);
@@ -396,11 +408,11 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	if (sd->gr) {
 		rspamd_config_add_metric_symbol (cfg, metric->name, key, score,
-				description, sd->gr->name, flags, priority);
+				description, sd->gr->name, flags, priority, nshots);
 	}
 	else {
 		rspamd_config_add_metric_symbol (cfg, metric->name, key, score,
-				description, NULL, flags, priority);
+				description, NULL, flags, priority, nshots);
 	}
 
 	return TRUE;
@@ -1506,7 +1518,8 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		}
 
 		rspamd_config_add_metric_symbol (cfg, metric, composite_name, score,
-				description, group, FALSE, FALSE);
+				description, group, FALSE, FALSE,
+				1);
 	}
 
 	val = ucl_object_lookup (obj, "policy");
@@ -2178,6 +2191,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, compat_messages),
 			0,
 			"Use pre 1.4 style of messages in the protocol");
+	rspamd_rcl_add_default_handler (sub,
+			"max_shots",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, default_max_shots),
+			0,
+			"Maximum number of hits per a single symbol (default: 100)");
 
 	/* Neighbours configuration */
 	rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",

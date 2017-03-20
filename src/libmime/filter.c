@@ -106,6 +106,7 @@ insert_metric_result (struct rspamd_task *task,
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
+	gint max_shots;
 
 	metric_res = rspamd_create_metric_result (task, metric->name);
 
@@ -142,13 +143,23 @@ insert_metric_result (struct rspamd_task *task,
 
 	/* Add metric score */
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
-		if (sdef && (sdef->flags & RSPAMD_SYMBOL_FLAG_ONESHOT)) {
-			/*
-			 * For one shot symbols we do not need to add them again, so
-			 * we just force single behaviour here
-			 */
+		if (single) {
+			max_shots = 1;
+		}
+		else {
+			if (sdef) {
+				max_shots = sdef->nshots;
+			}
+			else {
+				max_shots = task->cfg->default_max_shots;
+			}
+		}
+
+		if (!single && (max_shots > 0 && (s->nshots >= max_shots))) {
 			single = TRUE;
 		}
+
+		s->nshots ++;
 
 		if (rspamd_task_add_result_option (task, s, opt)) {
 			if (!single) {
@@ -208,6 +219,7 @@ insert_metric_result (struct rspamd_task *task,
 
 		s->name = symbol;
 		s->sym = sdef;
+		s->nshots = 1;
 
 		w = rspamd_check_group_score (task, symbol, gr, gr_score, w);
 
@@ -285,7 +297,7 @@ rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *opt)
 {
 	return insert_result_common (task, symbol, flag, opt,
-			task->cfg->one_shot_mode);
+			FALSE);
 }
 
 /* Insert result as a single option */
@@ -307,7 +319,8 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 
 	if (s && opt) {
 		if (s->options && !(s->sym &&
-				(s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM))) {
+				(s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
+				g_hash_table_size (s->options) < task->cfg->default_max_shots) {
 			/* Append new options */
 			if (!g_hash_table_lookup (s->options, opt)) {
 				opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);

@@ -22,6 +22,7 @@ struct rspamd_symbol_result {
 	GHashTable *options;                            /**< list of symbol's options				*/
 	const gchar *name;
 	struct rspamd_symbol *sym;						/**< symbol configuration					*/
+	guint nshots;
 };
 
 /**

@@ -530,7 +530,7 @@ dkim_module_config (struct rspamd_config *cfg)
 
 					rspamd_config_add_metric_symbol (cfg, DEFAULT_METRIC,
 							"DKIM_SIGN", 0.0, "DKIM signature fake symbol",
-							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1);
+							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
 
 				}
 				else {

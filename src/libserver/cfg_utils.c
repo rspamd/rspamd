@@ -41,6 +41,7 @@
 #define DEFAULT_WORDS_DECAY 200
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
+#define DEFAULT_MAX_SHOTS 100
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -179,6 +180,7 @@ rspamd_config_new (void)
 #ifdef WITH_HIREDIS
 	cfg->redis_pool = rspamd_redis_pool_init ();
 #endif
+	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -659,6 +661,12 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 	/* For gettimeofday */
 	cfg->clock_res = 1;
 #endif
+
+	if (cfg->one_shot_mode) {
+		msg_info_config ("enabling one shot mode (was %d max shots)",
+				cfg->default_max_shots);
+		cfg->default_max_shots = 1;
+	}
 
 	rspamd_regexp_library_init ();
 	rspamd_multipattern_library_init (cfg->hs_cache_dir,
@@ -1374,7 +1382,7 @@ static void
 rspamd_config_new_metric_symbol (struct rspamd_config *cfg,
 		struct rspamd_metric *metric, const gchar *symbol,
 		gdouble score, const gchar *description, const gchar *group,
-		guint flags, guint priority)
+		guint flags, guint priority, gint nshots)
 {
 	struct rspamd_symbols_group *sym_group;
 	struct rspamd_symbol *sym_def;
@@ -1391,6 +1399,7 @@ rspamd_config_new_metric_symbol (struct rspamd_config *cfg,
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
 	sym_def->priority = priority;
 	sym_def->flags = flags;
+	sym_def->nshots = nshots;
 
 	if (description) {
 		sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
@@ -1433,7 +1442,7 @@ gboolean
 rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		const gchar *metric_name, const gchar *symbol,
 		gdouble score, const gchar *description, const gchar *group,
-		guint flags, guint priority)
+		guint flags, guint priority, gint nshots)
 {
 	struct rspamd_symbol *sym_def;
 	struct rspamd_metric *metric;
@@ -1482,6 +1491,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 			*sym_def->weight_ptr = score;
 			sym_def->score = score;
 			sym_def->flags = flags;
+			sym_def->nshots = nshots;
 
 			if (description) {
 				sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool,
@@ -1495,7 +1505,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	}
 
 	rspamd_config_new_metric_symbol (cfg, metric, symbol, score, description,
-			group, flags, priority);
+			group, flags, priority, nshots);
 
 	return TRUE;
 }

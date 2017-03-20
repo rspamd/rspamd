@@ -127,7 +127,7 @@ regexp_module_config (struct rspamd_config *cfg)
 	struct regexp_module_item *cur_item = NULL;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
-	gint res = TRUE, id, nre = 0, nlua = 0;
+	gint res = TRUE, id, nre = 0, nlua = 0, nshots = cfg->default_max_shots;
 
 	if (!rspamd_config_is_module_enabled (cfg, "regexp")) {
 		return TRUE;
@@ -282,8 +282,18 @@ regexp_module_config (struct rspamd_config *cfg)
 
 				if (elt) {
 					if (ucl_object_toboolean (elt)) {
-						flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+						nshots = 1;
 					}
+				}
+
+				if ((elt = ucl_object_lookup (value, "any_shot")) != NULL) {
+					if (ucl_object_toboolean (elt)) {
+						nshots = -1;
+					}
+				}
+
+				if ((elt = ucl_object_lookup (value, "nshots")) != NULL) {
+					nshots = ucl_object_toint (elt);
 				}
 
 				elt = ucl_object_lookup (value, "one_param");
@@ -301,7 +311,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				}
 
 				rspamd_config_add_metric_symbol (cfg, metric, cur_item->symbol,
-						score, description, group, flags, priority);
+						score, description, group, flags, priority, nshots);
 			}
 		}
 		else {

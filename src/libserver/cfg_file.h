@@ -95,7 +95,6 @@ struct rspamd_symbols_group {
 	gboolean one_shot;
 };
 
-#define RSPAMD_SYMBOL_FLAG_ONESHOT (1 << 0)
 #define RSPAMD_SYMBOL_FLAG_IGNORE (1 << 1)
 #define RSPAMD_SYMBOL_FLAG_ONEPARAM (1 << 2)
 
@@ -111,6 +110,7 @@ struct rspamd_symbol {
 	struct rspamd_symbols_group *gr;
 	GList *groups;
 	guint flags;
+	gint nshots;
 };
 
 
@@ -313,6 +313,7 @@ struct rspamd_config {
 	gsize max_message;                              /**< maximum size for messages							*/
 	gsize max_pic_size;                             /**< maximum size for a picture to process				*/
 	gsize images_cache_size;                        /**< size of LRU cache for DCT data from images			*/
+	gint default_max_shots;                         /**< default maximum count of symbols hits permitted (-1 for unlimited) */
 
 	enum rspamd_log_type log_type;                  /**< log type											*/
 	gint log_facility;                              /**< log facility in case of syslog						*/
@@ -590,13 +591,15 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
  * @param one_shot TRUE if symbol can add its score once
  * @param rewrite_existing TRUE if we need to rewrite the existing symbol
  * @param priority use the following priority for a symbol
+ * @param nshots means maximum number of hits for a symbol in metric (-1 for unlimited)
  * @return TRUE if symbol has been inserted or FALSE if symbol already exists with higher priority
  */
 gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		const gchar *metric,
 		const gchar *symbol, gdouble score, const gchar *description,
 		const gchar *group, guint flags,
-		guint priority);
+		guint priority,
+		gint nshots);
 
 /**
  * Sets action score for a specified metric with the specified priority

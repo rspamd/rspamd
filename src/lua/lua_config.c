@@ -1204,21 +1204,25 @@ lua_config_register_symbol (lua_State * L)
 			*description = NULL, *group = NULL;
 	double weight = 0, score = NAN;
 	gboolean one_shot = FALSE;
-	gint ret = -1, cbref = -1, type, flags = 0;
+	gint ret = -1, cbref = -1, type, flags = 0, nshots = 0;
 	gint64 parent = 0, priority = 0;
 	GError *err = NULL;
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=I;"
-				"score=D;description=S;group=S;one_shot=B",
+				"score=D;description=S;group=S;one_shot=B;nshots=I",
 				&name, &weight, &cbref, &flags_str, &type_str,
 				&priority, &parent,
-				&score, &description, &group, &one_shot)) {
+				&score, &description, &group, &one_shot, &nshots)) {
 			msg_err_config ("bad arguments: %e", err);
 			g_error_free (err);
 
 			return luaL_error (L, "invalid arguments");
+		}
+
+		if (nshots == 0) {
+			nshots = cfg->default_max_shots;
 		}
 
 		type = lua_parse_symbol_type (type_str);
@@ -1244,11 +1248,11 @@ lua_config_register_symbol (lua_State * L)
 
 		if (!isnan (score)) {
 			if (one_shot) {
-				flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+				nshots = 1;
 			}
 
 			rspamd_config_add_metric_symbol (cfg, DEFAULT_METRIC, name,
-					score, description, group, flags, (guint)priority);
+					score, description, group, flags, (guint)priority, nshots);
 		}
 	}
 	else {
@@ -1484,13 +1488,15 @@ lua_config_set_metric_symbol (lua_State * L)
 	GError *err = NULL;
 	gdouble priority = 0.0;
 	guint flags = 0;
+	gint nshots = 0;
 
 	if (cfg) {
 
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*name=S;score=N;description=S;"
-					"group=S;one_shot=B;one_param=B;metric=S;priority=N;flags=S",
+					"group=S;one_shot=B;one_param=B;metric=S;priority=N;flags=S;"
+					"nshots=I",
 					&name, &weight, &description,
 					&group, &one_shot, &one_param,
 					&metric_name, &priority, &flags_str)) {
@@ -1522,9 +1528,13 @@ lua_config_set_metric_symbol (lua_State * L)
 			metric_name = DEFAULT_METRIC;
 		}
 
+		if (nshots == 0) {
+			nshots = cfg->default_max_shots;
+		}
+
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 		if (one_shot) {
-			flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+			nshots = 1;
 		}
 		if (one_param) {
 			flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
@@ -1532,7 +1542,7 @@ lua_config_set_metric_symbol (lua_State * L)
 
 		if (flags_str) {
 			if (strstr (flags_str, "one_shot") != NULL) {
-				flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+				nshots = 1;
 			}
 			if (strstr (flags_str, "ignore") != NULL) {
 				flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
@@ -1547,7 +1557,7 @@ lua_config_set_metric_symbol (lua_State * L)
 		}
 		else if (name != NULL && weight != 0) {
 			rspamd_config_add_metric_symbol (cfg, metric_name, name,
-					weight, description, group, flags, (guint)priority);
+					weight, description, group, flags, (guint)priority, nshots);
 		}
 	}
 	else {
@@ -1748,7 +1758,7 @@ lua_config_newindex (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
-	gint id;
+	gint id, nshots = 0;
 	gboolean optional = FALSE;
 
 	name = luaL_checkstring (L, 2);
@@ -1893,7 +1903,7 @@ lua_config_newindex (lua_State *L)
 
 					if (lua_type (L, -1) == LUA_TBOOLEAN) {
 						if (lua_toboolean (L, -1)) {
-							flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+							nshots = 1;
 						}
 					}
 					lua_pop (L, 1);
@@ -1913,7 +1923,7 @@ lua_config_newindex (lua_State *L)
 					 * since we are defining default values here
 					 */
 					rspamd_config_add_metric_symbol (cfg, NULL, name, score,
-							description, group, flags, 0);
+							description, group, flags, 0, nshots);
 				}
 				else {
 					lua_pop (L, 1);
