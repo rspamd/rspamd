@@ -22,8 +22,8 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'footable'],
-function($) {
+define(['jquery', 'footable', 'humanize'],
+function($, _, Humanize) {
     var interface = {};
 
     function unix_time_format(tm) {
@@ -51,6 +51,8 @@ function($) {
         if (item.user == null) {
             item.user = "none";
         }
+
+        item.size = Humanize.compactInteger(item.size);
     }
 
     function process_history_v2(data) {
