@@ -42,17 +42,23 @@ function($, _, Humanize) {
             item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
         }
 
+        var score_content;
         if (item.score < item.required_score) {
-            item.score = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
+            score_content = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
         } else {
-            item.score = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
+            score_content = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
         }
+
+        item.score = {
+            "options": {
+                "sortValue": item.score,
+            },
+            "value": score_content
+        };
 
         if (item.user == null) {
             item.user = "none";
         }
-
-        item.size = Humanize.compactInteger(item.size);
     }
 
     function process_history_v2(data) {
@@ -64,9 +70,20 @@ function($, _, Humanize) {
             preprocess_item(item);
             var symbols = Object.keys(item.symbols);
             item.symbols = symbols
-            item.time = unix_time_format(item.unix_time);
-            item.scan_time = item.time_real.toFixed(3) + '/' +
+            item.time = {
+                "value": unix_time_format(item.unix_time),
+                "options": {
+                    "sortValue": item.unix_time,
+                },
+            };
+            var scan_time = item.time_real.toFixed(3) + '/' +
                 item.time_virtual.toFixed(3);
+            item.scan_time = {
+                "options": {
+                    "sortValue": item.time_real,
+                },
+                "value": scan_time
+            }
             item.id = item['message-id'];
             items.push(item);
         });
@@ -80,6 +97,18 @@ function($, _, Humanize) {
         $.each(data, function (i, item) {
             item.time = unix_time_format(item.unix_time)
             preprocess_item(item);
+            item.scan_time = {
+                "options": {
+                    "sortValue": item.scan_time,
+                },
+                "value": item.scan_time
+            };
+            item.time = {
+                "value": unix_time_format(item.unix_time),
+                "options": {
+                    "sortValue": item.unix_time,
+                },
+            };
 
             items.push(item)
         });
@@ -123,7 +152,8 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "maxWidth": 110
-                }
+                },
+                "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "symbols",
                 "title": "Symbols",
@@ -141,7 +171,8 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 120,
                     "maxWidth": 120
-                }
+                },
+                "formatter": Humanize.compactInteger
             }, {
                 "name": "scan_time",
                 "title": "Scan time",
@@ -149,7 +180,8 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "maxWidth": 80
-                }
+                },
+                "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "sorted": true,
                 "direction": "DESC",
@@ -157,7 +189,8 @@ function($, _, Humanize) {
                 "title": "Time",
                 "style": {
                     "font-size": "11px"
-                }
+                },
+                "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "user",
                 "title": "Authenticated user",
@@ -206,7 +239,8 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "maxWidth": 110
-                }
+                },
+                "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "symbols",
                 "title": "Symbols",
@@ -224,7 +258,8 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 120,
                     "maxWidth": 120
-                }
+                },
+                "formatter": Humanize.compactInteger
             }, {
                 "name": "scan_time",
                 "title": "Scan time",
@@ -232,7 +267,8 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "maxWidth": 80
-                }
+                },
+                "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "sorted": true,
                 "direction": "DESC",
@@ -240,7 +276,8 @@ function($, _, Humanize) {
                 "title": "Time",
                 "style": {
                     "font-size": "11px"
-                }
+                },
+                "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "user",
                 "title": "Authenticated user",
