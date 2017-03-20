@@ -45,7 +45,7 @@ return function(_, res)
       end
     else
       for line in h:lines() do
-        local hash = string.match(line, '^%d+-%d+-%d+ %d+:%d+:%d+ #%d+%(%a+%) <(%x+)>')
+        local hash = string.match(line, '<(%x+)>')
         local already_matching = false
         if hash then
           if matches[hash] then
@@ -79,7 +79,7 @@ return function(_, res)
             matches[hash] = buffer[hash]
           end
         end
-        local is_end = string.match(line, '^%d+-%d+-%d+ %d+:%d+:%d+ #%d+%(%a+%) <%x+>; task; rspamd_protocol_http_reply:')
+        local is_end = string.match(line, '<%x+>; task; rspamd_protocol_http_reply:')
         if is_end then
           buffer[hash] = nil
           if matches[hash] then
