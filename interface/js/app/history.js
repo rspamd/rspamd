@@ -31,31 +31,35 @@ function($) {
         return date.toLocaleString();
     }
 
+    function preprocess_item(item) {
+        if (item.action === 'clean' || item.action === 'no action') {
+            item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
+        } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
+            item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
+        } else if (item.action === 'spam' || item.action === 'reject') {
+            item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
+        } else {
+            item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
+        }
+
+        if (item.score < item.required_score) {
+            item.score = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
+        } else {
+            item.score = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
+        }
+
+        if (item.user == null) {
+            item.user = "none";
+        }
+    }
+
     function process_history_v2(data) {
         var items = [];
 
         $.each(data.rows.map(function(elt) { return JSON.parse(elt);}),
           function (i, item) {
-            if (item.action === 'clean' || item.action === 'no action') {
-                item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
-            } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
-                item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
-            } else if (item.action === 'spam' || item.action === 'reject') {
-                item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
-            } else {
-                item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
-            }
 
-            if (item.score < item.required_score) {
-                item.score = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            } else {
-                item.score = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            }
-
-            if (item.user == null) {
-                item.user = "none";
-            }
-
+            preprocess_item(item);
             var symbols = Object.keys(item.symbols);
             item.symbols = symbols
             item.time = unix_time_format(item.unix_time);
@@ -73,25 +77,7 @@ function($) {
 
         $.each(data, function (i, item) {
             item.time = unix_time_format(item.unix_time)
-            if (item.action === 'clean' || item.action === 'no action') {
-                item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
-            } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
-                item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
-            } else if (item.action === 'spam' || item.action === 'reject') {
-                item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
-            } else {
-                item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
-            }
-
-            if (item.score < item.required_score) {
-                item.score = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            } else {
-                item.score = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            }
-
-            if (item.user == null) {
-                item.user = "none";
-            }
+            preprocess_item(item);
 
             items.push(item)
         });
@@ -99,10 +85,181 @@ function($) {
         return items;
     }
 
+    function columns_v2() {
+        return [{
+                "name": "id",
+                "title": "ID",
+                "style": {
+                    "font-size": "11px",
+                    "width": 300,
+                    "maxWidth": 300,
+                    "overflow": "hidden",
+                    "textOverflow": "ellipsis",
+                    "wordBreak": "keep-all",
+                    "whiteSpace": "nowrap"
+                }
+            }, {
+                "name": "ip",
+                "title": "IP address",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 150,
+                    "maxWidth": 150
+                }
+            }, {
+                "name": "action",
+                "title": "Action",
+                "style": {
+                    "font-size": "11px",
+                    "width": 110,
+                    "maxWidth": 110
+                }
+            }, {
+                "name": "score",
+                "title": "Score",
+                "style": {
+                    "font-size": "11px",
+                    "maxWidth": 110
+                }
+            }, {
+                "name": "symbols",
+                "title": "Symbols",
+                "breakpoints": "all",
+                "style": {
+                    "font-size": "11px",
+                    "width": 550,
+                    "maxWidth": 550
+                }
+            }, {
+                "name": "size",
+                "title": "Message size",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 120,
+                    "maxWidth": 120
+                }
+            }, {
+                "name": "scan_time",
+                "title": "Scan time",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "maxWidth": 80
+                }
+            }, {
+                "sorted": true,
+                "direction": "DESC",
+                "name": "time",
+                "title": "Time",
+                "style": {
+                    "font-size": "11px"
+                }
+            }, {
+                "name": "user",
+                "title": "Authenticated user",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 200,
+                    "maxWidth": 200
+                }
+            }];
+    }
+
+    function columns_legacy() {
+        return [{
+                "name": "id",
+                "title": "ID",
+                "style": {
+                    "font-size": "11px",
+                    "width": 300,
+                    "maxWidth": 300,
+                    "overflow": "hidden",
+                    "textOverflow": "ellipsis",
+                    "wordBreak": "keep-all",
+                    "whiteSpace": "nowrap"
+                }
+            }, {
+                "name": "ip",
+                "title": "IP address",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 150,
+                    "maxWidth": 150
+                }
+            }, {
+                "name": "action",
+                "title": "Action",
+                "style": {
+                    "font-size": "11px",
+                    "width": 110,
+                    "maxWidth": 110
+                }
+            }, {
+                "name": "score",
+                "title": "Score",
+                "style": {
+                    "font-size": "11px",
+                    "maxWidth": 110
+                }
+            }, {
+                "name": "symbols",
+                "title": "Symbols",
+                "breakpoints": "all",
+                "style": {
+                    "font-size": "11px",
+                    "width": 550,
+                    "maxWidth": 550
+                }
+            }, {
+                "name": "size",
+                "title": "Message size",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 120,
+                    "maxWidth": 120
+                }
+            }, {
+                "name": "scan_time",
+                "title": "Scan time",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "maxWidth": 80
+                }
+            }, {
+                "sorted": true,
+                "direction": "DESC",
+                "name": "time",
+                "title": "Time",
+                "style": {
+                    "font-size": "11px"
+                }
+            }, {
+                "name": "user",
+                "title": "Authenticated user",
+                "breakpoints": "xs sm",
+                "style": {
+                    "font-size": "11px",
+                    "width": 200,
+                    "maxWidth": 200
+                }
+            }];
+    }
+
     var process_functions = {
        "2": process_history_v2,
        "legacy": process_history_legacy
-    }
+    };
+
+    var columns = {
+       "2": columns_v2,
+       "legacy": columns_legacy
+    };
 
     function process_history_data(data) {
         var pf = process_functions.legacy;
@@ -115,6 +272,19 @@ function($) {
         }
 
         return pf(data);
+    }
+
+    function get_history_columns(data) {
+        var func = columns.legacy;
+
+        if (data.version) {
+            var strkey = data.version.toString();
+            if (columns[strkey]) {
+                func = columns[strkey];
+            }
+        }
+
+        return func();
     }
 
     interface.getHistory = function (rspamd, tables) {
@@ -195,17 +365,7 @@ function($) {
                 var items = process_history_data(data);
 
                 $('#historyTable').footable({
-                    "columns": [
-                      {"name":"id","title":"ID","style":{"font-size":"11px","width":300,"maxWidth":300,"overflow":"hidden","textOverflow":"ellipsis","wordBreak":"keep-all","whiteSpace":"nowrap"}},
-                      {"name":"ip","title":"IP address","breakpoints":"xs sm","style":{"font-size":"11px","width":150,"maxWidth":150}},
-                      {"name":"action","title":"Action","style":{"font-size":"11px","width":110,"maxWidth":110}},
-                      {"name":"score","title":"Score","style":{"font-size":"11px","maxWidth":110}},
-                      {"name":"symbols","title":"Symbols","breakpoints":"all","style":{"font-size":"11px","width":550,"maxWidth":550}},
-                      {"name":"size","title":"Message size","breakpoints":"xs sm","style":{"font-size":"11px","width":120,"maxWidth":120}},
-                      {"name":"scan_time","title":"Scan time","breakpoints":"xs sm","style":{"font-size":"11px","maxWidth":80}},
-                      {"sorted": true,"direction": "DESC","name":"time","title":"Time","style":{"font-size":"11px"}},
-                      {"name":"user","title":"Authenticated user","breakpoints":"xs sm","style":{"font-size":"11px","width":200,"maxWidth":200}}
-                    ],
+                    "columns": get_history_columns(data),
                     "rows": items,
                     "paging": {
                       "enabled": true,
