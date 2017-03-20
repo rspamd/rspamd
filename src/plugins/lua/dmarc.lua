@@ -101,8 +101,14 @@ local function dmarc_callback(task)
     rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
     return
   end
-  if ((from or E)[1] or E).domain and not (from or E)[2] then
+  if ((from or E)[1] or E).domain and ((from or E)[1] or E).domain ~= '' and not (from or E)[2] then
     dmarc_domain = rspamd_util.get_tld(from[1]['domain'])
+  elseif (from or E)[2] then
+    task:insert_result(dmarc_symbols['na'], 1.0, 'Duplicate From header')
+    return maybe_force_action('na')
+  elseif (from or E)[1] then
+    task:insert_result(dmarc_symbols['na'], 1.0, 'No domain in From header')
+    return maybe_force_action('na')
   else
     task:insert_result(dmarc_symbols['na'], 1.0, 'No From header')
     return maybe_force_action('na')
