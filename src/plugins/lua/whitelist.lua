@@ -46,16 +46,19 @@ local function whitelist_cb(symbol, rule, task)
         return true,mult
       end
     elseif rule['maps'] then
-      for map, mmult in pairs(rule['maps']) do
-        local val = map:get_key(dom)
-        if val then
-          if #val > 0 then
-            mult = tonumber(val)
-          else
-            mult = mmult
+      for _,v in pairs(rule['maps']) do
+        local map = v.map
+        if map then
+          local val = map:get_key(dom)
+          if val then
+            if #val > 0 then
+              mult = tonumber(val)
+            else
+              mult = v.mult or 1.0
+            end
+            table.insert(domains, dom)
+            return true,mult
           end
-          table.insert(domains, dom)
-          return true,mult
         end
       end
     else
@@ -198,32 +201,40 @@ local configure_whitelist_module = function()
     fun.each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
-          rule['map'] = rspamd_config:add_kv_map(rule['domains'],
-            "Whitelist map for " .. symbol)
+          rule['map'] = rspamd_config:add_map{
+            url = rule['domains'],
+            description = "Whitelist map for " .. symbol,
+            type = 'regexp'
+          }
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
           -- {'domain1' = 1, 'domain2' = 1 ...]
-          rule['maps'] = fun.tomap(fun.map(function(d)
-            local name
-            local value = 1
-
-            if type(d) == 'table' then
-              name = rspamd_config:add_map({
-                url = d[1],
-                type = 'map',
-              })
-              value = tonumber(d[2])
-            else
-              name = rspamd_config:add_map({
-                url = d,
-                type = 'map',
-              })
+          local is_domains_list = fun.all(function(v)
+            if type(v) == 'table' then
+              return true
+            elseif type(v) == 'string' and not (string.match(v, '^https?://') or
+              string.match(v, '^ftp://') or string.match(v, '^[./]')) then
+              return true
             end
 
-            if name and value then
-              return name,value
-            end
-          end, rule['domains']))
+            return false
+          end, rule.domains)
+
+          if is_domains_list then
+            rule['domains'] = fun.tomap(fun.map(function(d)
+              if type(d) == 'table' then
+                return d[1],d[2]
+              end
+
+              return d,1.0
+            end, rule['domains']))
+          else
+            rule['map'] = rspamd_config:add_map{
+              url = rule['domains'],
+              description = "Whitelist map for " .. symbol,
+              type = 'regexp'
+            }
+          end
         else
           rspamd_logger.errx(rspamd_config, 'whitelist %s has bad "domains" value',
             symbol)
