@@ -77,7 +77,7 @@ rspamd_check_group_score (struct rspamd_task *task,
 		gdouble *group_score,
 		gdouble w)
 {
-	if (gr != NULL && group_score && gr->max_score > 0.0) {
+	if (gr != NULL && group_score && gr->max_score > 0.0 && w > 0.0) {
 		if (*group_score >= gr->max_score && w > 0) {
 			msg_info_task ("maximum group score %.2f for group %s has been reached,"
 					" ignoring symbol %s with weight %.2f", gr->max_score,
@@ -165,9 +165,6 @@ insert_metric_result (struct rspamd_task *task,
 		}
 		else {
 			s->nshots ++;
-		}
-
-		if (!single) {
 			rspamd_task_add_result_option (task, s, opt);
 		}
 
@@ -176,7 +173,7 @@ insert_metric_result (struct rspamd_task *task,
 			diff = w;
 		}
 		else {
-			if (fabs (s->score) < fabs (w)) {
+			if (fabs (s->score) < fabs (w) && signbit (s->score) == signbit (w)) {
 				/* Replace less weight with a bigger one */
 				diff = metric_res->score - s->score + w;
 			}
