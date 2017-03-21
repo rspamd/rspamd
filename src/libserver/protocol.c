@@ -373,7 +373,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 						g_ptr_array_add (task->rcpt_envelope, addr);
 					}
 					else {
-						msg_err_task ("bad from header: '%T'", h->value);
+						msg_err_task ("bad rcpt header: '%T'", h->value);
 						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 					}
 					debug_task ("read rcpt header, value: %V", hv);
