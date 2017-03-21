@@ -75,6 +75,7 @@ static void process_dns_results (struct rspamd_task *task,
 	guint32 addr, struct rspamd_url *url);
 static gint surbl_register_redirect_handler (lua_State *L);
 static gint surbl_continue_process_handler (lua_State *L);
+static gint surbl_is_redirector_handler (lua_State *L);
 
 #define NO_REGEXP (gpointer) - 1
 
@@ -719,6 +720,9 @@ surbl_module_config (struct rspamd_config *cfg)
 		lua_settable (L, -3);
 		lua_pushstring (L, "continue_process");
 		lua_pushcfunction (L, surbl_continue_process_handler);
+		lua_settable (L, -3);
+		lua_pushstring (L, "is_redirector");
+		lua_pushcfunction (L, surbl_is_redirector_handler);
 		lua_settable (L, -3);
 		/* Finish fuzzy_check key */
 		lua_settable (L, -3);
@@ -1718,6 +1722,68 @@ surbl_register_redirect_handler (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+surbl_is_redirector_handler (lua_State *L)
+{
+	const gchar *url;
+	struct rspamd_task *task;
+	struct rspamd_url uri;
+	gsize len;
+	rspamd_regexp_t *re;
+	rspamd_ftok_t srch;
+	gboolean found = FALSE;
+	gchar *found_tld, *url_cpy;
+
+	task = lua_check_task (L, 1);
+	url = luaL_checklstring (L, 2, &len);
+
+	if (task && url) {
+		url_cpy = rspamd_mempool_alloc (task->task_pool, len);
+		memcpy (url_cpy, url, len);
+
+		if (rspamd_url_parse (&uri, url_cpy, len, task->task_pool)) {
+			msg_debug_surbl ("check url redirection %*s", uri.urllen,
+					uri.string);
+
+			if (uri.hostlen <= 0) {
+				lua_pushboolean (L, false);
+
+				return 1;
+			}
+
+			/* Search in trie */
+			srch.begin = uri.tld;
+			srch.len = uri.tldlen;
+			re = g_hash_table_lookup (surbl_module_ctx->redirector_tlds, &srch);
+
+			if (re) {
+				if (re == NO_REGEXP) {
+					found = TRUE;
+				}
+				else if (rspamd_regexp_search (re, uri.string, 0,
+						NULL, NULL, TRUE, NULL)) {
+					found = TRUE;
+				}
+
+				if (found) {
+					found_tld = rspamd_mempool_ftokdup (task->task_pool, &srch);
+					lua_pushboolean (L, true);
+					lua_pushstring (L, found_tld);
+
+					return 2;
+				}
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "arguments must be: task, url");
+	}
+
+	lua_pushboolean (L, false);
+
+	return 1;
 }
 
 /*
