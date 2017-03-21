@@ -15,14 +15,16 @@ limitations under the License.
 ]]--
 
 local redis_params
+local N = 'url_redirector'
 local settings = {
   expire = 86400, -- 1 day by default
   timeout = 10, -- 10 seconds by default
-  nested_limit = 1, -- How many redirects to follow
+  nested_limit = 5, -- How many redirects to follow
   --proxy = "http://example.com:3128", -- Send request through proxy
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
   max_size = 10 * 1024, -- maximum body to process
+  redirectors_only = true, -- follow merely redirectors
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -76,7 +78,17 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
           rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
             orig_url, loc)
           if loc then
-            resolve_cached(task, orig_url, loc, key, param, ntries + 1)
+            if settings.redirectors_only then
+              if rspamd_plugins.surbl.is_redirector(loc) then
+                resolve_cached(task, orig_url, loc, key, param, ntries + 1)
+              else
+                rspamd_logger.debugm(N, task,
+                  "stop resolving redirects as %s is not a redirector", loc)
+                cache_url(task, orig_url, loc, key, param)
+              end
+            else
+              resolve_cached(task, orig_url, loc, key, param, ntries + 1)
+            end
           else
             cache_url(task, orig_url, url, key, param)
           end
