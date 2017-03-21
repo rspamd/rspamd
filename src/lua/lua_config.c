@@ -1204,8 +1204,8 @@ lua_config_register_symbol (lua_State * L)
 			*description = NULL, *group = NULL;
 	double weight = 0, score = NAN;
 	gboolean one_shot = FALSE;
-	gint ret = -1, cbref = -1, type, flags = 0, nshots = 0;
-	gint64 parent = 0, priority = 0;
+	gint ret = -1, cbref = -1, type, flags = 0;
+	gint64 parent = 0, priority = 0, nshots = 0;
 	GError *err = NULL;
 
 	if (cfg) {
@@ -1488,7 +1488,7 @@ lua_config_set_metric_symbol (lua_State * L)
 	GError *err = NULL;
 	gdouble priority = 0.0;
 	guint flags = 0;
-	gint nshots = 0;
+	gint64 nshots = 0;
 
 	if (cfg) {
 
@@ -1758,7 +1758,7 @@ lua_config_newindex (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
-	gint id, nshots = 0;
+	gint id, nshots;
 	gboolean optional = FALSE;
 
 	name = luaL_checkstring (L, 2);
@@ -1874,6 +1874,7 @@ lua_config_newindex (lua_State *L)
 			 * insert default value if applicable
 			 */
 			if (g_hash_table_lookup (cfg->metrics_symbols, name) == NULL) {
+				nshots = cfg->default_max_shots;
 				lua_pushstring (L, "score");
 				lua_gettable (L, -2);
 
