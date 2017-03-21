@@ -559,13 +559,11 @@ td.maps-cell {
   height: 100%;
   width: 100%;
 }
-#rrd-table_wrapper {
-    z-index: 100;
-}
 #rrd-table {
     width: 100% !important;
     text-align: left;
     font-size: 12px;
+    z-index: 100;
 }
 #rrd-table td {
     padding-top: 2px;

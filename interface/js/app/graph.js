@@ -23,7 +23,7 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'd3evolution', 'datatables'],
+define(['jquery', 'd3evolution', 'footable'],
 function($, D3Evolution, unused) {
     var rrd_pie_config = {
         header: {},
@@ -128,24 +128,30 @@ function($, D3Evolution, unused) {
     }
 
     function drawRrdTable(data, unit) {
-        $('#rrd-table').DataTable({
-            destroy: true,
-            paging: false,
-            searching: false,
-            info: false,
-            data: data,
-            columns: [
-                { data: "label", title: "Action" },
-                { data: "value", title: "Messages",       defaultContent: "" },
-                { data: "min",   title: "Minimum, " + unit, defaultContent: "" },
-                { data: "avg",   title: "Average, " + unit, defaultContent: "" },
-                { data: "max",   title: "Maximum, " + unit, defaultContent: "" },
-                { data: "last",  title: "Last, " + unit },
-            ],
+        var rows = data.map(function (curr, i) {
+            return {
+                options: {
+                    style: {
+                        color: graph_options.legend.entries[i].color
+                    }
+                },
+                value: curr
+            };
+        }, []);
 
-            "fnRowCallback": function (nRow, aData) {
-                $(nRow).css("color", aData.color);
-            }
+        $('#rrd-table').footable({
+            sorting: {
+                enabled: true
+            },
+            columns: [
+                { name: "label", title: "Action" },
+                { name: "value", title: "Messages",         defaultContent: "" },
+                { name: "min",   title: "Minimum, " + unit, defaultContent: "" },
+                { name: "avg",   title: "Average, " + unit, defaultContent: "" },
+                { name: "max",   title: "Maximum, " + unit, defaultContent: "" },
+                { name: "last",  title: "Last, " + unit },
+            ],
+            rows: rows
         });
     }
 
