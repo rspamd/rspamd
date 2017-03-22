@@ -1381,7 +1381,21 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 								checkpoint,
 								recursion + 1,
 								check_only)) {
-							g_ptr_array_add (checkpoint->waitq, item);
+							gboolean found = FALSE;
+							guint j;
+							struct cache_item *tmp_it;
+
+							PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
+								if (item->id == tmp_it->id) {
+									found = TRUE;
+									break;
+								}
+							}
+
+							if (!found) {
+								g_ptr_array_add (checkpoint->waitq, item);
+							}
+
 							ret = FALSE;
 							msg_debug_task ("delayed dependency %d for symbol %d",
 									dep->id, item->id);
@@ -1686,10 +1700,25 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
 						checkpoint, 0, FALSE)) {
+					gboolean found = FALSE;
+					guint j;
+					struct cache_item *tmp_it;
+
 					msg_debug_task ("blocked execution of %d unless deps are "
-									"resolved",
+							"resolved",
 							item->id);
-					g_ptr_array_add (checkpoint->waitq, item);
+
+					PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
+						if (item->id == tmp_it->id) {
+							found = TRUE;
+							break;
+						}
+					}
+
+					if (!found) {
+						g_ptr_array_add (checkpoint->waitq, item);
+					}
+
 					continue;
 				}
 
