@@ -26,6 +26,7 @@
 #include "worker_private.h"
 #include "cryptobox.h"
 #include "contrib/zstd/zstd.h"
+#include "contrib/uthash/utlist.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include <math.h>
@@ -857,8 +858,9 @@ static ucl_object_t *
 rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
 	struct rspamd_symbol_result *sym)
 {
-	ucl_object_t *obj = NULL;
+	ucl_object_t *obj = NULL, *ar;
 	const gchar *description = NULL;
+	struct rspamd_symbol_option *opt;
 
 	if (sym->sym != NULL) {
 		description = sym->sym->description;
@@ -874,8 +876,13 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
 				description), "description", 0, false);
 	}
 	if (sym->options != NULL) {
-		ucl_object_insert_key (obj, rspamd_str_hash_ucl (sym->options),
-				"options", 0, false);
+		ar = ucl_object_typed_new (UCL_ARRAY);
+
+		DL_FOREACH (sym->opts_head, opt) {
+			ucl_array_append (ar, ucl_object_fromstring (opt->option));
+		}
+
+		ucl_object_insert_key (obj, ar, "options", 0, false);
 	}
 
 	return obj;

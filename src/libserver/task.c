@@ -1031,19 +1031,15 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 				}
 
 				if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_PARAMS) {
-					GHashTableIter it;
-					gpointer k, v;
-
 					rspamd_printf_fstring (&symbuf, "{");
 
 					if (sym->options) {
+						struct rspamd_symbol_option *opt;
+
 						j = 0;
-						g_hash_table_iter_init (&it, sym->options);
 
-						while (g_hash_table_iter_next (&it, &k, &v)) {
-							const char *opt = v;
-
-							rspamd_printf_fstring (&symbuf, "%s;", opt);
+						DL_FOREACH (sym->opts_head, opt) {
+							rspamd_printf_fstring (&symbuf, "%s;", opt->option);
 
 							if (j >= max_log_elts) {
 								rspamd_printf_fstring (&symbuf, "...;");

@@ -21,6 +21,7 @@
 #include "lua/lua_common.h"
 #include "cryptobox.h"
 #include <math.h>
+#include "contrib/uthash/utlist.h"
 
 
 #define COMMON_PART_FACTOR 95
@@ -318,19 +319,22 @@ rspamd_task_insert_result_single (struct rspamd_task *task,
 
 gboolean
 rspamd_task_add_result_option (struct rspamd_task *task,
-		struct rspamd_symbol_result *s, const gchar *opt)
+		struct rspamd_symbol_result *s, const gchar *val)
 {
-	char *opt_cpy;
+	struct rspamd_symbol_option *opt;
 	gboolean ret = FALSE;
 
-	if (s && opt) {
+	if (s && val) {
 		if (s->options && !(s->sym &&
 				(s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
 				g_hash_table_size (s->options) < task->cfg->default_max_shots) {
 			/* Append new options */
-			if (!g_hash_table_lookup (s->options, opt)) {
-				opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
-				g_hash_table_insert (s->options, opt_cpy, opt_cpy);
+			if (!g_hash_table_lookup (s->options, val)) {
+				opt = rspamd_mempool_alloc (task->task_pool, sizeof (*opt));
+				opt->option = rspamd_mempool_strdup (task->task_pool, val);
+				DL_APPEND (s->opts_head, opt);
+
+				g_hash_table_insert (s->options, opt->option, opt);
 				ret = TRUE;
 			}
 		}
@@ -340,12 +344,16 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)g_hash_table_unref,
 					s->options);
-			opt_cpy = rspamd_mempool_strdup (task->task_pool, opt);
-			g_hash_table_insert (s->options, opt_cpy, opt_cpy);
+			opt = rspamd_mempool_alloc (task->task_pool, sizeof (*opt));
+			opt->option = rspamd_mempool_strdup (task->task_pool, val);
+			s->opts_head = NULL;
+			DL_APPEND (s->opts_head, opt);
+
+			g_hash_table_insert (s->options, opt->option, opt);
 			ret = TRUE;
 		}
 	}
-	else if (!opt) {
+	else if (!val) {
 		ret = TRUE;
 	}
 

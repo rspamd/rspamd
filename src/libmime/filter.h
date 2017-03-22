@@ -14,12 +14,18 @@ struct rspamd_task;
 struct rspamd_settings;
 struct rspamd_classifier_config;
 
+struct rspamd_symbol_option {
+	gchar *option;
+	struct rspamd_symbol_option *prev, *next;
+};
+
 /**
  * Rspamd symbol
  */
 struct rspamd_symbol_result {
 	double score;                                   /**< symbol's score							*/
 	GHashTable *options;                            /**< list of symbol's options				*/
+	struct rspamd_symbol_option *opts_head;        /**< head of linked list of options			*/
 	const gchar *name;
 	struct rspamd_symbol *sym;						/**< symbol configuration					*/
 	guint nshots;

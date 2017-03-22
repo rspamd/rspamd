@@ -27,6 +27,7 @@
 #include "cryptobox.h"
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
+#include "contrib/uthash/utlist.h"
 #include <math.h>
 
 /***
@@ -2745,6 +2746,7 @@ lua_push_symbol_result (lua_State *L,
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
+	struct rspamd_symbol_option *opt;
 	gint j = 1, e = 4;
 
 	if (!symbol_result) {
@@ -2793,15 +2795,11 @@ lua_push_symbol_result (lua_State *L,
 		}
 
 		if (s->options) {
-			GHashTableIter it;
-			gpointer k, v;
-
 			lua_pushstring (L, "options");
 			lua_createtable (L, g_hash_table_size (s->options), 0);
-			g_hash_table_iter_init (&it, s->options);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				lua_pushstring (L, (const char*)v);
+			DL_FOREACH (s->opts_head, opt) {
+				lua_pushstring (L, (const char*)opt->option);
 				lua_rawseti (L, -2, j++);
 			}
 
