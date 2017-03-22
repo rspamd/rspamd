@@ -1223,16 +1223,21 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 				if (!rspamd_symbols_cache_check_deps (task, cache, it,
 						checkpoint, 0)) {
 					remain ++;
-					break;
 				}
-
-				rspamd_symbols_cache_check_symbol (task, cache, it, checkpoint,
-						NULL);
+				else {
+					msg_debug_task ("watcher for %d, unblocked item %d",
+							item->id,
+							it->id);
+					rspamd_symbols_cache_check_symbol (task, cache, it,
+							checkpoint,
+							NULL);
+				}
 			}
 		}
 	}
 
-	msg_debug_task ("finished watcher, %ud symbols waiting", remain);
+	msg_debug_task ("finished watcher for %d, %ud symbols waiting", item->id,
+			remain);
 }
 
 static gboolean
