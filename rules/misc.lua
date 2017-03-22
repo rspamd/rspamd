@@ -16,6 +16,7 @@ limitations under the License.
 
 -- This is main lua config file for rspamd
 
+local E = {}
 local fun = require "fun"
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
@@ -436,22 +437,25 @@ rspamd_config.SPOOF_REPLYTO = {
     -- First check for a Reply-To header
     local rt = task:get_header('Reply-To')
     if not rt then return false end
-    -- Get From header
-    local from = task:get_from(2)
-    if not (from and from[1] and from[1]['domain']) then return false end
-    -- Get To header
-    local to = task:get_recipients(2)
-    if not (to and to[1] and to[1]['domain']) then return false end
-    -- From and To domains must be matching
-    if not util.strequal_caseless(from[1]['domain'], to[1]['domain']) then
-      return false
+    -- Get From header domain
+    local fromdom = ((task:get_from(2) or E)[1] or E).domain
+    if not fromdom then return false end
+    -- SMTP recipients must contain From domain
+    local to = task:get_recipients(1)
+    local found_fromdom = false
+    for _, t in ipairs(to) do
+      if util.strequal_caseless(t.domain, fromdom) then
+        found_fromdom = true
+        break
+      end
     end
+    if not found_fromdom then return false end
     -- Parse Reply-To header
-    local parsed = util.parse_mail_address(rt)
-    if not (parsed and parsed[1] and parsed[1]['domain']) then return false end
+    local parsed = ((util.parse_mail_address(rt) or E)[1] or E).domain
+    if not parsed then return false end
     -- Reply-To domain must be different to From domain
-    if not util.strequal_caseless(parsed[1]['domain'], from[1]['domain']) then
-      return true, from[1]['domain'], parsed[1]['domain']
+    if not util.strequal_caseless(parsed, fromdom) then
+      return true, fromdom, parsed
     end
     return false
   end,
