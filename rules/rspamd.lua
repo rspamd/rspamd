@@ -23,9 +23,6 @@ local local_rules = rspamd_paths['RULESDIR']
 
 dofile(local_rules .. '/global_functions.lua')
 dofile(local_rules .. '/regexp/headers.lua')
-dofile(local_rules .. '/regexp/lotto.lua')
-dofile(local_rules .. '/regexp/fraud.lua')
-dofile(local_rules .. '/regexp/drugs.lua')
 dofile(local_rules .. '/regexp/misc.lua')
 dofile(local_rules .. '/regexp/upstream_spam_filters.lua')
 dofile(local_rules .. '/regexp/compromised_hosts.lua')
