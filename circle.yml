@@ -14,7 +14,7 @@ test:
     - make install -j`nproc`
     - RSPAMADM=../install/bin/rspamadm RSPAMC=../install/bin/rspamc RSPAMD=../install/bin/rspamd sudo -E robot -x xunit.xml --exclude isbroken ../rspamd/test/functional/cases
     - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
-    - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info; fi
+    - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info || true; fi
   post:
     - for i in output.xml log.html report.html; do mv $i $CIRCLE_ARTIFACTS; done
     - mkdir -p $CIRCLE_TEST_REPORTS/rspamd ; mv xunit.xml $CIRCLE_TEST_REPORTS/rspamd
