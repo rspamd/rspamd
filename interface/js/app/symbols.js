@@ -239,12 +239,6 @@ function($) {
                   components: {
                     filtering: FooTable.groupFilter
                   }
-                }, function tableHook() {
-                  $('#symbolsTable :button').on('click', function() {
-                    var value = $(this).data('save');
-                    if (!value) return
-                    saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == 'cluster');
-                  });
                 });
                 if (rspamd.read_only) {
                     $( ".mb-disabled" ).attr('disabled', true);
@@ -253,6 +247,11 @@ function($) {
             error: function (data) {
                 rspamd.alertMessage('alert-modal alert-error', data.statusText);
             }
+        });
+        $(document).on("click", "#symbolsTable :button", function(event){
+          var value = $(this).data('save');
+          if (!value) return
+          saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == 'cluster');
         });
     };
 
