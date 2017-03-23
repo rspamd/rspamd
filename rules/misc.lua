@@ -415,12 +415,14 @@ local check_from_display_name = rspamd_config:register_symbol{
     local parsed = util.parse_mail_address(from[1].name)
     if not parsed then return false end
     if not (parsed[1] and parsed[1]['addr']) then return false end
+    if parsed[1]['domain'] == nil or parsed[1]['domain'] == '' then return false end
     -- See if the parsed domains differ
     if not util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
       -- See if the destination domain is the same as the spoof
       local to = task:get_recipients(2)
-      -- Be careful with undisclosed-recipients:; as domain will be an empty string
-      if not (to and to[1] and to[1]['domain'] and to[1]['domain'] ~= '') then
+      if not (to and to[1] and to[1]['domain']) then 
+        -- Be careful with undisclosed-recipients:; as domain will be an empty string
+        if to[1]['domain'] == nil or to[1]['domain'] == '' then return false end
         task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
         return false
       end
