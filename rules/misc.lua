@@ -442,6 +442,7 @@ rspamd_config.SPOOF_REPLYTO = {
     if not fromdom then return false end
     -- SMTP recipients must contain From domain
     local to = task:get_recipients(1)
+    if not to then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
       if util.strequal_caseless(t.domain, fromdom) then
