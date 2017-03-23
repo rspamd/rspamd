@@ -129,16 +129,6 @@ local function check_quantity_received (task)
   end
 end
 
--- Registration
-if type(rspamd_config.get_api_version) ~= 'nil' then
-  if rspamd_config:get_api_version() >= 1 then
-    rspamd_config:register_module_option('once_received', 'symbol', 'string')
-    rspamd_config:register_module_option('once_received', 'symbol_strict', 'string')
-    rspamd_config:register_module_option('once_received', 'bad_host', 'string')
-    rspamd_config:register_module_option('once_received', 'good_host', 'string')
-  end
-end
-
 local opts = rspamd_config:get_all_opt('options')
 if opts and type(opts) ~= 'table' then
   if type(opts['check_local']) == 'boolean' then

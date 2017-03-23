@@ -406,29 +406,6 @@ local function rbl_cb (task)
   end
 end
 
--- Registration
-if type(rspamd_config.get_api_version) ~= 'nil' then
-  if rspamd_config:get_api_version() >= 1 then
-    rspamd_config:register_module_option(N, 'rbls', 'map')
-    rspamd_config:register_module_option(N, 'default_ipv4', 'string')
-    rspamd_config:register_module_option(N, 'default_ipv6', 'string')
-    rspamd_config:register_module_option(N, 'default_received', 'string')
-    rspamd_config:register_module_option(N, 'default_from', 'string')
-    rspamd_config:register_module_option(N, 'default_rdns', 'string')
-    rspamd_config:register_module_option(N, 'default_helo', 'string')
-    rspamd_config:register_module_option(N, 'default_dkim', 'string')
-    rspamd_config:register_module_option(N, 'default_dkim_domainonly', 'string')
-    rspamd_config:register_module_option(N, 'default_unknown', 'string')
-    rspamd_config:register_module_option(N, 'default_exclude_users', 'string')
-    rspamd_config:register_module_option(N, 'default_exclude_private_ips', 'string')
-    rspamd_config:register_module_option(N, 'local_exclude_ip_map', 'string')
-    rspamd_config:register_module_option(N, 'default_exclude_local', 'string')
-    rspamd_config:register_module_option(N, 'default_emails', 'string')
-    rspamd_config:register_module_option(N, 'default_is_whitelist', 'string')
-    rspamd_config:register_module_option(N, 'default_ignore_whitelists', 'string')
-  end
-end
-
 -- Configuration
 local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
