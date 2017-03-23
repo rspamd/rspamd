@@ -56,6 +56,13 @@ Maps Key Values
   Should Contain  ${result.stdout}  REGEXP_KV (1.00)[no worry]
   Should Contain  ${result.stdout}  MAP_KV (1.00)[no worry]
 
+Option Order
+  [Setup]  Lua Replace Setup  ${TESTDIR}/lua/option_order.lua
+  [Teardown]  Lua Replace Teardown
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  OPTION_ORDER (1.00)[one, two, three, 4, 5, a]
+  Should Contain  ${result.stdout}  TBL_OPTION_ORDER (1.00)[one, two, three, 4, 5, a]
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
