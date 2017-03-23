@@ -18,7 +18,6 @@
 #include "rspamd.h"
 #include "stat_internal.h"
 #include "libmime/message.h"
-#include "libmime/filter.h"
 #include "libmime/images.h"
 #include "libserver/html.h"
 #include "lua/lua_common.h"

@@ -26,6 +26,8 @@
 #include "libmime/message.h"
 #include "rspamd.h"
 #include "libstat/stat_api.h"
+#include "libstat/tokenizers/tokenizers.h"
+
 #include "unicode/utf8.h"
 #include "unicode/uchar.h"
 
@@ -398,6 +400,39 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
 		rspamd_chartable_process_part (task, part);
+	}
+
+	if (task->subject != NULL) {
+		GArray *words;
+		rspamd_stat_token_t *w;
+		guint i;
+		gdouble cur_score = 0.0;
+
+		words = rspamd_tokenize_text (task->subject, strlen (task->subject),
+				TRUE,
+				NULL,
+				NULL,
+				FALSE,
+				NULL);
+
+		if (words) {
+			for (i = 0; i < words->len; i++) {
+				w = &g_array_index (words, rspamd_stat_token_t, i);
+				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE);
+			}
+		}
+
+		cur_score /= (gdouble)part->normalized_words->len;
+
+		if (cur_score > 2.0) {
+			cur_score = 2.0;
+		}
+
+		if (cur_score > chartable_module_ctx->threshold) {
+			rspamd_task_insert_result (task, chartable_module_ctx->symbol,
+					cur_score, "subject");
+
+		}
 	}
 }
 
