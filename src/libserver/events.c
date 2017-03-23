@@ -43,8 +43,9 @@
 
 struct rspamd_async_watcher {
 	event_watcher_t cb;
-	guint remain;
 	gpointer ud;
+	guint remain;
+	gint id;
 };
 
 struct rspamd_async_event {
@@ -273,6 +274,7 @@ rspamd_session_pending (struct rspamd_async_session *session)
 
 void
 rspamd_session_watch_start (struct rspamd_async_session *session,
+		gint id,
 		event_watcher_t cb,
 		gpointer ud)
 {
@@ -287,6 +289,7 @@ rspamd_session_watch_start (struct rspamd_async_session *session,
 	session->cur_watcher->cb = cb;
 	session->cur_watcher->remain = 0;
 	session->cur_watcher->ud = ud;
+	session->cur_watcher->id = id;
 	session->flags |= RSPAMD_SESSION_FLAG_WATCHING;
 }
 
@@ -323,7 +326,8 @@ rspamd_session_events_pending (struct rspamd_async_session *session)
 
 	if (RSPAMD_SESSION_IS_WATCHING (session)) {
 		npending += session->cur_watcher->remain;
-		msg_debug_session ("pending %d watchers", session->cur_watcher->remain);
+		msg_debug_session ("pending %d watchers, id: %d",
+				session->cur_watcher->remain, session->cur_watcher->id);
 	}
 
 	return npending;
@@ -336,7 +340,9 @@ rspamd_session_watcher_push (struct rspamd_async_session *session)
 
 	if (RSPAMD_SESSION_IS_WATCHING (session)) {
 		session->cur_watcher->remain ++;
-		msg_debug_session ("push session, %d events", session->cur_watcher->remain);
+		msg_debug_session ("push session, watcher: %d, %d events",
+				session->cur_watcher->id,
+				session->cur_watcher->remain);
 	}
 }
 
@@ -348,6 +354,9 @@ rspamd_session_watcher_push_specific (struct rspamd_async_session *session,
 
 	if (w) {
 		w->remain ++;
+		msg_debug_session ("push specific, watcher: %d, %d events",
+				w->id,
+				w->remain);
 	}
 }
 
@@ -358,7 +367,8 @@ rspamd_session_watcher_pop (struct rspamd_async_session *session,
 	g_assert (session != NULL);
 
 	if (w) {
-		msg_debug_session ("pop session, %d events", w->remain);
+		msg_debug_session ("pop session, watcher: %d, %d events", w->id,
+				w->remain);
 
 		if (--w->remain == 0) {
 			w->cb (session->user_data, w->ud);

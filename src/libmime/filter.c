@@ -248,7 +248,7 @@ insert_metric_result (struct rspamd_task *task,
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
 
-	msg_debug ("symbol %s, score %.2f, metric %s, factor: %f",
+	msg_debug_task ("symbol %s, score %.2f, metric %s, factor: %f",
 		symbol,
 		s->score,
 		metric->name,

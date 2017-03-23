@@ -93,6 +93,7 @@ guint rspamd_session_events_pending (struct rspamd_async_session *session);
  * @param ud opaque data for the callback
  */
 void rspamd_session_watch_start (struct rspamd_async_session *s,
+		gint id,
 		event_watcher_t cb,
 		gpointer ud);
 

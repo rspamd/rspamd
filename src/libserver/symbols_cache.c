@@ -1288,7 +1288,9 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		if (check) {
 			pending_before = rspamd_session_events_pending (task->s);
 			/* Watch for events appeared */
-			rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
+			rspamd_session_watch_start (task->s,
+					item->id,
+					rspamd_symbols_cache_watcher_cb,
 					item);
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
 			t1 = rspamd_get_ticks ();
