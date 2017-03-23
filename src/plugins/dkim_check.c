@@ -898,6 +898,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 
 			cur->first = res;
 			cur->res = -1;
+			cur->w = res->w;
 			cur->task = task;
 			cur->mult_allow = 1.0;
 			cur->mult_deny = 1.0;
