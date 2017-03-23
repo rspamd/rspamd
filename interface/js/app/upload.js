@@ -22,7 +22,7 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'datatables'],
+define(['jquery'],
 function($) {
     var interface = {}
 
