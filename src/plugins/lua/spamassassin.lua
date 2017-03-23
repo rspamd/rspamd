@@ -37,6 +37,7 @@ local known_plugins = {
   'Mail::SpamAssassin::Plugin::BodyEval',
   'Mail::SpamAssassin::Plugin::MIMEHeader',
   'Mail::SpamAssassin::Plugin::WLBLEval',
+  'Mail::SpamAssassin::Plugin::HTMLEval',
 }
 
 -- Table that replaces SA symbol with rspamd equialent
@@ -520,6 +521,24 @@ local function gen_eval_rule(arg)
         return 0
       end
     },
+    {
+      'html_tag_exists',
+      function(task, remain)
+        local tp = task:get_text_parts()
+
+        for _,p in ipairs(tp) do
+          if p:is_html() then
+            local hc = p:get_html()
+
+            if hc:has_tag(remain) then
+              return 1
+            end
+          end
+        end
+
+        return 0
+      end
+    }
   }
 
   for _,f in ipairs(eval_funcs) do
