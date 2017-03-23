@@ -940,7 +940,9 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 				s = rspamd_task_insert_result (task, cd->symbol, flag, NULL);
 
 				if (s) {
-					for (i = lua_gettop (L); i >= level + first_opt; i--) {
+					guint last_pos = lua_gettop (L);
+
+					for (i = level + first_opt; i <= last_pos; i++) {
 						if (lua_type (L, i) == LUA_TSTRING) {
 							const char *opt = lua_tostring (L, i);
 
