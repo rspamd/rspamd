@@ -40,3 +40,10 @@ reconf['DATA_URI_OBFU'] = {
   score = 2.0
 }
 
+reconf['INTRODUCTION'] = {
+  re = '/\\b(?:my name is\\b|(?:i am|this is)\\s+(?:mr|mrs|ms|miss|master|sir|prof(?:essor)?|d(?:octo)?r|rev(?:erend)?)(\.|\\b))/{sa_body}i',
+  description = "Sender introduces themselves",
+  score = 2.0,
+  group = 'scams'
+}
+

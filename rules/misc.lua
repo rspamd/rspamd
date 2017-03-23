@@ -406,7 +406,8 @@ rspamd_config:register_symbol{
   score = 0,
 }
 
-rspamd_config.SPOOF_DISPLAY_NAME = {
+local check_from_display_name = rspamd_config:register_symbol{
+  name = 'CHECK_FROM_SPOOF',
   callback = function (task)
     local from = task:get_from(2)
     if not (from and from[1] and from[1].name) then return false end
@@ -420,16 +421,32 @@ rspamd_config.SPOOF_DISPLAY_NAME = {
       local to = task:get_recipients(2)
       -- Be careful with undisclosed-recipients:; as domain will be an empty string
       if not (to and to[1] and to[1]['domain'] and to[1]['domain'] ~= '') then
+        task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
         return false
       end
       if util.strequal_caseless(to[1]['domain'], parsed[1]['domain']) then
-          return true,from[1]['domain'],parsed[1]['domain']
+        task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
+        return false
       end
     end
     return false
   end,
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_from_display_name,
+  name = 'SPOOF_DISPLAY_NAME',
   description = 'Display name is being used to spoof and trick the recipient',
-  score = 8.0
+  score = 8,
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_from_display_name,
+  name = 'FROM_NEQ_DISPLAY_NAME',
+  description = 'Display name contains an email address different to the From address',
+  score = 4,
 }
 
 rspamd_config.SPOOF_REPLYTO = {
