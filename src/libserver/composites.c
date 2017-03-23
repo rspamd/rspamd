@@ -139,7 +139,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	const gchar *beg = atom->data, *sym = NULL;
 	gchar t;
 	struct symbol_remove_data *rd, *nrd;
-	struct rspamd_symbol_result *ms;
+	struct rspamd_symbol_result *ms = NULL;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_symbol *sdef;
 	struct rspamd_metric *metric;
