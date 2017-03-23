@@ -683,6 +683,8 @@ local function process_sa_conf(f)
       return
     end
 
+    -- Unbalanced if/endif
+    if if_nested < 0 then if_nested = 0 end
     if skip_to_endif then
       if string.match(l, '^endif') then
         if_nested = if_nested - 1
@@ -692,6 +694,9 @@ local function process_sa_conf(f)
         end
       elseif string.match(l, '^if') then
         if_nested = if_nested + 1
+      elseif string.match(l, '^else') then
+        -- Else counterpart for if
+        skip_to_endif = false
       end
       return
     else
@@ -703,8 +708,8 @@ local function process_sa_conf(f)
             return false
             end, known_plugins) then
           skip_to_endif = true
-          if_nested = 1
         end
+        if_nested = if_nested + 1
       elseif string.match(l, '^if !plugin%(') then
          local pname = string.match(l, '^if !plugin%(([A-Za-z:]+)%)')
          if fun.any(function(pl)
@@ -712,12 +717,17 @@ local function process_sa_conf(f)
            return false
          end, known_plugins) then
            skip_to_endif = true
-           if_nested = 1
          end
+         if_nested = if_nested + 1
       elseif string.match(l, '^if') then
         -- Unknown if
         skip_to_endif = true
-        if_nested = 1
+        if_nested = if_nested + 1
+      elseif string.match(l, '^else') then
+        -- Else counterpart for if
+        skip_to_endif = true
+      elseif string.match(l, '^endif') then
+        if_nested = if_nested - 1
       end
     end
 
@@ -975,7 +985,10 @@ local function process_sa_conf(f)
       cur_rule['type'] = 'meta'
       cur_rule['symbol'] = words[2]
       cur_rule['meta'] = words_to_re(words, 2)
-      if cur_rule['meta'] and cur_rule['symbol'] then valid_rule = true end
+      if cur_rule['meta'] and cur_rule['symbol']
+        and cur_rule['meta'] ~= '0' then
+          valid_rule = true
+      end
     elseif words[1] == "describe" and valid_rule then
       cur_rule['description'] = words_to_re(words, 2)
     elseif words[1] == "score" then
