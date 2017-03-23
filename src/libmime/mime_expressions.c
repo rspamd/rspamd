@@ -20,7 +20,6 @@
 #include "message.h"
 #include "mime_expressions.h"
 #include "html.h"
-#include "email_addr.h"
 #include "lua/lua_common.h"
 #include "utlist.h"
 
@@ -1172,7 +1171,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 		}
 	}
 
-	if ((double)(hits * num / 2.) / (double)total >= threshold) {
+	if ((hits * num / 2.) / (double)total >= threshold) {
 		return TRUE;
 	}
 

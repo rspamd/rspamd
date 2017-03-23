@@ -18,7 +18,6 @@
 #include "message.h"
 #include "task.h"
 #include "archives.h"
-#include "fstring.h"
 
 static void
 rspamd_archive_dtor (gpointer p)

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "util.h"
+
 #ifdef WITH_FANN
 #include <fann.h>
 #endif

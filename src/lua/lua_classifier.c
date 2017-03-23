@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "cfg_file.h"
 
 /* Classifier methods */
 LUA_FUNCTION_DEF (classifier, get_statfiles);

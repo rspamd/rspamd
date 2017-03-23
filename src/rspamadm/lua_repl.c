@@ -16,13 +16,11 @@
 
 #include "config.h"
 #include "rspamadm.h"
-#include "cryptobox.h"
 #include "libutil/http.h"
 #include "libutil/http_private.h"
 #include "printf.h"
 #include "lua/lua_common.h"
 #include "message.h"
-#include "task.h"
 #include "unix-std.h"
 #include "linenoise.h"
 #include "worker_util.h"

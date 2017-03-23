@@ -19,7 +19,6 @@
 
 #include "tokenizers.h"
 #include "stat_internal.h"
-#include "cryptobox.h"
 
 /* Size for features pipe */
 #define DEFAULT_FEATURE_WINDOW_SIZE 5

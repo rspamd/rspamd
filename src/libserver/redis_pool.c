@@ -22,7 +22,6 @@
 #include "contrib/hiredis/async.h"
 #include "contrib/hiredis/adapters/libevent.h"
 #include "cryptobox.h"
-#include "ref.h"
 #include "logger.h"
 
 struct rspamd_redis_pool_elt;

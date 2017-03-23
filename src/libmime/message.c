@@ -17,15 +17,10 @@
 #include "util.h"
 #include "rspamd.h"
 #include "message.h"
-#include "cfg_file.h"
-#include "libutil/regexp.h"
 #include "html.h"
 #include "images.h"
 #include "archives.h"
-#include "email_addr.h"
-#include "utlist.h"
 #include "tokenizers/tokenizers.h"
-#include "cryptobox.h"
 #include "smtp_parsers.h"
 #include "mime_parser.h"
 #include "mime_encoding.h"
@@ -33,8 +28,6 @@
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"
 #endif
-
-#include <iconv.h>
 
 #define GTUBE_SYMBOL "GTUBE"
 

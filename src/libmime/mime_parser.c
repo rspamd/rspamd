@@ -19,9 +19,7 @@
 #include "mime_parser.h"
 #include "mime_headers.h"
 #include "message.h"
-#include "content_type.h"
 #include "multipattern.h"
-#include "cryptobox.h"
 #include "contrib/libottery/ottery.h"
 
 struct rspamd_mime_parser_lib_ctx {
@@ -1009,7 +1007,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
 
-			task->raw_headers_content.begin = (gchar *) (str.str);
+			task->raw_headers_content.begin = str.str;
 			task->raw_headers_content.len = hdr_pos;
 			task->raw_headers_content.body_start = str.str + body_pos;
 
@@ -1029,7 +1027,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			hdr_pos = rspamd_mime_parser_headers_heuristic (&str, &body_pos);
 
 			if (hdr_pos > 0 && hdr_pos <= str.len) {
-				task->raw_headers_content.begin = (gchar *) (str.str);
+				task->raw_headers_content.begin = str.str;
 				task->raw_headers_content.len = hdr_pos;
 				task->raw_headers_content.body_start = str.str + body_pos;
 
@@ -1063,7 +1061,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 				rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
-			npart->raw_headers_str = (gchar *) (str.str);
+			npart->raw_headers_str = str.str;
 			npart->raw_headers_len = hdr_pos;
 			npart->raw_data.begin = str.str + body_pos;
 

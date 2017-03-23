@@ -18,9 +18,6 @@
 #include "cryptobox.h"
 #include "printf.h"
 #include "http.h"
-#include "ucl.h"
-#include "libcryptobox/keypair.h"
-#include "libutil/str_util.h"
 
 static gboolean hex_encode = FALSE;
 static gboolean raw = FALSE;

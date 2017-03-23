@@ -391,7 +391,7 @@ xmlrpc_text (GMarkupParseContext *context,
 		case 12:
 			/* Push integer value */
 			num = strtoul (text, NULL, 10);
-			lua_pushinteger (ud->L, num);
+			lua_pushnumber (ud->L, num);
 			break;
 		case 13:
 			/* Push integer value */

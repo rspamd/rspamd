@@ -17,10 +17,6 @@
 #include "mime_headers.h"
 #include "smtp_parsers.h"
 #include "mime_encoding.h"
-#include "email_addr.h"
-#include "task.h"
-#include "cryptobox.h"
-#include "contrib/libottery/ottery.h"
 
 static void
 rspamd_mime_header_check_special (struct rspamd_task *task,

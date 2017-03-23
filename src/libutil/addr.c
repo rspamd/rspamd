@@ -18,7 +18,6 @@
 #include "util.h"
 #include "logger.h"
 #include "cryptobox.h"
-#include "radix.h"
 #include "unix-std.h"
 /* pwd and grp */
 #ifdef HAVE_PWD_H

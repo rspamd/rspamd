@@ -17,13 +17,11 @@
 #include "config.h"
 #include "libutil/multipattern.h"
 #include "libutil/str_util.h"
-#include "libutil/util.h"
-#include "libutil/printf.h"
 #include "libcryptobox/cryptobox.h"
-#include "unix-std.h"
-#include "libutil/logger.h"
 
 #ifdef WITH_HYPERSCAN
+#include "logger.h"
+#include "unix-std.h"
 #include "hs.h"
 #endif
 #include "acism.h"

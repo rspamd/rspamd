@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "regexp.h"
 
 /***
  * @module rspamd_regexp

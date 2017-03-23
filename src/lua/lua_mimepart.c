@@ -675,7 +675,7 @@ lua_mimepart_get_length (lua_State * L)
 		return 1;
 	}
 
-	lua_pushinteger (L, part->parsed_data.len);
+	lua_pushnumber (L, part->parsed_data.len);
 
 	return 1;
 }

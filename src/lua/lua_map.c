@@ -17,8 +17,6 @@
 #include "lua_common.h"
 #include "libutil/map.h"
 #include "libutil/map_private.h"
-#include "libutil/radix.h"
-#include "lua/lua_map.h"
 
 /***
  * This module is used to manage rspamd maps and map like objects

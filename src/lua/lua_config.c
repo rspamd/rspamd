@@ -18,7 +18,6 @@
 #include "libutil/expression.h"
 #include "libserver/composites.h"
 #include "lua/lua_map.h"
-#include "monitored.h"
 #include "utlist.h"
 #include <math.h>
 
@@ -682,8 +681,7 @@ lua_check_monitored (lua_State * L, gint pos)
 static gint
 lua_config_get_api_version (lua_State *L)
 {
-	lua_pushinteger (L, RSPAMD_LUA_API_VERSION);
-	return 1;
+	return luaL_error (L, "obsolete function");
 }
 
 static gint

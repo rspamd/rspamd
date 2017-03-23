@@ -17,10 +17,8 @@
 #include "rdns.h"
 #include "mem_pool.h"
 #include "cfg_file.h"
-#include "monitored.h"
 #include "cryptobox.h"
 #include "logger.h"
-#include "radix.h"
 
 static const gdouble default_monitoring_interval = 60.0;
 static const guint default_max_errors = 3;

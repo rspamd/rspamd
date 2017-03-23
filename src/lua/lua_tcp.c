@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "dns.h"
 #include "utlist.h"
-#include "ref.h"
 #include "unix-std.h"
 
 /***
@@ -875,7 +873,7 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, struct lua_tcp_cbdata *cbd,
 		vec->iov_base = g_malloc (len);
 		dtor = g_slice_alloc0 (sizeof (*dtor));
 		dtor->dtor = g_free;
-		dtor->data = (void *)vec->iov_base;
+		dtor->data = vec->iov_base;
 		LL_PREPEND (cbd->dtors, dtor);
 		memcpy (vec->iov_base, str, len);
 		vec->iov_len = len;

@@ -17,7 +17,6 @@
 #include "mem_pool.h"
 #include "fstring.h"
 #include "logger.h"
-#include "utlist.h"
 #include "ottery.h"
 #include "unix-std.h"
 

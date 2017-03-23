@@ -15,18 +15,11 @@
  */
 #include "config.h"
 #include "rspamd.h"
-#include "util.h"
-#include "cfg_file.h"
-#include "cfg_rcl.h"
 #include "message.h"
 #include "utlist.h"
-#include "http.h"
 #include "http_private.h"
-#include "email_addr.h"
 #include "worker_private.h"
-#include "cryptobox.h"
 #include "contrib/zstd/zstd.h"
-#include "contrib/uthash/utlist.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include <math.h>

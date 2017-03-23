@@ -15,8 +15,6 @@
  */
 #include "config.h"
 #include "lua_common.h"
-#include "upstream.h"
-#include "cfg_file.h"
 
 
 /***

@@ -32,7 +32,6 @@
 #include "libutil/hash.h"
 #include "libutil/map.h"
 #include "rspamd.h"
-#include "addr.h"
 
 #define DEFAULT_SYMBOL_FAIL "R_SPF_FAIL"
 #define DEFAULT_SYMBOL_SOFTFAIL "R_SPF_SOFTFAIL"

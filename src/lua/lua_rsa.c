@@ -21,12 +21,10 @@
 
 #include "lua_common.h"
 #include "unix-std.h"
-
-#ifdef HAVE_OPENSSL
 #include <openssl/err.h>
+#include <openssl/pem.h>
 #include <openssl/sha.h>
 #include <openssl/rsa.h>
-#include <openssl/pem.h>
 
 LUA_FUNCTION_DEF (rsa_pubkey,	 load);
 LUA_FUNCTION_DEF (rsa_pubkey,	 create);
@@ -693,12 +691,3 @@ luaopen_rsa (lua_State * L)
 
 	lua_settop (L, 0);
 }
-
-#else
-void
-luaopen_rsa (lua_State * L)
-{
-	msg_info ("this rspamd version is not linked against openssl, therefore no "
-		"RSA support is available");
-}
-#endif

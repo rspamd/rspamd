@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "task.h"
-#include "rspamd.h"
 #include "html.h"
-#include "cfg_rcl.h"
 #include "tokenizers/tokenizers.h"
-#include "libserver/url.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
 #include "libmime/email_addr.h"

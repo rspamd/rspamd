@@ -39,9 +39,7 @@
  */
 
 #include "printf.h"
-#include "fstring.h"
 #include "str_util.h"
-#include <math.h>
 
 /**
  * From FreeBSD libutil code

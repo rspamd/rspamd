@@ -15,7 +15,6 @@
  */
 #include "config.h"
 #include "rspamd.h"
-#include "message.h"
 #include "lua/lua_common.h"
 #include "worker_util.h"
 #include "unix-std.h"

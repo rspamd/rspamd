@@ -15,8 +15,6 @@
  */
 #include "config.h"
 #include "rspamd.h"
-#include "roll_history.h"
-#include "ucl.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
 

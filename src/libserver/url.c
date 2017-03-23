@@ -42,12 +42,9 @@
 #include "config.h"
 #include "url.h"
 #include "util.h"
-#include "fstring.h"
 #include "rspamd.h"
 #include "message.h"
-#include "http.h"
 #include "multipattern.h"
-#include "http_parser.h"
 #include "contrib/uthash/utlist.h"
 
 typedef struct url_match_s {

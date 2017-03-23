@@ -15,19 +15,11 @@
  */
 #include "lua_common.h"
 #include "message.h"
-#include "protocol.h"
-#include "filter.h"
-#include "dns.h"
-#include "util.h"
 #include "images.h"
 #include "archives.h"
-#include "cfg_file.h"
-#include "email_addr.h"
 #include "utlist.h"
-#include "cryptobox.h"
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
-#include "contrib/uthash/utlist.h"
 #include <math.h>
 
 /***
@@ -2582,7 +2574,7 @@ lua_task_get_helo (lua_State *L)
 
 	if (task) {
 		if (task->helo != NULL) {
-			lua_pushstring (L, (gchar *)task->helo);
+			lua_pushstring (L, task->helo);
 			return 1;
 		}
 		else {
@@ -3998,7 +3990,7 @@ lua_image_get_size (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushinteger (L, img->data->len);
+		lua_pushnumber (L, img->data->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4124,7 +4116,7 @@ lua_archive_get_size (lua_State *L)
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
-		lua_pushinteger (L, arch->size);
+		lua_pushnumber (L, arch->size);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

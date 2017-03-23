@@ -19,7 +19,6 @@
 #include "message.h"
 #include "printf.h"
 #include "smtp_parsers.h"
-#include "mime_headers.h"
 
 static void
 rspamd_email_addr_dtor (struct rspamd_email_address *addr)

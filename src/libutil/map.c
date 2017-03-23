@@ -22,10 +22,6 @@
 #include "http.h"
 #include "http_private.h"
 #include "rspamd.h"
-#include "cryptobox.h"
-#include "unix-std.h"
-#include "http_parser.h"
-#include "libutil/regexp.h"
 #include "contrib/zstd/zstd.h"
 
 #ifdef WITH_HYPERSCAN

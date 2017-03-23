@@ -19,7 +19,6 @@
 #include "rspamd.h"
 #include "message.h"
 #include "lua/lua_common.h"
-#include "cryptobox.h"
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 

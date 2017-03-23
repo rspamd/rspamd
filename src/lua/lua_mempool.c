@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "mem_pool.h"
 
 /***
  * @module rspamd_mempool
@@ -236,7 +235,7 @@ lua_mempool_suggest_size (lua_State *L)
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
 	if (mempool) {
-		lua_pushinteger (L, rspamd_mempool_suggest_size ());
+		lua_pushnumber (L, rspamd_mempool_suggest_size ());
 		return 0;
 	}
 	else {

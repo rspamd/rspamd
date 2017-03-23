@@ -27,11 +27,7 @@
  */
 
 #include "lua_common.h"
-#include "cryptobox.h"
-#include "keypair.h"
 #include "unix-std.h"
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
 
 struct rspamd_lua_cryptobox_hash {
 	rspamd_cryptobox_hash_state_t *h;

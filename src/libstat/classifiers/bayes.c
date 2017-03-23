@@ -18,8 +18,6 @@
  */
 #include "classifiers.h"
 #include "rspamd.h"
-#include "filter.h"
-#include "cfg_file.h"
 #include "stat_internal.h"
 #include "math.h"
 

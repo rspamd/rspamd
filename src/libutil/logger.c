@@ -15,12 +15,9 @@
  */
 #include "config.h"
 #include "logger.h"
-#include "util.h"
 #include "rspamd.h"
 #include "map.h"
-#include "cryptobox.h"
 #include "ottery.h"
-#include "keypair.h"
 #include "unix-std.h"
 
 #ifdef HAVE_SYSLOG_H
