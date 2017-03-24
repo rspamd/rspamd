@@ -18,6 +18,7 @@ limitations under the License.
 
 local symbol = 'ONCE_RECEIVED'
 local symbol_rdns = 'RDNS_NONE'
+local symbol_mx = 'DIRECT_TO_MX'
 -- Symbol for strict checks
 local symbol_strict = nil
 local bad_hosts = {}
@@ -40,6 +41,12 @@ local function check_quantity_received (task)
       if recvh and #recvh <= 1 then
         task:insert_result(symbol, 1)
         task:insert_result(symbol_strict, 1)
+        -- Check for MUAs
+        local ua = task:get_header('User-Agent')
+        local xm = task:get_header('X-Mailer')
+        if (ua or xm) then
+          task:insert_result(symbol_mx, 1, (ua or xm))
+        end
       end
       task:insert_result(symbol_rdns, 1)
     else
@@ -169,6 +176,8 @@ if opts then
       elseif n == 'whitelist' then
         whitelist = rspamd_map_add('once_received', 'whitelist', 'radix',
           'once received whitelist')
+      elseif n == 'symbol_mx' then
+        symbol_mx = v
       end
     end
 
@@ -179,6 +188,11 @@ if opts then
     })
       rspamd_config:register_symbol({
       name = symbol_strict,
+      type = 'virtual',
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      name = symbol_mx,
       type = 'virtual',
       parent = id
     })
