@@ -681,7 +681,10 @@ lua_check_monitored (lua_State * L, gint pos)
 static gint
 lua_config_get_api_version (lua_State *L)
 {
-	return luaL_error (L, "obsolete function");
+	msg_warn ("get_api_version is deprecated, do not use it");
+	lua_pushnumber (L, 100);
+
+	return 1;
 }
 
 static gint
