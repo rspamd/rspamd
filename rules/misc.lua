@@ -456,15 +456,22 @@ rspamd_config.SPOOF_REPLYTO = {
     -- First check for a Reply-To header
     local rt = task:get_header('Reply-To')
     if not rt then return false end
-    -- Get From header domain
-    local fromdom = ((task:get_from(2) or E)[1] or E).domain
-    if not fromdom then return false end
+    -- Get From and To headers
+    local from = task:get_from(2)
+    local to = task:get_recipients(2)
+    if not (from and from[1] and from[1].addr) then return false end
+    if (to and to[1] and to[1].addr) then
+      -- Handle common case for Web Contact forms of From = To 
+      if util.strequal_caseless(from[1].addr, to[1].addr) then
+        return false
+      end
+    end 
     -- SMTP recipients must contain From domain
     local to = task:get_recipients(1)
     if not to then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
-      if util.strequal_caseless(t.domain, fromdom) then
+      if util.strequal_caseless(t.domain, from[1].domain) then
         found_fromdom = true
         break
       end
@@ -474,8 +481,8 @@ rspamd_config.SPOOF_REPLYTO = {
     local parsed = ((util.parse_mail_address(rt) or E)[1] or E).domain
     if not parsed then return false end
     -- Reply-To domain must be different to From domain
-    if not util.strequal_caseless(parsed, fromdom) then
-      return true, fromdom, parsed
+    if not util.strequal_caseless(parsed, from[1].domain) then
+      return true, from[1].domain, parsed
     end
     return false
   end,
