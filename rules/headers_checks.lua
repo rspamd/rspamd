@@ -210,17 +210,17 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
     else
       if (from and from[1]) then
         -- See if From and Reply-To addresses match
-        if (from[1].addr:lower() == rt[1].addr:lower()) then
+        if (util.strequal_caseless(from[1].addr, rt[1].addr)) then
           task:insert_result('REPLYTO_ADDR_EQ_FROM', 1.0)
         elseif from[1].domain and rt[1].domain then
-          if (from[1].domain:lower() == rt[1].domain:lower()) then
+          if (util.streqal_caseless(from[1].domain, rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
           else
             task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
           end
         end
         -- See if the Display Names match
-        if (from[1].name and rt[1].name and from[1].name:lower() == rt[1].name:lower()) then
+        if (from[1].name and rt[1].name and util.strequal_caseless(from[1].name, rt[1].name)) then
           task:insert_result('REPLYTO_DN_EQ_FROM_DN', 1.0)
         end
       end
@@ -562,12 +562,12 @@ local check_from_id = rspamd_config:register_symbol{
   callback = function(task)
     local envfrom = task:get_from(1)
     local from = task:get_from(2)
-    if (from and from[1] and not from[1].name) then
+    if (from and from[1] and (from[1].name == nil or from[1].name == '' )) then
       task:insert_result('FROM_NO_DN', 1.0)
     elseif (from and from[1] and from[1].name and
-            from[1].name:lower() == from[1].addr:lower()) then
+            util.strequal_caseless(from[1].name, from[1].addr)) then
       task:insert_result('FROM_DN_EQ_ADDR', 1.0)
-    elseif (from and from[1] and from[1].name) then
+    elseif (from and from[1] and from[1].name and from[1].name ~= '') then
       task:insert_result('FROM_HAS_DN', 1.0)
       -- Look for Mr/Mrs/Dr titles
       local n = from[1].name:lower()
@@ -586,7 +586,7 @@ local check_from_id = rspamd_config:register_symbol{
       end
     end
     if (envfrom and from and envfrom[1] and from[1] and
-        envfrom[1].addr:lower() == from[1].addr:lower())
+        util.strequal_caseless(envfrom[1].addr, from[1].addr))
     then
       task:insert_result('FROM_EQ_ENVFROM', 1.0)
     elseif (envfrom and envfrom[1] and envfrom[1].addr) then
@@ -596,10 +596,11 @@ local check_from_id = rspamd_config:register_symbol{
     local to = task:get_recipients(2)
     if not (to and to[1] and #to == 1 and from) then return false end
     -- Check if FROM == TO
-    if (to[1].addr:lower() == from[1].addr:lower()) then
+    if (util.strequal_caseless(to[1].addr, from[1].addr)) then
       task:insert_result('TO_EQ_FROM', 1.0)
     elseif (to[1].domain and from[1].domain and
-        to[1].domain:lower() == from[1].domain:lower()) then
+            util.strequal_caseless(to[1].domain, from[1].domain)) 
+    then
       task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
     end
   end
@@ -713,16 +714,16 @@ local check_to_cc_id = rspamd_config:register_symbol{
           or toa['name']:lower() == 'recipients')) then
         task:insert_result('TO_DN_RECIPIENTS', 1.0)
       end
-      if (toa['name'] and toa['name']:lower() == toa['addr']:lower()) then
+      if (toa['name'] and util.strequal_caseless(toa['name'], toa['addr'])) then
         to_dn_eq_addr_count = to_dn_eq_addr_count + 1
-      elseif (toa['name']) then
+      elseif (toa['name'] and toa['name'] ~= '') then
         to_dn_count = to_dn_count + 1
       end
       -- See if header recipients match envrcpts
       if (rcpts) then
         for _, rcpt in ipairs(rcpts) do
           if (toa and toa['addr'] and rcpt and rcpt['addr'] and
-              rcpt['addr']:lower() == toa['addr']:lower())
+              util.strequal_caseless(rcpt['addr'], toa['addr']))
           then
             to_match_envrcpt = to_match_envrcpt + 1
           end
