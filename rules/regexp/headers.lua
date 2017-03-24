@@ -905,11 +905,3 @@ reconf['HAS_XOIP'] = {
   score = 0.0,
   group = 'headers'
 }
-
-reconf['RCVD_VIA_SMTP_AUTH'] = {
-  re = "Received=/\\bE?SMTPS?A\\b/ || Received=/\\bauthenticated\\b/i",
-  description = "Recieved using SMTP AUTH",
-  score = 0,
-  group = 'headers'
-}
-

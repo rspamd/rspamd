@@ -187,20 +187,61 @@ rspamd_config.ENVFROM_VERP = {
   group = "mailing_list"
 }
 
-rspamd_config.RCVD_TLS_ALL = {
+local check_rcvd = rspamd_config:register_symbol{
+  name = 'CHECK_RCVD',
   callback = function (task)
-    local rcvds = task:get_header_full('Received')
+    local rcvds = task:get_received_headers()
     if not rcvds then return false end
 
-    local ret = fun.all(function(rc)
-      return rc.flags and (rc.flags['ssl'] or rc.flags['authenticated'])
+    local tls = fun.all(function(rc)
+      return rc.flags and rc.flags['ssl']
     end, rcvds)
 
-    return ret
-  end,
+    -- See if only the last hop was encrypted
+    if tls then
+      task:insert_result('RCVD_TLS_ALL', 1.0)
+    else
+      local rcvd = rcvds[1]
+      if rcvd.flags and rcvd.flags['ssl'] then
+        task:insert_result('RCVD_TLS_LAST', 1.0)
+      end
+    end
+
+    local auth = fun.any(function(rc)
+      return rc.flags and rc.flags['authenticated']
+    end, rcvds)
+
+    if auth then
+      task:insert_result('RCVD_VIA_SMTP_AUTH', 1.0)
+    end
+  end
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_rcvd,
+  name = 'RCVD_TLS_ALL',
+  description = 'All hops used encrypted transports',
   score = 0.0,
-  description = "All hops used encrypted transports",
-  group = "encryption"
+  group = 'encryption'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_rcvd,
+  name = 'RCVD_TLS_LAST',
+  description = 'Last hop used encrypted transports',
+  score = 0.0,
+  group = 'encryption'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_rcvd,
+  name = 'RCVD_VIA_SMTP_AUTH',
+  description = 'Message injected via SMTP AUTH',
+  score = 0.0,
+  group = 'authentication'
 }
 
 rspamd_config.RCVD_HELO_USER = {
