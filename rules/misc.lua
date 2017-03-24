@@ -401,7 +401,6 @@ rspamd_config:register_symbol{
 }
 
 local check_from_display_name = rspamd_config:register_symbol{
-  name = 'CHECK_FROM_SPOOF',
   callback = function (task)
     local from = task:get_from(2)
     if not (from and from[1] and from[1].name) then return false end
@@ -414,7 +413,7 @@ local check_from_display_name = rspamd_config:register_symbol{
     if not util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
       -- See if the destination domain is the same as the spoof
       local to = task:get_recipients(2)
-      if not (to and to[1] and to[1]['domain']) then 
+      if not (to and to[1] and to[1]['domain']) then
         -- Be careful with undisclosed-recipients:; as domain will be an empty string
         if to[1]['domain'] == nil or to[1]['domain'] == '' then return false end
         task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
@@ -455,13 +454,13 @@ rspamd_config.SPOOF_REPLYTO = {
     local to = task:get_recipients(2)
     if not (from and from[1] and from[1].addr) then return false end
     if (to and to[1] and to[1].addr) then
-      -- Handle common case for Web Contact forms of From = To 
+      -- Handle common case for Web Contact forms of From = To
       if util.strequal_caseless(from[1].addr, to[1].addr) then
         return false
       end
-    end 
+    end
     -- SMTP recipients must contain From domain
-    local to = task:get_recipients(1)
+    to = task:get_recipients(1)
     if not to then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
