@@ -401,6 +401,7 @@ rspamd_config:register_symbol{
 }
 
 local check_from_display_name = rspamd_config:register_symbol{
+  type = 'callback',
   callback = function (task)
     local from = task:get_from(2)
     if not (from and from[1] and from[1].name) then return false end
