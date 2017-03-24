@@ -31,13 +31,11 @@
  * and add the corresponding symbols to the scan's results.
 @example
 rspamd_config.DATE_IN_PAST = function(task)
-	if rspamd_config:get_api_version() >= 5 then
 	local dm = task:get_date{format = 'message', gmt = true}
 	local dt = task:get_date{format = 'connect', gmt = true}
-		-- A day
-		if dt - dm > 86400 then
-			return true
-		end
+	-- A day
+	if dt - dm > 86400 then
+		return true
 	end
 
 	return false

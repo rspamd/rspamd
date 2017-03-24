@@ -56,11 +56,9 @@ rspamd_config.R_PARTS_DIFFER = {
 -- Date issues
 rspamd_config.MISSING_DATE = {
   callback = function(task)
-    if rspamd_config:get_api_version() >= 5 then
-      local date = task:get_header_raw('Date')
-      if date == nil or date == '' then
-        return true
-      end
+    local date = task:get_header_raw('Date')
+    if date == nil or date == '' then
+      return true
     end
     return false
   end,
@@ -71,13 +69,11 @@ rspamd_config.MISSING_DATE = {
 
 rspamd_config.DATE_IN_FUTURE = {
   callback = function(task)
-    if rspamd_config:get_api_version() >= 5 then
-      local dm = task:get_date{format = 'message', gmt = true}
-      local dt = task:get_date{format = 'connect', gmt = true}
-      -- 2 hours
-      if dm > 0 and dm - dt > 7200 then
-        return true
-      end
+    local dm = task:get_date{format = 'message', gmt = true}
+    local dt = task:get_date{format = 'connect', gmt = true}
+    -- 2 hours
+    if dm > 0 and dm - dt > 7200 then
+      return true
     end
     return false
   end,
@@ -88,13 +84,11 @@ rspamd_config.DATE_IN_FUTURE = {
 
 rspamd_config.DATE_IN_PAST = {
   callback = function(task)
-    if rspamd_config:get_api_version() >= 5 then
-      local dm = task:get_date{format = 'message', gmt = true}
-      local dt = task:get_date{format = 'connect', gmt = true}
-      -- A day
-      if dm > 0 and dt - dm > 86400 then
-        return true
-      end
+    local dm = task:get_date{format = 'message', gmt = true}
+    local dt = task:get_date{format = 'connect', gmt = true}
+    -- A day
+    if dm > 0 and dt - dm > 86400 then
+      return true
     end
     return false
   end,
