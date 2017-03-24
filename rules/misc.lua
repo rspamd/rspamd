@@ -400,7 +400,8 @@ rspamd_config:register_symbol{
   score = 0,
 }
 
-rspamd_config.SPOOF_DISPLAY_NAME = {
+local check_from_display_name = rspamd_config:register_symbol{
+  name = 'CHECK_FROM_SPOOF',
   callback = function (task)
     local from = task:get_from(2)
     if not (from and from[1] and from[1].name) then return false end
@@ -408,22 +409,40 @@ rspamd_config.SPOOF_DISPLAY_NAME = {
     local parsed = util.parse_mail_address(from[1].name)
     if not parsed then return false end
     if not (parsed[1] and parsed[1]['addr']) then return false end
+    if parsed[1]['domain'] == nil or parsed[1]['domain'] == '' then return false end
     -- See if the parsed domains differ
     if not util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
       -- See if the destination domain is the same as the spoof
       local to = task:get_recipients(2)
-      -- Be careful with undisclosed-recipients:; as domain will be an empty string
-      if not (to and to[1] and to[1]['domain'] and to[1]['domain'] ~= '') then
+      if not (to and to[1] and to[1]['domain']) then 
+        -- Be careful with undisclosed-recipients:; as domain will be an empty string
+        if to[1]['domain'] == nil or to[1]['domain'] == '' then return false end
+        task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
         return false
       end
       if util.strequal_caseless(to[1]['domain'], parsed[1]['domain']) then
-          return true,from[1]['domain'],parsed[1]['domain']
+        task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
+        return false
       end
     end
     return false
   end,
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_from_display_name,
+  name = 'SPOOF_DISPLAY_NAME',
   description = 'Display name is being used to spoof and trick the recipient',
-  score = 8.0
+  score = 8,
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_from_display_name,
+  name = 'FROM_NEQ_DISPLAY_NAME',
+  description = 'Display name contains an email address different to the From address',
+  score = 4,
 }
 
 rspamd_config.SPOOF_REPLYTO = {
@@ -431,15 +450,22 @@ rspamd_config.SPOOF_REPLYTO = {
     -- First check for a Reply-To header
     local rt = task:get_header('Reply-To')
     if not rt then return false end
-    -- Get From header domain
-    local fromdom = ((task:get_from(2) or E)[1] or E).domain
-    if not fromdom then return false end
+    -- Get From and To headers
+    local from = task:get_from(2)
+    local to = task:get_recipients(2)
+    if not (from and from[1] and from[1].addr) then return false end
+    if (to and to[1] and to[1].addr) then
+      -- Handle common case for Web Contact forms of From = To 
+      if util.strequal_caseless(from[1].addr, to[1].addr) then
+        return false
+      end
+    end 
     -- SMTP recipients must contain From domain
     local to = task:get_recipients(1)
     if not to then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
-      if util.strequal_caseless(t.domain, fromdom) then
+      if util.strequal_caseless(t.domain, from[1].domain) then
         found_fromdom = true
         break
       end
@@ -449,8 +475,8 @@ rspamd_config.SPOOF_REPLYTO = {
     local parsed = ((util.parse_mail_address(rt) or E)[1] or E).domain
     if not parsed then return false end
     -- Reply-To domain must be different to From domain
-    if not util.strequal_caseless(parsed, fromdom) then
-      return true, fromdom, parsed
+    if not util.strequal_caseless(parsed, from[1].domain) then
+      return true, from[1].domain, parsed
     end
     return false
   end,

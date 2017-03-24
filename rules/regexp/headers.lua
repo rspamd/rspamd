@@ -899,3 +899,17 @@ reconf['X_PHPOS_FAKE'] = {
   group = 'headers'
 }
 
+reconf['HAS_XOIP'] = {
+  re = "header_exists('X-Originating-IP')",
+  description = "Has X-Originating-IP header",
+  score = 0.0,
+  group = 'headers'
+}
+
+reconf['RCVD_VIA_SMTP_AUTH'] = {
+  re = "Received=/\\bE?SMTPS?A\\b/ || Received=/\\bauthenticated\\b/i",
+  description = "Recieved using SMTP AUTH",
+  score = 0,
+  group = 'headers'
+}
+
