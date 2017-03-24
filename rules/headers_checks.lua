@@ -599,7 +599,7 @@ local check_from_id = rspamd_config:register_symbol{
     if (util.strequal_caseless(to[1].addr, from[1].addr)) then
       task:insert_result('TO_EQ_FROM', 1.0)
     elseif (to[1].domain and from[1].domain and
-            util.strequal_caseless(to[1].domain, from[1].domain)) 
+            util.strequal_caseless(to[1].domain, from[1].domain))
     then
       task:insert_result('TO_DOM_EQ_FROM_DOM', 1.0)
     end

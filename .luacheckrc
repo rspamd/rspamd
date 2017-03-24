@@ -27,6 +27,7 @@ globals = {
 
 ignore = {
   '212', -- unused argument
+  '612', -- trailing whitespace
   '631', -- line is too long
 }
 
