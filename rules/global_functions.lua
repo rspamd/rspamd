@@ -178,12 +178,18 @@ function rspamd_redis_make_request(task, redis_params, key, is_write, callback, 
   return ret,conn,addr
 end
 
+local split_grammar
 function rspamd_str_split(s, sep)
   local lpeg = require "lpeg"
-  sep = lpeg.P(sep)
-  local elem = lpeg.C((1 - sep)^0)
-  local p = lpeg.Ct(elem * (sep * elem)^0)   -- make a table capture
-  return lpeg.match(p, s)
+
+  if not split_grammar then
+    sep = lpeg.P(sep)
+    local elem = lpeg.C((1 - sep)^0)
+    local p = lpeg.Ct(elem * (sep * elem)^0)
+    split_grammar = p
+  end
+
+  return lpeg.match(split_grammar, s)
 end
 
 -- Metafunctions

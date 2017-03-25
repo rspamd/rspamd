@@ -500,6 +500,7 @@ local function parse_limit(str)
   end
 end
 
+local limit_parser
 local function parse_string_limit(lim)
   local function parse_time_suffix(s)
     if s == 's' then
@@ -524,30 +525,33 @@ local function parse_string_limit(lim)
     end
   end
   local lpeg = require "lpeg"
-  local digit = lpeg.R("09")
-  local grammar = {}
-  grammar.integer =
+
+  if not limit_parser then
+    local digit = lpeg.R("09")
+    limit_parser = {}
+    limit_parser.integer =
     (lpeg.S("+-") ^ -1) *
-    (digit   ^  1)
-  grammar.fractional =
+            (digit   ^  1)
+    limit_parser.fractional =
     (lpeg.P(".")   ) *
-    (digit ^ 1)
-  grammar.number =
-    (grammar.integer *
-    (grammar.fractional ^ -1)) +
-    (lpeg.S("+-") * grammar.fractional)
-  grammar.time = lpeg.Cf(lpeg.Cc(1) *
-    (grammar.number / tonumber) *
-    ((lpeg.S("smhd") / parse_time_suffix) ^ -1),
-    function (acc, val) return acc * val end)
-  grammar.suffixed_number = lpeg.Cf(lpeg.Cc(1) *
-    (grammar.number / tonumber) *
-    ((lpeg.S("kmg") / parse_num_suffix) ^ -1),
-    function (acc, val) return acc * val end)
-  grammar.limit = lpeg.Ct(grammar.suffixed_number *
-    (lpeg.S(" ") ^ 0) * lpeg.S("/") * (lpeg.S(" ") ^ 0) *
-    grammar.time)
-  local t = lpeg.match(grammar.limit, lim)
+            (digit ^ 1)
+    limit_parser.number =
+    (limit_parser.integer *
+            (limit_parser.fractional ^ -1)) +
+            (lpeg.S("+-") * limit_parser.fractional)
+    limit_parser.time = lpeg.Cf(lpeg.Cc(1) *
+            (limit_parser.number / tonumber) *
+            ((lpeg.S("smhd") / parse_time_suffix) ^ -1),
+      function (acc, val) return acc * val end)
+    limit_parser.suffixed_number = lpeg.Cf(lpeg.Cc(1) *
+            (limit_parser.number / tonumber) *
+            ((lpeg.S("kmg") / parse_num_suffix) ^ -1),
+      function (acc, val) return acc * val end)
+    limit_parser.limit = lpeg.Ct(limit_parser.suffixed_number *
+            (lpeg.S(" ") ^ 0) * lpeg.S("/") * (lpeg.S(" ") ^ 0) *
+            limit_parser.time)
+  end
+  local t = lpeg.match(limit_parser.limit, lim)
 
   if t and t[1] and t[2] and t[2] ~= 0 then
     return t[1] / t[2], t[1]

@@ -40,16 +40,19 @@ local E = {}
 local N = 'dkim_signing'
 local redis_params
 
+local template_grammar
 local function simple_template(tmpl, keys)
   local lpeg = require "lpeg"
 
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
+  if not template_grammar then
+    local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
+    local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
+    local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
 
-  local rep = lpeg.Cs((var + var_braced + 1)^0)
+    template_grammar = lpeg.Cs((var + var_braced + 1)^0)
+  end
 
-  return lpeg.match(rep, tmpl)
+  return lpeg.match(template_grammar, tmpl)
 end
 
 local function dkim_signing_cb(task)

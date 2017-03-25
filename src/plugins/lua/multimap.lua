@@ -343,6 +343,8 @@ local multimap_filters = {
   --content = apply_content_filter, -- Content filters are special :(
 }
 
+local multimap_grammar
+
 local function multimap_callback(task, rule)
   local pre_filter = rule['prefilter']
 
@@ -396,36 +398,39 @@ local function multimap_callback(task, rule)
   local function parse_ret(parse_rule, p_ret)
     if p_ret and type(p_ret) == 'string' then
       local lpeg = require "lpeg"
+
+      if not multimap_grammar then
       local number = {}
 
-      local digit = lpeg.R("09")
-      number.integer =
+        local digit = lpeg.R("09")
+        number.integer =
         (lpeg.S("+-") ^ -1) *
-        (digit   ^  1)
+                (digit   ^  1)
 
-      -- Matches: .6, .899, .9999873
-      number.fractional =
+        -- Matches: .6, .899, .9999873
+        number.fractional =
         (lpeg.P(".")   ) *
-        (digit ^ 1)
+                (digit ^ 1)
 
-      -- Matches: 55.97, -90.8, .9
-      number.decimal =
+        -- Matches: 55.97, -90.8, .9
+        number.decimal =
         (number.integer *              -- Integer
-        (number.fractional ^ -1)) +    -- Fractional
-        (lpeg.S("+-") * number.fractional)  -- Completely fractional number
+                (number.fractional ^ -1)) +    -- Fractional
+                (lpeg.S("+-") * number.fractional)  -- Completely fractional number
 
-      local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
-      local sym_elt = sym_start + lpeg.R("09")
-      local symbol = sym_start * sym_elt ^0
-      local symbol_cap = lpeg.Cg(symbol, 'symbol')
-      local score_cap = lpeg.Cg(number.decimal, 'score')
-      local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
-      local grammar = symscore_cap + symbol_cap + score_cap
-      local parser = lpeg.Ct(grammar)
-      local tbl = parser:match(p_ret)
+        local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
+        local sym_elt = sym_start + lpeg.R("09")
+        local symbol = sym_start * sym_elt ^0
+        local symbol_cap = lpeg.Cg(symbol, 'symbol')
+        local score_cap = lpeg.Cg(number.decimal, 'score')
+        local symscore_cap = (symbol_cap * lpeg.P(":") * score_cap)
+        local grammar = symscore_cap + symbol_cap + score_cap
+        multimap_grammar = lpeg.Ct(grammar)
+      end
+      local tbl = multimap_grammar:match(p_ret)
 
       if tbl then
-        local sym = nil
+        local sym
         local score = 1.0
 
         if tbl['symbol'] then
