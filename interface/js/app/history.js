@@ -52,7 +52,7 @@ function($, _, Humanize) {
 
         item.score = {
             "options": {
-                "sortValue": item.score,
+                "sortValue": item.score
             },
             "value": score_content
         };
@@ -87,17 +87,17 @@ function($, _, Humanize) {
             item.time = {
                 "value": unix_time_format(item.unix_time),
                 "options": {
-                    "sortValue": item.unix_time,
-                },
+                    "sortValue": item.unix_time
+                }
             };
             var scan_time = item.time_real.toFixed(3) + '/' +
                 item.time_virtual.toFixed(3);
             item.scan_time = {
                 "options": {
-                    "sortValue": item.time_real,
+                    "sortValue": item.time_real
                 },
                 "value": scan_time
-            }
+            };
             item.id = item['message-id'];
             item.rcpt_mime = item.rcpt_mime.join(",");
             items.push(item);
@@ -110,19 +110,19 @@ function($, _, Humanize) {
         var items = [];
 
         $.each(data, function (i, item) {
-            item.time = unix_time_format(item.unix_time)
+            item.time = unix_time_format(item.unix_time);
             preprocess_item(item);
             item.scan_time = {
                 "options": {
-                    "sortValue": item.scan_time,
+                    "sortValue": item.scan_time
                 },
                 "value": item.scan_time
             };
             item.time = {
                 "value": unix_time_format(item.unix_time),
                 "options": {
-                    "sortValue": item.unix_time,
-                },
+                    "sortValue": item.unix_time
+                }
             };
 
             items.push(item)
@@ -150,7 +150,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 150,
+                    "minWidth": 150
                 }
             }, {
                 "name": "sender_mime",
@@ -158,7 +158,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 150,
+                    "minWidth": 150
                 }
             }, {
                 "name": "rcpt_mime",
@@ -168,7 +168,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "word-break": "break-all",
                     "minWidth": 150,
-                    "maxWidth": 300,
+                    "maxWidth": 300
                 }
             }, {
                 "name": "subject",
@@ -176,7 +176,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 150,
+                    "minWidth": 150
                 }
             }, {
                 "name": "action",
@@ -365,7 +365,7 @@ function($, _, Humanize) {
         return func();
     }
 
-    interface.getHistory = function (rspamd, tables) {
+    interface.getHistory = function (rspamd, tables, neighbours, checked_server) {
         FooTable.actionFilter = FooTable.Filtering.extend({
         construct : function(instance) {
             this._super(instance);
@@ -416,163 +416,193 @@ function($, _, Humanize) {
         }
         });
 
-        $.ajax({
-            dataType: 'json',
-            url: 'history',
-            jsonp: false,
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
-            },
-            error: function () {
-                rspamd.alertMessage('alert-error', 'Cannot receive history');
-            },
-            success: function (data) {
-                var items = process_history_data(data);
-                ft.history = FooTable.init("#historyTable", {
-                    "columns": get_history_columns(data),
-                    "rows": items,
-                    "paging": {
-                      "enabled": true,
-                      "limit": 5,
-                      "size": 25
+        if (checked_server === "All SERVERS") {
+            rspamd.queryNeighbours("history", function (req_data) {
+                var neighbours_data = req_data
+                    .filter(function (d) { return d.status }) // filter out unavailable neighbours
+                    .map(function (d){ return d.data; });
+                if (neighbours_data.length > 0) {
+                    var data = {};
+                    data.rows = neighbours_data.map(function(e) {return e.rows;});
+                    data.version = neighbours_data[0].version;
+
+                    var items = process_history_data(data);
+                    ft.history = FooTable.init("#historyTable", {
+                        "columns": get_history_columns(data),
+                        "rows": items,
+                        "paging": {
+                            "enabled": true,
+                            "limit": 5,
+                            "size": 25
+                        },
+                        "filtering": {
+                            "enabled": true,
+                            "position": "left"
+                        },
+                        "sorting": {
+                            "enabled": true
+                        },
+                        components: {
+                            filtering: FooTable.actionFilter
+                        }
+                    });
+                }
+
+            });
+        }
+        else {
+            $.ajax({
+                dataType: 'json',
+                url: neighbours[checked_server].url + 'history',
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', rspamd.getPassword());
+                },
+                error: function () {
+                    rspamd.alertMessage('alert-error', 'Cannot receive history');
+                },
+                success: function (data) {
+                    var items = process_history_data(data);
+                    ft.history = FooTable.init("#historyTable", {
+                        "columns": get_history_columns(data),
+                        "rows": items,
+                        "paging": {
+                            "enabled": true,
+                            "limit": 5,
+                            "size": 25
+                        },
+                        "filtering": {
+                            "enabled": true,
+                            "position": "left"
+                        },
+                        "sorting": {
+                            "enabled": true
+                        },
+                        components: {
+                            filtering: FooTable.actionFilter
+                        }
+                    });
+                }
+            });
+        }
+        $('#updateHistory').off('click');
+        $('#updateHistory').on('click', function (e) {
+            e.preventDefault();
+            interface.getHistory(rspamd, tables);
+        });
+
+        // @reset history log
+        $('#resetHistory').off('click');
+        $('#resetHistory').on('click', function (e) {
+            e.preventDefault();
+            if (!confirm("Are you sure you want to reset history log?")) {
+                return;
+            }
+            if (ft.history) {
+                ft.history.destroy();
+                ft.history = undefined;
+            }
+            if (ft.errors) {
+                ft.errors.destroy();
+                ft.errors = undefined;
+            }
+            if (checked_server === "All SERVERS") {
+                rspamd.queryNeighbours("errors", function (data) {
+                    interface.getHistory(rspamd, tables, neighbours, checked_server);
+                    interface.getErrors(rspamd, tables, neighbours, checked_server);
+                });
+            }
+            else {
+                $.ajax({
+                    dataType: 'json',
+                    type: 'GET',
+                    jsonp: false,
+                    url: neighbours[checked_server].url + 'historyreset',
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader('Password', rspamd.getPassword());
                     },
-                    "filtering": {
-                      "enabled": true,
-                      "position": "left"
+                    success: function () {
+                        interface.getHistory(rspamd, tables, neighbours, checked_server);
+                        interface.getErrors(rspamd, tables, neighbours, checked_server);
                     },
-                    "sorting": {
-                      "enabled": true
-                    },
-                    components: {
-                      filtering: FooTable.actionFilter
+                    error: function (data) {
+                        rspamd.alertMessage('alert-modal alert-error', data.statusText);
                     }
                 });
             }
         });
     };
 
-    interface.getErrors = function(rspamd, tables) {
+    function drawErrorsTable(data) {
+        var items = [];
+        $.each(data, function (i, item) {
+            items.push(
+                item.ts = unix_time_format(item.ts)
+            );
+        });
+        ft.errors = FooTable.init("#errorsLog", {
+            "columns": [
+                {"sorted": true,"direction": "DESC","name":"ts","title":"Time","style":{"font-size":"11px","width":300,"maxWidth":300}},
+                {"name":"type","title":"Worker type","breakpoints":"xs sm","style":{"font-size":"11px","width":150,"maxWidth":150}},
+                {"name":"pid","title":"PID","breakpoints":"xs sm","style":{"font-size":"11px","width":110,"maxWidth":110}},
+                {"name":"module","title":"Module","style":{"font-size":"11px"}},
+                {"name":"id","title":"Internal ID","style":{"font-size":"11px"}},
+                {"name":"message","title":"Message","breakpoints":"xs sm","style":{"font-size":"11px"}},
+            ],
+            "rows": data,
+            "paging": {
+                "enabled": true,
+                "limit": 5,
+                "size": 25
+            },
+            "filtering": {
+                "enabled": true,
+                "position": "left"
+            },
+            "sorting": {
+                "enabled": true
+            }
+        });
+    }
+
+    interface.getErrors = function(rspamd, tables, neighbours, checked_server) {
         if (rspamd.read_only) return;
 
-        var items = [];
-        $.ajax({
-            dataType: 'json',
-            url: 'errors',
-            jsonp: false,
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
-            },
-            error: function () {
-                rspamd.alertMessage('alert-error', 'Cannot receive errors');
-            },
-            success: function (data) {
-              $.each(data, function (i, item) {
-                items.push(
-                  item.ts = unix_time_format(item.ts)
-                );
-              });
-              ft.errors = FooTable.init("#errorsLog", {
-                "columns": [
-                  {"sorted": true,"direction": "DESC","name":"ts","title":"Time","style":{"font-size":"11px","width":300,"maxWidth":300}},
-                  {"name":"type","title":"Worker type","breakpoints":"xs sm","style":{"font-size":"11px","width":150,"maxWidth":150}},
-                  {"name":"pid","title":"PID","breakpoints":"xs sm","style":{"font-size":"11px","width":110,"maxWidth":110}},
-                  {"name":"module","title":"Module","style":{"font-size":"11px"}},
-                  {"name":"id","title":"Internal ID","style":{"font-size":"11px"}},
-                  {"name":"message","title":"Message","breakpoints":"xs sm","style":{"font-size":"11px"}},
-                ],
-                "rows": data,
-                "paging": {
-                  "enabled": true,
-                  "limit": 5,
-                  "size": 25
+        if (checked_server !== "All SERVERS") {
+            $.ajax({
+                dataType: 'json',
+                url: neighbours[checked_server].url + 'errors',
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', rspamd.getPassword());
                 },
-                "filtering": {
-                  "enabled": true,
-                  "position": "left"
+                error: function () {
+                    rspamd.alertMessage('alert-error', 'Cannot receive errors');
                 },
-                "sorting": {
-                  "enabled": true
+                success: function (data) {
+                    drawErrorsTable(data);
                 }
-              });
-            }
+            });
+        } else {
+            rspamd.queryNeighbours("errors", function (req_data) {
+                var neighbours_data = req_data
+                    .filter(function (d) {
+                        return d.status
+                    }) // filter out unavailable neighbours
+                    .map(function (d) {
+                        return d.data;
+                    });
+                drawErrorsTable([].concat.apply([], neighbours_data));
+            });
+        }
+        $('#updateErrors').off('click');
+        $('#updateErrors').on('click', function (e) {
+            e.preventDefault();
+            interface.getErrors(rspamd, tables, neighbours, checked_server);
         });
     };
 
     interface.setup = function(rspamd, tables) {
-        $('#updateHistory').on('click', function (e) {
-          e.preventDefault();
-          $.ajax({
-              dataType: 'json',
-              type: 'GET',
-              jsonp: false,
-              url: 'history',
-              beforeSend: function (xhr) {
-                  xhr.setRequestHeader('Password', rspamd.getPassword());
-              },
-              success: function (data) {
-                var items = process_history_data(data);
-                ft.history.rows.load(items);
-              },
-              error: function (data) {
-                  rspamd.alertMessage('alert-modal alert-error', data.statusText);
-              }
-          });
-        });
-        $('#updateErrors').on('click', function (e) {
-          e.preventDefault();
-          var items = [];
-          $.ajax({
-              dataType: 'json',
-              type: 'GET',
-              jsonp: false,
-              url: 'errors',
-              beforeSend: function (xhr) {
-                  xhr.setRequestHeader('Password', rspamd.getPassword());
-              },
-              success: function (data) {
-                $.each(data, function (i, item) {
-                  items.push(
-                    item.ts = unix_time_format(item.ts)
-                  );
-                });
-                ft.errors.rows.load(data);
-              },
-              error: function (data) {
-                  rspamd.alertMessage('alert-modal alert-error', data.statusText);
-              }
-          });
-        });
-        // @reset history log
-        $('#resetHistory').on('click', function (e) {
-          e.preventDefault();
-          if (!confirm("Are you sure you want to reset history log?")) {
-              return;
-          }
-          if (ft.history) {
-              ft.history.destroy();
-              ft.history = undefined;
-          }
-          if (ft.errors) {
-              ft.errors.destroy();
-              ft.errors = undefined;
-          }
-          $.ajax({
-              dataType: 'json',
-              type: 'GET',
-              jsonp: false,
-              url: 'historyreset',
-              beforeSend: function (xhr) {
-                  xhr.setRequestHeader('Password', rspamd.getPassword());
-              },
-              success: function () {
-                  interface.getHistory(rspamd, tables);
-                  interface.getErrors(rspamd, tables);
-              },
-              error: function (data) {
-                  rspamd.alertMessage('alert-modal alert-error', data.statusText);
-              }
-          });
-        });
     };
     return interface;
 });

@@ -200,7 +200,7 @@ function($, D3Evolution, unused) {
             rspamd.queryNeighbours("graph", function (req_data) {
                 var neighbours_data = req_data
                     .filter(function (d) { return d.status }) // filter out unavailable neighbours
-                    .map(function (d){ return d.data; })
+                    .map(function (d){ return d.data; });
 
                 if (neighbours_data.length > 1) {
                     neighbours_data.reduce(function (res, curr) {

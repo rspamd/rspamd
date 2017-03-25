@@ -111,8 +111,8 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                     tab_symbols.getSymbols(interface, tables, checked_server);
                     break;
                 case "#history_nav":
-                    tab_history.getHistory(interface, tables, checked_server);
-                    tab_history.getErrors(interface, tables, checked_server);
+                    tab_history.getHistory(interface, tables, neighbours, checked_server);
+                    tab_history.getErrors(interface, tables, neighbours, checked_server);
                     break;
                 case "#disconnect":
                     disconnect();
