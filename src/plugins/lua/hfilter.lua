@@ -127,7 +127,8 @@ local function check_regexp(str, regexp_text)
 end
 
 local function check_fqdn(domain)
-  if check_regexp(domain, '(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z0-9-]{2,63}\\.?$)') then
+  if check_regexp(domain,
+      '(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z0-9-]{2,63}\\.?$)') then
     return true
   end
   return false
@@ -147,7 +148,8 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
         rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
     end
     if not results then
-      task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0)
+      task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0,
+        to_resolve)
     else
       for _,mx in pairs(results) do
         if mx['name'] then
@@ -161,7 +163,8 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
             end
 
             if failed_mx_address >= 2 then
-              task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX', 1.0)
+              task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX',
+                1.0, mx['name'])
             end
           end
 
@@ -198,7 +201,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
             return true
           end
         end
-        task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0)
+        task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0, host)
       end
       task:get_resolver():resolve_mx({
         task = task,
@@ -234,7 +237,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       })
     end
   else
-    task:insert_result('HFILTER_' .. symbol_suffix .. '_NOT_FQDN', 1.0)
+    task:insert_result('HFILTER_' .. symbol_suffix .. '_NOT_FQDN', 1.0, host)
   end
 
   return true
@@ -272,10 +275,11 @@ local function hfilter(task)
             if rel > 0.8 then
               local sc = (rel - 0.8) * 5.0
               if sc > 1.0 then sc = 1.0 end
-              task:insert_result('HFILTER_URL_ONLY', sc)
+              task:insert_result('HFILTER_URL_ONLY', sc, tostring(sc))
               local lines =  html_text_part:get_lines_count()
               if lines > 0 and lines < 2 then
-                task:insert_result('HFILTER_URL_ONELINE', 1.00)
+                task:insert_result('HFILTER_URL_ONELINE', 1.00,
+                  string.format('html:%d:%d', sc, lines))
               end
             end
           end
@@ -288,10 +292,12 @@ local function hfilter(task)
         if plen > 0 and url_len > 0 then
           local rel = url_len / plen
           if rel > 0.8 then
-            task:insert_result('HFILTER_URL_ONLY', (rel - 0.8) * 5.0)
+            task:insert_result('HFILTER_URL_ONLY', (rel - 0.8) * 5.0,
+              tostring(rel))
             local lines = plain_text_part:get_lines_count()
             if lines > 0 and lines < 2 then
-              task:insert_result('HFILTER_URL_ONELINE', 1.00)
+              task:insert_result('HFILTER_URL_ONELINE', 1.00,
+                string.format('plain:%d:%d', rel, lines))
             end
           end
         end
@@ -324,7 +330,8 @@ local function hfilter(task)
         local find_badip = false
         for regexp,weight in pairs(checks_hello_badip) do
           if check_regexp(helo, regexp) then
-            task:insert_result('HFILTER_HELO_BADIP', weight)
+            task:insert_result('HFILTER_HELO_BADIP', weight,
+              string.format('%s:/%s/', helo, tostring(regexp)))
             find_badip = true
             break
           end
@@ -335,7 +342,8 @@ local function hfilter(task)
         if not find_badip then
           for _,regexp in pairs(checks_hello_bareip) do
             if check_regexp(helo, regexp) then
-              task:insert_result('HFILTER_HELO_BAREIP', 1.0)
+              task:insert_result('HFILTER_HELO_BAREIP', 1.0,
+                string.format('%s:/%s/', helo, tostring(regexp)))
               find_bareip = true
               break
             end
@@ -389,9 +397,9 @@ local function hfilter(task)
 
   --Insert weight's for HELO or HOSTNAME
   if weight_helo > 0 and weight_helo >= weight_hostname then
-    task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
+    task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0, helo)
   elseif weight_hostname > 0 and weight_hostname > weight_helo then
-    task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
+    task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0, hostname)
   end
 
   -- MAILFROM checks --
@@ -411,7 +419,7 @@ local function hfilter(task)
       end
     else
       if helo and helo ~= rspamc_local_helo then
-        task:insert_result('HFILTER_FROM_BOUNCE', 1.00)
+        task:insert_result('HFILTER_FROM_BOUNCE', 1.00, helo)
         frombounce = true
       end
     end
@@ -424,7 +432,8 @@ local function hfilter(task)
       local count_rcpt = #rcpt
       if frombounce then
         if count_rcpt > 1 then
-          task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00)
+          task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00,
+            tostring(count_rcpt))
         end
       end
     end
