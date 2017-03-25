@@ -174,8 +174,8 @@ insert_metric_result (struct rspamd_task *task,
 		}
 		else {
 			if (fabs (s->score) < fabs (w) && signbit (s->score) == signbit (w)) {
-				/* Replace less weight with a bigger one */
-				diff = metric_res->score - s->score + w;
+				/* Replace less significant weight with a more significant one */
+				diff = w - s->score;
 			}
 			else {
 				diff = 0;

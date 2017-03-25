@@ -3805,6 +3805,8 @@ lua_task_set_metric_score (lua_State *L)
 	if (task && metric_name) {
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+			msg_debug_task ("set metric score from %.2f to %.2f",
+				metric_res->score, nscore);
 			metric_res->score = nscore;
 			lua_pushboolean (L, true);
 		}
