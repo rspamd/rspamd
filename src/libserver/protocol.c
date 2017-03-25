@@ -1341,7 +1341,13 @@ end:
 				action = rspamd_check_action_metric (task, metric_res);
 			}
 
-			if (action <= METRIC_ACTION_NOACTION) {
+			if (action == METRIC_ACTION_SOFT_REJECT &&
+					(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
+				/* Set stat action to greylist to display greylisted messages */
+				action = METRIC_ACTION_GREYLIST;
+			}
+
+			if (action < METRIC_ACTION_MAX) {
 #ifndef HAVE_ATOMIC_BUILTINS
 				task->worker->srv->stat->actions_stat[action]++;
 #else

@@ -3239,6 +3239,7 @@ lua_task_set_flag (lua_State *L)
 		LUA_TASK_SET_FLAG (flag, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM, set);
 		LUA_TASK_SET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS, set);
+		LUA_TASK_SET_FLAG (flag, "gerylisted", RSPAMD_TASK_FLAG_GREYLISTED, set);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -3266,6 +3267,7 @@ lua_task_has_flag (lua_State *L)
 		LUA_TASK_GET_FLAG (flag, "extended_urls", RSPAMD_TASK_FLAG_EXT_URLS);
 		LUA_TASK_GET_FLAG (flag, "learn_spam", RSPAMD_TASK_FLAG_LEARN_SPAM);
 		LUA_TASK_GET_FLAG (flag, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM);
+		LUA_TASK_GET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
 		LUA_TASK_GET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS);
 
@@ -3328,6 +3330,10 @@ lua_task_get_flags (lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_LEARN_HAM:
 					lua_pushstring (L, "learn_ham");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_GREYLISTED:
+					lua_pushstring (L, "greylisted");
 					lua_rawseti (L, -2, idx++);
 					break;
 				default:

@@ -104,6 +104,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_LOCAL_CLIENT (1 << 23)
 #define RSPAMD_TASK_FLAG_COMPRESSED (1 << 24)
 #define RSPAMD_TASK_FLAG_PROFILE (1 << 25)
+#define RSPAMD_TASK_FLAG_GREYLISTED (1 << 26)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -124,7 +125,7 @@ struct rspamd_task {
 	guint processed_stages;							/**< bits of stages that are processed				*/
 	enum rspamd_command cmd;						/**< command										*/
 	gint sock;										/**< socket descriptor								*/
-	guint flags;									/**< Bit flags										*/
+	guint32 flags;									/**< Bit flags										*/
 	guint32 dns_requests;							/**< number of DNS requests per this task			*/
 	gulong message_len;								/**< Message length									*/
 	gchar *helo;									/**< helo header value								*/
