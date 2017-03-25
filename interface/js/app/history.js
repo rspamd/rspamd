@@ -137,12 +137,12 @@ function($, _, Humanize) {
                 "title": "ID",
                 "style": {
                     "font-size": "11px",
-                    "width": 300,
-                    "maxWidth": 300,
+                    "width": 200,
+                    "maxWidth": 200,
                     "overflow": "hidden",
                     "textOverflow": "ellipsis",
-                    "wordBreak": "keep-all",
-                    "whiteSpace": "nowrap"
+                    "wordBreak": "break-all",
+                    "whiteSpace": "normal"
                 }
             }, {
                 "name": "ip",
