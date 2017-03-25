@@ -378,8 +378,9 @@ local function hfilter(task)
 
   -- Check's HOSTNAME
   local weight_hostname = 0
+  local hostname = task:get_hostname()
+
   if config['hostname_enabled'] then
-    local hostname = task:get_hostname()
     if hostname then
       -- Check regexp HOSTNAME
       if hostname == 'unknown' then
