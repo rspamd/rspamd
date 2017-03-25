@@ -265,6 +265,7 @@ local function greylist_set(task)
   end
 
   local is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
+  local do_greylisting = task:get_mempool():get_variable("grey_greylisted")
   local do_greylisting_required = task:get_mempool():get_variable("grey_greylisted_required")
 
   -- Third and second level domains whitelist
