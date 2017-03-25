@@ -27,6 +27,7 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local ucl = require("ucl")
 local E = {}
+local hostname = rspamd_util.get_hostname()
 
 local function process_addr(addr)
   if addr then
@@ -86,7 +87,7 @@ local function history_save(task)
   end
 
   local data = task:get_protocol_reply{'metrics', 'basic'}
-  local prefix = settings.key_prefix
+  local prefix = settings.key_prefix .. hostname
 
   if data then
     normalise_results(data, task)
@@ -114,11 +115,12 @@ local function history_save(task)
 
   if ret then
     conn:add_cmd('LTRIM', {prefix, '0', string.format('%d', settings.nrows-1)})
+    conn:add_cmd('SADD', {settings.key_prefix, prefix})
   end
 end
 
 local function handle_history_request(task, conn, from, to, reset)
-  local prefix = settings.key_prefix
+  local prefix = settings.key_prefix .. hostname
   if settings.compress then
     -- Distinguish between compressed and non-compressed options
     prefix = prefix .. '_zst'
@@ -163,7 +165,7 @@ local function handle_history_request(task, conn, from, to, reset)
         end
         conn:send_ucl(reply)
       else
-       rspamd_logger.errx(task, 'got error %s when getting history: %s',
+        rspamd_logger.errx(task, 'got error %s when getting history: %s',
           err)
         conn:send_error(504, '{"error": "' .. err .. '"}')
       end
