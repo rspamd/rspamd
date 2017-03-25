@@ -24,8 +24,6 @@
 #include "unix-std.h"
 #include <math.h>
 
-/* Max line size */
-#define OUTBUFSIZ BUFSIZ
 /*
  * Just check if the passed message is spam or not and reply as
  * described below
@@ -57,34 +55,16 @@
  * Process this message as described above and return modified message
  */
 #define MSG_CMD_PROCESS "process"
-
-/*
- * Learn specified statfile using message
- */
-#define MSG_CMD_LEARN "learn"
-
-/*
- * spamassassin greeting:
- */
-#define SPAMC_GREETING "SPAMC"
-/*
- * rspamd greeting:
- */
-#define RSPAMC_GREETING "RSPAMC"
 /*
  * Headers
  */
-#define CONTENT_LENGTH_HEADER "Content-length"
 #define HELO_HEADER "Helo"
 #define FROM_HEADER "From"
 #define IP_ADDR_HEADER "IP"
-#define NRCPT_HEADER "Recipient-Number"
 #define RCPT_HEADER "Rcpt"
 #define SUBJECT_HEADER "Subject"
 #define SETTINGS_ID_HEADER "Settings-ID"
-#define STATFILE_HEADER "Statfile"
 #define QUEUE_ID_HEADER "Queue-ID"
-#define ERROR_HEADER "Error"
 #define USER_HEADER "User"
 #define URLS_HEADER "URL-Format"
 #define PASS_HEADER "Pass"
