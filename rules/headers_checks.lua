@@ -213,7 +213,7 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
         if (util.strequal_caseless(from[1].addr, rt[1].addr)) then
           task:insert_result('REPLYTO_ADDR_EQ_FROM', 1.0)
         elseif from[1].domain and rt[1].domain then
-          if (util.streqal_caseless(from[1].domain, rt[1].domain)) then
+          if (util.strequal_caseless(from[1].domain, rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
           else
             task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
