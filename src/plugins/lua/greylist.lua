@@ -206,7 +206,7 @@ local function greylist_check(task)
         else
           task:set_pre_result('soft reject', settings['message'])
         end
-        task:set_flags('greylisted')
+        task:set_flag('greylisted')
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
@@ -334,7 +334,7 @@ local function greylist_set(task)
       'new record')
     if not qid then return end
     task:set_pre_result(settings['action'], settings['message'])
-    task:set_flags('greylisted')
+    task:set_flag('greylisted')
     -- Create new record
     ret,conn,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -374,7 +374,7 @@ local function greylist_set(task)
       task:set_metric_action('default', settings['action'])
       if not qid then return end
       task:set_pre_result(settings['action'], settings['message'])
-      task:set_flags('greylisted')
+      task:set_flag('greylisted')
     else
       task:insert_result(settings['symbol'], 0.0, 'greylisted', 'passed')
     end
