@@ -190,7 +190,7 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 		const ucl_object_t *res, const gchar *script)
 {
 	lua_State *L = pL;
-	gint err_idx, cb_idx, i, ret;
+	gint err_idx, i, ret;
 	GString *tb;
 
 	g_assert (script != NULL);
@@ -203,14 +203,13 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 		return FALSE;
 	}
 	else {
-		if (lua_type (L, -1) == LUA_TFUNCTION) {
-			cb_idx = luaL_ref (L, LUA_REGISTRYINDEX);
-		}
-		else {
+		if (lua_type (L, -1) != LUA_TFUNCTION) {
 			msg_err ("lua script must return "
 					"function and not %s",
 					lua_typename (L,
 							lua_type (L, -1)));
+			lua_settop (L, 0);
+
 			return FALSE;
 		}
 	}
@@ -219,7 +218,7 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	err_idx = lua_gettop (L);
 
 	/* Push function */
-	lua_rawgeti (L, LUA_REGISTRYINDEX, cb_idx);
+	lua_pushvalue (L, -2);
 
 	/* Push argv */
 	lua_newtable (L);
@@ -240,15 +239,13 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 			g_string_free (tb, TRUE);
 		}
 
-		lua_pop (L, 2);
+		lua_settop (L, 0);
 
 		return FALSE;
 	}
 
 	/* error function */
-	lua_pop (L, 1);
-
-	luaL_unref (L, LUA_REGISTRYINDEX, cb_idx);
+	lua_settop (L, 0);
 
 	return TRUE;
 }

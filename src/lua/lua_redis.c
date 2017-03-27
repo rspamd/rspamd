@@ -480,11 +480,11 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 
 		args = g_slice_alloc ((top + 1) * sizeof (gchar *));
 		arglens = g_slice_alloc ((top + 1) * sizeof (gsize));
-		lua_pushnil (L);
 		arglens[0] = strlen (cmd);
 		args[0] = g_slice_alloc (arglens[0]);
 		memcpy (args[0], cmd, arglens[0]);
 		top = 1;
+		lua_pushnil (L);
 
 		while (lua_next (L, -2) != 0) {
 			if (lua_isstring (L, -1)) {
@@ -518,7 +518,6 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 
 		args = g_slice_alloc (sizeof (gchar *));
 		arglens = g_slice_alloc (sizeof (gsize));
-		lua_pushnil (L);
 		arglens[0] = strlen (cmd);
 		args[0] = g_slice_alloc (arglens[0]);
 		memcpy (args[0], cmd, arglens[0]);
@@ -1226,7 +1225,7 @@ lua_redis_add_cmd (lua_State *L)
 		}
 	}
 
-	lua_pushboolean (L, 1);
+	lua_pushboolean (L, true);
 
 	return 1;
 }
@@ -1262,6 +1261,10 @@ lua_redis_exec (lua_State *L)
 			return 0;
 		}
 		else {
+			if (!lua_checkstack (L, (ctx->cmds_pending * 2) + 1)) {
+				return luaL_error (L, "cannot resiz stack to fit %d commands",
+					ctx->cmds_pending);
+			}
 			for (i = 0; i < ctx->cmds_pending; i ++) {
 				ret = redisGetReply (ctx->d.sync, (void **)&r);
 
@@ -1273,7 +1276,7 @@ lua_redis_exec (lua_State *L)
 					}
 					else {
 						lua_pushboolean (L, FALSE);
-						lua_pushstring (L, r->str);
+						lua_pushlstring (L, r->str, r->len);
 					}
 					freeReplyObject (r);
 				}

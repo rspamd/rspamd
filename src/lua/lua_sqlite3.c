@@ -266,7 +266,9 @@ lua_sqlite3_next_row (lua_State *L)
 		}
 	}
 
-	return 0;
+	lua_pushnil (L);
+
+	return 1;
 }
 
 /***
@@ -294,7 +296,7 @@ lua_sqlite3_rows (lua_State *L)
 		if (sqlite3_prepare_v2 (db, query, -1, &stmt, NULL) != SQLITE_OK) {
 			msg_err ("cannot prepare query %s: %s", query, sqlite3_errmsg (db));
 			lua_pushstring (L, sqlite3_errmsg (db));
-			lua_error (L);
+			return lua_error (L);
 		}
 		else {
 			top = lua_gettop (L);
