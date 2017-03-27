@@ -102,7 +102,7 @@ local function graphite_push(kwargs)
   else
     stamp = math.floor(util.get_time())
   end
-  local metrics_str = ''
+  local metrics_str = {}
   for _, v in ipairs(settings['metrics']) do
     local mvalue
     local mname = string.format('%s.%s', settings['metric_prefix'], v:gsub(' ', '_'))
@@ -112,9 +112,11 @@ local function graphite_push(kwargs)
     elseif #split == 2 then
       mvalue = kwargs['stats'][split[1]][split[2]]
     end
-    metrics_str = metrics_str .. string.format('%s %s %s\n', mname, mvalue, stamp)
+    metrics_str:insert(string.format('%s %s %s', mname, mvalue, stamp))
   end
-  metrics_str = metrics_str .. '\n'
+
+  metrics_str = metrics_str:concat('\n')
+
   tcp.request({
     ev_base = kwargs['ev_base'],
     pool = pool,
