@@ -125,7 +125,7 @@ local function graphite_push(kwargs)
     timeout = settings['timeout'],
     read = false,
     data = {
-      {metrics_str, '\n'},
+      metrics_str, '\n',
     },
     callback = (function (err)
       if err then
