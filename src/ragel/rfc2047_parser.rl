@@ -43,12 +43,12 @@
   token = (graph - especials)+;
   charset = token;
   encoding = "Q" | "q" | "B" | "b";
-  encoded_text = (print - ("?" | " "))+;
+  encoded_text = (print - ("?"))+;
   encoded_word = "=?" charset >Start_Charset %End_Charset
     ("*" language)? "?"
     encoding %End_Encoding "?"
     encoded_text >Start_Encoded %End_Encoded
-    "?=";
+    "?="?;
   main := encoded_word;
 }%%
 
@@ -64,7 +64,8 @@ rspamd_rfc2047_parser (const gchar *in, gsize len, gint *pencoding,
 {
   const char *p = in, *pe = in + len,
     *encoded_start = NULL, *encoded_end = NULL,
-    *charset_start = NULL, *charset_end = NULL;
+    *charset_start = NULL, *charset_end = NULL,
+    *eof = in + len;
   gint encoding = RSPAMD_RFC2047_QP, cs = 0;
 
   %% write init;
