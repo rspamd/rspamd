@@ -423,7 +423,8 @@ function($, _, Humanize) {
                     .map(function (d){ return d.data; });
                 if (neighbours_data.length > 0) {
                     var data = {};
-                    data.rows = neighbours_data.map(function(e) {return e.rows;});
+                    data.rows = [].concat.apply([], neighbours_data
+                        .map(function(e) {return e.rows;}));
                     data.version = neighbours_data[0].version;
 
                     var items = process_history_data(data);
@@ -488,7 +489,7 @@ function($, _, Humanize) {
         $('#updateHistory').off('click');
         $('#updateHistory').on('click', function (e) {
             e.preventDefault();
-            interface.getHistory(rspamd, tables);
+            interface.getHistory(rspamd, tables, neighbours, checked_server);
         });
 
         // @reset history log
