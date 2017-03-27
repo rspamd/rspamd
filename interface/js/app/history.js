@@ -78,7 +78,10 @@ function($, _, Humanize) {
                }
                item.symbols[key].str = str;
             });
-            item.symbols = Object.values(item.symbols).
+            item.symbols = Object.keys(item.symbols).
+                map(function(key) {
+                    return item.symbols[key];
+                }).
                 sort(function(e1, e2) {
                     return Math.abs(e1.score) < Math.abs(e2.score);
                 }).
