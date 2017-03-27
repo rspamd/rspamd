@@ -239,17 +239,12 @@ local function phishing_map(mapname, phishmap, id)
   end
 end
 
-local lpeg_grammar
 local function rspamd_str_split_fun(s, sep, func)
   local lpeg = require "lpeg"
-
-  if not lpeg_grammar then
-    sep = lpeg.P(sep)
-    local elem = lpeg.C((1 - sep)^0 / func)
-    local p = lpeg.C(elem * (sep * elem)^0)   -- make a table capture
-    lpeg_grammar = p
-  end
-  return lpeg.match(lpeg_grammar, s)
+  sep = lpeg.P(sep)
+  local elem = lpeg.C((1 - sep)^0 / func)
+  local p = lpeg.C(elem * (sep * elem)^0)   -- make a table capture
+  return p:match(s)
 end
 
 local function insert_url_from_string(pool, tbl, str, data)
