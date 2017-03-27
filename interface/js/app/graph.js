@@ -64,7 +64,7 @@ function($, D3Evolution, unused) {
                 label: "Rejected",
                 color: "#FF0000"
             }, {
-                label: "Temporary rejected",
+                label: "Temporarily rejected",
                 color: "#BF8040"
             }, {
                 label: "Subject rewritten",

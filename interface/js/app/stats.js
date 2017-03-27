@@ -146,7 +146,7 @@ function($, d3pie, Humanize) {
                 "value" : data.clean
             }, {
                 "color" : "#BF8040",
-                "label" : "Temporary rejected",
+                "label" : "Temporarily rejected",
                 "data" : data.soft_reject,
                 "value" : data.soft_reject
             }, {

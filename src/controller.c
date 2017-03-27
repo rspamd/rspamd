@@ -1117,7 +1117,7 @@ rspamd_controller_handle_pie_chart (
 	ucl_array_append (top, rspamd_controller_pie_element (
 			METRIC_ACTION_NOACTION, "Clean", data[0]));
 	ucl_array_append (top, rspamd_controller_pie_element (
-			METRIC_ACTION_SOFT_REJECT, "Temporary rejected", data[1]));
+			METRIC_ACTION_SOFT_REJECT, "Temporarily rejected", data[1]));
 	ucl_array_append (top, rspamd_controller_pie_element (
 			METRIC_ACTION_ADD_HEADER, "Probable spam", data[2]));
 	ucl_array_append (top, rspamd_controller_pie_element (
