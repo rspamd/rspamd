@@ -112,10 +112,10 @@ local function graphite_push(kwargs)
     elseif #split == 2 then
       mvalue = kwargs['stats'][split[1]][split[2]]
     end
-    metrics_str:insert(string.format('%s %s %s', mname, mvalue, stamp))
+    table.insert(metrics_str, string.format('%s %s %s', mname, mvalue, stamp))
   end
 
-  metrics_str = metrics_str:concat('\n')
+  metrics_str = table.concat(metrics_str, '\n')
 
   tcp.request({
     ev_base = kwargs['ev_base'],
@@ -125,7 +125,7 @@ local function graphite_push(kwargs)
     timeout = settings['timeout'],
     read = false,
     data = {
-      metrics_str,
+      {metrics_str, '\n'},
     },
     callback = (function (err)
       if err then
