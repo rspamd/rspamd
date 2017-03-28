@@ -196,6 +196,12 @@ LUA_FUNCTION_DEF (task, get_request_header);
  */
 LUA_FUNCTION_DEF (task, set_request_header);
 /***
+ * @method task:get_subject()
+ * Returns task subject (either from the protocol override or from a header)
+ * @return {string} value of a subject (decoded)
+ */
+LUA_FUNCTION_DEF (task, get_subject);
+/***
  * @method task:get_header(name[, case_sensitive])
  * Get decoded value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter.
@@ -817,6 +823,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_from_ip),
 	LUA_INTERFACE_DEF (task, get_from_ip_num),
 	LUA_INTERFACE_DEF (task, get_client_ip),
+	LUA_INTERFACE_DEF (task, get_subject),
 	LUA_INTERFACE_DEF (task, get_helo),
 	LUA_INTERFACE_DEF (task, set_helo),
 	LUA_INTERFACE_DEF (task, get_hostname),
@@ -2573,6 +2580,27 @@ lua_task_get_helo (lua_State *L)
 	if (task) {
 		if (task->helo != NULL) {
 			lua_pushstring (L, task->helo);
+			return 1;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_subject (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		if (task->subject != NULL) {
+			lua_pushstring (L, task->subject);
 			return 1;
 		}
 		else {
