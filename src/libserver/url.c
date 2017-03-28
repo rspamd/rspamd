@@ -2178,11 +2178,8 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 }
 
 gboolean
-rspamd_url_find (rspamd_mempool_t *pool,
-		const gchar *begin,
-		gsize len,
-		gchar **url_str,
-		gboolean is_html)
+rspamd_url_find (rspamd_mempool_t *pool, const gchar *begin, gsize len,
+		gchar **url_str, gboolean is_html, goffset *url_pos)
 {
 	struct url_callback_data cb;
 	gint ret;
@@ -2199,6 +2196,10 @@ rspamd_url_find (rspamd_mempool_t *pool,
 	if (ret) {
 		if (url_str) {
 			*url_str = cb.url_str;
+		}
+
+		if (url_pos) {
+			*url_pos = cb.start - begin;
 		}
 
 		return TRUE;
@@ -2380,11 +2381,8 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
-		if (rspamd_url_find (task->task_pool,
-				url->query,
-				url->querylen,
-				&url_str,
-				IS_PART_HTML (cbd->part))) {
+		if (rspamd_url_find (task->task_pool, url->query, url->querylen,
+				&url_str, IS_PART_HTML (cbd->part), NULL)) {
 
 			query_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct rspamd_url));
@@ -2515,11 +2513,8 @@ rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
 
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
-		if (rspamd_url_find (task->task_pool,
-				url->query,
-				url->querylen,
-				&url_str,
-				FALSE)) {
+		if (rspamd_url_find (task->task_pool, url->query, url->querylen,
+				&url_str, FALSE, NULL)) {
 
 			query_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct rspamd_url));

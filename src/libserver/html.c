@@ -764,6 +764,55 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 	return (t - s);
 }
 
+static gboolean
+rspamd_url_is_subdomain (rspamd_ftok_t *t1, rspamd_ftok_t *t2)
+{
+	const gchar *p1, *p2;
+
+	p1 = t1->begin + t1->len - 1;
+	p2 = t2->begin + t2->len - 1;
+
+	/* Skip trailing dots */
+	while (p1 > t1->begin) {
+		if (*p1 != '.') {
+			break;
+		}
+
+		p1 --;
+	}
+
+	while (p2 > t2->begin) {
+		if (*p2 != '.') {
+			break;
+		}
+
+		p2 --;
+	}
+
+	while (p1 > t1->begin && p2 > t2->begin) {
+		if (*p1 != *p2) {
+			break;
+		}
+
+		p1 --;
+		p2 --;
+	}
+
+	if (p2 == t2->begin) {
+		/* p2 can be subdomain of p1 if *p1 is '.' */
+		if (p1 != t1->begin && *(p1 - 1) == '.') {
+			return TRUE;
+		}
+	}
+	else if (p1 == t1->begin) {
+		if (p2 != t2->begin && *(p2 - 1) == '.') {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 static void
 rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	struct rspamd_url *href_url,
@@ -775,8 +824,9 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	struct rspamd_url *text_url;
 	rspamd_ftok_t phished_tld, disp_tok, href_tok;
 	gint rc;
+	goffset url_pos;
 	gchar *url_str = NULL, *idn_hbuf;
-	const guchar *end = url_text + len;
+	const guchar *end = url_text + len, *p;
 #if U_ICU_VERSION_MAJOR_NUM >= 46
 	static UIDNA *udn;
 	UErrorCode uc_err = U_ZERO_ERROR;
@@ -798,8 +848,25 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 		url_text ++;
 	}
 
-	if (rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE) &&
+	if (rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE,
+			&url_pos) &&
 			url_str != NULL) {
+		if (url_pos > 0) {
+			/*
+			 * We have some url at some offset, so we need to check what is
+			 * at the start of the text
+			 */
+			p = url_text;
+
+			while (p < url_text + url_pos) {
+				if (!g_ascii_isspace (*p)) {
+					*url_found = FALSE;
+					return;
+				}
+
+				p++;
+			}
+		}
 		text_url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool);
 
@@ -892,14 +959,18 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 				}
 #endif
 				if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
-					href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
-					href_url->phished_url = text_url;
-					phished_tld.begin = href_tok.begin;
-					phished_tld.len = href_tok.len;
-					rspamd_url_add_tag (text_url, "phishing",
-							rspamd_mempool_ftokdup (pool, &phished_tld),
-							pool);
-					text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+					/* Check if one url is a subdomain for another */
+
+					if (!rspamd_url_is_subdomain (&disp_tok, &href_tok)) {
+						href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
+						href_url->phished_url = text_url;
+						phished_tld.begin = href_tok.begin;
+						phished_tld.len = href_tok.len;
+						rspamd_url_add_tag (text_url, "phishing",
+								rspamd_mempool_ftokdup (pool, &phished_tld),
+								pool);
+						text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+					}
 				}
 			}
 
@@ -1480,7 +1551,8 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE)) {
+		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE,
+				NULL)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));
 

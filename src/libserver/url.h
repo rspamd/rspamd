@@ -111,11 +111,8 @@ enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean rspamd_url_find (rspamd_mempool_t *pool,
-	const gchar *begin,
-	gsize len,
-	gchar **url_str,
-	gboolean is_html);
+gboolean rspamd_url_find (rspamd_mempool_t *pool, const gchar *begin, gsize len,
+		gchar **url_str, gboolean is_html, goffset *url_pos);
 /*
  * Return text representation of url parsing error
  */
