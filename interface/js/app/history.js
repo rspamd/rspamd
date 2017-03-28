@@ -179,6 +179,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
+                    "word-break": "break-all",
                     "minWidth": 150
                 }
             }, {
