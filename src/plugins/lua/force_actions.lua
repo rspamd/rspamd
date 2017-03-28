@@ -72,7 +72,7 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor)
       else
         task:set_pre_result(act)
       end
-      return true
+      return true, act
     end
 
   end, e:atoms()
