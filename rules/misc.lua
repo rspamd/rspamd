@@ -349,6 +349,31 @@ rspamd_config.OMOGRAPH_URL = {
   description = 'Url contains both latin and non-latin characters'
 }
 
+rspamd_config.URL_IN_SUBJECT = {
+  callback = function(task)
+    local urls = task:get_urls()
+
+    if urls then
+      for _,u in ipairs(urls) do
+        if u:is_subject() then
+          local subject = task:get_subject()
+
+          if subject then
+            if tostring(u) == subject then
+              return true,1.0,u:get_host()
+            end
+          end
+          return true,0.5,u:get_host()
+        end
+      end
+    end
+
+    return false
+  end,
+  score = 2.0,
+  description = 'Url found in Subject'
+}
+
 local aliases_id = rspamd_config:register_symbol{
   type = 'prefilter',
   name = 'EMAIL_PLUS_ALIASES',
