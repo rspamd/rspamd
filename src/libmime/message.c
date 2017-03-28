@@ -632,8 +632,6 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
-	GPtrArray *hdrs;
-	struct rspamd_mime_header *rh;
 	struct rspamd_mime_text_part *p1, *p2;
 	struct received_header *recv, *trecv;
 	const gchar *p;
@@ -824,13 +822,11 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	/* Parse urls inside Subject header */
-	hdrs = rspamd_message_get_header_array (task, "Subject", FALSE);
-
-	PTR_ARRAY_FOREACH (hdrs, i, rh) {
-		p = rh->decoded;
+	if (task->subject) {
+		p = task->subject;
 		len = strlen (p);
 		rspamd_url_find_multiple (task->task_pool, p, len, FALSE, NULL,
-				rspamd_url_task_callback, task);
+				rspamd_url_task_subject_callback, task);
 	}
 
 	/* Calculate distance for 2-parts messages */

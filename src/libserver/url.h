@@ -16,6 +16,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_REDIRECTED = 1 << 3,
 	RSPAMD_URL_FLAG_HTML_DISPLAYED = 1 << 4,
 	RSPAMD_URL_FLAG_FROM_TEXT = 1 << 5,
+	RSPAMD_URL_FLAG_SUBJECT = 1 << 6,
 };
 
 struct rspamd_url_tag {
@@ -163,7 +164,8 @@ void rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
  * @param end_offset
  * @param ud
  */
-void rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
+void rspamd_url_task_subject_callback (struct rspamd_url *url,
+		gsize start_offset,
 		gsize end_offset, gpointer ud);
 
 /**

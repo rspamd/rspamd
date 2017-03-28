@@ -53,6 +53,7 @@ LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, is_redirected);
 LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, is_html_displayed);
+LUA_FUNCTION_DEF (url, is_subject);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, get_tag);
 LUA_FUNCTION_DEF (url, get_tags);
@@ -76,6 +77,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, is_redirected),
 	LUA_INTERFACE_DEF (url, is_obscured),
 	LUA_INTERFACE_DEF (url, is_html_displayed),
+	LUA_INTERFACE_DEF (url, is_subject),
 	LUA_INTERFACE_DEF (url, get_phished),
 	LUA_INTERFACE_DEF (url, get_tag),
 	LUA_INTERFACE_DEF (url, get_tags),
@@ -331,6 +333,26 @@ lua_url_is_html_displayed (lua_State *L)
 
 	if (url != NULL) {
 		lua_pushboolean (L, url->url->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:is_subject()
+ * Check whether URL is found in subject
+ * @return {boolean} `true` if URL is found in subject
+ */
+static gint
+lua_url_is_subject (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL) {
+		lua_pushboolean (L, url->url->flags & RSPAMD_URL_FLAG_SUBJECT);
 	}
 	else {
 		lua_pushnil (L);

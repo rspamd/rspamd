@@ -2486,7 +2486,7 @@ rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
 
 
 void
-rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
+rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud)
 {
 	struct rspamd_task *task = ud;
@@ -2495,7 +2495,7 @@ rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
 	gint rc;
 
 	/* It is just a displayed URL, we should not check it for certain things */
-	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED|RSPAMD_URL_FLAG_SUBJECT;
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
