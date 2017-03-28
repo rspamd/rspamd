@@ -145,18 +145,20 @@ struct delayed_cache_condition {
 	lua_State *L;
 };
 
+enum rspamd_cache_savepoint_stage {
+	RSPAMD_CACHE_PASS_INIT = 0,
+	RSPAMD_CACHE_PASS_PREFILTERS,
+	RSPAMD_CACHE_PASS_WAIT_PREFILTERS,
+	RSPAMD_CACHE_PASS_FILTERS,
+	RSPAMD_CACHE_PASS_WAIT_FILTERS,
+	RSPAMD_CACHE_PASS_POSTFILTERS,
+	RSPAMD_CACHE_PASS_WAIT_POSTFILTERS,
+	RSPAMD_CACHE_PASS_DONE,
+};
+
 struct cache_savepoint {
 	guchar *processed_bits;
-	enum {
-		RSPAMD_CACHE_PASS_INIT = 0,
-		RSPAMD_CACHE_PASS_PREFILTERS,
-		RSPAMD_CACHE_PASS_WAIT_PREFILTERS,
-		RSPAMD_CACHE_PASS_FILTERS,
-		RSPAMD_CACHE_PASS_WAIT_FILTERS,
-		RSPAMD_CACHE_PASS_POSTFILTERS,
-		RSPAMD_CACHE_PASS_WAIT_POSTFILTERS,
-		RSPAMD_CACHE_PASS_DONE,
-	} pass;
+	enum rspamd_cache_savepoint_stage pass;
 	guint version;
 	struct rspamd_metric_result *rs;
 	gdouble lim;
