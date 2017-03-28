@@ -19,7 +19,7 @@ local reconf = config['regexp']
 
 reconf['HTML_META_REFRESH_URL'] = {
   -- Requires options { check_attachements = true; }
-  re = '/<meta\\s+http-equiv="refresh"\\s+content="\\d+;url=/{sa_raw_body}i',
+  re = '/<meta\\s+http-equiv="refresh"\\s+content="\\d+\\s*;\\s*url=/{sa_raw_body}i',
   description = "Has HTML Meta refresh URL",
   score = 5.0,
   group = 'HTML'

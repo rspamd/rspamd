@@ -881,3 +881,23 @@ rspamd_config:register_symbol{
   type = 'virtual',
   description = 'Some of the recipients match the envelope',
 }
+
+rspamd_config.CTYPE_MISSING_DISPOSITION = {
+  callback = function(task)
+    local parts = task:get_parts()
+    if (not parts) or (parts and #parts < 1) then return false end
+    for _,p in ipairs(parts) do
+      local ct = p:get_header('Content-Type')
+      if (ct and ct:lower():match('^application/octet%-stream') ~= nil) then
+        local cd = p:get_header('Content-Disposition')
+        if (not cd) or (cd and cd:lower():find('^attachment') == nil) then
+          return true
+        end
+      end
+    end
+    return false
+  end,
+  description = 'Binary content-type not specified as an attachment',
+  score = 4.0,
+  group = 'header'
+}
