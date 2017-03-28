@@ -146,16 +146,24 @@ local function configure_module()
         local honor = list_to_hash(sett.honor_action)
         local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(), message, subject, raction, honor)
         if cb and atoms then
-          local sname = 'FORCE_ACTION_' .. name
-          local id = rspamd_config:register_symbol({
-            type = 'normal',
-            name = sname,
-            callback = cb,
-          })
-          for _, a in ipairs(atoms) do
-            rspamd_config:register_dependency(id, a)
+          local t = {}
+          if (raction or honor) then
+            t.type = 'postfilter'
+            t.priority = 10
+          else
+            t.type = 'normal'
           end
-          rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]', name, expr, table.concat(atoms, ','))
+          t.name = 'FORCE_ACTION_' .. name
+          t.callback = cb
+          local id = rspamd_config:register_symbol(t)
+          if t.type == 'normal' then
+            for _, a in ipairs(atoms) do
+              rspamd_config:register_dependency(id, a)
+            end
+            rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]', name, expr, table.concat(atoms, ','))
+          else
+            rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> as postfilter', name, expr)
+          end
         end
       end
     end
