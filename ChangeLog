@@ -1,3 +1,54 @@
+1.5.4:
+	* [Conf] Add history_redis default configuration
+	* [Feature] Add spoofed rules
+	* [Feature] Add URL_IN_SUBJECT rule
+	* [Feature] Allow to get task's subject
+	* [Feature] Allow to specify maximum number of shots for symbols
+	* [Feature] Distinguish URLs found in Subject
+	* [Feature] Memoize LPEG grammars
+	* [Feature] Parse else parts in SA rules
+	* [Feature] Process subject for mixed characters
+	* [Feature] Resolve url chains in url_redirector module
+	* [Feature] Stat greylisted messages as greylisted not soft-rejected
+	* [Feature] Support checking for redirector in Lua SURBL
+	* [Feature] Support tag_exists SA function
+	* [Feature] Work with broken rfc2047 tokens
+	* [Fix] Check all watcher's dependencies
+	* [Fix] Do not compile hyperscan with no SSSE3 support
+	* [Fix] Do not crash if cannot decode qp encoded part
+	* [Fix] Fix dependencies of DKIM when multiple signatures are found
+	* [Fix] Fix lists in whitelist plugin
+	* [Fix] Fix one-shot symbols weight calculations
+	* [Fix] Fix options and shots match
+	* [Fix] Fix order of symbol options
+	* [Fix] Fix parsing of dot at the end of the address
+	* [Fix] Fix parsing of lua table arguments
+	* [Fix] Fix processing of subject words
+	* [Fix] Fix string split memoization
+	* [Fix] Fix templates grammar usage
+	* [Fix] Fix various issues related to Lua stack manipulation
+	* [Fix] Force actions: Use postfilter if we have honor_action / require_action
+	* [Fix] Further fixes to avoid PHISHING FP
+	* [Fix] Preserve order of options in symbols
+	* [Fix] Rspamadm grep: deal with unusually-formatted logs
+	* [Fix] Use hostname suffix when dealing with history
+	* [Rework] Remove outdated SA rules
+	* [WebUI] Add flexible columns
+	* [WebUI] Add footable
+	* [WebUI] Add sender, recipients and subject columns
+	* [WebUI] Allow message-id break
+	* [WebUI] Fix history clustering
+	* [WebUI] Fix history display
+	* [WebUI] Fix sorting
+	* [WebUI] Humanize sizes
+	* [WebUI] Initial move towards footable
+	* [WebUI] Remove datatables
+	* [WebUI] Replace `.values` method with `.map`
+	* [WebUI] Rework v2 symbols display
+	* [WebUI] Try to normalize frequencies
+	* [WebUI] Unbreak WebUI
+	* [WebUI] Use Footable to draw Throughput summary table
+
 1.5.3:
 	* [Conf] Add composite for hacked wordpress phishing
 	* [CritFix] Fix base64 decoding when there are unparseable characters
