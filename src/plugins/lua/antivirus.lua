@@ -33,6 +33,10 @@ local function match_patterns(default_sym, found, patterns)
   return default_sym
 end
 
+local function trim(s)
+  return s:match "^%s*(.-)%s*$"
+end
+
 local function yield_result(task, rule, vname)
   local symname = match_patterns(rule['symbol'], vname, rule['patterns'])
   if rule['whitelist'] and rule['whitelist']:get_key(vname) then
@@ -531,11 +535,18 @@ local function savapi_check(task, rule)
 
       elseif string.find(result, '310') then
         -- Recursive result
+	local vname = nil
         local parts = rspamd_str_split(result, ' <<< ')
-        local vname = rspamd_str_split(parts[2], ';')[1]:match "^%s*(.-)%s*$"
-        rspamd_logger.infox(task, '%s: virus found: %s', rule['type'], vname)
-        yield_result(task, rule, vname)
-        save_av_cache(task, rule, vname)
+        if parts and parts[2] then
+          vname = trim(rspamd_str_split(parts[2], ';')[1])
+        else
+          vname = trim(rspamd_str_split(result, ';')[1])
+          vname = rspamd_str_split(vname, ' ')[2]
+        end
+	if vname then
+          yield_result(task, rule, vname)
+          save_av_cache(task, rule, vname)
+        end
       end
       conn:add_write(savapi_fin_cb, 'QUIT\n')
     end
