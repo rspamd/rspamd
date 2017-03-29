@@ -535,7 +535,7 @@ local function savapi_check(task, rule)
 
       elseif string.find(result, '310') then
         -- Recursive result
-	local vname = nil
+	local vname
         local parts = rspamd_str_split(result, ' <<< ')
         if parts and parts[2] then
           vname = trim(rspamd_str_split(parts[2], ';')[1])
