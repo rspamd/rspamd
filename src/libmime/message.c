@@ -441,7 +441,8 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		}
 
 		if (found_txt || found_html) {
-			msg_info_task ("found text part with incorrect content-type: %T/%T",
+			msg_info_task ("found %s part with incorrect content-type: %T/%T",
+					found_html ? "html" : "text",
 					&mime_part->ct->type, &mime_part->ct->subtype);
 			mime_part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 		}

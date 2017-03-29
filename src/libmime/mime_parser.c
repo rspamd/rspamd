@@ -313,7 +313,8 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 	guint i;
 	GPtrArray *hdrs;
 	struct rspamd_content_disposition *cd = NULL;
-	rspamd_ftok_t srch, *found;
+	rspamd_ftok_t srch;
+	struct rspamd_content_type_param *found;
 
 	hdrs = rspamd_message_get_header_from_hash (part->raw_headers,
 			task->task_pool,
@@ -336,7 +337,7 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 
 			if (found) {
 				cd->type = RSPAMD_CT_ATTACHMENT;
-				memcpy (&cd->filename, found, sizeof (cd->filename));
+				memcpy (&cd->filename, &found->value, sizeof (cd->filename));
 			}
 		}
 
