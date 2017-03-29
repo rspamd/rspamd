@@ -313,6 +313,7 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 	guint i;
 	GPtrArray *hdrs;
 	struct rspamd_content_disposition *cd = NULL;
+	rspamd_ftok_t srch, *found;
 
 	hdrs = rspamd_message_get_header_from_hash (part->raw_headers,
 			task->task_pool,
@@ -322,6 +323,23 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 	if (hdrs == NULL) {
 		cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
 		cd->type = RSPAMD_CT_INLINE;
+
+		/* We can also have content dispositon definitions in Content-Type */
+		if (part->ct) {
+			RSPAMD_FTOK_ASSIGN (&srch, "name");
+			found = g_hash_table_lookup (part->ct->attrs, &srch);
+
+			if (!found) {
+				RSPAMD_FTOK_ASSIGN (&srch, "filename");
+				found = g_hash_table_lookup (part->ct->attrs, &srch);
+			}
+
+			if (found) {
+				cd->type = RSPAMD_CT_ATTACHMENT;
+				memcpy (&cd->filename, found, sizeof (cd->filename));
+			}
+		}
+
 	}
 	else {
 		for (i = 0; i < hdrs->len; i ++) {

@@ -50,13 +50,15 @@ struct rspamd_content_type {
 	GHashTable *attrs; /* Can be empty */
 };
 
+enum rspamd_contetn_disposition_type {
+	RSPAMD_CT_UNKNOWN = 0,
+	RSPAMD_CT_INLINE = 1,
+	RSPAMD_CT_ATTACHMENT = 2,
+};
+
 struct rspamd_content_disposition {
 	gchar *lc_data;
-	enum {
-		RSPAMD_CT_UNKNOWN = 0,
-		RSPAMD_CT_INLINE = 1,
-		RSPAMD_CT_ATTACHMENT = 2,
-	} type;
+	enum rspamd_contetn_disposition_type type;
 	rspamd_ftok_t filename;
 	GHashTable *attrs; /* Can be empty */
 };
