@@ -353,10 +353,10 @@ local configure_ip_score_module = function()
     rspamd_logger.infox(rspamd_config, 'no servers are specified')
     return
   end
-  whitelist = rspamd_map_add('ip_score', 'asn_cc_whitelist', 'map',
-    'IP score whitelisted ips')
-  asn_cc_whitelist = rspamd_map_add('ip_score', 'whitelist', 'radix',
+  asn_cc_whitelist = rspamd_map_add('ip_score', 'asn_cc_whitelist', 'map',
     'IP score whitelisted ASNs/countries')
+  whitelist = rspamd_map_add('ip_score', 'whitelist', 'radix',
+    'IP score whitelisted ips')
   return true
 end
 
