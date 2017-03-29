@@ -1092,7 +1092,6 @@ rspamd_header_value_fold (const gchar *name,
 				cur_len = 0;
 			}
 			else {
-				g_assert (p > c);
 				/* Skip space if needed */
 				if (g_ascii_isspace (*c) && p > c) {
 					c ++;
@@ -1111,8 +1110,13 @@ rspamd_header_value_fold (const gchar *name,
 					break;
 				}
 
-				g_string_append_len (res, c, p - c);
-				cur_len = p - c;
+				if (p > c) {
+					g_string_append_len (res, c, p - c);
+					cur_len = p - c;
+				}
+				else {
+					cur_len = 0;
+				}
 			}
 
 			first_token = TRUE;
