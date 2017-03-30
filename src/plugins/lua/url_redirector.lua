@@ -79,7 +79,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
             orig_url, loc)
           if loc then
             if settings.redirectors_only then
-              if rspamd_plugins.surbl.is_redirector(loc) then
+              if rspamd_plugins.surbl.is_redirector(task, loc) then
                 resolve_cached(task, orig_url, loc, key, param, ntries + 1)
               else
                 rspamd_logger.debugm(N, task,
