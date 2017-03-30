@@ -1083,46 +1083,49 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 	struct html_tag_component *comp;
 	gint len;
 	gboolean ret = FALSE;
+	gchar *p;
 
 	g_assert (end >= begin);
-	len = rspamd_html_decode_entitles_inplace ((gchar *)begin, end - begin);
+	p = rspamd_mempool_alloc (pool, end - begin);
+	memcpy (p, begin, end - begin);
+	len = rspamd_html_decode_entitles_inplace (p, end - begin);
 
 	if (len == 3) {
-		if (g_ascii_strncasecmp (begin, "src", len) == 0) {
+		if (g_ascii_strncasecmp (p, "src", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
 	else if (len == 4) {
-		if (g_ascii_strncasecmp (begin, "href", len) == 0) {
+		if (g_ascii_strncasecmp (p, "href", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
 	else if (tag->id == Tag_IMG) {
 		/* Check width and height if presented */
-		if (len == 5 && g_ascii_strncasecmp (begin, "width", len) == 0) {
+		if (len == 5 && g_ascii_strncasecmp (p, "width", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_WIDTH);
 		}
-		else if (len == 6 && g_ascii_strncasecmp (begin, "height", len) == 0) {
+		else if (len == 6 && g_ascii_strncasecmp (p, "height", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HEIGHT);
 		}
-		else if (g_ascii_strncasecmp (begin, "style", len) == 0) {
+		else if (g_ascii_strncasecmp (p, "style", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
 		}
 	}
 	else if (tag->flags & FL_BLOCK) {
 		if (len == 5){
-			if (g_ascii_strncasecmp (begin, "color", len) == 0) {
+			if (g_ascii_strncasecmp (p, "color", len) == 0) {
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_COLOR);
 			}
-			else if (g_ascii_strncasecmp (begin, "style", len) == 0) {
+			else if (g_ascii_strncasecmp (p, "style", len) == 0) {
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
 			}
-			else if (g_ascii_strncasecmp (begin, "class", len) == 0) {
+			else if (g_ascii_strncasecmp (p, "class", len) == 0) {
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_CLASS);
 			}
 		}
 		else if (len == 7) {
-			if (g_ascii_strncasecmp (begin, "bgcolor", len) == 0) {
+			if (g_ascii_strncasecmp (p, "bgcolor", len) == 0) {
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_BGCOLOR);
 			}
 		}
@@ -1188,10 +1191,15 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				state = ignore_bad_tag;
 			}
 			else {
-				/* We can safely modify tag's name here, as it is already parsed */
+				gchar *s;
+				/* We CANNOT safely modify tag's name here, as it is already parsed */
+
+				s = rspamd_mempool_alloc (pool, tag->name.len);
+				memcpy (s, tag->name.start, tag->name.len);
 				tag->name.len = rspamd_html_decode_entitles_inplace (
-						(gchar *)tag->name.start,
+						s,
 						tag->name.len);
+				tag->name.start = s;
 
 				found = bsearch (tag, tag_defs, G_N_ELEMENTS (tag_defs),
 					sizeof (tag_defs[0]), tag_find);
@@ -1333,13 +1341,16 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		}
 		if (store) {
 			if (*savep != NULL) {
+				gchar *s;
+
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				comp->start = *savep;
-				comp->len = rspamd_html_decode_entitles_inplace ((gchar *)*savep,
-						comp->len);
+				s = rspamd_mempool_alloc (pool, comp->len);
+				memcpy (s, *savep, comp->len);
+				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
+				comp->start = s;
 				*savep = NULL;
 			}
 		}
@@ -1352,13 +1363,16 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		}
 		if (store) {
 			if (*savep != NULL) {
+				gchar *s;
+
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				comp->start = *savep;
-				comp->len = rspamd_html_decode_entitles_inplace ((gchar *)*savep,
-						comp->len);
+				s = rspamd_mempool_alloc (pool, comp->len);
+				memcpy (s, *savep, comp->len);
+				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
+				comp->start = s;
 				*savep = NULL;
 			}
 		}
@@ -1376,13 +1390,16 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 		if (store) {
 			if (*savep != NULL) {
+				gchar *s;
+
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				comp->start = *savep;
-				comp->len = rspamd_html_decode_entitles_inplace ((gchar *)*savep,
-						comp->len);
+				s = rspamd_mempool_alloc (pool, comp->len);
+				memcpy (s, *savep, comp->len);
+				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
+				comp->start = s;
 				*savep = NULL;
 			}
 		}
