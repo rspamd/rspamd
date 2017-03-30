@@ -2111,16 +2111,22 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				else if (g_ascii_isspace (t)) {
 					save_space = TRUE;
 
-					if (c != p) {
+					if (p > c) {
 						if (need_decode) {
-							len = rspamd_html_decode_entitles_inplace ((gchar *)c,
+							goffset old_offset = dest->len;
+
+							g_byte_array_append (dest, c, (p - c));
+
+							len = rspamd_html_decode_entitles_inplace (
+									dest->data + old_offset,
 									p - c);
+							dest->len = dest->len + len - (p - c);
 						}
 						else {
 							len = p - c;
+							g_byte_array_append (dest, c, len);
 						}
 
-						g_byte_array_append (dest, c, len);
 						if (content_tag) {
 							if (content_tag->content == NULL) {
 								content_tag->content = c;
@@ -2148,14 +2154,19 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				if (c != p) {
 
 					if (need_decode) {
-						len = rspamd_html_decode_entitles_inplace ((gchar *)c,
+						goffset old_offset = dest->len;
+
+						g_byte_array_append (dest, c, (p - c));
+						len = rspamd_html_decode_entitles_inplace (
+								dest->data + old_offset,
 								p - c);
+						dest->len = dest->len + len - (p - c);
 					}
 					else {
 						len = p - c;
+						g_byte_array_append (dest, c, len);
 					}
 
-					g_byte_array_append (dest, c, len);
 
 					if (content_tag) {
 						if (content_tag->content == NULL) {
