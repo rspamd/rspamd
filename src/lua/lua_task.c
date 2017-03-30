@@ -3267,7 +3267,7 @@ lua_task_set_flag (lua_State *L)
 		LUA_TASK_SET_FLAG (flag, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM, set);
 		LUA_TASK_SET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS, set);
-		LUA_TASK_SET_FLAG (flag, "gerylisted", RSPAMD_TASK_FLAG_GREYLISTED, set);
+		LUA_TASK_SET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED, set);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
