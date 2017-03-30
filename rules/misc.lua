@@ -204,6 +204,8 @@ local check_rcvd = rspamd_config:register_symbol{
       local rcvd = rcvds[1]
       if rcvd.flags and rcvd.flags['ssl'] then
         task:insert_result('RCVD_TLS_LAST', 1.0)
+      else
+        task:insert_result('RCVD_NO_TLS_LAST', 1.0)
       end
     end
 
@@ -231,6 +233,15 @@ rspamd_config:register_symbol{
   parent = check_rcvd,
   name = 'RCVD_TLS_LAST',
   description = 'Last hop used encrypted transports',
+  score = 0.0,
+  group = 'encryption'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_rcvd,
+  name = 'RCVD_NO_TLS_LAST',
+  description = 'Last hop did not use encrypted transports',
   score = 0.0,
   group = 'encryption'
 }
