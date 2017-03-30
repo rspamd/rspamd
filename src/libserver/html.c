@@ -1745,7 +1745,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 	while (p <= end) {
 		switch(state) {
 		case read_key:
-			if (*p == ':') {
+			if (p == end || *p == ':') {
 				key = c;
 				klen = p - c;
 				state = skip_spaces;
@@ -1762,7 +1762,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 			break;
 
 		case read_colon:
-			if (*p == ':') {
+			if (p == end || *p == ':') {
 				state = skip_spaces;
 				next_state = read_value;
 			}
@@ -1771,7 +1771,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 			break;
 
 		case read_value:
-			if (*p == ';' || p == end) {
+			if (p == end || *p == ';') {
 				if (key && klen && p - c > 0) {
 					if ((klen == 5 && g_ascii_strncasecmp (key, "color", 5) == 0)
 					|| (klen == 10 && g_ascii_strncasecmp (key, "font-color", 10) == 0)) {
@@ -1806,7 +1806,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 			break;
 
 		case skip_spaces:
-			if (!g_ascii_isspace (*p)) {
+			if (p < end && !g_ascii_isspace (*p)) {
 				c = p;
 				state = next_state;
 			}
