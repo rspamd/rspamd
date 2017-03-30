@@ -130,7 +130,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 			elt.len = part->ct->boundary.len;
 
 			if (elt.len) {
-				msg_debug_task ("added stat tokens for mime boundary '%s'", elt.begin);
+				msg_debug_task ("added stat tokens for mime boundary '%*s'",
+						(gint)elt.len, elt.begin);
 				g_array_append_val (ar, elt);
 			}
 
