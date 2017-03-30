@@ -450,7 +450,8 @@ function($, _, Humanize) {
                         },
                         "filtering": {
                             "enabled": true,
-                            "position": "left"
+                            "position": "left",
+                            "connectors": false
                         },
                         "sorting": {
                             "enabled": true
@@ -486,7 +487,8 @@ function($, _, Humanize) {
                         },
                         "filtering": {
                             "enabled": true,
-                            "position": "left"
+                            "position": "left",
+                            "connectors": false
                         },
                         "sorting": {
                             "enabled": true
@@ -570,7 +572,8 @@ function($, _, Humanize) {
             },
             "filtering": {
                 "enabled": true,
-                "position": "left"
+                "position": "left",
+                "connectors": false
             },
             "sorting": {
                 "enabled": true
