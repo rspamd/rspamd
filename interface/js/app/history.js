@@ -427,9 +427,17 @@ function($, _, Humanize) {
                     .map(function (d){ return d.data; });
                 if (neighbours_data.length > 0) {
                     var data = {};
-                    data.rows = [].concat.apply([], neighbours_data
-                        .map(function(e) {return e.rows;}));
-                    data.version = neighbours_data[0].version;
+                    if (neighbours_data[0].version) {
+                        data.rows = [].concat.apply([], neighbours_data
+                            .map(function (e) {
+                                return e.rows;
+                            }));
+                        data.version = neighbours_data[0].version;
+                    }
+                    else {
+                        // Legacy version
+                        data = [].concat.apply([], neighbours_data);
+                    }
 
                     var items = process_history_data(data);
                     ft.history = FooTable.init("#historyTable", {
