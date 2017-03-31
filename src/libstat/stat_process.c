@@ -219,7 +219,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 			"META:",
 			task->tokens);
 
-	g_array_free (ar, TRUE);
+	rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_array_free_hard, ar);
 }
 
 /*
@@ -288,7 +289,9 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 					TRUE,
 					"SUBJECT",
 					task->tokens);
-			g_array_free (words, TRUE);
+
+			rspamd_mempool_add_destructor (task->task_pool,
+					rspamd_array_free_hard, words);
 		}
 	}
 
