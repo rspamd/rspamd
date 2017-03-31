@@ -231,7 +231,8 @@ function($) {
                   },
                   "filtering": {
                     "enabled": true,
-                    "position": "left"
+                    "position": "left",
+                    "connectors": false
                   },
                   "sorting": {
                     "enabled": true
