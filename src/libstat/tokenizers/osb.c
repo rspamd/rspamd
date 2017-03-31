@@ -346,8 +346,9 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 
 		if (processed < window_size) {
 			/* Just fill a hashpipe */
-			hashpipe[window_size - ++processed].h = cur;
-			hashpipe[window_size - ++processed].t = token;
+			++processed;
+			hashpipe[window_size - processed].h = cur;
+			hashpipe[window_size - processed].t = token;
 		}
 		else {
 			/* Shift hashpipe */

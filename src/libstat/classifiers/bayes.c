@@ -156,15 +156,30 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		cl->ham_prob += log2 (bayes_ham_prob);
 		cl->processed_tokens ++;
 
-		msg_debug_bayes ("token: weight: %f, total_count: %L, "
-				"spam_count: %L, ham_count: %L,"
-				"spam_prob: %.3f, ham_prob: %.3f, "
-				"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
-				"current spam prob: %.3f, current ham prob: %.3f",
-				fw, total_count, spam_count, ham_count,
-				spam_prob, ham_prob,
-				bayes_spam_prob, bayes_ham_prob,
-				cl->spam_prob, cl->ham_prob);
+		if (tok->t1 && tok->t2) {
+			msg_debug_bayes ("token <%*s:%*s>: weight: %f, total_count: %L, "
+					"spam_count: %L, ham_count: %L,"
+					"spam_prob: %.3f, ham_prob: %.3f, "
+					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
+					"current spam prob: %.3f, current ham prob: %.3f",
+					(int) tok->t1->len, tok->t1->begin,
+					(int) tok->t2->len, tok->t2->begin,
+					fw, total_count, spam_count, ham_count,
+					spam_prob, ham_prob,
+					bayes_spam_prob, bayes_ham_prob,
+					cl->spam_prob, cl->ham_prob);
+		}
+		else {
+			msg_debug_bayes ("token <?:?>: weight: %f, total_count: %L, "
+					"spam_count: %L, ham_count: %L,"
+					"spam_prob: %.3f, ham_prob: %.3f, "
+					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
+					"current spam prob: %.3f, current ham prob: %.3f",
+					fw, total_count, spam_count, ham_count,
+					spam_prob, ham_prob,
+					bayes_spam_prob, bayes_ham_prob,
+					cl->spam_prob, cl->ham_prob);
+		}
 	}
 }
 
