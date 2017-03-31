@@ -57,6 +57,8 @@ typedef struct token_node_s {
 	guint window_idx;
 	guint datalen;
 	guint flags;
+	rspamd_stat_token_t *t1;
+	rspamd_stat_token_t *t2;
 	gdouble values[];
 } rspamd_token_t;
 

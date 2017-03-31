@@ -252,7 +252,10 @@ rspamd_tokenizer_osb_is_compat (struct rspamd_tokenizer_runtime *rt)
 }
 #endif
 
-
+struct token_pipe_entry {
+	guint64 h;
+	rspamd_stat_token_t *t;
+};
 
 gint
 rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
@@ -265,7 +268,8 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	rspamd_token_t *new_tok = NULL;
 	rspamd_stat_token_t *token;
 	struct rspamd_osb_tokenizer_config *osb_cf;
-	guint64 *hashpipe, cur, seed;
+	guint64 cur, seed;
+	struct token_pipe_entry *hashpipe;
 	guint32 h1, h2;
 	gsize token_size;
 	guint processed = 0, i, w, window_size, token_flags = 0;
@@ -287,7 +291,8 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 
 	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
 	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
-	token_size = sizeof (rspamd_token_t) + sizeof (gdouble) * ctx->statfiles->len;
+	token_size = sizeof (rspamd_token_t) +
+			sizeof (gdouble) * ctx->statfiles->len;
 	g_assert (token_size > 0);
 
 	for (w = 0; w < words->len; w ++) {
@@ -321,16 +326,18 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
     new_tok = rspamd_mempool_alloc0 (pool, token_size); \
     new_tok->datalen = sizeof (gint64); \
     new_tok->flags = token_flags; \
+    new_tok->t1 = hashpipe[0].t; \
+    new_tok->t2 = hashpipe[i].t; \
     if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) { \
-        h1 = ((guint32)hashpipe[0]) * primes[0] + \
-            ((guint32)hashpipe[i]) * primes[i << 1]; \
-        h2 = ((guint32)hashpipe[0]) * primes[1] + \
-            ((guint32)hashpipe[i]) * primes[(i << 1) - 1]; \
+        h1 = ((guint32)hashpipe[0].h) * primes[0] + \
+            ((guint32)hashpipe[i].h) * primes[i << 1]; \
+        h2 = ((guint32)hashpipe[0].h) * primes[1] + \
+            ((guint32)hashpipe[i].h) * primes[(i << 1) - 1]; \
         memcpy(new_tok->data, &h1, sizeof (h1)); \
         memcpy(new_tok->data + sizeof (h1), &h2, sizeof (h2)); \
     } \
     else { \
-        cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1]; \
+        cur = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \
         memcpy (new_tok->data, &cur, sizeof (cur)); \
     } \
     new_tok->window_idx = i + 1; \
@@ -339,14 +346,17 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 
 		if (processed < window_size) {
 			/* Just fill a hashpipe */
-			hashpipe[window_size - ++processed] = cur;
+			hashpipe[window_size - ++processed].h = cur;
+			hashpipe[window_size - ++processed].t = token;
 		}
 		else {
 			/* Shift hashpipe */
 			for (i = window_size - 1; i > 0; i--) {
 				hashpipe[i] = hashpipe[i - 1];
 			}
-			hashpipe[0] = cur;
+			hashpipe[0].h = cur;
+			hashpipe[0].t = token;
+
 			processed++;
 
 			for (i = 1; i < window_size; i++) {
@@ -356,7 +366,8 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	}
 
 	if (processed <= window_size) {
-		memmove (hashpipe, hashpipe + (window_size - processed + 1), processed);
+		memmove (hashpipe, &hashpipe[window_size - processed + 1],
+				processed * sizeof (hashpipe[0]));
 
 		for (i = 1; i < processed; i++) {
 			ADD_TOKEN;

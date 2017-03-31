@@ -208,6 +208,7 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 
 	remain = buf->len - pos;
 	s = *cur;
+	p = s;
 	token->begin = s;
 
 	for (i = 0; i < remain; ) {
