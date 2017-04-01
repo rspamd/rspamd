@@ -73,14 +73,14 @@ end
 
 local dmarc_grammar = gen_dmarc_grammar()
 
-local function dmarc_report(task, spf_ok, dkim_ok, disposition)
+local function dmarc_report(task, spf_ok, dkim_ok, disposition, sampled_out)
   local ip = task:get_from_ip()
   if not ip:is_valid() then
     return nil
   end
-  local res = string.format('%d,%s,%s,%s,%s', task:get_date(0),
+  local res = string.format('%d,%s,%s,%s,%s,%s', task:get_date(0),
     ip:to_string(), tostring(spf_ok), tostring(dkim_ok),
-    disposition)
+    disposition, (sampled_out and 'sampled_out' or ''))
 
   return res
 end
@@ -308,6 +308,8 @@ local function dmarc_callback(task)
     end
 
     local disposition = 'none'
+    local sampled_out = false
+
     if not (spf_ok or dkim_ok) then
       local reason_str = table.concat(reason, ", ")
       res = 1.0
@@ -321,11 +323,18 @@ local function dmarc_callback(task)
         if not pct or pct == 100 or (math.random(100) <= pct) then
           task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
           disposition = "quarantine"
+        else
+          task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "sampled_out")
+          sampled_out = true
         end
       elseif dmarc_policy == 'reject' then
         if not pct or pct == 100 or (math.random(100) <= pct) then
           task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
           disposition = "reject"
+        else
+          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "sampled_out")
+          disposition = "quarantine"
+          sampled_out = true
         end
       else
         task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
@@ -337,7 +346,7 @@ local function dmarc_callback(task)
     if rua and redis_params and dmarc_reporting then
       -- Prepare and send redis report element
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
-      local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition)
+      local report_data = dmarc_report(task, spf_ok, dkim_ok, disposition, sampled_out)
 
       if report_data then
         local ret,conn,_ = rspamd_redis_make_request(task,
