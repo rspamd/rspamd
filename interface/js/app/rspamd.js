@@ -186,7 +186,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                 tabClick("#throughput_nav");
             });
             $.ajaxSetup({
-                timeout: 2000,
+                timeout: 20000,
                 jsonp: false
             });
 
