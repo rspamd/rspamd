@@ -37,13 +37,15 @@ struct rspamd_http_client_header {
  * @param err error pointer
  */
 typedef void (*rspamd_client_callback) (
-	struct rspamd_client_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *name,
-	ucl_object_t *result,
-	GString *input,
-	gpointer ud,
-	GError *err);
+		struct rspamd_client_connection *conn,
+		struct rspamd_http_message *msg,
+		const gchar *name,
+		ucl_object_t *result,
+		GString *input,
+		gpointer ud,
+		gdouble start_time,
+		gdouble send_time,
+		GError *err);
 
 /**
  * Start rspamd worker or controller command

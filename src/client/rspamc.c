@@ -324,7 +324,6 @@ struct rspamc_command {
 struct rspamc_callback_data {
 	struct rspamc_command *cmd;
 	gchar *filename;
-	gdouble start;
 };
 
 gboolean
@@ -1392,9 +1391,10 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 
 static void
 rspamc_client_cb (struct rspamd_client_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *name, ucl_object_t *result, GString *input,
-	gpointer ud, GError *err)
+		struct rspamd_http_message *msg,
+		const gchar *name, ucl_object_t *result, GString *input,
+		gpointer ud, gdouble start_time, gdouble send_time,
+		GError *err)
 {
 	gchar *ucl_out;
 	struct rspamc_callback_data *cbdata = (struct rspamc_callback_data *)ud;
@@ -1405,7 +1405,13 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	gsize body_len;
 
 	cmd = cbdata->cmd;
-	diff = finish - cbdata->start;
+
+	if (send_time > 0) {
+		diff = finish - send_time;
+	}
+	else {
+		diff = finish - start_time;
+	}
 
 	if (execute) {
 		/* Pass all to the external command */
@@ -1526,7 +1532,6 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
 		cbdata->cmd = cmd;
 		cbdata->filename = g_strdup (name);
-		cbdata->start = rspamd_get_ticks ();
 
 		if (cmd->need_input) {
 			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,

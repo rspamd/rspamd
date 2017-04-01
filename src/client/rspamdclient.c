@@ -41,6 +41,8 @@ struct rspamd_client_connection {
 	struct timeval timeout;
 	struct rspamd_http_connection *http_conn;
 	gboolean req_sent;
+	gdouble start_time;
+	gdouble send_time;
 	struct rspamd_client_request *req;
 	struct rspamd_keypair_cache *keys_cache;
 };
@@ -92,7 +94,9 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 	struct rspamd_client_connection *c;
 
 	c = req->conn;
-	req->cb (c, NULL, c->server_name->str, NULL, req->input, req->ud, err);
+	req->cb (c, NULL, c->server_name->str, NULL,
+			req->input, req->ud,
+			c->start_time, c->send_time, err);
 }
 
 static gint
@@ -110,6 +114,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 
 	if (!c->req_sent) {
 		c->req_sent = TRUE;
+		c->send_time = rspamd_get_ticks ();
 		rspamd_http_connection_reset (c->http_conn);
 		rspamd_http_connection_read_message (c->http_conn,
 			c->req,
@@ -123,7 +128,8 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 					msg->code,
 					(gint)msg->status->len, msg->status->str);
-			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
+			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud,
+					c->start_time, c->send_time, err);
 			g_error_free (err);
 
 			return 0;
@@ -169,7 +175,8 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 								"Decompression error: %s",
 								ZSTD_getErrorName (r));
 						req->cb (c, msg, c->server_name->str, NULL,
-								req->input, req->ud, err);
+								req->input, req->ud, c->start_time,
+								c->send_time, err);
 						g_error_free (err);
 						ZSTD_freeDStream (zstream);
 						g_free (out);
@@ -191,7 +198,8 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 					err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 							ucl_parser_get_error (parser));
 					ucl_parser_free (parser);
-					req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
+					req->cb (c, msg, c->server_name->str, NULL, req->input,
+							req->ud, c->start_time, c->send_time, err);
 					g_error_free (err);
 					g_free (zout.dst);
 
@@ -204,7 +212,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 				err = g_error_new (RCLIENT_ERROR, 500,
 						"Invalid compression method");
 				req->cb (c, msg, c->server_name->str, NULL,
-						req->input, req->ud, err);
+						req->input, req->ud, c->start_time, c->send_time, err);
 				g_error_free (err);
 
 				return 0;
@@ -216,7 +224,8 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 				err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 						ucl_parser_get_error (parser));
 				ucl_parser_free (parser);
-				req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
+				req->cb (c, msg, c->server_name->str, NULL,
+						req->input, req->ud, c->start_time, c->send_time, err);
 				g_error_free (err);
 
 				return 0;
@@ -224,7 +233,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
-				parser), req->input, req->ud, NULL);
+				parser), req->input, req->ud, c->start_time, c->send_time, NULL);
 		ucl_parser_free (parser);
 	}
 
@@ -425,6 +434,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	req->msg->url = rspamd_fstring_append (req->msg->url, command, strlen (command));
 
 	conn->req = req;
+	conn->start_time = rspamd_get_ticks ();
 
 	if (compressed) {
 		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
