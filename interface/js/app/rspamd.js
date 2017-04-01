@@ -416,7 +416,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                                 }
                                 else {
                                     alertMessage('alert-error', 'Cannot receive data from ' +
-                                       neighbours_status[ind] + ': ' + errorThrown);
+                                       neighbours_status[ind].host + ': ' + errorThrown);
                                 }
                                 if (neighbours_status.every(
                                         function (elt) {return elt.checked;})) {
