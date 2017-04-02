@@ -134,12 +134,8 @@
   action From_Start {
     real_domain_start = NULL;
     real_domain_end = NULL;
-    real_ip_start = NULL;
-    real_ip_end = NULL;
     reported_domain_start = NULL;
     reported_domain_end = NULL;
-    reported_ip_start = NULL;
-    reported_ip_end = NULL;
     ip_start = NULL;
     ip_end = NULL;
     for_start = NULL;
@@ -149,12 +145,8 @@
   action By_Start {
     real_domain_start = NULL;
     real_domain_end = NULL;
-    real_ip_start = NULL;
-    real_ip_end = NULL;
     reported_domain_start = NULL;
     reported_domain_end = NULL;
-    reported_ip_start = NULL;
-    reported_ip_end = NULL;
     ip_start = NULL;
     ip_end = NULL;
     for_start = NULL;
@@ -162,55 +154,28 @@
   }
 
   action By_End {
-    guint len;
-
     if (real_domain_end && real_domain_start && real_domain_end > real_domain_start) {
-      len = real_domain_end - real_domain_start;
-      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->by_hostname, real_domain_start, len + 1);
+      tmplen = real_domain_end - real_domain_start;
+      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+      rspamd_strlcpy (rh->by_hostname, real_domain_start, tmplen + 1);
     }
     else if (reported_domain_end && reported_domain_start && reported_domain_end > reported_domain_start) {
       len = reported_domain_end - reported_domain_start;
-      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->by_hostname, reported_domain_start, len + 1);
+      rh->by_hostname = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+      rspamd_strlcpy (rh->by_hostname, reported_domain_start, tmplen + 1);
     }
   }
 
   action From_End {
-    guint len;
-
     if (real_domain_end && real_domain_start && real_domain_end > real_domain_start) {
-      len = real_domain_end - real_domain_start;
-      rh->real_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->real_hostname, real_domain_start, len + 1);
+      tmplen = real_domain_end - real_domain_start;
+      rh->real_hostname = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+      rspamd_strlcpy (rh->real_hostname, real_domain_start, tmplen + 1);
     }
     if (reported_domain_end && reported_domain_start && reported_domain_end > reported_domain_start) {
-      len = reported_domain_end - reported_domain_start;
-      rh->from_hostname = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->from_hostname, reported_domain_start, len + 1);
-    }
-    if (real_ip_end && real_ip_start && real_ip_end > real_ip_start) {
-      len = real_ip_end - real_ip_start;
-      rh->real_ip = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->real_ip, real_ip_start, len + 1);
-    }
-    if (reported_ip_end && reported_ip_start && reported_ip_end > reported_ip_start) {
-      len = reported_ip_end - reported_ip_start;
-      rh->from_ip = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->from_ip, reported_ip_start, len + 1);
-    }
-
-    if (rh->real_ip && !rh->from_ip) {
-      rh->from_ip = rh->real_ip;
-    }
-    if (rh->real_hostname && !rh->from_hostname) {
-      rh->from_hostname = rh->real_hostname;
-    }
-
-    if (rh->real_ip) {
-      if (rspamd_parse_inet_address (&rh->addr, rh->real_ip, strlen (rh->real_ip))) {
-        rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)rspamd_inet_address_destroy, rh->addr);
-      }
+      tmplen = reported_domain_end - reported_domain_start;
+      rh->from_hostname = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+      rspamd_strlcpy (rh->from_hostname, reported_domain_start, tmplen + 1);
     }
   }
 
@@ -221,9 +186,9 @@
   action For_End {
     if (for_start && p > for_start) {
       for_end = p;
-      len = for_end - for_start;
-      rh->for_mbox = rspamd_mempool_alloc (task->task_pool, len + 1);
-      rspamd_strlcpy (rh->for_mbox, for_start, len + 1);
+      tmplen = for_end - for_start;
+      rh->for_mbox = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+      rspamd_strlcpy (rh->for_mbox, for_start, tmplen + 1);
     }
   }
 
@@ -287,6 +252,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
     int *data;
     gsize size;
   } st_storage;
+  guint tmplen;
 
   memset (&st_storage, 0, sizeof (st_storage));
   memset (rh, 0, sizeof (*rh));
@@ -312,6 +278,31 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
 
   %% write init;
   %% write exec;
+
+  if (real_ip_end && real_ip_start && real_ip_end > real_ip_start) {
+    tmplen = real_ip_end - real_ip_start;
+    rh->real_ip = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+    rspamd_strlcpy (rh->real_ip, real_ip_start, tmplen + 1);
+  }
+  if (reported_ip_end && reported_ip_start && reported_ip_end > reported_ip_start) {
+    tmplen = reported_ip_end - reported_ip_start;
+    rh->from_ip = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
+    rspamd_strlcpy (rh->from_ip, reported_ip_start, tmplen + 1);
+  }
+
+  if (rh->real_ip && !rh->from_ip) {
+    rh->from_ip = rh->real_ip;
+  }
+  if (rh->real_hostname && !rh->from_hostname) {
+    rh->from_hostname = rh->real_hostname;
+  }
+
+  if (rh->real_ip) {
+    if (rspamd_parse_inet_address (&rh->addr, rh->real_ip, strlen (rh->real_ip))) {
+      rspamd_mempool_add_destructor (task->task_pool,
+              (rspamd_mempool_destruct_t)rspamd_inet_address_destroy, rh->addr);
+    }
+  }
 
   if (st_storage.data) {
     free (st_storage.data);
