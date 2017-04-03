@@ -171,47 +171,62 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		cur = g_list_next (cur);
 	}
 
-	/* Use global metatokens from lua */
-	lua_getglobal (L, "rspamd_gen_metatokens");
-	elt.flags |= RSPAMD_STAT_TOKEN_FLAG_LUA_META;
+	/* Use metatokens plugin from Lua */
+	lua_getglobal (L, "rspamd_plugins");
 
-	if (lua_type (L, -1) == LUA_TFUNCTION) {
-		struct rspamd_task **ptask;
+	if (lua_type (L, -1) == LUA_TTABLE) {
+		lua_pushstring (L, "stat_metatokens");
+		lua_gettable (L, -1);
 
-		ptask = lua_newuserdata (L, sizeof (*ptask));
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
-		*ptask = task;
+		if (lua_type (L, -1) == LUA_TFUNCTION) {
+			struct rspamd_task **ptask;
 
-		if (lua_pcall (L, 1, 1, 0) != 0) {
-			msg_err_task ("rspamd_gen_metatokens failed: %s",
-					lua_tostring (L, -1));
-			lua_pop (L, 1);
-		}
-		else {
-			/* Iterate over table of tables */
-			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-				if (lua_isnumber (L, -1)) {
-					gdouble num = lua_tonumber (L, -1);
-					guint8 *pnum = rspamd_mempool_alloc (task->task_pool,
-							sizeof (num));
+			ptask = lua_newuserdata (L, sizeof (*ptask));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
 
-					msg_debug_task ("got metatoken number: %.2f", num);
-					memcpy (pnum, &num, sizeof (num));
-					elt.begin = (gchar *)pnum;
-					elt.len = sizeof (num);
-					g_array_append_val (ar, elt);
+			if (lua_pcall (L, 1, 1, 0) != 0) {
+				msg_err_task ("stat_metatokens failed: %s",
+						lua_tostring (L, -1));
+				lua_pop (L, 1);
+			}
+			else {
+				/* Iterate over table of tables */
+				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+					elt.flags |= RSPAMD_STAT_TOKEN_FLAG_LUA_META;
+
+					if (lua_isnumber (L, -1)) {
+						gdouble num = lua_tonumber (L, -1);
+						guint8 *pnum = rspamd_mempool_alloc (task->task_pool,
+								sizeof (num));
+
+						msg_debug_task ("got metatoken number: %.2f", num);
+						memcpy (pnum, &num, sizeof (num));
+						elt.begin = (gchar *) pnum;
+						elt.len = sizeof (num);
+						g_array_append_val (ar, elt);
+					}
+					else if (lua_isstring (L, -1)) {
+						const gchar *str;
+						gsize tlen;
+
+						str = lua_tolstring (L, -1, &tlen);
+						guint8 *pstr = rspamd_mempool_alloc (task->task_pool,
+								tlen);
+						memcpy (pstr, str, tlen);
+
+						msg_debug_task ("got metatoken string: %*s",
+								(gint)tlen, str);
+						elt.begin = (gchar *)pstr;
+						elt.len = tlen;
+						g_array_append_val (ar, elt);
+					}
 				}
 			}
-
-			lua_pop (L, 1);
 		}
 	}
-	else {
-		/* Not a function */
-		msg_info_task ("rspamd_gen_metatokens is not defined");
-		lua_pop (L, 1);
-	}
 
+	lua_settop (L, 0);
 	st_ctx->tokenizer->tokenize_func (st_ctx,
 			task->task_pool,
 			ar,
