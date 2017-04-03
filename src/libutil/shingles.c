@@ -68,10 +68,7 @@ rspamd_shingles_from_text (GArray *input,
 		rspamd_cryptobox_hash_update (&bs, cur_key, 16);
 		rspamd_cryptobox_hash_final (&bs, shabuf);
 
-		for (j = 0; j < 16; j ++) {
-			out_key[j] = shabuf[j];
-		}
-
+		memcpy (out_key, shabuf, 16);
 		rspamd_cryptobox_hash_init (&bs, NULL, 0);
 		cur_key = out_key;
 		out_key += 16;
