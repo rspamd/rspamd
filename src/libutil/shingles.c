@@ -243,11 +243,8 @@ rspamd_shingles_from_image (guchar *dct,
 {
 	struct rspamd_shingle *shingle;
 	guint64 **hashes;
-	rspamd_sipkey_t keys[RSPAMD_SHINGLE_SIZE];
-	guchar shabuf[rspamd_cryptobox_HASHBYTES], *out_key;
-	const guchar *cur_key;
+	guchar **keys;
 	guint64 d;
-	rspamd_cryptobox_hash_state_t bs;
 	guint64 val;
 	gint i, j;
 	gsize hlen, beg = 0;
@@ -261,31 +258,13 @@ rspamd_shingles_from_image (guchar *dct,
 		shingle = g_malloc (sizeof (*shingle));
 	}
 
-	rspamd_cryptobox_hash_init (&bs, NULL, 0);
-	cur_key = key;
-	out_key = (guchar *)&keys[0];
-
 	/* Init hashes pipes and keys */
 	hashes = g_slice_alloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
 	hlen = RSPAMD_DCT_LEN / NBBY  + 1;
+	keys = rspamd_shingles_get_keys_cached (key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		hashes[i] = g_slice_alloc (hlen * sizeof (guint64));
-		/*
-		 * To generate a set of hashes we just apply sha256 to the
-		 * initial key as many times as many hashes are required and
-		 * xor left and right parts of sha256 to get a single 16 bytes SIP key.
-		 */
-		rspamd_cryptobox_hash_update (&bs, cur_key, 16);
-		rspamd_cryptobox_hash_final (&bs, shabuf);
-
-		for (j = 0; j < 16; j ++) {
-			out_key[j] = shabuf[j];
-		}
-
-		rspamd_cryptobox_hash_init (&bs, NULL, 0);
-		cur_key = out_key;
-		out_key += 16;
 	}
 
 	switch (alg) {
