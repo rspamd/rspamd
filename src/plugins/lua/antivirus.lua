@@ -484,7 +484,7 @@ local function sophos_check(task, rule)
               rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
             end
             save_av_cache(task, rule, 'OK')
-          elseif string.find(data, 'ACC') then
+          elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
             conn:add_read(sophos_callback)
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
