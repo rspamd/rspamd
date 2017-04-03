@@ -121,7 +121,8 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 
 static void
 rspamd_mime_header_add (struct rspamd_task *task,
-		GHashTable *target, struct rspamd_mime_header *rh,
+		GHashTable *target, GQueue *order,
+		struct rspamd_mime_header *rh,
 		gboolean check_special)
 {
 	GPtrArray *ar;
@@ -137,6 +138,8 @@ rspamd_mime_header_add (struct rspamd_task *task,
 		msg_debug_task ("add new raw header %s: %s", rh->name, rh->value);
 	}
 
+	g_queue_push_tail (order, rh);
+
 	if (check_special) {
 		rspamd_mime_header_check_special (task, rh);
 	}
@@ -145,7 +148,9 @@ rspamd_mime_header_add (struct rspamd_task *task,
 /* Convert raw headers to a list of struct raw_header * */
 void
 rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
-		const gchar *in, gsize len, gboolean check_newlines)
+		GQueue *order,
+		const gchar *in, gsize len,
+		gboolean check_newlines)
 {
 	struct rspamd_mime_header *nh = NULL;
 	const gchar *p, *c, *end;
@@ -153,7 +158,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
 	guint nlines_count[RSPAMD_TASK_NEWLINES_MAX];
-	guint order = 0;
+	guint norder = 0;
 
 	p = in;
 	end = p + len;
@@ -334,16 +339,16 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 
 			/* We also validate utf8 and replace all non-valid utf8 chars */
 			rspamd_mime_charset_utf_enforce (nh->decoded, strlen (nh->decoded));
-			rspamd_mime_header_add (task, target, nh, check_newlines);
-			nh->order = order ++;
+			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			nh->order = norder ++;
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			nh->value = "";
 			nh->decoded = "";
-			rspamd_mime_header_add (task, target, nh, check_newlines);
-			nh->order = order ++;
+			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			nh->order = norder ++;
 			state = 0;
 			break;
 		case 99:

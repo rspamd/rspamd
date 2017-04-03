@@ -49,6 +49,7 @@ struct rspamd_mime_part {
 	rspamd_ftok_t parsed_data;
 	struct rspamd_mime_part *parent_part;
 	GHashTable *raw_headers;
+	GQueue *headers_order;
 	gchar *raw_headers_str;
 	gsize raw_headers_len;
 	enum rspamd_cte cte;

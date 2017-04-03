@@ -517,6 +517,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	npart->parent_part = multipart;
 	npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
+	npart->headers_order = g_queue_new ();
 	g_ptr_array_add (multipart->specific.mp.children, npart);
 
 	if (hdr_pos > 0 && hdr_pos < str.len) {
@@ -527,6 +528,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 
 			if (task->raw_headers_content.len > 0) {
 				rspamd_mime_headers_process (task, npart->raw_headers,
+						npart->headers_order,
 						npart->raw_headers_str,
 						npart->raw_headers_len,
 						FALSE);
@@ -1032,6 +1034,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 			if (task->raw_headers_content.len > 0) {
 				rspamd_mime_headers_process (task, task->raw_headers,
+						task->headers_order,
 						task->raw_headers_content.begin,
 						task->raw_headers_content.len,
 						TRUE);
@@ -1052,6 +1055,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 				if (task->raw_headers_content.len > 0) {
 					rspamd_mime_headers_process (task, task->raw_headers,
+							task->headers_order,
 							task->raw_headers_content.begin,
 							task->raw_headers_content.len,
 							TRUE);
@@ -1078,6 +1082,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 		npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
 				rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
+		npart->headers_order = g_queue_new ();
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
 			npart->raw_headers_str = str.str;
@@ -1086,6 +1091,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 			if (npart->raw_headers_len > 0) {
 				rspamd_mime_headers_process (task, npart->raw_headers,
+						npart->headers_order,
 						npart->raw_headers_str,
 						npart->raw_headers_len,
 						FALSE);

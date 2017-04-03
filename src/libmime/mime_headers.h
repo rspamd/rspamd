@@ -47,7 +47,9 @@ struct rspamd_mime_header {
  * @param check_newlines
  */
 void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
-		const gchar *in, gsize len, gboolean check_newlines);
+		GQueue *order,
+		const gchar *in, gsize len,
+		gboolean check_newlines);
 
 /**
  * Perform rfc2047 decoding of a header

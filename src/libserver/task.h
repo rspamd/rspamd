@@ -157,6 +157,7 @@ struct rspamd_task {
 	GHashTable *urls;								/**< list of parsed urls							*/
 	GHashTable *emails;								/**< list of parsed emails							*/
 	GHashTable *raw_headers;						/**< list of raw headers							*/
+	GQueue *headers_order;							/**< order of raw headers							*/
 	GHashTable *results;							/**< hash table of metric_result indexed by
 													 *    metric's name									*/
 	GHashTable *lua_cache;							/**< cache of lua objects							*/
