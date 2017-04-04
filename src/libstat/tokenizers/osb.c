@@ -324,7 +324,6 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 
 #define ADD_TOKEN do {\
     new_tok = rspamd_mempool_alloc0 (pool, token_size); \
-    new_tok->datalen = sizeof (gint64); \
     new_tok->flags = token_flags; \
     new_tok->t1 = hashpipe[0].t; \
     new_tok->t2 = hashpipe[i].t; \
@@ -333,12 +332,11 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
             ((guint32)hashpipe[i].h) * primes[i << 1]; \
         h2 = ((guint32)hashpipe[0].h) * primes[1] + \
             ((guint32)hashpipe[i].h) * primes[(i << 1) - 1]; \
-        memcpy(new_tok->data, &h1, sizeof (h1)); \
-        memcpy(new_tok->data + sizeof (h1), &h2, sizeof (h2)); \
+        memcpy((guchar *)&new_tok->data, &h1, sizeof (h1)); \
+        memcpy(((guchar *)&new_tok->data) + sizeof (h1), &h2, sizeof (h2)); \
     } \
     else { \
-        cur = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \
-        memcpy (new_tok->data, &cur, sizeof (cur)); \
+        new_tok->data = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \
     } \
     new_tok->window_idx = i + 1; \
     g_ptr_array_add (result, new_tok); \

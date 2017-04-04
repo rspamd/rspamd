@@ -151,8 +151,7 @@ lua_classifier_classify (struct rspamd_classifier *cl,
 
 	for (i = 0; i < tokens->len; i ++) {
 		tok = g_ptr_array_index (tokens, i);
-		v = 0;
-		memcpy (&v, tok->data, MIN (sizeof (v), tok->datalen));
+		v = tok->data;
 		lua_createtable (L, 3, 0);
 		/* High word, low word, order */
 		lua_pushnumber (L, (guint32)(v >> 32));
@@ -208,7 +207,7 @@ lua_classifier_learn_spam (struct rspamd_classifier *cl,
 	for (i = 0; i < tokens->len; i ++) {
 		tok = g_ptr_array_index (tokens, i);
 		v = 0;
-		memcpy (&v, tok->data, MIN (sizeof (v), tok->datalen));
+		v = tok->data;
 		lua_createtable (L, 3, 0);
 		/* High word, low word, order */
 		lua_pushnumber (L, (guint32)(v >> 32));

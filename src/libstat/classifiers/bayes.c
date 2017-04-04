@@ -159,11 +159,12 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		cl->processed_tokens ++;
 
 		if (tok->t1 && tok->t2) {
-			msg_debug_bayes ("token <%*s:%*s>: weight: %f, total_count: %L, "
+			msg_debug_bayes ("token %uL <%*s:%*s>: weight: %f, total_count: %L, "
 					"spam_count: %L, ham_count: %L,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
+					tok->data,
 					(int) tok->t1->len, tok->t1->begin,
 					(int) tok->t2->len, tok->t2->begin,
 					fw, total_count, spam_count, ham_count,
@@ -172,11 +173,12 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					cl->spam_prob, cl->ham_prob);
 		}
 		else {
-			msg_debug_bayes ("token <?:?>: weight: %f, total_count: %L, "
+			msg_debug_bayes ("token %uL <?:?>: weight: %f, total_count: %L, "
 					"spam_count: %L, ham_count: %L,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
+					tok->data,
 					fw, total_count, spam_count, ham_count,
 					spam_prob, ham_prob,
 					bayes_spam_prob, bayes_ham_prob,
@@ -324,7 +326,7 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 		gboolean unlearn,
 		GError **err)
 {
-	guint i, j;
+	guint i, j, total_cnt, spam_cnt, ham_cnt;
 	gint id;
 	struct rspamd_statfile *st;
 	rspamd_token_t *tok;
@@ -336,6 +338,9 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 	incrementing = ctx->cfg->flags & RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 
 	for (i = 0; i < tokens->len; i++) {
+		total_cnt = 0;
+		spam_cnt = 0;
+		ham_cnt = 0;
 		tok = g_ptr_array_index (tokens, i);
 
 		for (j = 0; j < ctx->statfiles_ids->len; j++) {
@@ -350,19 +355,53 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 				else {
 					tok->values[id]++;
 				}
-			}
-			else if (tok->values[id] > 0 && unlearn) {
-				/* Unlearning */
-				if (incrementing) {
-					tok->values[id] = -1;
+
+				total_cnt += tok->values[id];
+
+				if (st->stcf->is_spam) {
+					spam_cnt += tok->values[id];
 				}
 				else {
-					tok->values[id]--;
+					ham_cnt += tok->values[id];
 				}
 			}
-			else if (incrementing) {
-				tok->values[id] = 0;
+			else {
+				if (tok->values[id] > 0 && unlearn) {
+					/* Unlearning */
+					if (incrementing) {
+						tok->values[id] = -1;
+					}
+					else {
+						tok->values[id]--;
+					}
+
+					if (st->stcf->is_spam) {
+						spam_cnt += tok->values[id];
+					}
+					else {
+						ham_cnt += tok->values[id];
+					}
+					total_cnt += tok->values[id];
+				}
+				else if (incrementing) {
+					tok->values[id] = 0;
+				}
 			}
+		}
+
+		if (tok->t1 && tok->t2) {
+			msg_debug_bayes ("token %uL <%*s:%*s>: window: %d, total_count: %d, "
+					"spam_count: %d, ham_count: %d",
+					tok->data,
+					(int) tok->t1->len, tok->t1->begin,
+					(int) tok->t2->len, tok->t2->begin,
+					tok->window_idx, total_cnt, spam_cnt, ham_cnt);
+		}
+		else {
+			msg_debug_bayes ("token %uL <?:?>: window: %d, total_count: %d, "
+					"spam_count: %d, ham_count: %d",
+					tok->data,
+					tok->window_idx, total_cnt, spam_cnt, ham_cnt);
 		}
 	}
 

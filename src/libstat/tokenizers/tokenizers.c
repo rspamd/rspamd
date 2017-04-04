@@ -57,18 +57,6 @@ const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0
 };
 
-gint
-token_node_compare_func (gconstpointer a, gconstpointer b)
-{
-	const rspamd_token_t *aa = a, *bb = b;
-
-	if (aa->datalen != bb->datalen) {
-		return aa->datalen - bb->datalen;
-	}
-
-	return memcmp (aa->data, bb->data, aa->datalen);
-}
-
 /* Get next word from specified f_str_t buf */
 static gboolean
 rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,

@@ -672,7 +672,7 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
-	gint64 iv = 0, idx;
+	gint64 iv = 0;
 	guint i;
 	rspamd_token_t *tok;
 
@@ -714,11 +714,9 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 			}
 		}
 
-		memcpy (&idx, tok->data, sizeof (idx));
-
 		if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_GET_TOKEN,
-				idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
+				tok->data, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
 			tok->values[id] = iv;
 		}
 		else {
@@ -765,7 +763,7 @@ rspamd_sqlite3_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
-	gint64 iv = 0, idx;
+	gint64 iv = 0;
 	guint i;
 	rspamd_token_t *tok;
 
@@ -806,11 +804,10 @@ rspamd_sqlite3_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		}
 
 		iv = tok->values[id];
-		memcpy (&idx, tok->data, sizeof (idx));
 
 		if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_SET_TOKEN,
-				idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
+				tok->data, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
 			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 					RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK);
 			bk->in_transaction = FALSE;

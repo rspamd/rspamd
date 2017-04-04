@@ -343,7 +343,6 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 	rspamd_token_t *tok;
 	gchar n0[64], n1[64];
 	guint i, l0, l1, larg0, larg1;
-	guint64 num;
 
 	g_assert (tokens != NULL);
 
@@ -365,7 +364,6 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 
 	for (i = 0; i < tokens->len; i ++) {
 		tok = g_ptr_array_index (tokens, i);
-		memcpy (&num, tok->data, sizeof (num));
 
 		if (learn) {
 			rspamd_printf_fstring (&out, ""
@@ -377,7 +375,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 					larg0, arg0,
 					larg1, arg1);
 
-			l0 = rspamd_snprintf (n0, sizeof (n0), "%uL", num);
+			l0 = rspamd_snprintf (n0, sizeof (n0), "%uL", tok->data);
 
 			if (intvals) {
 				l1 = rspamd_snprintf (n1, sizeof (n1), "%L",
@@ -395,7 +393,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 					"%s\r\n", l0, n0, l1, n1);
 		}
 		else {
-			l0 = rspamd_snprintf (n0, sizeof (n0), "%uL", num);
+			l0 = rspamd_snprintf (n0, sizeof (n0), "%uL", tok->data);
 			rspamd_printf_fstring (&out, ""
 					"$%d\r\n"
 					"%s\r\n", l0, n0);

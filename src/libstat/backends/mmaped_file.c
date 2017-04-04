@@ -963,8 +963,8 @@ rspamd_mmaped_file_process_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 	for (i = 0; i < tokens->len; i++) {
 		tok = g_ptr_array_index (tokens, i);
-		memcpy (&h1, tok->data, sizeof (h1));
-		memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
+		memcpy (&h1, (guchar *)&tok->data, sizeof (h1));
+		memcpy (&h2, ((guchar *)&tok->data) + sizeof (h1), sizeof (h2));
 		tok->values[id] = rspamd_mmaped_file_get_block (mf, h1, h2);
 	}
 
@@ -993,8 +993,8 @@ rspamd_mmaped_file_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 	for (i = 0; i < tokens->len; i++) {
 		tok = g_ptr_array_index (tokens, i);
-		memcpy (&h1, tok->data, sizeof (h1));
-		memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
+		memcpy (&h1, (guchar *)&tok->data, sizeof (h1));
+		memcpy (&h2, ((guchar *)&tok->data) + sizeof (h1), sizeof (h2));
 		rspamd_mmaped_file_set_block (task->task_pool, mf, h1, h2,
 				tok->values[id]);
 	}

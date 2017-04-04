@@ -200,7 +200,8 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 
 		for (i = 0; i < task->tokens->len; i ++) {
 			tok = g_ptr_array_index (task->tokens, i);
-			rspamd_cryptobox_hash_update (&st, tok->data, tok->datalen);
+			rspamd_cryptobox_hash_update (&st, (guchar *)&tok->data,
+					sizeof (tok->data));
 		}
 
 		rspamd_cryptobox_hash_final (&st, out);
