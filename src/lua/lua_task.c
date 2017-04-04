@@ -773,6 +773,20 @@ LUA_FUNCTION_DEF (task, store_in_file);
  */
 LUA_FUNCTION_DEF (task, get_protocol_reply);
 
+/***
+ * @method task:headers_foreach(callback, [params])
+ * This method calls `callback` for each header that satisfies some condition.
+ * By default, all headers are iterated unless `callback` returns `true`. Nil or
+ * false means continue of iterations.
+ * Params could be as following:
+ *
+ * - `full`: header value is full table of all attributes @see task:get_header_full for details
+ * - `regexp`: return headers that satisfies the specified regexp
+ * @param {function} callback function from header name and header value
+ * @param {table} params optional parameters
+ */
+LUA_FUNCTION_DEF (task, headers_foreach);
+
 static const struct luaL_reg tasklib_f[] = {
 	{NULL, NULL}
 };
@@ -859,6 +873,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_digest),
 	LUA_INTERFACE_DEF (task, store_in_file),
 	LUA_INTERFACE_DEF (task, get_protocol_reply),
+	LUA_INTERFACE_DEF (task, headers_foreach),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1556,17 +1571,64 @@ lua_task_set_request_header (lua_State *L)
 }
 
 gint
-rspamd_lua_push_header (lua_State * L,
+rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
+		gboolean full, gboolean raw)
+{
+	const gchar *val;
+
+	if (full) {
+		/* Create new associated table for a header */
+		lua_createtable (L, 0, 7);
+		rspamd_lua_table_set (L, "name",	 rh->name);
+
+		if (rh->value) {
+			rspamd_lua_table_set (L, "value", rh->value);
+		}
+
+		if (rh->decoded) {
+			rspamd_lua_table_set (L, "decoded", rh->decoded);
+		}
+
+		lua_pushstring (L, "tab_separated");
+		lua_pushboolean (L, rh->tab_separated);
+		lua_settable (L, -3);
+		lua_pushstring (L, "empty_separator");
+		lua_pushboolean (L, rh->empty_separator);
+		lua_settable (L, -3);
+		rspamd_lua_table_set (L, "separator", rh->separator);
+		lua_pushstring (L, "order");
+		lua_pushnumber (L, rh->order);
+		lua_settable (L, -3);
+	}
+	else {
+		if (!raw) {
+			val = rh->decoded;
+		}
+		else {
+			val = rh->value;
+		}
+
+		if (val) {
+			lua_pushstring (L, val);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 1;
+}
+
+gint
+rspamd_lua_push_header_array (lua_State * L,
 		GPtrArray *ar,
-		const gchar *name,
-		gboolean strong,
 		gboolean full,
 		gboolean raw)
 {
 
 	struct rspamd_mime_header *rh;
 	guint i;
-	const gchar *val;
+
 
 	if (ar == NULL || ar->len == 0) {
 		lua_pushnil (L);
@@ -1579,46 +1641,11 @@ rspamd_lua_push_header (lua_State * L,
 
 	PTR_ARRAY_FOREACH (ar, i, rh) {
 		if (full) {
-			/* Create new associated table for a header */
-			lua_createtable (L, 0, 7);
-			rspamd_lua_table_set (L, "name",	 rh->name);
-
-			if (rh->value) {
-				rspamd_lua_table_set (L, "value", rh->value);
-			}
-
-			if (rh->decoded) {
-				rspamd_lua_table_set (L, "decoded", rh->decoded);
-			}
-
-			lua_pushstring (L, "tab_separated");
-			lua_pushboolean (L, rh->tab_separated);
-			lua_settable (L, -3);
-			lua_pushstring (L, "empty_separator");
-			lua_pushboolean (L, rh->empty_separator);
-			lua_settable (L, -3);
-			rspamd_lua_table_set (L, "separator", rh->separator);
-			lua_pushstring (L, "order");
-			lua_pushnumber (L, rh->order);
-			lua_settable (L, -3);
+			rspamd_lua_push_header (L, rh, full, raw);
 			lua_rawseti (L, -2, i + 1);
 		}
 		else {
-			if (!raw) {
-				val = rh->decoded;
-			}
-			else {
-				val = rh->value;
-			}
-
-			if (val) {
-				lua_pushstring (L, val);
-			}
-			else {
-				lua_pushnil (L);
-			}
-
-			return 1;
+			return rspamd_lua_push_header (L, rh, full, raw);
 		}
 	}
 
@@ -1642,8 +1669,7 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 
 		ar = rspamd_message_get_header_array (task, name, strong);
 
-		return rspamd_lua_push_header (L, ar, name,
-				strong, full, raw);
+		return rspamd_lua_push_header_array (L, ar, full, raw);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3970,6 +3996,87 @@ lua_task_get_protocol_reply (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_task_headers_foreach (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean full = FALSE, raw = FALSE;
+	struct rspamd_lua_regexp *re = NULL;
+	GList *cur;
+	struct rspamd_mime_header *hdr;
+
+	if (task && lua_isfunction (L, 2)) {
+		if (lua_istable (L, 3)) {
+			lua_pushstring (L, "full");
+			lua_gettable (L, 3);
+
+			if (lua_isboolean (L, -1)) {
+				full = lua_toboolean (L, -1);
+			}
+
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "raw");
+			lua_gettable (L, 3);
+
+			if (lua_isboolean (L, -1)) {
+				raw = lua_toboolean (L, -1);
+			}
+
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "regexp");
+			lua_gettable (L, 3);
+
+			if (lua_isuserdata (L, -1)) {
+				re = *(struct rspamd_lua_regexp **)
+						rspamd_lua_check_udata (L, -1, "rspamd{regexp}");
+			}
+
+			lua_pop (L, 1);
+		}
+
+		if (task->headers_order) {
+			cur = task->headers_order->head;
+
+			while (cur) {
+				hdr = cur->data;
+
+				if (re && re->re) {
+					if (!rspamd_regexp_match (re->re, hdr->name,
+							strlen (hdr->name),FALSE)) {
+						cur = g_list_next (cur);
+						continue;
+					}
+				}
+				lua_pushvalue (L, 2);
+				lua_pushstring (L, hdr->name);
+				rspamd_lua_push_header (L, hdr, full, raw);
+
+				if (lua_pcall (L, 3, 1, 0) != 0) {
+					msg_err_task ("call to header_foreach failed: %s",
+						lua_tostring (L, -1));
+					lua_pop (L, 1);
+					break;
+				}
+				else {
+					if (lua_isboolean (L, -1)) {
+						if (lua_toboolean (L, -1)) {
+							lua_pop (L, 1);
+							break;
+						}
+					}
+				}
+
+				lua_pop (L, 1);
+				cur = g_list_next (cur);
+			}
+		}
+	}
+
+	return 0;
 }
 
 /* Image functions */

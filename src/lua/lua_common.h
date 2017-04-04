@@ -87,6 +87,7 @@ struct rspamd_lua_regexp {
 struct rspamd_map;
 struct lua_map_callback_data;
 struct radix_tree_compressed;
+struct rspamd_mime_header;
 
 enum rspamd_lua_map_type {
 	RSPAMD_LUA_MAP_RADIX = 0,
@@ -190,15 +191,18 @@ struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);
 
 struct rspamd_lua_text * lua_check_text (lua_State * L, gint pos);
 
+
+gint rspamd_lua_push_header (lua_State *L,
+		struct rspamd_mime_header *h,
+		gboolean full,
+		gboolean raw);
 /**
  * Push specific header to lua
  */
-gint rspamd_lua_push_header (lua_State * L,
-	GPtrArray *hdrs,
-	const gchar *name,
-	gboolean strong,
-	gboolean full,
-	gboolean raw);
+gint rspamd_lua_push_header_array (lua_State *L,
+		GPtrArray *hdrs,
+		gboolean full,
+		gboolean raw);
 
 /**
  * Check for task at the specified position

@@ -741,7 +741,7 @@ lua_mimepart_get_header_common (lua_State *L, gboolean full, gboolean raw)
 		ar = rspamd_message_get_header_from_hash (part->raw_headers, NULL,
 				name, FALSE);
 
-		return rspamd_lua_push_header (L, ar, name, FALSE, full, raw);
+		return rspamd_lua_push_header_array (L, ar, full, raw);
 	}
 
 	lua_pushnil (L);
