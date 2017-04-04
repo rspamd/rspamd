@@ -290,7 +290,11 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	}
 
 	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
-	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
+	for (i = 0; i < window_size; i++) {
+		hashpipe[i].h = 0xfe;
+		hashpipe[i].t = NULL;
+	}
+
 	token_size = sizeof (rspamd_token_t) +
 			sizeof (gdouble) * ctx->statfiles->len;
 	g_assert (token_size > 0);
@@ -364,8 +368,9 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		}
 	}
 
-	if (processed <= window_size) {
-		memmove (hashpipe, &hashpipe[window_size - processed + 1],
+	if (processed > 1 && processed <= window_size) {
+		processed --;
+		memmove (hashpipe, &hashpipe[window_size - processed],
 				processed * sizeof (hashpipe[0]));
 
 		for (i = 1; i < processed; i++) {
