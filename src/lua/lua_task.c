@@ -4051,6 +4051,7 @@ lua_task_headers_foreach (lua_State *L)
 						continue;
 					}
 				}
+
 				lua_pushvalue (L, 2);
 				lua_pushstring (L, hdr->name);
 				rspamd_lua_push_header (L, hdr, full, raw);

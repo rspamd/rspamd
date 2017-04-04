@@ -307,6 +307,19 @@ LUA_FUNCTION_DEF (mimepart, get_digest);
  * @return {bool} true if a part has bad content type
  */
 LUA_FUNCTION_DEF (mimepart, is_broken);
+/***
+ * @method mime_part:headers_foreach(callback, [params])
+ * This method calls `callback` for each header that satisfies some condition.
+ * By default, all headers are iterated unless `callback` returns `true`. Nil or
+ * false means continue of iterations.
+ * Params could be as following:
+ *
+ * - `full`: header value is full table of all attributes @see task:get_header_full for details
+ * - `regexp`: return headers that satisfies the specified regexp
+ * @param {function} callback function from header name and header value
+ * @param {table} params optional parameters
+ */
+LUA_FUNCTION_DEF (mimepart, headers_foreach);
 
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
@@ -325,6 +338,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, is_broken),
 	LUA_INTERFACE_DEF (mimepart, get_text),
 	LUA_INTERFACE_DEF (mimepart, get_digest),
+	LUA_INTERFACE_DEF (mimepart, headers_foreach),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -911,6 +925,88 @@ lua_mimepart_get_digest (lua_State * L)
 	lua_pushstring (L, digestbuf);
 
 	return 1;
+}
+
+static gint
+lua_mimepart_headers_foreach (lua_State *L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	gboolean full = FALSE, raw = FALSE;
+	struct rspamd_lua_regexp *re = NULL;
+	GList *cur;
+	struct rspamd_mime_header *hdr;
+
+	if (part && lua_isfunction (L, 2)) {
+		if (lua_istable (L, 3)) {
+			lua_pushstring (L, "full");
+			lua_gettable (L, 3);
+
+			if (lua_isboolean (L, -1)) {
+				full = lua_toboolean (L, -1);
+			}
+
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "raw");
+			lua_gettable (L, 3);
+
+			if (lua_isboolean (L, -1)) {
+				raw = lua_toboolean (L, -1);
+			}
+
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "regexp");
+			lua_gettable (L, 3);
+
+			if (lua_isuserdata (L, -1)) {
+				re = *(struct rspamd_lua_regexp **)
+						rspamd_lua_check_udata (L, -1, "rspamd{regexp}");
+			}
+
+			lua_pop (L, 1);
+		}
+
+		if (part->headers_order) {
+			cur = part->headers_order->head;
+
+			while (cur) {
+				hdr = cur->data;
+
+				if (re && re->re) {
+					if (!rspamd_regexp_match (re->re, hdr->name,
+							strlen (hdr->name),FALSE)) {
+						cur = g_list_next (cur);
+						continue;
+					}
+				}
+
+				lua_pushvalue (L, 2);
+				lua_pushstring (L, hdr->name);
+				rspamd_lua_push_header (L, hdr, full, raw);
+
+				if (lua_pcall (L, 3, 1, 0) != 0) {
+					msg_err ("call to header_foreach failed: %s",
+							lua_tostring (L, -1));
+					lua_pop (L, 1);
+					break;
+				}
+				else {
+					if (lua_isboolean (L, -1)) {
+						if (lua_toboolean (L, -1)) {
+							lua_pop (L, 1);
+							break;
+						}
+					}
+				}
+
+				lua_pop (L, 1);
+				cur = g_list_next (cur);
+			}
+		}
+	}
+
+	return 0;
 }
 
 void
