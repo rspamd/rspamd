@@ -83,6 +83,7 @@ struct bayes_task_closure {
 	double spam_prob;
 	guint64 processed_tokens;
 	guint64 total_hits;
+	guint64 text_tokens;
 	struct rspamd_task *task;
 };
 
@@ -157,6 +158,10 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		cl->spam_prob += log2 (bayes_spam_prob);
 		cl->ham_prob += log2 (bayes_ham_prob);
 		cl->processed_tokens ++;
+
+		if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_META)) {
+			cl->text_tokens ++;
+		}
 
 		if (tok->t1 && tok->t2) {
 			msg_debug_bayes ("token %uL <%*s:%*s>: weight: %f, total_count: %L, "
@@ -247,14 +252,15 @@ bayes_classify (struct rspamd_classifier * ctx,
 		final_prob = (s + 1.0 - h) / 2.;
 		msg_debug_bayes (
 				"<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
-						" %L tokens processed of %ud total tokens",
+						" %L tokens processed of %ud total tokens (%uL text tokens)",
 				task->message_id,
 				cl.ham_prob,
 				h,
 				cl.spam_prob,
 				s,
 				cl.processed_tokens,
-				tokens->len);
+				tokens->len,
+				cl.text_tokens);
 	}
 	else {
 		/*
@@ -281,6 +287,26 @@ bayes_classify (struct rspamd_classifier * ctx,
 	pprob = rspamd_mempool_alloc (task->task_pool, sizeof (*pprob));
 	*pprob = final_prob;
 	rspamd_mempool_set_variable (task->task_pool, "bayes_prob", pprob, NULL);
+
+	if (cl.text_tokens <= (cl.processed_tokens - cl.text_tokens) / 2) {
+		msg_info_bayes ("ignore bayes probability %.2f since we have "
+				"much more metatokens (%d) than text tokens (%d)",
+				final_prob,
+				cl.processed_tokens - cl.text_tokens, cl.text_tokens);
+
+		return TRUE;
+	}
+
+	if (ctx->cfg->min_tokens > 0 &&
+			cl.text_tokens < ctx->cfg->min_tokens * 0.1) {
+		msg_info_bayes ("ignore bayes probability %.2f since we have "
+				"too few text tokens: %d, at least %.0f is required",
+				final_prob,
+				cl.text_tokens,
+				ctx->cfg->min_tokens * 0.1);
+
+		return TRUE;
+	}
 
 	if (cl.processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
 		/* Now we can have exactly one HAM and exactly one SPAM statfiles per classifier */
