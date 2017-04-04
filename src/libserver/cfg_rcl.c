@@ -655,7 +655,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	if (wparser != NULL && obj->type == UCL_OBJECT) {
 		it = ucl_object_iterate_new (obj);
 
-		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
+		while ((cur = ucl_object_iterate_full (it, UCL_ITERATE_EXPLICIT)) != NULL) {
 			srch.name = ucl_object_key (cur);
 			srch.ptr = wrk->ctx; /* XXX: is it valid? */
 			whandler = g_hash_table_lookup (wparser->parsers, &srch);
