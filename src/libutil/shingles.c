@@ -89,7 +89,6 @@ rspamd_shingles_get_keys_cached (const guchar key[SHINGLES_KEY_SIZE])
 		/* Generate keys */
 		rspamd_cryptobox_hash_init (&bs, NULL, 0);
 		cur_key = key;
-		out_key = keys[0];
 
 		for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 			/*
@@ -97,13 +96,13 @@ rspamd_shingles_get_keys_cached (const guchar key[SHINGLES_KEY_SIZE])
 			 * initial key as many times as many hashes are required and
 			 * xor left and right parts of sha256 to get a single 16 bytes SIP key.
 			 */
+			out_key = keys[i];
 			rspamd_cryptobox_hash_update (&bs, cur_key, 16);
 			rspamd_cryptobox_hash_final (&bs, shabuf);
 
 			memcpy (out_key, shabuf, 16);
 			rspamd_cryptobox_hash_init (&bs, NULL, 0);
 			cur_key = out_key;
-			out_key = keys[i + 1];
 		}
 
 		g_hash_table_insert (ht, key_cpy, keys);
