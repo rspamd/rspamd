@@ -212,7 +212,9 @@ rspamd_task_free (struct rspamd_task *task)
 				g_hash_table_unref (p->raw_headers);
 			}
 
-			g_queue_free (p->headers_order);
+			if (p->headers_order) {
+				g_queue_free (p->headers_order);
+			}
 
 			if (IS_CT_MULTIPART (p->ct)) {
 				if (p->specific.mp.children) {

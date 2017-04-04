@@ -1074,6 +1074,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		pbegin = st->start + body_pos;
 		plen = st->end - pbegin;
 		npart->raw_headers = g_hash_table_ref (task->raw_headers);
+		npart->headers_order = NULL;
 	}
 	else {
 		str.str = (gchar *)part->parsed_data.begin;
