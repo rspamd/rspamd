@@ -450,7 +450,7 @@ local function sophos_check(task, rule)
     local streamsize = string.format('SCANDATA %d\n', task:get_size())
     local bye = 'BYE\n'
 
-    local function sophos_callback(err, data)
+    local function sophos_callback(err, data, conn)
       if err then
         if err == 'IO timeout' then
           if retransmits > 0 then
@@ -484,6 +484,8 @@ local function sophos_check(task, rule)
               rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
             end
             save_av_cache(task, rule, 'OK')
+          elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
+            conn:add_read(sophos_callback)
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
           end
