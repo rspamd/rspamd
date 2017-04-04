@@ -93,7 +93,7 @@ function($, _, Humanize) {
                     "sortValue": item.unix_time
                 }
             };
-            var scan_time = item.time_real.toFixed(3) + '/' +
+            var scan_time = item.time_real.toFixed(3) + ' / ' +
                 item.time_virtual.toFixed(3);
             item.scan_time = {
                 "options": {
@@ -140,7 +140,7 @@ function($, _, Humanize) {
                 "title": "ID",
                 "style": {
                     "font-size": "11px",
-                    "width": 200,
+                    "minWidth": 130,
                     "maxWidth": 200,
                     "overflow": "hidden",
                     "textOverflow": "ellipsis",
@@ -153,7 +153,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 150
+                    "minWidth": 88
                 }
             }, {
                 "name": "sender_mime",
@@ -187,8 +187,7 @@ function($, _, Humanize) {
                 "title": "Action",
                 "style": {
                     "font-size": "11px",
-                    "width": 110,
-                    "maxWidth": 110
+                    "minwidth": 82
                 }
             }, {
                 "name": "score",
@@ -209,12 +208,11 @@ function($, _, Humanize) {
                 }
             }, {
                 "name": "size",
-                "title": "Message size",
+                "title": "Msg size",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "width": 90,
-                    "maxWidth": 110
+                    "minwidth": 50,
                 },
                 "formatter": Humanize.compactInteger
             }, {
@@ -223,7 +221,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "maxWidth": 120
+                    "maxWidth": 72
                 },
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
@@ -241,7 +239,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 150
+                    "minWidth": 100
                 }
             }];
     }
