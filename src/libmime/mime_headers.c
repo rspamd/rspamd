@@ -641,7 +641,7 @@ gchar *
 rspamd_mime_header_encode (const gchar *in, gsize len)
 {
 	const gchar *p = in, *end = in + len;
-	gchar *out, encode_buf[80];
+	gchar *out, encode_buf[80 * sizeof (guint32)];
 	GString *res;
 	gboolean need_encoding = FALSE;
 
@@ -664,12 +664,14 @@ rspamd_mime_header_encode (const gchar *in, gsize len)
 		gint r;
 		const gchar *prev;
 		/* Choose step: =?UTF-8?Q?<qp>?= should be less than 76 chars */
-		const guint step = (76 - 12) / 3 + 1;
+		guint step = (76 - 12) / 3 + 1;
 
 		ulen = g_utf8_strlen (in, len);
 		res = g_string_sized_new (len * 2 + 1);
 		pos = 0;
 		prev = in;
+		/* Adjust chunk size for unicode average length */
+		step *= 1.0 * ulen / (gdouble)len;
 
 		while (pos < ulen) {
 			p = g_utf8_offset_to_pointer (in, pos);
