@@ -956,6 +956,16 @@ rspamd_mime_preprocess_message (struct rspamd_task *task,
 	}
 }
 
+static void
+rspamd_mime_parse_stack_free (struct rspamd_mime_parser_ctx *st)
+{
+	if (st) {
+		g_ptr_array_free (st->stack, TRUE);
+		g_array_free (st->boundaries, TRUE);
+		g_slice_free1 (sizeof (*st), st);
+	}
+}
+
 static gboolean
 rspamd_mime_parse_message (struct rspamd_task *task,
 		struct rspamd_mime_part *part,
@@ -972,6 +982,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	guint i;
 	gboolean ret = FALSE;
 	GString str;
+	struct rspamd_mime_parser_ctx *nst = st;
 
 	if (st->stack->len > max_nested) {
 		g_set_error (err, RSPAMD_MIME_QUARK, E2BIG, "Nesting level is too high: %d",
@@ -992,7 +1003,6 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			p ++;
 			len --;
 		}
-
 		/*
 		 * Exim somehow uses mailbox format for messages being scanned:
 		 * From x@x.com Fri May 13 19:08:48 2016
@@ -1077,6 +1087,20 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		npart->headers_order = NULL;
 	}
 	else {
+		/*
+		 * Here are dragons:
+		 * We allocate new parser context as we need to shift pointers
+		 */
+		nst = g_slice_alloc0 (sizeof (*st));
+		nst->stack = g_ptr_array_sized_new (4);
+		nst->pos = task->raw_headers_content.body_start;
+		nst->end = task->msg.begin + task->msg.len;
+		nst->boundaries = g_array_sized_new (FALSE, FALSE,
+				sizeof (struct rspamd_mime_boundary), 8);
+		nst->start = part->parsed_data.begin;
+		nst->end = nst->start + part->parsed_data.len;
+		nst->pos = nst->start;
+
 		str.str = (gchar *)part->parsed_data.begin;
 		str.len = part->parsed_data.len;
 
@@ -1115,7 +1139,6 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		sel = NULL;
 	}
 	else {
-
 		for (i = 0; i < hdrs->len; i ++) {
 			hdr = g_ptr_array_index (hdrs, i);
 			ct = rspamd_content_type_parse (hdr->value, strlen (hdr->value),
@@ -1144,40 +1167,34 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 	npart->ct = sel;
 
-	if (part == NULL &&
+	if ((part == NULL || nst != st) &&
 			(sel->flags & (RSPAMD_CONTENT_TYPE_MULTIPART|RSPAMD_CONTENT_TYPE_MESSAGE))) {
 		/* Not a trivial message, need to preprocess */
-		rspamd_mime_preprocess_message (task, npart, st);
+		rspamd_mime_preprocess_message (task, npart, nst);
 	}
 
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
-		g_ptr_array_add (st->stack, npart);
-		ret = rspamd_mime_parse_multipart_part (task, npart, st, err);
+		g_ptr_array_add (nst->stack, npart);
+		ret = rspamd_mime_parse_multipart_part (task, npart, nst, err);
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
-		g_ptr_array_add (st->stack, npart);
-		ret = rspamd_mime_parse_message (task, npart, st, err);
+		g_ptr_array_add (nst->stack, npart);
+		ret = rspamd_mime_parse_message (task, npart, nst, err);
 	}
 	else {
-		ret = rspamd_mime_parse_normal_part (task, npart, st, err);
+		ret = rspamd_mime_parse_normal_part (task, npart, nst, err);
 	}
 
 	if (part) {
 		/* Remove message part from the stack */
-		g_ptr_array_remove_index_fast (st->stack, st->stack->len - 1);
+		g_ptr_array_remove_index_fast (nst->stack, nst->stack->len - 1);
+	}
+
+	if (nst != st) {
+		rspamd_mime_parse_stack_free (nst);
 	}
 
 	return ret;
-}
-
-static void
-rspamd_mime_parse_stack_free (struct rspamd_mime_parser_ctx *st)
-{
-	if (st) {
-		g_ptr_array_free (st->stack, TRUE);
-		g_array_free (st->boundaries, TRUE);
-		g_slice_free1 (sizeof (*st), st);
-	}
 }
 
 gboolean
