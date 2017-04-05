@@ -81,6 +81,7 @@ inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 struct bayes_task_closure {
 	double ham_prob;
 	double spam_prob;
+	gdouble meta_skip_prob;
 	guint64 processed_tokens;
 	guint64 total_hits;
 	guint64 text_tokens;
@@ -106,6 +107,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 	guint64 spam_count = 0, ham_count = 0, total_count = 0;
 	struct rspamd_statfile *st;
 	struct rspamd_task *task;
+	const gchar *token_type = "txt";
 	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
 		ham_prob, fw, w, norm_sum, norm_sub, val;
 
@@ -117,6 +119,22 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		return;
 	}
 #endif
+
+	if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_META && cl->meta_skip_prob > 0) {
+		val = rspamd_random_double_fast ();
+
+		if (val <= cl->meta_skip_prob) {
+			if (tok->t1 && tok->t2) {
+				msg_debug_bayes (
+						"token(meta) %uL <%*s:%*s> probabilistically skipped",
+						tok->data,
+						(int) tok->t1->len, tok->t1->begin,
+						(int) tok->t2->len, tok->t2->begin);
+			}
+
+			return;
+		}
+	}
 
 	for (i = 0; i < ctx->statfiles_ids->len; i++) {
 		id = g_array_index (ctx->statfiles_ids, gint, i);
@@ -162,13 +180,17 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_META)) {
 			cl->text_tokens ++;
 		}
+		else {
+			token_type = "meta";
+		}
 
 		if (tok->t1 && tok->t2) {
-			msg_debug_bayes ("token %uL <%*s:%*s>: weight: %f, total_count: %L, "
+			msg_debug_bayes ("token(%s) %uL <%*s:%*s>: weight: %f, total_count: %L, "
 					"spam_count: %L, ham_count: %L,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
+					token_type,
 					tok->data,
 					(int) tok->t1->len, tok->t1->begin,
 					(int) tok->t2->len, tok->t2->begin,
@@ -178,11 +200,12 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					cl->spam_prob, cl->ham_prob);
 		}
 		else {
-			msg_debug_bayes ("token %uL <?:?>: weight: %f, total_count: %L, "
+			msg_debug_bayes ("token(%s) %uL <?:?>: weight: %f, total_count: %L, "
 					"spam_count: %L, ham_count: %L,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
+					token_type,
 					tok->data,
 					fw, total_count, spam_count, ham_count,
 					spam_prob, ham_prob,
@@ -212,7 +235,7 @@ bayes_classify (struct rspamd_classifier * ctx,
 	struct rspamd_statfile *st = NULL;
 	struct bayes_task_closure cl;
 	rspamd_token_t *tok;
-	guint i;
+	guint i, text_tokens = 0;
 	gint id;
 
 	g_assert (ctx != NULL);
@@ -237,6 +260,31 @@ bayes_classify (struct rspamd_classifier * ctx,
 
 			return TRUE;
 		}
+	}
+
+	for (i = 0; i < tokens->len; i ++) {
+		tok = g_ptr_array_index (tokens, i);
+		if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_META)) {
+			text_tokens ++;
+		}
+	}
+
+	if (text_tokens == 0) {
+		msg_info_task ("skip classification as there are no text tokens, "
+				"%ud total tokens",
+				tokens->len);
+
+		return TRUE;
+	}
+
+	/*
+	 * Skip some metatokens if we don't have enough text tokens
+	 */
+	if (text_tokens > tokens->len - text_tokens) {
+		cl.meta_skip_prob = 0.0;
+	}
+	else {
+		cl.meta_skip_prob = 1.0 - text_tokens / tokens->len;
 	}
 
 	for (i = 0; i < tokens->len; i ++) {
