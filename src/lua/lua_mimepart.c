@@ -985,7 +985,7 @@ lua_mimepart_headers_foreach (lua_State *L)
 				lua_pushstring (L, hdr->name);
 				rspamd_lua_push_header (L, hdr, full, raw);
 
-				if (lua_pcall (L, 3, 1, 0) != 0) {
+				if (lua_pcall (L, 2, 1, 0) != 0) {
 					msg_err ("call to header_foreach failed: %s",
 							lua_tostring (L, -1));
 					lua_pop (L, 1);
