@@ -152,6 +152,14 @@ input.action-scores {
 		background-image:url('../img/desc.png');
 		}
 
+#historyTable > tbody > tr > td,
+#historyTable > thead > tr > th {
+    padding: 4px;
+}
+#historyTable > thead > tr > th {
+    padding-right: 20px;
+}
+
 .btn-upload-trigger {
 	position:relative;
 	z-index:1;
