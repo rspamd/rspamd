@@ -179,6 +179,9 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		lua_gettable (L, -2);
 
 		if (lua_type (L, -1) == LUA_TTABLE) {
+			gint old_top;
+
+			old_top = lua_gettop (L);
 			lua_pushstring (L, "callback");
 			lua_gettable (L, -2);
 
@@ -189,41 +192,47 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 				rspamd_lua_setclass (L, "rspamd{task}", -1);
 				*ptask = task;
 
-				if (lua_pcall (L, 1, 1, 0) != 0) {
+				if (lua_pcall (L, 1, LUA_MULTRET, 0) != 0) {
 					msg_err_task ("stat_metatokens failed: %s",
 							lua_tostring (L, -1));
 					lua_pop (L, 1);
 				} else {
-					/* Iterate over table of tables */
-					for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-						elt.flags |= RSPAMD_STAT_TOKEN_FLAG_LUA_META;
+					if (lua_gettop (L) > old_top &&
+							lua_istable (L, old_top + 1)) {
+						lua_pushvalue (L, old_top + 1);
+						/* Iterate over table of tables */
+						for (lua_pushnil (L); lua_next (L, -2);
+								lua_pop (L, 1)) {
+							elt.flags |= RSPAMD_STAT_TOKEN_FLAG_LUA_META;
 
-						if (lua_isnumber (L, -1)) {
-							gdouble num = lua_tonumber (L, -1);
-							guint8 *pnum = rspamd_mempool_alloc (
-									task->task_pool,
-									sizeof (num));
+							if (lua_isnumber (L, -1)) {
+								gdouble num = lua_tonumber (L, -1);
+								guint8 *pnum = rspamd_mempool_alloc (
+										task->task_pool,
+										sizeof (num));
 
-							msg_debug_task ("got metatoken number: %.2f", num);
-							memcpy (pnum, &num, sizeof (num));
-							elt.begin = (gchar *) pnum;
-							elt.len = sizeof (num);
-							g_array_append_val (ar, elt);
-						} else if (lua_isstring (L, -1)) {
-							const gchar *str;
-							gsize tlen;
+								msg_debug_task ("got metatoken number: %.2f",
+										num);
+								memcpy (pnum, &num, sizeof (num));
+								elt.begin = (gchar *) pnum;
+								elt.len = sizeof (num);
+								g_array_append_val (ar, elt);
+							} else if (lua_isstring (L, -1)) {
+								const gchar *str;
+								gsize tlen;
 
-							str = lua_tolstring (L, -1, &tlen);
-							guint8 *pstr = rspamd_mempool_alloc (
-									task->task_pool,
-									tlen);
-							memcpy (pstr, str, tlen);
+								str = lua_tolstring (L, -1, &tlen);
+								guint8 *pstr = rspamd_mempool_alloc (
+										task->task_pool,
+										tlen);
+								memcpy (pstr, str, tlen);
 
-							msg_debug_task ("got metatoken string: %*s",
-									(gint) tlen, str);
-							elt.begin = (gchar *) pstr;
-							elt.len = tlen;
-							g_array_append_val (ar, elt);
+								msg_debug_task ("got metatoken string: %*s",
+										(gint) tlen, str);
+								elt.begin = (gchar *) pstr;
+								elt.len = tlen;
+								g_array_append_val (ar, elt);
+							}
 						}
 					}
 				}

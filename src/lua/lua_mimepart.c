@@ -935,6 +935,7 @@ lua_mimepart_headers_foreach (lua_State *L)
 	struct rspamd_lua_regexp *re = NULL;
 	GList *cur;
 	struct rspamd_mime_header *hdr;
+	gint old_top;
 
 	if (part && lua_isfunction (L, 2)) {
 		if (lua_istable (L, 3)) {
@@ -981,26 +982,29 @@ lua_mimepart_headers_foreach (lua_State *L)
 					}
 				}
 
+				old_top = lua_gettop (L);
 				lua_pushvalue (L, 2);
 				lua_pushstring (L, hdr->name);
 				rspamd_lua_push_header (L, hdr, full, raw);
 
-				if (lua_pcall (L, 2, 1, 0) != 0) {
+				if (lua_pcall (L, 2, LUA_MULTRET, 0) != 0) {
 					msg_err ("call to header_foreach failed: %s",
 							lua_tostring (L, -1));
-					lua_pop (L, 1);
+					lua_settop (L, old_top);
 					break;
 				}
 				else {
-					if (lua_isboolean (L, -1)) {
-						if (lua_toboolean (L, -1)) {
-							lua_pop (L, 1);
-							break;
+					if (lua_gettop (L) > old_top) {
+						if (lua_isboolean (L, old_top + 1)) {
+							if (lua_toboolean (L, old_top + 1)) {
+								lua_settop (L, old_top);
+								break;
+							}
 						}
 					}
 				}
 
-				lua_pop (L, 1);
+				lua_settop (L, old_top);
 				cur = g_list_next (cur);
 			}
 		}
