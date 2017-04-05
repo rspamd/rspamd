@@ -1186,8 +1186,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	}
 
 	if (part) {
-		/* Remove message part from the stack */
-		g_ptr_array_remove_index_fast (nst->stack, nst->stack->len - 1);
+		/* Remove message part from the parent stack */
+		g_ptr_array_remove_index_fast (st->stack, st->stack->len - 1);
 	}
 
 	if (nst != st) {
