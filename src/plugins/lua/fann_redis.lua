@@ -99,6 +99,7 @@ local redis_lua_script_maybe_invalidate = [[
   redis.call('DEL', KEYS[1] .. '_ham')
   redis.call('DEL', KEYS[1] .. '_data')
   redis.call('DEL', KEYS[1] .. '_locked')
+  redis.call('DEL', KEYS[1] .. '_hostname')
   return 1
 ]]
 local redis_maybe_invalidate_sha = nil
@@ -112,6 +113,7 @@ local redis_lua_script_locked_invalidate = [[
   redis.call('DEL', KEYS[1] .. '_ham')
   redis.call('DEL', KEYS[1] .. '_data')
   redis.call('DEL', KEYS[1] .. '_locked')
+  redis.call('DEL', KEYS[1] .. '_hostname')
   return 1
 ]]
 local redis_locked_invalidate_sha = nil
@@ -139,12 +141,16 @@ local redis_maybe_lock_sha = nil
 -- Uses the following keys
 -- key1 - prefix for keys
 -- key2 - compressed ANN
+-- key3 - expire in seconds
 local redis_lua_script_save_unlock = [[
   redis.call('INCRBY', KEYS[1] .. '_version', '1')
   redis.call('DEL', KEYS[1] .. '_spam')
   redis.call('DEL', KEYS[1] .. '_ham')
   redis.call('SET', KEYS[1] .. '_data', KEYS[2])
   redis.call('DEL', KEYS[1] .. '_locked')
+  redis.call('DEL', KEYS[1] .. '_hostname')
+  redis.call('EXPIRE', KEYS[1] .. '_data', KEYS[3])
+  redis.call('EXPIRE', KEYS[1] .. '_version', KEYS[3])
   return 1
 ]]
 local redis_save_unlock_sha = nil
@@ -162,6 +168,7 @@ local mse = 0.0001
 local nlayers = 4
 local lock_expire = 600
 local learning_spawned = false
+local ann_expire = 60 * 60 * 24 * 2 -- 2 days
 
 local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
   if not ev_base or not redis_params or not callback or not command then
@@ -599,7 +606,7 @@ local function train_fann(_, ev_base, elt)
         true, -- is write
         redis_save_cb, --callback
         'EVALSHA', -- command
-        {redis_save_unlock_sha, '2', prefix, ann_data}
+        {redis_save_unlock_sha, '2', prefix, ann_data, tostring(ann_expire)}
       )
     end
   end
