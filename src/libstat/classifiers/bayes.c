@@ -336,15 +336,6 @@ bayes_classify (struct rspamd_classifier * ctx,
 	*pprob = final_prob;
 	rspamd_mempool_set_variable (task->task_pool, "bayes_prob", pprob, NULL);
 
-	if (cl.text_tokens <= (cl.processed_tokens - cl.text_tokens) / 2) {
-		msg_info_bayes ("ignore bayes probability %.2f since we have "
-				"much more metatokens (%d) than text tokens (%d)",
-				final_prob,
-				cl.processed_tokens - cl.text_tokens, cl.text_tokens);
-
-		return TRUE;
-	}
-
 	if (ctx->cfg->min_tokens > 0 &&
 			cl.text_tokens < ctx->cfg->min_tokens * 0.1) {
 		msg_info_bayes ("ignore bayes probability %.2f since we have "
