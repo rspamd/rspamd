@@ -333,7 +333,9 @@ local function rbl_cb (task)
             to_resolve = upart .. '.' .. email:get_host() .. '.' .. rbl['rbl']
           end
         end
-        gen_rbl_rule(to_resolve, rbl)
+        if to_resolve then
+          gen_rbl_rule(to_resolve, rbl)
+        end
       end
     end
   end,
