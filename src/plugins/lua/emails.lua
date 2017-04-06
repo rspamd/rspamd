@@ -21,6 +21,7 @@ limitations under the License.
 -- symbol = sym2, dnsbl = bl.somehost.com, domain_only = no
 local rules = {}
 local logger = require "rspamd_logger"
+local hash = require "rspamd_cryptobox_hash"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
@@ -39,6 +40,10 @@ local function check_email_rule(task, rule, addr)
       to_resolve = string.format('%s.%s', addr:get_host(), rule['dnsbl'])
     else
       to_resolve = string.format('%s.%s.%s', addr:get_user(), addr:get_host(), rule['dnsbl'])
+    end
+
+    if rule['hash'] then
+      to_resolve = hash.create_specific(rule['hash'], to_resolve):hex()
     end
 
     task:get_resolver():resolve_a({
