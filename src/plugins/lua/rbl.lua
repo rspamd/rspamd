@@ -241,30 +241,6 @@ local function rbl_cb (task)
           notgot['emails'] = true
           return false
         end
-        local cleanList = {}
-
-        for _, e in pairs(havegot['emails']) do
-          local localpart = e:get_user()
-          local domainpart = e:get_host()
-          if rbl['emails'] == 'domain_only' then
-            if not cleanList[domainpart] and validate_dns(domainpart) then
-              cleanList[domainpart] = true
-            end
-          else
-            if rbl['hash'] then
-              table.insert(cleanList, make_hash(tostring(e), rbl['hash']))
-            else
-              if validate_dns(localpart) and validate_dns(domainpart) then
-                table.insert(cleanList, localpart .. '.' .. domainpart)
-              end
-            end
-          end
-        end
-        havegot['emails'] = cleanList
-        if not next(havegot['emails']) then
-          notgot['emails'] = true
-          return false
-        end
       end
     elseif rbl['from'] then
       if notgot['from'] then
@@ -333,13 +309,30 @@ local function rbl_cb (task)
   -- Emails RBLs
   fun.each(function(_, rbl)
     if rbl['emails'] == 'domain_only' then
-      for domain, _ in pairs(havegot['emails']) do
-        local to_resolve = domain .. '.' .. rbl['rbl']
+      local cleanList = {}
+      for _, email in ipairs(havegot['emails']) do
+        cleanList[email:get_host()] = true
+      end
+      for k in pairs(cleanList) do
+        local to_resolve
+        if rbl['hash'] then
+          to_resolve = make_hash(tostring(k), rbl['hash']) .. '.' .. rbl['rbl']
+        else
+          to_resolve = k .. '.' .. rbl['rbl']
+        end
         gen_rbl_rule(to_resolve, rbl)
       end
     else
-      for _, email in pairs(havegot['emails']) do
-        local to_resolve = email .. '.' .. rbl['rbl']
+      for _, email in ipairs(havegot['emails']) do
+        local to_resolve
+        if rbl['hash'] then
+          to_resolve = make_hash(tostring(email), rbl['hash']) .. '.' .. rbl['rbl']
+        else
+          local upart = email:get_user()
+          if validate_dns(upart) then
+            to_resolve = upart .. '.' .. email:get_host() .. '.' .. rbl['rbl']
+          end
+        end
         gen_rbl_rule(to_resolve, rbl)
       end
     end
