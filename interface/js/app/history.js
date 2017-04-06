@@ -102,7 +102,7 @@ function($, _, Humanize) {
                 "value": scan_time
             };
             item.id = item['message-id'];
-            item.rcpt_mime = item.rcpt_mime.join(",");
+            item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
             items.push(item);
         });
 
@@ -141,7 +141,6 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "minWidth": 130,
-                    "maxWidth": 200,
                     "overflow": "hidden",
                     "textOverflow": "ellipsis",
                     "wordBreak": "break-all",
@@ -161,7 +160,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 150
+                    "minWidth": 100
                 }
             }, {
                 "name": "rcpt_mime",
@@ -169,9 +168,7 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "word-break": "break-all",
-                    "minWidth": 150,
-                    "maxWidth": 300
+                    "minWidth": 100
                 }
             }, {
                 "name": "subject",
