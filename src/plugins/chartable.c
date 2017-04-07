@@ -191,7 +191,11 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 	/* We assume that w is normalized */
 
 	while (p + i < end) {
-		U8_NEXT_UNSAFE (p, i, uc);
+		U8_NEXT (p, i, w->len, uc);
+
+		if (((gint32)uc) < 0) {
+			break;
+		}
 
 		if (u_isalpha (uc)) {
 			sc = ublock_getCode (uc);
