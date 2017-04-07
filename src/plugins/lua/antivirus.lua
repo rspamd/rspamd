@@ -50,14 +50,17 @@ local function yield_result(task, rule, vname)
     for _, vn in ipairs(vname) do
       local symname = match_patterns(rule['symbol'], vn, rule['patterns'])
       if rule['whitelist'] and rule['whitelist']:get_key(vn) then
-        rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vname)
+        rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vn)
       else
-        task:insert_result(symname, 1.0, vname)
-        rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
+        task:insert_result(symname, 1.0, vn)
+        rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vn)
       end
     end
   end
   if rule['action'] then
+    if type(vname) == 'table' then
+      vname = table.concat(vname, '; ')
+    end
     task:set_pre_result(rule['action'],
         string.format('%s: virus found: "%s"', rule['type'], vname))
   end
