@@ -848,8 +848,9 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 		url_text ++;
 	}
 
-	if (rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE,
-			&url_pos) &&
+	if (end > url_text + 4 &&
+			rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE,
+					&url_pos) &&
 			url_str != NULL) {
 		if (url_pos > 0) {
 			/*

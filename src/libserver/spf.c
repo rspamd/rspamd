@@ -452,6 +452,9 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 	if (*dend == '.') {
 		dend--;
 	}
+	if (nend <= nstart || dend <= dstart) {
+		return FALSE;
+	}
 
 	/* Now compare from end to start */
 	for (;;) {
@@ -459,6 +462,7 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 			msg_debug_spf ("ptr records mismatch: %s and %s", dend, nend);
 			return FALSE;
 		}
+
 		if (dend == dstart) {
 			break;
 		}
@@ -469,7 +473,8 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 		nend--;
 		dend--;
 	}
-	if (nend != nstart && *(nend - 1) != '.') {
+
+	if (nend > nstart && *(nend - 1) != '.') {
 		/* Not a subdomain */
 		return FALSE;
 	}
