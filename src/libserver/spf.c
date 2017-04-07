@@ -424,15 +424,15 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 	const char *dend, *nend, *dstart, *nstart;
 	struct spf_record *rec = cb->rec;
 
-	if (name == NULL) {
-		return FALSE;
-	}
 	if (cb->ptr_host != NULL) {
 		dstart = cb->ptr_host;
-
 	}
 	else {
 		dstart = cb->resolved->cur_domain;
+	}
+
+	if (name == NULL || dstart == NULL) {
+		return FALSE;
 	}
 
 	msg_debug_spf ("check ptr %s vs %s", name, dstart);
@@ -442,7 +442,7 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 	nstart = name;
 	nend = nstart + strlen (nstart) - 1;
 
-	if (nend == nstart || dend == dstart) {
+	if (nend <= nstart || dend <= dstart) {
 		return FALSE;
 	}
 	/* Strip last '.' from names */
