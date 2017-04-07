@@ -7085,9 +7085,14 @@ net.zm
 org.zm
 sch.zm
 
-// zw : https://en.wikipedia.org/wiki/.zw
-*.zw
-
+// zw : https://www.potraz.gov.zw/
+// Confirmed by registry <bmtengwa@potraz.gov.zw> 2017-01-25
+zw
+ac.zw
+co.zw
+gov.zw
+mil.zw
+org.zw
 
 // List of new gTLDs imported from https://newgtlds.icann.org/newgtlds.csv on 2017-02-23T00:46:09Z
 
@@ -11546,8 +11551,10 @@ us.eu.org
 // Submitted by Michal Kralik <support@evennode.com>
 eu-1.evennode.com
 eu-2.evennode.com
+eu-3.evennode.com
 us-1.evennode.com
 us-2.evennode.com
+us-3.evennode.com
 
 // Facebook, Inc.
 // Submitted by Peter Ruibal <public-suffix@fb.com>
@@ -11631,14 +11638,15 @@ vologda.su
 
 // Fastly Inc. : http://www.fastly.com/
 // Submitted by Fastly Security <security@fastly.com>
+fastlylb.net
+map.fastlylb.net
+freetls.fastly.net
 map.fastly.net
 a.prod.fastly.net
 global.prod.fastly.net
 a.ssl.fastly.net
 b.ssl.fastly.net
 global.ssl.fastly.net
-fastlylb.net
-map.fastlylb.net
 
 // Featherhead : https://featherhead.xyz/
 // Submitted by Simon Menke <simon@featherhead.xyz>
