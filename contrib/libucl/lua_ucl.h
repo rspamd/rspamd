@@ -55,6 +55,14 @@ UCL_EXTERN int luaopen_ucl (lua_State *L);
 UCL_EXTERN ucl_object_t* ucl_object_lua_import (lua_State *L, int idx);
 
 /**
+ * Import UCL object from lua state, escaping JSON strings
+ * @param L lua state
+ * @param idx index of object at the lua stack to convert to UCL
+ * @return new UCL object or NULL, the caller should unref object after using
+ */
+UCL_EXTERN ucl_object_t* ucl_object_lua_import_escape (lua_State *L, int idx);
+
+/**
  * Push an object to lua
  * @param L lua state
  * @param obj object to push
