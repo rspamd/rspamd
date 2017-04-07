@@ -520,25 +520,20 @@ local function savapi_check(task, rule)
     local message_file = task:store_in_file(tonumber("0644", 8))
     local vnames = {}
 
-    -- Forward declaration for recursive calls
-    local savapi_scan1_cb
-
     local function savapi_fin_cb(err, conn)
       local vnames_reordered = {}
       -- Swap table
-      for virus,c in pairs(vnames) do
+      for virus,_ in pairs(vnames) do
         table.insert(vnames_reordered, virus)
       end
       rspamd_logger.debugm(N, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
       if #vnames_reordered > 0 then
-        local vname = nil
+        local vname = {}
         for _,virus in ipairs(vnames_reordered) do
-          if vname then
-            vname = vname .. ';' .. virus
-          else
-            vname = virus
-          end
+          table.insert(vname, virus)
         end
+
+        vname = table.concat(vname, ';')
         yield_result(task, rule, vname)
         save_av_cache(task, rule, vname)
       end
@@ -582,7 +577,7 @@ local function savapi_check(task, rule)
       end
     end
 
-    function savapi_scan1_cb(err, conn)
+    local function savapi_scan1_cb(err, conn)
       conn:add_read(savapi_scan2_cb, '\n')
     end
 
