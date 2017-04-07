@@ -341,6 +341,13 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 	while (remain > 0 && !g_utf8_validate (p, remain, &end)) {
 		gchar *valid;
 
+		if (end >= in + len) {
+			if (p < in + len) {
+				memset ((gchar *)p, '?', (in + len) - p);
+			}
+			break;
+		}
+
 		valid = g_utf8_find_next_char (end, in + len);
 
 		if (!valid) {
