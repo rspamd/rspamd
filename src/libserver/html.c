@@ -1605,6 +1605,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	GList *cur;
 	gulong val;
 	gboolean seen_width = FALSE, seen_height = FALSE;
+	goffset pos;
 
 	cur = tag->params->head;
 	img = rspamd_mempool_alloc0 (pool, sizeof (*img));
@@ -1640,10 +1641,11 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE) {
 			/* Try to search for height= or width= in style tag */
 			if (!seen_height && comp->len > 0) {
-				p = rspamd_strncasestr (comp->start, "height", comp->len);
+				pos = rspamd_substring_search_caseless (comp->start, comp->len,
+						"height", sizeof ("height") - 1);
 
-				if (p != NULL) {
-					p += sizeof ("height") - 1;
+				if (pos != -1) {
+					p = comp->start + pos + sizeof ("height") - 1;
 
 					while (p < comp->start + comp->len) {
 						if (g_ascii_isdigit (*p)) {
@@ -1661,10 +1663,11 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			}
 
 			if (!seen_width && comp->len > 0) {
-				p = rspamd_strncasestr (comp->start, "width", comp->len);
+				pos = rspamd_substring_search_caseless (comp->start, comp->len,
+						"width", sizeof ("width") - 1);
 
-				if (p != NULL) {
-					p += sizeof ("width") - 1;
+				if (pos != -1) {
+					p = comp->start + pos + sizeof ("width") - 1;
 
 					while (p < comp->start + comp->len) {
 						if (g_ascii_isdigit (*p)) {
