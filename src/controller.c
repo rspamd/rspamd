@@ -3380,7 +3380,7 @@ static int
 lua_csession_send_ucl (lua_State *L)
 {
 	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
-	ucl_object_t *obj = ucl_object_lua_import (L, 2);
+	ucl_object_t *obj = ucl_object_lua_import_escape (L, 2);
 
 	if (c) {
 		rspamd_controller_send_ucl (c, obj);
@@ -3520,7 +3520,7 @@ rspamd_controller_register_plugins_paths (struct rspamd_controller_worker_ctx *c
 			lua_gettable (L, -3); /* value is at -3 index */
 
 			if (lua_istable (L, -1)) {
-				webui_data = ucl_object_lua_import (L, -1);
+				webui_data = ucl_object_lua_import_escape (L, -1);
 
 				while ((cur = ucl_object_iterate (webui_data, &it, true)) != NULL) {
 					handler_obj = ucl_object_lookup (cur, "handler");
