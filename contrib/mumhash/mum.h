@@ -77,10 +77,12 @@ typedef unsigned __int64 uint64_t;
 #define _MUM_ATTRIBUTE_UNUSED  __attribute__((unused))
 #define _MUM_OPTIMIZE(opts) __attribute__((__optimize__ (opts)))
 #define _MUM_TARGET(opts) __attribute__((__target__ (opts)))
+#define _MUM_INLINE __attribute__((always_inline))
 #else
 #define _MUM_ATTRIBUTE_UNUSED
 #define _MUM_OPTIMIZE(opts)
 #define _MUM_TARGET(opts)
+#define _MUM_INLINE
 #endif
 
 
@@ -104,7 +106,7 @@ static uint64_t _mum_primes [] = {
 
 /* Multiply 64-bit V and P and return sum of high and low parts of the
    result.  */
-static inline uint64_t
+static inline uint64_t _MUM_INLINE
 _mum (uint64_t v, uint64_t p) {
   uint64_t hi, lo;
 #if _MUM_USE_INT128
@@ -165,7 +167,7 @@ _mum (uint64_t v, uint64_t p) {
 #define _mum_bswap64(x) bswap64 (x)
 #endif
 
-static inline uint64_t
+static inline uint64_t _MUM_INLINE
 _mum_le (uint64_t v) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ || !defined(MUM_TARGET_INDEPENDENT_HASH)
   return v;
@@ -176,7 +178,7 @@ _mum_le (uint64_t v) {
 #endif
 }
 
-static inline uint32_t
+static inline uint32_t _MUM_INLINE
 _mum_le32 (uint32_t v) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ || !defined(MUM_TARGET_INDEPENDENT_HASH)
   return v;
@@ -213,7 +215,7 @@ _mum_le32 (uint32_t v) {
 
 #define _MUM_UNROLL_FACTOR (1 << _MUM_UNROLL_FACTOR_POWER)
 
-static inline uint64_t _MUM_OPTIMIZE("unroll-loops")
+static inline uint64_t _MUM_OPTIMIZE("unroll-loops") _MUM_INLINE
 _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
   uint64_t result = start;
   const unsigned char *str = (const unsigned char *) key;
@@ -340,7 +342,7 @@ _mum_hash_default (const void *key, size_t len, uint64_t seed) {
   return _mum_final (result);
 }
 
-static inline uint64_t
+static inline uint64_t _MUM_INLINE
 _mum_next_factor (void) {
   uint64_t start = 0;
   int i;
@@ -397,7 +399,7 @@ mum_hash64 (uint64_t key, uint64_t seed) {
 
 /* Hash data KEY of length LEN and SEED.  The hash depends on the
    target endianess and the unroll factor.  */
-static inline uint64_t
+static inline uint64_t _MUM_INLINE
 mum_hash (const void *key, size_t len, uint64_t seed) {
 #if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
   static int avx2_support = 0;
