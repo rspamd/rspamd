@@ -1182,79 +1182,113 @@ rspamd_header_value_fold (const gchar *name,
 	return res;
 }
 
-#define RKHASH(a, b, h) ((((h) - (a)*d) << 1) + (b))
+static inline bool rspamd_substring_cmp_func (guchar a, guchar b) RSPAMD_ALWAYS_INLINE;
+static inline bool rspamd_substring_cmp_func (guchar a, guchar b) { return a == b; }
+
+static inline bool rspamd_substring_casecmp_func (guchar a, guchar b) RSPAMD_ALWAYS_INLINE;
+static inline bool rspamd_substring_casecmp_func (guchar a, guchar b) { return lc_map[a] == lc_map[b]; }
+
+typedef bool (*rspamd_cmpchar_func_t) (guchar a, guchar b);
+
+static inline void
+rspamd_substring_preprocess (const gchar *pat, gsize len, goffset *fsm,
+		rspamd_cmpchar_func_t f)
+{
+	goffset i, j;
+
+	i = 0;
+	j = -1;
+	fsm[0] = -1;
+
+	while (i < len) {
+		while (j > -1 && !f(pat[i], pat[j])) {
+			j = fsm[j];
+		}
+
+		i++;
+		j++;
+
+		if (f(pat[i], pat[j])) {
+			fsm[i] = fsm[j];
+		}
+		else {
+			fsm[i] = j;
+		}
+	}
+}
+
+static goffset
+rspamd_substring_seacrh_common (const gchar *in, gsize inlen,
+		const gchar *srch, gsize srchlen, rspamd_cmpchar_func_t f)
+{
+	goffset *fsm;
+	goffset i, j, k, ell, ret = -1;
+
+	if (G_LIKELY (srchlen < 1024)) {
+		fsm = g_alloca ((srchlen + 1) * sizeof (*fsm));
+	}
+	else {
+		fsm = g_malloc ((srchlen + 1) * sizeof (*fsm));
+	}
+
+	rspamd_substring_preprocess (srch, srchlen, fsm, f);
+
+	for (ell = 1; f(srch[ell - 1], srch[ell]); ell++) {}
+	if (ell == srchlen) {
+		ell = 0;
+	}
+
+	/* Searching */
+	i = ell;
+	j = k = 0;
+
+	while (j <= inlen - srchlen) {
+		while (i < srchlen && f(srch[i], in[i + j])) {
+			++i;
+		}
+
+		if (i >= srchlen) {
+			while (k < ell && f(srch[k], in[j + k])) {
+				++k;
+			}
+
+			if (k >= ell) {
+				ret = j;
+				goto out;
+			}
+		}
+
+		j += (i - fsm[i]);
+
+		if (i == ell) {
+			k = MAX(0, k - 1);
+		}
+		else {
+			if (fsm[i] <= ell) {
+				k = MAX(0, fsm[i]);
+				i = ell;
+			} else {
+				k = ell;
+				i = fsm[i];
+			}
+		}
+	}
+
+out:
+	if (G_UNLIKELY (srchlen >= 1024)) {
+		g_free (fsm);
+	}
+
+	return ret;
+}
 
 goffset
 rspamd_substring_search (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen)
 {
-	gint d, hash_srch, hash_in;
-	gsize i, j;
-
-	if (inlen < srchlen) {
-		return -1;
-	}
-
-	/* Preprocessing */
-	for (d = i = 1; i < srchlen; ++i) {
-		/* computes d = 2^(m-1) with the left-shift operator */
-		d = (d << 1);
-	}
-
-	for (hash_in = hash_srch = i = 0; i < srchlen; ++i) {
-		hash_srch = ((hash_srch << 1) + srch[i]);
-		hash_in = ((hash_in << 1) + in[i]);
-	}
-
-	/* Searching */
-	j = 0;
-	while (j <= inlen - srchlen) {
-
-		if (hash_srch == hash_in && memcmp (srch, in + j, srchlen) == 0) {
-			return (goffset)j;
-		}
-
-		hash_in = RKHASH (in[j], in[j + srchlen], hash_in);
-		++j;
-	}
-
-	return -1;
-}
-
-goffset
-rspamd_substring_search_caseless (const gchar *in, gsize inlen,
-		const gchar *srch, gsize srchlen)
-{
-	gint d, hash_srch, hash_in;
-	gsize i, j;
-	gchar c1, c2;
-
-	/* Searching */
 	if (inlen > srchlen) {
-		/* Preprocessing */
-		for (d = i = 1; i < srchlen; ++i) {
-			/* computes d = 2^(m-1) with the left-shift operator */
-			d = (d << 1);
-		}
-
-		for (hash_in = hash_srch = i = 0; i < srchlen; ++i) {
-			hash_srch = ((hash_srch << 1) + g_ascii_tolower (srch[i]));
-			hash_in = ((hash_in << 1) + g_ascii_tolower (in[i]));
-		}
-
-		j = 0;
-		while (j <= inlen - srchlen) {
-
-			if (hash_srch == hash_in &&
-					rspamd_lc_cmp (srch, in + j, srchlen) == 0) {
-				return (goffset) j;
-			}
-
-			c1 = g_ascii_tolower (in[j]);
-			c2 = g_ascii_tolower (in[j + srchlen]);
-			hash_in = RKHASH (c1, c2, hash_in);
-			++j;
-		}
+		return rspamd_substring_seacrh_common (in, inlen, srch, srchlen,
+				rspamd_substring_cmp_func);
 	}
 	else if (inlen == srchlen) {
 		return rspamd_lc_cmp (srch, in, srchlen) == 0;
@@ -1266,166 +1300,23 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 	return (-1);
 }
 
-/* Computing of the maximal suffix for <= */
-static inline gint
-rspamd_two_way_max_suffix (const gchar *srch, gint srchlen, gint *p)
-{
-	gint ms, j, k;
-	gchar a, b;
-
-	ms = -1;
-	j = 0;
-	k = *p = 1;
-
-	while (j + k < srchlen) {
-		a = srch[j + k];
-		b = srch[ms + k];
-
-		if (a < b) {
-			j += k;
-			k = 1;
-			*p = j - ms;
-		}
-		else if (a == b)
-			if (k != *p) {
-				k++;
-			}
-			else {
-				j += *p;
-				k = 1;
-			}
-		else { /* a > b */
-			ms = j;
-			j = ms + 1;
-			k = *p = 1;
-		}
-	}
-
-	return (ms);
-}
-
-/* Computing of the maximal suffix for >= */
-static inline gint
-rspamd_two_way_max_suffix_tilde (const gchar *srch, gint srchlen, gint *p)
-{
-	gint ms, j, k;
-	gchar a, b;
-
-	ms = -1;
-	j = 0;
-	k = *p = 1;
-
-	while (j + k < srchlen) {
-		a = srch[j + k];
-		b = srch[ms + k];
-
-		if (a > b) {
-			j += k;
-			k = 1;
-			*p = j - ms;
-		}
-		else if (a == b)
-			if (k != *p) {
-				k ++;
-			}
-			else {
-				j += *p;
-				k = 1;
-			}
-		else { /* a < b */
-			ms = j;
-			j = ms + 1;
-			k = *p = 1;
-		}
-	}
-	return (ms);
-}
-
-/* Two Way string matching algorithm. */
 goffset
-rspamd_substring_search_twoway (const gchar *in, gint inlen,
-		const gchar *srch, gint srchlen)
+rspamd_substring_search_caseless (const gchar *in, gsize inlen,
+		const gchar *srch, gsize srchlen)
 {
-	int i, j, ell, memory, p, per, q;
-
-	/* Preprocessing */
-	i = rspamd_two_way_max_suffix (srch, srchlen, &p);
-	j = rspamd_two_way_max_suffix_tilde (srch, srchlen, &q);
-
-	if (i > j) {
-		ell = i;
-		per = p;
+	if (inlen > srchlen) {
+		return rspamd_substring_seacrh_common (in, inlen, srch, srchlen,
+				rspamd_substring_casecmp_func);
+	}
+	else if (inlen == srchlen) {
+		return rspamd_lc_cmp (srch, in, srchlen) == 0;
 	}
 	else {
-		ell = j;
-		per = q;
+		return (-1);
 	}
 
-	/* Searching */
-	if (memcmp (srch, srch + per, ell + 1) == 0) {
-		j = 0;
-		memory = -1;
-
-		while (j <= inlen - srchlen) {
-			i = MAX (ell, memory) + 1;
-
-			while (i < srchlen && srch[i] == in[i + j]) {
-				i ++;
-			}
-
-			if (i >= srchlen) {
-				i = ell;
-
-				while (i > memory && srch[i] == in[i + j]) {
-					i --;
-				}
-
-				if (i <= memory) {
-					return j;
-				}
-
-				j += per;
-				memory = srchlen - per - 1;
-			}
-			else {
-				j += (i - ell);
-				memory = -1;
-			}
-		}
-	}
-	else {
-		per = MAX (ell + 1, srchlen - ell - 1) + 1;
-		j = 0;
-
-		while (j <= inlen - srchlen) {
-			i = ell + 1;
-
-			while (i < srchlen && srch[i] == in[i + j]) {
-				i ++;
-			}
-
-			if (i >= srchlen) {
-				i = ell;
-
-				while (i >= 0 && srch[i] == in[i + j]) {
-					i --;
-				}
-
-				if (i < 0) {
-					return j;
-				}
-
-				j += per;
-			}
-			else {
-				j += (i - ell);
-			}
-		}
-	}
-
-	return -1;
+	return (-1);
 }
-
 
 goffset
 rspamd_string_find_eoh (GString *input, goffset *body_start)

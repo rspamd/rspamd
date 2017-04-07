@@ -372,7 +372,7 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 
 	if (part->content && part->content->len > sizeof (gtube_pattern) &&
 			part->content->len <= max_check_size) {
-		if (rspamd_substring_search_twoway (part->content->data,
+		if (rspamd_substring_search (part->content->data,
 				part->content->len,
 				gtube_pattern, sizeof (gtube_pattern) - 1) != -1) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;

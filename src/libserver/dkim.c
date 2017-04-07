@@ -1747,7 +1747,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				}
 
 				PTR_ARRAY_FOREACH (ar, i, rh) {
-					if (rspamd_substring_search_twoway (rh->raw_value,
+					if (rspamd_substring_search (rh->raw_value,
 							rh->raw_len, dkim_domain,
 							strlen (dkim_domain)) != -1) {
 						rspamd_dkim_signature_update (ctx, rh->raw_value,

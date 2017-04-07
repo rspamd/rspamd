@@ -326,8 +326,11 @@ typedef off_t goffset;
 #ifndef RSPAMD_ALIGNED
 #if defined(_MSC_VER)
 # define RSPAMD_ALIGNED(x) __declspec(align(x))
+# define RSPAMD_OPTIMIZE(x)
+# define RSPAMD_ALWAYS_INLINE
 #elif defined(__GNUC__)
 # define RSPAMD_ALIGNED(x) __attribute__((aligned(x)))
+# define RSPAMD_ALWAYS_INLINE __attribute__((always_inline))
 #ifndef __clang__
 # define RSPAMD_OPTIMIZE(x) __attribute__((__optimize__ (x)))
 #else
@@ -336,6 +339,7 @@ typedef off_t goffset;
 #else
 # define RSPAMD_ALIGNED(x)
 # define RSPAMD_OPTIMIZE(x)
+# define RSPAMD_ALWAYS_INLINE
 #endif
 #endif
 

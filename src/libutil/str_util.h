@@ -264,7 +264,8 @@ GString *rspamd_header_value_fold (const gchar *name,
 		enum rspamd_newlines_type how);
 
 /**
- * Search for a substring `srch` in the text `in` using Karp-Rabin algorithm
+ * Search for a substring `srch` in the text `in` using Apostolico-Crochemore algorithm
+ * http://www-igm.univ-mlv.fr/~lecroq/string/node12.html#SECTION00120
  * @param in input
  * @param inlen input len
  * @param srch search string
@@ -275,7 +276,8 @@ goffset rspamd_substring_search (const gchar *in, gsize inlen,
 	const gchar *srch, gsize srchlen);
 
 /**
- * Search for a substring `srch` in the text `in` using Karp-Rabin algorithm in caseless matter (ASCII only)
+ * Search for a substring `srch` in the text `in` using Apostolico-Crochemore algorithm in caseless matter (ASCII only)
+ * http://www-igm.univ-mlv.fr/~lecroq/string/node12.html#SECTION00120
  * @param in input
  * @param inlen input len
  * @param srch search string
@@ -284,18 +286,6 @@ goffset rspamd_substring_search (const gchar *in, gsize inlen,
  */
 goffset rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen);
-
-/**
- * Search for a substring `srch` in the text `in` using 2-way algorithm:
- * http://www-igm.univ-mlv.fr/~lecroq/string/node26.html#SECTION00260
- * @param in input
- * @param inlen input len
- * @param srch search string
- * @param srchlen length of the search string
- * @return position of the first substring match or (-1) if not found
- */
-goffset rspamd_substring_search_twoway (const gchar *in, gint inlen,
-		const gchar *srch, gint srchlen);
 
 /**
  * Search for end-of-headers mark in the input string. Returns position just after
