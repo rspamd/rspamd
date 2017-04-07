@@ -3713,7 +3713,7 @@ rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
 				else {
 					/* We have something like bla../, so we need to copy it as is */
 					if (o > path && dot && p > dot) {
-						memcpy (o, dot, p - dot);
+						memmove (o, dot, p - dot);
 						o += p - dot;
 					}
 
