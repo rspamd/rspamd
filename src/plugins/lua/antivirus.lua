@@ -38,13 +38,25 @@ local function trim(s)
 end
 
 local function yield_result(task, rule, vname)
-  local symname = match_patterns(rule['symbol'], vname, rule['patterns'])
-  if rule['whitelist'] and rule['whitelist']:get_key(vname) then
-    rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vname)
-    return
+  if type(vname) == 'string' then
+    local symname = match_patterns(rule['symbol'], vname, rule['patterns'])
+    if rule['whitelist'] and rule['whitelist']:get_key(vname) then
+      rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vname)
+      return
+    end
+    task:insert_result(symname, 1.0, vname)
+    rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
+  elseif type(vname) == 'table' then
+    for _, vn in ipairs(vname) do
+      local symname = match_patterns(rule['symbol'], vn, rule['patterns'])
+      if rule['whitelist'] and rule['whitelist']:get_key(vn) then
+        rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vname)
+      else
+        task:insert_result(symname, 1.0, vname)
+        rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
+      end
+    end
   end
-  task:insert_result(symname, 1.0, vname)
-  rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
   if rule['action'] then
     task:set_pre_result(rule['action'],
         string.format('%s: virus found: "%s"', rule['type'], vname))
@@ -229,6 +241,7 @@ local function check_av_cache(task, rule, fn)
       -- Cached
       if data ~= 'OK' then
         rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
+        data = rspamd_str_split(data, '\x30')
         yield_result(task, rule, data)
       else
         rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
@@ -271,6 +284,10 @@ local function save_av_cache(task, rule, to_save)
     else
       rspamd_logger.debugm(N, task, 'saved cached result for %s: %s', key, to_save)
     end
+  end
+
+  if type(to_save) == 'table' then
+    to_save = table.concat(to_save, '\x30')
   end
 
   if redis_params then
@@ -520,6 +537,9 @@ local function savapi_check(task, rule)
     local message_file = task:store_in_file(tonumber("0644", 8))
     local vnames = {}
 
+    -- Forward declaration for recursive calls
+    local savapi_scan1_cb
+
     local function savapi_fin_cb(err, conn)
       local vnames_reordered = {}
       -- Swap table
@@ -533,7 +553,6 @@ local function savapi_check(task, rule)
           table.insert(vname, virus)
         end
 
-        vname = table.concat(vname, ';')
         yield_result(task, rule, vname)
         save_av_cache(task, rule, vname)
       end
@@ -577,7 +596,7 @@ local function savapi_check(task, rule)
       end
     end
 
-    local function savapi_scan1_cb(err, conn)
+    savapi_scan1_cb = function(err, conn)
       conn:add_read(savapi_scan2_cb, '\n')
     end
 
