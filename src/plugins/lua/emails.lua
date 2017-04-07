@@ -37,14 +37,15 @@ local function check_email_rule(task, rule, addr)
   if rule['dnsbl'] then
     local to_resolve
     if rule['domain_only'] then
-      to_resolve = string.format('%s.%s', addr:get_host(), rule['dnsbl'])
+      to_resolve = addr:get_host()
     else
-      to_resolve = string.format('%s.%s.%s', addr:get_user(), addr:get_host(), rule['dnsbl'])
+      to_resolve = string.format('%s.%s', addr:get_user(), addr:get_host())
     end
 
     if rule['hash'] then
       to_resolve = hash.create_specific(rule['hash'], to_resolve):hex()
     end
+    to_resolve = string.format('%s.%s', to_resolve, rule['dnsbl'])
 
     task:get_resolver():resolve_a({
       task=task,
