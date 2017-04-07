@@ -1288,6 +1288,18 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen)
 {
 	if (inlen > srchlen) {
+		if (G_UNLIKELY (srchlen == 1)) {
+			const gchar *p;
+
+			p = memchr (in, srch[0], inlen);
+
+			if (p) {
+				return p - in;
+			}
+
+			return (-1);
+		}
+
 		return rspamd_substring_search_common (in, inlen, srch, srchlen,
 				rspamd_substring_cmp_func);
 	}
@@ -1306,6 +1318,19 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen)
 {
 	if (inlen > srchlen) {
+		if (G_UNLIKELY (srchlen == 1)) {
+			goffset i;
+			gchar s = lc_map[(guchar)srch[0]];
+
+			for (i = 0; i < inlen; i++) {
+				if (lc_map[(guchar)in[i]] == s) {
+					return i;
+				}
+			}
+
+			return (-1);
+		}
+
 		return rspamd_substring_search_common (in, inlen, srch, srchlen,
 				rspamd_substring_casecmp_func);
 	}
