@@ -1191,7 +1191,7 @@ static inline bool rspamd_substring_casecmp_func (guchar a, guchar b) { return l
 typedef bool (*rspamd_cmpchar_func_t) (guchar a, guchar b);
 
 static inline void
-rspamd_substring_preprocess (const gchar *pat, gsize len, goffset *fsm,
+rspamd_substring_preprocess_kmp (const gchar *pat, gsize len, goffset *fsm,
 		rspamd_cmpchar_func_t f)
 {
 	goffset i, j;
@@ -1217,21 +1217,22 @@ rspamd_substring_preprocess (const gchar *pat, gsize len, goffset *fsm,
 	}
 }
 
-static goffset
-rspamd_substring_seacrh_common (const gchar *in, gsize inlen,
+static inline goffset
+rspamd_substring_search_common (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen, rspamd_cmpchar_func_t f)
 {
+	static goffset st_fsm[128];
 	goffset *fsm;
 	goffset i, j, k, ell, ret = -1;
 
-	if (G_LIKELY (srchlen < 1024)) {
-		fsm = g_alloca ((srchlen + 1) * sizeof (*fsm));
+	if (G_LIKELY (srchlen < G_N_ELEMENTS (st_fsm))) {
+		fsm = st_fsm;
 	}
 	else {
 		fsm = g_malloc ((srchlen + 1) * sizeof (*fsm));
 	}
 
-	rspamd_substring_preprocess (srch, srchlen, fsm, f);
+	rspamd_substring_preprocess_kmp (srch, srchlen, fsm, f);
 
 	for (ell = 1; f(srch[ell - 1], srch[ell]); ell++) {}
 	if (ell == srchlen) {
@@ -1275,7 +1276,7 @@ rspamd_substring_seacrh_common (const gchar *in, gsize inlen,
 	}
 
 out:
-	if (G_UNLIKELY (srchlen >= 1024)) {
+	if (G_UNLIKELY (srchlen >= G_N_ELEMENTS (st_fsm))) {
 		g_free (fsm);
 	}
 
@@ -1287,7 +1288,7 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen)
 {
 	if (inlen > srchlen) {
-		return rspamd_substring_seacrh_common (in, inlen, srch, srchlen,
+		return rspamd_substring_search_common (in, inlen, srch, srchlen,
 				rspamd_substring_cmp_func);
 	}
 	else if (inlen == srchlen) {
@@ -1305,7 +1306,7 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 		const gchar *srch, gsize srchlen)
 {
 	if (inlen > srchlen) {
-		return rspamd_substring_seacrh_common (in, inlen, srch, srchlen,
+		return rspamd_substring_search_common (in, inlen, srch, srchlen,
 				rspamd_substring_casecmp_func);
 	}
 	else if (inlen == srchlen) {
