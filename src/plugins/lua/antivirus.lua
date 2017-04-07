@@ -518,8 +518,30 @@ local function savapi_check(task, rule)
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
     local message_file = task:store_in_file(tonumber("0644", 8))
+    local vnames = {}
+
+    -- Forward declaration for recursive calls
+    local savapi_scan1_cb
 
     local function savapi_fin_cb(err, conn)
+      local vnames_reordered = {}
+      -- Swap table
+      for virus,c in pairs(vnames) do
+        table.insert(vnames_reordered, virus)
+      end
+      rspamd_logger.debugm(N, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
+      if #vnames_reordered > 0 then
+        local vname = nil
+        for _,virus in ipairs(vnames_reordered) do
+          if vname then
+            vname = vname .. ';' .. virus
+          else
+            vname = virus
+          end
+        end
+        yield_result(task, rule, vname)
+        save_av_cache(task, rule, vname)
+      end
       if conn then
         conn:close()
       end
@@ -529,31 +551,38 @@ local function savapi_check(task, rule)
       local result = tostring(data)
       rspamd_logger.debugm(N, task, "%s: got reply: %s", rule['type'], result)
 
+      -- Terminal response - clean
       if string.find(result, '200') or string.find(result, '210') then
         if rule['log_clean'] then
           rspamd_logger.infox(task, '%s: message is clean', rule['type'])
         end
         save_av_cache(task, rule, 'OK')
+        conn:add_write(savapi_fin_cb, 'QUIT\n')
 
+      -- Terminal response - infected
+      elseif string.find(result, '319') then
+        conn:add_write(savapi_fin_cb, 'QUIT\n')
+
+      -- Non-terminal response
       elseif string.find(result, '310') then
         -- Recursive result
-	local vname
-        local parts = rspamd_str_split(result, ' <<< ')
-        if parts and parts[2] then
-          vname = trim(rspamd_str_split(parts[2], ';')[1])
+        local virus_obj = rspamd_str_split(result, ' object ')
+        local virus
+        if virus_obj and virus_obj[2] then
+          virus = rspamd_str_split(virus_obj[2], '<<<')
+          virus = trim(virus[#virus])
+          virus = rspamd_str_split(virus, ' ; ')[1]
         else
-          vname = trim(rspamd_str_split(result, ';')[1])
-          vname = rspamd_str_split(vname, ' ')[2]
+          virus = trim(rspamd_str_split(result, ' ; ')[1])
         end
-	if vname then
-          yield_result(task, rule, vname)
-          save_av_cache(task, rule, vname)
-        end
+        -- Store unique virus names
+        vnames[virus] = 1
+        -- More content is expected
+        conn:add_write(savapi_scan1_cb, '\n')
       end
-      conn:add_write(savapi_fin_cb, 'QUIT\n')
     end
 
-    local function savapi_scan1_cb(err, conn)
+    function savapi_scan1_cb(err, conn)
       conn:add_read(savapi_scan2_cb, '\n')
     end
 
