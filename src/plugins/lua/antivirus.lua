@@ -38,6 +38,7 @@ local function trim(s)
 end
 
 local function yield_result(task, rule, vname)
+  local all_whitelisted = true
   if type(vname) == 'string' then
     local symname = match_patterns(rule['symbol'], vname, rule['patterns'])
     if rule['whitelist'] and rule['whitelist']:get_key(vname) then
@@ -52,6 +53,7 @@ local function yield_result(task, rule, vname)
       if rule['whitelist'] and rule['whitelist']:get_key(vn) then
         rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vn)
       else
+        all_whitelisted = false
         task:insert_result(symname, 1.0, vn)
         rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vn)
       end
@@ -59,6 +61,7 @@ local function yield_result(task, rule, vname)
   end
   if rule['action'] then
     if type(vname) == 'table' then
+      if all_whitelisted then return end
       vname = table.concat(vname, '; ')
     end
     task:set_pre_result(rule['action'],
