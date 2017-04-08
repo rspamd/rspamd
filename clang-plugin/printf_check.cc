@@ -60,6 +60,9 @@ namespace rspamd {
 	static bool pid_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
+	static bool time_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
 	static bool int64_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
@@ -174,6 +177,9 @@ namespace rspamd {
 						this->pcontext, this->ci);
 			case 'P':
 				return llvm::make_unique<PrintfArgChecker> (pid_arg_handler,
+						this->pcontext, this->ci);
+			case 't':
+				return llvm::make_unique<PrintfArgChecker> (time_arg_handler,
 						this->pcontext, this->ci);
 			case 'L':
 				return llvm::make_unique<PrintfArgChecker> (int64_arg_handler,
@@ -621,6 +627,28 @@ namespace rspamd {
 					{BuiltinType::Kind::UInt,
 					 BuiltinType::Kind::Int},
 					"%P");
+		}
+		else {
+			assert (0);
+		}
+	}
+
+	static bool
+	time_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		if (sizeof (time_t) == sizeof (long)) {
+			return check_builtin_type (arg,
+					ctx,
+					{BuiltinType::Kind::ULong,
+							BuiltinType::Kind::Long},
+					"%t");
+		}
+		else if (sizeof (time_t) == sizeof (int)) {
+			return check_builtin_type (arg,
+					ctx,
+					{BuiltinType::Kind::UInt,
+							BuiltinType::Kind::Int},
+					"%t");
 		}
 		else {
 			assert (0);
