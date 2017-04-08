@@ -164,18 +164,17 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             $('#progress').hide();
         }
 
-        function alertMessage (alertState, alertText) {
-            if ($('.alert').is(':visible')) {
-                $(alert).hide().remove();
-            }
-            var alert = $('<div class="alert ' + alertState + '" style="display:none">' +
-                    '<button type="button" class="close" data-dismiss="alert" tutle="Dismiss">&times;</button>' +
-                    '<strong>' + alertText + '</strong>')
-                .prependTo('body');
-            $(alert).show();
+        function alertMessage(alertClass, alertText) {
+            const a = $('<div class="alert ' + alertClass + ' alert-dismissible fade in show">' +
+                '<button type="button" class="close" data-dismiss="alert" title="Dismiss">&times;</button>' +
+                '<strong>' + alertText + '</strong>');
+            $('.notification-area').append(a);
+
             setTimeout(function () {
-                $(alert).remove();
-            }, 3600);
+                $(a).fadeTo(500, 0).slideUp(500, function () {
+                    $(this).alert('close');
+                });
+            }, 5000);
         }
 
         // Public functions
