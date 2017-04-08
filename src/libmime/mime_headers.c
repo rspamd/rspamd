@@ -465,6 +465,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 	gint encoding;
 	gssize r;
 	guint qmarks = 0;
+	gchar *ret;
 	enum {
 		parse_normal = 0,
 		got_eqsign,
@@ -478,9 +479,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 	c = in;
 	p = in;
 	end = in + inlen;
-	out = rspamd_mempool_alloc0 (pool, sizeof (*out));
-	g_string_set_size (out, inlen);
-	out->len = 0;
+	out = g_string_sized_new (inlen);
 	token = g_byte_array_sized_new (80);
 	decoded = g_byte_array_sized_new (122);
 
@@ -632,9 +631,10 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 
 	g_byte_array_free (token, TRUE);
 	g_byte_array_free (decoded, TRUE);
-	rspamd_mempool_add_destructor (pool, g_free, out->str);
+	ret = g_string_free (out, FALSE);
+	rspamd_mempool_add_destructor (pool, g_free, ret);
 
-	return out->str;
+	return ret;
 }
 
 gchar *
