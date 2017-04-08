@@ -417,10 +417,21 @@ function($, _, Humanize) {
 
         if (checked_server === "All SERVERS") {
             rspamd.queryNeighbours("history", function (req_data) {
+                function differentVersions() {
+                    const dv = neighbours_data.some(function (e) {
+                        return e.version !== neighbours_data[0].version;
+                    });
+                    if (dv) {
+                        rspamd.alertMessage('alert-error',
+                            'Neighbours history backend versions do not match. Cannot display history.');
+                        return true;
+                    }
+                }
+
                 var neighbours_data = req_data
                     .filter(function (d) { return d.status }) // filter out unavailable neighbours
                     .map(function (d){ return d.data; });
-                if (neighbours_data.length > 0) {
+                if (neighbours_data.length && !differentVersions()) {
                     var data = {};
                     if (neighbours_data[0].version) {
                         data.rows = [].concat.apply([], neighbours_data
@@ -455,8 +466,12 @@ function($, _, Humanize) {
                             filtering: FooTable.actionFilter
                         }
                     });
+                } else {
+                    if (ft.history) {
+                        ft.history.destroy();
+                        ft.history = undefined;
+                    }
                 }
-
             });
         }
         else {
