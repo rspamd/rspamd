@@ -1130,7 +1130,7 @@ fuzzy_cmd_stat (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool)
 {
 	struct rspamd_fuzzy_cmd *cmd;
-	struct rspamd_fuzzy_encrypted_cmd *enccmd;
+	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
 	if (rule->peer_key) {
@@ -1151,7 +1151,7 @@ fuzzy_cmd_stat (struct fuzzy_rule *rule,
 	io->tag = cmd->tag;
 	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
-	if (rule->peer_key) {
+	if (rule->peer_key && enccmd) {
 		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof (*enccmd);
@@ -1173,7 +1173,7 @@ fuzzy_cmd_hash (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool)
 {
 	struct rspamd_fuzzy_cmd *cmd;
-	struct rspamd_fuzzy_encrypted_cmd *enccmd;
+	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 
 	if (rule->peer_key) {
@@ -1208,7 +1208,7 @@ fuzzy_cmd_hash (struct fuzzy_rule *rule,
 
 	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
-	if (rule->peer_key) {
+	if (rule->peer_key && enccmd) {
 		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof (*enccmd);

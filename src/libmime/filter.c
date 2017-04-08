@@ -382,6 +382,8 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 		}
 	}
 	else {
+		sc = NAN;
+
 		for (i = task->pre_result.action; i < METRIC_ACTION_MAX; i ++) {
 			selected_action = &mres->metric->actions[i];
 			sc = mres->actions_limits[i];
