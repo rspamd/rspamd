@@ -1175,10 +1175,12 @@ rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 	cur = cf->statfiles;
 	while (cur) {
 		st = cur->data;
-		if (rspamd_strncasestr (st->symbol, "spam", -1) != NULL) {
+		if (rspamd_substring_search_caseless (st->symbol,
+				strlen (st->symbol),"spam", 4) != -1) {
 			st->is_spam = TRUE;
 		}
-		else if (rspamd_strncasestr (st->symbol, "ham", -1) != NULL) {
+		else if (rspamd_substring_search_caseless (st->symbol,
+				strlen (st->symbol),"ham", 3) != -1) {
 			st->is_spam = FALSE;
 		}
 

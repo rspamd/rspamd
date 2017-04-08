@@ -1228,12 +1228,12 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			msg_info_config (
 				"statfile %s has no explicit 'spam' setting, trying to guess by symbol",
 				st->symbol);
-			if (rspamd_strncasestr (st->symbol, "spam",
-				strlen (st->symbol)) != NULL) {
+			if (rspamd_substring_search_caseless (st->symbol,
+					strlen (st->symbol),"spam", 4) != -1) {
 				st->is_spam = TRUE;
 			}
-			else if (rspamd_strncasestr (st->symbol, "ham",
-				strlen (st->symbol)) != NULL) {
+			else if (rspamd_substring_search_caseless (st->symbol,
+					strlen (st->symbol),"ham", 3) != -1) {
 				st->is_spam = FALSE;
 			}
 			else {

@@ -86,11 +86,6 @@ gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
 gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 
 /*
- * Find string find in string s ignoring case
- */
-gchar * rspamd_strncasestr (const gchar *s, const gchar *find, gint len);
-
-/*
  * Try to convert string of length to long
  */
 gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
