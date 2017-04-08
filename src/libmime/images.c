@@ -471,7 +471,7 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 	}
 
 	if (src == NULL) {
-		msg_info_task ("cannot load image of type %s from %s",
+		msg_info_task ("cannot load image of type %s from %T",
 				rspamd_image_type_str (img->type), img->filename);
 	}
 	else {

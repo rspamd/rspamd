@@ -339,7 +339,7 @@ bayes_classify (struct rspamd_classifier * ctx,
 	if (ctx->cfg->min_tokens > 0 &&
 			cl.text_tokens < ctx->cfg->min_tokens * 0.1) {
 		msg_info_bayes ("ignore bayes probability %.2f since we have "
-				"too few text tokens: %d, at least %.0f is required",
+				"too few text tokens: %uL, at least %.0f is required",
 				final_prob,
 				cl.text_tokens,
 				ctx->cfg->min_tokens * 0.1);

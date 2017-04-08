@@ -633,7 +633,7 @@ lua_dkim_sign_handler (lua_State *L)
 		}
 	}
 	else {
-		msg_err_task ("neither key nor rawkey are specified", err);
+		msg_err_task ("neither key nor rawkey are specified");
 		lua_pushboolean (L, FALSE);
 
 		return 1;

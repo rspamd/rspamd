@@ -665,7 +665,7 @@ rspamd_hard_terminate (struct rspamd_main *rspamd_main)
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		w = v;
-		msg_err_main ("kill worker %p as Rspamd is terminating due to "
+		msg_err_main ("kill worker %P as Rspamd is terminating due to "
 				"an unrecoverable error", w->pid);
 		kill (w->pid, SIGKILL);
 	}
