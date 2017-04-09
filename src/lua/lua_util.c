@@ -368,6 +368,13 @@ LUA_FUNCTION_DEF (util, normalize_prob);
 LUA_FUNCTION_DEF (util, is_utf_spoofed);
 
 /***
+ * @function util.is_valid_utf8(str)
+ * Returns true if a string is valid UTF8 string
+ * @return {boolean} true if a string is spoofed
+ */
+LUA_FUNCTION_DEF (util, is_valid_utf8);
+
+/***
  * @function util.pack(fmt, ...)
  *
  * Backport of Lua 5.3 `string.pack` function:
@@ -507,6 +514,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
+	LUA_INTERFACE_DEF (util, is_valid_utf8),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -1969,6 +1977,24 @@ lua_util_get_hostname (lua_State *L)
 	gethostname (hostbuf, hostlen - 1);
 
 	lua_pushstring (L, hostbuf);
+
+	return 1;
+}
+
+static gint
+lua_util_is_valid_utf8 (lua_State *L)
+{
+	const gchar *str;
+	gsize len;
+
+	str = lua_tolstring (L, 1, &len);
+
+	if (str) {
+		lua_pushboolean (L, g_utf8_validate (str, len, NULL));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
