@@ -150,9 +150,8 @@ local function handle_history_request(task, conn, from, to, reset)
         local reply = {
           version = 2,
         }
-
         if settings.compress then
-          reply.rows = fun.totable(fun.filter(function(e) return e ~= nil end,
+          data = fun.totable(fun.filter(function(e) return e ~= nil end,
             fun.map(function(e)
               local _,dec = rspamd_util.zstd_decompress(e)
               if dec then
@@ -160,9 +159,22 @@ local function handle_history_request(task, conn, from, to, reset)
               end
               return nil
             end, data)))
-        else
-          reply.rows = data
         end
+        -- Parse elements using ucl
+        data = fun.totable(
+          fun.map(function (_, obj) return obj end,
+          fun.filter(function(res, obj) if res then return true end end,
+            fun.map(function(elt)
+              local parser = ucl.parser()
+              local res,_ = parser:parse_string(elt)
+
+              if res then
+                return true, parser:get_object()
+              else
+                return false, nil
+              end
+            end, data))))
+        reply.rows = data
         conn:send_ucl(reply)
       else
         rspamd_logger.errx(task, 'got error %s when getting history: %s',
