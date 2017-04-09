@@ -1445,7 +1445,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	/* Strip spaces from the url */
 	/* Head spaces */
-	while (g_ascii_isspace (*p) && p < start + len) {
+	while ( p < start + len && g_ascii_isspace (*p)) {
 		p ++;
 		start ++;
 		len --;
@@ -1459,7 +1459,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	/* Trailing spaces */
 	p = start + len - 1;
 
-	while (g_ascii_isspace (*p) && p >= start) {
+	while (p >= start && g_ascii_isspace (*p)) {
 		p --;
 		len --;
 

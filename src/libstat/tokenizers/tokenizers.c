@@ -304,8 +304,10 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 
 	buf.begin = text;
 	buf.len = len;
+	buf.flags = 0;
 	token.begin = NULL;
 	token.len = 0;
+	token.flags = 0;
 
 	if (compat || !is_utf) {
 		func = rspamd_tokenizer_get_word_compat;
