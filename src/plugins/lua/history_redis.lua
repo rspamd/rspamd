@@ -163,7 +163,13 @@ local function handle_history_request(task, conn, from, to, reset)
         -- Parse elements using ucl
         data = fun.totable(
           fun.map(function (_, obj) return obj end,
-          fun.filter(function(res, obj) if res then return true end end,
+          fun.filter(function(res, obj)
+              if res and (not obj.subject or
+                  rspamd_util.is_valid_utf8(obj.subject)) then
+                return true
+              end
+              return false
+            end,
             fun.map(function(elt)
               local parser = ucl.parser()
               local res,_ = parser:parse_string(elt)
