@@ -164,8 +164,7 @@ local function handle_history_request(task, conn, from, to, reset)
         data = fun.totable(
           fun.map(function (_, obj) return obj end,
           fun.filter(function(res, obj)
-              if res and (not obj.subject or
-                  rspamd_util.is_valid_utf8(obj.subject)) then
+              if res then
                 return true
               end
               return false
@@ -180,6 +179,11 @@ local function handle_history_request(task, conn, from, to, reset)
                 return false, nil
               end
             end, data))))
+        fun.each(function(e)
+          if e.subject and not rspamd_util.is_valid_utf8(e.subject) then
+            e.subject = '???'
+          end
+        end, data)
         reply.rows = data
         conn:send_ucl(reply)
       else
