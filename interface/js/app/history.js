@@ -65,7 +65,7 @@ function($, _, Humanize) {
     function process_history_v2(data) {
         var items = [];
 
-        $.each(data.rows.map(function(elt) { return JSON.parse(elt);}),
+        $.each(data.rows,
           function (i, item) {
 
             preprocess_item(item);
