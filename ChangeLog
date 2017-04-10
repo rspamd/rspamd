@@ -1,3 +1,47 @@
+1.5.5:
+	* [CritFix] Fix classifier learning with Redis backend
+	* [CritFix] Fix issue when parsing encoded rfc822/messages
+	* [Feature] Add escaped version of lua_ucl import
+	* [Feature] Add task:headers_foreach function
+	* [Feature] Allow to process filenames from content type
+	* [Feature] Allow to query hashed emails
+	* [Feature] Ignore bayes with mostly metatokens or with too few text
+	* [Feature] Probabilistically skip metatokens
+	* [Feature] Retrieve all virus names from SAVAPI
+	* [Feature] Rework classifiers lua metatokens
+	* [Feature] Store headers order
+	* [Feature] Store text tokens inside bayes tokens
+	* [Feature] Use cached shingles keys
+	* [Fix] Add missing score normalisation for HFILTER_URL_ONLY
+	* [Fix] Avoid lookup in absent hash
+	* [Fix] Check return values from Lua functions called from C
+	* [Fix] Do not count sending and loading time in rspamc
+	* [Fix] Escape json strings for controller rejplies from Lua
+	* [Fix] Fix archive scans for savapi
+	* [Fix] Fix domain_only emails RBL
+	* [Fix] Fix ip_score map configuration
+	* [Fix] Fix JSON output for history_redis
+	* [Fix] Fix one character length substrings search
+	* [Fix] Fix parsing of non-RFC compatible Exim received
+	* [Fix] Fix parsing of options for workers with the same type
+	* [Fix] Fix processing of small tokens vectors
+	* [Fix] Fix rfc2047 tokenization
+	* [Fix] Fix typo
+	* [Fix] More fixes for inplace decoding
+	* [Fix] Try to avoid modifications of the original data
+	* [Fix] URL redirector: Fix call to is_redirector
+	* [Rework] Set token data as uint64_t instead of chars array
+	* [WebUI] Check if neighbours' history backend versions match
+	* [WebUI] Disable phrase connectors replacement in history filtering
+	* [WebUI] Disable phrase connectors replacement in symbols filtering
+	* [WebUI] Do not hide messages with bad subject, just replace it with '???'
+	* [WebUI] Fix error message
+	* [WebUI] Fix history v2 display
+	* [WebUI] Fix legacy history
+	* [WebUI] history: break To address lists on commas
+	* [WebUI] Increase default timeout to 20 seconds
+	* [WebUI] Save some history table space
+
 1.5.4:
 	* [Conf] Add history_redis default configuration
 	* [Feature] Add spoofed rules
