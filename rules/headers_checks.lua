@@ -901,3 +901,20 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
   score = 4.0,
   group = 'header'
 }
+
+rspamd_config.CTYPE_MIXED_BOGUS = {
+  callback = function(task)
+    local ct = task:get_header('Content-Type')
+    if (not ct) then return false end
+    local parts = task:get_parts()
+    if (not parts) then return false end
+    if (ct:lower():match('^multipart/mixed') ~= nil and #parts < 3)
+    then
+      return true, tostring(#parts)
+    end
+    return false
+  end,
+  description = 'multipart/mixed with less than 3 total parts',
+  score = 2.0,
+  group = 'headers'
+}
