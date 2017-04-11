@@ -283,18 +283,6 @@ _mum_final (uint64_t h) {
   return h;
 }
 
-#if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
-
-/* We want to use AVX2 insn MULX instead of generic x86-64 MULQ where
-   it is possible.  Although on modern Intel processors MULQ takes
-   3-cycles vs. 4 for MULX, MULX permits more freedom in insn
-   scheduling as it uses less fixed registers.  */
-static inline uint64_t _MUM_TARGET("arch=haswell")
-_mum_hash_avx2 (const void * key, size_t len, uint64_t seed) {
-  return _mum_final (_mum_hash_aligned (seed + len, key, len));
-}
-#endif
-
 #ifndef _MUM_UNALIGNED_ACCESS
 #if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) \
     || defined(__s390__) || defined(__m32c__) || defined(cris)     \
@@ -317,10 +305,7 @@ _mum_hash_avx2 (const void * key, size_t len, uint64_t seed) {
 #error "too small block length"
 #endif
 
-static inline uint64_t
-#if defined(__x86_64__)
-_MUM_TARGET("inline-all-stringops")
-#endif
+static inline uint64_t _MUM_INLINE
 _mum_hash_default (const void *key, size_t len, uint64_t seed) {
   uint64_t result;
   const unsigned char *str = (const unsigned char *) key;
@@ -401,18 +386,6 @@ mum_hash64 (uint64_t key, uint64_t seed) {
    target endianess and the unroll factor.  */
 static inline uint64_t _MUM_INLINE
 mum_hash (const void *key, size_t len, uint64_t seed) {
-#if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
-  static int avx2_support = 0;
-
-  if (avx2_support > 0)
-    return _mum_hash_avx2 (key, len, seed);
-  else if (! avx2_support) {
-    __builtin_cpu_init ();
-    avx2_support =  __builtin_cpu_supports ("avx2") ? 1 : -1;
-    if (avx2_support > 0)
-      return _mum_hash_avx2 (key, len, seed);
-  }
-#endif
   return _mum_hash_default (key, len, seed);
 }
 
