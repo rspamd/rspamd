@@ -200,7 +200,7 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
-      my $ts = join ' ', ( split /\s+/ )[ 0 .. 1 ];
+      my $ts = join ' ', ( split /\s+/ )[ 0 .. 2 ];
 
       next if ( $ts lt $startTime );
       next if ( defined $endTime && $ts gt $endTime );
