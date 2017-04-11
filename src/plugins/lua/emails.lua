@@ -22,6 +22,7 @@ limitations under the License.
 local rules = {}
 local logger = require "rspamd_logger"
 local hash = require "rspamd_cryptobox_hash"
+local N = "emails"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
@@ -39,13 +40,21 @@ local function check_email_rule(task, rule, addr)
     if rule['domain_only'] then
       to_resolve = addr:get_host()
     else
-      to_resolve = string.format('%s.%s', addr:get_user(), addr:get_host())
+      if not rule['hash'] then
+        to_resolve = string.format('%s.%s', addr:get_user(), addr:get_host())
+      else
+        to_resolve = string.format('%s@%s', addr:get_user(), addr:get_host())
+      end
     end
+
+    logger.debugm(N, task, "check %s on %s", to_resolve, rule['dnsbl'])
 
     if rule['hash'] then
       to_resolve = hash.create_specific(rule['hash'], to_resolve):hex()
     end
     to_resolve = string.format('%s.%s', to_resolve, rule['dnsbl'])
+
+    logger.debugm(N, task, "query %s", to_resolve)
 
     task:get_resolver():resolve_a({
       task=task,
@@ -110,6 +119,8 @@ if opts and type(opts) == 'table' then
         logger.errx(rspamd_config, 'incomplete rule')
       else
         table.insert(rules, rule)
+        logger.infox(rspamd_config, 'add emails rule %s',
+          rule['dnsbl'] or rule['name'] or '???')
       end
     end
   end
