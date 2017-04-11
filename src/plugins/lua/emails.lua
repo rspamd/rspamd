@@ -26,39 +26,49 @@ local N = "emails"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
-  local function emails_dns_cb(_, to_resolve, results, err)
-    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-      logger.errx(task, 'Error querying DNS: %1', err)
-    elseif results then
-      logger.infox(task, '<%1> email: [%2] resolved for symbol: %3',
-        task:get_message_id(), to_resolve, rule['symbol'])
-      task:insert_result(rule['symbol'], 1)
-    end
-  end
   if rule['dnsbl'] then
+    local email
     local to_resolve
+
     if rule['domain_only'] then
-      to_resolve = addr:get_host()
+      email = addr:get_host()
     else
       if not rule['hash'] then
-        to_resolve = string.format('%s.%s', addr:get_user(), addr:get_host())
+        email = string.format('%s.%s', addr:get_user(), addr:get_host())
       else
-        to_resolve = string.format('%s@%s', addr:get_user(), addr:get_host())
+        email = string.format('%s@%s', addr:get_user(), addr:get_host())
       end
     end
 
-    logger.debugm(N, task, "check %s on %s", to_resolve, rule['dnsbl'])
+    local function emails_dns_cb(_, _, results, err)
+      if err and (err ~= 'requested record is not found'
+          and err ~= 'no records with this name') then
+        logger.errx(task, 'Error querying DNS: %1', err)
+      elseif results then
+        if rule['hash'] then
+          task:insert_result(rule['symbol'], 1.0, {email, to_resolve})
+        else
+          task:insert_result(rule['symbol'], 1.0, email)
+        end
+
+      end
+    end
+
+    logger.debugm(N, task, "check %s on %s", email, rule['dnsbl'])
 
     if rule['hash'] then
-      to_resolve = hash.create_specific(rule['hash'], to_resolve):hex()
+      to_resolve = hash.create_specific(rule['hash'], email):hex()
+    else
+      to_resolve = email
     end
-    to_resolve = string.format('%s.%s', to_resolve, rule['dnsbl'])
 
-    logger.debugm(N, task, "query %s", to_resolve)
+    local dns_arg = string.format('%s.%s', to_resolve, rule['dnsbl'])
+
+    logger.debugm(N, task, "query %s", dns_arg)
 
     task:get_resolver():resolve_a({
       task=task,
-      name = to_resolve,
+      name = dns_arg,
       callback = emails_dns_cb})
   elseif rule['map'] then
     if rule['domain_only'] then
