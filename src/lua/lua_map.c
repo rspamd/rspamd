@@ -223,8 +223,7 @@ lua_config_add_hash_map (lua_State *L)
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
 		map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-		map->data.hash = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		map->data.hash = NULL;
 		map->type = RSPAMD_LUA_MAP_SET;
 
 		if ((m = rspamd_map_add (cfg, map_line, description,
@@ -232,7 +231,6 @@ lua_config_add_hash_map (lua_State *L)
 				rspamd_hosts_fin,
 				(void **)&map->data.hash)) == NULL) {
 			msg_warn_config ("invalid set map %s", map_line);
-			g_hash_table_destroy (map->data.hash);
 			lua_pushnil (L);
 			return 1;
 		}
@@ -262,8 +260,7 @@ lua_config_add_kv_map (lua_State *L)
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
 		map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-		map->data.hash = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		map->data.hash = NULL;
 		map->type = RSPAMD_LUA_MAP_HASH;
 
 		if ((m = rspamd_map_add (cfg, map_line, description,
@@ -271,8 +268,8 @@ lua_config_add_kv_map (lua_State *L)
 				rspamd_kv_list_fin,
 				(void **)&map->data.hash)) == NULL) {
 			msg_warn_config ("invalid hash map %s", map_line);
-			g_hash_table_destroy (map->data.hash);
 			lua_pushnil (L);
+
 			return 1;
 		}
 
