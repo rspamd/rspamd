@@ -299,6 +299,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				IF_HEADER (FROM_HEADER) {
 					task->from_envelope = rspamd_email_address_from_smtp (hv->str,
 							hv->len);
+					debug_task ("read from header, value: %V", hv);
+
 					if (!task->from_envelope) {
 						msg_err_task ("bad from header: '%V'", hv);
 						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
@@ -311,6 +313,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'j':
 			case 'J':
 				IF_HEADER (JSON_HEADER) {
+					debug_task ("read json header, value: %V", hv);
 					fl = rspamd_config_parse_flag (hv->str, hv->len);
 					if (fl) {
 						task->flags |= RSPAMD_TASK_FLAG_JSON;
@@ -376,24 +379,29 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					srch.begin = "all";
 					srch.len = 3;
 
+					debug_task ("read pass header, value: %V", hv);
+
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 						debug_task ("pass all filters");
 					}
 				}
 				IF_HEADER (PROFILE_HEADER) {
+					debug_task ("read profile header, value: %V", hv);
 					task->flags |= RSPAMD_TASK_FLAG_PROFILE;
 				}
 				break;
 			case 's':
 			case 'S':
 				IF_HEADER (SUBJECT_HEADER) {
+					debug_task ("read subject header, value: %V", hv);
 					task->subject = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
 				}
 				IF_HEADER (SETTINGS_ID_HEADER) {
 					guint64 h;
 					guint32 *hp;
 
+					debug_task ("read settings-id header, value: %V", hv);
 					h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
 							hv_tok->begin, hv_tok->len, 0xdeadbabe);
 					hp = rspamd_mempool_alloc (task->task_pool, sizeof (*hp));
@@ -409,21 +417,28 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					 * We must ignore User header in case of spamc, as SA has
 					 * different meaning of this header
 					 */
+					debug_task ("read user header, value: %V", hv);
 					if (!RSPAMD_TASK_IS_SPAMC (task)) {
 						task->user = rspamd_mempool_ftokdup (task->task_pool,
 								hv_tok);
+					}
+					else {
+						msg_info_task ("ignore user header: legacy SA protocol");
 					}
 				}
 				IF_HEADER (URLS_HEADER) {
 					srch.begin = "extended";
 					srch.len = 8;
 
+					debug_task ("read urls header, value: %V", hv);
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
 						debug_task ("extended urls information");
 					}
 				}
 				IF_HEADER (USER_AGENT_HEADER) {
+					debug_task ("read user-agent header, value: %V", hv);
+
 					if (hv_tok->len == 6 &&
 							rspamd_lc_cmp (hv_tok->begin, "rspamc", 6) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_LOCAL_CLIENT;
@@ -433,6 +448,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'l':
 			case 'L':
 				IF_HEADER (NO_LOG_HEADER) {
+					debug_task ("read log header, value: %V", hv);
 					srch.begin = "no";
 					srch.len = 2;
 
@@ -444,6 +460,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'm':
 			case 'M':
 				IF_HEADER (MLEN_HEADER) {
+					debug_task ("read message length header, value: %V", hv);
 					if (!rspamd_strtoul (hv_tok->begin,
 							hv_tok->len,
 							&task->message_len)) {
