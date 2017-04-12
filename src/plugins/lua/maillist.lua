@@ -204,7 +204,7 @@ local function check_ml_googlegroup(task)
     end
   end
 
-  return check_rfc2919(task)
+  return true
 end
 
 -- Majordomo detector
@@ -237,7 +237,7 @@ local function check_ml_cgp(task)
     return false
   end
 
-  return check_rfc2919(task)
+  return true
 end
 
 local function check_ml_generic(task)
@@ -250,20 +250,22 @@ local function check_ml_generic(task)
 end
 
 local function check_maillist(task)
-  if check_ml_ezmlm(task) then
-    task:insert_result(symbol, 1, 'ezmlm')
-  elseif check_ml_mailman(task) then
-    task:insert_result(symbol, 1, 'mailman')
-  elseif check_ml_subscriberu(task) then
-    task:insert_result(symbol, 1, 'subscribe.ru')
-  elseif check_ml_googlegroup(task) then
-    task:insert_result(symbol, 1, 'googlegroups')
-  elseif check_ml_majordomo(task) then
-    task:insert_result(symbol, 1, 'majordomo')
-  elseif check_ml_cgp(task) then
-    task:insert_result(symbol, 1, 'cgp')
-  elseif check_ml_generic(task) then
-    task:insert_result(symbol, 0.5, 'generic')
+  if check_ml_generic(task) then
+    if check_ml_ezmlm(task) then
+      task:insert_result(symbol, 1, 'ezmlm')
+    elseif check_ml_mailman(task) then
+      task:insert_result(symbol, 1, 'mailman')
+    elseif check_ml_subscriberu(task) then
+      task:insert_result(symbol, 1, 'subscribe.ru')
+    elseif check_ml_googlegroup(task) then
+      task:insert_result(symbol, 1, 'googlegroups')
+    elseif check_ml_majordomo(task) then
+      task:insert_result(symbol, 1, 'majordomo')
+    elseif check_ml_cgp(task) then
+      task:insert_result(symbol, 1, 'cgp')
+    else
+      task:insert_result(symbol, 0.5, 'generic')
+    end
   end
 end
 
