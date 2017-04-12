@@ -264,3 +264,71 @@ rspamd_config.EXT_CSS = {
   group = 'html',
   description = 'Message contains external CSS reference'
 }
+
+rspamd_config.HTTP_TO_HTTPS = {
+  callback = function(task)
+    local tp = task:get_text_parts()
+    if (not tp) then return false end
+    for _,p in ipairs(tp) do
+      if p:is_html() then
+        local hc = p:get_html()
+        local found = false
+        hc:foreach_tag('a', function (tag, length)
+          -- Skip this loop if we already have a match
+          if (found) then return true end
+          local c = tag:get_content()
+          if (c) then
+            c = tostring(c):lower()
+            if (not c:match('^http')) then return false end
+            local u = tag:get_extra()
+            if (not u) then return false end
+            u = tostring(u):lower()
+            if (not u:match('^http')) then return false end
+            if ((c:match('^http:') and u:match('^https:')) or
+                (c:match('^https:') and u:match('^http:')))
+            then
+              found = true
+              return true
+            end
+          end
+          return false
+        end)
+        if (found) then return true end
+        return false
+      end
+    end
+    return false
+  end,
+  description = 'Anchor text contains different scheme to target URL',
+  score = 2.0,
+  group = 'html'
+}
+
+rspamd_config.HTTP_TO_IP = {
+  callback = function(task)
+    local tp = task:get_text_parts()
+    if (not tp) then return false end
+    for _,p in ipairs(tp) do
+      if p:is_html() then
+        local hc = p:get_html()
+        local found = false
+        hc:foreach_tag('a', function (tag, length)
+          if (found) then return true end
+          local u = tag:get_extra()
+          if (u) then
+            u = tostring(u):lower()
+            if (u:match('^https?://%d+%.%d+%.%d+%.%d+')) then
+              found = true
+            end
+          end
+          return false
+        end)
+        if found then return true end
+        return false
+      end
+    end
+  end,
+  description = 'Anchor points to an IP address',
+  score = 1.0,
+  group = 'html'
+}
