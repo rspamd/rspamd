@@ -161,7 +161,15 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		ham_freq = ((double)ham_count / MAX (1., (double)ctx->ham_learns));
 		spam_prob = spam_freq / (spam_freq + ham_freq);
 		ham_prob = ham_freq / (spam_freq + ham_freq);
-		fw = feature_weight[tok->window_idx % G_N_ELEMENTS (feature_weight)];
+
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UNIGRAM) {
+			fw = 1.0;
+		}
+		else {
+			fw = feature_weight[tok->window_idx %
+					G_N_ELEMENTS (feature_weight)];
+		}
+
 		norm_sum = (spam_freq + ham_freq) * (spam_freq + ham_freq);
 		norm_sub = (spam_freq - ham_freq) * (spam_freq - ham_freq);
 

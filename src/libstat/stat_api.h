@@ -31,6 +31,7 @@
 #define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1 << 2)
 #define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1 << 3)
 #define RSPAMD_STAT_TOKEN_FLAG_SUBJECT (1 << 4)
+#define RSPAMD_STAT_TOKEN_FLAG_UNIGRAM (1 << 5)
 
 typedef struct rspamd_stat_token_s {
 	const gchar *begin;

@@ -326,6 +326,18 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 			}
 		}
 
+		if (token_flags & RSPAMD_STAT_TOKEN_FLAG_UNIGRAM) {
+			new_tok = rspamd_mempool_alloc0 (pool, token_size);
+			new_tok->flags = token_flags;
+			new_tok->t1 = token;
+			new_tok->t2 = token;
+			new_tok->data = cur;
+			new_tok->window_idx = 0;
+			g_ptr_array_add (result, new_tok);
+
+			continue;
+		}
+
 #define ADD_TOKEN do {\
     new_tok = rspamd_mempool_alloc0 (pool, token_size); \
     new_tok->flags = token_flags; \
