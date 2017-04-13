@@ -312,6 +312,7 @@ rspamd_config.HTTP_TO_IP = {
     for _,p in ipairs(tp) do
       if p:is_html() then
         local hc = p:get_html()
+        if (not hc) then return false end
         local found = false
         hc:foreach_tag('a', function (tag, length)
           if (found) then return true end
