@@ -272,6 +272,7 @@ rspamd_config.HTTP_TO_HTTPS = {
     for _,p in ipairs(tp) do
       if p:is_html() then
         local hc = p:get_html()
+        if (not hc) then return false end
         local found = false
         hc:foreach_tag('a', function (tag, length)
           -- Skip this loop if we already have a match
