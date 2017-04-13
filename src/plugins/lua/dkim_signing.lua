@@ -21,6 +21,8 @@ local rspamd_util = require "rspamd_util"
 local settings = {
   allow_envfrom_empty = true,
   allow_hdrfrom_mismatch = false,
+  allow_hdrfrom_mismatch_local = false,
+  allow_hdrfrom_mismatch_sign_networks = false,
   allow_hdrfrom_multiple = false,
   allow_username_mismatch = false,
   auth_only = true,
@@ -53,12 +55,17 @@ local function simple_template(tmpl, keys)
 end
 
 local function dkim_signing_cb(task)
+  local is_local, is_sign_networks
   local auser = task:get_user()
+  local ip = task:get_from_ip()
+  if ip and ip:is_local() then
+    is_local = true
+  end
   if settings.auth_only and not auser then
-    local ip = task:get_from_ip()
-    if settings.sign_local and ip:is_local() then
+    if settings.sign_local and is_local then
       rspamd_logger.debugm(N, task, 'mail is from local address')
     elseif (settings.sign_networks and settings.sign_networks:get_key(ip)) then
+      is_sign_networks = true
       rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
     else
       rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
@@ -102,7 +109,9 @@ local function dkim_signing_cb(task)
       edom = rspamd_util.get_tld(edom)
     end
   end
-  if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom then
+  if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom and
+    (not settings.allow_hdrfrom_mismatch_local or not is_local) and
+    (not settings.allow_hdrfrom_mismatch_sign_networks or not is_sign_networks) then
     rspamd_logger.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
     return false
   end
