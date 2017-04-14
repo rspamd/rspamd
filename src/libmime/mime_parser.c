@@ -340,7 +340,6 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 				memcpy (&cd->filename, &found->value, sizeof (cd->filename));
 			}
 		}
-
 	}
 	else {
 		for (i = 0; i < hdrs->len; i ++) {
@@ -354,6 +353,25 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 			if (cd) {
 				msg_debug_mime ("processed content disposition: %s",
 						cd->lc_data);
+
+				/* We still need to check filename */
+				if (cd->filename.len == 0) {
+					if (part->ct && part->ct->attrs) {
+						RSPAMD_FTOK_ASSIGN (&srch, "name");
+						found = g_hash_table_lookup (part->ct->attrs, &srch);
+
+						if (!found) {
+							RSPAMD_FTOK_ASSIGN (&srch, "filename");
+							found = g_hash_table_lookup (part->ct->attrs, &srch);
+						}
+
+						if (found) {
+							cd->type = RSPAMD_CT_ATTACHMENT;
+							memcpy (&cd->filename, &found->value,
+									sizeof (cd->filename));
+						}
+					}
+				}
 				break;
 			}
 		}
