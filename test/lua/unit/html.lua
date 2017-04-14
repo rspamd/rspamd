@@ -57,6 +57,64 @@ context("HTML processing", function()
   </body>
 </html>
       ]], 'Hello, world!'},
+      {[[
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>title</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+  </head>
+  <body>
+    <!-- page content -->
+    Hello, world!<br>test</br><br>content</hr>more content<br>
+    <div>
+      content inside div
+    </div>
+  </body>
+</html>
+      ]], 'Hello, world!\r\ntest\r\ncontent\r\nmore content\r\ncontent inside div\r\n'},
+      {[[
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>title</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+  </head>
+  <body>
+    <!-- tabular content -->
+    <table>
+      content
+    </table>
+    <table>
+      <tr>
+        <th>heada</th>
+        <th>headb</th>
+      </tr>
+      <tr>
+        <td>data1</td>
+        <td>data2</td>
+      </tr>
+    </table>
+
+  </body>
+</html>
+      ]], 'content heada headb\r\ndata1 data2\r\n'},
+      {[[
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>title</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+  </head>
+  <body>
+    <!-- escape content -->
+    a&nbsp;b a &gt; b a &lt; b a &amp; b &apos;a &quot;a&quot;
+  </body>
+</html>
+      ]], 'a b a > b a < b a & b \'a "a"'},
     }
 
     for _,c in ipairs(cases) do
