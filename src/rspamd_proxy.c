@@ -601,7 +601,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 
 	type = g_quark_try_string ("rspamd_proxy");
 
-	ctx = rspamd_mempool_alloc (cfg->cfg_pool,
+	ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct rspamd_proxy_ctx));
 	ctx->magic = rspamd_rspamd_proxy_magic;
 	ctx->timeout = 10.0;
@@ -624,8 +624,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			"timeout",
 			rspamd_rcl_parse_struct_time,
 			ctx,
-			G_STRUCT_OFFSET (struct rspamd_proxy_ctx,
-					timeout),
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"IO timeout");
 	rspamd_rcl_register_worker_option (cfg,
@@ -633,8 +632,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			"rotate",
 			rspamd_rcl_parse_struct_time,
 			ctx,
-			G_STRUCT_OFFSET (struct rspamd_proxy_ctx,
-					rotate_tm),
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, rotate_tm),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"Rotation keys time, default: "
 			G_STRINGIFY (DEFAULT_ROTATION_TIME) " seconds");
@@ -643,8 +641,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			"keypair",
 			rspamd_rcl_parse_struct_keypair,
 			ctx,
-			G_STRUCT_OFFSET (struct rspamd_proxy_ctx,
-					key),
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, key),
 			0,
 			"Server's keypair");
 	rspamd_rcl_register_worker_option (cfg,
