@@ -365,7 +365,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 	gchar *h;
 	gboolean from_found = FALSE;
 	guint count = 0;
-	struct rspamd_dkim_header *new, *check;
+	struct rspamd_dkim_header *new;
 	GHashTable *htb;
 
 	p = param;
@@ -405,7 +405,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 
 			g_ptr_array_add (ctx->hlist, new);
 
-			if ((check = g_hash_table_lookup (htb, h)) != NULL) {
+			if (g_hash_table_lookup (htb, h) != NULL) {
 				new->count++;
 			}
 			else {

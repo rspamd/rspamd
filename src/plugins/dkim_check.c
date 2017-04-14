@@ -274,6 +274,15 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"dkim",
+			"Headers used in signing",
+			"sign_headers",
+			UCL_STRING,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	return 0;
 }
@@ -315,21 +324,21 @@ dkim_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
-		dkim_module_ctx->check_local = ucl_obj_toboolean (value);
+		dkim_module_ctx->check_local = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->check_local = FALSE;
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "options", "check_authed")) != NULL) {
-		dkim_module_ctx->check_authed = ucl_obj_toboolean (value);
+		dkim_module_ctx->check_authed = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->check_authed = FALSE;
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "symbol_reject")) != NULL) {
-		dkim_module_ctx->symbol_reject = ucl_obj_tostring (value);
+		dkim_module_ctx->symbol_reject = ucl_object_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_reject = DEFAULT_SYMBOL_REJECT;
@@ -337,28 +346,28 @@ dkim_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"symbol_tempfail")) != NULL) {
-		dkim_module_ctx->symbol_tempfail = ucl_obj_tostring (value);
+		dkim_module_ctx->symbol_tempfail = ucl_object_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_tempfail = DEFAULT_SYMBOL_TEMPFAIL;
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "symbol_allow")) != NULL) {
-		dkim_module_ctx->symbol_allow = ucl_obj_tostring (value);
+		dkim_module_ctx->symbol_allow = ucl_object_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_allow = DEFAULT_SYMBOL_ALLOW;
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "symbol_na")) != NULL) {
-		dkim_module_ctx->symbol_na = ucl_obj_tostring (value);
+		dkim_module_ctx->symbol_na = ucl_object_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_na = DEFAULT_SYMBOL_NA;
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "symbol_permfail")) != NULL) {
-		dkim_module_ctx->symbol_permfail = ucl_obj_tostring (value);
+		dkim_module_ctx->symbol_permfail = ucl_object_tostring (value);
 	}
 	else {
 		dkim_module_ctx->symbol_permfail = DEFAULT_SYMBOL_PERMFAIL;
@@ -366,7 +375,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"dkim_cache_size")) != NULL) {
-		cache_size = ucl_obj_toint (value);
+		cache_size = ucl_object_toint (value);
 	}
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
@@ -374,7 +383,7 @@ dkim_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "time_jitter")) != NULL) {
-		dkim_module_ctx->time_jitter = ucl_obj_todouble (value);
+		dkim_module_ctx->time_jitter = ucl_object_todouble (value);
 	}
 	else {
 		dkim_module_ctx->time_jitter = DEFAULT_TIME_JITTER;
@@ -398,7 +407,7 @@ dkim_module_config (struct rspamd_config *cfg)
 			"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
-				ucl_obj_tostring (value));
+				ucl_object_tostring (value));
 		}
 		else {
 			got_trusted = TRUE;
@@ -411,7 +420,7 @@ dkim_module_config (struct rspamd_config *cfg)
 				"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
 				(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
-					ucl_obj_tostring (value));
+					ucl_object_tostring (value));
 		}
 		else {
 			got_trusted = TRUE;
@@ -421,7 +430,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"strict_multiplier")) != NULL) {
-		dkim_module_ctx->strict_multiplier = ucl_obj_toint (value);
+		dkim_module_ctx->strict_multiplier = ucl_object_toint (value);
 	}
 	else {
 		dkim_module_ctx->strict_multiplier = 1;
@@ -429,7 +438,7 @@ dkim_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "trusted_only")) != NULL) {
-		dkim_module_ctx->trusted_only = ucl_obj_toboolean (value);
+		dkim_module_ctx->trusted_only = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->trusted_only = FALSE;
@@ -437,10 +446,15 @@ dkim_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
-		dkim_module_ctx->skip_multi = ucl_obj_toboolean (value);
+		dkim_module_ctx->skip_multi = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->skip_multi = FALSE;
+	}
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "dkim", "sign_headers")) != NULL) {
+		dkim_module_ctx->sign_headers = ucl_object_tostring (value);
 	}
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
