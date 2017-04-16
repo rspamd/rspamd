@@ -193,15 +193,21 @@ local check_rcvd = rspamd_config:register_symbol{
     local rcvds = task:get_received_headers()
     if not rcvds then return false end
 
-    local tls = fun.all(function(rc)
+    local all_tls = fun.all(function(rc)
       return rc.flags and rc.flags['ssl']
-    end, rcvds)
+    end, fun.filter(function(rc)
+      return rc.by and rc.by ~= 'localhost'
+    end, rcvds))
 
     -- See if only the last hop was encrypted
-    if tls then
+    if all_tls then
       task:insert_result('RCVD_TLS_ALL', 1.0)
     else
       local rcvd = rcvds[1]
+      if rcvd.by and rcvd.by == 'localhost' then
+        -- Ignore artificial header from Rmilter
+        rcvd = rcvds[2]
+      end
       if rcvd.flags and rcvd.flags['ssl'] then
         task:insert_result('RCVD_TLS_LAST', 1.0)
       else
