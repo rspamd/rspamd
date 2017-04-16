@@ -380,14 +380,14 @@ rspamd_config.URL_IN_SUBJECT = {
               return true,1.0,u:get_host()
             end
           end
-          return true,0.5,u:get_host()
+          return true,0.25,u:get_host()
         end
       end
     end
 
     return false
   end,
-  score = 2.0,
+  score = 4.0,
   description = 'Url found in Subject'
 }
 
