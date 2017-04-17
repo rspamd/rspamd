@@ -576,6 +576,16 @@ reconf['MAIL_RU_MAILER'] = {
   group = 'header'
 }
 
+-- Detect yandex.ru web-mail
+local xm_yandex_ru_mailer_5_0 = 'X-Mailer=/^Yamail \\[ http:\\/\\/yandex\\.ru \\] 5\\.0$/H'
+local rcvd_web_yandex_ru = 'Received=/^by web\\d{1,2}[a-z]\\.yandex\\.ru with HTTP;/mH'
+reconf['YANDEX_RU_MAILER'] = {
+  re = string.format('(%s) & (%s)', xm_yandex_ru_mailer_5_0, rcvd_web_yandex_ru),
+  score = 0.0,
+  description = 'Sent with yandex.ru web-mail',
+  group = 'header'
+}
+
 -- Two received headers with ip addresses
 local double_ip_spam_1 = 'Received=/from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3} with/H'
 local double_ip_spam_2 = 'Received=/from\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s+by\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3};/H'
