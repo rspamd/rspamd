@@ -109,11 +109,15 @@ local function dkim_signing_cb(task)
       edom = rspamd_util.get_tld(edom)
     end
   end
-  if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom and
-    (not settings.allow_hdrfrom_mismatch_local or not is_local) and
-    (not settings.allow_hdrfrom_mismatch_sign_networks or not is_sign_networks) then
-    rspamd_logger.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
-    return false
+  if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom then
+    if settings.allow_hdrfrom_mismatch_local and is_local then
+      rspamd_logger.debugm(N, task, 'domain mismatch allowed for local IP: %1 != %2', hdom, edom)
+    elseif settings.allow_hdrfrom_mismatch_sign_networks and is_sign_networks then
+      rspamd_logger.debugm(N, task, 'domain mismatch allowed for sign_networks: %1 != %2', hdom, edom)
+    else
+      rspamd_logger.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
+      return false
+    end
   end
   if auser and not settings.allow_username_mismatch then
     local udom = string.match(auser, '.*@(.*)')
