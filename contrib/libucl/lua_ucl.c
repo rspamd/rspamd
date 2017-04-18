@@ -627,6 +627,76 @@ lua_ucl_parser_parse_file (lua_State *L)
 }
 
 /***
+ * @method parser:register_variable(name, value)
+ * Register parser variable
+ * @param {string} name name of variable
+ * @param {string} value value of variable
+ * @return {bool} success
+@example
+local parser = ucl.parser()
+local res = parser:register_variable('CONFDIR', '/etc/foo')
+ */
+static int
+lua_ucl_parser_register_variable (lua_State *L)
+{
+	struct ucl_parser *parser;
+	const char *name, *value;
+	int ret = 2;
+
+	parser = lua_ucl_parser_get (L, 1);
+	name = luaL_checkstring (L, 2);
+	value = luaL_checkstring (L, 3);
+
+	if (parser != NULL && name != NULL && value != NULL) {
+		ucl_parser_register_variable (parser, name, value);
+		lua_pushboolean (L, true);
+		ret = 1;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return ret;
+}
+
+/***
+ * @method parser:register_variables(vars)
+ * Register parser variables
+ * @param {table} vars names/values of variables
+ * @return {bool} success
+@example
+local parser = ucl.parser()
+local res = parser:register_variables({CONFDIR = '/etc/foo', VARDIR = '/var'})
+ */
+static int
+lua_ucl_parser_register_variables (lua_State *L)
+{
+	struct ucl_parser *parser;
+	const char *name, *value;
+	int ret = 2;
+
+	parser = lua_ucl_parser_get (L, 1);
+
+	if (parser != NULL && lua_type (L, 2) == LUA_TTABLE) {
+		for (lua_pushnil (L); lua_next (L, 2); lua_pop (L, 1)) {
+			lua_pushvalue (L, -2);
+			name = luaL_checkstring (L, -1);
+			value = luaL_checkstring (L, -2);
+			ucl_parser_register_variable (parser, name, value);
+			lua_pop (L, 1);
+		}
+
+		lua_pushboolean (L, true);
+		ret = 1;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return ret;
+}
+
+/***
  * @method parser:parse_string(input)
  * Parse UCL object from file.
  * @param {string} input string to parse
@@ -1013,6 +1083,12 @@ lua_ucl_parser_mt (lua_State *L)
 
 	lua_pushcfunction (L, lua_ucl_parser_parse_string);
 	lua_setfield (L, -2, "parse_string");
+
+	lua_pushcfunction (L, lua_ucl_parser_register_variable);
+	lua_setfield (L, -2, "register_variable");
+
+	lua_pushcfunction (L, lua_ucl_parser_register_variables);
+	lua_setfield (L, -2, "register_variables");
 
 	lua_pushcfunction (L, lua_ucl_parser_get_object);
 	lua_setfield (L, -2, "get_object");
