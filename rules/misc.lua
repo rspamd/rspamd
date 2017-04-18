@@ -532,9 +532,10 @@ rspamd_config:register_symbol{
 rspamd_config.SPOOF_REPLYTO = {
   callback = function (task)
     -- First check for a Reply-To header
-    local rt = task:get_header('Reply-To')
-    if not rt then return false end
+    local rt = task:get_header_full('Reply-To')
+    if not rt or not rt[1] then return false end
     -- Get From and To headers
+    rt = rt[1]['value']
     local from = task:get_from(2)
     local to = task:get_recipients(2)
     if not (from and from[1] and from[1].addr) then return false end
