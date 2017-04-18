@@ -171,7 +171,7 @@ it.ao
 // aq : https://en.wikipedia.org/wiki/.aq
 aq
 
-// ar : https://nic.ar/normativa-vigente.xhtml
+// ar : https://nic.ar/nic-argentina/normativa-vigente
 ar
 com.ar
 edu.ar
@@ -179,6 +179,7 @@ gob.ar
 gov.ar
 int.ar
 mil.ar
+musica.ar
 net.ar
 org.ar
 tur.ar
@@ -7017,6 +7018,18 @@ xn--mgbtf8fl
 // http://www.thnic.co.th
 xn--o3cw4h
 ไทย
+xn--12c1fe0br.xn--o3cw4h
+ศึกษา.ไทย
+xn--12co0c3b4eva.xn--o3cw4h
+ธุรกิจ.ไทย
+xn--h3cuzk1di.xn--o3cw4h
+รัฐบาล.ไทย
+xn--o3cyx2a.xn--o3cw4h
+ทหาร.ไทย
+xn--m3ch0j3a.xn--o3cw4h
+เน็ต.ไทย
+xn--12cfi8ixb8l.xn--o3cw4h
+องค์กร.ไทย
 
 // xn--pgbs0dh ("Tunisia", Arabic) : TN
 // http://nic.tn
@@ -10979,6 +10992,11 @@ myasustor.com
 // Submitted by Andreas Weise <a.weise@avm.de>
 myfritz.net
 
+// AW AdvisorWebsites.com Software Inc : https://advisorwebsites.com
+// Submitted by James Kennedy <domains@advisorwebsites.com>
+*.awdev.ca
+*.advisor.ws
+
 // backplane : https://www.backplane.io
 // Submitted by Anthony Voutas <anthony@backplane.io>
 backplaneapp.io
@@ -10994,6 +11012,15 @@ bnr.la
 // Boxfuse : https://boxfuse.com
 // Submitted by Axel Fontaine <axel@boxfuse.com>
 boxfuse.io
+
+// bplaced : https://www.bplaced.net/
+// Submitted by Miroslav Bozic <security@bplaced.net>
+square7.ch
+bplaced.com
+bplaced.de
+square7.de
+bplaced.net
+square7.net
 
 // BrowserSafetyMark
 // Submitted by Dave Tharp <browsersafetymark.io@quicinc.com>
@@ -11069,6 +11096,10 @@ xenapponazure.com
 // Submitted by Leon Rowland <leon@clearvox.nl>
 virtueeldomein.nl
 
+// Cloud66 : https://www.cloud66.com/
+// Submitted by Khash Sajadi <khash@cloud66.com>
+c66.me
+
 // cloudControl : https://www.cloudcontrol.com/
 // Submitted by Tobias Wilken <tw@cloudcontrol.com>
 cloudcontrolled.com
@@ -11107,10 +11138,6 @@ cloudns.us
 co.nl
 co.no
 
-// Commerce Guys, SAS
-// Submitted by Damien Tournoud <damien@commerceguys.com>
-*.platform.sh
-
 // COSIMO GmbH http://www.cosimo.de
 // Submitted by Rene Marticke <rmarticke@cosimo.de>
 dyn.cosidns.de
@@ -11143,6 +11170,7 @@ cyon.site
 // Daplie, Inc : https://daplie.com
 // Submitted by AJ ONeal <aj@daplie.com>
 daplie.me
+localhost.daplie.me
 
 // Dansk.net : http://www.dansk.net/
 // Submitted by Anani Voule <digital@digital.co.dk>
@@ -11556,6 +11584,14 @@ us-1.evennode.com
 us-2.evennode.com
 us-3.evennode.com
 
+// eDirect Corp. : https://hosting.url.com.tw/
+// Submitted by C.S. chang <cschang@corp.url.com.tw>
+twmail.cc
+twmail.net
+twmail.org
+mymailer.com.tw
+url.tw
+
 // Facebook, Inc.
 // Submitted by Peter Ruibal <public-suffix@fb.com>
 apps.fbsbx.com
@@ -11651,6 +11687,12 @@ global.ssl.fastly.net
 // Featherhead : https://featherhead.xyz/
 // Submitted by Simon Menke <simon@featherhead.xyz>
 fhapp.xyz
+
+// Fedora : https://fedoraproject.org/
+// submitted by Patrick Uiterwijk <puiterwijk@fedoraproject.org>
+fedorainfracloud.org
+fedorapeople.org
+cloud.fedoraproject.org
 
 // Firebase, Inc.
 // Submitted by Chris Raynor <chris@firebase.com>
@@ -11815,6 +11857,10 @@ hepforge.org
 herokuapp.com
 herokussl.com
 
+// Ici la Lune : http://www.icilalune.com/
+// Submitted by Simon Morvan <simon@icilalune.com>
+moonscale.net
+
 // iki.fi
 // Submitted by Hannu Aronsson <haa@iki.fi>
 iki.fi
@@ -11853,6 +11899,10 @@ se.leg.br
 sp.leg.br
 to.leg.br
 
+// IPiFony Systems, Inc. : https://www.ipifony.com/
+// Submitted by Matthew Hardeman <mhardeman@ipifony.com>
+ipifony.net
+
 // Joyent : https://www.joyent.com/
 // Submitted by Brian Bennett <brian.bennett@joyent.com>
 *.triton.zone
@@ -11877,6 +11927,10 @@ edu.krd
 // Magento Commerce
 // Submitted by Damien Tournoud <dtournoud@magento.cloud>
 *.magentosite.cloud
+
+// Mail.Ru Group : https://hb.cldmail.ru 
+// Submitted by Ilya Zaretskiy <zaretskiy@corp.mail.ru>
+hb.cldmail.ru
 
 // Meteor Development Group : https://www.meteor.com/hosting
 // Submitted by Pierre Carrier <pierre@meteor.com>
@@ -12005,6 +12059,10 @@ zapto.org
 // Submitted by Matthew Brown <mattbrown@nyc.mn>
 nyc.mn
 
+// Octopodal Solutions, LLC. : https://ulterius.io/
+// Submitted by Andrew Sampson <andrew@ulterius.io>
+cya.gg
+
 // One Fold Media : http://www.onefoldmedia.com/
 // Submitted by Eddie Jones <eddie@onefoldmedia.com>
 nid.io
@@ -12058,6 +12116,11 @@ mypep.link
 // Submitted by Frédéric VANNIÈRE <f.vanniere@planet-work.com>
 on-web.fr
 
+// Platform.sh : https://platform.sh
+// Submitted by Nikola Kotur <nikola@platform.sh>
+*.platform.sh
+*.platformsh.site
+
 // prgmr.com : https://prgmr.com/
 // Submitted by Sarah Newman <owner@prgmr.com>
 xen.prgmr.com
@@ -12083,6 +12146,15 @@ qa2.com
 dev-myqnapcloud.com
 alpha-myqnapcloud.com
 myqnapcloud.com
+
+// Quip : https://quip.com
+// Submitted by Patrick Linehan <plinehan@quip.com>
+*.quipelements.com
+
+// Qutheory LLC : http://qutheory.io
+// Submitted by Jonas Schwartz <jonas@qutheory.io>
+vapor.cloud
+vaporcloud.io
 
 // Rackmaze LLC : https://www.rackmaze.com
 // Submitted by Kirill Pertsev <kika@rackmaze.com>
@@ -12124,6 +12196,10 @@ firewall-gateway.net
 my-firewall.org
 myfirewall.org
 spdns.org
+
+// SensioLabs, SAS : https://sensiolabs.com/
+// Submitted by Fabien Potencier <fabien.potencier@sensiolabs.com>
+*.sensiosite.cloud
 
 // Service Online LLC : http://drs.ua/
 // Submitted by Serhii Bulakh <support@drs.ua>
@@ -12191,6 +12267,7 @@ familyds.org
 i234.me
 myds.me
 synology.me
+vpnplus.to
 
 // TAIFUN Software AG : http://taifun-software.de
 // Submitted by Bjoern Henke <dev-server@taifun-software.de>
@@ -12234,6 +12311,10 @@ syno-ds.de
 synology-diskstation.de
 synology-ds.de
 
+// Uberspace : https://uberspace.de
+// Submitted by Moritz Werner <mwerner@jonaspasche.com>
+uber.space
+
 // UDR Limited : http://www.udr.hk.com
 // Submitted by registry <hostmaster@udr.hk.com>
 hk.com
@@ -12256,6 +12337,10 @@ remotewd.com
 // Wikimedia Labs : https://wikitech.wikimedia.org
 // Submitted by Yuvi Panda <yuvipanda@wikimedia.org>
 wmflabs.org
+
+// XS4ALL Internet bv: https://www.xs4all.nl/
+// Submitted by Daniel Mostertman <unixbeheer+publicsuffix@xs4all.net>
+xs4all.space
 
 // Yola : https://www.yola.com/
 // Submitted by Stefano Rivera <stefano@yola.com>
