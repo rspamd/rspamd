@@ -1,3 +1,18 @@
+1.5.6:
+	* [Feature] Add unigramms support in bayes
+	* [Feature] Allow configurable sign headers for DKIM
+	* [Feature] Allow to add unigramm metatokens from Lua
+	* [Feature] DKIM Signing: envelope match exception for local IPs
+	* [Feature] UCL: register parser variables from Lua
+	* [Fix] Always try to adjust filename
+	* [Fix] Do extra copy to ensure that original content is never touched
+	* [Fix] Fix SPOOF_REPLYTO rule
+	* [Fix] Ignore Rmilter added Received
+	* [Fix] More fixes for hashed email dnsbls
+	* [Fix] Plug memory leak in chartable module
+	* [WebUI] Display multiple alerts at once
+
+
 1.5.5:
 	* [CritFix] Fix classifier learning with Redis backend
 	* [CritFix] Fix issue when parsing encoded rfc822/messages
