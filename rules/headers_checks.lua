@@ -915,6 +915,6 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
     return false
   end,
   description = 'multipart/mixed with less than 3 total parts',
-  score = 2.0,
+  score = 0.1,
   group = 'headers'
 }
