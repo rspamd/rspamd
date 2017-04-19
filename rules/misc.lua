@@ -568,3 +568,25 @@ rspamd_config.SPOOF_REPLYTO = {
   description = 'Reply-To is being used to spoof and trick the recipient to send an off-domain reply',
   score = 6.0
 }
+
+rspamd_config.INFO_TO_INFO_LU = {
+  callback = function(task)
+    local lu = task:get_header('List-Unsubscribe')
+    if not lu then return false end
+    local from = task:get_from('mime')
+    if not (from and from[1] and util.strequal_caseless(from[1].user, 'info')) then
+      return false
+    end
+    local to = task:get_recipients('smtp')
+    local found = false
+    for _,r in ipairs(to) do
+      if util.strequal_caseless(r['user'], 'info') then
+        found = true
+      end
+    end
+    if found then return true end
+    return false
+  end,
+  description = 'info@ From/To address with List-Unsubscribe headers',
+  score = 2.0
+}
