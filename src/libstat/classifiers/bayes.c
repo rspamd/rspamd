@@ -63,16 +63,32 @@ inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 	prob = exp (value);
 
 	if (errno == ERANGE) {
-		msg_err_bayes ("exp overflow");
-		return 0;
+		/*
+		 * e^x where x is large *NEGATIVE* number is OK, so we have a very strong
+		 * confidence that inv-chi-square is close to zero
+		 */
+		msg_debug_bayes ("exp overflow");
+
+		if (value < 0) {
+			return 0;
+		}
+		else {
+			return 1.0;
+		}
 	}
 
 	sum = prob;
 
+	/*
+	 * m is our confidence in class
+	 * prob is e ^ x (small value since x is normally less than zero
+	 * So we integrate over degrees of freedom and produce the total result
+	 * from 1.0 (no confidence) to 0.0 (full confidence)
+	 */
 	for (i = 1; i < freedom_deg; i++) {
 		prob *= m / (gdouble)i;
-		msg_debug_bayes ("prob: %.6f", prob);
 		sum += prob;
+		msg_debug_bayes ("prob: %.6f, sum: %.6f", prob, sum);
 	}
 
 	return MIN (1.0, sum);
