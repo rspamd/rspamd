@@ -50,6 +50,7 @@ local settings = {
   action = 'soft reject', -- default greylisted action
   ipv4_mask = 19, -- Mask bits for ipv4
   ipv6_mask = 64, -- Mask bits for ipv6
+  report_time = false, -- Tell when greylisting is epired (appended to `message`)
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -199,13 +200,20 @@ local function greylist_check(task)
         rspamd_logger.infox(task, 'greylisted until "%s" using %s key',
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
-        if not task:get_queue_id() then return end
+
+        if not task:get_queue_id() then return end -- Likely rspamc scan
+
         if settings.message_func then
           task:set_pre_result('soft reject',
             settings.message_func(task, end_time))
         else
-          task:set_pre_result('soft reject', settings['message'])
+          local message = settings['message']
+          if settings.report_time then
+            message = string.format("%s: %s", message, end_time)
+          end
+          task:set_pre_result('soft reject', message)
         end
+
         task:set_flag('greylisted')
       end
     elseif err then
