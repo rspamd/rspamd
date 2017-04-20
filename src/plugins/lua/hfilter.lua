@@ -389,8 +389,9 @@ local function hfilter(task)
       else
         for regexp,weight in pairs(checks_hellohost) do
           if check_regexp(hostname, regexp) then
-            weight_hostname = weight
-            break
+            if weight > weight_hostname then
+              weight_hostname = weight
+            end
           end
         end
       end
