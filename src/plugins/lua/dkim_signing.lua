@@ -230,7 +230,8 @@ if settings.use_redis then
   redis_params = rspamd_parse_redis_server('dkim_signing')
 
   if not redis_params then
-    rspamd_logger.infox(rspamd_config, 'no servers are specified, disable redis')
+    rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
+    return
   end
 end
 if settings.use_domain ~= 'header' and settings.use_domain ~= 'envelope' then
