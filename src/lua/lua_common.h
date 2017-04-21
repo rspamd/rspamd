@@ -97,8 +97,6 @@ enum rspamd_lua_map_type {
 	RSPAMD_LUA_MAP_CALLBACK
 };
 
-#define RSPAMD_LUA_MAP_FLAG_EMBEDDED (1 << 0)
-
 struct rspamd_lua_map {
 	struct rspamd_map *map;
 	enum rspamd_lua_map_type type;

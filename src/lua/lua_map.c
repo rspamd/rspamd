@@ -51,7 +51,6 @@ LUA_FUNCTION_DEF (map, is_signed);
  *
  * - `http`: for HTTP map
  * - `file`: for file map
- * - `embedded`: for manually created maps
  * @return {string} string representation of the map protocol
  */
 LUA_FUNCTION_DEF (map, get_proto);
@@ -123,7 +122,7 @@ lua_config_add_radix_map (lua_State *L)
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
 		map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-		map->data.radix = radix_create_compressed ();
+		map->data.radix = NULL;
 		map->type = RSPAMD_LUA_MAP_RADIX;
 
 		if ((m = rspamd_map_add (cfg, map_line, description,
@@ -131,8 +130,8 @@ lua_config_add_radix_map (lua_State *L)
 				rspamd_radix_fin,
 				(void **)&map->data.radix)) == NULL) {
 			msg_warn_config ("invalid radix map %s", map_line);
-			radix_destroy_compressed (map->data.radix);
 			lua_pushnil (L);
+
 			return 1;
 		}
 
@@ -156,7 +155,8 @@ lua_config_radix_from_config (lua_State *L)
 	const gchar *mname, *optname;
 	const ucl_object_t *obj;
 	struct rspamd_lua_map *map, **pmap;
-	static const char fill_ptr[] = "1";
+	ucl_object_t *fake_obj;
+	struct rspamd_map *m;
 
 	if (!cfg) {
 		return luaL_error (L, "invalid arguments");
@@ -167,37 +167,36 @@ lua_config_radix_from_config (lua_State *L)
 
 	if (mname && optname) {
 		obj = rspamd_config_get_module_opt (cfg, mname, optname);
+
 		if (obj) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+			map->data.radix = NULL;
 			map->type = RSPAMD_LUA_MAP_RADIX;
-			map->flags |= RSPAMD_LUA_MAP_FLAG_EMBEDDED;
 
-			if (ucl_object_type (obj) == UCL_STRING) {
-				map->data.radix = radix_create_compressed ();
-				radix_add_generic_iplist (ucl_obj_tostring (obj), &map->data.radix,
-						TRUE);
-			}
-			else {
-				ucl_object_iter_t it = NULL;
-				const ucl_object_t *cur;
+			fake_obj = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (fake_obj, ucl_object_ref (obj),
+					"data", 0, false);
+			ucl_object_insert_key (fake_obj, ucl_object_fromstring ("static"),
+					"url", 0, false);
 
-				map->data.radix = radix_create_compressed ();
+			if ((m = rspamd_map_add_from_ucl (cfg, fake_obj, "static radix map",
+					rspamd_radix_read,
+					rspamd_radix_fin,
+					(void **)&map->data.radix)) == NULL) {
+				msg_err_config ("invalid radix map static");
+				lua_pushnil (L);
+				ucl_object_unref (fake_obj);
 
-				while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
-					if (ucl_object_type (cur) == UCL_STRING) {
-						rspamd_radix_add_iplist (ucl_object_tostring (cur),
-								",;", map->data.radix, fill_ptr, TRUE);
-					}
-				}
+				return 1;
 			}
 
-			rspamd_mempool_add_destructor (cfg->cfg_pool,
-					(rspamd_mempool_destruct_t)radix_destroy_compressed,
-					map->data.radix);
+			ucl_object_unref (fake_obj);
 			pmap = lua_newuserdata (L, sizeof (void *));
+			map->map = m;
 			*pmap = map;
 			rspamd_lua_setclass (L, "rspamd{map}", -1);
-		} else {
+		}
+		else {
 			msg_warn_config ("Couldnt find config option [%s][%s]", mname,
 					optname);
 			lua_pushnil (L);
@@ -678,31 +677,23 @@ lua_map_get_proto (lua_State *L)
 	guint i;
 
 	if (map != NULL) {
-		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || map->map == NULL) {
-			ret = "embedded";
-			lua_pushstring (L, ret);
-
-			return 1;
-		}
-		else {
-			for (i = 0; i < map->map->backends->len; i ++) {
-				bk = g_ptr_array_index (map->map->backends, i);
-				switch (bk->protocol) {
-				case MAP_PROTO_FILE:
-					ret = "file";
-					break;
-				case MAP_PROTO_HTTP:
-					ret = "http";
-					break;
-				case MAP_PROTO_HTTPS:
-					ret = "https";
-					break;
-				case MAP_PROTO_STATIC:
-					ret = "static";
-					break;
-				}
-				lua_pushstring (L, ret);
+		for (i = 0; i < map->map->backends->len; i ++) {
+			bk = g_ptr_array_index (map->map->backends, i);
+			switch (bk->protocol) {
+			case MAP_PROTO_FILE:
+				ret = "file";
+				break;
+			case MAP_PROTO_HTTP:
+				ret = "http";
+				break;
+			case MAP_PROTO_HTTPS:
+				ret = "https";
+				break;
+			case MAP_PROTO_STATIC:
+				ret = "static";
+				break;
 			}
+			lua_pushstring (L, ret);
 		}
 	}
 	else {
@@ -722,11 +713,6 @@ lua_map_get_sign_key (lua_State *L)
 	GString *ret = NULL;
 
 	if (map != NULL) {
-		if (map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) {
-			lua_pushnil (L);
-
-			return 1;
-		}
 		for (i = 0; i < map->map->backends->len; i ++) {
 			bk = g_ptr_array_index (map->map->backends, i);
 
@@ -767,11 +753,6 @@ lua_map_set_sign_key (lua_State *L)
 	pk_str = lua_tolstring (L, 2, &len);
 
 	if (map && pk_str) {
-
-		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || !map->map) {
-			return luaL_error (L, "cannot set key for embedded maps");
-		}
-
 		pk = rspamd_pubkey_from_base32 (pk_str, len, RSPAMD_KEYPAIR_SIGN,
 				RSPAMD_CRYPTOBOX_MODE_25519);
 
@@ -827,18 +808,10 @@ lua_map_get_uri (lua_State *L)
 		guint i;
 
 	if (map != NULL) {
-		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || map->map == NULL) {
-			ret = "embedded";
+		for (i = 0; i < map->map->backends->len; i ++) {
+			bk = g_ptr_array_index (map->map->backends, i);
+			ret = bk->uri;
 			lua_pushstring (L, ret);
-
-			return 1;
-		}
-		else {
-			for (i = 0; i < map->map->backends->len; i ++) {
-				bk = g_ptr_array_index (map->map->backends, i);
-				ret = bk->uri;
-				lua_pushstring (L, ret);
-			}
 		}
 	}
 	else {
