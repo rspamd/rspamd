@@ -417,7 +417,7 @@ local function hfilter(task)
         -- Regexp check HELO (checks_hello_bareip)
         local find_bareip = false
         if not find_badip then
-          local values = checks_hello_bareip_map:get_key(helo)
+          values = checks_hello_bareip_map:get_key(helo)
           if values then
             task:insert_result('HFILTER_HELO_BAREIP', 1.0, helo, values)
             find_bareip = true
