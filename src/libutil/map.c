@@ -710,6 +710,89 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 	return TRUE;
 }
 
+static gboolean
+read_map_static (struct rspamd_map *map, struct static_map_data *data,
+		struct rspamd_map_backend *bk, struct map_periodic_cbdata *periodic)
+{
+	guchar *bytes;
+	gsize len;
+
+	if (map->read_callback == NULL || map->fin_callback == NULL) {
+		msg_err_map ("bad callback for reading map file");
+		data->processed = TRUE;
+		return FALSE;
+	}
+
+	bytes = data->data;
+	len = data->len;
+
+	if (len > 0) {
+		if (bk->is_compressed) {
+			ZSTD_DStream *zstream;
+			ZSTD_inBuffer zin;
+			ZSTD_outBuffer zout;
+			guchar *out;
+			gsize outlen, r;
+
+			zstream = ZSTD_createDStream ();
+			ZSTD_initDStream (zstream);
+
+			zin.pos = 0;
+			zin.src = bytes;
+			zin.size = len;
+
+			if ((outlen = ZSTD_getDecompressedSize (zin.src, zin.size)) == 0) {
+				outlen = ZSTD_DStreamOutSize ();
+			}
+
+			out = g_malloc (outlen);
+
+			zout.dst = out;
+			zout.pos = 0;
+			zout.size = outlen;
+
+			while (zin.pos < zin.size) {
+				r = ZSTD_decompressStream (zstream, &zout, &zin);
+
+				if (ZSTD_isError (r)) {
+					msg_err_map ("cannot decompress data: %s",
+							ZSTD_getErrorName (r));
+					ZSTD_freeDStream (zstream);
+					g_free (out);
+					munmap (bytes, len);
+					return FALSE;
+				}
+
+				if (zout.pos == zout.size) {
+					/* We need to extend output buffer */
+					zout.size = zout.size * 1.5 + 1.0;
+					out = g_realloc (zout.dst, zout.size);
+					zout.dst = out;
+				}
+			}
+
+			ZSTD_freeDStream (zstream);
+			msg_info_map ("read map data from static memory (%z bytes compressed, "
+					"%z uncompressed)",
+					len, zout.pos);
+			map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
+			g_free (out);
+		}
+		else {
+			msg_info_map ("read map data from static memory (%z bytes)",
+					len);
+			map->read_callback (bytes, len, &periodic->cbdata, TRUE);
+		}
+	}
+	else {
+		map->read_callback (NULL, 0, &periodic->cbdata, TRUE);
+	}
+
+	data->processed = TRUE;
+
+	return TRUE;
+}
+
 static void
 rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 {
@@ -1124,6 +1207,30 @@ rspamd_map_file_read_callback (gint fd, short what, void *ud)
 }
 
 static void
+rspamd_map_static_read_callback (gint fd, short what, void *ud)
+{
+	struct rspamd_map *map;
+	struct map_periodic_cbdata *periodic = ud;
+	struct static_map_data *data;
+	struct rspamd_map_backend *bk;
+
+	map = periodic->map;
+
+	bk = g_ptr_array_index (map->backends, periodic->cur_backend);
+	data = bk->data.sd;
+
+	msg_info_map ("rereading static map");
+
+	if (!read_map_static (map, data, bk, periodic)) {
+		periodic->errored = TRUE;
+	}
+
+	/* Switch to the next backend */
+	periodic->cur_backend ++;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+}
+
+static void
 rspamd_map_periodic_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_map_backend *bk;
@@ -1177,20 +1284,35 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 
 	if (cbd->need_modify) {
 		/* Load data from the next backend */
-		if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
+		switch (bk->protocol) {
+		case MAP_PROTO_HTTP:
+		case MAP_PROTO_HTTPS:
 			rspamd_map_http_read_callback (fd, what, cbd);
-		}
-		else {
+			break;
+		case MAP_PROTO_FILE:
 			rspamd_map_file_read_callback (fd, what, cbd);
+			break;
+		case MAP_PROTO_STATIC:
+			rspamd_map_static_read_callback (fd, what, cbd);
+			break;
 		}
 	}
 	else {
 		/* Check the next backend */
-		if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
+		switch (bk->protocol) {
+		case MAP_PROTO_HTTP:
+		case MAP_PROTO_HTTPS:
 			rspamd_map_http_check_callback (fd, what, cbd);
-		}
-		else {
+			break;
+		case MAP_PROTO_FILE:
 			rspamd_map_file_check_callback (fd, what, cbd);
+			break;
+		case MAP_PROTO_STATIC:
+			if (!bk->data.sd->processed) {
+				cbd->need_modify = TRUE;
+			}
+
+			break;
 		}
 	}
 }
@@ -1255,6 +1377,20 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 	g_assert (pos != NULL);
 
 	end = pos + strlen (pos);
+
+	if (g_ascii_strcasecmp (pos, "static") == 0) {
+		bk->protocol = MAP_PROTO_STATIC;
+		bk->uri = g_strdup (pos);
+
+		return pos;
+	}
+	else if (g_ascii_strcasecmp (pos, "zst+static") == 0) {
+		bk->protocol = MAP_PROTO_STATIC;
+		bk->uri = g_strdup (pos + 4);
+		bk->is_compressed = TRUE;
+
+		return pos + 4;
+	}
 
 	if (g_ascii_strncasecmp (pos, "sign+", sizeof ("sign+") - 1) == 0) {
 		bk->is_signed = TRUE;
@@ -1390,6 +1526,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	struct rspamd_map_backend *bk;
 	struct file_map_data *fdata = NULL;
 	struct http_map_data *hdata = NULL;
+	struct static_map_data *sdata = NULL;
 	struct http_parser_url up;
 	const gchar *end, *p;
 	rspamd_ftok_t tok;
@@ -1472,6 +1609,9 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		}
 
 		bk->data.hd = hdata;
+	}else if (bk->protocol == MAP_PROTO_STATIC) {
+		sdata = g_slice_alloc0 (sizeof (*sdata));
+		bk->data.sd = sdata;
 	}
 
 	bk->id = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_T1HA,
@@ -1567,6 +1707,9 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	const ucl_object_t *cur, *elt;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
+	gsize sz;
+	const gchar *dline;
+	guint i;
 
 	g_assert (obj != NULL);
 
@@ -1694,6 +1837,30 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 		if (map->backends->len == 0) {
 			msg_err_config ("map has no urls to be loaded: no valid backends");
 			goto err;
+		}
+
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (bk->protocol == MAP_PROTO_STATIC) {
+				/* We need data field in ucl */
+				elt = ucl_object_lookup (obj, "data");
+
+				if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
+					msg_err_config ("map has static backend but no `data` field");
+					goto err;
+				}
+
+				/* Otherwise, we copy data to the backend */
+				dline = ucl_object_tolstring (elt, &sz);
+
+				if (sz == 0) {
+					msg_err_config ("map has static backend but empty `data` field");
+					goto err;
+				}
+
+				bk->data.sd->data = g_malloc (sz);
+				bk->data.sd->len = sz;
+				memcpy (bk->data.sd->data, dline, sz);
+			}
 		}
 	}
 	else {

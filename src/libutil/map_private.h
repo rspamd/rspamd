@@ -44,7 +44,8 @@ typedef void (*rspamd_map_dtor) (gpointer p);
 enum fetch_proto {
 	MAP_PROTO_FILE,
 	MAP_PROTO_HTTP,
-	MAP_PROTO_HTTPS
+	MAP_PROTO_HTTPS,
+	MAP_PROTO_STATIC
 };
 
 struct rspamd_map_backend {
@@ -56,6 +57,7 @@ struct rspamd_map_backend {
 	union {
 		struct file_map_data *fd;
 		struct http_map_data *hd;
+		struct static_map_data *sd;
 	} data;
 	gchar *uri;
 	ref_entry_t ref;
@@ -109,6 +111,12 @@ struct http_map_data {
 	time_t last_checked;
 	gboolean request_sent;
 	guint16 port;
+};
+
+struct static_map_data {
+	guchar *data;
+	gsize len;
+	gboolean processed;
 };
 
 enum rspamd_map_http_stage {
