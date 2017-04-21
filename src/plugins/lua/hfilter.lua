@@ -22,85 +22,155 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamc_local_helo = "rspamc.local"
-local checks_hellohost = {
-  ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5,
-  ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5,
-  ['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5,
-  ['[.-]dhcp[.-]'] = 5, ['dhcp[.-][0-9]'] = 5, ['[0-9][.-]?dhcp'] = 5,
-  ['[.-]catv[.-]'] = 5, ['catv[.-][0-9]'] = 5, ['[0-9][.-]?catv'] = 5,
-  ['[.-]wifi[.-]'] = 5, ['wifi[.-][0-9]'] = 5, ['[0-9][.-]?wifi'] = 5,
-  ['[.-]dial-?up[.-]'] = 5, ['dial-?up[.-][0-9]'] = 5, ['[0-9][.-]?dial-?up'] = 5,
-  ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5,
-  ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5,
-  ['[.-]clients?[.-]'] = 1, ['clients?[.-][0-9]{2,}'] = 5, ['[0-9]{3,}[.-]?clients?'] = 5,
-  ['[.-]dynip[.-]'] = 5, ['dynip[.-][0-9]'] = 5, ['[0-9][.-]?dynip'] = 5,
-  ['[.-]broadband[.-]'] = 5, ['broadband[.-][0-9]'] = 5, ['[0-9][.-]?broadband'] = 5,
-  ['[.-]broad[.-]'] = 5, ['broad[.-][0-9]'] = 5, ['[0-9][.-]?broad'] = 5,
-  ['[.-]bredband[.-]'] = 5, ['bredband[.-][0-9]'] = 5, ['[0-9][.-]?bredband'] = 5,
-  ['[.-]nat[.-]'] = 5, ['nat[.-][0-9]'] = 5, ['[0-9][.-]?nat'] = 5,
-  ['[.-]pptp[.-]'] = 5, ['pptp[.-][0-9]'] = 5, ['[0-9][.-]?pptp'] = 5,
-  ['[.-]pppoe[.-]'] = 5, ['pppoe[.-][0-9]'] = 5, ['[0-9][.-]?pppoe'] = 5,
-  ['[.-]ppp[.-]'] = 5, ['ppp[.-][0-9]'] = 5, ['[0-9][.-]?ppp'] = 5,
-  ['[.-]modem[.-]'] = 5, ['modem[.-][0-9]'] = 5, ['[0-9][.-]?modem'] = 5,
-  ['[.-]cablemodem[.-]'] = 5, ['cablemodem[.-][0-9]'] = 5, ['[0-9][.-]?cablemodem'] = 5,
-  ['[.-]comcast[.-]'] = 5, ['comcast[.-][0-9]'] = 5, ['[0-9][.-]?comcast'] = 5,
-  ['[.-][a|x]?dsl-dynamic[.-]'] = 5, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 5, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 5,
-  ['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4,
-  ['[.-][a|x]?dsl-line[.-]'] = 4, ['[a|x]?dsl-line[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-line'] = 4,
-  ['[.-]in-?addr[.-]'] = 4, ['in-?addr[.-][0-9]'] = 4, ['[0-9][.-]?in-?addr'] = 4,
-  ['[.-]pool[.-]'] = 4, ['pool[.-][0-9]'] = 4, ['[0-9][.-]?pool'] = 4,
-  ['[.-]fibertel[.-]'] = 4, ['fibertel[.-][0-9]'] = 4, ['[0-9][.-]?fibertel'] = 4,
-  ['[.-]fbx[.-]'] = 4, ['fbx[.-][0-9]'] = 4, ['[0-9][.-]?fbx'] = 4,
-  ['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3,
-  ['[.-]cable[.-]'] = 3, ['cable[.-][0-9]'] = 3, ['[0-9][.-]?cable'] = 3,
-  ['[.-]kabel[.-]'] = 3, ['kabel[.-][0-9]'] = 3, ['[0-9][.-]?kabel'] = 3,
-  ['[.-]host[.-]'] = 2, ['host[.-][0-9]'] = 2, ['[0-9][.-]?host'] = 2,
-  ['[.-]customers?[.-]'] = 1, ['customers?[.-][0-9]'] = 1, ['[0-9][.-]?customers?'] = 1,
-  ['[.-]user[.-]'] = 1, ['user[.-][0-9]'] = 1, ['[0-9][.-]?user'] = 1,
-  ['[.-]peer[.-]'] = 1, ['peer[.-][0-9]'] = 1, ['[0-9][.-]?peer'] = 1
-}
+local checks_hellohost = [[
+/[0-9][.-]?nat/i 5
+/homeuser[.-][0-9]/i 5
+/[0-9][.-]?unused-addr/i 3
+/[0-9][.-]?pppoe/i 5
+/[0-9][.-]?dynamic/i 5
+/[.-]catv[.-]/i 5
+/unused-addr[.-][0-9]/i 3
+/comcast[.-][0-9]/i 5
+/[.-]broadband[.-]/i 5
+/[0-9][.-]?fbx/i 4
+/[.-]peer[.-]/i 1
+/[.-]homeuser[.-]/i 5
+/[0-9][.-]?catv/i 5
+/customers?[.-][0-9]/i 1
+/[.-]wifi[.-]/i 5
+/[0-9][.-]?kabel/i 3
+/dynip[.-][0-9]/i 5
+/[.-]broad[.-]/i 5
+/[a|x]?dsl-line[.-]?[0-9]/i 4
+/[0-9][.-]?ppp/i 5
+/pool[.-][0-9]/i 4
+/[.-]nat[.-]/i 5
+/gprs[.-][0-9]/i 5
+/brodband[.-][0-9]/i 5
+/[.-]gprs[.-]/i 5
+/[.-]user[.-]/i 1
+/[0-9][.-]?in-?addr/i 4
+/[.-]host[.-]/i 2
+/[.-]fbx[.-]/i 4
+/dynamic[.-][0-9]/i 5
+/[0-9][.-]?peer/i 1
+/[0-9][.-]?pool/i 4
+/[0-9][.-]?user/i 1
+/[.-]cdma[.-]/i 5
+/user[.-][0-9]/i 1
+/[0-9][.-]?customers?/i 1
+/ppp[.-][0-9]/i 5
+/kabel[.-][0-9]/i 3
+/dhcp[.-][0-9]/i 5
+/peer[.-][0-9]/i 1
+/[0-9][.-]?host/i 2
+/clients?[.-][0-9]{2,}/i 5
+/host[.-][0-9]/i 2
+/[.-]ppp[.-]/i 5
+/[.-]dhcp[.-]/i 5
+/[.-]comcast[.-]/i 5
+/cable[.-][0-9]/i 3
+/[0-9][.-]?dial-?up/i 5
+/[0-9][.-]?bredband/i 5
+/[0-9][.-]?[a|x]?dsl-line/i 4
+/[.-]dial-?up[.-]/i 5
+/[.-]cablemodem[.-]/i 5
+/pppoe[.-][0-9]/i 5
+/[.-]unused-addr[.-]/i 3
+/pptp[.-][0-9]/i 5
+/broadband[.-][0-9]/i 5
+/[.-][a|x]?dsl-line[.-]/i 4
+/[.-]customers?[.-]/i 1
+/[0-9][.-]?fibertel/i 4
+/[0-9][.-]?comcast/i 5
+/[.-]dynamic[.-]/i 5
+/cdma[.-][0-9]/i 5
+/[0-9][.-]?broad/i 5
+/fbx[.-][0-9]/i 4
+/catv[.-][0-9]/i 5
+/[0-9][.-]?homeuser/i 5
+/[.-]pppoe[.-]/i 5
+/[.-]dynip[.-]/i 5
+/[0-9][.-]?[a|x]?dsl/i 4
+/[0-9]{3,}[.-]?clients?/i 5
+/[0-9][.-]?pptp/i 5
+/[.-]clients?[.-]/i 1
+/[.-]in-?addr[.-]/i 4
+/[.-]pool[.-]/i 4
+/[a|x]?dsl[.-]?[0-9]/i 4
+/[.-][a|x]?dsl[.-]/i 4
+/[0-9][.-]?[a|x]?dsl-dynamic/i 5
+/dial-?up[.-][0-9]/i 5
+/[0-9][.-]?cablemodem/i 5
+/[a|x]?dsl-dynamic[.-]?[0-9]/i 5
+/[.-]pptp[.-]/i 5
+/[.-][a|x]?dsl-dynamic[.-]/i 5
+/[0-9][.-]?wifi/i 5
+/fibertel[.-][0-9]/i 4
+/dyn[.-][0-9]/i 5
+/[0-9][.-]?broadband/i 5
+/[0-9][.-]?cable/i 3
+/broad[.-][0-9]/i 5
+/[0-9][.-]?gprs/i 5
+/cablemodem[.-][0-9]/i 5
+/[0-9][.-]?modem/i 5
+/[0-9][.-]?dyn/i 5
+/[0-9][.-]?dynip/i 5
+/[0-9][.-]?cdma/i 5
+/[.-]modem[.-]/i 5
+/[.-]kabel[.-]/i 3
+/[.-]cable[.-]/i 3
+/in-?addr[.-][0-9]/i 4
+/nat[.-][0-9]/i 5
+/[.-]fibertel[.-]/i 4
+/[.-]bredband[.-]/i 5
+/modem[.-][0-9]/i 5
+/[.-]dyn[.-]/i 5
+/[0-9][.-]?dhcp/i 5
+/wifi[.-][0-9]/i 5
+]]
+local checks_hellohost_map
 
-local checks_hello = {
-  ['^[^\\.]+$'] = 5, -- for helo=COMPUTER, ANNA, etc... Without dot in helo
-  ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
-  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|user|veloxzon)$'] = 5
-}
+local checks_hello = [[
+/^[^\.]+$/i 5 # for helo=COMPUTER, ANNA, etc... Without dot in helo
+/^(dsl)?(device|speedtouch)\.lan$/i 5
+/\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|user|veloxzon)$ 5
+]]
+local checks_hello_map
 
-local checks_hello_badip = {
-  ['^0\\.'] = 1,
-  ['^::1$'] = 1, --loopback ipv4, ipv6
-  ['^127\\.'] = 1,
-  ['^10\\.'] = 1,
-  ['^192\\.168\\.'] = 1, --local ipv4
-  ['^172\\.1[6-9]\\.'] = 1,
-  ['^172\\.2[0-9]\\.'] = 1,
-  ['^172\\.3[01]\\.'] = 1,  --local ipv4
-  ['^169\\.254\\.'] = 1, --chanel ipv4
-  ['^192\\.0\\.0\\.'] = 1, --IETF Protocol
-  ['^192\\.88\\.99\\.'] = 1, --RFC3068
-  ['^100.6[4-9]\\.'] = 1,
-  ['^100.[7-9]\\d\\.'] = 1,
-  ['^100.1[01]\\d\\.'] = 1,
-  ['^100.12[0-7]\\d\\.'] = 1, --RFC6598
-  ['^\\d\\.\\d\\.\\d\\.255$'] = 1, --multicast ipv4
-  ['^192\\.0\\.2\\.'] = 1,
-  ['^198\\.51\\.100\\.'] = 1,
-  ['^203\\.0\\.113\\.'] = 1,  --sample
-  ['^fe[89ab][0-9a-f]::'] = 1,
-  ['^fe[cdf][0-9a-f]:'] = 1, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
-  ['^2001:db8::'] = 1, --reserved RFC 3849 for ipv6
-  ['^fc00::'] = 1,
-  ['^ffxx::'] = 1 --unicast, multicast ipv6
-}
+local checks_hello_badip = [[
+/^\d\.\d\.\d\.255$/i 1
+/^192\.0\.0\./i 1
+/^2001:db8::/i 1
+/^10\./i 1
+/^192\.0\.2\./i 1
+/^172\.1[6-9]\./i 1
+/^192\.168\./i 1
+/^::1$/i 1 # loopback ipv4, ipv6
+/^ffxx::/i 1
+/^fc00::/i 1
+/^203\.0\.113\./i 1
+/^fe[cdf][0-9a-f]:/i 1
+/^100.12[0-7]\d\./i 1
+/^fe[89ab][0-9a-f]::/i 1
+/^169\.254\./i 1
+/^0\./i 1
+/^198\.51\.100\./i 1
+/^172\.3[01]\./i 1
+/^100.[7-9]\d\./i 1
+/^100.1[01]\d\./i 1
+/^127\./i 1
+/^100.6[4-9]\./i 1
+/^192\.88\.99\./i 1
+/^172\.2[0-9]\./i 1
+]]
+local checks_hello_badip_map
 
-local checks_hello_bareip = {
-  '^\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+$', --bareip ipv4,
-  '^[0-9a-f]+:' --bareip ipv6
-}
-
--- Table of compiled regexps indexed by pattern
-local compiled_regexp = {
-}
+local checks_hello_bareip = [[
+/^\d+[x.-]\d+[x.-]\d+[x.-]\d+$/
+/^[0-9a-f]+:/
+]]
+local checks_hello_bareip_map
 
 local config = {
   ['helo_enabled'] = false,
@@ -111,19 +181,28 @@ local config = {
   ['url_enabled'] = false
 }
 
+local compiled_regexp = {} -- cache of regexps
 local check_local = false
 local check_authed = false
 
 local function check_regexp(str, regexp_text)
-  if not compiled_regexp[regexp_text] then
-    compiled_regexp[regexp_text] = rspamd_regexp.create(regexp_text, 'i')
+  local re = compiled_regexp[regexp_text]
+  if not re then
+    re = rspamd_regexp.create(regexp_text, 'i')
+    compiled_regexp[regexp_text] = re
   end
 
-  if compiled_regexp[regexp_text] then
-    return compiled_regexp[regexp_text]:match(str)
-  end
+  return re:match(str)
+end
 
-  return false
+local function add_static_map(data)
+  return rspamd_config:add_map{
+    type = 'regexp_multi',
+    url = {
+      upstreams = 'static',
+      data = data,
+    }
+  }
 end
 
 local function check_fqdn(domain)
@@ -329,43 +408,37 @@ local function hfilter(task)
         helo = string.gsub(helo, '[%[%]]', '')
         -- Regexp check HELO (checks_hello_badip)
         local find_badip = false
-        for regexp,weight in pairs(checks_hello_badip) do
-          if check_regexp(helo, regexp) then
-            task:insert_result('HFILTER_HELO_BADIP', weight,
-              string.format('%s:/%s/', helo, tostring(regexp)))
-            find_badip = true
-            break
-          end
+        local values = checks_hello_badip_map:get_key(helo)
+        if values then
+          task:insert_result('HFILTER_HELO_BADIP', 1.0, helo, values)
+          find_badip = true
         end
 
         -- Regexp check HELO (checks_hello_bareip)
         local find_bareip = false
         if not find_badip then
-          for _,regexp in pairs(checks_hello_bareip) do
-            if check_regexp(helo, regexp) then
-              task:insert_result('HFILTER_HELO_BAREIP', 1.0,
-                string.format('%s:/%s/', helo, tostring(regexp)))
-              find_bareip = true
-              break
-            end
+          local values = checks_hello_bareip_map:get_key(helo)
+          if values then
+            task:insert_result('HFILTER_HELO_BAREIP', 1.0, helo, values)
+            find_bareip = true
           end
         end
 
         if not find_badip and not find_bareip then
           -- Regexp check HELO (checks_hello)
-          for regexp,weight in pairs(checks_hello) do
-            if check_regexp(helo, regexp) then
+          local weights = checks_hello_map:get_key(helo)
+          for _,weight in ipairs(weights or {}) do
+            weight = tonumber(weight) or 0
+            if weight > weight_helo then
               weight_helo = weight
-              break
             end
           end
           -- Regexp check HELO (checks_hellohost)
-          for regexp,weight in pairs(checks_hellohost) do
-            if check_regexp(helo, regexp) then
-              if weight > weight_helo then
-                weight_helo = weight
-              end
-              break
+          weights = checks_hellohost_map:get_key(helo)
+          for _,weight in ipairs(weights or {}) do
+            weight = tonumber(weight) or 0
+            if weight > weight_helo then
+              weight_helo = weight
             end
           end
           --FQDN check HELO
@@ -387,11 +460,11 @@ local function hfilter(task)
       if hostname == 'unknown' then
         task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
       else
-        for regexp,weight in pairs(checks_hellohost) do
-          if check_regexp(hostname, regexp) then
-            if weight > weight_hostname then
-              weight_hostname = weight
-            end
+        local weights = checks_hellohost_map:get_key(hostname)
+        for _,weight in ipairs(weights or {}) do
+          weight = tonumber(weight) or 0
+          if weight > weight_hostname then
+            weight_hostname = weight
           end
         end
       end
@@ -519,9 +592,16 @@ local function append_t(t, a)
   for _,v in ipairs(a) do table.insert(t, v) end
 end
 if config['helo_enabled'] then
+  checks_hello_bareip_map = add_static_map(checks_hello_bareip)
+  checks_hello_badip_map = add_static_map(checks_hello_badip)
+  checks_hellohost_map = add_static_map(checks_hellohost)
+  checks_hello_map = add_static_map(checks_hello)
   append_t(symbols_enabled, symbols_helo)
 end
 if config['hostname_enabled'] then
+  if not checks_hellohost_map then
+    checks_hellohost_map = add_static_map(checks_hellohost)
+  end
   append_t(symbols_enabled, symbols_hostname)
 end
 if config['from_enabled'] then
