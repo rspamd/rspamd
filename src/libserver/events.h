@@ -112,6 +112,14 @@ guint rspamd_session_watch_stop (struct rspamd_async_session *s);
 void rspamd_session_watcher_push (struct rspamd_async_session *s);
 
 /**
+ * Push callback to the watcher specified
+ */
+void rspamd_session_watcher_push_callback (struct rspamd_async_session *s,
+		struct rspamd_async_watcher *w,
+		event_watcher_t cb,
+		gpointer ud);
+
+/**
  * Increase refcount for a specific watcher
  */
 void rspamd_session_watcher_push_specific (struct rspamd_async_session *s,
