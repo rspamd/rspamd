@@ -368,7 +368,7 @@ function($, _, Humanize) {
         FooTable.actionFilter = FooTable.Filtering.extend({
         construct : function(instance) {
             this._super(instance);
-            this.actions = [ 'reject', 'add_header', 'greylist',
+            this.actions = [ 'reject', 'add header', 'greylist',
                     'no action', 'soft reject' ];
             this.def = 'Any action';
             this.$action = null;
