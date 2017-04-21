@@ -467,9 +467,9 @@ lua_config_add_map (lua_State *L)
 			map->type = RSPAMD_LUA_MAP_REGEXP;
 
 			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
-					rspamd_regexp_list_read,
+					rspamd_regexp_list_read_single,
 					rspamd_regexp_list_fin,
-					(void **)&map->data.re_map)) == NULL) {
+					(void **) &map->data.re_map)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -606,7 +606,8 @@ lua_map_get_key (lua_State * L)
 			key = lua_map_process_string_key (L, 2, &len);
 
 			if (key && map->data.re_map) {
-				value = rspamd_match_regexp_map (map->data.re_map, key, len);
+				value = rspamd_match_regexp_map_single (map->data.re_map, key,
+						len);
 
 				if (value) {
 					lua_pushstring (L, value);

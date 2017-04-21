@@ -2360,11 +2360,16 @@ rspamd_radix_fin (struct map_cb_data *data)
 	}
 }
 
+enum rspamd_regexp_map_flags {
+	RSPAMD_REGEXP_FLAG_UTF = (1 << 0),
+	RSPAMD_REGEXP_FLAG_MULTIPLE = (1 << 1)
+};
+
 struct rspamd_regexp_map {
 	struct rspamd_map *map;
 	GPtrArray *regexps;
 	GPtrArray *values;
-	gboolean has_utf;
+	enum rspamd_regexp_map_flags map_flags;
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
 	hs_scratch_t *hs_scratch;
@@ -2375,7 +2380,8 @@ struct rspamd_regexp_map {
 };
 
 static struct rspamd_regexp_map *
-rspamd_regexp_map_create (struct rspamd_map *map)
+rspamd_regexp_map_create (struct rspamd_map *map,
+		enum rspamd_regexp_map_flags flags)
 {
 	struct rspamd_regexp_map *re_map;
 
@@ -2383,6 +2389,7 @@ rspamd_regexp_map_create (struct rspamd_map *map)
 	re_map->values = g_ptr_array_new ();
 	re_map->regexps = g_ptr_array_new ();
 	re_map->map = map;
+	re_map->map_flags = flags;
 
 	return re_map;
 }
@@ -2453,7 +2460,7 @@ rspamd_re_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value
 
 #ifndef WITH_PCRE2
 	if (pcre_flags & PCRE_FLAG(UTF8)) {
-		re_map->has_utf = TRUE;
+		re_map->map_flags |= RSPAMD_REGEXP_FLAG_UTF;
 	}
 #else
 	if (pcre_flags & PCRE_FLAG(UTF)) {
@@ -2557,16 +2564,39 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 }
 
 gchar *
-rspamd_regexp_list_read (
-	gchar *chunk,
-	gint len,
-	struct map_cb_data *data,
-	gboolean final)
+rspamd_regexp_list_read_single (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final)
 {
 	struct rspamd_regexp_map *re_map;
 
 	if (data->cur_data == NULL) {
-		re_map = rspamd_regexp_map_create (data->map);
+		re_map = rspamd_regexp_map_create (data->map, 0);
+		data->cur_data = re_map;
+	}
+
+	return rspamd_parse_kv_list (
+			chunk,
+			len,
+			data,
+			rspamd_re_map_insert_helper,
+			hash_fill,
+			final);
+}
+
+gchar *
+rspamd_regexp_list_read_multiple (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final)
+{
+	struct rspamd_regexp_map *re_map;
+
+	if (data->cur_data == NULL) {
+		re_map = rspamd_regexp_map_create (data->map, RSPAMD_REGEXP_FLAG_MULTIPLE);
 		data->cur_data = re_map;
 	}
 
@@ -2610,7 +2640,7 @@ rspamd_match_hs_single_handler (unsigned int id, unsigned long long from,
 }
 
 gpointer
-rspamd_match_regexp_map (struct rspamd_regexp_map *map,
+rspamd_match_regexp_map_single (struct rspamd_regexp_map *map,
 		const gchar *in, gsize len)
 {
 	guint i;
@@ -2625,7 +2655,7 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 		return NULL;
 	}
 
-	if (map->has_utf) {
+	if (map->map_flags & RSPAMD_REGEXP_FLAG_UTF) {
 		if (g_utf8_validate (in, len, NULL)) {
 			validated = TRUE;
 		}
@@ -2665,4 +2695,85 @@ rspamd_match_regexp_map (struct rspamd_regexp_map *map,
 	}
 
 	return ret;
+}
+
+static int
+rspamd_match_hs_multiple_handler (unsigned int id, unsigned long long from,
+		unsigned long long to,
+		unsigned int flags, void *context)
+{
+	guint *i = context;
+	/* Always return zero as we need all matches here */
+
+	*i = id;
+
+	return 0;
+}
+
+gpointer
+rspamd_match_regexp_map_all (struct rspamd_regexp_map *map,
+		const gchar *in, gsize len)
+{
+	guint i;
+	rspamd_regexp_t *re;
+	GPtrArray *ret;
+	gint res = 0;
+	gboolean validated = FALSE;
+
+	g_assert (in != NULL);
+
+	if (map == NULL || len == 0) {
+		return NULL;
+	}
+
+	if (map->map_flags & RSPAMD_REGEXP_FLAG_UTF) {
+		if (g_utf8_validate (in, len, NULL)) {
+			validated = TRUE;
+		}
+	}
+	else {
+		validated = TRUE;
+	}
+
+	ret = g_ptr_array_new ();
+
+#ifdef WITH_HYPERSCAN
+	if (map->hs_db && map->hs_scratch) {
+
+		if (validated) {
+			res = hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
+					rspamd_match_hs_single_handler, (void *)&i);
+
+			if (res == HS_SUCCESS) {
+				return ret;
+			}
+			else {
+				g_ptr_array_free (ret, TRUE);
+
+				return NULL;
+			}
+		}
+	}
+#endif
+
+	if (!res) {
+		/* PCRE version */
+		for (i = 0; i < map->regexps->len; i ++) {
+			re = g_ptr_array_index (map->regexps, i);
+
+			if (rspamd_regexp_search (re, in, len, NULL, NULL,
+					!validated, NULL)) {
+				g_ptr_array_add (ret, g_ptr_array_index (map->values, i));
+			}
+		}
+	}
+
+	if (ret->len > 0) {
+
+		return ret;
+	}
+
+	g_ptr_array_free (ret, TRUE);
+
+	return NULL;
 }

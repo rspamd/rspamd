@@ -120,11 +120,16 @@ void rspamd_kv_list_fin (struct map_cb_data *data);
  */
 struct rspamd_regexp_map;
 
-gchar * rspamd_regexp_list_read (
-	gchar *chunk,
-	gint len,
-	struct map_cb_data *data,
-	gboolean final);
+gchar * rspamd_regexp_list_read_single (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final);
+gchar * rspamd_regexp_list_read_multiple (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final);
 void rspamd_regexp_list_fin (struct map_cb_data *data);
 
 /**
@@ -147,7 +152,18 @@ rspamd_parse_kv_list (
  * @param len
  * @return
  */
-gpointer rspamd_match_regexp_map (struct rspamd_regexp_map *map,
+gpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map *map,
+		const gchar *in, gsize len);
+
+/**
+ * Find a multiple (all) matching regexp for the specified text or NULL if
+ * no matches found. Returns GPtrArray that *must* be freed by a caller if not NULL
+ * @param map
+ * @param in
+ * @param len
+ * @return
+ */
+gpointer rspamd_match_regexp_map_all (struct rspamd_regexp_map *map,
 		const gchar *in, gsize len);
 
 #endif
