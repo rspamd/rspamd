@@ -61,8 +61,7 @@ typedef gint (*rspamd_multipattern_cb_t) (struct rspamd_multipattern *mp,
  * Init multipart library and set the appropriate cache dir
  * @param cache_dir
  */
-void rspamd_multipattern_library_init (const gchar *cache_dir,
-		struct rspamd_cryptobox_library_ctx *crypto_ctx);
+void rspamd_multipattern_library_init (const gchar *cache_dir);
 
 /**
  * Creates empty multipattern structure
@@ -78,8 +77,8 @@ struct rspamd_multipattern *rspamd_multipattern_create (
  * @param reserved
  * @return
  */
-struct rspamd_multipattern *rspamd_multipattern_create_sized (
-		enum rspamd_multipattern_flags flags, guint reserved);
+struct rspamd_multipattern *rspamd_multipattern_create_sized (guint reserved,
+		enum rspamd_multipattern_flags flags);
 
 /**
  * Creates new multipattern structure
@@ -152,5 +151,11 @@ guint rspamd_multipattern_get_npatterns (struct rspamd_multipattern *mp);
  * @param mp
  */
 void rspamd_multipattern_destroy (struct rspamd_multipattern *mp);
+
+/**
+ * Returns TRUE if hyperscan is supported
+ * @return
+ */
+gboolean rspamd_multipattern_has_hyperscan (void);
 
 #endif /* SRC_LIBUTIL_MULTIPATTERN_H_ */

@@ -28,10 +28,15 @@
 
 #define MAX_SCRATCH 4
 
+enum rspamd_hs_check_state {
+	RSPAMD_HS_UNCHECKED = 0,
+	RSPAMD_HS_SUPPORTED,
+	RSPAMD_HS_UNSUPPORTED
+};
+
 static const char *hs_cache_dir = NULL;
-#ifdef WITH_HYPERSCAN
-static gboolean hs_suitable_cpu = FALSE;
-#endif
+static enum rspamd_hs_check_state hs_suitable_cpu = RSPAMD_HS_UNCHECKED;
+
 
 struct rspamd_multipattern {
 #ifdef WITH_HYPERSCAN
@@ -57,15 +62,29 @@ rspamd_multipattern_quark (void)
 	return g_quark_from_static_string ("multipattern");
 }
 
+static inline gboolean
+rspamd_hs_check (void)
+{
+#ifdef WITH_HYPERSCAN
+	if (G_UNLIKELY (hs_suitable_cpu == RSPAMD_HS_UNCHECKED)) {
+		if (hs_valid_platform () == HS_SUCCESS) {
+			hs_suitable_cpu = RSPAMD_HS_SUPPORTED;
+		}
+		else {
+			hs_suitable_cpu = RSPAMD_HS_UNSUPPORTED;
+		}
+	}
+#endif
+
+	return hs_suitable_cpu == RSPAMD_HS_SUPPORTED;
+}
+
 void
-rspamd_multipattern_library_init (const gchar *cache_dir,
-		struct rspamd_cryptobox_library_ctx *crypto_ctx)
+rspamd_multipattern_library_init (const gchar *cache_dir)
 {
 	hs_cache_dir = cache_dir;
 #ifdef WITH_HYPERSCAN
-	if (crypto_ctx->cpu_config & CPUID_SSSE3) {
-		hs_suitable_cpu = TRUE;
-	}
+	rspamd_hs_check ();
 #endif
 }
 
@@ -284,7 +303,7 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 {
 	gchar *ret = NULL;
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		if (flags & RSPAMD_MULTIPATTERN_TLD) {
 			ret = rspamd_multipattern_escape_tld_hyperscan (pattern, len, dst_len);
 		}
@@ -323,7 +342,7 @@ rspamd_multipattern_create (enum rspamd_multipattern_flags flags)
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		mp->hs_pats = g_array_new (FALSE, TRUE, sizeof (gchar *));
 		mp->hs_flags = g_array_new (FALSE, TRUE, sizeof (gint));
 		mp->hs_ids = g_array_new (FALSE, TRUE, sizeof (gint));
@@ -348,7 +367,7 @@ rspamd_multipattern_create_sized (guint npatterns,
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		mp->hs_pats = g_array_sized_new (FALSE, TRUE, sizeof (gchar *), npatterns);
 		mp->hs_flags = g_array_sized_new (FALSE, TRUE, sizeof (gint), npatterns);
 		mp->hs_ids = g_array_sized_new (FALSE, TRUE, sizeof (gint), npatterns);
@@ -383,7 +402,7 @@ rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
 	g_assert (!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		gchar *np;
 		gint fl = HS_FLAG_SOM_LEFTMOST;
 
@@ -522,7 +541,7 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 	g_assert (!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		guint i;
 		hs_platform_info_t plt;
 		hs_compile_error_t *hs_errors;
@@ -652,7 +671,7 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 	cbd.ret = 0;
 
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		hs_scratch_t *scr = NULL;
 		guint i;
 
@@ -706,7 +725,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 
 	if (mp) {
 #ifdef WITH_HYPERSCAN
-		if (hs_suitable_cpu) {
+		if (rspamd_hs_check ()) {
 			gchar *p;
 
 			if (mp->compiled && mp->cnt > 0) {
@@ -755,7 +774,7 @@ rspamd_multipattern_get_pattern (struct rspamd_multipattern *mp,
 	g_assert (index < mp->cnt);
 
 #ifdef WITH_HYPERSCAN
-	if (hs_suitable_cpu) {
+	if (rspamd_hs_check ()) {
 		return g_array_index (mp->hs_pats, gchar *, index);
 	}
 #endif
@@ -773,4 +792,10 @@ rspamd_multipattern_get_npatterns (struct rspamd_multipattern *mp)
 	g_assert (mp != NULL);
 
 	return mp->cnt;
+}
+
+gboolean
+rspamd_multipattern_has_hyperscan (void)
+{
+	return rspamd_hs_check ();
 }

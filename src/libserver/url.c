@@ -460,7 +460,8 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 		if (static_matchers[i].flags & URL_FLAG_REGEXP) {
 			rspamd_multipattern_add_pattern (url_scanner->search_trie,
 					static_matchers[i].pattern,
-					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|RSPAMD_MULTIPATTERN_RE);
+					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|
+							RSPAMD_MULTIPATTERN_RE);
 		}
 		else {
 			rspamd_multipattern_add_pattern (url_scanner->search_trie,

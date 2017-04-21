@@ -669,8 +669,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 	}
 
 	rspamd_regexp_library_init ();
-	rspamd_multipattern_library_init (cfg->hs_cache_dir,
-			cfg->libs_ctx->crypto_ctx);
+	rspamd_multipattern_library_init (cfg->hs_cache_dir);
 
 #ifdef WITH_HYPERSCAN
 	if (!cfg->disable_hyperscan) {
