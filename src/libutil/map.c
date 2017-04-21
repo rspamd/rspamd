@@ -759,7 +759,7 @@ read_map_static (struct rspamd_map *map, struct static_map_data *data,
 							ZSTD_getErrorName (r));
 					ZSTD_freeDStream (zstream);
 					g_free (out);
-					munmap (bytes, len);
+
 					return FALSE;
 				}
 
@@ -1183,6 +1183,32 @@ rspamd_map_file_check_callback (gint fd, short what, void *ud)
 }
 
 static void
+rspamd_map_static_check_callback (gint fd, short what, void *ud)
+{
+	struct rspamd_map *map;
+	struct map_periodic_cbdata *periodic = ud;
+	struct static_map_data *data;
+	struct rspamd_map_backend *bk;
+
+	map = periodic->map;
+	bk = g_ptr_array_index (map->backends, periodic->cur_backend);
+	data = bk->data.sd;
+
+	if (!data->processed) {
+		periodic->need_modify = TRUE;
+		periodic->cur_backend = 0;
+
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+
+		return;
+	}
+
+	/* Switch to the next backend */
+	periodic->cur_backend ++;
+	rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+}
+
+static void
 rspamd_map_file_read_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_map *map;
@@ -1308,10 +1334,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 			rspamd_map_file_check_callback (fd, what, cbd);
 			break;
 		case MAP_PROTO_STATIC:
-			if (!bk->data.sd->processed) {
-				cbd->need_modify = TRUE;
-			}
-
+			rspamd_map_static_check_callback (fd, what, cbd);
 			break;
 		}
 	}
@@ -1499,18 +1522,28 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 {
 	g_free (bk->uri);
 
-	if (bk->protocol == MAP_PROTO_FILE) {
+	switch (bk->protocol) {
+	case MAP_PROTO_FILE:
 		if (bk->data.fd) {
 			g_free (bk->data.fd->filename);
 			g_slice_free1 (sizeof (*bk->data.fd), bk->data.fd);
 		}
-	}
-	else {
+		break;
+	case MAP_PROTO_STATIC:
+		if (bk->data.sd) {
+			if (bk->data.sd->data) {
+				g_free (bk->data.sd->data);
+			}
+		}
+		break;
+	case MAP_PROTO_HTTP:
+	case MAP_PROTO_HTTPS:
 		if (bk->data.hd) {
 			g_free (bk->data.hd->host);
 			g_free (bk->data.hd->path);
 			g_slice_free1 (sizeof (*bk->data.hd), bk->data.hd);
 		}
+		break;
 	}
 
 	if (bk->trusted_pubkey) {
@@ -2626,6 +2659,7 @@ rspamd_regexp_list_fin (struct map_cb_data *data)
 	}
 }
 
+#ifdef WITH_HYPERSCAN
 static int
 rspamd_match_hs_single_handler (unsigned int id, unsigned long long from,
 		unsigned long long to,
@@ -2638,6 +2672,7 @@ rspamd_match_hs_single_handler (unsigned int id, unsigned long long from,
 
 	return 1;
 }
+#endif
 
 gpointer
 rspamd_match_regexp_map_single (struct rspamd_regexp_map *map,
@@ -2697,18 +2732,27 @@ rspamd_match_regexp_map_single (struct rspamd_regexp_map *map,
 	return ret;
 }
 
+#ifdef WITH_HYPERSCAN
+struct rspamd_multiple_cbdata {
+	GPtrArray *ar;
+	struct rspamd_regexp_map *map;
+};
+
 static int
 rspamd_match_hs_multiple_handler (unsigned int id, unsigned long long from,
 		unsigned long long to,
 		unsigned int flags, void *context)
 {
-	guint *i = context;
+	struct rspamd_multiple_cbdata *cbd = context;
+
+	if (id < cbd->map->values->len) {
+		g_ptr_array_add (cbd->ar, g_ptr_array_index (cbd->map->values, id));
+	}
+
 	/* Always return zero as we need all matches here */
-
-	*i = id;
-
 	return 0;
 }
+#endif
 
 gpointer
 rspamd_match_regexp_map_all (struct rspamd_regexp_map *map,
@@ -2741,16 +2785,14 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map *map,
 	if (map->hs_db && map->hs_scratch) {
 
 		if (validated) {
-			res = hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
-					rspamd_match_hs_single_handler, (void *)&i);
+			struct rspamd_multiple_cbdata cbd;
 
-			if (res == HS_SUCCESS) {
-				return ret;
-			}
-			else {
-				g_ptr_array_free (ret, TRUE);
+			cbd.ar = ret;
+			cbd.map = map;
 
-				return NULL;
+			if (hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
+					rspamd_match_hs_multiple_handler, &cbd) == HS_SUCCESS) {
+				res = 1;
 			}
 		}
 	}
@@ -2769,7 +2811,6 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map *map,
 	}
 
 	if (ret->len > 0) {
-
 		return ret;
 	}
 
