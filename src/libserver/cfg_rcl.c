@@ -3883,9 +3883,17 @@ rspamd_rcl_add_doc_from_comments (struct rspamd_config *cfg,
 						ucl_object_type (cur), NULL, 0, NULL, FALSE);
 			}
 
-			if (cur_doc && ucl_object_type (cur) == UCL_OBJECT) {
-				rspamd_rcl_add_doc_from_comments (cfg, cur_doc, cur, comments,
-						FALSE);
+			if (ucl_object_type (cur) == UCL_OBJECT) {
+				if (cur_doc) {
+					rspamd_rcl_add_doc_from_comments (cfg, cur_doc, cur,
+							comments,
+							FALSE);
+				}
+				else {
+					rspamd_rcl_add_doc_from_comments (cfg, top_doc, cur,
+							comments,
+							FALSE);
+				}
 			}
 		}
 	}
