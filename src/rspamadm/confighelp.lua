@@ -64,16 +64,11 @@ local function print_help(key, value, tabs)
 
   if not opts['short'] then
     if value['data'] then
-      print(string.format('%s\tDescription: %s', tabs, value['data']))
-    end
-    if not opts['no-examples'] and value['example'] then
-      print(string.format('%s\tExample: %s', tabs, value['example']))
+      local nv = string.match(value['data'], '^#%s*(.*)%s*$') or value.data
+      print(string.format('%s\tDescription: %s', tabs, nv))
     end
     if value['type'] then
       print(string.format('%s\tType: %s', tabs, value['type']))
-      if value['type'] == 'object' then
-        print('')
-      end
     end
     if type(value['required']) == 'boolean' then
       if value['required'] then
@@ -86,6 +81,13 @@ local function print_help(key, value, tabs)
     end
     if value['default'] then
       print(string.format('%s\tDefault: %s', tabs, value['default']))
+    end
+    if not opts['no-examples'] and value['example'] then
+      local nv = string.match(value['example'], '^%s*(.*[^%s])%s*$') or value.example
+      print(string.format('%s\tExample:\n%s', tabs, nv))
+    end
+    if value.type and value.type == 'object' then
+      print('')
     end
   end
 
