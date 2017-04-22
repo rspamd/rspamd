@@ -578,6 +578,17 @@ LUA_FUNCTION_DEF (config, register_monitored);
 LUA_FUNCTION_DEF (config, add_doc);
 
 /***
+ * @method rspamd_config:add_example(path, option, doc_string, example)
+ * Adds new documentation
+ *
+ * @param {string} path documentation path (e.g. module name or nil for top)
+ * @param {string} option name of the option
+ * @param {string} doc_string documentation string
+ * @param {string} example example in ucl format, comments are also parsed
+ */
+LUA_FUNCTION_DEF (config, add_example);
+
+/***
  * @method rspamd_config:set_peak_cb(function)
  * Sets a function that will be called when frequency of some symbol goes out of
  * stddev * 2 over the last period of refreshment.
@@ -639,6 +650,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
 	LUA_INTERFACE_DEF (config, add_doc),
+	LUA_INTERFACE_DEF (config, add_example),
 	LUA_INTERFACE_DEF (config, set_peak_cb),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
@@ -2623,6 +2635,31 @@ lua_config_add_doc (lua_State *L)
 
 		rspamd_rcl_add_doc_by_path (cfg, path, doc_string, option,
 				type, NULL, 0, default_value, required);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_add_example (lua_State *L)
+{
+	struct rspamd_config *cfg;
+	const gchar *path, *option, *doc_string, *example;
+	gsize example_len;
+
+	cfg = lua_check_config (L, 1);
+	path = luaL_checkstring (L, 2);
+	option = luaL_checkstring (L, 3);
+	doc_string = luaL_checkstring (L, 4);
+	example = luaL_checklstring (L, 5, &example_len);
+
+	if (cfg && path && option && doc_string && example) {
+
+		rspamd_rcl_add_doc_by_example (cfg, path, doc_string, option,
+				example, example_len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
