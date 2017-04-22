@@ -162,7 +162,8 @@ lua_State *rspamd_lua_init (void);
 /**
  * Load and initialize lua plugins
  */
-gboolean rspamd_init_lua_filters (struct rspamd_config *cfg);
+gboolean
+rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load);
 
 /**
  * Initialize new locked lua_State structure

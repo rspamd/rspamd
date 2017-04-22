@@ -340,7 +340,7 @@ rspamd_free_lua_locked (struct lua_locked_state *st)
 }
 
 gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg)
+rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 {
 	struct rspamd_config **pcfg;
 	GList *cur;
@@ -355,9 +355,11 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 	while (cur) {
 		module = cur->data;
 		if (module->path) {
-			if (!rspamd_config_is_module_enabled (cfg, module->name)) {
-				cur = g_list_next (cur);
-				continue;
+			if (!force_load) {
+				if (!rspamd_config_is_module_enabled (cfg, module->name)) {
+					cur = g_list_next (cur);
+					continue;
+				}
 			}
 
 			lua_pushcfunction (L, &rspamd_lua_traceback);

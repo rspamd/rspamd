@@ -2603,18 +2603,22 @@ static gint
 lua_config_add_doc (lua_State *L)
 {
 	struct rspamd_config *cfg;
-	const gchar *path, *option, *doc_string;
+	const gchar *path = NULL, *option, *doc_string;
 	const gchar *type_str = NULL, *default_value = NULL;
 	ucl_type_t type = UCL_NULL;
 	gboolean required = FALSE;
 	GError *err = NULL;
 
 	cfg = lua_check_config (L, 1);
-	path = luaL_checkstring (L, 2);
+
+	if (lua_type (L, 2 ) == LUA_TSTRING) {
+		path = luaL_checkstring (L, 2);
+	}
+
 	option = luaL_checkstring (L, 3);
 	doc_string = luaL_checkstring (L, 4);
 
-	if (cfg && path && option && doc_string) {
+	if (cfg && option && doc_string) {
 		if (lua_type (L, 5) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"type=S;default=S;required=B",
@@ -2647,16 +2651,20 @@ static gint
 lua_config_add_example (lua_State *L)
 {
 	struct rspamd_config *cfg;
-	const gchar *path, *option, *doc_string, *example;
+	const gchar *path = NULL, *option, *doc_string, *example;
 	gsize example_len;
 
 	cfg = lua_check_config (L, 1);
-	path = luaL_checkstring (L, 2);
+
+	if (lua_type (L, 2 ) == LUA_TSTRING) {
+		path = luaL_checkstring (L, 2);
+	}
+
 	option = luaL_checkstring (L, 3);
 	doc_string = luaL_checkstring (L, 4);
 	example = luaL_checklstring (L, 5, &example_len);
 
-	if (cfg && path && option && doc_string && example) {
+	if (cfg && option && doc_string && example) {
 
 		rspamd_rcl_add_doc_by_example (cfg, path, doc_string, option,
 				example, example_len);

@@ -446,4 +446,15 @@ ucl_object_t *rspamd_rcl_add_doc_by_example (struct rspamd_config *cfg,
 		const gchar *doc_string,
 		const gchar *doc_name,
 		const gchar *example_data, gsize example_len);
+
+/**
+ * Add lua modules path
+ * @param cfg
+ * @param path
+ * @param err
+ * @return
+ */
+gboolean rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
+		const gchar *path,
+		GError **err);
 #endif /* CFG_RCL_H_ */

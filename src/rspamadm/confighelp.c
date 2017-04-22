@@ -25,6 +25,7 @@
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean keyword = FALSE;
+static const gchar *plugins_path = RSPAMD_PLUGINSDIR;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -48,6 +49,8 @@ static GOptionEntry entries[] = {
 				"Output compacted", NULL},
 		{"keyword", 'k', 0, G_OPTION_ARG_NONE, &keyword,
 				"Search by keyword", NULL},
+		{"plugins", 'P', 0, G_OPTION_ARG_STRING, &plugins_path,
+				"Use the following plugin path (" RSPAMD_PLUGINSDIR ")", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -63,7 +66,8 @@ rspamadm_confighelp_help (gboolean full_help)
 				"-c: output compacted JSON\n"
 				"-j: output pretty formatted JSON\n"
 				"-k: search by keyword in doc string\n"
-				"--color: show colored output\n"
+				"-P: use specific Lua plugins path\n"
+				"--no-color: show colored output\n"
 				"--short: show only option names\n"
 				"--no-examples: do not show examples (impied by --short)\n"
 				"--help: shows available options and commands";
@@ -224,6 +228,9 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	cfg->compiled_workers = workers;
 
 	rspamd_rcl_config_init (cfg);
+	lua_pushboolean (cfg->lua_state, true);
+	lua_setglobal (cfg->lua_state, "confighelp");
+	rspamd_rcl_add_lua_plugins_path (cfg, plugins_path, NULL);
 
 	/* Init modules to get documentation strings */
 	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod++) {
@@ -241,6 +248,9 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	for (pworker = cfg->compiled_workers; *pworker != NULL; pworker ++) {
 		(*pworker)->worker_init_func (cfg);
 	}
+
+	/* Init lua modules */
+	rspamd_init_lua_filters (cfg, TRUE);
 
 	if (argc > 1) {
 		for (i = 1; i < argc; i ++) {

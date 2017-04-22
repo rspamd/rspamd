@@ -1029,10 +1029,10 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	return TRUE;
 }
 
-static gboolean
-rspamd_rcl_add_module_path (struct rspamd_config *cfg,
-	const gchar *path,
-	GError **err)
+gboolean
+rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
+		const gchar *path,
+		GError **err)
 {
 	struct stat st;
 	struct script_module *cur_mod;
@@ -1145,16 +1145,16 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		LL_FOREACH (val, cur)
 		{
 			if (ucl_object_tostring_safe (cur, &data)) {
-				if (!rspamd_rcl_add_module_path (cfg,
-					rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
+				if (!rspamd_rcl_add_lua_plugins_path (cfg,
+						rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
 					return FALSE;
 				}
 			}
 		}
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
-		if (!rspamd_rcl_add_module_path (cfg,
-			rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
+		if (!rspamd_rcl_add_lua_plugins_path (cfg,
+				rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
 			return FALSE;
 		}
 	}
@@ -3869,7 +3869,7 @@ rspamd_rcl_add_doc_from_comments (struct rspamd_config *cfg,
 		ucl_object_t *top_doc, const ucl_object_t *obj,
 		const ucl_object_t *comments, gboolean is_top)
 {
-	ucl_object_iter_t it;
+	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *cmt;
 	ucl_object_t *cur_doc;
 
@@ -3927,7 +3927,7 @@ rspamd_rcl_add_doc_by_example (struct rspamd_config *cfg,
 	top_doc = rspamd_rcl_add_doc_by_path (cfg, root_path, doc_string,
 			doc_name, ucl_object_type (top), NULL, 0, NULL, FALSE);
 	ucl_object_insert_key (top_doc,
-			ucl_object_fromlstring (example_data, example_len),
+			ucl_object_fromstring_common (example_data, example_len, 0),
 			"example", 0, false);
 
 	rspamd_rcl_add_doc_from_comments (cfg, top_doc, top, comments, TRUE);

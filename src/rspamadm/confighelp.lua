@@ -12,7 +12,7 @@ local known_attrs = {
 
 
 local function maybe_print_color(key)
-  if opts['color'] then
+  if not opts['no-color'] then
     return ansicolors.white .. key .. ansicolors.reset
   else
     return key

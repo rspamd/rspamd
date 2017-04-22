@@ -1376,7 +1376,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 		cur = g_list_next (cur);
 	}
 
-	return rspamd_init_lua_filters (cfg);
+	return rspamd_init_lua_filters (cfg, 0);
 }
 
 static void
