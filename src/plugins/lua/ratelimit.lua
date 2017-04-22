@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- A plugin that implements ratelimits using redis or kvstorage server
 
 local E = {}

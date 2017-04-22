@@ -15,6 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- A plugin that pushes metadata (or whole messages) to external services
 
 local redis_params

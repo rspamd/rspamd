@@ -17,6 +17,10 @@ limitations under the License.
 -- Plugin for comparing smtp dialog recipients and sender with recipients and sender
 -- in mime headers
 
+if confighelp then
+  return
+end
+
 local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 

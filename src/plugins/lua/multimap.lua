@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- Multimap is rspamd module designed to define and operate with different maps
 
 local rules = {}

@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- This plugin is a concept of FANN scores adjustment
 -- NOT FOR PRODUCTION USE so far
 local rspamd_logger = require "rspamd_logger"

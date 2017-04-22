@@ -19,6 +19,10 @@ MID plugin - suppress INVALID_MSGID and MISSING_MID for messages originating
 from listed valid DKIM domains with missed or known proprietary Message-IDs
 ]]--
 
+if confighelp then
+  return
+end
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 

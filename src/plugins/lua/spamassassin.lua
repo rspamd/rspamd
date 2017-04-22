@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- This plugin is intended to read and parse spamassassin rules with regexp
 -- rules. SA plugins or statistics are not supported
 

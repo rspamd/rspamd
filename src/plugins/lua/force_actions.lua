@@ -17,6 +17,10 @@ limitations under the License.
 
 -- A plugin that forces actions
 
+if confighelp then
+  return
+end
+
 local E = {}
 local N = 'force_actions'
 

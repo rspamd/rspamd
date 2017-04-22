@@ -18,6 +18,10 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 
+if confighelp then
+  return
+end
+
 local options = {
   provider_type = 'rspamd',
   provider_info = {

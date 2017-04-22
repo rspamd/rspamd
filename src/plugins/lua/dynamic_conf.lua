@@ -19,6 +19,10 @@ local redis_params
 local ucl = require "ucl"
 local fun = require "fun"
 
+if confighelp then
+  return
+end
+
 local settings = {
   redis_key = "dynamic_conf",
   redis_watch_interval = 10.0,

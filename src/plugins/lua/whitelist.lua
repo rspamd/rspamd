@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"

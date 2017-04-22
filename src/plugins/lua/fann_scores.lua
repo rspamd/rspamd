@@ -17,6 +17,10 @@ limitations under the License.
 -- This plugin is a concept of FANN scores adjustment
 -- NOT FOR PRODUCTION USE so far
 
+if confighelp then
+  return
+end
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"

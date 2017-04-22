@@ -15,6 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
 -- https://rspamd.com/doc/modules/rbl.html

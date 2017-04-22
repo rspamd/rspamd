@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- Phishing detection interface for selecting phished urls and inserting corresponding symbol
 --
 --

@@ -390,7 +390,9 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 				continue;
 			}
 
-			msg_info_config ("init lua module %s", module->name);
+			if (!force_load) {
+				msg_info_config ("init lua module %s", module->name);
+			}
 
 			lua_pop (L, 1); /* Error function */
 		}

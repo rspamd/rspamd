@@ -24,6 +24,19 @@ local logger = require "rspamd_logger"
 local tcp = require "rspamd_tcp"
 local fun = require "fun"
 
+if confighelp then
+  rspamd_config:add_example(nil, 'dcc',
+    "Check messages for 'bulkiness' using DCC",
+    [[
+dcc {
+  host = "/var/dcc/dccifd"; # Unix socket or hostname
+  port = 1234 # Port to use (needed for TCP socket)
+  timeout = 2s; # Timeout to wait for checks
+}
+]])
+  return
+end
+
 local function check_dcc (task)
   -- Connection
   local client = '0.0.0.0'
@@ -128,13 +141,3 @@ if opts and opts['host'] then
 else
   logger.infox('DCC module not configured');
 end
-
-rspamd_config:add_example(nil, 'dcc',
-  "Check messages for 'bulkiness' using DCC",
-[[
-dcc {
-  host = "/var/dcc/dccifd"; # Unix socket or hostname
-  port = 1234 # Port to use (needed for TCP socket)
-  timeout = 2s; # Timeout to wait for checks
-}
-]])

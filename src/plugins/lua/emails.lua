@@ -16,6 +16,10 @@ limitations under the License.
 
 -- Emails is module for different checks for emails inside messages
 
+if confighelp then
+  return
+end
+
 -- Rules format:
 -- symbol = sym, map = file:///path/to/file, domain_only = yes
 -- symbol = sym2, dnsbl = bl.somehost.com, domain_only = no

@@ -18,6 +18,10 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 
+if confighelp then
+  return
+end
+
 local settings = {
   allow_envfrom_empty = true,
   allow_hdrfrom_mismatch = false,

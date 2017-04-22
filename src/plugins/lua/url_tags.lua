@@ -15,6 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+if confighelp then
+  return
+end
+
 -- A plugin that restores/persists URL tags
 
 local N = 'url_tags'

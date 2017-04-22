@@ -35,6 +35,10 @@ greylist {
 }
 --]]
 
+if confighelp then
+  return
+end
+
 -- A plugin that implements greylisting using redis
 
 local redis_params

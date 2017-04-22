@@ -22,6 +22,10 @@ local rspamd_util = require "rspamd_util"
 local check_local = false
 local check_authed = false
 
+if confighelp then
+  return
+end
+
 local symbols = {
   spf_allow_symbol = 'R_SPF_ALLOW',
   spf_deny_symbol = 'R_SPF_FAIL',

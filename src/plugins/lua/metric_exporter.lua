@@ -15,6 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]] --
 
+if confighelp then
+  return
+end
+
 local N = 'metric_exporter'
 local logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"

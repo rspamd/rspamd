@@ -17,6 +17,10 @@ limitations under the License.
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
 
+if confighelp then
+  return
+end
+
 local E = {}
 
 local rows = {}
