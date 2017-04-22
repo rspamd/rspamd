@@ -419,4 +419,31 @@ ucl_object_t *rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 		gint flags,
 		const char *default_value,
 		gboolean required);
+
+/**
+ * Parses example and adds documentation according to the example:
+ *
+ * ```
+ * section {
+ *   param1 = value; # explanation
+ *   param2 = value; # explanation
+ * }
+ * ```
+ *
+ * will produce the following documentation strings:
+ * section ->
+ *   section.param1 : explanation
+ *   section.param2 : explanation
+ *
+ * @param cfg
+ * @param root_path
+ * @param example_data
+ * @param example_len
+ * @return
+ */
+ucl_object_t *rspamd_rcl_add_doc_by_example (struct rspamd_config *cfg,
+		const gchar *root_path,
+		const gchar *doc_string,
+		const gchar *doc_name,
+		const gchar *example_data, gsize example_len);
 #endif /* CFG_RCL_H_ */

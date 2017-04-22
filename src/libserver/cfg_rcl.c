@@ -3863,3 +3863,74 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 			default_value,
 			required);
 }
+
+static void
+rspamd_rcl_add_doc_from_comments (struct rspamd_config *cfg,
+		ucl_object_t *top_doc, const ucl_object_t *obj,
+		const ucl_object_t *comments, gboolean is_top)
+{
+	ucl_object_iter_t it;
+	const ucl_object_t *cur, *cmt;
+	ucl_object_t *cur_doc;
+
+	if (ucl_object_type (obj) == UCL_OBJECT) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+			cur_doc = NULL;
+
+			if ((cmt = ucl_comments_find (comments, cur)) != NULL) {
+				cur_doc = rspamd_rcl_add_doc_obj (top_doc,
+						ucl_object_tostring (cmt), ucl_object_key (cur),
+						ucl_object_type (cur), NULL, 0, NULL, FALSE);
+			}
+
+			if (cur_doc && ucl_object_type (cur) == UCL_OBJECT) {
+				rspamd_rcl_add_doc_from_comments (cfg, cur_doc, cur, comments,
+						FALSE);
+			}
+		}
+	}
+	else if (!is_top) {
+		if ((cmt = ucl_comments_find (comments, obj)) != NULL) {
+			rspamd_rcl_add_doc_obj (top_doc,
+					ucl_object_tostring (cmt), ucl_object_key (obj),
+					ucl_object_type (obj), NULL, 0, NULL, FALSE);
+		}
+
+	}
+}
+
+ucl_object_t *
+rspamd_rcl_add_doc_by_example (struct rspamd_config *cfg,
+		const gchar *root_path,
+		const gchar *doc_string,
+		const gchar *doc_name,
+		const gchar *example_data, gsize example_len)
+{
+	struct ucl_parser *parser;
+	ucl_object_t *top, *top_doc;
+	const ucl_object_t *comments;
+
+	parser = ucl_parser_new (UCL_PARSER_NO_FILEVARS|UCL_PARSER_SAVE_COMMENTS);
+
+	if (!ucl_parser_add_chunk (parser, example_data, example_len)) {
+		msg_err_config ("cannot parse example: %s",
+				ucl_parser_get_error (parser));
+		ucl_parser_free (parser);
+
+		return NULL;
+	}
+
+	top = ucl_parser_get_object (parser);
+	comments = ucl_parser_get_comments (parser);
+
+	/* Add top object */
+	top_doc = rspamd_rcl_add_doc_by_path (cfg, root_path, doc_string,
+			doc_name, ucl_object_type (top), NULL, 0, NULL, FALSE);
+	ucl_object_insert_key (top_doc,
+			ucl_object_fromlstring (example_data, example_len),
+			"example", 0, false);
+
+	rspamd_rcl_add_doc_from_comments (cfg, top_doc, top, comments, TRUE);
+
+	return top_doc;
+}
