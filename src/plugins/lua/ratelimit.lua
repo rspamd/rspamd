@@ -291,7 +291,7 @@ local function check_limits(task, args)
 
             if mult > 0.5 then
               task:insert_result(ratelimit_symbol, mult,
-                rtype .. ':' .. tostring(mult))
+                rtype .. ':' .. string.format('%.2f', mult))
             end
           else
             if bucket > threshold then
