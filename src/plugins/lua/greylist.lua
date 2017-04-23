@@ -44,6 +44,7 @@ end
 local redis_params
 local whitelisted_ip
 local whitelist_domains_map = nil
+local toint =math.ifloor or math.floor
 local settings = {
   expire = 86400, -- 1 day by default
   timeout = 300, -- 5 minutes by default
@@ -328,18 +329,18 @@ local function greylist_set(task)
       true, -- is write
       redis_set_cb, --callback
       'EXPIRE', -- command
-      {body_key, tostring(settings['expire'])} -- arguments
+      {body_key, tostring(toint(settings['expire']))} -- arguments
     )
     -- Update greylisting record expire
     if ret then
       conn:add_cmd('EXPIRE', {
-        meta_key, tostring(settings['expire'])
+        meta_key, tostring(toint(settings['expire']))
       })
     else
       rspamd_logger.errx(task, 'got error while connecting to redis')
     end
   elseif do_greylisting or do_greylisting_required then
-    local t = tostring(math.floor(rspamd_util.get_time()))
+    local t = tostring(toint(rspamd_util.get_time()))
     local end_time = rspamd_util.time_to_string(t + settings['timeout'])
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
     task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
@@ -354,12 +355,12 @@ local function greylist_set(task)
       true, -- is write
       redis_set_cb, --callback
       'SETEX', -- command
-      {body_key, tostring(settings['expire']), t} -- arguments
+      {body_key, tostring(toint(settings['expire'])), t} -- arguments
     )
 
     if ret then
       conn:add_cmd('SETEX', {
-        meta_key, tostring(settings['expire']), t
+        meta_key, tostring(toint(settings['expire'])), t
       })
     else
       rspamd_logger.errx(task, 'got error while connecting to redis')
