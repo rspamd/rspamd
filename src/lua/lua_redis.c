@@ -469,10 +469,10 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 		top = 0;
 
 		while (lua_next (L, -2) != 0) {
-			if (lua_isstring (L, -1)) {
-				top ++;
-			}
-			else if (lua_type (L, -1) == LUA_TUSERDATA) {
+			gint type = lua_type (L, -1);
+
+			if (type == LUA_TNUMBER || type == LUA_TSTRING ||
+					type == LUA_TUSERDATA) {
 				top ++;
 			}
 			lua_pop (L, 1);
@@ -487,7 +487,9 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 		lua_pushnil (L);
 
 		while (lua_next (L, -2) != 0) {
-			if (lua_isstring (L, -1)) {
+			gint type = lua_type (L, -1);
+
+			if (type == LUA_TSTRING) {
 				const gchar *s;
 
 				s = lua_tolstring (L, -1, &arglens[top]);
@@ -495,7 +497,7 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 				memcpy (args[top], s, arglens[top]);
 				top ++;
 			}
-			else if (lua_type (L, -1) == LUA_TUSERDATA) {
+			else if (type == LUA_TUSERDATA) {
 				struct rspamd_lua_text *t;
 
 				t = lua_check_text (L, -1);
@@ -506,6 +508,25 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 					memcpy (args[top], t->start, arglens[top]);
 					top ++;
 				}
+			}
+			else if (type == LUA_TNUMBER) {
+				gdouble val = lua_tonumber (L, -1);
+				gint r;
+				gchar numbuf[64];
+
+				if (val == (gdouble)((gint64)val)) {
+					r = rspamd_snprintf (numbuf, sizeof (numbuf), "%L",
+							(gint64)val);
+				}
+				else {
+					r = rspamd_snprintf (numbuf, sizeof (numbuf), "%f",
+							val);
+				}
+
+				arglens[top] = r;
+				args[top] = g_slice_alloc (arglens[top]);
+				memcpy (args[top], numbuf, arglens[top]);
+				top ++;
 			}
 
 			lua_pop (L, 1);
