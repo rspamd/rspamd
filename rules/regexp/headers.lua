@@ -57,20 +57,6 @@ rspamd_config.MISSING_SUBJECT = {
   end
 }
 
--- Detects bad content-transfer-encoding for text parts
--- For text parts (text/plain and text/html mainly)
-local r_ctype_text = 'content_type_is_type(text)'
--- Content transfer encoding is 7bit
-local r_cte_7bit = 'compare_transfer_encoding(7bit)'
--- And body contains 8bit characters
-local r_body_8bit = '/[^\\x01-\\x7f]/Qr'
-reconf['R_BAD_CTE_7BIT'] = {
-  re = string.format('(%s) & (%s) & (%s)', r_ctype_text, r_cte_7bit, r_body_8bit),
-  score = 2.0,
-  description = 'Detects bad content-transfer-encoding for text parts',
-  group = 'header'
-}
-
 -- Detects missing To header
 reconf['MISSING_TO'] = {
   re = '!raw_header_exists(To)',
