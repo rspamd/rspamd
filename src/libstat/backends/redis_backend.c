@@ -44,6 +44,7 @@ struct redis_stat_ctx {
 	const gchar *dbname;
 	gdouble timeout;
 	gboolean enable_users;
+	gboolean store_tokens;
 	gint cbref_user;
 };
 
@@ -160,8 +161,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 					(gpointer)rcpt, NULL);
 		}
 	}
-
-
 
 	/* Length calculation */
 	while (*p) {
@@ -421,6 +420,35 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 				rspamd_fstring_free (out);
 
 				return NULL;
+			}
+
+			if (rt->ctx->store_tokens) {
+				/*
+				 * We also store tokens in form
+				 * HSET arg0_keys <token_id> "token_string"
+				 * ZINCRBY arg0_zlist <token_id> 1.0
+				 */
+				if (tok->t1 && tok->t2) {
+					redisAsyncCommand (rt->redis, NULL, NULL,
+							"HSET %b_tokens %b %b:%b",
+							arg1, (size_t)larg1,
+							n0, (size_t)l0,
+							tok->t1->begin, tok->t1->len,
+							tok->t2->begin, tok->t2->len);
+				}
+				else if (tok->t1) {
+					redisAsyncCommand (rt->redis, NULL, NULL,
+							"HSET %b_tokens %b %b",
+							arg1, (size_t)larg1,
+							n0, (size_t)l0,
+							tok->t1->begin, tok->t1->len);
+				}
+
+				redisAsyncCommand (rt->redis, NULL, NULL,
+						"ZINCRBY %b_z %b %b",
+						arg1, (size_t)larg1,
+						n1, (size_t)l1,
+						n0, (size_t)l0);
 			}
 
 			out->len = 0;
@@ -1050,6 +1078,14 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 	}
 	else {
 		backend->password = NULL;
+	}
+
+	elt = ucl_object_lookup (obj, "store_tokens");
+	if (elt) {
+		backend->store_tokens = ucl_object_toboolean (elt);
+	}
+	else {
+		backend->store_tokens = FALSE;
 	}
 
 	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
