@@ -47,18 +47,18 @@ end
 LUA_FUNCTION_DEF (textpart, is_utf);
 
 /***
- * @method text_part:is_8bit_raw()
+ * @method text_part:has_8bit_raw()
  * Return TRUE if a part has raw 8bit characters
  * @return {boolean} true if a part has raw 8bit characters
  */
-LUA_FUNCTION_DEF (textpart, is_8bit_raw);
+LUA_FUNCTION_DEF (textpart, has_8bit_raw);
 
 /***
- * @method text_part:is_8bit()
+ * @method text_part:has_8bit()
  * Return TRUE if a part has raw 8bit characters
  * @return {boolean} true if a part has encoded 8bit characters
  */
-LUA_FUNCTION_DEF (textpart, is_8bit);
+LUA_FUNCTION_DEF (textpart, has_8bit);
 
 /***
  * @method text_part:get_content([type])
@@ -146,8 +146,8 @@ LUA_FUNCTION_DEF (textpart, get_mimepart);
 
 static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_utf),
-	LUA_INTERFACE_DEF (textpart, is_8bit_raw),
-	LUA_INTERFACE_DEF (textpart, is_8bit),
+	LUA_INTERFACE_DEF (textpart, has_8bit_raw),
+	LUA_INTERFACE_DEF (textpart, has_8bit),
 	LUA_INTERFACE_DEF (textpart, get_content),
 	LUA_INTERFACE_DEF (textpart, get_raw_content),
 	LUA_INTERFACE_DEF (textpart, get_content_oneline),
@@ -395,7 +395,7 @@ lua_textpart_is_utf (lua_State * L)
 
 
 static gint
-lua_textpart_is_8bit_raw (lua_State * L)
+lua_textpart_has_8bit_raw (lua_State * L)
 {
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 
@@ -415,7 +415,7 @@ lua_textpart_is_8bit_raw (lua_State * L)
 }
 
 static gint
-lua_textpart_is_8bit (lua_State * L)
+lua_textpart_has_8bit (lua_State * L)
 {
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 

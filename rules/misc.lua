@@ -590,3 +590,23 @@ rspamd_config.INFO_TO_INFO_LU = {
   description = 'info@ From/To address with List-Unsubscribe headers',
   score = 2.0
 }
+
+-- Detects bad content-transfer-encoding for text parts
+
+rspamd_config.R_BAD_CTE_7BIT = {
+  callback = function(task)
+    local tp = task:get_text_parts() or {}
+
+    for _,p in ipairs(tp) do
+      local cte = p:get_mimepart():get_cte() or ''
+      if cte ~= '8bit' and p:has_8bit_raw() then
+        return true,1.0,cte
+      end
+    end
+
+    return false
+  end,
+  score = 4.0,
+  description = 'Detects bad content-transfer-encoding for text parts',
+  group = 'header'
+}
