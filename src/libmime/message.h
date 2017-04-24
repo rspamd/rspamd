@@ -69,6 +69,8 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_FLAG_BALANCED (1 << 1)
 #define RSPAMD_MIME_TEXT_PART_FLAG_EMPTY (1 << 2)
 #define RSPAMD_MIME_TEXT_PART_FLAG_HTML (1 << 3)
+#define RSPAMD_MIME_TEXT_PART_FLAG_8BIT (1 << 4)
+#define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED (1 << 5)
 
 #define IS_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
