@@ -45,6 +45,21 @@ end
  * @return {boolean} true if part is valid `UTF8` part
  */
 LUA_FUNCTION_DEF (textpart, is_utf);
+
+/***
+ * @method text_part:is_8bit_raw()
+ * Return TRUE if a part has raw 8bit characters
+ * @return {boolean} true if a part has raw 8bit characters
+ */
+LUA_FUNCTION_DEF (textpart, is_8bit_raw);
+
+/***
+ * @method text_part:is_8bit()
+ * Return TRUE if a part has raw 8bit characters
+ * @return {boolean} true if a part has encoded 8bit characters
+ */
+LUA_FUNCTION_DEF (textpart, is_8bit);
+
 /***
  * @method text_part:get_content([type])
  * Get the text of the part (html tags stripped). Optional `type` defines type of content to get:
@@ -131,6 +146,8 @@ LUA_FUNCTION_DEF (textpart, get_mimepart);
 
 static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_utf),
+	LUA_INTERFACE_DEF (textpart, is_8bit_raw),
+	LUA_INTERFACE_DEF (textpart, is_8bit),
 	LUA_INTERFACE_DEF (textpart, get_content),
 	LUA_INTERFACE_DEF (textpart, get_raw_content),
 	LUA_INTERFACE_DEF (textpart, get_content_oneline),
@@ -372,6 +389,47 @@ lua_textpart_is_utf (lua_State * L)
 	}
 
 	lua_pushboolean (L, IS_PART_UTF (part));
+
+	return 1;
+}
+
+
+static gint
+lua_textpart_is_8bit_raw (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+
+	if (part) {
+		if (part->flags & RSPAMD_MIME_TEXT_PART_FLAG_8BIT) {
+			lua_pushboolean (L, TRUE);
+		}
+		else {
+			lua_pushboolean (L, FALSE);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_textpart_is_8bit (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+
+	if (part) {
+		if (part->flags & RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED) {
+			lua_pushboolean (L, TRUE);
+		}
+		else {
+			lua_pushboolean (L, FALSE);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
