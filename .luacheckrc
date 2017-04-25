@@ -11,6 +11,7 @@ globals = {
   'check_header_delimiter_tab',
   'classifiers',
   'config',
+  'confighelp',
   'kmail_msgid',
   'rspamd_classifiers',
   'rspamd_config',
