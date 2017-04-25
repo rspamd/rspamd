@@ -1987,6 +1987,14 @@ lua_task_str_to_get_type (lua_State *L, gint pos)
 	return ret;
 }
 
+#define EMAIL_CHECK_FLAG(fl, str) do { \
+	if (addr->flags & (fl)) { \
+		lua_pushstring (L, (str)); \
+		lua_pushboolean (L, true); \
+		lua_settable (L, -3); \
+	} \
+} while(0)
+
 static void
 lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 {
@@ -2034,6 +2042,19 @@ lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 			lua_pushstring (L, "");
 			lua_settable (L, -3);
 		}
+
+		lua_pushstring (L, "flags");
+		lua_createtable (L, 0, 7);
+
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_VALID, "valid");
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_IP, "ip");
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_BRACED, "braced");
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_QUOTED, "quoted");
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_EMPTY, "empty");
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_HAS_BACKSLASH, "backslash");
+		EMAIL_CHECK_FLAG (RSPAMD_EMAIL_ADDR_HAS_8BIT, "8bit");
+
+		lua_settable (L, -3);
 	}
 }
 
