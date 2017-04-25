@@ -918,3 +918,39 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
   score = 0.1,
   group = 'headers'
 }
+
+local function is_8bit_addr(addr)
+  if addr.flags and addr.flags['8bit'] then
+    return true
+  end
+
+  return false;
+end
+
+rspamd_config.INVALID_FROM_8BIT = {
+  callback = function(task)
+    local from = (task:get_from('mime') or {})[1] or {}
+    if is_8bit_addr(from) then
+      return true
+    end
+    return false
+  end,
+  description = 'Invalid 8bit character in From header',
+  score = 6.0,
+  group = 'headers'
+}
+
+rspamd_config.INVALID_RCPT_8BIT = {
+  callback = function(task)
+    local rcpts = task:get_recipients('mime') or {}
+    return fun.any(function(rcpt)
+      if is_8bit_addr(rcpt) then
+        return true
+      end
+      return false
+    end, rcpts)
+  end,
+  description = 'Invalid 8bit character in recipients headers',
+  score = 6.0,
+  group = 'headers'
+}
