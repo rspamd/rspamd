@@ -339,4 +339,35 @@ const void *rspamd_memrchr (const void *m, gint c, gsize len);
  */
 gsize rspamd_memcspn (const gchar *s, const gchar *e, gsize len);
 
+
+/* https://graphics.stanford.edu/~seander/bithacks.html#HasMoreInWord */
+#define rspamd_str_hasmore(x,n) ((((x)+~0UL/255*(127-(n)))|(x))&~0UL/255*128)
+
+static inline gboolean
+rspamd_str_has_8bit (const guchar *beg, gsize len)
+{
+	unsigned long *w;
+	gsize i, leftover = len % sizeof (*w);
+
+	w = (unsigned long *)beg;
+
+	for (i = 0; i < len / sizeof (*w); i ++) {
+		if (rspamd_str_hasmore (*w, 127)) {
+			return TRUE;
+		}
+
+		w ++;
+	}
+
+	beg = (const guchar *)w;
+
+	for (i = 0; i < leftover; i ++) {
+		if (beg[i] > 127) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

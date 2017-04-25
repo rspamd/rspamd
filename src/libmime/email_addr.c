@@ -169,7 +169,8 @@ static gboolean
 rspamd_email_address_parse_heuristic (const char *data, size_t len,
 		struct rspamd_email_address *addr)
 {
-	const gchar *p = data;
+	const gchar *p = data, *at = NULL, *end = data + len;
+	gboolean ret = FALSE;
 
 	memset (addr, 0, sizeof (*addr));
 
@@ -179,19 +180,36 @@ rspamd_email_address_parse_heuristic (const char *data, size_t len,
 		addr->addr = p + 1;
 		addr->raw = p;
 		addr->raw_len = len;
+		ret = TRUE;
 
-		return TRUE;
+		p = p + 1;
+		len = addr->addr_len;
+		end = p + len;
 	}
 	else if (len > 0) {
 		addr->addr = p;
 		addr->addr_len = len;
 		addr->raw = p;
 		addr->raw_len = len;
-
-		return TRUE;
+		ret = TRUE;
 	}
 
-	return FALSE;
+	if (ret) {
+		at = memchr (p, '@', len);
+
+		if (at != NULL && at + 1 < end) {
+			addr->domain = at + 1;
+			addr->domain_len = end - (at + 1);
+			addr->user = p;
+			addr->user_len = at - p;
+		}
+
+		if (rspamd_str_has_8bit (p, len)) {
+			addr->flags |= RSPAMD_EMAIL_ADDR_HAS_8BIT;
+		}
+	}
+
+	return ret;
 }
 
 GPtrArray *
@@ -328,6 +346,9 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				seen_at = FALSE;
 				state = skip_spaces;
 				next_state = parse_name;
+			}
+			else if (*p == '@') {
+				seen_at = TRUE;
 			}
 			p ++;
 			break;

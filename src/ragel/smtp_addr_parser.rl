@@ -54,7 +54,9 @@
   }
 
   action Valid_addr {
-    addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
+    if (addr->addr_len > 0) {
+      addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
+    }
   }
 
   action Addr_has_angle {
