@@ -2076,7 +2076,7 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 		p = lua_tolstring (L, -1, &len);
 		addr->name = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
 		memcpy ((gchar *)addr->name, p, len);
-		addr->addr_len = len;
+		addr->name_len = len;
 	}
 
 	lua_pop (L, 1);
@@ -2152,6 +2152,7 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 	}
 
 	lua_pop (L, 1);
+	addr->flags = RSPAMD_EMAIL_ADDR_VALID;
 
 	*paddr = addr;
 
