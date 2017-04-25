@@ -415,8 +415,8 @@ local aliases_id = rspamd_config:register_symbol{
         addr.addr = string.format('%s@', addr.user)
       end
 
-      if addr.name then
-        addr.raw = string.format('%s <%s>', addr.name, addr.addr)
+      if addr.name and #addr.name > 0 then
+        addr.raw = string.format('"%s" <%s>', addr.name, addr.addr)
       else
         addr.raw = string.format('<%s>', addr.addr)
       end
