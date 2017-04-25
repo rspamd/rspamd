@@ -37,6 +37,10 @@ files['/**/src/plugins/lua/spamassassin.lua'].globals = {
   'jit',
 }
 
+files['/**/src/plugins/lua/greylist.lua'].globals = {
+  'math.ifloor',
+}
+
 files['/**/src/rspamadm/*'].globals = {
   'ansicolors',
   'getopt',
