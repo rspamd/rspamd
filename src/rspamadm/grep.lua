@@ -15,6 +15,10 @@ return function(_, res)
     end
   end
 
+  local plainm = true
+  if res['luapat'] then
+    plainm = false
+  end
   local orphans = res['orphans']
   local search_str = res['string']
   local sensitive = res['sensitive']
@@ -63,10 +67,10 @@ return function(_, res)
         if re then
           ismatch = re:match(line)
         elseif sensitive and search_str then
-          ismatch = string.find(line, search_str)
+          ismatch = string.find(line, search_str, 1, plainm)
         elseif search_str then
           local lwr = string.lower(line)
-          ismatch = string.find(lwr, search_str)
+          ismatch = string.find(lwr, search_str, 1, plainm)
         end
         if ismatch then
           if not hash then

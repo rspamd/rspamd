@@ -25,6 +25,7 @@ static gchar **inputs = NULL;
 static gboolean sensitive = FALSE;
 static gboolean orphans = FALSE;
 static gboolean partial = FALSE;
+static gboolean luapat = FALSE;
 
 static void rspamadm_grep (gint argc, gchar **argv);
 static const char *rspamadm_grep_help (gboolean full_help);
@@ -39,6 +40,8 @@ struct rspamadm_command grep_command = {
 static GOptionEntry entries[] = {
 		{"string", 's', 0, G_OPTION_ARG_STRING, &string,
 				"Plain string to search (case-insensitive)", NULL},
+		{"lua", 'l', 0, G_OPTION_ARG_NONE, &luapat,
+				"Use Lua patterns in string search", NULL},
 		{"pattern", 'p', 0, G_OPTION_ARG_STRING, &pattern,
 				"Pattern to search for (regex)", NULL},
                 {"input", 'i', 0, G_OPTION_ARG_STRING_ARRAY, &inputs,
@@ -63,6 +66,7 @@ rspamadm_grep_help (gboolean full_help)
 				"Usage: rspamadm grep <-s string | -p pattern> [-i input1 -i input2 -S -o -P]\n"
 				"Where options are:\n\n"
 				"-s: Plain string to search (case-insensitive)\n"
+				"-l: Use Lua patterns in string search\n"
 				"-p: Pattern to search for (regex)\n"
 				"-i: Process specified inputs (stdin if unspecified)\n"
 				"-S: Enable case-sensitivity in string search\n"
@@ -137,6 +141,8 @@ rspamadm_grep (gint argc, gchar **argv)
 			"orphans", 0, false);
 	ucl_object_insert_key (obj, ucl_object_frombool (partial),
 			"partial", 0, false);
+	ucl_object_insert_key (obj, ucl_object_frombool (luapat),
+			"luapat", 0, false);
 
 	rspamadm_execute_lua_ucl_subr (L,
 			argc,
