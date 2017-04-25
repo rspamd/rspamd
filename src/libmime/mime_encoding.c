@@ -455,36 +455,6 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 	return FALSE;
 }
 
-/* https://graphics.stanford.edu/~seander/bithacks.html#HasMoreInWord */
-#define hasmore(x,n) (((x)+~0UL/255*(127-(n))|(x))&~0UL/255*128)
-
-static inline gboolean
-rspamd_mime_has_8bit (const guchar *beg, gsize len)
-{
-	unsigned long *w;
-	gsize i, leftover = len % sizeof (*w);
-
-	w = (unsigned long *)beg;
-
-	for (i = 0; i < len / sizeof (*w); i ++) {
-		if (hasmore (*w, 127)) {
-			return TRUE;
-		}
-
-		w ++;
-	}
-
-	beg = (const guchar *)w;
-
-	for (i = 0; i < leftover; i ++) {
-		if (beg[i] > 127) {
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
 GByteArray *
 rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part)
@@ -498,7 +468,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	rspamd_ftok_t charset_tok;
 	struct rspamd_mime_part *part = text_part->mime_part;
 
-	if (rspamd_mime_has_8bit (text_part->raw.begin, text_part->raw.len)) {
+	if (rspamd_str_has_8bit (text_part->raw.begin, text_part->raw.len)) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_8BIT;
 	}
 
@@ -508,7 +478,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	memcpy (part_content->data, text_part->parsed.begin, text_part->parsed.len);
 	part_content->len = text_part->parsed.len;
 
-	if (rspamd_mime_has_8bit (text_part->parsed.begin, text_part->parsed.len)) {
+	if (rspamd_str_has_8bit (text_part->parsed.begin, text_part->parsed.len)) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED;
 	}
 

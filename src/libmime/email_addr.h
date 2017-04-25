@@ -32,6 +32,7 @@ enum rspamd_email_address_flags {
 	RSPAMD_EMAIL_ADDR_HAS_BACKSLASH = (1 << 6),
 	RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED = (1 << 7),
 	RSPAMD_EMAIL_ADDR_USER_ALLOCATED = (1 << 8),
+	RSPAMD_EMAIL_ADDR_HAS_8BIT = (1 << 9),
 };
 
 /*
