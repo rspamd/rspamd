@@ -62,11 +62,11 @@ local function dkim_signing_cb(task)
     is_local = true
   end
   if settings.auth_only and not auser then
-    if settings.sign_local and is_local then
-      rspamd_logger.debugm(N, task, 'mail is from local address')
-    elseif (settings.sign_networks and settings.sign_networks:get_key(ip)) then
+    if (settings.sign_networks and settings.sign_networks:get_key(ip)) then
       is_sign_networks = true
       rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
+    elseif settings.sign_local and is_local then
+      rspamd_logger.debugm(N, task, 'mail is from local address')
     else
       rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
       return
@@ -92,10 +92,24 @@ local function dkim_signing_cb(task)
   if edom then
     edom = edom:lower()
   end
-  if settings.use_domain == 'header' then
-    dkim_domain = hdom
+  if settings.use_domain_sign_networks and is_sign_networks then
+    if settings.use_domain_sign_networks == 'header' then
+      dkim_domain = hdom
+    else
+      dkim_domain = edom
+    end
+  elseif settings.use_domain_local and is_local then
+    if settings.use_domain_local == 'header' then
+      dkim_domain = hdom
+    else
+      dkim_domain = edom
+    end
   else
-    dkim_domain = edom
+    if settings.use_domain == 'header' then
+      dkim_domain = hdom
+    else
+      dkim_domain = edom
+    end
   end
   if not dkim_domain then
     rspamd_logger.debugm(N, task, 'could not extract dkim domain')
