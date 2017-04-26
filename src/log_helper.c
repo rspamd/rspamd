@@ -77,7 +77,7 @@ static void
 rspamd_log_helper_read (gint fd, short what, gpointer ud)
 {
 	struct log_helper_ctx *ctx = ud;
-	guchar buf[1024];
+	guchar buf[8192];
 	gssize r;
 	guint32 n, i, nextra;
 	struct rspamd_protocol_log_message_sum *sm;

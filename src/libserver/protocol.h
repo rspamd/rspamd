@@ -20,7 +20,7 @@
 
 struct rspamd_protocol_log_symbol_result {
 	guint32 id;
-	gdouble score;
+	float score;
 };
 struct rspamd_protocol_log_message_sum {
 	guint32 nresults;
