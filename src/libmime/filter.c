@@ -26,19 +26,20 @@
 #define COMMON_PART_FACTOR 95
 
 struct rspamd_metric_result *
-rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
+rspamd_create_metric_result (struct rspamd_task *task)
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_metric *metric;
 	guint i;
 
-	metric_res = g_hash_table_lookup (task->results, name);
+	metric_res = task->result;
 
 	if (metric_res != NULL) {
 		return metric_res;
 	}
 
-	metric = g_hash_table_lookup (task->cfg->metrics, name);
+	metric = task->cfg->default_metric;
+
 	if (metric == NULL) {
 		return NULL;
 	}
@@ -64,8 +65,6 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	}
 
 	metric_res->action = METRIC_ACTION_MAX;
-	g_hash_table_insert (task->results, (gpointer) metric->name,
-			metric_res);
 
 	return metric_res;
 }
@@ -108,7 +107,7 @@ insert_metric_result (struct rspamd_task *task,
 	const ucl_object_t *mobj, *sobj;
 	gint max_shots;
 
-	metric_res = rspamd_create_metric_result (task, metric->name);
+	metric_res = rspamd_create_metric_result (task);
 
 	sdef = g_hash_table_lookup (metric->symbols, symbol);
 	if (sdef == NULL) {

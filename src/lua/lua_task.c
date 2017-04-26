@@ -1207,7 +1207,7 @@ lua_task_set_pre_result (lua_State * L)
 
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
-			mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
+			mres = rspamd_create_metric_result (task);
 			if (mres != NULL) {
 				mres->score = mres->metric->actions[action].score;
 				mres->action = action;
@@ -2804,7 +2804,6 @@ lua_task_get_archives (lua_State *L)
 static inline gboolean
 lua_push_symbol_result (lua_State *L,
 		struct rspamd_task *task,
-		struct rspamd_metric *metric,
 		const gchar *symbol,
 		struct rspamd_symbol_result *symbol_result,
 		gboolean add_metric,
@@ -2816,7 +2815,8 @@ lua_push_symbol_result (lua_State *L,
 	gint j = 1, e = 4;
 
 	if (!symbol_result) {
-		metric_res = g_hash_table_lookup (task->results, metric->name);
+		metric_res = task->result;
+
 		if (metric_res) {
 			s = g_hash_table_lookup (metric_res->symbols, symbol);
 		}
@@ -2835,11 +2835,6 @@ lua_push_symbol_result (lua_State *L,
 
 		lua_createtable (L, 0, e);
 
-		if (add_metric) {
-			lua_pushstring (L, "metric");
-			lua_pushstring (L, metric->name);
-			lua_settable (L, -3);
-		}
 		if (add_name) {
 			lua_pushstring (L, "name");
 			lua_pushstring (L, symbol);
@@ -2883,45 +2878,21 @@ lua_task_get_symbol (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol;
-	struct rspamd_metric *metric;
-	GList *cur = NULL, *metric_list;
 	gboolean found = FALSE;
 	gint i = 1;
 
 	symbol = luaL_checkstring (L, 2);
 
 	if (task && symbol) {
-		metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
-		if (metric_list) {
-			lua_createtable (L, 1, 0);
-			cur = metric_list;
+		lua_createtable (L, 1, 0);
+
+		if ((found = lua_push_symbol_result (L, task, symbol,
+				NULL, TRUE, FALSE))) {
+			lua_rawseti (L, -2, i++);
 		}
 		else {
-			metric = task->cfg->default_metric;
-		}
-
-		if (!cur && metric) {
-			lua_createtable (L, 1, 0);
-
-			if ((found = lua_push_symbol_result (L, task, metric, symbol,
-					NULL, TRUE, FALSE))) {
-				lua_rawseti (L, -2, i++);
-			}
-			else {
-				/* Pop table */
-				lua_pop (L, 1);
-			}
-		}
-		else {
-			while (cur) {
-				metric = cur->data;
-				if (lua_push_symbol_result (L, task, metric, symbol,
-						NULL, TRUE, FALSE)) {
-					lua_rawseti (L, -2, i++);
-					found = TRUE;
-				}
-				cur = g_list_next (cur);
-			}
+			/* Pop table */
+			lua_pop (L, 1);
 		}
 	}
 	else {
@@ -2946,7 +2917,7 @@ lua_task_has_symbol (lua_State *L)
 	symbol = luaL_checkstring (L, 2);
 
 	if (task && symbol) {
-		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		mres = task->result;
 
 		if (mres) {
 			found = g_hash_table_lookup (mres->symbols, symbol) != NULL;
@@ -2972,7 +2943,7 @@ lua_task_get_symbols (lua_State *L)
 	struct rspamd_symbol_result *s;
 
 	if (task) {
-		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		mres = task->result;
 
 		if (mres) {
 			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
@@ -3004,7 +2975,6 @@ static gint
 lua_task_get_symbols_all (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric *metric;
 	struct rspamd_metric_result *mres;
 	GHashTableIter it;
 	gpointer k, v;
@@ -3012,15 +2982,15 @@ lua_task_get_symbols_all (lua_State *L)
 	gint i = 1;
 
 	if (task) {
-		metric = task->cfg->default_metric;
-		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		mres = task->result;
+
 		if (mres) {
 			found = TRUE;
 			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
 			g_hash_table_iter_init (&it, mres->symbols);
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
-				lua_push_symbol_result (L, task, metric, k, v, FALSE, TRUE);
+				lua_push_symbol_result (L, task, k, v, FALSE, TRUE);
 				lua_rawseti (L, -2, i++);
 			}
 		}
@@ -3048,7 +3018,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 	struct rspamd_symbol_result *s;
 
 	if (task) {
-		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		mres = task->result;
 
 		if (mres) {
 			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
@@ -3511,10 +3481,10 @@ lua_task_set_settings (lua_State *L)
 
 		if (act) {
 			/* Adjust desired actions */
-			mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+			mres = task->result;
 
 			if (mres == NULL) {
-				mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
+				mres = rspamd_create_metric_result (task);
 			}
 
 			for (i = 0; i < METRIC_ACTION_MAX; i++) {
@@ -3805,15 +3775,11 @@ static gint
 lua_task_get_metric_score (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *metric_name;
 	gdouble rs;
 	struct rspamd_metric_result *metric_res;
 
-	metric_name = luaL_checkstring (L, 2);
-
-	if (task && metric_name) {
-		if ((metric_res =
-			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+	if (task) {
+		if ((metric_res = task->result) != NULL) {
 			lua_createtable (L, 2, 0);
 			lua_pushnumber (L, isnan (metric_res->score) ? 0.0 : metric_res->score);
 			rs = rspamd_task_get_required_score (task, metric_res);
@@ -3836,19 +3802,11 @@ static gint
 lua_task_get_metric_action (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *metric_name;
 	struct rspamd_metric_result *metric_res;
 	enum rspamd_metric_action action;
 
-	metric_name = luaL_checkstring (L, 2);
-
-	if (metric_name == NULL) {
-		metric_name = DEFAULT_METRIC;
-	}
-
-	if (task && metric_name) {
-		if ((metric_res =
-			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+	if (task) {
+		if ((metric_res = task->result) != NULL) {
 			action = rspamd_check_action_metric (task, metric_res);
 			lua_pushstring (L, rspamd_action_to_str (action));
 		}
@@ -3867,20 +3825,18 @@ static gint
 lua_task_set_metric_score (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *metric_name;
 	struct rspamd_metric_result *metric_res;
 	gdouble nscore;
 
-	metric_name = luaL_checkstring (L, 2);
-	nscore = luaL_checknumber (L, 3);
-
-	if (metric_name == NULL) {
-		metric_name = DEFAULT_METRIC;
+	if (lua_isnumber (L, 2)) {
+		nscore = luaL_checknumber (L, 2);
+	}
+	else {
+		nscore = luaL_checknumber (L, 3);
 	}
 
-	if (task && metric_name) {
-		if ((metric_res =
-			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+	if (task) {
+		if ((metric_res = task->result) != NULL) {
 			msg_debug_task ("set metric score from %.2f to %.2f",
 				metric_res->score, nscore);
 			metric_res->score = nscore;
@@ -3914,8 +3870,7 @@ lua_task_set_metric_action (lua_State *L)
 	action_name = luaL_checkstring (L, 3);
 
 	if (task && metric_name && action_name) {
-		if ((metric_res =
-			g_hash_table_lookup (task->results, metric_name)) != NULL) {
+		if ((metric_res = task->result) != NULL) {
 
 			if (rspamd_action_from_str (action_name, &action)) {
 				metric_res->action = action;

@@ -143,7 +143,8 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 
 	/* Get default metric */
-	metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+	metric_res = task->result;
+
 	if (metric_res == NULL) {
 		row->symbols[0] = '\0';
 		row->action = METRIC_ACTION_NOACTION;

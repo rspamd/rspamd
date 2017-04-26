@@ -1158,34 +1158,22 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 		struct cache_savepoint *cp)
 {
 	struct rspamd_metric_result *res;
-	GList *cur;
-	struct rspamd_metric *metric;
 	double ms;
 
 	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {
 		return FALSE;
 	}
 
-	cur = task->cfg->metrics_list;
-
 	if (cp->lim == 0.0) {
-		/*
-		 * Look for metric that has the maximum reject score
-		 */
-		while (cur) {
-			metric = cur->data;
-			res = g_hash_table_lookup (task->results, metric->name);
+		res = task->result;
 
-			if (res) {
-				ms = rspamd_task_get_required_score (task, res);
+		if (res) {
+			ms = rspamd_task_get_required_score (task, res);
 
-				if (!isnan (ms) && cp->lim < ms) {
-					cp->rs = res;
-					cp->lim = ms;
-				}
+			if (!isnan (ms) && cp->lim < ms) {
+				cp->rs = res;
+				cp->lim = ms;
 			}
-
-			cur = g_list_next (cur);
 		}
 	}
 
@@ -1493,7 +1481,7 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
-	rspamd_create_metric_result (task, DEFAULT_METRIC);
+	task->result = rspamd_create_metric_result (task);
 
 	return checkpoint;
 }

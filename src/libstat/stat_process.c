@@ -1074,7 +1074,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 					 * - We learn spam if action is ACTION_REJECT
 					 * - We learn ham if score is less than zero
 					 */
-					mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+					mres = task->result;
 
 					if (mres) {
 
@@ -1117,7 +1117,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 						spam_score = t;
 					}
 
-					mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+					mres = task->result;
 
 					if (mres) {
 						if (mres->score >= spam_score) {

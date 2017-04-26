@@ -366,12 +366,11 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 }
 
 static void
-composites_metric_callback (gpointer key, gpointer value, gpointer data)
+composites_metric_callback (struct rspamd_metric_result *metric_res,
+		struct rspamd_task *task)
 {
-	struct rspamd_task *task = (struct rspamd_task *)data;
 	struct composites_data *cd =
 		rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
-	struct rspamd_metric_result *metric_res = (struct rspamd_metric_result *)value;
 
 	cd->task = task;
 	cd->metric_res = (struct rspamd_metric_result *)metric_res;
@@ -394,7 +393,9 @@ composites_metric_callback (gpointer key, gpointer value, gpointer data)
 void
 rspamd_make_composites (struct rspamd_task *task)
 {
-	g_hash_table_foreach (task->results, composites_metric_callback, task);
+	if (task->result) {
+		composites_metric_callback (task->result, task);
+	}
 }
 
 

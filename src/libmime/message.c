@@ -544,7 +544,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 	if (rspamd_check_gtube (task, text_part)) {
 		struct rspamd_metric_result *mres;
 
-		mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
+		mres = rspamd_create_metric_result (task);
 
 		if (mres != NULL) {
 			mres->score = rspamd_task_get_required_score (task, mres);

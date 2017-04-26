@@ -29,6 +29,12 @@
  * described below
  */
 #define MSG_CMD_CHECK "check"
+
+/*
+ * Modern check version
+ */
+#define MSG_CMD_CHECK_V2 "checkv2"
+
 /*
  * Check if message is spam or not, and return score plus list
  * of symbols hit
@@ -168,7 +174,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'c':
 	case 'C':
 		/* check */
-		if (g_ascii_strncasecmp (p, MSG_CMD_CHECK, pathlen) == 0) {
+		if (g_ascii_strncasecmp (p, MSG_CMD_CHECK_V2, pathlen) == 0) {
+			task->cmd = CMD_CHECK_V2;
+		}
+		else if (g_ascii_strncasecmp (p, MSG_CMD_CHECK, pathlen) == 0) {
 			task->cmd = CMD_CHECK;
 		}
 		else {
@@ -1116,13 +1125,8 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
-		g_hash_table_iter_init (&hiter, task->results);
-		/* Convert results to an ucl object */
-		while (g_hash_table_iter_next (&hiter, &h, &v)) {
-			metric_res = (struct rspamd_metric_result *)v;
-			obj = rspamd_metric_result_ucl (task, metric_res);
-			ucl_object_insert_key (top, obj, h, 0, false);
-		}
+		obj = rspamd_metric_result_ucl (task, task->result);
+		ucl_object_insert_key (top, obj, DEFAULT_METRIC, 0, false);
 	}
 
 	if (flags & RSPAMD_PROTOCOL_MESSAGES) {
@@ -1328,7 +1332,8 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 end:
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
 		/* Update stat for default metric */
-		metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		metric_res = task->result;
+
 		if (metric_res != NULL) {
 
 			if (metric_res->action != METRIC_ACTION_MAX) {
@@ -1515,7 +1520,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 		if (lp->fd != -1) {
 			switch (lp->type) {
 			case RSPAMD_LOG_PIPE_SYMBOLS:
-				mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+				mres = task->result;
 
 				if (mres) {
 					n = g_hash_table_size (mres->symbols);

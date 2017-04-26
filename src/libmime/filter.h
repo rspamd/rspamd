@@ -47,11 +47,9 @@ struct rspamd_metric_result {
 /**
  * Create or return existing result for the specified metric name
  * @param task task object
- * @param name name of metric
  * @return metric result or NULL if metric `name` has not been found
  */
-struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *task,
-		const gchar *name);
+struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *task);
 
 /**
  * Insert a result to task

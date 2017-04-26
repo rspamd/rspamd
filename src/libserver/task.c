@@ -83,11 +83,6 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 
 	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
 
-	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_unref,
-		new_task->results);
-
 	new_task->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 	new_task->headers_order = g_queue_new ();
@@ -987,7 +982,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	GPtrArray *sorted_symbols;
 	guint i, j;
 
-	mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+	mres = task->result;
 
 	if (mres != NULL) {
 		switch (lf->type) {
@@ -1415,7 +1410,7 @@ rspamd_task_get_required_score (struct rspamd_task *task, struct rspamd_metric_r
 	guint i;
 
 	if (m == NULL) {
-		m = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		m = task->result;
 
 		if (m == NULL) {
 			return NAN;

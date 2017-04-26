@@ -32,6 +32,7 @@ enum rspamd_command {
 	CMD_SKIP,
 	CMD_PING,
 	CMD_PROCESS,
+	CMD_CHECK_V2,
 	CMD_OTHER
 };
 
@@ -158,8 +159,7 @@ struct rspamd_task {
 	GHashTable *emails;								/**< list of parsed emails							*/
 	GHashTable *raw_headers;						/**< list of raw headers							*/
 	GQueue *headers_order;							/**< order of raw headers							*/
-	GHashTable *results;							/**< hash table of metric_result indexed by
-													 *    metric's name									*/
+	struct rspamd_metric_result *result;			/**< Metric result									*/
 	GHashTable *lua_cache;							/**< cache of lua objects							*/
 	GPtrArray *tokens;								/**< statistics tokens */
 
