@@ -889,14 +889,14 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
 
 static ucl_object_t *
 rspamd_metric_result_ucl (struct rspamd_task *task,
-	struct rspamd_metric_result *mres)
+	struct rspamd_metric_result *mres, ucl_object_t *top)
 {
 	GHashTableIter hiter;
 	struct rspamd_symbol_result *sym;
 	struct rspamd_metric *m;
 	gboolean is_spam;
 	enum rspamd_metric_action action = METRIC_ACTION_NOACTION;
-	ucl_object_t *obj = NULL, *sobj;;
+	ucl_object_t *obj = NULL, *sobj;
 	gpointer h, v;
 	const gchar *subject;
 
@@ -909,7 +909,13 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	action = mres->action;
 	is_spam = (action < METRIC_ACTION_GREYLIST);
 
-	obj = ucl_object_typed_new (UCL_OBJECT);
+	if (task->cmd != CMD_CHECK_V2) {
+		obj = ucl_object_typed_new (UCL_OBJECT);
+	}
+	else {
+		obj = top;
+	}
+
 	ucl_object_insert_key (obj,
 			ucl_object_frombool (is_spam),
 			"is_spam", 0, false);
@@ -923,6 +929,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 		ucl_object_insert_key (obj,
 			ucl_object_fromdouble (0.0), "score", 0, false);
 	}
+
 	ucl_object_insert_key (obj,
 			ucl_object_fromdouble (rspamd_task_get_required_score (task, mres)),
 			"required_score", 0, false);
@@ -938,12 +945,25 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 				"subject", 0, false);
 		}
 	}
+
 	/* Now handle symbols */
+	if (task->cmd == CMD_CHECK_V2) {
+		obj = ucl_object_typed_new (UCL_OBJECT);
+	}
+
 	g_hash_table_iter_init (&hiter, mres->symbols);
+
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		sym = (struct rspamd_symbol_result *)v;
 		sobj = rspamd_metric_symbol_ucl (task, m, sym);
 		ucl_object_insert_key (obj, sobj, h, 0, false);
+	}
+
+	if (task->cmd == CMD_CHECK_V2) {
+		ucl_object_insert_key (top, obj, "symbols", 0, false);
+	}
+	else {
+		ucl_object_insert_key (top, obj, DEFAULT_METRIC, 0, false);
 	}
 
 	return obj;
@@ -1088,14 +1108,11 @@ ucl_object_t *
 rspamd_protocol_write_ucl (struct rspamd_task *task,
 		enum rspamd_protocol_flags flags)
 {
-	struct rspamd_metric_result *metric_res;
-	ucl_object_t *top = NULL, *obj;
-	GHashTableIter hiter;
+	ucl_object_t *top = NULL;
 	GString *dkim_sig;
 	const ucl_object_t *rmilter_reply;
 	struct rspamd_saved_protocol_reply *cached;
 	static const gchar *varname = "cached_reply";
-	gpointer h, v;
 
 	/* Check for cached reply */
 	cached = rspamd_mempool_get_variable (task->task_pool, varname);
@@ -1125,8 +1142,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
-		obj = rspamd_metric_result_ucl (task, task->result);
-		ucl_object_insert_key (top, obj, DEFAULT_METRIC, 0, false);
+		rspamd_metric_result_ucl (task, task->result, top);
 	}
 
 	if (flags & RSPAMD_PROTOCOL_MESSAGES) {
@@ -1645,6 +1661,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_SYMBOLS:
 		case CMD_PROCESS:
 		case CMD_SKIP:
+		case CMD_CHECK_V2:
 			rspamd_protocol_http_reply (msg, task);
 
 			if (task->worker && task->worker->ctx) {

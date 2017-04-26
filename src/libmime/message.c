@@ -551,6 +551,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			mres->action = METRIC_ACTION_REJECT;
 		}
 
+		task->result = mres;
 		task->pre_result.action = METRIC_ACTION_REJECT;
 		task->pre_result.str = "Gtube pattern";
 		ucl_object_insert_key (task->messages,
