@@ -132,6 +132,8 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 	return rspamd_mempool_ftokdup (task->task_pool, &tok);
 }
 
+#define CMD_CHECK(str, cmd, len) (sizeof(cmd) - 1 == (len) && rspamd_lc_cmp((str), (cmd), (len)) == 0)
+
 static gboolean
 rspamd_protocol_handle_url (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
@@ -174,10 +176,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'c':
 	case 'C':
 		/* check */
-		if (g_ascii_strncasecmp (p, MSG_CMD_CHECK_V2, pathlen) == 0) {
+		if (CMD_CHECK (p, MSG_CMD_CHECK_V2, pathlen)) {
 			task->cmd = CMD_CHECK_V2;
 		}
-		else if (g_ascii_strncasecmp (p, MSG_CMD_CHECK, pathlen) == 0) {
+		else if (CMD_CHECK (p, MSG_CMD_CHECK, pathlen)) {
 			task->cmd = CMD_CHECK;
 		}
 		else {
@@ -187,10 +189,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 's':
 	case 'S':
 		/* symbols, skip */
-		if (g_ascii_strncasecmp (p, MSG_CMD_SYMBOLS, pathlen) == 0) {
+		if (CMD_CHECK (p, MSG_CMD_SYMBOLS, pathlen)) {
 			task->cmd = CMD_SYMBOLS;
 		}
-		else if (g_ascii_strncasecmp (p, MSG_CMD_SKIP, pathlen) == 0) {
+		else if (CMD_CHECK (p, MSG_CMD_SKIP, pathlen)) {
 			task->cmd = CMD_SKIP;
 		}
 		else {
@@ -200,10 +202,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'p':
 	case 'P':
 		/* ping, process */
-		if (g_ascii_strncasecmp (p, MSG_CMD_PING, pathlen) == 0) {
+		if (CMD_CHECK (p, MSG_CMD_PING, pathlen)) {
 			task->cmd = CMD_PING;
 		}
-		else if (g_ascii_strncasecmp (p, MSG_CMD_PROCESS, pathlen) == 0) {
+		else if (CMD_CHECK (p, MSG_CMD_PROCESS, pathlen)) {
 			task->cmd = CMD_PROCESS;
 		}
 		else {
@@ -213,11 +215,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'r':
 	case 'R':
 		/* report, report_ifspam */
-		if (g_ascii_strncasecmp (p, MSG_CMD_REPORT, pathlen) == 0) {
+		if (CMD_CHECK (p, MSG_CMD_REPORT, pathlen)) {
 			task->cmd = CMD_REPORT;
 		}
-		else if (g_ascii_strncasecmp (p, MSG_CMD_REPORT_IFSPAM,
-				pathlen) == 0) {
+		else if (CMD_CHECK (p, MSG_CMD_REPORT_IFSPAM, pathlen)) {
 			task->cmd = CMD_REPORT_IFSPAM;
 		}
 		else {
@@ -251,7 +252,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	return TRUE;
 
 err:
-	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command: %*.s",
+	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command: %.*s",
 			(gint)pathlen, p);
 
 	return FALSE;
@@ -870,10 +871,23 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
 			sym->name),	 "name",  0, false);
 	ucl_object_insert_key (obj, ucl_object_fromdouble (
 			sym->score), "score", 0, false);
+
+	if (task->cmd == CMD_CHECK_V2) {
+		if (sym->sym) {
+			ucl_object_insert_key (obj, ucl_object_fromdouble (
+					sym->sym->score), "metric_score", 0, false);
+		}
+		else {
+			ucl_object_insert_key (obj, ucl_object_fromdouble (0.0),
+					"metric_score", 0, false);
+		}
+	}
+
 	if (description) {
 		ucl_object_insert_key (obj, ucl_object_fromstring (
 				description), "description", 0, false);
 	}
+
 	if (sym->options != NULL) {
 		ar = ucl_object_typed_new (UCL_ARRAY);
 
@@ -911,17 +925,18 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	if (task->cmd != CMD_CHECK_V2) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (obj,
+				ucl_object_frombool (is_spam),
+				"is_spam", 0, false);
 	}
 	else {
 		obj = top;
 	}
 
 	ucl_object_insert_key (obj,
-			ucl_object_frombool (is_spam),
-			"is_spam", 0, false);
-	ucl_object_insert_key (obj,
 			ucl_object_frombool (RSPAMD_TASK_IS_SKIPPED (task)),
 			"is_skipped", 0, false);
+
 	if (!isnan (mres->score)) {
 		ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
 			"score", 0, false);
