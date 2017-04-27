@@ -578,6 +578,7 @@ rspamd_config.INFO_TO_INFO_LU = {
       return false
     end
     local to = task:get_recipients('smtp')
+    if not to then return false end
     local found = false
     for _,r in ipairs(to) do
       if util.strequal_caseless(r['user'], 'info') then
