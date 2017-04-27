@@ -32,9 +32,10 @@ local settings = {
   expire = 86400, -- 1 day by default
   expire_novalid = 7200, -- 2 hours by default for no valid mxes
   greylist_invalid = false, -- Greylist first message with invalid MX (require greylist plugin)
-  key_prefix = 'rmx'
+  key_prefix = 'rmx',
 }
 local redis_params
+local exclude_domains
 
 local E = {}
 
@@ -58,6 +59,14 @@ local function mx_check(task)
 
   if not mx_domain then
     return
+  end
+
+  if exclude_domains then
+    if exclude_domains:get_key(mx_domain) then
+      rspamd_logger.infox(task, 'skip mx check for %s, excluded', mx_domain)
+
+      return
+    end
   end
 
   local valid = false
@@ -307,4 +316,12 @@ if opts then
     one_shot = true,
     one_param = true,
   })
+
+  if settings.exclude_domains then
+    exclude_domains = rspamd_config:add_map{
+      type = 'set',
+      description = 'Exclude specific domains from MX checks',
+      url = settings.exclude_domains,
+    }
+  end
 end
