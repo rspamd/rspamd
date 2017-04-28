@@ -45,7 +45,6 @@ struct rspamd_milter_outbuf {
 
 enum rspamd_milter_io_state {
 	RSPAMD_MILTER_READ_MORE,
-	RSPAMD_MILTER_PROCESS_DATA,
 	RSPAMD_MILTER_WRITE_REPLY,
 	RSPAMD_MILTER_WANNA_DIE
 };

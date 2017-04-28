@@ -52,6 +52,43 @@ rspamd_milter_quark (void)
 }
 
 static void
+rspamd_milter_obuf_free (struct rspamd_milter_outbuf *obuf)
+{
+	if (obuf) {
+		if (obuf->buf) {
+			rspamd_fstring_free (obuf->buf);
+		}
+
+		g_free (obuf->buf);
+	}
+}
+
+static void
+rspamd_milter_session_dtor (struct rspamd_milter_session *session)
+{
+	struct rspamd_milter_outbuf *obuf, *obuf_tmp;
+	struct rspamd_milter_private *priv;
+
+	if (session) {
+		priv = session->priv;
+
+		if (event_get_base (&priv->ev)) {
+			event_del (&priv->ev);
+		}
+
+		DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
+			rspamd_milter_obuf_free (obuf);
+		}
+
+		if (priv->parser.buf) {
+			rspamd_fstring_free (priv->parser.buf);
+		}
+
+		priv->out_chain = NULL;
+	}
+}
+
+static void
 rspamd_milter_io_handler (gint fd, gshort what, void *ud)
 {
 	struct rspamd_milter_session *session = ud;
@@ -225,7 +262,8 @@ static gboolean
 rspamd_milter_handle_session (struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv)
 {
-	gssize r;
+	struct rspamd_milter_outbuf *obuf, *obuf_tmp;
+	gssize r, to_write;
 	GError *err;
 
 	g_assert (session != NULL);
@@ -247,7 +285,7 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 			else {
 				/* Fatal IO error */
 				err = g_error_new (rspamd_milter_quark (), errno,
-						"IO error: %s", strerror (errno));
+						"IO read error: %s", strerror (errno));
 				REF_RETAIN (session);
 				priv->err_cb (priv->fd, session, priv->ud, err);
 				REF_RELEASE (session);
@@ -267,7 +305,70 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 			return rspamd_milter_consume_input (session, priv);
 		}
+	case RSPAMD_MILTER_WRITE_REPLY:
+		if (priv->out_chain == NULL) {
+			/* We have written everything, so we can read something */
+			priv->state = RSPAMD_MILTER_READ_MORE;
+			rspamd_milter_plan_io (session, priv, EV_READ);
+		}
+		else {
+			DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
+				to_write = obuf->buf->len - obuf->pos;
+
+				g_assert (to_write > 0);
+
+				r = write (priv->fd, obuf->buf->str + obuf->pos, to_write);
+
+				if (r == -1) {
+					if (errno == EAGAIN || errno == EINTR) {
+						rspamd_milter_plan_io (session, priv, EV_WRITE);
+					}
+					else {
+						/* Fatal IO error */
+						err = g_error_new (rspamd_milter_quark (), errno,
+								"IO write error: %s", strerror (errno));
+						REF_RETAIN (session);
+						priv->err_cb (priv->fd, session, priv->ud, err);
+						REF_RELEASE (session);
+						g_error_free (err);
+					}
+				}
+				else if (r == 0) {
+					err = g_error_new (rspamd_milter_quark (), ECONNRESET,
+							"Unexpected EOF");
+					REF_RETAIN (session);
+					priv->err_cb (priv->fd, session, priv->ud, err);
+					REF_RELEASE (session);
+					g_error_free (err);
+				}
+				else {
+					if (r == to_write) {
+						/* We have done with this buf */
+						DL_DELETE (priv->out_chain, obuf);
+						rspamd_milter_obuf_free (obuf);
+					}
+					else {
+						/* We need to plan another write */
+						obuf->pos += r;
+						rspamd_milter_plan_io (session, priv, EV_WRITE);
+
+						return TRUE;
+					}
+				}
+			}
+
+			/* Here we have written everything, so we can plan reading */
+			priv->state = RSPAMD_MILTER_READ_MORE;
+			rspamd_milter_plan_io (session, priv, EV_READ);
+		}
+		break;
+	case RSPAMD_MILTER_WANNA_DIE:
+		/* We are here after processing everything, so release session */
+		REF_RELEASE (session);
+		break;
 	}
+
+	return TRUE;
 }
 
 
@@ -307,6 +408,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	}
 
 	session->priv = priv;
+	REF_INIT_RETAIN (session, rspamd_milter_session_dtor);
 
 	return rspamd_milter_handle_session (session, priv);
 }
@@ -418,7 +520,7 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 	if (reply) {
 		obuf = g_malloc (sizeof (*obuf));
 		obuf->buf = reply;
-		obuf->pos = NULL;
+		obuf->pos = 0;
 		DL_APPEND (priv->out_chain, obuf);
 		priv->state = RSPAMD_MILTER_WRITE_REPLY;
 		rspamd_milter_plan_io (session, priv, EV_WRITE);
