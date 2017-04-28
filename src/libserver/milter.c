@@ -121,11 +121,25 @@ rspamd_milter_on_protocol_error (struct rspamd_milter_session *session,
 	g_error_free (err);
 }
 
+#define READ_INT_32(pos, var) do { \
+	memcpy (&(var), (pos), sizeof (var)); \
+	(pos) += sizeof (var); \
+	(var) = ntohl (var); \
+} while (0)
+
 static gboolean
 rspamd_milter_process_command (struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv)
 {
 	GError *err;
+	rspamd_fstring_t *buf;
+	const guchar *pos;
+	guint cmdlen;
+	guint32 version, actions, protocol;
+
+	buf = priv->parser.buf;
+	pos = buf->str + priv->parser.pos;
+	cmdlen = priv->parser.datalen;
 
 	switch (priv->parser.cur_cmd) {
 	case RSPAMD_MILTER_CMD_ABORT:
@@ -152,6 +166,17 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_CMD_EOH:
 		break;
 	case RSPAMD_MILTER_CMD_OPTNEG:
+		if (cmdlen != sizeof (guint32) * 3) {
+			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+					"optneg command");
+			rspamd_milter_on_protocol_error (session, priv, err);
+
+			return FALSE;
+		}
+
+		READ_INT_32 (pos, version);
+		READ_INT_32 (pos, actions);
+		READ_INT_32 (pos, protocol);
 		break;
 	case RSPAMD_MILTER_CMD_QUIT:
 		break;
