@@ -2497,7 +2497,7 @@ rspamd_re_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value
 	}
 #else
 	if (pcre_flags & PCRE_FLAG(UTF)) {
-		re_map->has_utf = TRUE;
+		re_map->map_flags |= RSPAMD_REGEXP_FLAG_UTF;
 	}
 #endif
 
