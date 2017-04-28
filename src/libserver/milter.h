@@ -31,7 +31,9 @@ enum rspamd_milter_reply {
 	RSPAMD_MILTER_CHGHEADER = 'm',
 	RSPAMD_MILTER_REJECT = 'r',
 	RSPAMD_MILTER_TEMPFAIL = 't',
-	RSPAMD_MILTER_REPLYCODE = 'y'
+	RSPAMD_MILTER_REPLYCODE = 'y',
+	RSPAMD_MILTER_OPTNEG = 'o',
+	RSPAMD_MILTER_PROGRESS = 'p'
 };
 
 struct rspamd_email_address;
@@ -87,9 +89,8 @@ gboolean rspamd_milter_set_reply (struct rspamd_milter_session *session,
  * @param act
  * @return
  */
-gboolean rspamd_milter_send_action (gint fd,
-		struct rspamd_milter_session *session,
-		enum rspamd_milter_reply act);
+gboolean rspamd_milter_send_action (struct rspamd_milter_session *session,
+		enum rspamd_milter_reply act, ...);
 
 /**
  * Adds some header

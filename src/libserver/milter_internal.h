@@ -60,6 +60,7 @@ struct rspamd_milter_private {
 	rspamd_milter_finish fin_cb;
 	rspamd_milter_error err_cb;
 	void *ud;
+	guchar uid[15];
 	enum rspamd_milter_io_state state;
 	int fd;
 };
