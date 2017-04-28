@@ -2624,17 +2624,27 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				g_string_free (tb, TRUE);
 			}
 			else {
-				if (lua_gettop (L) > 1) {
-					skip = !(lua_toboolean (L, -2));
+				if (lua_gettop (L) > err_idx + 1) {
+					/* 2 return values */
+					skip = !(lua_toboolean (L, err_idx + 1));
 
-					if (lua_isnumber (L, -1)) {
+					if (lua_isnumber (L, err_idx + 2)) {
 						msg_info_task ("learn condition changed flag from %d to "
-								"%d", flag, (guint)lua_tonumber (L, -1));
-						flag = lua_tonumber (L, -1);
+								"%d", flag,
+								(gint)lua_tonumber (L, err_idx + 2));
+						flag = lua_tonumber (L, err_idx + 2);
 					}
 				}
 				else {
-					skip = !(lua_toboolean (L, -1));
+					if (lua_isboolean (L, err_idx + 1)) {
+						skip = !(lua_toboolean (L, err_idx + 1));
+					}
+					else {
+						msg_warn_task ("set skip for rule %s as its condition "
+								"callback returned"
+								" a valid boolean", rule->name);
+						skip = TRUE;
+					}
 				}
 			}
 
@@ -2642,8 +2652,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			lua_settop (L, 0);
 
 			if (skip) {
-				msg_info_task ("skip rule %s as its condition callback returned"
-						" false", rule->name);
+				msg_info_task ("skip rule %s by condition callback",
+						rule->name);
 				continue;
 			}
 		}
@@ -2726,11 +2736,17 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				"No content to generate fuzzy for flag %d", flag);
 		}
 		else {
-			msg_warn_task ("<%s>: no fuzzy rules found for flag %d",
-					task->message_id,
-				flag);
-			rspamd_controller_send_error (conn_ent, 404,
-				"No fuzzy rules matched for flag %d", flag);
+			if (skip) {
+				rspamd_controller_send_error (conn_ent, 403,
+						"Message is conditionally skipped for flag %d", flag);
+			}
+			else {
+				msg_warn_task ("<%s>: no fuzzy rules found for flag %d",
+						task->message_id,
+						flag);
+				rspamd_controller_send_error (conn_ent, 404,
+						"No fuzzy rules matched for flag %d", flag);
+			}
 		}
 		rspamd_task_free (task);
 
