@@ -176,9 +176,13 @@ rspamd_config:register_symbol{
   group = 'header',
 }
 
+local function get_raw_header(task, name)
+  return ((task:get_header_full(name) or {})[1] or {})['raw']
+end
+
 local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
   function (task)
-    local replyto = task:get_header('Reply-To')
+    local replyto = get_raw_header(task, 'Reply-To')
     if not replyto then return false end
     local rt = util.parse_mail_address(replyto)
     if not (rt and rt[1]) then
@@ -202,7 +206,7 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
 
     -- See if Reply-To matches From in some way
     local from = task:get_from(2)
-    local from_h = task:get_header('From')
+    local from_h = get_raw_header(task, 'From')
     if not (from and from[1]) then return false end
     if (from_h and from_h == replyto) then
       -- From and Reply-To are identical
@@ -220,7 +224,8 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
           end
         end
         -- See if the Display Names match
-        if (from[1].name and rt[1].name and util.strequal_caseless(from[1].name, rt[1].name)) then
+        if (from[1].name and rt[1].name and
+            util.strequal_caseless(from[1].name, rt[1].name)) then
           task:insert_result('REPLYTO_DN_EQ_FROM_DN', 1.0)
         end
       end
