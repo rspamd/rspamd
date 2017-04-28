@@ -21,11 +21,11 @@
 #include <event.h>
 
 enum rspamd_milter_state {
-	st_read_cmd,
-	st_len_1,
+	st_len_1 = 0,
 	st_len_2,
 	st_len_3,
 	st_len_4,
+	st_read_cmd,
 	st_read_data
 };
 
@@ -62,6 +62,24 @@ struct rspamd_milter_private {
 	void *ud;
 	enum rspamd_milter_io_state state;
 	int fd;
+};
+
+enum rspamd_milter_io_cmd {
+	RSPAMD_MILTER_CMD_ABORT = 'A', /* Abort */
+	RSPAMD_MILTER_CMD_BODY = 'B', /* Body chunk */
+	RSPAMD_MILTER_CMD_CONNECT = 'C', /* Connection information */
+	RSPAMD_MILTER_CMD_MACRO = 'D', /* Define macro */
+	RSPAMD_MILTER_CMD_BODYEOB = 'E', /* final body chunk (end of message) */
+	RSPAMD_MILTER_CMD_HELO = 'H', /* HELO/EHLO */
+	RSPAMD_MILTER_CMD_QUIT_NC = 'K', /* QUIT but new connection follows */
+	RSPAMD_MILTER_CMD_HEADER = 'L', /* Header */
+	RSPAMD_MILTER_CMD_MAIL = 'M', /* MAIL from */
+	RSPAMD_MILTER_CMD_EOH = 'N', /* EOH */
+	RSPAMD_MILTER_CMD_OPTNEG = 'O', /* Option negotiation */
+	RSPAMD_MILTER_CMD_QUIT = 'Q', /* QUIT */
+	RSPAMD_MILTER_CMD_RCPT = 'R', /* RCPT to */
+	RSPAMD_MILTER_CMD_DATA = 'T', /* DATA */
+	RSPAMD_MILTER_CMD_UNKNOWN = 'U' /* Any unknown command */
 };
 
 #endif

@@ -54,25 +54,71 @@ rspamd_milter_plan_io (struct rspamd_milter_session *session,
 	event_add (&priv->ev, priv->ptv);
 }
 
+static void
+rspamd_milter_on_protocol_error (struct rspamd_milter_session *session,
+		struct rspamd_milter_private *priv, GError *err)
+{
+	REF_RETAIN (session);
+	priv->err_cb (priv->fd, session, priv->ud, err);
+	REF_RELEASE (session);
+	g_error_free (err);
+}
+
+static gboolean
+rspamd_milter_process_command (struct rspamd_milter_session *session,
+		struct rspamd_milter_private *priv)
+{
+	switch (priv->parser.cur_cmd) {
+	case RSPAMD_MILTER_CMD_ABORT:
+		break;
+	case RSPAMD_MILTER_CMD_BODY:
+		break;
+	case RSPAMD_MILTER_CMD_CONNECT:
+		break;
+	case RSPAMD_MILTER_CMD_MACRO:
+		break;
+	case RSPAMD_MILTER_CMD_BODYEOB:
+		break;
+	case RSPAMD_MILTER_CMD_HELO:
+		break;
+	case RSPAMD_MILTER_CMD_QUIT_NC:
+		break;
+	case RSPAMD_MILTER_CMD_HEADER:
+		break;
+	case RSPAMD_MILTER_CMD_MAIL:
+		break;
+	case RSPAMD_MILTER_CMD_EOH:
+		break;
+	case RSPAMD_MILTER_CMD_OPTNEG:
+		break;
+	case RSPAMD_MILTER_CMD_QUIT:
+		break;
+	case RSPAMD_MILTER_CMD_RCPT:
+		break;
+	case RSPAMD_MILTER_CMD_DATA:
+		break;
+	default:
+		break;
+	}
+
+	return TRUE;
+}
+
 static gboolean
 rspamd_milter_consume_input (struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv)
 {
 	const guchar *p, *end;
+	GError *err;
 
 	p = priv->parser.buf->str + priv->parser.pos;
 	end = priv->parser.buf->str + priv->parser.buf->len;
 
 	while (p < end) {
 		switch (priv->parser.state) {
-		case st_read_cmd:
-			priv->parser.cur_cmd = *p;
-			priv->parser.state = st_len_1;
-			priv->parser.datalen = 0;
-			p++;
-			break;
 		case st_len_1:
 			/* The first length byte in big endian order */
+			priv->parser.datalen = 0;
 			priv->parser.datalen |= *p << 24;
 			priv->parser.state = st_len_2;
 			p++;
@@ -92,14 +138,62 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 		case st_len_4:
 			/* The fourth length byte in big endian order */
 			priv->parser.datalen |= *p;
+			priv->parser.state = st_read_cmd;
+			p++;
+			break;
+		case st_read_cmd:
+			priv->parser.cur_cmd = *p;
 			priv->parser.state = st_read_data;
+
+			if (priv->parser.datalen < 1) {
+				err = g_error_new (rspamd_milter_quark (), EINVAL,
+					"Command length is too short");
+				rspamd_milter_on_protocol_error (session, priv, err);
+
+				return FALSE;
+			}
+			else {
+				/* Eat command itself */
+				priv->parser.datalen --;
+			}
+
 			p++;
 			break;
 		case st_read_data:
 			/* We might need some more data in buffer for further steps */
+			if (priv->parser.buf->allocated < priv->parser.datalen) {
+				priv->parser.buf = rspamd_fstring_grow (priv->parser.buf,
+						priv->parser.pos + priv->parser.datalen);
+				/* This can realloc buffer */
+				p = priv->parser.buf->str + priv->parser.pos;
+				rspamd_milter_plan_io (session, priv, EV_READ);
+				goto end;
+			}
+			else {
+				/* We may have the full command available */
+				if (p + priv->parser.datalen <= end) {
+					/* We need to process command */
+					if (!rspamd_milter_process_command (session, priv)) {
+						return FALSE;
+					}
+
+					p += priv->parser.datalen;
+					priv->parser.state = st_len_1;
+					priv->parser.cur_cmd = '\0';
+				}
+				else {
+					/* Need to read more */
+					rspamd_milter_plan_io (session, priv, EV_READ);
+					goto end;
+				}
+			}
 			break;
 		}
 	}
+end:
+
+	priv->parser.pos = p - (const guchar *)priv->parser.buf->str;
+	return TRUE;
 }
 
 static gboolean
@@ -113,13 +207,13 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 	switch (priv->state) {
 	case RSPAMD_MILTER_READ_MORE:
-		if (priv->parser.pos >= priv->parser.buf->allocated) {
+		if (priv->parser.buf->len >= priv->parser.buf->allocated) {
 			priv->parser.buf = rspamd_fstring_grow (priv->parser.buf,
-					priv->parser.pos * 2);
+					priv->parser.buf->len * 2);
 		}
 
-		r = read (priv->fd, priv->parser.buf->str + priv->parser.pos,
-				priv->parser.buf->allocated - priv->parser.pos);
+		r = read (priv->fd, priv->parser.buf->str + priv->parser.buf->len,
+				priv->parser.buf->allocated - priv->parser.buf->len);
 
 		if (r == -1) {
 			if (errno == EAGAIN || errno == EINTR) {
@@ -169,7 +263,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->ud = ud;
 	priv->fin_cb = finish_cb;
 	priv->err_cb = error_cb;
-	priv->parser.state = st_read_cmd;
+	priv->parser.state = st_len_1;
 	priv->parser.buf = rspamd_fstring_sized_new (100);
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
