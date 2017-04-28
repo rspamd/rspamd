@@ -324,7 +324,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		session = task->s;
 	}
 
-	if (pool != NULL && session != NULL && to_resolve != NULL && cbref != -1) {
+	if (pool != NULL && to_resolve != NULL && cbref != -1) {
 		cbdata = rspamd_mempool_alloc0 (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
