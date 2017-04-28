@@ -16,8 +16,6 @@ limitations under the License.
 
 -- Rules to detect forwarding
 
-local fun = require "fun"
-
 rspamd_config.FWD_GOOGLE = {
   callback = function (task)
     if not (task:has_from(1) and task:has_recipients(1)) then

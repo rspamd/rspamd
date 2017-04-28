@@ -1008,10 +1008,12 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	debug_task ("try to get header %s", (gchar *)arg->data);
 	headerlist = rspamd_message_get_header_array (task,
 			(gchar *)arg->data,
 			FALSE);
+
+	debug_task ("try to get header %s: %d", (gchar *)arg->data,
+			(headerlist != NULL));
 
 	if (headerlist) {
 		return TRUE;
