@@ -300,7 +300,7 @@ rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t l
   if (rh->real_ip) {
     if (rspamd_parse_inet_address (&rh->addr, rh->real_ip, strlen (rh->real_ip))) {
       rspamd_mempool_add_destructor (task->task_pool,
-              (rspamd_mempool_destruct_t)rspamd_inet_address_destroy, rh->addr);
+              (rspamd_mempool_destruct_t)rspamd_inet_address_free, rh->addr);
     }
   }
 
