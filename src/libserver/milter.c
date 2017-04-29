@@ -167,12 +167,13 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 {
 	GError *err;
 	rspamd_fstring_t *buf;
-	const guchar *pos;
+	const guchar *pos, *end, *zero;
 	guint cmdlen;
 	guint32 version, actions, protocol;
 
 	buf = priv->parser.buf;
 	pos = buf->str + priv->parser.pos;
+	end = pos + cmdlen;
 	cmdlen = priv->parser.datalen;
 
 	switch (priv->parser.cur_cmd) {
@@ -182,6 +183,14 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		rspamd_milter_on_protocol_error (session, priv, err);
 		break;
 	case RSPAMD_MILTER_CMD_BODY:
+		if (!session->message) {
+			session->message = rspamd_fstring_sized_new (
+					RSPAMD_MILTER_MESSAGE_CHUNK);
+		}
+
+		msg_debug_milter ("got body chunk: %d bytes", (int)cmdlen);
+		session->message = rspamd_fstring_append (session->message,
+				pos, cmdlen);
 		break;
 	case RSPAMD_MILTER_CMD_CONNECT:
 		break;
@@ -190,12 +199,75 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_CMD_BODYEOB:
 		break;
 	case RSPAMD_MILTER_CMD_HELO:
+		msg_debug_milter ("got helo command");
+
+		if (end > pos && *(end - 1) == '\0') {
+			session->helo = rspamd_fstring_new_init (pos, cmdlen - 1);
+		}
+		else if (end > pos) {
+			/* Should not happen */
+			session->helo = rspamd_fstring_new_init (pos, cmdlen - 1);
+		}
 		break;
 	case RSPAMD_MILTER_CMD_QUIT_NC:
 		break;
 	case RSPAMD_MILTER_CMD_HEADER:
+		msg_debug_milter ("got header command");
+		zero = memchr (pos, '\0', cmdlen);
+
+		if (zero == NULL) {
+			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+					"header command (no name)");
+			rspamd_milter_on_protocol_error (session, priv, err);
+
+			return FALSE;
+		}
+		else {
+			if (end > zero && *(end - 1) == '\0') {
+				rspamd_printf_fstring (&session->message, "%*s: %*s\r\n",
+						(int)(zero - pos), pos,
+						(int)(end - zero - 2), zero + 1);
+			}
+			else {
+				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+						"header command (bad value)");
+				rspamd_milter_on_protocol_error (session, priv, err);
+
+				return FALSE;
+			}
+		}
 		break;
 	case RSPAMD_MILTER_CMD_MAIL:
+		msg_debug_milter ("mail command");
+
+		while (pos < end) {
+			zero = memchr (pos, '\0', end - pos);
+			struct rspamd_email_address *addr;
+
+			if (zero) {
+				msg_debug_milter ("got mail: %*s", (int)(zero - pos), pos);
+				addr = rspamd_email_address_from_smtp (pos, zero - pos);
+
+				if (addr) {
+					session->from = addr;
+				}
+
+				/* TODO: parse esmtp arguments */
+				break;
+			}
+			else {
+				msg_debug_milter ("got weird from: %*s", (int)(end - pos),
+						pos);
+				/* That actually should not happen */
+				addr = rspamd_email_address_from_smtp (pos, end - pos);
+
+				if (addr) {
+					session->from = addr;
+				}
+
+				break;
+			}
+		}
 		break;
 	case RSPAMD_MILTER_CMD_EOH:
 		break;
@@ -234,17 +306,58 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			version, actions, protocol);
 		break;
 	case RSPAMD_MILTER_CMD_QUIT:
+		msg_debug_milter ("quit command");
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
+		msg_debug_milter ("rcpt command");
+
+		while (pos < end) {
+			const guchar *zero = memchr (pos, '\0', end - pos);
+			struct rspamd_email_address *addr;
+
+			if (zero) {
+				msg_debug_milter ("got rcpt: %*s", (int)(zero - pos), pos);
+				addr = rspamd_email_address_from_smtp (pos, zero - pos);
+
+				if (addr) {
+					if (!session->rcpts) {
+						session->rcpts = g_ptr_array_sized_new (1);
+					}
+
+					g_ptr_array_add (session->rcpts, addr);
+				}
+
+				pos = zero + 1;
+			}
+			else {
+				msg_debug_milter ("got weird rcpt: %*s", (int)(end - pos),
+						pos);
+				/* That actually should not happen */
+				addr = rspamd_email_address_from_smtp (pos, end - pos);
+
+				if (addr) {
+					if (!session->rcpts) {
+						session->rcpts = g_ptr_array_sized_new (1);
+					}
+
+					g_ptr_array_add (session->rcpts, addr);
+				}
+
+				break;
+			}
+		}
 		break;
 	case RSPAMD_MILTER_CMD_DATA:
 		if (!session->message) {
 			session->message = rspamd_fstring_sized_new (
 					RSPAMD_MILTER_MESSAGE_CHUNK);
 		}
+
+		msg_debug_milter ("got data command");
 		/* We do not need reply as specified */
 		break;
 	default:
+		msg_debug_milter ("got bad command: %c", priv->parser.cur_cmd);
 		break;
 	}
 
