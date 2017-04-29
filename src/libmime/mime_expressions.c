@@ -177,49 +177,58 @@ rspamd_mime_expr_quark (void)
 	return g_quark_from_static_string ("mime-expressions");
 }
 
+#define TYPE_CHECK(str, type, len) (sizeof(type) - 1 == (len) && rspamd_lc_cmp((str), (type), (len)) == 0)
 static gboolean
 rspamd_parse_long_option (const gchar *start, gsize len,
 		struct rspamd_regexp_atom *a)
 {
 	gboolean ret = FALSE;
 
-	if (rspamd_lc_cmp (start, "body", len) == 0) {
+	if (TYPE_CHECK (start, "body", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_BODY;
 	}
-	else if (rspamd_lc_cmp (start, "part", len) == 0) {
+	else if (TYPE_CHECK (start, "part", len) ||
+			TYPE_CHECK (start, "mime", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_MIME;
 	}
-	else if (rspamd_lc_cmp (start, "raw_part", len) == 0) {
+	else if (TYPE_CHECK (start, "raw_part", len) ||
+			TYPE_CHECK (start, "raw_mime", len) ||
+			TYPE_CHECK (start, "mime_raw", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_RAWMIME;
 	}
-	else if (rspamd_lc_cmp (start, "header", len) == 0) {
+	else if (TYPE_CHECK (start, "header", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_HEADER;
 	}
-	else if (rspamd_lc_cmp (start, "mime_header", len) == 0) {
+	else if (TYPE_CHECK (start, "mime_header", len) ||
+			TYPE_CHECK (start, "header_mime", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_MIMEHEADER;
 	}
-	else if (rspamd_lc_cmp (start, "raw_header", len) == 0) {
+	else if (rspamd_lc_cmp (start, "raw_header", len) ||
+			TYPE_CHECK (start, "header_raw", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_RAWHEADER;
 	}
-	else if (rspamd_lc_cmp (start, "all_header", len) == 0) {
+	else if (rspamd_lc_cmp (start, "all_header", len) ||
+			TYPE_CHECK (start, "header_all", len) ||
+			TYPE_CHECK (start, "all_headers", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_ALLHEADER;
 	}
-	else if (rspamd_lc_cmp (start, "url", len) == 0) {
+	else if (rspamd_lc_cmp (start, "url", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_URL;
 	}
-	else if (rspamd_lc_cmp (start, "sa_body", len) == 0) {
+	else if (rspamd_lc_cmp (start, "sa_body", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SABODY;
 	}
-	else if (rspamd_lc_cmp (start, "sa_raw_body", len) == 0) {
+	else if (rspamd_lc_cmp (start, "sa_raw_body", len) ||
+			TYPE_CHECK (start, "sa_body_raw", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SARAWBODY;
 	}
