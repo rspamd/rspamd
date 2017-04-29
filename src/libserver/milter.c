@@ -64,12 +64,61 @@ rspamd_milter_obuf_free (struct rspamd_milter_outbuf *obuf)
 }
 
 static void
-rspamd_milter_session_dtor (struct rspamd_milter_session *session)
+rspamd_milter_session_reset (struct rspamd_milter_session *session)
 {
 	struct rspamd_milter_outbuf *obuf, *obuf_tmp;
-	struct rspamd_milter_private *priv;
+	struct rspamd_milter_private *priv = session->priv;
 	struct rspamd_email_address *cur;
 	guint i;
+
+	DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
+		rspamd_milter_obuf_free (obuf);
+	}
+
+	if (priv->parser.buf) {
+		priv->parser.buf->len = 0;
+	}
+
+	if (session->message) {
+		session->message->len = 0;
+	}
+
+	if (session->addr) {
+		rspamd_inet_address_free (session->addr);
+	}
+
+	if (session->rcpts) {
+		PTR_ARRAY_FOREACH (session->rcpts, i, cur) {
+			rspamd_email_address_unref (cur);
+		}
+
+		g_ptr_array_free (session->rcpts, TRUE);
+	}
+
+	if (session->from) {
+		rspamd_email_address_unref (session->from);
+	}
+
+	if (session->macros) {
+		g_hash_table_unref (session->macros);
+		session->macros = NULL;
+	}
+
+	if (session->helo) {
+		session->helo->len = 0;
+	}
+
+	if (session->hostname) {
+		session->hostname->len = 0;
+	}
+
+	priv->out_chain = NULL;
+}
+
+static void
+rspamd_milter_session_dtor (struct rspamd_milter_session *session)
+{
+	struct rspamd_milter_private *priv;
 
 	if (session) {
 		priv = session->priv;
@@ -78,9 +127,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			event_del (&priv->ev);
 		}
 
-		DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
-			rspamd_milter_obuf_free (obuf);
-		}
+		rspamd_milter_session_reset (session);
 
 		if (priv->parser.buf) {
 			rspamd_fstring_free (priv->parser.buf);
@@ -88,26 +135,6 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 		if (session->message) {
 			rspamd_fstring_free (session->message);
-		}
-
-		if (session->addr) {
-			rspamd_inet_address_free (session->addr);
-		}
-
-		if (session->rcpts) {
-			PTR_ARRAY_FOREACH (session->rcpts, i, cur) {
-				rspamd_email_address_unref (cur);
-			}
-
-			g_ptr_array_free (session->rcpts, TRUE);
-		}
-
-		if (session->from) {
-			rspamd_email_address_unref (session->from);
-		}
-
-		if (session->macros) {
-			g_hash_table_unref (session->macros);
 		}
 
 		if (session->helo) {
@@ -118,7 +145,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			rspamd_fstring_free (session->hostname);
 		}
 
-		priv->out_chain = NULL;
+		g_free (session);
 	}
 }
 
@@ -160,6 +187,11 @@ rspamd_milter_on_protocol_error (struct rspamd_milter_session *session,
 	(pos) += sizeof (var); \
 	(var) = ntohl (var); \
 } while (0)
+#define READ_INT_16(pos, var) do { \
+	memcpy (&(var), (pos), sizeof (var)); \
+	(pos) += sizeof (var); \
+	(var) = ntohs (var); \
+} while (0)
 
 static gboolean
 rspamd_milter_process_command (struct rspamd_milter_session *session,
@@ -173,11 +205,12 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 
 	buf = priv->parser.buf;
 	pos = buf->str + priv->parser.pos;
-	end = pos + cmdlen;
 	cmdlen = priv->parser.datalen;
+	end = pos + cmdlen;
 
 	switch (priv->parser.cur_cmd) {
 	case RSPAMD_MILTER_CMD_ABORT:
+		msg_debug_milter ("got abort command");
 		err = g_error_new (rspamd_milter_quark (), ECONNABORTED, "connection "
 				"aborted");
 		rspamd_milter_on_protocol_error (session, priv, err);
@@ -193,20 +226,183 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 				pos, cmdlen);
 		break;
 	case RSPAMD_MILTER_CMD_CONNECT:
+		msg_debug_milter ("got connect command");
+
+		/*
+		 * char hostname[]: Hostname, NUL terminated
+		 * char family: Protocol family
+		 * uint16 port: Port number (SMFIA_INET or SMFIA_INET6 only)
+		 * char address[]: IP address (ASCII) or unix socket path, NUL terminated
+		 */
+		zero = memchr (pos, '\0', cmdlen);
+
+		if (zero == NULL || zero > (end - sizeof (guint16) + 1)) {
+			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+					"connect command (no name)");
+			rspamd_milter_on_protocol_error (session, priv, err);
+
+			return FALSE;
+		}
+		else {
+			guchar proto;
+			guint16 port;
+
+			if (session->hostname == NULL) {
+				session->hostname = rspamd_fstring_new_init (pos, zero - pos);
+			}
+			else {
+				session->hostname = rspamd_fstring_assign (session->hostname,
+						pos, zero - pos);
+			}
+
+			pos = zero + 1;
+			proto = *pos ++;
+
+			if (proto == RSPAMD_MILTER_CONN_UNKNOWN) {
+				/* We have no information about host */
+				msg_debug_milter ("unknown connect address");
+			}
+			else {
+				READ_INT_16 (pos, port);
+
+				if (pos >= end) {
+					/* No IP somehow */
+					msg_debug_milter ("unknown connect IP/socket");
+				}
+				else {
+					zero = memchr (pos, '\0', end - pos);
+
+					if (zero == NULL) {
+						err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+								"connect command (no zero terminated IP)");
+						rspamd_milter_on_protocol_error (session, priv, err);
+
+						return FALSE;
+					}
+
+					switch (proto) {
+					case RSPAMD_MILTER_CONN_UNIX:
+						session->addr = rspamd_inet_address_new (AF_UNIX,
+								pos);
+						break;
+
+					case RSPAMD_MILTER_CONN_INET:
+						session->addr = rspamd_inet_address_new (AF_INET, NULL);
+
+						if (!rspamd_parse_inet_address_ip (pos, zero - pos,
+								session->addr)) {
+							err = g_error_new (rspamd_milter_quark (), EINVAL,
+									"invalid connect command (bad IPv4)");
+							rspamd_milter_on_protocol_error (session, priv,
+									err);
+
+							return FALSE;
+						}
+
+						rspamd_inet_address_set_port (session->addr, port);
+						break;
+
+					case RSPAMD_MILTER_CONN_INET6:
+						session->addr = rspamd_inet_address_new (AF_INET, NULL);
+
+						if (!rspamd_parse_inet_address_ip (pos, zero - pos,
+								session->addr)) {
+							err = g_error_new (rspamd_milter_quark (), EINVAL,
+									"invalid connect command (bad IPv6)");
+							rspamd_milter_on_protocol_error (session, priv,
+									err);
+
+							return FALSE;
+						}
+
+						rspamd_inet_address_set_port (session->addr, port);
+						break;
+
+					default:
+						err = g_error_new (rspamd_milter_quark (), EINVAL,
+								"invalid connect command (bad protocol: %c)",
+								proto);
+						rspamd_milter_on_protocol_error (session, priv,
+								err);
+
+						return FALSE;
+					}
+				}
+			}
+		}
 		break;
 	case RSPAMD_MILTER_CMD_MACRO:
+		msg_debug_milter ("got macro command");
+		/*
+		 * Format is
+		 * 1 byte - command associated (we don't care about it)
+		 * 0-terminated name
+		 * 0-terminated value
+		 */
+		if (session->macros == NULL) {
+			session->macros = g_hash_table_new_full (rspamd_ftok_icase_hash,
+					rspamd_ftok_icase_equal,
+					rspamd_fstring_mapped_ftok_free,
+					rspamd_fstring_mapped_ftok_free);
+		}
+
+		pos ++;
+		zero = memchr (pos, '\0', cmdlen);
+
+		if (zero == NULL) {
+			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+					"macro command (no name)");
+			rspamd_milter_on_protocol_error (session, priv, err);
+
+			return FALSE;
+		}
+		else {
+			rspamd_fstring_t *name, *value;
+			rspamd_ftok_t *name_tok, *value_tok;
+
+			if (end > zero && *(end - 1) == '\0') {
+				name = rspamd_fstring_new_init (pos, zero - pos);
+				value = rspamd_fstring_new_init (zero + 1, end - zero - 2);
+				name_tok = rspamd_ftok_map (name);
+				value_tok = rspamd_ftok_map (value);
+
+				g_hash_table_replace (session->macros, name_tok, value_tok);
+				msg_debug_milter ("got macro: %T -> %T",
+						name_tok, value_tok);
+			}
+			else {
+				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+						"macro command (bad value)");
+				rspamd_milter_on_protocol_error (session, priv, err);
+
+				return FALSE;
+			}
+		}
 		break;
 	case RSPAMD_MILTER_CMD_BODYEOB:
+		msg_debug_milter ("got eob command");
 		break;
 	case RSPAMD_MILTER_CMD_HELO:
 		msg_debug_milter ("got helo command");
 
 		if (end > pos && *(end - 1) == '\0') {
-			session->helo = rspamd_fstring_new_init (pos, cmdlen - 1);
+			if (session->helo == NULL) {
+				session->helo = rspamd_fstring_new_init (pos, cmdlen - 1);
+			}
+			else {
+				session->helo = rspamd_fstring_assign (session->helo,
+						pos, cmdlen - 1);
+			}
 		}
 		else if (end > pos) {
 			/* Should not happen */
-			session->helo = rspamd_fstring_new_init (pos, cmdlen - 1);
+			if (session->helo == NULL) {
+				session->helo = rspamd_fstring_new_init (pos, cmdlen);
+			}
+			else {
+				session->helo = rspamd_fstring_assign (session->helo,
+						pos, cmdlen);
+			}
 		}
 		break;
 	case RSPAMD_MILTER_CMD_QUIT_NC:
@@ -270,6 +466,15 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		}
 		break;
 	case RSPAMD_MILTER_CMD_EOH:
+		msg_debug_milter ("got eoh command");
+
+		if (!session->message) {
+			session->message = rspamd_fstring_sized_new (
+					RSPAMD_MILTER_MESSAGE_CHUNK);
+		}
+
+		session->message = rspamd_fstring_append (session->message,
+				"\r\n", 2);
 		break;
 	case RSPAMD_MILTER_CMD_OPTNEG:
 		if (cmdlen != sizeof (guint32) * 3) {
@@ -312,7 +517,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		msg_debug_milter ("rcpt command");
 
 		while (pos < end) {
-			const guchar *zero = memchr (pos, '\0', end - pos);
+			zero = memchr (pos, '\0', end - pos);
 			struct rspamd_email_address *addr;
 
 			if (zero) {

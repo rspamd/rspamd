@@ -123,6 +123,13 @@ enum rspamd_milter_io_cmd {
 	(RSPAMD_MILTER_FLAG_ADDHDRS | RSPAMD_MILTER_FLAG_ADDRCPT | \
 	RSPAMD_MILTER_FLAG_DELRCPT | RSPAMD_MILTER_FLAG_CHGHDRS)
 
+enum rspamd_milter_connect_proto {
+	RSPAMD_MILTER_CONN_UNKNOWN = 'U',
+	RSPAMD_MILTER_CONN_UNIX = 'L',
+	RSPAMD_MILTER_CONN_INET = '4',
+	RSPAMD_MILTER_CONN_INET6 = '6',
+};
+
 /*
  * Rspamd supports just version 6 of the protocol, failing all versions below
  * this one
