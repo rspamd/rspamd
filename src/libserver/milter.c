@@ -68,6 +68,8 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 {
 	struct rspamd_milter_outbuf *obuf, *obuf_tmp;
 	struct rspamd_milter_private *priv;
+	struct rspamd_email_address *cur;
+	guint i;
 
 	if (session) {
 		priv = session->priv;
@@ -82,6 +84,38 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 		if (priv->parser.buf) {
 			rspamd_fstring_free (priv->parser.buf);
+		}
+
+		if (session->message) {
+			rspamd_fstring_free (session->message);
+		}
+
+		if (session->addr) {
+			rspamd_inet_address_destroy (session->addr);
+		}
+
+		if (session->rcpts) {
+			PTR_ARRAY_FOREACH (session->rcpts, i, cur) {
+				rspamd_email_address_unref (cur);
+			}
+
+			g_ptr_array_free (session->rcpts, TRUE);
+		}
+
+		if (session->from) {
+			rspamd_email_address_unref (session->from);
+		}
+
+		if (session->macros) {
+			g_hash_table_unref (session->macros);
+		}
+
+		if (session->helo) {
+			rspamd_fstring_free (session->helo);
+		}
+
+		if (session->hostname) {
+			rspamd_fstring_free (session->hostname);
 		}
 
 		priv->out_chain = NULL;
@@ -177,12 +211,38 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		READ_INT_32 (pos, version);
 		READ_INT_32 (pos, actions);
 		READ_INT_32 (pos, protocol);
+
+		msg_debug_milter ("optneg: version: %d, actions: %d, protocol: %d",
+				version, actions, protocol);
+
+		if (version < RSPAMD_MILTER_PROTO_VER) {
+			msg_warn_milter ("MTA specifies too old protocol: %d, "
+					"aborting connnection", version);
+
+			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
+					"protocol version: %d", version);
+			rspamd_milter_on_protocol_error (session, priv, err);
+
+			return FALSE;
+		}
+
+		version = RSPAMD_MILTER_PROTO_VER;
+		actions |= RSPAMD_MILTER_ACTIONS_MASK;
+		protocol = RSPAMD_MILTER_FLAG_NOREPLY_MASK;
+
+		return rspamd_milter_send_action (session, RSPAMD_MILTER_OPTNEG,
+			version, actions, protocol);
 		break;
 	case RSPAMD_MILTER_CMD_QUIT:
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
 		break;
 	case RSPAMD_MILTER_CMD_DATA:
+		if (!session->message) {
+			session->message = rspamd_fstring_sized_new (
+					RSPAMD_MILTER_MESSAGE_CHUNK);
+		}
+		/* We do not need reply as specified */
 		break;
 	default:
 		break;
