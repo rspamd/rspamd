@@ -208,26 +208,26 @@ rspamd_parse_long_option (const gchar *start, gsize len,
 		ret = TRUE;
 		a->type = RSPAMD_RE_MIMEHEADER;
 	}
-	else if (rspamd_lc_cmp (start, "raw_header", len) ||
+	else if (TYPE_CHECK (start, "raw_header", len) ||
 			TYPE_CHECK (start, "header_raw", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_RAWHEADER;
 	}
-	else if (rspamd_lc_cmp (start, "all_header", len) ||
+	else if (TYPE_CHECK (start, "all_header", len) ||
 			TYPE_CHECK (start, "header_all", len) ||
 			TYPE_CHECK (start, "all_headers", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_ALLHEADER;
 	}
-	else if (rspamd_lc_cmp (start, "url", len)) {
+	else if (TYPE_CHECK (start, "url", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_URL;
 	}
-	else if (rspamd_lc_cmp (start, "sa_body", len)) {
+	else if (TYPE_CHECK (start, "sa_body", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SABODY;
 	}
-	else if (rspamd_lc_cmp (start, "sa_raw_body", len) ||
+	else if (TYPE_CHECK (start, "sa_raw_body", len) ||
 			TYPE_CHECK (start, "sa_body_raw", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SARAWBODY;
