@@ -109,7 +109,7 @@ lua_http_fin (gpointer arg)
 	}
 
 	if (cbd->addr) {
-		rspamd_inet_address_destroy (cbd->addr);
+		rspamd_inet_address_free (cbd->addr);
 	}
 
 	if (cbd->mime_type) {

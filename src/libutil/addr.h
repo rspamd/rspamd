@@ -227,7 +227,7 @@ gboolean rspamd_parse_host_port_priority (const gchar *str,
  * Destroy the specified IP address
  * @param addr
  */
-void rspamd_inet_address_destroy (rspamd_inet_addr_t *addr);
+void rspamd_inet_address_free (rspamd_inet_addr_t *addr);
 
 /**
  * Apply the specified mask to an address (ignored for AF_UNIX)

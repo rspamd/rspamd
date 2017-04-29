@@ -2587,7 +2587,7 @@ lua_task_set_from_ip (lua_State *L)
 		}
 		else {
 			if (task->from_addr) {
-				rspamd_inet_address_destroy (task->from_addr);
+				rspamd_inet_address_free (task->from_addr);
 			}
 
 			task->from_addr = addr;

@@ -777,7 +777,7 @@ rspamd_message_parse (struct rspamd_task *task)
 			trecv->from_ip = trecv->real_ip;
 			trecv->addr = rspamd_inet_address_copy (task->from_addr);
 			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t)rspamd_inet_address_destroy,
+					(rspamd_mempool_destruct_t)rspamd_inet_address_free,
 					trecv->addr);
 
 			if (task->hostname) {

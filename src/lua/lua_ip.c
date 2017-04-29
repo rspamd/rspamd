@@ -404,7 +404,7 @@ lua_ip_destroy (lua_State *L)
 
 	if (ip) {
 		if (ip->addr) {
-			rspamd_inet_address_destroy (ip->addr);
+			rspamd_inet_address_free (ip->addr);
 		}
 		g_slice_free1 (sizeof (struct rspamd_lua_ip), ip);
 	}

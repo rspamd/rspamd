@@ -91,7 +91,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 		}
 
 		if (session->addr) {
-			rspamd_inet_address_destroy (session->addr);
+			rspamd_inet_address_free (session->addr);
 		}
 
 		if (session->rcpts) {

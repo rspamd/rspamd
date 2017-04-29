@@ -707,7 +707,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 				rspamd_inet_address_get_port (addr->addr));
 
 		if (ip) {
-			rspamd_inet_address_destroy (ip);
+			rspamd_inet_address_free (ip);
 		}
 
 		if (ud->ctx == NULL || ud->ctx->err) {
@@ -731,7 +731,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 	}
 
 	if (ip) {
-		rspamd_inet_address_destroy (ip);
+		rspamd_inet_address_free (ip);
 	}
 
 	return NULL;
@@ -931,7 +931,7 @@ lua_redis_make_request_sync (lua_State *L)
 				rspamd_inet_address_get_port (addr->addr), tv);
 
 		if (ip) {
-			rspamd_inet_address_destroy (ip);
+			rspamd_inet_address_free (ip);
 		}
 
 		if (ctx == NULL || ctx->err) {
@@ -972,7 +972,7 @@ lua_redis_make_request_sync (lua_State *L)
 	}
 	else {
 		if (ip) {
-			rspamd_inet_address_destroy (ip);
+			rspamd_inet_address_free (ip);
 		}
 		msg_err ("bad arguments for redis request");
 		lua_pushboolean (L, FALSE);
@@ -1091,7 +1091,7 @@ lua_redis_connect_sync (lua_State *L)
 				rspamd_inet_address_get_port (addr->addr), tv);
 
 		if (ip) {
-			rspamd_inet_address_destroy (ip);
+			rspamd_inet_address_free (ip);
 		}
 
 		if (ctx->d.sync == NULL || ctx->d.sync->err) {
@@ -1116,7 +1116,7 @@ lua_redis_connect_sync (lua_State *L)
 	}
 	else {
 		if (ip) {
-			rspamd_inet_address_destroy (ip);
+			rspamd_inet_address_free (ip);
 		}
 
 		lua_pushboolean (L, FALSE);

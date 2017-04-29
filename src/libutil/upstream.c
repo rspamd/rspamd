@@ -226,7 +226,7 @@ rspamd_upstream_addr_elt_dtor (gpointer a)
 {
 	struct upstream_addr_elt *elt = a;
 
-	rspamd_inet_address_destroy (elt->addr);
+	rspamd_inet_address_free (elt->addr);
 	g_slice_free1 (sizeof (*elt), elt);
 }
 
@@ -497,7 +497,7 @@ rspamd_upstream_dtor (struct upstream *up)
 	if (up->new_addrs) {
 		LL_FOREACH_SAFE(up->new_addrs, cur, tmp) {
 			/* Here we need to free pointer as well */
-			rspamd_inet_address_destroy (cur->addr);
+			rspamd_inet_address_free (cur->addr);
 			g_free (cur);
 		}
 	}

@@ -281,7 +281,7 @@ lua_tcp_fin (gpointer arg)
 	}
 
 	if (cbd->addr) {
-		rspamd_inet_address_destroy (cbd->addr);
+		rspamd_inet_address_free (cbd->addr);
 	}
 
 	while (lua_tcp_shift_handler (cbd)) {}

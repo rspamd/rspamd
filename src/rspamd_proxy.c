@@ -848,7 +848,7 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	g_ptr_array_free (session->mirror_conns, TRUE);
 	rspamd_http_message_shmem_unref (session->shmem_ref);
 	rspamd_http_message_unref (session->client_message);
-	rspamd_inet_address_destroy (session->client_addr);
+	rspamd_inet_address_free (session->client_addr);
 	close (session->client_sock);
 	rspamd_mempool_delete (session->pool);
 	g_slice_free1 (sizeof (*session), session);

@@ -289,7 +289,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 		lua_pop (L, 1);
 	}
 
-	rspamd_inet_address_destroy (addr);
+	rspamd_inet_address_free (addr);
 	close (nfd);
 }
 

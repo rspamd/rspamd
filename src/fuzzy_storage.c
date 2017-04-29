@@ -1249,7 +1249,7 @@ fuzzy_session_destroy (gpointer d)
 {
 	struct fuzzy_session *session = d;
 
-	rspamd_inet_address_destroy (session->addr);
+	rspamd_inet_address_free (session->addr);
 	rspamd_explicit_memzero (session->nm, sizeof (session->nm));
 	session->worker->nconns--;
 	g_slice_free1 (sizeof (*session), session);
@@ -1261,7 +1261,7 @@ rspamd_fuzzy_mirror_session_destroy (struct fuzzy_master_update_session *session
 	if (session) {
 		rspamd_http_connection_reset (session->conn);
 		rspamd_http_connection_unref (session->conn);
-		rspamd_inet_address_destroy (session->addr);
+		rspamd_inet_address_free (session->addr);
 		close (session->sock);
 
 		if (session->psrc) {
@@ -1406,7 +1406,7 @@ rspamd_fuzzy_collection_finish_handler (struct rspamd_http_connection_entry *con
 	struct rspamd_fuzzy_collection_session *session = conn_ent->ud;
 
 
-	rspamd_inet_address_destroy (session->from_addr);
+	rspamd_inet_address_free (session->from_addr);
 
 
 	g_slice_free1 (sizeof (struct rspamd_fuzzy_collection_session), session);
@@ -1621,7 +1621,7 @@ accept_fuzzy_collection_socket (gint fd, short what, void *arg)
 	if (!ctx->collection_keypair) {
 		msg_err ("deny request from %s, as no local keypair is specified",
 				rspamd_inet_address_to_string (addr));
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 		close (nfd);
 
 		return;
@@ -1709,7 +1709,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	if (!ctx->master_ips) {
 		msg_err ("deny update request from %s as no masters defined",
 				rspamd_inet_address_to_string (addr));
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 		close (nfd);
 
 		return;
@@ -1717,7 +1717,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	else if (radix_find_compressed_addr (ctx->master_ips, addr) == RADIX_NO_VALUE) {
 		msg_err ("deny update request from %s",
 				rspamd_inet_address_to_string (addr));
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 		close (nfd);
 
 		return;
@@ -1726,7 +1726,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	if (!ctx->sync_keypair) {
 		msg_err ("deny update request from %s, as no local keypair is specified",
 				rspamd_inet_address_to_string (addr));
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 		close (nfd);
 
 		return;
@@ -2309,7 +2309,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		keystat = rspamd_mempool_alloc0 (pool, sizeof (*keystat));
 		/* Hash of ip -> fuzzy_key_stat */
 		keystat->last_ips = rspamd_lru_hash_new_full (1024,
-				(GDestroyNotify)rspamd_inet_address_destroy, fuzzy_key_stat_dtor,
+				(GDestroyNotify) rspamd_inet_address_free, fuzzy_key_stat_dtor,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		key->stat = keystat;
 		pk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK,
@@ -2366,7 +2366,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)g_hash_table_unref, ctx->master_flags);
 	ctx->errors_ips = rspamd_lru_hash_new_full (1024,
-			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
+			(GDestroyNotify) rspamd_inet_address_free, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy, ctx->errors_ips);

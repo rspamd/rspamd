@@ -126,7 +126,7 @@ rspamd_inet_addr_create (gint af)
 }
 
 void
-rspamd_inet_address_destroy (rspamd_inet_addr_t *addr)
+rspamd_inet_address_free (rspamd_inet_addr_t *addr)
 {
 	if (addr) {
 		if (addr->af == AF_UNIX) {
@@ -293,7 +293,7 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target,
 	}
 	else {
 		/* Avoid leak */
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 	}
 
 	return (nfd);
@@ -302,7 +302,7 @@ out:
 	serrno = errno;
 	close (nfd);
 	errno = serrno;
-	rspamd_inet_address_destroy (addr);
+	rspamd_inet_address_free (addr);
 
 	return (-1);
 
@@ -390,14 +390,14 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 		*target = addr;
 	}
 	else {
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 	}
 
 	return TRUE;
 
 err:
 
-	rspamd_inet_address_destroy (addr);
+	rspamd_inet_address_free (addr);
 	return FALSE;
 }
 
@@ -1160,7 +1160,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 	if (rspamd_parse_inet_address (&cur_addr, begin, len)) {
 		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full (1,
-					(GDestroyNotify)rspamd_inet_address_destroy);
+					(GDestroyNotify) rspamd_inet_address_free);
 
 			if (pool != NULL) {
 				rspamd_mempool_add_destructor (pool,
@@ -1206,7 +1206,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 
 			if (*addrs == NULL) {
 				*addrs = g_ptr_array_new_full (addr_cnt,
-						(GDestroyNotify)rspamd_inet_address_destroy);
+						(GDestroyNotify) rspamd_inet_address_free);
 
 				if (pool != NULL) {
 					rspamd_mempool_add_destructor (pool,
@@ -1310,7 +1310,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 		/* Special case of unix socket, as getaddrinfo cannot deal with them */
 		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full (1,
-					(GDestroyNotify)rspamd_inet_address_destroy);
+					(GDestroyNotify) rspamd_inet_address_free);
 
 			if (pool != NULL) {
 				rspamd_mempool_add_destructor (pool,

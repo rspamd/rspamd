@@ -65,7 +65,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 		return;
 	}
 
-	rspamd_inet_address_destroy (addr);
+	rspamd_inet_address_free (addr);
 	rspamd_http_router_handle_socket (rt, nfd, NULL);
 }
 

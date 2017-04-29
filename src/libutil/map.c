@@ -268,7 +268,7 @@ free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 	}
 
 	if (cbd->addr) {
-		rspamd_inet_address_destroy (cbd->addr);
+		rspamd_inet_address_free (cbd->addr);
 	}
 
 
@@ -910,7 +910,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 					write_http_request (cbd);
 				}
 				else {
-					rspamd_inet_address_destroy (cbd->addr);
+					rspamd_inet_address_free (cbd->addr);
 					cbd->addr = NULL;
 				}
 			}
@@ -1094,7 +1094,7 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 		else {
 			msg_warn_map ("cannot load map: cannot connect to %s: %s",
 					data->host, strerror (errno));
-			rspamd_inet_address_destroy (cbd->addr);
+			rspamd_inet_address_free (cbd->addr);
 			cbd->addr = NULL;
 			MAP_RELEASE (cbd, "http_callback_data");
 		}

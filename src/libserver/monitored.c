@@ -285,11 +285,11 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					rspamd_monitored_propagate_error (m,
 							"invalid address");
 
-					rspamd_inet_address_destroy (addr);
+					rspamd_inet_address_free (addr);
 				}
 				else {
 					rspamd_monitored_propagate_success (m, lat);
-					rspamd_inet_address_destroy (addr);
+					rspamd_inet_address_free (addr);
 				}
 			}
 		}

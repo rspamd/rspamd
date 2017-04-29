@@ -425,7 +425,7 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 				ret = -1;
 			}
 
-			rspamd_inet_address_destroy (addr);
+			rspamd_inet_address_free (addr);
 		}
 		else {
 			msg_warn_session ("cannot parse forwarded IP: %T", hdr);
@@ -455,7 +455,7 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 					ret = -1;
 				}
 
-				rspamd_inet_address_destroy (addr);
+				rspamd_inet_address_free (addr);
 			}
 			else {
 				msg_warn_session ("cannot parse real IP: %T", hdr);
@@ -2953,7 +2953,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 	}
 
 	session->wrk->nconns --;
-	rspamd_inet_address_destroy (session->from_addr);
+	rspamd_inet_address_free (session->from_addr);
 	REF_RELEASE (session->cfg);
 
 	if (session->pool) {

@@ -227,7 +227,7 @@ rspamadm_control (gint argc, gchar **argv)
 
 	if (sock == -1) {
 		rspamd_fprintf (stderr, "cannot connect to: %s\n", control_path);
-		rspamd_inet_address_destroy (addr);
+		rspamd_inet_address_free (addr);
 		exit (1);
 	}
 
@@ -255,7 +255,7 @@ rspamadm_control (gint argc, gchar **argv)
 	event_base_loop (ev_base, 0);
 
 	rspamd_http_connection_unref (conn);
-	rspamd_inet_address_destroy (addr);
+	rspamd_inet_address_free (addr);
 	lua_close (L);
 	close (sock);
 }

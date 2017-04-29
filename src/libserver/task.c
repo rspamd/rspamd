@@ -255,11 +255,11 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		if (task->client_addr) {
-			rspamd_inet_address_destroy (task->client_addr);
+			rspamd_inet_address_free (task->client_addr);
 		}
 
 		if (task->from_addr) {
-			rspamd_inet_address_destroy (task->from_addr);
+			rspamd_inet_address_free (task->from_addr);
 		}
 
 		if (task->err) {
