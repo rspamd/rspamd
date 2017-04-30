@@ -341,22 +341,36 @@ rspamd_config.OMOGRAPH_URL = {
 
     if urls then
       local bad_omographs = 0
+      local single_bad_omograps = 0
       local bad_urls = {}
 
       fun.each(function(u)
-        local h1 = u:get_host()
-        local h2 = u:get_phished():get_host()
-        if h1 and h2 then
-          if util.is_utf_spoofed(h1, h2) then
-            table.insert(bad_urls, string.format('%s->%s', h1, h2))
-            bad_omographs = bad_omographs + 1
+        if u:is_phished() then
+          local h1 = u:get_host()
+          local h2 = u:get_phished():get_host()
+          if h1 and h2 then
+            if util.is_utf_spoofed(h1, h2) then
+              table.insert(bad_urls, string.format('%s->%s', h1, h2))
+              bad_omographs = bad_omographs + 1
+            end
           end
         end
-      end, fun.filter(function(u) return u:is_phished() end, urls))
+        if not u:is_html_displayed() then
+          local h = u:get_tld()
+
+          if h then
+            if util.is_utf_spoofed(h) then
+              table.insert(bad_urls, string.format('%s', h))
+              single_bad_omograps = single_bad_omograps + 1
+            end
+          end
+        end
+      end, urls)
 
       if bad_omographs > 0 then
-        if bad_omographs > 1 then bad_omographs = 1.0 end
-        return true, bad_omographs, bad_urls
+        return true, 1.0, bad_urls
+      elseif single_bad_omograps > 0 then
+        return true, 0.5, bad_urls
       end
     end
 
