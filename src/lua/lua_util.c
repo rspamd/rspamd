@@ -361,8 +361,8 @@ LUA_FUNCTION_DEF (util, zstd_decompress);
  */
 LUA_FUNCTION_DEF (util, normalize_prob);
 /***
- * @function util.is_utf_spoofed(str)
- * Returns true if a string is spoofed
+ * @function util.is_utf_spoofed(str, [str2])
+ * Returns true if a string is spoofed (possibly with another string `str2`)
  * @return {boolean} true if a string is spoofed
  */
 LUA_FUNCTION_DEF (util, is_utf_spoofed);
@@ -1913,8 +1913,9 @@ lua_util_is_utf_spoofed (lua_State *L)
 {
 	gsize l1, l2;
 	gint ret, nres = 2;
-	const gchar *s1 = lua_tolstring (L, 1, &l1), *s2 = lua_tolstring (L, 2, &l2);
-	static USpoofChecker *spc;
+	const gchar *s1 = lua_tolstring (L, 1, &l1),
+			*s2 = lua_tolstring (L, 2, &l2);
+	static USpoofChecker *spc, *spc_sgl;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
 	if (s1 && s2) {
@@ -1930,28 +1931,56 @@ lua_util_is_utf_spoofed (lua_State *L)
 		}
 
 		ret = uspoof_areConfusableUTF8 (spc, s1, l1, s2, l2, &uc_err);
-		lua_pushboolean (L, !!(ret != 0));
+	}
+	else if (s1) {
+		/* We have just s1, not s2 */
+		if (spc_sgl == NULL) {
+			USet *allowed = uset_openEmpty ();
 
-		switch (ret) {
-		case 0:
-			nres = 1;
-			break;
-		case USPOOF_SINGLE_SCRIPT_CONFUSABLE:
-			lua_pushstring (L, "single");
-			break;
-		case USPOOF_MIXED_SCRIPT_CONFUSABLE:
-			lua_pushstring (L, "multiple");
-			break;
-		case USPOOF_WHOLE_SCRIPT_CONFUSABLE:
-			lua_pushstring (L, "whole");
-			break;
-		default:
-			lua_pushstring (L, "unknown");
-			break;
+#if U_ICU_VERSION_MAJOR_NUM >= 51
+			uset_addAll (allowed, uspoof_getRecommendedSet (&uc_err));
+			uset_addAll (allowed, uspoof_getInclusionSet (&uc_err));
+#endif
+
+			spc_sgl = uspoof_open (&uc_err);
+
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+
+				return 1;
+			}
+
+			uspoof_setAllowedChars (spc_sgl, allowed, &uc_err);
+#if U_ICU_VERSION_MAJOR_NUM >= 51
+			uspoof_setRestrictionLevel (spc_sgl, USPOOF_MODERATELY_RESTRICTIVE);
+#endif
 		}
+
+		ret = uspoof_checkUTF8 (spc_sgl, s1, l1, NULL, &uc_err);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, !!(ret != 0));
+
+	switch (ret) {
+	case 0:
+		nres = 1;
+		break;
+	case USPOOF_SINGLE_SCRIPT_CONFUSABLE:
+		lua_pushstring (L, "single");
+		break;
+	case USPOOF_MIXED_SCRIPT_CONFUSABLE:
+		lua_pushstring (L, "multiple");
+		break;
+	case USPOOF_WHOLE_SCRIPT_CONFUSABLE:
+		lua_pushstring (L, "whole");
+		break;
+	default:
+		lua_pushstring (L, "unknown");
+		break;
 	}
 
 	return nres;
