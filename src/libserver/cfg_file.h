@@ -1,6 +1,17 @@
-/**
- * @file cfg_file.h
- * Config file parser and config routines API
+/*-
+ * Copyright 2016-2017 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifndef CFG_FILE_H
@@ -34,17 +45,6 @@ struct rspamd_external_libs_ctx;
 struct rspamd_cryptobox_pubkey;
 struct rspamd_dns_resolver;
 
-enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
-
-/**
- * Type of time configuration parameter
- */
-enum time_type {
-	TIME_SECONDS = 0,
-	TIME_MILLISECONDS,
-	TIME_MINUTES,
-	TIME_HOURS
-};
 /**
  * Types of rspamd bind lines
  */
@@ -113,10 +113,6 @@ struct rspamd_symbol {
 	gint nshots;
 };
 
-
-typedef double (*statfile_normalize_func)(struct rspamd_config *cfg,
-	long double score, void *params);
-
 /**
  * Statfile config definition
  */
@@ -154,15 +150,15 @@ struct rspamd_classifier_config {
 	GList *statfiles;                               /**< statfiles list                                     */
 	GHashTable *labels;                             /**< statfiles with labels								*/
 	gchar *metric;                                  /**< metric of this classifier                          */
-	gchar *classifier;                  			/**< classifier interface                               */
+	gchar *classifier;                              /**< classifier interface                               */
 	struct rspamd_tokenizer_config *tokenizer;      /**< tokenizer used for classifier						*/
-	const gchar *backend;							/**< name of statfile's backend							*/
+	const gchar *backend;                           /**< name of statfile's backend							*/
 	ucl_object_t *opts;                             /**< other options                                      */
-	GList *learn_conditions;						/**< list of learn condition callbacks					*/
-	gchar *name;									/**< unique name of classifier							*/
-	guint32 min_tokens;								/**< minimal number of tokens to process classifier 	*/
-	guint32 max_tokens;								/**< maximum number of tokens							*/
-	guint min_learns;								/**< minimum number of learns for each statfile			*/
+	GList *learn_conditions;                        /**< list of learn condition callbacks					*/
+	gchar *name;                                    /**< unique name of classifier							*/
+	guint32 min_tokens;                             /**< minimal number of tokens to process classifier 	*/
+	guint32 max_tokens;                             /**< maximum number of tokens							*/
+	guint min_learns;                               /**< minimum number of learns for each statfile			*/
 	guint flags;
 };
 
@@ -679,6 +675,3 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
         __VA_ARGS__)
 
 #endif /* ifdef CFG_FILE_H */
-/*
- * vi:ts=4
- */
