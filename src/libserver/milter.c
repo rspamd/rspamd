@@ -145,8 +145,23 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			rspamd_fstring_free (session->hostname);
 		}
 
+		if (priv->fd) {
+			close (priv->fd);
+		}
+
 		g_free (session);
 	}
+}
+
+static void
+rspamd_milter_on_protocol_error (struct rspamd_milter_session *session,
+		struct rspamd_milter_private *priv, GError *err)
+{
+	priv->state = RSPAMD_MILTER_WANNA_DIE;
+	REF_RETAIN (session);
+	priv->err_cb (priv->fd, session, priv->ud, err);
+	REF_RELEASE (session);
+	g_error_free (err);
 }
 
 static void
@@ -154,8 +169,19 @@ rspamd_milter_io_handler (gint fd, gshort what, void *ud)
 {
 	struct rspamd_milter_session *session = ud;
 	struct rspamd_milter_private *priv;
+	GError *err;
 
 	priv = session->priv;
+
+	if (what == EV_TIMEOUT) {
+		msg_debug_milter ("connection timed out");
+		err = g_error_new (rspamd_milter_quark (), ETIMEDOUT, "connection "
+				"timed out");
+		rspamd_milter_on_protocol_error (session, priv, err);
+	}
+	else {
+		rspamd_milter_handle_session (session, priv);
+	}
 }
 
 static inline void
@@ -172,15 +198,6 @@ rspamd_milter_plan_io (struct rspamd_milter_session *session,
 	event_add (&priv->ev, priv->ptv);
 }
 
-static void
-rspamd_milter_on_protocol_error (struct rspamd_milter_session *session,
-		struct rspamd_milter_private *priv, GError *err)
-{
-	REF_RETAIN (session);
-	priv->err_cb (priv->fd, session, priv->ud, err);
-	REF_RELEASE (session);
-	g_error_free (err);
-}
 
 #define READ_INT_32(pos, var) do { \
 	memcpy (&(var), (pos), sizeof (var)); \
@@ -381,6 +398,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_BODYEOB:
 		msg_debug_milter ("got eob command");
+		REF_RETAIN (session);
+		priv->fin_cb (priv->fd, session, priv->ud);
+		REF_RELEASE (session);
 		break;
 	case RSPAMD_MILTER_CMD_HELO:
 		msg_debug_milter ("got helo command");
@@ -406,6 +426,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		}
 		break;
 	case RSPAMD_MILTER_CMD_QUIT_NC:
+		/* We need to reset session and start over */
+		msg_debug_milter ("got quit_nc command");
+		rspamd_milter_session_reset (session);
 		break;
 	case RSPAMD_MILTER_CMD_HEADER:
 		msg_debug_milter ("got header command");
@@ -512,6 +535,8 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_QUIT:
 		msg_debug_milter ("quit command");
+		priv->state = RSPAMD_MILTER_WANNA_DIE;
+		REF_RELEASE (session);
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
 		msg_debug_milter ("rcpt command");
