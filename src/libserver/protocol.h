@@ -66,7 +66,12 @@ gboolean rspamd_protocol_handle_request (struct rspamd_task *task,
  * @param task
  */
 void rspamd_protocol_http_reply (struct rspamd_http_message *msg,
-	struct rspamd_task *task);
+		struct rspamd_task *task, ucl_object_t **pobj);
+/**
+ * Write data to log pipes
+ * @param task
+ */
+void rspamd_protocol_write_log_pipe (struct rspamd_task *task);
 
 enum rspamd_protocol_flags {
 	RSPAMD_PROTOCOL_BASIC = 1 << 0,

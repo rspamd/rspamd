@@ -60,4 +60,14 @@ void rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct event_base *ev_base,
 		struct rspamd_dns_resolver *resolver);
 
+/*
+ * Called on forced timeout
+ */
+void rspamd_task_timeout (gint fd, short what, gpointer ud);
+
+/*
+ * Called on unexpected IO error (e.g. ECONNRESET)
+ */
+void rspamd_worker_guard_handler (gint fd, short what, void *data);
+
 #endif

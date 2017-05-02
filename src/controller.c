@@ -1876,7 +1876,7 @@ rspamd_controller_scan_reply (struct rspamd_task *task)
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
-	rspamd_protocol_http_reply (msg, task);
+	rspamd_protocol_http_reply (msg, task, NULL);
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
 			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,

@@ -142,7 +142,7 @@ reduce_tasks_count (gpointer arg)
 	}
 }
 
-static void
+void
 rspamd_task_timeout (gint fd, short what, gpointer ud)
 {
 	struct rspamd_task *task = (struct rspamd_task *) ud;
@@ -156,7 +156,7 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 	}
 }
 
-static void
+void
 rspamd_worker_guard_handler (gint fd, short what, void *data)
 {
 	struct rspamd_task *task = data;

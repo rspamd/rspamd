@@ -1241,7 +1241,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 
 void
 rspamd_protocol_http_reply (struct rspamd_http_message *msg,
-	struct rspamd_task *task)
+		struct rspamd_task *task, ucl_object_t **pobj)
 {
 	struct rspamd_metric_result *metric_res;
 	GHashTableIter hiter;
@@ -1264,6 +1264,10 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 
 	top = rspamd_protocol_write_ucl (task, flags);
+
+	if (pobj) {
+		*pobj = top;
+	}
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
@@ -1400,7 +1404,7 @@ end:
 	}
 }
 
-static void
+void
 rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 {
 	struct rspamd_worker_log_pipe *lp;
@@ -1645,7 +1649,6 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 
 	msg->date = time (NULL);
 
-
 	debug_task ("writing reply to client");
 	if (task->err != NULL) {
 		ucl_object_t *top = NULL;
@@ -1675,7 +1678,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_PROCESS:
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
-			rspamd_protocol_http_reply (msg, task);
+			rspamd_protocol_http_reply (msg, task, NULL);
 			rspamd_protocol_write_log_pipe (task);
 			break;
 		case CMD_PING:
