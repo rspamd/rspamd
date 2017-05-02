@@ -23,15 +23,6 @@
 #include "libserver/cfg_file.h"
 #include "libserver/rspamd_control.h"
 
-/*
- * Worker's context
- */
-struct rspamd_worker_log_pipe {
-	gint fd;
-	enum rspamd_log_pipe_type type;
-	struct rspamd_worker_log_pipe *prev, *next;
-};
-
 static const guint64 rspamd_worker_magic = 0xb48abc69d601dc1dULL;
 
 struct rspamd_worker_ctx {
@@ -60,8 +51,13 @@ struct rspamd_worker_ctx {
 	struct rspamd_keypair_cache *keys_cache;
 	/* Configuration */
 	struct rspamd_config *cfg;
-	/* Log pipe */
-	struct rspamd_worker_log_pipe *log_pipes;
 };
+
+/*
+ * Init scanning routines
+ */
+void rspamd_worker_init_scanner (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver);
 
 #endif

@@ -459,7 +459,7 @@ rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
 		struct rspamd_control_command *cmd,
 		gpointer ud)
 {
-	struct rspamd_worker_ctx *ctx = ud;
+	struct rspamd_config *cfg = ud;
 	struct rspamd_worker_log_pipe *lp;
 	struct rspamd_control_reply rep;
 
@@ -471,7 +471,7 @@ rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
 		lp->fd = attached_fd;
 		lp->type = cmd->cmd.log_pipe.type;
 
-		DL_APPEND (ctx->log_pipes, lp);
+		DL_APPEND (cfg->log_pipes, lp);
 		msg_info ("added new log pipe");
 	}
 	else {
@@ -598,6 +598,28 @@ rspamd_worker_on_terminate (struct rspamd_worker *worker)
 	return FALSE;
 }
 
+void
+rspamd_worker_init_scanner (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver)
+{
+	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
+			worker->srv->cfg, ev_base, resolver->r);
+	rspamd_stat_init (worker->srv->cfg, ev_base);
+	g_ptr_array_add (worker->finish_actions,
+			(gpointer) rspamd_worker_on_terminate);
+#ifdef WITH_HYPERSCAN
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_HYPERSCAN_LOADED,
+			rspamd_worker_hyperscan_ready,
+			NULL);
+#endif
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_LOG_PIPE,
+			rspamd_worker_log_pipe_handler,
+			worker->srv->cfg);
+}
+
 /*
  * Start worker process
  */
@@ -605,7 +627,6 @@ void
 start_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_worker_ctx *ctx = worker->ctx;
-	struct rspamd_worker_log_pipe *lp, *ltmp;
 
 	ctx->cfg = worker->srv->cfg;
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket, TRUE);
@@ -617,42 +638,19 @@ start_worker (struct rspamd_worker *worker)
 			ctx->ev_base,
 			worker->srv->cfg);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
-
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
-	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
-			worker->srv->cfg, ctx->ev_base, ctx->resolver->r);
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
-	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
-	g_ptr_array_add (worker->finish_actions,
-			(gpointer) rspamd_worker_on_terminate);
+	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
 
-#ifdef WITH_HYPERSCAN
-	rspamd_control_worker_add_cmd_handler (worker,
-			RSPAMD_CONTROL_HYPERSCAN_LOADED,
-			rspamd_worker_hyperscan_ready,
-			ctx);
-#endif
-
-	rspamd_control_worker_add_cmd_handler (worker,
-			RSPAMD_CONTROL_LOG_PIPE,
-			rspamd_worker_log_pipe_handler,
-			ctx);
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
 	rspamd_stat_close ();
 	rspamd_log_close (worker->srv->logger);
-
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
-
-	DL_FOREACH_SAFE (ctx->log_pipes, lp, ltmp) {
-		close (lp->fd);
-		g_slice_free1 (sizeof (*lp), lp);
-	}
-
 	REF_RELEASE (ctx->cfg);
 
 	exit (EXIT_SUCCESS);

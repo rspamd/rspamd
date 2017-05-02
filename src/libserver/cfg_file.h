@@ -64,6 +64,12 @@ enum rspamd_log_type {
 	RSPAMD_LOG_FILE
 };
 
+struct rspamd_worker_log_pipe {
+	gint fd;
+	gint type;
+	struct rspamd_worker_log_pipe *prev, *next;
+};
+
 /**
  * script module list item
  */
@@ -328,6 +334,7 @@ struct rspamd_config {
 	gboolean log_re_cache;                          /**< show statistics about regexps						*/
 	guint log_error_elts;                           /**< number of elements in error logbuf					*/
 	guint log_error_elt_maxlen;                     /**< maximum size of error log element					*/
+	struct rspamd_worker_log_pipe *log_pipes;
 
 	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
 	gboolean compat_messages;                       /**< use old messages in the protocol (array) 			*/

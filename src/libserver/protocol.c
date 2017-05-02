@@ -1401,8 +1401,7 @@ end:
 }
 
 static void
-rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
-		struct rspamd_task *task)
+rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 {
 	struct rspamd_worker_log_pipe *lp;
 	struct rspamd_protocol_log_message_sum *ls;
@@ -1547,7 +1546,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 
 	nextra = extra->len;
 
-	LL_FOREACH (ctx->log_pipes, lp) {
+	LL_FOREACH (task->cfg->log_pipes, lp) {
 		if (lp->fd != -1) {
 			switch (lp->type) {
 			case RSPAMD_LOG_PIPE_SYMBOLS:
@@ -1628,7 +1627,6 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
 	const gchar *ctype = "application/json";
-	struct rspamd_abstract_worker_ctx *actx;
 	rspamd_fstring_t *reply;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
@@ -1678,14 +1676,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
 			rspamd_protocol_http_reply (msg, task);
-
-			if (task->worker && task->worker->ctx) {
-				actx = task->worker->ctx;
-
-				if (actx->magic == rspamd_worker_magic) {
-					rspamd_protocol_write_log_pipe (task->worker->ctx, task);
-				}
-			}
+			rspamd_protocol_write_log_pipe (task);
 			break;
 		case CMD_PING:
 			rspamd_http_message_set_body (msg, "pong" CRLF, 6);

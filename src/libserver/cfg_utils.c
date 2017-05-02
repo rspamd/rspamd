@@ -191,6 +191,7 @@ void
 rspamd_config_free (struct rspamd_config *cfg)
 {
 	struct rspamd_config_post_load_script *sc, *sctmp;
+	struct rspamd_worker_log_pipe *lp, *ltmp;
 
 	rspamd_map_remove_all (cfg);
 
@@ -244,6 +245,12 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_mempool_delete (cfg->cfg_pool);
 	lua_close (cfg->lua_state);
 	REF_RELEASE (cfg->libs_ctx);
+
+	DL_FOREACH_SAFE (cfg->log_pipes, lp, ltmp) {
+		close (lp->fd);
+		g_slice_free1 (sizeof (*lp), lp);
+	}
+
 	g_slice_free1 (sizeof (*cfg), cfg);
 }
 
