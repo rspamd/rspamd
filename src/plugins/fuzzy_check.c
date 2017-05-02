@@ -1221,7 +1221,12 @@ fuzzy_cmd_hash (struct fuzzy_rule *rule,
 	return io;
 }
 
-static void *
+struct rspamd_cached_shingles {
+	struct rspamd_shingle *sh;
+	guchar digest[rspamd_cryptobox_HASHBYTES];
+};
+
+static struct rspamd_cached_shingles *
 fuzzy_cmd_get_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
 		gpointer p)
@@ -1240,7 +1245,7 @@ static void
 fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
 		rspamd_mempool_t *pool,
 		gpointer p,
-		struct rspamd_fuzzy_encrypted_shingle_cmd *data)
+		struct rspamd_cached_shingles *data)
 {
 	gchar key[32];
 	gint key_part;
@@ -1264,7 +1269,8 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		struct rspamd_mime_text_part *part)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd;
-	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
+	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd;
+	struct rspamd_cached_shingles *cached;
 	struct rspamd_shingle *sh;
 	guint i;
 	rspamd_cryptobox_hash_state_t st;
@@ -1276,9 +1282,12 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 
 	if (cached) {
 		/* Copy cached */
-		encshcmd = rspamd_mempool_alloc (pool, sizeof (*encshcmd));
-		memcpy (encshcmd, cached, sizeof (*encshcmd));
+		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
 		shcmd = &encshcmd->cmd;
+		memcpy (&shcmd->sgl, cached->sh, sizeof (struct rspamd_shingle));
+		memcpy (shcmd->basic.digest, cached->digest,
+				sizeof (cached->digest));
+		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 	}
 	else {
 		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
@@ -1294,6 +1303,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 			word = &g_array_index (words, rspamd_stat_token_t, i);
 			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
 		}
+
 		rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);
 
 		msg_debug_pool ("loading shingles of type %s with key %*xs",
@@ -1315,7 +1325,10 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		 * Since it is copied when obtained from the cache, it is safe to use
 		 * it this way.
 		 */
-		fuzzy_cmd_set_cached (rule, pool, part, encshcmd);
+		cached = rspamd_mempool_alloc (pool, sizeof (*cached));
+		cached->sh = sh;
+		memcpy (cached->digest, shcmd->basic.digest, sizeof (cached->digest));
+		fuzzy_cmd_set_cached (rule, pool, part, cached);
 	}
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
@@ -1355,17 +1368,21 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 		struct rspamd_image *img)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd;
-	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd, *cached;
+	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd;
 	struct fuzzy_cmd_io *io;
 	struct rspamd_shingle *sh;
+	struct rspamd_cached_shingles *cached;
 
 	cached = fuzzy_cmd_get_cached (rule, pool, img);
 
 	if (cached) {
 		/* Copy cached */
-		encshcmd = rspamd_mempool_alloc (pool, sizeof (*encshcmd));
-		memcpy (encshcmd, cached, sizeof (*encshcmd));
+		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
 		shcmd = &encshcmd->cmd;
+		memcpy (&shcmd->sgl, cached->sh, sizeof (struct rspamd_shingle));
+		memcpy (shcmd->basic.digest, cached->digest,
+				sizeof (cached->digest));
+		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
 	}
 	else {
 		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
@@ -1403,7 +1420,10 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 		 * Since it is copied when obtained from the cache, it is safe to use
 		 * it this way.
 		 */
-		fuzzy_cmd_set_cached (rule, pool, img, encshcmd);
+		cached = rspamd_mempool_alloc (pool, sizeof (*cached));
+		cached->sh = sh;
+		memcpy (cached->digest, shcmd->basic.digest, sizeof (cached->digest));
+		fuzzy_cmd_set_cached (rule, pool, img, cached);
 	}
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
