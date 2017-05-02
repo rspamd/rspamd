@@ -1,3 +1,32 @@
+1.5.7:
+	* [CritFix] Fix corruption when multiple fuzzy are defined
+	* [CritFix] Fix learn condition in fuzzy check
+	* [Feature] Add rules to detect bad 8bit characters in From and To
+	* [Feature] DKIM signing: sign_networks/local address specific use_domain settings
+	* [Feature] Support numeric arguments for Redis requests
+	* [Fix] Deal with 8bit characters in email addresses
+	* [Fix] Fix couple of issues in FORWARDED rule
+	* [Fix] Fix passing data to log helper when many symbols defined
+	* [Fix] Fix R_BAD_CTE_7BIT rule
+	* [Fix] Fix REPLYTO_UNPARSEABLE rule
+	* [Fix] Fix setting of email address
+	* [Fix] Rspamadm grep: Disable Lua patterns in string search by default
+	* [Minor] Add Lua 5.3 workaround
+	* [Minor] Add lua methods to detect if a part has 8bit characters
+	* [Minor] Allow session-less lua dns requests
+	* [Minor] Allow to append greylist end time to message reported
+	* [Minor] Avoid `nil` table
+	* [Minor] Disable dkim_signing if redis is specified but not configured
+	* [Minor] Fix build with pcre2
+	* [Minor] Fix rule
+	* [Minor] Fix warnings
+	* [Minor] Format floating point number
+	* [Minor] Push email flags to the lua API
+	* [Minor] Silence some warnings
+	* [Minor] Silence warning
+	* [Minor] Try all hostname regexps to find the most significant one
+	* [WebUI] Fix add header filter in history
+
 1.5.6:
 	* [Feature] Add unigramms support in bayes
 	* [Feature] Allow configurable sign headers for DKIM
