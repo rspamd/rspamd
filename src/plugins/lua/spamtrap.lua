@@ -20,6 +20,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local redis_params
 local use_redis = false;
+local M = 'spamtrap'
 
 local settings = {
   symbol = 'SPAMTRAP',
@@ -34,16 +35,21 @@ local settings = {
 local function spamtrap_cb(task)
   local rcpts = task:get_recipients('smtp')
   local called_for_domain = false
-  local target = nil
+  local target
 
   local function do_action(rcpt)
     if settings['learn_fuzzy'] then
-      rspamd_plugins.fuzzy_check.learn(task, settings['fuzzy_flag'], settings['fuzzy_weight'])
+      rspamd_plugins.fuzzy_check.learn(task,
+        settings['fuzzy_flag'],
+        settings['fuzzy_weight'])
     end
     if settings['learn_spam'] then
       task:set_flag("learn_spam")
     end
-    task:insert_result(settings['symbol'], settings['score'], rcpt)
+    task:insert_result(settings['symbol'],
+      settings['score'],
+      rcpt)
+
     if settings['action'] then
       task:set_pre_result(settings['action'],
         string.format('spamtrap found: <%s>', rcpt))
@@ -76,7 +82,7 @@ local function spamtrap_cb(task)
         end
         called_for_domain = true
       else
-        return -- nothing found
+        rspamd_logger.debugm(M, task, 'skip spamtrap for %s', target)
       end
     end
   end
@@ -97,10 +103,11 @@ local function spamtrap_cb(task)
       if not ret then
         rspamd_logger.errx(task, "redis request wasn't scheduled")
       end
-    else
+    elseif settings['map'] then
       if settings['map']:get_key(target) then
         do_action(target)
       else
+        rspamd_logger.debugm(M, task, 'skip spamtrap for %s', target)
       end
     end
   end
@@ -117,12 +124,11 @@ if opts then
     settings[k] = v
   end
   if settings['map'] then
-    settings['name'] = settings['map']
-    settings['map'] = rspamd_config:add_map({
-      url = settings['name'],
+    settings['map'] = rspamd_config:add_map{
+      url = settings['map'],
       description = "Spamtrap map for %s", settings['symbol'],
       type = "regexp"
-    })
+    }
   else
     redis_params = rspamd_parse_redis_server('spamtrap')
     if not redis_params then
