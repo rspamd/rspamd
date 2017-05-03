@@ -1036,6 +1036,21 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 					tag->flags |= FL_IGNORE;
 				}
 
+				if (!(tag->flags & FL_CLOSED) &&
+						!(parent->flags & FL_BLOCK)) {
+					/* We likely have some bad nesting */
+					if (parent->id == tag->id) {
+						/* Something like <a>bla<a>foo... */
+						hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
+						*balanced = FALSE;
+						tag->parent = parent->parent;
+						g_node_append (parent->parent, nnode);
+						*cur_level = nnode;
+
+						return TRUE;
+					}
+				}
+
 				parent->content_length += tag->content_length;
 			}
 
@@ -1928,6 +1943,69 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	tag->extra = bl;
 }
 
+static void
+rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
+		GList **exceptions, GHashTable *urls, GHashTable *emails,
+		GByteArray *dest, GHashTable *target_tbl,
+		gint href_offset,
+		struct rspamd_url *url)
+{
+	struct rspamd_url *displayed_url = NULL;
+	struct rspamd_url *turl;
+	gboolean url_found = FALSE;
+	struct rspamd_process_exception *ex;
+
+	rspamd_html_url_is_phished (pool, url,
+			dest->data + href_offset,
+			dest->len - href_offset,
+			&url_found, &displayed_url);
+
+	if (exceptions && url_found) {
+		ex = rspamd_mempool_alloc (pool,
+				sizeof (*ex));
+		ex->pos = href_offset;
+		ex->len = dest->len - href_offset;
+		ex->type = RSPAMD_EXCEPTION_URL;
+
+		*exceptions = g_list_prepend (*exceptions,
+				ex);
+	}
+
+	if (displayed_url) {
+		if (displayed_url->protocol ==
+				PROTOCOL_MAILTO) {
+			target_tbl = emails;
+		}
+		else {
+			target_tbl = urls;
+		}
+
+		if (target_tbl != NULL) {
+			turl = g_hash_table_lookup (target_tbl,
+					displayed_url);
+
+			if (turl != NULL) {
+				/* Here, we assume the following:
+				 * if we have a URL in the text part which
+				 * is the same as displayed URL in the
+				 * HTML part, we assume that it is also
+				 * hint only.
+				 */
+				if (turl->flags &
+						RSPAMD_URL_FLAG_FROM_TEXT) {
+					turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
+					turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
+				}
+			}
+			else {
+				g_hash_table_insert (target_tbl,
+						displayed_url,
+						displayed_url);
+			}
+		}
+	}
+}
+
 GByteArray*
 rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in, GList **exceptions, GHashTable *urls,  GHashTable *emails)
@@ -1935,7 +2013,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	const guchar *p, *c, *end, *savep = NULL;
 	guchar t;
 	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE,
-			balanced, url_text;
+			balanced;
 	GByteArray *dest;
 	GHashTable *target_tbl;
 	guint obrace = 0, ebrace = 0;
@@ -1943,7 +2021,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	gint substate = 0, len, href_offset = -1;
 	struct html_tag *cur_tag = NULL, *content_tag = NULL;
 	struct rspamd_url *url = NULL, *turl;
-	struct rspamd_process_exception *ex;
 	enum {
 		parse_start = 0,
 		tag_begin,
@@ -2334,61 +2411,40 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							href_offset = dest->len;
 						}
 					}
-					else if (cur_tag->id == Tag_A &&
-							(cur_tag->flags & FL_CLOSING)) {
-						/* Insert exception */
-						if (url != NULL && (gint)dest->len > href_offset) {
-							struct rspamd_url *displayed_url = NULL;
 
-							rspamd_html_url_is_phished (pool, url,
-									dest->data + href_offset,
-									dest->len - href_offset,
-									&url_text, &displayed_url);
+					if (cur_tag->id == Tag_A) {
+						if (!balanced && cur_level && cur_level->prev) {
+							struct html_tag *prev_tag;
+							struct rspamd_url *prev_url;
 
-							if (exceptions && url_text) {
-								ex = rspamd_mempool_alloc (pool, sizeof (*ex));
-								ex->pos = href_offset;
-								ex->len = dest->len - href_offset;
-								ex->type = RSPAMD_EXCEPTION_URL;
+							prev_tag = cur_level->prev->data;
 
-								*exceptions = g_list_prepend (*exceptions, ex);
-							}
+							if (prev_tag->id == Tag_A &&
+									!(prev_tag->flags & (FL_CLOSING)) &&
+									prev_tag->extra) {
+								prev_url = prev_tag->extra;
 
-							if (displayed_url) {
-								if (displayed_url->protocol == PROTOCOL_MAILTO) {
-									target_tbl = emails;
-								}
-								else {
-									target_tbl = urls;
-								}
-
-								if (target_tbl != NULL) {
-									turl = g_hash_table_lookup (target_tbl,
-											displayed_url);
-
-									if (turl != NULL) {
-										/* Here, we assume the following:
-										 * if we have a URL in the text part which
-										 * is the same as displayed URL in the
-										 * HTML part, we assume that it is also
-										 * hint only.
-										 */
-										if (turl->flags & RSPAMD_URL_FLAG_FROM_TEXT) {
-											turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
-											turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
-										}
-									}
-									else {
-										g_hash_table_insert (target_tbl,
-												displayed_url, displayed_url);
-									}
-								}
+								rspamd_html_check_displayed_url (pool,
+										exceptions, urls, emails,
+										dest, target_tbl, href_offset,
+										prev_url);
 							}
 						}
 
-						href_offset = -1;
-						url_text = FALSE;
-						url = NULL;
+						if (cur_tag->flags & (FL_CLOSING)) {
+
+							/* Insert exception */
+							if (url != NULL && (gint) dest->len > href_offset) {
+								rspamd_html_check_displayed_url (pool,
+										exceptions, urls, emails,
+										dest, target_tbl, href_offset,
+										url);
+
+							}
+
+							href_offset = -1;
+							url = NULL;
+						}
 					}
 				}
 				else if (cur_tag->id == Tag_LINK) {
