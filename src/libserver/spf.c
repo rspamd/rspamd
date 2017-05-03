@@ -973,6 +973,7 @@ parse_spf_a (struct spf_record *rec,
 	struct spf_dns_cb *cb;
 	const gchar *host = NULL;
 	struct rspamd_task *task = rec->task;
+	enum rdns_request_type rtype;
 
 	CHECK_REC (rec);
 
@@ -987,27 +988,21 @@ parse_spf_a (struct spf_record *rec,
 	cb->rec = rec;
 	cb->ptr_host = host;
 	cb->addr = addr;
-	cb->cur_action = SPF_RESOLVE_A;
+	if (rspamd_inet_address_get_af(task->from_addr) == AF_INET6) {
+		cb->cur_action = SPF_RESOLVE_AAA;
+		rtype = RDNS_REQUEST_AAAA;
+		msg_debug_spf ("resolve aaa %s", host);
+	}
+	else {
+		cb->cur_action = SPF_RESOLVE_A;
+		rtype = RDNS_REQUEST_A;
+		msg_debug_spf ("resolve a %s", host);
+	}
 	cb->resolved = resolved;
-	msg_debug_spf ("resolve a %s", host);
 
 	if (make_dns_request_task_forced (task,
-			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_A, host)) {
+			spf_record_dns_callback, (void *) cb, rtype, host)) {
 		rec->requests_inflight++;
-
-		cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
-		cb->rec = rec;
-		cb->ptr_host = host;
-		cb->addr = addr;
-		cb->cur_action = SPF_RESOLVE_AAA;
-		cb->resolved = resolved;
-		msg_debug_spf ("resolve aaa %s", host);
-
-		if (make_dns_request_task_forced (task,
-				spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
-			rec->requests_inflight++;
-		}
-
 		return TRUE;
 	}
 
