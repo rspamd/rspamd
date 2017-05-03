@@ -215,15 +215,15 @@ function($) {
                     $('#actionsFormField').attr('disabled', true);
                 }
 
-                var elts = loadActionsFromForm();
-
                 $('#saveActionsClusterBtn').on('click', function() {
+                    var elts = loadActionsFromForm();
                     rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
                         data: elts,
                         dataType: "json",
                     });
                 });
                 $('#saveActionsBtn').on('click', function() {
+                    var elts = loadActionsFromForm();
                     rspamd.queryLocal('saveactions', null, null, "POST", {}, {
                         data: elts,
                         dataType: "json",
