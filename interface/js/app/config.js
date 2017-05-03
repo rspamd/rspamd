@@ -206,8 +206,8 @@ function($) {
                     }).join('') +
                     '<br><div class="form-group">' +
                     '<div class="btn-group">' +
-                    '<button class="btn btn-primary" id="saveActionsBtn">Save actions</button>' +
-                    '<button class="btn btn-primary" id="saveActionsClusterBtn">Save cluster</button>' +
+                    '<button class="btn btn-primary" type="button" id="saveActionsBtn">Save actions</button>' +
+                    '<button class="btn btn-primary" type="button" id="saveActionsClusterBtn">Save cluster</button>' +
                     '</div></div></fieldset></form>');
                 if (rspamd.read_only) {
                     $('#saveActionsClusterBtn').attr('disabled', true);
