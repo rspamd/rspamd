@@ -75,7 +75,7 @@ struct rspamd_http_upstream {
 	gint parser_from_ref;
 	gint parser_to_ref;
 	gboolean local;
-	gboolean self_process;
+	gboolean self_scan;
 };
 
 struct rspamd_http_mirror {
@@ -325,15 +325,15 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 				(rspamd_mempool_destruct_t)rspamd_pubkey_unref, up->key);
 	}
 
-	elt = ucl_object_lookup (obj, "self_process");
+	elt = ucl_object_lookup (obj, "self_scan");
 	if (elt && ucl_object_toboolean (elt)) {
-		up->self_process = TRUE;
+		up->self_scan = TRUE;
 		ctx->has_self_scan = TRUE;
 	}
 
 	elt = ucl_object_lookup (obj, "hosts");
 
-	if (elt == NULL && !up->self_process) {
+	if (elt == NULL && !up->self_scan) {
 		g_set_error (err, rspamd_proxy_quark (), 100,
 				"upstream option must have some hosts definition");
 
@@ -1289,14 +1289,13 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 {
 	struct rspamd_task *task;
 	struct rspamd_http_message *msg;
-	struct event *guard_ev;
 	const gchar *data;
 	gsize len;
 
 	msg = session->client_message;
 	task = rspamd_task_new (session->worker, session->ctx->cfg);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
-	task->sock = session->client_sock;
+	task->sock = -1;
 	task->client_addr = session->client_addr;
 	task->fin_arg = session;
 	task->resolver = session->ctx->resolver;
@@ -1335,19 +1334,6 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 		event_add (&task->timeout_ev, &task_tv);
 	}
 
-	/* Set socket guard */
-	guard_ev = rspamd_mempool_alloc (task->task_pool, sizeof (*guard_ev));
-#ifdef EV_CLOSED
-	event_set (guard_ev, task->sock, EV_READ|EV_PERSIST|EV_CLOSED,
-				rspamd_worker_guard_handler, task);
-#else
-	event_set (guard_ev, task->sock, EV_READ|EV_PERSIST,
-			rspamd_worker_guard_handler, task);
-#endif
-	event_base_set (task->ev_base, guard_ev);
-	event_add (guard_ev, NULL);
-	task->guard_ev = guard_ev;
-
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 
 	return TRUE;
@@ -1381,7 +1367,7 @@ proxy_send_master_message (struct rspamd_proxy_session *session)
 		goto err;
 	}
 	else {
-		if (backend->self_process) {
+		if (backend->self_scan) {
 			return rspamd_proxy_self_scan (session);
 		}
 retry:
