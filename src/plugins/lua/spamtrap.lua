@@ -46,7 +46,7 @@ local function spamtrap_cb(task)
     task:insert_result(settings['symbol'], settings['score'], rcpt)
     if settings['action'] then
       task:set_pre_result(settings['action'],
-          string.format('spamtrap found: <%s>', rcpt))
+        string.format('spamtrap found: <%s>', rcpt))
     end
   end
 
@@ -101,6 +101,7 @@ local function spamtrap_cb(task)
       if settings['map']:get_key(target) then
         do_action(target)
       else
+      end
     end
   end
 end
