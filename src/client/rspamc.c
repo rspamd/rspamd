@@ -172,6 +172,7 @@ static void rspamc_stat_output (FILE *out, ucl_object_t *obj);
 
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
+	RSPAMC_COMMAND_CHECK,
 	RSPAMC_COMMAND_SYMBOLS,
 	RSPAMC_COMMAND_LEARN_SPAM,
 	RSPAMC_COMMAND_LEARN_HAM,
@@ -199,7 +200,7 @@ struct rspamc_command {
 	{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
 		.name = "symbols",
-		.path = "check",
+		.path = "checkv2",
 		.description = "scan message and show symbols (default command)",
 		.is_controller = FALSE,
 		.is_privileged = FALSE,
@@ -403,6 +404,54 @@ read_cmd_line (gint *argc, gchar ***argv)
 		raw = TRUE;
 	}
 	/* Argc and argv are shifted after this function */
+}
+
+static gboolean
+rspamd_action_from_str (const gchar *data, gint *result)
+{
+	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
+		*result = METRIC_ACTION_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "greylist",
+			sizeof ("greylist") - 1) == 0) {
+		*result = METRIC_ACTION_GREYLIST;
+	}
+	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") -
+			1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite_subject",
+			sizeof ("rewrite_subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "add header", sizeof ("add header") -
+			1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite subject",
+			sizeof ("rewrite subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "soft_reject",
+			sizeof ("soft_reject") - 1) == 0) {
+		*result = METRIC_ACTION_SOFT_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "soft reject",
+			sizeof ("soft reject") - 1) == 0) {
+		*result = METRIC_ACTION_SOFT_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "no_action",
+			sizeof ("soft_reject") - 1) == 0) {
+		*result = METRIC_ACTION_NOACTION;
+	}
+	else if (g_ascii_strncasecmp (data, "no action",
+			sizeof ("soft reject") - 1) == 0) {
+		*result = METRIC_ACTION_NOACTION;
+	}
+	else {
+		return FALSE;
+	}
+	return TRUE;
 }
 
 /*
@@ -623,48 +672,61 @@ rspamc_symbols_sort_func (gconstpointer a, gconstpointer b)
 	return strcmp (ucl_object_key (*ua), ucl_object_key (*ub));
 }
 
+#define PRINT_PROTOCOL_STRING(ucl_name, output_message) do { \
+	elt = ucl_object_lookup (obj, (ucl_name)); \
+	if (elt) { \
+		rspamd_fprintf (out, output_message ": %s\n", ucl_object_tostring (elt)); \
+	} \
+} while (0)
+
 static void
 rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL;
-	const ucl_object_t *cur;
+	const ucl_object_t *cur, *elt;
 	gdouble score = 0, required_score = 0;
-	gint got_scores = 0;
+	gint got_scores = 0, action = METRIC_ACTION_MAX;
 	GPtrArray *sym_ptr;
 	guint i;
 
 	sym_ptr = g_ptr_array_new ();
-	rspamd_fprintf (out, "[Metric: %s]\n", ucl_object_key (obj));
+	rspamd_fprintf (out, "[Metric: default]\n");
 
-	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
-		if (g_ascii_strcasecmp (ucl_object_key (cur), "is_spam") == 0) {
-			rspamd_fprintf (out, "Spam: %s\n", ucl_object_toboolean (cur) ?
+	elt = ucl_object_lookup (obj, "required_score");
+
+	if (elt) {
+		required_score = ucl_object_todouble (elt);
+		got_scores++;
+	}
+
+	elt = ucl_object_lookup (obj, "score");
+
+	if (elt) {
+		score = ucl_object_todouble (elt);
+		got_scores++;
+	}
+
+	PRINT_PROTOCOL_STRING ("action", "Action");
+	/* Defined by previous macro */
+	if (elt && rspamd_action_from_str (ucl_object_tostring (elt), &action)) {
+		rspamd_fprintf (out, "Spam: %s\n", action < METRIC_ACTION_GREYLIST ?
 				"true" : "false");
-		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "score") == 0) {
-			score = ucl_object_todouble (cur);
-			got_scores++;
-		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur),
-			"required_score") == 0) {
-			required_score = ucl_object_todouble (cur);
-			got_scores++;
-		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "action") == 0) {
-			rspamd_fprintf (out, "Action: %s\n", ucl_object_tostring (cur));
-		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "subject") == 0) {
-			rspamd_fprintf (out, "Subject: %s\n", ucl_object_tostring (cur));
-		}
-		else if (cur->type == UCL_OBJECT) {
-			g_ptr_array_add (sym_ptr, (void *)cur);
-		}
-		if (got_scores == 2) {
-			rspamd_fprintf (out,
+	}
+
+	PRINT_PROTOCOL_STRING ("subject", "Subject");
+
+	if (got_scores == 2) {
+		rspamd_fprintf (out,
 				"Score: %.2f / %.2f\n",
 				score,
 				required_score);
-			got_scores = 0;
+	}
+
+	elt = ucl_object_lookup (obj, "symbols");
+
+	while (elt && (cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+		if (cur->type == UCL_OBJECT) {
+			g_ptr_array_add (sym_ptr, (void *)cur);
 		}
 	}
 
@@ -714,60 +776,61 @@ rspamc_profile_output (FILE *out, const ucl_object_t *obj)
 static void
 rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 {
-	ucl_object_iter_t it = NULL, mit = NULL;
-	const ucl_object_t *cur, *cmesg;
+	ucl_object_iter_t mit = NULL;
+	const ucl_object_t *cmesg, *elt;
 	gchar *emitted;
 
-	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
-		if (g_ascii_strcasecmp (ucl_object_key (cur), "message-id") == 0) {
-			rspamd_fprintf (out, "Message-ID: %s\n", ucl_object_tostring (
-					cur));
+	rspamc_metric_output (out, obj);
+
+	PRINT_PROTOCOL_STRING ("message-id", "Message-ID");
+	PRINT_PROTOCOL_STRING ("queue-id", "Queue-ID");
+
+	elt = ucl_object_lookup (obj, "urls");
+
+	if (elt) {
+		if (!extended_urls || compact) {
+			emitted = ucl_object_emit (elt, UCL_EMIT_JSON_COMPACT);
 		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "queue-id") == 0) {
-			rspamd_fprintf (out, "Queue-ID: %s\n",
-				ucl_object_tostring (cur));
+		else {
+			emitted = ucl_object_emit (elt, UCL_EMIT_JSON);
 		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "urls") == 0) {
-			if (!extended_urls || compact) {
-				emitted = ucl_object_emit (cur, UCL_EMIT_JSON_COMPACT);
-			}
-			else {
-				emitted = ucl_object_emit (cur, UCL_EMIT_JSON);
-			}
-			rspamd_fprintf (out, "Urls: %s\n", emitted);
-			free (emitted);
+
+		rspamd_fprintf (out, "Urls: %s\n", emitted);
+		free (emitted);
+	}
+
+	elt = ucl_object_lookup (obj, "emails");
+
+	if (elt) {
+		if (!extended_urls || compact) {
+			emitted = ucl_object_emit (elt, UCL_EMIT_JSON_COMPACT);
 		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "emails") == 0) {
-			emitted = ucl_object_emit (cur, UCL_EMIT_JSON_COMPACT);
-			rspamd_fprintf (out, "Emails: %s\n", emitted);
-			free (emitted);
+		else {
+			emitted = ucl_object_emit (elt, UCL_EMIT_JSON);
 		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "error") == 0) {
-			rspamd_fprintf (out, "Scan error: %s\n", ucl_object_tostring (
-					cur));
+
+		rspamd_fprintf (out, "Emails: %s\n", emitted);
+		free (emitted);
+	}
+
+	PRINT_PROTOCOL_STRING ("error", "Scan error");
+
+	elt = ucl_object_lookup (obj, "messages");
+	if (elt && elt->type == UCL_OBJECT) {
+		mit = NULL;
+		while ((cmesg = ucl_object_iterate (elt, &mit, true)) != NULL) {
+			rspamd_fprintf (out, "Message - %s: %s\n",
+					ucl_object_key (cmesg), ucl_object_tostring (cmesg));
 		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "messages") == 0) {
-			if (cur->type == UCL_OBJECT) {
-				mit = NULL;
-				while ((cmesg = ucl_object_iterate (cur, &mit, true)) != NULL) {
-					rspamd_fprintf (out, "Message - %s: %s\n",
-							ucl_object_key (cmesg), ucl_object_tostring (cmesg));
-				}
-			}
-		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "dkim-signature") == 0) {
-			rspamd_fprintf (out, "DKIM-Signature: %s\n", ucl_object_tostring (
-					cur));
-		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "profile") == 0) {
-			rspamd_fprintf (out, "Profile data:\n");
-			rspamc_profile_output (out, cur);
-		}
-		else if (cur->type == UCL_OBJECT &&
-				g_ascii_strcasecmp (ucl_object_key (cur), "rmilter") != 0) {
-			/* Parse metric */
-			rspamc_metric_output (out, cur);
-		}
+	}
+
+	PRINT_PROTOCOL_STRING ("dkim-signature", "DKIM-Signature");
+
+	elt = ucl_object_lookup (obj, "profile");
+
+	if (elt) {
+		rspamd_fprintf (out, "Profile data:\n");
+		rspamc_profile_output (out, elt);
 	}
 }
 
@@ -1108,54 +1171,6 @@ rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 	}
 
 	rspamd_fprintf (out, "\n");
-}
-
-static gboolean
-rspamd_action_from_str (const gchar *data, gint *result)
-{
-	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
-		*result = METRIC_ACTION_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "greylist",
-		sizeof ("greylist") - 1) == 0) {
-		*result = METRIC_ACTION_GREYLIST;
-	}
-	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") -
-		1) == 0) {
-		*result = METRIC_ACTION_ADD_HEADER;
-	}
-	else if (g_ascii_strncasecmp (data, "rewrite_subject",
-		sizeof ("rewrite_subject") - 1) == 0) {
-		*result = METRIC_ACTION_REWRITE_SUBJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "add header", sizeof ("add header") -
-			1) == 0) {
-		*result = METRIC_ACTION_ADD_HEADER;
-	}
-	else if (g_ascii_strncasecmp (data, "rewrite subject",
-			sizeof ("rewrite subject") - 1) == 0) {
-		*result = METRIC_ACTION_REWRITE_SUBJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "soft_reject",
-			sizeof ("soft_reject") - 1) == 0) {
-		*result = METRIC_ACTION_SOFT_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "soft reject",
-			sizeof ("soft reject") - 1) == 0) {
-		*result = METRIC_ACTION_SOFT_REJECT;
-	}
-	else if (g_ascii_strncasecmp (data, "no_action",
-			sizeof ("soft_reject") - 1) == 0) {
-		*result = METRIC_ACTION_NOACTION;
-	}
-	else if (g_ascii_strncasecmp (data, "no action",
-			sizeof ("soft reject") - 1) == 0) {
-		*result = METRIC_ACTION_NOACTION;
-	}
-	else {
-		return FALSE;
-	}
-	return TRUE;
 }
 
 static void
