@@ -83,7 +83,7 @@ local function dkim_signing_cb(task)
     return false
   end
   local hfrom = task:get_from('mime')
-  if not settings.allow_hdrfrom_multiple and hfrom[2] then
+  if not settings.allow_hdrfrom_multiple and (hfrom or E)[2] then
     rspamd_logger.debugm(N, task, 'multiple header from not allowed')
     return false
   end
