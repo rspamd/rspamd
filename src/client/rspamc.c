@@ -1177,7 +1177,7 @@ static void
 rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		gdouble time, GError *err)
 {
-	const ucl_object_t *cur, *metric, *res;
+	const ucl_object_t *cur, *res, *syms;
 	ucl_object_iter_t it = NULL;
 	const gchar *action = "no action", *line_end = "\r\n", *p;
 	gchar scorebuf[32];
@@ -1216,24 +1216,20 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 	added_headers = g_string_sized_new (127);
 
 	if (result) {
-		metric = ucl_object_lookup (result, "default");
+		res = ucl_object_lookup (result, "action");
 
-		if (metric != NULL) {
-			res = ucl_object_lookup (metric, "action");
+		if (res) {
+			action = ucl_object_tostring (res);
+		}
 
-			if (res) {
-				action = ucl_object_tostring (res);
-			}
+		res = ucl_object_lookup (result, "score");
+		if (res) {
+			score = ucl_object_todouble (res);
+		}
 
-			res = ucl_object_lookup (metric, "score");
-			if (res) {
-				score = ucl_object_todouble (res);
-			}
-
-			res = ucl_object_lookup (metric, "required_score");
-			if (res) {
-				required_score = ucl_object_todouble (res);
-			}
+		res = ucl_object_lookup (result, "required_score");
+		if (res) {
+			required_score = ucl_object_todouble (res);
 		}
 
 		rspamd_action_from_str (action, &act);
@@ -1247,6 +1243,9 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f%s",
 				time, line_end);
 
+		/*
+		 * TODO: add rmilter_headers support here
+		 */
 		if (is_spam) {
 			rspamd_printf_gstring (added_headers, "X-Spam: yes%s", line_end);
 		}
@@ -1268,8 +1267,9 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 
 		/* Short description of all symbols */
 		symbuf = g_string_sized_new (64);
+		syms = ucl_object_lookup (result, "symbols");
 
-		while ((cur = ucl_object_iterate (metric, &it, true)) != NULL) {
+		while (syms && (cur = ucl_object_iterate (syms, &it, true)) != NULL) {
 
 			if (ucl_object_type (cur) == UCL_OBJECT) {
 				rspamd_printf_gstring (symbuf, "%s,", ucl_object_key (cur));
