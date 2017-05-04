@@ -449,8 +449,8 @@ local aliases_id = rspamd_config:register_symbol{
       end
     end
 
-    check_from('smtp')
-    check_from('mime')
+    check_from(1)
+    check_from(2)
 
     local function check_rcpt(type)
       if task:has_recipients(type) then
@@ -475,8 +475,8 @@ local aliases_id = rspamd_config:register_symbol{
       end
     end
 
-    check_rcpt('smtp')
-    check_rcpt('mime')
+    check_rcpt(1)
+    check_rcpt(2)
   end,
   priority = 150,
   description = 'Removes plus aliases from the email',
