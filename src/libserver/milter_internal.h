@@ -32,6 +32,7 @@ enum rspamd_milter_state {
 struct rspamd_milter_parser {
 	rspamd_fstring_t *buf;
 	goffset pos;
+	goffset cmd_start;
 	gsize datalen;
 	enum rspamd_milter_state state;
 	gchar cur_cmd;

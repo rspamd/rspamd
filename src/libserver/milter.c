@@ -59,7 +59,7 @@ rspamd_milter_obuf_free (struct rspamd_milter_outbuf *obuf)
 			rspamd_fstring_free (obuf->buf);
 		}
 
-		g_free (obuf->buf);
+		g_free (obuf);
 	}
 }
 
@@ -221,7 +221,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 	guint32 version, actions, protocol;
 
 	buf = priv->parser.buf;
-	pos = buf->str + priv->parser.pos;
+	pos = buf->str + priv->parser.cmd_start;
 	cmdlen = priv->parser.datalen;
 	end = pos + cmdlen;
 
@@ -346,6 +346,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 					}
 				}
 			}
+
+			msg_info_milter ("got connection from %s",
+					rspamd_inet_address_to_string_pretty (session->addr));
 		}
 		break;
 	case RSPAMD_MILTER_CMD_MACRO:
@@ -355,6 +358,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		 * 1 byte - command associated (we don't care about it)
 		 * 0-terminated name
 		 * 0-terminated value
+		 * ...
 		 */
 		if (session->macros == NULL) {
 			session->macros = g_hash_table_new_full (rspamd_ftok_icase_hash,
@@ -363,36 +367,47 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 					rspamd_fstring_mapped_ftok_free);
 		}
 
+		/* Ignore one byte */
 		pos ++;
-		zero = memchr (pos, '\0', cmdlen);
 
-		if (zero == NULL) {
-			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
-					"macro command (no name)");
-			rspamd_milter_on_protocol_error (session, priv, err);
+		while (pos < end) {
+			zero = memchr (pos, '\0', cmdlen);
 
-			return FALSE;
-		}
-		else {
-			rspamd_fstring_t *name, *value;
-			rspamd_ftok_t *name_tok, *value_tok;
-
-			if (end > zero && *(end - 1) == '\0') {
-				name = rspamd_fstring_new_init (pos, zero - pos);
-				value = rspamd_fstring_new_init (zero + 1, end - zero - 2);
-				name_tok = rspamd_ftok_map (name);
-				value_tok = rspamd_ftok_map (value);
-
-				g_hash_table_replace (session->macros, name_tok, value_tok);
-				msg_debug_milter ("got macro: %T -> %T",
-						name_tok, value_tok);
-			}
-			else {
+			if (zero == NULL) {
 				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
-						"macro command (bad value)");
+						"macro command (no name)");
 				rspamd_milter_on_protocol_error (session, priv, err);
 
 				return FALSE;
+			}
+			else {
+				rspamd_fstring_t *name, *value;
+				rspamd_ftok_t *name_tok, *value_tok;
+				const guchar *zero_val;
+
+				zero_val = memchr (zero + 1, '\0', cmdlen);
+
+				if (end > zero_val) {
+					name = rspamd_fstring_new_init (pos, zero - pos);
+					value = rspamd_fstring_new_init (zero + 1,
+							zero_val - zero - 1);
+					name_tok = rspamd_ftok_map (name);
+					value_tok = rspamd_ftok_map (value);
+
+					g_hash_table_replace (session->macros, name_tok, value_tok);
+					msg_debug_milter ("got macro: %T -> %T",
+							name_tok, value_tok);
+
+					cmdlen -= zero_val - pos;
+					pos = zero_val + 1;
+				}
+				else {
+					err = g_error_new (rspamd_milter_quark (), EINVAL,
+							"invalid macro command (bad value)");
+					rspamd_milter_on_protocol_error (session, priv, err);
+
+					return FALSE;
+				}
 			}
 		}
 		break;
@@ -424,6 +439,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 						pos, cmdlen);
 			}
 		}
+
+		msg_debug_milter ("got helo value: %V", session->helo);
+
 		break;
 	case RSPAMD_MILTER_CMD_QUIT_NC:
 		/* We need to reset session and start over */
@@ -675,6 +693,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 			}
 
 			p++;
+			priv->parser.cmd_start = p - (const guchar *)priv->parser.buf->str;
 			break;
 		case st_read_data:
 			/* We might need some more data in buffer for further steps */
@@ -706,7 +725,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 			else {
 				/* We may have the full command available */
 				if (p + priv->parser.datalen <= end) {
-					/* We need to process command */
+					/* We can process command */
 					if (!rspamd_milter_process_command (session, priv)) {
 						return FALSE;
 					}
@@ -714,6 +733,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 					p += priv->parser.datalen;
 					priv->parser.state = st_len_1;
 					priv->parser.cur_cmd = '\0';
+					priv->parser.cmd_start = 0;
 				}
 				else {
 					/* Need to read more */
@@ -906,7 +926,7 @@ rspamd_milter_set_reply (struct rspamd_milter_session *session,
 	guint32 _len; \
 	_len = (sz) + 1; \
 	(reply) = rspamd_fstring_sized_new (sizeof (_len) + (sz)); \
-	(reply)->len = sizeof (_len) + (sz); \
+	(reply)->len = sizeof (_len) + (sz) + 1; \
 	_len = htonl (_len); \
 	memcpy ((reply)->str, &_len, sizeof (_len)); \
 	(reply)->str[sizeof(_len)] = (cmd); \
