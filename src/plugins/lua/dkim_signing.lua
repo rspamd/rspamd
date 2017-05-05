@@ -203,7 +203,7 @@ local function dkim_signing_cb(task)
     local ret = rspamd_redis_make_request(task,
       redis_params, -- connect params
       rk, -- hash key
-      true, -- is write
+      false, -- is write
       redis_key_cb, --callback
       'HGET', -- command
       {settings.key_prefix, rk} -- arguments
