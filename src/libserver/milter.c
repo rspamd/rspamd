@@ -595,6 +595,33 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 }
 
 static gboolean
+rspamd_milter_is_valid_cmd (guchar c)
+{
+	switch (c) {
+	case RSPAMD_MILTER_CMD_ABORT:
+	case RSPAMD_MILTER_CMD_BODY:
+	case RSPAMD_MILTER_CMD_CONNECT:
+	case RSPAMD_MILTER_CMD_MACRO:
+	case RSPAMD_MILTER_CMD_BODYEOB:
+	case RSPAMD_MILTER_CMD_HELO:
+	case RSPAMD_MILTER_CMD_QUIT_NC:
+	case RSPAMD_MILTER_CMD_HEADER:
+	case RSPAMD_MILTER_CMD_MAIL:
+	case RSPAMD_MILTER_CMD_EOH:
+	case RSPAMD_MILTER_CMD_OPTNEG:
+	case RSPAMD_MILTER_CMD_QUIT:
+	case RSPAMD_MILTER_CMD_RCPT:
+	case RSPAMD_MILTER_CMD_DATA:
+	case RSPAMD_MILTER_CMD_UNKNOWN:
+		return TRUE;
+	default:
+		break;
+	}
+
+	return FALSE;
+}
+
+static gboolean
 rspamd_milter_consume_input (struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv)
 {
@@ -651,6 +678,23 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 			break;
 		case st_read_data:
 			/* We might need some more data in buffer for further steps */
+			if (priv->parser.datalen == 0 || priv->parser.datalen >
+					RSPAMD_MILTER_MESSAGE_CHUNK * 2) {
+				err = g_error_new (rspamd_milter_quark (), E2BIG,
+						"Command length is too big: %zd",
+						priv->parser.datalen);
+				rspamd_milter_on_protocol_error (session, priv, err);
+
+				return FALSE;
+			}
+			if (!rspamd_milter_is_valid_cmd (priv->parser.cur_cmd)) {
+				err = g_error_new (rspamd_milter_quark (), E2BIG,
+						"Unvalid command: %c",
+						priv->parser.cur_cmd);
+				rspamd_milter_on_protocol_error (session, priv, err);
+
+				return FALSE;
+			}
 			if (priv->parser.buf->allocated < priv->parser.datalen) {
 				priv->parser.buf = rspamd_fstring_grow (priv->parser.buf,
 						priv->parser.pos + priv->parser.datalen);

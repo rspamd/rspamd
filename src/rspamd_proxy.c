@@ -1620,13 +1620,14 @@ proxy_accept_socket (gint fd, short what, void *arg)
 				ctx->ev_base);
 	}
 	else {
+		msg_info_session ("accepted milter connection from %s port %d",
+				rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+
 		rspamd_milter_handle_socket (nfd, &ctx->io_tv, ctx->ev_base,
 				proxy_milter_finish_handler,
 				proxy_milter_error_handler,
 				session);
-		msg_info_session ("accepted milter connection from %s port %d",
-				rspamd_inet_address_to_string (addr),
-				rspamd_inet_address_get_port (addr));
 	}
 }
 
