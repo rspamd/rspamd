@@ -33,10 +33,6 @@ local function match_patterns(default_sym, found, patterns)
   return default_sym
 end
 
-local function trim(s)
-  return s:match "^%s*(.-)%s*$"
-end
-
 local function yield_result(task, rule, vname)
   local all_whitelisted = true
   if type(vname) == 'string' then
@@ -585,15 +581,14 @@ local function savapi_check(task, rule)
 
       -- Non-terminal response
       elseif string.find(result, '310') then
-        -- Recursive result
-        local virus_obj = rspamd_str_split(result, ' object ')
         local virus
-        if virus_obj and virus_obj[2] then
-          virus = rspamd_str_split(virus_obj[2], '<<<')
-          virus = trim(virus[#virus])
-          virus = rspamd_str_split(virus, ' ; ')[1]
-        else
-          virus = trim(rspamd_str_split(result, ' ; ')[1])
+        virus = result:match "310.*<<<%s(.*)%s+;.*;.*"
+        if not virus then
+          virus = result:match "310%s(.*)%s+;.*;.*"
+          if not virus then
+            rspamd_logger.errx(task, "%s: virus result unparseable: %s", rule['type'], result)
+            return
+          end
         end
         -- Store unique virus names
         vnames[virus] = 1
