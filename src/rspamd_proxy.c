@@ -32,6 +32,7 @@
 #include "libstat/stat_api.h"
 #include "ottery.h"
 #include "unix-std.h"
+#include "libserver/milter.h"
 
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
@@ -123,6 +124,8 @@ struct rspamd_proxy_ctx {
 	guint max_retries;
 	/* If we have self_scanning backends, we need to work as a normal worker */
 	gboolean has_self_scan;
+	/* It is not HTTP but milter proxy */
+	gboolean milter;
 };
 
 enum rspamd_backend_flags {
@@ -156,6 +159,7 @@ struct rspamd_proxy_session {
 	struct rspamd_proxy_ctx *ctx;
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
+	struct rspamd_milter_session *client_milter_conn;
 	gpointer map;
 	gchar *fname;
 	gpointer shmem_ref;
@@ -692,6 +696,14 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, max_retries),
 			RSPAMD_CL_FLAG_UINT,
 			"Maximum number of retries for master connection");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"milter",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, milter),
+			0,
+			"Accept milter connections, not HTTP");
 
 	return ctx;
 }
@@ -833,6 +845,9 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 
 	if (session->master_conn) {
 		proxy_backend_close_connection (session->master_conn);
+	}
+	else if (session->client_milter_conn) {
+		rspamd_milter_session_unref (session->client_milter_conn);
 	}
 
 	if (session->map && session->map_len) {
@@ -1528,6 +1543,29 @@ err:
 }
 
 static void
+proxy_milter_finish_handler (gint fd,
+		struct rspamd_milter_session *rms,
+		void *ud)
+{
+	struct rspamd_proxy_session *session = ud;
+}
+
+static void
+proxy_milter_error_handler (gint fd,
+		struct rspamd_milter_session *rms,
+		void *ud, GError *err)
+{
+	struct rspamd_proxy_session *session = ud;
+
+	msg_info_session ("abnormally closing milter connection from: %s, "
+			"error: %s", rspamd_inet_address_to_string (session->client_addr),
+			err->message);
+	/* Terminate session immediately */
+	proxy_backend_close_connection (session->master_conn);
+	REF_RELEASE (session);
+}
+
+static void
 proxy_accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
@@ -1555,29 +1593,41 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->mirror_conns = g_ptr_array_sized_new (ctx->mirrors->len);
 
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
-	session->client_conn = rspamd_http_connection_new (NULL,
-			proxy_client_error_handler,
-			proxy_client_finish_handler,
-			0,
-			RSPAMD_HTTP_SERVER,
-			ctx->keys_cache,
-			NULL);
 	session->ctx = ctx;
 	session->worker = worker;
 
-	if (ctx->key) {
-		rspamd_http_connection_set_key (session->client_conn, ctx->key);
+	if (!ctx->milter) {
+		session->client_conn = rspamd_http_connection_new (NULL,
+				proxy_client_error_handler,
+				proxy_client_finish_handler,
+				0,
+				RSPAMD_HTTP_SERVER,
+				ctx->keys_cache,
+				NULL);
+
+		if (ctx->key) {
+			rspamd_http_connection_set_key (session->client_conn, ctx->key);
+		}
+
+		msg_info_session ("accepted http connection from %s port %d",
+				rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+
+		rspamd_http_connection_read_message_shared (session->client_conn,
+				session,
+				nfd,
+				&ctx->io_tv,
+				ctx->ev_base);
 	}
-
-	msg_info_session ("accepted connection from %s port %d",
-			rspamd_inet_address_to_string (addr),
-			rspamd_inet_address_get_port (addr));
-
-	rspamd_http_connection_read_message_shared (session->client_conn,
-			session,
-			nfd,
-			&ctx->io_tv,
-			ctx->ev_base);
+	else {
+		rspamd_milter_handle_socket (nfd, &ctx->io_tv, ctx->ev_base,
+				proxy_milter_finish_handler,
+				proxy_milter_error_handler,
+				session);
+		msg_info_session ("accepted milter connection from %s port %d",
+				rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr));
+	}
 }
 
 static void
