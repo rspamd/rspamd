@@ -697,7 +697,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 			break;
 		case st_read_data:
 			/* We might need some more data in buffer for further steps */
-			if (priv->parser.datalen == 0 || priv->parser.datalen >
+			if (priv->parser.datalen >
 					RSPAMD_MILTER_MESSAGE_CHUNK * 2) {
 				err = g_error_new (rspamd_milter_quark (), E2BIG,
 						"Command length is too big: %zd",
