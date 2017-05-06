@@ -67,11 +67,11 @@ rspamd_milter_obuf_free (struct rspamd_milter_outbuf *obuf)
 }
 
 #define RSPAMD_MILTER_RESET_COMMON (1 << 0)
-#define RSPAMD_MILTER_RESET_OUT (1 << 1)
+#define RSPAMD_MILTER_RESET_IO (1 << 1)
 #define RSPAMD_MILTER_RESET_ADDR (1 << 2)
 #define RSPAMD_MILTER_RESET_MACRO (1 << 3)
 #define RSPAMD_MILTER_RESET_ALL (RSPAMD_MILTER_RESET_COMMON | \
-	RSPAMD_MILTER_RESET_OUT | \
+	RSPAMD_MILTER_RESET_IO | \
 	RSPAMD_MILTER_RESET_ADDR | \
 	RSPAMD_MILTER_RESET_MACRO)
 #define RSPAMD_MILTER_RESET_QUIT_NC (RSPAMD_MILTER_RESET_COMMON | \
@@ -88,19 +88,19 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 	struct rspamd_email_address *cur;
 	guint i;
 
-	if (how & RSPAMD_MILTER_RESET_OUT) {
+	if (how & RSPAMD_MILTER_RESET_IO) {
 		DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
 			rspamd_milter_obuf_free (obuf);
 		}
 
 		priv->out_chain = NULL;
-	}
 
-	if (how & RSPAMD_MILTER_RESET_COMMON) {
 		if (priv->parser.buf) {
 			priv->parser.buf->len = 0;
 		}
+	}
 
+	if (how & RSPAMD_MILTER_RESET_COMMON) {
 		if (session->message) {
 			session->message->len = 0;
 		}
@@ -171,10 +171,6 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 		if (session->hostname) {
 			rspamd_fstring_free (session->hostname);
-		}
-
-		if (priv->fd) {
-			close (priv->fd);
 		}
 
 		g_free (session);
@@ -585,6 +581,8 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_CMD_QUIT:
 		msg_debug_milter ("quit command");
 		priv->state = RSPAMD_MILTER_WANNA_DIE;
+		REF_RETAIN (session);
+		priv->fin_cb (priv->fd, session, priv->ud);
 		REF_RELEASE (session);
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
@@ -631,7 +629,6 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			session->message = rspamd_fstring_sized_new (
 					RSPAMD_MILTER_MESSAGE_CHUNK);
 		}
-
 		msg_debug_milter ("got data command");
 		/* We do not need reply as specified */
 		break;
@@ -681,6 +678,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 	end = priv->parser.buf->str + priv->parser.buf->len;
 
 	while (p < end) {
+		msg_debug_milter("offset: %d, state: %d", (gint)(p - (const guchar *)priv->parser.buf->str), priv->parser.state);
 		switch (priv->parser.state) {
 		case st_len_1:
 			/* The first length byte in big endian order */
@@ -746,10 +744,10 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 				return FALSE;
 			}
 			if (priv->parser.buf->allocated < priv->parser.datalen) {
+				priv->parser.pos = p - (const guchar *)priv->parser.buf->str;
 				priv->parser.buf = rspamd_fstring_grow (priv->parser.buf,
-						priv->parser.pos + priv->parser.datalen);
+						priv->parser.buf->len + priv->parser.datalen);
 				/* This can realloc buffer */
-				p = priv->parser.buf->str + priv->parser.pos;
 				rspamd_milter_plan_io (session, priv, EV_READ);
 				goto end;
 			}
@@ -768,6 +766,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 				}
 				else {
 					/* Need to read more */
+					priv->parser.pos = p - (const guchar *)priv->parser.buf->str;
 					rspamd_milter_plan_io (session, priv, EV_READ);
 					goto end;
 				}
@@ -775,9 +774,38 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 			break;
 		}
 	}
+
+	/* Leftover */
+	switch (priv->parser.state) {
+	case st_read_data:
+		if (p + priv->parser.datalen <= end) {
+			if (!rspamd_milter_process_command (session, priv)) {
+				return FALSE;
+			}
+
+			priv->parser.state = st_len_1;
+			priv->parser.cur_cmd = '\0';
+			priv->parser.cmd_start = 0;
+		}
+		break;
+	default:
+		/* No need to do anything */
+		break;
+	}
+
+	if (p == end) {
+		priv->parser.buf->len = 0;
+		priv->parser.pos = 0;
+	}
+
+	if (priv->out_chain) {
+		rspamd_milter_plan_io (session, priv, EV_READ|EV_WRITE);
+	}
+	else {
+		rspamd_milter_plan_io (session, priv, EV_READ);
+	}
 end:
 
-	priv->parser.pos = p - (const guchar *)priv->parser.buf->str;
 	return TRUE;
 }
 
@@ -800,6 +828,9 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 		r = read (priv->fd, priv->parser.buf->str + priv->parser.buf->len,
 				priv->parser.buf->allocated - priv->parser.buf->len);
+
+		msg_debug_milter ("read %z bytes, %z remain, %z allocated",
+				r, priv->parser.buf->len, priv->parser.buf->allocated);
 
 		if (r == -1) {
 			if (errno == EAGAIN || errno == EINTR) {

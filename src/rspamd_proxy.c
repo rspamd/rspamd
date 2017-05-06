@@ -859,6 +859,10 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		rspamd_http_connection_unref (session->client_conn);
 	}
 
+	if (session->client_milter_conn) {
+		rspamd_milter_session_unref (session->client_milter_conn);
+	}
+
 	for (i = 0; i < session->mirror_conns->len; i ++) {
 		conn = g_ptr_array_index (session->mirror_conns, i);
 
@@ -1142,12 +1146,18 @@ proxy_client_write_error (struct rspamd_proxy_session *session, gint code,
 {
 	struct rspamd_http_message *reply;
 
-	reply = rspamd_http_new_message (HTTP_RESPONSE);
-	reply->code = code;
-	reply->status = rspamd_fstring_new_init (status, strlen (status));
-	rspamd_http_connection_write_message (session->client_conn,
-			reply, NULL, NULL, session, session->client_sock,
-			&session->ctx->io_tv, session->ctx->ev_base);
+	if (session->client_milter_conn) {
+		rspamd_milter_send_action (session->client_milter_conn,
+				RSPAMD_MILTER_TEMPFAIL);
+	}
+	else {
+		reply = rspamd_http_new_message (HTTP_RESPONSE);
+		reply->code = code;
+		reply->status = rspamd_fstring_new_init (status, strlen (status));
+		rspamd_http_connection_write_message (session->client_conn,
+				reply, NULL, NULL, session, session->client_sock,
+				&session->ctx->io_tv, session->ctx->ev_base);
+	}
 }
 
 static void
@@ -1180,7 +1190,8 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 		else {
 			msg_info_session ("retry connection to: %s"
 					" retries left: %d",
-					rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
+					rspamd_inet_address_to_string (
+							rspamd_upstream_addr (session->master_conn->up)),
 					session->ctx->max_retries - session->retries);
 		}
 	}
@@ -1223,9 +1234,18 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 
 	rspamd_upstream_ok (bk_conn->up);
 
-	rspamd_http_connection_write_message (session->client_conn,
-			msg, NULL, NULL, session, session->client_sock,
-			bk_conn->io_tv, session->ctx->ev_base);
+	if (session->client_milter_conn) {
+		/*
+		 * TODO: convert reply to milter reply
+		 */
+		rspamd_milter_send_action (session->client_milter_conn,
+				RSPAMD_MILTER_ACCEPT);
+	}
+	else {
+		rspamd_http_connection_write_message (session->client_conn,
+				msg, NULL, NULL, session, session->client_sock,
+				bk_conn->io_tv, session->ctx->ev_base);
+	}
 
 	return 0;
 }
@@ -1262,15 +1282,27 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 		break;
 	}
 
-	rspamd_http_connection_reset (session->client_conn);
 	session->master_conn->flags |= RSPAMD_BACKEND_CLOSED;
 	session->master_conn->results = rep;
-	rspamd_http_connection_write_message (session->client_conn, msg, NULL,
-			ctype,
-			session,
-			session->client_sock,
-			NULL,
-			session->ctx->ev_base);
+
+	if (session->client_milter_conn) {
+		/*
+		 * TODO: convert reply to milter reply
+		 */
+		rspamd_milter_send_action (session->client_milter_conn,
+				RSPAMD_MILTER_ACCEPT);
+	}
+	else {
+		rspamd_http_connection_reset (session->client_conn);
+		rspamd_http_connection_write_message (session->client_conn,
+				msg,
+				NULL,
+				ctype,
+				session,
+				session->client_sock,
+				NULL,
+				session->ctx->ev_base);
+	}
 }
 
 static gboolean
@@ -1548,6 +1580,32 @@ proxy_milter_finish_handler (gint fd,
 		void *ud)
 {
 	struct rspamd_proxy_session *session = ud;
+	struct rspamd_http_message *msg;
+
+	if (!session->master_conn) {
+		session->client_milter_conn = rms;
+		msg = rspamd_milter_to_http (rms);
+		session->master_conn = rspamd_mempool_alloc0 (session->pool,
+				sizeof (*session->master_conn));
+		session->master_conn->s = session;
+		session->master_conn->name = "master";
+		session->client_message = msg;
+
+		if (msg->body_buf.len == 0) {
+			msg_info_session ("incomplete master connection");
+			proxy_backend_close_connection (session->master_conn);
+			REF_RELEASE (session);
+		}
+		else {
+			proxy_open_mirror_connections (session);
+			proxy_send_master_message (session);
+		}
+	}
+	else {
+		msg_info_session ("finished master connection");
+		proxy_backend_close_connection (session->master_conn);
+		REF_RELEASE (session);
+	}
 }
 
 static void
