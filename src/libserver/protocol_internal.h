@@ -75,6 +75,8 @@
 #define USER_AGENT_HEADER "User-Agent"
 #define MTA_TAG_HEADER "MTA-Tag"
 #define PROFILE_HEADER "Profile"
+#define TLS_CIPHER_HEADER "TLS-Cipher"
+#define TLS_VERSION_HEADER "TLS-Version"
 
 
 #endif //RSPAMD_PROTOCOL_INTERNAL_H

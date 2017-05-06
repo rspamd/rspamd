@@ -424,6 +424,11 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 					msg_debug_milter ("got macro: %T -> %T",
 							name_tok, value_tok);
 
+					if (rspamd_ftok_cstr_equal (name_tok, "{mail_host}", FALSE)) {
+						session->hostname = rspamd_fstring_assign (session->hostname,
+								value_tok->begin, value_tok->len);
+					}
+
 					cmdlen -= zero_val - pos;
 					pos = zero_val + 1;
 				}
@@ -1085,6 +1090,51 @@ rspamd_milter_session_ref (struct rspamd_milter_session *session)
 	return session;
 }
 
+#define IF_MACRO(lit) RSPAMD_FTOK_ASSIGN (&srch, (lit)); \
+	found = g_hash_table_lookup (session->macros, &srch); \
+	if (found)
+
+static void
+rspamd_milter_macro_http (struct rspamd_milter_session *session,
+		struct rspamd_http_message *msg)
+{
+	rspamd_ftok_t *found, srch;
+
+	/*
+	 * We assume postfix macros here, sendmail ones might be slightly
+	 * different
+	 */
+
+	if (!session->macros) {
+		return;
+	}
+
+	IF_MACRO("i") {
+		rspamd_http_message_add_header_len (msg, QUEUE_ID_HEADER,
+				found->begin, found->len);
+	}
+
+	IF_MACRO("{daemon_name}") {
+		rspamd_http_message_add_header_len (msg, MTA_TAG_HEADER,
+				found->begin, found->len);
+	}
+
+	IF_MACRO("{v}") {
+		rspamd_http_message_add_header_len (msg, USER_AGENT_HEADER,
+				found->begin, found->len);
+	}
+
+	IF_MACRO("{cipher}") {
+		rspamd_http_message_add_header_len (msg, TLS_CIPHER_HEADER,
+				found->begin, found->len);
+	}
+
+	IF_MACRO("{tls_version}") {
+		rspamd_http_message_add_header_len (msg, TLS_VERSION_HEADER,
+				found->begin, found->len);
+	}
+}
+
 struct rspamd_http_message *
 rspamd_milter_to_http (struct rspamd_milter_session *session)
 {
@@ -1124,6 +1174,8 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 					rcpt->raw, rcpt->raw_len);
 		}
 	}
+
+	rspamd_milter_macro_http (session, msg);
 
 	return msg;
 }
