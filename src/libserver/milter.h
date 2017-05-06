@@ -38,6 +38,7 @@ enum rspamd_milter_reply {
 
 struct rspamd_email_address;
 struct event_base;
+struct rspamd_http_message;
 
 struct rspamd_milter_session {
 	GHashTable *macros;
@@ -114,6 +115,14 @@ gboolean rspamd_milter_del_header (struct rspamd_milter_session *session,
 void rspamd_milter_session_unref (struct rspamd_milter_session *session);
 
 struct rspamd_milter_session * rspamd_milter_session_ref (
+		struct rspamd_milter_session *session);
+
+/**
+ * Converts milter session to HTTP session that is suitable for Rspamd
+ * @param session
+ * @return
+ */
+struct rspamd_http_message * rspamd_milter_to_http (
 		struct rspamd_milter_session *session);
 
 #endif

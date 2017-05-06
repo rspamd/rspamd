@@ -2789,9 +2789,10 @@ rspamd_http_message_set_peer_key (struct rspamd_http_message *msg,
 }
 
 void
-rspamd_http_message_add_header (struct rspamd_http_message *msg,
+rspamd_http_message_add_header_len (struct rspamd_http_message *msg,
 	const gchar *name,
-	const gchar *value)
+	const gchar *value,
+	gsize len)
 {
 	struct rspamd_http_header *hdr, *found = NULL;
 	guint nlen, vlen;
@@ -2799,9 +2800,52 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	if (msg != NULL && name != NULL && value != NULL) {
 		hdr = g_slice_alloc (sizeof (struct rspamd_http_header));
 		nlen = strlen (name);
-		vlen = strlen (value);
+		vlen = len;
 		hdr->combined = rspamd_fstring_sized_new (nlen + vlen + 4);
 		rspamd_printf_fstring (&hdr->combined, "%s: %s\r\n", name, value);
+		hdr->value = g_slice_alloc (sizeof (*hdr->value));
+		hdr->name = g_slice_alloc (sizeof (*hdr->name));
+		hdr->name->begin = hdr->combined->str;
+		hdr->name->len = nlen;
+		hdr->value->begin = hdr->combined->str + nlen + 2;
+		hdr->value->len = vlen;
+
+		HASH_FIND (hh, msg->headers, hdr->name->begin,
+				hdr->name->len, found);
+
+		if (found == NULL) {
+			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name->begin,
+					hdr->name->len, hdr);
+		}
+
+		DL_APPEND (found, hdr);
+	}
+}
+
+void
+rspamd_http_message_add_header (struct rspamd_http_message *msg,
+		const gchar *name,
+		const gchar *value)
+{
+	if (value) {
+		rspamd_http_message_add_header_len (msg, name, value, strlen (value));
+	}
+}
+
+void
+rspamd_http_message_add_header_fstr (struct rspamd_http_message *msg,
+		const gchar *name,
+		rspamd_fstring_t *value)
+{
+	struct rspamd_http_header *hdr, *found = NULL;
+	guint nlen, vlen;
+
+	if (msg != NULL && name != NULL && value != NULL) {
+		hdr = g_slice_alloc (sizeof (struct rspamd_http_header));
+		nlen = strlen (name);
+		vlen = value->len;
+		hdr->combined = rspamd_fstring_sized_new (nlen + vlen + 4);
+		rspamd_printf_fstring (&hdr->combined, "%s: %V\r\n", name, value);
 		hdr->value = g_slice_alloc (sizeof (*hdr->value));
 		hdr->name = g_slice_alloc (sizeof (*hdr->name));
 		hdr->name->begin = hdr->combined->str;

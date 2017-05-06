@@ -22,6 +22,9 @@
 #include "unix-std.h"
 #include "logger.h"
 #include "ottery.h"
+#include "libutil/http.h"
+#include "libutil/http_private.h"
+#include "libserver/protocol_internal.h"
 #include "utlist.h"
 
 #define msg_err_milter(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
@@ -1080,4 +1083,47 @@ rspamd_milter_session_ref (struct rspamd_milter_session *session)
 	REF_RETAIN (session);
 
 	return session;
+}
+
+struct rspamd_http_message *
+rspamd_milter_to_http (struct rspamd_milter_session *session)
+{
+	struct rspamd_http_message *msg;
+	guint i;
+	struct rspamd_email_address *rcpt;
+
+	g_assert (session != NULL);
+
+	msg = rspamd_http_new_message (HTTP_REQUEST);
+
+	msg->url = rspamd_fstring_assign (msg->url, "/" MSG_CMD_CHECK_V2,
+			sizeof ("/" MSG_CMD_CHECK_V2) - 1);
+
+	if (session->message) {
+		rspamd_http_message_set_body_from_fstring_steal (msg, session->message);
+	}
+
+	if (session->hostname && session->hostname->len > 0) {
+		rspamd_http_message_add_header_fstr (msg, HOSTNAME_HEADER,
+				session->hostname);
+	}
+
+	if (session->helo && session->helo->len > 0) {
+		rspamd_http_message_add_header_fstr (msg, HELO_HEADER,
+				session->helo);
+	}
+
+	if (session->from) {
+		rspamd_http_message_add_header_len (msg, FROM_HEADER,
+				session->from->raw, session->from->raw_len);
+	}
+
+	if (session->rcpts) {
+		PTR_ARRAY_FOREACH (session->rcpts, i, rcpt) {
+			rspamd_http_message_add_header_len (msg, RCPT_HEADER,
+					rcpt->raw, rcpt->raw_len);
+		}
+	}
+
+	return msg;
 }

@@ -378,7 +378,7 @@ gboolean rspamd_http_message_append_body (struct rspamd_http_message *msg,
 		const gchar *data, gsize len);
 
 /**
- * Append a header to reply
+ * Append a header to http message
  * @param rep
  * @param name
  * @param value
@@ -386,6 +386,15 @@ gboolean rspamd_http_message_append_body (struct rspamd_http_message *msg,
 void rspamd_http_message_add_header (struct rspamd_http_message *msg,
 		const gchar *name,
 		const gchar *value);
+
+void rspamd_http_message_add_header_len (struct rspamd_http_message *msg,
+		const gchar *name,
+		const gchar *value,
+		gsize len);
+
+void rspamd_http_message_add_header_fstr (struct rspamd_http_message *msg,
+		const gchar *name,
+		rspamd_fstring_t *value);
 
 /**
  * Search for a specified header in message
