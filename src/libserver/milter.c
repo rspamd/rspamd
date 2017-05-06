@@ -63,56 +63,81 @@ rspamd_milter_obuf_free (struct rspamd_milter_outbuf *obuf)
 	}
 }
 
+#define RSPAMD_MILTER_RESET_COMMON (1 << 0)
+#define RSPAMD_MILTER_RESET_OUT (1 << 1)
+#define RSPAMD_MILTER_RESET_ADDR (1 << 2)
+#define RSPAMD_MILTER_RESET_MACRO (1 << 3)
+#define RSPAMD_MILTER_RESET_ALL (RSPAMD_MILTER_RESET_COMMON | \
+	RSPAMD_MILTER_RESET_OUT | \
+	RSPAMD_MILTER_RESET_ADDR | \
+	RSPAMD_MILTER_RESET_MACRO)
+#define RSPAMD_MILTER_RESET_QUIT_NC (RSPAMD_MILTER_RESET_COMMON | \
+	RSPAMD_MILTER_RESET_ADDR | \
+	RSPAMD_MILTER_RESET_MACRO)
+#define RSPAMD_MILTER_RESET_ABORT (RSPAMD_MILTER_RESET_COMMON)
+
 static void
-rspamd_milter_session_reset (struct rspamd_milter_session *session)
+rspamd_milter_session_reset (struct rspamd_milter_session *session,
+		guint how)
 {
 	struct rspamd_milter_outbuf *obuf, *obuf_tmp;
 	struct rspamd_milter_private *priv = session->priv;
 	struct rspamd_email_address *cur;
 	guint i;
 
-	DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
-		rspamd_milter_obuf_free (obuf);
-	}
-
-	if (priv->parser.buf) {
-		priv->parser.buf->len = 0;
-	}
-
-	if (session->message) {
-		session->message->len = 0;
-	}
-
-	if (session->addr) {
-		rspamd_inet_address_free (session->addr);
-	}
-
-	if (session->rcpts) {
-		PTR_ARRAY_FOREACH (session->rcpts, i, cur) {
-			rspamd_email_address_unref (cur);
+	if (how & RSPAMD_MILTER_RESET_OUT) {
+		DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
+			rspamd_milter_obuf_free (obuf);
 		}
 
-		g_ptr_array_free (session->rcpts, TRUE);
+		priv->out_chain = NULL;
 	}
 
-	if (session->from) {
-		rspamd_email_address_unref (session->from);
+	if (how & RSPAMD_MILTER_RESET_COMMON) {
+		if (priv->parser.buf) {
+			priv->parser.buf->len = 0;
+		}
+
+		if (session->message) {
+			session->message->len = 0;
+		}
+
+		if (session->rcpts) {
+			PTR_ARRAY_FOREACH (session->rcpts, i, cur) {
+				rspamd_email_address_unref (cur);
+			}
+
+			g_ptr_array_free (session->rcpts, TRUE);
+			session->rcpts = NULL;
+		}
+
+		if (session->from) {
+			rspamd_email_address_unref (session->from);
+			session->from = NULL;
+		}
+
+		if (session->helo) {
+			session->helo->len = 0;
+		}
+
+		if (session->hostname) {
+			session->hostname->len = 0;
+		}
 	}
 
-	if (session->macros) {
-		g_hash_table_unref (session->macros);
-		session->macros = NULL;
+	if (how & RSPAMD_MILTER_RESET_ADDR) {
+		if (session->addr) {
+			rspamd_inet_address_free (session->addr);
+			session->addr = NULL;
+		}
 	}
 
-	if (session->helo) {
-		session->helo->len = 0;
+	if (how & RSPAMD_MILTER_RESET_MACRO) {
+		if (session->macros) {
+			g_hash_table_unref (session->macros);
+			session->macros = NULL;
+		}
 	}
-
-	if (session->hostname) {
-		session->hostname->len = 0;
-	}
-
-	priv->out_chain = NULL;
 }
 
 static void
@@ -127,7 +152,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			event_del (&priv->ev);
 		}
 
-		rspamd_milter_session_reset (session);
+		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_ALL);
 
 		if (priv->parser.buf) {
 			rspamd_fstring_free (priv->parser.buf);
@@ -228,9 +253,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 	switch (priv->parser.cur_cmd) {
 	case RSPAMD_MILTER_CMD_ABORT:
 		msg_debug_milter ("got abort command");
-		err = g_error_new (rspamd_milter_quark (), ECONNABORTED, "connection "
-				"aborted");
-		rspamd_milter_on_protocol_error (session, priv, err);
+		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_ABORT);
 		break;
 	case RSPAMD_MILTER_CMD_BODY:
 		if (!session->message) {
@@ -446,7 +469,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_CMD_QUIT_NC:
 		/* We need to reset session and start over */
 		msg_debug_milter ("got quit_nc command");
-		rspamd_milter_session_reset (session);
+		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_QUIT_NC);
 		break;
 	case RSPAMD_MILTER_CMD_HEADER:
 		msg_debug_milter ("got header command");
