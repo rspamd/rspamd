@@ -79,7 +79,13 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 rspamd_fstring_t *
 rspamd_fstring_assign (rspamd_fstring_t *str, const gchar *init, gsize len)
 {
-	gsize avail = fstravail (str);
+	gsize avail;
+
+	if (str == NULL) {
+		return rspamd_fstring_new_init (init, len);
+	}
+
+	avail = fstravail (str);
 
 	if (avail < len) {
 		str = rspamd_fstring_grow (str, len);
