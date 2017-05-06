@@ -945,7 +945,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->fin_cb = finish_cb;
 	priv->err_cb = error_cb;
 	priv->parser.state = st_len_1;
-	priv->parser.buf = rspamd_fstring_sized_new (100);
+	priv->parser.buf = rspamd_fstring_sized_new (RSPAMD_MILTER_MESSAGE_CHUNK + 5);
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
 	ottery_rand_bytes (uidbuf, sizeof (uidbuf));
