@@ -81,7 +81,6 @@ struct rspamd_map {
 	gchar *description;
 	gchar *name;
 	guint32 id;
-	struct event ev;
 	struct timeval tv;
 	gdouble poll_timeout;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
@@ -131,6 +130,7 @@ enum rspamd_map_http_stage {
 struct map_periodic_cbdata {
 	struct rspamd_map *map;
 	struct map_cb_data cbdata;
+	struct event ev;
 	gboolean need_modify;
 	gboolean errored;
 	guint cur_backend;

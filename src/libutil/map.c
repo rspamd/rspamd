@@ -800,6 +800,7 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 
 	map = periodic->map;
 	msg_debug_map ("periodic dtor %p", periodic);
+	event_del (&periodic->ev);
 
 	if (periodic->need_modify) {
 		/* We are done */
@@ -853,20 +854,20 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
 
 	if (initial) {
-		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
-		event_base_set (map->ev_base, &map->ev);
+		evtimer_set (&cbd->ev, rspamd_map_periodic_callback, cbd);
+		event_base_set (map->ev_base, &cbd->ev);
 	}
 	else {
-		evtimer_del (&map->ev);
-		evtimer_set (&map->ev, rspamd_map_periodic_callback, cbd);
-		event_base_set (map->ev_base, &map->ev);
+		evtimer_set (&cbd->ev, rspamd_map_periodic_callback, cbd);
+		event_base_set (map->ev_base, &cbd->ev);
 	}
 
 	jittered_sec = rspamd_time_jitter (timeout, 0);
-	msg_debug_map ("schedule new periodic event %p in %.2f seconds", cbd, jittered_sec);
+	msg_debug_map ("schedule new periodic event %p in %.2f seconds",
+			cbd, jittered_sec);
 	double_to_tv (jittered_sec, &map->tv);
 
-	evtimer_add (&map->ev, &map->tv);
+	evtimer_add (&cbd->ev, &map->tv);
 }
 
 static void
