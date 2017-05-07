@@ -1273,6 +1273,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_milter_send_action (nsession->client_milter_conn,
 				RSPAMD_MILTER_ACCEPT);
 		REF_RELEASE (session);
+		rspamd_http_message_free (msg);
 	}
 	else {
 		rspamd_http_connection_write_message (session->client_conn,
@@ -1288,7 +1289,7 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_proxy_session *session = task->fin_arg, *nsession;
-	ucl_object_t *rep;
+	ucl_object_t *rep = NULL;
 	const char *ctype = "application/json";
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
@@ -1316,7 +1317,10 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 	}
 
 	session->master_conn->flags |= RSPAMD_BACKEND_CLOSED;
-	session->master_conn->results = rep;
+
+	if (rep) {
+		session->master_conn->results = ucl_object_ref (rep);
+	}
 
 	if (session->client_milter_conn) {
 		/*
@@ -1325,6 +1329,7 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 		nsession = proxy_session_refresh (session);
 		rspamd_milter_send_action (nsession->client_milter_conn,
 				RSPAMD_MILTER_ACCEPT);
+		rspamd_http_message_free (msg);
 		REF_RELEASE (session);
 	}
 	else {
@@ -1378,7 +1383,15 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	task = rspamd_task_new (session->worker, session->ctx->cfg);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->sock = -1;
-	task->client_addr = session->client_addr;
+
+	if (session->client_milter_conn) {
+		task->client_addr = rspamd_inet_address_copy (
+				session->client_milter_conn->addr);
+	}
+	else {
+		task->client_addr = rspamd_inet_address_copy (session->client_addr);
+	}
+
 	task->fin_arg = session;
 	task->resolver = session->ctx->resolver;
 	/* TODO: allow to disable autolearn in protocol */
@@ -1416,6 +1429,7 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 		event_add (&task->timeout_ev, &task_tv);
 	}
 
+	session->master_conn->task = task;
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 
 	return TRUE;
