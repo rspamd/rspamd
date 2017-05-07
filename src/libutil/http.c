@@ -2802,7 +2802,7 @@ rspamd_http_message_add_header_len (struct rspamd_http_message *msg,
 		nlen = strlen (name);
 		vlen = len;
 		hdr->combined = rspamd_fstring_sized_new (nlen + vlen + 4);
-		rspamd_printf_fstring (&hdr->combined, "%s: %*s\r\n", name, (gint)nlen,
+		rspamd_printf_fstring (&hdr->combined, "%s: %*s\r\n", name, (gint)vlen,
 				value);
 		hdr->value = g_slice_alloc (sizeof (*hdr->value));
 		hdr->name = g_slice_alloc (sizeof (*hdr->name));
