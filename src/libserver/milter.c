@@ -173,6 +173,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			rspamd_fstring_free (session->hostname);
 		}
 
+		g_free (priv);
 		g_free (session);
 	}
 }
