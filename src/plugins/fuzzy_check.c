@@ -2396,7 +2396,8 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 #endif
 end:
 	if (res->len == 0) {
-		g_ptr_array_free (res, FALSE);
+		g_ptr_array_free (res, TRUE);
+
 		return NULL;
 	}
 
