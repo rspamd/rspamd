@@ -1776,16 +1776,31 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 
 			if (encrypted) {
 				/* Internal reply (encrypted) */
-				meth_len =
-						rspamd_snprintf (repbuf, replen,
-								"HTTP/1.1 %d %T\r\n"
-								"Connection: close\r\n"
-								"Server: %s\r\n"
-								"Date: %s\r\n"
-								"Content-Length: %z\r\n"
-								"Content-Type: %s", /* NO \r\n at the end ! */
-								msg->code, &status, "rspamd/" RVERSION, datebuf,
-								bodylen, mime_type);
+				if (mime_type) {
+					meth_len =
+							rspamd_snprintf (repbuf, replen,
+									"HTTP/1.1 %d %T\r\n"
+											"Connection: close\r\n"
+											"Server: %s\r\n"
+											"Date: %s\r\n"
+											"Content-Length: %z\r\n"
+											"Content-Type: %s", /* NO \r\n at the end ! */
+									msg->code, &status, "rspamd/" RVERSION,
+									datebuf,
+									bodylen, mime_type);
+				}
+				else {
+					meth_len =
+							rspamd_snprintf (repbuf, replen,
+									"HTTP/1.1 %d %T\r\n"
+											"Connection: close\r\n"
+											"Server: %s\r\n"
+											"Date: %s\r\n"
+											"Content-Length: %z", /* NO \r\n at the end ! */
+									msg->code, &status, "rspamd/" RVERSION,
+									datebuf,
+									bodylen);
+				}
 				enclen += meth_len;
 				/* External reply */
 				rspamd_printf_fstring (buf,
@@ -1798,16 +1813,31 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 						datebuf, enclen);
 			}
 			else {
-				meth_len =
-						rspamd_printf_fstring (buf,
-								"HTTP/1.1 %d %T\r\n"
-								"Connection: close\r\n"
-								"Server: %s\r\n"
-								"Date: %s\r\n"
-								"Content-Length: %z\r\n"
-								"Content-Type: %s\r\n",
-								msg->code, &status, "rspamd/" RVERSION, datebuf,
-								bodylen, mime_type);
+				if (mime_type) {
+					meth_len =
+							rspamd_printf_fstring (buf,
+									"HTTP/1.1 %d %T\r\n"
+											"Connection: close\r\n"
+											"Server: %s\r\n"
+											"Date: %s\r\n"
+											"Content-Length: %z\r\n"
+											"Content-Type: %s\r\n",
+									msg->code, &status, "rspamd/" RVERSION,
+									datebuf,
+									bodylen, mime_type);
+				}
+				else {
+					meth_len =
+							rspamd_printf_fstring (buf,
+									"HTTP/1.1 %d %T\r\n"
+											"Connection: close\r\n"
+											"Server: %s\r\n"
+											"Date: %s\r\n"
+											"Content-Length: %z\r\n",
+									msg->code, &status, "rspamd/" RVERSION,
+									datebuf,
+									bodylen);
+				}
 			}
 		}
 		else {
@@ -1894,13 +1924,11 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 				}
 
 				if (bodylen > 0) {
-					if (mime_type == NULL) {
-						mime_type = "text/plain";
+					if (mime_type != NULL) {
+						rspamd_printf_fstring (buf,
+								"Content-Type: %s\r\n",
+								mime_type);
 					}
-
-					rspamd_printf_fstring (buf,
-							"Content-Type: %s\r\n",
-							mime_type);
 				}
 			}
 		}
@@ -2057,8 +2085,18 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			priv->outlen = 8;
 
 			if (bodylen > 0) {
-				if (mime_type == NULL) {
-					mime_type = "text/plain";
+				if (mime_type != NULL) {
+					preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n"
+									"Content-Length: %z\r\n"
+									"Content-Type: %s\r\n"
+									"\r\n", ENCRYPTED_VERSION, bodylen,
+							mime_type);
+				}
+				else {
+					preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n"
+							"Content-Length: %z\r\n"
+							""
+							"\r\n", ENCRYPTED_VERSION, bodylen);
 				}
 
 				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n"
@@ -2068,7 +2106,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 						mime_type);
 			}
 			else {
-				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n\r\n",
+				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf),
+						"%s\r\n\r\n",
 						ENCRYPTED_VERSION);
 			}
 

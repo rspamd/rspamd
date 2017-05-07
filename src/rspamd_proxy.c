@@ -1534,7 +1534,8 @@ retry:
 		}
 		else {
 			if (session->fname) {
-				rspamd_http_message_set_body (msg, session->map, session->map_len);
+				rspamd_http_message_set_body (msg,
+						session->map, session->map_len);
 			}
 
 			rspamd_http_connection_write_message (
