@@ -584,6 +584,8 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		REF_RETAIN (session);
 		priv->fin_cb (priv->fd, session, priv->ud);
 		REF_RELEASE (session);
+
+		return FALSE;
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
 		msg_debug_milter ("rcpt command");
@@ -1182,6 +1184,7 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 
 	if (session->message) {
 		rspamd_http_message_set_body_from_fstring_steal (msg, session->message);
+		session->message = NULL;
 	}
 
 	if (session->hostname && session->hostname->len > 0) {
@@ -1209,4 +1212,17 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 	rspamd_milter_macro_http (session, msg);
 
 	return msg;
+}
+
+void *
+rspamd_milter_update_userdata (struct rspamd_milter_session *session,
+		void *ud)
+{
+	struct rspamd_milter_private *priv = session->priv;
+	void *prev_ud;
+
+	prev_ud = priv->ud;
+	priv->ud = ud;
+
+	return prev_ud;
 }

@@ -71,6 +71,15 @@ gboolean rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 		rspamd_milter_error error_cb, void *ud);
 
 /**
+ * Updates userdata for a session, returns previous userdata
+ * @param session
+ * @param ud
+ * @return
+ */
+void * rspamd_milter_update_userdata (struct rspamd_milter_session *session,
+		void *ud);
+
+/**
  * Sets SMTP reply string
  * @param session
  * @param xcode

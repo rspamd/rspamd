@@ -846,21 +846,17 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	if (session->master_conn) {
 		proxy_backend_close_connection (session->master_conn);
 	}
-	else if (session->client_milter_conn) {
+
+	if (session->client_milter_conn) {
 		rspamd_milter_session_unref (session->client_milter_conn);
 	}
-
-	if (session->map && session->map_len) {
-		munmap (session->map, session->map_len);
-	}
-
-	if (session->client_conn) {
+	else if (session->client_conn) {
 		rspamd_http_connection_reset (session->client_conn);
 		rspamd_http_connection_unref (session->client_conn);
 	}
 
-	if (session->client_milter_conn) {
-		rspamd_milter_session_unref (session->client_milter_conn);
+	if (session->map && session->map_len) {
+		munmap (session->map, session->map_len);
 	}
 
 	for (i = 0; i < session->mirror_conns->len; i ++) {
@@ -888,10 +884,44 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	g_ptr_array_free (session->mirror_conns, TRUE);
 	rspamd_http_message_shmem_unref (session->shmem_ref);
 	rspamd_http_message_unref (session->client_message);
-	rspamd_inet_address_free (session->client_addr);
-	close (session->client_sock);
-	rspamd_mempool_delete (session->pool);
+
+	if (session->client_addr) {
+		rspamd_inet_address_free (session->client_addr);
+	}
+
+	if (session->client_sock != -1) {
+		close (session->client_sock);
+	}
+
+	if (session->pool) {
+		rspamd_mempool_delete (session->pool);
+	}
+
 	g_slice_free1 (sizeof (*session), session);
+}
+
+static struct rspamd_proxy_session *
+proxy_session_refresh (struct rspamd_proxy_session *session)
+{
+	struct rspamd_proxy_session *nsession;
+
+	nsession = g_slice_alloc0 (sizeof (*nsession));
+	nsession->client_milter_conn = session->client_milter_conn;
+	session->client_milter_conn = NULL;
+	rspamd_milter_update_userdata (nsession->client_milter_conn,
+			nsession);
+	nsession->client_addr = session->client_addr;
+	session->client_addr = NULL;
+	nsession->ctx = session->ctx;
+	nsession->worker = session->worker;
+	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
+	nsession->client_sock = session->client_sock;
+	session->client_sock = -1;
+	nsession->mirror_conns = g_ptr_array_sized_new (nsession->ctx->mirrors->len);
+
+	REF_INIT_RETAIN (nsession, proxy_session_dtor);
+
+	return nsession;
 }
 
 static gboolean
@@ -1149,6 +1179,7 @@ proxy_client_write_error (struct rspamd_proxy_session *session, gint code,
 	if (session->client_milter_conn) {
 		rspamd_milter_send_action (session->client_milter_conn,
 				RSPAMD_MILTER_TEMPFAIL);
+		REF_RELEASE (session);
 	}
 	else {
 		reply = rspamd_http_new_message (HTTP_RESPONSE);
@@ -1202,7 +1233,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
-	struct rspamd_proxy_session *session;
+	struct rspamd_proxy_session *session, *nsession;
 	rspamd_fstring_t *reply;
 
 	session = bk_conn->s;
@@ -1238,8 +1269,10 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 		/*
 		 * TODO: convert reply to milter reply
 		 */
-		rspamd_milter_send_action (session->client_milter_conn,
+		nsession = proxy_session_refresh (session);
+		rspamd_milter_send_action (nsession->client_milter_conn,
 				RSPAMD_MILTER_ACCEPT);
+		REF_RELEASE (session);
 	}
 	else {
 		rspamd_http_connection_write_message (session->client_conn,
@@ -1254,7 +1287,7 @@ static void
 rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
-	struct rspamd_proxy_session *session = task->fin_arg;
+	struct rspamd_proxy_session *session = task->fin_arg, *nsession;
 	ucl_object_t *rep;
 	const char *ctype = "application/json";
 
@@ -1289,8 +1322,10 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 		/*
 		 * TODO: convert reply to milter reply
 		 */
-		rspamd_milter_send_action (session->client_milter_conn,
+		nsession = proxy_session_refresh (session);
+		rspamd_milter_send_action (nsession->client_milter_conn,
 				RSPAMD_MILTER_ACCEPT);
+		REF_RELEASE (session);
 	}
 	else {
 		rspamd_http_connection_reset (session->client_conn);
@@ -1499,9 +1534,16 @@ retry:
 	return TRUE;
 
 err:
-	rspamd_http_connection_steal_msg (session->client_conn);
-	rspamd_http_connection_reset (session->client_conn);
-	proxy_client_write_error (session, 404, "Backend not found");
+	if (session->client_milter_conn) {
+		rspamd_milter_send_action (session->client_milter_conn,
+				RSPAMD_MILTER_TEMPFAIL);
+		REF_RELEASE (session);
+	}
+	else {
+		rspamd_http_connection_steal_msg (session->client_conn);
+		rspamd_http_connection_reset (session->client_conn);
+		proxy_client_write_error (session, 404, "Backend not found");
+	}
 
 	return FALSE;
 }
@@ -1582,29 +1624,26 @@ proxy_milter_finish_handler (gint fd,
 	struct rspamd_proxy_session *session = ud;
 	struct rspamd_http_message *msg;
 
-	if (!session->master_conn) {
+	if (rms->message == NULL || rms->message->len == 0) {
+		msg_info_session ("finished milter connection");
+		proxy_backend_close_connection (session->master_conn);
+		REF_RELEASE (session);
+	}
+	else {
+		if (!session->master_conn) {
+			session->master_conn = rspamd_mempool_alloc0 (session->pool,
+					sizeof (*session->master_conn));
+		}
+
 		session->client_milter_conn = rms;
 		msg = rspamd_milter_to_http (rms);
-		session->master_conn = rspamd_mempool_alloc0 (session->pool,
-				sizeof (*session->master_conn));
+
 		session->master_conn->s = session;
 		session->master_conn->name = "master";
 		session->client_message = msg;
 
-		if (msg->body_buf.len == 0) {
-			msg_info_session ("incomplete master connection");
-			proxy_backend_close_connection (session->master_conn);
-			REF_RELEASE (session);
-		}
-		else {
-			proxy_open_mirror_connections (session);
-			proxy_send_master_message (session);
-		}
-	}
-	else {
-		msg_info_session ("finished master connection");
-		proxy_backend_close_connection (session->master_conn);
-		REF_RELEASE (session);
+		proxy_open_mirror_connections (session);
+		proxy_send_master_message (session);
 	}
 }
 
