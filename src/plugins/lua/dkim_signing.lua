@@ -177,6 +177,7 @@ local function dkim_signing_cb(task)
       p.selector = data
     end
   end
+
   if settings.path_map then
     local data = settings.path_map:get_key(dkim_domain)
     if data then
@@ -185,6 +186,25 @@ local function dkim_signing_cb(task)
   end
 
   if settings.use_redis then
+    if settings.selector_prefix then
+      local function redis_key_cb(err, data)
+        if err or type(data) ~= 'string' then
+          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
+        else
+          if data then
+            p.selector = data
+          end
+        end
+      end
+      local ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        p.domain, -- hash key
+        false, -- is write
+        redis_key_cb, --callback
+        'HGET', -- command
+        {settings.selector_prefix, p.domain} -- arguments
+      )
+    end
     if not p.selector then
       rspamd_logger.errx(task, 'No selector specified')
       return false
