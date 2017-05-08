@@ -78,6 +78,7 @@ struct rspamd_http_upstream {
 	gint parser_to_ref;
 	gboolean local;
 	gboolean self_scan;
+	gboolean compress;
 };
 
 struct rspamd_http_mirror {
@@ -91,6 +92,7 @@ struct rspamd_http_mirror {
 	gint parser_from_ref;
 	gint parser_to_ref;
 	gboolean local;
+	gboolean compress;
 };
 
 static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
@@ -336,6 +338,11 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		ctx->has_self_scan = TRUE;
 	}
 
+	elt = ucl_object_lookup_any (obj, "compress", "compression", NULL);
+	if (elt && ucl_object_toboolean (elt)) {
+		up->compress = TRUE;
+	}
+
 	elt = ucl_object_lookup (obj, "hosts");
 
 	if (elt == NULL && !up->self_scan) {
@@ -482,6 +489,11 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 	elt = ucl_object_lookup (obj, "local");
 	if (elt && ucl_object_toboolean (elt)) {
 		up->local = TRUE;
+	}
+
+	elt = ucl_object_lookup_any (obj, "compress", "compression", NULL);
+	if (elt && ucl_object_toboolean (elt)) {
+		up->compress = TRUE;
 	}
 
 	elt = ucl_object_lookup (obj, "timeout");
@@ -1152,6 +1164,8 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 
+	proxy_request_decompress (msg);
+
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
 			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
@@ -1265,6 +1279,10 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				rspamd_http_message_set_body (msg, session->map, session->map_len);
 			}
 
+			if (m->compress) {
+				proxy_request_compress (msg);
+			}
+
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
 					bk_conn->backend_sock,
@@ -1345,6 +1363,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
+	proxy_request_decompress (msg);
 
 	rspamd_http_message_remove_header (msg, "Content-Length");
 	rspamd_http_message_remove_header (msg, "Key");
@@ -1637,6 +1656,10 @@ retry:
 			if (session->fname) {
 				rspamd_http_message_set_body (msg,
 						session->map, session->map_len);
+			}
+
+			if (backend->compress) {
+				proxy_request_compress (msg);
 			}
 
 			rspamd_http_connection_write_message (
