@@ -926,7 +926,7 @@ proxy_request_compress (struct rspamd_http_message *msg)
 
 	flags = rspamd_http_message_get_flags (msg);
 
-	if (!rspamd_http_message_find_header (msg, "compression")) {
+	if (!rspamd_http_message_find_header (msg, "Compression")) {
 		if ((flags & RSPAMD_HTTP_FLAG_SHMEM) ||
 				!(flags & RSPAMD_HTTP_FLAG_HAS_BODY)) {
 			/* Cannot compress shared or empty message */
@@ -968,7 +968,7 @@ proxy_request_decompress (struct rspamd_http_message *msg)
 	ZSTD_inBuffer zin;
 	ZSTD_outBuffer zout;
 
-	if (rspamd_http_message_find_header (msg, "compression")) {
+	if (rspamd_http_message_find_header (msg, "Compression")) {
 		in = rspamd_http_message_get_body (msg, &inlen);
 
 		if (in == NULL || inlen == 0) {
@@ -1011,6 +1011,7 @@ proxy_request_decompress (struct rspamd_http_message *msg)
 			}
 		}
 
+		body->len = zout.pos;
 		ZSTD_freeDStream (zstream);
 		rspamd_http_message_set_body_from_fstring_steal (msg, body);
 		rspamd_http_message_remove_header (msg, "Compression");
