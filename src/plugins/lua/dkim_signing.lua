@@ -181,36 +181,59 @@ local function dkim_signing_cb(task)
   end
 
   if settings.use_redis then
-    if not p.selector then
-      rspamd_logger.errx(task, 'No selector specified')
-      return false
-    end
-    p.key = nil
-    local rk = string.format('%s.%s', p.selector, p.domain)
-
-    local function redis_key_cb(err, data)
-      if err or type(data) ~= 'string' then
-        rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s: %s",
-          rk, err)
-      else
-        p.rawkey = data
-        if rspamd_plugins.dkim.sign(task, p) then
-          task:insert_result(settings.symbol, 1.0)
+    local function try_redis_key(selector)
+      p.key = nil
+      p.selector = selector
+      local rk = string.format('%s.%s', p.selector, p.domain)
+      local function redis_key_cb(err, data)
+        if err or type(data) ~= 'string' then
+          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s: %s",
+            rk, err)
+        else
+          p.rawkey = data
+          if rspamd_plugins.dkim.sign(task, p) then
+            task:insert_result(settings.symbol, 1.0)
+          end
         end
       end
+      local ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        rk, -- hash key
+        false, -- is write
+        redis_key_cb, --callback
+        'HGET', -- command
+        {settings.key_prefix, rk} -- arguments
+      )
+      if not ret then
+        rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
+      end
     end
-
-    local ret = rspamd_redis_make_request(task,
-      redis_params, -- connect params
-      rk, -- hash key
-      false, -- is write
-      redis_key_cb, --callback
-      'HGET', -- command
-      {settings.key_prefix, rk} -- arguments
-    )
-
-    if not ret then
-      rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
+    if settings.selector_prefix then
+      rspamd_logger.infox(rspamd_config, "Using selector prefix %s for domain %s", settings.selector_prefix, p.domain);
+      local function redis_selector_cb(err, data)
+        if err or type(data) ~= 'string' then
+          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
+        else
+          try_redis_key(data)
+        end
+      end
+      local ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        p.domain, -- hash key
+        false, -- is write
+        redis_selector_cb, --callback
+        'HGET', -- command
+        {settings.selector_prefix, p.domain} -- arguments
+      )
+      if not ret then
+        rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for %s", p.domain)
+      end
+    else
+      if not p.selector then
+        rspamd_logger.errx(task, 'No selector specified')
+        return false
+      end
+      try_redis_key(p.selector)
     end
   else
     if (p.key and p.selector) then
