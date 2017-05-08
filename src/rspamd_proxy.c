@@ -838,9 +838,11 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 	gint cbref;
 	struct rspamd_proxy_backend_connection *conn;
 
-	for (i = 0; i < session->ctx->cmp_refs->len; i ++) {
-		cbref = g_array_index (session->ctx->cmp_refs, gint, i);
-		proxy_call_cmp_script (session, cbref);
+	if (session->master_conn && session->master_conn->results) {
+		for (i = 0; i < session->ctx->cmp_refs->len; i++) {
+			cbref = g_array_index (session->ctx->cmp_refs, gint, i);
+			proxy_call_cmp_script (session, cbref);
+		}
 	}
 
 	if (session->master_conn) {
