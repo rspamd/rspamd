@@ -449,6 +449,13 @@ struct rspamd_storage_shmem* rspamd_http_message_shmem_ref (struct rspamd_http_m
 void rspamd_http_message_shmem_unref (struct rspamd_storage_shmem *p);
 
 /**
+ * Returns message's flags
+ * @param msg
+ * @return
+ */
+guint rspamd_http_message_get_flags (struct rspamd_http_message *msg);
+
+/**
  * Parse HTTP date header and return it as time_t
  * @param header HTTP date header
  * @param len length of header

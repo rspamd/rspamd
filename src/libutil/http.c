@@ -2463,6 +2463,12 @@ rspamd_http_message_shmem_ref (struct rspamd_http_message *msg)
 	return NULL;
 }
 
+guint
+rspamd_http_message_get_flags (struct rspamd_http_message *msg)
+{
+	return msg->flags;
+}
+
 void
 rspamd_http_message_shmem_unref (struct rspamd_storage_shmem *p)
 {
