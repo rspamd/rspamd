@@ -1281,6 +1281,17 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 			if (m->compress) {
 				proxy_request_compress (msg);
+
+				if (session->client_milter_conn) {
+					rspamd_http_message_add_header (msg, "Content-Type",
+							"application/octet-stream");
+				}
+			}
+			else {
+				if (session->client_milter_conn) {
+					rspamd_http_message_add_header (msg, "Content-Type",
+							"text/plain");
+				}
 			}
 
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
@@ -1660,6 +1671,16 @@ retry:
 
 			if (backend->compress) {
 				proxy_request_compress (msg);
+				if (session->client_milter_conn) {
+					rspamd_http_message_add_header (msg, "Content-Type",
+							"application/octet-stream");
+				}
+			}
+			else {
+				if (session->client_milter_conn) {
+					rspamd_http_message_add_header (msg, "Content-Type",
+							"text/plain");
+				}
 			}
 
 			rspamd_http_connection_write_message (
