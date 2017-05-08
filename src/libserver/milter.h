@@ -19,6 +19,7 @@
 #include "config.h"
 #include "fstring.h"
 #include "addr.h"
+#include "contrib/libucl/ucl.h"
 #include "ref.h"
 
 enum rspamd_milter_reply {
@@ -133,5 +134,13 @@ struct rspamd_milter_session * rspamd_milter_session_ref (
  */
 struct rspamd_http_message * rspamd_milter_to_http (
 		struct rspamd_milter_session *session);
+
+/**
+ * Sends task results to the
+ * @param session
+ * @param results
+ */
+void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
+		const ucl_object_t *results);
 
 #endif

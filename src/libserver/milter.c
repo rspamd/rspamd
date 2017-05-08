@@ -25,6 +25,7 @@
 #include "libutil/http.h"
 #include "libutil/http_private.h"
 #include "libserver/protocol_internal.h"
+#include "libmime/filter.h"
 #include "utlist.h"
 
 #define msg_err_milter(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
@@ -1226,4 +1227,192 @@ rspamd_milter_update_userdata (struct rspamd_milter_session *session,
 	priv->ud = ud;
 
 	return prev_ud;
+}
+
+static void
+rspamd_milter_process_rmilter_block (struct rspamd_milter_session *session,
+		const ucl_object_t *obj)
+{
+	const ucl_object_t *elt, *cur, *cur_elt;
+	ucl_object_iter_t it;
+	GString *hname, *hvalue;
+	gint nhdr;
+
+	if (obj && ucl_object_type (obj) == UCL_OBJECT) {
+		elt = ucl_object_lookup (obj, "remove_headers");
+		/*
+		 * remove_headers:  {"name": 1, ... }
+		 * where number is the header's position starting from '1'
+		 */
+		if (elt && ucl_object_type (elt) == UCL_OBJECT) {
+			it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_INT) {
+					nhdr = ucl_object_toint (cur);
+					hname = g_string_new (ucl_object_key (cur));
+					hvalue = g_string_new ("");
+
+					if (nhdr >= 1) {
+						rspamd_milter_send_action (session,
+								RSPAMD_MILTER_CHGHEADER,
+								nhdr, hname, hvalue);
+					}
+
+					g_string_free (hname, TRUE);
+					g_string_free (hvalue, TRUE);
+				}
+			}
+		}
+
+		elt = ucl_object_lookup (obj, "add_headers");
+		/*
+		 * add_headers: {"name": "value", ... }
+		 * name could have multiple values
+		 */
+		if (elt && ucl_object_type (elt) == UCL_OBJECT) {
+			it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				LL_FOREACH (cur, cur_elt) {
+					if (ucl_object_type (cur_elt) == UCL_STRING) {
+						hname = g_string_new (ucl_object_key (cur));
+						hvalue = g_string_new (ucl_object_tostring (cur_elt));
+
+						rspamd_milter_send_action (session,
+								RSPAMD_MILTER_ADDHEADER,
+								hname, hvalue);
+						g_string_free (hname, TRUE);
+						g_string_free (hvalue, TRUE);
+					}
+				}
+			}
+		}
+	}
+}
+
+void
+rspamd_milter_send_task_results (struct rspamd_milter_session *session,
+		const ucl_object_t *results)
+{
+	const ucl_object_t *elt;
+	struct rspamd_milter_private *priv = session->priv;
+	gint action = METRIC_ACTION_REJECT;
+	rspamd_fstring_t *xcode, *rcode, *reply = NULL;
+	GString *hname, *hvalue;
+
+	if (results == NULL) {
+		msg_err_milter ("cannot find scan results, tempfail");
+		rspamd_milter_send_action (session, RSPAMD_MILTER_TEMPFAIL);
+
+		return;
+	}
+
+	elt = ucl_object_lookup (results, "action");
+
+	if (!elt) {
+		msg_err_milter ("cannot find action in results, tempfail");
+		rspamd_milter_send_action (session, RSPAMD_MILTER_TEMPFAIL);
+
+		return;
+	}
+
+	rspamd_action_from_str (ucl_object_tostring (elt), &action);
+
+	elt = ucl_object_lookup (results, "messages");
+	if (elt) {
+		const ucl_object_t *smtp_res;
+		const gchar *msg;
+		gsize len = 0;
+
+		smtp_res = ucl_object_lookup (elt, "smtp_message");
+
+		if (smtp_res) {
+			msg = ucl_object_tolstring (smtp_res, &len);
+			reply = rspamd_fstring_new_init (msg, len);
+		}
+	}
+
+	/* Deal with milter headers */
+	elt = ucl_object_lookup (results, "rmilter");
+	if (elt) {
+		rspamd_milter_process_rmilter_block (session, elt);
+	}
+
+	/* DKIM-Signature */
+	elt = ucl_object_lookup (results, "dkim-signature");
+	if (elt) {
+		hname = g_string_new (RSPAMD_MILTER_DKIM_HEADER);
+		hvalue = g_string_new (ucl_object_tostring (elt));
+
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ADDHEADER,
+				hname, hvalue);
+		g_string_free (hname, TRUE);
+		g_string_free (hvalue, TRUE);
+	}
+
+	switch (action) {
+	case METRIC_ACTION_REJECT:
+		rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_REJECT,
+				sizeof (RSPAMD_MILTER_RCODE_REJECT) - 1);
+		xcode = rspamd_fstring_new_init (RSPAMD_MILTER_XCODE_REJECT,
+				sizeof (RSPAMD_MILTER_XCODE_REJECT) - 1);
+
+		if (!reply) {
+			reply = rspamd_fstring_new_init (RSPAMD_MILTER_REJECT_MESSAGE,
+					sizeof (RSPAMD_MILTER_REJECT_MESSAGE) - 1);
+		}
+
+		rspamd_milter_set_reply (session, rcode, xcode, reply);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_REJECT);
+
+		break;
+	case METRIC_ACTION_SOFT_REJECT:
+	case METRIC_ACTION_GREYLIST:
+		rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_TEMPFAIL,
+				sizeof (RSPAMD_MILTER_RCODE_TEMPFAIL) - 1);
+		xcode = rspamd_fstring_new_init (RSPAMD_MILTER_XCODE_TEMPFAIL,
+				sizeof (RSPAMD_MILTER_XCODE_TEMPFAIL) - 1);
+
+		if (!reply) {
+			reply = rspamd_fstring_new_init (RSPAMD_MILTER_TEMPFAIL_MESSAGE,
+					sizeof (RSPAMD_MILTER_TEMPFAIL_MESSAGE) - 1);
+		}
+
+		rspamd_milter_set_reply (session, rcode, xcode, reply);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_REJECT);
+		break;
+
+	case METRIC_ACTION_REWRITE_SUBJECT:
+		elt = ucl_object_lookup (results, "subject");
+
+		if (elt) {
+			hname = g_string_new ("Subject");
+			hvalue = g_string_new (ucl_object_tostring (elt));
+
+			rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
+					(guint32)1, hname, hvalue);
+			g_string_free (hname, TRUE);
+			g_string_free (hvalue, TRUE);
+		}
+
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+		break;
+
+	case METRIC_ACTION_ADD_HEADER:
+		hname = g_string_new (RSPAMD_MILTER_SPAM_HEADER);
+		hvalue = g_string_new ("Yes");
+
+		rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
+				(guint32)1, hname, hvalue);
+		g_string_free (hname, TRUE);
+		g_string_free (hvalue, TRUE);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+		break;
+
+	case METRIC_ACTION_NOACTION:
+	default:
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+		break;
+	}
 }

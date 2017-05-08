@@ -1266,12 +1266,9 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	rspamd_upstream_ok (bk_conn->up);
 
 	if (session->client_milter_conn) {
-		/*
-		 * TODO: convert reply to milter reply
-		 */
 		nsession = proxy_session_refresh (session);
-		rspamd_milter_send_action (nsession->client_milter_conn,
-				RSPAMD_MILTER_ACCEPT);
+		rspamd_milter_send_task_results (nsession->client_milter_conn,
+				session->master_conn->results);
 		REF_RELEASE (session);
 		rspamd_http_message_free (msg);
 	}
@@ -1323,12 +1320,9 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 	}
 
 	if (session->client_milter_conn) {
-		/*
-		 * TODO: convert reply to milter reply
-		 */
 		nsession = proxy_session_refresh (session);
-		rspamd_milter_send_action (nsession->client_milter_conn,
-				RSPAMD_MILTER_ACCEPT);
+		rspamd_milter_send_task_results (nsession->client_milter_conn,
+				session->master_conn->results);
 		rspamd_http_message_free (msg);
 		REF_RELEASE (session);
 	}
