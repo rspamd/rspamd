@@ -266,6 +266,11 @@ MAP - RECEIVED - IP MINMAX POS - TWO
   Check Rspamc  ${result}  RCVD_TEST_02
   Check Rspamc  ${result}  RCVD_TEST_01  inverse=1
 
+MAP - RECEIVED - REDIS
+  Redis HSET  RCVD_TEST  2a01:7c8:aab6:26d:5054:ff:fed1:1da2  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${RCVD1}
+  Check Rspamc  ${result}  RCVD_TEST_REDIS_01
+
 *** Keywords ***
 Multimap Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/multimap.conf
