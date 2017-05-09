@@ -369,7 +369,8 @@ local function multimap_callback(task, rule)
       ret = r['cdb']:lookup(srch)
     elseif r['redis_key'] then
       local srch = value
-      if r['type'] == 'ip' then
+      if r['type'] == 'ip' or (r['type'] == 'received' and
+        (r['filter'] == 'real_ip' or r['filter'] == 'from_ip' or not r['filter'])) then
         srch = value:to_string()
       end
       ret = rspamd_redis_make_request(task,
