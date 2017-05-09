@@ -25,7 +25,7 @@ TEST NOT SIGNED - USERNAME WRONG DOMAIN
 
 *** Keywords ***
 DKIM Signing Setup
-  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dkim_signing.conf
+  ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dkim_signing/simple.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
   Generic Setup  PLUGIN_CONFIG
 
