@@ -352,7 +352,7 @@ rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv)
 	func_idx = lua_gettop (L);
 
 	for (i = 2; argv[i] != NULL; i ++) {
-		map = rspamd_file_xmap (argv[i], PROT_READ, &len);
+		map = rspamd_file_xmap (argv[i], PROT_READ, &len, TRUE);
 
 		if (map == NULL) {
 			rspamd_printf ("cannot open %s: %s\n", argv[i], strerror (errno));

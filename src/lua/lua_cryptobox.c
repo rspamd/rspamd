@@ -190,7 +190,7 @@ lua_cryptobox_pubkey_load (lua_State *L)
 
 	filename = luaL_checkstring (L, 1);
 	if (filename != NULL) {
-		map = rspamd_file_xmap (filename, PROT_READ, &len);
+		map = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
 
 		if (map == NULL) {
 			msg_err ("cannot open pubkey from file: %s, %s",
@@ -1230,7 +1230,7 @@ lua_cryptobox_verify_file (lua_State *L)
 	signature = lua_check_cryptobox_sign (L, 2);
 	fname = luaL_checkstring (L, 3);
 
-	map = rspamd_file_xmap (fname, PROT_READ, &len);
+	map = rspamd_file_xmap (fname, PROT_READ, &len, TRUE);
 
 	if (map != NULL && pk != NULL && signature != NULL) {
 		ret = rspamd_cryptobox_verify (signature->str, map, len,
@@ -1331,7 +1331,7 @@ lua_cryptobox_sign_file (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	data = rspamd_file_xmap (filename, PROT_READ, &len);
+	data = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
 
 	if (data == NULL) {
 		msg_err ("cannot mmap file %s: %s", filename, strerror (errno));

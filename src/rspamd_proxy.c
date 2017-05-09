@@ -1061,8 +1061,8 @@ proxy_check_file (struct rspamd_http_message *msg,
 
 	if (tok) {
 		file_str = rspamd_mempool_ftokdup (session->pool, tok);
-		session->map = rspamd_file_xmap (file_str, PROT_READ,
-				&session->map_len);
+		session->map = rspamd_file_xmap (file_str, PROT_READ, &session->map_len,
+				TRUE);
 
 		if (session->map == NULL) {
 			msg_err_session ("cannot map %s: %s", file_str, strerror (errno));
@@ -1091,7 +1091,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 			if (tok) {
 				file_str = rspamd_mempool_ftokdup (session->pool, tok);
 				session->map = rspamd_file_xmap (file_str, PROT_READ,
-						&session->map_len);
+						&session->map_len, TRUE);
 
 				if (session->map == NULL) {
 					msg_err_session ("cannot map %s: %s", file_str, strerror (errno));

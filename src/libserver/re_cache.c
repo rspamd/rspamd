@@ -1744,7 +1744,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 			close (fd);
 
 			if (try_load) {
-				map = rspamd_file_xmap (path, PROT_READ, &len);
+				map = rspamd_file_xmap (path, PROT_READ, &len, TRUE);
 
 				if (map == NULL) {
 					msg_err_re_cache ("cannot mmap hyperscan cache file %s: "

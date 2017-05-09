@@ -340,7 +340,7 @@ rspamc_password_callback (const gchar *option_name,
 	if (value != NULL) {
 		if (value[0] == '/' || value[0] == '.') {
 			/* Try to open file */
-			map = rspamd_file_xmap (value, PROT_READ, &sz);
+			map = rspamd_file_xmap (value, PROT_READ, &sz, 0);
 
 			if (map == NULL) {
 				/* Just use it as a string */

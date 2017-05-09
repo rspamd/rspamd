@@ -1973,7 +1973,7 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 		gchar fpath[PATH_MAX];
 
 		rspamd_snprintf (fpath, sizeof (fpath), "%*s", (gint)len, what);
-		map = rspamd_file_xmap (fpath, PROT_READ, &map_len);
+		map = rspamd_file_xmap (fpath, PROT_READ, &map_len, TRUE);
 
 		if (map == NULL) {
 			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,

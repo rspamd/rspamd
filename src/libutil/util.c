@@ -2114,7 +2114,7 @@ rspamd_open_zstd_dictionary (const char *path)
 	struct zstd_dictionary *dict;
 
 	dict = g_slice_alloc0 (sizeof (*dict));
-	dict->dict = rspamd_file_xmap (path, PROT_READ, &dict->size);
+	dict->dict = rspamd_file_xmap (path, PROT_READ, &dict->size, TRUE);
 
 	if (dict->dict == NULL) {
 		g_slice_free1 (sizeof (*dict), dict);
@@ -2418,7 +2418,8 @@ event_get_base (struct event *ev)
 #endif
 
 int
-rspamd_file_xopen (const char *fname, int oflags, guint mode)
+rspamd_file_xopen (const char *fname, int oflags, guint mode,
+		gboolean allow_symlink)
 {
 	struct stat sb;
 	int fd;
@@ -2434,7 +2435,12 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode)
 	}
 
 #ifdef HAVE_ONOFOLLOW
-	fd = open (fname, oflags | O_NOFOLLOW, mode);
+	if (!allow_symlink) {
+		fd = open (fname, oflags | O_NOFOLLOW, mode);
+	}
+	else {
+		fd = open (fname, oflags, mode);
+	}
 #else
 	fd = open (fname, oflags, mode);
 #endif
@@ -2443,8 +2449,8 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode)
 }
 
 gpointer
-rspamd_file_xmap (const char *fname, guint mode,
-		gsize *size)
+rspamd_file_xmap (const char *fname, guint mode, gsize *size,
+		gboolean allow_symlink)
 {
 	gint fd;
 	struct stat sb;
@@ -2454,10 +2460,10 @@ rspamd_file_xmap (const char *fname, guint mode,
 	g_assert (size != NULL);
 
 	if (mode & PROT_WRITE) {
-		fd = rspamd_file_xopen (fname, O_RDWR, 0);
+		fd = rspamd_file_xopen (fname, O_RDWR, 0, allow_symlink);
 	}
 	else {
-		fd = rspamd_file_xopen (fname, O_RDONLY, 0);
+		fd = rspamd_file_xopen (fname, O_RDONLY, 0, allow_symlink);
 	}
 
 	if (fd == -1) {

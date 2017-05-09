@@ -1632,7 +1632,7 @@ lua_util_create_file (lua_State *L)
 			mode = lua_tonumber (L, 2);
 		}
 
-		fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT|O_EXCL, mode);
+		fd = rspamd_file_xopen (fpath, O_RDWR | O_CREAT | O_EXCL, mode, 0);
 
 		if (fd == -1) {
 			lua_pushnil (L);

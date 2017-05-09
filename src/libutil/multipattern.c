@@ -470,7 +470,7 @@ rspamd_multipattern_try_load_hs (struct rspamd_multipattern *mp,
 	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp", hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
 
-	if ((map = rspamd_file_xmap (fp, PROT_READ, &len)) != NULL) {
+	if ((map = rspamd_file_xmap (fp, PROT_READ, &len, TRUE)) != NULL) {
 		if (hs_deserialize_database (map, len, &mp->db) == HS_SUCCESS) {
 			munmap (map, len);
 			return TRUE;
@@ -500,7 +500,7 @@ rspamd_multipattern_try_save_hs (struct rspamd_multipattern *mp,
 	rspamd_snprintf (fp, sizeof (fp), "%s/%*xs.hsmp.tmp", hs_cache_dir,
 			(gint)rspamd_cryptobox_HASHBYTES / 2, hash);
 
-	if ((fd = rspamd_file_xopen (fp, O_WRONLY|O_CREAT|O_EXCL, 00644)) != -1) {
+	if ((fd = rspamd_file_xopen (fp, O_WRONLY | O_CREAT | O_EXCL, 00644, 0)) != -1) {
 		if (hs_serialize_database (mp->db, &bytes, &len) == HS_SUCCESS) {
 			if (write (fd, bytes, len) == -1) {
 				msg_warn ("cannot write hyperscan cache to %s: %s",

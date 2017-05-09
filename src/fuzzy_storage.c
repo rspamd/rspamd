@@ -2762,7 +2762,8 @@ start_fuzzy (struct rspamd_worker *worker)
 			if (ctx->collection_id_file) {
 				gint fd;
 
-				fd = rspamd_file_xopen (ctx->collection_id_file, O_RDONLY, 0);
+				fd = rspamd_file_xopen (ctx->collection_id_file, O_RDONLY, 0,
+						FALSE);
 
 				if (fd == -1) {
 					if (errno != ENOENT) {
@@ -2862,7 +2863,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 		/* Try to save collection id */
 		fd = rspamd_file_xopen (ctx->collection_id_file,
-				O_WRONLY | O_CREAT | O_TRUNC, 00644);
+				O_WRONLY | O_CREAT | O_TRUNC, 00644, 0);
 
 		if (fd == -1) {
 			msg_err ("cannot open collection id to store in %s: %s",

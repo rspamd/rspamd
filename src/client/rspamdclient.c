@@ -352,7 +352,8 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		}
 		else {
 			if (comp_dictionary) {
-				dict = rspamd_file_xmap (comp_dictionary, PROT_READ, &dict_len);
+				dict = rspamd_file_xmap (comp_dictionary, PROT_READ, &dict_len,
+						TRUE);
 
 				if (dict == NULL) {
 					g_set_error (err, RCLIENT_ERROR, errno,

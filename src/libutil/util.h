@@ -479,7 +479,8 @@ struct event_base * event_get_base (struct event *ev);
  * @param mode mode to open
  * @return fd or -1 in case of error
  */
-int rspamd_file_xopen (const char *fname, int oflags, guint mode);
+int rspamd_file_xopen (const char *fname, int oflags, guint mode,
+		gboolean allow_symlink);
 
 /**
  * Map file without following symlinks or special stuff
@@ -488,8 +489,8 @@ int rspamd_file_xopen (const char *fname, int oflags, guint mode);
  * @param size target size (must NOT be NULL)
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
-gpointer rspamd_file_xmap (const char *fname, guint mode,
-		gsize *size);
+gpointer rspamd_file_xmap (const char *fname, guint mode, gsize *size,
+		gboolean allow_symlink);
 
 /**
  * Map named shared memory segment

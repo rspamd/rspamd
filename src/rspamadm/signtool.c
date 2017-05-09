@@ -133,7 +133,8 @@ rspamadm_edit_file (const gchar *fname)
 		map = NULL;
 
 		/* Try to touch source anyway */
-		fd_out = rspamd_file_xopen (fname, O_WRONLY|O_CREAT|O_EXCL, 00644);
+		fd_out = rspamd_file_xopen (fname, O_WRONLY | O_CREAT | O_EXCL, 00644,
+				0);
 
 		if (fd_out == -1) {
 			rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
@@ -144,7 +145,7 @@ rspamadm_edit_file (const gchar *fname)
 		close (fd_out);
 	}
 	else {
-		map = rspamd_file_xmap (fname, PROT_READ, &len);
+		map = rspamd_file_xmap (fname, PROT_READ, &len, TRUE);
 
 		if (map == NULL) {
 			rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
@@ -231,7 +232,7 @@ rspamadm_edit_file (const gchar *fname)
 	}
 #endif
 
-	map = rspamd_file_xmap (tmppath, PROT_READ, &len);
+	map = rspamd_file_xmap (tmppath, PROT_READ, &len, TRUE);
 
 	if (map == NULL) {
 		rspamd_fprintf (stderr, "cannot map %s: %s\n", tmppath,
@@ -241,8 +242,8 @@ rspamadm_edit_file (const gchar *fname)
 	}
 
 	rspamd_snprintf (run_cmdline, sizeof (run_cmdline), "%s.new", fname);
-	fd_out = rspamd_file_xopen (run_cmdline, O_RDWR|O_CREAT|O_TRUNC,
-			00600);
+	fd_out = rspamd_file_xopen (run_cmdline, O_RDWR | O_CREAT | O_TRUNC, 00600,
+			0);
 
 	if (fd_out == -1) {
 		rspamd_fprintf (stderr, "cannot open new file %s: %s\n", run_cmdline,
@@ -288,7 +289,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 		fd_input = rspamadm_edit_file (fname);
 	}
 	else {
-		fd_input = rspamd_file_xopen (fname, O_RDONLY, 0);
+		fd_input = rspamd_file_xopen (fname, O_RDONLY, 0, TRUE);
 	}
 
 	if (fd_input == -1) {
@@ -300,7 +301,7 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 	g_assert (fstat (fd_input, &st) != -1);
 
 	rspamd_snprintf (sigpath, sizeof (sigpath), "%s%s", fname, suffix);
-	fd_sig = rspamd_file_xopen (sigpath, O_WRONLY | O_CREAT | O_TRUNC, 00644);
+	fd_sig = rspamd_file_xopen (sigpath, O_WRONLY | O_CREAT | O_TRUNC, 00644, 0);
 
 	if (fd_sig == -1) {
 		close (fd_input);
@@ -392,7 +393,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		suffix = ".sig";
 	}
 
-	fd_input = rspamd_file_xopen (fname, O_RDONLY, 0);
+	fd_input = rspamd_file_xopen (fname, O_RDONLY, 0, TRUE);
 
 	if (fd_input == -1) {
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
@@ -403,7 +404,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 	g_assert (fstat (fd_input, &st) != -1);
 
 	rspamd_snprintf (sigpath, sizeof (sigpath), "%s%s", fname, suffix);
-	fd_sig = rspamd_file_xopen (sigpath, O_RDONLY, 0);
+	fd_sig = rspamd_file_xopen (sigpath, O_RDONLY, 0, TRUE);
 
 	if (fd_sig == -1) {
 		close (fd_input);

@@ -180,7 +180,7 @@ rspamd_map_check_file_sig (const char *fname,
 	if (bk->trusted_pubkey == NULL) {
 		/* Try to load and check pubkey */
 		rspamd_snprintf (fpath, sizeof (fpath), "%s.pub", fname);
-		data = rspamd_file_xmap (fpath, PROT_READ, &len);
+		data = rspamd_file_xmap (fpath, PROT_READ, &len, TRUE);
 
 		if (data == NULL) {
 			msg_err_map ("can't open pubkey %s: %s", fpath, strerror (errno));
@@ -628,7 +628,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 		return TRUE;
 	}
 
-	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len);
+	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
 
 	if (bytes == NULL) {
 		msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));

@@ -4351,7 +4351,7 @@ lua_text_save_in_file (lua_State *L)
 			mode = lua_tonumber (L, 3);
 		}
 
-		fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode);
+		fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
 
 		if (fd == -1) {
 			lua_pushboolean (L, false);

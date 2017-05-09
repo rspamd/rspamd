@@ -493,7 +493,7 @@ lua_fann_data (lua_State *L)
 
 
 		(void)lseek (fd, 0, SEEK_SET);
-		map = rspamd_file_xmap (fpath, PROT_READ, &sz);
+		map = rspamd_file_xmap (fpath, PROT_READ, &sz, TRUE);
 		unlink (fpath);
 		close (fd);
 
