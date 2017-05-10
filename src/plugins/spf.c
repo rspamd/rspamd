@@ -549,6 +549,21 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	const gchar *domain;
 	struct spf_resolved *l;
 	struct rspamd_async_watcher *w;
+	gint *dmarc_checks;
+
+	/* Allow dmarc */
+	dmarc_checks = rspamd_mempool_get_variable (task->task_pool, "dmarc_checks");
+
+	if (dmarc_checks) {
+		(*dmarc_checks) ++;
+	}
+	else {
+		dmarc_checks = rspamd_mempool_alloc (task->task_pool,
+				sizeof (*dmarc_checks));
+		*dmarc_checks = 1;
+		rspamd_mempool_set_variable (task->task_pool, "dmarc_checks",
+				dmarc_checks, NULL);
+	}
 
 	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
 			task->from_addr) != RADIX_NO_VALUE) {

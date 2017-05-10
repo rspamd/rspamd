@@ -870,7 +870,21 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	GError *err = NULL;
 	struct rspamd_mime_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
-	guint checked = 0, i;
+	guint checked = 0, i, *dmarc_checks;
+
+	/* Allow dmarc */
+	dmarc_checks = rspamd_mempool_get_variable (task->task_pool, "dmarc_checks");
+
+	if (dmarc_checks) {
+		(*dmarc_checks) ++;
+	}
+	else {
+		dmarc_checks = rspamd_mempool_alloc (task->task_pool,
+				sizeof (*dmarc_checks));
+		*dmarc_checks = 1;
+		rspamd_mempool_set_variable (task->task_pool, "dmarc_checks",
+				dmarc_checks, NULL);
+	}
 
 	/* First check if plugin should be enabled */
 	if ((!dkim_module_ctx->check_authed && task->user != NULL)

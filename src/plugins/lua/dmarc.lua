@@ -255,6 +255,12 @@ local function dmarc_callback(task)
   local dmarc_domain, efromdom, spf_domain
   local ip_addr = task:get_ip()
   local dkim_results = {}
+  local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'int') or 0
+
+  if dmarc_checks ~= 2 then
+    rspamd_logger.infox(task, "skip DMARC checks as either SPF or DKIM were not checked");
+    return
+  end
 
   if ((not check_authed and task:get_user()) or
       (not check_local and ip_addr and ip_addr:is_local())) then
