@@ -209,7 +209,7 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 				/* Penalize digit -> alpha translations */
 				if (!is_url && sc != UBLOCK_BASIC_LATIN &&
 						prev_state != start_process) {
-					badness += 1.0;
+					badness += 0.25;
 				}
 			}
 			else if (state == got_alpha) {
@@ -305,7 +305,7 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 			if (state == got_digit) {
 				/* Penalize digit -> alpha translations */
 				if (seen_alpha && !is_url && !g_ascii_isxdigit (*p)) {
-					badness += 1.0;
+					badness += 0.25;
 				}
 			}
 			else if (state == got_alpha) {
