@@ -35,7 +35,7 @@ GetOptions(
   "symbol|s=s@" => \@symbols_search,
   "exclude|s=s@" => \@symbols_exclude,
   "log|l=s" => \$log_file,
-  "alpha|a=f" => \$diff_alpha,
+  "alpha-score|alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
   "search-pattern=s" => \$search_pattern,
   "start=s" => \$startTime,
@@ -396,7 +396,7 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
    --reject-score=score   set reject threshold (15 by default)
    --junk-score=score     set junk score (6.0 by default)
    --symbol=sym           check specified symbol (perl regexps, '.*' by default)
-   --alpha=value          set ignore score for symbols (0.1 by default)
+   --alpha-score=score    set ignore score for symbols (0.1 by default)
    --correlations         enable correlations report
    --search-pattern       do not process input unless the desired pattern is found
    --start                starting time (oldest) for log parsing
