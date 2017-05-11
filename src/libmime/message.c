@@ -200,7 +200,7 @@ rspamd_extract_words (struct rspamd_task *task,
 	rspamd_stat_token_t *w;
 	gchar *temp_word;
 	const guchar *r;
-	guint i, nlen;
+	guint i, nlen, total_len = 0, short_len = 0;
 
 #ifdef WITH_SNOWBALL
 	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
@@ -237,6 +237,14 @@ rspamd_extract_words (struct rspamd_task *task,
 					nlen = strlen (r);
 					nlen = MIN (nlen, w->len);
 					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
+
+					if (IS_PART_UTF (part)) {
+						rspamd_str_lc_utf8 (temp_word, nlen);
+					}
+					else {
+						rspamd_str_lc (temp_word, nlen);
+					}
+
 					memcpy (temp_word, r, nlen);
 					w->begin = temp_word;
 					w->len = nlen;
@@ -265,6 +273,11 @@ rspamd_extract_words (struct rspamd_task *task,
 						RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
 						w->begin, w->len, words_hash_seed);
 				g_array_append_val (part->normalized_hashes, h);
+				total_len += w->len;
+
+				if (w->len <= 3) {
+					short_len ++;
+				}
 			}
 		}
 	}
@@ -273,6 +286,38 @@ rspamd_extract_words (struct rspamd_task *task,
 		sb_stemmer_delete (stem);
 	}
 #endif
+
+	if (part->normalized_words->len) {
+		gdouble *avg_len_p, *short_len_p;
+
+		avg_len_p = rspamd_mempool_get_variable (task->task_pool,
+				"avg_words_len");
+
+		if (avg_len_p == NULL) {
+			avg_len_p = rspamd_mempool_alloc (task->task_pool, sizeof (double));
+			*avg_len_p = total_len;
+			rspamd_mempool_set_variable (task->task_pool,
+					"avg_words_len", avg_len_p, NULL);
+		}
+		else {
+			*avg_len_p += total_len;
+		}
+
+		short_len_p = rspamd_mempool_get_variable (task->task_pool,
+				"short_words_cnt");
+
+		if (short_len_p == NULL) {
+			short_len_p = rspamd_mempool_alloc (task->task_pool, sizeof (double));
+			*short_len_p = short_len;
+			rspamd_mempool_set_variable (task->task_pool,
+					"short_words_cnt", avg_len_p, NULL);
+		}
+		else {
+			*short_len_p += short_len;
+		}
+	}
+
+
 }
 
 static void
@@ -638,7 +683,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	struct received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
-	gint i;
+	guint i;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
 	GError *err = NULL;
@@ -891,6 +936,31 @@ rspamd_message_parse (struct rspamd_task *task)
 
 		part = g_ptr_array_index (task->parts, i);
 		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
+	}
+
+	/* Calculate average words length and number of short words */
+	struct rspamd_mime_text_part *text_part;
+	gdouble *var;
+	guint total_words = 0;
+
+	PTR_ARRAY_FOREACH (task->text_parts, i, text_part) {
+		if (text_part->normalized_words) {
+			total_words += text_part->normalized_words->len;
+		}
+	}
+
+	if (total_words > 0) {
+		var = rspamd_mempool_get_variable (task->task_pool, "avg_words_len");
+
+		if (var) {
+			*var /= (double)total_words;
+		}
+
+		var = rspamd_mempool_get_variable (task->task_pool, "short_words_cnt");
+
+		if (var) {
+			*var /= (double)total_words;
+		}
 	}
 
 	rspamd_cryptobox_hash_final (&st, digest_out);
