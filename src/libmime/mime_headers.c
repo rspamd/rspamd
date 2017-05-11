@@ -17,6 +17,7 @@
 #include "mime_headers.h"
 #include "smtp_parsers.h"
 #include "mime_encoding.h"
+#include "libserver/mempool_vars_internal.h"
 
 static void
 rspamd_mime_header_check_special (struct rspamd_task *task,
@@ -444,7 +445,8 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		hexout[sizeof (hout) * 2] = '\0';
 		rspamd_encode_hex_buf (hout, sizeof (hout), hexout,
 				sizeof (hout) * 2 + 1);
-		rspamd_mempool_set_variable (task->task_pool, "headers_hash",
+		rspamd_mempool_set_variable (task->task_pool,
+				RSPAMD_MEMPOOL_HEADERS_HASH,
 				hexout, NULL);
 	}
 }

@@ -24,6 +24,7 @@
 #include "smtp_parsers.h"
 #include "mime_parser.h"
 #include "mime_encoding.h"
+#include "libserver/mempool_vars_internal.h"
 
 #ifdef WITH_SNOWBALL
 #include "libstemmer.h"
@@ -291,26 +292,26 @@ rspamd_extract_words (struct rspamd_task *task,
 		gdouble *avg_len_p, *short_len_p;
 
 		avg_len_p = rspamd_mempool_get_variable (task->task_pool,
-				"avg_words_len");
+				RSPAMD_MEMPOOL_AVG_WORDS_LEN);
 
 		if (avg_len_p == NULL) {
 			avg_len_p = rspamd_mempool_alloc (task->task_pool, sizeof (double));
 			*avg_len_p = total_len;
 			rspamd_mempool_set_variable (task->task_pool,
-					"avg_words_len", avg_len_p, NULL);
+					RSPAMD_MEMPOOL_AVG_WORDS_LEN, avg_len_p, NULL);
 		}
 		else {
 			*avg_len_p += total_len;
 		}
 
 		short_len_p = rspamd_mempool_get_variable (task->task_pool,
-				"short_words_cnt");
+				RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
 
 		if (short_len_p == NULL) {
 			short_len_p = rspamd_mempool_alloc (task->task_pool, sizeof (double));
 			*short_len_p = short_len;
 			rspamd_mempool_set_variable (task->task_pool,
-					"short_words_cnt", avg_len_p, NULL);
+					RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
 		}
 		else {
 			*short_len_p += short_len;
@@ -950,13 +951,15 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	if (total_words > 0) {
-		var = rspamd_mempool_get_variable (task->task_pool, "avg_words_len");
+		var = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_AVG_WORDS_LEN);
 
 		if (var) {
 			*var /= (double)total_words;
 		}
 
-		var = rspamd_mempool_get_variable (task->task_pool, "short_words_cnt");
+		var = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
 
 		if (var) {
 			*var /= (double)total_words;

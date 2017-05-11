@@ -23,6 +23,7 @@
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include "protocol_internal.h"
+#include "libserver/mempool_vars_internal.h"
 #include <math.h>
 
 static GQuark
@@ -357,7 +358,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							hv_tok->begin, hv_tok->len, 0xdeadbabe);
 					hp = rspamd_mempool_alloc (task->task_pool, sizeof (*hp));
 					memcpy (hp, &h, sizeof (*hp));
-					rspamd_mempool_set_variable (task->task_pool, "settings_hash",
+					rspamd_mempool_set_variable (task->task_pool,
+							RSPAMD_MEMPOOL_SETTINGS_HASH,
 							hp, NULL);
 				}
 				break;
@@ -424,7 +426,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				IF_HEADER (MTA_TAG_HEADER) {
 					gchar *mta_tag;
 					mta_tag = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
-					rspamd_mempool_set_variable (task->task_pool, "MTA-Tag",
+					rspamd_mempool_set_variable (task->task_pool,
+							RSPAMD_MEMPOOL_MTA_TAG,
 							mta_tag, NULL);
 					debug_task ("read MTA-Tag header, value: %s", mta_tag);
 				}
@@ -1068,7 +1071,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	GString *dkim_sig;
 	const ucl_object_t *rmilter_reply;
 	struct rspamd_saved_protocol_reply *cached;
-	static const gchar *varname = "cached_reply";
+	static const gchar *varname = RSPAMD_MEMPOOL_CACHED_REPLY;
 
 	/* Check for cached reply */
 	cached = rspamd_mempool_get_variable (task->task_pool, varname);
