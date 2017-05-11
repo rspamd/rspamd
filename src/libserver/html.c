@@ -1716,6 +1716,112 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		cl->d.val = strtoul (hexbuf, NULL, 16);
 		cl->valid = TRUE;
 	}
+	else if (len > 4 && rspamd_lc_cmp (p, "rgb", 3) == 0) {
+		/* We have something like rgba(x,x,x,x) or rgb(x,x,x) */
+		enum {
+			obrace,
+			num1,
+			num2,
+			num3,
+			skip_spaces
+		} state = skip_spaces, next_state = obrace;
+		gulong r = 0, g = 0, b = 0;
+		const gchar *c;
+		gboolean valid = FALSE;
+
+		p += 3;
+
+		if (*p == 'a') {
+			p ++;
+		}
+
+		c = p;
+
+		while (p < end) {
+			switch (state) {
+			case obrace:
+				if (*p == '(') {
+					p ++;
+					state = skip_spaces;
+					next_state = num1;
+				}
+				else if (g_ascii_isspace (*p)) {
+					state = skip_spaces;
+					next_state = obrace;
+				}
+				else {
+					goto stop;
+				}
+				break;
+			case num1:
+				if (*p == ',') {
+					if (!rspamd_strtoul (c, p - c, &r)) {
+						goto stop;
+					}
+
+					p ++;
+					state = skip_spaces;
+					next_state = num2;
+				}
+				else if (!g_ascii_isdigit (*p)) {
+					goto stop;
+				}
+				else {
+					p ++;
+				}
+				break;
+			case num2:
+				if (*p == ',') {
+					if (!rspamd_strtoul (c, p - c, &g)) {
+						goto stop;
+					}
+
+					p ++;
+					state = skip_spaces;
+					next_state = num3;
+				}
+				else if (!g_ascii_isdigit (*p)) {
+					goto stop;
+				}
+				else {
+					p ++;
+				}
+				break;
+			case num3:
+				if (*p == ',') {
+					if (!rspamd_strtoul (c, p - c, &b)) {
+						goto stop;
+					}
+
+					valid = TRUE;
+					goto stop;
+				}
+				else if (!g_ascii_isdigit (*p)) {
+					goto stop;
+				}
+				else {
+					p ++;
+				}
+				break;
+			case skip_spaces:
+				if (!g_ascii_isspace (*p)) {
+					c = p;
+					state = next_state;
+				}
+				else {
+					p ++;
+				}
+				break;
+			}
+		}
+
+		stop:
+
+		if (valid) {
+			cl->d.val = b + (g << 8) + (r << 16);
+			cl->valid = TRUE;
+		}
+	}
 	else {
 		/* Compare color by name */
 		search.begin = line;
