@@ -1951,6 +1951,9 @@ lua_util_is_utf_spoofed (lua_State *L)
 				return 1;
 			}
 
+			uspoof_setChecks (spc_sgl,
+					USPOOF_ALL_CHECKS & ~USPOOF_WHOLE_SCRIPT_CONFUSABLE,
+					&uc_err);
 			uspoof_setAllowedChars (spc_sgl, allowed, &uc_err);
 #if U_ICU_VERSION_MAJOR_NUM >= 51
 			uspoof_setRestrictionLevel (spc_sgl, USPOOF_MODERATELY_RESTRICTIVE);
