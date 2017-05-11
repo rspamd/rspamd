@@ -413,6 +413,9 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 	if (check_newlines) {
 		guint max_cnt = 0;
 		gint sel = 0;
+		GList *cur;
+		rspamd_cryptobox_hash_state_t hs;
+		guchar hout[rspamd_cryptobox_HASHBYTES], *hexout;
 
 		for (gint i = 0; i < RSPAMD_TASK_NEWLINES_MAX; i ++) {
 			if (nlines_count[i] > max_cnt) {
@@ -422,6 +425,27 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		}
 
 		task->nlines_type = sel;
+
+		cur = order->head;
+		rspamd_cryptobox_hash_init (&hs, NULL, 0);
+
+		while (cur) {
+			nh = cur->data;
+
+			if (nh->name) {
+				rspamd_cryptobox_hash_update (&hs, nh->name, strlen (nh->name));
+			}
+
+			cur = g_list_next (cur);
+		}
+
+		rspamd_cryptobox_hash_final (&hs, hout);
+		hexout = rspamd_mempool_alloc (task->task_pool, sizeof (hout) * 2 + 1);
+		hexout[sizeof (hout) * 2] = '\0';
+		rspamd_encode_hex_buf (hout, sizeof (hout), hexout,
+				sizeof (hout) * 2 + 1);
+		rspamd_mempool_set_variable (task->task_pool, "headers_hash",
+				hexout, NULL);
 	}
 }
 
