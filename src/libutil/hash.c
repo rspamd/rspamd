@@ -22,14 +22,31 @@
  */
 
 static const guint expire_aggressive_count = 10;
+static const guint log_base = 10;
+static const guint eviction_candidates = 16;
+static const gdouble lfu_base_value = 5.0;
 
 struct rspamd_lru_hash_s {
 	guint maxsize;
+	guint eviction_min_prio;
+	guint eviction_used;
 	GDestroyNotify value_destroy;
 	GDestroyNotify key_destroy;
-	struct rspamd_min_heap *heap;
+	struct rspamd_lru_element_s **eviction_pool;
 	GHashTable *tbl;
 };
+
+struct rspamd_lru_element_s {
+	guint16 ttl;
+	guint16 last;
+	guint8 lg_usages;
+	guint eviction_pos;
+	gpointer data;
+	gpointer key;
+	rspamd_lru_hash_t *hash;
+};
+
+#define TIME_TO_TS(t) ((guint16)(((t) / 60) & 0xFFFFU))
 
 static void
 rspamd_lru_destroy_node (gpointer value)
@@ -48,17 +65,102 @@ rspamd_lru_destroy_node (gpointer value)
 	}
 }
 
-static inline guint
-rspamd_lru_priority (guint ttl, guint usages)
+static void
+rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
+		rspamd_lru_element_t *elt)
 {
-	/* 1 day */
-	static const  guint max_ttl = 3600 * 24;
+	guint i;
 
-	if (ttl > 0 && usages > 0) {
-		return G_MAXUINT / (MIN (max_ttl, ttl) * usages);
+	g_assert (elt->eviction_pos < eviction_candidates);
+
+	memmove (&hash->eviction_pool[elt->eviction_pos],
+			&hash->eviction_pool[elt->eviction_pos + 1],
+			sizeof (rspamd_lru_element_t *) *
+					(eviction_candidates - elt->eviction_pos - 1));
+	hash->eviction_used --;
+
+	if (elt->lg_usages <= hash->eviction_min_prio) {
+		/* We also need to update min_prio */
+		hash->eviction_min_prio = G_MAXUINT;
+
+		for (i = 0; i < hash->eviction_used; i ++) {
+			if (hash->eviction_min_prio > hash->eviction_pool[i]->lg_usages) {
+				hash->eviction_min_prio = hash->eviction_pool[i]->lg_usages;
+			}
+		}
+	}
+}
+
+static void
+rspamd_lru_hash_update_counter (rspamd_lru_element_t *elt)
+{
+	guint8 counter = elt->lg_usages;
+
+	if (counter != 255) {
+		double r, baseval, p;
+
+		r = rspamd_random_double_fast ();
+		baseval = counter - lfu_base_value;
+
+		if (baseval < 0) {
+			baseval = 0;
+		}
+
+		p = 1.0 / (baseval * log_base + 1);
+
+		if (r < p) {
+			elt->lg_usages ++;
+		}
+	}
+}
+
+static inline void
+rspamd_lru_hash_decrease_counter (rspamd_lru_element_t *elt, time_t now)
+{
+	if (now - elt->last > lfu_base_value) {
+		/* Penalise counters for outdated records */
+		elt->lg_usages /= 2;
+	}
+}
+
+static gboolean
+rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
+		rspamd_lru_element_t *elt)
+{
+	guint i;
+	rspamd_lru_element_t *cur;
+
+	if (elt->eviction_pos != -1) {
+		if (hash->eviction_used < eviction_candidates) {
+			/* There are free places in eviction pool */
+			hash->eviction_pool[hash->eviction_used] = elt;
+			elt->eviction_pos = hash->eviction_used;
+			hash->eviction_used ++;
+
+			if (hash->eviction_min_prio > elt->lg_usages) {
+				hash->eviction_min_prio = elt->lg_usages;
+			}
+
+			return TRUE;
+		}
+		else if (hash->eviction_min_prio > elt->lg_usages) {
+			/* Find any candidate that has higher usage count */
+			for (i = 0; i < hash->eviction_used; i ++) {
+				cur = hash->eviction_pool[i];
+
+				if (cur->lg_usages > elt->lg_usages) {
+					cur->eviction_pos = -1;
+					elt->eviction_pos = i;
+					hash->eviction_pool[i] = elt;
+					hash->eviction_min_prio = elt->lg_usages;
+
+					return TRUE;
+				}
+			}
+		}
 	}
 
-	return G_MAXUINT;
+	return FALSE;
 }
 
 static rspamd_lru_element_t *
@@ -73,14 +175,88 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 	node = g_slice_alloc (sizeof (rspamd_lru_element_t));
 	node->data = value;
 	node->key = key;
-	node->ttl = ttl;
-	node->helt.pri = now;
+	node->ttl = TIME_TO_TS (ttl);
+
+	if (node->ttl == 0) {
+		node->ttl = 1;
+	}
+
 	node->hash = hash;
-	node->usages = 1;
-	node->storage = now;
-	node->helt.pri = rspamd_lru_priority (ttl, 1);
+	node->lg_usages = lfu_base_value;
+	node->last = TIME_TO_TS (now);
 
 	return node;
+}
+
+static void
+rspamd_lru_hash_remove_node (rspamd_lru_hash_t *hash, rspamd_lru_element_t *elt)
+{
+	if (elt->eviction_pos != -1) {
+		rspamd_lru_hash_remove_evicted (hash, elt);
+	}
+
+	g_hash_table_remove (hash->tbl, elt);
+}
+
+static rspamd_lru_element_t *
+rspamd_lru_eviction_full_update (rspamd_lru_hash_t *hash, time_t now)
+{
+	GHashTableIter it;
+	gpointer k, v;
+	rspamd_lru_element_t *cur, *selected = NULL;
+
+	g_hash_table_iter_init (&it, hash->tbl);
+	now = TIME_TO_TS (now);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		cur = v;
+
+		rspamd_lru_hash_decrease_counter (cur, now);
+
+		if (rspamd_lru_hash_maybe_evict (hash, cur)) {
+
+			if (selected && cur->lg_usages < selected->lg_usages) {
+				selected = cur;
+			}
+			else if (selected == NULL) {
+				selected = cur;
+			}
+		}
+	}
+
+	return selected;
+}
+
+static void
+rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
+{
+	double r;
+	guint i;
+	rspamd_lru_element_t *elt = NULL;
+
+	/*
+	 * We either evict one node from the eviction list
+	 * or, at some probability scan all table and update eviction
+	 * list first
+	 */
+
+	r = rspamd_random_double_fast ();
+
+	if (r < ((double)eviction_candidates) / hash->maxsize) {
+		elt = rspamd_lru_eviction_full_update (hash, now);
+	}
+	else {
+		for (i = 0; i < hash->eviction_used; i ++) {
+			elt = hash->eviction_pool[i];
+
+			if (elt->lg_usages <= hash->eviction_min_prio) {
+				break;
+			}
+		}
+	}
+
+	g_assert (elt != NULL);
+	rspamd_lru_hash_remove_node (hash, elt);
 }
 
 rspamd_lru_hash_t *
@@ -93,12 +269,18 @@ rspamd_lru_hash_new_full (
 {
 	rspamd_lru_hash_t *new;
 
-	new = g_slice_alloc (sizeof (rspamd_lru_hash_t));
+	if (maxsize < eviction_candidates * 2) {
+		maxsize = eviction_candidates * 2;
+	}
+
+	new = g_malloc0 (sizeof (rspamd_lru_hash_t));
 	new->tbl = g_hash_table_new_full (hf, cmpf, NULL, rspamd_lru_destroy_node);
-	new->heap = rspamd_min_heap_create (maxsize);
+	new->eviction_pool = g_malloc0 (sizeof (rspamd_lru_element_t *) *
+			eviction_candidates);
 	new->maxsize = maxsize;
 	new->value_destroy = value_destroy;
 	new->key_destroy = key_destroy;
+	new->eviction_min_prio = G_MAXUINT;
 
 	return new;
 }
@@ -121,16 +303,19 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 
 	res = g_hash_table_lookup (hash->tbl, key);
 	if (res != NULL) {
+		now = TIME_TO_TS(now);
+
 		if (res->ttl != 0) {
-			if (((guint)now) - res->storage > res->ttl) {
-				rspamd_min_heap_remove_elt (hash->heap, &res->helt);
-				g_hash_table_remove (hash->tbl, key);
+			if (now - res->last > res->ttl) {
+				rspamd_lru_hash_remove_node (hash, res);
+
 				return NULL;
 			}
 		}
 
-		rspamd_min_heap_update_elt (hash->heap, &res->helt,
-				rspamd_lru_priority (res->ttl, ++res->usages));
+		res->last = MAX (res->last, now);
+		rspamd_lru_hash_update_counter (res);
+		rspamd_lru_hash_maybe_evict (hash, res);
 
 		return res->data;
 	}
@@ -143,42 +328,29 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	time_t now, guint ttl)
 {
 	rspamd_lru_element_t *res;
-	guint i;
 
 	res = g_hash_table_lookup (hash->tbl, key);
 
 	if (res != NULL) {
-		rspamd_min_heap_remove_elt (hash->heap, &res->helt);
-		g_hash_table_remove (hash->tbl, key);
+		rspamd_lru_hash_remove_node (hash, res);
 	}
 	else {
-		if (hash->maxsize > 0 &&
-				g_hash_table_size (hash->tbl) >= hash->maxsize) {
-
-			for (i = 0; i < MIN (hash->maxsize, expire_aggressive_count); i ++) {
-				res = (rspamd_lru_element_t *)rspamd_min_heap_pop (hash->heap);
-
-				if (res) {
-					g_hash_table_remove (hash->tbl, res->key);
-				}
-				else {
-					break;
-				}
-			}
+		if (g_hash_table_size (hash->tbl) >= hash->maxsize) {
+			rspamd_lru_hash_evict (hash, now);
 		}
 	}
 
 	res = rspamd_lru_create_node (hash, key, value, now, ttl);
 	g_hash_table_insert (hash->tbl, key, res);
-	rspamd_min_heap_push (hash->heap, &res->helt);
+	rspamd_lru_hash_maybe_evict (hash, res);
 }
 
 void
 rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash)
 {
-	rspamd_min_heap_destroy (hash->heap);
 	g_hash_table_unref (hash->tbl);
-	g_slice_free1 (sizeof (rspamd_lru_hash_t), hash);
+	g_free (hash->eviction_pool);
+	g_free (hash);
 }
 
 
@@ -186,4 +358,10 @@ GHashTable *
 rspamd_lru_hash_get_htable (rspamd_lru_hash_t *hash)
 {
 	return hash->tbl;
+}
+
+gpointer
+rspamd_lru_hash_element_data (rspamd_lru_element_t *elt)
+{
+	return elt->data;
 }

@@ -8,20 +8,11 @@
 #define RSPAMD_HASH_H
 
 #include "config.h"
-#include "heap.h"
 
 struct rspamd_lru_hash_s;
 typedef struct rspamd_lru_hash_s rspamd_lru_hash_t;
-
-typedef struct rspamd_lru_element_s {
-	struct rspamd_min_heap_elt helt;
-	guint ttl;
-	guint usages;
-	time_t storage;
-	gpointer data;
-	gpointer key;
-	rspamd_lru_hash_t *hash;
-} rspamd_lru_element_t;
+struct rspamd_lru_element_s;
+typedef struct rspamd_lru_element_s rspamd_lru_element_t;
 
 
 /**
@@ -85,6 +76,13 @@ void rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash);
  * Get hash table for this lru hash (use rspamd_lru_element_t as data)
  */
 GHashTable *rspamd_lru_hash_get_htable (rspamd_lru_hash_t *hash);
+
+/**
+ * Get element's data
+ * @param elt
+ * @return
+ */
+gpointer rspamd_lru_hash_element_data (rspamd_lru_element_t *elt);
 #endif
 
 /*

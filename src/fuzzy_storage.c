@@ -1976,7 +1976,8 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 
 					while (g_hash_table_iter_next (&ip_it, &k, &v)) {
 						lru_elt = v;
-						ip_cur = rspamd_fuzzy_storage_stat_key (lru_elt->data);
+						ip_cur = rspamd_fuzzy_storage_stat_key (
+								rspamd_lru_hash_element_data (lru_elt));
 						ucl_object_insert_key (ip_elt, ip_cur,
 								rspamd_inet_address_to_string (k), 0, true);
 					}
@@ -2019,7 +2020,8 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 				lru_elt = v;
 
 				ucl_object_insert_key (ip_elt,
-						ucl_object_fromint (*(guint64 *)lru_elt->data),
+						ucl_object_fromint (*(guint64 *)
+								rspamd_lru_hash_element_data (lru_elt)),
 						rspamd_inet_address_to_string (k), 0, true);
 			}
 
