@@ -25,6 +25,7 @@
 #include "unix-std.h"
 #include "utlist.h"
 #include "contrib/zstd/zstd.h"
+#include "libserver/mempool_vars_internal.h"
 #include <math.h>
 
 /*
@@ -829,7 +830,8 @@ rspamd_task_cache_principal_recipient (struct rspamd_task *task,
 	rspamd_strlcpy (rcpt_lc, rcpt, len + 1);
 	rspamd_str_lc (rcpt_lc, len);
 
-	rspamd_mempool_set_variable (task->task_pool, "recipient", rcpt_lc, NULL);
+	rspamd_mempool_set_variable (task->task_pool,
+			RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT, rcpt_lc, NULL);
 
 	return rcpt_lc;
 }
@@ -840,7 +842,8 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 	const gchar *val;
 	struct rspamd_email_address *addr;
 
-	val = rspamd_mempool_get_variable (task->task_pool, "recipient");
+	val = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT);
 
 	if (val) {
 		return val;
@@ -1494,12 +1497,12 @@ rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
 		return;
 	}
 
-	tbl = rspamd_mempool_get_variable (task->task_pool, "profile");
+	tbl = rspamd_mempool_get_variable (task->task_pool, RSPAMD_MEMPOOL_PROFILE);
 
 	if (tbl == NULL) {
 		tbl = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		rspamd_mempool_set_variable (task->task_pool, "profile", tbl,
-				(rspamd_mempool_destruct_t)g_hash_table_unref);
+		rspamd_mempool_set_variable (task->task_pool, RSPAMD_MEMPOOL_PROFILE,
+				tbl, (rspamd_mempool_destruct_t)g_hash_table_unref);
 	}
 
 	pval = g_hash_table_lookup (tbl, key);
@@ -1520,7 +1523,7 @@ rspamd_task_profile_get (struct rspamd_task *task, const gchar *key)
 	GHashTable *tbl;
 	gdouble *pval = NULL;
 
-	tbl = rspamd_mempool_get_variable (task->task_pool, "profile");
+	tbl = rspamd_mempool_get_variable (task->task_pool, RSPAMD_MEMPOOL_PROFILE);
 
 	if (tbl != NULL) {
 		pval = g_hash_table_lookup (tbl, key);

@@ -26,12 +26,14 @@
  * - whitelist (map): map of whitelisted networks
  */
 
+
 #include "config.h"
 #include "libmime/message.h"
 #include "libserver/spf.h"
 #include "libutil/hash.h"
 #include "libutil/map.h"
 #include "rspamd.h"
+#include "libserver/mempool_vars_internal.h"
 
 #define DEFAULT_SYMBOL_FAIL "R_SPF_FAIL"
 #define DEFAULT_SYMBOL_SOFTFAIL "R_SPF_SOFTFAIL"
@@ -552,7 +554,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	gint *dmarc_checks;
 
 	/* Allow dmarc */
-	dmarc_checks = rspamd_mempool_get_variable (task->task_pool, "dmarc_checks");
+	dmarc_checks = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_DMARC_CHECKS);
 
 	if (dmarc_checks) {
 		(*dmarc_checks) ++;
@@ -561,7 +564,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 		dmarc_checks = rspamd_mempool_alloc (task->task_pool,
 				sizeof (*dmarc_checks));
 		*dmarc_checks = 1;
-		rspamd_mempool_set_variable (task->task_pool, "dmarc_checks",
+		rspamd_mempool_set_variable (task->task_pool,
+				RSPAMD_MEMPOOL_DMARC_CHECKS,
 				dmarc_checks, NULL);
 	}
 

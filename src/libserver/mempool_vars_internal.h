@@ -24,6 +24,11 @@
 #define RSPAMD_MEMPOOL_SETTINGS_HASH "settings_hash"
 #define RSPAMD_MEMPOOL_MTA_TAG "MTA-Tag"
 #define RSPAMD_MEMPOOL_CACHED_REPLY "cached_reply"
-
+#define RSPAMD_MEMPOOL_SPF_DOMAIN "spf_domain"
+#define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
+#define RSPAMD_MEMPOOL_PROFILE "profile"
+#define RSPAMD_MEMPOOL_RMILTER_REPLY "rmilter_reply"
+#define RSPAMD_MEMPOOL_DKIM_SIGNATURE "dkim-signature"
+#define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
 
 #endif

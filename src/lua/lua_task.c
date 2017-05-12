@@ -20,6 +20,7 @@
 #include "utlist.h"
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
+#include "libserver/mempool_vars_internal.h"
 #include <math.h>
 
 /***
@@ -3517,7 +3518,8 @@ lua_task_set_rmilter_reply (lua_State *L)
 	reply = ucl_object_lua_import (L, 2);
 
 	if (reply != NULL && task != NULL) {
-		rspamd_mempool_set_variable (task->task_pool, "rmilter-reply",
+		rspamd_mempool_set_variable (task->task_pool,
+				RSPAMD_MEMPOOL_RMILTER_REPLY,
 				reply, (rspamd_mempool_destruct_t)ucl_object_unref);
 	}
 	else {

@@ -30,6 +30,7 @@
  * - skip_mutli (flag): skip messages with multiply dkim signatures
  */
 
+
 #include "config.h"
 #include "libmime/message.h"
 #include "libserver/dkim.h"
@@ -38,6 +39,7 @@
 #include "rspamd.h"
 #include "utlist.h"
 #include "lua/lua_common.h"
+#include "libserver/mempool_vars_internal.h"
 
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"
@@ -873,7 +875,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	guint checked = 0, i, *dmarc_checks;
 
 	/* Allow dmarc */
-	dmarc_checks = rspamd_mempool_get_variable (task->task_pool, "dmarc_checks");
+	dmarc_checks = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_DMARC_CHECKS);
 
 	if (dmarc_checks) {
 		(*dmarc_checks) ++;
@@ -882,7 +885,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 		dmarc_checks = rspamd_mempool_alloc (task->task_pool,
 				sizeof (*dmarc_checks));
 		*dmarc_checks = 1;
-		rspamd_mempool_set_variable (task->task_pool, "dmarc_checks",
+		rspamd_mempool_set_variable (task->task_pool,
+				RSPAMD_MEMPOOL_DMARC_CHECKS,
 				dmarc_checks, NULL);
 	}
 

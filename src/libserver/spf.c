@@ -19,6 +19,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "utlist.h"
+#include "libserver/mempool_vars_internal.h"
 
 #define SPF_VER1_STR "v=spf1"
 #define SPF_VER2_STR "spf2."
@@ -1984,7 +1985,8 @@ rspamd_spf_cache_domain (struct rspamd_task *task)
 	}
 
 	if (cred) {
-		rspamd_mempool_set_variable (task->task_pool, "spf_domain", cred, NULL);
+		rspamd_mempool_set_variable (task->task_pool, RSPAMD_MEMPOOL_SPF_DOMAIN,
+				cred, NULL);
 	}
 
 	return cred;
@@ -1996,7 +1998,8 @@ rspamd_spf_get_domain (struct rspamd_task *task)
 	gchar *domain = NULL;
 	struct rspamd_spf_cred *cred;
 
-	cred = rspamd_mempool_get_variable (task->task_pool, "spf_domain");
+	cred = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_SPF_DOMAIN);
 
 	if (!cred) {
 		cred = rspamd_spf_cache_domain (task);
@@ -2016,7 +2019,8 @@ rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
 	struct spf_record *rec;
 	struct rspamd_spf_cred *cred;
 
-	cred = rspamd_mempool_get_variable (task->task_pool, "spf_domain");
+	cred = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_SPF_DOMAIN);
 
 	if (!cred) {
 		cred = rspamd_spf_cache_domain (task);
