@@ -784,7 +784,7 @@ if opts['reporting'] == true then
       end
       local function send_report_via_email(xmlf)
         local tmp_addr = reporting_addr
-        local encoded = rspamd_util.encode_base64(table.concat({xmlf('header'), xmlf('entries'), xmlf('footer')}, 78))
+        local encoded = rspamd_util.encode_base64(table.concat({xmlf('header'), xmlf('entries'), xmlf('footer')}), 78)
         local function mail_cb(err, data, conn)
           local function no_error(merr, mdata, wantcode)
             wantcode = wantcode or '2'
