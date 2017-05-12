@@ -661,38 +661,37 @@ if opts['reporting'] == true then
       local cursor = 0
       local function entry_to_xml(data)
         local buf = {
-          string.format(
-[[	<record>
-		<row>
-			<source_ip>%s</source_ip>
-			<count>%d</count>
-			<policy_evaluated>
-				<disposition>%s</disposition>
-				<dkim>%s</dkim>
-				<spf>%s</spf>
-			</policy_evaluated>
-		</row>
-		<identifiers>
-			<header_from>%s</header_from>
-		</identifiers>
-	</record>
-]], data.ip, data.count, data.disposition, data.dkim_disposition, data.spf_disposition, data.header_from),
+          table.concat({
+            '<record><row><source_ip>', data.ip, '</source_ip><count>',
+            data.count, '</count><policy_evaluated><disposition>',
+            data.disposition, '</disposition><dkim>', data.dkim_disposition,
+            '</dkim><spf>', data.spf_disposition, '</spf>'
+          }),
         }
+        if data.override ~= '' then
+          table.insert(buf, string.format('<reason>%s</reason>', data.override))
+        end
+        table.insert(buf, table.concat({
+          '</policy_evaluated></row><identifiers><header_from>', data.header_from,
+          '</header_from></identifiers></record>',
+        }))
         if data.dkim_results[1] or (data.spf_result ~= '' and data.spf_domain ~= '') then
-          table.insert(buf, '\t\t<auth_results>\n')
+          table.insert(buf, '<auth_results>')
           for _, d in ipairs(data.dkim_results) do
-            table.insert(buf, string.format(
-              '\t\t\t<dkim>\n\t\t\t\t<domain>%s</domain>\n\t\t\t\t<result>%s</result>\n\t\t\t</dkim>\n',
-              d.domain, d.result))
+            table.insert(buf, table.concat({
+              '<dkim><domain>', d.domain, '</domain><result>',
+              d.result, '</result></dkim>',
+            }))
           end
           if (data.spf_result ~= '' and data.spf_domain ~= '') then
-            table.insert(buf, string.format(
-              '\t\t\t<spf>\n\t\t\t\t<domain>%s</domain>\n\t\t\t\t<result>%s</result>\n\t\t\t</spf>\n',
-              data.spf_domain, data.spf_result))
+            table.insert(buf, table.concat({
+              '<spf><domain>', data.spf_domain, '</domain><result>',
+              data.spf_result, '</result>t</spf>',
+            }))
           end
-          table.insert(buf, '\t\t</auth_results>\n')
+          table.insert(buf, '</auth_results>')
         end
-        table.insert(buf, '\t<record>\n')
+        table.insert(buf, '<record>')
         return table.concat(buf)
       end
       local function dmarc_report_xml()
@@ -742,28 +741,17 @@ if opts['reporting'] == true then
             table.insert(entries, row)
           end,
           header = function()
-            return string.format(
-[[<?xml version="1.0" encoding="utf-8"?><feedback>
-	<report_metadata>
-		<org_name>%s</org_name>
-		<email>%s</email>
-		<report_id>%s</report_id>
-		<date_range>
-			<begin>%d</begin>
-			<end>%d</end>
-		</date_range>
-	</report_metadata>
-	<policy_published>
-		<domain>%s</domain>
-		<adkim>%s</adkim>
-		<aspf>%s</aspf>
-		<p>%s</p>
-		<sp>%s</sp>
-		<pct>%s</pct>
-	</policy_published>
-]], escape_xml(report_settings.org_name), escape_xml(report_settings.email), report_id, report_start, report_end,
-    reporting_domain, escape_xml(domain_policy.adkim), escape_xml(domain_policy.aspf), escape_xml(domain_policy.p),
-    escape_xml(domain_policy.sp), escape_xml(domain_policy.pct))
+              return table.concat({
+                '<?xml version="1.0" encoding="utf-8"?><feedback><report_metadata><org_name>',
+                escape_xml(report_settings.org_name), '</org_name><email>',
+                escape_xml(report_settings.email), '</email><report_id>',
+                report_id, '</report_id><date_range><begin>', report_start,
+                '</begin><end>', report_end, '</end></date_range></report_metadata><policy_published><domain>',
+                reporting_domain, '</domain><adkim>', escape_xml(domain_policy.adkim), '</adkim><aspf>',
+                escape_xml(domain_policy.aspf), '</aspf><p>', escape_xml(domain_policy.p),
+                '</p><sp>', escape_xml(domain_policy.sp), '</sp><pct>', escape_xml(domain_policy.pct),
+                '</pct></policy_published>'
+              })
           end,
           footer = function()
             return [[</feedback>]]
@@ -955,7 +943,7 @@ if opts['reporting'] == true then
           if err then
             rspamd_logger.errx(rspamd_config, 'Error deleting reports: %s', err)
           end
-          rspamd_logger.infox(rspamd_config, 'Deleted reports for %s')
+          rspamd_logger.infox(rspamd_config, 'Deleted reports for %s', reporting_domain)
           get_reporting_domain()
         end
         local ret = redis_make_request(ev_base,
@@ -1020,8 +1008,14 @@ if opts['reporting'] == true then
         local function check_addr_cb(resolver, to_resolve, results, err, _, authenticated)
           if err then
             if err == 'no records with this name' or err == 'requested record is not found' then
-              rspamd_logger.errx(rspamd_config, 'No DMARC record found for %s', reporting_domain)
-              delete_reports()
+              local esld = rspamd_util.get_tld(reporting_domain)
+              if reporting_domain ~= esld then
+                rspamd_config:get_resolver():resolve_txt(nil, pool,
+                string.format('_dmarc.%s', esld), check_addr_cb)
+              else
+                rspamd_logger.errx(rspamd_config, 'No DMARC record found for %s', reporting_domain)
+                delete_reports()
+              end
             else
               rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
               -- XXX: retry?
@@ -1041,7 +1035,13 @@ if opts['reporting'] == true then
             end
             if not found_policy then
               rspamd_logger.errx(rspamd_config, 'No policy: %s', to_resolve)
-              delete_reports()
+              local esld = rspamd_util.get_tld(reporting_domain)
+              if reporting_domain ~= esld then
+                rspamd_config:get_resolver():resolve_txt(nil, pool,
+                string.format('_dmarc.%s', esld), check_addr_cb)
+              else
+                delete_reports()
+              end
             elseif failed_policy then
               rspamd_logger.errx(rspamd_config, 'Duplicate policies: %s', to_resolve)
               delete_reports()
