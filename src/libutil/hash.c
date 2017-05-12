@@ -130,7 +130,7 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 	guint i;
 	rspamd_lru_element_t *cur;
 
-	if (elt->eviction_pos != -1) {
+	if (elt->eviction_pos == -1) {
 		if (hash->eviction_used < eviction_candidates) {
 			/* There are free places in eviction pool */
 			hash->eviction_pool[hash->eviction_used] = elt;
@@ -159,6 +159,10 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 			}
 		}
 	}
+	else {
+		/* Already in the eviction list */
+		return TRUE;
+	}
 
 	return FALSE;
 }
@@ -184,6 +188,7 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 	node->hash = hash;
 	node->lg_usages = lfu_base_value;
 	node->last = TIME_TO_TS (now);
+	node->eviction_pos = -1;
 
 	return node;
 }
