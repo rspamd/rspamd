@@ -1918,7 +1918,7 @@ rspamd_symbols_cache_call_peak_cb (struct event_base *ev_base,
 	lua_State *L = cache->cfg->lua_state;
 	struct event_base **pbase;
 
-	lua_pushvalue (L, cache->peak_cb);
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cache->peak_cb);
 	pbase = lua_newuserdata (L, sizeof (*pbase));
 	*pbase = ev_base;
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
