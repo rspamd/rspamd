@@ -147,13 +147,14 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 	gunichar uc;
 
 	while (remain > 0) {
-		uc = g_utf8_get_char (s);
-		uc = g_unichar_tolower (uc);
 		p = g_utf8_next_char (s);
 
 		if (p - s > remain) {
 			break;
 		}
+
+		uc = g_utf8_get_char (s);
+		uc = g_unichar_tolower (uc);
 
 		if (remain >= 6) {
 			r = g_unichar_to_utf8 (uc, d);

@@ -238,6 +238,7 @@ rspamd_extract_words (struct rspamd_task *task,
 					nlen = strlen (r);
 					nlen = MIN (nlen, w->len);
 					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
+					memcpy (temp_word, r, nlen);
 
 					if (IS_PART_UTF (part)) {
 						rspamd_str_lc_utf8 (temp_word, nlen);
@@ -246,7 +247,6 @@ rspamd_extract_words (struct rspamd_task *task,
 						rspamd_str_lc (temp_word, nlen);
 					}
 
-					memcpy (temp_word, r, nlen);
 					w->begin = temp_word;
 					w->len = nlen;
 				}
