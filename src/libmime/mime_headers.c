@@ -48,25 +48,31 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		}
 
 		g_ptr_array_add (task->received, recv);
+		rh->type = RSPAMD_HEADER_RECEIVED;
 		break;
 	case 0x76F31A09F4352521ULL:	/* to */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->value, strlen (rh->value), task->rcpt_mime);
+		rh->type = RSPAMD_HEADER_TO;
 		break;
 	case 0x7EB117C1480B76ULL:	/* cc */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->value, strlen (rh->value), task->rcpt_mime);
+		rh->type = RSPAMD_HEADER_CC;
 		break;
 	case 0xE4923E11C4989C8DULL:	/* bcc */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->value, strlen (rh->value), task->rcpt_mime);
+		rh->type = RSPAMD_HEADER_BCC;
 		break;
 	case 0x41E1985EDC1CBDE4ULL:	/* from */
 		task->from_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->value, strlen (rh->value), task->from_mime);
+		rh->type = RSPAMD_HEADER_FROM;
 		break;
 	case 0x43A558FC7C240226ULL:	/* message-id */ {
 
+		rh->type = RSPAMD_HEADER_MESSAGE_ID;
 		p = rh->decoded;
 		end = p + strlen (p);
 
@@ -105,17 +111,20 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		if (task->subject == NULL) {
 			task->subject = rh->decoded;
 		}
+		rh->type = RSPAMD_HEADER_SUBJECT;
 		break;
 	case 0xEE4AA2EAAC61D6F4ULL:	/* return-path */
 		if (task->from_envelope == NULL) {
 			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
 					strlen (rh->decoded));
 		}
+		rh->type = RSPAMD_HEADER_RETURN_PATH;
 		break;
 	case 0xB9EEFAD2E93C2161ULL:	/* delivered-to */
 		if (task->deliver_to == NULL) {
 			task->deliver_to = rh->decoded;
 		}
+		rh->type = RSPAMD_HEADER_DELIVERED_TO;
 		break;
 	}
 }
@@ -433,7 +442,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		while (cur) {
 			nh = cur->data;
 
-			if (nh->name) {
+			if (nh->name && nh->type != RSPAMD_HEADER_RECEIVED) {
 				rspamd_cryptobox_hash_update (&hs, nh->name, strlen (nh->name));
 			}
 

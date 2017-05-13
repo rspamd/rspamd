@@ -26,6 +26,19 @@ enum rspamd_rfc2047_encoding {
 	RSPAMD_RFC2047_BASE64,
 };
 
+enum rspamd_mime_header_special_type {
+	RSPAMD_HEADER_GENERIC = 0,
+	RSPAMD_HEADER_RECEIVED = 1,
+	RSPAMD_HEADER_TO,
+	RSPAMD_HEADER_CC,
+	RSPAMD_HEADER_BCC,
+	RSPAMD_HEADER_FROM,
+	RSPAMD_HEADER_MESSAGE_ID,
+	RSPAMD_HEADER_SUBJECT,
+	RSPAMD_HEADER_RETURN_PATH,
+	RSPAMD_HEADER_DELIVERED_TO,
+};
+
 struct rspamd_mime_header {
 	gchar *name;
 	gchar *value;
@@ -34,6 +47,7 @@ struct rspamd_mime_header {
 	gboolean tab_separated;
 	gboolean empty_separator;
 	guint order;
+	enum rspamd_mime_header_special_type type;
 	gchar *separator;
 	gchar *decoded;
 };
