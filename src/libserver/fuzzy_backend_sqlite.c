@@ -283,7 +283,7 @@ rspamd_fuzzy_backend_sqlite_cleanup_stmt (struct rspamd_fuzzy_backend_sqlite *ba
 		return -1;
 	}
 
-	msg_debug_fuzzy_backend ("reseting `%s`", prepared_stmts[idx].sql);
+	msg_debug_fuzzy_backend ("resetting `%s`", prepared_stmts[idx].sql);
 	stmt = prepared_stmts[idx].stmt;
 	sqlite3_clear_bindings (stmt);
 	sqlite3_reset (stmt);

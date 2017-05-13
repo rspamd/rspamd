@@ -839,7 +839,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 		udn = uidna_openUTS46 (UIDNA_DEFAULT, &uc_err);
 
 		if (uc_err != U_ZERO_ERROR) {
-			msg_err_pool ("cannot init idna convertor: %s", u_errorName (uc_err));
+			msg_err_pool ("cannot init idna converter: %s", u_errorName (uc_err));
 		}
 	}
 #endif

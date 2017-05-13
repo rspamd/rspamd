@@ -193,7 +193,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 
 		if (uc_err != U_ZERO_ERROR) {
 			g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
-					"cannot open convertor for utf8: %s",
+					"cannot open converter for utf8: %s",
 					u_errorName (uc_err));
 
 			return NULL;
@@ -211,7 +211,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 
 	if (conv == NULL) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
-				"cannot open convertor for %s: %s",
+				"cannot open converter for %s: %s",
 				in_enc, u_errorName (uc_err));
 
 		return NULL;
@@ -281,7 +281,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
 
 		if (uc_err != U_ZERO_ERROR) {
-			msg_err ("cannot open convertor for utf8: %s",
+			msg_err ("cannot open converter for utf8: %s",
 					u_errorName (uc_err));
 
 			return FALSE;

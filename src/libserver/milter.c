@@ -564,7 +564,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 
 		if (version < RSPAMD_MILTER_PROTO_VER) {
 			msg_warn_milter ("MTA specifies too old protocol: %d, "
-					"aborting connnection", version);
+					"aborting connection", version);
 
 			err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
 					"protocol version: %d", version);

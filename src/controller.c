@@ -1654,7 +1654,7 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 				0,
 				sizeof (*row) * (ctx->srv->history->nrows - start_row));
 
-		msg_info_session ("<%s> reseted history",
+		msg_info_session ("<%s> reset history",
 				rspamd_inet_address_to_string (session->from_addr));
 		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 	}
