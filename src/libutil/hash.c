@@ -70,6 +70,7 @@ rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
 		rspamd_lru_element_t *elt)
 {
 	guint i;
+	rspamd_lru_element_t *cur;
 
 	g_assert (hash->eviction_used > 0);
 	g_assert (elt->eviction_pos < hash->eviction_used);
@@ -82,15 +83,17 @@ rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
 	hash->eviction_used--;
 
 	if (hash->eviction_used > 0) {
-		if (elt->lg_usages <= hash->eviction_min_prio) {
-			/* We also need to update min_prio */
-			hash->eviction_min_prio = G_MAXUINT;
+		/* We also need to update min_prio and renumber eviction list */
+		hash->eviction_min_prio = G_MAXUINT;
 
-			for (i = 0; i < hash->eviction_used; i ++) {
-				if (hash->eviction_min_prio > hash->eviction_pool[i]->lg_usages) {
-					hash->eviction_min_prio = hash->eviction_pool[i]->lg_usages;
-				}
+		for (i = 0; i < hash->eviction_used; i ++) {
+			cur = hash->eviction_pool[i];
+
+			if (hash->eviction_min_prio > cur->lg_usages) {
+				hash->eviction_min_prio = cur->lg_usages;
 			}
+
+			cur->eviction_pos = i;
 		}
 	}
 	else {
