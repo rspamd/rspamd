@@ -204,11 +204,29 @@ rspamd_extract_words (struct rspamd_task *task,
 	guint i, nlen, total_len = 0, short_len = 0;
 
 #ifdef WITH_SNOWBALL
+	static GHashTable *stemmers = NULL;
+
 	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
-		stem = sb_stemmer_new (part->language, "UTF_8");
+
+		if (!stemmers) {
+			stemmers = g_hash_table_new (rspamd_strcase_hash,
+					rspamd_strcase_equal);
+		}
+
+		stem = g_hash_table_lookup (stemmers, part->language);
+
 		if (stem == NULL) {
-			msg_debug_task ("<%s> cannot create lemmatizer for %s language",
-					task->message_id, part->language);
+
+			stem = sb_stemmer_new (part->language, "UTF_8");
+
+			if (stem == NULL) {
+				msg_debug_task ("<%s> cannot create lemmatizer for %s language",
+						task->message_id, part->language);
+			}
+			else {
+				g_hash_table_insert (stemmers, g_strdup (part->language),
+						stem);
+			}
 		}
 	}
 #endif
@@ -284,11 +302,6 @@ rspamd_extract_words (struct rspamd_task *task,
 			}
 		}
 	}
-#ifdef WITH_SNOWBALL
-	if (stem != NULL) {
-		sb_stemmer_delete (stem);
-	}
-#endif
 
 	if (part->normalized_words && part->normalized_words->len) {
 		gdouble *avg_len_p, *short_len_p;
