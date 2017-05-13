@@ -288,7 +288,7 @@ rspamd_extract_words (struct rspamd_task *task,
 	}
 #endif
 
-	if (part->normalized_words->len) {
+	if (part->normalized_words && part->normalized_words->len) {
 		gdouble *avg_len_p, *short_len_p;
 
 		avg_len_p = rspamd_mempool_get_variable (task->task_pool,
