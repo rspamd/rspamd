@@ -21,6 +21,7 @@
 #include "libmime/images.h"
 #include "libserver/html.h"
 #include "lua/lua_common.h"
+#include "libserver/mempool_vars_internal.h"
 #include "utlist.h"
 #include <math.h>
 
@@ -79,6 +80,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	guint i;
 	gchar tmpbuf[128];
 	lua_State *L = task->cfg->lua_state;
+	const gchar *headers_hash;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
@@ -170,6 +172,17 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 		cur = g_list_next (cur);
 	}
+
+	/* Use headers order */
+	headers_hash = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_HEADERS_HASH);
+
+	if (headers_hash) {
+		elt.begin = (gchar *)headers_hash;
+		elt.len = 16;
+		g_array_append_val (ar, elt);
+	}
+
 
 	/* Use metatokens plugin from Lua */
 	lua_getglobal (L, "rspamd_plugins");
