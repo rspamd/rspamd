@@ -71,24 +71,33 @@ rspamd_lru_hash_remove_evicted (rspamd_lru_hash_t *hash,
 {
 	guint i;
 
-	g_assert (elt->eviction_pos < eviction_candidates);
+	g_assert (hash->eviction_used > 0);
+	g_assert (elt->eviction_pos < hash->eviction_used);
 
 	memmove (&hash->eviction_pool[elt->eviction_pos],
 			&hash->eviction_pool[elt->eviction_pos + 1],
 			sizeof (rspamd_lru_element_t *) *
 					(eviction_candidates - elt->eviction_pos - 1));
-	hash->eviction_used --;
 
-	if (elt->lg_usages <= hash->eviction_min_prio) {
-		/* We also need to update min_prio */
-		hash->eviction_min_prio = G_MAXUINT;
+	hash->eviction_used--;
 
-		for (i = 0; i < hash->eviction_used; i ++) {
-			if (hash->eviction_min_prio > hash->eviction_pool[i]->lg_usages) {
-				hash->eviction_min_prio = hash->eviction_pool[i]->lg_usages;
+	if (hash->eviction_used > 0) {
+		if (elt->lg_usages <= hash->eviction_min_prio) {
+			/* We also need to update min_prio */
+			hash->eviction_min_prio = G_MAXUINT;
+
+			for (i = 0; i < hash->eviction_used; i ++) {
+				if (hash->eviction_min_prio > hash->eviction_pool[i]->lg_usages) {
+					hash->eviction_min_prio = hash->eviction_pool[i]->lg_usages;
+				}
 			}
 		}
 	}
+	else {
+		hash->eviction_min_prio = G_MAXUINT;
+	}
+
+
 }
 
 static void
@@ -143,7 +152,7 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 
 			return TRUE;
 		}
-		else if (hash->eviction_min_prio > elt->lg_usages) {
+		else {
 			/* Find any candidate that has higher usage count */
 			for (i = 0; i < hash->eviction_used; i ++) {
 				cur = hash->eviction_pool[i];
@@ -152,7 +161,10 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 					cur->eviction_pos = -1;
 					elt->eviction_pos = i;
 					hash->eviction_pool[i] = elt;
-					hash->eviction_min_prio = elt->lg_usages;
+
+					if (hash->eviction_min_prio > elt->lg_usages) {
+						hash->eviction_min_prio = elt->lg_usages;
+					}
 
 					return TRUE;
 				}
