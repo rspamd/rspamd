@@ -418,7 +418,7 @@ namespace rspamd {
 					if (parsers->size () != E->getNumArgs () - (pos + 1)) {
 						std::ostringstream err_buf;
 						err_buf << "number of arguments for " << fname
-								<< " missmatches query string '" <<
+								<< " mismatches query string '" <<
 								qval->getString ().str ()
 										<< "', expected " << parsers->size () <<
 								" args"

@@ -122,7 +122,7 @@ requires input.
 
 # RETURN VALUE
 
-On exit `rspamc` returns `0` if operation was successfull and an error code otherwise.
+On exit `rspamc` returns `0` if operation was successful and an error code otherwise.
 
 # EXAMPLES
 
