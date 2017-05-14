@@ -215,7 +215,7 @@ rspamd_lru_hash_remove_node (rspamd_lru_hash_t *hash, rspamd_lru_element_t *elt)
 		rspamd_lru_hash_remove_evicted (hash, elt);
 	}
 
-	g_hash_table_remove (hash->tbl, elt);
+	g_hash_table_remove (hash->tbl, elt->key);
 }
 
 static rspamd_lru_element_t *
