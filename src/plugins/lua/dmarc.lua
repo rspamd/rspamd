@@ -438,7 +438,6 @@ local function dmarc_callback(task)
     -- Check dkim and spf symbols
     local spf_ok = false
     local dkim_ok = false
-    local dmarc_ok = false
 
     if task:has_symbol(symbols['spf_allow_symbol']) then
       local efrom = task:get_from(1)
@@ -525,7 +524,6 @@ local function dmarc_callback(task)
         task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
       end
     else
-      dmarc_ok = true
       task:insert_result(dmarc_symbols['allow'], res, lookup_domain, dmarc_policy)
     end
 
@@ -559,7 +557,7 @@ local function dmarc_callback(task)
       -- Prepare and send redis report element
       local period = os.date('%Y%m%d', task:get_date(0))
       local dmarc_domain_key = table.concat({redis_keys.report_prefix, hfromdom, period}, redis_keys.join_char)
-      local report_data = dmarc_report(task, spf_ok and 'pass' or 'fail', dkim_ok and 'pass' or 'fail', dmarc_ok and 'pass' or 'fail', sampled_out,
+      local report_data = dmarc_report(task, spf_ok and 'pass' or 'fail', dkim_ok and 'pass' or 'fail', disposition, sampled_out,
         hfromdom, spf_domain, dkim_results, spf_result)
       local idx_key = table.concat({redis_keys.index_prefix, period}, redis_keys.join_char)
 
@@ -673,7 +671,7 @@ if opts['reporting'] == true then
         end
         table.insert(buf, table.concat({
           '</policy_evaluated></row><identifiers><header_from>', data.header_from,
-          '</header_from></identifiers></record>',
+          '</header_from></identifiers>',
         }))
         if data.dkim_results[1] or (data.spf_result ~= '' and data.spf_domain ~= '') then
           table.insert(buf, '<auth_results>')
@@ -691,7 +689,7 @@ if opts['reporting'] == true then
           end
           table.insert(buf, '</auth_results>')
         end
-        table.insert(buf, '<record>')
+        table.insert(buf, '</record>')
         return table.concat(buf)
       end
       local function dmarc_report_xml()
@@ -771,7 +769,10 @@ if opts['reporting'] == true then
         end
       end
       local function send_report_via_email(xmlf)
-        local tmp_addr = reporting_addr
+        local tmp_addr = {}
+        for k in pairs(reporting_addr) do
+          table.insert(tmp_addr, k)
+        end
         local encoded = rspamd_util.encode_base64(table.concat({xmlf('header'), xmlf('entries'), xmlf('footer')}), 78)
         local function mail_cb(err, data, conn)
           local function no_error(merr, mdata, wantcode)
@@ -891,7 +892,7 @@ if opts['reporting'] == true then
       end
       local function make_report()
         if type(report_settings.override_address) == 'string' then
-          reporting_addr = {report_settings.override_address}
+          reporting_addr = {[report_settings.override_address] = true}
         end
         rspamd_logger.infox(ev_base, 'sending report for %s <%s>', reporting_domain, table.concat(reporting_addr, ','))
         local dmarc_xml = dmarc_report_xml()
