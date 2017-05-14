@@ -271,7 +271,7 @@
 	* [Feature] Apply DCT using AAN for fuzzy signature
 	* [Feature] Avira SAVAPI support
 	* [Feature] Cache and simplify DCT and jpeg decode
-	* [Feature] Cache libicu convertors
+	* [Feature] Cache libicu converters
 	* [Feature] Detect URLs with suspicious omographs
 	* [Feature] Do not increase score for duplicate options
 	* [Feature] Do not trust CTE, check base64 and qp strictly

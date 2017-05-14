@@ -492,7 +492,7 @@ lua_cryptobox_signature_load (lua_State *L)
 					*psig = sig;
 				}
 				else {
-					msg_err ("size of %s missmatches: %d while %d is expected",
+					msg_err ("size of %s mismatches: %d while %d is expected",
 							filename, (int)st.st_size,
 							rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
 					lua_pushnil (L);

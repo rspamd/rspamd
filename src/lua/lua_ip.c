@@ -131,7 +131,7 @@ LUA_FUNCTION_DEF (ip, get_version);
 LUA_FUNCTION_DEF (ip, is_valid);
 /***
  * @method ip:apply_mask(mask)
- * Applies mask to IP address, reseting up to `mask` least significant bits to zero.
+ * Applies mask to IP address, resetting up to `mask` least significant bits to zero.
  * @param {integer} mask how many bits to reset
  * @return {ip} new IP object with `mask` bits reset
  */

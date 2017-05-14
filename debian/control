@@ -2,7 +2,24 @@ Source: rspamd
 Section: mail
 Priority: extra
 Maintainer: Mikhail Gusarov <dottedmag@debian.org>
-Build-Depends: debhelper (>= 9), dpkg-dev (>= 1.16.1~), cmake, libevent-dev (>= 1.3), libglib2.0-dev (>= 2.16.0), libluajit-5.1-dev [amd64 armel armhf i386 kfreebsd-i386 mips mipsel powerpc powerpcspe] | liblua5.1-dev, libpcre3-dev, libssl-dev (>= 1.0), libcurl4-openssl-dev, libsqlite3-dev, libmagic-dev, perl, dh-systemd, libjemalloc-dev, ragel
+Build-Depends: cmake,
+               debhelper (>= 9),
+               dh-systemd,
+               dpkg-dev (>= 1.16.1~),
+               libcurl4-openssl-dev,
+               libevent-dev (>= 1.3),
+               libfann-dev,
+               libgd-dev,
+               libglib2.0-dev (>= 2.16.0),
+               libicu-dev,
+               libjemalloc-dev,
+               libluajit-5.1-dev [amd64 armel armhf i386 kfreebsd-i386 mips mipsel powerpc powerpcspe] | liblua5.1-dev,
+               libmagic-dev,
+               libpcre3-dev,
+               libsqlite3-dev,
+               libssl-dev (>= 1.0),
+               perl,
+               ragel
 Standards-Version: 3.9.6
 Homepage: https://rspamd.com
 Vcs-Git: git://github.com/vstakhov/rspamd.git
@@ -10,15 +27,15 @@ Vcs-Browser: https://github.com/vstakhov/rspamd
 
 Package: rspamd
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, ca-certificates
+Depends: adduser, lsb-base, ca-certificates, ${misc:Depends}, ${shlibs:Depends}
 Description: Rapid spam filtering system
  Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
  with big amount of mail and can be easily extended with own filters written in
- lua.
+ Lua.
 
 Package: rspamd-dbg
 Architecture: any
 Section: debug
-Depends: ${shlibs:Depends}, ${misc:Depends}, rspamd (= ${binary:Version})
+Depends: rspamd (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
 Description: debugging symbols for rspamd
  This package contains the debugging symbols for rspamd.

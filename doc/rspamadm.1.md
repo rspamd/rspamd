@@ -41,7 +41,7 @@ Also for each command you can check list of available **command_options** by run
 
 # RETURN VALUE
 
-On exit `rspamadm` returns `0` if operation was successfull and an error code otherwise.
+On exit `rspamadm` returns `0` if operation was successful and an error code otherwise.
 
 # EXAMPLES
 
