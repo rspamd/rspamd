@@ -684,7 +684,7 @@ if opts['reporting'] == true then
           if (data.spf_result ~= '' and data.spf_domain ~= '') then
             table.insert(buf, table.concat({
               '<spf><domain>', data.spf_domain, '</domain><result>',
-              data.spf_result, '</result>t</spf>',
+              data.spf_result, '</result></spf>',
             }))
           end
           table.insert(buf, '</auth_results>')
