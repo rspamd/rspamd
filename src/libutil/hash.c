@@ -21,7 +21,6 @@
  * LRU hashing
  */
 
-static const guint expire_aggressive_count = 10;
 static const guint log_base = 10;
 static const guint eviction_candidates = 16;
 static const gdouble lfu_base_value = 5.0;
