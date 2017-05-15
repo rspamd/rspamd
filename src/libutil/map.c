@@ -321,7 +321,9 @@ http_map_error (struct rspamd_http_connection *conn,
 	cbd->periodic->errored = TRUE;
 	msg_err_map ("error reading %s(%s): "
 			"connection with http server terminated incorrectly: %e",
-			map->name, cbd->bk->uri, err);
+			cbd->bk->uri,
+			cbd->addr ? rspamd_inet_address_to_string_pretty (cbd->addr) : "",
+			err);
 	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	MAP_RELEASE (cbd, "http_callback_data");
 }
