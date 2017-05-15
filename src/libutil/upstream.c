@@ -338,23 +338,12 @@ rspamd_upstream_revive_cb (int fd, short what, void *arg)
 }
 
 static void
-rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
+rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
+		struct upstream *up)
 {
-	gdouble ntim;
-	guint i;
-	struct upstream *cur;
-
-	RSPAMD_UPSTREAM_LOCK (ls->lock);
-	g_ptr_array_remove_index (ls->alive, up->active_idx);
-	up->active_idx = -1;
-
-	/* We need to update all indicies */
-	for (i = 0; i < ls->alive->len; i ++) {
-		cur = g_ptr_array_index (ls->alive, i);
-		cur->active_idx = i;
-	}
-
-	if (up->ctx->res != NULL && up->ctx->configured &&
+	if (up->ctx->res != NULL &&
+			up->ctx->configured &&
+			up->dns_requests == 0 &&
 			!(ls->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
 		/* Resolve name of the upstream one more time */
 		if (up->name[0] != '/') {
@@ -374,6 +363,26 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 			}
 		}
 	}
+}
+
+static void
+rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
+{
+	gdouble ntim;
+	guint i;
+	struct upstream *cur;
+
+	RSPAMD_UPSTREAM_LOCK (ls->lock);
+	g_ptr_array_remove_index (ls->alive, up->active_idx);
+	up->active_idx = -1;
+
+	/* We need to update all indicies */
+	for (i = 0; i < ls->alive->len; i ++) {
+		cur = g_ptr_array_index (ls->alive, i);
+		cur->active_idx = i;
+	}
+
+	rspamd_upstream_resolve_addrs (ls, up);
 
 	REF_RETAIN (up);
 	evtimer_set (&up->ev, rspamd_upstream_revive_cb, up);
@@ -421,10 +430,16 @@ rspamd_upstream_fail (struct upstream *up)
 					max_error_rate = 0;
 				}
 
-				if (up->ls->ups->len > 1 && error_rate > max_error_rate) {
+				if (error_rate > max_error_rate) {
 					/* Remove upstream from the active list */
-					up->errors = 0;
-					rspamd_upstream_set_inactive (up->ls, up);
+					if (up->ls->ups->len > 1) {
+						up->errors = 0;
+						rspamd_upstream_set_inactive (up->ls, up);
+					}
+					else {
+						/* Just re-resolve addresses */
+						rspamd_upstream_resolve_addrs (up->ls, up);
+					}
 				}
 			}
 		}
@@ -926,34 +941,7 @@ rspamd_upstream_reresolve (struct upstream_ctx *ctx)
 	while (cur) {
 		up = cur->data;
 		REF_RETAIN (up);
-
-		if (up->name[0] != '/' && ctx->res != NULL &&
-				!(up->ls->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
-			if (rdns_make_request_full (ctx->res,
-					rspamd_upstream_dns_cb,
-					up,
-					ctx->dns_timeout,
-					ctx->dns_retransmits,
-					1,
-					up->name,
-					RDNS_REQUEST_A) != NULL) {
-				up->dns_requests++;
-				REF_RETAIN (up);
-			}
-
-			if (rdns_make_request_full (ctx->res,
-					rspamd_upstream_dns_cb,
-					up,
-					ctx->dns_timeout,
-					ctx->dns_retransmits,
-					1,
-					up->name,
-					RDNS_REQUEST_AAAA) != NULL) {
-				up->dns_requests++;
-				REF_RETAIN (up);
-			}
-		}
-
+		rspamd_upstream_resolve_addrs (up->ls, up);
 		REF_RELEASE (up);
 		cur = g_list_next (cur);
 	}
