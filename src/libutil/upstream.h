@@ -63,6 +63,12 @@ void rspamd_upstream_fail (struct upstream *up);
 void rspamd_upstream_ok (struct upstream *up);
 
 /**
+ * Set weight for an upstream
+ * @param up
+ */
+void rspamd_upstream_set_weight (struct upstream *up, guint weight);
+
+/**
  * Create new list of upstreams
  * @return
  */
@@ -75,6 +81,14 @@ struct upstream_list* rspamd_upstreams_create (struct upstream_ctx *ctx);
  */
 void rspamd_upstreams_set_flags (struct upstream_list *ups,
 		enum rspamd_upstream_flag flags);
+
+/**
+ * Sets rotation policy for upstreams list
+ * @param ups
+ * @param rot
+ */
+void rspamd_upstreams_set_rotation (struct upstream_list *ups,
+		enum rspamd_upstream_rotation rot);
 
 /**
  * Destroy list of upstreams
@@ -131,7 +145,7 @@ gboolean rspamd_upstreams_from_ucl (struct upstream_list *ups,
 		const ucl_object_t *in, guint16 def_port, void *data);
 
 
-typedef void (*rspamd_upstream_traverse_func) (struct upstream *up,
+typedef void (*rspamd_upstream_traverse_func) (struct upstream *up, guint idx,
 		void *ud);
 
 /**

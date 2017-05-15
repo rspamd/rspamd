@@ -473,6 +473,14 @@ rspamd_upstream_ok (struct upstream *up)
 	RSPAMD_UPSTREAM_UNLOCK (up->lock);
 }
 
+void
+rspamd_upstream_set_weight (struct upstream *up, guint weight)
+{
+	RSPAMD_UPSTREAM_LOCK (up->lock);
+	up->weight = weight;
+	RSPAMD_UPSTREAM_UNLOCK (up->lock);
+}
+
 #define SEED_CONSTANT 0xa574de7df64e9b9dULL
 
 struct upstream_list*
@@ -609,6 +617,13 @@ rspamd_upstreams_set_flags (struct upstream_list *ups,
 		enum rspamd_upstream_flag flags)
 {
 	ups->flags = flags;
+}
+
+void
+rspamd_upstreams_set_rotation (struct upstream_list *ups,
+		enum rspamd_upstream_rotation rot)
+{
+	ups->rot_alg = rot;
 }
 
 gboolean
@@ -973,6 +988,6 @@ rspamd_upstreams_foreach (struct upstream_list *ups,
 	for (i = 0; i < ups->ups->len; i ++) {
 		up = g_ptr_array_index (ups->ups, i);
 
-		cb (up, ud);
+		cb (up, i, ud);
 	}
 }
