@@ -356,10 +356,6 @@ bayes_classify (struct rspamd_classifier * ctx,
 		}
 	}
 
-	pprob = rspamd_mempool_alloc (task->task_pool, sizeof (*pprob));
-	*pprob = final_prob;
-	rspamd_mempool_set_variable (task->task_pool, "bayes_prob", pprob, NULL);
-
 	if (ctx->cfg->min_tokens > 0 &&
 			cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
 		msg_info_bayes ("ignore bayes probability %.2f since we have "
@@ -370,6 +366,10 @@ bayes_classify (struct rspamd_classifier * ctx,
 
 		return TRUE;
 	}
+
+	pprob = rspamd_mempool_alloc (task->task_pool, sizeof (*pprob));
+	*pprob = final_prob;
+	rspamd_mempool_set_variable (task->task_pool, "bayes_prob", pprob, NULL);
 
 	if (cl.processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
 		/* Now we can have exactly one HAM and exactly one SPAM statfiles per classifier */
