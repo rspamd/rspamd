@@ -265,6 +265,20 @@ void* rdns_resolver_add_server (struct rdns_resolver *resolver,
 bool rdns_resolver_parse_resolv_conf (struct rdns_resolver *resolver,
 		const char *path);
 
+typedef bool (*rdns_resolv_conf_cb) (struct rdns_resolver *resolver,
+		const char *name, unsigned int port,
+		int priority, unsigned int io_cnt, void *ud);
+/**
+ * Parse nameservers calling the specified callback for each nameserver
+ * @param resolve resolver object
+ * @param path path to resolv.conf file (/etc/resolv.conf typically)
+ * @param cb callback to call
+ * @param ud userdata for callback
+ * @return true if resolv.conf has been parsed
+ */
+bool rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
+		const char *path, rdns_resolv_conf_cb cb, void *ud);
+
 /**
  * Set an external logger function to log messages from the resolver
  * @param resolver resolver object

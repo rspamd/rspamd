@@ -487,22 +487,28 @@ rdns_request_release (struct rdns_request *req)
 }
 
 static bool
-rdns_resolver_conf_process_line (struct rdns_resolver *resolver, char *line)
+rdns_resolver_conf_process_line (struct rdns_resolver *resolver,
+		const char *line, rdns_resolv_conf_cb cb, void *ud)
 {
-	char *p, *c;
+	const char *p, *c, *end;
 	bool has_obrace = false;
 	unsigned int port = dns_port;
 
-	if (strncmp (line, "nameserver", sizeof ("nameserver") - 1) == 0) {
+	end = line + strlen (line);
+
+	if (end - line > sizeof ("nameserver") - 1 &&
+			strncmp (line, "nameserver", sizeof ("nameserver") - 1) == 0) {
 		p = line + sizeof ("nameserver") - 1;
 		/* Skip spaces */
 		while (*p == ' ' || *p == '\t') {
 			p ++;
 		}
+
 		if (*p == '[') {
 			has_obrace = true;
 			p ++;
 		}
+
 		if (isxdigit (*p) || *p == ':') {
 			c = p;
 			while (isxdigit (*p) || *p == ':' || *p == '.') {
@@ -514,7 +520,7 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver, char *line)
 			else if (*p != '\0' && !isspace (*p) && *p != '#') {
 				return false;
 			}
-			*p = '\0';
+
 			if (has_obrace) {
 				p ++;
 				if (*p == ':') {
@@ -526,7 +532,14 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver, char *line)
 				}
 			}
 
-			return rdns_resolver_add_server (resolver, c, port, 0, default_io_cnt);
+			if (cb == NULL) {
+				return rdns_resolver_add_server (resolver, c, port, 0,
+						default_io_cnt) != NULL;
+			}
+			else {
+				return cb (resolver, c, port, 0,
+						default_io_cnt, ud);
+			}
 		}
 		else {
 			return false;
@@ -538,7 +551,8 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver, char *line)
 }
 
 bool
-rdns_resolver_parse_resolv_conf (struct rdns_resolver *resolver, const char *path)
+rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
+		const char *path, rdns_resolv_conf_cb cb, void *ud)
 {
 	FILE *in;
 	char buf[BUFSIZ];
@@ -550,10 +564,11 @@ rdns_resolver_parse_resolv_conf (struct rdns_resolver *resolver, const char *pat
 	}
 
 	while (!feof (in)) {
-		if (fgets (buf, sizeof (buf), in) == NULL) {
+		if (fgets (buf, sizeof (buf) - 1, in) == NULL) {
 			break;
 		}
-		if (!rdns_resolver_conf_process_line (resolver, buf)) {
+
+		if (!rdns_resolver_conf_process_line (resolver, buf, cb, ud)) {
 			rdns_warn ("rdns_resolver_parse_resolv_conf: cannot parse line: %s", buf);
 			fclose (in);
 			return false;
@@ -561,7 +576,14 @@ rdns_resolver_parse_resolv_conf (struct rdns_resolver *resolver, const char *pat
 	}
 
 	fclose (in);
+
 	return true;
+}
+
+bool
+rdns_resolver_parse_resolv_conf (struct rdns_resolver *resolver, const char *path)
+{
+	return rdns_resolver_parse_resolv_conf_cb (resolver, path, NULL, NULL);
 }
 
 bool
