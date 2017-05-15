@@ -16,7 +16,6 @@
 #include "error_private.h"
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"           /* declaration of ZSTD_isError, ZSTD_getErrorName, ZSTD_getErrorCode, ZSTD_getErrorString, ZSTD_versionNumber */
-#include "zbuff.h"          /* declaration of ZBUFF_isError, ZBUFF_getErrorName */
 
 
 /*-****************************************
@@ -42,16 +41,7 @@ ZSTD_ErrorCode ZSTD_getErrorCode(size_t code) { return ERR_getErrorCode(code); }
 
 /*! ZSTD_getErrorString() :
 *   provides error code string from enum */
-const char* ZSTD_getErrorString(ZSTD_ErrorCode code) { return ERR_getErrorName(code); }
-
-
-/* **************************************************************
-*  ZBUFF Error Management
-****************************************************************/
-unsigned ZBUFF_isError(size_t errorCode) { return ERR_isError(errorCode); }
-
-const char* ZBUFF_getErrorName(size_t errorCode) { return ERR_getErrorName(errorCode); }
-
+const char* ZSTD_getErrorString(ZSTD_ErrorCode code) { return ERR_getErrorString(code); }
 
 
 /*=**************************************************************

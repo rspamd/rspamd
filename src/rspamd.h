@@ -301,10 +301,6 @@ struct zstd_dictionary {
 	guint id;
 };
 
-
-struct ZSTD_CStream_s;
-struct ZSTD_DStream_s;
-
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
 	radix_compressed_t **local_addrs;
@@ -313,8 +309,8 @@ struct rspamd_external_libs_ctx {
 	SSL_CTX *ssl_ctx;
 	struct zstd_dictionary *in_dict;
 	struct zstd_dictionary *out_dict;
-	struct ZSTD_CStream_s *out_zstream;
-	struct ZSTD_DStream_s *in_zstream;
+	void *out_zstream;
+	void *in_zstream;
 	ref_entry_t ref;
 };
 

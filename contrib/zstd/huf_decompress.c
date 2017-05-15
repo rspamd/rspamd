@@ -35,24 +35,19 @@
 /* **************************************************************
 *  Compiler specifics
 ****************************************************************/
-#if defined (__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */)
-/* inline is defined */
-#elif defined(_MSC_VER) || defined(__GNUC__)
-#  define inline __inline
-#else
-#  define inline /* disable inline */
-#endif
-
-
 #ifdef _MSC_VER    /* Visual Studio */
 #  define FORCE_INLINE static __forceinline
 #  pragma warning(disable : 4127)        /* disable: C4127: conditional expression is constant */
 #else
-#  ifdef __GNUC__
-#    define FORCE_INLINE static inline __attribute__((always_inline))
+#  if defined (__cplusplus) || defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* C99 */
+#    ifdef __GNUC__
+#      define FORCE_INLINE static inline __attribute__((always_inline))
+#    else
+#      define FORCE_INLINE static inline
+#    endif
 #  else
-#    define FORCE_INLINE static inline
-#  endif
+#    define FORCE_INLINE static
+#  endif /* __STDC_VERSION__ */
 #endif
 
 
@@ -110,16 +105,16 @@ size_t HUF_readDTableX2 (HUF_DTable* DTable, const void* src, size_t srcSize)
 
     /* Table header */
     {   DTableDesc dtd = HUF_getDTableDesc(DTable);
-        if (tableLog > (U32)(dtd.maxTableLog+1)) return ERROR(tableLog_tooLarge);   /* DTable too small, huffman tree cannot fit in */
+        if (tableLog > (U32)(dtd.maxTableLog+1)) return ERROR(tableLog_tooLarge);   /* DTable too small, Huffman tree cannot fit in */
         dtd.tableType = 0;
         dtd.tableLog = (BYTE)tableLog;
         memcpy(DTable, &dtd, sizeof(dtd));
     }
 
-    /* Prepare ranks */
+    /* Calculate starting value for each rank */
     {   U32 n, nextRankStart = 0;
         for (n=1; n<tableLog+1; n++) {
-            U32 current = nextRankStart;
+            U32 const current = nextRankStart;
             nextRankStart += (rankVal[n] << (n-1));
             rankVal[n] = current;
     }   }
@@ -129,11 +124,11 @@ size_t HUF_readDTableX2 (HUF_DTable* DTable, const void* src, size_t srcSize)
         for (n=0; n<nbSymbols; n++) {
             U32 const w = huffWeight[n];
             U32 const length = (1 << w) >> 1;
-            U32 i;
+            U32 u;
             HUF_DEltX2 D;
             D.byte = (BYTE)n; D.nbBits = (BYTE)(tableLog + 1 - w);
-            for (i = rankVal[w]; i < rankVal[w] + length; i++)
-                dt[i] = D;
+            for (u = rankVal[w]; u < rankVal[w] + length; u++)
+                dt[u] = D;
             rankVal[w] += length;
     }   }
 
@@ -160,7 +155,7 @@ static BYTE HUF_decodeSymbolX2(BIT_DStream_t* Dstream, const HUF_DEltX2* dt, con
     if (MEM_64bits()) \
         HUF_DECODE_SYMBOLX2_0(ptr, DStreamPtr)
 
-static inline size_t HUF_decodeStreamX2(BYTE* p, BIT_DStream_t* const bitDPtr, BYTE* const pEnd, const HUF_DEltX2* const dt, const U32 dtLog)
+FORCE_INLINE size_t HUF_decodeStreamX2(BYTE* p, BIT_DStream_t* const bitDPtr, BYTE* const pEnd, const HUF_DEltX2* const dt, const U32 dtLog)
 {
     BYTE* const pStart = p;
 
@@ -366,13 +361,15 @@ typedef struct { U16 sequence; BYTE nbBits; BYTE length; } HUF_DEltX4;  /* doubl
 
 typedef struct { BYTE symbol; BYTE weight; } sortedSymbol_t;
 
+/* HUF_fillDTableX4Level2() :
+ * `rankValOrigin` must be a table of at least (HUF_TABLELOG_MAX + 1) U32 */
 static void HUF_fillDTableX4Level2(HUF_DEltX4* DTable, U32 sizeLog, const U32 consumed,
                            const U32* rankValOrigin, const int minWeight,
                            const sortedSymbol_t* sortedSymbols, const U32 sortedListSize,
                            U32 nbBitsBaseline, U16 baseSeq)
 {
     HUF_DEltX4 DElt;
-    U32 rankVal[HUF_TABLELOG_ABSOLUTEMAX + 1];
+    U32 rankVal[HUF_TABLELOG_MAX + 1];
 
     /* get pre-calculated rankVal */
     memcpy(rankVal, rankValOrigin, sizeof(rankVal));
@@ -406,14 +403,14 @@ static void HUF_fillDTableX4Level2(HUF_DEltX4* DTable, U32 sizeLog, const U32 co
     }   }
 }
 
-typedef U32 rankVal_t[HUF_TABLELOG_ABSOLUTEMAX][HUF_TABLELOG_ABSOLUTEMAX + 1];
+typedef U32 rankVal_t[HUF_TABLELOG_MAX][HUF_TABLELOG_MAX + 1];
 
 static void HUF_fillDTableX4(HUF_DEltX4* DTable, const U32 targetLog,
                            const sortedSymbol_t* sortedList, const U32 sortedListSize,
                            const U32* rankStart, rankVal_t rankValOrigin, const U32 maxWeight,
                            const U32 nbBitsBaseline)
 {
-    U32 rankVal[HUF_TABLELOG_ABSOLUTEMAX + 1];
+    U32 rankVal[HUF_TABLELOG_MAX + 1];
     const int scaleLog = nbBitsBaseline - targetLog;   /* note : targetLog >= srcLog, hence scaleLog <= 1 */
     const U32 minBits  = nbBitsBaseline - maxWeight;
     U32 s;
@@ -454,8 +451,8 @@ size_t HUF_readDTableX4 (HUF_DTable* DTable, const void* src, size_t srcSize)
 {
     BYTE weightList[HUF_SYMBOLVALUE_MAX + 1];
     sortedSymbol_t sortedSymbol[HUF_SYMBOLVALUE_MAX + 1];
-    U32 rankStats[HUF_TABLELOG_ABSOLUTEMAX + 1] = { 0 };
-    U32 rankStart0[HUF_TABLELOG_ABSOLUTEMAX + 2] = { 0 };
+    U32 rankStats[HUF_TABLELOG_MAX + 1] = { 0 };
+    U32 rankStart0[HUF_TABLELOG_MAX + 2] = { 0 };
     U32* const rankStart = rankStart0+1;
     rankVal_t rankVal;
     U32 tableLog, maxW, sizeOfSort, nbSymbols;
@@ -465,8 +462,8 @@ size_t HUF_readDTableX4 (HUF_DTable* DTable, const void* src, size_t srcSize)
     void* dtPtr = DTable+1;   /* force compiler to avoid strict-aliasing */
     HUF_DEltX4* const dt = (HUF_DEltX4*)dtPtr;
 
-    HUF_STATIC_ASSERT(sizeof(HUF_DEltX4) == sizeof(HUF_DTable));   /* if compilation fails here, assertion is false */
-    if (maxTableLog > HUF_TABLELOG_ABSOLUTEMAX) return ERROR(tableLog_tooLarge);
+    HUF_STATIC_ASSERT(sizeof(HUF_DEltX4) == sizeof(HUF_DTable));   /* if compiler fails here, assertion is wrong */
+    if (maxTableLog > HUF_TABLELOG_MAX) return ERROR(tableLog_tooLarge);
     /* memset(weightList, 0, sizeof(weightList)); */  /* is not necessary, even though some analyzer complain ... */
 
     iSize = HUF_readStats(weightList, HUF_SYMBOLVALUE_MAX + 1, rankStats, &nbSymbols, &tableLog, src, srcSize);
@@ -565,7 +562,7 @@ static U32 HUF_decodeLastSymbolX4(void* op, BIT_DStream_t* DStream, const HUF_DE
     if (MEM_64bits()) \
         ptr += HUF_decodeSymbolX4(ptr, DStreamPtr, dt, dtLog)
 
-static inline size_t HUF_decodeStreamX4(BYTE* p, BIT_DStream_t* bitDPtr, BYTE* const pEnd, const HUF_DEltX4* const dt, const U32 dtLog)
+FORCE_INLINE size_t HUF_decodeStreamX4(BYTE* p, BIT_DStream_t* bitDPtr, BYTE* const pEnd, const HUF_DEltX4* const dt, const U32 dtLog)
 {
     BYTE* const pStart = p;
 

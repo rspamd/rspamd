@@ -10,6 +10,38 @@
 #ifndef ZSTD_CCOMMON_H_MODULE
 #define ZSTD_CCOMMON_H_MODULE
 
+/*-*******************************************************
+*  Compiler specifics
+*********************************************************/
+#ifdef _MSC_VER    /* Visual Studio */
+#  define FORCE_INLINE static __forceinline
+#  include <intrin.h>                    /* For Visual 2005 */
+#  pragma warning(disable : 4100)        /* disable: C4100: unreferenced formal parameter */
+#  pragma warning(disable : 4127)        /* disable: C4127: conditional expression is constant */
+#  pragma warning(disable : 4324)        /* disable: C4324: padded structure */
+#else
+#  if defined (__cplusplus) || defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L   /* C99 */
+#    ifdef __GNUC__
+#      define FORCE_INLINE static inline __attribute__((always_inline))
+#    else
+#      define FORCE_INLINE static inline
+#    endif
+#  else
+#    define FORCE_INLINE static
+#  endif /* __STDC_VERSION__ */
+#endif
+
+#ifdef _MSC_VER
+#  define FORCE_NOINLINE static __declspec(noinline)
+#else
+#  ifdef __GNUC__
+#    define FORCE_NOINLINE static __attribute__((__noinline__))
+#  else
+#    define FORCE_NOINLINE static
+#  endif
+#endif
+
+
 /*-*************************************
 *  Dependencies
 ***************************************/
@@ -17,13 +49,21 @@
 #include "error_private.h"
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
+#ifndef XXH_STATIC_LINKING_ONLY
+#  define XXH_STATIC_LINKING_ONLY   /* XXH64_state_t */
+#endif
+#include "xxhash.h"               /* XXH_reset, update, digest */
 
 
 /*-*************************************
-*  Common macros
+*  shared macros
 ***************************************/
+#undef MIN
+#undef MAX
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 #define MAX(a,b) ((a)>(b) ? (a) : (b))
+#define CHECK_F(f) { size_t const errcod = f; if (ERR_isError(errcod)) return errcod; }  /* check and Forward error code */
+#define CHECK_E(f, e) { size_t const errcod = f; if (ERR_isError(errcod)) return ERROR(e); }  /* check and send Error code */
 
 
 /*-*************************************
@@ -66,7 +106,6 @@ typedef enum { set_basic, set_rle, set_compressed, set_repeat } symbolEncodingTy
 #define LONGNBSEQ 0x7F00
 
 #define MINMATCH 3
-#define EQUAL_READ32 4
 
 #define Litbits  8
 #define MaxLit ((1<<Litbits) - 1)
@@ -84,7 +123,8 @@ static const U32 LL_bits[MaxLL+1] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 static const S16 LL_defaultNorm[MaxLL+1] = { 4, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1,
                                              2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 1, 1, 1, 1, 1,
                                             -1,-1,-1,-1 };
-static const U32 LL_defaultNormLog = 6;
+#define LL_DEFAULTNORMLOG 6  /* for static allocation */
+static const U32 LL_defaultNormLog = LL_DEFAULTNORMLOG;
 
 static const U32 ML_bits[MaxML+1] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -94,11 +134,13 @@ static const S16 ML_defaultNorm[MaxML+1] = { 1, 4, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1,
                                              1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                                              1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,-1,-1,
                                             -1,-1,-1,-1,-1 };
-static const U32 ML_defaultNormLog = 6;
+#define ML_DEFAULTNORMLOG 6  /* for static allocation */
+static const U32 ML_defaultNormLog = ML_DEFAULTNORMLOG;
 
 static const S16 OF_defaultNorm[MaxOff+1] = { 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1,
                                               1, 1, 1, 1, 1, 1, 1, 1,-1,-1,-1,-1,-1 };
-static const U32 OF_defaultNormLog = 5;
+#define OF_DEFAULTNORMLOG 5  /* for static allocation */
+static const U32 OF_defaultNormLog = OF_DEFAULTNORMLOG;
 
 
 /*-*******************************************
@@ -110,7 +152,7 @@ static void ZSTD_copy8(void* dst, const void* src) { memcpy(dst, src, 8); }
 /*! ZSTD_wildcopy() :
 *   custom version of memcpy(), can copy up to 7 bytes too many (8 bytes if length==0) */
 #define WILDCOPY_OVERLENGTH 8
-MEM_STATIC void ZSTD_wildcopy(void* dst, const void* src, size_t length)
+MEM_STATIC void ZSTD_wildcopy(void* dst, const void* src, ptrdiff_t length)
 {
     const BYTE* ip = (const BYTE*)src;
     BYTE* op = (BYTE*)dst;
@@ -185,6 +227,7 @@ typedef struct {
     U32  log2litSum;
     U32  log2offCodeSum;
     U32  factor;
+    U32  staticPrices;
     U32  cachedPrice;
     U32  cachedLitLength;
     const BYTE* cachedLiterals;
@@ -197,7 +240,9 @@ int ZSTD_isSkipFrame(ZSTD_DCtx* dctx);
 /* custom memory allocation functions */
 void* ZSTD_defaultAllocFunction(void* opaque, size_t size);
 void ZSTD_defaultFreeFunction(void* opaque, void* address);
+#ifndef ZSTD_DLL_IMPORT
 static const ZSTD_customMem defaultCustomMem = { ZSTD_defaultAllocFunction, ZSTD_defaultFreeFunction, NULL };
+#endif
 void* ZSTD_malloc(size_t size, ZSTD_customMem customMem);
 void ZSTD_free(void* ptr, ZSTD_customMem customMem);
 
@@ -225,6 +270,15 @@ MEM_STATIC U32 ZSTD_highbit32(U32 val)
     return r;
 #   endif
 }
+
+
+/* hidden functions */
+
+/* ZSTD_invalidateRepCodes() :
+ * ensures next compression will not use repcodes from previous block.
+ * Note : only works with regular variant;
+ *        do not use with extDict variant ! */
+void ZSTD_invalidateRepCodes(ZSTD_CCtx* cctx);
 
 
 #endif   /* ZSTD_CCOMMON_H_MODULE */

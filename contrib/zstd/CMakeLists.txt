@@ -1,11 +1,14 @@
-SET(ZSTDSRC	divsufsort.c
+SET(ZSTDSRC
+			cover.c
+			divsufsort.c
 			entropy_common.c
+			error_private.c
 			fse_compress.c
 			fse_decompress.c
 			huf_compress.c
 			huf_decompress.c
-			zbuff_compress.c
-			zbuff_decompress.c
+			pool.c
+			threading.c
 			zdict.c
 			zstd_common.c
 			zstd_compress.c
