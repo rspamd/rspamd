@@ -198,7 +198,7 @@ static void rspamd_rnds_log_bridge (
 }
 
 static void
-rspamd_dns_server_init (struct upstream *up, gpointer ud)
+rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 {
 	struct rspamd_dns_resolver *r = ud;
 	rspamd_inet_addr_t *addr;
@@ -223,6 +223,25 @@ rspamd_dns_server_init (struct upstream *up, gpointer ud)
 	elt->lib_data = up;
 
 	rspamd_upstream_set_data (up, elt);
+}
+
+static void
+rspamd_dns_server_reorder (struct upstream *up, guint idx, gpointer ud)
+{
+	struct rspamd_dns_resolver *r = ud;
+
+	rspamd_upstream_set_weight (up, rspamd_upstreams_count (r->ups) - idx + 1);
+}
+
+static bool
+rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
+		const char *name, unsigned int port,
+		int priority, unsigned int io_cnt, void *ud)
+{
+	struct rspamd_dns_resolver *dns_resolver = ud;
+
+	return rspamd_upstreams_add_upstream (dns_resolver->ups,
+		name, port, NULL);
 }
 
 struct rspamd_dns_resolver *
@@ -256,7 +275,16 @@ dns_resolver_init (rspamd_logger_t *logger,
 
 	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
-		if (!rdns_resolver_parse_resolv_conf (dns_resolver->r, "/etc/resolv.conf")) {
+		dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
+		rspamd_upstreams_set_flags (dns_resolver->ups,
+				RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+		rspamd_upstreams_set_rotation (dns_resolver->ups,
+				RSPAMD_UPSTREAM_MASTER_SLAVE);
+
+		if (!rdns_resolver_parse_resolv_conf_cb (dns_resolver->r,
+				"/etc/resolv.conf",
+				rspamd_dns_resolv_conf_on_server,
+				dns_resolver)) {
 			msg_err ("cannot parse resolv.conf and no nameservers defined, "
 					"so no ways to resolve addresses");
 			rdns_resolver_release (dns_resolver->r);
@@ -264,6 +292,10 @@ dns_resolver_init (rspamd_logger_t *logger,
 
 			return dns_resolver;
 		}
+
+		/* Use normal resolv.conf rules */
+		rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_reorder,
+				dns_resolver);
 	}
 	else {
 		dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
@@ -278,12 +310,12 @@ dns_resolver_init (rspamd_logger_t *logger,
 
 			return dns_resolver;
 		}
-
-		rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_init,
-				dns_resolver);
-		rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
-				dns_resolver->ups);
 	}
+
+	rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_init,
+			dns_resolver);
+	rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
+			dns_resolver->ups);
 
 	rdns_resolver_init (dns_resolver->r);
 
