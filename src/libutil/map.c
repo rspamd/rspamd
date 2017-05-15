@@ -301,7 +301,9 @@ free_http_cbdata_dtor (gpointer p)
 		cbd->stage = map_finished;
 	}
 
-	msg_warn_map ("connection with http server is terminated: worker is stopping");
+	msg_warn_map ("%s: "
+			"connection with http server is terminated: worker is stopping",
+			map->name);
 
 }
 
@@ -317,7 +319,9 @@ http_map_error (struct rspamd_http_connection *conn,
 
 	map = cbd->map;
 	cbd->periodic->errored = TRUE;
-	msg_err_map ("connection with http server terminated incorrectly: %e", err);
+	msg_err_map ("error reading %s(%s): "
+			"connection with http server terminated incorrectly: %e",
+			map->name, cbd->bk->uri, err);
 	rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	MAP_RELEASE (cbd, "http_callback_data");
 }
@@ -618,13 +622,15 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 	gsize len;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err_map ("bad callback for reading map file");
+		msg_err_map ("%s: bad callback for reading map file",
+				data->filename);
 		return FALSE;
 	}
 
 	if (access (data->filename, R_OK) == -1) {
 		/* File does not exist, skipping */
-		msg_err_map ("map file is unavailable for reading");
+		msg_err_map ("%s: map file is unavailable for reading",
+				data->filename);
 		return TRUE;
 	}
 
@@ -672,7 +678,8 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 				r = ZSTD_decompressStream (zstream, &zout, &zin);
 
 				if (ZSTD_isError (r)) {
-					msg_err_map ("cannot decompress data: %s",
+					msg_err_map ("%s: cannot decompress data: %s",
+							data->filename,
 							ZSTD_getErrorName (r));
 					ZSTD_freeDStream (zstream);
 					g_free (out);
@@ -718,7 +725,7 @@ read_map_static (struct rspamd_map *map, struct static_map_data *data,
 	gsize len;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err_map ("bad callback for reading map file");
+		msg_err_map ("%s: bad callback for reading map file", map->name);
 		data->processed = TRUE;
 		return FALSE;
 	}
@@ -755,7 +762,8 @@ read_map_static (struct rspamd_map *map, struct static_map_data *data,
 				r = ZSTD_decompressStream (zstream, &zout, &zin);
 
 				if (ZSTD_isError (r)) {
-					msg_err_map ("cannot decompress data: %s",
+					msg_err_map ("%s: cannot decompress data: %s",
+							map->name,
 							ZSTD_getErrorName (r));
 					ZSTD_freeDStream (zstream);
 					g_free (out);
@@ -772,15 +780,15 @@ read_map_static (struct rspamd_map *map, struct static_map_data *data,
 			}
 
 			ZSTD_freeDStream (zstream);
-			msg_info_map ("read map data from static memory (%z bytes compressed, "
-					"%z uncompressed)",
+			msg_info_map ("%s: read map data from static memory (%z bytes compressed, "
+					"%z uncompressed)", map->name,
 					len, zout.pos);
 			map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
 			g_free (out);
 		}
 		else {
-			msg_info_map ("read map data from static memory (%z bytes)",
-					len);
+			msg_info_map ("%s: read map data from static memory (%z bytes)",
+					len, map->name);
 			map->read_callback (bytes, len, &periodic->cbdata, TRUE);
 		}
 	}
