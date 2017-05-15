@@ -947,8 +947,9 @@ rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 	if (r == -1) {
 		if (!async || errno != EINPROGRESS) {
 			close (fd);
-			msg_warn ("connect failed: %d, '%s'", errno,
-						strerror (errno));
+			msg_warn ("connect %s failed: %d, '%s'",
+					rspamd_inet_address_to_string_pretty (addr),
+					errno, strerror (errno));
 			return -1;
 		}
 	}
@@ -1004,8 +1005,10 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 	if (r == -1) {
 		if (!async || errno != EINPROGRESS) {
 			close (fd);
-			msg_warn ("bind failed: %d, '%s'", errno,
-						strerror (errno));
+			msg_warn ("bind %s failed: %d, '%s'",
+					rspamd_inet_address_to_string_pretty (addr),
+					errno,
+					strerror (errno));
 			return -1;
 		}
 	}
@@ -1032,7 +1035,9 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 		r = listen (fd, -1);
 
 		if (r == -1) {
-			msg_warn ("listen failed: %d, '%s'", errno, strerror (errno));
+			msg_warn ("listen %s failed: %d, '%s'",
+					rspamd_inet_address_to_string_pretty (addr),
+					errno, strerror (errno));
 			close (fd);
 			return -1;
 		}
