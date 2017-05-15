@@ -696,14 +696,14 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 			}
 
 			ZSTD_freeDStream (zstream);
-			msg_info_map ("read map data from %s (%z bytes compressed, "
+			msg_info_map ("%s: read map data, %z bytes compressed, "
 					"%z uncompressed)", data->filename,
 					len, zout.pos);
 			map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
 			g_free (out);
 		}
 		else {
-			msg_info_map ("read map data from %s (%z bytes)", data->filename,
+			msg_info_map ("%s: read map dat, %z bytes", data->filename,
 					len);
 			map->read_callback (bytes, len, &periodic->cbdata, TRUE);
 		}
@@ -780,15 +780,16 @@ read_map_static (struct rspamd_map *map, struct static_map_data *data,
 			}
 
 			ZSTD_freeDStream (zstream);
-			msg_info_map ("%s: read map data from static memory (%z bytes compressed, "
-					"%z uncompressed)", map->name,
+			msg_info_map ("%s: read map data, %z bytes compressed, "
+					"%z uncompressed)",
+					map->name,
 					len, zout.pos);
 			map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
 			g_free (out);
 		}
 		else {
-			msg_info_map ("%s: read map data from static memory (%z bytes)",
-					len, map->name);
+			msg_info_map ("%s: read map data, %z bytes",
+					map->name, len);
 			map->read_callback (bytes, len, &periodic->cbdata, TRUE);
 		}
 	}
