@@ -554,61 +554,122 @@ add_options (GQueue *opts)
 	gchar **hdr, **rcpt;
 
 	ADD_CLIENT_HEADER (opts, "User-Agent", "rspamc");
+
 	if (ip != NULL) {
+		rspamd_inet_addr_t *addr = NULL;
+
+		if (!rspamd_parse_inet_address (&addr, ip, strlen (ip))) {
+			/* Try to resolve */
+			struct addrinfo hints, *res, *cur;
+			gint r;
+
+			memset (&hints, 0, sizeof (hints));
+			hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
+#ifdef AI_IDN
+			hints.ai_flags = AI_NUMERICSERV|AI_IDN;
+#else
+			hints.ai_flags = AI_NUMERICSERV;
+#endif
+			hints.ai_family = AF_UNSPEC;
+
+			if ((r = getaddrinfo (ip, "25", &hints, &res)) == 0) {
+
+				cur = res;
+				while (cur) {
+					addr = rspamd_inet_address_from_sa (cur->ai_addr,
+							cur->ai_addrlen);
+
+					if (addr != NULL) {
+						ip = g_strdup (rspamd_inet_address_to_string (addr));
+						rspamd_inet_address_free (addr);
+						break;
+					}
+
+					cur = cur->ai_next;
+				}
+
+				freeaddrinfo (res);
+			}
+			else {
+				rspamd_fprintf (stderr, "address resolution for %s failed: %s\n",
+						ip,
+						gai_strerror (r));
+			}
+		}
+		else {
+			rspamd_inet_address_free (addr);
+		}
+
 		ADD_CLIENT_HEADER (opts, "Ip", ip);
 	}
+
 	if (from != NULL) {
 		ADD_CLIENT_HEADER (opts, "From", from);
 	}
+
 	if (user != NULL) {
 		ADD_CLIENT_HEADER (opts, "User", user);
 	}
+
 	if (rcpts != NULL) {
 
 		for (rcpt = rcpts; *rcpt != NULL; rcpt ++) {
 			ADD_CLIENT_HEADER (opts, "Rcpt", *rcpt);
 		}
 	}
+
 	if (deliver_to != NULL) {
 		ADD_CLIENT_HEADER (opts, "Deliver-To", deliver_to);
 	}
+
 	if (helo != NULL) {
 		ADD_CLIENT_HEADER (opts, "Helo", helo);
 	}
+
 	if (hostname != NULL) {
 		ADD_CLIENT_HEADER (opts, "Hostname", hostname);
 	}
+
 	if (password != NULL) {
 		ADD_CLIENT_HEADER (opts, "Password", password);
 	}
+
 	if (pass_all) {
 		ADD_CLIENT_HEADER (opts, "Pass", "all");
 	}
+
 	if (classifier) {
 		ADD_CLIENT_HEADER (opts, "Classifier", classifier);
 	}
+
 	if (weight != 0) {
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", weight);
 		ADD_CLIENT_HEADER (opts, "Weight", numbuf->str);
 	}
+
 	if (fuzzy_symbol != NULL) {
 		ADD_CLIENT_HEADER (opts, "Symbol", fuzzy_symbol);
 	}
+
 	if (flag != 0) {
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", flag);
 		ADD_CLIENT_HEADER (opts, "Flag", numbuf->str);
 	}
+
 	if (extended_urls) {
 		ADD_CLIENT_HEADER (opts, "URL-Format", "extended");
 	}
+
 	if (profile) {
 		ADD_CLIENT_HEADER (opts, "Profile", "true");
 	}
+
 	if (skip_images) {
 		ADD_CLIENT_HEADER (opts, "Skip-Images", "true");
 	}
+
 	if (skip_attachments) {
 		ADD_CLIENT_HEADER (opts, "Skip-Attachments", "true");
 	}
