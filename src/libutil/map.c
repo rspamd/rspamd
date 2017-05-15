@@ -542,7 +542,9 @@ read_data:
 				r = ZSTD_decompressStream (zstream, &zout, &zin);
 
 				if (ZSTD_isError (r)) {
-					msg_err_map ("cannot decompress data: %s",
+					msg_err_map ("%s(%s): cannot decompress data: %s",
+							cbd->bk->uri,
+							rspamd_inet_address_to_string_pretty (cbd->addr),
 							ZSTD_getErrorName (r));
 					ZSTD_freeDStream (zstream);
 					g_free (out);
@@ -559,14 +561,18 @@ read_data:
 			}
 
 			ZSTD_freeDStream (zstream);
-			msg_info_map ("read map data from %s (%z bytes compressed, "
-					"%z uncompressed)", cbd->data->host,
-								dlen, zout.pos);
+			msg_info_map ("%s(%s): read map data %z bytes compressed, "
+					"%z uncompressed",
+					cbd->bk->uri,
+					rspamd_inet_address_to_string_pretty (cbd->addr),
+					dlen, zout.pos);
 			map->read_callback (out, zout.pos, &cbd->periodic->cbdata, TRUE);
 			g_free (out);
 		}
 		else {
-			msg_info_map ("read map data from %s (%z bytes)", cbd->data->host,
+			msg_info_map ("%s(%s): read map data %z bytes",
+					cbd->bk->uri,
+					rspamd_inet_address_to_string_pretty (cbd->addr),
 					dlen);
 			map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 		}
@@ -899,7 +905,8 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 			r = ZSTD_decompressStream (zstream, &zout, &zin);
 
 			if (ZSTD_isError (r)) {
-				msg_err_map ("cannot decompress data: %s",
+				msg_err_map ("%s: cannot decompress data: %s",
+						bk->uri,
 						ZSTD_getErrorName (r));
 				ZSTD_freeDStream (zstream);
 				g_free (out);
@@ -916,14 +923,14 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 		}
 
 		ZSTD_freeDStream (zstream);
-		msg_info_map ("read map data from %s (cached) (%z bytes compressed, "
-				"%z uncompressed)", host,
+		msg_info_map ("%s: read map data cached %z bytes compressed, "
+				"%z uncompressed", bk->uri,
 				len, zout.pos);
 		map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
 		g_free (out);
 	}
 	else {
-		msg_info_map ("read map data from %s (cached) (%z bytes)", host,
+		msg_info_map ("%s: read map data cached %z bytes", bk->uri,
 				len);
 		map->read_callback (in, len, &periodic->cbdata, TRUE);
 	}
