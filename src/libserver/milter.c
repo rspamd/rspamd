@@ -981,7 +981,7 @@ rspamd_milter_set_reply (struct rspamd_milter_session *session,
 	gboolean ret;
 
 	buf = g_string_sized_new (xcode->len + rcode->len + reply->len + 2);
-	rspamd_printf_gstring (buf, "%v %v %v", xcode, rcode, reply);
+	rspamd_printf_gstring (buf, "%V %V %V", xcode, rcode, reply);
 	ret = rspamd_milter_send_action (session, RSPAMD_MILTER_REPLYCODE,
 		buf);
 
