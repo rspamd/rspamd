@@ -139,6 +139,17 @@ redis.call('HINCRBY', report_key, report, 1)
 redis.call('EXPIRE', report_key, 172800)
 ]]
 
+-- return the timezone offset in seconds, as it was on the time given by ts
+-- Eric Feliksik
+local function get_timezone_offset(ts)
+  local utcdate   = os.date("!*t", ts)
+  local localdate = os.date("*t", ts)
+  localdate.isdst = false -- this is the trick
+  return os.difftime(os.time(localdate), os.time(utcdate))
+end
+
+local tz_offset = get_timezone_offset(os.time())
+
 local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
   if not ev_base or not redis_params or not callback or not command then
     return false,nil,nil
@@ -555,7 +566,7 @@ local function dmarc_callback(task)
         end
       end
       -- Prepare and send redis report element
-      local period = os.date('%Y%m%d', task:get_date(0))
+      local period = os.date('%Y%m%d', task:get_date({type = 'connect', gmt = true}))
       local dmarc_domain_key = table.concat({redis_keys.report_prefix, hfromdom, period}, redis_keys.join_char)
       local report_data = dmarc_report(task, spf_ok and 'pass' or 'fail', dkim_ok and 'pass' or 'fail', disposition, sampled_out,
         hfromdom, spf_domain, dkim_results, spf_result)
@@ -1128,10 +1139,10 @@ if opts['reporting'] == true then
       local function send_reports(time)
         rspamd_logger.infox(ev_base, 'sending reports ostensibly %1', time)
         pool:set_variable(VAR_NAME, time)
-        local yesterday = os.date('*t', rspamd_util.get_time() - INTERVAL)
-        local today = os.date('*t', rspamd_util.get_time())
-        report_start = os.time({year = yesterday.year, month = yesterday.month, day = yesterday.day, hour = 0})
-        report_end = os.time({year = today.year, month = today.month, day = today.day, hour = 0})
+        local yesterday = os.date('!*t', rspamd_util.get_time() - INTERVAL)
+        local today = os.date('!*t', rspamd_util.get_time())
+        report_start = os.time({year = yesterday.year, month = yesterday.month, day = yesterday.day, hour = 0}) + tz_offset
+        report_end = os.time({year = today.year, month = today.month, day = today.day, hour = 0}) + tz_offset
         want_period = table.concat({
           yesterday.year,
           string.format('%02d', yesterday.month),
