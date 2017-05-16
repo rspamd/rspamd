@@ -223,6 +223,11 @@ local function apply_addr_filter(task, filter, input, rule)
     if addr and addr[1] then
       return addr[1]['domain']
     end
+  elseif filter == 'email:domain:tld' then
+    local addr = util.parse_mail_address(input, task:get_mempool())
+    if addr and addr[1] then
+      return util.get_tld(addr[1]['domain'])
+    end
   elseif filter == 'email:name' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
