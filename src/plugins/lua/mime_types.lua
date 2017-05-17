@@ -56,6 +56,8 @@ local settings = {
     jar = 3,
     js = 0.5,
     vbs = 4,
+    wsf = 4,
+    hta = 4,
   },
 
   archive_extensions = {
