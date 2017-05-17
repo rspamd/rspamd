@@ -1168,6 +1168,11 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 		rspamd_http_message_add_header_len (msg, TLS_VERSION_HEADER,
 				found->begin, found->len);
 	}
+
+	IF_MACRO("{auth_authen}") {
+		rspamd_http_message_add_header_len (msg, USER_HEADER,
+				found->begin, found->len);
+	}
 }
 
 struct rspamd_http_message *
