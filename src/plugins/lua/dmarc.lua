@@ -574,7 +574,7 @@ local function dmarc_callback(task)
         end
       end
       -- Prepare and send redis report element
-      local period = os.date('%Y%m%d', task:get_date({type = 'connect', gmt = true}))
+      local period = os.date('%Y%m%d', task:get_date({format = 'connect', gmt = true}))
       local dmarc_domain_key = table.concat({redis_keys.report_prefix, hfromdom, period}, redis_keys.join_char)
       local report_data = dmarc_report(task, spf_ok and 'pass' or 'fail', dkim_ok and 'pass' or 'fail', disposition, sampled_out,
         hfromdom, spf_domain, dkim_results, spf_result)
