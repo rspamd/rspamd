@@ -77,12 +77,14 @@ local symbols = {
   spf_softfail_symbol = 'R_SPF_SOFTFAIL',
   spf_neutral_symbol = 'R_SPF_NEUTRAL',
   spf_tempfail_symbol = 'R_SPF_DNSFAIL',
+  spf_permfail_symbol = 'R_SPF_PERMFAIL',
   spf_na_symbol = 'R_SPF_NA',
 
   dkim_allow_symbol = 'R_DKIM_ALLOW',
   dkim_deny_symbol = 'R_DKIM_REJECT',
   dkim_tempfail_symbol = 'R_DKIM_TEMPFAIL',
   dkim_na_symbol = 'R_DKIM_NA',
+  dkim_permfail_symbol = 'R_DKIM_PERMFAIL',
 }
 
 local dmarc_symbols = {
@@ -252,7 +254,7 @@ local function dmarc_report(task, spf_ok, dkim_ok, disposition, sampled_out, hfr
   local res = table.concat({
     ip:to_string(), spf_ok, dkim_ok,
     disposition, (sampled_out and 'sampled_out' or ''), hfromdom,
-    dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, spfdom or '', spf_result or ''}, ',')
+    dkim_pass, dkim_fail, dkim_temperror, dkim_permerror, spfdom, spf_result}, ',')
 
   return res
 end
@@ -266,7 +268,7 @@ local function dmarc_callback(task)
   end
   local from = task:get_from(2)
   local hfromdom = ((from or E)[1] or E).domain
-  local dmarc_domain, efromdom, spf_domain
+  local dmarc_domain, spf_domain
   local ip_addr = task:get_ip()
   local dkim_results = {}
   local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'int') or 0
@@ -449,24 +451,23 @@ local function dmarc_callback(task)
     -- Check dkim and spf symbols
     local spf_ok = false
     local dkim_ok = false
+    spf_domain = ((task:get_from(1) or E)[1] or E).domain
+    if not spf_domain or spf_domain == '' then
+      spf_domain = task:get_helo() or ''
+    end
 
     if task:has_symbol(symbols['spf_allow_symbol']) then
-      local efrom = task:get_from(1)
-      efromdom = ((efrom or E)[1] or E).domain
-      spf_domain = efromdom or task:get_helo()
-      if efromdom then
-        if strict_spf and rspamd_util.strequal_caseless(spf_domain, hfromdom) then
+      if strict_spf and rspamd_util.strequal_caseless(spf_domain, hfromdom) then
+        spf_ok = true
+      elseif strict_spf then
+        table.insert(reason, "SPF not aligned (strict)")
+      end
+      if not strict_spf then
+        local spf_tld = rspamd_util.get_tld(spf_domain)
+        if rspamd_util.strequal_caseless(spf_tld, dmarc_domain) then
           spf_ok = true
-        elseif strict_spf then
-          table.insert(reason, "SPF not aligned (strict)")
-        end
-        if not strict_spf then
-          local spf_tld = rspamd_util.get_tld(spf_domain)
-          if rspamd_util.strequal_caseless(spf_tld, dmarc_domain) then
-            spf_ok = true
-          else
-            table.insert(reason, "SPF not aligned (relaxed)")
-          end
+        else
+          table.insert(reason, "SPF not aligned (relaxed)")
         end
       end
     else
@@ -552,7 +553,7 @@ local function dmarc_callback(task)
           spf_result = 'softfail'
         elseif task:get_symbol(symbols.spf_neutral_symbol) then
           spf_result = 'neutral'
-        elseif task:get_symbol(symbols.spf_softfail_symbol) then
+        elseif task:get_symbol(symbols.spf_permfail_symbol) then
           spf_result = 'permerror'
         else
           spf_result = 'none'
@@ -563,6 +564,13 @@ local function dmarc_callback(task)
         dkim_results.fail = {}
         for _, domain in ipairs(dkim_deny) do
           table.insert(dkim_results.fail, domain)
+        end
+      end
+      local dkim_permerror = ((task:get_symbol(symbols.dkim_permfail_symbol) or E)[1] or E).options
+      if dkim_permerror then
+        dkim_results.permerror = {}
+        for _, domain in ipairs(dkim_permerror) do
+          table.insert(dkim_results.permerror, domain)
         end
       end
       -- Prepare and send redis report element
@@ -684,23 +692,19 @@ if opts['reporting'] == true then
           '</policy_evaluated></row><identifiers><header_from>', data.header_from,
           '</header_from></identifiers>',
         }))
-        if data.dkim_results[1] or (data.spf_result ~= '' and data.spf_domain ~= '') then
-          table.insert(buf, '<auth_results>')
+        table.insert(buf, '<auth_results>')
+        if data.dkim_results[1] then
           for _, d in ipairs(data.dkim_results) do
             table.insert(buf, table.concat({
               '<dkim><domain>', d.domain, '</domain><result>',
               d.result, '</result></dkim>',
             }))
           end
-          if (data.spf_result ~= '' and data.spf_domain ~= '') then
-            table.insert(buf, table.concat({
-              '<spf><domain>', data.spf_domain, '</domain><result>',
-              data.spf_result, '</result></spf>',
-            }))
-          end
-          table.insert(buf, '</auth_results>')
         end
-        table.insert(buf, '</record>')
+        table.insert(buf, table.concat({
+          '<spf><domain>', data.spf_domain, '</domain><result>',
+          data.spf_result, '</result></spf></auth_results></record>',
+        }))
         return table.concat(buf)
       end
       local function dmarc_report_xml()
