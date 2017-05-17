@@ -257,25 +257,52 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target,
 		return -1;
 	}
 
-	addr = rspamd_inet_addr_create (su.sa.sa_family);
-	addr->slen = len;
+	if (su.sa.sa_family == AF_INET6) {
+		/* Deal with bloody v4 mapped to v6 addresses */
 
-	if (addr->af == AF_UNIX) {
-		addr->u.un = g_slice_alloc0 (sizeof (*addr->u.un));
-		/* Get name from the listening socket */
-		len = sizeof (su);
+		static const guint8 mask[] = {
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+		};
+		const guint8 *p;
 
-		if (getsockname (sock, &su.sa, &len) != -1) {
-			memcpy (&addr->u.un->addr, &su.su, MIN (len,
-					sizeof (struct sockaddr_un)));
+		if (memcmp ((const guint8 *)&su.s6.sin6_addr, mask, sizeof (mask)) == 0) {
+			p = (const guint8 *)&su.s6.sin6_addr;
+
+			if ((p[10] == 0xff && p[11] == 0xff)) {
+				addr = rspamd_inet_addr_create (AF_INET);
+				memcpy (&addr->u.in.addr.s4.sin_addr, &p[12],
+						sizeof (struct in_addr));
+			}
+			else {
+				/* Something strange but not mapped v4 address */
+				addr = rspamd_inet_addr_create (AF_INET6);
+				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
+						sizeof (struct in6_addr));
+			}
 		}
-		else {
-			/* Just copy socket address */
-			memcpy (&addr->u.un->addr, &su.sa, sizeof (struct sockaddr));
-		}
+
 	}
 	else {
-		memcpy (&addr->u.in.addr, &su, MIN (len, sizeof (addr->u.in.addr)));
+		addr = rspamd_inet_addr_create (su.sa.sa_family);
+		addr->slen = len;
+
+		if (addr->af == AF_UNIX) {
+			addr->u.un = g_slice_alloc0 (sizeof (*addr->u.un));
+			/* Get name from the listening socket */
+			len = sizeof (su);
+
+			if (getsockname (sock, &su.sa, &len) != -1) {
+				memcpy (&addr->u.un->addr, &su.su, MIN (len,
+						sizeof (struct sockaddr_un)));
+			}
+			else {
+				/* Just copy socket address */
+				memcpy (&addr->u.un->addr, &su.sa, sizeof (struct sockaddr));
+			}
+		}
+		else {
+			memcpy (&addr->u.in.addr, &su, MIN (len, sizeof (addr->u.in.addr)));
+		}
 	}
 
 	if (rspamd_socket_nonblocking (nfd) < 0) {
