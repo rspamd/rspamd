@@ -174,6 +174,8 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			rspamd_fstring_free (session->hostname);
 		}
 
+		rspamd_mempool_delete (priv->pool);
+
 		g_free (priv);
 		g_free (session);
 	}
@@ -507,12 +509,16 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		msg_debug_milter ("mail command");
 
 		while (pos < end) {
-			zero = memchr (pos, '\0', end - pos);
 			struct rspamd_email_address *addr;
+			gchar *cpy;
 
-			if (zero) {
-				msg_debug_milter ("got mail: %*s", (int)(zero - pos), pos);
-				addr = rspamd_email_address_from_smtp (pos, zero - pos);
+			zero = memchr (pos, '\0', end - pos);
+
+			if (zero && zero > pos) {
+				cpy = rspamd_mempool_alloc (priv->pool, zero - pos);
+				memcpy (cpy, pos, zero - pos);
+				msg_debug_milter ("got mail: %*s", (int)(zero - pos), cpy);
+				addr = rspamd_email_address_from_smtp (cpy, zero - pos);
 
 				if (addr) {
 					session->from = addr;
@@ -525,7 +531,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 				msg_debug_milter ("got weird from: %*s", (int)(end - pos),
 						pos);
 				/* That actually should not happen */
-				addr = rspamd_email_address_from_smtp (pos, end - pos);
+				cpy = rspamd_mempool_alloc (priv->pool, end - pos);
+				memcpy (cpy, pos, end - pos);
+				addr = rspamd_email_address_from_smtp (cpy, end - pos);
 
 				if (addr) {
 					session->from = addr;
@@ -593,12 +601,17 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		msg_debug_milter ("rcpt command");
 
 		while (pos < end) {
-			zero = memchr (pos, '\0', end - pos);
 			struct rspamd_email_address *addr;
+			gchar *cpy;
 
-			if (zero) {
-				msg_debug_milter ("got rcpt: %*s", (int)(zero - pos), pos);
-				addr = rspamd_email_address_from_smtp (pos, zero - pos);
+			zero = memchr (pos, '\0', end - pos);
+
+			if (zero && zero > pos) {
+				cpy = rspamd_mempool_alloc (priv->pool, end - pos);
+				memcpy (cpy, pos, end - pos);
+
+				msg_debug_milter ("got rcpt: %*s", (int)(zero - pos), cpy);
+				addr = rspamd_email_address_from_smtp (cpy, zero - pos);
 
 				if (addr) {
 					if (!session->rcpts) {
@@ -611,10 +624,13 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 				pos = zero + 1;
 			}
 			else {
+				cpy = rspamd_mempool_alloc (priv->pool, end - pos);
+				memcpy (cpy, pos, end - pos);
+
 				msg_debug_milter ("got weird rcpt: %*s", (int)(end - pos),
 						pos);
 				/* That actually should not happen */
-				addr = rspamd_email_address_from_smtp (pos, end - pos);
+				addr = rspamd_email_address_from_smtp (cpy, end - pos);
 
 				if (addr) {
 					if (!session->rcpts) {
@@ -952,6 +968,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->parser.buf = rspamd_fstring_sized_new (RSPAMD_MILTER_MESSAGE_CHUNK + 5);
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
+	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
 	ottery_rand_bytes (uidbuf, sizeof (uidbuf));
 	rspamd_encode_hex_buf (uidbuf, sizeof (uidbuf), priv->uid,
 			sizeof (priv->uid) - 1);

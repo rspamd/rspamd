@@ -18,6 +18,7 @@
 #define RSPAMD_MILTER_INTERNAL_H
 
 #include "config.h"
+#include "libutil/mem_pool.h"
 #include <event.h>
 
 enum rspamd_milter_state {
@@ -52,11 +53,12 @@ enum rspamd_milter_io_state {
 
 struct rspamd_milter_private {
 	struct rspamd_milter_parser parser;
-	struct rspamd_milter_outbuf *out_chain;
 	struct event ev;
 	struct timeval tv;
+	struct rspamd_milter_outbuf *out_chain;
 	struct timeval *ptv;
 	struct event_base *ev_base;
+	rspamd_mempool_t *pool;
 	rspamd_milter_finish fin_cb;
 	rspamd_milter_error err_cb;
 	void *ud;
