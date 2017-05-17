@@ -29,19 +29,19 @@
 #include "utlist.h"
 
 #define msg_err_milter(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
-        "milter", priv->uid, \
+        "milter", priv->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_milter(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        "milter", priv->uid, \
+        "milter", priv->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_milter(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        "milter", priv->uid, \
+        "milter", priv->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_milter(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "milter", priv->uid, \
+        "milter", priv->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 
@@ -953,7 +953,6 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 {
 	struct rspamd_milter_session *session;
 	struct rspamd_milter_private *priv;
-	guchar uidbuf[7];
 
 	g_assert (finish_cb != NULL);
 	g_assert (error_cb != NULL);
@@ -969,10 +968,6 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
 	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
-	ottery_rand_bytes (uidbuf, sizeof (uidbuf));
-	rspamd_encode_hex_buf (uidbuf, sizeof (uidbuf), priv->uid,
-			sizeof (priv->uid) - 1);
-	priv->uid[sizeof (priv->uid) - 1] = '\0';
 
 	if (tv) {
 		memcpy (&priv->tv, tv, sizeof (*tv));
