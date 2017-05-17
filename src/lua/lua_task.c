@@ -3058,7 +3058,8 @@ enum lua_date_type {
 };
 
 static enum lua_date_type
-lua_task_detect_date_type (lua_State *L, gint idx, gboolean *gmt)
+lua_task_detect_date_type (struct rspamd_task *task,
+		lua_State *L, gint idx, gboolean *gmt)
 {
 	enum lua_date_type type = DATE_CONNECT;
 
@@ -3074,16 +3075,22 @@ lua_task_detect_date_type (lua_State *L, gint idx, gboolean *gmt)
 		lua_pushvalue (L, idx);
 		lua_pushstring (L, "format");
 		lua_gettable (L, -2);
+
 		str = lua_tostring (L, -1);
-		if (g_ascii_strcasecmp (str, "message") == 0) {
-			type = DATE_MESSAGE;
+
+		if (str) {
+			if (g_ascii_strcasecmp (str, "message") == 0) {
+				type = DATE_MESSAGE;
+			} else if (g_ascii_strcasecmp (str, "connect_str") == 0) {
+				type = DATE_CONNECT_STRING;
+			} else if (g_ascii_strcasecmp (str, "message_str") == 0) {
+				type = DATE_MESSAGE_STRING;
+			}
 		}
-		else if (g_ascii_strcasecmp (str, "connect_str") == 0) {
-			type = DATE_CONNECT_STRING;
+		else {
+			msg_warn_task ("date format has not been specified");
 		}
-		else if (g_ascii_strcasecmp (str, "message_str") == 0) {
-			type = DATE_MESSAGE_STRING;
-		}
+
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "gmt");
@@ -3111,7 +3118,7 @@ lua_task_get_date (lua_State *L)
 
 	if (task != NULL) {
 		if (lua_gettop (L) > 1) {
-			type = lua_task_detect_date_type (L, 2, &gmt);
+			type = lua_task_detect_date_type (task, L, 2, &gmt);
 		}
 		/* Get GMT date and store it to time_t */
 		if (type == DATE_CONNECT || type == DATE_CONNECT_STRING) {
