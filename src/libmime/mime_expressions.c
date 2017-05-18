@@ -77,6 +77,9 @@ static gboolean rspamd_has_content_part (struct rspamd_task *task,
 static gboolean rspamd_has_content_part_len (struct rspamd_task *task,
 	GArray * args,
 	void *unused);
+static gboolean rspamd_is_empty_body (struct rspamd_task *task,
+		GArray * args,
+		void *unused);
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
@@ -145,6 +148,7 @@ static struct _fl {
 	{"has_html_tag", rspamd_has_html_tag, NULL},
 	{"has_only_html_part", rspamd_has_only_html_part, NULL},
 	{"header_exists", rspamd_header_exists, NULL},
+	{"is_empty_body", rspamd_is_empty_body, NULL},
 	{"is_html_balanced", rspamd_is_html_balanced, NULL},
 	{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},
 	{"raw_header_exists", rspamd_raw_header_exists, NULL}
@@ -1948,4 +1952,21 @@ rspamd_has_content_part_len (struct rspamd_task * task,
 	}
 
 	return common_has_content_part (task, param_type, param_subtype, min, max);
+}
+
+static gboolean
+rspamd_is_empty_body (struct rspamd_task *task,
+		GArray * args,
+		void *unused)
+{
+	struct rspamd_mime_part *part;
+	guint i;
+
+	PTR_ARRAY_FOREACH (task->parts, i, part) {
+		if (part->parsed_data.len > 0) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
 }
