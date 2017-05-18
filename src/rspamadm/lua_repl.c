@@ -676,7 +676,7 @@ rspamadm_lua (gint argc, gchar **argv)
 	}
 
 	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, NULL);
+	rspamd_lua_set_path (L, NULL, ucl_vars);
 
 	if (paths) {
 		for (elt = paths; *elt != NULL; elt ++) {

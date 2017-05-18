@@ -202,10 +202,14 @@ lua_add_actions_global (lua_State *L)
 }
 
 void
-rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
+rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 {
 	const gchar *old_path, *additional_path = NULL;
 	const ucl_object_t *opts;
+	const gchar *pluginsdir = RSPAMD_PLUGINSDIR,
+			*rulesdir = RSPAMD_RULESDIR,
+			*lualibdir = RSPAMD_LUALIBDIR;
+
 	gchar path_buf[PATH_MAX];
 
 	lua_getglobal (L, "package");
@@ -228,16 +232,37 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 		}
 	}
 
+	if (vars) {
+		gchar *t;
+
+		t = g_hash_table_lookup (vars, "PLUGINSDIR");
+		if (t) {
+			pluginsdir = t;
+		}
+
+		t = g_hash_table_lookup (vars, "RULESDIR");
+		if (t) {
+			rulesdir = t;
+		}
+
+		t = g_hash_table_lookup (vars, "LUALIBDIR");
+		if (t) {
+			lualibdir = t;
+		}
+	}
+
 	if (additional_path) {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s;%s",
-				RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR, RSPAMD_RULESDIR,
+				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s/?.lua;%s/?.so;%s;%s",
+				pluginsdir, RSPAMD_CONFDIR, rulesdir,
+				lualibdir, lualibdir,
 				additional_path, old_path);
 	}
 	else {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s",
-				RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR, RSPAMD_RULESDIR,
+				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s/?.lua;%s/?.so;%s",
+				pluginsdir, RSPAMD_CONFDIR, rulesdir,
+				lualibdir, lualibdir,
 				old_path);
 	}
 
@@ -340,7 +365,8 @@ rspamd_free_lua_locked (struct lua_locked_state *st)
 }
 
 gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
+rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load,
+		GHashTable *vars)
 {
 	struct rspamd_config **pcfg;
 	GList *cur;
@@ -349,7 +375,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 	GString *tb;
 	gint err_idx;
 
-	rspamd_lua_set_path (L, cfg);
+	rspamd_lua_set_path (L, cfg, vars);
 	cur = g_list_first (cfg->script_modules);
 
 	while (cur) {

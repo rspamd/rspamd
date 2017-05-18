@@ -163,7 +163,8 @@ lua_State *rspamd_lua_init (void);
  * Load and initialize lua plugins
  */
 gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load);
+rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load,
+		GHashTable *vars);
 
 /**
  * Initialize new locked lua_State structure
@@ -279,7 +280,8 @@ gboolean rspamd_lua_check_condition (struct rspamd_config *cfg,
 void rspamd_lua_dumpstack (lua_State *L);
 
 /* Set lua path according to the configuration */
-void rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg);
+void rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg,
+		GHashTable *vars);
 
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);

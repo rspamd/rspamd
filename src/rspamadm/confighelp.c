@@ -250,7 +250,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	}
 
 	/* Init lua modules */
-	rspamd_init_lua_filters (cfg, TRUE);
+	rspamd_init_lua_filters (cfg, TRUE, ucl_vars);
 
 	if (argc > 1) {
 		for (i = 1; i < argc; i ++) {
