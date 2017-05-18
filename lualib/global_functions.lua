@@ -1,9 +1,11 @@
 local logger = require "rspamd_logger"
 
+local exports = {}
+
 -- This function parses redis server definition using either
 -- specific server string for this module or global
 -- redis section
-function rspamd_parse_redis_server(module_name)
+local function rspamd_parse_redis_server(module_name)
 
   local result = {}
   local default_port = 6379
@@ -115,6 +117,8 @@ function rspamd_parse_redis_server(module_name)
   end
 end
 
+exports.rspamd_parse_redis_server = rspamd_parse_redis_server
+
 -- Performs async call to redis hiding all complexity inside function
 -- task - rspamd_task
 -- redis_params - valid params returned by rspamd_parse_redis_server
@@ -123,7 +127,7 @@ end
 -- callback - function to be called upon request is completed
 -- command - redis command
 -- args - table of arguments
-function rspamd_redis_make_request(task, redis_params, key, is_write, callback, command, args)
+local function rspamd_redis_make_request(task, redis_params, key, is_write, callback, command, args)
   local addr
   local function rspamd_redis_make_request_cb(err, data)
     if err then
@@ -177,6 +181,8 @@ function rspamd_redis_make_request(task, redis_params, key, is_write, callback, 
   local ret,conn = rspamd_redis.make_request(options)
   return ret,conn,addr
 end
+
+exports.rspamd_redis_make_request = rspamd_redis_make_request
 
 local split_grammar = {}
 function rspamd_str_split(s, sep)
@@ -416,7 +422,7 @@ local metafunctions = {
   },
 }
 
-function rspamd_gen_metatokens(task)
+local function rspamd_gen_metatokens(task)
   local ipairs = ipairs
   local metatokens = {}
   local cached = task:cache_get('metatokens')
@@ -438,7 +444,9 @@ function rspamd_gen_metatokens(task)
   return metatokens
 end
 
-function rspamd_count_metatokens()
+exports.rspamd_gen_metatokens = rspamd_gen_metatokens
+
+local function rspamd_count_metatokens()
   local ipairs = ipairs
   local total = 0
   for _,mt in ipairs(metafunctions) do
@@ -448,7 +456,9 @@ function rspamd_count_metatokens()
   return total
 end
 
-function rspamd_map_add(mname, optname, mtype, description)
+exports.rspamd_count_metatokens = rspamd_count_metatokens
+
+local function rspamd_map_add(mname, optname, mtype, description)
   local ret = {
     get_key = function(t, k)
       if t.__data then
@@ -576,3 +586,26 @@ function rspamd_map_add(mname, optname, mtype, description)
 
   return nil
 end
+
+exports.rspamd_map_add = rspamd_map_add
+
+-- a special syntax sugar to export all functions to the global table
+setmetatable(exports, {
+  __call = function(t, override)
+    for k, v in pairs(t) do
+      if _G[k] ~= nil then
+        local msg = 'function ' .. k .. ' already exists in global scope.'
+        if override then
+          _G[k] = v
+          logger.errx('WARNING: ' .. msg .. ' Overwritten.')
+        else
+          logger.errx('NOTICE: ' .. msg .. ' Skipped.')
+        end
+      else
+        _G[k] = v
+      end
+    end
+  end,
+})
+
+return exports
