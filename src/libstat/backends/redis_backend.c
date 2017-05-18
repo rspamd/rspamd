@@ -207,8 +207,13 @@ rspamd_redis_expand_object (const gchar *pattern,
 				}
 				break;
 			case 's':
-				if (stcf->symbol) {
-					tlen += strlen (stcf->symbol);
+				if (ctx->new_schema) {
+					tlen += sizeof ("RS") - 1;
+				}
+				else {
+					if (stcf->symbol) {
+						tlen += strlen (stcf->symbol);
+					}
 				}
 				break;
 			default:
@@ -290,8 +295,13 @@ rspamd_redis_expand_object (const gchar *pattern,
 				}
 				break;
 			case 's':
-				if (stcf->symbol) {
-					d += rspamd_strlcpy (d, stcf->symbol, end - d);
+				if (ctx->new_schema) {
+					d += rspamd_strlcpy (d, "RS", end - d);
+				}
+				else {
+					if (stcf->symbol) {
+						d += rspamd_strlcpy (d, stcf->symbol, end - d);
+					}
 				}
 				break;
 			default:
@@ -469,20 +479,23 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 			}
 
 			if (rt->ctx->new_schema && rt->ctx->expiry > 0) {
+				out->len = 0;
 				l1 = rspamd_snprintf (n1, sizeof (n1), "%d",
 						rt->ctx->expiry);
 
 				rspamd_printf_fstring (&out, ""
 								"*3\r\n"
-								"$5\r\n"
+								"$6\r\n"
 								"EXPIRE\r\n"
 								"$%d\r\n"
 								"%s\r\n"
 								"$%d\r\n"
 								"%s\r\n",
-						cmd_len, command,
 						l0, n0,
 						l1, n1);
+				redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+						out->str, out->len);
+				out->len = 0;
 			}
 
 			if (rt->ctx->store_tokens) {
@@ -1399,7 +1412,8 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 		event_add (&rt->timeout_event, &tv);
 
 		query = rspamd_redis_tokens_to_query (task, rt, tokens,
-				"HMGET", rt->redis_object_expanded, FALSE, -1,
+				rt->ctx->new_schema ? "HGET" : "HMGET",
+				rt->redis_object_expanded, FALSE, -1,
 				rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER);
 		g_assert (query != NULL);
 		rspamd_mempool_add_destructor (task->task_pool,
