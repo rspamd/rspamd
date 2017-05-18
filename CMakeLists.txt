@@ -1326,8 +1326,6 @@ FOREACH(LUA_PLUGIN ${LUA_PLUGINS})
 	INSTALL(FILES "src/plugins/lua/${LUA_PLUGIN}" DESTINATION ${PLUGINSDIR}/lua/${_rp})
 ENDFOREACH(LUA_PLUGIN)
 
-# Install lua fun library
-INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR}/lua)
 
 # Install TLD list
 INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION
@@ -1350,6 +1348,9 @@ FOREACH(LUA_LIB ${LUA_LIBS})
 	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${LUALIBDIR}/${_rp})")
 	INSTALL(FILES "lualib/${LUA_LIB}" DESTINATION ${LUALIBDIR}/${_rp})
 ENDFOREACH(LUA_LIB)
+
+# Install lua fun library
+INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
 
 # systemd unit
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
