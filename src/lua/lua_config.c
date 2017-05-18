@@ -55,6 +55,14 @@ LUA_FUNCTION_DEF (config, get_module_opt);
  * @return {table} table of all options for `mname` or `nil` if a module's configuration is not found
  */
 LUA_FUNCTION_DEF (config, get_all_opt);
+
+/***
+ * @method rspamd_config:get_ucl()
+ * Returns full configuration as a native Lua object (ucl to lua conversion).
+ * This method uses caching if possible.
+ * @return {table} table of all options in the configuration
+ */
+LUA_FUNCTION_DEF (config, get_ucl);
 /***
  * @method rspamd_config:get_mempool()
  * Returns static configuration memory pool.
@@ -613,6 +621,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_mempool),
 	LUA_INTERFACE_DEF (config, get_resolver),
 	LUA_INTERFACE_DEF (config, get_all_opt),
+	LUA_INTERFACE_DEF (config, get_ucl),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, radix_from_config),
 	LUA_INTERFACE_DEF (config, add_hash_map),
@@ -806,6 +815,48 @@ lua_config_get_all_opt (lua_State * L)
 		}
 	}
 	lua_pushnil (L);
+
+	return 1;
+}
+
+struct rspamd_lua_cached_config {
+	lua_State *L;
+	gint ref;
+};
+
+static void
+lua_config_ucl_dtor (gpointer p)
+{
+	struct rspamd_lua_cached_config *cached = p;
+
+	luaL_unref (cached->L, LUA_REGISTRYINDEX, cached->ref);
+}
+
+static gint
+lua_config_get_ucl (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_lua_cached_config *cached;
+
+	if (cfg) {
+		cached = rspamd_mempool_get_variable (cfg->cfg_pool, "ucl_cached");
+
+		if (cached) {
+			lua_rawgeti (L, LUA_REGISTRYINDEX, cached->ref);
+		}
+		else {
+			ucl_object_push_lua (L, cfg->rcl_obj, true);
+			lua_pushvalue (L, -1);
+			cached = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*cached));
+			cached->L = L;
+			cached->ref = luaL_ref (L, LUA_REGISTRYINDEX);
+			rspamd_mempool_set_variable (cfg->cfg_pool, "ucl_cached",
+					cached, lua_config_ucl_dtor);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
