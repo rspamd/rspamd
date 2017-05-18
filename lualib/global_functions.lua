@@ -118,6 +118,7 @@ local function rspamd_parse_redis_server(module_name)
 end
 
 exports.rspamd_parse_redis_server = rspamd_parse_redis_server
+exports.parse_redis_server = rspamd_parse_redis_server
 
 -- Performs async call to redis hiding all complexity inside function
 -- task - rspamd_task
@@ -183,6 +184,61 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write, call
 end
 
 exports.rspamd_redis_make_request = rspamd_redis_make_request
+exports.redis_make_request = rspamd_redis_make_request
+
+local function redis_make_request_taskless(ev_base, cfg, key, is_write, callback, command, args)
+  if not ev_base or not redis_params or not callback or not command then
+    return false,nil,nil
+  end
+
+  local addr
+  local rspamd_redis = require "rspamd_redis"
+
+  if key then
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_by_hash(key)
+    else
+      addr = redis_params['read_servers']:get_upstream_by_hash(key)
+    end
+  else
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_master_slave(key)
+    else
+      addr = redis_params['read_servers']:get_upstream_round_robin(key)
+    end
+  end
+
+  if not addr then
+    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
+  end
+
+  local options = {
+    ev_base = ev_base,
+    config = cfg,
+    callback = callback,
+    host = addr:get_addr(),
+    timeout = redis_params['timeout'],
+    cmd = command,
+    args = args
+  }
+
+  if redis_params['password'] then
+    options['password'] = redis_params['password']
+  end
+
+  if redis_params['db'] then
+    options['dbname'] = redis_params['db']
+  end
+
+  local ret,conn = rspamd_redis.make_request(options)
+  if not ret then
+    rspamd_logger.errx('cannot execute redis request')
+  end
+  return ret,conn,addr
+end
+
+exports.rspamd_redis_make_request_taskless = redis_make_request_taskless
+exports.redis_make_request_taskless = redis_make_request_taskless
 
 local split_grammar = {}
 function rspamd_str_split(s, sep)

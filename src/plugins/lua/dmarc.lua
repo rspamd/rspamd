@@ -22,6 +22,7 @@ local mempool = require "rspamd_mempool"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
+local globals = require "global_functions"
 local check_local = false
 local check_authed = false
 
@@ -152,57 +153,6 @@ end
 
 local tz_offset = get_timezone_offset(os.time())
 
-local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
-  if not ev_base or not redis_params or not callback or not command then
-    return false,nil,nil
-  end
-
-  local addr
-  local rspamd_redis = require "rspamd_redis"
-
-  if key then
-    if is_write then
-      addr = redis_params['write_servers']:get_upstream_by_hash(key)
-    else
-      addr = redis_params['read_servers']:get_upstream_by_hash(key)
-    end
-  else
-    if is_write then
-      addr = redis_params['write_servers']:get_upstream_master_slave(key)
-    else
-      addr = redis_params['read_servers']:get_upstream_round_robin(key)
-    end
-  end
-
-  if not addr then
-    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
-  end
-
-  local options = {
-    ev_base = ev_base,
-    config = cfg,
-    callback = callback,
-    host = addr:get_addr(),
-    timeout = redis_params['timeout'],
-    cmd = command,
-    args = args
-  }
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  local ret,conn = rspamd_redis.make_request(options)
-  if not ret then
-    rspamd_logger.errx(cfg, 'cannot execute redis request')
-  end
-  return ret,conn,addr
-end
-
 local function load_scripts(cfg, ev_base)
   local function redis_report_script_cb(err, data)
     if err then
@@ -212,7 +162,7 @@ local function load_scripts(cfg, ev_base)
       rspamd_logger.infox(cfg, 'Loaded DMARC report script with SHA %s', take_report_sha)
     end
   end
-  local ret = redis_make_request(ev_base,
+  local ret = globals.redis_make_request_taskless(ev_base,
     rspamd_config,
     nil,
     true, -- is write
@@ -581,7 +531,7 @@ local function dmarc_callback(task)
       local idx_key = table.concat({redis_keys.index_prefix, period}, redis_keys.join_char)
 
       if report_data then
-        local ret = rspamd_redis_make_request(task,
+        local ret = globals.redis_make_request(task,
           redis_params, -- connect params
           hfromdom, -- hash key
           true, -- is write
@@ -923,7 +873,7 @@ if opts['reporting'] == true then
               dmarc_xml('push', {data[2][i], data[2][i+1]})
             end
             if cursor ~= 0 then
-              local ret = redis_make_request(ev_base,
+              local ret = globals.redis_make_request_taskless(ev_base,
                 rspamd_config,
                 nil,
                 false, -- is write
@@ -940,7 +890,7 @@ if opts['reporting'] == true then
             end
           end
         end
-        local ret = redis_make_request(ev_base,
+        local ret = globals.redis_make_request_taskless(ev_base,
           rspamd_config,
           nil,
           false, -- is write
@@ -962,7 +912,7 @@ if opts['reporting'] == true then
           rspamd_logger.infox(rspamd_config, 'Deleted reports for %s', reporting_domain)
           get_reporting_domain()
         end
-        local ret = redis_make_request(ev_base,
+        local ret = globals.redis_make_request_taskless(ev_base,
           rspamd_config,
           nil,
           false, -- is write
@@ -1128,7 +1078,7 @@ if opts['reporting'] == true then
           end
         end
         local idx_key = table.concat({redis_keys.index_prefix, want_period}, redis_keys.join_char)
-        local ret = redis_make_request(ev_base,
+        local ret = globals.redis_make_request_taskless(ev_base,
           rspamd_config,
           nil,
           false, -- is write
