@@ -1208,7 +1208,7 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 		backend->new_schema = FALSE;
 	}
 
-	elt = ucl_object_lookup (obj, "expiry");
+	elt = ucl_object_lookup_any (obj, "expiry", "expire", NULL);
 	if (elt) {
 		backend->expiry = ucl_object_toint (elt);
 	}
