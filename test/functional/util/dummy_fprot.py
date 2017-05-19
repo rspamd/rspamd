@@ -8,6 +8,7 @@ try:
     import SocketServer as socketserver
 except:
     import socketserver
+import signal
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
@@ -24,6 +25,7 @@ if __name__ == "__main__":
     pid = os.fork()
     if pid > 0:
         sys.exit(0)
+    signal.alarm(5)
 
     HOST = "localhost"
 
