@@ -209,7 +209,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
   end
 
   if not addr then
-    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
+    logger.errx(cfg, 'cannot select server to make redis request')
   end
 
   local options = {
@@ -232,7 +232,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
 
   local ret,conn = rspamd_redis.make_request(options)
   if not ret then
-    rspamd_logger.errx('cannot execute redis request')
+    logger.errx('cannot execute redis request')
   end
   return ret,conn,addr
 end
