@@ -957,22 +957,24 @@ if opts['reporting'] == true then
                 to_verify[test_addr] = nil
                 reporting_addr[test_addr] = true
               end
-              if not next(to_verify) then
-                if next(reporting_addr) then
-                  make_report()
-                else
-                  rspamd_logger.infox(rspamd_config, 'No valid reporting addresses for %s', reporting_domain)
-                  delete_reports()
-                end
+            end
+            local t, vdom = next(to_verify)
+            if not t then
+              if next(reporting_addr) then
+                make_report()
+              else
+                rspamd_logger.infox(rspamd_config, 'No valid reporting addresses for %s', reporting_domain)
+                delete_reports()
               end
+            else
+              verifier(t, vdom)
             end
           end
           rspamd_config:get_resolver():resolve_txt(nil, pool,
             string.format('%s._report._dmarc.%s', reporting_domain, vdom), verify_cb)
         end
-        for t, vdom in pairs(to_verify) do
-          verifier(t, vdom)
-        end
+        local t, vdom = next(to_verify)
+        verifier(t, vdom)
       end
       local function get_reporting_address()
         local function check_addr_cb(resolver, to_resolve, results, err, _, authenticated)
