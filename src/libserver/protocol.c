@@ -1000,7 +1000,7 @@ rspamd_ucl_torspamc_output (const ucl_object_t *top,
 	}
 }
 
-static void
+void
 rspamd_ucl_tospamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
