@@ -45,19 +45,31 @@ def get_top_dir():
 
     return get_test_directory() + "/../../"
 
+def get_install_root():
+    if os.environ.get('RSPAMD_INSTALLROOT'):
+        return os.path.abspath(os.environ['RSPAMD_INSTALLROOT'])
+
+    return os.path.abspath("../install/")
+
 def get_rspamd():
     if os.environ.get('RSPAMD'):
         return os.environ['RSPAMD']
+    if os.environ.get('RSPAMD_INSTALLROOT'):
+        return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamd"
     dname = get_top_dir()
     return dname + "/src/rspamd"
 def get_rspamc():
     if os.environ.get('RSPAMC'):
         return os.environ['RSPAMC']
+    if os.environ.get('RSPAMD_INSTALLROOT'):
+        return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamc"
     dname = get_top_dir()
     return dname + "/src/client/rspamc"
 def get_rspamadm():
     if os.environ.get('RSPAMADM'):
         return os.environ['RSPAMADM']
+    if os.environ.get('RSPAMD_INSTALLROOT'):
+        return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamadm"
     dname = get_top_dir()
     return dname + "/src/rspamadm/rspamadm"
 

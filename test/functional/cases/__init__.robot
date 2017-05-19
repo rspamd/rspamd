@@ -10,6 +10,8 @@ Export Global Variables
   ${RSPAMADM} =  Get Rspamadm
   ${RSPAMC} =  Get Rspamc
   ${RSPAMD} =  Get Rspamd
+  ${INSTALLROOT} =  Get Install Root
+  Set Global Variable  ${INSTALLROOT}
   Set Global Variable  ${RSPAMADM}
   Set Global Variable  ${RSPAMC}
   Set Global Variable  ${RSPAMD}
