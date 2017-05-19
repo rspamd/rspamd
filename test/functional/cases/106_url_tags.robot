@@ -26,7 +26,7 @@ URL Tags Setup
   Set Suite Variable  ${TMPDIR}
   Run Redis
   ${LUA} =  Make Temporary File
-  ${goop} =  Get File  ${TESTDIR}/../../lualib/global_functions.lua
+  ${goop} =  Get File  ${INSTALLROOT}/share/rspamd/rules/rspamd.lua
   ${goop2} =  Get File  ${ADDITIONAL}
   ${goop_unesc} =  Catenate  ${goop}  ${goop2}
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/url_tags.conf
