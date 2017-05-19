@@ -919,7 +919,7 @@ if opts['reporting'] == true then
           rspamd_config,
           redis_params,
           nil,
-          false, -- is write
+          true, -- is write
           delete_reports_cb, --callback
           'DEL', -- command
           {report_key}
@@ -1086,7 +1086,7 @@ if opts['reporting'] == true then
           rspamd_config,
           redis_params,
           nil,
-          false, -- is write
+          true, -- is write
           get_reporting_domain_cb, --callback
           'SPOP', -- command
           {idx_key}
