@@ -185,6 +185,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     can_train_sha_cb, --callback
@@ -208,6 +209,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     maybe_load_sha_cb, --callback
@@ -224,6 +226,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     maybe_invalidate_sha_cb, --callback
@@ -240,6 +243,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     locked_invalidate_sha_cb, --callback
@@ -256,6 +260,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     maybe_lock_sha_cb, --callback
@@ -272,6 +277,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     save_unlock_sha_cb, --callback
@@ -429,6 +435,7 @@ local function load_or_invalidate_fann(data, id, ev_base)
     rspamd_logger.infox(rspamd_config, 'invalidate ANN %s', prefix)
     globals.redis_make_request_taskless(ev_base,
       rspamd_config,
+      redis_params,
       nil,
       true, -- is write
       redis_invalidate_cb, --callback
@@ -476,6 +483,7 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
 
         globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           true, -- is write
           learn_vec_cb, --callback
@@ -494,6 +502,7 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
 
     globals.redis_make_request_taskless(ev_base,
       rspamd_config,
+      redis_params,
       nil,
       true, -- is write
       can_train_cb, --callback
@@ -522,6 +531,7 @@ local function train_fann(_, ev_base, elt)
         prefix, err)
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         false, -- is write
         redis_unlock_cb, --callback
@@ -541,6 +551,7 @@ local function train_fann(_, ev_base, elt)
         prefix, errmsg)
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
@@ -556,6 +567,7 @@ local function train_fann(_, ev_base, elt)
       fanns[elt].fann_train = nil
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         true, -- is write
         redis_save_cb, --callback
@@ -571,6 +583,7 @@ local function train_fann(_, ev_base, elt)
         prefix, err)
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
@@ -621,6 +634,7 @@ local function train_fann(_, ev_base, elt)
         rspamd_logger.infox(rspamd_config, 'invalidate ANN %s: training data is invalid', prefix)
         globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           true, -- is write
           redis_invalidate_cb, --callback
@@ -642,6 +656,7 @@ local function train_fann(_, ev_base, elt)
         prefix, err)
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
@@ -656,6 +671,7 @@ local function train_fann(_, ev_base, elt)
       end, data))
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         false, -- is write
         redis_ham_cb, --callback
@@ -676,6 +692,7 @@ local function train_fann(_, ev_base, elt)
       -- Can train ANN
       globals.redis_make_request_taskless(ev_base,
         rspamd_config,
+        redis_params,
         nil,
         false, -- is write
         redis_spam_cb, --callback
@@ -697,6 +714,7 @@ local function train_fann(_, ev_base, elt)
           if learning_spawned then
             globals.redis_make_request_taskless(ev_base,
               rspamd_config,
+              redis_params,
               nil,
               true, -- is write
               redis_lock_extend_cb, --callback
@@ -721,6 +739,7 @@ local function train_fann(_, ev_base, elt)
   end
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     redis_lock_cb, --callback
@@ -752,6 +771,7 @@ local function maybe_train_fanns(cfg, ev_base)
 
         globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           false, -- is write
           redis_len_cb, --callback
@@ -770,6 +790,7 @@ local function maybe_train_fanns(cfg, ev_base)
   -- First we need to get all fanns stored in our Redis
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     false, -- is write
     members_cb, --callback
@@ -806,6 +827,7 @@ local function check_fanns(_, ev_base)
         end
         globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           false, -- is write
           redis_update_cb, --callback
@@ -824,6 +846,7 @@ local function check_fanns(_, ev_base)
   -- First we need to get all fanns stored in our Redis
   globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     false, -- is write
     members_cb, --callback

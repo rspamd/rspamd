@@ -186,7 +186,7 @@ end
 exports.rspamd_redis_make_request = rspamd_redis_make_request
 exports.redis_make_request = rspamd_redis_make_request
 
-local function redis_make_request_taskless(ev_base, cfg, key, is_write, callback, command, args)
+local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_write, callback, command, args)
   if not ev_base or not redis_params or not callback or not command then
     return false,nil,nil
   end

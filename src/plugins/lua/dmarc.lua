@@ -164,6 +164,7 @@ local function load_scripts(cfg, ev_base)
   end
   local ret = globals.redis_make_request_taskless(ev_base,
     rspamd_config,
+    redis_params,
     nil,
     true, -- is write
     redis_report_script_cb, --callback
@@ -875,6 +876,7 @@ if opts['reporting'] == true then
             if cursor ~= 0 then
               local ret = globals.redis_make_request_taskless(ev_base,
                 rspamd_config,
+                redis_params,
                 nil,
                 false, -- is write
                 dmarc_push_cb, --callback
@@ -892,6 +894,7 @@ if opts['reporting'] == true then
         end
         local ret = globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           false, -- is write
           dmarc_push_cb, --callback
@@ -914,6 +917,7 @@ if opts['reporting'] == true then
         end
         local ret = globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           false, -- is write
           delete_reports_cb, --callback
@@ -1080,6 +1084,7 @@ if opts['reporting'] == true then
         local idx_key = table.concat({redis_keys.index_prefix, want_period}, redis_keys.join_char)
         local ret = globals.redis_make_request_taskless(ev_base,
           rspamd_config,
+          redis_params,
           nil,
           false, -- is write
           get_reporting_domain_cb, --callback
