@@ -1843,10 +1843,25 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 		else {
 			/* Legacy spamd reply */
 			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
+				gsize real_bodylen;
+				goffset eoh_pos;
+				GString tmp;
+
+				/* Unfortunately, spamc protocol is deadly brain damaged */
+				tmp.str = (gchar *)msg->body_buf.begin;
+				tmp.len = msg->body_buf.len;
+
+				if (rspamd_string_find_eoh (&tmp, &eoh_pos) != -1 &&
+						bodylen > eoh_pos) {
+					real_bodylen = bodylen - eoh_pos;
+				}
+				else {
+					real_bodylen = bodylen;
+				}
+
 				rspamd_printf_fstring (buf, "SPAMD/1.1 0 EX_OK\r\n"
-						"Content-length: %z\r\n"
-						"\r\n",
-						bodylen);
+						"Content-length: %z\r\n",
+						real_bodylen);
 			}
 			else {
 				rspamd_printf_fstring (buf, "RSPAMD/1.3 0 EX_OK\r\n");
