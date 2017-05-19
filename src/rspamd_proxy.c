@@ -156,6 +156,12 @@ struct rspamd_proxy_backend_connection {
 	struct rspamd_task *task;
 };
 
+enum rspamd_proxy_legacy_support {
+	LEGACY_SUPPORT_NO = 0,
+	LEGACY_SUPPORT_RSPAMC,
+	LEGACY_SUPPORT_SPAMC
+};
+
 struct rspamd_proxy_session {
 	struct rspamd_worker *worker;
 	rspamd_mempool_t *pool;
@@ -171,7 +177,7 @@ struct rspamd_proxy_session {
 	GPtrArray *mirror_conns;
 	gsize map_len;
 	gint client_sock;
-	gboolean is_spamc;
+	enum rspamd_proxy_legacy_support legacy_support;
 	gint retries;
 	ref_entry_t ref;
 };
@@ -1387,11 +1393,19 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	}
 
 
-	if (session->is_spamc) {
+	if (session->legacy_support > LEGACY_SUPPORT_NO) {
 		/* We need to reformat ucl to fit with legacy spamc protocol */
 		if (bk_conn->results) {
 			reply = rspamd_fstring_new ();
-			rspamd_ucl_torspamc_output (bk_conn->results, &reply);
+
+			if (session->legacy_support == LEGACY_SUPPORT_SPAMC) {
+				rspamd_ucl_tospamc_output (bk_conn->results, &reply);
+				msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
+			}
+			else {
+				rspamd_ucl_torspamc_output (bk_conn->results, &reply);
+			}
+
 			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
 			msg->method = HTTP_SYMBOLS;
 		}
@@ -1736,7 +1750,14 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		/* Reset spamc legacy */
 		if (msg->method >= HTTP_SYMBOLS) {
 			msg->method = HTTP_GET;
-			session->is_spamc = TRUE;
+
+			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
+				session->legacy_support = LEGACY_SUPPORT_SPAMC;
+			}
+			else {
+				session->legacy_support = LEGACY_SUPPORT_SPAMC;
+			}
+
 			msg_info_session ("enabling legacy rspamc mode for session");
 		}
 
