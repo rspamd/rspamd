@@ -47,7 +47,7 @@
   }
 
   action Empty_addr {
-    addr->flags |= RSPAMD_EMAIL_ADDR_EMPTY;
+    addr->flags |= RSPAMD_EMAIL_ADDR_EMPTY|RSPAMD_EMAIL_ADDR_VALID;
     addr->addr = "";
     addr->user = addr->addr;
     addr->domain = addr->addr;
