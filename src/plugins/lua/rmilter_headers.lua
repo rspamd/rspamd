@@ -150,17 +150,17 @@ local function rmilter_headers(task)
     local virii = {}
     for _, sym in ipairs(settings.routines['x-virus'].symbols) do
       if not (common.symbols[sym] == false) then
-	local s = task:get_symbol(sym)
-	if not s then
-	  common.symbols[sym] = false
-	else
-	  common.symbols[sym] = s
-	  if (((s or E)[1] or E).options or E)[1] then
-	    table.insert(virii, s[1].options[1])
-	  else
-	    table.insert(virii, 'unknown')
-	  end
-	end
+        local s = task:get_symbol(sym)
+        if not s then
+          common.symbols[sym] = false
+        else
+          common.symbols[sym] = s
+          if (((s or E)[1] or E).options or E)[1] then
+            table.insert(virii, s[1].options[1])
+          else
+            table.insert(virii, 'unknown')
+          end
+        end
       end
     end
     if #virii > 0 then
@@ -192,90 +192,18 @@ local function rmilter_headers(task)
   end
 
   routines['authentication-results'] = function()
-    local auth_results, hdr_parts = {}, {}
-    if not common.symbols then
-      common.symbols = {}
-    end
-    local auth_types = {
-      dkim = settings.routines['authentication-results'].dkim_symbols,
-      dmarc = settings.routines['authentication-results'].dmarc_symbols,
-      spf = settings.routines['authentication-results'].spf_symbols,
-    }
-    for auth_type, symbols in pairs(auth_types) do
-      for key, sym in pairs(symbols) do
-	if not (common.symbols[sym] == false) then
-	  local s = task:get_symbol(sym)
-	  if not s then
-	    common.symbols[sym] = false
-	  else
-	    common.symbols[sym] = s
-	    if not auth_results[auth_type] then
-	      auth_results[auth_type] = {key}
-	    else
-	      table.insert(auth_results[auth_type], key)
-	    end
-	    if auth_type ~= 'dkim' then
-	      break
-	    end
-	  end
-	end
-      end
-    end
+    local ar = require "auth_results"
+
     if settings.routines['authentication-results'].remove then
-      remove[settings.routines['authentication-results'].header] = settings.routines['authentication-results'].remove
+      remove[settings.routines['authentication-results'].header] =
+          settings.routines['authentication-results'].remove
     end
-    for auth_type, keys in pairs(auth_results) do
-      for _, key in ipairs(keys) do
-	local hdr = ''
-	if auth_type == 'dmarc' and key ~= 'none' then
-	  hdr = hdr .. 'dmarc='
-	  if key == 'reject' or key == 'quarantine' or key == 'softfail' then
-	    hdr = hdr .. 'fail'
-	  else
-	    hdr = hdr .. key
-	  end
-	  if key == 'pass' then
-	    hdr = hdr .. ' policy=' .. common.symbols[auth_types['dmarc'][key]][1]['options'][2]
-	    hdr = hdr .. ' header.from=' .. common.symbols[auth_types['dmarc'][key]][1]['options'][1]
-	  elseif key ~= 'none' then
-	    local t = rspamd_str_split(common.symbols[auth_types['dmarc'][key]][1]['options'][1], ' : ')
-	    local dom = t[1]
-	    local rsn = t[2]
-	    if rsn then
-              hdr = hdr .. ' reason="' .. rsn .. '"'
-            end
-	    hdr = hdr .. ' header.from=' .. dom
-	    if key == 'softfail' then
-	      hdr = hdr .. ' policy=none'
-	    else
-	      hdr = hdr .. ' policy=' .. key
-	    end
-	  end
-	  table.insert(hdr_parts, hdr)
-	elseif auth_type == 'dkim' and key ~= 'none' then
-	  if common.symbols[auth_types['dkim'][key]][1] then
-	    for _, v in ipairs(common.symbols[auth_types['dkim'][key]][1]['options']) do
-	      hdr = hdr .. auth_type .. '=' .. key .. ' header.d=' .. v
-	      table.insert(hdr_parts, hdr)
-	    end
-	  end
-	elseif auth_type == 'spf' and key ~= 'none' then
-	  hdr = hdr .. auth_type .. '=' .. key
-	  local smtp_from = task:get_from('smtp')
-	  if smtp_from['addr'] ~= '' and smtp_from['addr'] ~= nil then
-	    hdr = hdr .. ' smtp.mailfrom=' .. smtp_from['addr']
-	  else
-	    local helo = task:get_helo()
-	    if helo then
-	      hdr = hdr .. ' smtp.helo=' .. task:get_helo()
-	    end
-	  end
-	  table.insert(hdr_parts, hdr)
-	end
-      end
-    end
-    if #hdr_parts > 0 then
-      add[settings.routines['authentication-results'].header] = table.concat(hdr_parts, '; ')
+
+    local res = ar.gen_auth_results(task,
+      settings.routines['authentication-results'])
+
+    if res then
+      add[settings.routines['authentication-results'].header] = res
     end
   end
 
