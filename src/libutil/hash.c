@@ -342,6 +342,23 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 	return NULL;
 }
 
+gboolean
+rspamd_lru_hash_remove (rspamd_lru_hash_t *hash,
+		gconstpointer key)
+{
+	rspamd_lru_element_t *res;
+
+	res = g_hash_table_lookup (hash->tbl, key);
+
+	if (res != NULL) {
+		rspamd_lru_hash_remove_node (hash, res);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 void
 rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	time_t now, guint ttl)

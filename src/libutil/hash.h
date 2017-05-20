@@ -53,6 +53,15 @@ rspamd_lru_hash_t * rspamd_lru_hash_new_full (
 gpointer rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash,
 	gconstpointer key,
 	time_t now);
+
+/**
+ * Removes key from LRU cache
+ * @param hash
+ * @param key
+ * @return TRUE if key has been found and removed
+ */
+gboolean rspamd_lru_hash_remove (rspamd_lru_hash_t *hash,
+		gconstpointer key);
 /**
  * Insert item in hash
  * @param hash hash object
