@@ -201,7 +201,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 
 		ucnv_setFromUCallBack (utf8_converter,
 				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
-				UCNV_SUB_STOP_ON_ILLEGAL,
+				NULL,
 				NULL,
 				NULL,
 				&uc_err);
@@ -289,7 +289,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 
 		ucnv_setFromUCallBack (utf8_converter,
 				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
-				UCNV_SUB_STOP_ON_ILLEGAL,
+				NULL,
 				NULL,
 				NULL,
 				&uc_err);
