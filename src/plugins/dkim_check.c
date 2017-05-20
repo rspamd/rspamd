@@ -1117,7 +1117,31 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 
 					if (dkim_key == NULL) {
 						msg_err_task ("cannot load dkim key %s: %e",
-								key, err);
+								lru_key, err);
+						g_error_free (err);
+
+						return;
+					}
+
+					rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+							g_strdup (lru_key), dkim_key,
+							time (NULL), 0);
+				}
+				else if (rspamd_dkim_sign_key_maybe_invalidate (dkim_key,
+						sign_type, key, len)) {
+					/*
+					 * Invalidate and reload DKIM key,
+					 * removal from lru cache also cleanup the key and value
+					 */
+
+					rspamd_lru_hash_remove (dkim_module_ctx->dkim_sign_hash,
+							lru_key);
+					dkim_key = rspamd_dkim_sign_key_load (key, len,
+							sign_type, &err);
+
+					if (dkim_key == NULL) {
+						msg_err_task ("cannot load dkim key %s: %e",
+								lru_key, err);
 						g_error_free (err);
 
 						return;

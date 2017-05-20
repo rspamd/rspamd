@@ -151,6 +151,15 @@ rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 		GError **err);
 
 /**
+ * Invalidate modified sign key
+ * @param key
+ * @return
+ */
+gboolean rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
+		enum rspamd_dkim_sign_key_type type,
+		const gchar *what, gsize len);
+
+/**
  * Make DNS request for specified context and obtain and parse key
  * @param ctx dkim context from signature
  * @param resolver dns resolver object

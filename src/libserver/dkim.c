@@ -19,11 +19,11 @@
 #include "dkim.h"
 #include "dns.h"
 #include "utlist.h"
+#include "unix-std.h"
 
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
-#include <sys/mman.h>
 
 /* special DNS tokens */
 #define DKIM_DNSKEYNAME     "_domainkey"
@@ -127,6 +127,7 @@ struct rspamd_dkim_sign_key_s {
 	RSA *key_rsa;
 	BIO *key_bio;
 	EVP_PKEY *key_evp;
+	time_t mtime;
 	ref_entry_t ref;
 };
 
@@ -1968,11 +1969,23 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 	gpointer map;
 	gsize map_len = 0;
 	rspamd_dkim_sign_key_t *nkey;
+	struct stat st;
+	time_t mtime = 0;
 
 	if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
 		gchar fpath[PATH_MAX];
 
 		rspamd_snprintf (fpath, sizeof (fpath), "%*s", (gint)len, what);
+
+		if (stat (fpath, &st) == -1) {
+			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+					"cannot stat private key %s: %s",
+					fpath, strerror (errno));
+
+			return NULL;
+		}
+
+		mtime = st.st_mtime;
 		map = rspamd_file_xmap (fpath, PROT_READ, &map_len, TRUE);
 
 		if (map == NULL) {
@@ -1986,6 +1999,7 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 
 	nkey = g_slice_alloc0 (sizeof (*nkey));
 	nkey->type = type;
+	nkey->mtime = mtime;
 
 	switch (type) {
 	case RSPAMD_DKIM_SIGN_KEY_FILE:
@@ -2062,6 +2076,31 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 	REF_INIT_RETAIN (nkey, rspamd_dkim_sign_key_free);
 
 	return nkey;
+}
+
+gboolean
+rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
+		enum rspamd_dkim_sign_key_type type,
+		const gchar *what, gsize len)
+{
+	struct stat st;
+
+	if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
+		gchar fpath[PATH_MAX];
+
+		rspamd_snprintf (fpath, sizeof (fpath), "%*s", (gint) len, what);
+
+		if (stat (fpath, &st) == -1) {
+			/* Prefer to use cached key since it is absent on FS */
+			return FALSE;
+		}
+
+		if (st.st_mtime > key->mtime) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 rspamd_dkim_sign_context_t *
