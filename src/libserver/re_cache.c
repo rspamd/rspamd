@@ -665,7 +665,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 					in[i],
 					lens[i],
 					is_raw);
-			rt->results[re_id] = ret;
+			rt->results[re_id] += ret;
 		}
 
 		setbit (rt->checked, re_id);
@@ -675,6 +675,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 			if (rt->cache->max_re_data > 0 && lens[i] > rt->cache->max_re_data) {
 				lens[i] = rt->cache->max_re_data;
 			}
+
 			rt->stat.bytes_scanned += lens[i];
 		}
 
