@@ -196,6 +196,19 @@ const gchar* rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
 guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
 
 /**
+ * Canonocalise header using relaxed algorithm
+ * @param hname
+ * @param hvalue
+ * @param out
+ * @param outlen
+ * @return
+ */
+goffset rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
+		const gchar *hvalue,
+		gchar *out,
+		gsize outlen);
+
+/**
  * Free DKIM key
  * @param key
  */

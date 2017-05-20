@@ -1614,44 +1614,40 @@ rspamd_dkim_signature_update (struct rspamd_dkim_common_ctx *ctx,
 	}
 }
 
-static gboolean
-rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
-	const gchar *header,
-	const gchar *header_name,
-	gboolean is_sign)
+goffset
+rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
+		const gchar *hvalue,
+		gchar *out,
+		gsize outlen)
 {
-	const gchar *h;
-	gchar *t, *buf;
-	guint inlen;
-	gboolean got_sp, allocated = FALSE;
-
-	inlen = strlen (header) + strlen (header_name) + sizeof (":" CRLF);
-	if (inlen > BUFSIZ) {
-		buf = g_malloc (inlen);
-		allocated = TRUE;
-	}
-	else {
-		/* Faster */
-		buf = g_alloca (inlen);
-	}
+	gchar *t;
+	const guchar *h;
+	gboolean got_sp;
 
 	/* Name part */
-	t = buf;
-	h = header_name;
-	while (*h) {
-		*t++ = g_ascii_tolower (*h++);
+	t = out;
+	h = hname;
+
+	while (*h && t - out < outlen) {
+		*t++ = lc_map[*h++];
 	}
+
+	if (t - out >= outlen) {
+		return -1;
+	}
+
 	*t++ = ':';
 
 	/* Value part */
-	h = header;
+	h = hvalue;
 	/* Skip spaces at the beginning */
 	while (g_ascii_isspace (*h)) {
 		h++;
 	}
+
 	got_sp = FALSE;
 
-	while (*h) {
+	while (*h && (t - out < outlen))  {
 		if (g_ascii_isspace (*h)) {
 			if (got_sp) {
 				h++;
@@ -1667,21 +1663,58 @@ rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
 		else {
 			got_sp = FALSE;
 		}
+
 		*t++ = *h++;
 	}
+
 	if (g_ascii_isspace (*(t - 1))) {
 		t--;
 	}
+
+	if (t - out >= outlen - 2) {
+		return -1;
+	}
+
 	*t++ = '\r';
 	*t++ = '\n';
 	*t = '\0';
 
-	if (!is_sign) {
-		msg_debug_dkim ("update signature with header: %s", buf);
-		EVP_DigestUpdate (ctx->headers_hash, buf, t - buf);
+	return t - out;
+}
+
+static gboolean
+rspamd_dkim_canonize_header_relaxed (struct rspamd_dkim_common_ctx *ctx,
+	const gchar *header,
+	const gchar *header_name,
+	gboolean is_sign)
+{
+	static gchar st_buf[8192];
+	gchar *buf;
+	guint inlen;
+	goffset r;
+	gboolean allocated = FALSE;
+
+	inlen = strlen (header) + strlen (header_name) + sizeof (":" CRLF);
+
+	if (inlen > sizeof (st_buf)) {
+		buf = g_malloc (inlen);
+		allocated = TRUE;
 	}
 	else {
-		rspamd_dkim_signature_update (ctx, buf, t - buf);
+		/* Faster */
+		buf = st_buf;
+	}
+
+	r = rspamd_dkim_canonize_header_relaxed_str (header_name, header, buf, inlen);
+
+	g_assert (r != -1);
+
+	if (!is_sign) {
+		msg_debug_dkim ("update signature with header: %s", buf);
+		EVP_DigestUpdate (ctx->headers_hash, buf, r);
+	}
+	else {
+		rspamd_dkim_signature_update (ctx, buf, r);
 	}
 
 	if (allocated) {
