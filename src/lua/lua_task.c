@@ -3520,14 +3520,23 @@ static gint
 lua_task_set_rmilter_reply (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	ucl_object_t *reply;
+	ucl_object_t *reply, *prev;
 
 	reply = ucl_object_lua_import (L, 2);
 
 	if (reply != NULL && task != NULL) {
-		rspamd_mempool_set_variable (task->task_pool,
-				RSPAMD_MEMPOOL_RMILTER_REPLY,
-				reply, (rspamd_mempool_destruct_t)ucl_object_unref);
+		prev = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_RMILTER_REPLY);
+
+		if (prev) {
+			ucl_object_merge (prev, reply, false);
+			ucl_object_unref (reply);
+		}
+		else {
+			rspamd_mempool_set_variable (task->task_pool,
+					RSPAMD_MEMPOOL_RMILTER_REPLY,
+					reply, (rspamd_mempool_destruct_t) ucl_object_unref);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
