@@ -9,6 +9,7 @@ use strict;
 
 my @symbols_search;
 my @symbols_exclude;
+my @symbols_bidirectional;
 my $reject_score = 15.0;
 my $junk_score = 6.0;
 my $diff_alpha = 0.1;
@@ -27,13 +28,15 @@ my %decompressor = (
     'bz2' => 'bzip2 -cd',
     'gz'  => 'gzip -cd',
     'xz'  => 'xz -cd',
+    'zst' => 'zstd -cd',
 );
 
 GetOptions(
   "reject-score|r=f" => \$reject_score,
   "junk-score|j=f" => \$junk_score,
   "symbol|s=s@" => \@symbols_search,
-  "exclude|s=s@" => \@symbols_exclude,
+  "symbol-bidir|S=s@" => \@symbols_bidirectional,
+  "exclude|X=s@" => \@symbols_exclude,
   "log|l=s" => \$log_file,
   "alpha-score|alpha|a=f" => \$diff_alpha,
   "correlations|c" => \$correlations,
@@ -49,8 +52,6 @@ GetOptions(
 pod2usage(1) if $help;
 pod2usage(-exitval => 0, -verbose => 2) if $man;
 
-@symbols_search = '.*'
-  unless @symbols_search;
 
 # Global vars
 my $total = 0;
@@ -71,29 +72,42 @@ my %scanTime = (
     max   => 0,
     total => 0,
 );
+my %bidir_match;
+
+# Convert bidirectional symbols
+foreach my $s (@symbols_bidirectional) {
+  $bidir_match{$s} = {
+    spam => "${s}_SPAM",
+    ham  => "${s}_HAM",
+  };
+  push @symbols_search, $s unless grep /^$s$/, @symbols_search;
+}
+
+@symbols_search = '.*'
+  unless @symbols_search;
 
 if ($log_file eq '-' || $log_file eq '') {
   $rspamd_log = \*STDIN;
   &ProcessLog();
 }
 elsif ( -d "$log_file" ) {
-    my $log_dir = "$log_file";
+  my $log_dir = "$log_file";
 
-    my @logs = &GetLogfilesList($log_dir);
+  my @logs = &GetLogfilesList($log_dir);
 
-    # Process logs
-    foreach (@logs) {
-        my $ext = (/[^.]+\.?([^.]*?)$/)[0];
-        my $dc = $decompressor{$ext} || 'cat';
+  # Process logs
+  foreach (@logs) {
+    my $ext = (/[^.]+\.?([^.]*?)$/)[0];
+    my $dc = $decompressor{$ext} || 'cat';
 
-        open( $rspamd_log, "-|", "$dc $log_dir/$_" )
-          or die "cannot execute $dc $log_dir/$_ : $!";
+    open( $rspamd_log, "-|", "$dc $log_dir/$_" )
+      or die "cannot execute $dc $log_dir/$_ : $!";
 
-        &ProcessLog;
+    &ProcessLog;
 
-        close($rspamd_log)
-          or warn "cannot close $dc $log_dir/$_: $!";
-    }
+    close($rspamd_log)
+      or warn "cannot close $dc $log_dir/$_: $!";
+  }
 }
 else {
   open($rspamd_log, '<', $log_file) or die "cannot open $log_file";
@@ -256,14 +270,27 @@ sub ProcessLog {
             $sym =~ /^([^\(]+)(\(([^\)]+)\))?/;
             my $sym_name = $1;
             my $sym_score = 0;
+            my $orig_name = $sym_name;
+
             if ($2) {
               $sym_score = $3 * 1.0;
 
               if (abs($sym_score) < $diff_alpha) {
                 next;
               }
+
+              my $bm = $bidir_match{$sym_name};
+              if ($bm) {
+                if ($sym_score >= 0) {
+                  $sym_name = $bm->{'spam'};
+                }
+                else {
+                  $sym_name = $bm->{'ham'};
+                }
+              }
             }
-            next if $sym_name !~ /^$s/;
+
+            next if $orig_name !~ /^$s/;
 
             push @sym_names, $sym_name;
 
