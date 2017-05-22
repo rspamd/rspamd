@@ -98,6 +98,7 @@ static void dkim_symbol_callback (struct rspamd_task *task, void *unused);
 static void dkim_sign_callback (struct rspamd_task *task, void *unused);
 
 static gint lua_dkim_sign_handler (lua_State *L);
+static gint lua_dkim_verify_handler (lua_State *L);
 
 /* Initialization */
 gint dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
@@ -309,6 +310,9 @@ dkim_module_config (struct rspamd_config *cfg)
 		/* Set methods */
 		lua_pushstring (cfg->lua_state, "sign");
 		lua_pushcfunction (cfg->lua_state, lua_dkim_sign_handler);
+		lua_settable (cfg->lua_state, -3);
+		lua_pushstring (cfg->lua_state, "verify");
+		lua_pushcfunction (cfg->lua_state, lua_dkim_verify_handler);
 		lua_settable (cfg->lua_state, -3);
 		/* Finish dkim key */
 		lua_settable (cfg->lua_state, -3);
@@ -1202,4 +1206,209 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 			return;
 		}
 	}
+}
+
+struct rspamd_dkim_lua_verify_cbdata {
+	rspamd_dkim_context_t *ctx;
+	struct rspamd_task *task;
+	lua_State *L;
+	rspamd_dkim_key_t *key;
+	gint cbref;
+};
+
+static void
+dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
+		gint code, GError *err)
+{
+	struct rspamd_task **ptask, *task;
+	const gchar *error_str = "unknown error";
+	gboolean success = FALSE;
+
+	task = cbd->task;
+
+	switch (code) {
+	case DKIM_CONTINUE:
+		error_str = NULL;
+		success = TRUE;
+		break;
+	case DKIM_REJECT:
+		if (err) {
+			error_str = err->message;
+		}
+		else {
+			error_str = "reject";
+		}
+		break;
+	case DKIM_TRYAGAIN:
+		if (err) {
+			error_str = err->message;
+		}
+		else {
+			error_str = "tempfail";
+		}
+		break;
+	case DKIM_NOTFOUND:
+		if (err) {
+			error_str = err->message;
+		}
+		else {
+			error_str = "not found";
+		}
+		break;
+	case DKIM_RECORD_ERROR:
+		if (err) {
+			error_str = err->message;
+		}
+		else {
+			error_str = "bad record";
+		}
+		break;
+	case DKIM_PERM_ERROR:
+		if (err) {
+			error_str = err->message;
+		}
+		else {
+			error_str = "permanent error";
+		}
+		break;
+	default:
+		break;
+	}
+
+	lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+	ptask = lua_newuserdata (cbd->L, sizeof (*ptask));
+	*ptask = task;
+	lua_pushboolean (cbd->L, success);
+	lua_pushstring (cbd->L, error_str);
+
+	if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
+		msg_err_task ("call to verify callback failed: %s",
+				lua_tostring (cbd->L, -1));
+		lua_pop (cbd->L, 1);
+	}
+
+	luaL_unref (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+}
+
+static void
+dkim_module_lua_on_key (rspamd_dkim_key_t *key,
+		gsize keylen,
+		rspamd_dkim_context_t *ctx,
+		gpointer ud,
+		GError *err)
+{
+	struct rspamd_dkim_lua_verify_cbdata *cbd = ud;
+	struct rspamd_task *task;
+	gint ret;
+
+	task = cbd->task;
+
+	if (key != NULL) {
+		/*
+		 * We actually receive key with refcount = 1, so we just assume that
+		 * lru hash owns this object now
+		 */
+		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
+				g_strdup (rspamd_dkim_get_dns_key (ctx)),
+				key, cbd->task->tv.tv_sec, rspamd_dkim_key_get_ttl (key));
+		/* Another ref belongs to the check context */
+		cbd->key = rspamd_dkim_key_ref (key);
+		/* Release key when task is processed */
+		rspamd_mempool_add_destructor (cbd->task->task_pool,
+				dkim_module_key_dtor, cbd->key);
+	}
+	else {
+		/* Insert tempfail symbol */
+		msg_info_task ("cannot get key for domain %s: %e",
+				rspamd_dkim_get_dns_key (ctx), err);
+
+		if (err != NULL) {
+			if (err->code == DKIM_SIGERROR_NOKEY) {
+				dkim_module_lua_push_verify_result (cbd, DKIM_TRYAGAIN, err);
+			}
+			else {
+				dkim_module_lua_push_verify_result (cbd, DKIM_PERM_ERROR, err);
+			}
+		}
+		else {
+			dkim_module_lua_push_verify_result (cbd, DKIM_TRYAGAIN, NULL);
+		}
+
+		if (err) {
+			g_error_free (err);
+		}
+
+		return;
+	}
+
+	ret = rspamd_dkim_check (cbd->ctx, cbd->key, cbd->task);
+	dkim_module_lua_push_verify_result (cbd, ret, NULL);
+}
+
+static gint
+lua_dkim_verify_handler (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *sig = luaL_checkstring (L, 2);
+	rspamd_dkim_context_t *ctx;
+	struct rspamd_dkim_lua_verify_cbdata *cbd;
+	rspamd_dkim_key_t *key;
+	gint ret;
+	GError *err = NULL;
+
+	if (task && sig && lua_isfunction (L, 3)) {
+		ctx = rspamd_create_dkim_context (sig,
+				task->task_pool,
+				dkim_module_ctx->time_jitter,
+				&err);
+
+		if (ctx == NULL) {
+			lua_pushboolean (L, false);
+
+			if (err) {
+				lua_pushstring (L, err->message);
+				g_error_free (err);
+			}
+			else {
+				lua_pushstring (L, "unknown error");
+			}
+
+			return 2;
+		}
+
+		cbd = rspamd_mempool_alloc (task->task_pool, sizeof (*cbd));
+		cbd->L = L;
+		cbd->task = task;
+		lua_pushvalue (L, 3);
+		cbd->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+		cbd->ctx = ctx;
+		cbd->key = NULL;
+
+		key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
+				rspamd_dkim_get_dns_key (ctx),
+				task->tv.tv_sec);
+
+		if (key != NULL) {
+			cbd->key = rspamd_dkim_key_ref (key);
+			/* Release key when task is processed */
+			rspamd_mempool_add_destructor (task->task_pool,
+					dkim_module_key_dtor, cbd->key);
+			ret = rspamd_dkim_check (cbd->ctx, cbd->key, cbd->task);
+			dkim_module_lua_push_verify_result (cbd, ret, NULL);
+		}
+		else {
+			rspamd_get_dkim_key (ctx,
+					task,
+					dkim_module_lua_on_key,
+					cbd);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, TRUE);
+	lua_pushnil (L);
+
+	return 2;
 }
