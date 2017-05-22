@@ -58,9 +58,9 @@ local function gen_auth_results(task, settings)
   end
 
   local auth_types = {
-    dkim = settings.routines['authentication-results'].dkim_symbols,
-    dmarc = settings.routines['authentication-results'].dmarc_symbols,
-    spf = settings.routines['authentication-results'].spf_symbols,
+    dkim = settings.dkim_symbols,
+    dmarc = settings.dmarc_symbols,
+    spf = settings.spf_symbols,
   }
 
   local common = {
