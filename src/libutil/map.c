@@ -859,7 +859,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 		timeout = map->poll_timeout * error_mult;
 	}
 	else if (locked) {
-		timeout = lock_mult;
+		timeout = map->poll_timeout * lock_mult;
 	}
 
 	cbd = g_slice_alloc0 (sizeof (*cbd));
