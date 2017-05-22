@@ -22,11 +22,26 @@ end
 -- A plugin that provides common header manipulations
 
 local logger = require "rspamd_logger"
+local util = require "rspamd_util"
 local N = 'rmilter_headers'
 local E = {}
 
+local HOSTNAME = util.get_hostname()
+
 local settings = {
   routines = {
+    ['x-spamd-result'] = {
+      header = 'X-Spamd-Result',
+      remove = 1,
+    },
+    ['x-rspamd-server'] = {
+      header = 'X-Rspamd-Server',
+      remove = 1,
+    },
+    ['x-rspamd-queue-id'] = {
+      header = 'X-Rspamd-Queue-Id',
+      remove = 1,
+    },
     ['spam-header'] = {
       header = 'Deliver-To',
       value = 'Junk',
@@ -91,6 +106,51 @@ local custom_routines = {}
 local function rmilter_headers(task)
 
   local routines, common, add, remove = {}, {}, {}, {}
+
+  routines['x-spamd-result'] = function()
+    if not common.symbols then
+      common.symbols = task:get_symbols_all()
+      common['metric_score'] = task:get_metric_score('default')
+      common['metric_action'] = task:get_metric_action('default')
+    end
+    if settings.routines['x-spamd-result'].remove then
+      remove[settings.routines['x-spamd-result'].header] = settings.routines['x-spamd-result'].remove
+    end
+    local buf = {}
+    table.insert(buf, table.concat({
+      'default: ', (common['metric_action'] == 'reject') and 'True' or 'False', ' [',
+      common['metric_score'][1], ' / ', common['metric_score'][2], ']'
+    }))
+    for _, s in ipairs(common.symbols) do
+      if not s.options then s.options = {} end
+      table.insert(buf, table.concat({
+        ' ', s.name, ' (', s.score, ') [', table.concat(s.options, ','), ']',
+      }))
+    end
+    add[settings.routines['x-spamd-result'].header] = table.concat(buf, '\n')
+  end
+
+  routines['x-rspamd-queue-id'] = function()
+    if common.queue_id ~= false then
+      common.queue_id = task:get_queue_id()
+      if not common.queue_id then
+        common.queue_id = false
+      end
+    end
+    if settings.routines['x-rspamd-queue-id'].remove then
+      remove[settings.routines['x-rspamd-queue-id'].header] = settings.routines['x-rspamd-queue-id'].remove
+    end
+    if common.queue_id then
+      add[settings.routines['x-rspamd-queue-id'].header] = common.queue_id
+    end
+  end
+
+  routines['x-rspamd-server'] = function()
+    if settings.routines['x-rspamd-server'].remove then
+      remove[settings.routines['x-rspamd-server'].header] = settings.routines['x-rspamd-server'].remove
+    end
+    add[settings.routines['x-rspamd-server'].header] = HOSTNAME
+  end
 
   routines['x-spamd-bar'] = function()
     if not common['metric_score'] then
@@ -272,8 +332,10 @@ if type(opts['custom']) == 'table' then
     end
   end
 end
-for _, s in ipairs(opts['use']) do
+local have_routine = {}
+local function activate_routine(s)
   if settings.routines[s] or custom_routines[s] then
+    have_routine[s] = true
     table.insert(active_routines, s)
     if (opts.routines and opts.routines[s]) then
       for k, v in pairs(opts.routines[s]) do
@@ -282,6 +344,16 @@ for _, s in ipairs(opts['use']) do
     end
   else
     logger.errx(rspamd_config, 'routine "%s" does not exist', s)
+  end
+end
+if opts['extended_spam_headers'] then
+  activate_routine('x-spamd-result')
+  activate_routine('x-rspamd-server')
+  activate_routine('x-rspamd-queue-id')
+end
+for _, s in ipairs(opts['use']) do
+  if not have_routine[s] then
+    activate_routine(s)
   end
 end
 if (#active_routines < 1) then
