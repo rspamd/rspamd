@@ -51,6 +51,13 @@
 #define DEFAULT_TIME_JITTER 60
 #define DEFAULT_MAX_SIGS 5
 
+static const gchar default_sign_headers[] = ""
+		"from:sender:reply-to:subject:date:message-id:"
+		"to:cc:mime-version:content-type:content-transfer-encoding:"
+		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
+		"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
+		"list-subscribe:list-post";
+
 struct dkim_ctx {
 	struct module_ctx ctx;
 	const gchar *symbol_reject;
@@ -121,11 +128,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 		dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
 
 		dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
-		dkim_module_ctx->sign_headers = "from:sender:reply-to:subject:date:message-id:"
-				"to:cc:mime-version:content-type:content-transfer-encoding:"
-				"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-				"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
-				"list-subscribe:list-post";
+		dkim_module_ctx->sign_headers = default_sign_headers;
 		dkim_module_ctx->sign_condition_ref = -1;
 		dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
 	}
@@ -562,7 +565,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	return res;
 }
 
-gint
+static gint
 lua_dkim_sign_handler (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
@@ -570,10 +573,12 @@ lua_dkim_sign_handler (lua_State *L)
 
 	GError *err = NULL;
 	GString *hdr;
-	const gchar *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL;
+	const gchar *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL,
+			*headers = NULL;
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0;
+	gboolean no_cache = FALSE;
 	/*
 	 * Get the following elements:
 	 * - selector
@@ -581,14 +586,18 @@ lua_dkim_sign_handler (lua_State *L)
 	 * - key
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-			"key=S;rawkey=V;*domain=S;*selector=S",
-			&key, &rawlen, &rawkey, &domain, &selector)) {
+			"key=S;rawkey=V;*domain=S;*selector=S;no_check=B;headers=S",
+			&key, &rawlen, &rawkey, &domain, &selector, &no_cache, &headers)) {
 		msg_err_task ("invalid return value from sign condition: %e",
 				err);
 		g_error_free (err);
 
 		lua_pushboolean (L, FALSE);
 		return 1;
+	}
+
+	if (headers == NULL) {
+		headers = dkim_module_ctx->sign_headers;
 	}
 
 	if (dkim_module_ctx->dkim_sign_hash == NULL) {
@@ -657,7 +666,7 @@ lua_dkim_sign_handler (lua_State *L)
 
 	ctx = rspamd_create_dkim_sign_context (task, dkim_key,
 			DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
-			dkim_module_ctx->sign_headers, &err);
+			headers, &err);
 
 	if (ctx == NULL) {
 		msg_err_task ("cannot create sign context: %e",
@@ -671,14 +680,23 @@ lua_dkim_sign_handler (lua_State *L)
 	hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, ctx);
 
 	if (hdr) {
-		rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
-				hdr, rspamd_gstring_free_hard);
+
+		if (!no_cache) {
+			rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+					hdr, rspamd_gstring_free_hard);
+		}
+
 		lua_pushboolean (L, TRUE);
-		return 1;
+		lua_pushlstring (L, hdr->str, hdr->len);
+
+		return 2;
 	}
 
+
 	lua_pushboolean (L, FALSE);
-	return 1;
+	lua_pushnil (L);
+
+	return 2;
 }
 
 gint
@@ -705,11 +723,7 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));
 	dkim_module_ctx->ctx = saved_ctx;
 	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
-	dkim_module_ctx->sign_headers = "from:sender:reply-to:subject:date:message-id:"
-			"to:cc:mime-version:content-type:content-transfer-encoding:"
-			"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-			"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
-			"list-subscribe:list-post";
+	dkim_module_ctx->sign_headers = default_sign_headers;
 	dkim_module_ctx->sign_condition_ref = -1;
 	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
 
