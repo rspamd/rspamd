@@ -1,3 +1,29 @@
+1.5.8:	
+	* [CritFix] Fix memory leak in fuzzy check
+	* [CritFix] Fix memory leak in maps scheduling
+	* [Feature] Multimap: email:domain:tld filter
+	* [Fix] DKIM Signing: avoid nil index when From header is missing
+	* [Fix] Do not set bayes probability if we don't use it
+	* [Fix] Do not stop on illegal unicode points - replace them
+	* [Fix] Fix brain-damaged spamc protocol for now
+	* [Fix] Fix Redis timeout set
+	* [Fix] Fix spamc support in rspamd proxy
+	* [Fix] Multimap: Received IP filters with Redis
+	* [Fix] Parse rgb[a](x,x,x[,x]) css colors
+	* [Fix] Reresolve upstreams even if there is a single server there
+	* [Fix] Treat empty address as valid
+	* [Fix] Try harder to detect CTE
+	* [Fix] Try to deal with v4 mapped to v6 addresses on accept
+	* [Minor] Add `wsf` and `hta` bad archive extensions
+	* [Minor] Fix configuration option
+	* [Minor] Fix result parsing for SAVAPI
+	* [Minor] Further logging improvements
+	* [Minor] Improve logging of errors
+	* [Minor] Prevent MID_CONTAINS_FROM from firing on empty address
+	* [Minor] Reduce digit->number transmission penalty
+	* [Minor] Relax CTYPE_MISSING_DISPOSITION rule
+
+
 1.5.7:
 	* [CritFix] Fix corruption when multiple fuzzy are defined
 	* [CritFix] Fix learn condition in fuzzy check
