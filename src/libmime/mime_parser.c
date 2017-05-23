@@ -201,12 +201,7 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 	}
 
 	while (p < end) {
-		if (*p == '\r' || *p == '\n') {
-			if (!b64_chars || n8bit || nspaces) {
-				break;
-			}
-		}
-		else if (*p == ' ') {
+		if (*p == ' ') {
 			nspaces ++;
 		}
 		else if (*p == '=') {
