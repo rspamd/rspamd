@@ -36,7 +36,7 @@ local function mid_check_func(task)
   end
   -- Check From address atrributes against MID
   local from = task:get_from(2)
-  if (from and from[1] and from[1].domain) then
+  if (from and from[1] and from[1].domain and from[1].domain ~= '') then
     local fd = from[1].domain:lower()
     local _,_,md = mid:find("@([^>]+)>?$")
     -- See if all or part of the From address
