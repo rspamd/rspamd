@@ -53,6 +53,7 @@
 #define PATH_SAVE_MAP "/savemap"
 #define PATH_SCAN "/scan"
 #define PATH_CHECK "/check"
+#define PATH_CHECKV2 "/checkv2"
 #define PATH_STAT "/stat"
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
@@ -2055,6 +2056,19 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->resolver = ctx->resolver;
 
+	if (!rspamd_protocol_handle_request (task, msg)) {
+		if (task->err) {
+			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+					task->err->message);
+		}
+		else {
+			rspamd_controller_send_error (conn_ent, 500,
+					"Message load error: unknown error");
+		}
+		rspamd_session_destroy (task->s);
+		return 0;
+	}
+
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		if (task->err) {
 			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
@@ -3674,6 +3688,9 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_controller_handle_scan);
 	rspamd_http_router_add_path (ctx->http,
 			PATH_CHECK,
+			rspamd_controller_handle_scan);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_CHECKV2,
 			rspamd_controller_handle_scan);
 	rspamd_http_router_add_path (ctx->http,
 			PATH_STAT,
