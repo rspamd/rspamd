@@ -45,6 +45,7 @@ local settings = {
 local E = {}
 local N = 'dkim_signing'
 local redis_params
+local sign_func = rspamd_plugins.dkim.sign
 
 local function simple_template(tmpl, keys)
   local lpeg = require "lpeg"
@@ -195,7 +196,8 @@ local function dkim_signing_cb(task)
             rk, err)
         else
           p.rawkey = data
-          if rspamd_plugins.dkim.sign(task, p) then
+          local ret, _ = sign_func(task, p)
+          if ret then
             task:insert_result(settings.symbol, 1.0)
           end
         end
@@ -242,7 +244,8 @@ local function dkim_signing_cb(task)
   else
     if (p.key and p.selector) then
       p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
-      return rspamd_plugins.dkim.sign(task, p)
+      local ret, _ = sign_func(task, p)
+      return ret
     else
       rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
       return false

@@ -590,7 +590,7 @@ lua_dkim_sign_handler (lua_State *L)
 	 * - key
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-			"key=S;rawkey=V;*domain=S;*selector=S;no_check=B;headers=S",
+			"key=S;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S",
 			&key, &rawlen, &rawkey, &domain, &selector, &no_cache, &headers)) {
 		msg_err_task ("invalid return value from sign condition: %e",
 				err);
