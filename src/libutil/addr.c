@@ -280,6 +280,11 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target,
 						sizeof (struct in6_addr));
 			}
 		}
+		else {
+			addr = rspamd_inet_addr_create (AF_INET6);
+			memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
+					sizeof (struct in6_addr));
+		}
 
 	}
 	else {
