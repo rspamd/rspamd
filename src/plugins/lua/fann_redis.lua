@@ -26,7 +26,7 @@ local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
 local fann_symbol_spam = 'FANNR_SPAM'
 local fann_symbol_ham = 'FANNR_HAM'
-local globals = require "global_functions"
+local rspamd_redis = require "lua_redis"
 local fun = require "fun"
 
 local module_log_id = 0x200
@@ -183,7 +183,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
       redis_can_train_sha = tostring(data)
     end
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -207,7 +207,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
       end
     end
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -224,7 +224,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
       redis_maybe_invalidate_sha = tostring(data)
     end
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -241,7 +241,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
       redis_locked_invalidate_sha = tostring(data)
     end
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -258,7 +258,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
       redis_maybe_lock_sha = tostring(data)
     end
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -275,7 +275,7 @@ local function load_scripts(cfg, ev_base, on_load_cb)
       redis_save_unlock_sha = tostring(data)
     end
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -433,7 +433,7 @@ local function load_or_invalidate_fann(data, id, ev_base)
     end
     -- Invalidate ANN
     rspamd_logger.infox(rspamd_config, 'invalidate ANN %s', prefix)
-    globals.redis_make_request_taskless(ev_base,
+    rspamd_redis.redis_make_request_taskless(ev_base,
       rspamd_config,
       redis_params,
       nil,
@@ -481,7 +481,7 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
         fun.each(function(e) table.insert(learn_data, e) end, extra)
         local str = rspamd_util.zstd_compress(table.concat(learn_data, ';'))
 
-        globals.redis_make_request_taskless(ev_base,
+        rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
@@ -500,7 +500,7 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
       end
     end
 
-    globals.redis_make_request_taskless(ev_base,
+    rspamd_redis.redis_make_request_taskless(ev_base,
       rspamd_config,
       redis_params,
       nil,
@@ -529,7 +529,7 @@ local function train_fann(_, ev_base, elt)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot save ANN %s to redis: %s',
         prefix, err)
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -549,7 +549,7 @@ local function train_fann(_, ev_base, elt)
     if errcode ~= 0 then
       rspamd_logger.errx(rspamd_config, 'cannot train ANN %s: %s',
         prefix, errmsg)
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -565,7 +565,7 @@ local function train_fann(_, ev_base, elt)
       fanns[elt].version = fanns[elt].version + 1
       fanns[elt].fann = fanns[elt].fann_train
       fanns[elt].fann_train = nil
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -581,7 +581,7 @@ local function train_fann(_, ev_base, elt)
     if err or type(data) ~= 'table' then
       rspamd_logger.errx(rspamd_config, 'cannot get ham tokens for ANN %s from redis: %s',
         prefix, err)
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -632,7 +632,7 @@ local function train_fann(_, ev_base, elt)
         end
         -- Invalidate ANN
         rspamd_logger.infox(rspamd_config, 'invalidate ANN %s: training data is invalid', prefix)
-        globals.redis_make_request_taskless(ev_base,
+        rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
@@ -654,7 +654,7 @@ local function train_fann(_, ev_base, elt)
     if err or type(data) ~= 'table' then
       rspamd_logger.errx(rspamd_config, 'cannot get spam tokens for ANN %s from redis: %s',
         prefix, err)
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -669,7 +669,7 @@ local function train_fann(_, ev_base, elt)
         local _,str = rspamd_util.zstd_decompress(tok)
         return fun.totable(fun.map(tonumber, rspamd_str_split(tostring(str), ';')))
       end, data))
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -690,7 +690,7 @@ local function train_fann(_, ev_base, elt)
       end
     elseif type(data) == 'number' then
       -- Can train ANN
-      globals.redis_make_request_taskless(ev_base,
+      rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
         redis_params,
         nil,
@@ -712,7 +712,7 @@ local function train_fann(_, ev_base, elt)
             end
           end
           if learning_spawned then
-            globals.redis_make_request_taskless(ev_base,
+            rspamd_redis.redis_make_request_taskless(ev_base,
               rspamd_config,
               redis_params,
               nil,
@@ -737,7 +737,7 @@ local function train_fann(_, ev_base, elt)
     rspamd_logger.infox(rspamd_config, 'do not learn ANN %s, already learning another ANN', prefix)
     return
   end
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -769,7 +769,7 @@ local function maybe_train_fanns(cfg, ev_base)
           end
         end
 
-        globals.redis_make_request_taskless(ev_base,
+        rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
@@ -788,7 +788,7 @@ local function maybe_train_fanns(cfg, ev_base)
     return 1.0
   end
   -- First we need to get all fanns stored in our Redis
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -825,7 +825,7 @@ local function check_fanns(_, ev_base)
             local_ver = fanns[elt].version
           end
         end
-        globals.redis_make_request_taskless(ev_base,
+        rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
@@ -844,7 +844,7 @@ local function check_fanns(_, ev_base)
     return 1.0
   end
   -- First we need to get all fanns stored in our Redis
-  globals.redis_make_request_taskless(ev_base,
+  rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,

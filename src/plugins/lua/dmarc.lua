@@ -22,7 +22,7 @@ local mempool = require "rspamd_mempool"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
-local globals = require "global_functions"
+local rspamd_redis = require "lua_redis"
 local check_local = false
 local check_authed = false
 
@@ -162,7 +162,7 @@ local function load_scripts(cfg, ev_base)
       rspamd_logger.infox(cfg, 'Loaded DMARC report script with SHA %s', take_report_sha)
     end
   end
-  local ret = globals.redis_make_request_taskless(ev_base,
+  local ret = rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
     redis_params,
     nil,
@@ -532,7 +532,7 @@ local function dmarc_callback(task)
       local idx_key = table.concat({redis_keys.index_prefix, period}, redis_keys.join_char)
 
       if report_data then
-        local ret = globals.redis_make_request(task,
+        local ret = rspamd_redis.redis_make_request(task,
           redis_params, -- connect params
           hfromdom, -- hash key
           true, -- is write
@@ -874,7 +874,7 @@ if opts['reporting'] == true then
               dmarc_xml('push', {data[2][i], data[2][i+1]})
             end
             if cursor ~= 0 then
-              local ret = globals.redis_make_request_taskless(ev_base,
+              local ret = rspamd_redis.redis_make_request_taskless(ev_base,
                 rspamd_config,
                 redis_params,
                 nil,
@@ -892,7 +892,7 @@ if opts['reporting'] == true then
             end
           end
         end
-        local ret = globals.redis_make_request_taskless(ev_base,
+        local ret = rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
@@ -915,7 +915,7 @@ if opts['reporting'] == true then
           rspamd_logger.infox(rspamd_config, 'Deleted reports for %s', reporting_domain)
           get_reporting_domain()
         end
-        local ret = globals.redis_make_request_taskless(ev_base,
+        local ret = rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
@@ -1082,7 +1082,7 @@ if opts['reporting'] == true then
           end
         end
         local idx_key = table.concat({redis_keys.index_prefix, want_period}, redis_keys.join_char)
-        local ret = globals.redis_make_request_taskless(ev_base,
+        local ret = rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
           redis_params,
           nil,
