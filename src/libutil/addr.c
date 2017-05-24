@@ -292,8 +292,6 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target,
 		addr->slen = len;
 
 		if (addr->af == AF_UNIX) {
-			addr->u.un = g_slice_alloc0 (sizeof (*addr->u.un));
-			/* Get name from the listening socket */
 			len = sizeof (su);
 
 			if (getsockname (sock, &su.sa, &len) != -1) {
