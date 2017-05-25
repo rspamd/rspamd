@@ -681,7 +681,7 @@ lua_dkim_sign_handler (lua_State *L)
 		return 1;
 	}
 
-	hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, 0, ctx);
+	hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, 0, NULL, ctx);
 
 	if (hdr) {
 
@@ -1185,7 +1185,8 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					return;
 				}
 
-				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, 0, ctx);
+				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, 0, NULL,
+						ctx);
 
 				if (hdr) {
 					rspamd_mempool_set_variable (task->task_pool,

@@ -36,28 +36,33 @@
 #define DKIM_CANON_DEFAULT  DKIM_CANON_SIMPLE
 
 /* Params */
-#define DKIM_PARAM_UNKNOWN  (-1)    /* unknown */
-#define DKIM_PARAM_SIGNATURE    0   /* b */
-#define DKIM_PARAM_SIGNALG  1   /* a */
-#define DKIM_PARAM_DOMAIN   2   /* d */
-#define DKIM_PARAM_CANONALG 3   /* c */
-#define DKIM_PARAM_QUERYMETHOD  4   /* q */
-#define DKIM_PARAM_SELECTOR 5   /* s */
-#define DKIM_PARAM_HDRLIST  6   /* h */
-#define DKIM_PARAM_VERSION  7   /* v */
-#define DKIM_PARAM_IDENTITY 8   /* i */
-#define DKIM_PARAM_TIMESTAMP    9   /* t */
-#define DKIM_PARAM_EXPIRATION   10  /* x */
-#define DKIM_PARAM_COPIEDHDRS   11  /* z */
-#define DKIM_PARAM_BODYHASH     12  /* bh */
-#define DKIM_PARAM_BODYLENGTH   13  /* l */
-#define DKIM_PARAM_IDX          14  /* i */
+enum rspamd_dkim_param_type {
+	DKIM_PARAM_UNKNOWN = -1,
+	DKIM_PARAM_SIGNATURE = 0,
+	DKIM_PARAM_SIGNALG,
+	DKIM_PARAM_DOMAIN,
+	DKIM_PARAM_CANONALG,
+	DKIM_PARAM_QUERYMETHOD,
+	DKIM_PARAM_SELECTOR,
+	DKIM_PARAM_HDRLIST,
+	DKIM_PARAM_VERSION,
+	DKIM_PARAM_IDENTITY,
+	DKIM_PARAM_TIMESTAMP,
+	DKIM_PARAM_EXPIRATION,
+	DKIM_PARAM_COPIEDHDRS,
+	DKIM_PARAM_BODYHASH,
+	DKIM_PARAM_BODYLENGTH,
+	DKIM_PARAM_IDX,
+	DKIM_PARAM_CV
+};
 
 /* Signature methods */
-#define DKIM_SIGN_UNKNOWN   (-2)    /* unknown method */
-#define DKIM_SIGN_DEFAULT   (-1)    /* use internal default */
-#define DKIM_SIGN_RSASHA1   0   /* an RSA-signed SHA1 digest */
-#define DKIM_SIGN_RSASHA256 1   /* an RSA-signed SHA256 digest */
+enum rspamd_sign_type {
+	DKIM_SIGN_UNKNOWN = -2,
+	DKIM_SIGN_RSASHA1 = 0,
+	DKIM_SIGN_RSASHA256
+};
+
 #define RSPAMD_DKIM_MAX_ARC_IDX 10
 
 #define msg_err_dkim(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -89,6 +94,14 @@ struct rspamd_dkim_common_ctx {
 	guint idx;
 };
 
+enum rspamd_arc_seal_cv {
+	RSPAMD_ARC_UNKNOWN = 0,
+	RSPAMD_ARC_NONE,
+	RSPAMD_ARC_INVALID,
+	RSPAMD_ARC_FAIL,
+	RSPAMD_ARC_PASS
+};
+
 struct rspamd_dkim_context_s {
 	struct rspamd_dkim_common_ctx common;
 	rspamd_mempool_t *pool;
@@ -103,6 +116,7 @@ struct rspamd_dkim_context_s {
 	gint8 *b;
 	gint8 *bh;
 	gchar *dns_key;
+	enum rspamd_arc_seal_cv cv;
 	const gchar *dkim_header;
 };
 
@@ -195,6 +209,10 @@ static gboolean rspamd_dkim_parse_idx (rspamd_dkim_context_t * ctx,
 		const gchar *param,
 		gsize len,
 		GError **err);
+static gboolean rspamd_dkim_parse_cv (rspamd_dkim_context_t * ctx,
+		const gchar *param,
+		gsize len,
+		GError **err);
 
 
 static const dkim_parse_param_f parser_funcs[] = {
@@ -213,6 +231,7 @@ static const dkim_parse_param_f parser_funcs[] = {
 	[DKIM_PARAM_BODYHASH] = rspamd_dkim_parse_bodyhash,
 	[DKIM_PARAM_BODYLENGTH] = rspamd_dkim_parse_bodylength,
 	[DKIM_PARAM_IDX] = rspamd_dkim_parse_idx,
+	[DKIM_PARAM_CV] = rspamd_dkim_parse_cv,
 };
 
 #define DKIM_ERROR dkim_error_quark ()
@@ -575,6 +594,40 @@ rspamd_dkim_parse_idx (rspamd_dkim_context_t * ctx,
 	return TRUE;
 }
 
+static gboolean
+rspamd_dkim_parse_cv (rspamd_dkim_context_t * ctx,
+		const gchar *param,
+		gsize len,
+		GError **err)
+{
+
+	/* Only check header */
+	if (len == 4 && memcmp (param, "fail", len) == 0) {
+		ctx->cv = RSPAMD_ARC_FAIL;
+		return TRUE;
+	}
+	else if (len == 4 && memcmp (param, "pass", len) == 0) {
+		ctx->cv = RSPAMD_ARC_PASS;
+		return TRUE;
+	}
+	else if (len == 4 && memcmp (param, "none", len) == 0) {
+		ctx->cv = RSPAMD_ARC_NONE;
+		return TRUE;
+	}
+	else if (len == 7 && memcmp (param, "invalid", len) == 0) {
+		ctx->cv = RSPAMD_ARC_INVALID;
+		return TRUE;
+	}
+
+	g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_UNKNOWN,
+			"invalid arc seal verification result");
+
+	return FALSE;
+}
+
+
 static void
 rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 		struct rspamd_dkim_common_ctx *ctx)
@@ -796,6 +849,19 @@ rspamd_create_dkim_context (const gchar *sig,
 						param = DKIM_PARAM_BODYHASH;
 					}
 				}
+				else if (tag[0] == 'c' && tag[1] == 'v') {
+					if (type != RSPAMD_DKIM_ARC_SEAL) {
+						g_set_error (err,
+								DKIM_ERROR,
+								DKIM_SIGERROR_UNKNOWN,
+								"cv tag is valid for ARC-Seal only");
+						state = DKIM_STATE_ERROR;
+						break;
+					}
+					else {
+						param = DKIM_PARAM_CV;
+					}
+				}
 				else {
 					g_set_error (err,
 						DKIM_ERROR,
@@ -974,6 +1040,16 @@ rspamd_create_dkim_context (const gchar *sig,
 				DKIM_SIGERROR_UNKNOWN,
 				"i parameter missing or invalid for ARC");
 		return NULL;
+	}
+
+	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
+		if (ctx->cv == RSPAMD_ARC_UNKNOWN) {
+			g_set_error (err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"cv parameter missing or invalid for ARC");
+			return NULL;
+		}
 	}
 
 	/* Now create dns key to request further */
@@ -1923,7 +1999,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
  * @param task task to check
  * @return
  */
-gint
+enum rspamd_dkim_check_result
 rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task)
@@ -1932,7 +2008,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	guchar raw_digest[EVP_MAX_MD_SIZE];
 	EVP_MD_CTX *cpy_ctx;
 	gsize dlen;
-	gint res = DKIM_CONTINUE;
+	enum rspamd_dkim_check_result res = DKIM_CONTINUE;
 	guint i;
 	struct rspamd_dkim_header *dh;
 	gint nid;
@@ -2060,6 +2136,21 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	if (RSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen, key->key_rsa) != 1) {
 		msg_debug_dkim ("rsa verify failed");
 		res = DKIM_REJECT;
+	}
+
+	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL && res == DKIM_CONTINUE) {
+		switch (ctx->cv) {
+		case RSPAMD_ARC_INVALID:
+			msg_info_dkim ("arc seal is invalid i=%d", ctx->common.idx);
+			res = DKIM_PERM_ERROR;
+			break;
+		case RSPAMD_ARC_FAIL:
+			msg_info_dkim ("arc seal failed i=%d", ctx->common.idx);
+			res = DKIM_REJECT;
+			break;
+		default:
+			break;
+		}
 	}
 
 	return res;
@@ -2348,12 +2439,10 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
 }
 
 
-GString*
-rspamd_dkim_sign (struct rspamd_task *task,
-		const gchar *selector, const gchar *domain,
-		time_t expire, gsize len,
-		guint idx,
-		rspamd_dkim_sign_context_t *ctx)
+GString *
+rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
+		const gchar *domain, time_t expire, gsize len, guint idx,
+		const gchar *arc_cv, rspamd_dkim_sign_context_t *ctx)
 {
 	GString *hdr;
 	struct rspamd_dkim_header *dh;
@@ -2407,8 +2496,9 @@ rspamd_dkim_sign (struct rspamd_task *task,
 				domain, selector);
 	}
 	else {
-		/* Shouldn't be called for arc seal */
-		rspamd_printf_gstring (hdr, "i=%d; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
+		g_assert (arc_cv != NULL);
+		rspamd_printf_gstring (hdr, "i=%d; a=rsa-sha256; c=%s/%s; d=%s; s=%s; cv=%s; ",
+				arc_cv,
 				idx,
 				domain, selector);
 	}

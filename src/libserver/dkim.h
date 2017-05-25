@@ -81,12 +81,14 @@
 #define DKIM_SIGERROR_EMPTY_V       45  /* v= tag empty */
 
 /* Check results */
-#define DKIM_CONTINUE   0   /* continue */
-#define DKIM_REJECT 1   /* reject */
-#define DKIM_TRYAGAIN   2   /* try again later */
-#define DKIM_NOTFOUND   3   /* requested record not found */
-#define DKIM_RECORD_ERROR   4   /* error requesting record */
-#define DKIM_PERM_ERROR     5   /* permanent error */
+enum rspamd_dkim_check_result {
+	DKIM_CONTINUE = 0,
+	DKIM_REJECT,
+	DKIM_TRYAGAIN,
+	DKIM_NOTFOUND,
+	DKIM_RECORD_ERROR,
+	DKIM_PERM_ERROR,
+};
 
 #define DKIM_CANON_SIMPLE   0   /* as specified in DKIM spec */
 #define DKIM_CANON_RELAXED  1   /* as specified in DKIM spec */
@@ -189,15 +191,13 @@ gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
  * @param task task to check
  * @return
  */
-gint rspamd_dkim_check (rspamd_dkim_context_t *ctx,
+enum rspamd_dkim_check_result rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task);
 
-GString* rspamd_dkim_sign (struct rspamd_task *task,
-		const gchar *selector, const gchar *domain,
-		time_t expire, gsize len,
-		guint idx,
-		rspamd_dkim_sign_context_t *ctx);
+GString *rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
+		const gchar *domain, time_t expire, gsize len, guint idx,
+		const gchar *arc_cv, rspamd_dkim_sign_context_t *ctx);
 
 rspamd_dkim_key_t * rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
 void rspamd_dkim_key_unref (rspamd_dkim_key_t *k);
