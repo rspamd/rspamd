@@ -2283,14 +2283,33 @@ rspamd_dkim_sign (struct rspamd_task *task,
 	}
 
 	hdr = g_string_sized_new (255);
-	rspamd_printf_gstring (hdr, "v=1; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
-			ctx->common.header_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
-			ctx->common.body_canon_type == DKIM_CANON_RELAXED ? "relaxed" : "simple",
-			domain, selector);
+
+	if (ctx->common.type == RSPAMD_DKIM_NORMAL) {
+		rspamd_printf_gstring (hdr, "v=1; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
+				ctx->common.header_canon_type == DKIM_CANON_RELAXED ?
+						"relaxed" : "simple",
+				ctx->common.body_canon_type == DKIM_CANON_RELAXED ?
+						"relaxed" : "simple",
+				domain, selector);
+	}
+	else if (ctx->common.type == RSPAMD_DKIM_ARC_SIG) {
+		rspamd_printf_gstring (hdr, "i=%d; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
+				idx,
+				ctx->common.header_canon_type == DKIM_CANON_RELAXED ?
+						"relaxed" : "simple",
+				ctx->common.body_canon_type == DKIM_CANON_RELAXED ?
+						"relaxed" : "simple",
+				domain, selector);
+	}
+	else {
+		/* Shouldn't be called for arc seal */
+		g_assert_not_reached ();
+	}
 
 	if (expire > 0) {
 		rspamd_printf_gstring (hdr, "x=%t; ", expire);
 	}
+
 	if (len > 0) {
 		rspamd_printf_gstring (hdr, "l=%z; ", len);
 	}
