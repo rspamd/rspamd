@@ -112,10 +112,8 @@ rspamd_inet_addr_create (gint af)
 	addr = g_slice_alloc0 (sizeof (rspamd_inet_addr_t));
 
 	if (af == AF_UNIX) {
-		addr->u.un = g_slice_alloc (sizeof (*addr->u.un));
+		addr->u.un = g_slice_alloc0 (sizeof (*addr->u.un));
 		addr->slen = sizeof (addr->u.un->addr);
-		/* Zero terminate to avoid issues with SUN_LEN */
-		addr->u.un->addr.sun_path[0] = '\0';
 	}
 
 	addr->af = af;
