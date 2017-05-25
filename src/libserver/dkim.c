@@ -49,8 +49,9 @@
 #define DKIM_PARAM_TIMESTAMP    9   /* t */
 #define DKIM_PARAM_EXPIRATION   10  /* x */
 #define DKIM_PARAM_COPIEDHDRS   11  /* z */
-#define DKIM_PARAM_BODYHASH 12  /* bh */
+#define DKIM_PARAM_BODYHASH     12  /* bh */
 #define DKIM_PARAM_BODYLENGTH   13  /* l */
+#define DKIM_PARAM_IDX          14  /* i */
 
 /* Signature methods */
 #define DKIM_SIGN_UNKNOWN   (-2)    /* unknown method */
@@ -75,8 +76,6 @@
         G_STRFUNC, \
         __VA_ARGS__)
 
-
-
 struct rspamd_dkim_common_ctx {
 	rspamd_mempool_t *pool;
 	gsize len;
@@ -85,6 +84,8 @@ struct rspamd_dkim_common_ctx {
 	GPtrArray *hlist;
 	EVP_MD_CTX *headers_hash;
 	EVP_MD_CTX *body_hash;
+	enum rspamd_dkim_type type;
+	guint idx;
 };
 
 struct rspamd_dkim_context_s {
@@ -189,6 +190,10 @@ static gboolean rspamd_dkim_parse_bodylength (rspamd_dkim_context_t * ctx,
 	const gchar *param,
 	gsize len,
 	GError **err);
+static gboolean rspamd_dkim_parse_idx (rspamd_dkim_context_t * ctx,
+		const gchar *param,
+		gsize len,
+		GError **err);
 
 
 static const dkim_parse_param_f parser_funcs[] = {
@@ -205,7 +210,8 @@ static const dkim_parse_param_f parser_funcs[] = {
 	[DKIM_PARAM_EXPIRATION] = rspamd_dkim_parse_expiration,
 	[DKIM_PARAM_COPIEDHDRS] = rspamd_dkim_parse_ignore,
 	[DKIM_PARAM_BODYHASH] = rspamd_dkim_parse_bodyhash,
-	[DKIM_PARAM_BODYLENGTH] = rspamd_dkim_parse_bodylength
+	[DKIM_PARAM_BODYLENGTH] = rspamd_dkim_parse_bodylength,
+	[DKIM_PARAM_IDX] = rspamd_dkim_parse_idx,
 };
 
 #define DKIM_ERROR dkim_error_quark ()
@@ -548,6 +554,26 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t * ctx,
 	return TRUE;
 }
 
+static gboolean
+rspamd_dkim_parse_idx (rspamd_dkim_context_t * ctx,
+		const gchar *param,
+		gsize len,
+		GError **err)
+{
+	gulong val;
+
+	if (!rspamd_strtoul (param, len, &val)) {
+		g_set_error (err,
+				DKIM_ERROR,
+				DKIM_SIGERROR_INVALID_L,
+				"invalid ARC idx");
+		return FALSE;
+	}
+	ctx->common.idx = val;
+
+	return TRUE;
+}
+
 /**
  * Create new dkim context from signature
  * @param sig message's signature
@@ -557,9 +583,10 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t * ctx,
  */
 rspamd_dkim_context_t *
 rspamd_create_dkim_context (const gchar *sig,
-	rspamd_mempool_t *pool,
-	guint time_jitter,
-	GError **err)
+		rspamd_mempool_t *pool,
+		guint time_jitter,
+		enum rspamd_dkim_type type,
+		GError **err)
 {
 	const gchar *p, *c, *tag = NULL, *end;
 	gsize taglen;
@@ -590,6 +617,7 @@ rspamd_create_dkim_context (const gchar *sig,
 	ctx->common.body_canon_type = DKIM_CANON_DEFAULT;
 	ctx->sig_alg = DKIM_SIGN_UNKNOWN;
 	ctx->common.pool = pool;
+	ctx->common.type = type;
 	/* A simple state machine of parsing tags */
 	state = DKIM_STATE_SKIP_SPACES;
 	next_state = DKIM_STATE_TAG;
@@ -666,7 +694,12 @@ rspamd_create_dkim_context (const gchar *sig,
 					param = DKIM_PARAM_HDRLIST;
 					break;
 				case 'i':
-					param = DKIM_PARAM_IDENTITY;
+					if (type == RSPAMD_DKIM_NORMAL) {
+						param = DKIM_PARAM_IDENTITY;
+					}
+					else {
+						param = DKIM_PARAM_IDX;
+					}
 					break;
 				case 'l':
 					param = DKIM_PARAM_BODYLENGTH;
@@ -2142,6 +2175,7 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
 		gint headers_canon,
 		gint body_canon,
 		const gchar *headers,
+		enum rspamd_dkim_type type,
 		GError **err)
 {
 	rspamd_dkim_sign_context_t *nctx;
@@ -2176,6 +2210,7 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
 	nctx->common.pool = task->task_pool;
 	nctx->common.header_canon_type = headers_canon;
 	nctx->common.body_canon_type = body_canon;
+	nctx->common.type = type;
 
 	if (!rspamd_dkim_parse_hdrlist_common (&nctx->common, headers, strlen (headers),
 			err)) {
@@ -2215,6 +2250,7 @@ GString*
 rspamd_dkim_sign (struct rspamd_task *task,
 		const gchar *selector, const gchar *domain,
 		time_t expire, gsize len,
+		guint idx,
 		rspamd_dkim_sign_context_t *ctx)
 {
 	GString *hdr;

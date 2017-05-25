@@ -670,7 +670,7 @@ lua_dkim_sign_handler (lua_State *L)
 
 	ctx = rspamd_create_dkim_sign_context (task, dkim_key,
 			DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
-			headers, &err);
+			headers, RSPAMD_DKIM_NORMAL, &err);
 
 	if (ctx == NULL) {
 		msg_err_task ("cannot create sign context: %e",
@@ -681,7 +681,7 @@ lua_dkim_sign_handler (lua_State *L)
 		return 1;
 	}
 
-	hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, ctx);
+	hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, 0, ctx);
 
 	if (hdr) {
 
@@ -956,6 +956,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			ctx = rspamd_create_dkim_context (rh->decoded,
 					task->task_pool,
 					dkim_module_ctx->time_jitter,
+					RSPAMD_DKIM_NORMAL,
 					&err);
 
 			if (ctx == NULL) {
@@ -1172,7 +1173,9 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 
 				ctx = rspamd_create_dkim_sign_context (task, dkim_key,
 						DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
-						dkim_module_ctx->sign_headers, &err);
+						dkim_module_ctx->sign_headers,
+						RSPAMD_DKIM_NORMAL,
+						&err);
 
 				if (ctx == NULL) {
 					msg_err_task ("cannot create sign context: %e",
@@ -1182,7 +1185,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					return;
 				}
 
-				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, ctx);
+				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0, 0, ctx);
 
 				if (hdr) {
 					rspamd_mempool_set_variable (task->task_pool,
@@ -1360,6 +1363,7 @@ lua_dkim_verify_handler (lua_State *L)
 		ctx = rspamd_create_dkim_context (sig,
 				task->task_pool,
 				dkim_module_ctx->time_jitter,
+				RSPAMD_DKIM_NORMAL,
 				&err);
 
 		if (ctx == NULL) {

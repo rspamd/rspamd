@@ -109,6 +109,12 @@ enum rspamd_dkim_sign_key_type {
 	RSPAMD_DKIM_SIGN_KEY_DER
 };
 
+enum rspamd_dkim_type {
+	RSPAMD_DKIM_NORMAL,
+	RSPAMD_DKIM_ARC_SIG,
+	RSPAMD_DKIM_ARC_SEAL
+};
+
 /* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
 typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
 	rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
@@ -122,9 +128,10 @@ typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
  * @return new context or NULL
  */
 rspamd_dkim_context_t * rspamd_create_dkim_context (const gchar *sig,
-	rspamd_mempool_t *pool,
-	guint time_jitter,
-	GError **err);
+		rspamd_mempool_t *pool,
+		guint time_jitter,
+		enum rspamd_dkim_type type,
+		GError **err);
 
 /**
  * Create new dkim context for making a signature
@@ -138,6 +145,7 @@ rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task
 		gint headers_canon,
 		gint body_canon,
 		const gchar *dkim_headers,
+		enum rspamd_dkim_type type,
 		GError **err);
 
 /**
@@ -185,6 +193,7 @@ gint rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 GString* rspamd_dkim_sign (struct rspamd_task *task,
 		const gchar *selector, const gchar *domain,
 		time_t expire, gsize len,
+		guint idx,
 		rspamd_dkim_sign_context_t *ctx);
 
 rspamd_dkim_key_t * rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
