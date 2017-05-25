@@ -1443,12 +1443,35 @@ lua_dkim_verify_handler (lua_State *L)
 	rspamd_dkim_key_t *key;
 	gint ret;
 	GError *err = NULL;
+	const gchar *type_str = NULL;
+	enum rspamd_dkim_type type = RSPAMD_DKIM_NORMAL;
 
 	if (task && sig && lua_isfunction (L, 3)) {
+		if (lua_isstring (L, 4)) {
+			type_str = lua_tostring (L, 4);
+
+			if (type_str) {
+				if (strcmp (type_str, "dkim") == 0) {
+					type = RSPAMD_DKIM_NORMAL;
+				}
+				else if (strcmp (type_str, "arc-sign") == 0) {
+					type = RSPAMD_DKIM_ARC_SIG;
+				}
+				else if (strcmp (type_str, "arc-seal") == 0) {
+					type = RSPAMD_DKIM_ARC_SEAL;
+				}
+				else {
+					lua_settop (L, 0);
+					return luaL_error (L, "unknown sign type: %s",
+							type_str);
+				}
+			}
+		}
+
 		ctx = rspamd_create_dkim_context (sig,
 				task->task_pool,
 				dkim_module_ctx->time_jitter,
-				RSPAMD_DKIM_NORMAL,
+				type,
 				&err);
 
 		if (ctx == NULL) {
