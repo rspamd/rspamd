@@ -23,7 +23,10 @@
 
 /* Main types and definitions */
 
-#define DKIM_SIGNHEADER     "DKIM-Signature"
+#define RSPAMD_DKIM_SIGNHEADER     "DKIM-Signature"
+#define RSPAMD_DKIM_ARC_SIGNHEADER     "ARC-Message-Signature"
+#define RSPAMD_DKIM_ARC_AUTHHEADER     "ARC-Authentication-Results"
+#define RSPAMD_DKIM_ARC_SEALHEADER     "ARC-Seal"
 /* DKIM signature header */
 
 
