@@ -1042,7 +1042,7 @@ rspamd_create_dkim_context (const gchar *sig,
 		return NULL;
 	}
 
-	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
+	if (ctx->common.type == RSPAMD_DKIM_ARC_SEAL) {
 		if (ctx->cv == RSPAMD_ARC_UNKNOWN) {
 			g_set_error (err,
 					DKIM_ERROR,
