@@ -903,7 +903,7 @@ rspamd_create_dkim_context (const gchar *sig,
 			}
 			else if (p == end) {
 				if (param == DKIM_PARAM_UNKNOWN ||
-					!parser_funcs[param](ctx, c, p - c + 1, err)) {
+					!parser_funcs[param](ctx, c, p - c, err)) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
