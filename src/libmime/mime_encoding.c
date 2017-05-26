@@ -461,8 +461,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 {
 	GError *err = NULL;
 	gsize write_bytes;
-	const gchar *charset;
-	gboolean checked = FALSE;
+	const gchar *charset = NULL;
+	gboolean checked = FALSE, need_charset_heuristic = TRUE;
 	gchar *res_str;
 	GByteArray *result_array, *part_content;
 	rspamd_ftok_t charset_tok;
@@ -483,26 +483,31 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	}
 
 	if (!(text_part->flags & RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED)) {
-		/* We don't care anymore about encoding */
-		SET_PART_UTF (text_part);
-
-		return part_content;
+		need_charset_heuristic = FALSE;
 	}
 
 	if (task->cfg && task->cfg->raw_mode) {
 		SET_PART_RAW (text_part);
+
 		return part_content;
 	}
 
 	if (part->ct->charset.len == 0) {
-		charset = rspamd_mime_charset_find_by_content (part_content->data,
-				MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
+		if (need_charset_heuristic) {
+			charset = rspamd_mime_charset_find_by_content (part_content->data,
+					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
 
-		if (charset != NULL) {
-			msg_info_task ("detected charset %s", charset);
+			if (charset != NULL) {
+				msg_info_task ("detected charset %s", charset);
+			}
+
+			checked = TRUE;
 		}
+		else {
+			SET_PART_UTF (text_part);
 
-		checked = TRUE;
+			return part_content;
+		}
 	}
 	else {
 		charset = rspamd_mime_detect_charset (&part->ct->charset,
