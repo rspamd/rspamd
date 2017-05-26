@@ -182,12 +182,14 @@ local function phishing_cb(task)
           rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
         end
 
-        local function found_in_map(map)
+        local function found_in_map(map, furl, sweight)
+          if not furl then furl = url end
+          if not sweight then sweight = weight end
           if #map > 0 then
             for _,rule in ipairs(map) do
-                for _,dn in ipairs({url:get_tld(), url:get_host()}) do
+                for _,dn in ipairs({furl:get_tld(), furl:get_host()}) do
                   if rule['map']:get_key(dn) then
-                    task:insert_result(rule['symbol'], weight, ptld .. '->' .. dn)
+                    task:insert_result(rule['symbol'], sweight, ptld .. '->' .. dn)
                     return true
                   end
                 end
