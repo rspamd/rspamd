@@ -633,7 +633,7 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 		struct rspamd_dkim_common_ctx *ctx)
 {
 	struct rspamd_dkim_header *hdr;
-	guint count = ctx->idx + 1, i;
+	guint count = ctx->idx, i;
 
 	ctx->hlist = g_ptr_array_sized_new (count * 3 - 1);
 
@@ -641,20 +641,20 @@ rspamd_dkim_add_arc_seal_headers (rspamd_mempool_t *pool,
 		/* Authentication results */
 		hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 		hdr->name = RSPAMD_DKIM_ARC_AUTHHEADER;
-		hdr->count = i + 1;
+		hdr->count = i;
 		g_ptr_array_add (ctx->hlist, hdr);
 
 		/* Arc signature */
 		hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 		hdr->name = RSPAMD_DKIM_ARC_SIGNHEADER;
-		hdr->count = i + 1;
+		hdr->count = i;
 		g_ptr_array_add (ctx->hlist, hdr);
 
 		/* Arc seal (except last one) */
 		if (i != count - 1) {
 			hdr = rspamd_mempool_alloc (pool, sizeof (*hdr));
 			hdr->name = RSPAMD_DKIM_ARC_SEALHEADER;
-			hdr->count = i + 1;
+			hdr->count = i;
 			g_ptr_array_add (ctx->hlist, hdr);
 		}
 	}
@@ -699,8 +699,16 @@ rspamd_create_dkim_context (const gchar *sig,
 
 	ctx = rspamd_mempool_alloc0 (pool, sizeof (rspamd_dkim_context_t));
 	ctx->pool = pool;
-	ctx->common.header_canon_type = DKIM_CANON_DEFAULT;
-	ctx->common.body_canon_type = DKIM_CANON_DEFAULT;
+
+	if (type == RSPAMD_DKIM_ARC_SEAL) {
+		ctx->common.header_canon_type = DKIM_CANON_RELAXED;
+		ctx->common.body_canon_type = DKIM_CANON_RELAXED;
+	}
+	else {
+		ctx->common.header_canon_type = DKIM_CANON_DEFAULT;
+		ctx->common.body_canon_type = DKIM_CANON_DEFAULT;
+	}
+
 	ctx->sig_alg = DKIM_SIGN_UNKNOWN;
 	ctx->common.pool = pool;
 	ctx->common.type = type;
@@ -992,29 +1000,32 @@ rspamd_create_dkim_context (const gchar *sig,
 			"s parameter missing");
 		return NULL;
 	}
-	if (ctx->sig_alg == DKIM_SIGN_RSASHA1) {
-		/* Check bh length */
-		if (ctx->bhlen != (guint)EVP_MD_size (EVP_sha1 ())) {
-			g_set_error (err,
-				DKIM_ERROR,
-				DKIM_SIGERROR_BADSIG,
-				"signature has incorrect length: %zu",
-				ctx->bhlen);
-			return NULL;
-		}
 
-	}
-	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256) {
-		if (ctx->bhlen !=
-			(guint)EVP_MD_size (EVP_sha256 ())) {
-			g_set_error (err,
-				DKIM_ERROR,
-				DKIM_SIGERROR_BADSIG,
-				"signature has incorrect length: %zu",
-				ctx->bhlen);
-			return NULL;
+	if (type != RSPAMD_DKIM_ARC_SEAL) {
+		if (ctx->sig_alg == DKIM_SIGN_RSASHA1) {
+			/* Check bh length */
+			if (ctx->bhlen != (guint) EVP_MD_size (EVP_sha1 ())) {
+				g_set_error (err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_BADSIG,
+						"signature has incorrect length: %zu",
+						ctx->bhlen);
+				return NULL;
+			}
+
+		} else if (ctx->sig_alg == DKIM_SIGN_RSASHA256) {
+			if (ctx->bhlen !=
+					(guint) EVP_MD_size (EVP_sha256 ())) {
+				g_set_error (err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_BADSIG,
+						"signature has incorrect length: %zu",
+						ctx->bhlen);
+				return NULL;
+			}
 		}
 	}
+
 	/* Check expiration */
 	now = time (NULL);
 	if (ctx->timestamp && now < ctx->timestamp && ctx->timestamp - now >
