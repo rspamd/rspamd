@@ -1369,7 +1369,14 @@ dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
 	lua_pushboolean (cbd->L, success);
 	lua_pushstring (cbd->L, error_str);
 
-	if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
+	if (cbd->ctx) {
+		lua_pushstring (cbd->L, rspamd_dkim_get_domain (cbd->ctx));
+	}
+	else {
+		lua_pushnil (cbd->L);
+	}
+
+	if (lua_pcall (cbd->L, 4, 0, 0) != 0) {
 		msg_err_task ("call to verify callback failed: %s",
 				lua_tostring (cbd->L, -1));
 		lua_pop (cbd->L, 1);
