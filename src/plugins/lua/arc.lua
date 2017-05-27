@@ -72,6 +72,47 @@ local function parse_arc_header(hdr, target)
   end
 end
 
+local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
+  for i = 1,#seals do
+    if (sigs[i].i or 0) ~= i then
+      rspamd_logger.infox(task, 'bad i value for signature: %s, expected %s',
+        sigs[i].i, i)
+      task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
+      return false
+    end
+    if (seals[i].i or 0) ~= i then
+      rspamd_logger.infox(task, 'bad i value for seal: %s, expected %s',
+        seals[i].i, i)
+      task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
+      return false
+    end
+
+    if not seals[i].cv then
+      task:insert_result(arc_symbols['invalid'], 1.0, 'no cv on i=' .. tostring(i))
+      return false
+    end
+
+    if i == 1 then
+      -- We need to ensure that cv of seal is equal to 'none'
+      if seals[i].cv ~= 'none' then
+        task:insert_result(arc_symbols['invalid'], 1.0, 'cv is not "none" for i=1')
+        return false
+      end
+    else
+      if seals[i].cv ~= 'pass' then
+        task:insert_result(arc_symbols['reject'], 1.0, string.format('cv is %s on i=%d',
+            seals[i].cv, i))
+        return false
+      end
+    end
+
+    sigs[i].header = sig_headers[i].decoded
+    seals[i].header = seal_headers[i].decoded
+  end
+
+  return true
+end
+
 local function arc_callback(task)
   local arc_sig_headers = task:get_header_full('ARC-Message-Signature')
   local arc_seal_headers = task:get_header_full('ARC-Seal')
@@ -120,22 +161,9 @@ local function arc_callback(task)
   rspamd_logger.debugm(N, task, 'got %s arc sections', #cbdata.seals)
 
   -- Now check sanity of what we have
-  for i = 1,#cbdata.seals do
-    if (cbdata.sigs[i].i or 0) ~= i then
-      rspamd_logger.infox(task, 'bad i value for signature: %s, expected %s',
-        cbdata.sigs[i].i, i)
-      task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
-      return
-    end
-    if (cbdata.seals[i].i or 0) ~= i then
-      rspamd_logger.infox(task, 'bad i value for seal: %s, expected %s',
-        cbdata.seals[i].i, i)
-      task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
-      return
-    end
-
-    cbdata.sigs[i].header = arc_sig_headers[i].decoded
-    cbdata.seals[i].header = arc_seal_headers[i].decoded
+  if not arc_validate_seals(task, cbdata.seals, cbdata.sigs,
+    arc_seal_headers, arc_sig_headers) then
+    return
   end
 
   local function arc_seal_cb(_, res, err, domain)
