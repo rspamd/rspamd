@@ -99,6 +99,7 @@ static void dkim_sign_callback (struct rspamd_task *task, void *unused);
 
 static gint lua_dkim_sign_handler (lua_State *L);
 static gint lua_dkim_verify_handler (lua_State *L);
+static gint lua_dkim_canonicalize_handler (lua_State *L);
 
 /* Initialization */
 gint dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
@@ -313,6 +314,9 @@ dkim_module_config (struct rspamd_config *cfg)
 		lua_settable (cfg->lua_state, -3);
 		lua_pushstring (cfg->lua_state, "verify");
 		lua_pushcfunction (cfg->lua_state, lua_dkim_verify_handler);
+		lua_settable (cfg->lua_state, -3);
+		lua_pushstring (cfg->lua_state, "canon_header_relaxed");
+		lua_pushcfunction (cfg->lua_state, lua_dkim_canonicalize_handler);
 		lua_settable (cfg->lua_state, -3);
 		/* Finish dkim key */
 		lua_settable (cfg->lua_state, -3);
@@ -1530,4 +1534,48 @@ lua_dkim_verify_handler (lua_State *L)
 	lua_pushnil (L);
 
 	return 2;
+}
+
+static gint
+lua_dkim_canonicalize_handler (lua_State *L)
+{
+	gsize nlen, vlen;
+	const gchar *hname = luaL_checklstring (L, 1, &nlen),
+		*hvalue = luaL_checklstring (L, 2, &vlen);
+	static gchar st_buf[8192];
+	gchar *buf;
+	guint inlen;
+	gboolean allocated = FALSE;
+	goffset r;
+
+	if (hname && hvalue && nlen > 0) {
+		inlen = nlen + vlen + sizeof (":" CRLF);
+
+		if (inlen > sizeof (st_buf)) {
+			buf = g_malloc (inlen);
+			allocated = TRUE;
+		}
+		else {
+			/* Faster */
+			buf = st_buf;
+		}
+
+		r = rspamd_dkim_canonize_header_relaxed_str (hname, hvalue, buf, inlen);
+
+		if (r == -1) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_pushlstring (L, buf, r);
+		}
+
+		if (allocated) {
+			g_free (buf);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
