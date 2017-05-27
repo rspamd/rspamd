@@ -2357,6 +2357,20 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 									task->task_pool,
 									image->parent->digest);
 							if (io) {
+								gboolean skip_existing = FALSE;
+
+								PTR_ARRAY_FOREACH (res, j, cur) {
+									if (memcmp (cur->cmd.digest, io->cmd.digest,
+											sizeof (io->cmd.digest)) == 0) {
+										skip_existing = TRUE;
+										break;
+									}
+								}
+
+								if (!skip_existing) {
+									g_ptr_array_add (res, io);
+								}
+
 								g_ptr_array_add (res, io);
 							}
 
@@ -2372,6 +2386,20 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 										task->task_pool,
 										image);
 								if (io) {
+									gboolean skip_existing = FALSE;
+
+									PTR_ARRAY_FOREACH (res, j, cur) {
+										if (memcmp (cur->cmd.digest, io->cmd.digest,
+												sizeof (io->cmd.digest)) == 0) {
+											skip_existing = TRUE;
+											break;
+										}
+									}
+
+									if (!skip_existing) {
+										g_ptr_array_add (res, io);
+									}
+
 									g_ptr_array_add (res, io);
 								}
 							}
@@ -2394,6 +2422,20 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							task->task_pool,
 							mime_part->digest);
 					if (io) {
+						gboolean skip_existing = FALSE;
+
+						PTR_ARRAY_FOREACH (res, j, cur) {
+							if (memcmp (cur->cmd.digest, io->cmd.digest,
+									sizeof (io->cmd.digest)) == 0) {
+								skip_existing = TRUE;
+								break;
+							}
+						}
+
+						if (!skip_existing) {
+							g_ptr_array_add (res, io);
+						}
+
 						g_ptr_array_add (res, io);
 					}
 				}
