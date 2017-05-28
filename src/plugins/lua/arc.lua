@@ -35,11 +35,11 @@ local dkim_canonicalize = rspamd_plugins.dkim.canon_header_relaxed
 local redis_params
 
 local arc_symbols = {
-  allow = 'ARC_POLICY_ALLOW',
-  invalid = 'ARC_BAD_POLICY',
+  allow = 'ARC_ALLOW',
+  invalid = 'ARC_INVALID',
   dnsfail = 'ARC_DNSFAIL',
   na = 'ARC_NA',
-  reject = 'ARC_POLICY_REJECT',
+  reject = 'ARC_REJECT',
 }
 
 local symbols = {
