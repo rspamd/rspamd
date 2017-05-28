@@ -16,6 +16,9 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
+local rspamd_rsa_privkey = require "rspamd_rsa_privkey"
+local rspamd_rsa = require "rspamd_rsa"
 local fun = require "fun"
 local auth_results = require "auth_results"
 local hash = require "rspamd_cryptobox_hash"
@@ -133,8 +136,8 @@ local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
 
     sigs[i].header = sig_headers[i].decoded
     seals[i].header = seal_headers[i].decoded
-    sigs[i].raw_header = sig_headers[i].raw
-    seals[i].raw_header = seal_headers[i].raw
+    sigs[i].raw_header = sig_headers[i].value
+    seals[i].raw_header = seal_headers[i].value
   end
 
   return true
@@ -347,7 +350,18 @@ local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
   local arc_auth_results = task:get_header_full('ARC-Authentication-Results') or {}
-  local cur_auth_results = auth_results.gen_auth_results() or ''
+  local cur_auth_results = auth_results.gen_auth_results(task) or ''
+  local privkey
+
+  if params.rawkey then
+    privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
+  elseif params.key then
+    privkey = rspamd_rsa_privkey.load_file(params.key)
+  end
+
+  if not privkey then
+    rspamd_logger.errx(task, 'cannot load private key for signing')
+  end
 
   local sha_ctx = hash.create('sha-256')
 
@@ -358,7 +372,7 @@ local function arc_sign_seal(task, params, header)
     for i = (cur_idx - 1), 1, (-1) do
       if arc_auth_results[i] then
         sha_ctx:update(dkim_canonicalize('ARC-Authentication-Results',
-          arc_auth_results[i].raw))
+          arc_auth_results[i].value))
       end
       if arc_sigs[i] then
         sha_ctx:update(dkim_canonicalize('ARC-Message-Signature',
@@ -370,18 +384,35 @@ local function arc_sign_seal(task, params, header)
     end
   end
 
-  cur_auth_results = string.format('i=%d; %s', #arc_seals + 1, cur_auth_results)
+  cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
   sha_ctx:update(dkim_canonicalize('ARC-Authentication-Results',
     cur_auth_results))
   sha_ctx:update(dkim_canonicalize('ARC-Message-Signature',
     header))
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
-      cur_idx, params.selector, params.domain, rspamd_util.get_time(), params.cv)
+      cur_idx, params.selector, params.domain, rspamd_util.get_time(), params.arc_cv)
   sha_ctx:update(dkim_canonicalize('ARC-Message-Signature',
     cur_arc_seal))
-  -- TODO: implement proper interface for RSA signatures
 
+  local sig = rspamd_rsa.sign_memory(privkey, sha_ctx:bin())
+  cur_arc_seal = string.format('%s%s', cur_arc_seal,
+    sig:base64())
+
+  task:set_rmilter_reply({
+    add_headers = {
+      ['ARC-Authentication-Results'] = rspamd_util.fold_header(
+        'ARC-Authentication-Results',
+        cur_auth_results),
+      ['ARC-Message-Signature'] = rspamd_util.fold_header(
+        'ARC-Message-Signature',
+        header),
+      ['ARC-Message-Seal'] = rspamd_util.fold_header(
+        'ARC-Message-Seal',
+        cur_arc_seal),
+    }
+  })
+  task:insert_result(settings.sign_symbol, 1.0, string.format('i=%d', cur_idx))
 end
 
 local function arc_signing_cb(task)
@@ -394,6 +425,7 @@ local function arc_signing_cb(task)
   if ip and ip:is_local() then
     is_local = true
   end
+
   if settings.auth_only and not auser then
     if (settings.sign_networks and settings.sign_networks:get_key(ip)) then
       is_sign_networks = true
