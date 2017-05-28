@@ -559,7 +559,7 @@ lua_rsa_signature_base64 (lua_State *L)
 		lua_pushnil (L);
 	}
 
-	return 0;
+	return 1;
 }
 
 /**
