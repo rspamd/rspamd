@@ -42,7 +42,6 @@ local settings = {
   key_prefix = 'dkim_keys', -- default hash name
 }
 
-local E = {}
 local N = 'dkim_signing'
 local redis_params
 local sign_func = rspamd_plugins.dkim.sign

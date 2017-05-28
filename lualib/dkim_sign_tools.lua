@@ -17,6 +17,7 @@ limitations under the License.
 
 local exports = {}
 
+local E = {}
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 
