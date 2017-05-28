@@ -30,5 +30,6 @@
 #define RSPAMD_MEMPOOL_RMILTER_REPLY "rmilter_reply"
 #define RSPAMD_MEMPOOL_DKIM_SIGNATURE "dkim-signature"
 #define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
+#define RSPAMD_MEMPOOL_DKIM_BH_CACHE "dkim_bh_cache"
 
 #endif

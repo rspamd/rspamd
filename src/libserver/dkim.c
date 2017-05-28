@@ -20,6 +20,7 @@
 #include "dns.h"
 #include "utlist.h"
 #include "unix-std.h"
+#include "mempool_vars_internal.h"
 
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
@@ -2003,6 +2004,40 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	return TRUE;
 }
 
+struct rspamd_dkim_cached_hash {
+	guchar *digest_normal;
+	guchar *digest_cr;
+	guchar *digest_crlf;
+	gchar *type;
+};
+
+static struct rspamd_dkim_cached_hash *
+rspamd_dkim_check_bh_cached (struct rspamd_dkim_common_ctx *ctx,
+		struct rspamd_task *task, gsize bhlen, gboolean is_sign)
+{
+	gchar typebuf[64];
+	struct rspamd_dkim_cached_hash *res;
+
+	rspamd_snprintf (typebuf, sizeof (typebuf),
+			RSPAMD_MEMPOOL_DKIM_BH_CACHE "%z_%s_%d_%z",
+			bhlen,
+			ctx->body_canon_type == DKIM_CANON_RELAXED ? "1" : "0",
+			!!is_sign,
+			ctx->len);
+
+	res = rspamd_mempool_get_variable (task->task_pool,
+			typebuf);
+
+	if (!res) {
+		res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+		res->type = rspamd_mempool_strdup (task->task_pool, typebuf);
+		rspamd_mempool_set_variable (task->task_pool,
+				res->type, res, NULL);
+	}
+
+	return res;
+}
+
 /**
  * Check task for dkim context using dkim key
  * @param ctx dkim verify context
@@ -2017,8 +2052,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 {
 	const gchar *body_end, *body_start;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
-	EVP_MD_CTX *cpy_ctx;
-	gsize dlen;
+	struct rspamd_dkim_cached_hash *cached_bh = NULL;
+	EVP_MD_CTX *cpy_ctx = NULL;
+	gsize dlen = 0;
 	enum rspamd_dkim_check_result res = DKIM_CONTINUE;
 	guint i;
 	struct rspamd_dkim_header *dh;
@@ -2037,10 +2073,16 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
-		/* Start canonization of body part */
-		if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end,
-				FALSE)) {
-			return DKIM_RECORD_ERROR;
+		dlen = EVP_MD_CTX_size (ctx->common.body_hash);
+		cached_bh = rspamd_dkim_check_bh_cached (&ctx->common, task,
+				dlen, FALSE);
+
+		if (!cached_bh->digest_normal) {
+			/* Start canonization of body part */
+			if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end,
+					FALSE)) {
+				return DKIM_RECORD_ERROR;
+			}
 		}
 	}
 
@@ -2069,54 +2111,89 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
-		dlen = EVP_MD_CTX_size (ctx->common.body_hash);
-		/* Copy md_ctx to deal with broken CRLF at the end */
-		cpy_ctx = EVP_MD_CTX_create ();
-		EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
-		EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
-
-		/* Check bh field */
-		if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-			msg_debug_dkim ("bh value mismatch: %*xs versus %*xs, try add CRLF",
-					dlen, ctx->bh,
-					dlen, raw_digest);
-			/* Try add CRLF */
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-			EVP_MD_CTX_cleanup (cpy_ctx);
-#else
-			EVP_MD_CTX_reset (cpy_ctx);
-#endif
+		if (!cached_bh->digest_normal) {
+			/* Copy md_ctx to deal with broken CRLF at the end */
+			cpy_ctx = EVP_MD_CTX_create ();
 			EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
-			EVP_DigestUpdate (cpy_ctx, "\r\n", 2);
 			EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
 
-			if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-				msg_debug_dkim (
-						"bh value mismatch: %*xs versus %*xs, try add LF",
-						dlen, ctx->bh,
-						dlen, raw_digest);
+			cached_bh->digest_normal = rspamd_mempool_alloc (task->task_pool,
+				sizeof (raw_digest));
+			memcpy (cached_bh->digest_normal, raw_digest, sizeof (raw_digest));
+		}
 
-				/* Try add LF */
+		/* Check bh field */
+		if (memcmp (ctx->bh, cached_bh->digest_normal, ctx->bhlen) != 0) {
+			if (cpy_ctx) {
+				msg_debug_dkim (
+						"bh value mismatch: %*xs versus %*xs, try add CRLF",
+						dlen, ctx->bh,
+						dlen, cached_bh->digest_normal);
+				/* Try add CRLF */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 				EVP_MD_CTX_cleanup (cpy_ctx);
 #else
 				EVP_MD_CTX_reset (cpy_ctx);
 #endif
 				EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
-				EVP_DigestUpdate (cpy_ctx, "\n", 1);
+				EVP_DigestUpdate (cpy_ctx, "\r\n", 2);
 				EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
+				cached_bh->digest_crlf = rspamd_mempool_alloc (task->task_pool,
+						sizeof (raw_digest));
+				memcpy (cached_bh->digest_crlf, raw_digest, sizeof (raw_digest));
 
 				if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
-					msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+					msg_debug_dkim (
+							"bh value mismatch: %*xs versus %*xs, try add LF",
 							dlen, ctx->bh,
 							dlen, raw_digest);
+
+					/* Try add LF */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 					EVP_MD_CTX_cleanup (cpy_ctx);
 #else
 					EVP_MD_CTX_reset (cpy_ctx);
 #endif
-					EVP_MD_CTX_destroy (cpy_ctx);
-					return DKIM_REJECT;
+					EVP_MD_CTX_copy (cpy_ctx, ctx->common.body_hash);
+					EVP_DigestUpdate (cpy_ctx, "\n", 1);
+					EVP_DigestFinal_ex (cpy_ctx, raw_digest, NULL);
+					cached_bh->digest_cr = rspamd_mempool_alloc (task->task_pool,
+							sizeof (raw_digest));
+					memcpy (cached_bh->digest_cr, raw_digest, sizeof (raw_digest));
+
+					if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
+						msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+								dlen, ctx->bh,
+								dlen, raw_digest);
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+						EVP_MD_CTX_cleanup (cpy_ctx);
+#else
+						EVP_MD_CTX_reset (cpy_ctx);
+#endif
+						EVP_MD_CTX_destroy (cpy_ctx);
+						return DKIM_REJECT;
+					}
+				}
+			}
+			else if (cached_bh->digest_crlf) {
+				if (memcmp (ctx->bh, cached_bh->digest_crlf, ctx->bhlen) != 0) {
+					msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
+							dlen, ctx->bh,
+							dlen, cached_bh->digest_crlf);
+
+					if (cached_bh->digest_cr) {
+						if (memcmp (ctx->bh, cached_bh->digest_cr, ctx->bhlen) != 0) {
+							msg_debug_dkim (
+									"bh value mismatch: %*xs versus %*xs",
+									dlen, ctx->bh,
+									dlen, cached_bh->digest_cr);
+
+							return DKIM_REJECT;
+						}
+					}
+					else {
+						return DKIM_REJECT;
+					}
 				}
 			}
 		}
@@ -2459,7 +2536,8 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	struct rspamd_dkim_header *dh;
 	const gchar *body_end, *body_start, *hname;
 	guchar raw_digest[EVP_MAX_MD_SIZE];
-	gsize dlen;
+	struct rspamd_dkim_cached_hash *cached_bh = NULL;
+	gsize dlen = 0;
 	guint i, j;
 	gchar *b64_data;
 	guchar *rsa_buf;
@@ -2481,9 +2559,16 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	/* Start canonization of body part */
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
-		if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end,
-				TRUE)) {
-			return NULL;
+		dlen = EVP_MD_CTX_size (ctx->common.body_hash);
+		cached_bh = rspamd_dkim_check_bh_cached (&ctx->common, task,
+				dlen, TRUE);
+
+		if (!cached_bh->digest_normal) {
+			/* Start canonization of body part */
+			if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end,
+					TRUE)) {
+				return NULL;
+			}
 		}
 	}
 
@@ -2544,10 +2629,15 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	hdr->str[hdr->len - 1] = ';';
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
-		dlen = EVP_MD_CTX_size (ctx->common.body_hash);
-		EVP_DigestFinal_ex (ctx->common.body_hash, raw_digest, NULL);
+		if (!cached_bh->digest_normal) {
+			EVP_DigestFinal_ex (ctx->common.body_hash, raw_digest, NULL);
+			cached_bh->digest_normal = rspamd_mempool_alloc (task->task_pool,
+					sizeof (raw_digest));
+			memcpy (cached_bh->digest_normal, raw_digest, sizeof (raw_digest));
+		}
 
-		b64_data = rspamd_encode_base64 (raw_digest, dlen, 0, NULL);
+
+		b64_data = rspamd_encode_base64 (cached_bh->digest_normal, dlen, 0, NULL);
 		rspamd_printf_gstring (hdr, " bh=%s; b=", b64_data);
 		g_free (b64_data);
 	}
