@@ -429,6 +429,7 @@ local function arc_signing_cb(task)
   p.arc_cv = 'none'
   p.arc_idx = 1
   p.no_cache = true
+  p.sign_type = 'arc-sign'
 
   if arc_seals then
     p.arc_idx = #arc_seals + 1
@@ -444,7 +445,6 @@ local function arc_signing_cb(task)
     local function try_redis_key(selector)
       p.key = nil
       p.selector = selector
-      p.sign_type = 'arc-sign'
       local rk = string.format('%s.%s', p.selector, p.domain)
       local function redis_key_cb(err, data)
         if err or type(data) ~= 'string' then
