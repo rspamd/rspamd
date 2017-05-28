@@ -67,6 +67,12 @@ local function gen_auth_results(task, settings)
     symbols = {}
   }
 
+  local received = task:get_received_headers() or {}
+  local mxname = (received[1] or {}).by_hostname
+  if mxname then
+    table.insert(hdr_parts, mxname)
+  end
+
   for auth_type, symbols in pairs(auth_types) do
     for key, sym in pairs(symbols) do
       if not common.symbols.sym then
@@ -139,6 +145,7 @@ local function gen_auth_results(task, settings)
       end
     end
   end
+
   if #hdr_parts > 0 then
     return table.concat(hdr_parts, '; ')
   end
