@@ -405,51 +405,64 @@ local function arc_signing_cb(task)
       return
     end
   end
+
   local efrom = task:get_from('smtp')
   if not settings.allow_envfrom_empty and
       #(((efrom or E)[1] or E).addr or '') == 0 then
     rspamd_logger.debugm(N, task, 'empty envelope from not allowed')
     return false
   end
+
   local hfrom = task:get_from('mime')
   if not settings.allow_hdrfrom_multiple and (hfrom or E)[2] then
     rspamd_logger.debugm(N, task, 'multiple header from not allowed')
     return false
   end
+
   local dkim_domain
   local hdom = ((hfrom or E)[1] or E).domain
   local edom = ((efrom or E)[1] or E).domain
+  local udom = string.match(auser or '', '.*@(.*)')
+
+  local function get_dkim_domain(type)
+    if settings[type] == 'header' then
+      return hdom
+    elseif settings[type] == 'envelope' then
+      return edom
+    elseif settings[type] == 'auth' then
+      return udom
+    end
+  end
+
   if hdom then
     hdom = hdom:lower()
   end
   if edom then
     edom = edom:lower()
   end
-  if settings.use_domain_sign_networks and is_sign_networks then
-    if settings.use_domain_sign_networks == 'header' then
-      dkim_domain = hdom
-    else
-      dkim_domain = edom
-    end
-  elseif settings.use_domain_local and is_local then
-    if settings.use_domain_local == 'header' then
-      dkim_domain = hdom
-    else
-      dkim_domain = edom
-    end
-  else
-    if settings.use_domain == 'header' then
-      dkim_domain = hdom
-    else
-      dkim_domain = edom
-    end
+  if udom then
+    udom = udom:lower()
   end
+
+  if settings.use_domain_sign_networks and is_sign_networks then
+    dkim_domain = get_dkim_domain('use_domain_sign_networks')
+  elseif settings.use_domain_local and is_local then
+    dkim_domain = get_dkim_domain('use_domain_local')
+  else
+    dkim_domain = get_dkim_domain('use_domain')
+  end
+
   if not dkim_domain then
     rspamd_logger.debugm(N, task, 'could not extract dkim domain')
     return false
+  else
+    rspamd_logger.debugm(N, task, 'use domain(%s) for sugnature: %s',
+      settings.use_domain, dkim_domain)
   end
+
   if settings.use_esld then
     dkim_domain = rspamd_util.get_tld(dkim_domain)
+
     if settings.use_domain == 'envelope' and hdom then
       hdom = rspamd_util.get_tld(hdom)
     elseif settings.use_domain == 'header' and edom then
@@ -466,8 +479,8 @@ local function arc_signing_cb(task)
       return false
     end
   end
+
   if auser and not settings.allow_username_mismatch then
-    local udom = string.match(auser, '.*@(.*)')
     if not udom then
       rspamd_logger.debugm(N, task, 'couldnt find domain in username')
       return false
@@ -480,21 +493,26 @@ local function arc_signing_cb(task)
       return false
     end
   end
+
   local p = {}
+
   if settings.domain[dkim_domain] then
     p.selector = settings.domain[dkim_domain].selector
     p.key = settings.domain[dkim_domain].path
   end
+
   if not (p.key and p.selector) and not
   (settings.try_fallback or settings.use_redis or settings.selector_map or settings.path_map) then
     rspamd_logger.debugm(N, task, 'dkim unconfigured and fallback disabled')
     return false
   end
+
   if not p.key then
     if not settings.use_redis then
       p.key = settings.path
     end
   end
+
   if not p.selector then
     p.selector = settings.selector
   end
@@ -506,6 +524,7 @@ local function arc_signing_cb(task)
       p.selector = data
     end
   end
+
   if settings.path_map then
     local data = settings.path_map:get_key(dkim_domain)
     if data then
@@ -624,11 +643,6 @@ if settings.use_redis then
     rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
     return
   end
-end
-
-if settings.use_domain ~= 'header' and settings.use_domain ~= 'envelope' then
-  rspamd_logger.errx(rspamd_config, "Value for 'use_domain' is invalid")
-  settings.use_domain = 'header'
 end
 
 id = rspamd_config:register_symbol({
