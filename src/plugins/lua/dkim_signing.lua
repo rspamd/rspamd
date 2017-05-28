@@ -159,10 +159,7 @@ if settings.use_redis then
     return
   end
 end
-if settings.use_domain ~= 'header' and settings.use_domain ~= 'envelope' then
-  rspamd_logger.errx(rspamd_config, "Value for 'use_domain' is invalid")
-  settings.use_domain = 'header'
-end
+
 
 rspamd_config:register_symbol({
   name = settings['symbol'],
