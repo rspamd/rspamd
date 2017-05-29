@@ -373,15 +373,21 @@ local function arc_sign_seal(task, params, header)
     cur_idx = #arc_seals + 1
     for i = (cur_idx - 1), 1, (-1) do
       if arc_auth_results[i] then
-        sha_ctx:update(dkim_canonicalize('ARC-Authentication-Results',
-          arc_auth_results[i].value))
+        local s = dkim_canonicalize('ARC-Authentication-Results',
+          arc_auth_results[i].value)
+        sha_ctx:update(s)
+        rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
       end
       if arc_sigs[i] then
-        sha_ctx:update(dkim_canonicalize('ARC-Message-Signature',
-          arc_sigs[i].raw_header))
+        local s = dkim_canonicalize('ARC-Message-Signature',
+          arc_sigs[i].raw_header)
+        sha_ctx:update(s)
+        rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
       end
       if arc_seals[i] then
-        sha_ctx:update(dkim_canonicalize('ARC-Seal', arc_seals[i].raw_header))
+        local s = dkim_canonicalize('ARC-Seal', arc_seals[i].raw_header)
+        sha_ctx:update(s)
+        rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
       end
     end
   end
@@ -389,20 +395,25 @@ local function arc_sign_seal(task, params, header)
   header = rspamd_util.fold_header(
     'ARC-Message-Signature',
     header)
+
   cur_auth_results = rspamd_util.fold_header(
     'ARC-Authentication-Results',
     cur_auth_results)
 
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
-  sha_ctx:update(dkim_canonicalize('ARC-Authentication-Results',
-    cur_auth_results))
-  sha_ctx:update(dkim_canonicalize('ARC-Message-Signature',
-    header))
+  local s = dkim_canonicalize('ARC-Authentication-Results',
+    cur_auth_results)
+  sha_ctx:update(s)
+  rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
+  s = dkim_canonicalize('ARC-Message-Signature', header)
+  sha_ctx:update(s)
+  rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
       cur_idx, params.selector, params.domain, rspamd_util.get_time(), params.arc_cv)
-  sha_ctx:update(dkim_canonicalize('ARC-Message-Signature',
-    cur_arc_seal))
+  s = string.format('%s:%s', 'arc-seal', cur_arc_seal)
+  sha_ctx:update(s)
+  rspamd_logger.debugm(N, task, 'initial update signature with header: %s', s)
 
   local sig = rspamd_rsa.sign_memory(privkey, sha_ctx:bin())
   cur_arc_seal = string.format('%s%s', cur_arc_seal,
