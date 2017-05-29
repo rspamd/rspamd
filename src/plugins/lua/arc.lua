@@ -364,7 +364,8 @@ local function arc_sign_seal(task, params, header)
     rspamd_logger.errx(task, 'cannot load private key for signing')
   end
 
-  local sha_ctx = hash.create('sha-256')
+
+  local sha_ctx = hash.create_specific('sha256')
 
   -- Update using previous seals + sigs + AAR
   local cur_idx = 1
@@ -385,6 +386,13 @@ local function arc_sign_seal(task, params, header)
     end
   end
 
+  header = rspamd_util.fold_header(
+    'ARC-Message-Signature',
+    header)
+  cur_auth_results = rspamd_util.fold_header(
+    'ARC-Authentication-Results',
+    cur_auth_results)
+
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
   sha_ctx:update(dkim_canonicalize('ARC-Authentication-Results',
     cur_auth_results))
@@ -402,12 +410,8 @@ local function arc_sign_seal(task, params, header)
 
   task:set_rmilter_reply({
     add_headers = {
-      ['ARC-Authentication-Results'] = rspamd_util.fold_header(
-        'ARC-Authentication-Results',
-        cur_auth_results),
-      ['ARC-Message-Signature'] = rspamd_util.fold_header(
-        'ARC-Message-Signature',
-        header),
+      ['ARC-Authentication-Results'] = cur_auth_results,
+      ['ARC-Message-Signature'] = header,
       ['ARC-Seal'] = rspamd_util.fold_header(
         'ARC-Seal',
         cur_arc_seal),
