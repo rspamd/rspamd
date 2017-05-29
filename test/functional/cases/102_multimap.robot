@@ -88,7 +88,7 @@ MAP - RCPT USER MISS
   Check Rspamc  ${result}  RCPT_USER  inverse=1
 
 MAP - DEPENDS HIT
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  5.9.155.182  --from  user123@rspamd.com
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  88.99.142.95  --from  user123@rspamd.com
   Check Rspamc  ${result}  DEPS_MAP
 
 MAP - DEPENDS MISS
