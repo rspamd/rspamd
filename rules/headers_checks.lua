@@ -897,7 +897,10 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
         local cd = p:get_header('Content-Disposition')
         if (not cd) or (cd and cd:lower():find('^attachment') == nil) then
           local ci = p:get_header('Content-ID')
-          if ci then return false end
+          if ci or (#parts > 1 and (cd and cd:find('filename=.+%.asc') ~= nil))
+          then
+            return false
+          end
           return true
         end
       end
