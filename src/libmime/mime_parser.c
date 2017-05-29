@@ -246,28 +246,42 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 }
 
 static void
-rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *part)
+rspamd_mime_part_get_cte (struct rspamd_task *task,
+		GHashTable *hdrs,
+		struct rspamd_mime_part *part,
+		gboolean apply_heuristic)
 {
 	struct rspamd_mime_header *hdr;
 	guint i;
-	GPtrArray *hdrs;
+	GPtrArray *hdrs_cte;
 	enum rspamd_cte cte = RSPAMD_CTE_UNKNOWN;
 
-	hdrs = rspamd_message_get_header_from_hash (part->raw_headers,
+	hdrs_cte = rspamd_message_get_header_from_hash (hdrs,
 			task->task_pool,
 			"Content-Transfer-Encoding", FALSE);
 
-	if (hdrs == NULL) {
-		part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
-		msg_info_task ("detected missing CTE for part as: %s",
-				rspamd_cte_to_string (part->cte));
+	if (hdrs_cte == NULL) {
+
+		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
+				!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
+			part->cte = part->parent_part->cte;
+
+			goto check_cte;
+		}
+
+		if (apply_heuristic) {
+			part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
+			msg_info_task ("detected missing CTE for part as: %s",
+					rspamd_cte_to_string (part->cte));
+		}
+
 		part->flags |= RSPAMD_MIME_PART_MISSING_CTE;
 	}
 	else {
-		for (i = 0; i < hdrs->len; i ++) {
+		for (i = 0; i < hdrs_cte->len; i ++) {
 			gsize hlen;
 
-			hdr = g_ptr_array_index (hdrs, i);
+			hdr = g_ptr_array_index (hdrs_cte, i);
 			hlen = strlen (hdr->value);
 			rspamd_str_lc (hdr->value, hlen);
 			cte = rspamd_mime_parse_cte (hdr->value, hlen);
@@ -278,22 +292,31 @@ rspamd_mime_part_get_cte (struct rspamd_task *task, struct rspamd_mime_part *par
 			}
 		}
 
-		if (part->cte == RSPAMD_CTE_UNKNOWN) {
-			part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
+check_cte:
+		if (apply_heuristic) {
+			if (part->cte == RSPAMD_CTE_UNKNOWN) {
+				part->cte = rspamd_mime_part_get_cte_heuristic (task, part);
 
-			msg_info_task ("corrected bad CTE for part to: %s",
-					rspamd_cte_to_string (part->cte));
-		}
-		else if (part->cte == RSPAMD_CTE_B64 || part->cte == RSPAMD_CTE_QP) {
-			/* Additionally check sanity */
-			cte = rspamd_mime_part_get_cte_heuristic (task, part);
+				msg_info_task ("corrected bad CTE for part to: %s",
+						rspamd_cte_to_string (part->cte));
+			}
+			else if (part->cte == RSPAMD_CTE_B64 ||
+					part->cte == RSPAMD_CTE_QP) {
+				/* Additionally check sanity */
+				cte = rspamd_mime_part_get_cte_heuristic (task, part);
 
-			if (cte == RSPAMD_CTE_8BIT) {
-				msg_info_task ("incorrect cte specified for part: %s, %s detected",
-						rspamd_cte_to_string (part->cte),
+				if (cte == RSPAMD_CTE_8BIT) {
+					msg_info_task (
+							"incorrect cte specified for part: %s, %s detected",
+							rspamd_cte_to_string (part->cte),
+							rspamd_cte_to_string (cte));
+					part->cte = cte;
+					part->flags |= RSPAMD_MIME_PART_BAD_CTE;
+				}
+			}
+			else {
+				msg_debug_mime ("processed cte: %s",
 						rspamd_cte_to_string (cte));
-				part->cte = cte;
-				part->flags |= RSPAMD_MIME_PART_BAD_CTE;
 			}
 		}
 		else {
@@ -408,7 +431,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 
 	g_assert (part != NULL);
 
-	rspamd_mime_part_get_cte (task, part);
+	rspamd_mime_part_get_cte (task, part->raw_headers, part, TRUE);
 	rspamd_mime_part_get_cd (task, part);
 
 	switch (part->cte) {
@@ -765,6 +788,7 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 	}
 
 	g_ptr_array_add (task->parts, part);
+	rspamd_mime_part_get_cte (task, part->raw_headers, part, FALSE);
 
 	st->pos = part->raw_data.begin;
 	cbdata.multipart = part;
