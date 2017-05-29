@@ -32,6 +32,7 @@ if confighelp then
 end
 
 local N = 'dmarc'
+local no_sampling_domains
 local statefile = string.format('%s/%s', rspamd_paths['DBDIR'], 'dmarc_reports_last_sent')
 local VAR_NAME = 'dmarc_reports_last_sent'
 local INTERVAL = 86400
@@ -468,21 +469,41 @@ local function dmarc_callback(task)
         return maybe_force_action('dnsfail')
       end
       if dmarc_policy == 'quarantine' then
-        if not pct or pct == 100 or (math.random(100) <= pct) then
+        if not pct or pct == 100 then
           task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
           disposition = "quarantine"
         else
-          task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "sampled_out")
-          sampled_out = true
+          if (math.random(100) > pct) then
+            if (not no_sampling_domains or not no_sampling_domains:get_key(dmarc_domain)) then
+              task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "sampled_out")
+              sampled_out = true
+            else
+              task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "local_policy")
+              disposition = "quarantine"
+            end
+          else
+            task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
+            disposition = "quarantine"
+          end
         end
       elseif dmarc_policy == 'reject' then
-        if not pct or pct == 100 or (math.random(100) <= pct) then
+        if not pct or pct == 100 then
           task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
           disposition = "reject"
         else
-          task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "sampled_out")
-          disposition = "quarantine"
-          sampled_out = true
+          if (math.random(100) > pct) then
+            if (not no_sampling_domains or not no_sampling_domains:get_key(dmarc_domain)) then
+              task:insert_result(dmarc_symbols['quarantine'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "sampled_out")
+              disposition = "quarantine"
+              sampled_out = true
+            else
+              task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy, "local_policy")
+              disposition = "reject"
+            end
+          else
+            task:insert_result(dmarc_symbols['reject'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
+            disposition = "reject"
+          end
         end
       else
         task:insert_result(dmarc_symbols['softfail'], res, lookup_domain .. ' : ' .. reason_str, dmarc_policy)
@@ -574,6 +595,7 @@ opts = rspamd_config:get_all_opt('dmarc')
 if not opts or type(opts) ~= 'table' then
   return
 end
+no_sampling_domains = rspamd_map_add(N, 'no_sampling_domains', 'map', 'Domains not to apply DMARC sampling to')
 
 if opts['symbols'] then
   for k,_ in pairs(dmarc_symbols) do
