@@ -408,8 +408,8 @@ local function arc_sign_seal(task, params, header)
       ['ARC-Message-Signature'] = rspamd_util.fold_header(
         'ARC-Message-Signature',
         header),
-      ['ARC-Message-Seal'] = rspamd_util.fold_header(
-        'ARC-Message-Seal',
+      ['ARC-Seal'] = rspamd_util.fold_header(
+        'ARC-Seal',
         cur_arc_seal),
     }
   })
