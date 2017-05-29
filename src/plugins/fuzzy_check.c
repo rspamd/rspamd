@@ -2370,8 +2370,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 								if (!skip_existing) {
 									g_ptr_array_add (res, io);
 								}
-
-								g_ptr_array_add (res, io);
 							}
 
 							if (rule->fuzzy_images) {
@@ -2399,8 +2397,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 									if (!skip_existing) {
 										g_ptr_array_add (res, io);
 									}
-
-									g_ptr_array_add (res, io);
 								}
 							}
 						}
@@ -2413,7 +2409,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 		if (G_LIKELY (!(flags & FUZZY_CHECK_FLAG_NOIMAGES))) {
 			if (mime_part->ct &&
-					!(mime_part->flags & RSPAMD_MIME_PART_TEXT) &&
+					!(mime_part->flags & RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_IMAGE) &&
 					mime_part->parsed_data.len > 0 &&
 					fuzzy_check_content_type (rule, mime_part->ct)) {
 				if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->parsed_data.len >=
@@ -2435,8 +2431,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 						if (!skip_existing) {
 							g_ptr_array_add (res, io);
 						}
-
-						g_ptr_array_add (res, io);
 					}
 				}
 			}
