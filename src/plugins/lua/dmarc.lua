@@ -17,6 +17,7 @@ limitations under the License.
 
 -- Dmarc policy filter
 
+local rspamd_resolver = require "rspamd_resolver"
 local rspamd_logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"
 local rspamd_tcp = require "rspamd_tcp"
@@ -607,6 +608,7 @@ if opts['reporting'] == true then
     end
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
+      local resolver = rspamd_resolver.init(ev_base, rspamd_config)
       load_scripts(cfg, ev_base)
       rspamd_config:register_finish_script(function ()
         local stamp = pool:get_variable(VAR_NAME, 'double')
@@ -854,6 +856,7 @@ if opts['reporting'] == true then
           stop_pattern = '\r\n',
           host = report_settings.smtp,
           port = report_settings.smtp_port,
+          resolver = resolver,
         })
       end
       local function make_report()
