@@ -515,13 +515,12 @@ local check_from_display_name = rspamd_config:register_symbol{
         -- Be careful with undisclosed-recipients:; as domain will be an empty string
         if to[1]['domain'] ~= '' and util.strequal_caseless(to[1]['domain'], parsed[1]['domain']) then
           task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
-        else
-          task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
+          return false
         end
-        return false
-      else
-        task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
       end
+      -- Make sure we did not mistake e.g. <something>@<name> for an email address
+      if not parsed[1]['domain']:find('%.') then return false end
+      task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
     end
     return false
   end,
