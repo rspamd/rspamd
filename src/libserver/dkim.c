@@ -2198,12 +2198,14 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			}
 		}
 
+		if (cpy_ctx) {
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-		EVP_MD_CTX_cleanup (cpy_ctx);
+			EVP_MD_CTX_cleanup (cpy_ctx);
 #else
-		EVP_MD_CTX_reset (cpy_ctx);
+			EVP_MD_CTX_reset (cpy_ctx);
 #endif
-		EVP_MD_CTX_destroy (cpy_ctx);
+			EVP_MD_CTX_destroy (cpy_ctx);
+		}
 	}
 
 	dlen = EVP_MD_CTX_size (ctx->common.headers_hash);
