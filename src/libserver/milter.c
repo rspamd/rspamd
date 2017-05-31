@@ -1253,6 +1253,11 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 		}
 	}
 
+	if (session->addr) {
+		rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
+				rspamd_inet_address_to_string (session->addr));
+	}
+
 	rspamd_milter_macro_http (session, msg);
 
 	return msg;
