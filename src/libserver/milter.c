@@ -290,6 +290,11 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			guchar proto;
 			guint16 port;
 
+			/*
+			 * Important notice: Postfix do NOT use this command to pass
+			 * client's info (e.g. hostname is not really here)
+			 * Sendmail will pass it here
+			 */
 			if (session->hostname == NULL) {
 				session->hostname = rspamd_fstring_new_init (pos, zero - pos);
 			}
@@ -1184,6 +1189,13 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 	IF_MACRO("{auth_authen}") {
 		rspamd_http_message_add_header_len (msg, USER_HEADER,
 				found->begin, found->len);
+	}
+
+	if (!session->hostname || session->hostname->len == 0) {
+		IF_MACRO("{client_name}") {
+			rspamd_http_message_add_header_len (msg, HOSTNAME_HEADER,
+					found->begin, found->len);
+		}
 	}
 }
 
