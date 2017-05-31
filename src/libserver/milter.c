@@ -1197,6 +1197,19 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 					found->begin, found->len);
 		}
 	}
+
+	IF_MACRO("{daemon_name}") {
+		/* Postfix style */
+		rspamd_http_message_add_header_len (msg, MTA_NAME_HEADER,
+				found->begin, found->len);
+	}
+	else {
+		/* Sendmail style */
+		IF_MACRO("j") {
+			rspamd_http_message_add_header_len (msg, MTA_NAME_HEADER,
+					found->begin, found->len);
+		}
+	}
 }
 
 struct rspamd_http_message *
