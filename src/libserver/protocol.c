@@ -431,6 +431,14 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							mta_tag, NULL);
 					debug_task ("read MTA-Tag header, value: %s", mta_tag);
 				}
+				IF_HEADER (MTA_NAME_HEADER) {
+					gchar *mta_name;
+					mta_name = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
+					rspamd_mempool_set_variable (task->task_pool,
+							RSPAMD_MEMPOOL_MTA_NAME,
+							mta_name, NULL);
+					debug_task ("read MTA-Name header, value: %s", mta_name);
+				}
 				break;
 			default:
 				debug_task ("unknown header: %V", hn);

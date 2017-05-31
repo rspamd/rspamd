@@ -77,6 +77,6 @@
 #define PROFILE_HEADER "Profile"
 #define TLS_CIPHER_HEADER "TLS-Cipher"
 #define TLS_VERSION_HEADER "TLS-Version"
-
+#define MTA_NAME_HEADER "MTA-Name"
 
 #endif //RSPAMD_PROTOCOL_INTERNAL_H

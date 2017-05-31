@@ -828,7 +828,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
 				&& task->from_addr) {
 			msg_debug_task ("the first received seems to be"
-					" not ours, replace it with fake one");
+					" not ours, prepend it with fake one");
 
 			trecv = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct received_header));
@@ -836,6 +836,8 @@ rspamd_message_parse (struct rspamd_task *task)
 			trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
 					rspamd_inet_address_to_string (task->from_addr));
 			trecv->from_ip = trecv->real_ip;
+			trecv->by_hostname = rspamd_mempool_get_variable (task->task_pool,
+					RSPAMD_MEMPOOL_MTA_NAME);
 			trecv->addr = rspamd_inet_address_copy (task->from_addr);
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)rspamd_inet_address_free,
