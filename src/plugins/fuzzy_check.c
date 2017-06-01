@@ -2349,13 +2349,49 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				image = mime_part->specific.img;
 
 				if (image->data->len > 0) {
-					if (fuzzy_module_ctx->min_height <= 0 || image->height >=
-							fuzzy_module_ctx->min_height) {
-						if (fuzzy_module_ctx->min_width <= 0 || image->width >=
-								fuzzy_module_ctx->min_width) {
-							io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+					/* Check:
+					 * - min height
+					 * - min width
+					 * - min bytes
+					 */
+
+					if ((fuzzy_module_ctx->min_height == 0 ||
+							image->height >= fuzzy_module_ctx->min_height) &&
+						(fuzzy_module_ctx->min_width == 0 ||
+							image->width >= fuzzy_module_ctx->min_width) &&
+						(fuzzy_module_ctx->min_bytes <= 0 ||
+								mime_part->parsed_data.len >= fuzzy_module_ctx->min_bytes)) {
+						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
+								task->task_pool,
+								image->parent->digest);
+						if (io) {
+							gboolean skip_existing = FALSE;
+
+							PTR_ARRAY_FOREACH (res, j, cur) {
+								if (memcmp (cur->cmd.digest, io->cmd.digest,
+										sizeof (io->cmd.digest)) == 0) {
+									skip_existing = TRUE;
+									break;
+								}
+							}
+
+							if (!skip_existing) {
+								g_ptr_array_add (res, io);
+							}
+						}
+
+						if (rule->fuzzy_images) {
+							/* Try to normalize image */
+							if (!image->is_normalized) {
+								rspamd_image_normalize (task, image);
+							}
+						}
+
+						if (image->is_normalized) {
+							io = fuzzy_cmd_from_image_part (rule, c, flag,
+									value,
 									task->task_pool,
-									image->parent->digest);
+									image);
 							if (io) {
 								gboolean skip_existing = FALSE;
 
@@ -2369,34 +2405,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 								if (!skip_existing) {
 									g_ptr_array_add (res, io);
-								}
-							}
-
-							if (rule->fuzzy_images) {
-								/* Try to normalize image */
-								if (!image->is_normalized) {
-									rspamd_image_normalize (task, image);
-								}
-							}
-
-							if (image->is_normalized) {
-								io = fuzzy_cmd_from_image_part (rule, c, flag, value,
-										task->task_pool,
-										image);
-								if (io) {
-									gboolean skip_existing = FALSE;
-
-									PTR_ARRAY_FOREACH (res, j, cur) {
-										if (memcmp (cur->cmd.digest, io->cmd.digest,
-												sizeof (io->cmd.digest)) == 0) {
-											skip_existing = TRUE;
-											break;
-										}
-									}
-
-									if (!skip_existing) {
-										g_ptr_array_add (res, io);
-									}
 								}
 							}
 						}
