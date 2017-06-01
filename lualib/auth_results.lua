@@ -164,6 +164,22 @@ local function gen_auth_results(task, settings)
     end
   end
 
+  local u = task:get_user()
+  local smtp_from = task:get_from('smtp')
+
+  if u and smtp_from then
+    local hdr
+
+    if #smtp_from[1]['addr'] > 0 then
+      hdr = string.format('auth=pass smtp.auth=%s smtp.mailfrom=%s',
+        u, smtp_from[1]['addr'])
+    else
+      hdr = string.format('auth=pass smtp.auth=%s', u)
+    end
+
+    table.insert(hdr_parts, hdr)
+  end
+
   if #hdr_parts > 0 then
     return table.concat(hdr_parts, '; ')
   end
