@@ -506,20 +506,29 @@ local check_from_display_name = rspamd_config:register_symbol{
     local parsed = util.parse_mail_address(from[1].name)
     if not parsed then return false end
     if not (parsed[1] and parsed[1]['addr']) then return false end
-    if parsed[1]['domain'] == nil or parsed[1]['domain'] == '' then return false end
+    -- Make sure we did not mistake e.g. <something>@<name> for an email address
+    if not parsed[1]['domain'] or not parsed[1]['domain']:find('%.') then return false end
     -- See if the parsed domains differ
     if not util.strequal_caseless(from[1]['domain'], parsed[1]['domain']) then
       -- See if the destination domain is the same as the spoof
-      local to = task:get_recipients(2)
-      if (to and to[1] and to[1]['domain']) then
-        -- Be careful with undisclosed-recipients:; as domain will be an empty string
-        if to[1]['domain'] ~= '' and util.strequal_caseless(to[1]['domain'], parsed[1]['domain']) then
-          task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
-          return false
+      local mto = task:get_recipients(2)
+      local sto = task:get_recipients(1)
+      if mto then
+        for _, to in ipairs(mto) do
+          if to['domain'] ~= '' and util.strequal_caseless(to['domain'], parsed[1]['domain']) then
+            task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
+            return false
+          end
         end
       end
-      -- Make sure we did not mistake e.g. <something>@<name> for an email address
-      if not parsed[1]['domain']:find('%.') then return false end
+      if sto then
+        for _, to in ipairs(sto) do
+          if to['domain'] ~= '' and util.strequal_caseless(to['domain'], parsed[1]['domain']) then
+            task:insert_result('SPOOF_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
+            return false
+          end
+        end
+      end
       task:insert_result('FROM_NEQ_DISPLAY_NAME', 1.0, from[1]['domain'], parsed[1]['domain'])
     end
     return false
