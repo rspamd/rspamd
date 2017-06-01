@@ -97,6 +97,7 @@ struct fuzzy_ctx {
 	guint32 min_hash_len;
 	radix_compressed_t *whitelist;
 	struct rspamd_keypair_cache *keypairs_cache;
+	gdouble text_multiplier;
 	guint32 min_bytes;
 	guint32 min_height;
 	guint32 min_width;
@@ -703,6 +704,15 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check",
+			"Multiplier for bytes limit when checking for text parts",
+			"text_multiplier",
+			UCL_FLOAT,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
 			"Minimum height in pixels for embedded images to check using fuzzy storage",
 			"min_height",
 			UCL_INT,
@@ -918,6 +928,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	else {
 		fuzzy_module_ctx->min_hash_len = 0;
 	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check",
 		"min_bytes")) != NULL) {
@@ -926,6 +937,16 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	else {
 		fuzzy_module_ctx->min_bytes = 0;
 	}
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "fuzzy_check",
+					"text_multiplier")) != NULL) {
+		fuzzy_module_ctx->text_multiplier = ucl_object_todouble (value);
+	}
+	else {
+		fuzzy_module_ctx->text_multiplier = 0.5;
+	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check",
 		"min_height")) != NULL) {
@@ -2287,6 +2308,8 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 	if (G_LIKELY (!(flags & FUZZY_CHECK_FLAG_NOTEXT))) {
 		for (i = 0; i < task->text_parts->len; i ++) {
+			gdouble fac;
+
 			part = g_ptr_array_index (task->text_parts, i);
 
 			if (IS_PART_EMPTY (part)) {
@@ -2294,10 +2317,12 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			}
 
 			/* Check length of part */
-			if (fuzzy_module_ctx->min_bytes > part->content->len) {
-				msg_info_task ("<%s>, part is shorter than %d bytes (%d bytes), "
+			fac = fuzzy_module_ctx->text_multiplier * part->content->len;
+			if ((double)fuzzy_module_ctx->min_bytes > fac) {
+				msg_info_task ("<%s>, part is shorter than %d bytes (%.0f * %.2f bytes), "
 						"skip fuzzy check",
-						task->message_id, fuzzy_module_ctx->min_bytes,
+						task->message_id, fuzzy_module_ctx->min_bytes, fac,
+						fuzzy_module_ctx->text_multiplier,
 						part->content->len);
 				continue;
 			}
