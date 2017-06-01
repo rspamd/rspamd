@@ -214,7 +214,8 @@ local function arc_callback(task)
 
     if cbdata.checked == #arc_sig_headers then
       if cbdata.res == 'success' then
-        task:insert_result(arc_symbols['allow'], 1.0, cbdata.errors)
+        task:insert_result(arc_symbols['allow'], 1.0, 'i=' ..
+            tostring(cbdata.checked))
       else
         task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
       end
