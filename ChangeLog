@@ -1,3 +1,22 @@
+1.5.9:
+	* [Conf] Increase min_bytes to avoid FP
+	* [Conf] Remove ratelimits from default configuration
+	* [CritFix] Fix accepting on IPv6 sockets
+	* [CritFix] Zero fill sockaddr_un
+	* [Feature] Add `text_multiplier` param
+	* [Fix] Check min_bytes for images as well
+	* [Fix] Do not add exact hashes from different parts
+	* [Fix] Fix memory leak when accepting from unix sockets
+	* [Fix] Fix some more issues about duplicated fuzzy requests
+	* [Fix] Phishing: strict_domains
+	* [Fix] Skip text parts when checking binary parts in fuzzy check
+	* [Minor] Add the same duplicates protection for all fuzzy hashes types
+	* [Minor] Fix braces
+	* [Minor] Fix test
+	* [Minor] SPOOF_DISPLAY_NAME: Use all SMTP/MIME recipients
+	* [Minor] Validate assumed spoofed display name domains to contain a dot
+
+
 1.5.8:	
 	* [CritFix] Fix memory leak in fuzzy check
 	* [CritFix] Fix memory leak in maps scheduling
