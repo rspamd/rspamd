@@ -5,6 +5,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Resource        lib.robot
 
 *** Variables ***
+${CONTROLLER_ERRORS}  False
 ${STATS_BACKEND}  sqlite3
 ${STATS_PATH_CACHE}  path = "/does/not/exist/bayes-cache.sqlite";
 ${STATS_PATH_HAM}  path = "/does/not/exist/bayes-ham.sqlite";

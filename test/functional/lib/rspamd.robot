@@ -4,6 +4,11 @@ Library         OperatingSystem
 Library         Process
 
 *** Keywords ***
+Check Controller Errors
+  @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /errors
+  Check Errors JSON  @{result}[1]
+  Should Be Equal As Integers  @{result}[0]  200
+
 Check Pidfile
   [Arguments]  ${pidfile}
   Wait Until Created  ${pidfile}
@@ -63,6 +68,7 @@ Generic Setup
 
 Generic Teardown
   [Arguments]  @{ports}
+  Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
   Cleanup Temporary Directory  ${TMPDIR}
   : FOR  ${i}  IN  @{ports}
@@ -97,6 +103,7 @@ Run Redis
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${TMPDIR}/redis.pid
+  Wait Until Keyword Succeeds  30 sec  1 sec  TCP Connect  ${REDIS_ADDR}  ${REDIS_PORT}
   ${REDIS_PID} =  Get File  ${TMPDIR}/redis.pid
   Run Keyword If  '${REDIS_SCOPE}' == 'Test'  Set Test Variable  ${REDIS_PID}
   ...  ELSE IF  '${REDIS_SCOPE}' == 'Suite'  Set Suite Variable  ${REDIS_PID}

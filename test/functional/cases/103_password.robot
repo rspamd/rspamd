@@ -6,6 +6,7 @@ Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/password.conf
+${CONTROLLER_ERRORS}  False
 ${RSPAMD_SCOPE}  Test
 ${PBKDF_PASSWORD}  "$1$rhzzahtm8a5homdhh7z4qiiy7j8pzp4u$k5toro136brshjjuy9t39r785td69qodmd39qzygxuyehn9tqauy"
 ${CATENA_PASSWORD}  "$2$xu1581gidj5cyp4yjgo68qbj6jz1j8o3$j9yg4k58jy3fj8suijxx9d7pea6a6obtufq9kfenosyq8erm87ky"

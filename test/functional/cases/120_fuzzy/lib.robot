@@ -91,11 +91,13 @@ Fuzzy Setup Keyed
   Fuzzy Setup Generic  ${algorithm}  ${EMPTY}  ${check_settings}
 
 Fuzzy Setup Generic
-  [Arguments]  ${algorithm}  ${worker_settings}  ${check_settings}
+  [Arguments]  ${algorithm}  ${worker_settings}  ${check_settings}  &{kwargs}
+  ${has_TMPDIR} =  Evaluate  'TMPDIR' in $kwargs
   Set Suite Variable  ${SETTINGS_FUZZY_WORKER}  ${worker_settings}
   Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  ${check_settings}
   Set Suite Variable  ${ALGORITHM}  ${algorithm}
-  Generic Setup
+  Run Keyword If  '${has_TMPDIR}' == 'True'  Generic Setup  TMPDIR=&{kwargs}[TMPDIR]
+  ...  ELSE  Generic Setup
 
 Fuzzy Setup Plain Fasthash
   Fuzzy Setup Plain  fasthash

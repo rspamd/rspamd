@@ -21,8 +21,10 @@ Fuzzy Overwrite
 
 *** Keywords ***
 Fuzzy Redis General Setup
-  Fuzzy Setup Generic  siphash  backend = "redis";  ${EMPTY}
+  ${tmpdir} =  Make Temporary Directory
+  Set Suite Variable  ${TMPDIR}  ${tmpdir}
   Run Redis
+  Fuzzy Setup Generic  siphash  backend \= "redis";  ${EMPTY}  TMPDIR=${TMPDIR}
 
 Fuzzy Redis General Teardown
   Normal Teardown

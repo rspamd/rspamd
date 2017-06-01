@@ -43,8 +43,10 @@ Relearn Test
   Check Rspamc  ${result}  BAYES_HAM
 
 Redis Statistics Setup
-  Generic Setup
+  ${tmpdir} =  Make Temporary Directory
+  Set Suite Variable  ${TMPDIR}  ${tmpdir}
   Run Redis
+  Generic Setup  TMPDIR=${tmpdir}
 
 Redis Statistics Teardown
   Normal Teardown
