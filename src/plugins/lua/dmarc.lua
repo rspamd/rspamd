@@ -43,6 +43,7 @@ local report_settings = {
   hscan_count = 1000,
   smtp = '127.0.0.1',
   smtp_port = 25,
+  retries = 2,
 }
 local report_template = [[From: "Rspamd" <%s>
 To: %s
@@ -758,7 +759,12 @@ if opts['reporting'] == true then
           return f(p)
         end
       end
-      local function send_report_via_email(xmlf)
+      local function send_report_via_email(xmlf, retry)
+        if not retry then retry = 0 end
+        if retry > report_settings.retries then
+          rspamd_logger.errx(rspamd_config, "Couldn't send mail for %s: retries exceeded", reporting_domain)
+          return get_reporting_domain()
+        end
         local tmp_addr = {}
         for k in pairs(reporting_addr) do
           table.insert(tmp_addr, k)
@@ -772,6 +778,7 @@ if opts['reporting'] == true then
               if conn then
                 conn:close()
               end
+              send_report_via_email(xmlf, retry+1)
               return false
             end
             if mdata then
@@ -783,6 +790,7 @@ if opts['reporting'] == true then
                 if conn then
                   conn:close()
                 end
+                send_report_via_email(xmlf, retry+1)
                 return false
               end
             else
@@ -790,6 +798,7 @@ if opts['reporting'] == true then
               if conn then
                 conn:close()
               end
+              send_report_via_email(xmlf, retry+1)
               return false
             end
             return true
@@ -956,6 +965,7 @@ if opts['reporting'] == true then
       end
       local function verify_reporting_address()
         local function verifier(test_addr, vdom)
+          local retry = 0
           local function verify_cb(resolver, to_resolve, results, err, _, authenticated)
             if err then
               if err == 'no records with this name' or err == 'requested record is not found' then
@@ -963,8 +973,13 @@ if opts['reporting'] == true then
                 to_verify[test_addr] = nil
               else
                 rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
-                -- XXX: retry?
-                delete_reports()
+                if retry < report_settings.retries then
+                  retry = retry + 1
+                  rspamd_config:get_resolver():resolve_txt(nil, pool,
+                    string.format('%s._report._dmarc.%s', reporting_domain, vdom), verify_cb)
+                else
+                  delete_reports()
+                end
               end
             else
               local is_authed = false
@@ -1002,10 +1017,11 @@ if opts['reporting'] == true then
         verifier(t, vdom)
       end
       local function get_reporting_address()
+        local retry = 0
+        local esld = rspamd_util.get_tld(reporting_domain)
         local function check_addr_cb(resolver, to_resolve, results, err, _, authenticated)
           if err then
             if err == 'no records with this name' or err == 'requested record is not found' then
-              local esld = rspamd_util.get_tld(reporting_domain)
               if reporting_domain ~= esld then
                 rspamd_config:get_resolver():resolve_txt(nil, pool,
                 string.format('_dmarc.%s', esld), check_addr_cb)
@@ -1015,8 +1031,14 @@ if opts['reporting'] == true then
               end
             else
               rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
-              -- XXX: retry?
-              delete_reports()
+              if retry < report_settings.retries then
+                retry = retry + 1
+                rspamd_config:get_resolver():resolve_txt(nil, pool,
+                  to_resolve, check_addr_cb)
+              else
+                rspamd_logger.errx(rspamd_config, "Couldn't get reporting address for %s: retries exceeded", reporting_domain)
+                delete_reports()
+              end
             end
           else
             local policy
@@ -1032,7 +1054,6 @@ if opts['reporting'] == true then
             end
             if not found_policy then
               rspamd_logger.errx(rspamd_config, 'No policy: %s', to_resolve)
-              local esld = rspamd_util.get_tld(reporting_domain)
               if reporting_domain ~= esld then
                 rspamd_config:get_resolver():resolve_txt(nil, pool,
                 string.format('_dmarc.%s', esld), check_addr_cb)
