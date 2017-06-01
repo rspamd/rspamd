@@ -43,6 +43,13 @@ local default_settings = {
     softfail = 'DMARC_POLICY_SOFTFAIL',
     quarantine = 'DMARC_POLICY_QUARANTINE',
   },
+  arc_symbols = {
+    pass = 'ARC_ALLOW',
+    permerror = 'ARC_INVALID',
+    temperror = 'ARC_DNSFAIL',
+    none = 'ARC_NA',
+    reject = 'ARC_REJECT',
+  },
 }
 
 local exports = {}
@@ -61,6 +68,7 @@ local function gen_auth_results(task, settings)
     dkim = settings.dkim_symbols,
     dmarc = settings.dmarc_symbols,
     spf = settings.spf_symbols,
+    arc = settings.arc_symbols,
   }
 
   local common = {
@@ -99,6 +107,7 @@ local function gen_auth_results(task, settings)
     for _, key in ipairs(keys) do
       local hdr = ''
       if auth_type == 'dmarc' and key ~= 'none' then
+        local opts = common.symbols[auth_types['dmarc'][key]][1]['options'] or {}
         hdr = hdr .. 'dmarc='
         if key == 'reject' or key == 'quarantine' or key == 'softfail' then
           hdr = hdr .. 'fail'
@@ -106,10 +115,10 @@ local function gen_auth_results(task, settings)
           hdr = hdr .. key
         end
         if key == 'pass' then
-          hdr = hdr .. ' policy=' .. common.symbols[auth_types['dmarc'][key]][1]['options'][2]
-          hdr = hdr .. ' header.from=' .. common.symbols[auth_types['dmarc'][key]][1]['options'][1]
+          hdr = hdr .. ' policy=' .. opts[2]
+          hdr = hdr .. ' header.from=' .. opts[1]
         elseif key ~= 'none' then
-          local t = global.rspamd_str_split(common.symbols[auth_types['dmarc'][key]][1]['options'][1], ' : ')
+          local t = global.rspamd_str_split(opts[1], ' : ')
           local dom = t[1]
           local rsn = t[2]
           if rsn then
@@ -125,8 +134,17 @@ local function gen_auth_results(task, settings)
         table.insert(hdr_parts, hdr)
       elseif auth_type == 'dkim' and key ~= 'none' then
         if common.symbols[auth_types['dkim'][key]][1] then
-          for _, v in ipairs(common.symbols[auth_types['dkim'][key]][1]['options']) do
+          local opts = common.symbols[auth_types['dkim'][key]][1]['options']
+          for _, v in ipairs(opts) do
             hdr = hdr .. auth_type .. '=' .. key .. ' header.d=' .. v
+            table.insert(hdr_parts, hdr)
+          end
+        end
+      elseif auth_type == 'arc' and key ~= 'none' then
+        if common.symbols[auth_types['arc'][key]][1] then
+          local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
+          for _, v in ipairs(opts) do
+            hdr = hdr .. auth_type .. '=' .. key .. ' (' .. v .. ')'
             table.insert(hdr_parts, hdr)
           end
         end
