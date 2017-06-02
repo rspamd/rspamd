@@ -944,7 +944,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 		fuzzy_module_ctx->text_multiplier = ucl_object_todouble (value);
 	}
 	else {
-		fuzzy_module_ctx->text_multiplier = 0.5;
+		fuzzy_module_ctx->text_multiplier = 2.0;
 	}
 
 	if ((value =
