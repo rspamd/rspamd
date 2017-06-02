@@ -610,17 +610,17 @@ LUA_FUNCTION_DEF (task, lookup_settings);
 LUA_FUNCTION_DEF (task, get_settings_id);
 
 /***
- * @method task:set_rmilter_reply(obj)
- * Set special reply for rmilter
+ * @method task:set_milter_reply(obj)
+ * Set special reply for milter
  * @param {any} obj any lua object that corresponds to the settings format
  * @example
-task:set_rmilter_reply({
+task:set_milter_reply({
 	add_headers = {['X-Lua'] = 'test'},
 	-- 1 is the position of header to remove
 	remove_headers = {['DKIM-Signature'] = 1},
 })
  */
-LUA_FUNCTION_DEF (task, set_rmilter_reply);
+LUA_FUNCTION_DEF (task, set_milter_reply);
 
 /***
  * @method task:process_re(params)
@@ -765,7 +765,7 @@ LUA_FUNCTION_DEF (task, store_in_file);
  * - `metrics`: metrics and symbols
  * - `messages`: messages
  * - `dkim`: dkim signature
- * - `rmilter`: rmilter control block
+ * - `milter`: milter control block
  * - `extra`: extra data, such as profiling
  * - `urls`: list of all urls in a message
  *
@@ -870,7 +870,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_flag),
 	LUA_INTERFACE_DEF (task, get_flags),
 	LUA_INTERFACE_DEF (task, has_flag),
-	LUA_INTERFACE_DEF (task, set_rmilter_reply),
+	{"set_rmilter_reply", lua_task_set_milter_reply},
+	LUA_INTERFACE_DEF (task, set_milter_reply),
 	LUA_INTERFACE_DEF (task, get_digest),
 	LUA_INTERFACE_DEF (task, store_in_file),
 	LUA_INTERFACE_DEF (task, get_protocol_reply),
@@ -3517,7 +3518,7 @@ lua_task_set_settings (lua_State *L)
 }
 
 static gint
-lua_task_set_rmilter_reply (lua_State *L)
+lua_task_set_milter_reply (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *reply, *prev;
@@ -3526,7 +3527,7 @@ lua_task_set_rmilter_reply (lua_State *L)
 
 	if (reply != NULL && task != NULL) {
 		prev = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_RMILTER_REPLY);
+				RSPAMD_MEMPOOL_MILTER_REPLY);
 
 		if (prev) {
 			ucl_object_merge (prev, reply, false);
@@ -3534,7 +3535,7 @@ lua_task_set_rmilter_reply (lua_State *L)
 		}
 		else {
 			rspamd_mempool_set_variable (task->task_pool,
-					RSPAMD_MEMPOOL_RMILTER_REPLY,
+					RSPAMD_MEMPOOL_MILTER_REPLY,
 					reply, (rspamd_mempool_destruct_t) ucl_object_unref);
 		}
 	}

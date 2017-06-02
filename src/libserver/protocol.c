@@ -1077,7 +1077,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 {
 	ucl_object_t *top = NULL;
 	GString *dkim_sig;
-	const ucl_object_t *rmilter_reply;
+	const ucl_object_t *milter_reply;
 	struct rspamd_saved_protocol_reply *cached;
 	static const gchar *varname = RSPAMD_MEMPOOL_CACHED_REPLY;
 
@@ -1180,16 +1180,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_RMILTER) {
-		rmilter_reply = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_RMILTER_REPLY);
+		milter_reply = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_MILTER_REPLY);
 
-		if (rmilter_reply) {
+		if (milter_reply) {
 			if (task->cmd == CMD_CHECK_V2) {
-				ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
+				ucl_object_insert_key (top, ucl_object_ref (milter_reply),
 						"milter", 0, false);
 			}
 			else {
-				ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
+				ucl_object_insert_key (top, ucl_object_ref (milter_reply),
 						"rmilter", 0, false);
 			}
 		}
