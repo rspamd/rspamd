@@ -2319,11 +2319,12 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			/* Check length of part */
 			fac = fuzzy_module_ctx->text_multiplier * part->content->len;
 			if ((double)fuzzy_module_ctx->min_bytes > fac) {
-				msg_info_task ("<%s>, part is shorter than %d bytes (%.0f * %.2f bytes), "
+				msg_info_task ("<%s>, part is shorter than %d bytes: %.0f "
+						"(%d * %.2f bytes), "
 						"skip fuzzy check",
 						task->message_id, fuzzy_module_ctx->min_bytes, fac,
-						fuzzy_module_ctx->text_multiplier,
-						part->content->len);
+						part->content->len,
+						fuzzy_module_ctx->text_multiplier);
 				continue;
 			}
 
