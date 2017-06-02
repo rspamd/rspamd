@@ -59,6 +59,7 @@ MIME Date: $header_date
 Subject: $header_subject
 Message-ID: $message_id
 Action: $action
+Score: $score
 Symbols: $symbols]],
 }
 
@@ -68,7 +69,7 @@ local function get_general_metadata(task, flatten, no_content)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
-  r.score = task:get_metric_score('default')[1]
+  r.score = string.format('%.2f', task:get_metric_score('default')[1])
   local rcpt = task:get_recipients('smtp')
   if rcpt then
     local l = {}
