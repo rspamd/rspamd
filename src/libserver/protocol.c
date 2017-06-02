@@ -1184,8 +1184,14 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				RSPAMD_MEMPOOL_RMILTER_REPLY);
 
 		if (rmilter_reply) {
-			ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
-					"rmilter", 0, false);
+			if (task->cmd == CMD_CHECK_V2) {
+				ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
+						"milter", 0, false);
+			}
+			else {
+				ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
+						"rmilter", 0, false);
+			}
 		}
 	}
 
