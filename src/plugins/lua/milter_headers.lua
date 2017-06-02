@@ -23,7 +23,7 @@ end
 
 local logger = require "rspamd_logger"
 local util = require "rspamd_util"
-local N = 'rmilter_headers'
+local N = 'milter_headers'
 local E = {}
 
 local HOSTNAME = util.get_hostname()
@@ -103,7 +103,7 @@ local settings = {
 local active_routines = {}
 local custom_routines = {}
 
-local function rmilter_headers(task)
+local function milter_headers(task)
 
   local routines, common, add, remove = {}, {}, {}, {}
 
@@ -303,15 +303,16 @@ local function rmilter_headers(task)
   if not next(add) then add = nil end
   if not next(remove) then remove = nil end
   if add or remove then
-    task:set_rmilter_reply({
+    task:set_milter_reply({
       add_headers = add,
       remove_headers = remove
     })
   end
 end
 
-local opts = rspamd_config:get_all_opt(N)
+local opts = rspamd_config:get_all_opt(N) or rspamd_config:get_all_opt('rmilter_headers')
 if not opts then return end
+
 if type(opts['use']) == 'string' then
   opts['use'] = {opts['use']}
 elseif (type(opts['use']) == 'table' and not opts['use'][1]) then
@@ -362,8 +363,8 @@ if (#active_routines < 1) then
 end
 logger.infox(rspamd_config, 'active routines [%s]', table.concat(active_routines, ','))
 rspamd_config:register_symbol({
-  name = 'RMILTER_HEADERS',
+  name = 'MILTER_HEADERS',
   type = 'postfilter',
-  callback = rmilter_headers,
+  callback = milter_headers,
   priority = 10
 })
