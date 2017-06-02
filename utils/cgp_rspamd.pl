@@ -77,10 +77,8 @@ sub rspamd_scan {
           my $id     = $js->{'message-id'};
 
           my $symbols = "";
-          while ( my ( $k, $s ) = each( %{$def} ) ) {
-            if ( ref($s) eq "HASH" && $s->{'score'} ) {
-              $symbols .= sprintf "%s(%.2f);", $k, $s->{'score'};
-            }
+          while ( my ( $k, $s ) = each( %{$def->{'symbols'}}) ) {
+            $symbols .= sprintf "%s(%.2f);", $k, $s->{'score'};
           }
 
           printf
@@ -91,8 +89,8 @@ sub rspamd_scan {
             $headers .= "DKIM-Signature: " . $js->{'dkim-signature'};
           }
 
-          if ( $js->{'rmilter'} ) {
-            my $block = $js->{'rmilter'};
+          if ( $js->{'milter'} ) {
+            my $block = $js->{'milter'};
 
             if ( $block->{'add_headers'} ) {
               while ( my ( $h, $v ) = each( %{ $block->{'add_headers'} } ) ) {
@@ -216,7 +214,7 @@ sub rspamd_scan {
         }
 
         http_post(
-          "http://$rspamd_host/symbols", $data,
+          "http://$rspamd_host/checkv2", $data,
           timeout => $request_timeout,
           headers => $headers,
           $http_callback
