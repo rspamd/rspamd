@@ -26,6 +26,7 @@ local rspamd_http = require "rspamd_http"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
+local lutil = require "lua_util"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
@@ -69,7 +70,7 @@ local function get_general_metadata(task, flatten, no_content)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
-  r.score = string.format('%.2f', task:get_metric_score('default')[1])
+  r.score = lutil.round(task:get_metric_score('default')[1], 2)
   local rcpt = task:get_recipients('smtp')
   if rcpt then
     local l = {}
