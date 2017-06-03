@@ -420,7 +420,7 @@ local function arc_sign_seal(task, params, header)
   cur_arc_seal = string.format('%s%s', cur_arc_seal,
     sig:base64())
 
-  task:set_rmilter_reply({
+  task:set_milter_reply({
     add_headers = {
       ['ARC-Authentication-Results'] = cur_auth_results,
       ['ARC-Message-Signature'] = header,
