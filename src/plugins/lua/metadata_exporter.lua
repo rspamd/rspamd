@@ -26,7 +26,6 @@ local rspamd_http = require "rspamd_http"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
-local lutil = require "lua_util"
 local ucl = require "ucl"
 local E = {}
 local N = 'metadata_exporter'
@@ -70,7 +69,10 @@ local function get_general_metadata(task, flatten, no_content)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
-  r.score = lutil.round(task:get_metric_score('default')[1], 2)
+
+  local s = task:get_metric_score('default')[1]
+  r.score = flatten and string.format('%.2f', s) or s
+
   local rcpt = task:get_recipients('smtp')
   if rcpt then
     local l = {}
@@ -98,9 +100,9 @@ local function get_general_metadata(task, flatten, no_content)
       local txt
       if sym.options then
         local topt = table.concat(sym.options, ', ')
-        txt = sym.name .. '(' .. sym.score .. ')' .. ' [' .. topt .. ']'
+        txt = sym.name .. '(' .. string.format('%.2f', sym.score) .. ')' .. ' [' .. topt .. ']'
       else
-        txt = sym.name .. '(' .. sym.score .. ')'
+        txt = sym.name .. '(' .. string.format('%.2f', sym.score) .. ')'
       end
       table.insert(l, txt)
     end
