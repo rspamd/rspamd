@@ -1,3 +1,77 @@
+1.5.9:
+	* [Conf] Increase min_bytes to avoid FP
+	* [Conf] Remove ratelimits from default configuration
+	* [CritFix] Fix accepting on IPv6 sockets
+	* [CritFix] Zero fill sockaddr_un
+	* [Feature] Add `text_multiplier` param
+	* [Fix] Check min_bytes for images as well
+	* [Fix] Do not add exact hashes from different parts
+	* [Fix] Fix memory leak when accepting from unix sockets
+	* [Fix] Fix some more issues about duplicated fuzzy requests
+	* [Fix] Phishing: strict_domains
+	* [Fix] Skip text parts when checking binary parts in fuzzy check
+	* [Minor] Add the same duplicates protection for all fuzzy hashes types
+	* [Minor] Fix braces
+	* [Minor] Fix test
+	* [Minor] SPOOF_DISPLAY_NAME: Use all SMTP/MIME recipients
+	* [Minor] Validate assumed spoofed display name domains to contain a dot
+
+
+1.5.8:
+	* [CritFix] Fix memory leak in fuzzy check
+	* [CritFix] Fix memory leak in maps scheduling
+	* [Feature] Multimap: email:domain:tld filter
+	* [Fix] DKIM Signing: avoid nil index when From header is missing
+	* [Fix] Do not set bayes probability if we don't use it
+	* [Fix] Do not stop on illegal unicode points - replace them
+	* [Fix] Fix brain-damaged spamc protocol for now
+	* [Fix] Fix Redis timeout set
+	* [Fix] Fix spamc support in rspamd proxy
+	* [Fix] Multimap: Received IP filters with Redis
+	* [Fix] Parse rgb[a](x,x,x[,x]) css colors
+	* [Fix] Reresolve upstreams even if there is a single server there
+	* [Fix] Treat empty address as valid
+	* [Fix] Try harder to detect CTE
+	* [Fix] Try to deal with v4 mapped to v6 addresses on accept
+	* [Minor] Add `wsf` and `hta` bad archive extensions
+	* [Minor] Fix configuration option
+	* [Minor] Fix result parsing for SAVAPI
+	* [Minor] Further logging improvements
+	* [Minor] Improve logging of errors
+	* [Minor] Prevent MID_CONTAINS_FROM from firing on empty address
+	* [Minor] Reduce digit->number transmission penalty
+	* [Minor] Relax CTYPE_MISSING_DISPOSITION rule
+
+
+1.5.7:
+	* [CritFix] Fix corruption when multiple fuzzy are defined
+	* [CritFix] Fix learn condition in fuzzy check
+	* [Feature] Add rules to detect bad 8bit characters in From and To
+	* [Feature] DKIM signing: sign_networks/local address specific use_domain settings
+	* [Feature] Support numeric arguments for Redis requests
+	* [Fix] Deal with 8bit characters in email addresses
+	* [Fix] Fix couple of issues in FORWARDED rule
+	* [Fix] Fix passing data to log helper when many symbols defined
+	* [Fix] Fix R_BAD_CTE_7BIT rule
+	* [Fix] Fix REPLYTO_UNPARSEABLE rule
+	* [Fix] Fix setting of email address
+	* [Fix] Rspamadm grep: Disable Lua patterns in string search by default
+	* [Minor] Add Lua 5.3 workaround
+	* [Minor] Add lua methods to detect if a part has 8bit characters
+	* [Minor] Allow session-less lua dns requests
+	* [Minor] Allow to append greylist end time to message reported
+	* [Minor] Avoid `nil` table
+	* [Minor] Disable dkim_signing if redis is specified but not configured
+	* [Minor] Fix build with pcre2
+	* [Minor] Fix rule
+	* [Minor] Fix warnings
+	* [Minor] Format floating point number
+	* [Minor] Push email flags to the lua API
+	* [Minor] Silence some warnings
+	* [Minor] Silence warning
+	* [Minor] Try all hostname regexps to find the most significant one
+	* [WebUI] Fix add header filter in history
+
 1.5.6:
 	* [Feature] Add unigramms support in bayes
 	* [Feature] Allow configurable sign headers for DKIM
