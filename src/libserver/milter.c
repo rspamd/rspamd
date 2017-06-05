@@ -1277,7 +1277,7 @@ rspamd_milter_update_userdata (struct rspamd_milter_session *session,
 }
 
 static void
-rspamd_milter_process_rmilter_block (struct rspamd_milter_session *session,
+rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 		const ucl_object_t *obj)
 {
 	const ucl_object_t *elt, *cur, *cur_elt;
@@ -1381,13 +1381,15 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	}
 
 	/* Deal with milter headers */
-	elt = ucl_object_lookup (results, "rmilter");
+	elt = ucl_object_lookup (results, "milter");
+
 	if (elt) {
-		rspamd_milter_process_rmilter_block (session, elt);
+		rspamd_milter_process_milter_block (session, elt);
 	}
 
 	/* DKIM-Signature */
 	elt = ucl_object_lookup (results, "dkim-signature");
+
 	if (elt) {
 		hname = g_string_new (RSPAMD_MILTER_DKIM_HEADER);
 		hvalue = g_string_new (ucl_object_tostring (elt));
