@@ -33,6 +33,7 @@ local hash = require 'rspamd_cryptobox_hash'
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
+local default_monitored = '1.0.0.127'
 
 local symbols = {
   dkim_allow_symbol = 'R_DKIM_ALLOW',
@@ -516,7 +517,7 @@ for key,rbl in pairs(opts['rbls']) do
       if rbl['dkim'] then
         need_dkim = true
       end
-      if(rbl['is_whitelist']) then
+      if (rbl['is_whitelist']) then
             if type(rbl['whitelist_exception']) == 'string' then
               if (rbl['whitelist_exception'] ~= rbl['symbol']) then
                 table.insert(white_symbols, rbl['symbol'])
@@ -542,8 +543,14 @@ for key,rbl in pairs(opts['rbls']) do
       end
     end
     if rbl['rbl'] then
-      rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
-        {rcode = 'nxdomain', prefix = '1.0.0.127'})
+      if not rbl['disable_monitoring'] and not rbl['is_whitelist'] then
+        rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
+          {
+            rcode = 'nxdomain',
+            prefix = rbl['monitored_address'] or default_monitored
+          })
+      end
+
       rbls[key] = rbl
     end
   end)()
