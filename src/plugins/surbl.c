@@ -65,6 +65,7 @@
 
 static struct surbl_ctx *surbl_module_ctx = NULL;
 static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
+static const gchar *rspamd_surbl_default_monitored = "facebook.com";
 
 static void surbl_test_url (struct rspamd_task *task, void *user_data);
 static void surbl_test_redirector (struct rspamd_task *task, void *user_data);
@@ -494,25 +495,25 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 }
 
 static gint
-surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
-		ucl_object_t* monitored_opts)
+surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 {
 	const ucl_object_t* cur_rule;
 	const ucl_object_t* cur;
 	gint cb_id;
 	gint nrules = 0;
 	struct suffix_item* new_suffix;
-	const gchar* ip_val;
+	const gchar* ip_val, *monitored_domain = NULL;
 	struct surbl_bit_item* new_bit;
-	ucl_object_t *ropts = monitored_opts;
+	ucl_object_t *ropts;
 
 	LL_FOREACH(value, cur_rule) {
 		cur = ucl_object_lookup (cur_rule, "enabled");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
-			if (!ucl_object_toboolean(cur)) {
+			if (!ucl_object_toboolean (cur)) {
 				continue;
 			}
 		}
+
 		cur = ucl_object_lookup (cur_rule, "suffix");
 		if (cur == NULL) {
 			msg_err_config("surbl rule must have explicit symbol "
@@ -521,13 +522,13 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 		}
 
 		new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
-				sizeof(struct suffix_item));
+				sizeof (struct suffix_item));
 		new_suffix->magic = rspamd_surbl_cb_magic;
 		new_suffix->suffix = rspamd_mempool_strdup (
 				surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
 		new_suffix->options = 0;
 		new_suffix->bits = g_array_new (FALSE, FALSE,
-				sizeof(struct surbl_bit_item));
+				sizeof (struct surbl_bit_item));
 		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 				(rspamd_mempool_destruct_t )rspamd_array_free_hard,
 				new_suffix->bits);
@@ -554,36 +555,49 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 
 		cur = ucl_object_lookup (cur_rule, "options");
 		if (cur != NULL && cur->type == UCL_STRING) {
-			if (strstr(ucl_obj_tostring(cur), "noip") != NULL) {
+			if (strstr(ucl_obj_tostring (cur), "noip") != NULL) {
 				new_suffix->options |= SURBL_OPTION_NOIP;
 			}
 		}
 
 		cur = ucl_object_lookup (cur_rule, "no_ip");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
-			if (ucl_object_toboolean(cur)) {
+			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_NOIP;
 			}
 		}
 
+		cur = ucl_object_lookup (cur_rule, "monitored_domain");
+		if (cur != NULL && cur->type == UCL_STRING) {
+			monitored_domain = ucl_object_tostring (cur);
+		}
+
 		cur = ucl_object_lookup (cur_rule, "resolve_ip");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
-			if (ucl_object_toboolean(cur)) {
+			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_RESOLVEIP;
 
-				/* We need to adjust monitored config */
-				ropts = ucl_object_typed_new (UCL_OBJECT);
-				ucl_object_insert_key (monitored_opts,
-						ucl_object_fromstring ("1.0.0.127"),
-						"prefix", 0, false);
-				ucl_object_insert_key (monitored_opts,
-						ucl_object_fromstring ("nxdomain"),
-						"rcode", 0, false);
-				rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-						(rspamd_mempool_destruct_t )ucl_object_unref,
-						ropts);
+				if (!monitored_domain) {
+					monitored_domain = "1.0.0.127";
+				}
+			}
+			else {
+				if (!monitored_domain) {
+					monitored_domain = rspamd_surbl_default_monitored;
+				}
 			}
 		}
+
+		ropts = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (ropts,
+				ucl_object_fromstring (monitored_domain),
+				"prefix", 0, false);
+		ucl_object_insert_key (ropts,
+				ucl_object_fromstring ("nxdomain"),
+				"rcode", 0, false);
+		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+				(rspamd_mempool_destruct_t )ucl_object_unref,
+				ropts);
 
 		cur = ucl_object_lookup (cur_rule, "images");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
@@ -595,8 +609,11 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 		if ((new_suffix->options & (SURBL_OPTION_RESOLVEIP | SURBL_OPTION_NOIP))
 				== (SURBL_OPTION_NOIP | SURBL_OPTION_RESOLVEIP)) {
 			/* Mutually exclusive options */
-			msg_err_config("options noip and resolve_ip are "
+			msg_err_config ("options noip and resolve_ip are "
 					"mutually exclusive for suffix %s", new_suffix->suffix);
+			ucl_object_unref (ropts);
+
+			continue;
 		}
 
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache, "SURBL_CALLBACK",
@@ -626,12 +643,14 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 							ucl_object_key (cur_bit));
 					/* Convert to uppercase */
 					p = new_bit->symbol;
+
 					while (*p) {
 						*p = g_ascii_toupper (*p);
 						p++;
 					}
+
 					msg_debug_config("add new bit suffix: %d with symbol: %s",
-							(gint )new_bit->bit, new_bit->symbol);
+							(gint)new_bit->bit, new_bit->symbol);
 					g_array_append_val(new_suffix->bits, *new_bit);
 				}
 			}
@@ -656,7 +675,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 							surbl_module_ctx->surbl_pool,
 							sizeof(struct surbl_bit_item));
 					if (inet_pton (AF_INET, ip_val, &bit) != 1) {
-						msg_err_config("cannot parse ip %s: %s", ip_val,
+						msg_err_config ("cannot parse ip %s: %s", ip_val,
 								strerror (errno));
 						continue;
 					}
@@ -671,7 +690,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 						p++;
 					}
 					msg_debug_config ("add new IP suffix: %d with symbol: %s",
-							(gint )new_bit->bit, new_bit->symbol);
+							(gint)new_bit->bit, new_bit->symbol);
 					g_hash_table_insert (new_suffix->ips, &new_bit->bit,
 							new_bit);
 				}
@@ -691,6 +710,8 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 				RSPAMD_MONITORED_DEFAULT, ropts);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes,
 				new_suffix);
+
+		ucl_object_unref (ropts);
 	}
 
 	return nrules;
@@ -704,7 +725,6 @@ surbl_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value, *cur;
 	const gchar *redir_val;
 	gint nrules = 0;
-	ucl_object_t *monitored_opts;
 	lua_State *L;
 
 	/* Register global methods */
@@ -733,12 +753,6 @@ surbl_module_config (struct rspamd_config *cfg)
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
 		return TRUE;
 	}
-
-	monitored_opts = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("facebook.com"),
-			"prefix", 0, false);
-	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("nxdomain"),
-			"rcode", 0, false);
 
 	(void)rspamd_symbols_cache_add_symbol (cfg->cache, SURBL_REDIRECTOR_CALLBACK,
 			0, surbl_test_redirector, NULL,
@@ -777,13 +791,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	else {
 		surbl_module_ctx->weight = DEFAULT_SURBL_WEIGHT;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl", "url_expire")) != NULL) {
-		surbl_module_ctx->url_expire = ucl_obj_todouble (value);
-	}
-	else {
-		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
-	}
+
 
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "use_tags")) != NULL) {
@@ -793,14 +801,6 @@ surbl_module_config (struct rspamd_config *cfg)
 		surbl_module_ctx->use_tags = TRUE;
 	}
 
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl",
-		"redirector_connect_timeout")) != NULL) {
-		surbl_module_ctx->connect_timeout = ucl_obj_todouble (value);
-	}
-	else {
-		surbl_module_ctx->connect_timeout = DEFAULT_REDIRECTOR_CONNECT_TIMEOUT;
-	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_read_timeout")) != NULL) {
@@ -822,13 +822,6 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl", "max_urls")) != NULL) {
-		surbl_module_ctx->max_urls = ucl_obj_toint (value);
-	}
-	else {
-		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
-	}
-	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
 				"SURBL exceptions list",
@@ -849,12 +842,12 @@ surbl_module_config (struct rspamd_config *cfg)
 
 		if (ucl_object_lookup (value, "symbol") != NULL) {
 			/* Old style */
-			nrules += surbl_module_parse_rule (value, cfg, monitored_opts);
+			nrules += surbl_module_parse_rule (value, cfg);
 		}
 		else {
 			/* New style */
 			while ((cur_value = ucl_object_iterate (value, &it, true)) != NULL) {
-				nrules += surbl_module_parse_rule (cur_value, cfg, monitored_opts);
+				nrules += surbl_module_parse_rule (cur_value, cfg);
 			}
 		}
 	}
@@ -866,7 +859,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 		/* New style only */
 		while ((cur_value = ucl_object_iterate (value, &it, true)) != NULL) {
-			nrules += surbl_module_parse_rule (cur_value, cfg, monitored_opts);
+			nrules += surbl_module_parse_rule (cur_value, cfg);
 		}
 	}
 
@@ -894,7 +887,6 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	msg_info_config ("init internal surbls module, %d uribl rules loaded",
 			nrules);
-	ucl_object_unref (monitored_opts);
 
 	return TRUE;
 }
