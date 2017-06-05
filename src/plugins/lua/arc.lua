@@ -433,7 +433,6 @@ local function arc_sign_seal(task, params, header)
 end
 
 local function arc_signing_cb(task)
-  local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
 
   local ret,p = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
@@ -468,13 +467,13 @@ local function arc_signing_cb(task)
             rk, err)
         else
           p.rawkey = data
-          local ret, hdr = dkim_sign(task, p)
-          if ret then
+          local dret, hdr = dkim_sign(task, p)
+          if dret then
             return arc_sign_seal(task, p, hdr)
           end
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         rk, -- hash key
         false, -- is write
@@ -482,7 +481,7 @@ local function arc_signing_cb(task)
         'HGET', -- command
         {settings.key_prefix, rk} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
       end
     end
@@ -495,7 +494,7 @@ local function arc_signing_cb(task)
           try_redis_key(data)
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         p.domain, -- hash key
         false, -- is write
@@ -503,7 +502,7 @@ local function arc_signing_cb(task)
         'HGET', -- command
         {settings.selector_prefix, p.domain} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for %s", p.domain)
       end
     else
@@ -516,8 +515,8 @@ local function arc_signing_cb(task)
   else
     if (p.key and p.selector) then
       p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
-      local ret, hdr = dkim_sign(task, p)
-      if ret then
+      local dret, hdr = dkim_sign(task, p)
+      if dret then
         return arc_sign_seal(task, p, hdr)
       end
     else
@@ -527,8 +526,6 @@ local function arc_signing_cb(task)
   end
 end
 
-local opts =  rspamd_config:get_all_opt('arc')
-if not opts then return end
 for k,v in pairs(opts) do
   if k == 'sign_networks' then
     settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')

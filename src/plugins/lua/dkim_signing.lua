@@ -76,13 +76,13 @@ local function dkim_signing_cb(task)
             rk, err)
         else
           p.rawkey = data
-          local ret, _ = sign_func(task, p)
-          if ret then
+          local sret, _ = sign_func(task, p)
+          if sret then
             task:insert_result(settings.symbol, 1.0)
           end
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         rk, -- hash key
         false, -- is write
@@ -90,7 +90,7 @@ local function dkim_signing_cb(task)
         'HGET', -- command
         {settings.key_prefix, rk} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
       end
     end
@@ -103,7 +103,7 @@ local function dkim_signing_cb(task)
           try_redis_key(data)
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         p.domain, -- hash key
         false, -- is write
@@ -111,7 +111,7 @@ local function dkim_signing_cb(task)
         'HGET', -- command
         {settings.selector_prefix, p.domain} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for %s", p.domain)
       end
     else
@@ -124,8 +124,8 @@ local function dkim_signing_cb(task)
   else
     if (p.key and p.selector) then
       p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
-      local ret, _ = sign_func(task, p)
-      return ret
+      local sret, _ = sign_func(task, p)
+      return sret
     else
       rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
       return false
