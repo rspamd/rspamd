@@ -543,7 +543,7 @@ for key,rbl in pairs(opts['rbls']) do
     end
     if rbl['rbl'] then
       rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
-        {rcode = 'nxdomain', prefix = '1.0.0.127'})
+        {rcode = 'nxdomain', prefix = '1.1.0.127'})
       rbls[key] = rbl
     end
   end)()
