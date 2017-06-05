@@ -27,7 +27,6 @@
  * - strict_multiplier (number): multiplier for strict domains
  * - time_jitter (number): jitter in seconds to allow time diff while checking
  * - trusted_only (flag): check signatures only for domains in 'domains' map
- * - skip_mutli (flag): skip messages with multiply dkim signatures
  */
 
 
@@ -77,7 +76,6 @@ struct dkim_ctx {
 	gint sign_condition_ref;
 	guint max_sigs;
 	gboolean trusted_only;
-	gboolean skip_multi;
 	gboolean check_local;
 	gboolean check_authed;
 };
@@ -249,15 +247,6 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"dkim",
 			"Check DKIM policies merely for `trusted_domains`",
 			"trusted_only",
-			UCL_BOOLEAN,
-			NULL,
-			0,
-			NULL,
-			0);
-	rspamd_rcl_add_doc_by_path (cfg,
-			"dkim",
-			"Do not check messages with multiple DKIM signatures",
-			"skip_multi",
 			UCL_BOOLEAN,
 			NULL,
 			0,
@@ -455,14 +444,6 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 	else {
 		dkim_module_ctx->trusted_only = FALSE;
-	}
-
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
-		dkim_module_ctx->skip_multi = ucl_object_toboolean (value);
-	}
-	else {
-		dkim_module_ctx->skip_multi = FALSE;
 	}
 
 	if ((value =
@@ -1047,15 +1028,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 
 			if (res != cur) {
 				DL_APPEND (res, cur);
-			}
-
-			if (dkim_module_ctx->skip_multi) {
-				if (hlist->len > 1) {
-					msg_info_task ("message has multiple signatures but we"
-							" check only one as 'skip_multi' is set");
-				}
-
-				break;
 			}
 
 			checked ++;
