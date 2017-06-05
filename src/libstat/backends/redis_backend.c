@@ -444,7 +444,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"%s\r\n",
 						cmd_len, command,
 						l0, n0,
-						1, rt->stcf->is_spam ? "1" : "0",
+						1, rt->stcf->is_spam ? "S" : "H",
 						l1, n1);
 			}
 			else {
@@ -499,25 +499,48 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 			}
 
 			if (rt->ctx->store_tokens) {
-				/*
-				 * We also store tokens in form
-				 * HSET arg0_keys <token_id> "token_string"
-				 * ZINCRBY arg0_zlist <token_id> 1.0
-				 */
-				if (tok->t1 && tok->t2) {
-					redisAsyncCommand (rt->redis, NULL, NULL,
-							"HSET %b_tokens %b %b:%b",
-							prefix, (size_t)prefix_len,
-							n0, (size_t)l0,
-							tok->t1->begin, tok->t1->len,
-							tok->t2->begin, tok->t2->len);
+
+				if (!rt->ctx->new_schema) {
+					/*
+					 * We store tokens in form
+					 * HSET prefix_tokens <token_id> "token_string"
+					 * ZINCRBY prefix_z 1.0 <token_id>
+					 */
+					if (tok->t1 && tok->t2) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b_tokens %b %b:%b",
+								prefix, (size_t) prefix_len,
+								n0, (size_t) l0,
+								tok->t1->begin, tok->t1->len,
+								tok->t2->begin, tok->t2->len);
+					} else if (tok->t1) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b_tokens %b %b",
+								prefix, (size_t) prefix_len,
+								n0, (size_t) l0,
+								tok->t1->begin, tok->t1->len);
+					}
 				}
-				else if (tok->t1) {
-					redisAsyncCommand (rt->redis, NULL, NULL,
-							"HSET %b_tokens %b %b",
-							prefix, (size_t)prefix_len,
-							n0, (size_t)l0,
-							tok->t1->begin, tok->t1->len);
+				else {
+					/*
+					 * We store tokens in form
+					 * HSET <token_id> "tokens" "token_string"
+					 * ZINCRBY prefix_z 1.0 <token_id>
+					 */
+					if (tok->t1 && tok->t2) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b %s %b:%b",
+								n0, (size_t) l0,
+								"tokens",
+								tok->t1->begin, tok->t1->len,
+								tok->t2->begin, tok->t2->len);
+					} else if (tok->t1) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b %s %b",
+								n0, (size_t) l0,
+								"tokens",
+								tok->t1->begin, tok->t1->len);
+					}
 				}
 
 				redisAsyncCommand (rt->redis, NULL, NULL,
@@ -546,7 +569,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"%s\r\n",
 						cmd_len, command,
 						l0, n0,
-						1, rt->stcf->is_spam ? "1" : "0");
+						1, rt->stcf->is_spam ? "S" : "H");
 
 				ret = redisAsyncFormattedCommand (rt->redis, NULL, NULL,
 						out->str, out->len);
