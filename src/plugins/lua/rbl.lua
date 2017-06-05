@@ -163,8 +163,10 @@ local function rbl_cb (task)
   local notgot = {}
 
   local alive_rbls = fun.filter(function(_, rbl)
-    if not rbl.monitored:alive() then
-      return false
+    if rbl.monitored then
+      if not rbl.monitored:alive() then
+        return false
+      end
     end
 
     return true
