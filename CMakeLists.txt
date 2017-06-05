@@ -57,9 +57,8 @@ OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: ON]" ON)
-OPTION(ENABLE_HIREDIS      "Enable redis support [default: ON]" ON)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
-OPTION(ENABLE_GD           "Enable libgd for images processing [default: ON]" ON)
+OPTION(ENABLE_GD           "Enable libgd for images processing [default: OFF]" OFF)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
@@ -1200,11 +1199,9 @@ ENDIF(NOT DESTDIR)
 
 
 ################################ SUBDIRS SECTION ###########################
-IF(ENABLE_HIREDIS MATCHES "ON")
-	ADD_SUBDIRECTORY(contrib/hiredis)
-	SET(WITH_HIREDIS 1)
-	INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
-ENDIF(ENABLE_HIREDIS MATCHES "ON")
+ADD_SUBDIRECTORY(contrib/hiredis)
+SET(WITH_HIREDIS 1)
+INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
 
 ADD_SUBDIRECTORY(contrib/lgpl)
 IF(GLIB_COMPAT)
