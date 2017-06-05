@@ -465,7 +465,8 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"%s\r\n",
 						cmd_len, command,
 						prefix_len, prefix,
-						l0, n0, l1, n1);
+						l0, n0,
+						l1, n1);
 			}
 
 			ret = redisAsyncFormattedCommand (rt->redis, NULL, NULL,
@@ -476,26 +477,6 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 				rspamd_fstring_free (out);
 
 				return NULL;
-			}
-
-			if (rt->ctx->new_schema && rt->ctx->expiry > 0) {
-				out->len = 0;
-				l1 = rspamd_snprintf (n1, sizeof (n1), "%d",
-						rt->ctx->expiry);
-
-				rspamd_printf_fstring (&out, ""
-								"*3\r\n"
-								"$6\r\n"
-								"EXPIRE\r\n"
-								"$%d\r\n"
-								"%s\r\n"
-								"$%d\r\n"
-								"%s\r\n",
-						l0, n0,
-						l1, n1);
-				redisAsyncFormattedCommand (rt->redis, NULL, NULL,
-						out->str, out->len);
-				out->len = 0;
 			}
 
 			if (rt->ctx->store_tokens) {
@@ -550,6 +531,24 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 						n0, (size_t)l0);
 			}
 
+			if (rt->ctx->new_schema && rt->ctx->expiry > 0) {
+				out->len = 0;
+				l1 = rspamd_snprintf (n1, sizeof (n1), "%d",
+						rt->ctx->expiry);
+
+				rspamd_printf_fstring (&out, ""
+								"*3\r\n"
+								"$6\r\n"
+								"EXPIRE\r\n"
+								"$%d\r\n"
+								"%s\r\n"
+								"$%d\r\n"
+								"%s\r\n",
+						l0, n0,
+						l1, n1);
+				redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+						out->str, out->len);
+			}
 
 			out->len = 0;
 		}
