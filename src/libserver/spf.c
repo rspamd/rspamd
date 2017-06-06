@@ -1387,7 +1387,7 @@ reverse_spf_ip (gchar *ip, gint len)
 }
 
 static const gchar *
-expand_spf_macro (struct spf_record *rec,
+expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 		const gchar *begin)
 {
 	const gchar *p;
@@ -1397,13 +1397,11 @@ expand_spf_macro (struct spf_record *rec,
 	gchar ip_buf[INET6_ADDRSTRLEN];
 	gboolean need_expand = FALSE;
 	struct rspamd_task *task;
-	struct spf_resolved_element *resolved;
 
 	g_assert (rec != NULL);
 	g_assert (begin != NULL);
 
 	task = rec->task;
-	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	p = begin;
 	/* Calculate length */
 	while (*p) {
@@ -1595,8 +1593,14 @@ expand_spf_macro (struct spf_record *rec,
 						c += len;
 						break;
 					case 'v':
-						len = sizeof ("in-addr") - 1;
-						memcpy (c, "in-addr", len);
+						if (rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
+							len = sizeof ("in-addr") - 1;
+							memcpy (c, "in-addr", len);
+						}
+						else {
+							len = sizeof ("ip6") - 1;
+							memcpy (c, "ip6", len);
+						}
 						c += len;
 						break;
 					case 'h':
@@ -1605,6 +1609,11 @@ expand_spf_macro (struct spf_record *rec,
 							if (tmp) {
 								len = strlen (tmp + 1);
 								memcpy (c, tmp + 1, len);
+								c += len;
+							}
+							else {
+								len = strlen (task->helo);
+								memcpy (c, task->helo, len);
 								c += len;
 							}
 						}
@@ -1672,7 +1681,7 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 	}
 
 	task = rec->task;
-	begin = expand_spf_macro (rec, elt);
+	begin = expand_spf_macro (rec, resolved, elt);
 	addr = rspamd_spf_new_addr (rec, resolved, begin);
 	g_assert (addr != NULL);
 	t = g_ascii_tolower (addr->spf_string[0]);
