@@ -288,7 +288,7 @@ rspamd_config.URI_COUNT_ODD = {
       local urls = task:get_urls() or {}
       local nurls = fun.filter(function(url)
         return not url:is_html_displayed()
-      end, urls):foldl(function(acc, val) return acc + 1 end, 0)
+      end, urls):foldl(function(acc, val) return acc + val:get_count() end, 0)
 
       if nurls % 2 == 1 then
         return true, 1.0, tostring(nurls)
