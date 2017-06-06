@@ -209,7 +209,6 @@ local check_rcvd = rspamd_config:register_symbol{
         rcvd = rcvds[2] or {}
       end
       if rcvd.flags and rcvd.flags['ssl'] then
-        local logger = require "rspamd_logger"
         task:insert_result('RCVD_TLS_LAST', 1.0)
       else
         task:insert_result('RCVD_NO_TLS_LAST', 1.0)
