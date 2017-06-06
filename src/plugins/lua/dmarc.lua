@@ -894,6 +894,9 @@ if opts['reporting'] == true then
         if type(report_settings.override_address) == 'string' then
           reporting_addr = {[report_settings.override_address] = true}
         end
+        if type(report_settings.additional_address) == 'string' then
+          reporting_addr[report_settings.additional_address] = true
+        end
         rspamd_logger.infox(ev_base, 'sending report for %s <%s>', reporting_domain, table.concat(reporting_addr, ','))
         local dmarc_xml = dmarc_report_xml()
         local dmarc_push_cb
