@@ -308,18 +308,45 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
+
 	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must have some name definition");
 
-		return FALSE;
+		if (ucl_object_key (obj)) {
+			if (strcmp (ucl_object_key (obj), "upstream") == 0) {
+				/* Iterate over the object and find upstream elements */
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+				gboolean ret = TRUE;
+
+				while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+					if (!rspamd_proxy_parse_upstream (pool, cur, ud,
+							section, err)) {
+						ret = FALSE;
+					}
+				}
+
+				return ret;
+			}
+			else {
+				/* Inside upstream */
+				up->name = rspamd_mempool_strdup (pool, ucl_object_key (obj));
+			}
+		}
+		else {
+			g_set_error (err, rspamd_proxy_quark (), 100,
+					"upstream option must have some name definition");
+
+			return FALSE;
+		}
+	}
+	else {
+		up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
-	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
 	up->parser_from_ref = -1;
 	up->parser_to_ref = -1;
-	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->timeout = ctx->timeout;
 
 	elt = ucl_object_lookup (obj, "key");
@@ -372,9 +399,15 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	}
 
 	elt = ucl_object_lookup (obj, "default");
-	if (elt && ucl_object_toboolean (elt)) {
+	if (elt) {
+		if (ucl_object_toboolean (elt)) {
+			ctx->default_upstream = up;
+		}
+	}
+	else if (up->self_scan) {
 		ctx->default_upstream = up;
 	}
+
 
 	elt = ucl_object_lookup (obj, "local");
 	if (elt && ucl_object_toboolean (elt)) {
@@ -434,16 +467,43 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
+
 	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"mirror option must have some name definition");
 
-		return FALSE;
+		if (ucl_object_key (obj)) {
+			if (strcmp (ucl_object_key (obj), "mirror") == 0) {
+				/* Iterate over the object and find upstream elements */
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+				gboolean ret = TRUE;
+
+				while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+					if (!rspamd_proxy_parse_mirror (pool, cur, ud,
+							section, err)) {
+						ret = FALSE;
+					}
+				}
+
+				return ret;
+			}
+			else {
+				/* Inside upstream */
+				up->name = rspamd_mempool_strdup (pool, ucl_object_key (obj));
+			}
+		}
+		else {
+			g_set_error (err, rspamd_proxy_quark (), 100,
+					"mirror option must have some name definition");
+
+			return FALSE;
+		}
+	}
+	else {
+		up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
-	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
-	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->parser_to_ref = -1;
 	up->parser_from_ref = -1;
 	up->timeout = ctx->timeout;
