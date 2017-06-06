@@ -1354,7 +1354,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	struct rspamd_task *task;
 	gint r, urllen;
-	struct rspamd_url *redirected_url;
+	struct rspamd_url *redirected_url, *existing;
 	const rspamd_ftok_t *hdr;
 	gchar *urlstr;
 
@@ -1378,11 +1378,14 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					task->task_pool);
 
 			if (r == URI_ERRNO_OK) {
-				if (!g_hash_table_lookup (task->urls, redirected_url)) {
+				if ((existing = g_hash_table_lookup (task->urls, redirected_url))) {
 					g_hash_table_insert (task->urls, redirected_url,
 							redirected_url);
 					redirected_url->phished_url = param->url;
 					redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+				}
+				else {
+					existing->count ++;
 				}
 
 				rspamd_url_add_tag (param->url, "redirector", urlstr,

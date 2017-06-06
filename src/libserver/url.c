@@ -1491,6 +1491,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 
 	memset (uri, 0, sizeof (*uri));
 	memset (&u, 0, sizeof (u));
+	uri->count = 1;
 
 	if (*uristring == '\0') {
 		return URI_ERRNO_EMPTY;
@@ -2350,7 +2351,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	struct rspamd_process_exception *ex;
 	struct rspamd_task *task;
 	gchar *url_str = NULL;
-	struct rspamd_url *query_url;
+	struct rspamd_url *query_url, *existing;
 	gint rc;
 
 	task = cbd->task;
@@ -2362,17 +2363,23 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
-			if (!g_hash_table_lookup (task->emails, url)) {
+			if ((existing = g_hash_table_lookup (task->emails, url)) == NULL) {
 				url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 				g_hash_table_insert (task->emails, url,
 						url);
 			}
+			else {
+				existing->count ++;
+			}
 		}
 	}
 	else {
-		if (!g_hash_table_lookup (task->urls, url)) {
+		if ((existing = g_hash_table_lookup (task->urls, url)) == NULL) {
 			url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 			g_hash_table_insert (task->urls, url, url);
+		}
+		else {
+			existing->count ++;
 		}
 	}
 
@@ -2397,12 +2404,15 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 				msg_debug_task ("found url %s in query of url"
 						" %*s", url_str, url->querylen, url->query);
 
-				if (!g_hash_table_lookup (task->urls,
-						query_url)) {
+				if ((existing = g_hash_table_lookup (task->urls,
+						query_url)) == NULL) {
 					query_url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 					g_hash_table_insert (task->urls,
 							query_url,
 							query_url);
+				}
+				else {
+					existing->count ++;
 				}
 			}
 		}
@@ -2492,7 +2502,7 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 {
 	struct rspamd_task *task = ud;
 	gchar *url_str = NULL;
-	struct rspamd_url *query_url;
+	struct rspamd_url *query_url, *existing;
 	gint rc;
 
 	/* It is just a displayed URL, we should not check it for certain things */
@@ -2500,15 +2510,21 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
-			if (!g_hash_table_lookup (task->emails, url)) {
+			if ((existing = g_hash_table_lookup (task->emails, url)) == NULL) {
 				g_hash_table_insert (task->emails, url,
 						url);
+			}
+			else {
+				existing->count ++;
 			}
 		}
 	}
 	else {
-		if (!g_hash_table_lookup (task->urls, url)) {
+		if ((existing = g_hash_table_lookup (task->urls, url)) == NULL) {
 			g_hash_table_insert (task->urls, url, url);
+		}
+		else {
+			existing->count ++;
 		}
 	}
 
@@ -2529,11 +2545,14 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 				msg_debug_task ("found url %s in query of url"
 						" %*s", url_str, url->querylen, url->query);
 
-				if (!g_hash_table_lookup (task->urls,
-						query_url)) {
+				if ((existing = g_hash_table_lookup (task->urls,
+						query_url))) {
 					g_hash_table_insert (task->urls,
 							query_url,
 							query_url);
+				}
+				else {
+					existing->count ++;
 				}
 			}
 		}

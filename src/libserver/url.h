@@ -50,6 +50,7 @@ struct rspamd_url {
 	guint urllen;
 
 	enum rspamd_url_flags flags;
+	guint count;
 	GHashTable *tags;
 };
 

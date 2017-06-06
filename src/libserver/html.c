@@ -1578,7 +1578,7 @@ static void
 rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 		GHashTable *target)
 {
-	struct rspamd_url *query_url;
+	struct rspamd_url *query_url, *existing;
 	gchar *url_str;
 	gint rc;
 
@@ -1599,11 +1599,14 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 				msg_debug_html ("found url %s in query of url"
 						" %*s", url_str, url->querylen, url->query);
 
-				if (!g_hash_table_lookup (target,
-						query_url)) {
+				if ((existing = g_hash_table_lookup (target,
+						query_url)) == NULL) {
 					g_hash_table_insert (target,
 							query_url,
 							query_url);
+				}
+				else {
+					existing->count ++;
 				}
 			}
 		}
@@ -2102,6 +2105,8 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 					turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 					turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
 				}
+
+				turl->count ++;
 			}
 			else {
 				g_hash_table_insert (target_tbl,
@@ -2504,6 +2509,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 									g_hash_table_insert (target_tbl, url, url);
 								}
 								else {
+									turl->count ++;
 									url = NULL;
 								}
 
