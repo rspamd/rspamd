@@ -29,6 +29,8 @@ local E = {}
 local HOSTNAME = util.get_hostname()
 
 local settings = {
+  skip_local = false,
+  skip_authenticated = false,
   routines = {
     ['x-spamd-result'] = {
       header = 'X-Spamd-Result',
@@ -104,6 +106,15 @@ local active_routines = {}
 local custom_routines = {}
 
 local function milter_headers(task)
+
+  if settings.skip_local then
+    local ip = task:get_ip()
+    if (ip and ip:is_local()) then return end
+  end
+
+  if settings.skip_authenticated then
+    if task:get_user() ~= nil then return end
+  end
 
   local routines, common, add, remove = {}, {}, {}, {}
 
@@ -351,6 +362,12 @@ if opts['extended_spam_headers'] then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
+end
+if opts['skip_local'] then
+  settings.skip_local = true
+end
+if opts['skip_authenticated'] then
+  settings.skip_authenticated = true
 end
 for _, s in ipairs(opts['use']) do
   if not have_routine[s] then
