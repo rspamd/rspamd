@@ -56,6 +56,7 @@ LUA_FUNCTION_DEF (url, is_html_displayed);
 LUA_FUNCTION_DEF (url, is_subject);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, get_tag);
+LUA_FUNCTION_DEF (url, get_count);
 LUA_FUNCTION_DEF (url, get_tags);
 LUA_FUNCTION_DEF (url, add_tag);
 LUA_FUNCTION_DEF (url, create);
@@ -82,6 +83,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_tag),
 	LUA_INTERFACE_DEF (url, get_tags),
 	LUA_INTERFACE_DEF (url, add_tag),
+	LUA_INTERFACE_DEF (url, get_count),
 	{"get_redirected", lua_url_get_phished},
 	{"__tostring", lua_url_get_text},
 	{NULL, NULL}
@@ -520,6 +522,26 @@ lua_url_get_tld (lua_State *L)
 
 	if (url != NULL && url->url->tldlen > 0) {
 		lua_pushlstring (L, url->url->tld, url->url->tldlen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_count()
+ * Return number of occurrencies for this particular URL
+ * @return {number} number of occurrencies
+ */
+static gint
+lua_url_get_count (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url != NULL) {
+		lua_pushnumber (L, url->url->count);
 	}
 	else {
 		lua_pushnil (L);
