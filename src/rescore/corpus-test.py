@@ -4,6 +4,7 @@ import socket
 import requests
 import json
 
+
 def is_rspamd_alive(rspamd_host, rspamd_port):
 
     result = False
@@ -19,7 +20,8 @@ def is_rspamd_alive(rspamd_host, rspamd_port):
 
 
 def get_all_filenames(location):
-
+    ''' Recursively gets a list of  all file names'''
+    
     files = []
     
     for root, directories, filenames in os.walk(location):
@@ -48,27 +50,37 @@ def is_symbol_field(value):
     return is_symbol
 
 
-def test_files_from_dir(test_url, location, output_file):
+def test_files_from_dir(test_url, location, email_type):
 
+    # email_type must be either "SPAM" or "HAM"
+    
+    # TODO raise error for wrong email_type:
+    if email_type not in ['HAM', 'SPAM']:
+        return
+    
     if not os.path.isdir(location):
         print "{} is does not exists or is not a directory.".format(location)
         return
 
-    filenames = get_all_filenames(location) # Recursively get all file names
+    filenames = get_all_filenames(location) 
+
+    test_results = []
 
     for filename in filenames:
-        with open(filename, 'r') as f, open(output_file, 'a') as out:
+        with open(filename, 'r') as f:
             response = requests.post(test_url, data=f)
-            result = json.loads(response.text)["default"]
+            metrics = json.loads(response.text)["default"]
 
             symbols = []
             
-            for field in result:
-                if is_symbol_field(result[field]):
+            for field in metrics:
+                if is_symbol_field(metrics[field]):
                     symbols.append(field)
 
-            # TODO filter filename
-            out.write(filename + ' ' + ' '.join(symbols) + '\r\n')        
+            print '{} {} {} {}'.format(filename,
+                                       email_type,
+                                       metrics['score'],
+                                       ' '.join(symbols)) 
 
             
 def main():
@@ -84,8 +96,6 @@ def main():
     arg_parser.add_argument("-p", "--port",
                             help="rspamd service port number [Default: 11333]",
                             type=int)
-    arg_parser.add_argument("-s", "--stat-output",
-                            help="generate stat file at the specified location")
     
     args = arg_parser.parse_args()
 
@@ -105,12 +115,14 @@ def main():
         return
 
     test_url = get_test_url(rspamd_host, rspamd_port)
-                
+
+    test_results = []
+
     if args.ham:
-        test_files_from_dir(test_url, args.ham, 'ham.log')
+        test_results = test_files_from_dir(test_url, args.ham, 'HAM')
 
     if args.spam:
-        test_files_from_dir(test_url, args.spam, 'spam.log')
+        test_results = test_files_from_dir(test_url, args.spam, 'SPAM')
 
         
 if __name__ == "__main__":
