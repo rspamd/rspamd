@@ -129,6 +129,8 @@ struct rspamd_proxy_ctx {
 	gboolean has_self_scan;
 	/* It is not HTTP but milter proxy */
 	gboolean milter;
+	/* Milter spam header */
+	gchar *spam_header;
 };
 
 enum rspamd_backend_flags {
@@ -783,6 +785,14 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, milter),
 			0,
 			"Accept milter connections, not HTTP");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"spam_header",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, spam_header),
+			0,
+			"Use the specific spam header instead of X-Spam");
 
 	return ctx;
 }
@@ -2021,6 +2031,10 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
 		rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
+	}
+
+	if (ctx->spam_header) {
+		rspamd_milter_init_library (ctx->spam_header);
 	}
 
 	event_base_loop (ctx->ev_base, 0);
