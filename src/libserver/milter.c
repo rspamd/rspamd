@@ -45,6 +45,12 @@
         G_STRFUNC, \
         __VA_ARGS__)
 
+struct rspamd_milter_context {
+	gchar *spam_header;
+};
+
+static struct rspamd_milter_context *milter_ctx = NULL;
+
 static gboolean  rspamd_milter_handle_session (
 		struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv);
@@ -962,6 +968,11 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	g_assert (finish_cb != NULL);
 	g_assert (error_cb != NULL);
 
+	if (G_UNLIKELY (milter_ctx == NULL)) {
+		milter_ctx = g_malloc (sizeof (*milter_ctx));
+		milter_ctx->spam_header = g_strdup (RSPAMD_MILTER_SPAM_HEADER);
+	}
+
 	session = g_malloc0 (sizeof (*session));
 	priv = g_malloc0 (sizeof (*priv));
 	priv->fd = fd;
@@ -1449,9 +1460,11 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		break;
 
 	case METRIC_ACTION_ADD_HEADER:
-		hname = g_string_new (RSPAMD_MILTER_SPAM_HEADER);
+		hname = g_string_new (milter_ctx->spam_header);
+		/* TODO: Perhaps, we can customize it as well */
 		hvalue = g_string_new ("Yes");
 
+		/* TODO: We to track headers to make it work fine */
 		rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
 				(guint32)1, hname, hvalue);
 		g_string_free (hname, TRUE);
