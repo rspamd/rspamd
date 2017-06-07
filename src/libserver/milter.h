@@ -143,4 +143,10 @@ struct rspamd_http_message * rspamd_milter_to_http (
 void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		const ucl_object_t *results);
 
+/**
+ * Init internal milter context
+ * @param spam_header spam header name (must NOT be NULL)
+ */
+void rspamd_milter_init_library (const gchar *spam_header);
+
 #endif

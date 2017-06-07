@@ -1478,3 +1478,15 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		break;
 	}
 }
+
+void
+rspamd_milter_init_library (const gchar *spam_header)
+{
+	if (milter_ctx) {
+		g_free (milter_ctx->spam_header);
+		g_free (milter_ctx);
+	}
+
+	milter_ctx = g_malloc (sizeof (*milter_ctx));
+	milter_ctx->spam_header = g_strdup (spam_header);
+}
