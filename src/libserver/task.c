@@ -60,7 +60,8 @@ rspamd_request_header_dtor (gpointer p)
  * Create new task
  */
 struct rspamd_task *
-rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
+rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
+		rspamd_mempool_t *pool)
 {
 	struct rspamd_task *new_task;
 
@@ -82,7 +83,14 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 	new_task->time_real = rspamd_get_ticks ();
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
 
-	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
+	if (pool == NULL) {
+		new_task->task_pool =
+				rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
+		new_task->flags |= RSPAMD_TASK_FLAG_OWN_POOL;
+	}
+	else {
+		new_task->task_pool = pool;
+	}
 
 	new_task->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
@@ -295,7 +303,10 @@ rspamd_task_free (struct rspamd_task *task)
 			REF_RELEASE (task->cfg);
 		}
 
-		rspamd_mempool_delete (task->task_pool);
+		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
+			rspamd_mempool_delete (task->task_pool);
+		}
+
 		g_slice_free1 (sizeof (struct rspamd_task), task);
 	}
 }

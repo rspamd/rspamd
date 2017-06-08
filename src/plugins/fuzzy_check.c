@@ -2675,7 +2675,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	gint r, *saved, rules = 0, err_idx;
 
 	/* Prepare task */
-	task = rspamd_task_new (session->wrk, session->cfg);
+	task = rspamd_task_new (session->wrk, session->cfg, NULL);
 	task->cfg = ctx->cfg;
 	task->ev_base = conn_ent->rt->ev_base;
 	saved = rspamd_mempool_alloc0 (session->pool, sizeof (gint));

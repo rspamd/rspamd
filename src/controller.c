@@ -1464,7 +1464,8 @@ rspamd_controller_handle_lua_history (lua_State *L,
 			lua_gettable (L, -2);
 
 			if (lua_isfunction (L, -1)) {
-				task = rspamd_task_new (session->ctx->worker, session->cfg);
+				task = rspamd_task_new (session->ctx->worker, session->cfg,
+						NULL);
 
 				task->resolver = ctx->resolver;
 				task->ev_base = ctx->ev_base;
@@ -1762,7 +1763,7 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, NULL);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -1945,7 +1946,7 @@ rspamd_controller_handle_learn_common (
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, NULL);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -2045,7 +2046,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, NULL);
 	task->ev_base = session->ctx->ev_base;
 
 	task->resolver = ctx->resolver;
@@ -2543,7 +2544,7 @@ rspamd_controller_handle_stat_common (
 	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, NULL);
 
 	ctx = session->ctx;
 	task->resolver = ctx->resolver;
@@ -2877,7 +2878,7 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, NULL);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;

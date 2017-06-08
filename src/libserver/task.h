@@ -106,6 +106,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_COMPRESSED (1 << 24)
 #define RSPAMD_TASK_FLAG_PROFILE (1 << 25)
 #define RSPAMD_TASK_FLAG_GREYLISTED (1 << 26)
+#define RSPAMD_TASK_FLAG_OWN_POOL (1 << 27)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -205,8 +206,9 @@ struct rspamd_task {
 /**
  * Construct new task for worker
  */
-struct rspamd_task * rspamd_task_new (struct rspamd_worker *worker,
-		struct rspamd_config *cfg);
+struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
+		struct rspamd_config *cfg,
+		rspamd_mempool_t *pool);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */

@@ -1596,7 +1596,7 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	gsize len;
 
 	msg = session->client_message;
-	task = rspamd_task_new (session->worker, session->ctx->cfg);
+	task = rspamd_task_new (session->worker, session->ctx->cfg, NULL);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->sock = -1;
 

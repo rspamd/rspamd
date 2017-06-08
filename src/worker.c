@@ -102,7 +102,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 	if (cfg->finish_callbacks) {
 		ctx = worker->ctx;
 		/* Create a fake task object for async events */
-		task = rspamd_task_new (worker, cfg);
+		task = rspamd_task_new (worker, cfg, NULL);
 		task->resolver = ctx->resolver;
 		task->ev_base = ctx->ev_base;
 		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
@@ -369,7 +369,7 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	task = rspamd_task_new (worker, ctx->cfg);
+	task = rspamd_task_new (worker, ctx->cfg, NULL);
 
 	msg_info_task ("accepted connection from %s port %d, task ptr: %p",
 		rspamd_inet_address_to_string (addr),
