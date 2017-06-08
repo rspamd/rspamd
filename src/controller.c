@@ -1871,7 +1871,7 @@ static void
 rspamd_controller_scan_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
-	struct rspamd_http_connection_entry *conn_ent = task->fin_arg;
+	struct rspamd_http_connection_entry *conn_ent;
 
 	conn_ent = task->fin_arg;
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
@@ -1889,8 +1889,17 @@ static gboolean
 rspamd_controller_check_fin_task (void *ud)
 {
 	struct rspamd_task *task = ud;
+	struct rspamd_http_connection_entry *conn_ent;
 
 	msg_debug_task ("finish task");
+	conn_ent = task->fin_arg;
+
+	if (task->err) {
+		msg_info_task ("cannot check <%s>: %e", task->message_id, task->err);
+		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+				task->err->message);
+		return TRUE;
+	}
 
 	if (RSPAMD_TASK_IS_PROCESSED (task)) {
 		rspamd_controller_scan_reply (task);
@@ -1961,20 +1970,17 @@ rspamd_controller_handle_learn_common (
 	}
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
-		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-				task->err->message);
-		return 0;
+		goto end;
 	}
 
 	rspamd_learn_task_spam (task, is_spam, session->classifier, NULL);
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_warn_session ("<%s> message cannot be processed", task->message_id);
-		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-				task->err->message);
-		return 0;
+		goto end;
 	}
 
+end:
 	session->is_spam = is_spam;
 	rspamd_session_pending (task->s);
 
@@ -2057,45 +2063,18 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
-		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-					task->err->message);
-		}
-		else {
-			rspamd_controller_send_error (conn_ent, 500,
-					"Message load error: unknown error");
-		}
-		rspamd_session_destroy (task->s);
-		return 0;
+		goto end;
 	}
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
-		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-					task->err->message);
-		}
-		else {
-			rspamd_controller_send_error (conn_ent, 500,
-					"Message load error: unknown error");
-		}
-		rspamd_session_destroy (task->s);
-		return 0;
+		goto end;
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
-		msg_warn_session ("message cannot be processed for %s", task->message_id);
-		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-					task->err->message);
-		}
-		else {
-			rspamd_controller_send_error (conn_ent, 500,
-					"Message process error: unknown error");
-		}
-		rspamd_session_destroy (task->s);
-		return 0;
+		goto end;
 	}
 
+end:
 	session->task = task;
 	rspamd_session_pending (task->s);
 
