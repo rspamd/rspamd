@@ -1490,3 +1490,11 @@ rspamd_milter_init_library (const gchar *spam_header)
 	milter_ctx = g_malloc (sizeof (*milter_ctx));
 	milter_ctx->spam_header = g_strdup (spam_header);
 }
+
+rspamd_mempool_t *
+rspamd_milter_get_session_pool (struct rspamd_milter_session *session)
+{
+	struct rspamd_milter_private *priv = session->priv;
+
+	return priv->pool;
+}

@@ -149,4 +149,12 @@ void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
  */
 void rspamd_milter_init_library (const gchar *spam_header);
 
+/**
+ * Returns pool for a session
+ * @param session
+ * @return
+ */
+rspamd_mempool_t *rspamd_milter_get_session_pool (
+		struct rspamd_milter_session *session);
+
 #endif
