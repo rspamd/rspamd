@@ -511,7 +511,7 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	if (hostname) {
 		conn->hostname = g_strdup (hostname);
 #ifdef HAVE_SSL_TLSEXT_HOSTNAME
-		SSL_set_tlsext_host_name (conn->ssl, hostname);
+		SSL_set_tlsext_host_name (conn->ssl, conn->hostname);
 #endif
 	}
 
