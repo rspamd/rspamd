@@ -27,6 +27,7 @@
  * Modern check version
  */
 #define MSG_CMD_CHECK_V2 "checkv2"
+#define MSG_CMD_SCAN "scan"
 
 /*
  * Check if message is spam or not, and return score plus list

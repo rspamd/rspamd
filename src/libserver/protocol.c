@@ -134,6 +134,9 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		if (CMD_CHECK (p, MSG_CMD_SYMBOLS, pathlen)) {
 			task->cmd = CMD_SYMBOLS;
 		}
+		else if (CMD_CHECK (p, MSG_CMD_SCAN, pathlen)) {
+			task->cmd = CMD_CHECK_V2;
+		}
 		else if (CMD_CHECK (p, MSG_CMD_SKIP, pathlen)) {
 			task->cmd = CMD_SKIP;
 		}
