@@ -1596,7 +1596,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	gsize len;
 
 	msg = session->client_message;
-	task = rspamd_task_new (session->worker, session->ctx->cfg, NULL);
+	task = rspamd_task_new (session->worker, session->ctx->cfg,
+			session->pool);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->sock = -1;
 
@@ -1941,7 +1942,8 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->client_addr = addr;
 	session->mirror_conns = g_ptr_array_sized_new (ctx->mirrors->len);
 
-	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"proxy");
 	session->ctx = ctx;
 	session->worker = worker;
 
@@ -1973,7 +1975,9 @@ proxy_accept_socket (gint fd, short what, void *arg)
 				rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr));
 
-		rspamd_milter_handle_socket (nfd, &ctx->io_tv, ctx->ev_base,
+		rspamd_milter_handle_socket (nfd, &ctx->io_tv,
+				session->pool,
+				ctx->ev_base,
 				proxy_milter_finish_handler,
 				proxy_milter_error_handler,
 				session);

@@ -180,8 +180,6 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			rspamd_fstring_free (session->hostname);
 		}
 
-		rspamd_mempool_delete (priv->pool);
-
 		g_free (priv);
 		g_free (session);
 	}
@@ -959,6 +957,7 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 gboolean
 rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
+		rspamd_mempool_t *pool,
 		struct event_base *ev_base, rspamd_milter_finish finish_cb,
 		rspamd_milter_error error_cb, void *ud)
 {
@@ -983,7 +982,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->parser.buf = rspamd_fstring_sized_new (RSPAMD_MILTER_MESSAGE_CHUNK + 5);
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
-	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
+	priv->pool = pool;
 
 	if (tv) {
 		memcpy (&priv->tv, tv, sizeof (*tv));

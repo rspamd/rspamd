@@ -68,6 +68,7 @@ typedef void (*rspamd_milter_error) (gint fd,
  * @return
  */
 gboolean rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
+		rspamd_mempool_t *pool,
 		struct event_base *ev_base, rspamd_milter_finish finish_cb,
 		rspamd_milter_error error_cb, void *ud);
 
