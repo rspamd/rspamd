@@ -1019,8 +1019,8 @@ rspamd_milter_set_reply (struct rspamd_milter_session *session,
 #define SET_COMMAND(cmd, sz, reply, pos) do { \
 	guint32 _len; \
 	_len = (sz) + 1; \
-	(reply) = rspamd_fstring_sized_new (sizeof (_len) + (sz)); \
-	(reply)->len = sizeof (_len) + (sz) + 1; \
+	(reply) = rspamd_fstring_sized_new (sizeof (_len) + _len); \
+	(reply)->len = sizeof (_len) + _len; \
 	_len = htonl (_len); \
 	memcpy ((reply)->str, &_len, sizeof (_len)); \
 	(reply)->str[sizeof(_len)] = (cmd); \
