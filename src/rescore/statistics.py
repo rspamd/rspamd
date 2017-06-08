@@ -1,11 +1,15 @@
+#!/usr/bin/env python
+
 import sys
 import argparse
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 file_stat = namedtuple('FileStat',
                         'no_of_emails \
                         no_of_spam \
                         no_of_ham \
+                        spam_percent \
+                        ham_percent \
                         spam_dict \
                         ham_dict \
                         symbol_set \
@@ -29,10 +33,8 @@ def get_symbol_stats(file_stat):
         ham_hits = 0
         spam_hits = 0
         
-        if symbol in file_stat.spam_dict:
-            spam_hits = file_stat.spam_dict[symbol]
-        if symbol in file_stat.ham_dict:
-            ham_hits = file_stat.ham_dict[symbol]
+        spam_hits = file_stat.spam_dict.get(symbol, 0)
+        ham_hits = file_stat.ham_dict.get(symbol, 0)
 
         total_hits = spam_hits + ham_hits
 
@@ -45,11 +47,11 @@ def get_symbol_stats(file_stat):
         if file_stat.no_of_emails > 0:
             overall = total_hits * 100/ float(file_stat.no_of_emails)
             
-        if total_hits > 0:
-            spam_percent = spam_hits * 100 / float(total_hits)
+        if file_stat.no_of_spam > 0:
+            spam_percent = spam_hits * 100 / float(file_stat.no_of_spam)
 
-        if total_hits > 0:
-            ham_percent = ham_hits * 100 / float(total_hits)
+        if file_stat.no_of_ham > 0:
+            ham_percent = ham_hits * 100 / float(file_stat.no_of_ham)
             
         so = spam_percent / float(spam_percent + ham_percent)
 
@@ -67,50 +69,50 @@ def get_file_stats(logs, spam_threshold):
     no_of_emails = len(logs)
     no_of_spam = 0
     no_of_ham = 0
-    spam_dict = {}
-    ham_dict = {}
+    spam_dict = defaultdict(int)
+    ham_dict = defaultdict(int)
     symbol_set = set()
-
+    ham_percent = 0
+    spam_percent = 0
     no_of_fp = 0
     no_of_fn = 0
+    false_positive_rate = 0
+    false_negative_rate = 0
     
     for line in logs:
         log = line.split()
 
-        no_of_fp += (1 if float(log[2]) >= spam_threshold else 0)        
-        no_of_ham += (1 if log[1] == 'HAM' else 0)
-        no_of_fn += (1 if float(log[2]) < spam_threshold else 0)        
-        no_of_spam += (1 if log[1] == 'SPAM' else 0)
+        if log[1] == 'HAM':
+            no_of_ham += 1
+            no_of_fp += (1 if float(log[2]) >= spam_threshold else 0)        
+        else:
+            no_of_spam += 1
+            no_of_fn += (1 if float(log[2]) < spam_threshold else 0)
 
         for symbol in log[3:]:
             symbol_set.add(symbol)
 
             if log[1] == 'HAM':
-
-                if symbol not in ham_dict:
-                    ham_dict[symbol] = 0
-
                 ham_dict[symbol] += 1
 
             else:
-                
-                if symbol not in spam_dict:
-                    spam_dict[symbol] = 0
-
                 spam_dict[symbol] += 1
-
-    false_positive_rate = 0
-    false_negative_rate = 0
     
     if no_of_ham > 0:
         false_positive_rate = no_of_fp * 100 / float(no_of_ham)
 
     if no_of_spam > 0:
-        false_negative_rate = no_of_fn * 100 / float(no_of_spam)                             
-    
+        false_negative_rate = no_of_fn * 100 / float(no_of_spam)                       
+
+    if no_of_emails > 0:
+        spam_percent = no_of_spam * 100 / float(no_of_emails)
+        ham_percent = no_of_ham * 100 / float(no_of_emails)
+        
     return file_stat(no_of_emails,
                      no_of_spam,
                      no_of_ham,
+                     spam_percent,
+                     ham_percent,
                      spam_dict,
                      ham_dict,
                      symbol_set,
@@ -122,32 +124,42 @@ def write_file_stats(file_stat):
 
     print "File statistics: "
     print
-    print "Number of emails: " + str(file_stat.no_of_emails)
-    print "Number of spam: " + str(file_stat.no_of_spam)
-    print "Number of ham: " + str(file_stat.no_of_ham)
-    print "False positive rate: " + str(file_stat.false_positive_rate)
-    print "False negative rate: " + str(file_stat.false_negative_rate)
+    print "Number of emails: {}".format(str(file_stat.no_of_emails))
+    print "Number of spam: {}".format(str(file_stat.no_of_spam))
+    print "Number of ham: {}".format(str(file_stat.no_of_ham))
+    print "Spam percentage : {} %".format(
+        str(round(file_stat.spam_percent, 2)))
+    print "Ham percentage : {} %".format(
+        str(round(file_stat.ham_percent, 2)))
+    print "False positive rate: {} %".format(
+        str(round(file_stat.false_positive_rate, 2)))
+    print "False negative rate: {} %".format(
+        str(round(file_stat.false_negative_rate, 2)))
     print
 
     
 def write_sym_stats(sym_stats):
     
-    width = len(max([sym.name for sym in sym_stats], key=len)) + 2
-
+    sym_width = max(len(max([sym.name for sym in sym_stats], key=len)) + 2, 8)
+    overall_width = 9
+    spam_width = 8
+    ham_width = 7
+    so_width = 5
+    
     print "Symbol statistics: "
     print 
-    print "{} {} {} {} {}".format('SYMBOL'.ljust(width),
-                                  'OVERALL'.ljust(9),
-                                  'SPAM %'.ljust(8),
-                                  'HAM %'.ljust(7),
-                                  'S/O'.ljust(5))
+    print "{} {} {} {} {}".format('SYMBOL'.ljust(sym_width),
+                                  'OVERALL'.ljust(overall_width),
+                                  'SPAM %'.ljust(spam_width),
+                                  'HAM %'.ljust(ham_width),
+                                  'S/O'.ljust(so_width))
 
     for sym in sym_stats:
-        print "{} {} {} {} {}".format(sym.name.ljust(width),
-                                      str(sym.overall).ljust(9),
-                                      str(sym.spam_percent).ljust(8),
-                                      str(sym.ham_percent).ljust(7),
-                                      str(sym.so).ljust(5))
+        print "{} {} {} {} {}".format(sym.name.ljust(sym_width),
+                                      str(sym.overall).ljust(overall_width),
+                                      str(sym.spam_percent).ljust(spam_width),
+                                      str(sym.ham_percent).ljust(ham_width),
+                                      str(sym.so).ljust(so_width))
 
 def main():
 

@@ -1,23 +1,13 @@
+#!/usr/bin/env python
+
 import argparse
 import os
 import socket
 import requests
 import json
-
-
-def is_rspamd_alive(rspamd_host, rspamd_port):
-
-    result = False
-    test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    try:
-        test_socket.connect((rspamd_host, rspamd_port))
-        result = True
-    except:
-        pass
-
-    return result
-
+from os.path import basename
+from requests.exceptions import RequestException
+from itertools import chain
 
 def get_all_filenames(location):
     ''' Recursively gets a list of  all file names'''
@@ -52,10 +42,9 @@ def is_symbol_field(value):
 
 def test_files_from_dir(test_url, location, email_type):
 
-    # email_type must be either "SPAM" or "HAM"
-    
-    # TODO raise error for wrong email_type:
     if email_type not in ['HAM', 'SPAM']:
+        # TODO : Handle exception
+        raise ValueError("Wrong email_type")
         return
     
     if not os.path.isdir(location):
@@ -68,29 +57,46 @@ def test_files_from_dir(test_url, location, email_type):
 
     for filename in filenames:
         with open(filename, 'r') as f:
-            response = requests.post(test_url, data=f)
-            metrics = json.loads(response.text)["default"]
+            try:
+                response = requests.post(test_url, data=f)
+            except RequestException as err:
+                print "Connection error."
+                print err
+            else:
+                metrics = json.loads(response.text)["default"]
 
-            symbols = []
+                symbols = []
             
-            for field in metrics:
-                if is_symbol_field(metrics[field]):
-                    symbols.append(field)
+                for field in metrics:
+                    if is_symbol_field(metrics[field]):
+                        symbols.append(field)
 
-            print '{} {} {} {}'.format(filename,
-                                       email_type,
-                                       metrics['score'],
-                                       ' '.join(symbols)) 
+                test_results.append('{} {} {} {}'.format(basename(filename),
+                                                         email_type,
+                                                         metrics['score'],
+                                                         ' '.join(symbols)))
 
-            
+    return test_results
+                                    
+
+def write_test_results(results, filename):
+
+    with open(filename, 'a') as out:
+        out.write('\r\n'.join(results))
+        
+    
 def main():
 
     rspamd_host = "127.0.0.1"
     rspamd_port = 11333
+
+    output_file = "results.log"
     
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("--ham", help="path to ham directory")
-    arg_parser.add_argument("--spam", help="path to spam directory")
+    arg_parser.add_argument("-a", "--ham", help="path to ham directory")
+    arg_parser.add_argument("-s", "--spam", help="path to spam directory")
+    arg_parser.add_argument("-o", "--output",
+                            help="path to test results output [Default: results.log]")
     arg_parser.add_argument("-i", "--ip",
                             help="ip of rspamd service [Default: 127.0.0.1]")
     arg_parser.add_argument("-p", "--port",
@@ -109,20 +115,24 @@ def main():
 
     if args.port:
         rspamd_port = args.port
-        
-    if not is_rspamd_alive(rspamd_host, rspamd_port):
-        print "Could not connect to rspamd on {}:{}".format(rspamd_host, rspamd_port)
-        return
 
+    if args.output:
+        output_file = args.output
+        
     test_url = get_test_url(rspamd_host, rspamd_port)
 
-    test_results = []
-
+    ham_test_results = []
+    spam_test_results = []
+    
     if args.ham:
-        test_results = test_files_from_dir(test_url, args.ham, 'HAM')
+        ham_test_results = test_files_from_dir(test_url, args.ham, 'HAM')
 
     if args.spam:
-        test_results = test_files_from_dir(test_url, args.spam, 'SPAM')
+        spam_test_results = test_files_from_dir(test_url, args.spam, 'SPAM')
+
+    test_results = chain(ham_test_results, spam_test_results)
+
+    write_test_results(test_results, output_file)
 
         
 if __name__ == "__main__":
