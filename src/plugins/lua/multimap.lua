@@ -658,11 +658,17 @@ local function multimap_callback(task, rule)
       if task:has_recipients('smtp') then
         local rcpts = task:get_recipients('smtp')
         match_addr(rule, rcpts)
+      elseif task:has_recipients('mime') then
+        local rcpts = task:get_recipients('mime')
+        match_addr(rule, rcpts)
       end
     end,
     from = function()
       if task:has_from('smtp') then
         local from = task:get_from('smtp')
+        match_addr(rule, from)
+      elseif task:has_from('mime') then
+        local from = task:get_from('mime')
         match_addr(rule, from)
       end
     end,
