@@ -145,11 +145,11 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
         key, -- hash key
         true, -- is write
         redis_reserve_cb, --callback
-        'SETNX', -- command
-        {key, 'processing'} -- arguments
+        'SET', -- command
+        {key, 'processing', 'EX', tostring(settings.timeout * 2), 'NX'} -- arguments
       )
       if not ret then
-        rspamd_logger.errx(task, 'Couldn\'t schedule SETNX')
+        rspamd_logger.errx(task, 'Couldn\'t schedule SET')
       end
     else
       resolve_url()
