@@ -37,7 +37,7 @@ local function rspamd_parse_redis_server(module_name)
     end
 
     -- Store options
-    if not result['timeout'] then
+    if not result['timeout'] and not result['timeout'] == default_timeout then
       if options['timeout'] then
         result['timeout'] = tonumber(options['timeout'])
       else
@@ -48,11 +48,12 @@ local function rspamd_parse_redis_server(module_name)
     if options['prefix'] and not result['prefix'] then
       result['prefix'] = options['prefix']
     end
+
     if not result['db'] then
       if options['db'] then
-        result['db'] = options['db']
+        result['db'] = tostring(options['db'])
       elseif options['dbname'] then
-        result['db'] = options['dbname']
+        result['db'] = tostring(options['dbname'])
       end
     end
     if options['password'] and not result['password'] then
