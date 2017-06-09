@@ -171,7 +171,8 @@ end
 
 local function url_redirector_handler(task, url, param)
   local url_str = tostring(url)
-  local key = settings.key_prefix .. hash.create(url_str):base32()
+  -- 32 base32 characters are roughly 20 bytes of data or 160 bits
+  local key = settings.key_prefix .. hash.create(url_str):base32():sub(1, 32)
   resolve_cached(task, url_str, url_str, key, param, 1)
 end
 
