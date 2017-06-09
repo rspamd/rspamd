@@ -29,6 +29,8 @@ local settings = {
   check_ssl = false, -- check ssl certificates
   max_size = 10 * 1024, -- maximum body to process
   redirectors_only = true, -- follow merely redirectors
+  top_urls_key = 'rdr:top_urls', -- key for top urls
+  top_urls_count = 200, -- how many top urls to save
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -43,7 +45,7 @@ local function cache_url(task, orig_url, url, key, param)
     rspamd_plugins.surbl.continue_process(url, param)
   end
 
-  local ret = rspamd_redis_make_request(task,
+  local ret,conn,_ = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     true, -- is write
@@ -53,6 +55,10 @@ local function cache_url(task, orig_url, url, key, param)
   )
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to cache results')
+  else
+    conn:add_cmd('ZINCRBY', {settings.top_urls_key, '1', url})
+    conn:add_cmd('ZREMRANGEBYRANK', {settings.top_urls_key, '0',
+      tostring(settings.top_urls_count + 1)})
   end
 end
 
