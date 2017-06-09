@@ -38,9 +38,58 @@ local rspamd_http = require "rspamd_http"
 local hash = require "rspamd_cryptobox_hash"
 
 local function cache_url(task, orig_url, url, key, param)
-  local function redis_set_cb(err, data)
+  local function redis_trim_cb(err, data)
+    if err then
+      rspamd_logger.errx(task, 'got error while getting top urls count: %s', err)
+    else
+      rspamd_logger.infox(task, 'trimmed url set to %s elements',
+        settings.top_urls_count)
+    end
+  end
+
+  -- Cleanup logic
+  local function redis_card_cb(err, data)
+    if err then
+      rspamd_logger.errx(task, 'got error while getting top urls count: %s', err)
+    else
+      if data then
+        if tonumber(data) > settings.top_urls_count * 2 then
+          local ret = rspamd_redis_make_request(task,
+            redis_params, -- connect params
+            key, -- hash key
+            true, -- is write
+            redis_trim_cb, --callback
+            'ZREMRANGEBYRANK', -- command
+            {settings.top_urls_key, '0',
+              tostring(settings.top_urls_count + 1)} -- arguments
+          )
+          if not ret then
+            rspamd_logger.errx(task, 'cannot trim top urls set')
+          else
+            rspamd_logger.infox(task, 'need to trim urls set from %s to %s elements',
+              data,
+              settings.top_urls_count)
+          end
+        end
+      end
+    end
+  end
+
+  local function redis_set_cb(err, _)
     if err then
       rspamd_logger.errx(task, 'got error while setting redirect keys: %s', err)
+    else
+      local ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        key, -- hash key
+        false, -- is write
+        redis_card_cb, --callback
+        'ZCARD', -- command
+        {settings.top_urls_key} -- arguments
+      )
+      if not ret then
+        rspamd_logger.errx(task, 'cannot make redis request to cache results')
+      end
     end
     rspamd_plugins.surbl.continue_process(url, param)
   end
@@ -53,12 +102,11 @@ local function cache_url(task, orig_url, url, key, param)
     'SETEX', -- command
     {key, tostring(settings.expire), url} -- arguments
   )
+
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to cache results')
   else
     conn:add_cmd('ZINCRBY', {settings.top_urls_key, '1', url})
-    conn:add_cmd('ZREMRANGEBYRANK', {settings.top_urls_key, '0',
-      tostring(settings.top_urls_count + 1)})
   end
 end
 
