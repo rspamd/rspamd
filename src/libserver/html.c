@@ -2502,10 +2502,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							if (target_tbl != NULL) {
 								turl = g_hash_table_lookup (target_tbl, url);
 
-								if (turl != NULL && turl->phished_url == NULL) {
-									g_hash_table_insert (target_tbl, url, url);
-								}
-								else if (turl == NULL) {
+								if (turl == NULL) {
 									g_hash_table_insert (target_tbl, url, url);
 								}
 								else {
