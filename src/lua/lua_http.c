@@ -135,8 +135,8 @@ static void
 lua_http_maybe_free (struct lua_http_cbdata *cbd)
 {
 	if (cbd->session) {
-		rspamd_session_watcher_pop (cbd->session, cbd->w);
 		rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
+		rspamd_session_watcher_pop (cbd->session, cbd->w);
 	}
 	else {
 		lua_http_fin (cbd);
@@ -616,7 +616,7 @@ lua_http_request (lua_State *L)
 				cbd,
 				g_quark_from_static_string ("lua http"));
 		cbd->w = rspamd_session_get_watcher (session);
-		rspamd_session_watcher_push (session);
+		rspamd_session_watcher_push_specific (session, cbd->w);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {

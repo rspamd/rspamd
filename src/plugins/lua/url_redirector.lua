@@ -139,8 +139,8 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
           cache_url(task, orig_url, url, key, param)
         elseif code == 301 or code == 302 then
           local loc = headers['Location']
-          rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-            orig_url, loc)
+          rspamd_logger.infox(task, 'found redirect from %s to %s, err code %s',
+            orig_url, loc, code)
           if loc then
             if settings.redirectors_only then
               if rspamd_plugins.surbl.is_redirector(task, loc) then
