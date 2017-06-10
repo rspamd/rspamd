@@ -46,6 +46,7 @@ local function cache_url(task, orig_url, url, key, param)
       rspamd_logger.infox(task, 'trimmed url set to %s elements',
         settings.top_urls_count)
     end
+    rspamd_plugins.surbl.continue_process(url, param)
   end
 
   -- Cleanup logic
@@ -66,14 +67,18 @@ local function cache_url(task, orig_url, url, key, param)
           )
           if not ret then
             rspamd_logger.errx(task, 'cannot trim top urls set')
+            rspamd_plugins.surbl.continue_process(url, param)
           else
             rspamd_logger.infox(task, 'need to trim urls set from %s to %s elements',
               data,
               settings.top_urls_count)
+            return
           end
         end
       end
     end
+
+    rspamd_plugins.surbl.continue_process(url, param)
   end
 
   local function redis_set_cb(err, _)
@@ -90,9 +95,9 @@ local function cache_url(task, orig_url, url, key, param)
       )
       if not ret then
         rspamd_logger.errx(task, 'cannot make redis request to cache results')
+        rspamd_plugins.surbl.continue_process(url, param)
       end
     end
-    rspamd_plugins.surbl.continue_process(url, param)
   end
 
   local ret,conn,_ = rspamd_redis_make_request(task,
@@ -188,7 +193,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
     local function redis_reserve_cb(nerr, ndata)
       if nerr then
         rspamd_logger.errx(task, 'got error while setting redirect keys: %s', nerr)
-      elseif ndata == 1 then
+      elseif ndata == 'OK' then
         orig_url = url
         resolve_url()
       end
