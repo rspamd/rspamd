@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+local lutil = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "dkim_sign_tools"
 
@@ -45,18 +46,6 @@ local settings = {
 local N = 'dkim_signing'
 local redis_params
 local sign_func = rspamd_plugins.dkim.sign
-
-local function simple_template(tmpl, keys)
-  local lpeg = require "lpeg"
-
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
-
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
-
-  return lpeg.match(template_grammar, tmpl)
-end
 
 local function dkim_signing_cb(task)
   local ret,p = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
@@ -123,7 +112,7 @@ local function dkim_signing_cb(task)
     end
   else
     if (p.key and p.selector) then
-      p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
+      p.key = lutil.template(p.key, {domain = p.domain, selector = p.selector})
       local sret, _ = sign_func(task, p)
       return sret
     else

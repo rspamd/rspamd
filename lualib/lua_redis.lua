@@ -5,7 +5,7 @@ local exports = {}
 -- This function parses redis server definition using either
 -- specific server string for this module or global
 -- redis section
-local function rspamd_parse_redis_server(module_name)
+local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
 
   local result = {}
   local default_port = 6379
@@ -71,7 +71,12 @@ local function rspamd_parse_redis_server(module_name)
   end
 
   -- Try local options
-  local opts = rspamd_config:get_all_opt(module_name)
+  local opts
+  if not module_opts then
+    opts = rspamd_config:get_all_opt(module_name)
+  else
+    opts = module_opts
+  end
   local ret = false
 
   if opts then
@@ -81,6 +86,8 @@ local function rspamd_parse_redis_server(module_name)
   if ret then
     return result
   end
+
+  if no_fallback then return nil end
 
   -- Try global options
   opts = rspamd_config:get_all_opt('redis')

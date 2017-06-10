@@ -335,19 +335,6 @@ rspamd_config:register_symbol({
 rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
 rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
 
--- Signatures part
-local function simple_template(tmpl, keys)
-  local lpeg = require "lpeg"
-
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
-
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
-
-  return lpeg.match(template_grammar, tmpl)
-end
-
 local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
@@ -514,7 +501,7 @@ local function arc_signing_cb(task)
     end
   else
     if (p.key and p.selector) then
-      p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
+      p.key = lua_util.template(p.key, {domain = p.domain, selector = p.selector})
       local dret, hdr = dkim_sign(task, p)
       if dret then
         return arc_sign_seal(task, p, hdr)

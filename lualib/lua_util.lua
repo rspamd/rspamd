@@ -30,4 +30,14 @@ exports.round = function(num, numDecimalPlaces)
   return math.floor(num * mult) / mult
 end
 
+exports.template = function(tmpl, keys)
+  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
+  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
+  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
+
+  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
+
+  return lpeg.match(template_grammar, tmpl)
+end
+
 return exports
