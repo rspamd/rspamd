@@ -1600,6 +1600,11 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		return;
 	}
 
+	if (url->tags && g_hash_table_lookup (url->tags, "redirector")) {
+		/* URL is redirected, skip from checks */
+		return;
+	}
+
 	make_surbl_requests (url, param->task, param->suffix, FALSE,
 			param->tree);
 }
