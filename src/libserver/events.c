@@ -147,17 +147,23 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	if (RSPAMD_SESSION_IS_WATCHING (session)) {
 		new->w = session->cur_watcher;
 		new->w->remain ++;
+		msg_debug_session ("added event: %p, pending %d events, "
+				"subsystem: %s, watcher: %d",
+				user_data,
+				g_hash_table_size (session->events),
+				g_quark_to_string (subsystem),
+				new->w->id);
 	}
 	else {
 		new->w = NULL;
+		msg_debug_session ("added event: %p, pending %d events, "
+				"subsystem: %s, no watcher!",
+				user_data,
+				g_hash_table_size (session->events),
+				g_quark_to_string (subsystem));
 	}
 
 	g_hash_table_insert (session->events, new, new);
-
-	msg_debug_session ("added event: %p, pending %d events, subsystem: %s",
-		user_data,
-		g_hash_table_size (session->events),
-		g_quark_to_string (subsystem));
 }
 
 static inline void
@@ -191,19 +197,28 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	found_ev = g_hash_table_lookup (session->events, &search_ev);
 	g_assert (found_ev != NULL);
 
-	msg_debug_session ("removed event: %p, subsystem: %s, pending %d events", ud,
-			g_quark_to_string (found_ev->subsystem),
-			g_hash_table_size (session->events));
 	/* Remove event */
 	fin (ud);
 
 	/* Call watcher if needed */
 	if (found_ev->w) {
+		msg_debug_session ("removed event: %p, subsystem: %s, "
+				"pending %d events, watcher: %d (%d pending)", ud,
+				g_quark_to_string (found_ev->subsystem),
+				g_hash_table_size (session->events),
+				found_ev->w->id, found_ev->w->remain);
+
 		if (found_ev->w->remain > 0) {
 			if (--found_ev->w->remain == 0) {
 				rspamd_session_call_watcher_stack (session, found_ev->w);
 			}
 		}
+	}
+	else {
+		msg_debug_session ("removed event: %p, subsystem: %s, "
+				"pending %d events, no watcher!", ud,
+				g_quark_to_string (found_ev->subsystem),
+				g_hash_table_size (session->events));
 	}
 
 	g_hash_table_remove (session->events, found_ev);
@@ -410,11 +425,12 @@ rspamd_session_watcher_pop (struct rspamd_async_session *session,
 {
 	g_assert (session != NULL);
 
-	if (w) {
+	if (w && w->remain > 0) {
 		msg_debug_session ("pop session, watcher: %d, %d events", w->id,
 				w->remain);
+		w->remain --;
 
-		if (--w->remain == 0) {
+		if (w->remain == 0) {
 			rspamd_session_call_watcher_stack (session, w);
 		}
 	}
@@ -425,5 +441,10 @@ rspamd_session_get_watcher (struct rspamd_async_session *session)
 {
 	g_assert (session != NULL);
 
-	return session->cur_watcher;
+	if (RSPAMD_SESSION_IS_WATCHING (session)) {
+		return session->cur_watcher;
+	}
+	else {
+		return NULL;
+	}
 }
