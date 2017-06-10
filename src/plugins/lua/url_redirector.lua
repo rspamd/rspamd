@@ -28,6 +28,7 @@ local settings = {
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
   max_size = 10 * 1024, -- maximum body to process
+  user_agent = 'Mozilla/5.0 (Maemo; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1',
   redirectors_only = true, -- follow merely redirectors
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
@@ -160,7 +161,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
 
     rspamd_http.request{
       headers = {
-        ['User-Agent'] = 'Mozilla/5.0 (Maemo; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1',
+        ['User-Agent'] = settings.user_agent,
       },
       url = url,
       task = task,
