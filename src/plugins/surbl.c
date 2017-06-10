@@ -1801,10 +1801,7 @@ surbl_continue_process_handler (lua_State *L)
 	param = (struct redirector_param *)lua_topointer (L, 2);
 
 	if (param != NULL) {
-
 		task = param->task;
-		rspamd_session_watcher_pop (task->s, param->w);
-		param->w = NULL;
 
 		if (nurl != NULL) {
 			msg_info_surbl ("<%s> got reply from redirector: '%*s' -> '%*s'",
@@ -1841,6 +1838,9 @@ surbl_continue_process_handler (lua_State *L)
 					param->task->message_id,
 					param->url->urllen, param->url->string);
 		}
+
+		rspamd_session_watcher_pop (task->s, param->w);
+		param->w = NULL;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
