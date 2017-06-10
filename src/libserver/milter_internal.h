@@ -59,6 +59,7 @@ struct rspamd_milter_private {
 	struct timeval *ptv;
 	struct event_base *ev_base;
 	rspamd_mempool_t *pool;
+	GHashTable *headers;
 	rspamd_milter_finish fin_cb;
 	rspamd_milter_error err_cb;
 	void *ud;
