@@ -22,6 +22,7 @@ end
 -- A plugin that pushes metadata (or whole messages) to external services
 
 local redis_params
+local lutil = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
@@ -136,18 +137,6 @@ local function get_general_metadata(task, flatten, no_content)
   return r
 end
 
-local function simple_template(tmpl, keys)
-  local lpeg = require "lpeg"
-
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
-
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
-
-  return lpeg.match(template_grammar, tmpl)
-end
-
 local formatters = {
   default = function(task)
     return task:get_content()
@@ -158,7 +147,7 @@ local formatters = {
     meta.mail_to = rule.mail_to or settings.mail_to
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return simple_template(rule.email_template or settings.email_template, meta)
+    return lutil.template(rule.email_template or settings.email_template, meta)
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
