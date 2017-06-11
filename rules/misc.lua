@@ -570,6 +570,8 @@ rspamd_config.SPOOF_REPLYTO = {
     -- SMTP recipients must contain From domain
     to = task:get_recipients(1)
     if not to then return false end
+    -- Try mitigate some possible FPs on mailing list posts
+    if #to == 1 and util.strequal_caseless(to[1].addr, from[1].addr) then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
       if util.strequal_caseless(t.domain, from[1].domain) then
