@@ -110,9 +110,13 @@ lua.
 %if 0%{?el6}
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/run/rspamd
-%endif
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
+%else
+%{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
+%{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
+%{__chown} %{rspamd_user}:%{rspamd_group} %{buildroot}%{rspamd_logdir}
+%endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
 %{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/%{name}/local.d/
