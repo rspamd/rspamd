@@ -48,14 +48,14 @@ BuildRequires:  luajit-devel
 %else
 BuildRequires:  lua-devel
 %endif
-%if 0%{?el6}
 Requires:       logrotate
+%if 0%{?el6}
 Requires(post): chkconfig
 Requires(preun): chkconfig, initscripts
 Requires(postun): initscripts
 Source1:        %{name}.init
-Source2:        %{name}.logrotate
 %endif
+Source2:        %{name}.logrotate
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
 Source3:	80-rspamd.preset
@@ -110,9 +110,9 @@ lua.
 %if 0%{?el6}
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/run/rspamd
+%endif
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
-%endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
 %{__install} -p -D -d -m 0755 %{buildroot}%{_sysconfdir}/%{name}/local.d/
@@ -181,9 +181,9 @@ fi
 %if 0%{?el6}
 %{_initrddir}/%{name}
 %dir %{_localstatedir}/run/rspamd
+%endif
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %dir %{rspamd_logdir}
-%endif
 %{_mandir}/man8/%{name}.*
 %{_mandir}/man1/rspamc.*
 %{_mandir}/man1/rspamadm.*
@@ -192,7 +192,6 @@ fi
 %{_bindir}/rspamc
 %{_bindir}/rspamadm
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
-%config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
 %config(noreplace) %{rspamd_confdir}/metrics.conf
 %config(noreplace) %{rspamd_confdir}/mime_types.inc
@@ -206,7 +205,6 @@ fi
 %config(noreplace) %{rspamd_confdir}/worker-fuzzy.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
 %config(noreplace) %{rspamd_confdir}/modules.d/*
-%config(noreplace) %{rspamd_confdir}/rspamd.systemd.conf
 %attr(-, _rspamd, _rspamd) %dir %{rspamd_home}
 %dir %{rspamd_rulesdir}/regexp
 %dir %{rspamd_rulesdir}
