@@ -217,7 +217,9 @@ local function arc_callback(task)
         task:insert_result(arc_symbols['allow'], 1.0, 'i=' ..
             tostring(cbdata.checked))
       else
-        task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
+        task:insert_result(arc_symbols['reject'], 1.0,
+          rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
+            cbdata.errors))
       end
     end
   end
@@ -251,7 +253,9 @@ local function arc_callback(task)
             end
           end, cbdata.seals)
       else
-        task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
+        task:insert_result(arc_symbols['reject'], 1.0,
+          rspamd_logger.slog('signature check failed: %s, %s', cbdata.res,
+            cbdata.errors))
       end
     end
   end
@@ -270,8 +274,10 @@ local function arc_callback(task)
       end
     end, cbdata.sigs)
 
-  if cbdata.checked == #arc_sig_headers then
-    task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
+  if cbdata.checked ~= #arc_sig_headers then
+    task:insert_result(arc_symbols['reject'], 1.0,
+      rspamd_logger.slog('cannot verify %s of signatures: %s',
+        #arc_sig_headers - cbdata.checked, cbdata.errors))
   end
 end
 
