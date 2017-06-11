@@ -261,6 +261,7 @@ local function arc_callback(task)
   end
 
   -- Now we can verify all signatures
+  local processed = 0
   fun.each(
     function(sig)
       local ret,err = dkim_verify(task, sig.header, arc_signature_cb, 'arc-sign')
@@ -268,16 +269,17 @@ local function arc_callback(task)
       if not ret then
         cbdata.res = 'fail'
         table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
-        cbdata.checked = cbdata.checked + 1
-        rspamd_logger.debugm(N, task, 'checked arc sig %s: %s(%s), %s processed',
+      else
+        processed = processed + 1
+        rspamd_logger.debugm(N, task, 'processed arc signature %s: %s(%s), %s processed',
           sig.d, ret, err, cbdata.checked)
       end
     end, cbdata.sigs)
 
-  if cbdata.checked ~= #arc_sig_headers then
+  if processed ~= #arc_sig_headers then
     task:insert_result(arc_symbols['reject'], 1.0,
-      rspamd_logger.slog('cannot verify %s of signatures: %s',
-        #arc_sig_headers - cbdata.checked, cbdata.errors))
+      rspamd_logger.slog('cannot verify %s of %s signatures: %s',
+        #arc_sig_headers - processed, #arc_sig_headers, cbdata.errors))
   end
 end
 
