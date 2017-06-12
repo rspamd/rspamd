@@ -115,7 +115,6 @@ lua.
 %else
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
-%{__chown} %{rspamd_user}:%{rspamd_group} %{buildroot}%{rspamd_logdir}
 %endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
@@ -146,6 +145,8 @@ systemctl --no-reload preset %{name}.service >/dev/null 2>&1 || :
 %endif
 %if 0%{?el6}
 /sbin/chkconfig --add %{name}
+%else
+%{__chown} %{rspamd_user}:%{rspamd_group} %{buildroot}%{rspamd_logdir}
 %endif
 
 %preun
