@@ -188,6 +188,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 			g_hash_table_destroy (priv->headers);
 		}
 
+		rspamd_mempool_delete (priv->pool);
 		g_free (priv);
 		g_free (session);
 	}
@@ -1010,7 +1011,13 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->parser.buf = rspamd_fstring_sized_new (RSPAMD_MILTER_MESSAGE_CHUNK + 5);
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
-	priv->pool = pool;
+	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
+
+	if (pool) {
+		/* Copy tag */
+		memcpy (priv->pool->tag.uid, pool->tag.uid, sizeof (pool->tag.uid));
+	}
+
 	priv->headers = g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, g_free, NULL);
 
