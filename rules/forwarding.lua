@@ -108,7 +108,7 @@ rspamd_config.FWD_SRS = {
 rspamd_config.FORWARDED = {
   callback = function (task)
     local function normalize_addr(addr)
-      addr = string.match(addr, '^<?([^<]*)>?$') or addr
+      addr = string.match(addr, '^<?([^>]*)>?$') or addr
       local cap, _,domain = string.match(addr, '^([^%+][^%+]*)(%+[^@]*)@(.*)$')
       if cap then
         addr = string.format('%s@%s', cap, domain)
