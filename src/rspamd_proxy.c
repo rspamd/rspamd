@@ -1649,6 +1649,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	session->master_conn->task = task;
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 
+	rspamd_session_pending (task->s);
+
 	return TRUE;
 }
 
