@@ -518,10 +518,11 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 					num = GPOINTER_TO_INT (res);
 					num ++;
 					/*
-					 * No need to copy, as insert does not call
-					 * destroy function for a key
+					 * We need to copy as glib is totally insane about it:
+					 * > If you supplied a key_destroy_func when creating the
+					 * > GHashTable, the passed key is freed using that function.
 					 */
-					g_hash_table_insert (priv->headers, (gpointer)pos,
+					g_hash_table_insert (priv->headers, g_strdup (pos),
 							GINT_TO_POINTER (num));
 				}
 				else {
