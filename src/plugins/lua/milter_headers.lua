@@ -341,9 +341,30 @@ end
 local opts = rspamd_config:get_all_opt(N) or rspamd_config:get_all_opt('rmilter_headers')
 if not opts then return end
 
+local have_routine = {}
+local function activate_routine(s)
+  if settings.routines[s] or custom_routines[s] then
+    if not have_routine[s] then
+      have_routine[s] = true
+      table.insert(active_routines, s)
+      if (opts.routines and opts.routines[s]) then
+        for k, v in pairs(opts.routines[s]) do
+          settings.routines[s][k] = v
+        end
+      end
+    end
+  else
+    logger.errx(rspamd_config, 'routine "%s" does not exist', s)
+  end
+end
+if opts['extended_spam_headers'] then
+  activate_routine('x-spamd-result')
+  activate_routine('x-rspamd-server')
+  activate_routine('x-rspamd-queue-id')
+end
 if type(opts['use']) == 'string' then
   opts['use'] = {opts['use']}
-elseif (type(opts['use']) == 'table' and not opts['use'][1]) then
+elseif (type(opts['use']) == 'table' and not opts['use'][1] and not next(active_routines)) then
   logger.debugm(N, rspamd_config, 'no functions are enabled')
   return
 end
@@ -369,20 +390,6 @@ if type(opts['custom']) == 'table' then
     else
       custom_routines[k] = f()
     end
-  end
-end
-local have_routine = {}
-local function activate_routine(s)
-  if settings.routines[s] or custom_routines[s] then
-    have_routine[s] = true
-    table.insert(active_routines, s)
-    if (opts.routines and opts.routines[s]) then
-      for k, v in pairs(opts.routines[s]) do
-        settings.routines[s][k] = v
-      end
-    end
-  else
-    logger.errx(rspamd_config, 'routine "%s" does not exist', s)
   end
 end
 if opts['extended_spam_headers'] then
