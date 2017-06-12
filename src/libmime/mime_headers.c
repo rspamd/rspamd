@@ -471,8 +471,18 @@ rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
 
 	if (old_charset->len > 0) {
 		if (rspamd_ftok_casecmp (new_charset, old_charset) == 0) {
-			/* We can concatenate buffers, just return */
-			return;
+			rspamd_ftok_t srch;
+
+			/*
+			 * Special case for iso-2022-jp:
+			 * https://github.com/vstakhov/rspamd/issues/1669
+			 */
+			RSPAMD_FTOK_ASSIGN (&srch, "iso-2022-jp");
+
+			if (rspamd_ftok_casecmp (new_charset, &srch) != 0) {
+				/* We can concatenate buffers, just return */
+				return;
+			}
 		}
 	}
 
