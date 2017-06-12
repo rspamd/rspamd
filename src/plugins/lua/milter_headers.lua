@@ -29,8 +29,10 @@ local E = {}
 local HOSTNAME = util.get_hostname()
 
 local settings = {
-  skip_local = false,
-  skip_authenticated = false,
+  skip_local = true,
+  skip_authenticated = true,
+  local_headers = {},
+  authenticated_headers = {},
   routines = {
     ['x-spamd-result'] = {
       header = 'X-Spamd-Result',
@@ -107,18 +109,25 @@ local custom_routines = {}
 
 local function milter_headers(task)
 
-  if settings.skip_local then
-    local ip = task:get_ip()
-    if (ip and ip:is_local()) then return end
-  end
+  local function skip_wanted(hdr)
 
-  if settings.skip_authenticated then
-    if task:get_user() ~= nil then return end
+    if settings.skip_local and not settings.local_headers[hdr] then
+      local ip = task:get_ip()
+      if (ip and ip:is_local()) then return true end
+    end
+
+    if settings.skip_authenticated and not settings.authenticated_headers[hdr] then
+      if task:get_user() ~= nil then return true end
+    end
+
+    return false
+
   end
 
   local routines, common, add, remove = {}, {}, {}, {}
 
   routines['x-spamd-result'] = function()
+    if skip_wanted('x-spamd-result') then return end
     if not common.symbols then
       common.symbols = task:get_symbols_all()
       common['metric_score'] = task:get_metric_score('default')
@@ -142,6 +151,7 @@ local function milter_headers(task)
   end
 
   routines['x-rspamd-queue-id'] = function()
+    if skip_wanted('x-rspamd-queue-id') then return end
     if common.queue_id ~= false then
       common.queue_id = task:get_queue_id()
       if not common.queue_id then
@@ -157,6 +167,7 @@ local function milter_headers(task)
   end
 
   routines['x-rspamd-server'] = function()
+    if skip_wanted('x-rspamd-server') then return end
     if settings.routines['x-rspamd-server'].remove then
       remove[settings.routines['x-rspamd-server'].header] = settings.routines['x-rspamd-server'].remove
     end
@@ -164,6 +175,7 @@ local function milter_headers(task)
   end
 
   routines['x-spamd-bar'] = function()
+    if skip_wanted('x-rspamd-bar') then return end
     if not common['metric_score'] then
       common['metric_score'] = task:get_metric_score('default')
     end
@@ -185,6 +197,7 @@ local function milter_headers(task)
   end
 
   routines['x-spam-level'] = function()
+    if skip_wanted('x-spam-level') then return end
     if not common['metric_score'] then
       common['metric_score'] = task:get_metric_score('default')
     end
@@ -199,6 +212,7 @@ local function milter_headers(task)
   end
 
   routines['spam-header'] = function()
+    if skip_wanted('spam-header') then return end
     if not common['metric_action'] then
       common['metric_action'] = task:get_metric_action('default')
     end
@@ -212,6 +226,7 @@ local function milter_headers(task)
   end
 
   routines['x-virus'] = function()
+    if skip_wanted('x-virus') then return end
     if not common.symbols then
       common.symbols = {}
     end
@@ -240,6 +255,7 @@ local function milter_headers(task)
   end
 
   routines['x-spam-status'] = function()
+    if skip_wanted('x-spam-status') then return end
     if not common['metric_score'] then
       common['metric_score'] = task:get_metric_score('default')
     end
@@ -263,6 +279,7 @@ local function milter_headers(task)
   end
 
   routines['authentication-results'] = function()
+    if skip_wanted('authentication-results') then return end
     local ar = require "auth_results"
 
     if settings.routines['authentication-results'].remove then
@@ -333,6 +350,16 @@ end
 if type(opts['use']) ~= 'table' then
   logger.errx(rspamd_config, 'unexpected type for "use" option: %s', type(opts['use']))
   return
+end
+if type(opts['local_headers']) == 'table' and opts['local_headers'][1] then
+  for _, h in ipairs(opts['local_headers']) do
+    settings.local_headers[h] = true
+  end
+end
+if type(opts['authenticated_headers']) == 'table' and opts['authenticated_headers'][1] then
+  for _, h in ipairs(opts['authenticated_headers']) do
+    settings.authenticated_headers[h] = true
+  end
 end
 if type(opts['custom']) == 'table' then
   for k, v in pairs(opts['custom']) do
