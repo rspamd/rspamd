@@ -291,13 +291,34 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 		if (password->len != ctx->cached_password.len ||
 				!rspamd_constant_memcmp (password->begin,
 						ctx->cached_password.begin, password->len)) {
-			msg_info_ctx ("incorrect or absent password has been specified");
-			return FALSE;
-		}
+			/* We still need to check enable password here */
+			if (ctx->cached_enable_password.len != 0) {
+				if (password->len != ctx->cached_enable_password.len ||
+						!rspamd_constant_memcmp (password->begin,
+								ctx->cached_enable_password.begin,
+								password->len)) {
+					msg_info_ctx (
+							"incorrect or absent password has been specified");
 
-		return TRUE;
+					return FALSE;
+				}
+				else {
+					/* Cached matched */
+					return TRUE;
+				}
+			}
+			else {
+				/* We might want to check uncached version */
+				goto check_uncached;
+			}
+		}
+		else {
+			/* Cached matched */
+			return TRUE;
+		}
 	}
 
+check_uncached:
 	g_assert (pbkdf != NULL);
 	/* get salt */
 	salt = rspamd_encrypted_password_get_str (check, 3, &salt_len);
