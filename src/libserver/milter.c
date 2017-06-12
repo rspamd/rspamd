@@ -1048,6 +1048,7 @@ rspamd_milter_set_reply (struct rspamd_milter_session *session,
 	rspamd_printf_gstring (buf, "%V %V %V", xcode, rcode, reply);
 	ret = rspamd_milter_send_action (session, RSPAMD_MILTER_REPLYCODE,
 		buf);
+	g_string_free (buf, TRUE);
 
 	return ret;
 }
@@ -1418,7 +1419,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	const ucl_object_t *elt;
 	struct rspamd_milter_private *priv = session->priv;
 	gint action = METRIC_ACTION_REJECT;
-	rspamd_fstring_t *xcode, *rcode, *reply = NULL;
+	rspamd_fstring_t *xcode = NULL, *rcode = NULL, *reply = NULL;
 	GString *hname, *hvalue;
 
 	if (results == NULL) {
@@ -1487,7 +1488,6 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 
 		rspamd_milter_set_reply (session, rcode, xcode, reply);
 		rspamd_milter_send_action (session, RSPAMD_MILTER_REJECT);
-
 		break;
 	case METRIC_ACTION_SOFT_REJECT:
 	case METRIC_ACTION_GREYLIST:
@@ -1539,6 +1539,10 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
 		break;
 	}
+
+	rspamd_fstring_free (rcode);
+	rspamd_fstring_free (xcode);
+	rspamd_fstring_free (reply);
 }
 
 void
