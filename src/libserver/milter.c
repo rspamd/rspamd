@@ -1210,7 +1210,7 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 		return;
 	}
 
-	IF_MACRO("i") {
+	IF_MACRO("{i}") {
 		rspamd_http_message_add_header_len (msg, QUEUE_ID_HEADER,
 				found->begin, found->len);
 	}
@@ -1254,7 +1254,7 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 	}
 	else {
 		/* Sendmail style */
-		IF_MACRO("j") {
+		IF_MACRO("{j}") {
 			rspamd_http_message_add_header_len (msg, MTA_NAME_HEADER,
 					found->begin, found->len);
 		}
