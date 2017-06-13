@@ -64,7 +64,7 @@ sub rspamd_scan {
         print "$tag FAILURE\n";
       }
       else {
-        my $def     = $js->{'default'};
+        my $def     = $js;
         my $headers = "";
 
         if ( !$def ) {
