@@ -269,59 +269,55 @@ dns_resolver_init (rspamd_logger_t *logger,
 		rdns_resolver_set_log_level (dns_resolver->r, cfg->log_level);
 		dns_resolver->cfg = cfg;
 		rdns_resolver_set_dnssec (dns_resolver->r, cfg->enable_dnssec);
+
+		if (cfg->nameservers == NULL) {
+			/* Parse resolv.conf */
+			dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
+			rspamd_upstreams_set_flags (dns_resolver->ups,
+					RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+			rspamd_upstreams_set_rotation (dns_resolver->ups,
+					RSPAMD_UPSTREAM_MASTER_SLAVE);
+
+			if (!rdns_resolver_parse_resolv_conf_cb (dns_resolver->r,
+					"/etc/resolv.conf",
+					rspamd_dns_resolv_conf_on_server,
+					dns_resolver)) {
+				msg_err ("cannot parse resolv.conf and no nameservers defined, "
+						"so no ways to resolve addresses");
+				rdns_resolver_release (dns_resolver->r);
+				dns_resolver->r = NULL;
+
+				return dns_resolver;
+			}
+
+			/* Use normal resolv.conf rules */
+			rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_reorder,
+					dns_resolver);
+		}
+		else {
+			dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
+			rspamd_upstreams_set_flags (dns_resolver->ups,
+					RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+
+			if (!rspamd_upstreams_from_ucl (dns_resolver->ups, cfg->nameservers,
+					53, dns_resolver)) {
+				msg_err_config ("cannot parse DNS nameservers definitions");
+				rdns_resolver_release (dns_resolver->r);
+				dns_resolver->r = NULL;
+
+				return dns_resolver;
+			}
+		}
+
+		rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_init,
+				dns_resolver);
+		rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
+				dns_resolver->ups);
+		cfg->dns_resolver = dns_resolver;
 	}
 
 	rdns_resolver_set_logger (dns_resolver->r, rspamd_rnds_log_bridge, logger);
-
-	if (cfg == NULL || cfg->nameservers == NULL) {
-		/* Parse resolv.conf */
-		dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
-		rspamd_upstreams_set_flags (dns_resolver->ups,
-				RSPAMD_UPSTREAM_FLAG_NORESOLVE);
-		rspamd_upstreams_set_rotation (dns_resolver->ups,
-				RSPAMD_UPSTREAM_MASTER_SLAVE);
-
-		if (!rdns_resolver_parse_resolv_conf_cb (dns_resolver->r,
-				"/etc/resolv.conf",
-				rspamd_dns_resolv_conf_on_server,
-				dns_resolver)) {
-			msg_err ("cannot parse resolv.conf and no nameservers defined, "
-					"so no ways to resolve addresses");
-			rdns_resolver_release (dns_resolver->r);
-			dns_resolver->r = NULL;
-
-			return dns_resolver;
-		}
-
-		/* Use normal resolv.conf rules */
-		rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_reorder,
-				dns_resolver);
-	}
-	else {
-		dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
-		rspamd_upstreams_set_flags (dns_resolver->ups,
-				RSPAMD_UPSTREAM_FLAG_NORESOLVE);
-
-		if (!rspamd_upstreams_from_ucl (dns_resolver->ups, cfg->nameservers,
-				53, dns_resolver)) {
-			msg_err_config ("cannot parse DNS nameservers definitions");
-			rdns_resolver_release (dns_resolver->r);
-			dns_resolver->r = NULL;
-
-			return dns_resolver;
-		}
-	}
-
-	rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_init,
-			dns_resolver);
-	rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
-			dns_resolver->ups);
-
 	rdns_resolver_init (dns_resolver->r);
-
-	if (cfg != NULL) {
-		cfg->dns_resolver = dns_resolver;
-	}
 
 	return dns_resolver;
 }
