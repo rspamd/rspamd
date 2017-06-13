@@ -884,6 +884,7 @@ if opts['reporting'] == true then
         rspamd_tcp.request({
           ev_base = ev_base,
           callback = mail_cb,
+          config = rspamd_config,
           stop_pattern = '\r\n',
           host = report_settings.smtp,
           port = report_settings.smtp_port,
