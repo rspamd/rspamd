@@ -530,7 +530,7 @@ rdns_make_request_full (
 	const char *cur_name, *last_name = NULL;
 	struct rdns_compression_entry *comp = NULL;
 
-	if (!resolver->initialized) {
+	if (resolver == NULL || !resolver->initialized) {
 		return NULL;
 	}
 
