@@ -14,7 +14,8 @@ file_stat = namedtuple('FileStat',
                         ham_dict \
                         symbol_set \
                         false_positive_rate \
-                        false_negative_rate')
+                        false_negative_rate \
+                        overall_accuracy')
 
 sym_stat = namedtuple('SymbolStat',
                       'name \
@@ -78,6 +79,7 @@ def get_file_stats(logs, spam_threshold):
     no_of_fn = 0
     false_positive_rate = 0
     false_negative_rate = 0
+    overall_accuracy = 0
     
     for line in logs:
         log = line.split()
@@ -107,6 +109,9 @@ def get_file_stats(logs, spam_threshold):
     if no_of_emails > 0:
         spam_percent = no_of_spam * 100 / float(no_of_emails)
         ham_percent = no_of_ham * 100 / float(no_of_emails)
+
+        no_of_correct_results = no_of_emails - no_of_fp - no_of_fn
+        overall_accuracy = no_of_correct_results * 100 / float(no_of_emails)
         
     return file_stat(no_of_emails,
                      no_of_spam,
@@ -117,7 +122,8 @@ def get_file_stats(logs, spam_threshold):
                      ham_dict,
                      symbol_set,
                      false_positive_rate,
-                     false_negative_rate)
+                     false_negative_rate,
+                     overall_accuracy)
             
                              
 def write_file_stats(file_stat):
@@ -135,6 +141,8 @@ def write_file_stats(file_stat):
         str(round(file_stat.false_positive_rate, 2)))
     print "False negative rate: {} %".format(
         str(round(file_stat.false_negative_rate, 2)))
+    print "Overall accuracy: {} %".format(
+        str(round(file_stat.overall_accuracy, 2)))
     print
 
     
