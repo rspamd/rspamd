@@ -53,10 +53,13 @@ static const guint64 rspamd_lua_ctx_magic = 0x8055e2652aacf96eULL;
  */
 struct rspamd_lua_worker_ctx {
 	guint64 magic;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
 	/* Other params */
 	GHashTable *params;
 	/* Lua script to load */
@@ -67,8 +70,6 @@ struct rspamd_lua_worker_ctx {
 	gint cbref_accept;
 	/* Callback for finishing */
 	gint cbref_fin;
-	/* Config file */
-	struct rspamd_config *cfg;
 	/* The rest options */
 	ucl_object_t *opts;
 };

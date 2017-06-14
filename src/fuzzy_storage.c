@@ -124,6 +124,13 @@ static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
 
 struct rspamd_fuzzy_storage_ctx {
 	guint64 magic;
+	/* Events base */
+	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
 	struct fuzzy_global_stat stat;
 	char *hashfile;
 	gdouble expire;
@@ -139,7 +146,6 @@ struct rspamd_fuzzy_storage_ctx {
 	const ucl_object_t *masters_map;
 	GHashTable *master_flags;
 	guint keypair_cache_size;
-	struct event_base *ev_base;
 	gint peer_fd;
 	struct event peer_ev;
 	struct event stat_ev;
@@ -160,8 +166,6 @@ struct rspamd_fuzzy_storage_ctx {
 	guint updates_failed;
 	guint updates_maxfail;
 	guint32 collection_id;
-	struct rspamd_dns_resolver *resolver;
-	struct rspamd_config *cfg;
 	struct rspamd_worker *worker;
 	struct rspamd_http_connection_router *collection_rt;
 	guchar cookie[COOKIE_SIZE];

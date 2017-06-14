@@ -78,6 +78,12 @@ struct rspamd_worker {
 
 struct rspamd_abstract_worker_ctx {
 	guint64 magic;
+	/* Events base */
+	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
 	char data[];
 };
 

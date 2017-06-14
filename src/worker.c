@@ -96,7 +96,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 {
 	struct rspamd_task *task;
 	struct rspamd_config *cfg = worker->srv->cfg;
-	struct rspamd_worker_ctx *ctx;
+	struct rspamd_abstract_worker_ctx *ctx;
 	struct rspamd_config_post_load_script *sc;
 
 	if (cfg->finish_callbacks) {

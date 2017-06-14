@@ -99,13 +99,15 @@ static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
 
 struct rspamd_proxy_ctx {
 	guint64 magic;
-	gdouble timeout;
-	struct timeval io_tv;
-	struct rspamd_config *cfg;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
+	gdouble timeout;
+	struct timeval io_tv;
 	/* Encryption key for clients */
 	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */

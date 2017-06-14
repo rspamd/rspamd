@@ -48,11 +48,15 @@ static const guint64 rspamd_log_helper_magic = 0x1090bb46aaa74c9aULL;
  */
 struct log_helper_ctx {
 	guint64 magic;
-	struct rspamd_config *cfg;
+	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
 	struct event log_ev;
 	struct rspamd_worker_lua_script *scripts;
-	struct rspamd_dns_resolver *resolver;
 	lua_State *L;
 	gint pair[2];
 };

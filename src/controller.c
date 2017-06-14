@@ -126,12 +126,15 @@ worker_t controller_worker = {
  */
 struct rspamd_controller_worker_ctx {
 	guint64 magic;
-	guint32 timeout;
-	struct timeval io_tv;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
+	guint32 timeout;
+	struct timeval io_tv;
 	/* Whether we use ssl for this server */
 	gboolean use_ssl;
 	/* Webui password */
@@ -147,8 +150,6 @@ struct rspamd_controller_worker_ctx {
 	time_t start_time;
 	/* Main server */
 	struct rspamd_main *srv;
-	/* Configuration */
-	struct rspamd_config *cfg;
 	/* SSL cert */
 	gchar *ssl_cert;
 	/* SSL private key */

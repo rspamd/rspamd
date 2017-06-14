@@ -46,13 +46,18 @@ static const guint64 rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
  */
 struct hs_helper_ctx {
 	guint64 magic;
+	/* Events base */
+	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
 	gchar *hs_dir;
 	gboolean loaded;
 	gdouble max_time;
 	gdouble recompile_time;
-	struct rspamd_config *cfg;
 	struct event recompile_timer;
-	struct event_base *ev_base;
 };
 
 static gpointer
