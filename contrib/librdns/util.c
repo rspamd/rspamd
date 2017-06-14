@@ -409,12 +409,16 @@ rdns_request_free (struct rdns_request *req)
 						req->async_event);
 				/* Remove from id hashes */
 				HASH_DEL (req->io->requests, req);
+				req->async_event = NULL;
 			}
 			else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 				/* Remove retransmit event */
 				req->async->del_write (req->async->data,
 						req->async_event);
+				HASH_DEL (req->io->requests, req);
+				req->async_event = NULL;
 			}
+
 		}
 #ifdef TWEETNACL
 		if (req->curve_plugin_data != NULL) {
