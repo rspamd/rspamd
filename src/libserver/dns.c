@@ -240,8 +240,9 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 {
 	struct rspamd_dns_resolver *dns_resolver = ud;
 
-	return rspamd_upstreams_add_upstream (dns_resolver->ups,
-		name, port, NULL);
+	return rspamd_upstreams_add_upstream (dns_resolver->ups, name, port,
+			RSPAMD_UPSTREAM_PARSE_NAMESERVER,
+			NULL);
 }
 
 struct rspamd_dns_resolver *

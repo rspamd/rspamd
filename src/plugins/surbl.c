@@ -768,7 +768,8 @@ surbl_module_config (struct rspamd_config *cfg)
 		{
 			redir_val = ucl_obj_tostring (cur);
 			if (rspamd_upstreams_add_upstream (surbl_module_ctx->redirectors,
-					redir_val, 80, NULL)) {
+					redir_val, 80, RSPAMD_UPSTREAM_PARSE_DEFAULT,
+					NULL)) {
 				surbl_module_ctx->use_redirector = TRUE;
 			}
 		}

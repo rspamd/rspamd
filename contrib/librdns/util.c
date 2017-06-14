@@ -556,6 +556,7 @@ rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
 {
 	FILE *in;
 	char buf[BUFSIZ];
+	char *p;
 
 	in = fopen (path, "r");
 
@@ -566,6 +567,13 @@ rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
 	while (!feof (in)) {
 		if (fgets (buf, sizeof (buf) - 1, in) == NULL) {
 			break;
+		}
+
+		/* Strip trailing spaces */
+		p = buf + strlen (buf) - 1;
+		while (p > buf &&
+				(*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
+			*p-- = '\0';
 		}
 
 		if (!rdns_resolver_conf_process_line (resolver, buf, cb, ud)) {
