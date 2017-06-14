@@ -1491,7 +1491,6 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		rspamd_milter_send_action (session, RSPAMD_MILTER_REJECT);
 		break;
 	case METRIC_ACTION_SOFT_REJECT:
-	case METRIC_ACTION_GREYLIST:
 		rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_TEMPFAIL,
 				sizeof (RSPAMD_MILTER_RCODE_TEMPFAIL) - 1);
 		xcode = rspamd_fstring_new_init (RSPAMD_MILTER_XCODE_TEMPFAIL,
@@ -1535,6 +1534,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
 		break;
 
+	case METRIC_ACTION_GREYLIST:
 	case METRIC_ACTION_NOACTION:
 	default:
 		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
