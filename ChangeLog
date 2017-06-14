@@ -1,3 +1,12 @@
+1.6.1: 14 Jun 2017
+	* [Fix] Allow to init resolver without rspamd_config
+	* [Fix] Do not crash when resolver failed to initialize
+	* [Fix] Fix abstract context layout
+	* [Fix] Fix CGP helper reply parsing
+	* [Fix] Fix crashes when socket write errors occur
+	* [Fix] Fix parsing IPv6 nameservers in resolv.conf
+	* [Fix] Milter: Don't defer on "greylist" action
+
 1.6.0: 12 Jun 2017
 	* [Conf] Add rspamd_proxy to the default configuration set
 	* [Conf] Add sample arc module config
