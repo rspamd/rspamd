@@ -33,6 +33,7 @@ end
 
 local N = 'dmarc'
 local no_sampling_domains
+local no_reporting_domains
 local statefile = string.format('%s/%s', rspamd_paths['DBDIR'], 'dmarc_reports_last_sent')
 local VAR_NAME = 'dmarc_reports_last_sent'
 local INTERVAL = 86400
@@ -515,6 +516,13 @@ local function dmarc_callback(task)
 
     if rua and redis_params and dmarc_reporting then
 
+      if no_reporting_domains then
+        if no_reporting_domains:get_key(dmarc_domain) or no_reporting_domains:get_key(rspamd_util.get_tld(dmarc_domain)) then
+          rspamd_logger.infox(task, 'DMARC reporting suppressed for %1', dmarc_domain)
+          return maybe_force_action(disposition)
+        end
+      end
+
       local spf_result
       if spf_ok then
         spf_result = 'pass'
@@ -597,6 +605,7 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 no_sampling_domains = rspamd_map_add(N, 'no_sampling_domains', 'map', 'Domains not to apply DMARC sampling to')
+no_reporting_domains = rspamd_map_add(N, 'no_reporting_domains', 'map', 'Domains not to apply DMARC reporting to')
 
 if opts['symbols'] then
   for k,_ in pairs(dmarc_symbols) do
