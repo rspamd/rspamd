@@ -206,7 +206,8 @@ local function greylist_check(task)
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
 
-        if not task:get_queue_id() then return end -- Likely rspamc scan
+        local ua = task:get_request_header('User-Agent') or ''
+        if ua == 'rspamc' then return end -- Likely rspamc scan
 
         if settings.message_func then
           task:set_pre_result('soft reject',
@@ -309,7 +310,10 @@ local function greylist_set(task)
     end
   end
 
-  local qid = task:get_queue_id()
+  local ua = task:get_request_header('User-Agent') or ''
+  local is_rspamc = false
+  if ua == 'rspamc' then is_rspamc = true end
+
   if is_whitelisted then
     if action == 'greylist' then
       -- We are going to accept message
@@ -322,7 +326,8 @@ local function greylist_set(task)
       is_whitelisted,
       rspamd_util.time_to_string(rspamd_util.get_time() + settings['expire']))
 
-    if not qid then return end
+    if is_rspamc then return end
+
     ret,conn,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
       hash_key, -- hash key
@@ -340,12 +345,13 @@ local function greylist_set(task)
       rspamd_logger.errx(task, 'got error while connecting to redis')
     end
   elseif do_greylisting or do_greylisting_required then
+    if is_rspamc then return end
     local t = tostring(toint(rspamd_util.get_time()))
     local end_time = rspamd_util.time_to_string(t + settings['timeout'])
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
     task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
       'new record')
-    if not qid then return end
+
     task:set_pre_result(settings['action'], settings['message'])
     task:set_flag('greylisted')
     -- Create new record
@@ -385,7 +391,7 @@ local function greylist_set(task)
         end
       end
       task:set_metric_action('default', settings['action'])
-      if not qid then return end
+      if is_rspamc then return end
       task:set_pre_result(settings['action'], settings['message'])
       task:set_flag('greylisted')
     else
