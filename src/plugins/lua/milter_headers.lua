@@ -33,6 +33,7 @@ local settings = {
   skip_authenticated = true,
   local_headers = {},
   authenticated_headers = {},
+  extended_headers_rcpt = {},
   routines = {
     ['x-spamd-result'] = {
       header = 'X-Spamd-Result',
@@ -110,6 +111,28 @@ local custom_routines = {}
 local function milter_headers(task)
 
   local function skip_wanted(hdr)
+
+    local function match_extended_headers_rcpt(rcpts)
+      local rcpts = task:get_recipients('smtp')
+      if not rcpts then return false end
+      local found
+      for _, r in ipairs(rcpts) do
+        found = false
+        for k, v in pairs(settings.extended_headers_rcpt) do
+          for _, ehr in ipairs(v) do
+            if r[k] == ehr then
+              found = true
+              break
+            end
+          end
+          if found then break end
+        end
+        if not found then break end
+      end
+      return found
+    end
+
+    if settings.extended_headers_rcpt and match_extended_headers_rcpt() then return false end
 
     if settings.skip_local and not settings.local_headers[hdr] then
       local ip = task:get_ip()
@@ -413,6 +436,34 @@ if (#active_routines < 1) then
   return
 end
 logger.infox(rspamd_config, 'active routines [%s]', table.concat(active_routines, ','))
+if type(opts['extended_headers_rcpt']) == 'string' then
+  opts['extended_headers_rcpt'] = {opts['extended_headers_rcpt']}
+end
+if type(opts['extended_headers_rcpt']) == 'table' and opts['extended_headers_rcpt'][1] then
+  for _, e in ipairs(opts['extended_headers_rcpt']) do
+    if string.find(e, '^[^@]+@[^@]+$') then
+      if not settings.extended_headers_rcpt.addr then
+        settings.extended_headers_rcpt.addr = {}
+      end
+      table.insert(settings.extended_headers_rcpt['addr'], e)
+    elseif string.find(e, '^[^@]+$') then
+      if not settings.extended_headers_rcpt.user then
+        settings.extended_headers_rcpt.user = {}
+      end
+      table.insert(settings.extended_headers_rcpt['user'], e)
+    else
+      local d = string.match(e, '^@([^@]+)$')
+      if d then
+        if not settings.extended_headers_rcpt.domain then
+          settings.extended_headers_rcpt.domain = {}
+        end
+        table.insert(settings.extended_headers_rcpt['domain'], d)
+      else
+        logger.errx(rspamd_config, 'extended_headers_rcpt: unexpected entry: %s', e)
+      end
+    end
+  end
+end
 rspamd_config:register_symbol({
   name = 'MILTER_HEADERS',
   type = 'postfilter',
