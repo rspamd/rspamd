@@ -112,7 +112,7 @@ local function milter_headers(task)
 
   local function skip_wanted(hdr)
 
-    local function match_extended_headers_rcpt(rcpts)
+    local function match_extended_headers_rcpt()
       local rcpts = task:get_recipients('smtp')
       if not rcpts then return false end
       local found
@@ -132,7 +132,9 @@ local function milter_headers(task)
       return found
     end
 
-    if settings.extended_headers_rcpt and match_extended_headers_rcpt() then return false end
+    if settings.extended_headers_rcpt and match_extended_headers_rcpt() then
+      return false
+    end
 
     if settings.skip_local and not settings.local_headers[hdr] then
       local ip = task:get_ip()
