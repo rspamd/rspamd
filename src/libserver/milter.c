@@ -1214,6 +1214,12 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 		rspamd_http_message_add_header_len (msg, QUEUE_ID_HEADER,
 				found->begin, found->len);
 	}
+	else {
+		IF_MACRO("i") {
+			rspamd_http_message_add_header_len (msg, QUEUE_ID_HEADER,
+					found->begin, found->len);
+		}
+	}
 
 	IF_MACRO("{daemon_name}") {
 		rspamd_http_message_add_header_len (msg, MTA_TAG_HEADER,
@@ -1223,6 +1229,12 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 	IF_MACRO("{v}") {
 		rspamd_http_message_add_header_len (msg, USER_AGENT_HEADER,
 				found->begin, found->len);
+	}
+	else {
+		IF_MACRO("v") {
+			rspamd_http_message_add_header_len (msg, USER_AGENT_HEADER,
+					found->begin, found->len);
+		}
 	}
 
 	IF_MACRO("{cipher}") {
@@ -1257,6 +1269,12 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 		IF_MACRO("{j}") {
 			rspamd_http_message_add_header_len (msg, MTA_NAME_HEADER,
 					found->begin, found->len);
+		}
+		else {
+			IF_MACRO("j") {
+				rspamd_http_message_add_header_len (msg, MTA_NAME_HEADER,
+						found->begin, found->len);
+			}
 		}
 	}
 }
