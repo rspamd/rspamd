@@ -81,6 +81,7 @@ rspamadm_dkim_keygen (gint argc, gchar **argv)
 	EVP_PKEY *pk;
 	gint rc;
 	glong publen;
+	gsize b64_len;
 	gchar *pubdata, *b64_data;
 
 	context = g_option_context_new (
@@ -140,11 +141,33 @@ rspamadm_dkim_keygen (gint argc, gchar **argv)
 	publen = BIO_get_mem_data (pubout, &pubdata);
 
 	g_assert (publen > 0);
-	b64_data = rspamd_encode_base64 (pubdata, publen, -1, NULL);
-	rspamd_printf ("%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n"
-			"\t\"p=%s\" ) ;\n",
-			selector ? selector : "selector",
-			b64_data);
+	b64_data = rspamd_encode_base64 (pubdata, publen, -1, &b64_len);
+
+	if (b64_len < 255 - 2) {
+		rspamd_printf ("%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n"
+						"\t\"p=%s\" ) ;\n",
+				selector ? selector : "selector",
+				b64_data);
+	}
+	else {
+		guint i;
+		gint step = 253, remain = b64_len;
+
+		rspamd_printf ("%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n",
+				selector ? selector : "selector");
+
+		for (i = 0; i < b64_len; i += step, remain -= step) {
+			if (i == 0) {
+				rspamd_printf ("\t\"p=%*s\"\n", MIN(step, remain), &b64_data[i]);
+			}
+			else {
+				step = 255;
+				rspamd_printf ("\t\"%*s\"\n", MIN(step, remain), &b64_data[i]);
+			}
+		}
+
+		rspamd_printf (") ; \n");
+	}
 
 	g_free (b64_data);
 	BIO_free (pubout);
