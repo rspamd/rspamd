@@ -160,7 +160,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_ALLOW,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -169,7 +169,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_REJECT,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -178,7 +178,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_TEMPFAIL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -187,7 +187,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_NA,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -196,7 +196,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_PERMFAIL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -205,7 +205,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_INT,
 			NULL,
 			0,
-			NULL,
+			G_STRINGIFY (DEFAULT_CACHE_SIZE),
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -214,7 +214,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_TIME,
 			NULL,
 			0,
-			NULL,
+			G_STRINGIFY (DEFAULT_TIME_JITTER),
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -223,7 +223,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			"empty",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -232,7 +232,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			"empty",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -250,7 +250,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_BOOLEAN,
 			NULL,
 			0,
-			NULL,
+			"false",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -259,16 +259,16 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			"empty",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
-			"Maximum number of DKIM signatures to check",
+			"Obsoleted: maximum number of DKIM signatures to check",
 			"max_sigs",
 			UCL_INT,
 			NULL,
 			0,
-			NULL,
+			"n/a",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -277,7 +277,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			default_sign_headers,
 			0);
 
 	return 0;
