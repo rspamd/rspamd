@@ -551,7 +551,12 @@ local function multimap_callback(task, rule)
   end
 
   local function match_received_header(r, pos, total, h)
+    local use_tld = false
     local filter = r['filter'] or 'real_ip'
+    if filter:match('^tld:') then
+      filter = filter:sub(5)
+      use_tld = true
+    end
     local v = h[filter]
     if v then
       local min_pos = tonumber(r['min_pos'])
@@ -590,6 +595,9 @@ local function multimap_callback(task, rule)
           match_rule(r, v)
         end
       else
+        if use_tld and type(v) == 'string' then
+          v = util.get_tld(v)
+        end
         match_rule(r, v)
       end
     end
