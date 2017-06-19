@@ -207,7 +207,7 @@ local function greylist_check(task)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
 
         local ua = task:get_request_header('User-Agent') or ''
-        if ua == 'rspamc' then return end -- Likely rspamc scan
+        if tostring(ua) == 'rspamc' then return end -- Likely rspamc scan
 
         if settings.message_func then
           task:set_pre_result('soft reject',
@@ -312,7 +312,7 @@ local function greylist_set(task)
 
   local ua = task:get_request_header('User-Agent') or ''
   local is_rspamc = false
-  if ua == 'rspamc' then is_rspamc = true end
+  if tostring(ua) == 'rspamc' then is_rspamc = true end
 
   if is_whitelisted then
     if action == 'greylist' then
