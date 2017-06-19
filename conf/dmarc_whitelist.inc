@@ -25,6 +25,7 @@ force.com
 hh.ru
 instagram.com
 linkedin.com
+livejournal.com
 mackeeper.com
 mercadolibre.com.ar
 mercadolivre.com.br

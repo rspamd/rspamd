@@ -987,6 +987,7 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 #endif
 		c->rlimit_nofile = 0;
 		c->rlimit_maxcore = 0;
+		c->enabled = TRUE;
 
 		REF_INIT_RETAIN (c, rspamd_worker_conf_dtor);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,

@@ -2400,6 +2400,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
 			RSPAMD_CL_FLAG_INT_32,
 			"Max size of core file in bytes");
+	rspamd_rcl_add_default_handler (sub,
+			"enabled",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, enabled),
+			0,
+			"Enable or disable a worker (true by default)");
 
 	/**
 	 * Modules handler

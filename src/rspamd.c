@@ -550,6 +550,14 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 			msg_err_main ("type of worker is unspecified, skip spawning");
 		}
 		else {
+			if (!cf->enabled) {
+				msg_info_main ("worker of type %s is disabled in the config, "
+						"skip spawning", g_quark_to_string (cf->type));
+				cur = g_list_next (cur);
+
+				continue;
+			}
+
 			if (cf->worker->flags & RSPAMD_WORKER_ALWAYS_START) {
 				g_ptr_array_add (seen_mandatory_workers, cf->worker);
 			}
