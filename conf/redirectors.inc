@@ -227,6 +227,7 @@ easyurl.net
 eepurl.com
 ej.uz
 elurl.com
+email.account.2gis.com
 email.mail.ostrovok.ru
 email.news.ostrovok.ru
 e.mail.ru
