@@ -816,7 +816,7 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 			}
 
 			if (rspamd_symbols_cache_stat_symbol (session->ctx->cfg->cache,
-					sym->name, &freq, &freq_dev, &tm)) {
+					sym->name, &freq, &freq_dev, &tm, NULL)) {
 				ucl_object_insert_key (sym_obj,
 						ucl_object_fromdouble (freq),
 						"frequency", 0, false);

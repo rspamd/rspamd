@@ -2136,10 +2136,8 @@ rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name
 
 gboolean
 rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
-		const gchar *name,
-		gdouble *frequency,
-		gdouble *freq_stddev,
-		gdouble *tm)
+		const gchar *name, gdouble *frequency, gdouble *freq_stddev,
+		gdouble *tm, guint *nhits)
 {
 	struct cache_item *item;
 
@@ -2155,6 +2153,10 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 		*frequency = item->st->avg_frequency;
 		*freq_stddev = sqrt (item->st->stddev_frequency);
 		*tm = item->st->time_counter.mean;
+
+		if (nhits) {
+			*nhits = item->st->hits;
+		}
 
 		return TRUE;
 	}
