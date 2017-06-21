@@ -337,6 +337,152 @@ rspamd_extract_words (struct rspamd_task *task,
 }
 
 static void
+rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
+		GByteArray *data, gboolean is_html, guint *newlines_count,
+		GPtrArray *newlines)
+{
+	const gchar *p = begin, *c = begin;
+	gchar last_c = '\0';
+	gboolean crlf_added = FALSE;
+	enum {
+		normal_char,
+		seen_cr,
+		seen_lf,
+	} state = normal_char;
+
+	while (p < pe) {
+		if (G_UNLIKELY (*p) == '\r') {
+			switch (state) {
+			case normal_char:
+				state = seen_cr;
+				if (p > c) {
+					last_c = *(p - 1);
+					g_byte_array_append (data, (const guint8 *)c, p - c);
+				}
+
+				crlf_added = FALSE;
+				c = p + 1;
+				break;
+			case seen_cr:
+				/* Double \r\r */
+				if (!crlf_added) {
+					g_byte_array_append (data, (const guint8 *)" ", 1);
+					crlf_added = TRUE;
+					g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+				}
+
+				(*newlines_count)++;
+				c = p + 1;
+				break;
+			case seen_lf:
+				/* Likely \r\n\r...*/
+				state = seen_cr;
+				c = p + 1;
+				break;
+			}
+
+			p ++;
+		}
+		else if (G_UNLIKELY (*p == '\n')) {
+			switch (state) {
+			case normal_char:
+				state = seen_lf;
+
+				if (p > c) {
+					last_c = *(p - 1);
+					g_byte_array_append (data, (const guint8 *)c, p - c);
+				}
+
+				c = p + 1;
+
+				if (is_html || g_ascii_ispunct (last_c)) {
+					g_byte_array_append (data, (const guint8 *)" ", 1);
+					crlf_added = TRUE;
+				}
+				else {
+					crlf_added = FALSE;
+				}
+
+				break;
+			case seen_cr:
+				/* \r\n */
+				if (!crlf_added) {
+					if (is_html || g_ascii_ispunct (last_c)) {
+						g_byte_array_append (data, (const guint8 *) " ", 1);
+						crlf_added = TRUE;
+					}
+
+					g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+				}
+
+				c = p + 1;
+				state = seen_lf;
+
+				break;
+			case seen_lf:
+				/* Double \n\n */
+				if (!crlf_added) {
+					g_byte_array_append (data, (const guint8 *)" ", 1);
+					crlf_added = TRUE;
+					g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+				}
+
+				(*newlines_count)++;
+
+				c = p + 1;
+				break;
+			}
+
+			p ++;
+		}
+		else {
+			switch (state) {
+			case normal_char:
+				break;
+			case seen_cr:
+			case seen_lf:
+				(*newlines_count)++;
+
+				/* Skip initial spaces */
+				if (G_UNLIKELY (*p == ' ')) {
+					if (!crlf_added) {
+						g_byte_array_append (data, (const guint8 *)" ", 1);
+					}
+
+					while (p < pe && *p == ' ') {
+						p ++;
+						c ++;
+					}
+				}
+
+				state = normal_char;
+				break;
+			}
+
+			p ++;
+		}
+	}
+
+	/* Leftover */
+	if (p > c) {
+		switch (state) {
+		case normal_char:
+			g_byte_array_append (data, (const guint8 *)c, p - c);
+			break;
+		default:
+
+			if (!crlf_added) {
+				g_byte_array_append (data, (const guint8 *)" ", 1);
+				g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+			}
+
+			(*newlines_count)++;
+			break;
+		}
+	}
+}
+
+static void
 rspamd_normalize_text_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
