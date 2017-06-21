@@ -39,6 +39,11 @@ local settings = {
       header = 'X-Spamd-Result',
       remove = 1,
     },
+    ['x-spam-flag'] = {
+      header = 'X-Spam-Flag',
+      remove = 1,
+      value = 'Yes',
+    },
     ['x-rspamd-server'] = {
       header = 'X-Rspamd-Server',
       remove = 1,
@@ -237,17 +242,39 @@ local function milter_headers(task)
   end
 
   routines['spam-header'] = function()
-    if skip_wanted('spam-header') then return end
+    if skip_wanted('x-spam-flag') then return end
     if not common['metric_action'] then
       common['metric_action'] = task:get_metric_action('default')
     end
-    if settings.routines['spam-header'].remove then
-      remove[settings.routines['spam-header'].header] = settings.routines['spam-header'].remove
+    if settings.routines['x-spam-flag'].remove then
+      remove[settings.routines['x-spam-flag'].header] = settings.routines['x-spam-flag'].remove
     end
     local action = common['metric_action']
     if action ~= 'no action' and action ~= 'greylist' then
-      add[settings.routines['spam-header'].header] = settings.routines['spam-header'].value
+      add[settings.routines['spam-header'].header] = settings.routines['x-spam-flag'].value
     end
+  end
+
+  local function spam_header (class, name, value, remove_v)
+    if skip_wanted(class) then return end
+    if not common['metric_action'] then
+      common['metric_action'] = task:get_metric_action('default')
+    end
+    if remove_v then
+      remove[name] = remove_v
+    end
+    local action = common['metric_action']
+    if action ~= 'no action' and action ~= 'greylist' then
+      add[name] = value
+    end
+  end
+
+  routines['spam-header'] = function()
+    spam_header('spam-header', settings.routines['spam-header'].header, settings.routines['spam-header'].value, settings.routines['spam-header'].remove)
+  end
+
+  routines['x-spam-flag'] = function()
+    spam_header('x-spam-flag', settings.routines['x-spam-flag'].header, settings.routines['x-spam-flag'].value, settings.routines['x-spam-flag'].remove)
   end
 
   routines['x-virus'] = function()
@@ -386,6 +413,7 @@ if opts['extended_spam_headers'] then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
+  activate_routine('x-spam-flag')
 end
 if type(opts['use']) == 'string' then
   opts['use'] = {opts['use']}
