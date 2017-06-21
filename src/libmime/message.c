@@ -419,7 +419,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 					}
 
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content))));
+							(((gpointer) (goffset) (part->stripped_content->len))));
 				}
 
 				c = p + 1;
@@ -433,7 +433,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 							(const guint8 *)" ", 1);
 					crlf_added = TRUE;
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content))));
+							(((gpointer) (goffset) (part->stripped_content->len))));
 				}
 
 				part->nlines++;
@@ -468,7 +468,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				break;
 			case seen_cr:
 			case seen_lf:
-				part->newlines ++;
+				part->nlines ++;
 
 				/* Skip initial spaces */
 				if (G_UNLIKELY (*p == ' ')) {
@@ -531,7 +531,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				g_byte_array_append (part->stripped_content,
 						(const guint8 *)" ", 1);
 				g_ptr_array_add (part->newlines,
-						(((gpointer) (goffset) (part->stripped_content))));
+						(((gpointer) (goffset) (part->stripped_content->len))));
 			}
 
 			part->nlines++;
