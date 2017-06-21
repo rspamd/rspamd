@@ -374,6 +374,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				}
 
 				part->nlines ++;
+				part->empty_lines ++;
 				c = p + 1;
 				break;
 			case seen_lf:
@@ -436,6 +437,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				}
 
 				part->nlines++;
+				part->empty_lines ++;
 
 				c = p + 1;
 				break;
@@ -459,6 +461,9 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 					if (G_UNLIKELY (*p & 0x80)) {
 						part->non_aciii_chars ++;
 					}
+					else {
+						part->ascii_chars ++;
+					}
 				}
 				break;
 			case seen_cr:
@@ -476,6 +481,10 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 						p ++;
 						c ++;
 						part->spaces ++;
+					}
+
+					if (*p == '\r' || *p == '\n') {
+						part->empty_lines ++;
 					}
 				}
 
@@ -507,6 +516,9 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 					if (G_UNLIKELY (*p & 0x80)) {
 						part->non_aciii_chars ++;
+					}
+					else {
+						part->ascii_chars ++;
 					}
 				}
 
