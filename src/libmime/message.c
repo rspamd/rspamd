@@ -459,7 +459,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 					part->non_spaces ++;
 
 					if (G_UNLIKELY (*p & 0x80)) {
-						part->non_aciii_chars ++;
+						part->non_ascii_chars ++;
 					}
 					else {
 						part->ascii_chars ++;
@@ -515,7 +515,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 					part->non_spaces ++;
 
 					if (G_UNLIKELY (*p & 0x80)) {
-						part->non_aciii_chars ++;
+						part->non_ascii_chars ++;
 					}
 					else {
 						part->ascii_chars ++;

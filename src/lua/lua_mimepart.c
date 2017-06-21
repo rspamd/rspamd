@@ -108,6 +108,18 @@ LUA_FUNCTION_DEF (textpart, get_urls_length);
  */
 LUA_FUNCTION_DEF (textpart, get_lines_count);
 /***
+ * @method mime_part:get_stats()
+ * Returns a table with the following data:
+ * - `lines`: number of lines
+ * - `spaces`: number of spaces
+ * - `double_spaces`: double spaces
+ * - `empty_lines`: number of empty lines
+ * - `non_ascii_characters`: number of non ascii characters
+ * - `ascii_characters`: number of ascii characters
+ * @return {table} table of stats
+ */
+LUA_FUNCTION_DEF (textpart, get_stats);
+/***
  * @method mime_part:get_words_count()
  * Get words number in the part
  * @return {integer} number of words in the part
@@ -161,6 +173,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_html),
 	LUA_INTERFACE_DEF (textpart, get_language),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
+	LUA_INTERFACE_DEF (textpart, get_stats),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -712,6 +725,55 @@ lua_textpart_get_mimepart (lua_State * L)
 	}
 
 	lua_pushnil (L);
+	return 1;
+}
+
+/***
+ * @method mime_part:get_stats()
+ * Returns a table with the following data:
+ * -
+ * - `lines`: number of lines
+ * - `spaces`: number of spaces
+ * - `double_spaces`: double spaces
+ * - `empty_lines`: number of empty lines
+ * - `non_ascii_characters`: number of non ascii characters
+ * - `ascii_characters`: number of ascii characters
+ * @return {table} table of stats
+ */
+static gint
+lua_textpart_get_stats (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+
+	if (part != NULL) {
+		lua_createtable (L, 0, 7);
+
+		lua_pushstring (L, "lines");
+		lua_pushnumber (L, part->nlines);
+		lua_settable (L, -3);
+		lua_pushstring (L, "empty_lines");
+		lua_pushnumber (L, part->empty_lines);
+		lua_settable (L, -3);
+		lua_pushstring (L, "spaces");
+		lua_pushnumber (L, part->spaces);
+		lua_settable (L, -3);
+		lua_pushstring (L, "non_spaces");
+		lua_pushnumber (L, part->non_spaces);
+		lua_settable (L, -3);
+		lua_pushstring (L, "double_spaces");
+		lua_pushnumber (L, part->double_spaces);
+		lua_settable (L, -3);
+		lua_pushstring (L, "ascii_characters");
+		lua_pushnumber (L, part->ascii_chars);
+		lua_settable (L, -3);
+		lua_pushstring (L, "non_ascii_characters");
+		lua_pushnumber (L, part->non_ascii_chars);
+		lua_settable (L, -3);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
 	return 1;
 }
 
