@@ -7,7 +7,7 @@ from utility import get_all_filenames
 
 def get_dataset_from_logs(logdir):
     '''
-    Return X, y
+    Returns X, y
     X is a list of lists. Each list contains symbols hit by an email
     y is a list of actual email class. Yi = 1 ith email is spam, 0 otherwise
     '''
