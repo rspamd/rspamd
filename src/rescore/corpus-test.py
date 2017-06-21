@@ -13,23 +13,12 @@ from threading import Thread
 import sys
 import time
 
+from utility import get_all_filenames
+
 test_queue = Queue()    # Each element is a tuple: (file_location, email_type)
                         # email_type is either "SPAM" or "HAM"
 progress_queue = Queue()                        
 test_results = []
-
-
-def get_all_filenames(location):
-    ''' Recursively gets a list of  all file names'''
-    
-    files = []
-    
-    for root, directories, filenames in os.walk(location):
-        for filename in filenames:
-            if not filename.startswith('.'):
-                files.append(os.path.join(root, filename))
-
-    return files
 
 
 def get_test_url(host, port):
