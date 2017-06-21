@@ -338,8 +338,7 @@ rspamd_extract_words (struct rspamd_task *task,
 
 static void
 rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
-		GByteArray *data, gboolean is_html, guint *newlines_count,
-		GPtrArray *newlines)
+		struct rspamd_mime_text_part *part)
 {
 	const gchar *p = begin, *c = begin;
 	gchar last_c = '\0';
@@ -357,7 +356,8 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				state = seen_cr;
 				if (p > c) {
 					last_c = *(p - 1);
-					g_byte_array_append (data, (const guint8 *)c, p - c);
+					g_byte_array_append (part->stripped_content,
+							(const guint8 *)c, p - c);
 				}
 
 				crlf_added = FALSE;
@@ -366,12 +366,14 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_cr:
 				/* Double \r\r */
 				if (!crlf_added) {
-					g_byte_array_append (data, (const guint8 *)" ", 1);
+					g_byte_array_append (part->stripped_content,
+							(const guint8 *)" ", 1);
 					crlf_added = TRUE;
-					g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+					g_ptr_array_add (part->newlines,
+							(((gpointer) (goffset) (part->stripped_content->len))));
 				}
 
-				(*newlines_count)++;
+				part->nlines ++;
 				c = p + 1;
 				break;
 			case seen_lf:
@@ -390,13 +392,15 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 				if (p > c) {
 					last_c = *(p - 1);
-					g_byte_array_append (data, (const guint8 *)c, p - c);
+					g_byte_array_append (part->stripped_content,
+							(const guint8 *)c, p - c);
 				}
 
 				c = p + 1;
 
-				if (is_html || g_ascii_ispunct (last_c)) {
-					g_byte_array_append (data, (const guint8 *)" ", 1);
+				if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
+					g_byte_array_append (part->stripped_content,
+							(const guint8 *)" ", 1);
 					crlf_added = TRUE;
 				}
 				else {
@@ -407,12 +411,14 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_cr:
 				/* \r\n */
 				if (!crlf_added) {
-					if (is_html || g_ascii_ispunct (last_c)) {
-						g_byte_array_append (data, (const guint8 *) " ", 1);
+					if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
+						g_byte_array_append (part->stripped_content,
+								(const guint8 *) " ", 1);
 						crlf_added = TRUE;
 					}
 
-					g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+					g_ptr_array_add (part->newlines,
+							(((gpointer) (goffset) (part->stripped_content))));
 				}
 
 				c = p + 1;
@@ -422,12 +428,14 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_lf:
 				/* Double \n\n */
 				if (!crlf_added) {
-					g_byte_array_append (data, (const guint8 *)" ", 1);
+					g_byte_array_append (part->stripped_content,
+							(const guint8 *)" ", 1);
 					crlf_added = TRUE;
-					g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+					g_ptr_array_add (part->newlines,
+							(((gpointer) (goffset) (part->stripped_content))));
 				}
 
-				(*newlines_count)++;
+				part->nlines++;
 
 				c = p + 1;
 				break;
@@ -438,20 +446,36 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 		else {
 			switch (state) {
 			case normal_char:
+				if (G_UNLIKELY (*p) == ' ') {
+					part->spaces ++;
+
+					if (*(p - 1) == ' ') {
+						part->double_spaces ++;
+					}
+				}
+				else {
+					part->non_spaces ++;
+
+					if (G_UNLIKELY (*p & 0x80)) {
+						part->non_aciii_chars ++;
+					}
+				}
 				break;
 			case seen_cr:
 			case seen_lf:
-				(*newlines_count)++;
+				part->newlines ++;
 
 				/* Skip initial spaces */
 				if (G_UNLIKELY (*p == ' ')) {
 					if (!crlf_added) {
-						g_byte_array_append (data, (const guint8 *)" ", 1);
+						g_byte_array_append (part->stripped_content,
+								(const guint8 *)" ", 1);
 					}
 
 					while (p < pe && *p == ' ') {
 						p ++;
 						c ++;
+						part->spaces ++;
 					}
 				}
 
@@ -467,16 +491,38 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 	if (p > c) {
 		switch (state) {
 		case normal_char:
-			g_byte_array_append (data, (const guint8 *)c, p - c);
+			g_byte_array_append (part->stripped_content,
+					(const guint8 *)c, p - c);
+
+			while (c < p) {
+				if (G_UNLIKELY (*c) == ' ') {
+					part->spaces ++;
+
+					if (*(c - 1) == ' ') {
+						part->double_spaces ++;
+					}
+				}
+				else {
+					part->non_spaces ++;
+
+					if (G_UNLIKELY (*p & 0x80)) {
+						part->non_aciii_chars ++;
+					}
+				}
+
+				c ++;
+			}
 			break;
 		default:
 
 			if (!crlf_added) {
-				g_byte_array_append (data, (const guint8 *)" ", 1);
-				g_ptr_array_add (newlines, (((gpointer) (goffset) (data->len))));
+				g_byte_array_append (part->stripped_content,
+						(const guint8 *)" ", 1);
+				g_ptr_array_add (part->newlines,
+						(((gpointer) (goffset) (part->stripped_content))));
 			}
 
-			(*newlines_count)++;
+			part->nlines++;
 			break;
 		}
 	}
@@ -487,7 +533,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 
-	const guchar *p, *end;
+	const gchar *p, *end;
 	guint i;
 	goffset off;
 	struct rspamd_process_exception *ex;
@@ -495,11 +541,10 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	/* Strip newlines */
 	part->stripped_content = g_byte_array_sized_new (part->content->len);
 	part->newlines = g_ptr_array_sized_new (128);
-	p = part->content->data;
+	p = (const gchar *)part->content->data;
 	end = p + part->content->len;
 
-	rspamd_strip_newlines_parse (p, end, part->stripped_content,
-			IS_PART_HTML (part), &part->nlines, part->newlines);
+	rspamd_strip_newlines_parse (p, end, part);
 
 	for (i = 0; i < part->newlines->len; i ++) {
 		ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
