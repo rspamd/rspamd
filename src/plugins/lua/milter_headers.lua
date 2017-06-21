@@ -241,20 +241,6 @@ local function milter_headers(task)
     add[settings.routines['x-spam-level'].header] = string.rep(settings.routines['x-spam-level'].char, score)
   end
 
-  routines['spam-header'] = function()
-    if skip_wanted('x-spam-flag') then return end
-    if not common['metric_action'] then
-      common['metric_action'] = task:get_metric_action('default')
-    end
-    if settings.routines['x-spam-flag'].remove then
-      remove[settings.routines['x-spam-flag'].header] = settings.routines['x-spam-flag'].remove
-    end
-    local action = common['metric_action']
-    if action ~= 'no action' and action ~= 'greylist' then
-      add[settings.routines['spam-header'].header] = settings.routines['x-spam-flag'].value
-    end
-  end
-
   local function spam_header (class, name, value, remove_v)
     if skip_wanted(class) then return end
     if not common['metric_action'] then
