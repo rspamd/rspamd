@@ -60,12 +60,12 @@ local function prepare_dkim_signing(N, task, settings)
   local edom = ((efrom or E)[1] or E).domain
   local udom = string.match(auser or '', '.*@(.*)')
 
-  local function get_dkim_domain(type)
-    if settings[type] == 'header' then
+  local function get_dkim_domain(dtype)
+    if settings[dtype] == 'header' then
       return hdom
-    elseif settings[type] == 'envelope' then
+    elseif settings[dtype] == 'envelope' then
       return edom
-    elseif settings[type] == 'auth' then
+    elseif settings[dtype] == 'auth' then
       return udom
     end
   end
@@ -92,16 +92,16 @@ local function prepare_dkim_signing(N, task, settings)
     rspamd_logger.debugm(N, task, 'could not extract dkim domain')
     return false,{}
   else
-    rspamd_logger.debugm(N, task, 'use domain(%s) for sugnature: %s',
+    rspamd_logger.debugm(N, task, 'use domain(%s) for signature: %s',
       settings.use_domain, dkim_domain)
   end
 
   if settings.use_esld then
     dkim_domain = rspamd_util.get_tld(dkim_domain)
-
-    if settings.use_domain == 'envelope' and hdom then
+    if hdom then
       hdom = rspamd_util.get_tld(hdom)
-    elseif settings.use_domain == 'header' and edom then
+    end
+    if edom then
       edom = rspamd_util.get_tld(edom)
     end
   end
