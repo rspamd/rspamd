@@ -30,6 +30,7 @@ local specific_rows = {}
 local asn_rows = {}
 local symbols_rows = {}
 local nrows = 0
+local connect_prefix = 'http://'
 
 local settings = {
   limit = 1000,
@@ -52,6 +53,7 @@ local settings = {
   full_urls = false,
   from_tables = nil,
   enable_symbols = false,
+  use_https = false,
 }
 
 --[[
@@ -248,7 +250,7 @@ local function clickhouse_send_data(task)
   local body = table.concat(rows, ' ')
   if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -262,7 +264,7 @@ local function clickhouse_send_data(task)
     body = table.concat(attachment_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -276,7 +278,7 @@ local function clickhouse_send_data(task)
     body = table.concat(urls_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -290,7 +292,7 @@ local function clickhouse_send_data(task)
     body = table.concat(asn_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -305,7 +307,7 @@ local function clickhouse_send_data(task)
     body = table.concat(symbols_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -321,7 +323,7 @@ local function clickhouse_send_data(task)
       body = table.concat(specific, ' ')
       if not rspamd_http.request({
         task = task,
-        url = 'http://' .. settings['server'],
+        url = connect_prefix .. settings['server'],
         body = body,
         callback = http_cb,
         mime_type = 'text/plain',
@@ -636,6 +638,10 @@ if opts then
     else
       settings['from_map'] = rspamd_map_add('clickhouse', 'from_tables',
         'regexp', 'clickhouse specific domains')
+      if settings.use_https then
+        connect_prefix = 'https://'
+      end
+
       clickhouse_first_row()
       rspamd_config:register_symbol({
         name = 'CLICKHOUSE_COLLECT',
