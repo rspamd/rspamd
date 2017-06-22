@@ -28,6 +28,7 @@ local attachment_rows = {}
 local urls_rows = {}
 local specific_rows = {}
 local asn_rows = {}
+local symbols_rows = {}
 local nrows = 0
 
 local settings = {
@@ -45,10 +46,12 @@ local settings = {
   table = 'rspamd',
   attachments_table = 'rspamd_attachments',
   urls_table = 'rspamd_urls',
+  symbols_table = 'rspamd_symbols',
   ipmask = 19,
   ipmask6 = 48,
   full_urls = false,
-  from_tables = nil
+  from_tables = nil,
+  enable_symbols = false,
 }
 
 --[[
@@ -102,6 +105,14 @@ CREATE TABLE rspamd_asn (
     ASN String,
     Country FixedString(2),
     IPNet String
+) ENGINE = MergeTree(Date, Digest, 8192)
+
+CREATE TABLE rspamd_symbols (
+    Date Date,
+    Digest FixedString(32),
+    `Symbols.Names` Array(String),
+    `Symbols.Scores` Array(Float64)
+    `Symbols.Options` Array(String)
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]]
 
@@ -162,6 +173,19 @@ local function clickhouse_urls_row(tname)
   return elt
 end
 
+local function clickhouse_symbols_row(tname)
+  local symbols_fields = {
+    'Date',
+    'Digest',
+    'Symbols.Names',
+    'Symbols.Scores',
+    'Symbols.Options',
+  }
+  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+    tname, table.concat(symbols_fields, ','))
+  return elt
+end
+
 local function clickhouse_asn_row(tname)
   local asn_fields = {
     'Date',
@@ -188,6 +212,10 @@ local function clickhouse_first_row()
   if settings['asn_table'] then
     table.insert(asn_rows,
       clickhouse_asn_row(settings['asn_table']))
+  end
+  if settings.enable_symbols and settings['symbols_table'] then
+    table.insert(symbols_rows,
+      clickhouse_symbols_row(settings['symbols_table']))
   end
 end
 
@@ -269,6 +297,21 @@ local function clickhouse_send_data(task)
       timeout = settings['timeout'],
     }) then
       rspamd_logger.errx(task, "cannot send asn info to clickhouse server %s: cannot make request",
+        settings['server'])
+    end
+  end
+
+  if #symbols_rows > 1 then
+    body = table.concat(symbols_rows, ' ')
+    if not rspamd_http.request({
+      task = task,
+      url = 'http://' .. settings['server'],
+      body = body,
+      callback = http_cb,
+      mime_type = 'text/plain',
+      timeout = settings['timeout'],
+    }) then
+      rspamd_logger.errx(task, "cannot send symbols info to clickhouse server %s: cannot make request",
         settings['server'])
     end
   end
@@ -538,6 +581,35 @@ local function clickhouse_collect(task)
     table.insert(asn_rows, elt)
   end
 
+  -- Symbols info
+  if settings.enable_symbols and settings['symbols_table'] then
+    local symbols = task:get_symbols_all()
+    local syms_tab = {}
+    local scores_tab = {}
+    local options_tab = {}
+
+    for _,s in ipairs(symbols) do
+      table.insert(syms_tab, string.format("'%s'",
+        clickhouse_quote(s.name or '')))
+      table.insert(scores_tab, string.format('%.3f', s.score))
+
+      if s.options then
+        table.insert(options_tab, string.format("'%s'",
+          clickhouse_quote(table.concat(s.options, ','))))
+      else
+        table.insert(options_tab, "''");
+      end
+    end
+
+    elt = string.format("(today(),'%s',[%s],[%s],[%s])",
+      task:get_digest(),
+      table.concat(syms_tab, ','),
+      table.concat(scores_tab, ','),
+      table.concat(options_tab, ','))
+
+    table.insert(urls_rows, elt)
+  end
+
   nrows = nrows + 1
 
   if nrows > settings['limit'] then
@@ -548,6 +620,7 @@ local function clickhouse_collect(task)
     urls_rows = {}
     specific_rows = {}
     asn_rows = {}
+    symbols_rows = {}
     clickhouse_first_row()
   end
 end
