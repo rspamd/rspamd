@@ -39,8 +39,8 @@ local settings = {
       header = 'X-Spamd-Result',
       remove = 1,
     },
-    ['x-spam-flag'] = {
-      header = 'X-Spam-Flag',
+    ['x-spam'] = {
+      header = 'X-Spam',
       remove = 1,
       value = 'Yes',
     },
@@ -259,8 +259,8 @@ local function milter_headers(task)
     spam_header('spam-header', settings.routines['spam-header'].header, settings.routines['spam-header'].value, settings.routines['spam-header'].remove)
   end
 
-  routines['x-spam-flag'] = function()
-    spam_header('x-spam-flag', settings.routines['x-spam-flag'].header, settings.routines['x-spam-flag'].value, settings.routines['x-spam-flag'].remove)
+  routines['x-spam'] = function()
+    spam_header('x-spam', settings.routines['x-spam'].header, settings.routines['x-spam'].value, settings.routines['x-spam'].remove)
   end
 
   routines['x-virus'] = function()
@@ -399,7 +399,7 @@ if opts['extended_spam_headers'] then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
-  activate_routine('x-spam-flag')
+  activate_routine('x-spam')
 end
 if type(opts['use']) == 'string' then
   opts['use'] = {opts['use']}
