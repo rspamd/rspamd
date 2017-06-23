@@ -1254,7 +1254,7 @@ lua_redis_add_cmd (lua_State *L)
 /***
  * @method rspamd_redis:exec()
  * Executes pending commands (suitable for blocking IO only for now)
- * @return {table} pairs in format [bool, result] for each request pending
+ * @return {boolean}, {table}, ...: pairs in format [bool, result] for each request pending
  */
 static int
 lua_redis_exec (lua_State *L)
