@@ -35,6 +35,9 @@ local settings = {
   authenticated_headers = {},
   extended_headers_rcpt = {},
   routines = {
+    ['remove-header'] = {
+      remove = 1,
+    },
     ['x-spamd-result'] = {
       header = 'X-Spamd-Result',
       remove = 1,
@@ -193,6 +196,13 @@ local function milter_headers(task)
     end
     if common.queue_id then
       add[settings.routines['x-rspamd-queue-id'].header] = common.queue_id
+    end
+  end
+
+  routines['remove-header'] = function()
+    if skip_wanted('remove-header') then return end
+    if settings.routines['remove-header'].header and settings.routines['x-rspamd-server'].remove then
+      remove[settings.routines['remove-header'].header] = settings.routines['remove-header'].remove
     end
   end
 
