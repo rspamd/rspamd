@@ -42,11 +42,6 @@ local settings = {
       header = 'X-Spamd-Result',
       remove = 1,
     },
-    ['x-spam'] = {
-      header = 'X-Spam',
-      remove = 1,
-      value = 'Yes',
-    },
     ['x-rspamd-server'] = {
       header = 'X-Rspamd-Server',
       remove = 1,
@@ -201,7 +196,7 @@ local function milter_headers(task)
 
   routines['remove-header'] = function()
     if skip_wanted('remove-header') then return end
-    if settings.routines['remove-header'].header and settings.routines['x-rspamd-server'].remove then
+    if settings.routines['remove-header'].header and settings.routines['remove-header'].remove then
       remove[settings.routines['remove-header'].header] = settings.routines['remove-header'].remove
     end
   end
@@ -267,10 +262,6 @@ local function milter_headers(task)
 
   routines['spam-header'] = function()
     spam_header('spam-header', settings.routines['spam-header'].header, settings.routines['spam-header'].value, settings.routines['spam-header'].remove)
-  end
-
-  routines['x-spam'] = function()
-    spam_header('x-spam', settings.routines['x-spam'].header, settings.routines['x-spam'].value, settings.routines['x-spam'].remove)
   end
 
   routines['x-virus'] = function()
@@ -409,7 +400,6 @@ if opts['extended_spam_headers'] then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
-  activate_routine('x-spam')
 end
 if type(opts['use']) == 'string' then
   opts['use'] = {opts['use']}
