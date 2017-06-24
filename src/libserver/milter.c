@@ -1344,15 +1344,59 @@ rspamd_milter_update_userdata (struct rspamd_milter_session *session,
 }
 
 static void
+rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
+		const gchar *key, gint nhdr)
+{
+	gint saved_nhdr, i;
+	gpointer found;
+	GString *hname, *hvalue;
+	struct rspamd_milter_private *priv = session->priv;
+
+	found = g_hash_table_lookup (priv->headers, key);
+
+	if (found) {
+		saved_nhdr = GPOINTER_TO_INT (found);
+
+		hname = g_string_new (key);
+		hvalue = g_string_new ("");
+
+		if (nhdr >= 1) {
+			rspamd_milter_send_action (session,
+					RSPAMD_MILTER_CHGHEADER,
+					nhdr, hname, hvalue);
+		}
+		else if (nhdr == 0) {
+			/* We need to clear all headers */
+			for (i = 1; i <= saved_nhdr; i ++) {
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_CHGHEADER,
+						i, hname, hvalue);
+			}
+		}
+		else {
+			/* Remove from the end */
+			if (nhdr >= -saved_nhdr) {
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_CHGHEADER,
+						saved_nhdr + nhdr + 1, hname, hvalue);
+			}
+		}
+
+		g_string_free (hname, TRUE);
+		g_string_free (hvalue, TRUE);
+	}
+}
+
+/*
+ * Returns `TRUE` if action has been processed internally by this function
+ */
+static gboolean
 rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
-		const ucl_object_t *obj)
+		const ucl_object_t *obj, gint action)
 {
 	const ucl_object_t *elt, *cur, *cur_elt;
 	ucl_object_iter_t it;
-	struct rspamd_milter_private *priv = session->priv;
 	GString *hname, *hvalue;
-	gint nhdr, saved_nhdr, i;
-	gpointer found;
 
 	if (obj && ucl_object_type (obj) == UCL_OBJECT) {
 		elt = ucl_object_lookup (obj, "remove_headers");
@@ -1365,42 +1409,9 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 
 			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
 				if (ucl_object_type (cur) == UCL_INT) {
-					nhdr = ucl_object_toint (cur);
-
-					found = g_hash_table_lookup (priv->headers,
-							ucl_object_key (cur));
-
-					if (found) {
-						saved_nhdr = GPOINTER_TO_INT (found);
-
-						hname = g_string_new (ucl_object_key (cur));
-						hvalue = g_string_new ("");
-
-						if (nhdr >= 1) {
-							rspamd_milter_send_action (session,
-									RSPAMD_MILTER_CHGHEADER,
-									nhdr, hname, hvalue);
-						}
-						else if (nhdr == 0) {
-							/* We need to clear all headers */
-							for (i = 1; i <= saved_nhdr; i ++) {
-								rspamd_milter_send_action (session,
-										RSPAMD_MILTER_CHGHEADER,
-										i, hname, hvalue);
-							}
-						}
-						else {
-							/* Remove from the end */
-							if (nhdr >= -saved_nhdr) {
-								rspamd_milter_send_action (session,
-										RSPAMD_MILTER_CHGHEADER,
-										saved_nhdr + nhdr + 1, hname, hvalue);
-							}
-						}
-
-						g_string_free (hname, TRUE);
-						g_string_free (hvalue, TRUE);
-					}
+					rspamd_milter_remove_header_safe (session,
+							ucl_object_key (cur),
+							ucl_object_toint (cur));
 				}
 			}
 		}
@@ -1429,6 +1440,50 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 			}
 		}
 	}
+
+	if (action == METRIC_ACTION_ADD_HEADER) {
+		elt = ucl_object_lookup (obj, "spam_header");
+
+		if (elt) {
+			if (ucl_object_type (elt) == UCL_STRING) {
+				rspamd_milter_remove_header_safe (session,
+						milter_ctx->spam_header,
+						0);
+
+				hname = g_string_new (milter_ctx->spam_header);
+				hvalue = g_string_new (ucl_object_tostring (elt));
+				rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
+						(guint32)1, hname, hvalue);
+				g_string_free (hname, TRUE);
+				g_string_free (hvalue, TRUE);
+				rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+
+				return TRUE;
+			}
+			else if (ucl_object_type (elt) == UCL_OBJECT) {
+				it = NULL;
+
+				while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+					rspamd_milter_remove_header_safe (session,
+							ucl_object_key (cur),
+							0);
+
+					hname = g_string_new (ucl_object_key (cur));
+					hvalue = g_string_new (ucl_object_tostring (cur));
+					rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
+							(guint32) 1, hname, hvalue);
+					g_string_free (hname, TRUE);
+					g_string_free (hvalue, TRUE);
+				}
+
+				rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
 }
 
 void
@@ -1440,6 +1495,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	gint action = METRIC_ACTION_REJECT;
 	rspamd_fstring_t *xcode = NULL, *rcode = NULL, *reply = NULL;
 	GString *hname, *hvalue;
+	gboolean processed = FALSE;
 
 	if (results == NULL) {
 		msg_err_milter ("cannot find scan results, tempfail");
@@ -1477,7 +1533,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	elt = ucl_object_lookup (results, "milter");
 
 	if (elt) {
-		rspamd_milter_process_milter_block (session, elt);
+		processed = rspamd_milter_process_milter_block (session, elt, action);
 	}
 
 	/* DKIM-Signature */
@@ -1491,6 +1547,10 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 				hname, hvalue);
 		g_string_free (hname, TRUE);
 		g_string_free (hvalue, TRUE);
+	}
+
+	if (processed) {
+		goto cleanup;
 	}
 
 	switch (action) {
@@ -1540,11 +1600,13 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		break;
 
 	case METRIC_ACTION_ADD_HEADER:
-		hname = g_string_new (milter_ctx->spam_header);
-		/* TODO: Perhaps, we can customize it as well */
-		hvalue = g_string_new ("Yes");
+		/* Remove existing headers */
+		rspamd_milter_remove_header_safe (session,
+				milter_ctx->spam_header,
+				0);
 
-		/* TODO: We to track headers to make it work fine */
+		hname = g_string_new (milter_ctx->spam_header);
+		hvalue = g_string_new ("Yes");
 		rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
 				(guint32)1, hname, hvalue);
 		g_string_free (hname, TRUE);
@@ -1559,6 +1621,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		break;
 	}
 
+cleanup:
 	rspamd_fstring_free (rcode);
 	rspamd_fstring_free (xcode);
 	rspamd_fstring_free (reply);
