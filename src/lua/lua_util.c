@@ -1138,11 +1138,11 @@ lua_util_fold_header (lua_State *L)
 		if (lua_isstring (L, 3)) {
 			how = lua_tostring (L, 3);
 
-			if (g_ascii_strcasecmp (how, "cr") == 0) {
+			if (strcmp (how, "cr") == 0) {
 				folded = rspamd_header_value_fold (name, value, 0,
 						RSPAMD_TASK_NEWLINES_CR);
 			}
-			else if (g_ascii_strcasecmp (how, "lf") == 0) {
+			else if (strcmp (how, "lf") == 0) {
 				folded = rspamd_header_value_fold (name, value, 0,
 						RSPAMD_TASK_NEWLINES_LF);
 			}
