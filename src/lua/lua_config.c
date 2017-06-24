@@ -526,6 +526,17 @@ LUA_FUNCTION_DEF (config, get_symbols_cksum);
 LUA_FUNCTION_DEF (config, get_symbol_callback);
 
 /***
+ * @method rspamd_config:get_symbol_stat(name)
+ * Returns table with statistics for a specific symbol:
+ * - `frequency`: frequency for symbol's hits
+ * - `stddev`: standard deviation of `frequency`
+ * - `time`: average time in seconds (floating point)
+ * - `count`: total number of hits
+ * @return {table} symbol stats
+ */
+LUA_FUNCTION_DEF (config, get_symbol_stat);
+
+/***
  * @method rspamd_config:set_symbol_callback(name, callback)
  * Sets callback for the specified symbol
  * @return {boolean} true if function has been replaced
@@ -656,6 +667,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_cksum),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
+	LUA_INTERFACE_DEF (config, get_symbol_stat),
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
 	LUA_INTERFACE_DEF (config, add_doc),
@@ -2585,6 +2597,43 @@ lua_config_set_symbol_callback (lua_State *L)
 
 	return 1;
 }
+
+static gint
+lua_config_get_symbol_stat (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2);
+	gdouble freq, stddev, tm;
+	guint hits;
+
+	if (cfg != NULL && sym != NULL) {
+		if (!rspamd_symbols_cache_stat_symbol (cfg->cache, sym, &freq,
+				&stddev, &tm, &hits)) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_createtable (L, 0, 4);
+			lua_pushstring (L, "frequency");
+			lua_pushnumber (L, freq);
+			lua_settable (L, -3);
+			lua_pushstring (L, "sttdev");
+			lua_pushnumber (L, stddev);
+			lua_settable (L, -3);
+			lua_pushstring (L, "time");
+			lua_pushnumber (L, tm);
+			lua_settable (L, -3);
+			lua_pushstring (L, "hits");
+			lua_pushnumber (L, hits);
+			lua_settable (L, -3);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_config_register_finish_script (lua_State *L)
