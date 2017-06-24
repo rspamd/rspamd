@@ -1127,15 +1127,34 @@ lua_util_parse_addr (lua_State *L)
 static gint
 lua_util_fold_header (lua_State *L)
 {
-	const gchar *name, *value;
+	const gchar *name, *value, *how;
 	GString *folded;
 
 	name = luaL_checkstring (L, 1);
 	value = luaL_checkstring (L, 2);
 
 	if (name && value) {
-		folded = rspamd_header_value_fold (name, value, 0,
-				RSPAMD_TASK_NEWLINES_CRLF);
+
+		if (lua_isstring (L, 3)) {
+			how = lua_tostring (L, 3);
+
+			if (g_ascii_strcasecmp (how, "cr") == 0) {
+				folded = rspamd_header_value_fold (name, value, 0,
+						RSPAMD_TASK_NEWLINES_CR);
+			}
+			else if (g_ascii_strcasecmp (how, "lf") == 0) {
+				folded = rspamd_header_value_fold (name, value, 0,
+						RSPAMD_TASK_NEWLINES_LF);
+			}
+			else {
+				folded = rspamd_header_value_fold (name, value, 0,
+						RSPAMD_TASK_NEWLINES_CRLF);
+			}
+		}
+		else {
+			folded = rspamd_header_value_fold (name, value, 0,
+					RSPAMD_TASK_NEWLINES_CRLF);
+		}
 
 		if (folded) {
 			lua_pushlstring (L, folded->str, folded->len);
