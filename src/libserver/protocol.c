@@ -442,6 +442,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							mta_name, NULL);
 					debug_task ("read MTA-Name header, value: %s", mta_name);
 				}
+				IF_HEADER (MILTER_HEADER) {
+					task->flags |= RSPAMD_TASK_FLAG_MILTER;
+					debug_task ("read Milter header, value: %V", hv);
+				}
 				break;
 			default:
 				debug_task ("unknown header: %V", hn);
@@ -1172,8 +1176,31 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				RSPAMD_MEMPOOL_DKIM_SIGNATURE);
 
 		if (dkim_sig) {
-			GString *folded_header = rspamd_header_value_fold ("DKIM-Signature",
-					dkim_sig->str, 80, task->nlines_type);
+			GString *folded_header;
+
+			if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+				folded_header = rspamd_header_value_fold ("DKIM-Signature",
+						dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF);
+			}
+			else {
+				folded_header = rspamd_header_value_fold ("DKIM-Signature",
+						dkim_sig->str, 80, task->nlines_type);
+			}
+			/*
+			 * According to milter docs, we need to be extra careful
+			 * when folding headers:
+			 * Neither the name nor the value of the header is checked for standards
+			 * compliance. However, each line of the header must be under 2048
+			 * characters and should be under 998 characters.
+			 * If longer headers are needed, make them multi-line.
+			 * To make a multi-line header, insert a line feed (ASCII 0x0a, or \n
+			 * in C) followed by at least one whitespace character such as a
+			 * space (ASCII 0x20) or tab (ASCII 0x09, or \t in C).
+			 * The line feed should NOT be preceded by a carriage return (ASCII 0x0d);
+			 * the MTA will add this automatically.
+			 * It is the filter writer's responsibility to ensure that no s
+			 * tandards are violated.
+			 */
 			ucl_object_insert_key (top,
 					ucl_object_fromstring_common (folded_header->str,
 							folded_header->len, UCL_STRING_RAW),
