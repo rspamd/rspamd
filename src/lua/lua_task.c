@@ -730,6 +730,7 @@ LUA_FUNCTION_DEF (task, has_flag);
  * - `learn_spam`: learn message as spam
  * - `learn_ham`: learn message as ham
  * - `broken_headers`: header data is broken for a message
+ * - `milter`: task is initiated by milter connection
  * @return {array of strings} table with all flags as strings
  */
 LUA_FUNCTION_DEF (task, get_flags);
@@ -3325,6 +3326,8 @@ lua_task_has_flag (lua_State *L)
 		LUA_TASK_GET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
 		LUA_TASK_GET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS);
+		LUA_TASK_GET_FLAG (flag, "milter",
+				RSPAMD_TASK_FLAG_MILTER);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -3389,6 +3392,10 @@ lua_task_get_flags (lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_GREYLISTED:
 					lua_pushstring (L, "greylisted");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_MILTER:
+					lua_pushstring (L, "milter");
 					lua_rawseti (L, -2, idx++);
 					break;
 				default:
