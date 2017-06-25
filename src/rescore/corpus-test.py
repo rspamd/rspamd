@@ -96,10 +96,12 @@ def test_email(test_url):
                     continue
                 
                 symbols = get_symbols_from_response(metrics)
-
-                test_results.append('{} {} {} {}'.format(basename(file_location),
+                action = metrics['action'].replace(' ', '_')
+                
+                test_results.append('{} {} {} {} {}'.format(basename(file_location),
                                                          email_type,
                                                          metrics['score'],
+                                                         action,
                                                          ' '.join(symbols)))
 
         progress_queue.put("DONE")
