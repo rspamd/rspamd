@@ -13,7 +13,7 @@ Example:
 
 Use ./corpus-test.py -h to get more info about usage.
 
-Log file consists of one line per email. It contains filename, actual email type, score, symbols in that order.
+Log file consists of one line per email. It contains filename, actual email type, score, action, symbols in that order.
 
 NOTE: You might encounter shutdown exception at times. This is a know python 2.7 error. However it doesnt affect the results.
 (http://bugs.python.org/issue14623)

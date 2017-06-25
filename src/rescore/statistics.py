@@ -91,7 +91,7 @@ def get_file_stats(logs, spam_threshold):
             no_of_spam += 1
             no_of_fn += (1 if float(log[2]) < spam_threshold else 0)
 
-        for symbol in log[3:]:
+        for symbol in log[4:]:
             symbol_set.add(symbol)
 
             if log[1] == 'HAM':
