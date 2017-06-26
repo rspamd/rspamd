@@ -1379,7 +1379,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					task->task_pool);
 
 			if (r == URI_ERRNO_OK) {
-				if ((existing = g_hash_table_lookup (task->urls, redirected_url))) {
+				if ((existing = g_hash_table_lookup (task->urls, redirected_url)) == NULL) {
 					g_hash_table_insert (task->urls, redirected_url,
 							redirected_url);
 					redirected_url->phished_url = param->url;
