@@ -168,7 +168,7 @@
  * array of children for that path can be found by counting the number
  * of set bits to the left of that bit.
  *
- * Similary, the internal bitmap has one bit for each binary node
+ * Similarly, the internal bitmap has one bit for each binary node
  * which is internal to the multibit node. To determine whether there
  * is data stored for an internal prefix, one checks the corresponding
  * bit in the internal bitmap. As for extending paths, the index into
@@ -946,7 +946,7 @@ static void coalesce_lc_node(struct btrie *btrie, struct lc_node *node,
 			btrie->n_lc_nodes--;
 		}
 		else {
-			/* can't merge, but can take some of childs bits */
+			/* can't merge, but can take some of children bits */
 			unsigned cshift = lc_shift (end + spare_bits) - lc_shift (end);
 
 			memcpy(node->prefix + shift, child->prefix,

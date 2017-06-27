@@ -2794,7 +2794,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 	if (!is_hash) {
 		/* Allocate message from string */
-		/* XXX: what about encrypted messsages ? */
+		/* XXX: what about encrypted messages ? */
 		task->msg.begin = msg->body_buf.begin;
 		task->msg.len = msg->body_buf.len;
 

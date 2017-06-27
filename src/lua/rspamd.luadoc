@@ -33,7 +33,7 @@ function config:get_metric (name)
 --- Register symbol in metric
 -- @param symbol name of symbol
 -- @param weight weight of symbol
--- @param callback fucntion that would be called as callback for symbol
+-- @param callback function that would be called as callback for symbol
 function metric:register_symbol (symbol, weight, callback)
 
 ------------------------------------- TASK -------------------------------------------

@@ -75,7 +75,7 @@ LUA_FUNCTION_DEF (task, get_session);
  */
 LUA_FUNCTION_DEF (task, get_ev_base);
 /***
- * @method task:insert_result(symbol, weigth[, option1, ...])
+ * @method task:insert_result(symbol, weight[, option1, ...])
  * Insert specific symbol to the tasks scanning results assigning the initial
  * weight to it.
  * @param {string} symbol symbol to insert
@@ -102,7 +102,7 @@ LUA_FUNCTION_DEF (task, insert_result);
  * - `greylist`: greylist message
  * - `accept` or `no action`: whitelist message
  * @param {rspamd_action or string} action a numeric or string action value
- * @param {string} description optional descripton
+ * @param {string} description optional description
 @example
 local function cb(task)
 	local gr = task:get_header('Greylist')
@@ -262,7 +262,7 @@ LUA_FUNCTION_DEF (task, get_raw_headers);
  * - `real_ip` - string representation of IP as resolved by PTR request of MTA
  * - `by_hostname` - MTA hostname
  * - `proto` - protocol, e.g. ESMTP or ESMTPS
- * - `timestamp` - received timetamp
+ * - `timestamp` - received timestamp
  * - `for` - for value (unparsed mailbox)
  *
  * Please note that in some situations rspamd cannot parse all the fields of received headers.
@@ -625,7 +625,7 @@ LUA_FUNCTION_DEF (task, set_milter_reply);
 /***
  * @method task:process_re(params)
  * Processes the specified regexp and returns number of captures (cached or new)
- * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
  * - `re`* : regular expression object
  * - `type`*: type of regular expression:
  *   + `mime`: mime regexp
@@ -636,7 +636,7 @@ LUA_FUNCTION_DEF (task, set_milter_reply);
  *   + `url`: url regexp
  * - `header`: for header and rawheader regexp means the name of header
  * - `strong`: case sensitive match for headers
- * @return {number} number of regexp occurences in the task (limited by 255 so far)
+ * @return {number} number of regexp occurrences in the task (limited by 255 so far)
  */
 LUA_FUNCTION_DEF (task, process_regexp);
 

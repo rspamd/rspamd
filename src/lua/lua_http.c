@@ -339,7 +339,7 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
- * @return {boolean} `true` if a request has been successfuly scheduled. If this value is `false` then some error occurred, the callback thus will not be called
+ * @return {boolean} `true` if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called
  */
 static gint
 lua_http_request (lua_State *L)

@@ -30,7 +30,7 @@ typedef struct radix_tree_compressed radix_compressed_t;
  * @param tree radix trie
  * @param key key to insert (bitstring)
  * @param keylen length of the key (in bytes)
- * @param masklen lenght of mask that should be applied to the key (in bits)
+ * @param masklen length of mask that should be applied to the key (in bits)
  * @param value opaque value pointer
  * @return previous value of the key or `RADIX_NO_VALUE`
  */

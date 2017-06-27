@@ -42,7 +42,7 @@ struct rspamd_worker_ctx {
 	gboolean is_http;
 	/* JSON output                                  */
 	gboolean is_json;
-	/* Allow learning throught worker				*/
+	/* Allow learning through worker				*/
 	gboolean allow_learn;
 	/* Limit of tasks */
 	guint32 max_tasks;

@@ -186,7 +186,7 @@ static int ktablelen (lua_State *L, int idx) {
 
 
 /*
-** Concatentate the contents of table 'idx1' into table 'idx2'.
+** Concatenate the contents of table 'idx1' into table 'idx2'.
 ** (Assume that both indices are negative.)
 ** Return the original length of table 'idx2' (or 0, if no
 ** element was added, as there is no need to correct any index).
@@ -484,7 +484,7 @@ static TTree *getpatt (lua_State *L, int idx, int *len) {
 
 
 /*
-** create a new tree, whith a new root and one sibling.
+** create a new tree, with a new root and one sibling.
 ** Sibling must be on the Lua stack, at index 1.
 */
 static TTree *newroot1sib (lua_State *L, int tag) {
@@ -499,7 +499,7 @@ static TTree *newroot1sib (lua_State *L, int tag) {
 
 
 /*
-** create a new tree, whith a new root and 2 siblings.
+** create a new tree, with a new root and 2 siblings.
 ** Siblings must be on the Lua stack, first one at index 1.
 */
 static TTree *newroot2sib (lua_State *L, int tag) {

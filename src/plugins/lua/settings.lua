@@ -34,8 +34,8 @@ local rspamd_regexp = require "rspamd_regexp"
 local ucl = require "ucl"
 local fun = require "fun"
 
--- Checks for overrided settings within query params and returns 'true' if
--- settings are overrided
+-- Checks for overridden settings within query params and returns 'true' if
+-- settings are overridden
 local function check_query_settings(task)
   -- Try 'settings' attribute
   local query_set = task:get_request_header('settings')

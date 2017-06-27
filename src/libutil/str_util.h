@@ -65,7 +65,7 @@ guint rspamd_gstring_icase_hash (gconstpointer key);
 gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
 
 /**
- * Copy src to dest limited to len, in compare with standart strlcpy(3) rspamd strlcpy does not
+ * Copy src to dest limited to len, in compare with standard strlcpy(3) rspamd strlcpy does not
  * traverse the whole string and it is possible to use it for non NULL terminated strings. This is
  * more like memccpy(dst, src, size, '\0')
  *

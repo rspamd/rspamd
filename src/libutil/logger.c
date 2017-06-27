@@ -762,12 +762,12 @@ file_log_helper (rspamd_logger_t *rspamd_log,
 		}
 		/* Fill buffer */
 		if (rspamd_log->io_buf.size < len) {
-			/* Buffer is too small to hold this string, so write it dirrectly */
+			/* Buffer is too small to hold this string, so write it directly */
 			rspamd_log_flush (rspamd_log);
 			direct_write_log_line (rspamd_log, (void *) iov, iovcnt, TRUE);
 		}
 		else if (rspamd_log->io_buf.used + len >= rspamd_log->io_buf.size) {
-			/* Buffer is full, try to write it dirrectly */
+			/* Buffer is full, try to write it directly */
 			rspamd_log_flush (rspamd_log);
 			fill_buffer (rspamd_log, iov, iovcnt);
 		}

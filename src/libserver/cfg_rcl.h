@@ -408,7 +408,7 @@ ucl_object_t *rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 
 /**
  * Adds new documentation option specified by path `doc_path` that should be
- * splitted by dots
+ * split by dots
  */
 ucl_object_t *rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 		const gchar *doc_path,

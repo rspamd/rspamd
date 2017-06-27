@@ -44,7 +44,7 @@ local known_plugins = {
   'Mail::SpamAssassin::Plugin::HTMLEval',
 }
 
--- Table that replaces SA symbol with rspamd equialent
+-- Table that replaces SA symbol with rspamd equivalent
 -- Used for dependency resolution
 local symbols_replacements = {
   -- SPF replacements

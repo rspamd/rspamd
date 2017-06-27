@@ -269,7 +269,7 @@ LUA_FUNCTION_DEF (mimepart, get_cte);
 
 /***
  * @method mime_part:get_filename()
- * Extract filename associated with mime part if it is an attachement
+ * Extract filename associated with mime part if it is an attachment
  * @return {string} filename or `nil` if no file is associated with this part
  */
 LUA_FUNCTION_DEF (mimepart, get_filename);

@@ -39,7 +39,7 @@ local setfenv = _G.setfenv or compat_env.setfenv
 
 local _VERSION = "0.6.0"
 
---- The status codes that can be returned by an invoked test. These should not be overidden.
+--- The status codes that can be returned by an invoked test. These should not be overridden.
 -- @name status_codes
 -- @class table
 -- @field err - This is returned when an invoked test results in an error
@@ -58,7 +58,7 @@ local status_codes = {
 }
 
 --- Labels used to show the various <tt>status_codes</tt> as a single character.
--- These can be overidden if you wish.
+-- These can be overridden if you wish.
 -- @name status_labels
 -- @class table
 -- @see status_codes

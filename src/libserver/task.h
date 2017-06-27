@@ -183,7 +183,7 @@ struct rspamd_task {
 	double time_virtual_finish;
 	struct timeval tv;
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
-													/**< calback for filters finalizing					*/
+													/**< callback for filters finalizing					*/
 	void *fin_arg;									/**< argument for fin callback						*/
 
 	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
@@ -252,7 +252,7 @@ gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
 struct rspamd_email_address* rspamd_task_get_sender (struct rspamd_task *task);
 
 /**
- * Return addresses in the following precendence:
+ * Return addresses in the following precedence:
  * - deliver to
  * - the first smtp recipient
  * - the first mime recipient

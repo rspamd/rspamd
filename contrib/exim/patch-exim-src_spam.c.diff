@@ -171,7 +171,7 @@ diff -ru exim-4.70.orig/src/spam.c exim-4.70/src/spam.c
 +  }
  
    /* now send the file */
-   /* spamd sometimes accepts conections but doesn't read data off
+   /* spamd sometimes accepts connections but doesn't read data off
 @@ -304,7 +359,9 @@
    (void)fclose(mbox_file);
  

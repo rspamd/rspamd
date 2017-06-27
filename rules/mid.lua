@@ -34,7 +34,7 @@ local function mid_check_func(task)
   if mid:find("@%[%d+%.%d+%.%d+%.%d+%]") then
     task:insert_result('MID_RHS_IP_LITERAL', 1.0)
   end
-  -- Check From address atrributes against MID
+  -- Check From address attributes against MID
   local from = task:get_from(2)
   if (from and from[1] and from[1].domain and from[1].domain ~= '') then
     local fd = from[1].domain:lower()

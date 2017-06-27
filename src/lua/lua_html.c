@@ -79,7 +79,7 @@ LUA_FUNCTION_DEF (html, has_property);
  * - `src` - link to the source
  * - `height` - height in pixels
  * - `width` - width in pixels
- * - `embeded` - `true` if an image is embedded in a message
+ * - `embedded` - `true` if an image is embedded in a message
  * @return {table} table of images in html part
  */
 LUA_FUNCTION_DEF (html, get_images);

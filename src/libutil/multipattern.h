@@ -124,7 +124,7 @@ gboolean rspamd_multipattern_compile (struct rspamd_multipattern *mp,
  * @param in
  * @param len
  * @param cb if callback returns non-zero, then search is terminated and that value is returned
- * @param ud calback data
+ * @param ud callback data
  * @return
  */
 gint rspamd_multipattern_lookup (struct rspamd_multipattern *mp,

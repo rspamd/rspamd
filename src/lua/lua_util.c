@@ -91,7 +91,7 @@ LUA_FUNCTION_DEF (util, decode_url);
  * @function util.tokenize_text(input[, exceptions])
  * Create tokens from a text using optional exceptions list
  * @param {text/string} input input data
- * @param {table} exceptions, a table of pairs containing <start_pos,lenght> of exceptions in the input
+ * @param {table} exceptions, a table of pairs containing <start_pos,length> of exceptions in the input
  * @return {table/strings} list of strings representing words in the text
  */
 LUA_FUNCTION_DEF (util, tokenize_text);

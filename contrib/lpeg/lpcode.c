@@ -248,7 +248,7 @@ int fixedlenx (TTree *tree, int count, int len) {
 
 /*
 ** Computes the 'first set' of a pattern.
-** The result is a conservative aproximation:
+** The result is a conservative approximation:
 **   match p ax -> x (for some x) ==> a belongs to first(p)
 ** or
 **   a not in first(p) ==> match p ax -> fail (for all x)
@@ -737,13 +737,13 @@ static void coderuntime (CompileState *compst, TTree *tree, int tt) {
 
 
 /*
-** Repetion; optimizations:
+** Repetition; optimizations:
 ** When pattern is a charset, can use special instruction ISpan.
 ** When pattern is head fail, or if it starts with characters that
 ** are disjoint from what follows the repetions, a simple test
 ** is enough (a fail inside the repetition would backtrack to fail
 ** again in the following pattern, so there is no need for a choice).
-** When 'opt' is true, the repetion can reuse the Choice already
+** When 'opt' is true, the repetition can reuse the Choice already
 ** active in the stack.
 */
 static void coderep (CompileState *compst, TTree *tree, int opt,
@@ -884,7 +884,7 @@ static int codeseq1 (CompileState *compst, TTree *p1, TTree *p2,
 
 
 /*
-** Main code-generation function: dispatch to auxiliar functions
+** Main code-generation function: dispatch to auxiliary functions
 ** according to kind of tree. ('needfollow' should return true
 ** only for consructions that use 'fl'.)
 */

@@ -280,7 +280,7 @@ int GetFiles (char *pInpFile, int local_scan_fd)
 {
     /*
         Returns OK if no errors, else error code.
-        On succesful return, pEnvFile points to Envelope file name and
+        On successful return, pEnvFile points to Envelope file name and
         pInpFile points to Message filename
     */
     int iStatus;

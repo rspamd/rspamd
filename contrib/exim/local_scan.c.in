@@ -267,7 +267,7 @@ local_scan(int fd, uschar **return_text)
 	tok_ptr = reply_buf;
 
 	/*
-	 * rspamd can use several metrics, logic implimented here:
+	 * rspamd can use several metrics, logic implemented here:
 	 * if any metric more than reject_score - will reject
 	 * if any metric true - message will be marked as spam
 	 */

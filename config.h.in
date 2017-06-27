@@ -143,7 +143,7 @@
 #define HAVE_EVUTIL_RNG_INIT 1
 #endif
 
-/* Detect endiannes */
+/* Detect endianness */
 
 #ifdef HAVE_ENDIAN_H
  #include <endian.h>

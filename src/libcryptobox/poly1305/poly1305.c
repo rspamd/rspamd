@@ -77,7 +77,7 @@ POLY1305_DECLARE(sse2)
 POLY1305_DECLARE(ref)
 #define POLY1305_GENERIC POLY1305_IMPL(0, "generic", ref)
 
-/* list implemenations from most optimized to least, with generic as the last entry */
+/* list implementations from most optimized to least, with generic as the last entry */
 static const poly1305_impl_t poly1305_list[] =
 {
 POLY1305_GENERIC,
