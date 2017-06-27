@@ -177,7 +177,7 @@ lua_worker_register_exit_callback (lua_State *L)
 	return 1;
 }
 
-/* XXX: This fucntions should be rewritten completely */
+/* XXX: This functions should be rewritten completely */
 static int
 lua_worker_get_option (lua_State *L)
 {

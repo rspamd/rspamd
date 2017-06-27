@@ -48,7 +48,7 @@ SIPHASH_DECLARE(avx2)
 #define SIPHASH_AVX2 SIPHASH_IMPL(CPUID_AVX2, "avx2", avx2)
 #endif
 
-/* list implemenations from most optimized to least, with generic as the last entry */
+/* list implementations from most optimized to least, with generic as the last entry */
 static const siphash_impl_t siphash_list[] = {
 		SIPHASH_GENERIC,
 #if defined(SIPHASH_AVX2)

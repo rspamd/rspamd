@@ -1411,7 +1411,7 @@
 	* [Feature] Add replies plugin
 	* [Feature] Add results parsing code
 	* [Feature] Add routines to compare and check pubkeys
-	* [Feature] Add simplier versions of refcounts
+	* [Feature] Add simpler versions of refcounts
 	* [Feature] Add some time manipulation functions for lua APi
 	* [Feature] Add support for non-standard BATV signatures
 	* [Feature] Add support of address with at-domain list
@@ -1511,7 +1511,7 @@
 	* [Feature] Implement zero-copy mode for HTTP reading
 	* [Feature] Improve SPF domain detection logic
 	* [Feature] Improve config:register_symbol function
-	* [Feature] Improve error report for type missmatch in lua
+	* [Feature] Improve error report for type mismatch in lua
 	* [Feature] Improve fstrings API
 	* [Feature] Improve getting SMTP data from lua_task
 	* [Feature] Improve levenshtein distance function
@@ -2105,7 +2105,7 @@
 		- Fix html images rules to reduce FP rates
 	* New rules:
 		- LONG_SUBJ - too long subject
-		- MIME_BAD_ATTACHMENT - bad attachement type
+		- MIME_BAD_ATTACHMENT - bad attachment type
 		- RDNS_NONE - no reverse DNS record for sender's IP
 		- Fix MISSING_MIMEOLE rule for modern OE
 	* Many other bugfixes, memory leaks plugs thanks to:
@@ -2553,7 +2553,7 @@
 	* Cache correct passwords to avoid too high CPU usage when working with webui
 	* Controller sockets are owned by router do not export them to task
 	* Optimize logging by skipping hash table search if it's empty
-	* Fix loading issue whith broken statfiles
+	* Fix loading issue with broken statfiles
 	* Print assertions from glib to rspamd logger
 	* Load legacy `lua/rspamd.local.lua`
 	* Update webui with some fixes to learning and scanning
@@ -2777,7 +2777,7 @@
 		- aggressive optimizations based on the abstract syntax tree;
 		- abstract expressions support (regular expressions, functions, lua modules
 		  composites and so on)
-		- New comparision and '+' operators support
+		- New comparison and '+' operators support
 		- New greedy algorithm to minimize execution time of expressions and
 		  all symbols
 		- Dynamic expressions benchmark and reoptimizations
@@ -2951,7 +2951,7 @@
 			- converted to UTF-8
 			- normalized if needed (e.g. HTML tags are stripped)
 	* Rework DKIM canonization to line based
-	* Fix fuzzy hashes addding
+	* Fix fuzzy hashes adding
 	* Use more specific hash function for fuzzy
 	* Fix leaking of iconv descriptors
 	* Fix PTR resolving in lua resolver
@@ -3000,7 +3000,7 @@
 		- Free IP list on upstream destruction
 		- Add test cases for addresses selection
 		- Allow adding of free form IP addresses to upstreams
-    * Fix endiannes in lua_radix search (reported by @citrin)
+    * Fix endianness in lua_radix search (reported by @citrin)
     * Soft shutdown should also set wanna_die flag (reported by @citrin)
     * Stop use-after-free in event loop termination
     * Fix processing of very short messages in DKIM (reported by @citrin)
@@ -3305,7 +3305,7 @@
 	* Do not output control characters if output is not terminal
 	* Fix some logic errors in learning
 	* Consider lua plugins errors as fatal configuration errors
-	* Fix wirting message id during fuzzy_add command
+	* Fix writing message id during fuzzy_add command
 	* Display weight of symbols correctly
 	* Fixes to winnow learning
 	* One more try to improve accuracy of winnow algorithm
@@ -3330,7 +3330,7 @@
 	* Add ability to set minimum dimensions for images
 	* Assume all text/* content types as text/plain
 	* Fix getting data wrapper for gmime24
-	* Many fixes to statfile syncronization system
+	* Many fixes to statfile synchronization system
 	* Fixed statfile pool initialization and synchronization with disk
 	* Prepare 0.3.2
 	* Fix Mail::Rspamd::Config for new rspamd features
@@ -3483,7 +3483,7 @@
 	* Make valgrind happy about comparing symbols
 	* Add more debug to comparing parts distance function
 	* Write action even if message has no symbols
-	* Make improvements to HTML entites decoder: now it replaces entities with common characters and
+	* Make improvements to HTML entities decoder: now it replaces entities with common characters and
 	* Add -d option to force debug output
 	* Assume 7bit as default transfer encoding
 	* Do not overwrite lua plugins and configs if they already exists in target directory
@@ -3508,7 +3508,7 @@
 	* Stupid error in calculation compressed label length
 	* Some optimizations to client library
 	* Do not compare empty parts
-	* Empty and non-empty parts are allways different
+	* Empty and non-empty parts are always different
 	* Save in regexp cache the whole regexp with header name (if exists) and with flags
 	* Add rspamd_log variable to lua plugins to access logging functions
 	* Each part in rspamd task now can have parent part

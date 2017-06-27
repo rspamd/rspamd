@@ -230,7 +230,7 @@ fstrhash_c (gchar c, guint32 hval)
 	guint32 tmp;
 	/*
 	 * xor in the current byte against each byte of hval
-	 * (which alone gaurantees that every bit of input will have
+	 * (which alone guarantees that every bit of input will have
 	 * an effect on the output)
 	 */
 	tmp = c & 0xFF;

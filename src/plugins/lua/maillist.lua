@@ -213,7 +213,7 @@ end
 
 -- Majordomo detector
 -- Check Sender for owner- or -owner
--- Check Precendence for 'Bulk' or 'List'
+-- Check Precedence for 'Bulk' or 'List'
 --
 -- And nothing more can be extracted :(
 local function check_ml_majordomo(task)

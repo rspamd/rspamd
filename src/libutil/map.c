@@ -396,7 +396,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 				return 0;
 			}
 			else {
-				/* Unsinged version - just open file */
+				/* Unsigned version - just open file */
 				cbd->shmem_data = rspamd_http_message_shmem_ref (msg);
 				cbd->data_len = msg->body_buf.len;
 

@@ -1,6 +1,6 @@
 /**
  * @file filter.h
- * Filters logic implemetation
+ * Filters logic implementation
  */
 
 #ifndef RSPAMD_FILTER_H

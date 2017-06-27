@@ -97,9 +97,9 @@ struct fuzzy_global_stat {
 	guint64 fuzzy_hashes_expired;
 	/**< number of fuzzy hashes expired					*/
 	guint64 fuzzy_hashes_checked[RSPAMD_FUZZY_EPOCH_MAX];
-	/**< ammount of check requests for each epoch		*/
+	/**< amount of check requests for each epoch		*/
 	guint64 fuzzy_shingles_checked[RSPAMD_FUZZY_EPOCH_MAX];
-	/**< ammount of shingle check requests for each epoch	*/
+	/**< amount of shingle check requests for each epoch	*/
 	guint64 fuzzy_hashes_found[RSPAMD_FUZZY_EPOCH_MAX];
 	/**< amount of hashes found by epoch				*/
 	guint64 invalid_requests;

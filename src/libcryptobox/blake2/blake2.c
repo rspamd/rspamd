@@ -64,7 +64,7 @@ BLAKE2B_DECLARE(x86)
 BLAKE2B_DECLARE(ref)
 #define BLAKE2B_GENERIC BLAKE2B_IMPL(0, "generic", ref)
 
-/* list implemenations from most optimized to least, with generic as the last entry */
+/* list implementations from most optimized to least, with generic as the last entry */
 static const blake2b_impl_t blake2b_list[] = {
 		BLAKE2B_GENERIC,
 #if defined(BLAKE2B_AVX)

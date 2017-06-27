@@ -55,7 +55,7 @@
 /**
  * Callback used for common printf operations
  * @param buf buffer to append
- * @param buflen lenght of the buffer
+ * @param buflen length of the buffer
  * @param ud opaque pointer
  * @return number of characters written
  */

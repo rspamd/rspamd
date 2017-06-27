@@ -996,7 +996,7 @@ if opts['reporting'] == true then
               end
             else
               local is_authed = false
-              -- XXX: reporting address could be overidden
+              -- XXX: reporting address could be overridden
               for _, r in ipairs(results) do
                 if string.match(r, 'v=DMARC1') then
                   is_authed = true

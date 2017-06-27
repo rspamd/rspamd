@@ -473,7 +473,7 @@ Number of latest logs to exclude (0 by default).
 
 =item B<--correlations>
 
-Additionaly print correlation rate for each symbol displayed. This routine calculates merely paired correlations between symbols.
+Additionally print correlation rate for each symbol displayed. This routine calculates merely paired correlations between symbols.
 
 =item B<--search-pattern>
 

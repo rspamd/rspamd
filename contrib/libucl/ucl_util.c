@@ -3070,7 +3070,7 @@ ucl_object_todouble_safe (const ucl_object_t *obj, double *target)
 	}
 	switch (obj->type) {
 	case UCL_INT:
-		*target = obj->value.iv; /* Probaly could cause overflow */
+		*target = obj->value.iv; /* Probably could cause overflow */
 		break;
 	case UCL_FLOAT:
 	case UCL_TIME:

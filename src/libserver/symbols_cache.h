@@ -169,7 +169,7 @@ gboolean rspamd_symbols_cache_process_symbols (struct rspamd_task *task,
 	struct symbols_cache *cache, gint stage);
 
 /**
- * Validate cache items agains theirs weights defined in metrics
+ * Validate cache items against theirs weights defined in metrics
  * @param cache symbols cache
  * @param cfg configuration
  * @param strict do strict checks - symbols MUST be described in metrics

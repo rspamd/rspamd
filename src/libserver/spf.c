@@ -1811,7 +1811,7 @@ parse_spf_scopes (struct spf_record *rec, gchar **begin)
 		}
 		else if (g_ascii_strncasecmp (*begin, SPF_SCOPE_MFROM,
 				sizeof (SPF_SCOPE_MFROM) - 1) == 0) {
-			/* mfrom is standart spf1 check */
+			/* mfrom is standard spf1 check */
 			*begin += sizeof (SPF_SCOPE_MFROM) - 1;
 			continue;
 		}

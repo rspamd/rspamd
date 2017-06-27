@@ -187,7 +187,7 @@ LUA_FUNCTION_DEF (config, get_classifier);
  * - `weight`: weight of symbol (should normally be 1 or missing)
  * - `priority`: priority of symbol (normally 0 or missing)
  * - `type`: type of symbol: `normal` (default), `virtual` or `callback`
- * - `flags`: various flags splitted by commas or spaces:
+ * - `flags`: various flags split by commas or spaces:
  *     + `nice` if symbol can produce negative score;
  *     + `empty` if symbol can be called for empty messages
  *     + `skip` if symbol should be skipped now
@@ -387,7 +387,7 @@ LUA_FUNCTION_DEF (config, disable_symbol);
 /***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
- * Technically, it is the equialent of @see rspamd_config:register_symbol where `weight` is 1.0.
+ * Technically, it is the equivalent of @see rspamd_config:register_symbol where `weight` is 1.0.
  * There is also table form invocation that allows to control more things:
  *
  * - `callback`: has the same meaning and acts as function of task
@@ -438,7 +438,7 @@ LUA_FUNCTION_DEF (config, newindex);
 /***
  * @method rspamd_config:register_regexp(params)
  * Registers new re for further cached usage
- * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
  * - `re`* : regular expression object
  * - `type`*: type of regular expression:
  *   + `mime`: mime regexp
@@ -455,7 +455,7 @@ LUA_FUNCTION_DEF (config, register_regexp);
 /***
  * @method rspamd_config:replace_regexp(params)
  * Replaces regexp with a new one
- * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
  * - `old_re`* : old regular expression object (must be in the cache)
  * - `new_re`* : old regular expression object (must not be in the cache)
  */
@@ -548,7 +548,7 @@ LUA_FUNCTION_DEF (config, set_symbol_callback);
  * Adds new callback that is called on worker process termination when all
  * tasks pending are processed
  *
- * @param callback {function} a fucntion with one argument (rspamd_task)
+ * @param callback {function} a function with one argument (rspamd_task)
  */
 LUA_FUNCTION_DEF (config, register_finish_script);
 
@@ -2008,7 +2008,7 @@ lua_config_newindex (lua_State *L)
 			 * "priority" - optional priority
 			 * "type" - optional type (normal, virtual, callback)
 			 * -- Metric options
-			 * "score" - optional default score (overrided by metric)
+			 * "score" - optional default score (overridden by metric)
 			 * "group" - optional default group
 			 * "one_shot" - optional one shot mode
 			 * "description" - optional description
