@@ -71,26 +71,285 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 	}
 }
 
+static struct rspamd_content_type *
+rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
+{
+	guint obraces = 0, ebraces = 0, qlen = 0;
+	const gchar *p, *c, *end, *pname_start = NULL, *pname_end = NULL;
+	struct rspamd_content_type *res = NULL, val;
+	gboolean eqsign_seen = FALSE;
+	enum {
+		parse_type,
+		parse_subtype,
+		parse_after_subtype,
+		parse_param_name,
+		parse_param_after_name,
+		parse_param_value,
+		parse_param_value_after_quote,
+		parse_space,
+		parse_quoted,
+		parse_comment,
+	} state = parse_space, next_state = parse_type;
+
+	p = in;
+	c = p;
+	end = p + len;
+	memset (&val, 0, sizeof (val));
+	val.lc_data = (gchar *)in;
+
+	while (p < end) {
+		switch (state) {
+		case parse_type:
+			if (g_ascii_isspace (*p) || *p == ';') {
+				/* We have type without subtype */
+				val.type.begin = c;
+				val.type.len = p - c;
+				state = parse_after_subtype;
+			} else if (*p == '/') {
+				val.type.begin = c;
+				val.type.len = p - c;
+				state = parse_space;
+				next_state = parse_subtype;
+				p++;
+			} else {
+				p++;
+			}
+			break;
+		case parse_subtype:
+			if (g_ascii_isspace (*p) || *p == ';') {
+				val.subtype.begin = c;
+				val.subtype.len = p - c;
+				state = parse_after_subtype;
+			} else {
+				p++;
+			}
+			break;
+		case parse_after_subtype:
+			if (*p == ';' || g_ascii_isspace (*p)) {
+				p++;
+			} else if (*p == '(') {
+				c = p;
+				state = parse_comment;
+				next_state = parse_param_name;
+				obraces = 1;
+				ebraces = 0;
+				pname_start = NULL;
+				pname_end = NULL;
+				eqsign_seen = FALSE;
+				p++;
+			} else {
+				c = p;
+				state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+				eqsign_seen = FALSE;
+			}
+			break;
+		case parse_param_name:
+			if (*p == '=') {
+				pname_start = c;
+				pname_end = p;
+				state = parse_param_after_name;
+				eqsign_seen = TRUE;
+				p++;
+			} else if (g_ascii_isspace (*p)) {
+				pname_start = c;
+				pname_end = p;
+				state = parse_param_after_name;
+			} else {
+				p++;
+			}
+			break;
+		case parse_param_after_name:
+			if (g_ascii_isspace (*p)) {
+				p++;
+			} else if (*p == '=') {
+				if (eqsign_seen) {
+					/* Treat as value start */
+					c = p;
+					eqsign_seen = FALSE;
+					state = parse_space;
+					next_state = parse_param_value;
+					p++;
+				} else {
+					eqsign_seen = TRUE;
+					p++;
+				}
+			} else {
+				if (eqsign_seen) {
+					state = parse_param_value;
+					c = p;
+				} else {
+					/* Invalid parameter without value */
+					c = p;
+					state = parse_param_name;
+					pname_start = NULL;
+					pname_end = NULL;
+				}
+			}
+			break;
+		case parse_param_value:
+			if (*p == '"') {
+				p++;
+				c = p;
+				state = parse_quoted;
+				next_state = parse_param_value_after_quote;
+			} else if (g_ascii_isspace (*p)) {
+				if (pname_start && pname_end && pname_end > pname_start) {
+					rspamd_content_type_add_param (pool, &val, pname_start,
+							pname_end, c, p);
+
+				}
+
+				state = parse_space;
+				next_state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+			} else if (*p == '(') {
+				if (pname_start && pname_end && pname_end > pname_start) {
+					rspamd_content_type_add_param (pool, &val, pname_start,
+							pname_end, c, p);
+				}
+
+				obraces = 1;
+				ebraces = 0;
+				p++;
+				state = parse_comment;
+				next_state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+			} else {
+				p++;
+			}
+			break;
+		case parse_param_value_after_quote:
+			if (pname_start && pname_end && pname_end > pname_start) {
+				rspamd_content_type_add_param (pool, &val, pname_start,
+						pname_end, c, c + qlen);
+			}
+
+			if (g_ascii_isspace (*p)) {
+				state = parse_space;
+				next_state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+			} else if (*p == '(') {
+				obraces = 1;
+				ebraces = 0;
+				p++;
+				state = parse_comment;
+				next_state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+			} else {
+				state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+				c = p;
+			}
+			break;
+		case parse_quoted:
+			if (*p == '\\') {
+				/* Quoted pair */
+				if (p + 1 < end) {
+					p += 2;
+				} else {
+					p++;
+				}
+			} else if (*p == '"') {
+				qlen = p - c;
+				state = next_state;
+			} else {
+				p++;
+			}
+			break;
+		case parse_comment:
+			if (*p == '(') {
+				obraces++;
+				p++;
+			} else if (*p == ')') {
+				ebraces++;
+				p++;
+
+				if (ebraces == obraces && p < end) {
+					if (g_ascii_isspace (*p)) {
+						state = parse_space;
+					} else {
+						c = p;
+						state = next_state;
+					}
+				}
+			} else {
+				p++;
+			}
+			break;
+		case parse_space:
+			if (g_ascii_isspace (*p)) {
+				p++;
+			} else if (*p == '(') {
+				obraces = 1;
+				ebraces = 0;
+				p++;
+				state = parse_comment;
+			} else {
+				c = p;
+				state = next_state;
+			}
+			break;
+		}
+	}
+
+	/* Process leftover */
+	switch (state) {
+	case parse_type:
+		val.type.begin = c;
+		val.type.len = p - c;
+		break;
+	case parse_subtype:
+		val.subtype.begin = c;
+		val.subtype.len = p - c;
+		break;
+	case parse_param_value:
+		if (pname_start && pname_end && pname_end > pname_start) {
+			rspamd_content_type_add_param (pool, &val, pname_start,
+					pname_end, c, p);
+
+		}
+	case parse_param_value_after_quote:
+		if (pname_start && pname_end && pname_end > pname_start) {
+			rspamd_content_type_add_param (pool, &val, pname_start,
+					pname_end, c, c + qlen);
+		}
+		break;
+	default:
+		break;
+	}
+
+	if (val.type.len > 0) {
+		res = rspamd_mempool_alloc (pool, sizeof (val));
+		memcpy (res, &val, sizeof (val));
+	}
+
+	return res;
+}
+
 struct rspamd_content_type *
 rspamd_content_type_parse (const gchar *in,
 		gsize len, rspamd_mempool_t *pool)
 {
-	struct rspamd_content_type *res = NULL, val;
+	struct rspamd_content_type *res = NULL;
 	rspamd_ftok_t srch;
+	gchar *lc_data;
 
-	val.lc_data = rspamd_mempool_alloc (pool, len);
-	memcpy (val.lc_data, in, len);
-	rspamd_str_lc (val.lc_data, len);
+	lc_data = rspamd_mempool_alloc (pool, len);
+	memcpy (lc_data, in, len);
+	rspamd_str_lc (lc_data, len);
 
-	if (rspamd_content_type_parser (val.lc_data, len, &val, pool)) {
-		res = rspamd_mempool_alloc (pool, sizeof (val));
-		memcpy (res, &val, sizeof (val));
-
+	if ((res = rspamd_content_type_parser (lc_data, len, pool)) != NULL) {
 		if (res->attrs) {
 			rspamd_mempool_add_destructor (pool,
 					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
 		}
-
 
 		/* Now do some hacks to work with broken content types */
 		if (res->subtype.len == 0) {
@@ -157,7 +416,7 @@ rspamd_content_type_parse (const gchar *in,
 		}
 	}
 	else {
-		msg_warn_pool ("cannot parse content type: %*s", (gint)len, val.lc_data);
+		msg_warn_pool ("cannot parse content type: %*s", (gint)len, lc_data);
 	}
 
 	return res;

@@ -42,6 +42,7 @@
   }
 
   action Param_Name_Start {
+          printf("name start: %s\n", p);
     qstart = NULL;
     qend = NULL;
     pname_start = p;
@@ -50,25 +51,32 @@
 
 
   action Param_Name_End {
+          printf("name end: %s\n", p);
     if (qstart) {
       pname_start = qstart;
     }
-    if (qend && qend >= qstart) {
+    if (qstart && qend && qend >= qstart) {
       pname_end = qend;
     }
     else if (p >= pname_start) {
       pname_end = p;
     }
-    qstart = NULL;
-    qend = NULL;
+
+    if (qstart && qend) {
+      qstart = NULL;
+      qend = NULL;
+    }
   }
 
 
   action Param_Value_Start {
-    qstart = NULL;
-    qend = NULL;
+          printf("value start: %s\n", p);
+    if (qend) {
+      qstart = NULL;
+      qend = NULL;
+    }
 
-    if (pname_end) {
+    if (pname_end && !pvalue_start) {
       pvalue_start = p;
       pvalue_end = NULL;
     }
@@ -76,30 +84,40 @@
 
 
   action Param_Value_End {
-    if (pname_end) {
+          printf("value end: %s\n", p);
+    if (pname_end && pname_start) {
       if (qstart) {
         pvalue_start = qstart;
+
+        if (!qend) {
+          pvalue_end = NULL;
+        }
       }
+
       if (qend && qend >= qstart) {
-        pvalue_end = qend;
+        if (qstart) {
+          pvalue_end = qend;
+        }
+        else {
+          pvalue_end = NULL;
+        }
       }
-      else if (p >= pvalue_start) {
+      else if (!qstart && p >= pvalue_start) {
         pvalue_end = p;
       }
-      qstart = NULL;
-      qend = NULL;
 
-      if (pvalue_end && pvalue_end > pvalue_start && pname_end > pname_start) {
-        rspamd_content_type_add_param (pool, ct, pname_start, pname_end, pvalue_start, pvalue_end);
+      if (pname_start && pvalue_start && pvalue_end && pvalue_end > pvalue_start
+              && pname_end > pname_start) {
+        rspamd_content_type_add_param (pool, ct, pname_start, pname_end,
+                pvalue_start, pvalue_end);
+        pname_start = NULL;
+        pname_end = NULL;
+        pvalue_start = NULL;
+        pvalue_end = NULL;
+        qend = NULL;
+        qstart = NULL;
       }
     }
-
-    pname_start = NULL;
-    pname_end = NULL;
-    pvalue_start = NULL;
-    pvalue_end = NULL;
-    qend = NULL;
-    qstart = NULL;
   }
 
   action Quoted_Str_Start {

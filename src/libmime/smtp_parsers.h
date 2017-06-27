@@ -26,9 +26,6 @@ int rspamd_smtp_recieved_parse (struct rspamd_task *task,
 		const char *data, size_t len, struct received_header *rh);
 int rspamd_smtp_addr_parse (const char *data, size_t len,
 		struct rspamd_email_address *addr);
-
-gboolean rspamd_content_type_parser (const char *data, size_t len,
-		struct rspamd_content_type *ct, rspamd_mempool_t *pool);
 gboolean rspamd_content_disposition_parser (const char *data, size_t len,
 		struct rspamd_content_disposition *cd, rspamd_mempool_t *pool);
 
