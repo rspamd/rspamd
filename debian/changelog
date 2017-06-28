@@ -1,3 +1,9 @@
+rspamd (1.6.1) unstable; urgency=medium
+
+  * New release.
+
+ -- Sebastian Lipponer <mail@sebastianlipponer.de>  Sat, 24 Jun 2017 22:12:07 +0200
+
 rspamd (1.0.2) unstable; urgency=low
 
   * New release.
