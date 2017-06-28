@@ -2691,8 +2691,15 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 		return NULL;
 	}
 
-	b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
-			task->nlines_type);
+	if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+		b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+				RSPAMD_TASK_NEWLINES_LF);
+	}
+	else {
+		b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+				task->nlines_type);
+	}
+
 	rspamd_printf_gstring (hdr, "%s", b64_data);
 	g_free (b64_data);
 
