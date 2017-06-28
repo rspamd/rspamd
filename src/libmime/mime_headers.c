@@ -35,7 +35,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		recv = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct received_header));
 		recv->hdr = rh;
-		rspamd_smtp_recieved_parse (task, rh->decoded,
+		rspamd_smtp_received_parse (task, rh->decoded,
 				strlen (rh->decoded), recv);
 		/* Set flags */
 		if (recv->type == RSPAMD_RECEIVED_ESMTPA ||

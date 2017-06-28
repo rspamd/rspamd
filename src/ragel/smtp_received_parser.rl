@@ -234,7 +234,7 @@
 %% write data;
 
 int
-rspamd_smtp_recieved_parse (struct rspamd_task *task, const char *data, size_t len, struct received_header *rh)
+rspamd_smtp_received_parse (struct rspamd_task *task, const char *data, size_t len, struct received_header *rh)
 {
   struct rspamd_email_address for_addr, *addr;
   const char *real_domain_start, *real_domain_end,
