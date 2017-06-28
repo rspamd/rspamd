@@ -175,7 +175,7 @@ int FakeSMTPCommand (socket_t sock,
 }
 
 
-static int writen (socket_t fd, const char *vptr, int n)
+static int written (socket_t fd, const char *vptr, int n)
 {
     size_t nleft;
     int nwritten;
@@ -263,7 +263,7 @@ static int SendEnvelope (char *sFile)
         if (FakeSMTPCommand (sock, "\r\n", "", sFile, 1, 0) != _OK)
             return ERR_WRITE;
             
-        if (writen (sock, psBuf, bytesRead) != bytesRead)
+        if (written (sock, psBuf, bytesRead) != bytesRead)
             return ERR_WRITE;
     }
     else
