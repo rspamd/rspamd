@@ -35,7 +35,7 @@
    Random and Pseudorandom Number Generators for Cryptographic
    Applications (version 2.2.1) with 1000 bitstreams each containing
    1M bits.  MUM hashing is also faster Spooky64 and City64 on small
-   strings (at least up to 512-bit) on Has well and Power7.  The MUM bulk
+   strings (at least up to 512-bit) on Haswell and Power7.  The MUM bulk
    speed (speed on very long data) is bigger than Spooky and City on
    Power7.  On Haswell the bulk speed is bigger than Spooky one and
    close to City speed.  */
