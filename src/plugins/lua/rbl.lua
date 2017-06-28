@@ -333,7 +333,7 @@ local function rbl_cb (task)
       for _, email in ipairs(havegot['emails']) do
         local to_resolve
         if rbl['hash'] then
-          to_resolve = make_hash(tostring(email), rbl['hash']) .. '.' .. rbl['rbl']
+          to_resolve = make_hash(email:get_user() .. '@' .. email:get_host(), rbl['hash']) .. '.' .. rbl['rbl']
         else
           local upart = email:get_user()
           if validate_dns(upart) then
