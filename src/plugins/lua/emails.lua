@@ -116,9 +116,9 @@ local function gen_check_emails(rule)
       for _,addr in ipairs(emails) do
         local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
         local naddr = {
-          user = addr:get_user(),
-          domain = addr:get_host(),
-          addr = to_check
+          user = (addr:get_user() or ''):lower(),
+          domain = (addr:get_host() or ''):lower(),
+          addr = to_check:lower()
         }
 
         rspamd_lua_utils.remove_email_aliases(naddr)
