@@ -62,6 +62,12 @@ local function check_email_rule(task, rule, addr)
 
     if rule['hash'] then
       to_resolve = hash.create_specific(rule['hash'], email):hex()
+
+      if rule['hashlen'] and type(rule['hashlen']) == 'number' then
+        if #to_resolve > rule['hashlen'] then
+          to_resolve = string.sub(to_resolve, 1, rule['hashlen'])
+        end
+      end
     else
       to_resolve = email
     end
