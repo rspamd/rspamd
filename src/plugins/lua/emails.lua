@@ -27,6 +27,7 @@ local rules = {}
 local logger = require "rspamd_logger"
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_lua_utils = require "lua_util"
+local util = require "rspamd_util"
 local N = "emails"
 
 -- Check rule for a single email
@@ -101,36 +102,34 @@ local function check_email_rule(task, rule, addr)
 end
 
 -- Check email
-local function check_emails(task)
-  local emails = task:get_emails()
-  local checked = {}
-  if emails and not rule.skip_body then
-    for _,addr in ipairs(emails) do
-      local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
-      local naddr = {
-        user = addr:get_user(),
-        domain = addr:get_host(),
-        addr = to_check
-      }
+local function gen_check_emails(rule)
+  return function(task)
+    local emails = task:get_emails()
+    local checked = {}
+    if emails and not rule.skip_body then
+      for _,addr in ipairs(emails) do
+        local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
+        local naddr = {
+          user = addr:get_user(),
+          domain = addr:get_host(),
+          addr = to_check
+        }
 
-      rspamd_lua_utils.remove_email_aliases(naddr)
+        rspamd_lua_utils.remove_email_aliases(naddr)
 
-      if not checked[naddr.addr] then
-        for _,rule in ipairs(rules) do
+        if not checked[naddr.addr] then
           check_email_rule(task, rule, naddr)
+          checked[naddr.addr] = true
         end
-        checked[naddr.addr] = true
       end
     end
-  end
 
-  for _,rule in ipairs(rules) do
     if rule.check_replyto then
-      local function get_raw_header(task, name)
-        return ((task:get_header_full(name) or {})[1] or {})['raw']
+      local function get_raw_header(name)
+        return ((task:get_header_full(name) or {})[1] or {})['value']
       end
 
-      local replyto = get_raw_header(task, 'Reply-To')
+      local replyto = get_raw_header('Reply-To')
       if not replyto then return false end
       local rt = util.parse_mail_address(replyto)
 
@@ -176,16 +175,11 @@ if opts and type(opts) == 'table' then
 end
 
 if #rules > 0 then
-  -- add fake symbol to check all maps inside a single callback
-  local id = rspamd_config:register_symbol({
-    type = 'callback',
-    callback = check_emails
-  })
   for _,rule in ipairs(rules) do
+    local cb = gen_check_emails(rule)
     rspamd_config:register_symbol({
       name = rule['symbol'],
-      type = 'virtual',
-      parent = id
+      callback = cb,
     })
   end
 end
