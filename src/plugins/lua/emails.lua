@@ -104,7 +104,7 @@ end
 local function check_emails(task)
   local emails = task:get_emails()
   local checked = {}
-  if emails then
+  if emails and not rule.skip_body then
     for _,addr in ipairs(emails) do
       local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
       local naddr = {
@@ -120,6 +120,26 @@ local function check_emails(task)
           check_email_rule(task, rule, naddr)
         end
         checked[naddr.addr] = true
+      end
+    end
+  end
+
+  for _,rule in ipairs(rules) do
+    if rule.check_replyto then
+      local function get_raw_header(task, name)
+        return ((task:get_header_full(name) or {})[1] or {})['raw']
+      end
+
+      local replyto = get_raw_header(task, 'Reply-To')
+      if not replyto then return false end
+      local rt = util.parse_mail_address(replyto)
+
+      if rt and rt[1] then
+        rspamd_lua_utils.remove_email_aliases(rt[1])
+        if not checked[rt[1].addr] then
+          check_email_rule(task, rule, rt[1])
+          checked[rt[1].addr] = true
+        end
       end
     end
   end
