@@ -63,7 +63,13 @@ local function check_email_rule(task, rule, addr)
     logger.debugm(N, task, "check %s on %s", email, rule['dnsbl'])
 
     if rule['hash'] then
-      to_resolve = hash.create_specific(rule['hash'], email):hex()
+      local hkey = hash.create_specific(rule['hash'], email)
+
+      if rule['encoding'] == 'base32' then
+        to_resolve = hkey:base32()
+      else
+        to_resolve = hkey:hex()
+      end
 
       if rule['hashlen'] and type(rule['hashlen']) == 'number' then
         if #to_resolve > rule['hashlen'] then
