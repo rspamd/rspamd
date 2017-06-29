@@ -40,4 +40,44 @@ exports.template = function(tmpl, keys)
   return lpeg.match(template_grammar, tmpl)
 end
 
+exports.remove_email_aliases = function(addr)
+  local function check_address(addr)
+    if addr.user then
+      local cap, pluses = string.match(addr.user, '^([^%+][^%+]*)(%+.*)$')
+      if cap then
+        return cap, rspamd_str_split(pluses, '+')
+      end
+    end
+
+    return nil
+  end
+
+  local function set_addr(addr, new_user)
+    addr.user = new_user
+
+    if addr.domain then
+      addr.addr = string.format('%s@%s', addr.user, addr.domain)
+    else
+      addr.addr = string.format('%s@', addr.user)
+    end
+
+    if addr.name and #addr.name > 0 then
+      addr.raw = string.format('"%s" <%s>', addr.name, addr.addr)
+    else
+      addr.raw = string.format('<%s>', addr.addr)
+    end
+  end
+
+  if addr then
+    local nu, tags = check_address(addr)
+    if nu then
+      set_addr(addr, nu)
+
+      return nu, tags
+    end
+
+    return nil
+  end
+end
+
 return exports

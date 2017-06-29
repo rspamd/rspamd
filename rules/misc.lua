@@ -20,6 +20,7 @@ local E = {}
 local fun = require "fun"
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_lua_utils = require "lua_util"
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = {
@@ -409,39 +410,11 @@ local aliases_id = rspamd_config:register_symbol{
   type = 'prefilter',
   name = 'EMAIL_PLUS_ALIASES',
   callback = function(task)
-    local function check_address(addr)
-      if addr.user then
-        local cap, pluses = string.match(addr.user, '^([^%+][^%+]*)(%+.*)$')
-        if cap then
-          return cap, rspamd_str_split(pluses, '+')
-        end
-      end
-
-      return nil
-    end
-
-    local function set_addr(addr, new_user)
-      addr.user = new_user
-
-      if addr.domain then
-        addr.addr = string.format('%s@%s', addr.user, addr.domain)
-      else
-        addr.addr = string.format('%s@', addr.user)
-      end
-
-      if addr.name and #addr.name > 0 then
-        addr.raw = string.format('"%s" <%s>', addr.name, addr.addr)
-      else
-        addr.raw = string.format('<%s>', addr.addr)
-      end
-    end
-
     local function check_from(type)
       if task:has_from(type) then
         local addr = task:get_from(type)[1]
-        local na,tags = check_address(addr)
+        local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
         if na then
-          set_addr(addr, na)
           task:set_from(type, addr)
           task:insert_result('TAGGED_FROM', 1.0, fun.totable(
             fun.filter(function(t) return t and #t > 0 end, tags)))
@@ -459,9 +432,8 @@ local aliases_id = rspamd_config:register_symbol{
         local addrs = task:get_recipients(type)
 
         for _, addr in ipairs(addrs) do
-          local na,tags = check_address(addr)
+          local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
           if na then
-            set_addr(addr, na)
             modified = true
             fun.each(function(t) table.insert(all_tags, t) end,
               fun.filter(function(t) return t and #t > 0 end, tags))
