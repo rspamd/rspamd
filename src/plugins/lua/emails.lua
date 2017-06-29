@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2011-2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ end
 local rules = {}
 local logger = require "rspamd_logger"
 local hash = require "rspamd_cryptobox_hash"
+local rspamd_lua_utils = require "lua_util"
 local N = "emails"
 
 -- Check rule for a single email
@@ -35,12 +36,12 @@ local function check_email_rule(task, rule, addr)
     local to_resolve
 
     if rule['domain_only'] then
-      email = addr:get_host()
+      email = addr.domain
     else
       if not rule['hash'] then
-        email = string.format('%s.%s', addr:get_user(), addr:get_host())
+        email = string.format('%s.%s', addr.user, addr.domain)
       else
-        email = string.format('%s@%s', addr:get_user(), addr:get_host())
+        email = string.format('%s@%s', addr.user, addr.domain)
       end
     end
 
@@ -82,14 +83,14 @@ local function check_email_rule(task, rule, addr)
       callback = emails_dns_cb})
   elseif rule['map'] then
     if rule['domain_only'] then
-      local key = addr:get_host()
+      local key = addr.domain
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
         logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
           task:get_message_id(), key, rule['symbol'])
       end
     else
-      local key = string.format('%s@%s', addr:get_user(), addr:get_host())
+      local key = string.format('%s@%s', addr.user, addr.domain)
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
         logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
@@ -106,11 +107,19 @@ local function check_emails(task)
   if emails then
     for _,addr in ipairs(emails) do
       local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
-      if not checked['to_check'] then
+      local naddr = {
+        user = addr:get_user(),
+        domain = addr:get_host(),
+        addr = to_check
+      }
+
+      rspamd_lua_utils.remove_email_aliases(naddr)
+
+      if not checked[naddr.addr] then
         for _,rule in ipairs(rules) do
-          check_email_rule(task, rule, addr)
+          check_email_rule(task, rule, naddr)
         end
-        checked[to_check] = true
+        checked[naddr.addr] = true
       end
     end
   end
