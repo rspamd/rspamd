@@ -22,7 +22,7 @@
 #include "task.h"
 #include "message.h"
 
-int rspamd_smtp_recieved_parse (struct rspamd_task *task,
+int rspamd_smtp_received_parse (struct rspamd_task *task,
 		const char *data, size_t len, struct received_header *rh);
 int rspamd_smtp_addr_parse (const char *data, size_t len,
 		struct rspamd_email_address *addr);

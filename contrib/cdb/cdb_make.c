@@ -320,7 +320,7 @@ static int findrec(struct cdb_make *cdbmp, const void *key, unsigned klen,
 	struct cdb_rl *rl;
 	struct cdb_rec *rp, *rs;
 	unsigned r;
-	int seeked = 0;
+	int sought = 0;
 	int ret = 0;
 	for (rl = cdbmp->cdb_rec[hval & 255]; rl; rl = rl->next)
 		for (rs = rl->rec, rp = rs + rl->cnt; --rp >= rs;) {
@@ -330,9 +330,9 @@ static int findrec(struct cdb_make *cdbmp, const void *key, unsigned klen,
 			 * smarter match() that looks into cdb_buf too, but
 			 * most of a time here spent in finding hash values
 			 * (above), not keys */
-			if (!seeked && _cdb_make_flush (cdbmp) < 0)
+			if (!sought && _cdb_make_flush (cdbmp) < 0)
 				return -1;
-			seeked = 1;
+			sought = 1;
 			r = match (cdbmp, rp->rpos, key, klen);
 			if (!r)
 				continue;
@@ -356,7 +356,7 @@ static int findrec(struct cdb_make *cdbmp, const void *key, unsigned klen,
 			--rl->cnt;
 			--cdbmp->cdb_rcnt;
 		}
-	finish: if (seeked && lseek (cdbmp->cdb_fd, cdbmp->cdb_dpos, SEEK_SET) < 0)
+	finish: if (sought && lseek (cdbmp->cdb_fd, cdbmp->cdb_dpos, SEEK_SET) < 0)
 		return -1;
 	return ret;
 }
