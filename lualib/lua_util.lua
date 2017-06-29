@@ -41,19 +41,37 @@ exports.template = function(tmpl, keys)
 end
 
 exports.remove_email_aliases = function(addr)
+  local function check_gmail_user(addr)
+    -- Remove all points
+    local no_dots_user = string.gsub(addr.user, '.', '')
+    local cap, pluses = string.match(no_dots_user, '^([^%+][^%+]*)(%+.*)$')
+    if cap then
+      return cap, rspamd_str_split(pluses, '+'), nil
+    elseif no_dots_user ~= addr.user then
+      return no_dots_user
+    end
+
+    return nil
+  end
+
   local function check_address(addr)
     if addr.user then
       local cap, pluses = string.match(addr.user, '^([^%+][^%+]*)(%+.*)$')
       if cap then
-        return cap, rspamd_str_split(pluses, '+')
+        return cap, rspamd_str_split(pluses, '+'), nil
       end
     end
 
     return nil
   end
 
-  local function set_addr(addr, new_user)
-    addr.user = new_user
+  local function set_addr(addr, new_user, new_domain)
+    if new_user then
+      addr.user = new_user
+    end
+    if new_domain then
+      addr.domain = new_domain
+    end
 
     if addr.domain then
       addr.addr = string.format('%s@%s', addr.user, addr.domain)
@@ -68,12 +86,47 @@ exports.remove_email_aliases = function(addr)
     end
   end
 
-  if addr then
-    local nu, tags = check_address(addr)
-    if nu then
-      set_addr(addr, nu)
+  local function check_gmail(addr)
+    local nu, tags, nd = check_gmail_user(addr)
 
-      return nu, tags
+    if nu then
+      return nu, tags, nd
+    end
+
+    return nil
+  end
+
+  local function check_gmail(addr)
+    local nd = 'gmail.com'
+    local nu, tags = check_gmail_user(addr)
+
+    if nu then
+      return nu, tags, nd
+    end
+
+    return nil, nil, nd
+  end
+
+  local specific_domains = {
+    ['gmail.com'] = check_gmail,
+    ['googlemail.com'] = check_googlemail,
+  }
+
+  if addr then
+    if addr.domain and specific_domains[addr.domain] then
+      local nu, tags, nd = specific_domains[addr.domain](addr)
+      if nu or nd then
+        set_addr(addr, nu, nd)
+
+        return nu, tags
+      end
+    else
+      local nu, tags, nd = check_address(addr)
+      if nu or nd then
+        set_addr(addr, nu, nd)
+
+        return nu, tags
+      end
     end
 
     return nil
