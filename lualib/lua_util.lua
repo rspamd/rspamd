@@ -2,7 +2,7 @@ local exports = {}
 local lpeg = require 'lpeg'
 
 local split_grammar = {}
-exports.rspamd_str_split = function(s, sep)
+local function rspamd_str_split(s, sep)
   local gr = split_grammar[sep]
 
   if not gr then
@@ -15,6 +15,8 @@ exports.rspamd_str_split = function(s, sep)
 
   return gr:match(s)
 end
+
+exports.rspamd_str_split = rspamd_str_split
 
 local space = lpeg.S' \t\n\v\f\r'
 local nospace = 1 - space
@@ -40,7 +42,7 @@ exports.template = function(tmpl, keys)
   return lpeg.match(template_grammar, tmpl)
 end
 
-exports.remove_email_aliases = function(addr)
+exports.remove_email_aliases = function(email_addr)
   local function check_gmail_user(addr)
     -- Remove all points
     local no_dots_user = string.gsub(addr.user, '.', '')
@@ -96,7 +98,7 @@ exports.remove_email_aliases = function(addr)
     return nil
   end
 
-  local function check_gmail(addr)
+  local function check_googlemail(addr)
     local nd = 'gmail.com'
     local nu, tags = check_gmail_user(addr)
 
@@ -112,18 +114,18 @@ exports.remove_email_aliases = function(addr)
     ['googlemail.com'] = check_googlemail,
   }
 
-  if addr then
-    if addr.domain and specific_domains[addr.domain] then
-      local nu, tags, nd = specific_domains[addr.domain](addr)
+  if email_addr then
+    if email_addr.domain and specific_domains[email_addr.domain] then
+      local nu, tags, nd = specific_domains[email_addr.domain](email_addr)
       if nu or nd then
-        set_addr(addr, nu, nd)
+        set_addr(email_addr, nu, nd)
 
         return nu, tags
       end
     else
-      local nu, tags, nd = check_address(addr)
+      local nu, tags, nd = check_address(email_addr)
       if nu or nd then
-        set_addr(addr, nu, nd)
+        set_addr(email_addr, nu, nd)
 
         return nu, tags
       end
