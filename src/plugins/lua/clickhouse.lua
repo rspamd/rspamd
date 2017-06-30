@@ -113,7 +113,7 @@ CREATE TABLE rspamd_symbols (
     Date Date,
     Digest FixedString(32),
     `Symbols.Names` Array(String),
-    `Symbols.Scores` Array(Float64)
+    `Symbols.Scores` Array(Float64),
     `Symbols.Options` Array(String)
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]]
