@@ -86,7 +86,7 @@ struct rdns_request {
 
 	void *async_event;
 
-#ifdef TWEETNACL
+#if defined(TWEETNACL) || defined(USE_RSPAMD_CRYPTOBOX)
 	void *curve_plugin_data;
 #endif
 
