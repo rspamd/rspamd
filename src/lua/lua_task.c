@@ -1210,10 +1210,15 @@ lua_task_set_pre_result (lua_State * L)
 
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
-			mres = rspamd_create_metric_result (task);
-			if (mres != NULL) {
-				mres->score = mres->metric->actions[action].score;
-				mres->action = action;
+			if (!task->result) {
+				mres = rspamd_create_metric_result (task);
+				if (mres != NULL) {
+					mres->score = mres->metric->actions[action].score;
+					mres->action = action;
+				}
+			}
+			else {
+				task->result->action = action;
 			}
 
 			task->pre_result.action = action;
