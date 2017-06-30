@@ -50,7 +50,7 @@ exports.remove_email_aliases = function(email_addr)
     if cap then
       return cap, rspamd_str_split(pluses, '+'), nil
     elseif no_dots_user ~= addr.user then
-      return no_dots_user
+      return no_dots_user,{},nil
     end
 
     return nil
