@@ -71,8 +71,6 @@ Generic Teardown
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
   Cleanup Temporary Directory  ${TMPDIR}
-  : FOR  ${i}  IN  @{ports}
-  \  Wait For Port  @{i}[0]  @{i}[1]  @{i}[2]
 
 Log Logs
   [Arguments]  ${logfile}  ${position}

@@ -36,4 +36,3 @@ DKIM Signing Setup
 DKIM Signing Teardown
   Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
-  Wait For Port  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${REDIS_PORT}
