@@ -182,10 +182,6 @@
 
 #endif /* BYTE_ORDER */
 
-/* Configure allocator */
-#define uthash_malloc(sz) g_slice_alloc(sz)
-#define uthash_free(ptr,sz) g_slice_free1(sz, ptr)
-
 #define RSPAMD_CONFDIR "${CONFDIR}"
 #define RSPAMD_LOCAL_CONFDIR "${LOCAL_CONFDIR}"
 #define RSPAMD_RUNDIR "${RUNDIR}"
