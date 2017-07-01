@@ -315,6 +315,7 @@ rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
 					pname_end, c, p);
 
 		}
+		break;
 	case parse_param_value_after_quote:
 		if (pname_start && pname_end && pname_end > pname_start) {
 			rspamd_content_type_add_param (pool, &val, pname_start,
