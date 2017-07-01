@@ -197,11 +197,14 @@ end
 
 local dmarc_grammar = gen_dmarc_grammar()
 
-local function dmarc_report(task, spf_ok, dkim_ok, disposition, sampled_out, hfromdom, spfdom, dres, spf_result)
+local function dmarc_report(task, spf_ok, dkim_ok, disposition,
+    sampled_out, hfromdom, spfdom, dres, spf_result)
   local ip = task:get_from_ip()
   if not ip:is_valid() then
     return nil
   end
+  local rspamd_lua_utils = require "lua_util"
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local dkim_pass = table.concat(dres.pass or E, '|')
   local dkim_fail = table.concat(dres.fail or E, '|')
   local dkim_temperror = table.concat(dres.temperror or E, '|')

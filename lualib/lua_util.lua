@@ -135,4 +135,13 @@ exports.remove_email_aliases = function(email_addr)
   end
 end
 
+exports.is_rspamc_or_controller = function(task)
+  local ua = task:get_request_header('User-Agent') or ''
+  local pwd = task:get_request_header('Password')
+  local is_rspamc = false
+  if tostring(ua) == 'rspamc' or pwd then is_rspamc = true end
+
+  return is_rspamc
+end
+
 return exports

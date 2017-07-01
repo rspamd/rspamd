@@ -48,6 +48,7 @@ end
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local rspamd_lua_utils = require "lua_util"
 local fun = require "fun"
 
 local user_keywords = {'user'}
@@ -545,6 +546,7 @@ end
 
 --- Check limit
 local function rate_test(task)
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   rate_test_set(task, check_limits)
 end
 --- Update limit
@@ -552,6 +554,7 @@ local function rate_set(task)
   local action = task:get_metric_action('default')
 
   if action ~= 'soft reject' then
+    if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
     rate_test_set(task, set_limits)
   end
 end

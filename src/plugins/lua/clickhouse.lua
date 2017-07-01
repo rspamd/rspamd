@@ -16,6 +16,7 @@ limitations under the License.
 
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
+local rspamd_lua_utils = require "lua_util"
 
 if confighelp then
   return
@@ -345,6 +346,7 @@ local function clickhouse_quote(str)
 end
 
 local function clickhouse_collect(task)
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local from_domain = ''
   local from_user = ''
   if task:has_from('smtp') then

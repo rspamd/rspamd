@@ -62,6 +62,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local hash = require "rspamd_cryptobox_hash"
+local rspamd_lua_utils = require "lua_util"
 
 local function data_key(task)
   local cached = task:get_mempool():get_variable("grey_bodyhash")
@@ -206,9 +207,7 @@ local function greylist_check(task)
           end_time, type)
         task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
 
-        local ua = task:get_request_header('User-Agent') or ''
-        if tostring(ua) == 'rspamc' then return end -- Likely rspamc scan
-
+        if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
         if settings.message_func then
           task:set_pre_result('soft reject',
             settings.message_func(task, end_time))
@@ -310,9 +309,7 @@ local function greylist_set(task)
     end
   end
 
-  local ua = task:get_request_header('User-Agent') or ''
-  local is_rspamc = false
-  if tostring(ua) == 'rspamc' then is_rspamc = true end
+  local is_rspamc = rspamd_lua_utils.is_rspamc_or_controller(task)
 
   if is_whitelisted then
     if action == 'greylist' then
