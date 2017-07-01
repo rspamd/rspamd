@@ -1793,12 +1793,11 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		type = "img";
 	}
 	else {
-		/* XXX: we need something better here */
 		if (cmd->shingles_count > 0) {
 			type = "txt";
 		}
 
-		nval *= rep->prob;
+		nval *= rspamd_normalize_probability (rep->prob, 0.5);
 	}
 
 	msg_info_task (
