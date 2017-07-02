@@ -3,6 +3,9 @@
 import argparse
 import os
 
+import numpy as np
+from sklearn.linear_model import Perceptron
+
 from utility import get_all_filenames
 
 def get_dataset_from_logs(logdir):
@@ -23,6 +26,13 @@ def get_dataset_from_logs(logdir):
                 X.append(line.split()[3:])
                 y.append(0 if line.split()[1] == "HAM" else 1)
 
+    symbol_set = get_all_symbols(X)
+
+    X, y = make_perceptron_input(X, y, symbol_set)
+
+    X = np.array(X)
+    y = np.array(y)
+    
     return X, y
 
 
@@ -35,7 +45,8 @@ def get_all_symbols(dataset):
 
     return tuple(symbol_set)
 
-def make_perceptron_input(X, symbol_set):
+
+def make_perceptron_input(X, y, symbol_set):
     '''
     Returns a list of lists containing 1s and 0s. 
     X(i, j) = 1 if symbol_set(j) is present in ith log line, 0 otherwise
@@ -46,8 +57,15 @@ def make_perceptron_input(X, symbol_set):
     for row in X:
         X_new.append([1 if symbol in row else 0 for symbol in symbol_set])
 
-    return X_new
+    return np.array(X_new)
     
+
+def rescore_weights(X, y, no_of_iters=1):
+    
+    n_samples, n_feaures = X.shape
+
+    pass
+
 
 def main():
 
@@ -62,12 +80,9 @@ def main():
         return
         
     X, y = get_dataset_from_logs(logdir=args.logdir)
+
+    weights = rescore_weights(X, y)
     
-    symbol_set = get_all_symbols(X)
-
-    X = make_perceptron_input(X=X,
-                              symbol_set=symbol_set)
-
-
+    
 if __name__ == "__main__":
     main()
