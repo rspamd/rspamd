@@ -1488,15 +1488,6 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 					state = 0;
 					need_expand = TRUE;
 				}
-				else if (*p != 'r' && !g_ascii_isdigit (*p)) {
-					msg_info_spf (
-							"<%s>: spf error for domain %s: unknown or unsupported spf modifier %c in %s",
-							task->message_id,
-							rec->sender_domain,
-							*p,
-							begin);
-					return begin;
-				}
 				p++;
 				slen++;
 				break;
@@ -1620,7 +1611,8 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 						break;
 					default:
 						msg_info_spf (
-								"<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
+								"<%s>: spf error for domain %s: unknown or "
+										"unsupported spf macro %c in %s",
 								task->message_id,
 								rec->sender_domain,
 								*p,
@@ -1639,12 +1631,15 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 					reverse_spf_ip (c - len, len);
 					len = 0;
 				}
-				else if (g_ascii_isdigit (*p)) {
-					/*XXX: try to implement domain trimming */
+				else if (g_ascii_isdigit (*p) || *p == '+' || *p == '-' ||
+						*p == '.' || *p == ',' || *p == '/' || *p == '_' ||
+						*p == '=') {
+					/* TODO: implement domain trimming */
 				}
 				else {
 					msg_info_spf (
-							"<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
+							"<%s>: spf error for domain %s: unknown or "
+									"unsupported spf macro %c in %s",
 							task->message_id,
 							rec->sender_domain,
 							*p,
