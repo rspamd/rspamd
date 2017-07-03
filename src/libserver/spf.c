@@ -1580,6 +1580,12 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 
 	new = rspamd_mempool_alloc (task->task_pool, len + 1);
 
+	/* Reduce TTL to avoid caching of records with macros */
+	if (rec->ttl != 0) {
+		rec->ttl = 0;
+		msg_debug_spf ("disable SPF caching as there is macro expansion");
+	}
+
 	c = new;
 	p = begin;
 	state = 0;
