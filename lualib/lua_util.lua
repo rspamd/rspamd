@@ -45,7 +45,7 @@ end
 exports.remove_email_aliases = function(email_addr)
   local function check_gmail_user(addr)
     -- Remove all points
-    local no_dots_user = string.gsub(addr.user, '.', '')
+    local no_dots_user = string.gsub(addr.user, '%.', '')
     local cap, pluses = string.match(no_dots_user, '^([^%+][^%+]*)(%+.*)$')
     if cap then
       return cap, rspamd_str_split(pluses, '+'), nil
