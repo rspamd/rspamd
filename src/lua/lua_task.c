@@ -3838,7 +3838,13 @@ lua_task_get_metric_action (lua_State *L)
 
 	if (task) {
 		if ((metric_res = task->result) != NULL) {
-			action = rspamd_check_action_metric (task, metric_res);
+			if (task->result->action == METRIC_ACTION_MAX) {
+				action = rspamd_check_action_metric (task, metric_res);
+			}
+			else {
+				action = task->result->action;
+			}
+
 			lua_pushstring (L, rspamd_action_to_str (action));
 		}
 		else {
