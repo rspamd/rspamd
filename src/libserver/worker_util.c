@@ -717,7 +717,7 @@ rspamd_session_cache_sort_cmp (gconstpointer pa, gconstpointer pb)
 			*e1 = *(const struct rspamd_worker_session_elt **)pa,
 			*e2 = *(const struct rspamd_worker_session_elt **)pb;
 
-	return e1->when < e2->when;
+	return e2->when < e1->when;
 }
 
 static void
@@ -732,7 +732,7 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 	GPtrArray *res;
 	guint i;
 
-	if (g_hash_table_size (c->cache) > c->cfg->max_session_cache) {
+	if (g_hash_table_size (c->cache) > c->cfg->max_sessions_cache) {
 		res = g_ptr_array_sized_new (g_hash_table_size (c->cache));
 		g_hash_table_iter_init (&it, c->cache);
 
@@ -741,7 +741,7 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 		}
 
 		msg_err ("sessions cache is overflowed %d elements where %d is limit",
-				(gint)res->len, (gint)c->cfg->max_session_cache);
+				(gint)res->len, (gint)c->cfg->max_sessions_cache);
 		g_ptr_array_sort (res, rspamd_session_cache_sort_cmp);
 
 		PTR_ARRAY_FOREACH (res, i, elt) {

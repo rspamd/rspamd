@@ -182,7 +182,7 @@ rspamd_config_new (void)
 	cfg->redis_pool = rspamd_redis_pool_init ();
 #endif
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
-	cfg->max_session_cache = DEFAULT_MAX_SESSIONS;
+	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 

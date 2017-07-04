@@ -412,7 +412,7 @@ struct rspamd_config {
 	guint max_word_len;								/**< maximum length of the word to be considered		*/
 	guint words_decay;								/**< limit for words for starting adaptive ignoring		*/
 	guint history_rows;								/**< number of history rows stored						*/
-	guint max_session_cache;                        /**< maximum number of sessions cache elts				*/
+	guint max_sessions_cache;                        /**< maximum number of sessions cache elts				*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/

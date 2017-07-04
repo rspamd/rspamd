@@ -2206,9 +2206,9 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			0,
 			"Enable sessions cache to debug dangling sessions");
 	rspamd_rcl_add_default_handler (sub,
-			"max_session_cache",
+			"max_sessions_cache",
 			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_session_cache),
+			G_STRUCT_OFFSET (struct rspamd_config, max_sessions_cache),
 			0,
 			"Maximum number of sessions in cache before warning (default: 100)");
 
