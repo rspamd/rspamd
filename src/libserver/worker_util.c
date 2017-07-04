@@ -697,7 +697,7 @@ rspamd_worker_is_normal (struct rspamd_worker *w)
 
 struct rspamd_worker_session_elt {
 	void *ptr;
-	gint *pref;
+	guint *pref;
 	const gchar *tag;
 	time_t when;
 };
@@ -781,7 +781,7 @@ rspamd_worker_session_cache_new (struct rspamd_worker *w,
 
 void
 rspamd_worker_session_cache_add (void *cache, const gchar *tag,
-		gint *pref, void *ptr)
+		guint *pref, void *ptr)
 {
 	struct rspamd_worker_session_cache *c = cache;
 	struct rspamd_worker_session_elt *elt;

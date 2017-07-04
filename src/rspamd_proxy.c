@@ -133,6 +133,8 @@ struct rspamd_proxy_ctx {
 	gboolean milter;
 	/* Milter spam header */
 	gchar *spam_header;
+	/* Sessions cache */
+	void *sessions_cache;
 };
 
 enum rspamd_backend_flags {
@@ -986,6 +988,11 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		close (session->client_sock);
 	}
 
+	if (session->ctx->sessions_cache) {
+		rspamd_worker_session_cache_remove (session->ctx->sessions_cache,
+				session);
+	}
+
 	if (session->pool) {
 		rspamd_mempool_delete (session->pool);
 	}
@@ -1118,6 +1125,11 @@ proxy_session_refresh (struct rspamd_proxy_session *session)
 	nsession->mirror_conns = g_ptr_array_sized_new (nsession->ctx->mirrors->len);
 
 	REF_INIT_RETAIN (nsession, proxy_session_dtor);
+
+	if (nsession->ctx->sessions_cache) {
+		rspamd_worker_session_cache_add (nsession->ctx->sessions_cache,
+				nsession->pool->tag.uid, &nsession->ref.refcount, nsession);
+	}
 
 	return nsession;
 }
@@ -1951,6 +1963,11 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->ctx = ctx;
 	session->worker = worker;
 
+	if (ctx->sessions_cache) {
+		rspamd_worker_session_cache_add (ctx->sessions_cache,
+				session->pool->tag.uid, &session->ref.refcount, session);
+	}
+
 	if (!ctx->milter) {
 		session->client_conn = rspamd_http_connection_new (NULL,
 				proxy_client_error_handler,
@@ -2041,9 +2058,12 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 		rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
 	}
 
-	if (ctx->spam_header) {
-		rspamd_milter_init_library (ctx->spam_header);
+	if (worker->srv->cfg->enable_sessions_cache) {
+		ctx->sessions_cache = rspamd_worker_session_cache_new (worker,
+				ctx->ev_base);
 	}
+
+	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

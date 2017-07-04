@@ -152,7 +152,7 @@ void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
  * @param ptr
  */
 void rspamd_worker_session_cache_add (void *cache, const gchar *tag,
-		gint *pref, void *ptr);
+		guint *pref, void *ptr);
 
 /**
  * Removes session from cache

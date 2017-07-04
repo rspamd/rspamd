@@ -148,7 +148,8 @@ void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
  * Init internal milter context
  * @param spam_header spam header name (must NOT be NULL)
  */
-void rspamd_milter_init_library (const gchar *spam_header);
+void rspamd_milter_init_library (const gchar *spam_header,
+		void *sessions_cache);
 
 /**
  * Returns pool for a session

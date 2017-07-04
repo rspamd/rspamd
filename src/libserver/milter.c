@@ -26,6 +26,7 @@
 #include "libutil/http_private.h"
 #include "libserver/protocol_internal.h"
 #include "libmime/filter.h"
+#include "libserver/worker_util.h"
 #include "utlist.h"
 
 #define msg_err_milter(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
@@ -47,6 +48,7 @@
 
 struct rspamd_milter_context {
 	gchar *spam_header;
+	void *sessions_cache;
 };
 
 static struct rspamd_milter_context *milter_ctx = NULL;
@@ -186,6 +188,11 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 		if (priv->headers) {
 			g_hash_table_destroy (priv->headers);
+		}
+
+		if (milter_ctx->sessions_cache) {
+			rspamd_worker_session_cache_remove (milter_ctx->sessions_cache,
+					session);
 		}
 
 		rspamd_mempool_delete (priv->pool);
@@ -996,11 +1003,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 
 	g_assert (finish_cb != NULL);
 	g_assert (error_cb != NULL);
-
-	if (G_UNLIKELY (milter_ctx == NULL)) {
-		milter_ctx = g_malloc (sizeof (*milter_ctx));
-		milter_ctx->spam_header = g_strdup (RSPAMD_MILTER_SPAM_HEADER);
-	}
+	g_assert (milter_ctx != NULL);
 
 	session = g_malloc0 (sizeof (*session));
 	priv = g_malloc0 (sizeof (*priv));
@@ -1032,6 +1035,11 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 
 	session->priv = priv;
 	REF_INIT_RETAIN (session, rspamd_milter_session_dtor);
+
+	if (milter_ctx->sessions_cache) {
+		rspamd_worker_session_cache_add (milter_ctx->sessions_cache,
+				priv->pool->tag.uid, &session->ref.refcount, session);
+	}
 
 	return rspamd_milter_handle_session (session, priv);
 }
@@ -1629,7 +1637,7 @@ cleanup:
 }
 
 void
-rspamd_milter_init_library (const gchar *spam_header)
+rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache)
 {
 	if (milter_ctx) {
 		g_free (milter_ctx->spam_header);
@@ -1637,7 +1645,15 @@ rspamd_milter_init_library (const gchar *spam_header)
 	}
 
 	milter_ctx = g_malloc (sizeof (*milter_ctx));
-	milter_ctx->spam_header = g_strdup (spam_header);
+
+	if (spam_header) {
+		milter_ctx->spam_header = g_strdup (spam_header);
+	}
+	else {
+		milter_ctx->spam_header = g_strdup (RSPAMD_MILTER_SPAM_HEADER);
+	}
+
+	milter_ctx->sessions_cache = sessions_cache;
 }
 
 rspamd_mempool_t *
