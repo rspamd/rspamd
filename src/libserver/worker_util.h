@@ -137,6 +137,31 @@ void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
 gboolean rspamd_worker_is_normal (struct rspamd_worker *w);
 
 /**
+ * Creates new session cache
+ * @param w
+ * @return
+ */
+void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
+		struct event_base *ev_base);
+
+/**
+ * Adds a new session identified by pointer
+ * @param cache
+ * @param tag
+ * @param pref
+ * @param ptr
+ */
+void rspamd_worker_session_cache_add (void *cache, const gchar *tag,
+		gint *pref, void *ptr);
+
+/**
+ * Removes session from cache
+ * @param cache
+ * @param ptr
+ */
+void rspamd_worker_session_cache_remove (void *cache, void *ptr);
+
+/**
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,

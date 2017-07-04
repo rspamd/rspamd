@@ -694,3 +694,112 @@ rspamd_worker_is_normal (struct rspamd_worker *w)
 
 	return FALSE;
 }
+
+struct rspamd_worker_session_elt {
+	void *ptr;
+	gint *pref;
+	const gchar *tag;
+	time_t when;
+};
+
+struct rspamd_worker_session_cache {
+	struct event_base *ev_base;
+	GHashTable *cache;
+	struct rspamd_config *cfg;
+	struct timeval tv;
+	struct event periodic;
+};
+
+static gint
+rspamd_session_cache_sort_cmp (gconstpointer pa, gconstpointer pb)
+{
+	const struct rspamd_worker_session_elt
+			*e1 = *(const struct rspamd_worker_session_elt **)pa,
+			*e2 = *(const struct rspamd_worker_session_elt **)pb;
+
+	return e1->when < e2->when;
+}
+
+static void
+rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
+{
+	struct rspamd_worker_session_cache *c = p;
+	GHashTableIter it;
+	gchar timebuf[32];
+	gpointer k, v;
+	struct rspamd_worker_session_elt *elt;
+	struct tm *tms;
+	GPtrArray *res;
+	guint i;
+
+	if (g_hash_table_size (c->cache) > c->cfg->max_session_cache) {
+		res = g_ptr_array_sized_new (g_hash_table_size (c->cache));
+		g_hash_table_iter_init (&it, c->cache);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			g_ptr_array_add (res, v);
+		}
+
+		msg_err ("sessions cache is overflowed %d elements where %d is limit",
+				(gint)res->len, (gint)c->cfg->max_session_cache);
+		g_ptr_array_sort (res, rspamd_session_cache_sort_cmp);
+
+		PTR_ARRAY_FOREACH (res, i, elt) {
+			tms = localtime (&elt->when);
+			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+
+			msg_warn ("redundant session; ptr: %p, "
+					"tag: %s, refcount: %d, time: %s",
+					elt->ptr, elt->tag ? elt->tag : "unknown",
+					elt->pref ? *elt->pref : 0,
+					timebuf);
+		}
+	}
+}
+
+void *
+rspamd_worker_session_cache_new (struct rspamd_worker *w,
+		struct event_base *ev_base)
+{
+	struct rspamd_worker_session_cache *c;
+	static const gdouble periodic_interval = 60.0;
+
+	c = g_malloc0 (sizeof (*c));
+	c->ev_base = ev_base;
+	c->cache = g_hash_table_new_full (g_direct_hash, g_direct_equal,
+			NULL, g_free);
+	c->cfg = w->srv->cfg;
+	double_to_tv (periodic_interval, &c->tv);
+	event_set (&c->periodic, -1, EV_TIMEOUT|EV_PERSIST,
+			rspamd_sessions_cache_periodic, c);
+	event_base_set (ev_base, &c->periodic);
+	event_add (&c->periodic, &c->tv);
+
+	return c;
+}
+
+
+void
+rspamd_worker_session_cache_add (void *cache, const gchar *tag,
+		gint *pref, void *ptr)
+{
+	struct rspamd_worker_session_cache *c = cache;
+	struct rspamd_worker_session_elt *elt;
+
+	elt = g_malloc0 (sizeof (*elt));
+	elt->pref = pref;
+	elt->ptr = ptr;
+	elt->tag = tag;
+	elt->when = time (NULL);
+
+	g_hash_table_insert (c->cache, elt->ptr, elt);
+}
+
+
+void
+rspamd_worker_session_cache_remove (void *cache, void *ptr)
+{
+	struct rspamd_worker_session_cache *c = cache;
+
+	g_hash_table_remove (c->cache, ptr);
+}
