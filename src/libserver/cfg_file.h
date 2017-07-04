@@ -308,6 +308,7 @@ struct rspamd_config {
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
 	gboolean check_local;				/** Don't disable any checks for local networks */
 	gboolean check_authed;				/** Don't disable any checks for authenticated users */
+	gboolean enable_sessions_cache;                 /**< Enable session cache for debug */
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
@@ -411,6 +412,7 @@ struct rspamd_config {
 	guint max_word_len;								/**< maximum length of the word to be considered		*/
 	guint words_decay;								/**< limit for words for starting adaptive ignoring		*/
 	guint history_rows;								/**< number of history rows stored						*/
+	guint max_session_cache;                        /**< maximum number of sessions cache elts				*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/

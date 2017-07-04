@@ -2199,6 +2199,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, default_max_shots),
 			0,
 			"Maximum number of hits per a single symbol (default: 100)");
+	rspamd_rcl_add_default_handler (sub,
+			"sessions_cache",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, enable_sessions_cache),
+			0,
+			"Enable sessions cache to debug dangling sessions");
+	rspamd_rcl_add_default_handler (sub,
+			"max_session_cache",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_session_cache),
+			0,
+			"Maximum number of sessions in cache before warning (default: 100)");
 
 	/* Neighbours configuration */
 	rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",

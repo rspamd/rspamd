@@ -42,6 +42,7 @@
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
 #define DEFAULT_MAX_SHOTS 100
+#define DEFAULT_MAX_SESSIONS 100
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -181,6 +182,7 @@ rspamd_config_new (void)
 	cfg->redis_pool = rspamd_redis_pool_init ();
 #endif
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
+	cfg->max_session_cache = DEFAULT_MAX_SESSIONS;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
