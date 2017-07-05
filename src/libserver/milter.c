@@ -49,6 +49,7 @@
 struct rspamd_milter_context {
 	gchar *spam_header;
 	void *sessions_cache;
+	gboolean discard_on_reject;
 };
 
 static struct rspamd_milter_context *milter_ctx = NULL;
@@ -1565,18 +1566,23 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 
 	switch (action) {
 	case METRIC_ACTION_REJECT:
-		rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_REJECT,
-				sizeof (RSPAMD_MILTER_RCODE_REJECT) - 1);
-		xcode = rspamd_fstring_new_init (RSPAMD_MILTER_XCODE_REJECT,
-				sizeof (RSPAMD_MILTER_XCODE_REJECT) - 1);
-
-		if (!reply) {
-			reply = rspamd_fstring_new_init (RSPAMD_MILTER_REJECT_MESSAGE,
-					sizeof (RSPAMD_MILTER_REJECT_MESSAGE) - 1);
+		if (milter_ctx->discard_on_reject) {
+			rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
 		}
+		else {
+			rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_REJECT,
+					sizeof (RSPAMD_MILTER_RCODE_REJECT) - 1);
+			xcode = rspamd_fstring_new_init (RSPAMD_MILTER_XCODE_REJECT,
+					sizeof (RSPAMD_MILTER_XCODE_REJECT) - 1);
 
-		rspamd_milter_set_reply (session, rcode, xcode, reply);
-		rspamd_milter_send_action (session, RSPAMD_MILTER_REJECT);
+			if (!reply) {
+				reply = rspamd_fstring_new_init (RSPAMD_MILTER_REJECT_MESSAGE,
+						sizeof (RSPAMD_MILTER_REJECT_MESSAGE) - 1);
+			}
+
+			rspamd_milter_set_reply (session, rcode, xcode, reply);
+			rspamd_milter_send_action (session, RSPAMD_MILTER_REJECT);
+		}
 		break;
 	case METRIC_ACTION_SOFT_REJECT:
 		rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_TEMPFAIL,
@@ -1638,7 +1644,8 @@ cleanup:
 }
 
 void
-rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache)
+rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache,
+		gboolean discard_on_reject)
 {
 	if (milter_ctx) {
 		g_free (milter_ctx->spam_header);
@@ -1655,6 +1662,7 @@ rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache)
 	}
 
 	milter_ctx->sessions_cache = sessions_cache;
+	milter_ctx->discard_on_reject = discard_on_reject;
 }
 
 rspamd_mempool_t *

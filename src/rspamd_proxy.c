@@ -131,6 +131,8 @@ struct rspamd_proxy_ctx {
 	gboolean has_self_scan;
 	/* It is not HTTP but milter proxy */
 	gboolean milter;
+	/* Discard messages instead of rejecting them */
+	gboolean discard_on_reject;
 	/* Milter spam header */
 	gchar *spam_header;
 	/* Sessions cache */
@@ -789,6 +791,14 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, milter),
 			0,
 			"Accept milter connections, not HTTP");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"discard_on_reject",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, discard_on_reject),
+			0,
+			"Tell MTA to discard rejected messages silently");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"spam_header",
@@ -2063,7 +2073,8 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 				ctx->ev_base);
 	}
 
-	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache);
+	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache,
+			ctx->discard_on_reject);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
