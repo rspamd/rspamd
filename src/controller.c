@@ -60,6 +60,7 @@
 #define PATH_ERRORS "/errors"
 #define PATH_NEIGHBOURS "/neighbours"
 #define PATH_PLUGINS "/plugins"
+#define PATH_PING "/ping"
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
@@ -2808,6 +2809,34 @@ rspamd_controller_handle_plugins (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+static int
+rspamd_controller_handle_ping (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_http_message *rep_msg;
+	rspamd_fstring_t *reply;
+
+	rep_msg = rspamd_http_new_message (HTTP_RESPONSE);
+	rep_msg->date = time (NULL);
+	rep_msg->code = 200;
+	rep_msg->status = rspamd_fstring_new_init ("OK", 2);
+	reply = rspamd_fstring_new_init ("pong" CRLF, strlen ("pong" CRLF));
+	rspamd_http_message_set_body_from_fstring_steal (rep_msg, reply);
+	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_router_insert_headers (conn_ent->rt, rep_msg);
+	rspamd_http_connection_write_message (conn_ent->conn,
+			rep_msg,
+			NULL,
+			"text/plain",
+			conn_ent,
+			conn_ent->conn->fd,
+			conn_ent->rt->ptv,
+			conn_ent->rt->ev_base);
+	conn_ent->is_reply = TRUE;
+
+	return 0;
+}
+
 /*
  * Called on unknown methods and is used to deal with CORS as per
  * https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS
@@ -3712,6 +3741,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_PLUGINS,
 			rspamd_controller_handle_plugins);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_PING,
+			rspamd_controller_handle_ping);
 	rspamd_controller_register_plugins_paths (ctx);
 
 #if 0
