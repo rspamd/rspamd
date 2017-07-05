@@ -1996,7 +1996,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 				rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr));
 
-		rspamd_milter_handle_socket (nfd, &ctx->io_tv,
+		rspamd_milter_handle_socket (nfd, NULL,
 				session->pool,
 				ctx->ev_base,
 				proxy_milter_finish_handler,
