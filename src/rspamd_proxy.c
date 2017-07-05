@@ -1893,6 +1893,8 @@ proxy_milter_finish_handler (gint fd,
 	struct rspamd_proxy_session *session = ud;
 	struct rspamd_http_message *msg;
 
+	session->client_milter_conn = rms;
+
 	if (rms->message == NULL || rms->message->len == 0) {
 		msg_info_session ("finished milter connection");
 		proxy_backend_close_connection (session->master_conn);
@@ -1904,9 +1906,7 @@ proxy_milter_finish_handler (gint fd,
 					sizeof (*session->master_conn));
 		}
 
-		session->client_milter_conn = rms;
 		msg = rspamd_milter_to_http (rms);
-
 		session->master_conn->s = session;
 		session->master_conn->name = "master";
 		session->client_message = msg;

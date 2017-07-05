@@ -163,6 +163,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 
 	if (session) {
 		priv = session->priv;
+		msg_debug_milter ("destroying milter session");
 
 		if (event_get_base (&priv->ev)) {
 			event_del (&priv->ev);
@@ -635,7 +636,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			version, actions, protocol);
 		break;
 	case RSPAMD_MILTER_CMD_QUIT:
-		msg_debug_milter ("quit command");
+		msg_debug_milter ("quit command, refcount: %d", session->ref.refcount);
 		priv->state = RSPAMD_MILTER_WANNA_DIE;
 		REF_RETAIN (session);
 		priv->fin_cb (priv->fd, session, priv->ud);
