@@ -11140,6 +11140,14 @@ virtueeldomein.nl
 // Submitted by Khash Sajadi <khash@cloud66.com>
 c66.me
 
+// CloudAccess.net : https://www.cloudaccess.net/
+// Submitted by Pawel Panek <noc@cloudaccess.net>
+jdevcloud.com
+wpdevcloud.com
+cloudaccess.host
+freesite.host
+cloudaccess.net
+
 // cloudControl : https://www.cloudcontrol.com/
 // Submitted by Tobias Wilken <tw@cloudcontrol.com>
 cloudcontrolled.com
@@ -11227,6 +11235,10 @@ dedyn.io
 // DNShome : https://www.dnshome.de/
 // Submitted by Norbert Auler <mail@dnshome.de>
 dnshome.de
+
+// DrayTek Corp. : https://www.draytek.com/
+// Submitted by Paul Fang <mis@draytek.com>
+drayddns.com
 
 // DreamHost : http://www.dreamhost.com/
 // Submitted by Andrew Farmer <andrew.farmer@dreamhost.com>
@@ -11556,6 +11568,10 @@ dynv6.net
 // Submitted by Vladimir Dudr <info@e4you.cz>
 e4.cz
 
+// Enalean SAS: https://www.enalean.com
+// Submitted by Thomas Cottier <thomas.cottier@enalean.com>
+mytuleap.com
+
 // Enonic : http://enonic.com/
 // Submitted by Erik Kaareng-Sunde <esu@enonic.com>
 enonic.io
@@ -11750,6 +11766,7 @@ firebaseapp.com
 // Flynn : https://flynn.io
 // Submitted by Jonathan Rudenberg <jonathan@flynn.io>
 flynnhub.com
+flynnhosting.net
 
 // Freebox : http://www.freebox.fr
 // Submitted by Romain Fliedel <rfliedel@freebox.fr>
@@ -11780,11 +11797,6 @@ service.gov.uk
 // Submitted by Patrick Toomey <security@github.com>
 github.io
 githubusercontent.com
-githubcloud.com
-*.api.githubcloud.com
-*.ext.githubcloud.com
-gist.githubcloud.com
-*.githubcloudusercontent.com
 
 // GitLab, Inc.
 // Submitted by Alex Hanselka <alex@gitlab.com>
@@ -11919,6 +11931,10 @@ iki.fi
 biz.at
 info.at
 
+// info.cx : http://info.cx
+// Submitted by Jacob Slater <whois@igloo.to>
+info.cx
+
 // Interlegis : http://www.interlegis.leg.br
 // Submitted by Gabriel Ferreira <registrobr@interlegis.leg.br>
 ac.leg.br
@@ -11974,6 +11990,12 @@ knightpoint.systems
 co.krd
 edu.krd
 
+// LCube - Professional hosting e.K. : https://www.lcube-webhosting.de
+// Submitted by Lars Laehn <info@lcube.de>
+git-repos.de
+lcube-server.de
+svn-repos.de
+
 // Lukanet Ltd : https://lukanet.com
 // Submitted by Anton Avramov <register@lukanet.com>
 barsy.bg
@@ -11992,6 +12014,11 @@ barsy.support
 // Mail.Ru Group : https://hb.cldmail.ru
 // Submitted by Ilya Zaretskiy <zaretskiy@corp.mail.ru>
 hb.cldmail.ru
+
+// MetaCentrum, CESNET z.s.p.o. : https://www.metacentrum.cz/en/
+// Submitted by Zdeněk Šustr <zdenek.sustr@cesnet.cz>
+cloud.metacentrum.cz
+custom.metacentrum.cz
 
 // Meteor Development Group : https://www.meteor.com/hosting
 // Submitted by Pierre Carrier <pierre@meteor.com>
@@ -12346,10 +12373,39 @@ gdynia.pl
 med.pl
 sopot.pl
 
+// Thingdust AG : https://thingdust.com/
+// Submitted by Adrian Imboden <adi@thingdust.com>
+cust.dev.thingdust.io
+cust.disrec.thingdust.io
+cust.prod.thingdust.io
+cust.testing.thingdust.io
+
 // TownNews.com : http://www.townnews.com
 // Submitted by Dustin Ward <dward@townnews.com>
 bloxcms.com
 townnews-staging.com
+
+// TrafficPlex GmbH : https://www.trafficplex.de/
+// Submitted by Phillipp Röll <phillipp.roell@trafficplex.de>
+12hp.at
+2ix.at
+4lima.at
+lima-city.at
+12hp.ch
+2ix.ch
+4lima.ch
+lima-city.ch
+trafficplex.cloud
+de.cool
+12hp.de
+2ix.de
+4lima.de
+lima-city.de
+1337.pictures
+clan.rip
+lima-city.rocks
+webspace.rocks
+lima.zone
 
 // TransIP : htts://www.transip.nl
 // Submitted by Rory Breuk <rbreuk@transip.nl>
@@ -12411,6 +12467,8 @@ wmflabs.org
 
 // XS4ALL Internet bv : https://www.xs4all.nl/
 // Submitted by Daniel Mostertman <unixbeheer+publicsuffix@xs4all.net>
+cistron.nl
+demon.nl
 xs4all.space
 
 // Yola : https://www.yola.com/
