@@ -27,7 +27,7 @@ struct rspamd_monitored_methods {
 	void * (*monitored_config) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx,
 			const ucl_object_t *opts);
-	void (*monitored_update) (struct rspamd_monitored *m,
+	gboolean (*monitored_update) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx, gpointer ud);
 	void (*monitored_dtor) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx, gpointer ud);
@@ -50,6 +50,7 @@ struct rspamd_monitored_ctx {
 struct rspamd_monitored {
 	gchar *url;
 	gdouble monitoring_interval;
+	gdouble monitoring_mult;
 	gdouble offline_time;
 	gdouble total_offline_time;
 	gdouble latency;
@@ -91,16 +92,36 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			msg_debug_mon ("%s on resolving %s, %d retries left",
 					error, m->url,  m->max_errors - m->cur_errors);
 			m->cur_errors ++;
+			/* Reduce timeout */
+			rspamd_monitored_stop (m);
+			m->monitoring_mult /= 2.0;
+			rspamd_monitored_start (m);
 		}
 		else {
 			msg_info_mon ("%s on resolving %s, disable object",
 					error, m->url);
 			m->alive = FALSE;
 			m->offline_time = rspamd_get_calendar_ticks ();
+			rspamd_monitored_stop (m);
+			m->monitoring_mult = 1.0;
+			rspamd_monitored_start (m);
 
 			if (m->ctx->change_cb) {
 				m->ctx->change_cb (m->ctx, m, FALSE, m->ctx->ud);
 			}
+		}
+	}
+	else {
+		if (m->monitoring_mult < 8.0) {
+			/* Increase timeout */
+			rspamd_monitored_stop (m);
+			m->monitoring_mult *= 2.0;
+			rspamd_monitored_start (m);
+		}
+		else {
+			rspamd_monitored_stop (m);
+			m->monitoring_mult = 8.0;
+			rspamd_monitored_start (m);
 		}
 	}
 }
@@ -122,6 +143,9 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 		m->offline_time = 0;
 		m->nchecks = 1;
 		m->latency = lat;
+		rspamd_monitored_stop (m);
+		m->monitoring_mult = 1.0;
+		rspamd_monitored_start (m);
 
 		if (m->ctx->change_cb) {
 			m->ctx->change_cb (m->ctx, m, TRUE, m->ctx->ud);
@@ -139,15 +163,19 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 	struct rspamd_monitored *m = ud;
 	struct timeval tv;
 	gdouble jittered;
+	gboolean ret = FALSE;
 
-	jittered = rspamd_time_jitter (m->monitoring_interval, 0.0);
+	jittered = rspamd_time_jitter (m->monitoring_interval * m->monitoring_mult,
+			0.0);
 	double_to_tv (jittered, &tv);
 
 	if (m->proc.monitored_update) {
-		m->proc.monitored_update (m, m->ctx, m->proc.ud);
+		ret = m->proc.monitored_update (m, m->ctx, m->proc.ud);
 	}
 
-	event_add (&m->periodic, &tv);
+	if (ret) {
+		event_add (&m->periodic, &tv);
+	}
 }
 
 struct rspamd_dns_monitored_conf {
@@ -310,7 +338,7 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 	}
 }
 
-void
+static gboolean
 rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 		struct rspamd_monitored_ctx *ctx, gpointer ud)
 {
@@ -323,10 +351,14 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 
 		m->cur_errors ++;
 		rspamd_monitored_propagate_error (m, "failed to make DNS request");
+
+		return FALSE;
 	}
 	else {
 		conf->check_tm = rspamd_get_calendar_ticks ();
 	}
+
+	return TRUE;
 }
 
 void
@@ -381,7 +413,9 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	/* Start all events */
 	for (i = 0; i < ctx->elts->len; i ++) {
 		m = g_ptr_array_index (ctx->elts, i);
+		m->monitoring_mult = 0;
 		rspamd_monitored_start (m);
+		m->monitoring_mult = 1.0;
 	}
 }
 
@@ -414,6 +448,7 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 	m->url = g_strdup (line);
 	m->ctx = ctx;
 	m->monitoring_interval = ctx->monitoring_interval;
+	m->monitoring_mult = 1.0;
 	m->max_errors = ctx->max_errors;
 	m->alive = TRUE;
 
@@ -521,7 +556,6 @@ rspamd_monitored_stop (struct rspamd_monitored *m)
 {
 	g_assert (m != NULL);
 
-	m->alive = FALSE;
 	if (event_get_base (&m->periodic)) {
 		event_del (&m->periodic);
 	}
@@ -535,7 +569,8 @@ rspamd_monitored_start (struct rspamd_monitored *m)
 
 	g_assert (m != NULL);
 	msg_debug_mon ("started monitored object %s", m->url);
-	jittered = rspamd_time_jitter (m->monitoring_interval, 0.0);
+	jittered = rspamd_time_jitter (m->monitoring_interval * m->monitoring_mult,
+			0.0);
 	double_to_tv (jittered, &tv);
 
 	if (event_get_base (&m->periodic)) {
