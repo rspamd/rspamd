@@ -23,6 +23,8 @@ struct rspamd_monitored;
 struct rspamd_monitored_ctx;
 struct rspamd_config;
 
+#define RSPAMD_MONITORED_TAG_LEN 32
+
 enum rspamd_monitored_type {
 	RSPAMD_MONITORED_DNS = 0,
 };
@@ -63,12 +65,32 @@ void rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
  * @param flags specific flags for monitoring
  * @return new monitored object
  */
-struct rspamd_monitored *rspamd_monitored_create (
+struct rspamd_monitored *rspamd_monitored_create_ (
 		struct rspamd_monitored_ctx *ctx,
 		const gchar *line,
 		enum rspamd_monitored_type type,
 		enum rspamd_monitored_flags flags,
-		const ucl_object_t *opts);
+		const ucl_object_t *opts,
+		const gchar *loc);
+#define rspamd_monitored_create(ctx, line, type, flags, opts) \
+	rspamd_monitored_create_(ctx, line, type, flags, opts, G_STRFUNC)
+
+/**
+ * Return monitored by its tag
+ * @param ctx
+ * @param tag
+ * @return
+ */
+struct rspamd_monitored * rspamd_monitored_by_tag (struct rspamd_monitored_ctx *ctx,
+		guchar tag[RSPAMD_MONITORED_TAG_LEN]);
+
+/**
+ * Sets `tag_out` to the monitored tag
+ * @param m
+ * @param tag_out
+ */
+void rspamd_monitored_get_tag (struct rspamd_monitored *m,
+		guchar tag_out[RSPAMD_MONITORED_TAG_LEN]);
 
 /**
  * Return TRUE if monitored object is alive

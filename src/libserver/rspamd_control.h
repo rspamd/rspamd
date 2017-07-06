@@ -32,12 +32,14 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_LOG_PIPE,
 	RSPAMD_CONTROL_FUZZY_STAT,
 	RSPAMD_CONTROL_FUZZY_SYNC,
+	RSPAMD_CONTROL_MONITORED_CHANGE,
 	RSPAMD_CONTROL_MAX
 };
 
 enum rspamd_srv_type {
 	RSPAMD_SRV_SOCKETPAIR = 0,
 	RSPAMD_SRV_HYPERSCAN_LOADED,
+	RSPAMD_SRV_MONITORED_CHANGE,
 	RSPAMD_SRV_LOG_PIPE,
 };
 
@@ -64,6 +66,10 @@ struct rspamd_control_command {
 			gchar cache_dir[CONTROL_PATHLEN];
 			gboolean forced;
 		} hs_loaded;
+		struct {
+			gchar tag[32];
+			gboolean alive;
+		} monitored_change;
 		struct {
 			enum rspamd_log_pipe_type type;
 		} log_pipe;
@@ -100,6 +106,9 @@ struct rspamd_control_reply {
 		} hs_loaded;
 		struct {
 			guint status;
+		} monitored_change;
+		struct {
+			guint status;
 		} log_pipe;
 		struct {
 			guint status;
@@ -127,6 +136,10 @@ struct rspamd_srv_command {
 			gboolean forced;
 		} hs_loaded;
 		struct {
+			gchar tag[32];
+			gboolean alive;
+		} monitored_change;
+		struct {
 			enum rspamd_log_pipe_type type;
 		} log_pipe;
 	} cmd;
@@ -142,6 +155,9 @@ struct rspamd_srv_reply {
 		struct {
 			gint forced;
 		} hs_loaded;
+		struct {
+			gint status;
+		};
 		struct {
 			enum rspamd_log_pipe_type type;
 		} log_pipe;

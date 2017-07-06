@@ -39,6 +39,7 @@ struct rspamd_monitored_ctx {
 	struct rdns_resolver *resolver;
 	struct event_base *ev_base;
 	GPtrArray *elts;
+	GHashTable *helts;
 	mon_change_cb change_cb;
 	gpointer ud;
 	gdouble monitoring_interval;
@@ -61,7 +62,7 @@ struct rspamd_monitored {
 	struct rspamd_monitored_ctx *ctx;
 	struct rspamd_monitored_methods proc;
 	struct event periodic;
-	gchar tag[MEMPOOL_UID_LEN];
+	gchar tag[RSPAMD_MONITORED_TAG_LEN];
 };
 
 #define msg_err_mon(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -352,6 +353,7 @@ rspamd_monitored_ctx_init (void)
 	ctx->monitoring_interval = default_monitoring_interval;
 	ctx->max_errors = default_max_errors;
 	ctx->elts = g_ptr_array_new ();
+	ctx->helts = g_hash_table_new (g_str_hash, g_str_equal);
 
 	return ctx;
 }
@@ -385,11 +387,12 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 
 
 struct rspamd_monitored *
-rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
+rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 		const gchar *line,
 		enum rspamd_monitored_type type,
 		enum rspamd_monitored_flags flags,
-		const ucl_object_t *opts)
+		const ucl_object_t *opts,
+		const gchar *loc)
 {
 	struct rspamd_monitored *m;
 	rspamd_cryptobox_hash_state_t st;
@@ -429,9 +432,19 @@ rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
 	/* Create a persistent tag */
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
 	rspamd_cryptobox_hash_update (&st, m->url, strlen (m->url));
+	rspamd_cryptobox_hash_update (&st, loc, strlen (loc));
 	rspamd_cryptobox_hash_final (&st, cksum);
 	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
 	rspamd_strlcpy (m->tag, cksum_encoded, sizeof (m->tag));
+
+	if (g_hash_table_lookup (ctx->helts, m->tag) != NULL) {
+		msg_err ("monitored error: tag collision detected for %s; "
+				"url: %s", m->tag, m->url);
+	}
+	else {
+		g_hash_table_insert (ctx->helts, m->tag, m);
+	}
+
 	g_free (cksum_encoded);
 
 	g_ptr_array_add (ctx->elts, m);
@@ -545,4 +558,27 @@ rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx)
 
 	g_ptr_array_free (ctx->elts, TRUE);
 	g_slice_free1 (sizeof (*ctx), ctx);
+}
+
+struct rspamd_monitored *
+rspamd_monitored_by_tag (struct rspamd_monitored_ctx *ctx,
+		guchar tag[RSPAMD_MONITORED_TAG_LEN])
+{
+	struct rspamd_monitored *res;
+	gchar rtag[RSPAMD_MONITORED_TAG_LEN];
+
+	rspamd_strlcpy (rtag, tag, sizeof (rtag));
+	res = g_hash_table_lookup (ctx->helts, rtag);
+
+	return res;
+}
+
+
+void
+rspamd_monitored_get_tag (struct rspamd_monitored *m,
+		guchar tag_out[RSPAMD_MONITORED_TAG_LEN])
+{
+	g_assert (m != NULL);
+
+	rspamd_strlcpy (m->tag, tag_out, RSPAMD_MONITORED_TAG_LEN);
 }

@@ -18,6 +18,7 @@
  */
 
 #include <libserver/rspamd_control.h>
+#include <src/libserver/rspamd_control.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -487,6 +488,39 @@ rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
 	return TRUE;
 }
 
+static gboolean
+rspamd_worker_monitored_handler (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_monitored *m;
+	struct rspamd_monitored_ctx *mctx = worker->srv->cfg->monitored_ctx;
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
+	m = rspamd_monitored_by_tag (mctx, cmd->cmd.monitored_change.tag);
+
+	if (!m) {
+		rspamd_monitored_set_alive (m, cmd->cmd.monitored_change.alive);
+		rep.reply.monitored_change.status = 1;
+	}
+	else {
+		msg_err ("cannot find monitored by tag: %*s", 32,
+				cmd->cmd.monitored_change.tag);
+		rep.reply.monitored_change.status = 0;
+	}
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+
 gpointer
 init_worker (struct rspamd_config *cfg)
 {
@@ -617,6 +651,10 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 	rspamd_control_worker_add_cmd_handler (worker,
 			RSPAMD_CONTROL_LOG_PIPE,
 			rspamd_worker_log_pipe_handler,
+			worker->srv->cfg);
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_MONITORED_CHANGE,
+			rspamd_worker_monitored_handler,
 			worker->srv->cfg);
 }
 

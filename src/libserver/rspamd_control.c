@@ -557,6 +557,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	case RSPAMD_CONTROL_RELOAD:
 	case RSPAMD_CONTROL_RECOMPILE:
 	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
+	case RSPAMD_CONTROL_MONITORED_CHANGE:
 	case RSPAMD_CONTROL_FUZZY_STAT:
 	case RSPAMD_CONTROL_FUZZY_SYNC:
 	case RSPAMD_CONTROL_LOG_PIPE:
@@ -807,14 +808,21 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				/* Broadcast command to all workers */
 				memset (&wcmd, 0, sizeof (wcmd));
 				wcmd.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
-				/*
-				 * We assume that cache dir is shared at the same address for all
-				 * workers
-				 */
 				rspamd_strlcpy (wcmd.cmd.hs_loaded.cache_dir,
 						cmd.cmd.hs_loaded.cache_dir,
 						sizeof (wcmd.cmd.hs_loaded.cache_dir));
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
+				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
+						rspamd_control_hs_io_handler, NULL);
+				break;
+			case RSPAMD_SRV_MONITORED_CHANGE:
+				/* Broadcast command to all workers */
+				memset (&wcmd, 0, sizeof (wcmd));
+				wcmd.type = RSPAMD_CONTROL_MONITORED_CHANGE;
+				rspamd_strlcpy (wcmd.cmd.monitored_change.tag,
+						cmd.cmd.monitored_change.tag,
+						sizeof (wcmd.cmd.monitored_change.tag));
+				wcmd.cmd.monitored_change.alive = cmd.cmd.monitored_change.alive;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_hs_io_handler, NULL);
 				break;
