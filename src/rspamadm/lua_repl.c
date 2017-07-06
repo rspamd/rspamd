@@ -34,6 +34,7 @@ static gchar **lua_args = NULL;
 static gchar *histfile = NULL;
 static guint max_history = 2000;
 static gchar *serve = NULL;
+static gchar *exec_line = NULL;
 static gint batch = -1;
 static gboolean per_line = FALSE;
 
@@ -109,8 +110,10 @@ static GOptionEntry entries[] = {
 				"Serve http lua server", NULL},
 		{"batch", 'b', 0, G_OPTION_ARG_NONE, &batch,
 				"Batch execution mode", NULL},
-		{"per-line", 'p', 0, G_OPTION_ARG_NONE, &batch,
+		{"per-line", 'p', 0, G_OPTION_ARG_NONE, &per_line,
 				"Pass each line of input to the specified lua script", NULL},
+		{"exec", 'e', 0, G_OPTION_ARG_STRING, &exec_line,
+				"Execute specified script", NULL},
 		{"args", 'a', 0, G_OPTION_ARG_STRING_ARRAY, &lua_args,
 				"Arguments to pass to Lua", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
@@ -130,6 +133,7 @@ rspamadm_lua_help (gboolean full_help)
 				"-s: load scripts on start from specified files (may be repeated)\n"
 				"-S: listen on a specified address as HTTP server\n"
 				"-a: pass argument to lua (may be repeated)\n"
+				"-e: execute script specified in command line"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -231,29 +235,30 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 
 	g_string_free (tb, TRUE);
 
-	if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		rspamd_fprintf (stderr, "call failed: %v\n", tb);
-		g_string_free (tb, TRUE);
+	if (!per_line) {
+		if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			rspamd_fprintf (stderr, "call failed: %v\n", tb);
+			g_string_free (tb, TRUE);
+			lua_settop (L, 0);
+			return;
+		}
+
+		/* Print output */
+		for (i = err_idx + 1; i <= lua_gettop (L); i++) {
+			if (lua_isfunction (L, i)) {
+				lua_pushvalue (L, i);
+				cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+				rspamd_printf ("local function: %d\n", cbref);
+			} else {
+				lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
+				rspamd_printf ("%s\n", outbuf);
+			}
+		}
+
 		lua_settop (L, 0);
-		return;
 	}
-
-	/* Print output */
-	for (i = err_idx + 1; i <= lua_gettop (L); i ++) {
-		if (lua_isfunction (L, i)) {
-			lua_pushvalue (L, i);
-			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-
-			rspamd_printf ("local function: %d\n", cbref);
-		}
-		else {
-			lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
-			rspamd_printf ("%s\n", outbuf);
-		}
-	}
-
-	lua_settop (L, 0);
 }
 
 static void
@@ -715,6 +720,10 @@ rspamadm_lua (gint argc, gchar **argv)
 		}
 	}
 
+	if (exec_line) {
+		rspamadm_exec_input (L, exec_line);
+	}
+
 	if (serve) {
 		/* HTTP Server mode */
 		GPtrArray *addrs = NULL;
@@ -807,6 +816,7 @@ rspamadm_lua (gint argc, gchar **argv)
 		GString *buf;
 		gsize end_pos;
 		GIOStatus ret;
+		gint old_top;
 		GError *err = NULL;
 
 		in = g_io_channel_unix_new (STDIN_FILENO);
@@ -815,16 +825,19 @@ rspamadm_lua (gint argc, gchar **argv)
 again:
 		while ((ret = g_io_channel_read_line_string (in, buf, &end_pos, &err)) ==
 				G_IO_STATUS_NORMAL) {
+			old_top = lua_gettop (L);
+			lua_pushvalue (L, -1);
 			lua_pushlstring (L, buf->str, MIN (buf->len, end_pos));
+			lua_setglobal (L, "input");
 
-			if (lua_pcall (L, 1, 0, 0) != 0) {
+			if (lua_pcall (L, 0, 0, 0) != 0) {
 				rspamd_fprintf (stderr, "call to script failed: %s",
 						lua_tostring (L, -1));
 				lua_settop (L, 0);
 				break;
 			}
 
-			lua_settop (L, 0);
+			lua_settop (L, old_top);
 		}
 
 		if (ret == G_IO_STATUS_AGAIN) {
