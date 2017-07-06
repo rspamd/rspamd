@@ -26,7 +26,6 @@
 #include "cryptobox.h"
 #include "ottery.h"
 #include "fuzzy_wire.h"
-#include "libutil/rrd.h"
 #include "unix-std.h"
 #include "utlist.h"
 #include <math.h>
@@ -3793,6 +3792,10 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
 	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
+
+	if (worker->index == 0) {
+		rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
+	}
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

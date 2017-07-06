@@ -386,6 +386,13 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 }
 
 
+struct event_base *
+rspamd_monitored_ctx_get_ev_base (struct rspamd_monitored_ctx *ctx)
+{
+	return ctx->ev_base;
+}
+
+
 struct rspamd_monitored *
 rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 		const gchar *line,
@@ -580,5 +587,5 @@ rspamd_monitored_get_tag (struct rspamd_monitored *m,
 {
 	g_assert (m != NULL);
 
-	rspamd_strlcpy (m->tag, tag_out, RSPAMD_MONITORED_TAG_LEN);
+	rspamd_strlcpy (tag_out, m->tag, RSPAMD_MONITORED_TAG_LEN);
 }

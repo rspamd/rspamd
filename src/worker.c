@@ -498,6 +498,7 @@ rspamd_worker_monitored_handler (struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_monitored *m;
 	struct rspamd_monitored_ctx *mctx = worker->srv->cfg->monitored_ctx;
+	struct rspamd_config *cfg = worker->srv->cfg;
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
@@ -506,6 +507,9 @@ rspamd_worker_monitored_handler (struct rspamd_main *rspamd_main,
 	if (!m) {
 		rspamd_monitored_set_alive (m, cmd->cmd.monitored_change.alive);
 		rep.reply.monitored_change.status = 1;
+		msg_info_config ("updated monitored status for %s: %s",
+				cmd->cmd.monitored_change.tag,
+				cmd->cmd.monitored_change.alive ? "alive" : "dead");
 	}
 	else {
 		msg_err ("cannot find monitored by tag: %*s", 32,
@@ -637,8 +641,6 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct event_base *ev_base,
 		struct rspamd_dns_resolver *resolver)
 {
-	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
-			worker->srv->cfg, ev_base, resolver->r, NULL, NULL);
 	rspamd_stat_init (worker->srv->cfg, ev_base);
 	g_ptr_array_add (worker->finish_actions,
 			(gpointer) rspamd_worker_on_terminate);

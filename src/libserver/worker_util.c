@@ -803,3 +803,36 @@ rspamd_worker_session_cache_remove (void *cache, void *ptr)
 
 	g_hash_table_remove (c->cache, ptr);
 }
+
+static void
+rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
+		struct rspamd_monitored *m, gboolean alive,
+		void *ud)
+{
+	struct rspamd_worker *worker = ud;
+	struct rspamd_config *cfg = worker->srv->cfg;
+	struct event_base *ev_base;
+	guchar tag[RSPAMD_MONITORED_TAG_LEN];
+	static struct rspamd_srv_command srv_cmd;
+
+	rspamd_monitored_get_tag (m, tag);
+	ev_base = rspamd_monitored_ctx_get_ev_base (ctx);
+	srv_cmd.type = RSPAMD_SRV_MONITORED_CHANGE;
+	rspamd_strlcpy (srv_cmd.cmd.monitored_change.tag, tag,
+			sizeof (srv_cmd.cmd.monitored_change.tag));
+	srv_cmd.cmd.monitored_change.alive = alive;
+	msg_info_config ("broadcast monitored update for %s: %s",
+			srv_cmd.cmd.monitored_change.tag, alive ? "alive" : "dead");
+
+	rspamd_srv_send_command (worker, ev_base, &srv_cmd, -1, NULL, NULL);
+}
+
+void
+rspamd_worker_init_monitored (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver)
+{
+	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
+			worker->srv->cfg, ev_base, resolver->r,
+			rspamd_worker_monitored_on_change, worker);
+}

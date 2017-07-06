@@ -57,6 +57,8 @@ void rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 		mon_change_cb change_cb,
 		gpointer ud);
 
+struct event_base *rspamd_monitored_ctx_get_ev_base (struct rspamd_monitored_ctx *ctx);
+
 /**
  * Create monitored object
  * @param ctx context

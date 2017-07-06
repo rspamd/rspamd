@@ -167,6 +167,16 @@ void rspamd_worker_session_cache_remove (void *cache, void *ptr);
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
 		struct rspamd_worker_conf *, guint idx, struct event_base *ev_base);
 
+/**
+ * Initialise the main monitoring worker
+ * @param worker
+ * @param ev_base
+ * @param resolver
+ */
+void rspamd_worker_init_monitored (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver);
+
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
         G_STRFUNC, \
