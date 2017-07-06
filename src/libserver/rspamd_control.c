@@ -823,6 +823,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 						cmd.cmd.monitored_change.tag,
 						sizeof (wcmd.cmd.monitored_change.tag));
 				wcmd.cmd.monitored_change.alive = cmd.cmd.monitored_change.alive;
+				wcmd.cmd.monitored_change.sender = cmd.cmd.monitored_change.sender;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_hs_io_handler, NULL);
 				break;

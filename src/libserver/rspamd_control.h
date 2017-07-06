@@ -69,6 +69,7 @@ struct rspamd_control_command {
 		struct {
 			gchar tag[32];
 			gboolean alive;
+			pid_t sender;
 		} monitored_change;
 		struct {
 			enum rspamd_log_pipe_type type;
@@ -138,6 +139,7 @@ struct rspamd_srv_command {
 		struct {
 			gchar tag[32];
 			gboolean alive;
+			pid_t sender;
 		} monitored_change;
 		struct {
 			enum rspamd_log_pipe_type type;

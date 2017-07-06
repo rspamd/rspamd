@@ -498,23 +498,25 @@ rspamd_worker_monitored_handler (struct rspamd_main *rspamd_main,
 	struct rspamd_control_reply rep;
 	struct rspamd_monitored *m;
 	struct rspamd_monitored_ctx *mctx = worker->srv->cfg->monitored_ctx;
-	struct rspamd_config *cfg = worker->srv->cfg;
+	struct rspamd_config *cfg = ud;
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
-	m = rspamd_monitored_by_tag (mctx, cmd->cmd.monitored_change.tag);
 
-	if (!m) {
-		rspamd_monitored_set_alive (m, cmd->cmd.monitored_change.alive);
-		rep.reply.monitored_change.status = 1;
-		msg_info_config ("updated monitored status for %s: %s",
-				cmd->cmd.monitored_change.tag,
-				cmd->cmd.monitored_change.alive ? "alive" : "dead");
-	}
-	else {
-		msg_err ("cannot find monitored by tag: %*s", 32,
-				cmd->cmd.monitored_change.tag);
-		rep.reply.monitored_change.status = 0;
+	if (cmd->cmd.monitored_change.sender != getpid ()) {
+		m = rspamd_monitored_by_tag (mctx, cmd->cmd.monitored_change.tag);
+
+		if (m != NULL) {
+			rspamd_monitored_set_alive (m, cmd->cmd.monitored_change.alive);
+			rep.reply.monitored_change.status = 1;
+			msg_info_config ("updated monitored status for %s: %s",
+					cmd->cmd.monitored_change.tag,
+					cmd->cmd.monitored_change.alive ? "alive" : "dead");
+		} else {
+			msg_err ("cannot find monitored by tag: %*s", 32,
+					cmd->cmd.monitored_change.tag);
+			rep.reply.monitored_change.status = 0;
+		}
 	}
 
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {

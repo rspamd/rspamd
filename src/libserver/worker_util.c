@@ -821,6 +821,7 @@ rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
 	rspamd_strlcpy (srv_cmd.cmd.monitored_change.tag, tag,
 			sizeof (srv_cmd.cmd.monitored_change.tag));
 	srv_cmd.cmd.monitored_change.alive = alive;
+	srv_cmd.cmd.monitored_change.sender = getpid ();
 	msg_info_config ("broadcast monitored update for %s: %s",
 			srv_cmd.cmd.monitored_change.tag, alive ? "alive" : "dead");
 
