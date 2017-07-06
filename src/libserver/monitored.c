@@ -39,6 +39,8 @@ struct rspamd_monitored_ctx {
 	struct rdns_resolver *resolver;
 	struct event_base *ev_base;
 	GPtrArray *elts;
+	mon_change_cb change_cb;
+	gpointer ud;
 	gdouble monitoring_interval;
 	guint max_errors;
 	gboolean initialized;
@@ -94,6 +96,10 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 					error, m->url);
 			m->alive = FALSE;
 			m->offline_time = rspamd_get_calendar_ticks ();
+
+			if (m->ctx->change_cb) {
+				m->ctx->change_cb (m->ctx, m, FALSE, m->ctx->ud);
+			}
 		}
 	}
 }
@@ -115,6 +121,10 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 		m->offline_time = 0;
 		m->nchecks = 1;
 		m->latency = lat;
+
+		if (m->ctx->change_cb) {
+			m->ctx->change_cb (m->ctx, m, TRUE, m->ctx->ud);
+		}
 	}
 	else {
 		m->latency = (lat + m->latency * m->nchecks) / (m->nchecks + 1);
@@ -351,7 +361,9 @@ void
 rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 		struct rspamd_config *cfg,
 		struct event_base *ev_base,
-		struct rdns_resolver *resolver)
+		struct rdns_resolver *resolver,
+		mon_change_cb change_cb,
+		gpointer ud)
 {
 	struct rspamd_monitored *m;
 	guint i;
@@ -361,6 +373,8 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	ctx->resolver = resolver;
 	ctx->cfg = cfg;
 	ctx->initialized = TRUE;
+	ctx->change_cb = change_cb;
+	ctx->ud = ud;
 
 	/* Start all events */
 	for (i = 0; i < ctx->elts->len; i ++) {
@@ -435,6 +449,18 @@ rspamd_monitored_alive (struct rspamd_monitored *m)
 	g_assert (m != NULL);
 
 	return m->alive;
+}
+
+gboolean
+rspamd_monitored_set_alive (struct rspamd_monitored *m, gboolean alive)
+{
+	gboolean st;
+
+	g_assert (m != NULL);
+	st = m->alive;
+	m->alive = alive;
+
+	return st;
 }
 
 gdouble

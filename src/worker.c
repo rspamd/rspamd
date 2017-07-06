@@ -604,7 +604,7 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct rspamd_dns_resolver *resolver)
 {
 	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
-			worker->srv->cfg, ev_base, resolver->r);
+			worker->srv->cfg, ev_base, resolver->r, NULL, NULL);
 	rspamd_stat_init (worker->srv->cfg, ev_base);
 	g_ptr_array_add (worker->finish_actions,
 			(gpointer) rspamd_worker_on_terminate);

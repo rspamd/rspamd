@@ -38,6 +38,9 @@ enum rspamd_monitored_flags {
  */
 struct rspamd_monitored_ctx *rspamd_monitored_ctx_init (void);
 
+typedef void (*mon_change_cb) (struct rspamd_monitored_ctx *ctx,
+		struct rspamd_monitored *m, gboolean alive,
+		void *ud);
 /**
  * Configure context for monitored objects
  * @param ctx context
@@ -48,7 +51,9 @@ struct rspamd_monitored_ctx *rspamd_monitored_ctx_init (void);
 void rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 		struct rspamd_config *cfg,
 		struct event_base *ev_base,
-		struct rdns_resolver *resolver);
+		struct rdns_resolver *resolver,
+		mon_change_cb change_cb,
+		gpointer ud);
 
 /**
  * Create monitored object
@@ -71,6 +76,13 @@ struct rspamd_monitored *rspamd_monitored_create (
  * @return TRUE or FALSE
  */
 gboolean rspamd_monitored_alive (struct rspamd_monitored *m);
+
+/**
+ * Force alive flag for a monitored object
+ * @param m monitored object
+ * @return TRUE or FALSE
+ */
+gboolean rspamd_monitored_set_alive (struct rspamd_monitored *m, gboolean alive);
 
 /**
  * Returns the current offline time for a monitored object
