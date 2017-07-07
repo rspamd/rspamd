@@ -1231,7 +1231,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		param->task = task;
 		param->suffix = suffix;
 		param->host_resolve =
-			rspamd_mempool_strdup (task->task_pool, surbl_req);
+			rspamd_mempool_strdup (task->task_pool, url->surbl);
 		msg_debug_surbl ("send surbl dns request %s", surbl_req);
 
 		if (make_dns_request_task (task,
