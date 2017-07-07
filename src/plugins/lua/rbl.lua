@@ -456,6 +456,7 @@ local id = rspamd_config:register_symbol({
   flags = 'empty,nice'
 })
 
+local is_monitored = {}
 for key,rbl in pairs(opts['rbls']) do
   (function()
     if rbl['disabled'] then return end
@@ -545,7 +546,8 @@ for key,rbl in pairs(opts['rbls']) do
       end
     end
     if rbl['rbl'] then
-      if not rbl['disable_monitoring'] and not rbl['is_whitelist'] then
+      if not rbl['disable_monitoring'] and not rbl['is_whitelist'] and not is_monitored[rbl['rbl']] then
+        is_monitored[rbl['rbl']] = true
         rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
           {
             rcode = 'nxdomain',
