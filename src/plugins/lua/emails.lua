@@ -39,11 +39,7 @@ local function check_email_rule(task, rule, addr)
     if rule['domain_only'] then
       email = addr.domain
     else
-      if not rule['hash'] then
-        email = string.format('%s.%s', addr.user, addr.domain)
-      else
-        email = string.format('%s@%s', addr.user, addr.domain)
-      end
+      email = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
     end
 
     local function emails_dns_cb(_, _, results, err)
@@ -97,7 +93,7 @@ local function check_email_rule(task, rule, addr)
           task:get_message_id(), key, rule['symbol'])
       end
     else
-      local key = string.format('%s@%s', addr.user, addr.domain)
+      local key = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
         logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
@@ -114,7 +110,8 @@ local function gen_check_emails(rule)
     local checked = {}
     if emails and not rule.skip_body then
       for _,addr in ipairs(emails) do
-        local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
+        local to_check = string.format('%s%s%s', addr:get_user(),
+          rule.delimiter, addr:get_host())
         local naddr = {
           user = (addr:get_user() or ''):lower(),
           domain = (addr:get_host() or ''):lower(),
@@ -159,6 +156,10 @@ if opts and type(opts) == 'table' then
       local rule = v
       if not rule['symbol'] then
         rule['symbol'] = k
+      end
+
+      if not rule['delimiter'] then
+        rule['delimiter'] = "@"
       end
 
       if rule['map'] then
