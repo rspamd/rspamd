@@ -36,6 +36,7 @@
 #define DEFAULT_RLIMIT_NOFILE 2048
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 60.0 * 5
+#define DEFAULT_MAP_FILE_WATCH_MULTIPLIER 1
 #define DEFAULT_MIN_WORD 4
 #define DEFAULT_MAX_WORD 40
 #define DEFAULT_WORDS_DECAY 200
@@ -137,6 +138,7 @@ rspamd_config_new (void)
 				rspamd_str_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
+	cfg->map_file_watch_multiplier = DEFAULT_MAP_FILE_WATCH_MULTIPLIER;
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;

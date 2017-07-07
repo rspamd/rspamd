@@ -1756,7 +1756,12 @@ rspamd_map_add (struct rspamd_config *cfg,
 			map->backends);
 	g_ptr_array_add (map->backends, bk);
 	map->name = rspamd_mempool_strdup (cfg->cfg_pool, map_line);
-	map->poll_timeout = cfg->map_timeout;
+
+	if (bk->protocol == MAP_PROTO_FILE) {
+		map->poll_timeout = (cfg->map_timeout * cfg->map_file_watch_multiplier);
+	} else {
+		map->poll_timeout = cfg->map_timeout;
+	}
 
 	if (description != NULL) {
 		map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
@@ -1820,6 +1825,9 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 				bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
 
 				if (bk != NULL) {
+					if (bk->protocol == MAP_PROTO_FILE) {
+						map->poll_timeout = (map->poll_timeout * cfg->map_file_watch_multiplier);
+					}
 					g_ptr_array_add (map->backends, bk);
 
 					if (!map->name) {
@@ -1873,6 +1881,9 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 					bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
 
 					if (bk != NULL) {
+						if (bk->protocol == MAP_PROTO_FILE) {
+							map->poll_timeout = (map->poll_timeout * cfg->map_file_watch_multiplier);
+						}
 						g_ptr_array_add (map->backends, bk);
 
 						if (!map->name) {
@@ -1900,6 +1911,9 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (elt));
 
 			if (bk != NULL) {
+				if (bk->protocol == MAP_PROTO_FILE) {
+					map->poll_timeout = (map->poll_timeout * cfg->map_file_watch_multiplier);
+				}
 				g_ptr_array_add (map->backends, bk);
 
 				if (!map->name) {

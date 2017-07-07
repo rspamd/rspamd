@@ -1984,6 +1984,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"Interval for checking maps");
 	rspamd_rcl_add_default_handler (sub,
+			"map_file_watch_multiplier",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_config, map_file_watch_multiplier),
+			0,
+			"Multiplier for map watch interval when map is file");
+	rspamd_rcl_add_default_handler (sub,
 			"dynamic_conf",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),

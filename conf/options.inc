@@ -6,6 +6,8 @@ one_shot = false;
 cache_file = "$DBDIR/symbols.cache";
 # How often maps are checked (
 map_watch_interval = 5min;
+# Multiplier for watch interval for files
+map_file_watch_multiplier = 0.1;
 dynamic_conf = "$DBDIR/rspamd_dynamic";
 history_file = "$DBDIR/rspamd.history";
 check_all_filters = false;
