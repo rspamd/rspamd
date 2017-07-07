@@ -1095,13 +1095,19 @@ rspamd_map_common_http_callback (struct rspamd_map *map,
 
 			return;
 		}
-		else if (rspamd_map_read_cached (map, bk, periodic, data->host)) {
-			/* Switch to the next backend */
-			periodic->cur_backend ++;
-			data->last_modified = map->cache->last_modified;
-			rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+		else {
+			if (map->active_http &&
+					data->last_modified > map->cache->last_modified) {
+				goto check;
+			}
+			else if (rspamd_map_read_cached (map, bk, periodic, data->host)) {
+				/* Switch to the next backend */
+				periodic->cur_backend++;
+				data->last_modified = map->cache->last_modified;
+				rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
-			return;
+				return;
+			}
 		}
 	}
 	else if (!map->active_http) {
