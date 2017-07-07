@@ -32,7 +32,6 @@
  * - bit (string): describes a prefix for a single bit
  */
 
-#include <rdns.h>
 #include "config.h"
 #include "libmime/message.h"
 #include "libutil/map.h"
@@ -697,6 +696,56 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			}
 		}
 
+		cur = ucl_object_lookup (cur_rule, "process_script");
+		if (cur != NULL && cur->type == UCL_STRING) {
+			lua_State *L = cfg->lua_state;
+			GString *tb;
+			gint err_idx;
+			const gchar *input = ucl_object_tostring (cur);
+			gboolean loaded = FALSE;
+
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
+			/* First try return + input */
+			tb = g_string_sized_new (strlen (input) + sizeof ("return "));
+			rspamd_printf_gstring (tb, "return %s", input);
+
+			if (luaL_loadstring (L, tb->str) != 0) {
+				/* Reset stack */
+				lua_settop (L, 0);
+				lua_pushcfunction (L, &rspamd_lua_traceback);
+				err_idx = lua_gettop (L);
+				/* Try with no return */
+				if (luaL_loadstring (L, input) != 0) {
+					msg_err_config ("cannot load string %s\n",
+							input);
+				}
+				else {
+					loaded = TRUE;
+				}
+			}
+			else {
+				loaded = TRUE;
+			}
+
+			g_string_free (tb, TRUE);
+
+			if (loaded) {
+				if (lua_pcall (L, 0, 1, err_idx) != 0) {
+					tb = lua_touserdata (L, -1);
+					msg_err_config ("call failed: %v\n", tb);
+					g_string_free (tb, TRUE);
+				}
+				else if (lua_isfunction (L, -1)) {
+					new_suffix->url_process_cbref = luaL_ref (L,
+							LUA_REGISTRYINDEX);
+				}
+			}
+
+			lua_settop (L, err_idx - 1);
+		}
+
 		if (new_suffix->symbol) {
 			/* Register just a symbol itself */
 			rspamd_symbols_cache_add_symbol (cfg->cache,
@@ -935,7 +984,8 @@ format_surbl_request (rspamd_mempool_t * pool,
 	GError ** err,
 	gboolean forced,
 	GHashTable *tree,
-	struct rspamd_url *url)
+	struct rspamd_url *url,
+	lua_State *L)
 {
 	GHashTable *t;
 	gchar *result = NULL;
@@ -1069,7 +1119,25 @@ format_surbl_request (rspamd_mempool_t * pool,
 	}
 
 	if (append_suffix) {
-		rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+		if (suffix->url_process_cbref > 0) {
+			lua_rawgeti (L, LUA_REGISTRYINDEX, suffix->url_process_cbref);
+			lua_pushstring (L, result);
+			lua_pushstring (L, suffix->suffix);
+
+			if (lua_pcall (L, 2, 1, 0) != 0) {
+				msg_err_pool ("cannot call url process script: %s",
+						lua_tostring (L, -1));
+				lua_pop (L, 1);
+				rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+			}
+			else {
+				result = rspamd_mempool_strdup (pool, lua_tostring (L, -1));
+				lua_pop (L, 1);
+			}
+		}
+		else {
+			rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+		}
 	}
 
 	if (tree != NULL) {
@@ -1114,7 +1182,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		 * check against surbl using reverse octets printing
 		 */
 		surbl_req = format_surbl_request (task->task_pool, &f, suffix, FALSE,
-				&err, forced, tree, url);
+				&err, forced, tree, url, task->cfg->lua_state);
 
 		if (surbl_req == NULL) {
 			if (err != NULL) {
@@ -1148,8 +1216,15 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			}
 		}
 	}
-	else if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
-		&err, forced, tree, url)) != NULL) {
+	else if ((surbl_req = format_surbl_request (task->task_pool,
+			&f,
+			suffix,
+			TRUE,
+			&err,
+			forced,
+			tree,
+			url,
+			task->cfg->lua_state)) != NULL) {
 		param =
 			rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
 		param->url = url;

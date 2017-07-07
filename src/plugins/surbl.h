@@ -46,6 +46,7 @@ struct suffix_item {
 	GHashTable *ips;
 	struct rspamd_monitored *m;
 	gint callback_id;
+	gint url_process_cbref;
 };
 
 struct dns_param {
