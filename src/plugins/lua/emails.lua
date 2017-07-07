@@ -147,36 +147,32 @@ local function gen_check_emails(rule)
   end
 end
 
-local opts =  rspamd_config:get_all_opt('emails', 'rule')
+local opts = rspamd_config:get_module_opt('emails', 'rules')
 if opts and type(opts) == 'table' then
-  local r = opts['rule']
+  for k,v in pairs(opts) do
+    local rule = v
+    if not rule['symbol'] then
+      rule['symbol'] = k
+    end
 
-  if r then
-    for k,v in pairs(r) do
-      local rule = v
-      if not rule['symbol'] then
-        rule['symbol'] = k
-      end
+    if not rule['delimiter'] then
+      rule['delimiter'] = "@"
+    end
 
-      if not rule['delimiter'] then
-        rule['delimiter'] = "@"
-      end
-
-      if rule['map'] then
-        rule['name'] = rule['map']
-        rule['map'] = rspamd_config:add_map({
-           url = rule['name'],
-           description = string.format('Emails rule %s', rule['symbol']),
-           type = 'regexp'
-        })
-      end
-      if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
-        logger.errx(rspamd_config, 'incomplete rule')
-      else
-        table.insert(rules, rule)
-        logger.infox(rspamd_config, 'add emails rule %s',
-          rule['dnsbl'] or rule['name'] or '???')
-      end
+    if rule['map'] then
+      rule['name'] = rule['map']
+      rule['map'] = rspamd_config:add_map({
+        url = rule['name'],
+        description = string.format('Emails rule %s', rule['symbol']),
+        type = 'regexp'
+      })
+    end
+    if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
+      logger.errx(rspamd_config, 'incomplete rule: %s', rule)
+    else
+      table.insert(rules, rule)
+      logger.infox(rspamd_config, 'add emails rule %s',
+        rule['dnsbl'] or rule['name'] or '???')
     end
   end
 end
