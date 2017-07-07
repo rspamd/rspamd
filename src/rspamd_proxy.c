@@ -2047,7 +2047,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 			ctx->ev_base,
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, 0);
 
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);

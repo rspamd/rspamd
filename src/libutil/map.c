@@ -1061,8 +1061,10 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
  * Async HTTP callback
  */
 static void
-rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backend *bk,
-		struct map_periodic_cbdata *periodic, gboolean check)
+rspamd_map_common_http_callback (struct rspamd_map *map,
+		struct rspamd_map_backend *bk,
+		struct map_periodic_cbdata *periodic,
+		gboolean check)
 {
 	struct http_map_data *data;
 	struct http_callback_data *cbd;
@@ -1080,9 +1082,15 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 				rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 			}
 			else {
-				/* Switch to the next backend */
-				periodic->cur_backend ++;
-				rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+				if (map->active_http) {
+					/* Check even if there is a cached version */
+					goto check;
+				}
+				else {
+					/* Switch to the next backend */
+					periodic->cur_backend++;
+					rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
+				}
 			}
 
 			return;
@@ -1096,7 +1104,15 @@ rspamd_map_common_http_callback (struct rspamd_map *map, struct rspamd_map_backe
 			return;
 		}
 	}
+	else if (!map->active_http) {
+		/* Switch to the next backend */
+		periodic->cur_backend ++;
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, periodic);
 
+		return;
+	}
+
+check:
 	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
 
 	cbd->ev_base = map->ev_base;
@@ -1384,9 +1400,8 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 
 /* Start watching event for all maps */
 void
-rspamd_map_watch (struct rspamd_config *cfg,
-		struct event_base *ev_base,
-		struct rspamd_dns_resolver *resolver)
+rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver, gboolean active_http)
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
@@ -1396,6 +1411,7 @@ rspamd_map_watch (struct rspamd_config *cfg,
 		map = cur->data;
 		map->ev_base = ev_base;
 		map->r = resolver;
+		map->active_http = active_http;
 
 		rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
 

@@ -2833,7 +2833,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 				ctx->ev_base,
 				worker->srv->cfg);
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, 0);
 
 	/* Get peer pipe */
 	memset (&srv_cmd, 0, sizeof (srv_cmd));

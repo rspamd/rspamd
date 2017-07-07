@@ -81,6 +81,8 @@ struct rspamd_map {
 	gchar *description;
 	gchar *name;
 	guint32 id;
+	/* Should we check HTTP or just load cached data */
+	gboolean active_http;
 	struct timeval tv;
 	gdouble poll_timeout;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */

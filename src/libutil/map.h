@@ -69,9 +69,8 @@ struct rspamd_map* rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 /**
  * Start watching of maps by adding events to libevent event loop
  */
-void rspamd_map_watch (struct rspamd_config *cfg,
-		struct event_base *ev_base,
-		struct rspamd_dns_resolver *resolver);
+void rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver, gboolean active_http);
 
 /**
  * Remove all maps watched (remove events)
