@@ -46,6 +46,7 @@ struct redis_stat_ctx {
 	gboolean enable_users;
 	gboolean store_tokens;
 	gboolean new_schema;
+	gboolean enable_signatures;
 	guint expiry;
 	gint cbref_user;
 };
@@ -358,6 +359,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 	rspamd_fstring_t *out;
 	rspamd_token_t *tok;
 	gchar n0[512], n1[64];
+	rspamd_cryptobox_hash_state_t hst;
 	guint i, l0, l1, cmd_len, prefix_len;
 	gint ret;
 
@@ -381,6 +383,11 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 		}
 
 		out->len = 0;
+
+		if (rt->ctx->enable_signatures) {
+			/* Generate hash for tokens */
+			rspamd_cryptobox_hash_init (&hst, NULL, 0);
+		}
 	}
 	else {
 		if (rt->ctx->new_schema) {
@@ -422,6 +429,12 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 			} else {
 				l1 = rspamd_snprintf (n1, sizeof (n1), "%f",
 						tok->values[idx]);
+			}
+
+			if (rt->ctx->enable_signatures) {
+				/* Generate hash for tokens */
+				rspamd_cryptobox_hash_update (&hst, (guchar *)&tok->data,
+						sizeof (tok->data));
 			}
 
 			if (rt->ctx->new_schema) {
@@ -595,7 +608,98 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 		rspamd_printf_fstring (&out, "*1\r\n$4\r\nEXEC\r\n");
 	}
 
+	if (learn && rt->ctx->enable_signatures) {
+		guchar hout[rspamd_cryptobox_HASHBYTES];
+		gchar *b32_hout;
+
+		rspamd_cryptobox_hash_final (&hst, hout);
+		b32_hout = rspamd_encode_base32 (hout, sizeof (hout));
+		/*
+		 * We need to strip it to 32 characters providing ~160 bits of
+		 * hash distribution
+		 */
+		b32_hout[32] = '\0';
+		rspamd_mempool_set_variable (task->task_pool, "bayes_signature",
+				b32_hout, g_free);
+	}
+
 	return out;
+}
+
+static void
+rspamd_redis_generate_learn_signature (struct rspamd_task *task,
+		struct redis_stat_runtime *rt,
+		GPtrArray *tokens,
+		const gchar *prefix)
+{
+	gchar *sig, keybuf[512], nbuf[64];
+	rspamd_token_t *tok;
+	guint i, blen, klen;
+	rspamd_fstring_t *out;
+
+	out = rspamd_fstring_sized_new (1024);
+	sig = rspamd_mempool_get_variable (task->task_pool, "bayes_signature");
+
+	if (sig == NULL) {
+		msg_err_task ("cannot get bayes signature");
+		return;
+	}
+
+	klen = rspamd_snprintf (keybuf, sizeof (keybuf), "%s_%s_%s",
+			prefix, sig, rt->stcf->is_spam ? "S" : "H");
+
+	out->len = 0;
+
+	/* Cleanup key */
+	rspamd_printf_fstring (&out, ""
+					"*2\r\n"
+					"$3\r\n"
+					"DEL\r\n"
+					"$%d\r\n"
+					"%s\r\n",
+			klen, keybuf);
+	redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+			out->str, out->len);
+	out->len = 0;
+
+	rspamd_printf_fstring (&out, ""
+					"*%d\r\n"
+					"$5\r\n"
+					"LPUSH\r\n"
+					"$%d\r\n"
+					"%s\r\n",
+			tokens->len + 2,
+			klen, keybuf);
+
+	PTR_ARRAY_FOREACH (tokens, i, tok) {
+		blen = rspamd_snprintf (nbuf, sizeof (nbuf), "%uL", tok->data);
+		rspamd_printf_fstring (&out, ""
+				"$%d\r\n"
+				"%s\r\n", blen, nbuf);
+	}
+
+	redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+			out->str, out->len);
+	out->len = 0;
+
+	if (rt->ctx->expiry > 0) {
+		out->len = 0;
+		blen = rspamd_snprintf (nbuf, sizeof (nbuf), "%d",
+				rt->ctx->expiry);
+
+		rspamd_printf_fstring (&out, ""
+						"*3\r\n"
+						"$6\r\n"
+						"EXPIRE\r\n"
+						"$%d\r\n"
+						"%s\r\n"
+						"$%d\r\n"
+						"%s\r\n",
+				klen, keybuf,
+				blen, nbuf);
+		redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+				out->str, out->len);
+	}
 }
 
 static void
@@ -1230,6 +1334,14 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 		backend->new_schema = FALSE;
 	}
 
+	elt = ucl_object_lookup (obj, "signatures");
+	if (elt) {
+		backend->enable_signatures = ucl_object_toboolean (elt);
+	}
+	else {
+		backend->enable_signatures = FALSE;
+	}
+
 	elt = ucl_object_lookup_any (obj, "expiry", "expire", NULL);
 	if (elt) {
 		backend->expiry = ucl_object_toint (elt);
@@ -1586,10 +1698,17 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	ret = rspamd_printf_fstring (&query, "*1\r\n$4\r\nEXEC\r\n");
 	ret = redisAsyncFormattedCommand (rt->redis, rspamd_redis_learned, rt,
 			query->str + off, ret);
-
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)rspamd_fstring_free, query);
+
 	if (ret == REDIS_OK) {
+
+		/* Add signature if needed */
+		if (rt->ctx->enable_signatures) {
+			rspamd_redis_generate_learn_signature (task, rt, tokens,
+					"RSIG");
+		}
+
 		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt,
 				rspamd_redis_stat_quark ());
 		rt->has_event = TRUE;
