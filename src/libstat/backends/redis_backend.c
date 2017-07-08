@@ -700,6 +700,8 @@ rspamd_redis_generate_learn_signature (struct rspamd_task *task,
 		redisAsyncFormattedCommand (rt->redis, NULL, NULL,
 				out->str, out->len);
 	}
+
+	rspamd_fstring_free (out);
 }
 
 static void
