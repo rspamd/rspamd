@@ -1,3 +1,63 @@
+1.6.2: 08 Jul 2017
+	* [Conf] Remove Rambler email bl for now
+	* [Conf] Switch RAMBLER_URIBL to a locally managed source
+	* [CritFix] Switch from ragel to C for Content-Type parsing
+	* [Feature] Add `-e` option for lua_repl
+	* [Feature] Add per-domain emails normalisation rules
+	* [Feature] Add sessions cache to debug dangling sessions
+	* [Feature] Add short_text_direct_hash for fuzzy check module
+	* [Feature] Add text_part:get_stats function
+	* [Feature] Allow to add custom processing script for surbl
+	* [Feature] Allow to check reply-to email
+	* [Feature] Allow to customize spam header, remove existing spam headers
+	* [Feature] Allow to disable specific workers in the config
+	* [Feature] Allow to discard messages instead of rejection
+	* [Feature] Allow to specify custom delimiter in emails plugin
+	* [Feature] Allow to specify custom User-Agent for rspamc
+	* [Feature] Allow to store symbols data in Clickhouse
+	* [Feature] Allow to use HTTPS when connecting to Clickhouse
+	* [Feature] Enable sessions cache tracking for milter connections
+	* [Feature] Implement per-line mode in lua_repl (like `perl -p`)
+	* [Feature] Implement rdns-curve plugin based on rspamd cryptobox
+	* [Feature] Improve maps cached data lifetime
+	* [Feature] Improve maps checking frequency
+	* [Feature] Improve monitored timeouts logic
+	* [Feature] milter_headers: add `extended_headers_rcpt` option
+	* [Feature] Milter headers: Add X-Spam-Flag to rmilter-compatibility headers
+	* [Feature] Milter headers: remove-header routine
+	* [Feature] Multimap: received filters for extracting TLDs from hostnames
+	* [Feature] Normalize email aliases in emails module
+	* [Feature] Re-add rambler email bl (as hashed list)
+	* [Feature] Reload file maps more frequently
+	* [Feature] Rework newlines strip parser one more time
+	* [Feature] Skip updates for messages scanned via controller
+	* [Feature] Split long DKIM public keys
+	* [Feature] Store more data when stripping newlines
+	* [Feature] Support SPF macros transformations
+	* [Feature] Support suppressing DMARC reports for some domains
+	* [Fix] Add missing `break` statement
+	* [Fix] Allow modifiers in SPF macros
+	* [Fix] DKIM sign tools: edge-cases around use_esld
+	* [Fix] Do not cache SPF records with macros
+	* [Fix] Do not overwrite score when setting pre-action
+	* [Fix] Fix comparision logic
+	* [Fix] Fix DKIM base64 folding for milter flagged messages
+	* [Fix] Fix emails module configuration
+	* [Fix] Fix folding for arc headers when milter interface is used
+	* [Fix] Fix gmail dots removal
+	* [Fix] Fix rspamc detection in greylist module
+	* [Fix] Fix some more issues with HTTP maps
+	* [Fix] Milter sessions can live forever
+	* [Fix] Normalize fuzzy probability better
+	* [Fix] Plug memory leak
+	* [Fix] RBL: Fixed hashed email address lookups
+	* [Fix] Try to deal with brain-damaged milter behaviour
+	* [Fix] Use `\n` to fold headers for milter
+	* [Rework] Allow to use custom callback for monitored checks
+	* [Rework] Further steps towards one process monitoring
+	* [Rework] Send health checks from a single worker
+	* [WebUI] Round-up throughput summary values
+
 1.6.1: 14 Jun 2017
 	* [Fix] Allow to init resolver without rspamd_config
 	* [Fix] Do not crash when resolver failed to initialize
