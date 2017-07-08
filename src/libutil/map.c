@@ -512,6 +512,11 @@ http_map_finish (struct rspamd_http_connection *conn,
 		}
 
 read_data:
+		if (cbd->data_len == 0) {
+			msg_err_map ("cannot read empty map");
+			goto err;
+		}
+
 		g_assert (cbd->shmem_data != NULL);
 
 		in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &dlen);
@@ -537,6 +542,7 @@ read_data:
 		cache_cbd = g_slice_alloc0 (sizeof (*cache_cbd));
 		cache_cbd->shm = cbd->shmem_data;
 		cache_cbd->map = map;
+		cache_cbd->data = cbd->data;
 		cache_cbd->last_checked = cbd->data->last_checked;
 		cache_cbd->gen = cbd->data->gen;
 		MAP_RETAIN (cache_cbd->shm, "shmem_data");
