@@ -160,7 +160,8 @@ function($, _, Humanize) {
                     "textOverflow": "ellipsis",
                     "wordBreak": "break-all",
                     "whiteSpace": "normal"
-                }
+                },
+                "formatter": EscapeHTML
             }, {
                 "name": "ip",
                 "title": "IP address",
