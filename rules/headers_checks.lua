@@ -177,7 +177,7 @@ rspamd_config:register_symbol{
 }
 
 local function get_raw_header(task, name)
-  return ((task:get_header_full(name) or {})[1] or {})['raw']
+  return ((task:get_header_full(name) or {})[1] or {})['value']
 end
 
 local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
@@ -189,8 +189,8 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
       return false
     else
-      task:insert_result('HAS_REPLYTO', 1.0)
       local rta = rt[1].addr
+      task:insert_result('HAS_REPLYTO', 1.0, rta)
       if rta then
         -- Check if Reply-To address starts with title seen in display name
         local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
