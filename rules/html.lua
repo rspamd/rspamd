@@ -175,6 +175,7 @@ rspamd_config.R_WHITE_ON_WHITE = {
     local diff = 0.0
     local normal_len = 0
     local transp_len = 0
+    local transp_rate = 0
     local arg
 
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
@@ -200,7 +201,9 @@ rspamd_config.R_WHITE_ON_WHITE = {
                 transp_len = (transp_len + tag:get_content_length()) *
                   (0.1 - diff) * 5.0
                 normal_len = normal_len - tag:get_content_length()
-                if not arg then
+                local tr = transp_len / (normal_len + transp_len)
+                if tr > transp_rate then
+                  transp_rate = tr
                   arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
                     tostring(tag:get_type()),
                     color[1], color[2], color[3],
@@ -217,9 +220,6 @@ rspamd_config.R_WHITE_ON_WHITE = {
     end
 
     if ret then
-      if normal_len < 0 then normal_len = 0 end
-      local transp_rate = transp_len / (normal_len + transp_len)
-
       if transp_rate > 0.1 then
         return true,(transp_rate * 2.0),arg
       end
