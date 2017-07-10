@@ -185,21 +185,19 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
     local replyto = get_raw_header(task, 'Reply-To')
     if not replyto then return false end
     local rt = util.parse_mail_address(replyto)
-    if not (rt and rt[1]) then
+    if not (rt and rt[1] and (string.len(rt[1].addr) > 0)) then
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
       return false
     else
       local rta = rt[1].addr
       task:insert_result('HAS_REPLYTO', 1.0, rta)
-      if rta then
-        -- Check if Reply-To address starts with title seen in display name
-        local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
-        local title = (((sym or E)[1] or E).options or E)[1]
-        if title then
-          rta = rta:lower()
-          if rta:find('^' .. title) then
-            task:insert_result('REPLYTO_EMAIL_HAS_TITLE', 1.0)
-          end
+      -- Check if Reply-To address starts with title seen in display name
+      local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
+      local title = (((sym or E)[1] or E).options or E)[1]
+      if title then
+        rta = rta:lower()
+        if rta:find('^' .. title) then
+          task:insert_result('REPLYTO_EMAIL_HAS_TITLE', 1.0)
         end
       end
     end
