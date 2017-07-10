@@ -64,13 +64,24 @@ antivirus {
 end
 
 local function match_patterns(default_sym, found, patterns)
-  if not patterns then return default_sym end
-  for sym, pat in pairs(patterns) do
-    if pat:match(found) then
-      return sym
+  if type(patterns) ~= 'table' then return default_sym end
+  if not patterns[1] then
+    for sym, pat in pairs(patterns) do
+      if pat:match(found) then
+        return sym
+      end
     end
+    return default_sym
+  else
+    for _, p in ipairs(patterns) do
+      for sym, pat in pairs(p) do
+        if pat:match(found) then
+          return sym
+        end
+      end
+    end
+    return default_sym
   end
-  return default_sym
 end
 
 local function yield_result(task, rule, vname)
@@ -749,10 +760,24 @@ local function add_antivirus_rule(sym, opts)
     return nil
   end
 
-  if opts['patterns'] then
+  if type(opts['patterns']) == 'table' then
     rule['patterns'] = {}
-    for k, v in pairs(opts['patterns']) do
-      rule['patterns'][k] = rspamd_regexp.create_cached(v)
+    if opts['patterns'][1] then
+      for i, p in ipairs(opts['patterns']) do
+        if type(p) == 'table' then
+          local new_set = {}
+          for k, v in pairs(p) do
+            new_set[k] = rspamd_regexp.create_cached(v)
+          end
+          rule['patterns'][i] = new_set
+        else
+          rule['patterns'][i] = {}
+        end
+      end
+    else
+      for k, v in pairs(opts['patterns']) do
+        rule['patterns'][k] = rspamd_regexp.create_cached(v)
+      end
     end
   end
 
@@ -780,13 +805,27 @@ if opts and type(opts) == 'table' then
           name = m['symbol'],
           callback = cb,
         })
-        if m['patterns'] then
-          for sym in pairs(m['patterns']) do
-            rspamd_config:register_symbol({
-              type = 'virtual',
-              name = sym,
-              parent = id
-            })
+        if type(m['patterns']) == 'table' then
+          if m['patterns'][1] then
+            for _, p in ipairs(m['patterns']) do
+              if type(p) == 'table' then
+                for sym in pairs(p) do
+                  rspamd_config:register_symbol({
+                    type = 'virtual',
+                    name = sym,
+                    parent = id
+                  })
+                end
+              end
+            end
+          else
+            for sym in pairs(m['patterns']) do
+              rspamd_config:register_symbol({
+                type = 'virtual',
+                name = sym,
+                parent = id
+              })
+            end
           end
         end
         if m['score'] then
