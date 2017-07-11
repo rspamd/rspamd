@@ -41,7 +41,7 @@ local settings = {
   mail_to = 'postmaster@localhost',
   helo = 'rspamd',
   email_template = [[From: "Rspamd" <$mail_from>
-To: <$mail_to>
+To: $mail_to
 Subject: Spam alert
 Date: $date
 MIME-Version: 1.0
@@ -141,13 +141,48 @@ local formatters = {
   default = function(task)
     return task:get_content()
   end,
-  email_alert = function(task, rule)
+  email_alert = function(task, rule, extra)
     local meta = get_general_metadata(task, true)
+    local display_emails = {}
     meta.mail_from = rule.mail_from or settings.mail_from
-    meta.mail_to = rule.mail_to or settings.mail_to
+    local mail_targets = rule.mail_to or settings.mail_to
+    if type(mail_targets) ~= 'table' then
+      table.insert(display_emails, string.format('<%s>', mail_targets))
+      mail_targets = {[mail_targets] = true}
+    else
+      for _, e in ipairs(mail_targets) do
+        table.insert(display_emails, string.format('<%s>', e))
+      end
+    end
+    if rule.email_alert_sender then
+      local x = task:get_from('smtp')
+      if x and string.len(x[1].addr) > 0 then
+        mail_targets[x] = true
+        table.insert(display_emails, string.format('<%s>', x[1].addr))
+      end
+    end
+    if rule.email_alert_user then
+      local x = task:get_user()
+      if x then
+        mail_targets[x] = true
+        table.insert(display_emails, string.format('<%s>', x))
+      end
+    end
+    if rule.email_alert_recipients then
+      local x = task:get_recipients('smtp')
+      if x then
+        for _, e in ipairs(x) do
+          if string.len(e.addr) > 0 then
+            mail_targets[e.addr] = true
+            table.insert(display_emails, string.format('<%s>', e.addr))
+          end
+        end
+      end
+    end
+    meta.mail_to = table.concat(display_emails, ', ')
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return lutil.template(rule.email_template or settings.email_template, meta)
+    return lutil.template(rule.email_template or settings.email_template, meta), {mail_targets = mail_targets}
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -246,7 +281,7 @@ local pushers = {
       headers=hdrs,
     })
   end,
-  send_mail = function(task, formatted, rule)
+  send_mail = function(task, formatted, rule, extra)
     local function mail_cb(err, data, conn)
       local function no_error(merr, mdata, wantcode)
         wantcode = wantcode or '2'
@@ -309,9 +344,15 @@ local pushers = {
           conn:add_read(data_done_cb, '\r\n')
         end
       end
+      local from_done_cb
       local function rcpt_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(data_cb, 'DATA\r\n')
+          local k = next(extra.mail_targets)
+          if not k then
+            conn:add_write(data_cb, 'DATA\r\n')
+          else
+            from_done_cb('2', '2')
+          end
         end
       end
       local function rcpt_cb(merr, mdata)
@@ -319,10 +360,10 @@ local pushers = {
           conn:add_read(rcpt_done_cb, '\r\n')
         end
       end
-      local function from_done_cb(merr, mdata)
-        if no_error(merr, mdata) then
-          conn:add_write(rcpt_cb, {'RCPT TO: <', rule.mail_to, '>\r\n'})
-        end
+      from_done_cb = function(merr, mdata)
+        local k = next(extra.mail_targets)
+        extra.mail_targets[k] = nil
+        conn:add_write(rcpt_cb, {'RCPT TO: <', k, '>\r\n'})
       end
       local function from_cb(merr, mdata)
         if no_error(merr, '2') then
@@ -629,9 +670,9 @@ local function gen_exporter(rule)
     if selected then
       rspamd_logger.debugm(N, task, 'Message selected for processing')
       local formatter = rule.formatter or 'default'
-      local formatted = formatters[formatter](task, rule)
+      local formatted, extra = formatters[formatter](task, rule)
       if formatted then
-        pushers[rule.backend](task, formatted, rule)
+        pushers[rule.backend](task, formatted, rule, extra)
       else
         rspamd_logger.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
       end
