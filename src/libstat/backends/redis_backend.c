@@ -18,6 +18,7 @@
 #include "stat_internal.h"
 #include "upstream.h"
 #include "lua/lua_common.h"
+#include "libserver/mempool_vars_internal.h"
 
 #ifdef WITH_HIREDIS
 #include "hiredis.h"
@@ -359,7 +360,6 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 	rspamd_fstring_t *out;
 	rspamd_token_t *tok;
 	gchar n0[512], n1[64];
-	rspamd_cryptobox_hash_state_t hst;
 	guint i, l0, l1, cmd_len, prefix_len;
 	gint ret;
 
@@ -383,11 +383,6 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 		}
 
 		out->len = 0;
-
-		if (rt->ctx->enable_signatures) {
-			/* Generate hash for tokens */
-			rspamd_cryptobox_hash_init (&hst, NULL, 0);
-		}
 	}
 	else {
 		if (rt->ctx->new_schema) {
@@ -429,12 +424,6 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 			} else {
 				l1 = rspamd_snprintf (n1, sizeof (n1), "%f",
 						tok->values[idx]);
-			}
-
-			if (rt->ctx->enable_signatures) {
-				/* Generate hash for tokens */
-				rspamd_cryptobox_hash_update (&hst, (guchar *)&tok->data,
-						sizeof (tok->data));
 			}
 
 			if (rt->ctx->new_schema) {
@@ -608,26 +597,11 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 		rspamd_printf_fstring (&out, "*1\r\n$4\r\nEXEC\r\n");
 	}
 
-	if (learn && rt->ctx->enable_signatures) {
-		guchar hout[rspamd_cryptobox_HASHBYTES];
-		gchar *b32_hout;
-
-		rspamd_cryptobox_hash_final (&hst, hout);
-		b32_hout = rspamd_encode_base32 (hout, sizeof (hout));
-		/*
-		 * We need to strip it to 32 characters providing ~160 bits of
-		 * hash distribution
-		 */
-		b32_hout[32] = '\0';
-		rspamd_mempool_set_variable (task->task_pool, "bayes_signature",
-				b32_hout, g_free);
-	}
-
 	return out;
 }
 
 static void
-rspamd_redis_generate_learn_signature (struct rspamd_task *task,
+rspamd_redis_store_stat_signature (struct rspamd_task *task,
 		struct redis_stat_runtime *rt,
 		GPtrArray *tokens,
 		const gchar *prefix)
@@ -638,7 +612,8 @@ rspamd_redis_generate_learn_signature (struct rspamd_task *task,
 	rspamd_fstring_t *out;
 
 	out = rspamd_fstring_sized_new (1024);
-	sig = rspamd_mempool_get_variable (task->task_pool, "bayes_signature");
+	sig = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_STAT_SIGNATURE);
 
 	if (sig == NULL) {
 		msg_err_task ("cannot get bayes signature");
@@ -1707,7 +1682,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 		/* Add signature if needed */
 		if (rt->ctx->enable_signatures) {
-			rspamd_redis_generate_learn_signature (task, rt, tokens,
+			rspamd_redis_store_stat_signature (task, rt, tokens,
 					"RSIG");
 		}
 
