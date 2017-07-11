@@ -112,6 +112,10 @@ local settings = {
         quarantine = 'DMARC_POLICY_QUARANTINE',
       },
     },
+    ['stat-signature'] = {
+      header = 'X-Stat-Signature',
+      remove = 1,
+    },
   },
 }
 
@@ -353,6 +357,18 @@ local function milter_headers(task)
 
     if res then
       add[settings.routines['authentication-results'].header] = res
+    end
+  end
+
+  routines['stat-signature'] = function()
+    if skip_wanted('stat-signature') then return end
+    if settings.routines['stat-signature'].remove then
+      remove[settings.routines['stat-signature'].header] =
+        settings.routines['stat-signature'].remove
+    end
+    local res = task:get_mempool():get_variable("stat_signature")
+    if res then
+      add[settings.routines['stat-signature'].header] = res
     end
   end
 
