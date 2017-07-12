@@ -29,10 +29,21 @@ if confighelp then
 end
 
 local N = 'arc'
+
+if not rspamd_plugins.dkim then
+  rspamd_logger.errx(rspamd_config, "cannot enable arc plugin: dkim is disabled")
+  return
+end
+
 local dkim_verify = rspamd_plugins.dkim.verify
 local dkim_sign = rspamd_plugins.dkim.sign
 local dkim_canonicalize = rspamd_plugins.dkim.canon_header_relaxed
 local redis_params
+
+if not dkim_verify or not dkim_sign or not dkim_canonicalize then
+  rspamd_logger.errx(rspamd_config, "cannot enable arc plugin: dkim is disabled")
+  return
+end
 
 local arc_symbols = {
   allow = 'ARC_ALLOW',
