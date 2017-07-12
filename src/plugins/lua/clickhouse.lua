@@ -57,10 +57,9 @@ local settings = {
   use_https = false,
 }
 
---[[
-Clickhouse schema:
-
-CREATE TABLE rspamd
+local clickhouse_schema = {
+rspamd = [[
+CREATE TABLE rspamd IF NOT EXISTS
 (
     Date Date,
     TS DateTime,
@@ -85,8 +84,10 @@ CREATE TABLE rspamd
     ListId String,
     Digest FixedString(32)
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
+]],
 
-CREATE TABLE rspamd_attachments (
+  attachments = [[
+CREATE TABLE rspamd_attachments IF NOT EXISTS (
     Date Date,
     Digest FixedString(32),
     `Attachments.FileName` Array(String),
@@ -94,23 +95,29 @@ CREATE TABLE rspamd_attachments (
     `Attachments.Length` Array(UInt32),
     `Attachments.Digest` Array(FixedString(16))
 ) ENGINE = MergeTree(Date, Digest, 8192)
+]],
 
-CREATE TABLE rspamd_urls (
+  urls = [[
+CREATE TABLE rspamd_urls IF NOT EXISTS (
     Date Date,
     Digest FixedString(32),
     `Urls.Tld` Array(String),
     `Urls.Url` Array(String)
 ) ENGINE = MergeTree(Date, Digest, 8192)
+]],
 
-CREATE TABLE rspamd_asn (
+  asn = [[
+CREATE TABLE rspamd_asn IF NOT EXISTS (
     Date Date,
     Digest FixedString(32),
     ASN String,
     Country FixedString(2),
     IPNet String
 ) ENGINE = MergeTree(Date, Digest, 8192)
+]],
 
-CREATE TABLE rspamd_symbols (
+  symbols = [[
+CREATE TABLE rspamd_symbols IF NOT EXISTS (
     Date Date,
     Digest FixedString(32),
     `Symbols.Names` Array(String),
@@ -118,6 +125,7 @@ CREATE TABLE rspamd_symbols (
     `Symbols.Options` Array(String)
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]]
+}
 
 local function clickhouse_main_row(tname)
   local fields = {
@@ -654,6 +662,34 @@ if opts then
       rspamd_config:register_finish_script(function(task)
         if nrows > 0 then
           clickhouse_send_data(task)
+        end
+      end)
+      -- Create tables on load
+      rspamd_config:add_on_load(function(cfg, ev_base, worker)
+        local function http_cb(err_message, code, _, _)
+          if code ~= 200 or err_message then
+            rspamd_logger.errx(task, "cannot create table in clickhouse server %s: %s:%s",
+              settings['server'], code, err_message)
+          end
+        end
+
+        local function send_req(elt, sql)
+          if not rspamd_http.request({
+            ev_base = ev_base,
+            config = cfg,
+            url = connect_prefix .. settings['server'],
+            body = sql,
+            callback = http_cb,
+            mime_type = 'text/plain',
+            timeout = settings['timeout'],
+          }) then
+            rspamd_logger.errx(task, "cannot create table %s in clickhouse server %s: cannot make request",
+              elt, settings['server'])
+          end
+        end
+
+        for tab,sql in pairs(clickhouse_schema) do
+          send_req(tab, sql)
         end
       end)
     end
