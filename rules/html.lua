@@ -174,12 +174,13 @@ rspamd_config.R_WHITE_ON_WHITE = {
     local ret = false
     local diff = 0.0
     local normal_len = 0
-    local transp_len = 0
+    local transp_rate = 0
     local arg
 
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
       if p:is_html() and p:get_html() then -- if the current part is html part
         normal_len = p:get_length()
+        local transp_len = 0
         local hc = p:get_html() -- we get HTML context
 
         hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag)
@@ -197,10 +198,12 @@ rspamd_config.R_WHITE_ON_WHITE = {
 
               if diff < 0.1 then
                 ret = true
-                transp_len = (transp_len + tag:get_content_length()) *
+                transp_len = (tag:get_content_length()) *
                   (0.1 - diff) * 5.0
                 normal_len = normal_len - tag:get_content_length()
-                if not arg then
+                local tr = transp_len / (normal_len + transp_len)
+                if tr > transp_rate then
+                  transp_rate = tr
                   arg = string.format('%s color #%x%x%x bgcolor #%x%x%x',
                     tostring(tag:get_type()),
                     color[1], color[2], color[3],
@@ -217,9 +220,6 @@ rspamd_config.R_WHITE_ON_WHITE = {
     end
 
     if ret then
-      if normal_len < 0 then normal_len = 0 end
-      local transp_rate = transp_len / (normal_len + transp_len)
-
       if transp_rate > 0.1 then
         return true,(transp_rate * 2.0),arg
       end

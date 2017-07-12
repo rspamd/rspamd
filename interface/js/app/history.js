@@ -26,7 +26,24 @@ define(['jquery', 'footable', 'humanize'],
 function($, _, Humanize) {
     var interface = {};
     var ft = {};
-
+    var htmlEscapes = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+      '/': '&#x2F;',
+      '`': '&#x60;',
+      '=': '&#x3D;'
+    };
+    var htmlEscaper = /[&<>"'\/]/g;
+ 
+    EscapeHTML = function(string) {
+      return ('' + string).replace(htmlEscaper, function(match) {
+        return htmlEscapes[match];
+      });
+    };
+ 
     function unix_time_format(tm) {
         var date = new Date(tm ? tm * 1000 : 0);
         return date.toLocaleString();
@@ -145,7 +162,8 @@ function($, _, Humanize) {
                     "textOverflow": "ellipsis",
                     "wordBreak": "break-all",
                     "whiteSpace": "normal"
-                }
+                },
+                "formatter": EscapeHTML
             }, {
                 "name": "ip",
                 "title": "IP address",
@@ -178,7 +196,8 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "word-break": "break-all",
                     "minWidth": 150
-                }
+                },
+                "formatter": EscapeHTML
             }, {
                 "name": "action",
                 "title": "Action",

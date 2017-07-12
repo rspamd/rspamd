@@ -509,7 +509,7 @@ local function rate_test_set(task, func)
             table.insert(args, {settings[k], rk})
           elseif type(settings[k]) == 'string' and
               (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
-            local res = custom_keywords[settings[k]]['get_limit']()
+            local res = custom_keywords[settings[k]]['get_limit'](task)
             if type(res) == 'table' then
               table.insert(args, {res, rate_key})
             elseif type(res) == 'string' then
@@ -525,7 +525,7 @@ local function rate_test_set(task, func)
           table.insert(args, {settings[k], rate_key})
         elseif type(settings[k]) == 'string' and
             (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
-          local res = custom_keywords[settings[k]]['get_limit']()
+          local res = custom_keywords[settings[k]]['get_limit'](task)
           if type(res) == 'table' then
             table.insert(args, {res, rate_key})
           elseif type(res) == 'string' then

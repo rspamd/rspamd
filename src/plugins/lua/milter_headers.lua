@@ -344,7 +344,7 @@ local function milter_headers(task)
           add[k] = v
         end
         for k, v in pairs(to_remove) do
-          add[k] = v
+          remove[k] = v
         end
         for k, v in pairs(common_in) do
           if type(v) == 'table' then
