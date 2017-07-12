@@ -57,14 +57,24 @@ def make_perceptron_input(X, y, symbol_set):
     for row in X:
         X_new.append([1 if symbol in row else 0 for symbol in symbol_set])
 
-    return np.array(X_new)
+    return np.array(X_new), np.array(y)
     
 
 def rescore_weights(X, y, no_of_iters=1):
+    '''
+    Returns a tuple of (symbol, score) after training perceptron
+    '''
+
+    print X
+    print y
     
     n_samples, n_feaures = X.shape
 
-    pass
+    perceptron = Perceptron(n_iter=50).fit(X, y)
+
+    print perceptron.coef_
+
+    return
 
 
 def main():
