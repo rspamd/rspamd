@@ -12,6 +12,7 @@ from Queue import Queue
 from threading import Thread
 import sys
 import time
+import ast
 
 from utility import get_all_filenames
 
@@ -74,7 +75,7 @@ def progress_bar(total_emails, width=50):
         progress_queue.task_done()
             
             
-def test_email(test_url):
+def test_email(test_url, headers):
 
     while True:
 
@@ -82,8 +83,8 @@ def test_email(test_url):
 
         with open(file_location, 'r') as f:
             try:
-                # TODO pass file /path instead                
-                response = requests.post(test_url, data=f)
+                # TODO pass file /path instead
+                response = requests.post(test_url, data=f, headers=headers)
             except RequestException as err:
                 print "Connection error."
                 print err
@@ -131,14 +132,31 @@ def print_test_stats(total_time, avg_time, no_of_emails):
     print "Avg. time per email: {}s".format(avg_time)
     print "Emails scanned: {}".format(no_of_emails)
 
+
+def get_headers_from_config(config_file):
+
+    # TODO : Handle improper configs, config-missing errors
     
-def run_tests(test_url, ham_location, spam_location, no_of_threads=2):
+    headers = {}
+
+    try:
+        with open(config_file, 'r') as f:
+            headers = ast.literal_eval(f.read())
+    except IOError:
+        print "Problem opening config file, Using default."
+        
+    return headers
+    
+    
+def run_tests(test_url, ham_location, spam_location, no_of_threads, config_file):
 
     start_time = time.time()
     
     ham_file_locations = []
     spam_file_locations = []
 
+    headers = get_headers_from_config(config_file)
+    
     if ham_location:
         if os.path.isdir(ham_location):
             ham_file_locations = get_all_filenames(ham_location)
@@ -153,7 +171,7 @@ def run_tests(test_url, ham_location, spam_location, no_of_threads=2):
 
     no_of_emails = len(ham_file_locations) + len(spam_file_locations)
     
-    threads = [Thread(target=test_email, args=(test_url, ))
+    threads = [Thread(target=test_email, args=(test_url, headers, ))
                for _ in range(no_of_threads)]        
 
     progress_thread = Thread(target=progress_bar, args=(no_of_emails, ))
@@ -184,7 +202,8 @@ def main():
     rspamd_port = 11333
     output_file = "results.log"
     no_of_threads = 10
-
+    config_file = "test.conf"
+    
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-a", "--ham", help="path to ham directory")
     arg_parser.add_argument("-s", "--spam", help="path to spam directory")
@@ -194,11 +213,13 @@ def main():
                             help="ip of rspamd service [Default: 127.0.0.1]")
     arg_parser.add_argument("-p", "--port",
                             help="rspamd service port number [Default: 11333]",
-                            type=int)
+                            type=int) 
     arg_parser.add_argument("-j", "--threads",
                             help="number of threads to run tests [Default: 10]",
                             type=int)
-    
+    arg_parser.add_argument("-c", "--config",
+                            help="config file location [Default: test.conf]")
+   
     args = arg_parser.parse_args()
 
     if not (args.ham or args.spam):
@@ -218,13 +239,16 @@ def main():
     if args.threads:
         no_of_threads = args.threads
 
-
+    if args.config:
+        config_file = args.config
+        
     test_url = get_test_url(rspamd_host, rspamd_port)
     
     run_tests(test_url=test_url,
               ham_location=args.ham,
               spam_location=args.spam,
-              no_of_threads=no_of_threads)
+              no_of_threads=no_of_threads,
+              config_file=config_file)
 
     write_test_results(output_file, test_results)
 
