@@ -288,7 +288,7 @@ dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id = -1;
-	guint cache_size;
+	guint cache_size, sign_cache_size;
 	gboolean got_trusted = FALSE;
 
 	/* Register global methods */
@@ -312,16 +312,6 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	lua_pop (cfg->lua_state, 1); /* Remove global function */
-
-	dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
-			128,
-			g_free, /* Keys are just C-strings */
-			(GDestroyNotify)rspamd_dkim_sign_key_unref);
-
-	if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
-		return TRUE;
-	}
-
 	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
 
 	if ((value =
@@ -381,6 +371,15 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
+	}
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "dkim",
+					"sign_cache_size")) != NULL) {
+		sign_cache_size = ucl_object_toint (value);
+	}
+	else {
+		sign_cache_size = 128;
 	}
 
 	if ((value =
@@ -451,11 +450,24 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->sign_headers = ucl_object_tostring (value);
 	}
 
+	dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
+			cache_size,
+			g_free,
+			dkim_module_key_dtor);
+	dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
+			sign_cache_size,
+			g_free,
+			(GDestroyNotify)rspamd_dkim_sign_key_unref);
+
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
 		msg_err_config (
 			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
 	}
 	else {
+		if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
+			return TRUE;
+		}
+
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_reject,
 			0,
@@ -487,11 +499,6 @@ dkim_module_config (struct rspamd_config *cfg)
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 			cb_id);
-
-		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
-				cache_size,
-				g_free, /* Keys are just C-strings */
-				dkim_module_key_dtor);
 
 		msg_info_config ("init internal dkim module");
 #ifndef HAVE_OPENSSL
