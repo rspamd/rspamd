@@ -59,7 +59,7 @@ local settings = {
 
 local clickhouse_schema = {
 rspamd = [[
-CREATE TABLE rspamd IF NOT EXISTS
+CREATE TABLE IF NOT EXISTS rspamd
 (
     Date Date,
     TS DateTime,
@@ -87,7 +87,7 @@ CREATE TABLE rspamd IF NOT EXISTS
 ]],
 
   attachments = [[
-CREATE TABLE rspamd_attachments IF NOT EXISTS (
+CREATE TABLE IF NOT EXISTS rspamd_attachments (
     Date Date,
     Digest FixedString(32),
     `Attachments.FileName` Array(String),
@@ -98,7 +98,7 @@ CREATE TABLE rspamd_attachments IF NOT EXISTS (
 ]],
 
   urls = [[
-CREATE TABLE rspamd_urls IF NOT EXISTS (
+CREATE TABLE IF NOT EXISTS rspamd_urls (
     Date Date,
     Digest FixedString(32),
     `Urls.Tld` Array(String),
@@ -107,7 +107,7 @@ CREATE TABLE rspamd_urls IF NOT EXISTS (
 ]],
 
   asn = [[
-CREATE TABLE rspamd_asn IF NOT EXISTS (
+CREATE TABLE IF NOT EXISTS rspamd_asn (
     Date Date,
     Digest FixedString(32),
     ASN String,
@@ -117,7 +117,7 @@ CREATE TABLE rspamd_asn IF NOT EXISTS (
 ]],
 
   symbols = [[
-CREATE TABLE rspamd_symbols IF NOT EXISTS (
+CREATE TABLE IF NOT EXISTS rspamd_symbols (
     Date Date,
     Digest FixedString(32),
     `Symbols.Names` Array(String),
@@ -668,7 +668,7 @@ if opts then
       rspamd_config:add_on_load(function(cfg, ev_base, worker)
         local function http_cb(err_message, code, _, _)
           if code ~= 200 or err_message then
-            rspamd_logger.errx(task, "cannot create table in clickhouse server %s: %s:%s",
+            rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s:%s",
               settings['server'], code, err_message)
           end
         end
@@ -683,7 +683,7 @@ if opts then
             mime_type = 'text/plain',
             timeout = settings['timeout'],
           }) then
-            rspamd_logger.errx(task, "cannot create table %s in clickhouse server %s: cannot make request",
+            rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
               elt, settings['server'])
           end
         end
