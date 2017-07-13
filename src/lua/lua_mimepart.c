@@ -828,7 +828,7 @@ lua_mimepart_get_type_common (lua_State * L, gboolean full)
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
 	GHashTableIter it;
 	gpointer k, v;
-	rspamd_ftok_t *akey, *avalue;
+	struct rspamd_content_type_param *param;
 
 	if (part == NULL) {
 		lua_pushnil (L);
@@ -862,12 +862,12 @@ lua_mimepart_get_type_common (lua_State * L, gboolean full)
 		g_hash_table_iter_init (&it, part->ct->attrs);
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
-			akey = k;
-			avalue = v;
+			param = v;
 
-			if (akey->len > 0 && avalue->len > 0) {
-				lua_pushlstring (L, akey->begin, akey->len);
-				lua_pushlstring (L, avalue->begin, avalue->len);
+			if (param->name.len > 0 && param->name.len > 0) {
+				/* TODO: think about multiple values here */
+				lua_pushlstring (L, param->name.begin, param->name.len);
+				lua_pushlstring (L, param->value.begin, param->value.len);
 				lua_settable (L, -3);
 			}
 		}
