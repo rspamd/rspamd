@@ -53,6 +53,7 @@ struct rspamd_mime_parser_ctx {
 	const gchar *start;
 	const gchar *pos;
 	const gchar *end;
+	struct rspamd_task *task;
 };
 
 static gboolean
@@ -688,7 +689,8 @@ rspamd_multipart_boundaries_filter (struct rspamd_task *task,
 		if (cur->start >= multipart->raw_data.begin - st->start) {
 			if (cb->cur_boundary) {
 				/* Check boundary */
-				msg_debug_mime ("compare %L and %L", cb->bhash, cur->hash);
+				msg_debug_mime ("compare %L and %L (and %L)",
+						cb->bhash, cur->hash, cur->closed_hash);
 
 				if (cb->bhash == cur->hash) {
 					sel = i;
@@ -834,6 +836,9 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 	gboolean closing = FALSE;
 	struct rspamd_mime_boundary b;
 	struct rspamd_mime_parser_ctx *st = context;
+	struct rspamd_task *task;
+
+	task = st->task;
 
 	if (G_LIKELY (p < end)) {
 		blen = rspamd_memcspn (p, "\r\n", end - p);
@@ -887,12 +892,14 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 
 			rspamd_cryptobox_siphash ((guchar *)&b.hash, lc_copy, blen,
 					lib_ctx->hkey);
+			msg_debug_mime ("normal hash: %*s -> %L", blen, lc_copy);
 
 			if (closing) {
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
 				rspamd_cryptobox_siphash ((guchar *)&b.closed_hash, lc_copy,
 						blen + 2,
 						lib_ctx->hkey);
+				msg_debug_mime ("closing hash: %*s -> %L", blen + 2, lc_copy);
 			}
 			else {
 				b.flags = 0;
@@ -1137,6 +1144,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		nst->start = part->parsed_data.begin;
 		nst->end = nst->start + part->parsed_data.len;
 		nst->pos = nst->start;
+		nst->task = st->task;
 
 		str.str = (gchar *)part->parsed_data.begin;
 		str.len = part->parsed_data.len;
@@ -1256,6 +1264,7 @@ rspamd_mime_parse_task (struct rspamd_task *task, GError **err)
 	st->end = task->msg.begin + task->msg.len;
 	st->boundaries = g_array_sized_new (FALSE, FALSE,
 			sizeof (struct rspamd_mime_boundary), 8);
+	st->task = task;
 
 	if (st->pos == NULL) {
 		st->pos = task->msg.begin;
