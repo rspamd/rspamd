@@ -280,11 +280,12 @@ rspamd_mime_part_get_cte (struct rspamd_task *task,
 	else {
 		for (i = 0; i < hdrs_cte->len; i ++) {
 			gsize hlen;
+			gchar lc_buf[128];
 
 			hdr = g_ptr_array_index (hdrs_cte, i);
-			hlen = strlen (hdr->value);
-			rspamd_str_lc (hdr->value, hlen);
-			cte = rspamd_mime_parse_cte (hdr->value, hlen);
+			hlen = rspamd_snprintf (lc_buf, sizeof (lc_buf), "%s", hdr->value);
+			rspamd_str_lc (lc_buf, hlen);
+			cte = rspamd_mime_parse_cte (lc_buf, hlen);
 
 			if (cte != RSPAMD_CTE_UNKNOWN) {
 				part->cte = cte;
