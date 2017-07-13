@@ -218,7 +218,20 @@ rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
 				next_state = parse_param_name;
 				pname_start = NULL;
 				pname_end = NULL;
-			} else {
+			}
+			else if (*p == ';') {
+				if (pname_start && pname_end && pname_end > pname_start) {
+					rspamd_content_type_add_param (pool, &val, pname_start,
+							pname_end, c, p);
+				}
+
+				p ++;
+				state = parse_space;
+				next_state = parse_param_name;
+				pname_start = NULL;
+				pname_end = NULL;
+			}
+			else {
 				p++;
 			}
 			break;
@@ -311,6 +324,10 @@ rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
 		break;
 	case parse_param_value:
 		if (pname_start && pname_end && pname_end > pname_start) {
+			if (p > c && *(p - 1) == ';') {
+				p --;
+			}
+
 			rspamd_content_type_add_param (pool, &val, pname_start,
 					pname_end, c, p);
 
