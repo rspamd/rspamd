@@ -3480,7 +3480,8 @@ lua_task_set_settings (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *settings;
-	const ucl_object_t *act, *elt, *metric_elt;
+	const ucl_object_t *act, *elt, *metric_elt, *vars, *cur;
+	ucl_object_iter_t it = NULL;
 	struct rspamd_metric_result *mres;
 	guint i;
 
@@ -3516,6 +3517,20 @@ lua_task_set_settings (lua_State *L)
 					mres->actions_limits[i] = ucl_object_todouble (elt);
 					msg_debug_task ("adjusted action %s to %.2f",
 							ucl_object_key (elt), mres->actions_limits[i]);
+				}
+			}
+		}
+
+		vars = ucl_object_lookup (task->settings, "variables");
+		if (vars && ucl_object_type (vars) == UCL_OBJECT) {
+			/* Set memory pool variables */
+			while ((cur = ucl_object_iterate (vars, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_STRING) {
+					rspamd_mempool_set_variable (task->task_pool,
+							ucl_object_key (cur), rspamd_mempool_strdup (
+									task->task_pool,
+									ucl_object_tostring (cur)
+							), NULL);
 				}
 			}
 		}
