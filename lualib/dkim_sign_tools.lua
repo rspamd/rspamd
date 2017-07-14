@@ -137,10 +137,23 @@ local function prepare_dkim_signing(N, task, settings)
     p.key = settings.domain[dkim_domain].path
   end
 
-  if not (p.key and p.selector) and not
-  (settings.try_fallback or settings.use_redis or settings.selector_map or settings.path_map) then
-    rspamd_logger.debugm(N, task, 'dkim unconfigured and fallback disabled')
-    return false,{}
+  if not p.key and p.selector then
+    local key_var = "dkim_key"
+    local selector_var = "dkim_selector"
+    if N == "arc" then
+      key_var = "arc_key"
+      selector_var = "arc_selector"
+    end
+
+    p.key = task:get_mempool():get_variable(key_var)
+    p.selector = task:get_mempool():get_variable(selector_var)
+
+    if (not p.key or not p.selector) and (not (settings.try_fallback or
+        settings.use_redis or settings.selector_map
+        or settings.path_map)) then
+      rspamd_logger.debugm(N, task, 'dkim unconfigured and fallback disabled')
+      return false,{}
+    end
   end
 
   if not p.key then
@@ -154,14 +167,14 @@ local function prepare_dkim_signing(N, task, settings)
   end
   p.domain = dkim_domain
 
-  if settings.selector_map then
+  if not p.selector and settings.selector_map then
     local data = settings.selector_map:get_key(dkim_domain)
     if data then
       p.selector = data
     end
   end
 
-  if settings.path_map then
+  if not p.key and settings.path_map then
     local data = settings.path_map:get_key(dkim_domain)
     if data then
       p.key = data
