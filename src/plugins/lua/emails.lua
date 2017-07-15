@@ -47,10 +47,26 @@ local function check_email_rule(task, rule, addr)
           and err ~= 'no records with this name') then
         logger.errx(task, 'Error querying DNS: %1', err)
       elseif results then
-        if rule['hash'] then
-          task:insert_result(rule['symbol'], 1.0, {email, to_resolve})
+        local expected_found = false
+
+        if rule['expect_ip'] then
+          for _,result in pairs(results) do
+            local ipstr = result:to_string()
+
+            if ipstr == rule['expect_ip'] then
+              expected_found = true
+            end
+          end
         else
-          task:insert_result(rule['symbol'], 1.0, email)
+          expected_found = true -- Accept any result
+        end
+
+        if expected_found then
+          if rule['hash'] then
+            task:insert_result(rule['symbol'], 1.0, {email, to_resolve})
+          else
+            task:insert_result(rule['symbol'], 1.0, email)
+          end
         end
 
       end
