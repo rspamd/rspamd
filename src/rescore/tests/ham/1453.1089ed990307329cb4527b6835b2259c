@@ -1,0 +1,99 @@
+From spamassassin-talk-admin@lists.sourceforge.net  Thu Aug 29 11:06:13 2002
+Return-Path: <spamassassin-talk-admin@example.sourceforge.net>
+Delivered-To: yyyy@localhost.netnoteinc.com
+Received: from localhost (localhost [127.0.0.1])
+	by phobos.labs.netnoteinc.com (Postfix) with ESMTP id 23C0D4415B
+	for <jm@localhost>; Thu, 29 Aug 2002 06:04:58 -0400 (EDT)
+Received: from phobos [127.0.0.1]
+	by localhost with IMAP (fetchmail-5.9.0)
+	for jm@localhost (single-drop); Thu, 29 Aug 2002 11:04:58 +0100 (IST)
+Received: from usw-sf-list2.sourceforge.net (usw-sf-fw2.sourceforge.net
+    [216.136.171.252]) by dogma.slashnull.org (8.11.6/8.11.6) with ESMTP id
+    g7SKrBZ09839 for <jm-sa@jmason.org>; Wed, 28 Aug 2002 21:53:11 +0100
+Received: from usw-sf-list1-b.sourceforge.net ([10.3.1.13]
+    helo=usw-sf-list1.sourceforge.net) by usw-sf-list2.sourceforge.net with
+    esmtp (Exim 3.31-VA-mm2 #1 (Debian)) id 17k9nM-0005YW-00; Wed,
+    28 Aug 2002 13:52:08 -0700
+Received: from ironmail1.cc.lehigh.edu ([128.180.39.26]
+    helo=cc.lehigh.edu) by usw-sf-list1.sourceforge.net with esmtp (Cipher
+    TLSv1:DES-CBC3-SHA:168) (Exim 3.31-VA-mm2 #1 (Debian)) id 17k9ms-00070d-00
+    for <spamassassin-talk@lists.sourceforge.net>; Wed, 28 Aug 2002 13:51:38
+    -0700
+Received: from  ([128.180.39.20]) by ironmail1.cc.lehigh.edu with ESMTP
+    with TLS; Wed, 28 Aug 2002 16:49:47 -0400 (EDT)
+Received: from lehigh.edu (Roamer052031.dept.Lehigh.EDU [128.180.52.31])
+    by rain.CC.Lehigh.EDU (8.12.5/8.12.5) with ESMTP id g7SKnlMS021052;
+    Wed, 28 Aug 2002 16:49:47 -0400
+Message-Id: <3D6D3763.3060300@lehigh.edu>
+From: Phil R Lawrence <prlawrence@Lehigh.EDU>
+User-Agent: Mozilla/5.0 (X11; U; Linux i686; en-US; rv:0.9.9) Gecko/20020513
+X-Accept-Language: en-us, en
+MIME-Version: 1.0
+To: Justin Mason <yyyy@example.com>
+Cc: spamassassin-talk@example.sourceforge.net
+Subject: Re: [SAtalk] testing the install
+References: <20020815174924.951B743C34@phobos.labs.netnoteinc.com>
+Content-Type: text/plain; charset=us-ascii; format=flowed
+Content-Transfer-Encoding: 7bit
+Sender: spamassassin-talk-admin@example.sourceforge.net
+Errors-To: spamassassin-talk-admin@example.sourceforge.net
+X-Beenthere: spamassassin-talk@example.sourceforge.net
+X-Mailman-Version: 2.0.9-sf.net
+Precedence: bulk
+List-Help: <mailto:spamassassin-talk-request@example.sourceforge.net?subject=help>
+List-Post: <mailto:spamassassin-talk@example.sourceforge.net>
+List-Subscribe: <https://example.sourceforge.net/lists/listinfo/spamassassin-talk>,
+    <mailto:spamassassin-talk-request@lists.sourceforge.net?subject=subscribe>
+List-Id: Talk about SpamAssassin <spamassassin-talk.example.sourceforge.net>
+List-Unsubscribe: <https://example.sourceforge.net/lists/listinfo/spamassassin-talk>,
+    <mailto:spamassassin-talk-request@lists.sourceforge.net?subject=unsubscribe>
+List-Archive: <http://www.geocrawler.com/redir-sf.php3?list=spamassassin-talk>
+X-Original-Date: Wed, 28 Aug 2002 16:49:39 -0400
+Date: Wed, 28 Aug 2002 16:49:39 -0400
+X-Pyzor: Reported 0 times.
+X-Spam-Status: No, hits=-5.6 required=7.0
+	tests=FORGED_RCVD_TRAIL,KNOWN_MAILING_LIST,QUOTED_EMAIL_TEXT,
+	      REFERENCES,SPAM_PHRASE_03_05,USER_AGENT,
+	      USER_AGENT_MOZILLA_UA,X_ACCEPT_LANG
+	version=2.40-cvs
+X-Spam-Level: 
+
+Justin Mason wrote:
+> Phil R Lawrence said:
+> 
+> 
+>>>something to watch out for is to use "nomime" => 1 in the Mail::Audit
+>>>ctor; the M:A folks changed the API there.
+>>
+>>What has MIME to do with it?  I read in perldoc M:A that your suggestion 
+>>is less expensive, but how does that help S:A?
+> 
+> 
+> M:A, for some reason, changes its base class depending on whether the
+> incoming message is mime or not.  Therefore the Mail::Internet methods
+> suddenly become unavailable for MIME messages...
+> 
+> (you do *not* want to know what I thought of that when I found it ;)
+
+As a new user of SA, I guess I'm having trouble connecting the dots.  If 
+I understand you:  If I don't use the "nomime" => 1 option and I recieve 
+MIME mail, the Mail::Internet modules become unavailable.
+
+Unavailable for which?  MA?  SA?  What do these methods do?  Does this 
+mean my incoming MIME mail won't be checked by SA unless I specify 
+"nomime" => 1?
+
+Thanks,
+Phil
+
+
+
+-------------------------------------------------------
+This sf.net email is sponsored by: Jabber - The world's fastest growing 
+real-time communications platform! Don't just IM. Build it in! 
+http://www.jabber.com/osdn/xim
+_______________________________________________
+Spamassassin-talk mailing list
+Spamassassin-talk@lists.sourceforge.net
+https://lists.sourceforge.net/lists/listinfo/spamassassin-talk
+

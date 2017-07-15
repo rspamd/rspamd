@@ -1,0 +1,31 @@
+From rssfeeds@jmason.org  Mon Oct  7 12:05:30 2002
+Return-Path: <rssfeeds@example.com>
+Delivered-To: yyyy@localhost.example.com
+Received: from localhost (jalapeno [127.0.0.1])
+	by jmason.org (Postfix) with ESMTP id CED2916F7E
+	for <jm@localhost>; Mon,  7 Oct 2002 12:04:06 +0100 (IST)
+Received: from jalapeno [127.0.0.1]
+	by localhost with IMAP (fetchmail-5.9.0)
+	for jm@localhost (single-drop); Mon, 07 Oct 2002 12:04:06 +0100 (IST)
+Received: from dogma.slashnull.org (localhost [127.0.0.1]) by
+    dogma.slashnull.org (8.11.6/8.11.6) with ESMTP id g9780nK23295 for
+    <jm@jmason.org>; Mon, 7 Oct 2002 09:00:49 +0100
+Message-Id: <200210070800.g9780nK23295@dogma.slashnull.org>
+To: yyyy@example.com
+From: gamasutra <rssfeeds@example.com>
+Subject: Artist Gallery: Troy Paradise
+Date: Mon, 07 Oct 2002 08:00:49 -0000
+Content-Type: text/plain; encoding=utf-8
+X-Spam-Status: No, hits=-941.4 required=5.0
+	tests=AWL,DATE_IN_PAST_03_06,T_NONSENSE_FROM_40_50
+	version=2.50-cvs
+X-Spam-Level: 
+
+URL: http://www.newsisfree.com/click/-0,8613678,159/
+Date: 2002-10-06T18:12:42+01:00
+
+Troy Paradise is a versatile and creative artist with over seven years of 
+experience in the videogames industry, working as a freelance lead artist and 
+college art instructor.
+
+
