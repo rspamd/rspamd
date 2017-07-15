@@ -35,7 +35,12 @@ local urls = {}
 
 local value_types = {
   ip = {
-    get_value = function(ip) return ip:to_string() end,
+    get_value = function(ip)
+      if type(ip) == 'string' then
+        return ip
+      end
+      return ip:to_string()
+    end,
   },
   from = {
     get_value = function(val) return val end,
@@ -373,14 +378,14 @@ local function multimap_callback(task, rule)
     if r['cdb'] then
       local srch = value
       if r['type'] == 'ip' then
-        srch = value:to_string()
+        srch = value_types['ip'].get_value(value)
       end
       ret = r['cdb']:lookup(srch)
     elseif r['redis_key'] then
       local srch = value
       if r['type'] == 'ip' or (r['type'] == 'received' and
         (r['filter'] == 'real_ip' or r['filter'] == 'from_ip' or not r['filter'])) then
-        srch = value:to_string()
+        srch = value_types['ip'].get_value(value)
       end
       ret = rspamd_redis_make_request(task,
         redis_params, -- connect params
@@ -636,6 +641,14 @@ local function multimap_callback(task, rule)
       if ip:is_valid() then
         if rt == 'ip' then
           match_rule(rule, ip)
+          local bits = 128
+          if ip:get_version() == 4 then
+            bits = 32
+          end
+          for i=bits,1,-1 do
+            local nip = ip:apply_mask(i):to_string() .. "/" .. i
+            match_rule(rule, nip)
+          end
         else
           local cb = function (_, to_resolve, results, err)
             task:inc_dns_req()
