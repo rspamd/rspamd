@@ -1,0 +1,39 @@
+From rssfeeds@jmason.org  Thu Oct 10 12:32:34 2002
+Return-Path: <rssfeeds@example.com>
+Delivered-To: yyyy@localhost.example.com
+Received: from localhost (jalapeno [127.0.0.1])
+	by jmason.org (Postfix) with ESMTP id 89EE616F03
+	for <jm@localhost>; Thu, 10 Oct 2002 12:32:33 +0100 (IST)
+Received: from jalapeno [127.0.0.1]
+	by localhost with IMAP (fetchmail-5.9.0)
+	for jm@localhost (single-drop); Thu, 10 Oct 2002 12:32:33 +0100 (IST)
+Received: from dogma.slashnull.org (localhost [127.0.0.1]) by
+    dogma.slashnull.org (8.11.6/8.11.6) with ESMTP id g9A84QK14194 for
+    <jm@jmason.org>; Thu, 10 Oct 2002 09:04:26 +0100
+Message-Id: <200210100804.g9A84QK14194@dogma.slashnull.org>
+To: yyyy@example.com
+From: newscientist <rssfeeds@example.com>
+Subject: Critical US satellites could be hacked
+Date: Thu, 10 Oct 2002 08:04:26 -0000
+Content-Type: text/plain; encoding=utf-8
+X-Spam-Status: No, hits=-959.4 required=5.0
+	tests=AWL,DATE_IN_PAST_03_06,T_NONSENSE_FROM_00_10,
+	      T_NONSENSE_FROM_10_20,T_NONSENSE_FROM_20_30,
+	      T_NONSENSE_FROM_30_40,T_NONSENSE_FROM_40_50,
+	      T_NONSENSE_FROM_50_60,T_NONSENSE_FROM_60_70,
+	      T_NONSENSE_FROM_70_80,T_NONSENSE_FROM_80_90,
+	      T_NONSENSE_FROM_90_91,T_NONSENSE_FROM_91_92,
+	      T_NONSENSE_FROM_92_93,T_NONSENSE_FROM_93_94,
+	      T_NONSENSE_FROM_94_95,T_NONSENSE_FROM_95_96,
+	      T_NONSENSE_FROM_96_97,T_NONSENSE_FROM_97_98,
+	      T_NONSENSE_FROM_98_99,T_NONSENSE_FROM_99_100
+	version=2.50-cvs
+X-Spam-Level: 
+
+URL: http://www.newsisfree.com/click/-3,8708820,1440/
+Date: Not supplied
+
+Military communications could be jammed or intercepted and satellites thrown 
+off course or destroyed, a new US study warns
+
+
