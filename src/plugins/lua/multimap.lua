@@ -383,11 +383,13 @@ local function multimap_callback(task, rule)
         (r['filter'] == 'real_ip' or r['filter'] == 'from_ip' or not r['filter'])) then
         srch = {value:to_string()}
         cmd = 'HMGET'
-        local bits = 128
+        local maxbits = 128
+        local minbits = 32
         if value:get_version() == 4 then
-            bits = 32
+            maxbits = 32
+            minbits = 8
         end
-        for i=bits,1,-1 do
+        for i=maxbits,minbits,-1 do
             local nip = value:apply_mask(i):to_string() .. "/" .. i
             table.insert(srch, nip)
         end
