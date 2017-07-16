@@ -63,6 +63,7 @@ OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
+OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -1260,6 +1261,16 @@ IF(ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_SUBDIRECTORY(clang-plugin)
 ENDIF()
 
+IF(ENABLE_TORCH MATCHES "ON")
+	IF(WITH_LUAJIT)
+		ADD_SUBDIRECTORY(contrib/torch/paths)
+		ADD_SUBDIRECTORY(contrib/torch/torch7)
+		ADD_SUBDIRECTORY(contrib/torch/nn)
+	ELSE()
+		MESSAGE(FATAL_ERROR "Cannot enable torch without luajit")
+	ENDIF()
+ENDIF()
+
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(test)
 ADD_SUBDIRECTORY(utils)
@@ -1339,6 +1350,10 @@ ENDFOREACH(LUA_LIB)
 
 # Install lua fun library
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
+
+IF(ENABLE_TORCH MATCHES "ON")
+	INSTALL(FILES "contrib/moses/moses.lua" DESTINATION ${LUALIBDIR})
+ENDIF()
 
 # systemd unit
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
