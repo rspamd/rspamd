@@ -253,14 +253,25 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 
 	if (additional_path) {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s/?.lua;%s/?.so;%s;%s",
+				"%s/lua/?.lua;"
+						"%s/lua/?.lua;"
+						"%s/?.lua;"
+						"%s/?.lua;"
+						"%s/?/init.lua;"
+						"%s;"
+						"%s",
 				pluginsdir, RSPAMD_CONFDIR, rulesdir,
 				lualibdir, lualibdir,
 				additional_path, old_path);
 	}
 	else {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;%s/lua/?.lua;%s/?.lua;%s/?.lua;%s/?.so;%s",
+				"%s/lua/?.lua;"
+						"%s/lua/?.lua;"
+						"%s/?.lua;"
+						"%s/?.lua;"
+						"%s/?/init.lua;"
+						"%s",
 				pluginsdir, RSPAMD_CONFDIR, rulesdir,
 				lualibdir, lualibdir,
 				old_path);
@@ -269,6 +280,20 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 	lua_pop (L, 1);
 	lua_pushstring (L, path_buf);
 	lua_setfield (L, -2, "path");
+
+	lua_getglobal (L, "package");
+	lua_getfield (L, -1, "cpath");
+	old_path = luaL_checkstring (L, -1);
+
+	rspamd_snprintf (path_buf, sizeof (path_buf),
+					"%s/?.so;"
+					"%s",
+			lualibdir,
+			old_path);
+	lua_pop (L, 1);
+	lua_pushstring (L, path_buf);
+	lua_setfield (L, -2, "cpath");
+
 	lua_pop (L, 1);
 }
 
