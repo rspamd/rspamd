@@ -35,12 +35,7 @@ local urls = {}
 
 local value_types = {
   ip = {
-    get_value = function(ip)
-      if type(ip) == 'string' then
-        return ip
-      end
-      return ip:to_string()
-    end,
+    get_value = function(ip) return ip:to_string() end,
   },
   from = {
     get_value = function(val) return val end,
@@ -378,22 +373,33 @@ local function multimap_callback(task, rule)
     if r['cdb'] then
       local srch = value
       if r['type'] == 'ip' then
-        srch = value_types['ip'].get_value(value)
+        srch = value:to_string()
       end
       ret = r['cdb']:lookup(srch)
     elseif r['redis_key'] then
-      local srch = value
+      local srch = {value}
+      local cmd = 'HGET'
       if r['type'] == 'ip' or (r['type'] == 'received' and
         (r['filter'] == 'real_ip' or r['filter'] == 'from_ip' or not r['filter'])) then
-        srch = value_types['ip'].get_value(value)
+        srch = {value:to_string()}
+        cmd = 'HMGET'
+        local bits = 128
+        if value:get_version() == 4 then
+            bits = 32
+        end
+        for i=bits,1,-1 do
+            local nip = value:apply_mask(i):to_string() .. "/" .. i
+            table.insert(srch, nip)
+        end
       end
+      table.insert(srch, 1, r['redis_key'])
       ret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         r['redis_key'], -- hash key
         false, -- is write
         redis_map_cb, --callback
-        'HGET', -- command
-        {r['redis_key'], srch} -- arguments
+        cmd, -- command
+        srch -- arguments
       )
 
       return ret
@@ -475,6 +481,14 @@ local function multimap_callback(task, rule)
   local function match_rule(r, value)
     local function rule_callback(result)
       if result then
+        if type(result) == 'table' then
+          for _,rs in ipairs(result) do
+            if type(rs) ~= 'userdata' then
+              rule_callback(rs)
+            end
+          end
+          return
+        end
         local _,symbol,score = parse_ret(r, result)
         if symbol and r['symbols_set'] then
           if not r['symbols_set'][symbol] then
@@ -641,14 +655,6 @@ local function multimap_callback(task, rule)
       if ip:is_valid() then
         if rt == 'ip' then
           match_rule(rule, ip)
-          local bits = 128
-          if ip:get_version() == 4 then
-            bits = 32
-          end
-          for i=bits,1,-1 do
-            local nip = ip:apply_mask(i):to_string() .. "/" .. i
-            match_rule(rule, nip)
-          end
         else
           local cb = function (_, to_resolve, results, err)
             task:inc_dns_req()
