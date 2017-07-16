@@ -28,6 +28,7 @@ local symbol = 'MAILLIST'
 -- List-Help: <mailto:
 -- List-Unsubscribe: <mailto:[a-zA-Z\.-]+-unsubscribe@
 -- List-Subscribe: <mailto:[a-zA-Z\.-]+-subscribe@
+-- RFC 2919 headers exist
 local function check_ml_ezmlm(task)
   -- Mailing-List
   local header = task:get_header('mailing-list')
@@ -66,10 +67,10 @@ end
 -- List-Help: <mailto:
 -- List-Post: <mailto:
 -- List-Subscribe: .*<mailto:.*=subscribe>
--- List-Id:
 -- List-Unsubscribe: .*<mailto:.*=unsubscribe>
 -- List-Archive:
 -- X-Mailman-Version: \d
+-- RFC 2919 headers exist
 local function check_ml_mailman(task)
   -- Mailing-List
   local header = task:get_header('x-mailman-version')
@@ -78,7 +79,7 @@ local function check_ml_mailman(task)
   end
   -- Precedence
   header = task:get_header('precedence')
-  if not header or (not string.match(header, '^bulk$') and not string.match(header, '^list$')) then
+  if not header or (header ~= 'bulk' and header ~= 'list') then
     return false
   end
   -- For reminders we have other headers than for normal messages
@@ -96,10 +97,6 @@ local function check_ml_mailman(task)
   end
 
   -- Other headers
-  header = task:get_header('list-id')
-  if not header then
-    return false
-  end
   header = task:get_header('list-post')
   if not header or not string.find(header, '^<mailto:') then
     return false
@@ -169,20 +166,6 @@ local function check_ml_subscriberu(task)
 
 end
 
--- RFC 2369 headers
-local function check_rfc2369(task)
-  local header = task:get_header('List-Unsubscribe')
-  if not header or not string.find(header, '<.+>') then
-    return false
-  end
-  header = task:get_header('List-Post')
-  if not header or not string.find(header, '<.+>') then
-    return false
-  end
-
-  return true
-end
-
 -- RFC 2919 headers
 local function check_rfc2919(task)
   local header = task:get_header('List-Id')
@@ -190,7 +173,7 @@ local function check_rfc2919(task)
     return false
   end
 
-  return check_rfc2369(task)
+  return true
 end
 
 -- Google groups detector
@@ -214,11 +197,12 @@ end
 -- Majordomo detector
 -- Check Sender for owner- or -owner
 -- Check Precedence for 'Bulk' or 'List'
+-- RFC 2919 headers exist
 --
 -- And nothing more can be extracted :(
 local function check_ml_majordomo(task)
   local header = task:get_header('Sender')
-  if not header or (not string.find(header, '^owner-.*$') and not string.find(header, '^.*-owner$')) then
+  if not header or (not string.find(header, '^owner-.*$') and not string.find(header, '^.*-owner@.*$')) then
     return false
   end
 
@@ -246,13 +230,14 @@ end
 
 local function check_ml_generic(task)
   local header = task:get_header('Precedence')
-  if not header or (header ~= 'list' and header ~= 'bulk') then
+  if not header then
     return false
   end
 
   return check_rfc2919(task)
 end
 
+-- RFC 2919 headers exist
 local function check_maillist(task)
   if check_ml_generic(task) then
     if check_ml_ezmlm(task) then
