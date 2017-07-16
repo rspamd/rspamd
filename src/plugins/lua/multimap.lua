@@ -377,18 +377,31 @@ local function multimap_callback(task, rule)
       end
       ret = r['cdb']:lookup(srch)
     elseif r['redis_key'] then
-      local srch = value
+      local srch = {value}
+      local cmd = 'HGET'
       if r['type'] == 'ip' or (r['type'] == 'received' and
         (r['filter'] == 'real_ip' or r['filter'] == 'from_ip' or not r['filter'])) then
-        srch = value:to_string()
+        srch = {value:to_string()}
+        cmd = 'HMGET'
+        local maxbits = 128
+        local minbits = 32
+        if value:get_version() == 4 then
+            maxbits = 32
+            minbits = 8
+        end
+        for i=maxbits,minbits,-1 do
+            local nip = value:apply_mask(i):to_string() .. "/" .. i
+            table.insert(srch, nip)
+        end
       end
+      table.insert(srch, 1, r['redis_key'])
       ret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         r['redis_key'], -- hash key
         false, -- is write
         redis_map_cb, --callback
-        'HGET', -- command
-        {r['redis_key'], srch} -- arguments
+        cmd, -- command
+        srch -- arguments
       )
 
       return ret
@@ -470,6 +483,14 @@ local function multimap_callback(task, rule)
   local function match_rule(r, value)
     local function rule_callback(result)
       if result then
+        if type(result) == 'table' then
+          for _,rs in ipairs(result) do
+            if type(rs) ~= 'userdata' then
+              rule_callback(rs)
+            end
+          end
+          return
+        end
         local _,symbol,score = parse_ret(r, result)
         if symbol and r['symbols_set'] then
           if not r['symbols_set'][symbol] then
