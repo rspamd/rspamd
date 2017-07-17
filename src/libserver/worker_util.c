@@ -617,7 +617,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		close (wrk->srv_pipe[1]);
 		rspamd_socket_nonblocking (wrk->control_pipe[0]);
 		rspamd_socket_nonblocking (wrk->srv_pipe[0]);
-		rspamd_srv_start_watching (wrk, ev_base);
+		rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
 		/* Insert worker into worker's table, pid is index */
 		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
 				wrk->pid), wrk);
