@@ -2,6 +2,9 @@
 
 import argparse
 import os
+import math
+import requests
+import json
 
 import numpy as np
 from Perceptron import Perceptron
@@ -59,29 +62,100 @@ def make_perceptron_input(X, y, symbol_set):
         X_new.append([1 if symbol in row else 0 for symbol in symbol_set])
 
     return np.array(X_new), np.array(y)
+
+
+def file_exists(filepath):
+
+    return os.path.isfile(filepath)
+
+
+def get_symbols_type_from_file(filepath):
+
+    cache = {}
+    
+    with open(filepath, 'r') as f:
+        cache = json.load(f)
+
+    return cache
+
+
+def get_all_symbols_type(address="localhost", port=11334, endpoint="symbols"):
+
+    url = "http://{}:{}/{}".format(address, port, endpoint)
+
+    response = json.loads(requests.get(url).text)
+
+    symbols_type = {}
+
+    for group in response:
+        group = group["rules"]
+        for rule in group:
+            symbols_type[rule['symbol']] = "UNDEFINED"
+            if rule['weight'] > 0:
+                symbols_type[rule['symbol']] = "SPAM"
+            elif rule['weight'] < 0:
+                symbols_type[rule['symbol']] = "HAM"
+
+    return symbols_type
+
+
+def write_symbols_cache(symbols_type, filepath="symbols_type.cache"):
+
+    with open(filepath, "w") as f:
+        json.dump(symbols_type, f)
+
+    return
+
+
+def get_symbols_type_from_file(filepath):
+
+    symbols_type = {}
+    
+    with open(filepath, 'r') as f:
+        symbols_type = json.load(f)
+    
+    return f
+
+
+def filter_symbols_type(symbols_set, symbols_type):
+
+    for symbol in symbols_type:
+        if symbol not in symbols_set:
+            symbols_type.pop(symbol)
+
+    return symbols_type
     
 
-def rescore_weights(X, y, epoch=10, l_rate=0.01):
+def get_symbols_type(symbol_set, symbols_type_cache_file="symbols_type.cache"):
+
+    symbols_type = {}
+    
+    if file_exists(symbols_type_cache_file):
+        symbols_type = get_symbols_type_from_file(symbols_type_cache_file)
+
+    else:
+        symbols_type = get_all_symbols_type()
+        write_symbols_cache(symbols_type)
+
+    symbols_type = filter_symbols_type(symbol_set, symbols_type) # Removes symbols not in symbol set
+
+    return symbols_type
+
+
+def rescore_weights(X, y, symbols_type, epoch=10, l_rate=0.01):
     '''
     Returns a tuple of (symbol, score) after training perceptron
     '''
 
     n_samples, n_feaures = X.shape
 
-    perceptron = Perceptron(n_epoch=epoch,l_rate=l_rate)
+    perceptron = Perceptron(n_epoch=epoch,
+                            l_rate=l_rate,
+                            symbols_type=symbols_type)
 
     weights = perceptron.rescore_weights(X, y)
 
     return weights
-
-
-def split_dataset(X, y):
-    '''
-    Return X_train, y_train, X_test, y_test
-    Splits dataset into 70:30 (70 - train, 30 - test)
-    '''
-
-    pass
     
 
 def main():
@@ -115,13 +189,13 @@ def main():
         
     X, y, symbol_set = get_dataset_from_logs(logdir=args.logdir)
 
-
-    #X_train, y_train, X_test, y_test = split_dataset(X, y)
+    symbols_type = get_symbols_type(symbol_set)
     
     weights = rescore_weights(X=X,
                               y=y,
                               epoch=epoch,
-                              l_rate=l_rate)
+                              l_rate=l_rate,
+                              symbols_type=symbols_type)
 
     
     for i in range(len(symbol_set)):
@@ -129,4 +203,5 @@ def main():
     
     
 if __name__ == "__main__":
-    main()
+    # main()
+
