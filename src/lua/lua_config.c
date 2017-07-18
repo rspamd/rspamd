@@ -2667,13 +2667,19 @@ lua_config_register_monitored (lua_State *L)
 
 	if (cfg != NULL && url != NULL && type != NULL) {
 		if (g_ascii_strcasecmp (type, "dns") == 0) {
+			lua_Debug ar;
+
 			if (lua_type (L, 4) == LUA_TTABLE) {
 				params = ucl_object_lua_import (L, 4);
 			}
 
-			m = rspamd_monitored_create (cfg->monitored_ctx, url,
+			/* Get lua line and source */
+			lua_getstack (L, 1, &ar);
+			lua_getinfo (L, "nSl", &ar);
+
+			m = rspamd_monitored_create_ (cfg->monitored_ctx, url,
 					RSPAMD_MONITORED_DNS, RSPAMD_MONITORED_DEFAULT,
-					params);
+					params, ar.short_src);
 
 			if (m) {
 				pm = lua_newuserdata (L, sizeof (*pm));
