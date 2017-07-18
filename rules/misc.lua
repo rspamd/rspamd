@@ -601,7 +601,6 @@ rspamd_config.R_BAD_CTE_7BIT = {
         local mul = 1.0
         local params = {cte}
         if attrs then
-          print(attrs.charset)
           if attrs.charset and attrs.charset:lower() == "utf-8" then
             -- Penalise rule as people don't know that utf8 is surprisingly
             -- eight bit encoding
