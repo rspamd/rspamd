@@ -1,13 +1,28 @@
 import math
+import random
 
 class Perceptron:
-
-    def __init__(self, n_epoch=5, l_rate=0.01):
+    
+    def __init__(self, , n_epoch=5, l_rate=0.01, symbols_type={}):
         self.weights_ = []
         self.n_epoch = n_epoch
         self.l_rate = l_rate
+        self.symbols_type = symbols_type
+        
+    
+    def shuffle(self, X, y):
+        '''
+        Randomly shuffles X, y pairwise.
+        '''
 
+        combined = zip(X, y)
+        random.shuffle(combined)
 
+        X[:], y[:] = zip(*combined)
+
+        return X, y
+    
+        
     def activation(self, x):
         return 1 / (1 + math.exp( -x ))
 
@@ -27,6 +42,9 @@ class Perceptron:
 
         for epoch in range(self.n_epoch):
             squared_sum_error = 0.0
+
+            X, y = self.shuffle(X, y)
+            
             for row, output in zip(X, y):
                 prediction = self.predict(row)
                 error = prediction * (1 - prediction) * (output - prediction)
@@ -54,7 +72,8 @@ class Perceptron:
             scaled_weights[i] = self.weights_[i] * -threshold / bias
 
         return scaled_weights
-        
+
+    
     def rescore_weights(self, X, y):
 
         self.train(X, y)
@@ -66,12 +85,17 @@ class Perceptron:
         
 if __name__ == "__main__":
 
+
+    # TESTING
+    
     p = Perceptron()
 
-    print "0: " + str(p.activation(0))
-    print "8: " + str(p.activation(8))
-    print "10: " + str(p.activation(10))
-    print "13: " + str(p.activation(13))
-    print "15: " + str(p.activation(15))
+    X = ['a', 'b', 'c']
+    y = [1, 2, 3]
+
+    X, y = p.shuffle(X, y)
+
+    print X
+    print y
     
     
