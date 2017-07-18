@@ -768,15 +768,9 @@ rspamd_control_handle_on_fork (struct rspamd_srv_command *cmd,
 	}
 }
 
-struct rspamd_srv_cbdata {
-	struct rspamd_worker *worker;
-	struct rspamd_main *srv;
-};
-
 static void
 rspamd_srv_handler (gint fd, short what, gpointer ud)
 {
-	struct rspamd_srv_cbdata *cbd;
 	struct rspamd_worker *worker;
 	static struct rspamd_srv_command cmd;
 	struct rspamd_main *srv;
@@ -791,9 +785,8 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 	gssize r;
 
 	if (what == EV_READ) {
-		cbd = ud;
-		worker = cbd->worker;
-		srv = cbd->srv;
+		worker = ud;
+		srv = worker->srv;
 		iov.iov_base = &cmd;
 		iov.iov_len = sizeof (cmd);
 		memset (&msg, 0, sizeof (msg));
@@ -959,14 +952,10 @@ rspamd_srv_start_watching (struct rspamd_main *srv,
 		struct rspamd_worker *worker,
 		struct event_base *ev_base)
 {
-	struct rspamd_srv_cbdata *cbd;
 	g_assert (worker != NULL);
 
-	cbd = rspamd_mempool_alloc (srv->server_pool, sizeof (*cbd));
-	cbd->worker = worker;
-	cbd->srv = srv;
 	event_set (&worker->srv_ev, worker->srv_pipe[0], EV_READ | EV_PERSIST,
-			rspamd_srv_handler, cbd);
+			rspamd_srv_handler, worker);
 	event_base_set (ev_base, &worker->srv_ev);
 	event_add (&worker->srv_ev, NULL);
 }
