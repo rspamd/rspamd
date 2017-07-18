@@ -375,6 +375,13 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 					case RSPAMD_MILTER_CONN_INET6:
 						session->addr = rspamd_inet_address_new (AF_INET, NULL);
 
+						if (zero - pos > sizeof ("IPv6:") &&
+								rspamd_lc_cmp (pos, "IPv6:",
+										sizeof ("IPv6:") - 1) == 0) {
+							/* Kill sendmail please */
+							pos += sizeof ("IPv6:") - 1;
+						}
+
 						if (!rspamd_parse_inet_address_ip (pos, zero - pos,
 								session->addr)) {
 							err = g_error_new (rspamd_milter_quark (), EINVAL,
