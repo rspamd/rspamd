@@ -558,18 +558,25 @@ local function gen_redis_callback(handler, id)
     local key = handler(task)
 
     local function redis_settings_cb(err, data)
-      if not err and type(data) == 'string' then
-        local parser = ucl.parser()
-        local res,ucl_err = parser:parse_string(data)
-        if not res then
-          rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
-            ucl_err)
-        else
-          local obj = parser:get_object()
-          rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
-            task:get_message_id(), id)
-          task:set_settings(obj)
+      if not err and type(data) == 'table' then
+        for _, d in ipairs(data) do
+          if type(d) == 'string' then
+            local parser = ucl.parser()
+            local res,ucl_err = parser:parse_string(d)
+            if not res then
+              rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
+                ucl_err)
+            else
+              local obj = parser:get_object()
+              rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
+                task:get_message_id(), id)
+              task:set_settings(obj)
+              break
+            end
+          end
         end
+      elseif err then
+        rspamd_logger.errx(task, 'Redis error: %1', err)
       end
     end
 
@@ -578,16 +585,24 @@ local function gen_redis_callback(handler, id)
       return
     end
 
+    local keys
+    if type(key) == 'table' then
+      keys = key
+    else
+      keys = {key}
+    end
+    key = keys[1]
+
     local ret,_,_ = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
       redis_settings_cb, --callback
-      'GET', -- command
-      {key} -- arguments
+      'MGET', -- command
+      keys -- arguments
     )
     if not ret then
-      rspamd_logger.errx(task, 'Redis GET failed: %s', ret)
+      rspamd_logger.errx(task, 'Redis MGET failed: %s', ret)
     end
   end
 end
