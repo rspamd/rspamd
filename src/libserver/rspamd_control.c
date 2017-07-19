@@ -858,7 +858,6 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_hs_io_handler, NULL);
-				return;
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
 				/* Broadcast command to all workers */
@@ -871,7 +870,6 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				wcmd.cmd.monitored_change.sender = cmd.cmd.monitored_change.sender;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_hs_io_handler, NULL);
-				return;
 				break;
 			case RSPAMD_SRV_LOG_PIPE:
 				memset (&wcmd, 0, sizeof (wcmd));
@@ -879,7 +877,6 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				wcmd.cmd.log_pipe.type = cmd.cmd.log_pipe.type;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_log_pipe_io_handler, NULL);
-				return;
 				break;
 			case RSPAMD_SRV_ON_FORK:
 				rdata->rep.reply.on_fork.status = 0;
