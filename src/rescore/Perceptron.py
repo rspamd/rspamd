@@ -3,11 +3,13 @@ import random
 
 class Perceptron:
     
-    def __init__(self, , n_epoch=5, l_rate=0.01, symbols_type={}):
+    def __init__(self, symbols_tuple, n_epoch=5, l_rate=0.01, threshold = 10, symbols_type={}):
         self.weights_ = []
         self.n_epoch = n_epoch
         self.l_rate = l_rate
         self.symbols_type = symbols_type
+        self.symbols_tuple = symbols_tuple
+        self.threshold = 10
         
     
     def shuffle(self, X, y):
@@ -47,7 +49,9 @@ class Perceptron:
             
             for row, output in zip(X, y):
                 prediction = self.predict(row)
-                error = prediction * (1 - prediction) * (output - prediction)
+                error = output - prediction
+                
+                delta = prediction * (1 - prediction) * error * self.l_rate / sum(row)
 
                 #print str(prediction) + " | " + str(output)
                 
@@ -55,21 +59,31 @@ class Perceptron:
 
                 self.weights_[0] = self.weights_[0] + self.l_rate * error
 
-                for i in range(len(row)):
-                    self.weights_[i + 1] = self.weights_[i + 1] + self.l_rate * error * row[i]
+                # TODO 
+                if epoch + 1 < self.n_epoch:
+                    self.weights_[0] += delta
+
+                for i in range(1, len(self.weights_)):
+                    self.weights_[i] += delta
+
+                    if self.symbols_type[self.symbols_tuple[i - 1]] < 0:
+                        self.weights_[i] = min(0, self.weights_[i]) # Prevent HAM symbols score exceeding 0
+
+                    elif self.symbols_type[self.symbols_tuple[i - 1]] > 0:
+                        self.weights_[i] = max(0, self.weights_[i]) # Prevent SPAM symbols score dipping below 0
 
 
             print "epoch : {} | error : {}".format(str(epoch), str(squared_sum_error))
         
 
-    def scale_weights(self, threshold=10):
+    def scale_weights(self):
 
         bias = self.weights_[0]
 
         scaled_weights = self.weights_
-        
+
         for i in range(1, len(self.weights_)):
-            scaled_weights[i] = self.weights_[i] * -threshold / bias
+            scaled_weights[i] = self.weights_[i] * -self.threshold / bias
 
         return scaled_weights
 
