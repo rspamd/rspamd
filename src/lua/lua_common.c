@@ -334,7 +334,6 @@ rspamd_lua_init ()
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
-	luaopen_lpeg (L);
 
 	luaL_newmetatable (L, "rspamd{ev_base}");
 	lua_pushstring (L, "class");
@@ -349,6 +348,7 @@ rspamd_lua_init ()
 	lua_pop (L, 1);
 
 	rspamd_lua_new_class (L, "rspamd{worker}", worker_reg);
+	rspamd_lua_add_preload (L, "lpeg", luaopen_lpeg);
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
 	/* Add plugins global */
