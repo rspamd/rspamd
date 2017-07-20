@@ -90,11 +90,7 @@ def get_all_symbols_type(address="localhost", port=11334, endpoint="symbols"):
     for group in response:
         group = group["rules"]
         for rule in group:
-            symbols_type[rule['symbol']] = "UNDEFINED"
-            if rule['weight'] > 0:
-                symbols_type[rule['symbol']] = "SPAM"
-            elif rule['weight'] < 0:
-                symbols_type[rule['symbol']] = "HAM"
+            symbols_type[rule['symbol']] = rule['weight']
 
     return symbols_type
 
@@ -114,16 +110,19 @@ def get_symbols_type_from_file(filepath):
     with open(filepath, 'r') as f:
         symbols_type = json.load(f)
     
-    return f
+    return symbols_type
 
 
 def filter_symbols_type(symbols_set, symbols_type):
 
-    for symbol in symbols_type:
-        if symbol not in symbols_set:
-            symbols_type.pop(symbol)
+    filtered_symbols_type = {}
 
-    return symbols_type
+    for symbol in symbols_set:
+        filtered_symbols_type[symbol] = 0
+        if symbol in symbols_type:
+            filtered_symbols_type[symbol] = symbols_type[symbol]
+    
+    return filtered_symbols_type
     
 
 def get_symbols_type(symbol_set, symbols_type_cache_file="symbols_type.cache"):
@@ -142,15 +141,17 @@ def get_symbols_type(symbol_set, symbols_type_cache_file="symbols_type.cache"):
     return symbols_type
 
 
-def rescore_weights(X, y, symbols_type, epoch=10, l_rate=0.01):
+def rescore_weights(X, y, symbols_tuple, symbols_type, epoch=10, l_rate=0.01, threshold=10):
     '''
     Returns a tuple of (symbol, score) after training perceptron
     '''
 
     n_samples, n_feaures = X.shape
 
-    perceptron = Perceptron(n_epoch=epoch,
+    perceptron = Perceptron(symbols_tuple=symbols_tuple,
+                            n_epoch=epoch,
                             l_rate=l_rate,
+                            threshold=threshold,
                             symbols_type=symbols_type)
 
     weights = perceptron.rescore_weights(X, y)
@@ -162,6 +163,7 @@ def main():
 
     epoch = 10
     l_rate = 0.01
+    threshold = 10
     
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-l", "--logdir",
@@ -172,7 +174,9 @@ def main():
     arg_parser.add_argument("-r", "--lrate",
                             help="Learning rate of perceptron",
                             type=float)
-    
+    arg_parser.add_argument("-t", "--threshold",
+                            help="threshold value",
+                            type=float)
 
     args = arg_parser.parse_args()
 
@@ -186,6 +190,8 @@ def main():
     if args.lrate:
         l_rate = args.lrate
 
+    if args.threshold:
+        threshold = args.threshold
         
     X, y, symbol_set = get_dataset_from_logs(logdir=args.logdir)
 
@@ -195,7 +201,9 @@ def main():
                               y=y,
                               epoch=epoch,
                               l_rate=l_rate,
-                              symbols_type=symbols_type)
+                              threshold=threshold,
+                              symbols_type=symbols_type,
+                              symbols_tuple=symbol_set)
 
     
     for i in range(len(symbol_set)):
@@ -203,5 +211,5 @@ def main():
     
     
 if __name__ == "__main__":
-    # main()
+    main()
 
