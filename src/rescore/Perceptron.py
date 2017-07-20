@@ -3,15 +3,20 @@ import random
 
 class Perceptron:
     
-    def __init__(self, symbols_tuple, n_epoch=5, l_rate=0.01, threshold = 10, symbols_type={}):
-        self.weights_ = []
+    def __init__(self, symbols_tuple, threshold, n_epoch=5, l_rate=0.01, symbols_type={}):
         self.n_epoch = n_epoch
         self.l_rate = l_rate
         self.symbols_type = symbols_type
         self.symbols_tuple = symbols_tuple
-        self.threshold = 10
+        self.threshold = threshold
+
+        self.weights_ = [0.0] * (len(symbols_tuple) + 1)        
+
+        # Randomly initialize weights within [-0.5, 0.5] range of current score
+        for i in range(1, len(symbols_tuple)):
+            self.weights_[i] = symbols_type[symbols_tuple[i - 1]] + random.random() - 0.5
+            
         
-    
     def shuffle(self, X, y):
         '''
         Randomly shuffles X, y pairwise.
@@ -40,8 +45,9 @@ class Perceptron:
 
     def train(self, X, y):
 
-        self.weights_ = [0.0] * (len(X[0]) + 1)
-
+        best_weights = self.weights_
+        best_error = float('inf')
+        
         for epoch in range(self.n_epoch):
             squared_sum_error = 0.0
 
@@ -52,8 +58,6 @@ class Perceptron:
                 error = output - prediction
                 
                 delta = prediction * (1 - prediction) * error * self.l_rate / sum(row)
-
-                #print str(prediction) + " | " + str(output)
                 
                 squared_sum_error = error ** 2
 
@@ -74,6 +78,13 @@ class Perceptron:
 
 
             print "epoch : {} | error : {}".format(str(epoch), str(squared_sum_error))
+
+            # Pocket the best weights
+            if squared_sum_error < best_error:
+                best_error = squared_sum_error
+                best_weights = self.weights_
+
+        self.weights_ = best_weights
         
 
     def scale_weights(self):
@@ -83,7 +94,7 @@ class Perceptron:
         scaled_weights = self.weights_
 
         for i in range(1, len(self.weights_)):
-            scaled_weights[i] = self.weights_[i] * -self.threshold / bias
+            scaled_weights[i] = round(self.weights_[i] * -self.threshold / float(bias), 2)
 
         return scaled_weights
 
