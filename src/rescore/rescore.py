@@ -141,7 +141,7 @@ def get_symbols_type(symbol_set, symbols_type_cache_file="symbols_type.cache"):
     return symbols_type
 
 
-def rescore_weights(X, y, symbols_tuple, symbols_type, epoch=10, l_rate=0.01, threshold=10):
+def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, epoch=10, l_rate=0.01):
     '''
     Returns a tuple of (symbol, score) after training perceptron
     '''
@@ -163,7 +163,7 @@ def main():
 
     epoch = 10
     l_rate = 0.01
-    threshold = 10
+    threshold = 15
     
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-l", "--logdir",
