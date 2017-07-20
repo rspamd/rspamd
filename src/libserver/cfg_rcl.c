@@ -1990,6 +1990,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			0,
 			"Multiplier for map watch interval when map is file");
 	rspamd_rcl_add_default_handler (sub,
+			"monitoring_watch_interval",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, monitored_interval),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Interval for checking monitored instances");
+	rspamd_rcl_add_default_handler (sub,
+			"disable_monitoring",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, disable_monitored),
+			0,
+			"Disable monitoring completely");
+	rspamd_rcl_add_default_handler (sub,
 			"dynamic_conf",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),

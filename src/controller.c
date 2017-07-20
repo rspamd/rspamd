@@ -3792,7 +3792,10 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 
 	if (worker->index == 0) {
-		rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
+		if (!ctx->cfg->disable_monitored) {
+			rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
+		}
+
 		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, TRUE);
 	}
 	else {

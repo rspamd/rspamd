@@ -377,7 +377,10 @@ struct rspamd_config {
 
 	GList *maps;                                    /**< maps active										*/
 	gdouble map_timeout;                            /**< maps watch timeout									*/
-	gdouble map_file_watch_multiplier;		/**< multiplier for watch timeout when maps are files */
+	gdouble map_file_watch_multiplier;              /**< multiplier for watch timeout when maps are files */
+
+	gdouble monitored_interval;                     /**< interval between monitored checks					*/
+	gboolean disable_monitored;                     /**< disable monitoring completely						*/
 
 	struct symbols_cache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/

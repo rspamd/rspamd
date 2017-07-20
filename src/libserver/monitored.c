@@ -414,6 +414,10 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	ctx->change_cb = change_cb;
 	ctx->ud = ud;
 
+	if (cfg->monitored_interval != 0) {
+		ctx->monitoring_interval = cfg->monitored_interval;
+	}
+
 	/* Start all events */
 	for (i = 0; i < ctx->elts->len; i ++) {
 		m = g_ptr_array_index (ctx->elts, i);
