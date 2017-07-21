@@ -14,7 +14,7 @@ MACRO(ADD_TORCH_LIBRARY package type src)
       ADD_LIBRARY(${package} ${type} ${src})
     endif()
   ENDIF()
-    INSTALL(TARGETS ${package} DESTINATION ${LUALIBDIR})
+    INSTALL(TARGETS ${package} DESTINATION ${RSPAMD_LIBDIR})
 ENDMACRO()
 
 MACRO(ADD_TORCH_PACKAGE package src luasrc)
@@ -41,7 +41,7 @@ MACRO(ADD_TORCH_PACKAGE package src luasrc)
             COMPILE_FLAGS "-fPIC")
     SET_TARGET_PROPERTIES(${package} PROPERTIES
             PREFIX "lib" IMPORT_PREFIX "lib" OUTPUT_NAME "${package}")
-    INSTALL(TARGETS ${package} DESTINATION ${LUALIBDIR})
+    INSTALL(TARGETS ${package} DESTINATION ${RSPAMD_LIBDIR})
 
   ENDIF(NOT "${src}" STREQUAL "")
 
