@@ -208,7 +208,8 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 	const ucl_object_t *opts;
 	const gchar *pluginsdir = RSPAMD_PLUGINSDIR,
 			*rulesdir = RSPAMD_RULESDIR,
-			*lualibdir = RSPAMD_LUALIBDIR;
+			*lualibdir = RSPAMD_LUALIBDIR,
+			*libdir = RSPAMD_LIBDIR;
 
 	gchar path_buf[PATH_MAX];
 
@@ -249,6 +250,16 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 		if (t) {
 			lualibdir = t;
 		}
+
+		t = g_hash_table_lookup (vars, "LIBDIR");
+		if (t) {
+			libdir = t;
+		}
+
+		t = g_hash_table_lookup (vars, "RSPAMD_LIBDIR");
+		if (t) {
+			libdir = t;
+		}
 	}
 
 	if (additional_path) {
@@ -288,7 +299,7 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 	rspamd_snprintf (path_buf, sizeof (path_buf),
 					"%s/?.so;"
 					"%s",
-			lualibdir,
+			libdir,
 			old_path);
 	lua_pop (L, 1);
 	lua_pushstring (L, path_buf);
