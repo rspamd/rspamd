@@ -720,7 +720,9 @@ add_tmpname(lua_State *L, const char *tmp)
   while (pp && *pp)
   {
       struct tmpname_s *p = *pp;
-      if (!strcmp(p->tmp, tmp)) return;
+      if (!strcmp(p->tmp, tmp)) {
+        return;
+      }
       pp = &(p->next);
   }
   if (pp)
@@ -741,10 +743,27 @@ add_tmpname(lua_State *L, const char *tmp)
 static int
 lua_tmpname(lua_State *L)
 {
+  char *tmp;
+  int fd = -1;
 #ifdef _WIN32
-  char *tmp = _tempnam("c:/temp", "luatmp");
+  tmp = _tempnam("c:/temp", "luatmp");
 #else
-  char *tmp = tempnam(NULL, "luatmp");
+  char *tempdir = getenv("TMPDIR");
+  if (tempdir == NULL) {
+    tempdir = "/tmp";
+  }
+  tmp = calloc(1, PATH_MAX);
+  snprintf(tmp, PATH_MAX, "%s/%sXXXXXXXX", tempdir, "luatmp");
+  fd = mkstemp(tmp);
+
+  if (fd == -1) {
+    free(tmp);
+    tmp = NULL;
+  }
+  else {
+    /* Stupid and unsafe thing but that's how this library wants to do it */
+    close(fd);
+  }
 #endif
   if (tmp)
   {
