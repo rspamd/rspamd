@@ -5,6 +5,7 @@ import os
 import math
 import requests
 import json
+import sys
 
 import numpy as np
 from Perceptron import Perceptron
@@ -164,6 +165,7 @@ def main():
     epoch = 10
     l_rate = 0.01
     threshold = 15
+    output = sys.stdout
     
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-l", "--logdir",
@@ -177,6 +179,9 @@ def main():
     arg_parser.add_argument("-t", "--threshold",
                             help="threshold value",
                             type=float)
+
+    arg_parser.add_argument("-o", "--output",
+                            help="Write new scores to file")
 
     args = arg_parser.parse_args()
 
@@ -192,7 +197,10 @@ def main():
 
     if args.threshold:
         threshold = args.threshold
-        
+
+    if args.output:
+        output = open(args.output, 'w')
+
     X, y, symbol_set = get_dataset_from_logs(logdir=args.logdir)
 
     symbols_type = get_symbols_type(symbol_set)
@@ -206,10 +214,12 @@ def main():
                                  symbols_tuple=symbol_set) [1:] # Ignore bias
  
 
-    print "{:<35} {:<13} {:<10}".format("SYMBOL", "OLD SCORE", "NEW SCORE")
+    score_output_format = "{:<35} {:<13} {:<10}"
+
+    print >>output, score_output_format.format("SYMBOL", "OLD SCORE", "NEW SCORE")
 
     for i in range(len(symbol_set)):
-        print "{:<35} {:<13} {:<10}".format(symbol_set[i], symbols_type[symbol_set[i]], new_scores[i])
+        print >>output, score_output_format.format(symbol_set[i], symbols_type[symbol_set[i]], new_scores[i])
     
     
 if __name__ == "__main__":
