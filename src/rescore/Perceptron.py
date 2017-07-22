@@ -84,6 +84,7 @@ class Perceptron:
                 best_error = squared_sum_error
                 best_weights = self.weights_
 
+
         self.weights_ = best_weights
         
 
