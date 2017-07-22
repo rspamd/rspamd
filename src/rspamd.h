@@ -88,9 +88,11 @@ struct rspamd_abstract_worker_ctx {
 };
 
 struct rspamd_worker_signal_handler;
+typedef gboolean (*rspamd_worker_signal_handler) (
+		struct rspamd_worker_signal_handler *, void *ud);
 
 struct rspamd_worker_signal_cb {
-	void (*handler) (struct rspamd_worker_signal_handler *, void *ud);
+	rspamd_worker_signal_handler handler;
 	void *handler_data;
 	struct rspamd_worker_signal_cb *next, *prev;
 };

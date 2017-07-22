@@ -87,7 +87,7 @@ rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 /*
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
  */
-static void
+static gboolean
 rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	/* Do not accept new connections, preparing to end worker's process */
@@ -108,18 +108,24 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 		event_base_loopexit (sigh->base, &tv);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
+
+	/* No more signals */
+	return FALSE;
 }
 
 /*
  * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
  */
-static void
+static gboolean
 rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	rspamd_log_reopen (sigh->worker->srv->logger);
+
+	/* Get more signals */
+	return TRUE;
 }
 
-static void
+static gboolean
 rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	struct timeval tv;
@@ -147,21 +153,23 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 #endif
 		rspamd_worker_stop_accept (sigh->worker);
 	}
+
+	/* Stop reacting on signals */
+	return FALSE;
 }
 
 static void
-rspamd_worker_signal_handler (int fd, short what, void *arg)
+rspamd_worker_signal_handle (int fd, short what, void *arg)
 {
 	struct rspamd_worker_signal_handler *sigh =
 			(struct rspamd_worker_signal_handler *) arg;
-	struct rspamd_worker_signal_cb *cb;
-
-	cb = sigh->cb;
+	struct rspamd_worker_signal_cb *cb, *cbtmp;
 
 	/* Call all signal handlers registered */
-	while (cb) {
-		cb->handler (sigh, cb->handler_data);
-		cb = cb->next;
+	DL_FOREACH_SAFE (sigh->cb, cb, cbtmp) {
+		if (!cb->handler (sigh, cb->handler_data)) {
+			DL_DELETE (sigh->cb, cb);
+		}
 	}
 }
 
@@ -180,7 +188,7 @@ rspamd_worker_ignore_signal (int signo)
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		struct event_base *base,
-		void (*handler)(struct rspamd_worker_signal_handler *sigh, void *),
+		rspamd_worker_signal_handler handler,
 		void *handler_data)
 {
 	struct rspamd_worker_signal_handler *sigh;
@@ -195,7 +203,7 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		sigh->base = base;
 		sigh->enabled = TRUE;
 
-		signal_set (&sigh->ev, signo, rspamd_worker_signal_handler, sigh);
+		signal_set (&sigh->ev, signo, rspamd_worker_signal_handle, sigh);
 		event_base_set (base, &sigh->ev);
 		signal_add (&sigh->ev, NULL);
 
