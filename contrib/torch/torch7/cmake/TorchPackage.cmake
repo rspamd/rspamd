@@ -25,7 +25,7 @@ MACRO(ADD_TORCH_PACKAGE package src luasrc)
  # As per CMake doc, macro arguments are not variables, so simple test syntax not working
   IF(NOT "${src}" STREQUAL "")
 
-    ADD_TORCH_LIBRARY(${package} MODULE "${src}")
+    ADD_TORCH_LIBRARY(${package} SHARED "${src}")
 
     ### Torch packages supposes libraries prefix is "lib"
     SET_TARGET_PROPERTIES(${package} PROPERTIES
