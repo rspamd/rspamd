@@ -2,3 +2,4 @@ rm *.pyc
 rm *.log
 rm *~
 rm \#*
+rm *.output
