@@ -197,17 +197,19 @@ def main():
 
     symbols_type = get_symbols_type(symbol_set)
     
-    weights = rescore_weights(X=X,
-                              y=y,
-                              epoch=epoch,
-                              l_rate=l_rate,
-                              threshold=threshold,
-                              symbols_type=symbols_type,
-                              symbols_tuple=symbol_set)
+    new_scores = rescore_weights(X=X,
+                                 y=y,
+                                 epoch=epoch,
+                                 l_rate=l_rate,
+                                 threshold=threshold,
+                                 symbols_type=symbols_type,
+                                 symbols_tuple=symbol_set) [1:] # Ignore bias
+ 
 
-    
+    print "{:<35} {:<13} {:<10}".format("SYMBOL", "OLD SCORE", "NEW SCORE")
+
     for i in range(len(symbol_set)):
-        print symbol_set[i] + ": " + str(weights[i + 1])
+        print "{:<35} {:<13} {:<10}".format(symbol_set[i], symbols_type[symbol_set[i]], new_scores[i])
     
     
 if __name__ == "__main__":
