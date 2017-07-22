@@ -107,6 +107,7 @@ ENDIF(C_SSE3_FOUND)
 # we dont set -mavx and -mavx2 flags globally, but only for specific files
 # however, we want to enable the AVX codepaths, so we still need to
 # add USE_AVX and USE_AVX2 macro defines
+IF(FALSE)
 IF(C_AVX_FOUND)
   MESSAGE(STATUS "AVX Found")
   SET(CMAKE_C_FLAGS "-DUSE_AVX ${CMAKE_C_FLAGS}")
@@ -115,6 +116,7 @@ IF(C_AVX2_FOUND)
   MESSAGE(STATUS "AVX2 Found")
   SET(CMAKE_C_FLAGS "-DUSE_AVX2 ${CMAKE_C_FLAGS}")
 ENDIF(C_AVX2_FOUND)
+ENDIF()
 
 CHECK_C_SOURCE_RUNS("
 #include <stdatomic.h>
@@ -179,6 +181,7 @@ IF(C_SSE4_1_FOUND AND C_SSE4_2_FOUND)
 ENDIF(C_SSE4_1_FOUND AND C_SSE4_2_FOUND)
 
 # IF AVX FOUND
+IF(FALSE)
 IF(C_AVX_FOUND)
   IF(MSVC)
     SET_SOURCE_FILES_PROPERTIES(generic/simd/convolve5x5_avx.c PROPERTIES COMPILE_FLAGS "/Ox /fp:fast ${C_AVX_FLAGS}")
@@ -198,6 +201,7 @@ IF(C_AVX2_FOUND)
   ENDIF(MSVC)
   SET(simd ${simd} vector/AVX2.c)
 ENDIF(C_AVX2_FOUND)
+ENDIF()
 
 SET(hdr
   THGeneral.h THHalf.h THAllocator.h THSize.h THStorage.h THTensor.h THTensorApply.h THBlas.h THMath.h
