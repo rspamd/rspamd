@@ -83,6 +83,14 @@ local function check_query_settings(task)
     local elt = settings_ids[id_str]
     if elt and elt['apply'] then
       task:set_settings(elt['apply'])
+
+      if elt.apply['add_headers'] or elt.apply['remove_headers'] then
+        local rep = {
+          add_headers = elt.apply['add_headers'] or {},
+          remove_headers = elt.apply['remove_headers'] or {},
+        }
+        task:set_rmilter_reply(rep)
+      end
       rspamd_logger.infox(task, "applying settings id %s", id_str)
 
       return true
