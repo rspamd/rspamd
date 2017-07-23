@@ -1882,6 +1882,13 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 						"fuzzy check error for %d: forbidden",
 						rep->flag);
 			}
+			else if (rep->value == 401) {
+				if (cmd->cmd != FUZZY_CHECK) {
+					msg_info_task (
+							"fuzzy check error for %d: skipped by server",
+							rep->flag);
+				}
+			}
 			else if (rep->value != 0) {
 				msg_info_task (
 						"fuzzy check error for %d: unknown error (%d)",
@@ -2142,21 +2149,42 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 							session->task->message_id);
 				}
 				else {
-					msg_info_task ("fuzzy hash (%s) for message cannot be %s"
-							"<%s>, %*xs, "
-							"list %s:%d, error: %d",
-							ftype,
-							op,
-							session->task->message_id,
-							(gint)sizeof (cmd->digest), cmd->digest,
-							symbol,
-							rep->flag,
-							rep->value);
+					if (rep->value == 401) {
+						msg_info_task (
+								"fuzzy hash (%s) for message cannot be %s"
+										"<%s>, %*xs, "
+										"list %s:%d, skipped by server",
+								ftype,
+								op,
+								session->task->message_id,
+								(gint) sizeof (cmd->digest), cmd->digest,
+								symbol,
+								rep->flag);
 
-					if (*(session->err) == NULL) {
-						g_set_error (session->err,
-							g_quark_from_static_string ("fuzzy check"),
-							rep->value, "process fuzzy error");
+						if (*(session->err) == NULL) {
+							g_set_error (session->err,
+									g_quark_from_static_string ("fuzzy check"),
+									rep->value, "fuzzy hash is skipped");
+						}
+					}
+					else {
+						msg_info_task (
+								"fuzzy hash (%s) for message cannot be %s"
+										"<%s>, %*xs, "
+										"list %s:%d, error: %d",
+								ftype,
+								op,
+								session->task->message_id,
+								(gint) sizeof (cmd->digest), cmd->digest,
+								symbol,
+								rep->flag,
+								rep->value);
+
+						if (*(session->err) == NULL) {
+							g_set_error (session->err,
+									g_quark_from_static_string ("fuzzy check"),
+									rep->value, "process fuzzy error");
+						}
 					}
 
 					ret = return_finished;
