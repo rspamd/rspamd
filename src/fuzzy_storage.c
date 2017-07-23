@@ -168,6 +168,8 @@ struct rspamd_fuzzy_storage_ctx {
 	guint32 collection_id;
 	struct rspamd_worker *worker;
 	struct rspamd_http_connection_router *collection_rt;
+	const ucl_object_t *skip_map;
+	GHashTable *skip_hashes;
 	guchar cookie[COOKIE_SIZE];
 };
 
@@ -784,6 +786,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	struct fuzzy_peer_cmd *up_cmd;
 	struct fuzzy_peer_request *up_req;
 	struct fuzzy_key_stat *ip_stat = NULL;
+	gchar hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_inet_addr_t *naddr;
 	gpointer ptr;
 	gsize up_len = 0;
@@ -871,6 +874,19 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	}
 	else {
 		if (rspamd_fuzzy_check_client (session)) {
+			/* Check whitelist */
+			if (session->ctx->skip_hashes) {
+				rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->cmd),
+					hexbuf, sizeof (hexbuf) - 1);
+				hexbuf[sizeof (hexbuf) - 1] = '\0';
+
+				if (g_hash_table_lookup (session->ctx->skip_hashes, hexbuf)) {
+					result.value = 401;
+					result.prob = 0.0;
+
+					goto reply;
+				}
+			}
 
 			if (session->worker->index == 0 || session->ctx->peer_fd == -1) {
 				/* Just add to the queue */
@@ -903,7 +919,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 			result.value = 403;
 			result.prob = 0.0;
 		}
-
+reply:
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 	}
 }
@@ -2581,6 +2597,14 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, collection_id_file),
 			RSPAMD_CL_FLAG_STRING_PATH,
 			"Store collection epoch in the desired file");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"skip_hashes",
+			rspamd_rcl_parse_struct_ucl,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, skip_map),
+			0,
+			"Skip specific hashes from the map");
 
 	return ctx;
 }
@@ -2827,6 +2851,14 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->masters_map,
 				"Allow fuzzy master/slave updates from specified addresses",
 				&ctx->master_ips, NULL);
+	}
+	if (ctx->skip_map != NULL) {
+		if (!rspamd_map_add_from_ucl (cfg, ctx->skip_map,
+				"Skip hashes", rspamd_kv_list_read, rspamd_kv_list_fin,
+				(void **)&ctx->skip_hashes)) {
+			msg_warn_config ("cannot load hashes list from %s",
+					ucl_object_tostring (ctx->skip_map));
+		}
 	}
 
 	/* Maps events */
