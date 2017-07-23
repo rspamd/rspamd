@@ -36,20 +36,49 @@ function($, _, Humanize) {
       '`': '&#x60;',
       '=': '&#x3D;'
     };
-    var htmlEscaper = /[&<>"'\/]/g;
- 
+    var htmlEscaper = /[&<>"'\/`=]/g;
+
     EscapeHTML = function(string) {
       return ('' + string).replace(htmlEscaper, function(match) {
         return htmlEscapes[match];
       });
     };
- 
+
+    escape_HTML_array = function (arr) {
+        arr.forEach(function (d, i) { arr[i] = EscapeHTML(d) });
+    };
+
     function unix_time_format(tm) {
         var date = new Date(tm ? tm * 1000 : 0);
         return date.toLocaleString();
     }
 
     function preprocess_item(item) {
+        for (var prop in item) {
+            switch (prop) {
+                case "rcpt_mime":
+                case "rcpt_smtp":
+                    escape_HTML_array(item[prop]);
+                    break;
+                case "symbols":
+                    Object.keys(item.symbols).map(function(key) {
+                        var sym = item.symbols[key];
+
+                        sym.name = EscapeHTML(sym.name);
+                        sym.description = EscapeHTML(sym.description);
+
+                        if (sym.options) {
+                            escape_HTML_array(sym.options);
+                        }
+                    });
+                    break;
+                default:
+                    if (typeof (item[prop]) == "string") {
+                        item[prop] = EscapeHTML(item[prop]);
+                    }
+            }
+        }
+
         if (item.action === 'clean' || item.action === 'no action') {
             item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
         } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
@@ -88,7 +117,7 @@ function($, _, Humanize) {
             preprocess_item(item);
             Object.keys(item.symbols).map(function(key) {
                 var sym = item.symbols[key];
-                var str = '<strong>' + key + '</strong>' + "(" + sym.score + ")";
+                var str = '<strong>' + sym.name + '</strong>' + "(" + sym.score + ")";
 
                if (sym.options) {
                    str += '[' + sym.options.join(",") + "]";
@@ -162,8 +191,7 @@ function($, _, Humanize) {
                     "textOverflow": "ellipsis",
                     "wordBreak": "break-all",
                     "whiteSpace": "normal"
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "ip",
                 "title": "IP address",
@@ -196,8 +224,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "word-break": "break-all",
                     "minWidth": 150
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "action",
                 "title": "Action",
