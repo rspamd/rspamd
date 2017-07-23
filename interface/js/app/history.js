@@ -171,8 +171,7 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "minWidth": 88
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "sender_mime",
                 "title": "From",
@@ -180,8 +179,7 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "minWidth": 100
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "rcpt_mime",
                 "title": "To",
@@ -189,8 +187,7 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "minWidth": 100
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "subject",
                 "title": "Subject",
@@ -207,8 +204,7 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "minwidth": 82
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "score",
                 "title": "Score",
@@ -216,7 +212,6 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "maxWidth": 110
                 },
-                "formatter": EscapeHTML,
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "symbols",
@@ -226,8 +221,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 550,
                     "maxWidth": 550
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "size",
                 "title": "Msg size",
@@ -245,7 +239,6 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "maxWidth": 72
                 },
-                "formatter": EscapeHTML,
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "sorted": true,
@@ -255,7 +248,6 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px"
                 },
-                "formatter": EscapeHTML,
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "user",
@@ -264,8 +256,7 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px",
                     "minWidth": 100
-                },
-                "formatter": EscapeHTML
+                }
             }];
     }
 
@@ -281,8 +272,7 @@ function($, _, Humanize) {
                     "textOverflow": "ellipsis",
                     "wordBreak": "keep-all",
                     "whiteSpace": "nowrap"
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "ip",
                 "title": "IP address",
@@ -291,8 +281,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 150,
                     "maxWidth": 150
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "action",
                 "title": "Action",
@@ -300,8 +289,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 110,
                     "maxWidth": 110
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "score",
                 "title": "Score",
@@ -309,7 +297,6 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "maxWidth": 110
                 },
-                "formatter": EscapeHTML,
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "symbols",
@@ -319,8 +306,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 550,
                     "maxWidth": 550
-                },
-                "formatter": EscapeHTML
+                }
             }, {
                 "name": "size",
                 "title": "Message size",
@@ -339,7 +325,6 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "maxWidth": 80
                 },
-                "formatter": EscapeHTML,
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "sorted": true,
@@ -349,7 +334,6 @@ function($, _, Humanize) {
                 "style": {
                     "font-size": "11px"
                 },
-                "formatter": EscapeHTML,
                 "sortValue": function(val) { return Number(val.options.sortValue); }
             }, {
                 "name": "user",
@@ -359,8 +343,7 @@ function($, _, Humanize) {
                     "font-size": "11px",
                     "width": 200,
                     "maxWidth": 200
-                },
-                "formatter": EscapeHTML
+                }
             }];
     }
 
