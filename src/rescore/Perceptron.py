@@ -1,6 +1,8 @@
 import math
 import random
 
+from utility import shuffle
+
 class Perceptron:
     
     def __init__(self, symbols_tuple, threshold, n_epoch=5, l_rate=0.01, symbols_type={}):
@@ -12,23 +14,10 @@ class Perceptron:
 
         self.weights_ = [0.0] * (len(symbols_tuple) + 1)        
 
-        # Randomly initialize weights within [-0.5, 0.5] range of current score
+
         for i in range(1, len(symbols_tuple)):
-            self.weights_[i] = symbols_type[symbols_tuple[i - 1]] + random.random() - 0.5
-            
-        
-    def shuffle(self, X, y):
-        '''
-        Randomly shuffles X, y pairwise.
-        '''
-
-        combined = zip(X, y)
-        random.shuffle(combined)
-
-        X[:], y[:] = zip(*combined)
-
-        return X, y
-    
+            self.weights_[i] = symbols_type[symbols_tuple[i - 1]]
+                
         
     def activation(self, x):
         return 1 / (1 + math.exp( -x ))
@@ -51,7 +40,7 @@ class Perceptron:
         for epoch in range(self.n_epoch):
             squared_sum_error = 0.0
 
-            X, y = self.shuffle(X, y)
+            X, y = shuffle(X, y)
             
             for row, output in zip(X, y):
                 prediction = self.predict(row)
@@ -82,12 +71,11 @@ class Perceptron:
             # Pocket the best weights
             if squared_sum_error < best_error:
                 best_error = squared_sum_error
-                best_weights = self.weights_
-
+                best_weights = self.weights_[:]
 
         self.weights_ = best_weights
-        
 
+        
     def scale_weights(self):
 
         bias = self.weights_[0]

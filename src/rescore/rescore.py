@@ -1,16 +1,21 @@
 #!/usr/bin/env python
 
+# TODO Rename symbol_set -> symbols_set
+# TODO Rename symbols_type -> org_symbol_scores
+
 import argparse
 import os
 import math
 import requests
 import json
 import sys
+import time
 
 import numpy as np
 from Perceptron import Perceptron
 
-from utility import get_all_filenames
+from statistics import get_file_stats
+from utility import get_all_filenames, shuffle
 
 def get_dataset_from_logs(logdir):
     '''
@@ -160,24 +165,102 @@ def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, epoch=10, l_ra
     return weights
     
 
+def split_dataset(X, y, percent):
+    '''
+    Splits dataset into (percent) % and (100 - percent) %
+    Returns X1, y1, X2, y2
+    '''
+
+    split_index = len(X) * percent / 100
+
+    X1 = X[ : split_index]
+    y1 = y[ : split_index]
+
+    X2 = X[split_index + 1 : ]
+    y2 = y[split_index + 1 : ]
+
+    return X1, y1, X2, y2
+
+def print_new_scores(output_file, symbol_set, symbols_type, new_scores, best_threshold):
+
+    score_output_format = "{:<35} {:<13} {:<10}"
+
+    print >>output_file, "Optimal spam threshold: " + str(best_threshold)
+
+    print >>output_file, score_output_format.format("SYMBOL", "OLD SCORE", "NEW SCORE")
+
+    for i in range(len(symbol_set)):
+        print >>output_file, score_output_format.format(symbol_set[i], symbols_type[symbol_set[i]], new_scores[i])
+
+        
+def eval_email_score(record, new_scores):
+
+    score = 0
+    
+    for i in range(len(record)):
+        if record[i] == 1:
+            score = score + new_scores[i]
+
+    return score
+
+def make_log_for_stats(X, y, scores):
+
+    logs = []
+
+    for x, y_val in zip(X, y):
+        logs.append("dummy_file" + " " +
+                    ("HAM" if y_val == 0 else "SPAM") + " " +
+                    str(eval_email_score(x, scores)) + " " +
+                    "DUMMY_SYM" +
+                    "\n")
+
+    return logs
+
+
+def find_best_spam_threshold(X_cv, y_cv, spam_thresholds, new_scores):
+
+    logs = make_log_for_stats(X_cv, y_cv, new_scores)
+
+    max_accuracy = -1
+    max_accuracy_threshold = -1
+    ms = 0
+    
+    for threshold in spam_thresholds:
+        stats = get_file_stats(logs, threshold)
+        accuracy = stats[-1]
+        if(accuracy > max_accuracy):
+            max_accuracy = accuracy
+            max_accuracy_threshold = threshold
+            ms = stats    
+
+    return max_accuracy_threshold
+
+def fscore(stats):
+
+    print stats
+
+    return 0
+    
 def main():
 
-    epoch = 10
-    l_rate = 0.01
-    threshold = 15
+    start_time = time.time()
+    
+    epoch = 20
+    l_rate = 0.001
+    threshold = 10
     output = sys.stdout
     
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-l", "--logdir",
                             help="path to log directory")
     arg_parser.add_argument("-e", "--epoch",
-                            help="no of epochs",
+                            help="no of epochs [Default: 20]",
                             type=int)
     arg_parser.add_argument("-r", "--lrate",
-                            help="Learning rate of perceptron",
+                            help="Learning rate of perceptron [Default: 0.001]",
                             type=float)
     arg_parser.add_argument("-t", "--threshold",
-                            help="threshold value",
+                            help="threshold value [Default: 10]",
                             type=float)
 
     arg_parser.add_argument("-o", "--output",
@@ -204,23 +287,62 @@ def main():
     X, y, symbol_set = get_dataset_from_logs(logdir=args.logdir)
 
     symbols_type = get_symbols_type(symbol_set)
-    
-    new_scores = rescore_weights(X=X,
-                                 y=y,
+
+    # Split data into 60 : 20 : 20 (Train : Cross-validation : Test)
+    X_train, y_train, X_test, y_test = split_dataset(X, y, 60)
+
+    X_cv, y_cv, X_test, y_test = split_dataset(X_test, y_test, 50) 
+
+    old_scores = []
+    for sym in symbol_set:
+       old_scores.append(symbols_type[sym])
+
+    new_scores = rescore_weights(X=X_train,
+                                 y=y_train,
                                  epoch=epoch,
                                  l_rate=l_rate,
                                  threshold=threshold,
                                  symbols_type=symbols_type,
-                                 symbols_tuple=symbol_set) [1:] # Ignore bias
+                                 symbols_tuple=symbol_set)[1:] # excluding bias
  
+    spam_thresholds = range(0, 60)
 
-    score_output_format = "{:<35} {:<13} {:<10}"
+    best_threshold = find_best_spam_threshold(X_cv=X_cv,
+                                              y_cv=y_cv,
+                                              spam_thresholds=spam_thresholds,
+                                              new_scores=new_scores)
 
-    print >>output, score_output_format.format("SYMBOL", "OLD SCORE", "NEW SCORE")
 
-    for i in range(len(symbol_set)):
-        print >>output, score_output_format.format(symbol_set[i], symbols_type[symbol_set[i]], new_scores[i])
+    total_time = round(time.time() - start_time, 2)
+
+    # Statistics 
+
+    print "Statistics: "
+    print "Time taken: {}s".format(total_time)
+
+    # Pre-rescore test stats
+    stats = get_file_stats(make_log_for_stats(X_test, y_test, old_scores), 15)
+    f_score = fscore(stats)
+    print
+    print "Pre-rescore test data stats"
+    print "Accuracy: " + str(stats[-1])
+    print "F-score: " + str(f_score)
     
+    # Post-rescore test stats
+    stats = get_file_stats(make_log_for_stats(X_test, y_test, new_scores), best_threshold)
+    f_score = fscore(stats)
+    print
+    print "Post-rescore test data stats"
+    print "Accuracy: " + str(stats[-1])
+    print "F-score: " + str(f_score)
+
+    
+    print_new_scores(output_file=output,
+                     symbol_set=symbol_set,
+                     symbols_type=symbols_type,
+                     new_scores=new_scores,
+                     best_threshold=best_threshold)
+
     
 if __name__ == "__main__":
     main()
