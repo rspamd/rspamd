@@ -1466,12 +1466,11 @@ rspamd_lua_cld_handler (struct rspamd_worker_signal_handler *sigh, void *ud)
 		/* We still need to call on_complete callback */
 		rspamd_lua_call_on_complete (cbdata->L, cbdata,
 				"Worker has died without reply", NULL, 0);
+		event_del (&cbdata->ev);
 	}
 
 	/* Free structures */
-	event_del (&cbdata->ev);
 	close (cbdata->sp[0]);
-	close (cbdata->sp[1]);
 	luaL_unref (L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 	luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
 	g_string_free (cbdata->io_buf, TRUE);
@@ -1496,7 +1495,7 @@ rspamd_lua_subprocess_io (gint fd, short what, gpointer ud)
 	struct rspamd_lua_process_cbdata *cbdata = ud;
 	gssize r;
 
-	if (cbdata->io_buf->len < sizeof (guint64)) {
+	if (cbdata->sz == (guint64)-1) {
 		guint64 sz;
 
 		/* We read size of reply + flags first */
@@ -1506,6 +1505,8 @@ rspamd_lua_subprocess_io (gint fd, short what, gpointer ud)
 		if (r == 0) {
 			rspamd_lua_call_on_complete (cbdata->L, cbdata,
 					"Unexpected EOF", NULL, 0);
+			event_del (&cbdata->ev);
+			cbdata->replied = TRUE;
 			kill (cbdata->cpid, SIGTERM);
 
 			return;
@@ -1517,6 +1518,8 @@ rspamd_lua_subprocess_io (gint fd, short what, gpointer ud)
 			else {
 				rspamd_lua_call_on_complete (cbdata->L, cbdata,
 						strerror (errno), NULL, 0);
+				event_del (&cbdata->ev);
+				cbdata->replied = TRUE;
 				kill (cbdata->cpid, SIGTERM);
 
 				return;
@@ -1547,6 +1550,8 @@ rspamd_lua_subprocess_io (gint fd, short what, gpointer ud)
 		if (r == 0) {
 			rspamd_lua_call_on_complete (cbdata->L, cbdata,
 					"Unexpected EOF", NULL, 0);
+			event_del (&cbdata->ev);
+			cbdata->replied = TRUE;
 			kill (cbdata->cpid, SIGTERM);
 
 			return;
@@ -1558,6 +1563,8 @@ rspamd_lua_subprocess_io (gint fd, short what, gpointer ud)
 			else {
 				rspamd_lua_call_on_complete (cbdata->L, cbdata,
 						strerror (errno), NULL, 0);
+				event_del (&cbdata->ev);
+				cbdata->replied = TRUE;
 				kill (cbdata->cpid, SIGTERM);
 
 				return;
@@ -1579,6 +1586,9 @@ rspamd_lua_subprocess_io (gint fd, short what, gpointer ud)
 				rspamd_lua_call_on_complete (cbdata->L, cbdata,
 						NULL, cbdata->io_buf->str, cbdata->io_buf->len);
 			}
+
+			event_del (&cbdata->ev);
+			cbdata->replied = TRUE;
 
 			/* Write reply to the child */
 			rspamd_socket_blocking (cbdata->sp[0]);
@@ -1627,6 +1637,7 @@ lua_worker_spawn_process (lua_State *L)
 	cbdata->wrk = w;
 	cbdata->L = L;
 	cbdata->ev_base = actx->ev_base;
+	cbdata->sz = (guint64)-1;
 
 	pid = fork ();
 

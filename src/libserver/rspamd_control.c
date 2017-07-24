@@ -751,7 +751,7 @@ rspamd_control_handle_on_fork (struct rspamd_srv_command *cmd,
 	if (cmd->cmd.on_fork.state == child_dead) {
 		/* We need to remove stale worker */
 		child = g_hash_table_lookup (srv->workers,
-				GSIZE_TO_POINTER (cmd->cmd.on_fork.ppid));
+				GSIZE_TO_POINTER (cmd->cmd.on_fork.cpid));
 
 		if (child == NULL) {
 			msg_err ("cannot find child for a forked process %P (%P parent)",
@@ -762,7 +762,7 @@ rspamd_control_handle_on_fork (struct rspamd_srv_command *cmd,
 
 		REF_RELEASE (child->cf);
 		g_hash_table_remove (srv->workers,
-				GSIZE_TO_POINTER (cmd->cmd.on_fork.ppid));
+				GSIZE_TO_POINTER (cmd->cmd.on_fork.cpid));
 		g_free (child);
 	}
 	else {
