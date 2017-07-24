@@ -37,6 +37,8 @@ class Perceptron:
         best_weights = self.weights_
         best_error = float('inf')
         
+        print 'epoch: {} | error: {}'.format(" ", " "),
+        
         for epoch in range(self.n_epoch):
             squared_sum_error = 0.0
 
