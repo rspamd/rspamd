@@ -2869,7 +2869,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	/* Get peer pipe */
 	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_SOCKETPAIR;
-	srv_cmd.id = ottery_rand_uint64 ();
 	srv_cmd.cmd.spair.af = SOCK_DGRAM;
 	srv_cmd.cmd.spair.pair_num = worker->index;
 	memset (srv_cmd.cmd.spair.pair_id, 0, sizeof (srv_cmd.cmd.spair.pair_id));

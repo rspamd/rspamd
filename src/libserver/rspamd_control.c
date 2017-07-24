@@ -1079,6 +1079,7 @@ rspamd_srv_send_command (struct rspamd_worker *worker,
 	g_assert (worker != NULL);
 
 	rd = g_slice_alloc0 (sizeof (*rd));
+	cmd->id = ottery_rand_uint64 ();
 	memcpy (&rd->cmd, cmd, sizeof (rd->cmd));
 	rd->handler = handler;
 	rd->ud = ud;

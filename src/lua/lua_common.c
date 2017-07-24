@@ -1478,6 +1478,7 @@ rspamd_lua_cld_handler (struct rspamd_worker_signal_handler *sigh, void *ud)
 	g_free (cbdata);
 
 	/* Notify main */
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_ON_FORK;
 	srv_cmd.cmd.on_fork.state = child_dead;
 	srv_cmd.cmd.on_fork.cpid = cbdata->cpid;
@@ -1679,6 +1680,7 @@ lua_worker_spawn_process (lua_State *L)
 	cbdata->cpid = pid;
 	cbdata->io_buf = g_string_sized_new (8);
 	/* Notify main */
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_ON_FORK;
 	srv_cmd.cmd.on_fork.state = child_create;
 	srv_cmd.cmd.on_fork.cpid = pid;

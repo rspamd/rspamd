@@ -338,19 +338,23 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	if (worker->accept_events != NULL) {
 		g_list_free (worker->accept_events);
 	}
-
+	/* XXX: we need to do it much later */
+#if 0
 	g_hash_table_iter_init (&it, worker->signal_events);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		sigh = (struct rspamd_worker_signal_handler *)v;
 		g_hash_table_iter_steal (&it);
+
 		if (sigh->enabled) {
 			event_del (&sigh->ev);
 		}
+
 		g_free (sigh);
 	}
 
 	g_hash_table_unref (worker->signal_events);
+#endif
 
 	/* Cleanup maps */
 	for (cur = worker->srv->cfg->maps; cur != NULL; cur = g_list_next (cur)) {
@@ -820,6 +824,7 @@ rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
 
 	rspamd_monitored_get_tag (m, tag);
 	ev_base = rspamd_monitored_ctx_get_ev_base (ctx);
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_MONITORED_CHANGE;
 	rspamd_strlcpy (srv_cmd.cmd.monitored_change.tag, tag,
 			sizeof (srv_cmd.cmd.monitored_change.tag));

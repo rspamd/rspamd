@@ -212,6 +212,7 @@ start_log_helper (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_LOG_PIPE;
 	srv_cmd.cmd.log_pipe.type = RSPAMD_LOG_PIPE_SYMBOLS;
 
