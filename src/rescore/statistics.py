@@ -13,6 +13,7 @@ file_stat = namedtuple('FileStat',
                         spam_dict \
                         ham_dict \
                         symbol_set \
+                        true_positives \
                         false_positive_rate \
                         false_negative_rate \
                         overall_accuracy')
@@ -77,6 +78,7 @@ def get_file_stats(logs, spam_threshold):
     spam_percent = 0
     no_of_fp = 0
     no_of_fn = 0
+    true_positives = 0
     false_positive_rate = 0
     false_negative_rate = 0
     overall_accuracy = 0
@@ -90,7 +92,8 @@ def get_file_stats(logs, spam_threshold):
         else:
             no_of_spam += 1
             no_of_fn += (1 if float(log[2]) < spam_threshold else 0)
-
+            true_positives += (1 if float(log[2]) >= spam_threshold else 0)
+            
         for symbol in log[4:]:
             symbol_set.add(symbol)
 
@@ -121,6 +124,7 @@ def get_file_stats(logs, spam_threshold):
                      spam_dict,
                      ham_dict,
                      symbol_set,
+                     true_positives,
                      false_positive_rate,
                      false_negative_rate,
                      overall_accuracy)

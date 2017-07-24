@@ -1,4 +1,5 @@
 import os
+import random
 
 def get_all_filenames(location):
     ''' Recursively gets a list of  all file names'''
@@ -12,3 +13,12 @@ def get_all_filenames(location):
 
     return files
 
+def shuffle(X, y):
+
+    combined = zip(X, y)
+
+    random.shuffle(combined)
+
+    X, y = zip(*combined)
+
+    return X, y

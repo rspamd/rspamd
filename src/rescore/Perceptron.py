@@ -65,9 +65,8 @@ class Perceptron:
                     elif self.symbols_type[self.symbols_tuple[i - 1]] > 0:
                         self.weights_[i] = max(0, self.weights_[i]) # Prevent SPAM symbols score dipping below 0
 
-
-            print "epoch : {} | error : {}".format(str(epoch), str(squared_sum_error))
-
+            print '\repoch: {} | error: {}'.format(str(epoch), str(squared_sum_error)),
+            
             # Pocket the best weights
             if squared_sum_error < best_error:
                 best_error = squared_sum_error
