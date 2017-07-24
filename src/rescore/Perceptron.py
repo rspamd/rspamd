@@ -61,11 +61,18 @@ class Perceptron:
                 for i in range(1, len(self.weights_)):
                     self.weights_[i] += delta
 
-                    if self.symbols_type[self.symbols_tuple[i - 1]] < 0:
+                    org_sym_score = self.symbols_type[self.symbols_tuple[i - 1]]
+                    max_change = 5
+                    
+                    if org_sym_score < 0:
                         self.weights_[i] = min(0, self.weights_[i]) # Prevent HAM symbols score exceeding 0
+#                        self.weights_[i] = max(self.score_to_weight(org_sym_score - max_change),
+#                                               self.weights_[i])
 
-                    elif self.symbols_type[self.symbols_tuple[i - 1]] > 0:
+                    elif org_sym_score > 0:
                         self.weights_[i] = max(0, self.weights_[i]) # Prevent SPAM symbols score dipping below 0
+#                        self.weights_[i] = min(self.score_to_weight(org_sym_score + max_change),
+#                                               self.weights_[i])
 
             print '\repoch: {} | error: {}'.format(str(epoch), str(squared_sum_error)),
             
@@ -76,6 +83,20 @@ class Perceptron:
 
         self.weights_ = best_weights
 
+
+    def score_to_weight(self, s):
+
+        bias = self.weights_[0]
+
+        return -s * bias / float(self.threshold)
+
+    
+    def weight_to_score(self, w):
+
+        bias = self.weights_[0]
+
+        return s * -self.threshold / float(bias)
+    
         
     def scale_weights(self):
 

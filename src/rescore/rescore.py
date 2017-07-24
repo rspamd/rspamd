@@ -42,7 +42,7 @@ def get_dataset_from_logs(logdir):
 
     X = np.array(X)
     y = np.array(y)
-    
+
     return X, y, symbol_set
 
 
@@ -147,12 +147,12 @@ def get_symbols_type(symbol_set, symbols_type_cache_file="symbols_type.cache"):
     return symbols_type
 
 
-def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, epoch=10, l_rate=0.01):
+def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, epoch, l_rate):
     '''
     Returns a tuple of (symbol, score) after training perceptron
     '''
 
-    n_samples, n_feaures = X.shape
+    n_samples, n_feaures = len(X), len(X[0])
 
     perceptron = Perceptron(symbols_tuple=symbols_tuple,
                             n_epoch=epoch,
@@ -290,6 +290,8 @@ def main():
 
     X, y, symbol_set = get_dataset_from_logs(logdir=args.logdir)
 
+    X, y = shuffle(X, y)
+    
     symbols_type = get_symbols_type(symbol_set)
 
     # Split data into 60 : 20 : 20 (Train : Cross-validation : Test)
@@ -331,7 +333,7 @@ def main():
     print "Pre-rescore test data stats:"
     print "Accuracy: {} %".format(str(round(stats[-1], 2)))
     print "F-score: " + str(f_score)
-    
+
     # Post-rescore test stats
     stats = get_file_stats(make_log_for_stats(X_test, y_test, new_scores), best_threshold)
     f_score = fscore(stats)
@@ -339,7 +341,7 @@ def main():
     print "Post-rescore test data stats:"
     print "Accuracy: {} %".format(str(round(stats[-1], 2)))
     print "F-score: " + str(f_score)
-    print 
+    print
     
     print_new_scores(output_file=output,
                      symbol_set=symbol_set,
