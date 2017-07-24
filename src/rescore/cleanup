@@ -3,3 +3,4 @@ rm *.log
 rm *~
 rm \#*
 rm *.output
+rm *.stats

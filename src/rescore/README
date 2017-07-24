@@ -65,9 +65,3 @@ Ham %    : % of ham emails hit by a symbol
 S/O      : % spam emails hit over all its hits
 	   (i.e What is the probability that it hits a spam message when it is fired)
 
-
-
-TODO
-
-# TODO Rename symbol_set to symbols_tuple
-# TODO Rename symbols_type to org_symbol_score
