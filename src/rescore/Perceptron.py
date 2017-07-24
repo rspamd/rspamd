@@ -37,8 +37,6 @@ class Perceptron:
         best_weights = self.weights_
         best_error = float('inf')
         
-        print 'epoch: {} | error: {}'.format(" ", " "),
-        
         for epoch in range(self.n_epoch):
             squared_sum_error = 0.0
 
@@ -74,7 +72,7 @@ class Perceptron:
 #                        self.weights_[i] = min(self.score_to_weight(org_sym_score + max_change),
 #                                               self.weights_[i])
 
-            print '\repoch: {} | error: {}'.format(str(epoch), str(squared_sum_error)),
+            print 'epoch: {} | error: {}'.format(str(epoch), str(squared_sum_error))
             
             # Pocket the best weights
             if squared_sum_error < best_error:
