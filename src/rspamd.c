@@ -687,6 +687,10 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	rspamd_main = w->srv;
 
+	if (w->ppid != getpid ()) {
+		return TRUE;
+	}
+
 	if (waitpid (w->pid, &res, WNOHANG) <= 0) {
 		if (term_attempts < 0) {
 			if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
@@ -1023,12 +1027,22 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 				}
 			}
 
-			event_del (&cur->srv_ev);
-			/* We also need to clean descriptors left */
-			close (cur->control_pipe[0]);
-			close (cur->srv_pipe[0]);
+			if (cur->srv_pipe[0] != -1) {
+				event_del (&cur->srv_ev);
+			}
+
+			if (cur->control_pipe[0] != -1) {
+				/* We also need to clean descriptors left */
+				close (cur->control_pipe[0]);
+				close (cur->srv_pipe[0]);
+			}
+
 			REF_RELEASE (cur->cf);
-			g_ptr_array_free (cur->finish_actions, TRUE);
+
+			if (cur->finish_actions) {
+				g_ptr_array_free (cur->finish_actions, TRUE);
+			}
+
 			g_free (cur);
 		}
 		else {

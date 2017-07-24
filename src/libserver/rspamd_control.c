@@ -397,6 +397,10 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		wrk = v;
 
+		if (wrk->control_pipe[0] == -1) {
+			continue;
+		}
+
 		memset (&msg, 0, sizeof (msg));
 
 		/* Attach fd to the message */
@@ -433,8 +437,10 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 			DL_APPEND (res, rep_elt);
 		}
 		else {
-			msg_err ("cannot write request to the worker %P (%s): %s",
-					wrk->pid, g_quark_to_string (wrk->type), strerror (errno));
+			msg_err ("cannot write request to the worker %P(%s), fd: %d: %s",
+					wrk->pid, g_quark_to_string (wrk->type),
+					wrk->control_pipe[0],
+					strerror (errno));
 		}
 	}
 
@@ -754,6 +760,7 @@ rspamd_control_handle_on_fork (struct rspamd_srv_command *cmd,
 			return;
 		}
 
+		REF_RELEASE (child->cf);
 		g_hash_table_remove (srv->workers,
 				GSIZE_TO_POINTER (cmd->cmd.on_fork.ppid));
 		g_free (child);
@@ -763,6 +770,13 @@ rspamd_control_handle_on_fork (struct rspamd_srv_command *cmd,
 		child->srv = srv;
 		child->type = parent->type;
 		child->pid = cmd->cmd.on_fork.cpid;
+		child->srv_pipe[0] = -1;
+		child->srv_pipe[1] = -1;
+		child->control_pipe[0] = -1;
+		child->control_pipe[1] = -1;
+		child->cf = parent->cf;
+		child->ppid = parent->pid;
+		REF_RETAIN (child->cf);
 		g_hash_table_insert (srv->workers,
 				GSIZE_TO_POINTER (cmd->cmd.on_fork.cpid), child);
 	}

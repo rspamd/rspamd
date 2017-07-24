@@ -546,13 +546,14 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->index = index;
 	wrk->ctx = cf->ctx;
 	wrk->finish_actions = g_ptr_array_new ();
-
+	wrk->ppid = getpid ();
 	wrk->pid = fork ();
 
 	switch (wrk->pid) {
 	case 0:
 		/* Update pid for logging */
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
+		wrk->pid = getpid ();
 
 		/* Init PRNG after fork */
 		rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);

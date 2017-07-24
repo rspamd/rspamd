@@ -57,6 +57,7 @@
  */
 struct rspamd_worker {
 	pid_t pid;                      /**< pid of worker									*/
+	pid_t ppid;                     /**< pid of parent									*/
 	guint index;                    /**< index number									*/
 	guint nconns;                   /**< current connections count						*/
 	gboolean wanna_die;             /**< worker is terminating							*/
