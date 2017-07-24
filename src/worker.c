@@ -671,7 +671,7 @@ start_worker (struct rspamd_worker *worker)
 	struct rspamd_worker_ctx *ctx = worker->ctx;
 
 	ctx->cfg = worker->srv->cfg;
-	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket, TRUE);
+	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
@@ -686,6 +686,8 @@ start_worker (struct rspamd_worker *worker)
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
 	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

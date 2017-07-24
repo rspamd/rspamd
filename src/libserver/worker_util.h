@@ -40,7 +40,7 @@ struct rspamd_worker_signal_handler;
  */
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *), gboolean load_lua);
+	void (*accept_handler)(int, short, void *));
 
 /**
  * Set special signal handler for a worker

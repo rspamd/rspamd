@@ -257,7 +257,7 @@ rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *bas
 
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *), gboolean load_lua)
+	void (*accept_handler)(int, short, void *))
 {
 	struct event_base *ev_base;
 	struct event *accept_events;
@@ -303,12 +303,6 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 
 			cur = g_list_next (cur);
 		}
-	}
-
-	if (load_lua) {
-		struct rspamd_config *cfg = worker->srv->cfg;
-
-		rspamd_lua_run_postloads (cfg->lua_state, cfg, ev_base, worker);
 	}
 
 	return ev_base;

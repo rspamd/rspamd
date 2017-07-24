@@ -2713,8 +2713,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",
-			NULL,
-			FALSE);
+			NULL);
 	ctx->peer_fd = -1;
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;

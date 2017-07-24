@@ -190,8 +190,7 @@ start_log_helper (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"log_helper",
-			NULL,
-			TRUE);
+			NULL);
 	ctx->cfg = worker->srv->cfg;
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;
@@ -222,6 +221,8 @@ start_log_helper (struct rspamd_worker *worker)
 	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, ctx->pair[1],
 			rspamd_log_helper_reply_handler, ctx);
 	rspamd_mempool_unlock_mutex (worker->srv->start_mtx);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 	event_base_loop (ctx->ev_base, 0);
 	close (ctx->pair[0]);
 	rspamd_worker_block_signals ();

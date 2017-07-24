@@ -352,8 +352,7 @@ start_lua_worker (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"lua_worker",
-			lua_accept_socket,
-			TRUE);
+			lua_accept_socket);
 
 	L = worker->srv->cfg->lua_state;
 	ctx->L = L;
@@ -392,9 +391,8 @@ start_lua_worker (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 
-	/* Maps events */
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, 0);
-
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 

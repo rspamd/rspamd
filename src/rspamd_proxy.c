@@ -2040,8 +2040,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 
 	ctx->cfg = worker->srv->cfg;
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
-			proxy_accept_socket,
-			TRUE);
+			proxy_accept_socket);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
@@ -2075,6 +2074,8 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 
 	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache,
 			ctx->discard_on_reject);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

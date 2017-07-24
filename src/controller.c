@@ -3605,8 +3605,7 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"controller",
-			rspamd_controller_accept_socket,
-			TRUE);
+			rspamd_controller_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	ctx->start_time = time (NULL);
@@ -3802,6 +3801,9 @@ start_controller_worker (struct rspamd_worker *worker)
 		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, FALSE);
 	}
 
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);
+
+	/* Start event loop */
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
