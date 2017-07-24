@@ -237,15 +237,19 @@ def find_best_spam_threshold(X_cv, y_cv, spam_thresholds, new_scores):
 
 def fscore(stats):
 
-    print stats
+    fp = stats.false_positive_rate * stats.no_of_ham / 100
+    fn = stats.false_negative_rate * stats.no_of_spam / 100
+    
+    f_score = 2 * stats.true_positives / float(2 * stats.true_positives + fp + fn)
 
-    return 0
+    return f_score
+
     
 def main():
 
     start_time = time.time()
     
-    epoch = 20
+    epoch = 100
     l_rate = 0.001
     threshold = 10
     output = sys.stdout
@@ -254,7 +258,7 @@ def main():
     arg_parser.add_argument("-l", "--logdir",
                             help="path to log directory")
     arg_parser.add_argument("-e", "--epoch",
-                            help="no of epochs [Default: 20]",
+                            help="no of epochs [Default: 100]",
                             type=int)
     arg_parser.add_argument("-r", "--lrate",
                             help="Learning rate of perceptron [Default: 0.001]",
@@ -316,7 +320,7 @@ def main():
     total_time = round(time.time() - start_time, 2)
 
     # Statistics 
-
+    print "\n"
     print "Statistics: "
     print "Time taken: {}s".format(total_time)
 
@@ -324,18 +328,18 @@ def main():
     stats = get_file_stats(make_log_for_stats(X_test, y_test, old_scores), 15)
     f_score = fscore(stats)
     print
-    print "Pre-rescore test data stats"
-    print "Accuracy: " + str(stats[-1])
+    print "Pre-rescore test data stats:"
+    print "Accuracy: {} %".format(str(round(stats[-1], 2)))
     print "F-score: " + str(f_score)
     
     # Post-rescore test stats
     stats = get_file_stats(make_log_for_stats(X_test, y_test, new_scores), best_threshold)
     f_score = fscore(stats)
     print
-    print "Post-rescore test data stats"
-    print "Accuracy: " + str(stats[-1])
+    print "Post-rescore test data stats:"
+    print "Accuracy: {} %".format(str(round(stats[-1], 2)))
     print "F-score: " + str(f_score)
-
+    print 
     
     print_new_scores(output_file=output,
                      symbol_set=symbol_set,
