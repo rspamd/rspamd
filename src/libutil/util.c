@@ -1618,7 +1618,6 @@ rspamd_thread_func (gpointer ud)
 
 	/* Ignore signals in thread */
 	sigemptyset (&s_mask);
-	sigaddset (&s_mask, SIGTERM);
 	sigaddset (&s_mask, SIGINT);
 	sigaddset (&s_mask, SIGHUP);
 	sigaddset (&s_mask, SIGCHLD);
@@ -1627,7 +1626,7 @@ rspamd_thread_func (gpointer ud)
 	sigaddset (&s_mask, SIGALRM);
 	sigaddset (&s_mask, SIGPIPE);
 
-	sigprocmask (SIG_BLOCK, &s_mask, NULL);
+	pthread_sigmask (SIG_BLOCK, &s_mask, NULL);
 
 	ud = td->func (td->data);
 	g_free (td->name);
