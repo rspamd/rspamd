@@ -75,6 +75,12 @@ LUA_FUNCTION_DEF (task, get_session);
  */
 LUA_FUNCTION_DEF (task, get_ev_base);
 /***
+ * @method task:get_worker()
+ * Returns a worker object associated with the task
+ * @return {rspamd_worker} worker object
+ */
+LUA_FUNCTION_DEF (task, get_worker);
+/***
  * @method task:insert_result(symbol, weight[, option1, ...])
  * Insert specific symbol to the tasks scanning results assigning the initial
  * weight to it.
@@ -802,6 +808,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_mempool),
 	LUA_INTERFACE_DEF (task, get_session),
 	LUA_INTERFACE_DEF (task, get_ev_base),
+	LUA_INTERFACE_DEF (task, get_worker),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, append_message),
@@ -1145,6 +1152,29 @@ lua_task_get_ev_base (lua_State * L)
 	}
 	return 1;
 }
+
+static int
+lua_task_get_worker (lua_State * L)
+{
+	struct rspamd_worker **pworker;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task != NULL) {
+		if (task->worker) {
+			pworker = lua_newuserdata (L, sizeof (struct rspamd_worker *));
+			rspamd_lua_setclass (L, "rspamd{worker}", -1);
+			*pworker = task->worker;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+	return 1;
+}
+
 
 static gint
 lua_task_insert_result (lua_State * L)
