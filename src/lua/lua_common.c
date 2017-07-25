@@ -1349,13 +1349,15 @@ struct rspamd_lua_process_cbdata {
 	lua_State *L;
 	guint64 sz;
 	GString *io_buf;
+	GString *out_buf;
+	goffset out_pos;
 	struct rspamd_worker *wrk;
 	struct event_base *ev_base;
 	struct event ev;
 };
 
 static void
-rspamd_lua_execute_subprocess (lua_State *L,
+rspamd_lua_execute_lua_subprocess (lua_State *L,
 		struct rspamd_lua_process_cbdata *cbdata)
 {
 	gint err_idx, r;
@@ -1409,7 +1411,8 @@ rspamd_lua_execute_subprocess (lua_State *L,
 static void
 rspamd_lua_call_on_complete (lua_State *L,
 		struct rspamd_lua_process_cbdata *cbdata,
-		const gchar *err_msg, const gchar *data, gsize datalen)
+		const gchar *err_msg,
+		const gchar *data, gsize datalen)
 {
 	gint err_idx;
 	GString *tb;
@@ -1474,6 +1477,11 @@ rspamd_lua_cld_handler (struct rspamd_worker_signal_handler *sigh, void *ud)
 	luaL_unref (L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 	luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
 	g_string_free (cbdata->io_buf, TRUE);
+
+	if (cbdata->out_buf) {
+		g_string_free (cbdata->out_buf, TRUE);
+	}
+
 	g_free (cbdata);
 
 	/* Notify main */
@@ -1605,12 +1613,15 @@ lua_worker_spawn_process (lua_State *L)
 	struct rspamd_lua_process_cbdata *cbdata;
 	struct rspamd_abstract_worker_ctx *actx;
 	struct rspamd_srv_command srv_cmd;
+	const gchar *cmdline = NULL, *input = NULL;
+	gsize inputlen = 0;
 	pid_t pid;
 	GError *err = NULL;
 	gint func_cbref, cb_cbref;
 
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-		"*func=F;*on_complete=F", &func_cbref, &cb_cbref)) {
+		"func=F;exec=S;stdin=V;*on_complete=F", &func_cbref,
+			&cmdline, &inputlen, &input, &cb_cbref)) {
 		msg_err ("cannot get parameters list: %e", err);
 
 		if (err) {
@@ -1624,7 +1635,12 @@ lua_worker_spawn_process (lua_State *L)
 	cbdata->cb_cbref = cb_cbref;
 	cbdata->func_cbref = func_cbref;
 
-	if (socketpair (AF_UNIX, SOCK_STREAM, 0, cbdata->sp) == -1) {
+	if (input) {
+		cbdata->out_buf = g_string_new_len (input, inputlen);
+		cbdata->out_pos = 0;
+	}
+
+	if (rspamd_socketpair (cbdata->sp, TRUE) == -1) {
 		msg_err ("cannot spawn socketpair: %s", strerror (errno));
 		g_free (cbdata);
 		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->func_cbref);
@@ -1672,7 +1688,7 @@ lua_worker_spawn_process (lua_State *L)
 		/* Here we assume that we can block on writing results */
 		rspamd_socket_blocking (cbdata->sp[1]);
 		event_reinit (cbdata->ev_base);
-		rspamd_lua_execute_subprocess (L, cbdata);
+		rspamd_lua_execute_lua_subprocess (L, cbdata);
 
 		/* Wait for parent to reply and exit */
 		rc = read (cbdata->sp[1], inbuf, sizeof (inbuf));
