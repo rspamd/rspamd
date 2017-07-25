@@ -2422,7 +2422,7 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode,
 		gboolean allow_symlink)
 {
 	struct stat sb;
-	int fd;
+	int fd, flags = oflags;
 
 	if (lstat (fname, &sb) == -1) {
 
@@ -2431,18 +2431,39 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode,
 		}
 	}
 	else if (!S_ISREG (sb.st_mode)) {
-		return -1;
+		if (S_ISLNK (sb.st_mode)) {
+			if (!allow_symlink) {
+				return -1;
+			}
+		}
+		else {
+			return -1;
+		}
 	}
+
+#ifdef HAVE_OCLOEXEC
+	flags |= O_CLOEXEC;
+#endif
 
 #ifdef HAVE_ONOFOLLOW
 	if (!allow_symlink) {
-		fd = open (fname, oflags | O_NOFOLLOW, mode);
+		flags |= O_NOFOLLOW;
+		fd = open (fname, flags, mode);
 	}
 	else {
-		fd = open (fname, oflags, mode);
+		fd = open (fname, flags, mode);
 	}
 #else
-	fd = open (fname, oflags, mode);
+	fd = open (fname, flags, mode);
+#endif
+
+#ifndef HAVE_OCLOEXEC
+	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		close (fd);
+
+		return -1;
+	}
 #endif
 
 	return (fd);
