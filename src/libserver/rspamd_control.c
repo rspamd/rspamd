@@ -844,7 +844,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				if (spair == NULL) {
 					spair = g_malloc (sizeof (gint) * 2);
 
-					if (rspamd_socketpair (spair) == -1) {
+					if (rspamd_socketpair (spair, 0) == -1) {
 						rdata->rep.reply.spair.code = errno;
 						msg_err ("cannot create socket pair: %s", strerror (errno));
 					}

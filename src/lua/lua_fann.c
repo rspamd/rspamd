@@ -708,7 +708,7 @@ lua_fann_train_threaded (lua_State *L)
 		lua_pushvalue (L, 4);
 		cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-		if (rspamd_socketpair (cbdata->pair) == -1) {
+		if (rspamd_socketpair (cbdata->pair, 0) == -1) {
 			msg_err ("cannot open socketpair: %s", strerror (errno));
 			cbdata->pair[0] = -1;
 			cbdata->pair[1] = -1;

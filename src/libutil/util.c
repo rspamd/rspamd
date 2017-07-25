@@ -604,22 +604,27 @@ err:
 }
 
 gboolean
-rspamd_socketpair (gint pair[2])
+rspamd_socketpair (gint pair[2], gboolean is_stream)
 {
 	gint r, serrno;
 
+	if (!is_stream) {
 #ifdef HAVE_SOCK_SEQPACKET
-	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, pair);
+		r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, pair);
 
-	if (r == -1) {
-		msg_warn ("seqpacket socketpair failed: %d, '%s'",
-				errno,
-				strerror (errno));
-		r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
-	}
+		if (r == -1) {
+			msg_warn ("seqpacket socketpair failed: %d, '%s'",
+					errno,
+					strerror (errno));
+			r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
+		}
 #else
-	r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
+		r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
 #endif
+	}
+	else {
+		r = socketpair (AF_LOCAL, SOCK_STREAM, 0, pair);
+	}
 
 	if (r == -1) {
 		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (

@@ -203,10 +203,9 @@ start_log_helper (struct rspamd_worker *worker)
 	DL_COUNT (worker->cf->scripts, tmp, nscripts);
 	msg_info ("started log_helper worker with %d scripts", nscripts);
 
-#ifdef HAVE_SOCK_SEQPACKET
-	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, ctx->pair);
-#endif
-	if (r == -1 && socketpair (AF_LOCAL, SOCK_DGRAM, 0, ctx->pair) == -1) {
+	r = rspamd_socketpair (ctx->pair, FALSE);
+
+	if (r == -1) {
 		msg_err ("cannot create socketpair: %s, exiting now", strerror (errno));
 		/* Prevent new processes spawning */
 		exit (EXIT_SUCCESS);

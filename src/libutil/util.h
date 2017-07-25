@@ -75,7 +75,7 @@ GList * rspamd_sockets_list (const gchar *credits,
 /*
  * Create socketpair
  */
-gboolean rspamd_socketpair (gint pair[2]);
+gboolean rspamd_socketpair (gint pair[2], gboolean is_stream);
 
 /*
  * Write pid to file

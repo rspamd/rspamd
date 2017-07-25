@@ -58,7 +58,8 @@
 #cmakedefine HAVE_NFTW           1
 #cmakedefine HAVE_OASYNC         1
 #cmakedefine HAVE_ONOFOLLOW      1
-#cmakedefine HAVE_OPENSSL		 1
+#cmakedefine HAVE_OCLOEXEC       1
+#cmakedefine HAVE_OPENSSL        1
 #cmakedefine HAVE_O_DIRECT       1
 #cmakedefine HAVE_PATH_MAX       1
 #cmakedefine HAVE_PCRE_JIT       1
