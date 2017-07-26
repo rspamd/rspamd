@@ -182,11 +182,10 @@ def split_dataset(X, y, percent):
 
     return X1, y1, X2, y2
 
-def print_new_scores(output_file, symbol_set, symbols_type, new_scores, best_threshold):
+
+def print_new_scores(output_file, symbol_set, symbols_type, new_scores):
 
     score_output_format = "{:<35} {:<13} {:<10}"
-
-    print >>output_file, "Optimal spam threshold: " + str(best_threshold)
 
     print >>output_file, score_output_format.format("SYMBOL", "OLD SCORE", "NEW SCORE")
 
@@ -203,6 +202,7 @@ def eval_email_score(record, new_scores):
             score = score + new_scores[i]
 
     return score
+
 
 def make_log_for_stats(X, y, scores):
 
@@ -236,6 +236,7 @@ def find_best_spam_threshold(X_cv, y_cv, spam_thresholds, new_scores):
 
     return max_accuracy_threshold
 
+
 def fscore(stats):
 
     fp = stats.false_positive_rate * stats.no_of_ham / 100
@@ -244,6 +245,7 @@ def fscore(stats):
     f_score = 2 * stats.true_positives / float(2 * stats.true_positives + fp + fn)
 
     return f_score
+
 
 def print_stats(X, y, scores, threshold):
 
@@ -265,7 +267,7 @@ def main():
     
     epoch = 100
     l_rate = 0.001
-    threshold = 10
+    threshold = 15
     output = sys.stdout
     decay = 1
     
@@ -279,7 +281,7 @@ def main():
                             help="Learning rate of perceptron [Default: 0.001]",
                             type=float)
     arg_parser.add_argument("-t", "--threshold",
-                            help="threshold value [Default: 10]",
+                            help="threshold value [Default: 15]",
                             type=float)
     arg_parser.add_argument("-o", "--output",
                             help="Write new scores to file")
@@ -332,14 +334,6 @@ def main():
                                  symbols_type=symbols_type,
                                  symbols_tuple=symbol_set)[1:] # excluding bias
  
-    spam_thresholds = range(0, 60)
-
-    best_threshold = find_best_spam_threshold(X_cv=X_cv,
-                                              y_cv=y_cv,
-                                              spam_thresholds=spam_thresholds,
-                                              new_scores=new_scores)
-
-
     total_time = round(time.time() - start_time, 2)
 
     # Statistics 
@@ -356,15 +350,14 @@ def main():
     # Post-rescore test stats
     print
     print "Post-rescore test data stats:"
-    print_stats(X_test, y_test, new_scores, best_threshold - 10)
-    print_stats(X_test, y_test, new_scores, best_threshold)
+    print_stats(X_test, y_test, new_scores, args.threshold)
+    print_stats(X_test, y_test, new_scores, args.threshold)
     print
     
     print_new_scores(output_file=output,
                      symbol_set=symbol_set,
                      symbols_type=symbols_type,
-                     new_scores=new_scores,
-                     best_threshold=best_threshold)
+                     new_scores=new_scores)
 
     
 if __name__ == "__main__":
