@@ -1,3 +1,22 @@
+1.6.3: 26 Jul 2017
+	* [CritFix] Fix semicolons parsing in the content type
+	* [Feature] Add EBL to the default config
+	* [Feature] Allow to configure monitored
+	* [Feature] Allow to skip specific hashes in fuzzy storage
+	* [Feature] Multimap: checking of symbol options
+	* [Feature] Redis settings: support checking multiple keys
+	* [Fix] ARC: Fix Lua 5.3 compatibility; timestamp should be integer
+	* [Fix] Avoid changing content-transfer-encoding header's value
+	* [Fix] Don't use whitelist/greylist maps as regexp, but as map
+	* [Fix] Fix get_content method
+	* [Fix] Header checks: Fix get_raw_header method
+	* [Fix] Header checks: REPLYTO_UNPARSEABLE rule
+	* [Fix] Lua_http: freeing
+	* [Fix] Milter headers: custom headers: removing headers
+	* [Fix] Parse HREF urls without explicit prefix
+	* [Fix] WHITE_ON_WHITE: Ensure score is matched to part that fired the rule
+	* [WebUI] Escape strings inside HTML in history
+
 1.6.2: 08 Jul 2017
 	* [Conf] Remove Rambler email bl for now
 	* [Conf] Switch RAMBLER_URIBL to a locally managed source
