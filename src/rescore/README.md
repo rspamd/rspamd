@@ -1,6 +1,8 @@
-Python Dependencies:
-       * Python version: 2.7+
-       * requests
+# Requirements
+
+Python Dependencies:  
+       * Python version: 2.7+  
+       * requests  
 
 # CORPUS TESTING
 
@@ -72,6 +74,4 @@ Use rescore.py on logs generated from corpus-test to find optimal symbol scores 
 
 ### Example:
 	
-	`./rescore.py -l logs/ -r 0.001 -t 15 -e 500 -o scores.txt`
-
-Note: To get spam threshold at 15, set threshold option 15. 
+	`./rescore.py -l logs/ -r 0.001 -e 500 -o scores.txt`
