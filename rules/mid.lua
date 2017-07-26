@@ -1,6 +1,6 @@
 --[[
 Copyright (c) 2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
-Copyright (c) 2016, Steve Freeguard
+Copyright (c) 2016, Steve Freegard <steve@freegard.name>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,8 +36,9 @@ local function mid_check_func(task)
   end
   -- Check From address attributes against MID
   local from = task:get_from(2)
+  local fd
   if (from and from[1] and from[1].domain and from[1].domain ~= '') then
-    local fd = from[1].domain:lower()
+    fd = from[1].domain:lower()
     local _,_,md = mid:find("@([^>]+)>?$")
     -- See if all or part of the From address
     -- can be found in the Message-ID
@@ -45,6 +46,22 @@ local function mid_check_func(task)
       task:insert_result('MID_CONTAINS_FROM', 1.0)
     elseif (md and fd == md:lower()) then
       task:insert_result('MID_RHS_MATCH_FROM', 1.0)
+    end
+  end
+  -- Check To address attributes against MID
+  local to = task:get_recipients(2)
+  if (to and to[1] and to[1].domain and to[1].domain ~= '') then
+    local td = to[1].domain:lower()
+    local _,_,md = mid:find("@([^>]+)>?$")
+    -- Skip if from domain == to domain
+    if ((fd and fd ~= td) or not fd) then
+      -- See if all or part of the To address
+      -- can be found in the Message-ID
+      if (mid:lower():find(to[1].addr:lower(),1,true)) then
+        task:insert_result('MID_CONTAINS_TO', 1.0)
+      elseif (md and td == md:lower()) then
+        task:insert_result('MID_RHS_MATCH_TO', 1.0)
+      end
     end
   end
 end
@@ -64,3 +81,8 @@ rspamd_config:register_virtual_symbol('MID_CONTAINS_FROM', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_CONTAINS_FROM', 1.0, 'Message-ID contains From address', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_FROM', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROM', 0.0, 'Message-ID RHS matches From domain', 'default', 'Message ID')
+rspamd_config:register_virtual_symbol('MID_CONTAINS_TO', 1.0, check_mid_id)
+rspamd_config:set_metric_symbol('MID_CONTAINS_TO', 1.0, 'Message-ID contains To address', 'default', 'Message ID')
+rspamd_config:register_virtual_symbol('MID_RHS_MATCH_TO', 1.0, check_mid_id)
+rspamd_config:set_metric_symbol('MID_RHS_MATCH_TO', 1.0, 'Message-ID RHS matches To domain', 'default', 'Message ID')
+
