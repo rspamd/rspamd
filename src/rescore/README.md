@@ -72,6 +72,6 @@ Use rescore.py on logs generated from corpus-test to find optimal symbol scores 
 
 ### Example:
 	
-	`./rescore.py -l logs/ -r 0.0001 -t 10 -e 500 -o scores.txt`
+	`./rescore.py -l logs/ -r 0.001 -t 15 -e 500 -o scores.txt`
 
-Note: Emails are generally not linearly seperable, run rescore.py until you get desired results.
+Note: To get spam threshold at 15, set threshold option 15. 
