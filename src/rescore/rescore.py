@@ -147,7 +147,7 @@ def get_symbols_type(symbol_set, symbols_type_cache_file="symbols_type.cache"):
     return symbols_type
 
 
-def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, epoch, l_rate):
+def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, decay, epoch, l_rate):
     '''
     Returns a tuple of (symbol, score) after training perceptron
     '''
@@ -158,6 +158,7 @@ def rescore_weights(X, y, symbols_tuple, symbols_type, threshold, epoch, l_rate)
                             n_epoch=epoch,
                             l_rate=l_rate,
                             threshold=threshold,
+                            decay=decay,
                             symbols_type=symbols_type)
 
     weights = perceptron.rescore_weights(X, y)
@@ -244,6 +245,19 @@ def fscore(stats):
 
     return f_score
 
+def print_stats(X, y, scores, threshold):
+
+    stats = get_file_stats(make_log_for_stats(X, y, scores), threshold)
+    f_score = fscore(stats)
+
+    print
+    print "Statistics at threshold {}".format(threshold)
+    print "Accuracy: {} %".format(str(round(stats.overall_accuracy, 2)))
+    print "F score: {}".format(fscore(stats))
+    print "False positive rate: {}".format(stats.false_positive_rate)
+    print "False negative rate: {}".format(stats.false_negative_rate)
+    print
+    
     
 def main():
 
@@ -253,6 +267,7 @@ def main():
     l_rate = 0.001
     threshold = 10
     output = sys.stdout
+    decay = 1
     
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("-l", "--logdir",
@@ -266,10 +281,12 @@ def main():
     arg_parser.add_argument("-t", "--threshold",
                             help="threshold value [Default: 10]",
                             type=float)
-
     arg_parser.add_argument("-o", "--output",
                             help="Write new scores to file")
-
+    arg_parser.add_argument("-d", "--decay",
+                            help="Weight decay [Default: 1]",
+                            type=float)
+    
     args = arg_parser.parse_args()
 
     if not args.logdir:
@@ -288,6 +305,9 @@ def main():
     if args.output:
         output = open(args.output, 'w')
 
+    if args.decay:
+        decay = args.decay
+        
     X, y, symbol_set = get_dataset_from_logs(logdir=args.logdir)
 
     X, y = shuffle(X, y)
@@ -307,6 +327,7 @@ def main():
                                  y=y_train,
                                  epoch=epoch,
                                  l_rate=l_rate,
+                                 decay=decay,
                                  threshold=threshold,
                                  symbols_type=symbols_type,
                                  symbols_tuple=symbol_set)[1:] # excluding bias
@@ -325,22 +346,18 @@ def main():
     print "\n"
     print "Statistics: "
     print "Time taken: {}s".format(total_time)
-
-    # Pre-rescore test stats
-    stats = get_file_stats(make_log_for_stats(X_test, y_test, old_scores), 15)
-    f_score = fscore(stats)
     print
-    print "Pre-rescore test data stats:"
-    print "Accuracy: {} %".format(str(round(stats[-1], 2)))
-    print "F-score: " + str(f_score)
-
+    
+    # Pre-rescore test stats
+    print "Pre-rescore test stats: "
+    print_stats(X_test, y_test, old_scores, 5)
+    print_stats(X_test, y_test, old_scores, 15)
+    
     # Post-rescore test stats
-    stats = get_file_stats(make_log_for_stats(X_test, y_test, new_scores), best_threshold)
-    f_score = fscore(stats)
     print
     print "Post-rescore test data stats:"
-    print "Accuracy: {} %".format(str(round(stats[-1], 2)))
-    print "F-score: " + str(f_score)
+    print_stats(X_test, y_test, new_scores, best_threshold - 10)
+    print_stats(X_test, y_test, new_scores, best_threshold)
     print
     
     print_new_scores(output_file=output,
