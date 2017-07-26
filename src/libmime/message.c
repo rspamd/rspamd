@@ -745,6 +745,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		text_part->html = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (*text_part->html));
 		text_part->mime_part = mime_part;
+		text_part->utf_raw_content = part_content;
 
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
 		text_part->content = rspamd_html_process_part_full (
@@ -754,7 +755,6 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 				&text_part->exceptions,
 				task->urls,
 				task->emails);
-		text_part->utf_raw_content = part_content;
 
 		if (text_part->content->len == 0) {
 			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;

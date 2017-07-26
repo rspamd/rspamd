@@ -208,7 +208,7 @@ local configure_whitelist_module = function()
           rule['map'] = rspamd_config:add_map{
             url = rule['domains'],
             description = "Whitelist map for " .. symbol,
-            type = 'regexp'
+            type = 'map'
           }
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
@@ -236,7 +236,7 @@ local configure_whitelist_module = function()
             rule['map'] = rspamd_config:add_map{
               url = rule['domains'],
               description = "Whitelist map for " .. symbol,
-              type = 'regexp'
+              type = 'map'
             }
           end
         else

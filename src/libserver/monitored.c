@@ -94,7 +94,11 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			m->cur_errors ++;
 			/* Reduce timeout */
 			rspamd_monitored_stop (m);
-			m->monitoring_mult /= 2.0;
+
+			if (m->monitoring_mult > 0.1) {
+				m->monitoring_mult /= 2.0;
+			}
+
 			rspamd_monitored_start (m);
 		}
 		else {
@@ -132,6 +136,7 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 	gdouble t;
 
 	m->cur_errors = 0;
+	m->monitoring_mult = 1.0;
 
 	if (!m->alive) {
 		t = rspamd_get_calendar_ticks ();
@@ -144,7 +149,6 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 		m->nchecks = 1;
 		m->latency = lat;
 		rspamd_monitored_stop (m);
-		m->monitoring_mult = 1.0;
 		rspamd_monitored_start (m);
 
 		if (m->ctx->change_cb) {
@@ -409,6 +413,10 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	ctx->initialized = TRUE;
 	ctx->change_cb = change_cb;
 	ctx->ud = ud;
+
+	if (cfg->monitored_interval != 0) {
+		ctx->monitoring_interval = cfg->monitored_interval;
+	}
 
 	/* Start all events */
 	for (i = 0; i < ctx->elts->len; i ++) {

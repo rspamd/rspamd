@@ -79,6 +79,9 @@ local value_types = {
   mempool = {
     get_value = function(val) return val end,
   },
+  symbol_options = {
+    get_value = function(val) return val end,
+  },
 }
 
 local function ip_to_rbl(ip, rbl)
@@ -344,6 +347,7 @@ local multimap_filters = {
   from = apply_addr_filter,
   rcpt = apply_addr_filter,
   helo = apply_hostname_filter,
+  symbol_options = apply_regexp_filter,
   header = apply_addr_filter,
   url = apply_url_filter,
   filename = apply_filename_filter,
@@ -759,6 +763,14 @@ local function multimap_callback(task, rule)
         match_rule(rule, var)
       end
     end,
+    symbol_options = function()
+      local sym = task:get_symbol(rule['target_symbol'])
+      if sym and sym[1].options then
+        for _, o in ipairs(sym[1].options) do
+          match_rule(rule, o)
+        end
+      end
+    end,
     received = function()
       local hdrs = task:get_received_headers()
       if hdrs and hdrs[1] then
@@ -913,6 +925,7 @@ local function add_multimap_rule(key, newrule)
         or newrule['type'] == 'rcpt'
         or newrule['type'] == 'from'
         or newrule['type'] == 'helo'
+        or newrule['type'] == 'symbol_options'
         or newrule['type'] == 'filename'
         or newrule['type'] == 'url'
         or newrule['type'] == 'content'
@@ -959,6 +972,9 @@ local function add_multimap_rule(key, newrule)
   end
 
   if ret then
+    if newrule['type'] == 'symbol_options' then
+      rspamd_config:register_dependency(newrule['symbol'], newrule['target_symbol'])
+    end
     if newrule['require_symbols'] and not newrule['prefilter'] then
       local atoms = {}
 

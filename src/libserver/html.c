@@ -1453,7 +1453,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	const gchar *p, *s;
 	gchar *d;
 	guint i, dlen;
-	gboolean has_bad_chars = FALSE;
+	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
 	p = start;
@@ -1495,8 +1495,19 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
+	if (rspamd_substring_search (s, len, "://", 3) == (-1)) {
+		/* We have no prefix */
+		dlen += sizeof ("http://") - 1;
+		no_prefix = TRUE;
+	}
+
 	decoded = rspamd_mempool_alloc (pool, dlen + 1);
 	d = decoded;
+
+	if (no_prefix) {
+		memcpy (d, "http://", sizeof ("http://") - 1);
+		d += sizeof ("http://") - 1;
+	}
 
 	/* We also need to remove all internal newlines and encode unsafe characters */
 	for (i = 0; i < len; i ++) {

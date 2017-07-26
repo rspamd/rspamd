@@ -411,7 +411,7 @@ local function arc_sign_seal(task, params, header)
   rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
-      cur_idx, params.selector, params.domain, rspamd_util.get_time(), params.arc_cv)
+      cur_idx, params.selector, params.domain, math.floor(rspamd_util.get_time()), params.arc_cv)
   s = string.format('%s:%s', 'arc-seal', cur_arc_seal)
   sha_ctx:update(s)
   rspamd_logger.debugm(N, task, 'initial update signature with header: %s', s)
