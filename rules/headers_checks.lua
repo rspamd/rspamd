@@ -916,14 +916,64 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
     if (not ct) then return false end
     local parts = task:get_parts()
     if (not parts) then return false end
-    if (ct:lower():match('^multipart/mixed') ~= nil and #parts < 3)
-    then
-      return true, tostring(#parts)
+    if (not ct:lower():match('^multipart/mixed')) then return false end
+    local found = false
+    -- Check each part and look for a part that isn't multipart/* or text/plain or text/html
+    for _,p in ipairs(parts) do
+      local ct = p:get_header('Content-Type')
+      if (ct) then
+        ct = ct:lower()
+        if (ct:match('^multipart/') or 
+            ct:match('^text/plain') or 
+            ct:match('^text/html')) 
+        then
+          -- Nothing
+        else
+          found = true
+        end
+      end
+    end
+    if (not found) then return true end
+    return false
+  end,
+  description = 'multipart/mixed without non-textual part',
+  score = 1.0,
+  group = 'headers'
+}
+
+local function check_for_base64_text(part)
+  local ct = part:get_header('Content-Type')
+  if (not ct) then return false end
+  ct = ct:lower()
+  if (ct:match('^text')) then
+    -- Check encoding
+    local cte = part:get_header('Content-Transfer-Encoding')
+    if (cte and cte:lower():match('^base64')) then
+      return true
+    end
+  end
+  return false
+end
+
+rspamd_config.MIME_BASE64_TEXT = {
+  callback = function(task)
+    -- Check outer part
+    if (check_for_base64_text(task)) then
+      return true
+    else
+      local parts = task:get_parts()
+      if (not parts) then return false end
+      -- Check each part and look for base64 encoded text parts
+      for _, part in ipairs(parts) do
+        if (check_for_base64_text(part)) then
+          return true
+        end
+      end
     end
     return false
   end,
-  description = 'multipart/mixed with less than 3 total parts',
-  score = 0.1,
+  description = 'Has text part encoded in base64',
+  score = 1.0,
   group = 'headers'
 }
 
