@@ -181,9 +181,10 @@ static gint
 rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 	gboolean async, GList **list)
 {
-	gint fd = -1, r, optlen, on = 1, s_error;
+	gint fd = -1, r, on = 1, s_error;
 	struct addrinfo *cur;
 	gpointer ptr;
+	socklen_t optlen;
 
 	cur = addr;
 	while (cur) {
@@ -294,7 +295,9 @@ rspamd_socket_unix (const gchar *path,
 	gboolean is_server,
 	gboolean async)
 {
-	gint fd = -1, s_error, r, optlen, serrno, on = 1;
+
+	socklen_t optlen;
+	gint fd = -1, s_error, r, serrno, on = 1;
 	struct stat st;
 
 	if (path == NULL)
@@ -1864,7 +1867,7 @@ rspamd_get_ticks (void)
 	struct timeval tv;
 
 	(void)gettimeofday (&tv, NULL);
-	res = (double)tv.tv_sec + tv.tv_nsec / 1000000.;
+	res = (double)tv.tv_sec + tv.tv_usec / 1000000.;
 #endif
 
 	return res;
@@ -1926,7 +1929,7 @@ rspamd_random_hex (guchar *buf, guint64 len)
 
 	g_assert (len > 0);
 
-	ottery_rand_bytes (buf, (len / 2.0 + 0.5));
+	ottery_rand_bytes (buf, ceil (len / 2.0));
 
 	for (i = (gint64)len - 1; i >= 0; i -= 2) {
 		buf[i] = hexdigests[buf[i / 2] & 0xf];
