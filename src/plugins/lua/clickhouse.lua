@@ -619,7 +619,7 @@ local function clickhouse_collect(task)
       table.concat(scores_tab, ','),
       table.concat(options_tab, ','))
 
-    table.insert(urls_rows, elt)
+    table.insert(symbols_rows, elt)
   end
 
   nrows = nrows + 1
