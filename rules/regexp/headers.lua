@@ -901,14 +901,3 @@ reconf['HAS_XOIP'] = {
   score = 0.0,
   group = 'headers'
 }
-
-reconf['MIME_BASE64_TEXT'] = {
-  re = string.format('(%s && %s) || (%s && %s)',
-                     'Content-Type=/^text/Hi',
-                     'Content-Transfer-Encoding=/^base64/Hi',
-                     'Content-Type=/^text/Bi',
-                     'Content-Transfer-Encoding=/^base64/Bi'),
-  description = 'Message text disguised using base64 encoding',
-  score = 0.0,
-  group = 'headers'
-}
