@@ -159,7 +159,10 @@ local function rbl_cb (task)
     return params[to_resolve]
   end
 
-  local havegot = {}
+  local havegot = {
+    emails = {},
+    received = {}
+  }
   local notgot = {}
 
   local alive_rbls = fun.filter(function(_, rbl)
@@ -242,10 +245,11 @@ local function rbl_cb (task)
       if notgot['emails'] then
         return false
       end
-      if not havegot['emails'] then
+      if #havegot['emails'] == 0 then
         havegot['emails'] = task:get_emails()
         if havegot['emails'] == nil then
           notgot['emails'] = true
+          havegot['emails'] = {}
           return false
         end
       end
@@ -264,10 +268,11 @@ local function rbl_cb (task)
       if notgot['received'] then
         return false
       end
-      if not havegot['received'] then
+      if #havegot['received'] == 0 then
         havegot['received'] = task:get_received_headers()
         if next(havegot['received']) == nil then
           notgot['received'] = true
+          havegot['received'] = {}
           return false
         end
       end
