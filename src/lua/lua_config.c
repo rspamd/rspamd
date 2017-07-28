@@ -626,6 +626,17 @@ rspamd_config:set_peak_cb(function(ev_base, sym, mean, stddev, value, error)
 end)
  */
 LUA_FUNCTION_DEF (config, set_peak_cb);
+/***
+ *  @method rspamd_config:get_cpu_flags()
+ * Returns architecture dependent flags supported by the CPU
+ * Currently, only x86 flags are supported:
+ * - 'ssse3'
+ * - 'sse42'
+ * - 'avx'
+ * - 'avx2'
+ * @return {table} flag -> true table
+ */
+LUA_FUNCTION_DEF (config, get_cpu_flags);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -673,6 +684,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_doc),
 	LUA_INTERFACE_DEF (config, add_example),
 	LUA_INTERFACE_DEF (config, set_peak_cb),
+	LUA_INTERFACE_DEF (config, get_cpu_flags),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -2780,6 +2792,59 @@ lua_config_add_example (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_config_get_cpu_flags (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_cryptobox_library_ctx *crypto_ctx;
+
+	if (cfg != NULL) {
+		crypto_ctx = cfg->libs_ctx->crypto_ctx;
+		lua_newtable (L);
+
+		if (crypto_ctx->cpu_config & CPUID_SSSE3) {
+			lua_pushstring (L, "ssse3");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE41) {
+			lua_pushstring (L, "sse41");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE42) {
+			lua_pushstring (L, "sse42");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE2) {
+			lua_pushstring (L, "sse2");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE3) {
+			lua_pushstring (L, "sse3");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_AVX) {
+			lua_pushstring (L, "avx");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_AVX2) {
+			lua_pushstring (L, "avx2");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint

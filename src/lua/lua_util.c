@@ -473,6 +473,7 @@ LUA_FUNCTION_DEF (util, caseless_hash_fast);
  */
 LUA_FUNCTION_DEF (util, get_hostname);
 
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
