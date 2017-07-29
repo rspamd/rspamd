@@ -1376,35 +1376,6 @@ lua_config_get_key (lua_State *L)
 }
 
 static gint
-lua_parse_symbol_type (const gchar *str)
-{
-	gint ret = SYMBOL_TYPE_NORMAL;
-
-	if (str) {
-		if (strcmp (str, "virtual") == 0) {
-			ret = SYMBOL_TYPE_VIRTUAL;
-		}
-		else if (strcmp (str, "callback") == 0) {
-			ret = SYMBOL_TYPE_CALLBACK;
-		}
-		else if (strcmp (str, "normal") == 0) {
-			ret = SYMBOL_TYPE_NORMAL;
-		}
-		else if (strcmp (str, "prefilter") == 0) {
-			ret = SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_GHOST;
-		}
-		else if (strcmp (str, "postfilter") == 0) {
-			ret = SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_GHOST;
-		}
-		else {
-			msg_warn ("bad type: %s", str);
-		}
-	}
-
-	return ret;
-}
-
-static gint
 lua_parse_symbol_flags (const gchar *str)
 {
 	int ret = 0;
@@ -1424,6 +1395,53 @@ lua_parse_symbol_flags (const gchar *str)
 		}
 		if (strstr (str, "nostat") != NULL) {
 			ret |= SYMBOL_TYPE_NOSTAT;
+		}
+	}
+
+	return ret;
+}
+
+static gint
+lua_parse_symbol_type (const gchar *str)
+{
+	gint ret = SYMBOL_TYPE_NORMAL;
+	gchar **vec;
+	guint i, l;
+
+	if (str) {
+		vec = g_strsplit_set (str, ",;", -1);
+
+		if (vec) {
+			l = g_strv_length (vec);
+
+			for (i = 0; i < l; i ++) {
+				str = vec[i];
+
+				if (g_ascii_strcasecmp (str, "virtual") == 0) {
+					ret = SYMBOL_TYPE_VIRTUAL;
+				} else if (g_ascii_strcasecmp (str, "callback") == 0) {
+					ret = SYMBOL_TYPE_CALLBACK;
+				} else if (g_ascii_strcasecmp (str, "normal") == 0) {
+					ret = SYMBOL_TYPE_NORMAL;
+				} else if (g_ascii_strcasecmp (str, "prefilter") == 0) {
+					ret = SYMBOL_TYPE_PREFILTER | SYMBOL_TYPE_GHOST;
+				} else if (g_ascii_strcasecmp (str, "postfilter") == 0) {
+					ret = SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST;
+				} else {
+					gint fl = 0;
+
+					fl = lua_parse_symbol_flags (str);
+
+					if (fl == 0) {
+						msg_warn ("bad type: %s", str);
+					}
+					else {
+						ret |= fl;
+					}
+				}
+			}
+
+			g_strfreev (vec);
 		}
 	}
 
