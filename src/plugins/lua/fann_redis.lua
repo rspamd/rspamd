@@ -29,8 +29,6 @@ local fann_symbol_ham = 'FANNR_HAM'
 local rspamd_redis = require "lua_redis"
 local fun = require "fun"
 local meta_functions = require "meta_functions"
-
-local module_log_id = 0x200
 -- Module vars
 -- ANNs indexed by settings id
 local fanns = {
@@ -38,6 +36,8 @@ local fanns = {
     version = 0,
   }
 }
+
+local opts = rspamd_config:get_all_opt("fann_redis")
 
 
 -- Lua script to train a row
@@ -457,8 +457,7 @@ local function fann_train_callback(task, score, required_score, id, opts)
         fun.each(function(e) table.insert(fann_data, e) end, mt)
         local str = rspamd_util.zstd_compress(table.concat(fann_data, ';'))
 
-        rspamd_redis.redis_make_request_taskless(ev_base,
-          rspamd_config,
+        rspamd_redis.redis_make_request(task,
           redis_params,
           nil,
           true, -- is write
@@ -846,8 +845,6 @@ local function ann_push_vector(task)
 end
 
 -- Initialization part
-
-local opts = rspamd_config:get_all_opt("fann_redis")
 if not (opts and type(opts) == 'table') or not redis_params then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
