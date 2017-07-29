@@ -497,6 +497,13 @@ LUA_FUNCTION_DEF (task, get_symbols);
 LUA_FUNCTION_DEF (task, get_symbols_numeric);
 
 /***
+ * @method task:get_symbols_tokens()
+ * Returns array of all symbols as statistical tokens
+ * @return {table|number} table of numbers
+ */
+LUA_FUNCTION_DEF (task, get_symbols_tokens);
+
+/***
  * @method task:has_symbol(name)
  * Fast path to check if a specified symbol is in the task's results
  * @param {string} name symbol's name
@@ -857,6 +864,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_symbols),
 	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
+	LUA_INTERFACE_DEF (task, get_symbols_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
@@ -3085,6 +3093,50 @@ lua_task_get_symbols_numeric (lua_State *L)
 	}
 
 	return 2;
+}
+
+struct tokens_foreach_cbdata {
+	struct rspamd_task *task;
+	lua_State *L;
+	gint idx;
+};
+
+static void
+tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
+{
+	struct rspamd_metric_result *mres;
+	struct tokens_foreach_cbdata *cbd = ud;
+	struct rspamd_symbol_result *s;
+
+	if (flags & SYMBOL_TYPE_NONSTAT) {
+		return;
+	}
+
+	mres = cbd->task->result;
+
+	if (mres && (s = g_hash_table_lookup (mres->symbols, sym)) != NULL) {
+		lua_pushnumber (cbd->L, s->score);
+	}
+	else {
+		lua_pushnumber (cbd->L, 0.0);
+	}
+
+	lua_rawseti (cbd->L, -2, cbd->idx++);
+}
+
+static gint
+lua_task_get_symbols_tokens (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct tokens_foreach_cbdata cbd;
+
+	cbd.task = task;
+	cbd.L = L;
+	cbd.idx = 1;
+	lua_createtable (L, rspamd_symbols_cache_symbols_count (task->cfg->cache), 0);
+	rspamd_symbols_cache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
+
+	return 1;
 }
 
 enum lua_date_type {
