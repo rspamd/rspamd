@@ -3115,7 +3115,7 @@ tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
 	mres = cbd->task->result;
 
 	if (mres && (s = g_hash_table_lookup (mres->symbols, sym)) != NULL) {
-		lua_pushnumber (cbd->L, s->score);
+		lua_pushnumber (cbd->L, tanh (s->score));
 	}
 	else {
 		lua_pushnumber (cbd->L, 0.0);
