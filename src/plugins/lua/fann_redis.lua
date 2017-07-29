@@ -423,18 +423,19 @@ local function load_or_invalidate_fann(data, id, ev_base)
   end
 end
 
-local function fann_train_callback(task, score, required_score, id, opts)
+local function fann_train_callback(task, score, required_score, id)
+  local train_opts = opts['train']
   local fname,suffix = gen_fann_prefix(id)
 
   local learn_spam, learn_ham
 
-  if opts['spam_score'] then
-    learn_spam = score >= opts['spam_score']
+  if train_opts['spam_score'] then
+    learn_spam = score >= train_opts['spam_score']
   else
     learn_spam = score >= required_score
   end
-  if opts['ham_score'] then
-    learn_ham = score <= opts['ham_score']
+  if train_opts['ham_score'] then
+    learn_ham = score <= train_opts['ham_score']
   else
     learn_ham = score < 0
   end
@@ -469,7 +470,7 @@ local function fann_train_callback(task, score, required_score, id, opts)
         if err then
           rspamd_logger.errx(rspamd_config, 'cannot check if we can train %s: %s', fname, err)
           if string.match(err, 'NOSCRIPT') then
-            load_scripts(rspamd_config, ev_base, nil)
+            load_scripts(rspamd_config, task:get_ev_base(), nil)
           end
         end
       end
@@ -836,11 +837,9 @@ local function ann_push_vector(task)
   local scores = task:get_metric_score()
   local sid = task:get_settings_id()
   if use_settings then
-    fann_train_callback(task, scores[1], scores[2],
-      tostring(sid), opts['train'])
+    fann_train_callback(task, scores[1], scores[2], tostring(sid))
   else
-    fann_train_callback(task, scores[1], scores[2],
-      tostring(sid), opts['train'])
+    fann_train_callback(task, scores[1], scores[2], "1")
   end
 end
 

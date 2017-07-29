@@ -920,15 +920,12 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
     local found = false
     -- Check each part and look for a part that isn't multipart/* or text/plain or text/html
     for _,p in ipairs(parts) do
-      local ct = p:get_header('Content-Type')
-      if (ct) then
-        ct = ct:lower()
-        if (ct:match('^multipart/') or 
-            ct:match('^text/plain') or 
-            ct:match('^text/html')) 
-        then
-          -- Nothing
-        else
+      local pct = p:get_header('Content-Type')
+      if (pct) then
+        pct = pct:lower()
+        if not ((pct:match('^multipart/') or
+            pct:match('^text/plain') or
+            pct:match('^text/html'))) then
           found = true
         end
       end
