@@ -644,7 +644,7 @@ if redis_section then
   fun.each(function(id, h)
     rspamd_config:register_symbol({
       name = 'REDIS_SETTINGS' .. tostring(id),
-      type = 'prefilter',
+      type = 'prefilter,nostat',
       callback = gen_redis_callback(h, id),
       priority = 10
     })
@@ -664,7 +664,7 @@ end
 
 rspamd_config:register_symbol({
   name = 'SETTINGS_CHECK',
-  type = 'prefilter',
+  type = 'prefilter,nostat',
   callback = check_settings,
   priority = 10
 })

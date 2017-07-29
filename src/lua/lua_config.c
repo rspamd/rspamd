@@ -191,6 +191,7 @@ LUA_FUNCTION_DEF (config, get_classifier);
  *     + `nice` if symbol can produce negative score;
  *     + `empty` if symbol can be called for empty messages
  *     + `skip` if symbol should be skipped now
+ *     + `nostat` if symbol should be excluded from stat tokens
  * - `parent`: id of parent symbol (useful for virtual symbols)
  *
  * @return {number} id of symbol registered
@@ -1420,6 +1421,9 @@ lua_parse_symbol_flags (const gchar *str)
 		}
 		if (strstr (str, "skip") != NULL) {
 			ret |= SYMBOL_TYPE_SKIPPED;
+		}
+		if (strstr (str, "nostat") != NULL) {
+			ret |= SYMBOL_TYPE_NOSTAT;
 		}
 	}
 

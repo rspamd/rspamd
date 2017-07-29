@@ -730,6 +730,11 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 		}
 	}
 
+	if (type & (SYMBOL_TYPE_CLASSIFIER|SYMBOL_TYPE_CALLBACK|
+			SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER)) {
+		type |= SYMBOL_TYPE_NOSTAT;
+	}
+
 	item = rspamd_mempool_alloc0 (cache->static_pool,
 			sizeof (struct cache_item));
 	item->st = rspamd_mempool_alloc0_shared (cache->static_pool,

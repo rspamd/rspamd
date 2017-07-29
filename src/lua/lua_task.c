@@ -3108,7 +3108,7 @@ tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
 	struct tokens_foreach_cbdata *cbd = ud;
 	struct rspamd_symbol_result *s;
 
-	if (flags & SYMBOL_TYPE_NONSTAT) {
+	if (flags & SYMBOL_TYPE_NOSTAT) {
 		return;
 	}
 

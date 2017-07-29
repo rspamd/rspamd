@@ -40,7 +40,7 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_EMPTY = (1 << 8), /* Allow execution on empty tasks */
 	SYMBOL_TYPE_PREFILTER = (1 << 9),
 	SYMBOL_TYPE_POSTFILTER = (1 << 10),
-	SYMBOL_TYPE_NONSTAT = (1 << 11), /* Skip as statistical symbol */
+	SYMBOL_TYPE_NOSTAT = (1 << 11), /* Skip as statistical symbol */
 };
 
 /**

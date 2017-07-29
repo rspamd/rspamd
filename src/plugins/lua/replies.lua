@@ -128,13 +128,13 @@ if opts then
   else
     rspamd_config:register_symbol({
       name = 'REPLIES_SET',
-      type = 'postfilter',
+      type = 'postfilter,nostat',
       callback = replies_set,
       priority = 5
     })
     local id = rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',
-      type = 'prefilter',
+      type = 'prefilter,nostat',
       callback = replies_check,
       priority = 10
     })

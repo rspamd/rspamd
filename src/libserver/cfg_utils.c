@@ -1118,7 +1118,7 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 
 	/* Actually, statistics should act like any ordinary symbol */
 	rspamd_symbols_cache_add_symbol (cfg->cache, key, 0, NULL, NULL,
-			SYMBOL_TYPE_CLASSIFIER, -1);
+			SYMBOL_TYPE_CLASSIFIER|SYMBOL_TYPE_NOSTAT, -1);
 }
 
 void

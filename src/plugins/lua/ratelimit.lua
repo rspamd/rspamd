@@ -682,7 +682,7 @@ if opts then
       rspamd_config:register_symbol({
         name = 'RATELIMIT_CHECK',
         callback = rate_test,
-        type = 'prefilter',
+        type = 'prefilter,nostat',
         priority = 4,
       })
     else
@@ -695,6 +695,7 @@ if opts then
       local id = rspamd_config:register_symbol({
         name = symbol,
         callback = rate_test,
+        type = 'normal,nostat'
       })
       if use_ip_score then
         rspamd_config:register_dependency(id, 'IP_SCORE')
@@ -702,7 +703,7 @@ if opts then
     end
     rspamd_config:register_symbol({
       name = 'RATELIMIT_SET',
-      type = 'postfilter',
+      type = 'postfilter,nostat',
       priority = 5,
       callback = rate_set,
     })

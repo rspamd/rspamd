@@ -879,7 +879,7 @@ else
   })
   local id = rspamd_config:register_symbol({
     name = fann_symbol_spam,
-    type = 'postfilter',
+    type = 'postfilter,nostat',
     priority = 6,
     callback = fann_scores_filter
   })
@@ -891,7 +891,7 @@ else
   })
   rspamd_config:register_symbol({
     name = fann_symbol_ham,
-    type = 'virtual',
+    type = 'virtual,nostat',
     parent = id
   })
   if opts['train'] then
@@ -909,7 +909,7 @@ else
     end
     rspamd_config:register_symbol({
       name = 'FANN_VECTOR_PUSH',
-      type = 'postfilter',
+      type = 'postfilter,nostat',
       priority = 5,
       callback = ann_push_vector
     })
