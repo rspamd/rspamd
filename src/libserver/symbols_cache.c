@@ -2462,3 +2462,16 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 
 	return ret;
 }
+
+void
+rspamd_symbols_cache_foreach (struct symbols_cache *cache,
+		void (*func)(gint , const gchar *, gint , gpointer ),
+		gpointer ud)
+{
+	guint i;
+	struct cache_item *item;
+
+	PTR_ARRAY_FOREACH (cache->items_by_id, i, item) {
+		func (item->id, item->symbol, item->type, ud);
+	}
+}
