@@ -494,7 +494,7 @@ local function fann_train_callback(rule, task, score, required_score, id)
       can_train_cb, --callback
       'EVALSHA', -- command
       {redis_can_train_sha, '4', gen_fann_prefix(rule, nil),
-        suffix, k, tostring(max_trains)} -- arguments
+        suffix, k, tostring(rule.max_trains)} -- arguments
     )
   end
 end
@@ -559,7 +559,7 @@ local function train_fann(rule, _, ev_base, elt)
         true, -- is write
         redis_save_cb, --callback
         'EVALSHA', -- command
-        {redis_save_unlock_sha, '2', prefix, ann_data, tostring(ann_expire)}
+        {redis_save_unlock_sha, '2', prefix, ann_data, tostring(rule.ann_expire)}
       )
     end
   end
@@ -607,7 +607,7 @@ local function train_fann(rule, _, ev_base, elt)
         create_train_fann(rule, n, elt)
       end
 
-      if #inputs < max_trains / 2 then
+      if #inputs < rule.max_trains / 2 then
         -- Invalidate ANN as it is definitely invalid
         local function redis_invalidate_cb(_err, _data)
           if _err then
@@ -752,10 +752,10 @@ local function maybe_train_fanns(rule, cfg, ev_base)
             rspamd_logger.errx(rspamd_config,
               'cannot get FANN trains %s from redis: %s', prefix, _err)
           elseif _data and type(_data) == 'number' or type(_data) == 'string' then
-            if tonumber(_data) and tonumber(_data) >= max_trains then
+            if tonumber(_data) and tonumber(_data) >= rule.max_trains then
               rspamd_logger.infox(rspamd_config,
                 'need to learn ANN %s after %s learn vectors (%s required)',
-                prefix, tonumber(_data), max_trains)
+                prefix, tonumber(_data), rule.max_trains)
               train_fann(rule, cfg, ev_base, elt)
             end
           end
@@ -933,15 +933,15 @@ else
   -- Add training scripts
   for k,rule in settings.rules do
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
-      load_scripts(cfg, ev_base, function(cfg, ev_base)
+      load_scripts(cfg, ev_base, function(_, _)
           check_fanns(rule, cfg, ev_base)
       end)
 
       if worker:get_name() == 'normal' then
         -- We also want to train neural nets when they have enough data
         rspamd_config:add_periodic(ev_base, 0.0,
-          function(_cfg, _ev_base)
-            return maybe_train_fanns(rule, _cfg, _ev_base)
+          function(_, _)
+            return maybe_train_fanns(rule, cfg, ev_base)
           end)
       end
     end)
