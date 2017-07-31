@@ -361,7 +361,7 @@ end
 local function create_fann(n, nlayers)
   local layers = {}
   local div = 1.0
-  for _ = 1, nlayers do
+  for _ = 1, nlayers - 1 do
     table.insert(layers, math.floor(n / div))
     div = div * 2
   end
