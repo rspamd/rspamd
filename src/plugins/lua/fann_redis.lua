@@ -361,7 +361,7 @@ end
 local function create_fann(n, nlayers)
   local layers = {}
   local div = 1.0
-  for i in 1,nlayers - 1 do
+  for _ = 1, nlayers do
     table.insert(layers, math.floor(n / div))
     div = div * 2
   end
@@ -907,7 +907,7 @@ else
     callback = fann_scores_filter
   })
 
-  for k,r in rules do
+  for k,r in pairs(rules) do
     rules[k] = default_options
     rules[k]['redis'] = redis_params
     local cur = rules[k]
@@ -948,7 +948,7 @@ else
   settings.rules = rules
 
   -- Add training scripts
-  for k,rule in pairs(settings.rules) do
+  for _,rule in pairs(settings.rules) do
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       load_scripts(cfg, ev_base, function(_, _)
           check_fanns(rule, cfg, ev_base)
