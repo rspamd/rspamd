@@ -2582,7 +2582,7 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 						" %*s", url_str, url->querylen, url->query);
 
 				if ((existing = g_hash_table_lookup (task->urls,
-						query_url))) {
+						query_url)) == NULL) {
 					g_hash_table_insert (task->urls,
 							query_url,
 							query_url);
