@@ -294,17 +294,21 @@ local function load_scripts(cfg, ev_base, on_load_cb)
 end
 
 local function gen_fann_prefix(rule, id)
+  local cksum = rspamd_config:get_symbols_cksum():hex()
+  -- We also need to count metatokens:
+  local n = meta_functions.rspamd_count_metatokens()
   if id then
-    return rule.prefix .. rspamd_config:get_symbols_cksum():hex() .. id,
+    return string.format('%s%s%d%s', rule.prefix, cksum, n, id),
       rule.prefix .. id
   else
-    return rule.prefix .. rspamd_config:get_symbols_cksum():hex(), nil
+    return string.format('%s%s%d', rule.prefix, cksum, n), nil
   end
 end
 
 local function is_fann_valid(rule, prefix, ann)
   if ann then
-    local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
+    local n = rspamd_config:get_symbols_count() +
+        meta_functions.rspamd_count_metatokens()
 
     if n ~= ann:get_inputs() then
       rspamd_logger.infox(rspamd_config, 'ANN %s has incorrect number of inputs: %s, %s symbols' ..
@@ -324,7 +328,7 @@ local function is_fann_valid(rule, prefix, ann)
 end
 
 local function fann_scores_filter(task)
-  for _,rule in settings.rules do
+  for _,rule in ipairs(settings.rules) do
     local id = rule.prefix .. '0'
     if rule.use_settings then
      local sid = task:get_settings_id()
@@ -600,7 +604,8 @@ local function train_fann(rule, _, ev_base, elt)
       local inputs = {}
       local outputs = {}
 
-      local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
+      local n = rspamd_config:get_symbols_count() +
+          meta_functions.rspamd_count_metatokens()
       local filt = function(elts)
         return #elts == n
       end
@@ -865,7 +870,7 @@ local function ann_push_vector(task)
   local scores = task:get_metric_score()
   local sid = task:get_settings_id()
 
-  for _,rule in settings.rules do
+  for _,rule in ipairs(settings.rules) do
     if rule.use_settings then
       fann_train_callback(rule, task, scores[1], scores[2], tostring(sid))
     else
@@ -943,7 +948,7 @@ else
   settings.rules = rules
 
   -- Add training scripts
-  for k,rule in settings.rules do
+  for k,rule in pairs(settings.rules) do
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       load_scripts(cfg, ev_base, function(_, _)
           check_fanns(rule, cfg, ev_base)
