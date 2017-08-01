@@ -35,6 +35,7 @@ local default_options = {
     max_epoch = 1000,
     max_usages = 10,
     use_settings = false,
+    per_user = false,
     watch_interval = 60.0,
     mse = 0.001,
     autotrain = true,
@@ -335,6 +336,10 @@ local function fann_scores_filter(task)
      if sid then
       id = rule.prefix .. tostring(sid)
      end
+    end
+    if rule.per_user then
+      local r = task:get_principal_recipient()
+      id = id .. r
     end
 
     if fanns[id].fann then
@@ -881,14 +886,17 @@ end
 
 local function ann_push_vector(task)
   local scores = task:get_metric_score()
-  local sid = task:get_settings_id()
 
   for _,rule in ipairs(settings.rules) do
+    local sid = "0"
     if rule.use_settings then
-      fann_train_callback(rule, task, scores[1], scores[2], tostring(sid))
-    else
-      fann_train_callback(rule, task, scores[1], scores[2], "0")
+      sid = tostring(task:get_settings_id())
     end
+    if rule.per_user then
+      local r = task:get_principal_recipient()
+      sid = sid .. r
+    end
+    fann_train_callback(rule, task, scores[1], scores[2], sid)
   end
 end
 
