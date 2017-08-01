@@ -933,7 +933,7 @@ else
     rules[k]['redis'] = redis_params
     local cur = rules[k]
     -- Override defaults
-    for sk,v in r do
+    for sk,v in pairs(r) do
       cur[sk] = v
     end
     if not cur.prefix then
