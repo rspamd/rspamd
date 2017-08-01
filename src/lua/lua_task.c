@@ -342,6 +342,18 @@ LUA_FUNCTION_DEF (task, has_recipients);
 LUA_FUNCTION_DEF (task, get_recipients);
 
 /***
+ * @method task:get_principal_recipient()
+ * Returns a single string with so called `principal recipient` for a message. The order
+ * of check is the following:
+ *
+ * - deliver-to request header
+ * - the first recipient (envelope)
+ * - the first recipient (mime)
+ * @return {string} principal recipient
+ */
+LUA_FUNCTION_DEF (task, get_principal_recipient);
+
+/***
  * @method task:set_recipients([type], {rcpt1, rcpt2...})
  * Sets sender for a task. This function accepts table that will be converted to the address.
  * If some fields are missing they are subsequently reconstructed by this function. E.g. if you
@@ -841,6 +853,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, has_recipients),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, set_recipients),
+	LUA_INTERFACE_DEF (task, get_principal_recipient),
 	LUA_INTERFACE_DEF (task, has_from),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, set_from),
@@ -2550,6 +2563,28 @@ lua_task_set_from (lua_State *L)
 		}
 		else {
 			lua_pushboolean (L, false);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_principal_recipient (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *r;
+
+	if (task) {
+		r = rspamd_task_get_principal_recipient (task);
+		if (r != NULL) {
+			lua_pushstring (L, r);
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
 	else {
