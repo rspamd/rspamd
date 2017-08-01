@@ -456,15 +456,28 @@ local function fann_train_callback(rule, task, score, required_score, id)
 
   local learn_spam, learn_ham
 
-  if train_opts['spam_score'] then
-    learn_spam = score >= train_opts['spam_score']
+  if rule.autotrain then
+    if train_opts['spam_score'] then
+      learn_spam = score >= train_opts['spam_score']
+    else
+      learn_spam = score >= required_score
+    end
+    if train_opts['ham_score'] then
+      learn_ham = score <= train_opts['ham_score']
+    else
+      learn_ham = score < 0
+    end
   else
-    learn_spam = score >= required_score
-  end
-  if train_opts['ham_score'] then
-    learn_ham = score <= train_opts['ham_score']
-  else
-    learn_ham = score < 0
+    -- Train by request header
+    local hdr = task:get_request_header('ANN-Train')
+
+    if hdr then
+      if hdr:lower() == 'spam' then
+        learn_spam = true
+      elseif hdr:lower() == 'ham' then
+        learn_ham = true
+      end
+    end
   end
 
   if learn_spam or learn_ham then
