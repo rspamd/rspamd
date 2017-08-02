@@ -82,6 +82,7 @@ struct fuzzy_rule {
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_cryptobox_pubkey *peer_key;
 	double max_score;
+	guint32 min_bytes;
 	gboolean read_only;
 	gboolean skip_unknown;
 	gboolean fuzzy_images;
@@ -465,6 +466,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup (obj, "max_score")) != NULL) {
 		rule->max_score = ucl_obj_todouble (value);
+	}
+
+	if ((value = ucl_object_lookup (obj, "min_bytes")) != NULL) {
+		rule->min_bytes = ucl_obj_toint (value);
 	}
 
 	if ((value = ucl_object_lookup (obj,  "symbol")) != NULL) {
@@ -885,6 +890,15 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"Use direct hash for short texts",
 			"short_text_direct_hash",
 			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Override module default min bytes for this rule",
+			"min_bytes",
+			UCL_INT,
 			NULL,
 			0,
 			NULL,
@@ -2396,10 +2410,17 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	struct rspamd_mime_part *mime_part;
 	struct rspamd_image *image;
 	struct fuzzy_cmd_io *io, *cur;
-	guint i, j;
+	guint i, j, min_bytes = 0;
 	GPtrArray *res;
 
 	res = g_ptr_array_sized_new (task->parts->len + 1);
+
+	if (rule->min_bytes) {
+		min_bytes = rule->min_bytes;
+	}
+	else {
+		min_bytes = fuzzy_module_ctx->min_bytes;
+	}
 
 	if (c == FUZZY_STAT) {
 		io = fuzzy_cmd_stat (rule, c, flag, value, task->task_pool);
@@ -2423,13 +2444,13 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 			/* Check length of part */
 			fac = fuzzy_module_ctx->text_multiplier * part->content->len;
-			if ((double) fuzzy_module_ctx->min_bytes > fac) {
+			if ((double)min_bytes > fac) {
 				if (!rule->short_text_direct_hash) {
 					msg_info_task (
 							"<%s>, part is shorter than %d bytes: %.0f "
 									"(%d * %.2f bytes), "
 									"skip fuzzy check",
-							task->message_id, fuzzy_module_ctx->min_bytes,
+							task->message_id, min_bytes,
 							fac,
 							part->content->len,
 							fuzzy_module_ctx->text_multiplier);
@@ -2440,7 +2461,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							"<%s>, part is shorter than %d bytes: %.0f "
 									"(%d * %.2f bytes), "
 									"use direct hash",
-							task->message_id, fuzzy_module_ctx->min_bytes,
+							task->message_id, min_bytes,
 							fac,
 							part->content->len,
 							fuzzy_module_ctx->text_multiplier);
@@ -2523,8 +2544,8 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							image->height >= fuzzy_module_ctx->min_height) &&
 						(fuzzy_module_ctx->min_width == 0 ||
 							image->width >= fuzzy_module_ctx->min_width) &&
-						(fuzzy_module_ctx->min_bytes <= 0 ||
-								mime_part->parsed_data.len >= fuzzy_module_ctx->min_bytes)) {
+						(min_bytes == 0 ||
+								mime_part->parsed_data.len >= min_bytes)) {
 						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 								task->task_pool,
 								image->parent->digest);
@@ -2584,8 +2605,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 					!(mime_part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_IMAGE)) &&
 					mime_part->parsed_data.len > 0 &&
 					fuzzy_check_content_type (rule, mime_part->ct)) {
-				if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->parsed_data.len >=
-						fuzzy_module_ctx->min_bytes) {
+				if (min_bytes == 0 || mime_part->parsed_data.len >= min_bytes) {
 					io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 							task->task_pool,
 							mime_part->digest);
