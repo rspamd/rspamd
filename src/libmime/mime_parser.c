@@ -544,7 +544,18 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	str.str = (gchar *)start;
 	str.len = end - start;
 
-	hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
+	if (*start == '\n' || *start == '\r') {
+		/*
+		 * We have a part that starts from newline which means that
+		 * there are completely no headers in this part,
+		 * hence we assume it as a text part
+		 */
+		hdr_pos = 0;
+		body_pos = 0;
+	}
+	else {
+		hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
+	}
 
 	if (multipart->specific.mp.children == NULL) {
 		multipart->specific.mp.children = g_ptr_array_sized_new (2);
@@ -559,22 +570,22 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	g_ptr_array_add (multipart->specific.mp.children, npart);
 
 	if (hdr_pos > 0 && hdr_pos < str.len) {
-			npart->raw_headers_str = str.str;
-			npart->raw_headers_len = hdr_pos;
-			npart->raw_data.begin = start + body_pos;
-			npart->raw_data.len = (end - start) - body_pos;
+		npart->raw_headers_str = str.str;
+		npart->raw_headers_len = hdr_pos;
+		npart->raw_data.begin = start + body_pos;
+		npart->raw_data.len = (end - start) - body_pos;
 
-			if (task->raw_headers_content.len > 0) {
-				rspamd_mime_headers_process (task, npart->raw_headers,
-						npart->headers_order,
-						npart->raw_headers_str,
-						npart->raw_headers_len,
-						FALSE);
-			}
+		if (npart->raw_headers_len > 0) {
+			rspamd_mime_headers_process (task, npart->raw_headers,
+					npart->headers_order,
+					npart->raw_headers_str,
+					npart->raw_headers_len,
+					FALSE);
+		}
 
-			hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
-					task->task_pool,
-					"Content-Type", FALSE);
+		hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
+				task->task_pool,
+				"Content-Type", FALSE);
 
 	}
 	else {
@@ -606,8 +617,8 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 
 	if (sel == NULL) {
 		sel = rspamd_mempool_alloc0 (task->task_pool, sizeof (*sel));
-		RSPAMD_FTOK_ASSIGN (&sel->type, "application");
-		RSPAMD_FTOK_ASSIGN (&sel->subtype, "octet-stream");
+		RSPAMD_FTOK_ASSIGN (&sel->type, "text");
+		RSPAMD_FTOK_ASSIGN (&sel->subtype, "plain");
 	}
 
 	npart->ct = sel;
