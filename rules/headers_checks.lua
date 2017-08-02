@@ -970,7 +970,7 @@ rspamd_config.MIME_BASE64_TEXT = {
     return false
   end,
   description = 'Has text part encoded in base64',
-  score = 1.0,
+  score = 0.1,
   group = 'headers'
 }
 
