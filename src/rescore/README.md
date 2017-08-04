@@ -10,7 +10,7 @@ Run corpus-test.py to test emails and generate log.
 
 Example:
 
-	`./corpus-test.py --ham test-ham --spam test-spam -o test.log`
+	./corpus-test.py --ham test-ham --spam test-spam -o test.log
 
 Use ./corpus-test.py -h to get more info about usage.
 
@@ -41,7 +41,7 @@ Use statistics.py to infer useful information from the log file generated in pre
 
 ### Example:
 
-	`./statistics.py -t 10 < test.log > stats.log`
+	./statistics.py -t 10 < test.log > stats.log
 
 Use ./statistics.py -h to get more info about usage
 
@@ -49,23 +49,23 @@ Statistics contains two different information - File stats and symbol stats.
 
 ### File stats:
 
-Number of emails: Number of emails read from log
-Number of spam: Number of spam emails read from log
-Number of ham: Number of ham emails read from log
-Spam percentage: Percentage of spam emails read from log
-Ham percentage: Percentage of ham emails read from log
-False positive rate: Percentage of ham emails that were falsely classified as spam
-False negative rate: Percentage of spam emails that were falsely classified as ham
+**Number of emails**: Number of emails read from log  
+**Number of spam**: Number of spam emails read from log  
+**Number of ham**: Number of ham emails read from log  
+**Spam percentage**: Percentage of spam emails read from log  
+**Ham percentage**: Percentage of ham emails read from log  
+**False positive rate**: Percentage of ham emails that were falsely classified as spam  
+**False negative rate**: Percentage of spam emails that were falsely classified as ham  
 
 ### Symbol stats:
 
-Each line presents statistics about a symbol read from the log.
+Each line presents statistics about a symbol read from the log.  
 
-Overall  : % of emails hit by a symbol
-Spam %   : % of spam emails hit by a symbol
-Ham %    : % of ham emails hit by a symbol
-S/O      : % spam emails hit over all its hits
-	   (i.e What is the probability that it hits a spam message when it is fired)
+**Overall**: % of emails hit by a symbol  
+**Spam**: % of spam emails hit by a symbol  
+**Ham**: % of ham emails hit by a symbol  
+**S/O**: % spam emails hit over all its hits  
+	   (i.e What is the probability that it hits a spam message when it is fired)  
 
 
 # Rescoring
@@ -74,4 +74,4 @@ Use rescore.py on logs generated from corpus-test to find optimal symbol scores 
 
 ### Example:
 	
-	`./rescore.py -l logs/ -r 0.001 -e 500 -o scores.txt`
+	./rescore.py -l logs/ -r 0.001 -e 500 -o scores.txt
