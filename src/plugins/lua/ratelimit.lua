@@ -481,7 +481,9 @@ local function rate_test_set(task, func)
   local rcpts = task:get_recipients()
   local rcpts_user = {}
   if rcpts then
-    fun.each(function(r) table.insert(rcpts_user, r['user']) end, rcpts)
+    fun.each(function(r)
+      fun.each(function(type) table.insert(rcpts_user, r[type]) end, {'user', 'addr'})
+    end, rcpts)
     if fun.any(
       function(r)
         if fun.any(function(w) return r == w end, whitelisted_rcpts) then return true end
