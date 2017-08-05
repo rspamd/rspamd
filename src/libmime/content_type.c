@@ -427,7 +427,16 @@ rspamd_content_type_parse (const gchar *in,
 						res->flags |= RSPAMD_CONTENT_TYPE_TEXT|RSPAMD_CONTENT_TYPE_DSN;
 					}
 					else {
-						res->flags |= RSPAMD_CONTENT_TYPE_MESSAGE;
+						RSPAMD_FTOK_ASSIGN (&srch, "notification");
+
+						if (rspamd_substring_search_caseless (res->subtype.begin,
+								res->subtype.len, srch.begin, srch.len) != -1) {
+							res->flags |= RSPAMD_CONTENT_TYPE_TEXT|
+									RSPAMD_CONTENT_TYPE_DSN;
+						}
+						else {
+							res->flags |= RSPAMD_CONTENT_TYPE_MESSAGE;
+						}
 					}
 				}
 			}
