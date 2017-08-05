@@ -1067,6 +1067,7 @@ rspamd_protocol_output_profiling (struct rspamd_task *task,
 
 struct rspamd_saved_protocol_reply {
 	ucl_object_t *obj;
+	guint metric_changes;
 	enum rspamd_protocol_flags flags;
 };
 
@@ -1101,12 +1102,43 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		flags ^= cached->flags;
 		cached->flags |= flags;
 
+		if (task->result &&
+				cached->metric_changes != task->result->changes) {
+			msg_info_task ("found metric modifications (%d) before we have "
+					"generated protocol results (%d), regenerate them",
+					task->result->changes, cached->metric_changes);
+
+			flags |= RSPAMD_PROTOCOL_METRICS;
+
+			if (task->cmd == CMD_CHECK_V2) {
+				ucl_object_delete_key (top, "symbols");
+			}
+			else {
+				ucl_object_delete_key (top, DEFAULT_METRIC);
+			}
+
+			/* That all is related to metric unfortunately */
+			ucl_object_delete_key (top, "is_spam");
+			ucl_object_delete_key (top, "is_skipped");
+			ucl_object_delete_key (top, "score");
+			ucl_object_delete_key (top, "required_score");
+			ucl_object_delete_key (top, "action");
+			ucl_object_delete_key (top, "subject");
+		}
+		if (task->result) {
+			cached->metric_changes = task->result->changes;
+		}
 	}
 	else {
 		top = ucl_object_typed_new (UCL_OBJECT);
 		cached = rspamd_mempool_alloc (task->task_pool, sizeof (*cached));
 		cached->obj = top;
 		cached->flags = flags;
+
+		if (task->result) {
+			cached->metric_changes = task->result->changes;
+		}
+
 		rspamd_mempool_set_variable (task->task_pool, varname,
 				cached, rspamd_protocol_cached_dtor);
 

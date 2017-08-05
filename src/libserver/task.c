@@ -780,6 +780,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_DONE:
+		/* Second run of composites processing */
+		rspamd_make_composites (task);
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		break;
 
