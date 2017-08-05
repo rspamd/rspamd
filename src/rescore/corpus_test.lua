@@ -89,10 +89,16 @@ local args = parser:parse()
 
 local results = {}
 
+local start_time = os.time()
+local no_of_ham = 0
+local no_of_spam = 0
+
 if args.ham then
    io.write("Scanning ham corpus...\n")
    local ham_results = scan_email(path, args.n, args.ham)
    ham_results = scan_results_to_logs(ham_results, HAM)
+
+   no_of_ham = #ham_results
    
    for _, result in pairs(ham_results) do
       table.insert(results, result)
@@ -103,6 +109,8 @@ if args.spam then
    io.write("Scanning spam corpus...\n")
    local spam_results = scan_email(path, args.n, args.spam)
    spam_results = scan_results_to_logs(spam_results, SPAM)
+
+   no_of_spam = #spam_results
    
    for _, result in pairs(spam_results) do
       table.insert(results, result)
@@ -111,3 +119,9 @@ end
 
 io.write(string.format("Writing results to %s\n", args.output))
 write_results(results, args.output)
+
+io.write("\nStats: \n")
+io.write(string.format("Elapsed time: %ds\n", os.time() - start_time))
+io.write(string.format("No of ham: %d\n", no_of_ham))
+io.write(string.format("No of spam: %d\n", no_of_spam))
+
