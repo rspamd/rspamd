@@ -186,7 +186,7 @@ local function mx_check(task)
         task = task,
         forced = true
       })
-      task:insert_result(settings.symbol_no_mx, 1.0, err)
+      task:insert_result(settings.symbol_no_mx, 0.0, err)
     else
       table.sort(results, function(r1, r2)
         return r1['priority'] < r2['priority']
