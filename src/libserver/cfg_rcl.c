@@ -1851,6 +1851,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, log_error_elt_maxlen),
 			RSPAMD_CL_FLAG_UINT,
 			"Size of each element in error log buffer (1000 by default)");
+	rspamd_rcl_add_default_handler (sub,
+			"log_usec",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, log_usec),
+			0,
+			"Use microseconds resolution for timestamps");
 	/**
 	 * Options section
 	 */

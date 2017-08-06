@@ -833,9 +833,9 @@ file_log_function (const gchar *module, const gchar *id,
 		const gchar *message,
 		gpointer arg)
 {
-	gchar tmpbuf[256], timebuf[32], modulebuf[64];
+	gchar tmpbuf[256], timebuf[64], modulebuf[64];
 	gchar *m;
-	time_t now;
+	gdouble now;
 	struct tm *tms;
 	struct iovec iov[5];
 	gulong r = 0, mr = 0;
@@ -851,7 +851,7 @@ file_log_function (const gchar *module, const gchar *id,
 
 	/* Check throttling due to write errors */
 	if (!(level_flags & RSPAMD_LOG_FORCED) && rspamd_log->throttling) {
-		now = time (NULL);
+		now = rspamd_get_calendar_ticks ();
 		if (rspamd_log->throttling_time != now) {
 			rspamd_log->throttling_time = now;
 			got_time = TRUE;
@@ -973,14 +973,25 @@ file_log_function (const gchar *module, const gchar *id,
 
 	if (rspamd_log->cfg->log_extended) {
 		if (!got_time) {
-			now = time (NULL);
+			now = rspamd_get_calendar_ticks ();
 		}
 
 		/* Format time */
 		if (!rspamd_log->cfg->log_systemd) {
-			tms = localtime (&now);
+			time_t sec = now;
+			gsize r;
 
-			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+			tms = localtime (&sec);
+			r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+
+			if (rspamd_log->cfg->log_usec) {
+				gchar usec_buf[16];
+
+				rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
+						now - (gdouble)sec);
+				rspamd_snprintf (timebuf + r, sizeof (timebuf) - r,
+						"%s", usec_buf + 1);
+			}
 		}
 
 		cptype = g_quark_to_string (rspamd_log->process_type);
