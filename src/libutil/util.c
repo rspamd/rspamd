@@ -1902,14 +1902,21 @@ gdouble
 rspamd_get_calendar_ticks (void)
 {
 	gdouble res;
+#ifdef HAVE_CLOCK_GETTIME
+	struct timespec ts;
+
+	clock_gettime (CLOCK_REALTIME, &ts);
+	res = ts_to_double (&ts);
+#else
 	struct timeval tv;
 
 	if (gettimeofday (&tv, NULL) == 0) {
-		res = (gdouble)tv.tv_sec + tv.tv_usec / 1e6f;
+		res = tv_to_double (&tv);
 	}
 	else {
 		res = time (NULL);
 	}
+#endif
 
 	return res;
 }

@@ -207,6 +207,7 @@ void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data);
 #define tv_to_double(tv) ((double)(tv)->tv_sec + (tv)->tv_usec / 1.0e6)
 #define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
 	(ts)->tv_nsec / 1000LLU)
+#define ts_to_double(tv) ((double)(tv)->tv_sec + (tv)->tv_nsec / 1.0e9)
 
 /**
  * Try to allocate a file on filesystem (using fallocate or posix_fallocate)
