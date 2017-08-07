@@ -639,6 +639,14 @@ LUA_FUNCTION_DEF (config, set_peak_cb);
  */
 LUA_FUNCTION_DEF (config, get_cpu_flags);
 
+/***
+ * @method rspamd_config:has_torch()
+ * Returns true if Rspamd is compiled with torch support and the runtime CPU
+ * supports sse4.2 required for torch.
+ * @return {boolean} true if torch is compiled and supported
+ */
+LUA_FUNCTION_DEF (config, has_torch);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -685,6 +693,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_doc),
 	LUA_INTERFACE_DEF (config, add_example),
 	LUA_INTERFACE_DEF (config, set_peak_cb),
+	LUA_INTERFACE_DEF (config, get_cpu_flags),
 	LUA_INTERFACE_DEF (config, get_cpu_flags),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
@@ -2861,6 +2870,33 @@ lua_config_get_cpu_flags (lua_State *L)
 			lua_pushboolean (L, true);
 			lua_settable (L, -3);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_has_torch (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_cryptobox_library_ctx *crypto_ctx;
+
+	if (cfg != NULL) {
+		crypto_ctx = cfg->libs_ctx->crypto_ctx;
+#ifndef WITH_TORCH
+		lua_pushboolean (L, false);
+		(void)crypto_ctx;
+#else
+		if (crypto_ctx->cpu_config & CPUID_SSE42) {
+			lua_pushboolean (L, true);
+		}
+		else {
+			lua_pushboolean (L, false);
+		}
+#endif
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
