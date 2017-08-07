@@ -35,6 +35,10 @@
 #include "libserver/milter.h"
 #include "contrib/zstd/zstd.h"
 
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h> /* for TCP_NODELAY */
+#endif
+
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
 #define DEFAULT_RETRIES 5
@@ -2005,6 +2009,14 @@ proxy_accept_socket (gint fd, short what, void *arg)
 		msg_info_session ("accepted milter connection from %s port %d",
 				rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr));
+
+#ifdef TCP_NODELAY
+		gint sopt = 1;
+
+		if (setsockopt (nfd, SOL_TCP, TCP_NODELAY, &sopt, sizeof (sopt)) == -1) {
+			msg_warn_session ("cannot set TCP_NODELAY: %s", strerror (errno));
+		}
+#endif
 
 		rspamd_milter_handle_socket (nfd, NULL,
 				session->pool,

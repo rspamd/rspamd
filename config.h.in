@@ -55,6 +55,7 @@
 #cmakedefine HAVE_NANOSLEEP      1
 #cmakedefine HAVE_NETDB_H        1
 #cmakedefine HAVE_NETINET_IN_H   1
+#cmakedefine HAVE_NETINET_TCP_H  1
 #cmakedefine HAVE_NFTW           1
 #cmakedefine HAVE_OASYNC         1
 #cmakedefine HAVE_ONOFOLLOW      1
