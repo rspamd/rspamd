@@ -2011,6 +2011,11 @@ proxy_accept_socket (gint fd, short what, void *arg)
 				rspamd_inet_address_get_port (addr));
 
 #ifdef TCP_NODELAY
+
+	#ifndef SOL_TCP
+	#define SOL_TCP IPPROTO_TCP
+	#endif
+
 		gint sopt = 1;
 
 		if (setsockopt (nfd, SOL_TCP, TCP_NODELAY, &sopt, sizeof (sopt)) == -1) {
