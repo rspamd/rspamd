@@ -704,7 +704,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 
 static gint
 rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
-		gchar const **end, gboolean strict)
+		gchar const **end, gboolean strict, gboolean *obscured)
 {
 	const gchar *p = str, *c = str, *last = str + len, *slash = NULL;
 	gchar t;
@@ -719,6 +719,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		parse_semicolon,
 		parse_user,
 		parse_at,
+		parse_multiple_at,
 		parse_password_start,
 		parse_password,
 		parse_domain,
@@ -829,8 +830,17 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				else if (t == '@') {
 					/* No password */
 					if (p - c == 0) {
-						goto out;
+						/* We have multiple at in fact */
+						st = parse_multiple_at;
+						user_seen = TRUE;
+
+						if (obscured) {
+							*obscured = TRUE;
+						}
+
+						continue;
 					}
+
 					SET_U (u, UF_USERINFO);
 					st = parse_at;
 				}
@@ -838,6 +848,20 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					goto out;
 				}
 				p++;
+				break;
+			case parse_multiple_at:
+				if (t != '@') {
+					if (p - c == 0) {
+						goto out;
+					}
+
+					/* For now, we ignore all that stuff as it is bogus */
+					SET_U (u, UF_USERINFO);
+					st = parse_at;
+				}
+				else {
+					p ++;
+				}
 				break;
 			case parse_password_start:
 				if (t == '@') {
@@ -1488,6 +1512,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	const gchar *end;
 	guint i, complen, ret;
 	gsize unquoted_len = 0;
+	gboolean obscured = FALSE;
 
 	memset (uri, 0, sizeof (*uri));
 	memset (&u, 0, sizeof (u));
@@ -1505,11 +1530,11 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 			ret = rspamd_mailto_parse (&u, uristring, len, &end, TRUE);
 		}
 		else {
-			ret = rspamd_web_parse (&u, uristring, len, &end, TRUE);
+			ret = rspamd_web_parse (&u, uristring, len, &end, TRUE, &obscured);
 		}
 	}
 	else {
-		ret = rspamd_web_parse (&u, uristring, len, &end, TRUE);
+		ret = rspamd_web_parse (&u, uristring, len, &end, TRUE, &obscured);
 	}
 
 	if (ret != 0) {
@@ -1563,10 +1588,14 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		return URI_ERRNO_HOST_MISSING;
 	}
 
-	/* Now decode url symbols */
+	if (obscured) {
+		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+	}
+
 	uri->string = p;
 	uri->urllen = len;
 
+	/* Now decode url symbols */
 	unquoted_len = rspamd_url_decode (uri->string,
 			uri->string,
 			uri->protocollen);
@@ -1933,7 +1962,7 @@ url_web_end (struct url_callback_data *cb,
 		len = MIN (len, match->newline_pos - pos);
 	}
 
-	if (rspamd_web_parse (NULL, pos, len, &last, FALSE) != 0) {
+	if (rspamd_web_parse (NULL, pos, len, &last, FALSE, NULL) != 0) {
 		return FALSE;
 	}
 
