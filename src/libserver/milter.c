@@ -1134,6 +1134,7 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_REPLYCODE:
 	case RSPAMD_MILTER_ADDRCPT:
 	case RSPAMD_MILTER_DELRCPT:
+	case RSPAMD_MILTER_CHGFROM:
 		/* Single GString * argument */
 		value = va_arg (ap, GString *);
 		SET_COMMAND (cmd, value->len + 1, reply, pos);
