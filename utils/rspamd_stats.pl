@@ -74,6 +74,8 @@ my %scanTime = (
 );
 my %bidir_match;
 
+foreach ( $startTime, $endTime ) { $_ = &normalized_time($_) }
+
 # Convert bidirectional symbols
 foreach my $s (@symbols_bidirectional) {
   $bidir_match{$s} = {
@@ -427,6 +429,16 @@ sub log_time_format {
     return $format;
 }
 
+sub normalized_time {
+    return undef
+      if !defined( $_ = shift );
+
+    /^\d\d(?::\d\d){0,2}$/
+      ? sprintf '%04d-%02d-%02d %s', 1900 + (localtime)[5], 1 + (localtime)[4],
+      (localtime)[3], $_
+      : $_;
+}
+
 sub numeric {
     $a =~ /\.(\d+)\./;
     my $a_num = $1;
@@ -527,13 +539,15 @@ Exclude log lines if certain symbols are fired (e.g. GTUBE). You may specify thi
 
 Select log entries after this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
 truncated to any desired accuracy). If used with B<--end> select entries between
-B<--start> and B<--end>.
+B<--start> and B<--end>. The omitted date defaults to the current date if you
+supply the time.
 
 =item B<--end>
 
 Select log entries before this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
 truncated to any desired accuracy). If used with B<--start> select entries between
-B<--start> and B<--end>.
+B<--start> and B<--end>. The omitted date defaults to the current date if you
+supply the time.
 
 =item B<--help>
 
