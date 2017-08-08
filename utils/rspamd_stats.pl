@@ -206,6 +206,9 @@ say '=' x 80;
 exit;
 
 sub ProcessLog {
+  my $ts_format = &log_time_format($rspamd_log);
+  my $is_syslog = defined $ts_format && $ts_format eq 'syslog';
+
   while(<$rspamd_log>) {
     if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
       $enabled = 1;
@@ -214,7 +217,10 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
-      my $ts = join ' ', ( split /\s+/ )[ 0 .. 1 ];
+      my $ts =
+        ($is_syslog)
+        ? syslog2iso( join ' ', ( split /\s+/ )[ 0 .. 2 ] )
+        : join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
       next if ( $ts lt $startTime );
       next if ( defined $endTime && $ts gt $endTime );
@@ -399,6 +405,28 @@ sub GetLogfilesList {
     return @logs;
 }
 
+sub log_time_format {
+    my $fh = shift;
+    my $format;
+    while (<$fh>) {
+
+        # 2017-08-08 00:00:01 #66984(
+        # 2017-08-08 00:00:01.001 #66984(
+        if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3})? #\d+\(/) {
+            $format = 'rspamd';
+            last;
+        }
+
+        # Aug  8 00:02:50 #66986(
+        elsif (/^\w{3} (?:\s\d|\d\d) \d\d:\d\d:\d\d #\d+\(/) {
+            $format = 'syslog';
+            last;
+        }
+    }
+    seek( $fh, 0, 0 );
+    return $format;
+}
+
 sub numeric {
     $a =~ /\.(\d+)\./;
     my $a_num = $1;
@@ -406,6 +434,18 @@ sub numeric {
     my $b_num = $1;
 
     $a_num <=> $b_num;
+}
+
+# Convert syslog timestamp to "ISO 8601 like" format.
+# Using current year, as syslog does not record the year (nor the timezone)
+sub syslog2iso {
+    my %month_map;
+    @month_map{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = 0 .. 11;
+
+    my ( $month, @t ) =
+      $_[0] =~ m/^(\w{3}) \s\s? (\d\d?) \s (\d\d):(\d\d):(\d\d)/x;
+    sprintf '%04d-%02d-%02d %02d:%02d:%02d', 1900 + (localtime)[5],
+      $month_map{$month} + 1, @t;
 }
 
 __END__
