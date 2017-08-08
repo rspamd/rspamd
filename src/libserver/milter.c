@@ -1458,6 +1458,16 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 				}
 			}
 		}
+
+		elt = ucl_object_lookup (obj, "change_from");
+
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			hvalue = g_string_new (ucl_object_tostring (elt));
+			rspamd_milter_send_action (session,
+					RSPAMD_MILTER_CHGFROM,
+					hvalue);
+			g_string_free (hvalue, TRUE);
+		}
 	}
 
 	if (action == METRIC_ACTION_ADD_HEADER) {
