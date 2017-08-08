@@ -74,6 +74,8 @@ my %scanTime = (
 );
 my %bidir_match;
 
+foreach ( $startTime, $endTime ) { $_ = &normalized_time($_) }
+
 # Convert bidirectional symbols
 foreach my $s (@symbols_bidirectional) {
   $bidir_match{$s} = {
@@ -206,6 +208,9 @@ say '=' x 80;
 exit;
 
 sub ProcessLog {
+  my $ts_format = &log_time_format($rspamd_log);
+  my $is_syslog = defined $ts_format && $ts_format eq 'syslog';
+
   while(<$rspamd_log>) {
     if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
       $enabled = 1;
@@ -214,7 +219,10 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
-      my $ts = join ' ', ( split /\s+/ )[ 0 .. 2 ];
+      my $ts =
+        ($is_syslog)
+        ? syslog2iso( join ' ', ( split /\s+/ )[ 0 .. 2 ] )
+        : join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
       next if ( $ts lt $startTime );
       next if ( defined $endTime && $ts gt $endTime );
@@ -399,6 +407,38 @@ sub GetLogfilesList {
     return @logs;
 }
 
+sub log_time_format {
+    my $fh = shift;
+    my $format;
+    while (<$fh>) {
+
+        # 2017-08-08 00:00:01 #66984(
+        # 2017-08-08 00:00:01.001 #66984(
+        if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3})? #\d+\(/) {
+            $format = 'rspamd';
+            last;
+        }
+
+        # Aug  8 00:02:50 #66986(
+        elsif (/^\w{3} (?:\s\d|\d\d) \d\d:\d\d:\d\d #\d+\(/) {
+            $format = 'syslog';
+            last;
+        }
+    }
+    seek( $fh, 0, 0 );
+    return $format;
+}
+
+sub normalized_time {
+    return undef
+      if !defined( $_ = shift );
+
+    /^\d\d(?::\d\d){0,2}$/
+      ? sprintf '%04d-%02d-%02d %s', 1900 + (localtime)[5], 1 + (localtime)[4],
+      (localtime)[3], $_
+      : $_;
+}
+
 sub numeric {
     $a =~ /\.(\d+)\./;
     my $a_num = $1;
@@ -406,6 +446,22 @@ sub numeric {
     my $b_num = $1;
 
     $a_num <=> $b_num;
+}
+
+# Convert syslog timestamp to "ISO 8601 like" format
+# using current year as syslog does not record the year (nor the timezone)
+# or the last year if the guessed time is in the future.
+sub syslog2iso {
+    my %month_map;
+    @month_map{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = 0 .. 11;
+
+    my ( $month, @t ) =
+      $_[0] =~ m/^(\w{3}) \s\s? (\d\d?) \s (\d\d):(\d\d):(\d\d)/x;
+    my $epoch =
+      timelocal( ( reverse @t ), $month_map{$month}, 1900 + (localtime)[5] );
+    sprintf '%04d-%02d-%02d %02d:%02d:%02d',
+      1900 + (localtime)[5] - ( $epoch > time ),
+      $month_map{$month} + 1, @t;
 }
 
 __END__
@@ -487,13 +543,15 @@ Exclude log lines if certain symbols are fired (e.g. GTUBE). You may specify thi
 
 Select log entries after this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
 truncated to any desired accuracy). If used with B<--end> select entries between
-B<--start> and B<--end>.
+B<--start> and B<--end>. The omitted date defaults to the current date if you
+supply the time.
 
 =item B<--end>
 
 Select log entries before this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
 truncated to any desired accuracy). If used with B<--start> select entries between
-B<--start> and B<--end>.
+B<--start> and B<--end>. The omitted date defaults to the current date if you
+supply the time.
 
 =item B<--help>
 
