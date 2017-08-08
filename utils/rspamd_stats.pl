@@ -448,15 +448,19 @@ sub numeric {
     $a_num <=> $b_num;
 }
 
-# Convert syslog timestamp to "ISO 8601 like" format.
-# Using current year, as syslog does not record the year (nor the timezone)
+# Convert syslog timestamp to "ISO 8601 like" format
+# using current year as syslog does not record the year (nor the timezone)
+# or the last year if the guessed time is in the future.
 sub syslog2iso {
     my %month_map;
     @month_map{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = 0 .. 11;
 
     my ( $month, @t ) =
       $_[0] =~ m/^(\w{3}) \s\s? (\d\d?) \s (\d\d):(\d\d):(\d\d)/x;
-    sprintf '%04d-%02d-%02d %02d:%02d:%02d', 1900 + (localtime)[5],
+    my $epoch =
+      timelocal( ( reverse @t ), $month_map{$month}, 1900 + (localtime)[5] );
+    sprintf '%04d-%02d-%02d %02d:%02d:%02d',
+      1900 + (localtime)[5] - ( $epoch > time ),
       $month_map{$month} + 1, @t;
 }
 
