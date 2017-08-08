@@ -581,7 +581,7 @@ dkim_module_load_key_format (lua_State *L, struct rspamd_task *task,
 			ret = rspamd_dkim_sign_key_load (key, keylen, kt, &err);
 
 			if (ret == NULL) {
-				msg_err_task ("cannot load dkim key: %e", err);
+				msg_err_task ("cannot load private key: %e", err);
 				g_error_free (err);
 
 				return NULL;
