@@ -178,6 +178,8 @@ local function prepare_dkim_signing(N, task, settings)
     local data = settings.path_map:get_key(dkim_domain)
     if data then
       p.key = data
+    else
+      return false,{}
     end
   end
 
