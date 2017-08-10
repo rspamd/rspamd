@@ -74,6 +74,7 @@ worker_t rspamd_proxy_worker = {
 
 struct rspamd_http_upstream {
 	gchar *name;
+	gchar *settings_id;
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
 	gdouble timeout;
@@ -181,6 +182,7 @@ struct rspamd_proxy_session {
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	struct rspamd_milter_session *client_milter_conn;
+	struct rspamd_http_upstream *backend;
 	gpointer map;
 	gchar *fname;
 	gpointer shmem_ref;
@@ -429,6 +431,11 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	elt = ucl_object_lookup (obj, "timeout");
 	if (elt) {
 		ucl_object_todouble_safe (elt, &up->timeout);
+	}
+
+	elt = ucl_object_lookup_any (obj, "settings", "settings_id", NULL);
+	if (elt && ucl_object_type (elt) == UCL_STRING) {
+		up->settings_id = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
 	/*
@@ -1646,6 +1653,12 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 			NULL, (event_finalizer_t )rspamd_task_free, task);
 	data = rspamd_http_message_get_body (msg, &len);
 
+	if (session->backend->settings_id) {
+		rspamd_http_message_remove_header (msg, "Settings-ID");
+		rspamd_http_message_add_header (msg, "Settings-ID",
+				session->backend->settings_id);
+	}
+
 	/* Process message */
 	if (!rspamd_protocol_handle_request (task, msg)) {
 		msg_err_task ("cannot handle request: %e", task->err);
@@ -1710,6 +1723,8 @@ proxy_send_master_message (struct rspamd_proxy_session *session)
 		goto err;
 	}
 	else {
+		session->backend = backend;
+
 		if (backend->self_scan) {
 			return rspamd_proxy_self_scan (session);
 		}
@@ -1763,6 +1778,12 @@ retry:
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
 			rspamd_http_connection_set_key (session->master_conn->backend_conn,
 					session->ctx->local_key);
+		}
+
+		if (backend->settings_id != NULL) {
+			rspamd_http_message_remove_header (msg, "Settings-ID");
+			rspamd_http_message_add_header (msg, "Settings-ID",
+					backend->settings_id);
 		}
 
 		if (backend->local ||
