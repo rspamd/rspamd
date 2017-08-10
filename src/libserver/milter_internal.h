@@ -66,6 +66,7 @@ struct rspamd_milter_private {
 	enum rspamd_milter_io_state state;
 	int fd;
 	gboolean discard_on_reject;
+	gboolean no_action;
 };
 
 enum rspamd_milter_io_cmd {
@@ -151,4 +152,5 @@ enum rspamd_milter_connect_proto {
 #define RSPAMD_MILTER_TEMPFAIL_MESSAGE "Try again later"
 #define RSPAMD_MILTER_SPAM_HEADER "X-Spam"
 #define RSPAMD_MILTER_DKIM_HEADER "DKIM-Signature"
+#define RSPAMD_MILTER_ACTION_HEADER "X-Rspamd-Action"
 #endif

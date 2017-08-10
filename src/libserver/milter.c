@@ -1482,6 +1482,12 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 				priv->discard_on_reject = FALSE;
 			}
 		}
+
+		elt = ucl_object_lookup (obj, "no_action");
+
+		if (elt && ucl_object_type (elt) == UCL_BOOLEAN) {
+			priv->no_action = ucl_object_toboolean (elt);
+		}
 	}
 
 	if (action == METRIC_ACTION_ADD_HEADER) {
@@ -1595,6 +1601,21 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	}
 
 	if (processed) {
+		goto cleanup;
+	}
+
+	if (priv->no_action) {
+		msg_info_milter ("do not apply action %s, no_action is set",
+				str_action);
+		hname = g_string_new (RSPAMD_MILTER_ACTION_HEADER);
+		hvalue = g_string_new (str_action);
+
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ADDHEADER,
+				hname, hvalue);
+		g_string_free (hname, TRUE);
+		g_string_free (hvalue, TRUE);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+
 		goto cleanup;
 	}
 
