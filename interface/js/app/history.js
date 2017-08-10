@@ -64,7 +64,7 @@ function($, _, Humanize) {
                     Object.keys(item.symbols).map(function(key) {
                         var sym = item.symbols[key];
 
-                        sym.name = EscapeHTML(sym.name);
+                        sym.name = EscapeHTML(key);
                         sym.description = EscapeHTML(sym.description);
 
                         if (sym.options) {
