@@ -1025,6 +1025,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->ev_base = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
 	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
+	priv->discard_on_reject = milter_ctx->discard_on_reject;
 
 	if (pool) {
 		/* Copy tag */
@@ -1415,6 +1416,7 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 {
 	const ucl_object_t *elt, *cur, *cur_elt;
 	ucl_object_iter_t it;
+	struct rspamd_milter_private *priv = session->priv;
 	GString *hname, *hvalue;
 
 	if (obj && ucl_object_type (obj) == UCL_OBJECT) {
@@ -1467,6 +1469,18 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 					RSPAMD_MILTER_CHGFROM,
 					hvalue);
 			g_string_free (hvalue, TRUE);
+		}
+
+		elt = ucl_object_lookup (obj, "reject");
+
+		if (elt && ucl_object_type (elt) == UCL_STRING) {
+			if (strcmp (ucl_object_tostring (elt), "discard") == 0) {
+				priv->discard_on_reject = TRUE;
+				msg_info_milter ("discard message instead of rejection");
+			}
+			else {
+				priv->discard_on_reject = FALSE;
+			}
 		}
 	}
 
@@ -1521,6 +1535,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 {
 	const ucl_object_t *elt;
 	struct rspamd_milter_private *priv = session->priv;
+	const gchar *str_action;
 	gint action = METRIC_ACTION_REJECT;
 	rspamd_fstring_t *xcode = NULL, *rcode = NULL, *reply = NULL;
 	GString *hname, *hvalue;
@@ -1542,7 +1557,8 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		return;
 	}
 
-	rspamd_action_from_str (ucl_object_tostring (elt), &action);
+	str_action = ucl_object_tostring (elt);
+	rspamd_action_from_str (str_action, &action);
 
 	elt = ucl_object_lookup (results, "messages");
 	if (elt) {
@@ -1584,7 +1600,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 
 	switch (action) {
 	case METRIC_ACTION_REJECT:
-		if (milter_ctx->discard_on_reject) {
+		if (priv->discard_on_reject) {
 			rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
 		}
 		else {

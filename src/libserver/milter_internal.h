@@ -65,6 +65,7 @@ struct rspamd_milter_private {
 	void *ud;
 	enum rspamd_milter_io_state state;
 	int fd;
+	gboolean discard_on_reject;
 };
 
 enum rspamd_milter_io_cmd {
