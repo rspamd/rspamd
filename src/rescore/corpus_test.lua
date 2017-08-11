@@ -1,6 +1,7 @@
 local argparse = require "argparse"
 local json = require "json"
 local inspect = require "inspect"
+local utility = require "utility"
 
 local HAM = "HAM"
 local SPAM = "SPAM"
@@ -11,16 +12,6 @@ local function scan_email(path, n_parellel, path)
    result = result:read("*all")
    return result
 end   
-
-local function string_split(str, delimiter)   
-   local t={}; i = 1
-   for s in string.gmatch(str, "([^"..delimiter.."]+)") do
-      t[i] = s
-      i = i + 1
-   end
-
-   return t
-end
 
 local function write_results(results, file)
    
@@ -64,7 +55,7 @@ local function scan_results_to_logs(results, actual_email_type)
 
    logs = {}
    
-   results = string_split(results, "\n")
+   results = utility.string_split(results, "\n")
 
    for _, result in pairs(results) do
       local result = encoded_json_to_log(result)
