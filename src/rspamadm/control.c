@@ -82,6 +82,9 @@ rspamadm_control_help (gboolean full_help)
 				"stat - show statistics\n"
 				"reload - reload workers dynamic data\n"
 				"reresolve - resolve upstreams addresses\n";
+				"recompile - recompile hyperscan regexes\n";
+				"fuzzystat - show fuzzy statistics\n";
+				"fuzzysync - immediately sync fuzzy database to storage\n";
 	}
 	else {
 		help_str = "Manage rspamd main control interface";
