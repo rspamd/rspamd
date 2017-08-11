@@ -146,7 +146,7 @@ systemctl --no-reload preset %{name}.service >/dev/null 2>&1 || :
 %if 0%{?el6}
 /sbin/chkconfig --add %{name}
 %else
-%{__chown} %{rspamd_user}:%{rspamd_group} %{buildroot}%{rspamd_logdir}
+%{__chown} %{rspamd_user}:%{rspamd_group} %{rspamd_logdir}
 %endif
 
 %preun
