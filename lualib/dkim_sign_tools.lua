@@ -156,6 +156,24 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
+  if not p.selector and settings.selector_map then
+    local data = settings.selector_map:get_key(dkim_domain)
+    if data then
+      p.selector = data
+    elseif not settings.try_fallback then
+      return false,{}
+    end
+  end
+
+  if not p.key and settings.path_map then
+    local data = settings.path_map:get_key(dkim_domain)
+    if data then
+      p.key = data
+    elseif not settings.try_fallback then
+      return false,{}
+    end
+  end
+
   if not p.key then
     if not settings.use_redis then
       p.key = settings.path
@@ -166,22 +184,6 @@ local function prepare_dkim_signing(N, task, settings)
     p.selector = settings.selector
   end
   p.domain = dkim_domain
-
-  if not p.selector and settings.selector_map then
-    local data = settings.selector_map:get_key(dkim_domain)
-    if data then
-      p.selector = data
-    end
-  end
-
-  if not p.key and settings.path_map then
-    local data = settings.path_map:get_key(dkim_domain)
-    if data then
-      p.key = data
-    else
-      return false,{}
-    end
-  end
 
   return true,p
 end
