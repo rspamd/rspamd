@@ -41,6 +41,7 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_PREFILTER = (1 << 9),
 	SYMBOL_TYPE_POSTFILTER = (1 << 10),
 	SYMBOL_TYPE_NOSTAT = (1 << 11), /* Skip as statistical symbol */
+	SYMBOL_TYPE_IDEMPOTENT = (1 << 12), /* Symbol cannot change metric */
 };
 
 /**

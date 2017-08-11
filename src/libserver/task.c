@@ -779,9 +779,14 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		}
 		break;
 
-	case RSPAMD_TASK_STAGE_DONE:
-		/* Second run of composites processing */
+	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		/* Second run of composites processing before idempotent filters */
 		rspamd_make_composites (task);
+		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+				RSPAMD_TASK_STAGE_IDEMPOTENT);
+		break;
+
+	case RSPAMD_TASK_STAGE_DONE:
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		break;
 
