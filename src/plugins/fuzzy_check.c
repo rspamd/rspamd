@@ -1761,6 +1761,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	const gchar *symbol;
 	struct fuzzy_mapping *map;
 	struct rspamd_task *task = session->task;
+	double weight;
 	double nval;
 	guchar buf[2048];
 	const gchar *type = "bin";
@@ -1771,11 +1772,12 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 					GINT_TO_POINTER (rep->flag))) == NULL) {
 		/* Default symbol and default weight */
 		symbol = session->rule->symbol;
-
+		weight = session->rule->max_score;
 	}
 	else {
 		/* Get symbol and weight from map */
 		symbol = map->symbol;
+		weight = map->weight;
 	}
 
 
@@ -1785,8 +1787,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	 * Otherwise `value` means error code
 	 */
 
-	nval = fuzzy_normalize (rep->value,
-			session->rule->max_score);
+	nval = fuzzy_normalize (rep->value, weight);
 
 	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
 		nval *= rspamd_normalize_probability (rep->prob, 0.5);
