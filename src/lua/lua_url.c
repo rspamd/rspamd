@@ -47,6 +47,7 @@ LUA_FUNCTION_DEF (url, get_path);
 LUA_FUNCTION_DEF (url, get_query);
 LUA_FUNCTION_DEF (url, get_fragment);
 LUA_FUNCTION_DEF (url, get_text);
+LUA_FUNCTION_DEF (url, get_raw);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
@@ -73,6 +74,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_fragment),
 	LUA_INTERFACE_DEF (url, get_text),
 	LUA_INTERFACE_DEF (url, get_tld),
+	LUA_INTERFACE_DEF (url, get_raw),
 	LUA_INTERFACE_DEF (url, to_table),
 	LUA_INTERFACE_DEF (url, is_phished),
 	LUA_INTERFACE_DEF (url, is_redirected),
@@ -254,6 +256,26 @@ lua_url_get_text (lua_State *L)
 
 	if (url != NULL) {
 		lua_pushlstring (L, url->url->string, url->url->urllen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_raw()
+ * Get full content of the url as it was parsed (e.g. with urldecode)
+ * @return {string} url string
+ */
+static gint
+lua_url_get_raw (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL) {
+		lua_pushlstring (L, url->url->raw, url->url->rawlen);
 	}
 	else {
 		lua_pushnil (L);
