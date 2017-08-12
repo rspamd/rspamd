@@ -1592,7 +1592,10 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
 	}
 
-	uri->string = p;
+	uri->raw = p;
+	uri->rawlen = len;
+	uri->string = rspamd_mempool_alloc (pool, len + 1);
+	rspamd_strlcpy (uri->string, p, len + 1);
 	uri->urllen = len;
 
 	/* Now decode url symbols */

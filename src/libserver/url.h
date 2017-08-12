@@ -25,6 +25,7 @@ struct rspamd_url_tag {
 };
 
 struct rspamd_url {
+	gchar *raw;
 	gchar *string;
 	gint protocol;
 	guint port;
@@ -48,6 +49,7 @@ struct rspamd_url {
 	guint surbllen;
 	guint tldlen;
 	guint urllen;
+	guint rawlen;
 
 	enum rspamd_url_flags flags;
 	guint count;

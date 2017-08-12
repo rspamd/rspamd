@@ -366,13 +366,16 @@ lua_http_request (lua_State *L)
 	if (lua_gettop (L) >= 2) {
 		/* url, callback and event_base format */
 		url = luaL_checkstring (L, 1);
+
 		if (url == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
 			msg_err ("http request has bad params");
 			lua_pushboolean (L, FALSE);
 			return 1;
 		}
+
 		lua_pushvalue (L, 2);
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+
 		if (lua_gettop (L) >= 3 && rspamd_lua_check_udata_maybe (L, 3, "rspamd{ev_base}")) {
 			ev_base = *(struct event_base **)lua_touserdata (L, 3);
 		}
