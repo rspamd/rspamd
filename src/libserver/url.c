@@ -1414,6 +1414,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		memmove (uri->string + uri->protocollen, uri->string + old_shift,
 				uri->urllen - uri->protocollen);
 		uri->urllen -= shift;
+		uri->flags |= RSPAMD_URL_FLAG_SCHEMAENCODED;
 		break;
 	case UF_HOST:
 		if (nlen >= uri->hostlen) {
@@ -1428,6 +1429,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		memmove (uri->host + uri->hostlen, uri->host + old_shift,
 				uri->datalen + uri->querylen + uri->fragmentlen);
 		uri->urllen -= shift;
+		uri->flags |= RSPAMD_URL_FLAG_HOSTENCODED;
 		break;
 	case UF_PATH:
 		if (nlen >= uri->datalen) {
@@ -1442,6 +1444,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		memmove (uri->data + uri->datalen, uri->data + old_shift,
 				uri->querylen + uri->fragmentlen);
 		uri->urllen -= shift;
+		uri->flags |= RSPAMD_URL_FLAG_PATHENCODED;
 		break;
 	case UF_QUERY:
 		if (nlen >= uri->querylen) {
@@ -1456,6 +1459,7 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 		memmove (uri->query + uri->querylen, uri->query + old_shift,
 				uri->fragmentlen);
 		uri->urllen -= shift;
+		uri->flags |= RSPAMD_URL_FLAG_QUERYENCODED;
 		break;
 	case UF_FRAGMENT:
 		if (nlen >= uri->fragmentlen) {
@@ -1542,42 +1546,46 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	}
 
 	if (end > uristring && (guint) (end - uristring) != len) {
-		/* We have extra data at the end of uri, so we are ignoring it for now */
-		p = rspamd_mempool_alloc (pool, end - uristring + 1);
-		rspamd_strlcpy (p, uristring, end - uristring + 1);
 		len = end - uristring;
 	}
 
+	uri->raw = p;
+	uri->rawlen = len;
+	uri->string = rspamd_mempool_alloc (pool, len + 1);
+	rspamd_strlcpy (uri->string, p, len + 1);
+	uri->urllen = len;
+
 	for (i = 0; i < UF_MAX; i++) {
 		if (u.field_set & (1 << i)) {
-			comp = p + u.field_data[i].off;
+			comp = uri->string + u.field_data[i].off;
 			complen = u.field_data[i].len;
+
 			switch (i) {
-				case UF_SCHEMA:
-					uri->protocollen = u.field_data[i].len;
-					break;
-				case UF_HOST:
-					uri->host = comp;
-					uri->hostlen = complen;
-					break;
-				case UF_PATH:
-					uri->data = comp;
-					uri->datalen = complen;
-					break;
-				case UF_QUERY:
-					uri->query = comp;
-					uri->querylen = complen;
-					break;
-				case UF_FRAGMENT:
-					uri->fragment = comp;
-					uri->fragmentlen = complen;
-					break;
-				case UF_USERINFO:
-					uri->user = comp;
-					uri->userlen = complen;
-					break;
-				default:
-					break;
+			case UF_SCHEMA:
+				uri->protocollen = u.field_data[i].len;
+				break;
+			case UF_HOST:
+				uri->host = comp;
+				uri->hostlen = complen;
+				break;
+			case UF_PATH:
+				uri->data = comp;
+				uri->datalen = complen;
+				break;
+			case UF_QUERY:
+				uri->query = comp;
+				uri->querylen = complen;
+				break;
+			case UF_FRAGMENT:
+				uri->fragment = comp;
+				uri->fragmentlen = complen;
+				break;
+			case UF_USERINFO:
+				uri->user = comp;
+				uri->userlen = complen;
+				break;
+			default:
+				break;
 			}
 		}
 	}
@@ -1591,12 +1599,6 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	if (obscured) {
 		uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
 	}
-
-	uri->raw = p;
-	uri->rawlen = len;
-	uri->string = rspamd_mempool_alloc (pool, len + 1);
-	rspamd_strlcpy (uri->string, p, len + 1);
-	uri->urllen = len;
 
 	/* Now decode url symbols */
 	unquoted_len = rspamd_url_decode (uri->string,
