@@ -42,6 +42,7 @@
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
 #endif
+#include "zlib.h"
 
 static void rspamd_worker_ignore_signal (int signo);
 /**
@@ -313,9 +314,6 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
 	GList *cur;
 	struct event *events;
-	GHashTableIter it;
-	struct rspamd_worker_signal_handler *sigh;
-	gpointer k, v;
 	struct rspamd_map *map;
 
 	/* Remove all events */
@@ -368,6 +366,73 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	}
 }
 
+static rspamd_fstring_t *
+rspamd_controller_maybe_compress (struct rspamd_http_connection_entry *entry,
+		rspamd_fstring_t *buf, struct rspamd_http_message *msg)
+{
+	z_stream strm;
+	gint rc;
+	rspamd_fstring_t *comp;
+	gchar *p;
+	gsize remain;
+
+	if (entry->support_gzip) {
+		memset (&strm, 0, sizeof (strm));
+		rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
+
+		if (rc != Z_OK) {
+			return buf;
+		}
+
+		comp = rspamd_fstring_sized_new (MIN (buf->len, 32768));
+
+		strm.avail_in = buf->len;
+		strm.next_in = (guchar *)buf->str;
+		p = comp->str;
+		remain = comp->allocated;
+
+		while (strm.avail_in != 0) {
+			strm.avail_out = remain;
+			strm.next_out = p;
+
+			rc = deflate (&strm, Z_FINISH);
+
+			if (rc != Z_OK) {
+				if (rc == Z_STREAM_END) {
+					break;
+				}
+				else {
+					rspamd_fstring_free (comp);
+					deflateEnd (&strm);
+
+					return buf;
+				}
+			}
+
+			comp->len = strm.total_out;
+
+			if (strm.avail_out == 0 && strm.avail_in != 0) {
+				/* Need to allocate more */
+				remain = comp->len;
+				comp = rspamd_fstring_grow (comp, comp->allocated +
+						strm.avail_in + 10);
+				p = comp->str + remain;
+				remain = comp->allocated - remain;
+			}
+		}
+
+		deflateEnd (&strm);
+		comp->len = strm.total_out;
+		rspamd_fstring_free (buf); /* We replace buf with its compressed version */
+		rspamd_http_message_add_header (msg, "Content-Encoding", "gzip");
+
+		return comp;
+	}
+
+	return buf;
+}
+
 void
 rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	gint code, const gchar *error_msg, ...)
@@ -387,7 +452,8 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	msg->code = code;
 	reply = rspamd_fstring_sized_new (msg->status->len + 16);
 	rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg,
+			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
@@ -413,7 +479,8 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
 	reply = rspamd_fstring_new_init (str, strlen (str));
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg,
+			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
@@ -440,7 +507,8 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	msg->status = rspamd_fstring_new_init ("OK", 2);
 	reply = rspamd_fstring_sized_new (BUFSIZ);
 	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &reply);
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg,
+			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,

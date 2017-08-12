@@ -3209,6 +3209,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 
 	GError *err;
 	rspamd_ftok_t lookup;
+	const rspamd_ftok_t *encoding;
 	struct http_parser_url u;
 	guint i;
 	rspamd_regexp_t *re;
@@ -3279,6 +3280,13 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		entry->is_reply = TRUE;
+
+		encoding = rspamd_http_message_find_header (msg, "Accept-Encoding");
+
+		if (encoding && rspamd_substring_search (encoding->begin, encoding->len,
+				"gzip", 4) != -1) {
+			entry->support_gzip = TRUE;
+		}
 
 		if (handler != NULL) {
 			return handler (entry, msg);
