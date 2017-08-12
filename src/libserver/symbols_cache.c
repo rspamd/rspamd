@@ -1850,8 +1850,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
-
-			return TRUE;
 		}
 
 		if (checkpoint->waitq->len == 0 ||

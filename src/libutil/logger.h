@@ -181,7 +181,7 @@ ucl_object_t * rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
         __VA_ARGS__)
 #define debug_task(...) rspamd_conditional_debug (NULL, \
         task->from_addr, \
-        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        "task", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 
@@ -199,7 +199,7 @@ ucl_object_t * rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_task(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        "task", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_err_task_encrypted(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL|RSPAMD_LOG_ENCRYPTED, \
