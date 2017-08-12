@@ -1,5 +1,9 @@
 local utility = {}
 
+function utility.round(num, places)
+   return string.format("%." .. (places or 0) .. "f", num)
+end
+
 function utility.string_split(str, delimiter)   
    local t={}; i = 1
    for s in string.gmatch(str, "([^"..delimiter.."]+)") do
@@ -66,7 +70,9 @@ function utility.read_log_file(file)
    for line in file:lines() do
       lines[#lines + 1] = line
    end
-   
+
+   io.close(file)
+
    return lines
 end
    
