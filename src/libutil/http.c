@@ -3459,7 +3459,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 {
 	struct rspamd_http_connection_entry *conn;
 
-	conn = g_slice_alloc (sizeof (struct rspamd_http_connection_entry));
+	conn = g_slice_alloc0 (sizeof (struct rspamd_http_connection_entry));
 	conn->rt = router;
 	conn->ud = ud;
 	conn->is_reply = FALSE;
