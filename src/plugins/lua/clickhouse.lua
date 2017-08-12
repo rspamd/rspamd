@@ -55,6 +55,7 @@ local settings = {
   from_tables = nil,
   enable_symbols = false,
   use_https = false,
+  use_gzip = true,
 }
 
 local clickhouse_schema = {
@@ -262,6 +263,7 @@ local function clickhouse_send_data(task)
       url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
+      gzip = settings.use_gzip,
       mime_type = 'text/plain',
       timeout = settings['timeout'],
     }) then
