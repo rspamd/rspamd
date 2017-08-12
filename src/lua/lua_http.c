@@ -68,6 +68,7 @@ struct lua_http_cbdata {
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
 	gchar *host;
+	const gchar *url;
 	gsize max_size;
 	gint flags;
 	gint fd;
@@ -202,6 +203,10 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	lua_newtable (cbd->L);
 
 	HASH_ITER (hh, msg->headers, h, htmp) {
+		/*
+		 * Lowercase header name, as Lua cannot search in caseless matter
+		 */
+		rspamd_str_lc (h->combined->str, h->name->len);
 		lua_pushlstring (cbd->L, h->name->begin, h->name->len);
 		lua_pushlstring (cbd->L, h->value->begin, h->value->len);
 		lua_settable (cbd->L, -3);
@@ -607,6 +612,7 @@ lua_http_request (lua_State *L)
 	cbd->local_kp = local_kp;
 	cbd->flags = flags;
 	cbd->max_size = max_size;
+	cbd->url = url;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
