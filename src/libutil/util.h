@@ -510,5 +510,12 @@ guint64 rspamd_tm_to_time (const struct tm *tm, glong tz);
 
 #define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = g_ptr_array_index((ar), (i))) || 1); ++(i))
 
+/**
+ * Compresses the input string using gzip+zlib. Old string is replaced and freed
+ * if compressed. If not compressed it is untouched.
+ * @param in
+ * @return TRUE if a string has been compressed
+ */
+gboolean rspamd_fstring_gzip (rspamd_fstring_t **in);
 
 #endif

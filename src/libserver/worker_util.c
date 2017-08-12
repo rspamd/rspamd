@@ -370,64 +370,10 @@ static rspamd_fstring_t *
 rspamd_controller_maybe_compress (struct rspamd_http_connection_entry *entry,
 		rspamd_fstring_t *buf, struct rspamd_http_message *msg)
 {
-	z_stream strm;
-	gint rc;
-	rspamd_fstring_t *comp;
-	gchar *p;
-	gsize remain;
-
 	if (entry->support_gzip) {
-		memset (&strm, 0, sizeof (strm));
-		rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
-
-		if (rc != Z_OK) {
-			return buf;
+		if (rspamd_fstring_gzip (&buf)) {
+			rspamd_http_message_add_header (msg, "Content-Encoding", "gzip");
 		}
-
-		comp = rspamd_fstring_sized_new (MIN (buf->len, 32768));
-
-		strm.avail_in = buf->len;
-		strm.next_in = (guchar *)buf->str;
-		p = comp->str;
-		remain = comp->allocated;
-
-		while (strm.avail_in != 0) {
-			strm.avail_out = remain;
-			strm.next_out = p;
-
-			rc = deflate (&strm, Z_FINISH);
-
-			if (rc != Z_OK) {
-				if (rc == Z_STREAM_END) {
-					break;
-				}
-				else {
-					rspamd_fstring_free (comp);
-					deflateEnd (&strm);
-
-					return buf;
-				}
-			}
-
-			comp->len = strm.total_out;
-
-			if (strm.avail_out == 0 && strm.avail_in != 0) {
-				/* Need to allocate more */
-				remain = comp->len;
-				comp = rspamd_fstring_grow (comp, comp->allocated +
-						strm.avail_in + 10);
-				p = comp->str + remain;
-				remain = comp->allocated - remain;
-			}
-		}
-
-		deflateEnd (&strm);
-		comp->len = strm.total_out;
-		rspamd_fstring_free (buf); /* We replace buf with its compressed version */
-		rspamd_http_message_add_header (msg, "Content-Encoding", "gzip");
-
-		return comp;
 	}
 
 	return buf;

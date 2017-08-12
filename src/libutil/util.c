@@ -1,5 +1,5 @@
 /*-
- * Copyright 2016 Vsevolod Stakhov
+ * Copyright 2017 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,7 @@
 #include <math.h> /* for pow */
 
 #include "cryptobox.h"
+#include "zlib.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -2687,4 +2688,66 @@ rspamd_tm_to_time (const struct tm *tm, glong tz)
 	result -= offset;
 
 	return result;
+}
+
+gboolean
+rspamd_fstring_gzip (rspamd_fstring_t **in)
+{
+	z_stream strm;
+	gint rc;
+	rspamd_fstring_t *comp, *buf = *in;
+	gchar *p;
+	gsize remain;
+
+	memset (&strm, 0, sizeof (strm));
+	rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
+
+	if (rc != Z_OK) {
+		return FALSE;
+	}
+
+	comp = rspamd_fstring_sized_new (MIN (buf->len, 32768));
+
+	strm.avail_in = buf->len;
+	strm.next_in = (guchar *)buf->str;
+	p = comp->str;
+	remain = comp->allocated;
+
+	while (strm.avail_in != 0) {
+		strm.avail_out = remain;
+		strm.next_out = p;
+
+		rc = deflate (&strm, Z_FINISH);
+
+		if (rc != Z_OK) {
+			if (rc == Z_STREAM_END) {
+				break;
+			}
+			else {
+				rspamd_fstring_free (comp);
+				deflateEnd (&strm);
+
+				return FALSE;
+			}
+		}
+
+		comp->len = strm.total_out;
+
+		if (strm.avail_out == 0 && strm.avail_in != 0) {
+			/* Need to allocate more */
+			remain = comp->len;
+			comp = rspamd_fstring_grow (comp, comp->allocated +
+					strm.avail_in + 10);
+			p = comp->str + remain;
+			remain = comp->allocated - remain;
+		}
+	}
+
+	deflateEnd (&strm);
+	comp->len = strm.total_out;
+	rspamd_fstring_free (buf); /* We replace buf with its compressed version */
+	*in = comp;
+
+	return TRUE;
 }
