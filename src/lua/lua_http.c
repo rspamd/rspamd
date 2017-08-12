@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "http_private.h"
 #include "unix-std.h"
+#include "zlib.h"
 
 /***
  * @module rspamd_http
@@ -74,6 +75,7 @@ struct lua_http_cbdata {
 	gint fd;
 	gint cbref;
 	gint bodyref;
+	gboolean gzip;
 };
 
 static const int default_http_timeout = 5000;
@@ -349,10 +351,6 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 static gint
 lua_http_request (lua_State *L)
 {
-	const gchar *url, *lua_body;
-	gchar *to_resolve;
-	gint cbref;
-	gsize bodylen;
 	struct event_base *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
@@ -363,10 +361,16 @@ lua_http_request (lua_State *L)
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
+	const gchar *url, *lua_body;
+	rspamd_fstring_t *body = NULL;
+	gchar *to_resolve;
+	gint cbref;
+	gsize bodylen;
 	gdouble timeout = default_http_timeout;
 	gint flags = 0;
 	gchar *mime_type = NULL;
 	gsize max_size = 0;
+	gboolean gzip = FALSE;
 
 	if (lua_gettop (L) >= 2) {
 		/* url, callback and event_base format */
@@ -519,13 +523,13 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			lua_body = lua_tolstring (L, -1, &bodylen);
-			rspamd_http_message_set_body (msg, lua_body, bodylen);
+			body = rspamd_fstring_new_init (lua_body, bodylen);
 		}
 		else if (lua_type (L, -1) == LUA_TUSERDATA) {
 			t = lua_check_text (L, -1);
 			/* TODO: think about zero-copy possibilities */
 			if (t) {
-				rspamd_http_message_set_body (msg, t->start, t->len);
+				body = rspamd_fstring_new_init (t->start, t->len);
 			}
 		}
 		lua_pop (L, 1);
@@ -561,6 +565,15 @@ lua_http_request (lua_State *L)
 
 		if (!!lua_toboolean (L, -1)) {
 			flags |= RSPAMD_LUA_HTTP_FLAG_TEXT;
+		}
+
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "gzip");
+		lua_gettable (L, 1);
+
+		if (!!lua_toboolean (L, -1)) {
+			gzip = TRUE;
 		}
 
 		lua_pop (L, 1);
@@ -616,6 +629,21 @@ lua_http_request (lua_State *L)
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
+	}
+
+	if (body) {
+		if (gzip) {
+			if (rspamd_fstring_gzip (&body)) {
+				rspamd_http_message_add_header (msg, "Content-Encoding", "gzip");
+			}
+		}
+
+		rspamd_http_message_set_body_from_fstring_steal (msg, body);
+	}
+
+	if (gzip) {
+		cbd->gzip = TRUE;
+		/* TODO: Add client support for gzip */
 	}
 
 	if (session) {
