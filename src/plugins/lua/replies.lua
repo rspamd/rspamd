@@ -128,7 +128,7 @@ if opts then
   else
     rspamd_config:register_symbol({
       name = 'REPLIES_SET',
-      type = 'postfilter,nostat',
+      type = 'idempotent',
       callback = replies_set,
       priority = 5
     })

@@ -707,7 +707,7 @@ if opts then
     end
     rspamd_config:register_symbol({
       name = 'RATELIMIT_SET',
-      type = 'postfilter,nostat',
+      type = 'idempotent',
       priority = 5,
       callback = rate_set,
     })

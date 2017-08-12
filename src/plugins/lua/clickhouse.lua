@@ -655,7 +655,7 @@ if opts then
       clickhouse_first_row()
       rspamd_config:register_symbol({
         name = 'CLICKHOUSE_COLLECT',
-        type = 'postfilter',
+        type = 'idempotent',
         callback = clickhouse_collect,
         priority = 10
       })
