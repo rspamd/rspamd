@@ -4,6 +4,7 @@ use 5.010;
 use Data::Dumper;
 use Getopt::Long;
 use Pod::Usage;
+use Time::Local;
 use warnings;
 use strict;
 
@@ -374,94 +375,118 @@ sub ProcessLog {
   }
 }
 
+sub JsonObjectElt() {
+  my ($k, $v) = @_;
+  my $f = defined $_[2] ? $_[2] : '%s';
+
+  if ($f eq "%s") {
+    $f = "\"%s\"";
+  }
+
+  printf "\"%s\":$f", $k, $v;
+}
+
 sub GetLogfilesList {
-    my ($dir) = @_;
-    opendir( DIR, $dir ) or die $!;
+  my ($dir) = @_;
+  opendir( DIR, $dir ) or die $!;
 
-    my $pattern = join( '|', keys %decompressor );
-    my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
+  my $pattern = join( '|', keys %decompressor );
+  my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
 
-    # Add unnumbered logs first
-    my @logs =
-      grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
+  # Add unnumbered logs first
+  my @logs =
+    grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
 
-    # Add numbered logs
-    rewinddir(DIR);
-    push( @logs,
-        ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
+  # Add numbered logs
+  rewinddir(DIR);
+  push( @logs,
+    ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
 
-    closedir(DIR);
+  closedir(DIR);
 
-    # Select required logs and revers their order
-    @logs =
-      reverse
+  # Select required logs and revers their order
+  @logs =
+    reverse
       splice( @logs, $exclude_logs, $num_logs ||= @logs - $exclude_logs );
 
-    # Loop through array printing out filenames
+  # Loop through array printing out filenames
+  if (!$json) {
     print "\nParsing log files:\n";
     foreach my $file (@logs) {
-        print "  $file\n";
+      print "  $file\n";
     }
     print "\n";
+  }
 
-    return @logs;
+  return @logs;
 }
 
 sub log_time_format {
-    my $fh = shift;
-    my $format;
-    while (<$fh>) {
+  my $fh = shift;
+  my $format;
+  while (<$fh>) {
 
-        # 2017-08-08 00:00:01 #66984(
-        # 2017-08-08 00:00:01.001 #66984(
-        if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3})? #\d+\(/) {
-            $format = 'rspamd';
-            last;
-        }
-
-        # Aug  8 00:02:50 #66986(
-        elsif (/^\w{3} (?:\s\d|\d\d) \d\d:\d\d:\d\d #\d+\(/) {
-            $format = 'syslog';
-            last;
-        }
+    # 2017-08-08 00:00:01 #66984(
+    # 2017-08-08 00:00:01.001 #66984(
+    if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3})? #\d+\(/) {
+      $format = 'rspamd';
+      last;
     }
-    seek( $fh, 0, 0 );
-    return $format;
+
+    # Aug  8 00:02:50 #66986(
+    elsif (/^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d #\d+\(/) {
+      $format = 'syslog';
+      last;
+    }
+    elsif (/^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\s/) {
+      $format = 'syslog';
+      last;
+    }
+    else {
+      print "Unknown log format\n";
+      exit 1;
+    }
+  }
+
+  # XXX: in case of pipe, we still will miss one element...
+  seek( $fh, 0, 0 );
+
+  return $format;
 }
 
 sub normalized_time {
-    return undef
-      if !defined( $_ = shift );
+  return undef
+    if !defined( $_ = shift );
 
-    /^\d\d(?::\d\d){0,2}$/
-      ? sprintf '%04d-%02d-%02d %s', 1900 + (localtime)[5], 1 + (localtime)[4],
-      (localtime)[3], $_
-      : $_;
+  /^\d\d(?::\d\d){0,2}$/
+    ? sprintf '%04d-%02d-%02d %s', 1900 + (localtime)[5], 1 + (localtime)[4],
+    (localtime)[3], $_
+    : $_;
 }
 
 sub numeric {
-    $a =~ /\.(\d+)\./;
-    my $a_num = $1;
-    $b =~ /\.(\d+)\./;
-    my $b_num = $1;
+  $a =~ /\.(\d+)\./;
+  my $a_num = $1;
+  $b =~ /\.(\d+)\./;
+  my $b_num = $1;
 
-    $a_num <=> $b_num;
+  $a_num <=> $b_num;
 }
 
 # Convert syslog timestamp to "ISO 8601 like" format
 # using current year as syslog does not record the year (nor the timezone)
 # or the last year if the guessed time is in the future.
 sub syslog2iso {
-    my %month_map;
-    @month_map{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = 0 .. 11;
+  my %month_map;
+  @month_map{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = 0 .. 11;
 
-    my ( $month, @t ) =
-      $_[0] =~ m/^(\w{3}) \s\s? (\d\d?) \s (\d\d):(\d\d):(\d\d)/x;
-    my $epoch =
-      timelocal( ( reverse @t ), $month_map{$month}, 1900 + (localtime)[5] );
-    sprintf '%04d-%02d-%02d %02d:%02d:%02d',
-      1900 + (localtime)[5] - ( $epoch > time ),
-      $month_map{$month} + 1, @t;
+  my ( $month, @t ) =
+    $_[0] =~ m/^(\w{3}) \s\s? (\d\d?) \s (\d\d):(\d\d):(\d\d)/x;
+  my $epoch =
+    timelocal( ( reverse @t ), $month_map{$month}, 1900 + (localtime)[5] );
+  sprintf '%04d-%02d-%02d %02d:%02d:%02d',
+    1900 + (localtime)[5] - ( $epoch > time ),
+    $month_map{$month} + 1, @t;
 }
 
 __END__
