@@ -330,6 +330,14 @@ rspamd_lua_init ()
 	lua_newtable (L);
 	lua_setglobal (L, "rspamd_plugins");
 
+	/* Set PRNG */
+	lua_getglobal (L, "math");
+	lua_pushstring (L, "randomseed");
+	lua_gettable (L, -2);
+	lua_pushnumber (L, ottery_rand_uint64 ());
+	lua_pcall (L, 1, 0, 0);
+	lua_pop (L, 1); /* math table */
+
 	return L;
 }
 
