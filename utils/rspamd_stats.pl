@@ -323,10 +323,13 @@ Messages scanned: $total";
 }
 
 sub ProcessLog {
-  my $ts_format = &log_time_format($rspamd_log);
+  my ( $ts_format, @line ) = &log_time_format($rspamd_log);
   my $is_syslog = defined $ts_format && $ts_format eq 'syslog';
 
-  while(<$rspamd_log>) {
+  while() {
+    last if eof $rspamd_log;
+    $_ = (@line) ? shift @line : <$rspamd_log>;
+
     if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
       $enabled = 1;
     }
@@ -537,8 +540,9 @@ sub GetLogfilesList {
 
 sub log_time_format {
   my $fh = shift;
-  my $format;
+  my ( $format, $line );
   while (<$fh>) {
+    $line = $_;
 
     # 2017-08-08 00:00:01 #66984(
     # 2017-08-08 00:00:01.001 #66984(
@@ -552,20 +556,18 @@ sub log_time_format {
       $format = 'syslog';
       last;
     }
-    elsif (/^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\s/) {
-      $format = 'syslog';
-      last;
+
+    # Skip newsyslog messages
+    # Aug  8 00:00:00 hostname newsyslog[63284]: logfile turned over
+    elsif ( /^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\ \S+ newsyslog\[\d+\]: logfile turned over$/ ) {
+      next;
     }
     else {
       print "Unknown log format\n";
       exit 1;
     }
   }
-
-  # XXX: in case of pipe, we still will miss one element...
-  seek( $fh, 0, 0 );
-
-  return $format;
+  return ( $format, $line );
 }
 
 sub normalized_time {
