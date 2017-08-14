@@ -552,9 +552,11 @@ sub log_time_format {
       $format = 'syslog';
       last;
     }
-    elsif (/^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\s/) {
-      $format = 'syslog';
-      last;
+
+    # Skip newsyslog messages
+    # Aug  8 00:00:00 hostname newsyslog[63284]: logfile turned over
+    elsif ( /^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\ \S+ newsyslog\[\d+\]: logfile turned over$/ ) {
+      next;
     }
     else {
       print "Unknown log format\n";
