@@ -27,7 +27,6 @@
  * - strict_multiplier (number): multiplier for strict domains
  * - time_jitter (number): jitter in seconds to allow time diff while checking
  * - trusted_only (flag): check signatures only for domains in 'domains' map
- * - skip_mutli (flag): skip messages with multiply dkim signatures
  */
 
 
@@ -77,7 +76,6 @@ struct dkim_ctx {
 	gint sign_condition_ref;
 	guint max_sigs;
 	gboolean trusted_only;
-	gboolean skip_multi;
 	gboolean check_local;
 	gboolean check_authed;
 };
@@ -162,7 +160,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_ALLOW,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -171,7 +169,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_REJECT,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -180,7 +178,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_TEMPFAIL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -189,7 +187,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_NA,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -198,7 +196,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			DEFAULT_SYMBOL_PERMFAIL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -207,7 +205,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_INT,
 			NULL,
 			0,
-			NULL,
+			G_STRINGIFY (DEFAULT_CACHE_SIZE),
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -216,7 +214,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_TIME,
 			NULL,
 			0,
-			NULL,
+			G_STRINGIFY (DEFAULT_TIME_JITTER),
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -225,7 +223,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			"empty",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -234,7 +232,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			"empty",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -252,16 +250,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_BOOLEAN,
 			NULL,
 			0,
-			NULL,
-			0);
-	rspamd_rcl_add_doc_by_path (cfg,
-			"dkim",
-			"Do not check messages with multiple DKIM signatures",
-			"skip_multi",
-			UCL_BOOLEAN,
-			NULL,
-			0,
-			NULL,
+			"false",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -270,16 +259,16 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			"empty",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
-			"Maximum number of DKIM signatures to check",
+			"Obsoleted: maximum number of DKIM signatures to check",
 			"max_sigs",
 			UCL_INT,
 			NULL,
 			0,
-			NULL,
+			"n/a",
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"dkim",
@@ -288,7 +277,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			UCL_STRING,
 			NULL,
 			0,
-			NULL,
+			default_sign_headers,
 			0);
 
 	return 0;
@@ -299,7 +288,7 @@ dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id = -1;
-	guint cache_size;
+	guint cache_size, sign_cache_size;
 	gboolean got_trusted = FALSE;
 
 	/* Register global methods */
@@ -323,16 +312,6 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	lua_pop (cfg->lua_state, 1); /* Remove global function */
-
-	dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
-			128,
-			g_free, /* Keys are just C-strings */
-			(GDestroyNotify)rspamd_dkim_sign_key_unref);
-
-	if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
-		return TRUE;
-	}
-
 	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
 
 	if ((value =
@@ -392,6 +371,15 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
+	}
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "dkim",
+					"sign_cache_size")) != NULL) {
+		sign_cache_size = ucl_object_toint (value);
+	}
+	else {
+		sign_cache_size = 128;
 	}
 
 	if ((value =
@@ -458,23 +446,28 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "dkim", "skip_multi")) != NULL) {
-		dkim_module_ctx->skip_multi = ucl_object_toboolean (value);
-	}
-	else {
-		dkim_module_ctx->skip_multi = FALSE;
-	}
-
-	if ((value =
 			rspamd_config_get_module_opt (cfg, "dkim", "sign_headers")) != NULL) {
 		dkim_module_ctx->sign_headers = ucl_object_tostring (value);
 	}
+
+	dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
+			cache_size,
+			g_free,
+			dkim_module_key_dtor);
+	dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
+			sign_cache_size,
+			g_free,
+			(GDestroyNotify)rspamd_dkim_sign_key_unref);
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
 		msg_err_config (
 			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
 	}
 	else {
+		if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
+			return TRUE;
+		}
+
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_reject,
 			0,
@@ -506,11 +499,6 @@ dkim_module_config (struct rspamd_config *cfg)
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 			cb_id);
-
-		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
-				cache_size,
-				g_free, /* Keys are just C-strings */
-				dkim_module_key_dtor);
 
 		msg_info_config ("init internal dkim module");
 #ifndef HAVE_OPENSSL
@@ -573,6 +561,40 @@ dkim_module_config (struct rspamd_config *cfg)
 	return res;
 }
 
+rspamd_dkim_sign_key_t *
+dkim_module_load_key_format (lua_State *L, struct rspamd_task *task,
+		const gchar *key, gsize keylen,
+		enum rspamd_dkim_sign_key_type kt)
+{
+	guchar h[rspamd_cryptobox_HASHBYTES],
+			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	rspamd_dkim_sign_key_t *ret;
+	GError *err = NULL;
+
+	memset (hex_hash, 0, sizeof (hex_hash));
+	rspamd_cryptobox_hash (h, key, keylen, NULL, 0);
+	rspamd_encode_hex_buf (h, sizeof (h), hex_hash, sizeof (hex_hash));
+	ret = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
+				hex_hash, time (NULL));
+
+	if (ret == NULL) {
+			ret = rspamd_dkim_sign_key_load (key, keylen, kt, &err);
+
+			if (ret == NULL) {
+				msg_err_task ("cannot load private key: %e", err);
+				g_error_free (err);
+
+				return NULL;
+			}
+
+			rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+					g_strdup (hex_hash), ret,
+					time (NULL), 0);
+		}
+
+	return ret;
+}
+
 static gint
 lua_dkim_sign_handler (lua_State *L)
 {
@@ -585,7 +607,7 @@ lua_dkim_sign_handler (lua_State *L)
 			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL;
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
-	gsize rawlen = 0;
+	gsize rawlen = 0, keylen = 0;
 	gboolean no_cache = FALSE;
 
 	luaL_argcheck (L, lua_type (L, 2) == LUA_TTABLE, 2, "'table' expected");
@@ -596,9 +618,10 @@ lua_dkim_sign_handler (lua_State *L)
 	 * - key
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-			"key=S;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
+			"key=V;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
 					"sign_type=S;arc_idx=I;arc_cv=S;expire=I",
-			&key, &rawlen, &rawkey, &domain, &selector, &no_cache, &headers,
+			&keylen, &key, &rawlen, &rawkey, &domain,
+			&selector, &no_cache, &headers,
 			&sign_type_str, &arc_idx, &arc_cv, &expire)) {
 		msg_err_task ("invalid return value from sign condition: %e",
 				err);
@@ -619,54 +642,76 @@ lua_dkim_sign_handler (lua_State *L)
 				(GDestroyNotify)rspamd_dkim_sign_key_unref);
 	}
 
-	if (key) {
-		dkim_key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
-				key, time (NULL));
+#define PEM_SIG "-----BEGIN"
 
-		if (dkim_key == NULL) {
-			dkim_key = rspamd_dkim_sign_key_load (key, strlen (key),
-					RSPAMD_DKIM_SIGN_KEY_FILE, &err);
+	if (key) {
+		if (key[0] == '.' || key[0] == '/') {
+			/* Likely raw path */
+			dkim_key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
+					key, time (NULL));
 
 			if (dkim_key == NULL) {
-				msg_err_task ("cannot load dkim key %s: %e",
-						key, err);
-				g_error_free (err);
+				dkim_key = rspamd_dkim_sign_key_load (key, strlen (key),
+						RSPAMD_DKIM_SIGN_KEY_FILE, &err);
 
+				if (dkim_key == NULL) {
+					msg_err_task ("cannot load dkim key %s: %e",
+							key, err);
+					g_error_free (err);
+
+					lua_pushboolean (L, FALSE);
+					return 1;
+				}
+
+				rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+						g_strdup (key), dkim_key,
+						time (NULL), 0);
+			}
+		}
+		else if (keylen > sizeof (PEM_SIG) &&
+				strncmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
+			/* Pem header found */
+			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
+					RSPAMD_DKIM_SIGN_KEY_PEM);
+
+			if (dkim_key == NULL) {
 				lua_pushboolean (L, FALSE);
 				return 1;
 			}
+		}
+		else {
+			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
+					RSPAMD_DKIM_SIGN_KEY_BASE64);
 
-			rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-					g_strdup (key), dkim_key,
-					time (NULL), 0);
+			if (dkim_key == NULL) {
+				lua_pushboolean (L, FALSE);
+				return 1;
+			}
 		}
 	}
 	else if (rawkey) {
-		guchar h[rspamd_cryptobox_HASHBYTES],
-			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		key = rawkey;
+		keylen = rawlen;
 
-		memset (hex_hash, 0, sizeof (hex_hash));
-		rspamd_cryptobox_hash (h, rawkey, rawlen, NULL, 0);
-		rspamd_encode_hex_buf (h, sizeof (h), hex_hash, sizeof (hex_hash));
-		dkim_key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
-				hex_hash, time (NULL));
-
-		if (dkim_key == NULL) {
-			dkim_key = rspamd_dkim_sign_key_load (rawkey, rawlen,
-					RSPAMD_DKIM_SIGN_KEY_PEM, &err);
+		if (keylen > sizeof (PEM_SIG) &&
+				strncmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
+			/* Pem header found */
+			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
+					RSPAMD_DKIM_SIGN_KEY_PEM);
 
 			if (dkim_key == NULL) {
-				msg_err_task ("cannot load dkim key %s: %e",
-						key, err);
-				g_error_free (err);
-
 				lua_pushboolean (L, FALSE);
 				return 1;
 			}
+		}
+		else {
+			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
+					RSPAMD_DKIM_SIGN_KEY_BASE64);
 
-			rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-					g_strdup (hex_hash), dkim_key,
-					time (NULL), 0);
+			if (dkim_key == NULL) {
+				lua_pushboolean (L, FALSE);
+				return 1;
+			}
 		}
 	}
 	else {
@@ -675,6 +720,8 @@ lua_dkim_sign_handler (lua_State *L)
 
 		return 1;
 	}
+
+#undef PEM_SIG
 
 	if (sign_type_str) {
 		if (strcmp (sign_type_str, "dkim") == 0) {
@@ -1047,15 +1094,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 
 			if (res != cur) {
 				DL_APPEND (res, cur);
-			}
-
-			if (dkim_module_ctx->skip_multi) {
-				if (hlist->len > 1) {
-					msg_info_task ("message has multiple signatures but we"
-							" check only one as 'skip_multi' is set");
-				}
-
-				break;
 			}
 
 			checked ++;

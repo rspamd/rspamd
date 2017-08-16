@@ -16,6 +16,7 @@ limitations under the License.
 
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
+local rspamd_lua_utils = require "lua_util"
 
 if confighelp then
   return
@@ -28,7 +29,9 @@ local attachment_rows = {}
 local urls_rows = {}
 local specific_rows = {}
 local asn_rows = {}
+local symbols_rows = {}
 local nrows = 0
+local connect_prefix = 'http://'
 
 local settings = {
   limit = 1000,
@@ -45,16 +48,19 @@ local settings = {
   table = 'rspamd',
   attachments_table = 'rspamd_attachments',
   urls_table = 'rspamd_urls',
+  symbols_table = 'rspamd_symbols',
   ipmask = 19,
   ipmask6 = 48,
   full_urls = false,
-  from_tables = nil
+  from_tables = nil,
+  enable_symbols = false,
+  use_https = false,
+  use_gzip = true,
 }
 
---[[
-Clickhouse schema:
-
-CREATE TABLE rspamd
+local clickhouse_schema = {
+rspamd = [[
+CREATE TABLE IF NOT EXISTS rspamd
 (
     Date Date,
     TS DateTime,
@@ -71,7 +77,7 @@ CREATE TABLE rspamd
     IsDkim Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2)),
     IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2)),
     NUrls Int32,
-    Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4) DEFAULT CAST('no action' AS Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4)),
+    Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5) DEFAULT CAST('no action' AS Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5)),
     FromUser String,
     MimeUser String,
     RcptUser String,
@@ -79,8 +85,10 @@ CREATE TABLE rspamd
     ListId String,
     Digest FixedString(32)
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
+]],
 
-CREATE TABLE rspamd_attachments (
+  attachments = [[
+CREATE TABLE IF NOT EXISTS rspamd_attachments (
     Date Date,
     Digest FixedString(32),
     `Attachments.FileName` Array(String),
@@ -88,22 +96,37 @@ CREATE TABLE rspamd_attachments (
     `Attachments.Length` Array(UInt32),
     `Attachments.Digest` Array(FixedString(16))
 ) ENGINE = MergeTree(Date, Digest, 8192)
+]],
 
-CREATE TABLE rspamd_urls (
+  urls = [[
+CREATE TABLE IF NOT EXISTS rspamd_urls (
     Date Date,
     Digest FixedString(32),
     `Urls.Tld` Array(String),
     `Urls.Url` Array(String)
 ) ENGINE = MergeTree(Date, Digest, 8192)
+]],
 
-CREATE TABLE rspamd_asn (
+  asn = [[
+CREATE TABLE IF NOT EXISTS rspamd_asn (
     Date Date,
     Digest FixedString(32),
     ASN String,
     Country FixedString(2),
     IPNet String
 ) ENGINE = MergeTree(Date, Digest, 8192)
+]],
+
+  symbols = [[
+CREATE TABLE IF NOT EXISTS rspamd_symbols (
+    Date Date,
+    Digest FixedString(32),
+    `Symbols.Names` Array(String),
+    `Symbols.Scores` Array(Float64),
+    `Symbols.Options` Array(String)
+) ENGINE = MergeTree(Date, Digest, 8192)
 ]]
+}
 
 local function clickhouse_main_row(tname)
   local fields = {
@@ -162,6 +185,19 @@ local function clickhouse_urls_row(tname)
   return elt
 end
 
+local function clickhouse_symbols_row(tname)
+  local symbols_fields = {
+    'Date',
+    'Digest',
+    'Symbols.Names',
+    'Symbols.Scores',
+    'Symbols.Options',
+  }
+  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+    tname, table.concat(symbols_fields, ','))
+  return elt
+end
+
 local function clickhouse_asn_row(tname)
   local asn_fields = {
     'Date',
@@ -188,6 +224,10 @@ local function clickhouse_first_row()
   if settings['asn_table'] then
     table.insert(asn_rows,
       clickhouse_asn_row(settings['asn_table']))
+  end
+  if settings.enable_symbols and settings['symbols_table'] then
+    table.insert(symbols_rows,
+      clickhouse_symbols_row(settings['symbols_table']))
   end
 end
 
@@ -220,9 +260,10 @@ local function clickhouse_send_data(task)
   local body = table.concat(rows, ' ')
   if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
+      gzip = settings.use_gzip,
       mime_type = 'text/plain',
       timeout = settings['timeout'],
     }) then
@@ -234,7 +275,7 @@ local function clickhouse_send_data(task)
     body = table.concat(attachment_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -248,7 +289,7 @@ local function clickhouse_send_data(task)
     body = table.concat(urls_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -262,7 +303,7 @@ local function clickhouse_send_data(task)
     body = table.concat(asn_rows, ' ')
     if not rspamd_http.request({
       task = task,
-      url = 'http://' .. settings['server'],
+      url = connect_prefix .. settings['server'],
       body = body,
       callback = http_cb,
       mime_type = 'text/plain',
@@ -273,12 +314,27 @@ local function clickhouse_send_data(task)
     end
   end
 
+  if #symbols_rows > 1 then
+    body = table.concat(symbols_rows, ' ')
+    if not rspamd_http.request({
+      task = task,
+      url = connect_prefix .. settings['server'],
+      body = body,
+      callback = http_cb,
+      mime_type = 'text/plain',
+      timeout = settings['timeout'],
+    }) then
+      rspamd_logger.errx(task, "cannot send symbols info to clickhouse server %s: cannot make request",
+        settings['server'])
+    end
+  end
+
   for k,specific in pairs(specific_rows) do
     if #specific > 1 then
       body = table.concat(specific, ' ')
       if not rspamd_http.request({
         task = task,
-        url = 'http://' .. settings['server'],
+        url = connect_prefix .. settings['server'],
         body = body,
         callback = http_cb,
         mime_type = 'text/plain',
@@ -300,6 +356,7 @@ local function clickhouse_quote(str)
 end
 
 local function clickhouse_collect(task)
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local from_domain = ''
   local from_user = ''
   if task:has_from('smtp') then
@@ -518,7 +575,7 @@ local function clickhouse_collect(task)
 
   -- ASN information
   if settings['asn_table'] then
-    local asn, country, ipnet = 'unknown', 'unknown', 'unknown'
+    local asn, country, ipnet = '--', '--', '--'
     local pool = task:get_mempool()
     ret = pool:get_variable("asn")
     if ret then
@@ -526,7 +583,7 @@ local function clickhouse_collect(task)
     end
     ret = pool:get_variable("country")
     if ret then
-      country = ret
+      country = ret:sub(1, 2)
     end
     ret = pool:get_variable("ipnet")
     if ret then
@@ -536,6 +593,35 @@ local function clickhouse_collect(task)
       task:get_digest(),
       clickhouse_quote(asn), clickhouse_quote(country), clickhouse_quote(ipnet))
     table.insert(asn_rows, elt)
+  end
+
+  -- Symbols info
+  if settings.enable_symbols and settings['symbols_table'] then
+    local symbols = task:get_symbols_all()
+    local syms_tab = {}
+    local scores_tab = {}
+    local options_tab = {}
+
+    for _,s in ipairs(symbols) do
+      table.insert(syms_tab, string.format("'%s'",
+        clickhouse_quote(s.name or '')))
+      table.insert(scores_tab, string.format('%.3f', s.score))
+
+      if s.options then
+        table.insert(options_tab, string.format("'%s'",
+          clickhouse_quote(table.concat(s.options, ','))))
+      else
+        table.insert(options_tab, "''");
+      end
+    end
+
+    elt = string.format("(today(),'%s',[%s],[%s],[%s])",
+      task:get_digest(),
+      table.concat(syms_tab, ','),
+      table.concat(scores_tab, ','),
+      table.concat(options_tab, ','))
+
+    table.insert(symbols_rows, elt)
   end
 
   nrows = nrows + 1
@@ -548,6 +634,7 @@ local function clickhouse_collect(task)
     urls_rows = {}
     specific_rows = {}
     asn_rows = {}
+    symbols_rows = {}
     clickhouse_first_row()
   end
 end
@@ -563,16 +650,48 @@ if opts then
     else
       settings['from_map'] = rspamd_map_add('clickhouse', 'from_tables',
         'regexp', 'clickhouse specific domains')
+      if settings.use_https then
+        connect_prefix = 'https://'
+      end
+
       clickhouse_first_row()
       rspamd_config:register_symbol({
         name = 'CLICKHOUSE_COLLECT',
-        type = 'postfilter',
+        type = 'idempotent',
         callback = clickhouse_collect,
         priority = 10
       })
       rspamd_config:register_finish_script(function(task)
         if nrows > 0 then
           clickhouse_send_data(task)
+        end
+      end)
+      -- Create tables on load
+      rspamd_config:add_on_load(function(cfg, ev_base, worker)
+        local function http_cb(err_message, code, _, _)
+          if code ~= 200 or err_message then
+            rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s:%s",
+              settings['server'], code, err_message)
+          end
+        end
+
+        local function send_req(elt, sql)
+          if not rspamd_http.request({
+            ev_base = ev_base,
+            config = cfg,
+            url = connect_prefix .. settings['server'],
+            body = sql,
+            callback = http_cb,
+            mime_type = 'text/plain',
+            timeout = settings['timeout'],
+          }) then
+            rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
+              elt, settings['server'])
+          end
+        end
+
+        for tab,sql in pairs(clickhouse_schema) do
+          send_req(tab, sql)
         end
       end)
     end

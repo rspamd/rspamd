@@ -279,6 +279,14 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			clrbit (cd->checked, comp->id * 2 + 1);
 		}
 		else {
+			if (g_hash_table_lookup (cd->metric_res->symbols, key) != NULL) {
+				/* Already set, no need to check */
+				setbit (cd->checked, comp->id * 2);
+				clrbit (cd->checked, comp->id * 2 + 1);
+
+				return;
+			}
+
 			rc = rspamd_process_expression (comp->expr,
 					RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
 
@@ -358,10 +366,13 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 		if (want_remove_symbol || want_forced) {
 			g_hash_table_remove (cd->metric_res->symbols, key);
 		}
+
 		if (want_remove_score || want_forced) {
 			cd->metric_res->score -= rd->ms->score;
 			rd->ms->score = 0.0;
 		}
+
+		cd->metric_res->changes ++;
 	}
 }
 
@@ -373,7 +384,7 @@ composites_metric_callback (struct rspamd_metric_result *metric_res,
 		rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
 
 	cd->task = task;
-	cd->metric_res = (struct rspamd_metric_result *)metric_res;
+	cd->metric_res = metric_res;
 	cd->symbols_to_remove = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cd->checked =
 		rspamd_mempool_alloc0 (task->task_pool,

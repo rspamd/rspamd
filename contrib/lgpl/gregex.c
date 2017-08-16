@@ -470,7 +470,7 @@ g_match_info_free (GMatchInfo *match_info)
 /**
  * g_match_info_next:
  * @match_info: a #GMatchInfo structure
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Scans for the next match using the same parameters of the previous
  * call to g_regex_match_full() or g_regex_match() that returned
@@ -534,7 +534,7 @@ g_match_info_next (GMatchInfo  *match_info,
       match_info->pos = match_info->offsets[1];
     }
 
-  /* it's possibile to get two identical matches when we are matching
+  /* it's possible to get two identical matches when we are matching
    * empty strings, for instance if the pattern is "(?=[A-Z0-9])" and
    * the string is "RegExTest" we have:
    *  - search at position 0: match from 0 to 0
@@ -661,7 +661,7 @@ g_match_info_is_partial_match (const GMatchInfo *match_info)
  * g_match_info_expand_references:
  * @match_info: a #GMatchInfo or %NULL
  * @string_to_expand: the string to expand
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Returns a new string containing the text in @string_to_expand with
  * references and escape sequences expanded. References refer to the last
@@ -1403,7 +1403,7 @@ g_regex_match (const GRegex      *regex,
  * @match_options: match options
  * @match_info: pointer to location where to store the #GMatchInfo, 
  *   or %NULL if you do not need it
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Scans for a match in string for the pattern in @regex. 
  * The @match_options are combined with the match options specified 
@@ -1534,10 +1534,10 @@ g_regex_match_all (const GRegex      *regex,
  * @match_options: match options
  * @match_info: pointer to location where to store the #GMatchInfo, 
  *   or %NULL if you do not need it
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Using the standard algorithm for regular expression matching only 
- * the longest match in the string is retrieved, it is not possibile 
+ * the longest match in the string is retrieved, it is not possible 
  * to obtain all the available matches. For instance matching
  * "&lt;a&gt; &lt;b&gt; &lt;c&gt;" against the pattern "&lt;.*&gt;" 
  * you get "&lt;a&gt; &lt;b&gt; &lt;c&gt;".
@@ -2402,7 +2402,7 @@ interpolation_list_needs_match (GList *list)
  * @start_position: starting index of the string to match
  * @replacement: text to replace each match with
  * @match_options: options for the match
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Replaces all occurrences of the pattern in @regex with the
  * replacement text. Backreferences of the form '\number' or 
@@ -2514,7 +2514,7 @@ literal_replacement (const GMatchInfo *match_info,
  * @start_position: starting index of the string to match
  * @replacement: text to replace each match with
  * @match_options: options for the match
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Replaces all occurrences of the pattern in @regex with the
  * replacement text. @replacement is replaced literally, to
@@ -2558,7 +2558,7 @@ g_regex_replace_literal (const GRegex      *regex,
  * @match_options: options for the match
  * @eval: a function to call for each match
  * @user_data: user data to pass to the function
- * @error: location to store the error occuring, or %NULL to ignore errors
+ * @error: location to store the error occurring, or %NULL to ignore errors
  *
  * Replaces occurrences of the pattern in regex with the output of 
  * @eval for that occurrence.

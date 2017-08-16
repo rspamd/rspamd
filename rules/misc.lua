@@ -20,6 +20,7 @@ local E = {}
 local fun = require "fun"
 local util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_lua_utils = require "lua_util"
 
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = {
@@ -196,7 +197,7 @@ local check_rcvd = rspamd_config:register_symbol{
     local all_tls = fun.all(function(rc)
       return rc.flags and rc.flags['ssl']
     end, fun.filter(function(rc)
-      return rc.by and rc.by ~= 'localhost'
+      return rc.by_hostname and rc.by_hostname ~= 'localhost'
     end, rcvds))
 
     -- See if only the last hop was encrypted
@@ -204,9 +205,9 @@ local check_rcvd = rspamd_config:register_symbol{
       task:insert_result('RCVD_TLS_ALL', 1.0)
     else
       local rcvd = rcvds[1]
-      if rcvd.by and rcvd.by == 'localhost' then
+      if rcvd.by_hostname and rcvd.by_hostname == 'localhost' then
         -- Ignore artificial header from Rmilter
-        rcvd = rcvds[2]
+        rcvd = rcvds[2] or {}
       end
       if rcvd.flags and rcvd.flags['ssl'] then
         task:insert_result('RCVD_TLS_LAST', 1.0)
@@ -288,7 +289,7 @@ rspamd_config.URI_COUNT_ODD = {
       local urls = task:get_urls() or {}
       local nurls = fun.filter(function(url)
         return not url:is_html_displayed()
-      end, urls):foldl(function(acc, val) return acc + 1 end, 0)
+      end, urls):foldl(function(acc, val) return acc + val:get_count() end, 0)
 
       if nurls % 2 == 1 then
         return true, 1.0, tostring(nurls)
@@ -409,39 +410,11 @@ local aliases_id = rspamd_config:register_symbol{
   type = 'prefilter',
   name = 'EMAIL_PLUS_ALIASES',
   callback = function(task)
-    local function check_address(addr)
-      if addr.user then
-        local cap, pluses = string.match(addr.user, '^([^%+][^%+]*)(%+.*)$')
-        if cap then
-          return cap, rspamd_str_split(pluses, '+')
-        end
-      end
-
-      return nil
-    end
-
-    local function set_addr(addr, new_user)
-      addr.user = new_user
-
-      if addr.domain then
-        addr.addr = string.format('%s@%s', addr.user, addr.domain)
-      else
-        addr.addr = string.format('%s@', addr.user)
-      end
-
-      if addr.name and #addr.name > 0 then
-        addr.raw = string.format('"%s" <%s>', addr.name, addr.addr)
-      else
-        addr.raw = string.format('<%s>', addr.addr)
-      end
-    end
-
     local function check_from(type)
       if task:has_from(type) then
         local addr = task:get_from(type)[1]
-        local na,tags = check_address(addr)
+        local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
         if na then
-          set_addr(addr, na)
           task:set_from(type, addr)
           task:insert_result('TAGGED_FROM', 1.0, fun.totable(
             fun.filter(function(t) return t and #t > 0 end, tags)))
@@ -459,9 +432,8 @@ local aliases_id = rspamd_config:register_symbol{
         local addrs = task:get_recipients(type)
 
         for _, addr in ipairs(addrs) do
-          local na,tags = check_address(addr)
+          local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
           if na then
-            set_addr(addr, na)
             modified = true
             fun.each(function(t) table.insert(all_tags, t) end,
               fun.filter(function(t) return t and #t > 0 end, tags))
@@ -570,6 +542,8 @@ rspamd_config.SPOOF_REPLYTO = {
     -- SMTP recipients must contain From domain
     to = task:get_recipients(1)
     if not to then return false end
+    -- Try mitigate some possible FPs on mailing list posts
+    if #to == 1 and util.strequal_caseless(to[1].addr, from[1].addr) then return false end
     local found_fromdom = false
     for _, t in ipairs(to) do
       if util.strequal_caseless(t.domain, from[1].domain) then
@@ -623,13 +597,25 @@ rspamd_config.R_BAD_CTE_7BIT = {
     for _,p in ipairs(tp) do
       local cte = p:get_mimepart():get_cte() or ''
       if cte ~= '8bit' and p:has_8bit_raw() then
-        return true,1.0,cte
+        local _,_,attrs = p:get_mimepart():get_type_full()
+        local mul = 1.0
+        local params = {cte}
+        if attrs then
+          if attrs.charset and attrs.charset:lower() == "utf-8" then
+            -- Penalise rule as people don't know that utf8 is surprisingly
+            -- eight bit encoding
+            mul = 0.3
+            table.insert(params, "utf8")
+          end
+        end
+
+        return true,mul,params
       end
     end
 
     return false
   end,
-  score = 4.0,
+  score = 3.5,
   description = 'Detects bad content-transfer-encoding for text parts',
   group = 'header'
 }

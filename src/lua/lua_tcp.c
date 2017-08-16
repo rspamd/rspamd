@@ -216,12 +216,17 @@ static void lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd,
 static const int default_tcp_timeout = 5000;
 
 static struct rspamd_dns_resolver *
-lua_tcp_global_resolver (struct event_base *ev_base)
+lua_tcp_global_resolver (struct event_base *ev_base,
+		struct rspamd_config *cfg)
 {
 	static struct rspamd_dns_resolver *global_resolver;
 
+	if (cfg && cfg->dns_resolver) {
+		return cfg->dns_resolver;
+	}
+
 	if (global_resolver == NULL) {
-		global_resolver = dns_resolver_init (NULL, ev_base, NULL);
+		global_resolver = dns_resolver_init (NULL, ev_base, cfg);
 	}
 
 	return global_resolver;
@@ -923,6 +928,7 @@ lua_tcp_request (lua_State *L)
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_async_session *session;
 	struct rspamd_task *task = NULL;
+	struct rspamd_config *cfg;
 	struct iovec *iov = NULL;
 	guint niov = 0, total_out;
 	guint64 h;
@@ -980,16 +986,6 @@ lua_tcp_request (lua_State *L)
 			}
 			lua_pop (L, 1);
 
-			lua_pushstring (L, "resolver");
-			lua_gettable (L, -2);
-			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{resolver}")) {
-				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
-			}
-			else {
-				resolver = lua_tcp_global_resolver (ev_base);
-			}
-			lua_pop (L, 1);
-
 			lua_pushstring (L, "session");
 			lua_gettable (L, -2);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{session}")) {
@@ -997,6 +993,26 @@ lua_tcp_request (lua_State *L)
 			}
 			else {
 				session = NULL;
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "config");
+			lua_gettable (L, -2);
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{config}")) {
+				cfg = *(struct rspamd_config **)lua_touserdata (L, -1);
+			}
+			else {
+				cfg = NULL;
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "resolver");
+			lua_gettable (L, -2);
+			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{resolver}")) {
+				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
+			}
+			else {
+				resolver = lua_tcp_global_resolver (ev_base, cfg);
 			}
 			lua_pop (L, 1);
 		}

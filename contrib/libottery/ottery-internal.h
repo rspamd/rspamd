@@ -170,7 +170,7 @@ struct ottery_prf {
   unsigned output_len;
   /** Bitmask of CPU flags required to run this PRF. */
   uint32_t required_cpucap;
-  /** Pointer to a function to intialize a state structure for the PRF.
+  /** Pointer to a function to initialize a state structure for the PRF.
    *
    * @param state An object of size at least (state_len) that will
    *     hold the state and any derived values.  It must be aligned to

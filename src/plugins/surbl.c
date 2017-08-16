@@ -32,7 +32,6 @@
  * - bit (string): describes a prefix for a single bit
  */
 
-#include <rdns.h>
 #include "config.h"
 #include "libmime/message.h"
 #include "libutil/map.h"
@@ -65,6 +64,7 @@
 
 static struct surbl_ctx *surbl_module_ctx = NULL;
 static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
+static const gchar *rspamd_surbl_default_monitored = "facebook.com";
 
 static void surbl_test_url (struct rspamd_task *task, void *user_data);
 static void surbl_test_redirector (struct rspamd_task *task, void *user_data);
@@ -494,25 +494,25 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 }
 
 static gint
-surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
-		ucl_object_t* monitored_opts)
+surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 {
 	const ucl_object_t* cur_rule;
 	const ucl_object_t* cur;
 	gint cb_id;
 	gint nrules = 0;
 	struct suffix_item* new_suffix;
-	const gchar* ip_val;
+	const gchar* ip_val, *monitored_domain = NULL;
 	struct surbl_bit_item* new_bit;
-	ucl_object_t *ropts = monitored_opts;
+	ucl_object_t *ropts;
 
 	LL_FOREACH(value, cur_rule) {
 		cur = ucl_object_lookup (cur_rule, "enabled");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
-			if (!ucl_object_toboolean(cur)) {
+			if (!ucl_object_toboolean (cur)) {
 				continue;
 			}
 		}
+
 		cur = ucl_object_lookup (cur_rule, "suffix");
 		if (cur == NULL) {
 			msg_err_config("surbl rule must have explicit symbol "
@@ -521,13 +521,13 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 		}
 
 		new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
-				sizeof(struct suffix_item));
+				sizeof (struct suffix_item));
 		new_suffix->magic = rspamd_surbl_cb_magic;
 		new_suffix->suffix = rspamd_mempool_strdup (
 				surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
 		new_suffix->options = 0;
 		new_suffix->bits = g_array_new (FALSE, FALSE,
-				sizeof(struct surbl_bit_item));
+				sizeof (struct surbl_bit_item));
 		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 				(rspamd_mempool_destruct_t )rspamd_array_free_hard,
 				new_suffix->bits);
@@ -554,36 +554,49 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 
 		cur = ucl_object_lookup (cur_rule, "options");
 		if (cur != NULL && cur->type == UCL_STRING) {
-			if (strstr(ucl_obj_tostring(cur), "noip") != NULL) {
+			if (strstr(ucl_obj_tostring (cur), "noip") != NULL) {
 				new_suffix->options |= SURBL_OPTION_NOIP;
 			}
 		}
 
 		cur = ucl_object_lookup (cur_rule, "no_ip");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
-			if (ucl_object_toboolean(cur)) {
+			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_NOIP;
 			}
 		}
 
+		cur = ucl_object_lookup (cur_rule, "monitored_domain");
+		if (cur != NULL && cur->type == UCL_STRING) {
+			monitored_domain = ucl_object_tostring (cur);
+		}
+
 		cur = ucl_object_lookup (cur_rule, "resolve_ip");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
-			if (ucl_object_toboolean(cur)) {
+			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_RESOLVEIP;
 
-				/* We need to adjust monitored config */
-				ropts = ucl_object_typed_new (UCL_OBJECT);
-				ucl_object_insert_key (monitored_opts,
-						ucl_object_fromstring ("1.0.0.127"),
-						"prefix", 0, false);
-				ucl_object_insert_key (monitored_opts,
-						ucl_object_fromstring ("nxdomain"),
-						"rcode", 0, false);
-				rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-						(rspamd_mempool_destruct_t )ucl_object_unref,
-						ropts);
+				if (!monitored_domain) {
+					monitored_domain = "1.0.0.127";
+				}
+			}
+			else {
+				if (!monitored_domain) {
+					monitored_domain = rspamd_surbl_default_monitored;
+				}
 			}
 		}
+
+		ropts = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (ropts,
+				ucl_object_fromstring (monitored_domain),
+				"prefix", 0, false);
+		ucl_object_insert_key (ropts,
+				ucl_object_fromstring ("nxdomain"),
+				"rcode", 0, false);
+		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+				(rspamd_mempool_destruct_t )ucl_object_unref,
+				ropts);
 
 		cur = ucl_object_lookup (cur_rule, "images");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
@@ -595,8 +608,11 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 		if ((new_suffix->options & (SURBL_OPTION_RESOLVEIP | SURBL_OPTION_NOIP))
 				== (SURBL_OPTION_NOIP | SURBL_OPTION_RESOLVEIP)) {
 			/* Mutually exclusive options */
-			msg_err_config("options noip and resolve_ip are "
+			msg_err_config ("options noip and resolve_ip are "
 					"mutually exclusive for suffix %s", new_suffix->suffix);
+			ucl_object_unref (ropts);
+
+			continue;
 		}
 
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache, "SURBL_CALLBACK",
@@ -626,12 +642,14 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 							ucl_object_key (cur_bit));
 					/* Convert to uppercase */
 					p = new_bit->symbol;
+
 					while (*p) {
 						*p = g_ascii_toupper (*p);
 						p++;
 					}
+
 					msg_debug_config("add new bit suffix: %d with symbol: %s",
-							(gint )new_bit->bit, new_bit->symbol);
+							(gint)new_bit->bit, new_bit->symbol);
 					g_array_append_val(new_suffix->bits, *new_bit);
 				}
 			}
@@ -656,7 +674,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 							surbl_module_ctx->surbl_pool,
 							sizeof(struct surbl_bit_item));
 					if (inet_pton (AF_INET, ip_val, &bit) != 1) {
-						msg_err_config("cannot parse ip %s: %s", ip_val,
+						msg_err_config ("cannot parse ip %s: %s", ip_val,
 								strerror (errno));
 						continue;
 					}
@@ -671,11 +689,61 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 						p++;
 					}
 					msg_debug_config ("add new IP suffix: %d with symbol: %s",
-							(gint )new_bit->bit, new_bit->symbol);
+							(gint)new_bit->bit, new_bit->symbol);
 					g_hash_table_insert (new_suffix->ips, &new_bit->bit,
 							new_bit);
 				}
 			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "process_script");
+		if (cur != NULL && cur->type == UCL_STRING) {
+			lua_State *L = cfg->lua_state;
+			GString *tb;
+			gint err_idx;
+			const gchar *input = ucl_object_tostring (cur);
+			gboolean loaded = FALSE;
+
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
+			/* First try return + input */
+			tb = g_string_sized_new (strlen (input) + sizeof ("return "));
+			rspamd_printf_gstring (tb, "return %s", input);
+
+			if (luaL_loadstring (L, tb->str) != 0) {
+				/* Reset stack */
+				lua_settop (L, 0);
+				lua_pushcfunction (L, &rspamd_lua_traceback);
+				err_idx = lua_gettop (L);
+				/* Try with no return */
+				if (luaL_loadstring (L, input) != 0) {
+					msg_err_config ("cannot load string %s\n",
+							input);
+				}
+				else {
+					loaded = TRUE;
+				}
+			}
+			else {
+				loaded = TRUE;
+			}
+
+			g_string_free (tb, TRUE);
+
+			if (loaded) {
+				if (lua_pcall (L, 0, 1, err_idx) != 0) {
+					tb = lua_touserdata (L, -1);
+					msg_err_config ("call failed: %v\n", tb);
+					g_string_free (tb, TRUE);
+				}
+				else if (lua_isfunction (L, -1)) {
+					new_suffix->url_process_cbref = luaL_ref (L,
+							LUA_REGISTRYINDEX);
+				}
+			}
+
+			lua_settop (L, err_idx - 1);
 		}
 
 		if (new_suffix->symbol) {
@@ -691,6 +759,8 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg,
 				RSPAMD_MONITORED_DEFAULT, ropts);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes,
 				new_suffix);
+
+		ucl_object_unref (ropts);
 	}
 
 	return nrules;
@@ -704,7 +774,6 @@ surbl_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value, *cur;
 	const gchar *redir_val;
 	gint nrules = 0;
-	ucl_object_t *monitored_opts;
 	lua_State *L;
 
 	/* Register global methods */
@@ -734,12 +803,6 @@ surbl_module_config (struct rspamd_config *cfg)
 		return TRUE;
 	}
 
-	monitored_opts = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("facebook.com"),
-			"prefix", 0, false);
-	ucl_object_insert_key (monitored_opts, ucl_object_fromstring ("nxdomain"),
-			"rcode", 0, false);
-
 	(void)rspamd_symbols_cache_add_symbol (cfg->cache, SURBL_REDIRECTOR_CALLBACK,
 			0, surbl_test_redirector, NULL,
 			SYMBOL_TYPE_CALLBACK, -1);
@@ -754,7 +817,8 @@ surbl_module_config (struct rspamd_config *cfg)
 		{
 			redir_val = ucl_obj_tostring (cur);
 			if (rspamd_upstreams_add_upstream (surbl_module_ctx->redirectors,
-					redir_val, 80, NULL)) {
+					redir_val, 80, RSPAMD_UPSTREAM_PARSE_DEFAULT,
+					NULL)) {
 				surbl_module_ctx->use_redirector = TRUE;
 			}
 		}
@@ -777,13 +841,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	else {
 		surbl_module_ctx->weight = DEFAULT_SURBL_WEIGHT;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl", "url_expire")) != NULL) {
-		surbl_module_ctx->url_expire = ucl_obj_todouble (value);
-	}
-	else {
-		surbl_module_ctx->url_expire = DEFAULT_SURBL_URL_EXPIRE;
-	}
+
 
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "use_tags")) != NULL) {
@@ -793,14 +851,6 @@ surbl_module_config (struct rspamd_config *cfg)
 		surbl_module_ctx->use_tags = TRUE;
 	}
 
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl",
-		"redirector_connect_timeout")) != NULL) {
-		surbl_module_ctx->connect_timeout = ucl_obj_todouble (value);
-	}
-	else {
-		surbl_module_ctx->connect_timeout = DEFAULT_REDIRECTOR_CONNECT_TIMEOUT;
-	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_read_timeout")) != NULL) {
@@ -822,13 +872,6 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl", "max_urls")) != NULL) {
-		surbl_module_ctx->max_urls = ucl_obj_toint (value);
-	}
-	else {
-		surbl_module_ctx->max_urls = DEFAULT_SURBL_MAX_URLS;
-	}
-	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
 				"SURBL exceptions list",
@@ -849,12 +892,12 @@ surbl_module_config (struct rspamd_config *cfg)
 
 		if (ucl_object_lookup (value, "symbol") != NULL) {
 			/* Old style */
-			nrules += surbl_module_parse_rule (value, cfg, monitored_opts);
+			nrules += surbl_module_parse_rule (value, cfg);
 		}
 		else {
 			/* New style */
 			while ((cur_value = ucl_object_iterate (value, &it, true)) != NULL) {
-				nrules += surbl_module_parse_rule (cur_value, cfg, monitored_opts);
+				nrules += surbl_module_parse_rule (cur_value, cfg);
 			}
 		}
 	}
@@ -866,7 +909,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 		/* New style only */
 		while ((cur_value = ucl_object_iterate (value, &it, true)) != NULL) {
-			nrules += surbl_module_parse_rule (cur_value, cfg, monitored_opts);
+			nrules += surbl_module_parse_rule (cur_value, cfg);
 		}
 	}
 
@@ -894,7 +937,6 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	msg_info_config ("init internal surbls module, %d uribl rules loaded",
 			nrules);
-	ucl_object_unref (monitored_opts);
 
 	return TRUE;
 }
@@ -942,7 +984,8 @@ format_surbl_request (rspamd_mempool_t * pool,
 	GError ** err,
 	gboolean forced,
 	GHashTable *tree,
-	struct rspamd_url *url)
+	struct rspamd_url *url,
+	lua_State *L)
 {
 	GHashTable *t;
 	gchar *result = NULL;
@@ -1076,7 +1119,25 @@ format_surbl_request (rspamd_mempool_t * pool,
 	}
 
 	if (append_suffix) {
-		rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+		if (suffix->url_process_cbref > 0) {
+			lua_rawgeti (L, LUA_REGISTRYINDEX, suffix->url_process_cbref);
+			lua_pushstring (L, result);
+			lua_pushstring (L, suffix->suffix);
+
+			if (lua_pcall (L, 2, 1, 0) != 0) {
+				msg_err_pool ("cannot call url process script: %s",
+						lua_tostring (L, -1));
+				lua_pop (L, 1);
+				rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+			}
+			else {
+				result = rspamd_mempool_strdup (pool, lua_tostring (L, -1));
+				lua_pop (L, 1);
+			}
+		}
+		else {
+			rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+		}
 	}
 
 	if (tree != NULL) {
@@ -1121,7 +1182,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		 * check against surbl using reverse octets printing
 		 */
 		surbl_req = format_surbl_request (task->task_pool, &f, suffix, FALSE,
-				&err, forced, tree, url);
+				&err, forced, tree, url, task->cfg->lua_state);
 
 		if (surbl_req == NULL) {
 			if (err != NULL) {
@@ -1155,15 +1216,22 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			}
 		}
 	}
-	else if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
-		&err, forced, tree, url)) != NULL) {
+	else if ((surbl_req = format_surbl_request (task->task_pool,
+			&f,
+			suffix,
+			TRUE,
+			&err,
+			forced,
+			tree,
+			url,
+			task->cfg->lua_state)) != NULL) {
 		param =
 			rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
 		param->url = url;
 		param->task = task;
 		param->suffix = suffix;
 		param->host_resolve =
-			rspamd_mempool_strdup (task->task_pool, surbl_req);
+			rspamd_mempool_strdup (task->task_pool, url->surbl);
 		msg_debug_surbl ("send surbl dns request %s", surbl_req);
 
 		if (make_dns_request_task (task,
@@ -1362,7 +1430,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	struct rspamd_task *task;
 	gint r, urllen;
-	struct rspamd_url *redirected_url;
+	struct rspamd_url *redirected_url, *existing;
 	const rspamd_ftok_t *hdr;
 	gchar *urlstr;
 
@@ -1386,11 +1454,14 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					task->task_pool);
 
 			if (r == URI_ERRNO_OK) {
-				if (!g_hash_table_lookup (task->urls, redirected_url)) {
+				if ((existing = g_hash_table_lookup (task->urls, redirected_url)) == NULL) {
 					g_hash_table_insert (task->urls, redirected_url,
 							redirected_url);
 					redirected_url->phished_url = param->url;
 					redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+				}
+				else {
+					existing->count ++;
 				}
 
 				rspamd_url_add_tag (param->url, "redirector", urlstr,
@@ -1605,6 +1676,11 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		return;
 	}
 
+	if (url->tags && g_hash_table_lookup (url->tags, "redirector")) {
+		/* URL is redirected, skip from checks */
+		return;
+	}
+
 	make_surbl_requests (url, param->task, param->suffix, FALSE,
 			param->tree);
 }
@@ -1806,10 +1882,7 @@ surbl_continue_process_handler (lua_State *L)
 	param = (struct redirector_param *)lua_topointer (L, 2);
 
 	if (param != NULL) {
-
 		task = param->task;
-		rspamd_session_watcher_pop (task->s, param->w);
-		param->w = NULL;
 
 		if (nurl != NULL) {
 			msg_info_surbl ("<%s> got reply from redirector: '%*s' -> '%*s'",
@@ -1846,6 +1919,9 @@ surbl_continue_process_handler (lua_State *L)
 					param->task->message_id,
 					param->url->urllen, param->url->string);
 		}
+
+		rspamd_session_watcher_pop (task->s, param->w);
+		param->w = NULL;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

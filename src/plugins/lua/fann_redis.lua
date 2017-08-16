@@ -24,19 +24,40 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
-local fann_symbol_spam = 'FANNR_SPAM'
-local fann_symbol_ham = 'FANNR_HAM'
 local rspamd_redis = require "lua_redis"
 local fun = require "fun"
+local meta_functions = require "meta_functions"
 
-local module_log_id = 0x200
 -- Module vars
--- ANNs indexed by settings id
-local fanns = {
-  ['0'] = {
-    version = 0,
+local default_options = {
+  train = {
+    max_trains = 1000,
+    max_epoch = 1000,
+    max_usages = 10,
+    use_settings = false,
+    per_user = false,
+    watch_interval = 60.0,
+    mse = 0.001,
+    autotrain = true,
+  },
+  nlayers = 4,
+  lock_expire = 600,
+  learning_spawned = false,
+  ann_expire = 60 * 60 * 24 * 2, -- 2 days
+  symbol_spam = 'FANNR_SPAM',
+  symbol_ham = 'FANNR_HAM',
+}
+
+local settings = {
+  rules = {
   }
 }
+
+-- ANNs indexed by settings id
+local fanns = {
+}
+
+local opts = rspamd_config:get_all_opt("fann_redis")
 
 
 -- Lua script to train a row
@@ -161,19 +182,6 @@ local redis_lua_script_save_unlock = [[
 local redis_save_unlock_sha = nil
 
 local redis_params
-redis_params = rspamd_parse_redis_server('fann_redis')
-
-local fann_prefix = 'RFANN'
-local max_trains = 1000
-local max_epoch = 1000
-local max_usages = 10
-local use_settings = false
-local watch_interval = 60.0
-local mse = 0.0001
-local nlayers = 4
-local lock_expire = 600
-local learning_spawned = false
-local ann_expire = 60 * 60 * 24 * 2 -- 2 days
 
 local function load_scripts(cfg, ev_base, on_load_cb)
   local function can_train_sha_cb(err, data)
@@ -286,37 +294,22 @@ local function load_scripts(cfg, ev_base, on_load_cb)
   )
 end
 
-local function symbols_to_fann_vector(syms, scores)
-  local learn_data = {}
-  local matched_symbols = {}
-  local n = rspamd_config:get_symbols_count()
-
-  fun.each(function(s, score)
-     matched_symbols[s + 1] = rspamd_util.tanh(score)
-  end, fun.zip(syms, scores))
-
-  for i=1,n do
-    if matched_symbols[i] then
-      learn_data[i] = matched_symbols[i]
-    else
-      learn_data[i] = 0
-    end
-  end
-
-  return learn_data
-end
-
-local function gen_fann_prefix(id)
+local function gen_fann_prefix(rule, id)
+  local cksum = rspamd_config:get_symbols_cksum():hex()
+  -- We also need to count metatokens:
+  local n = meta_functions.rspamd_count_metatokens()
   if id then
-    return fann_prefix .. rspamd_config:get_symbols_cksum():hex() .. id,id
+    return string.format('%s%s%d%s', rule.prefix, cksum, n, id),
+      rule.prefix .. id
   else
-    return fann_prefix .. rspamd_config:get_symbols_cksum():hex(), nil
+    return string.format('%s%s%d', rule.prefix, cksum, n), nil
   end
 end
 
-local function is_fann_valid(prefix, ann)
+local function is_fann_valid(rule, prefix, ann)
   if ann then
-    local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
+    local n = rspamd_config:get_symbols_count() +
+        meta_functions.rspamd_count_metatokens()
 
     if n ~= ann:get_inputs() then
       rspamd_logger.infox(rspamd_config, 'ANN %s has incorrect number of inputs: %s, %s symbols' ..
@@ -325,7 +318,7 @@ local function is_fann_valid(prefix, ann)
     end
     local layers = ann:get_layers()
 
-    if not layers or #layers ~= nlayers then
+    if not layers or #layers ~= rule.nlayers then
       rspamd_logger.infox(rspamd_config, 'ANN %s has incorrect number of layers: %s',
         prefix, #layers)
       return false
@@ -336,68 +329,85 @@ local function is_fann_valid(prefix, ann)
 end
 
 local function fann_scores_filter(task)
-  local id = '0'
-  if use_settings then
-   local sid = task:get_settings_id()
-   if sid then
-    id = tostring(sid)
-   end
-  end
-
-  if fanns[id].fann then
-    local symbols,scores = task:get_symbols_numeric()
-    local fann_data = symbols_to_fann_vector(symbols, scores)
-    local mt = rspamd_gen_metatokens(task)
-
-    for _,tok in ipairs(mt) do
-      table.insert(fann_data, tok)
+  for _,rule in ipairs(settings.rules) do
+    local id = rule.prefix .. '0'
+    if rule.use_settings then
+     local sid = task:get_settings_id()
+     if sid then
+      id = rule.prefix .. tostring(sid)
+     end
+    end
+    if rule.per_user then
+      local r = task:get_principal_recipient()
+      id = id .. r
     end
 
-    local out = fanns[id].fann:test(fann_data)
-    local symscore = string.format('%.3f', out[1])
-    rspamd_logger.infox(task, 'fann score: %s', symscore)
+    if fanns[id].fann then
+      local fann_data = task:get_symbols_tokens()
+      local mt = meta_functions.rspamd_gen_metatokens(task)
+      -- Add filtered meta tokens
+      fun.each(function(e) table.insert(fann_data, e) end, mt)
 
-    if out[1] > 0 then
-      local result = rspamd_util.normalize_prob(out[1] / 2.0, 0)
-      task:insert_result(fann_symbol_spam, result, symscore, id)
-    else
-      local result = rspamd_util.normalize_prob((-out[1]) / 2.0, 0)
-      task:insert_result(fann_symbol_ham, result, symscore, id)
+      local out = fanns[id].fann:test(fann_data)
+      local symscore = string.format('%.3f', out[1])
+      rspamd_logger.infox(task, 'fann score: %s', symscore)
+
+      if out[1] > 0 then
+        local result = rspamd_util.normalize_prob(out[1] / 2.0, 0)
+        task:insert_result(rule.symbol_spam, result, symscore, id)
+      else
+        local result = rspamd_util.normalize_prob((-out[1]) / 2.0, 0)
+        task:insert_result(rule.symbol_ham, result, symscore, id)
+      end
     end
   end
 end
 
-local function create_train_fann(n, id)
-  id = tostring(id)
-  local prefix = gen_fann_prefix(id)
+local function create_fann(n, nlayers)
+  local layers = {}
+  local div = 1.0
+  for _ = 1, nlayers - 1 do
+    table.insert(layers, math.floor(n / div))
+    div = div * 2
+  end
+  table.insert(layers, 1)
+  return rspamd_fann.create(nlayers, layers)
+end
+
+local function create_train_fann(rule, n, id)
+  id = rule.prefix .. tostring(id)
+  local prefix = gen_fann_prefix(rule, id)
   if not fanns[id] then
     fanns[id] = {}
   end
-
+  -- Fix that for flexibe layers number
   if fanns[id].fann then
-    if n ~= fanns[id].fann:get_inputs() or
+    if n ~= fanns[id].fann:get_inputs() or --
       (fanns[id].fann_train and n ~= fanns[id].fann_train:get_inputs()) then
-      rspamd_logger.infox(rspamd_config, 'recreate ANN %s as it has a wrong number of inputs, version %s', prefix,
+      rspamd_logger.infox(rspamd_config,
+        'recreate ANN %s as it has a wrong number of inputs, version %s',
+        prefix,
         fanns[id].version)
-      fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
+
+      fanns[id].fann_train = create_fann(n, rule.nlayers)
       fanns[id].fann = nil
-    elseif fanns[id].version % max_usages == 0 then
+    elseif fanns[id].version % rule.max_usages == 0 then
       -- Forget last fann
       rspamd_logger.infox(rspamd_config, 'recreate ANN %s, version %s', prefix,
         fanns[id].version)
-      fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
+      fanns[id].fann_train = create_fann(n, rule.nlayers)
     else
       fanns[id].fann_train = fanns[id].fann
     end
   else
-    fanns[id].fann_train = rspamd_fann.create(nlayers, n, n / 2, n / 4, 1)
+    fanns[id].fann_train = create_fann(n, rule.nlayers)
     fanns[id].version = 0
   end
 end
 
-local function load_or_invalidate_fann(data, id, ev_base)
+local function load_or_invalidate_fann(rule, data, id, ev_base)
   local ver = data[2]
-  local prefix = gen_fann_prefix(id)
+  local prefix = gen_fann_prefix(rule, id)
 
   if not ver or not tonumber(ver) then
     rspamd_logger.errx(rspamd_config, 'cannot get version for ANN: %s', prefix)
@@ -414,7 +424,7 @@ local function load_or_invalidate_fann(data, id, ev_base)
     ann = rspamd_fann.load_data(ann_data)
   end
 
-  if is_fann_valid(prefix, ann) then
+  if is_fann_valid(rule, prefix, ann) then
     fanns[id].fann = ann
     rspamd_logger.infox(rspamd_config, 'loaded ANN %s version %s from redis',
       prefix, ver)
@@ -435,7 +445,7 @@ local function load_or_invalidate_fann(data, id, ev_base)
     rspamd_logger.infox(rspamd_config, 'invalidate ANN %s', prefix)
     rspamd_redis.redis_make_request_taskless(ev_base,
       rspamd_config,
-      redis_params,
+      rule.redis,
       nil,
       true, -- is write
       redis_invalidate_cb, --callback
@@ -445,20 +455,34 @@ local function load_or_invalidate_fann(data, id, ev_base)
   end
 end
 
-local function fann_train_callback(score, required_score, results, _, id, opts, extra, ev_base)
-  local fname,suffix = gen_fann_prefix(id)
+local function fann_train_callback(rule, task, score, required_score, id)
+  local train_opts = rule['train']
+  local fname,suffix = gen_fann_prefix(rule, id)
 
   local learn_spam, learn_ham
 
-  if opts['spam_score'] then
-    learn_spam = score >= opts['spam_score']
+  if rule.autotrain then
+    if train_opts['spam_score'] then
+      learn_spam = score >= train_opts['spam_score']
+    else
+      learn_spam = score >= required_score
+    end
+    if train_opts['ham_score'] then
+      learn_ham = score <= train_opts['ham_score']
+    else
+      learn_ham = score < 0
+    end
   else
-    learn_spam = score >= required_score
-  end
-  if opts['ham_score'] then
-    learn_ham = score <= opts['ham_score']
-  else
-    learn_ham = score < 0
+    -- Train by request header
+    local hdr = task:get_request_header('ANN-Train')
+
+    if hdr then
+      if hdr:lower() == 'spam' then
+        learn_spam = true
+      elseif hdr:lower() == 'ham' then
+        learn_ham = true
+      end
+    end
   end
 
   if learn_spam or learn_ham then
@@ -473,17 +497,14 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
 
     local function can_train_cb(err, data)
       if not err and tonumber(data) > 0 then
-        local learn_data = symbols_to_fann_vector(
-          fun.map(function(r) return r[1] end, results),
-          fun.map(function(r) return r[2] end, results)
-        )
+        local fann_data = task:get_symbols_tokens()
+        local mt = meta_functions.rspamd_gen_metatokens(task)
         -- Add filtered meta tokens
-        fun.each(function(e) table.insert(learn_data, e) end, extra)
-        local str = rspamd_util.zstd_compress(table.concat(learn_data, ';'))
+        fun.each(function(e) table.insert(fann_data, e) end, mt)
+        local str = rspamd_util.zstd_compress(table.concat(fann_data, ';'))
 
-        rspamd_redis.redis_make_request_taskless(ev_base,
-          rspamd_config,
-          redis_params,
+        rspamd_redis.redis_make_request(task,
+          rule.redis,
           nil,
           true, -- is write
           learn_vec_cb, --callback
@@ -494,29 +515,29 @@ local function fann_train_callback(score, required_score, results, _, id, opts, 
         if err then
           rspamd_logger.errx(rspamd_config, 'cannot check if we can train %s: %s', fname, err)
           if string.match(err, 'NOSCRIPT') then
-            load_scripts(rspamd_config, ev_base, nil)
+            load_scripts(rspamd_config, task:get_ev_base(), nil)
           end
         end
       end
     end
 
-    rspamd_redis.redis_make_request_taskless(ev_base,
-      rspamd_config,
-      redis_params,
+    rspamd_redis.rspamd_redis_make_request(task,
+      rule.redis,
       nil,
       true, -- is write
       can_train_cb, --callback
       'EVALSHA', -- command
-      {redis_can_train_sha, '4', gen_fann_prefix(nil), suffix, k, tostring(max_trains)} -- arguments
+      {redis_can_train_sha, '4', gen_fann_prefix(rule, nil),
+        suffix, k, tostring(rule.max_trains)} -- arguments
     )
   end
 end
 
-local function train_fann(_, ev_base, elt)
+local function train_fann(rule, _, ev_base, elt)
   local spam_elts = {}
   local ham_elts = {}
   elt = tostring(elt)
-  local prefix = gen_fann_prefix(elt)
+  local prefix = gen_fann_prefix(rule, elt)
 
   local function redis_unlock_cb(err)
     if err then
@@ -531,7 +552,7 @@ local function train_fann(_, ev_base, elt)
         prefix, err)
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         false, -- is write
         redis_unlock_cb, --callback
@@ -545,13 +566,13 @@ local function train_fann(_, ev_base, elt)
   end
 
   local function ann_trained(errcode, errmsg, train_mse)
-    learning_spawned = false
+    rule.learning_spawned = false
     if errcode ~= 0 then
       rspamd_logger.errx(rspamd_config, 'cannot train ANN %s: %s',
         prefix, errmsg)
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
@@ -567,12 +588,12 @@ local function train_fann(_, ev_base, elt)
       fanns[elt].fann_train = nil
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         true, -- is write
         redis_save_cb, --callback
         'EVALSHA', -- command
-        {redis_save_unlock_sha, '2', prefix, ann_data, tostring(ann_expire)}
+        {redis_save_unlock_sha, '2', prefix, ann_data, tostring(rule.ann_expire)}
       )
     end
   end
@@ -583,7 +604,7 @@ local function train_fann(_, ev_base, elt)
         prefix, err)
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
@@ -601,7 +622,8 @@ local function train_fann(_, ev_base, elt)
       local inputs = {}
       local outputs = {}
 
-      local n = rspamd_config:get_symbols_count() + rspamd_count_metatokens()
+      local n = rspamd_config:get_symbols_count() +
+          meta_functions.rspamd_count_metatokens()
       local filt = function(elts)
         return #elts == n
       end
@@ -617,10 +639,10 @@ local function train_fann(_, ev_base, elt)
       if not fanns[elt] or not fanns[elt].fann_train
         or n ~= fanns[elt].fann_train:get_inputs() then
         -- Create fann if it does not exist
-        create_train_fann(n, elt)
+        create_train_fann(rule, n, elt)
       end
 
-      if #inputs < max_trains / 2 then
+      if #inputs < rule.max_trains / 2 then
         -- Invalidate ANN as it is definitely invalid
         local function redis_invalidate_cb(_err, _data)
           if _err then
@@ -634,7 +656,7 @@ local function train_fann(_, ev_base, elt)
         rspamd_logger.infox(rspamd_config, 'invalidate ANN %s: training data is invalid', prefix)
         rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
-          redis_params,
+          rule.redis,
           nil,
           true, -- is write
           redis_invalidate_cb, --callback
@@ -642,10 +664,13 @@ local function train_fann(_, ev_base, elt)
           {redis_locked_invalidate_sha, 1, prefix}
         )
       else
-        learning_spawned = true
+        rule.learning_spawned = true
         rspamd_logger.infox(rspamd_config, 'start learning ANN %s', prefix)
-        fanns[elt].fann_train:train_threaded(inputs, outputs, ann_trained, ev_base,
-          {max_epochs = max_epoch, desired_mse = mse})
+        fanns[elt].fann_train:train_threaded(inputs, outputs, ann_trained,
+          ev_base, {
+            max_epochs = rule.train.max_epoch,
+            desired_mse = rule.train.mse
+          })
       end
     end
   end
@@ -656,7 +681,7 @@ local function train_fann(_, ev_base, elt)
         prefix, err)
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         true, -- is write
         redis_unlock_cb, --callback
@@ -671,7 +696,7 @@ local function train_fann(_, ev_base, elt)
       end, data))
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         false, -- is write
         redis_ham_cb, --callback
@@ -692,7 +717,7 @@ local function train_fann(_, ev_base, elt)
       -- Can train ANN
       rspamd_redis.redis_make_request_taskless(ev_base,
         rspamd_config,
-        redis_params,
+        rule.redis,
         nil,
         false, -- is write
         redis_spam_cb, --callback
@@ -711,10 +736,10 @@ local function train_fann(_, ev_base, elt)
                 prefix)
             end
           end
-          if learning_spawned then
+          if rule.learning_spawned then
             rspamd_redis.redis_make_request_taskless(ev_base,
               rspamd_config,
-              redis_params,
+              rule.redis,
               nil,
               true, -- is write
               redis_lock_extend_cb, --callback
@@ -733,45 +758,47 @@ local function train_fann(_, ev_base, elt)
       rspamd_logger.infox(rspamd_config, 'do not learn ANN %s, locked by another process', prefix)
     end
   end
-  if learning_spawned then
+  if rule.learning_spawned then
     rspamd_logger.infox(rspamd_config, 'do not learn ANN %s, already learning another ANN', prefix)
     return
   end
   rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
-    redis_params,
+    rule.redis,
     nil,
     true, -- is write
     redis_lock_cb, --callback
     'EVALSHA', -- command
     {redis_maybe_lock_sha, '4', prefix, tostring(os.time()),
-      tostring(lock_expire), rspamd_util.get_hostname()}
+      tostring(rule.lock_expire), rspamd_util.get_hostname()}
   )
 end
 
-local function maybe_train_fanns(cfg, ev_base)
+local function maybe_train_fanns(rule, cfg, ev_base)
   local function members_cb(err, data)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot get FANNS list from redis: %s', err)
     elseif type(data) == 'table' then
       fun.each(function(elt)
         elt = tostring(elt)
-        local prefix = gen_fann_prefix(elt)
+        local prefix = gen_fann_prefix(rule, elt)
         local redis_len_cb = function(_err, _data)
           if _err then
-            rspamd_logger.errx(rspamd_config, 'cannot get FANN trains %s from redis: %s', prefix, _err)
+            rspamd_logger.errx(rspamd_config,
+              'cannot get FANN trains %s from redis: %s', prefix, _err)
           elseif _data and type(_data) == 'number' or type(_data) == 'string' then
-            if tonumber(_data) and tonumber(_data) >= max_trains then
-              rspamd_logger.infox(rspamd_config, 'need to learn ANN %s after %s learn vectors (%s required)',
-                prefix, tonumber(_data), max_trains)
-              train_fann(cfg, ev_base, elt)
+            if tonumber(_data) and tonumber(_data) >= rule.max_trains then
+              rspamd_logger.infox(rspamd_config,
+                'need to learn ANN %s after %s learn vectors (%s required)',
+                prefix, tonumber(_data), rule.max_trains)
+              train_fann(rule, cfg, ev_base, elt)
             end
           end
         end
 
         rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
-          redis_params,
+          rule.redis,
           nil,
           false, -- is write
           redis_len_cb, --callback
@@ -790,18 +817,18 @@ local function maybe_train_fanns(cfg, ev_base)
   -- First we need to get all fanns stored in our Redis
   rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
-    redis_params,
+    rule.redis,
     nil,
     false, -- is write
     members_cb, --callback
     'SMEMBERS', -- command
-    {gen_fann_prefix(nil)} -- arguments
+    {gen_fann_prefix(rule, nil)} -- arguments
   )
 
-  return watch_interval
+  return rule.watch_interval
 end
 
-local function check_fanns(_, ev_base)
+local function check_fanns(rule, _, ev_base)
   local function members_cb(err, data)
     if err then
       rspamd_logger.errx(rspamd_config, 'cannot get FANNS list from redis: %s', err)
@@ -815,7 +842,7 @@ local function check_fanns(_, ev_base)
               load_scripts(rspamd_config, ev_base, nil)
             end
           elseif _data and type(_data) == 'table' then
-            load_or_invalidate_fann(_data, elt, ev_base)
+            load_or_invalidate_fann(rule, _data, elt, ev_base)
           end
         end
 
@@ -827,12 +854,12 @@ local function check_fanns(_, ev_base)
         end
         rspamd_redis.redis_make_request_taskless(ev_base,
           rspamd_config,
-          redis_params,
+          rule.redis,
           nil,
           false, -- is write
           redis_update_cb, --callback
           'EVALSHA', -- command
-          {redis_maybe_load_sha, 2, gen_fann_prefix(elt), tostring(local_ver)}
+          {redis_maybe_load_sha, 2, gen_fann_prefix(rule, elt), tostring(local_ver)}
         )
       end,
       data)
@@ -846,20 +873,36 @@ local function check_fanns(_, ev_base)
   -- First we need to get all fanns stored in our Redis
   rspamd_redis.redis_make_request_taskless(ev_base,
     rspamd_config,
-    redis_params,
+    rule.redis,
     nil,
     false, -- is write
     members_cb, --callback
     'SMEMBERS', -- command
-    {gen_fann_prefix(nil)} -- arguments
+    {gen_fann_prefix(rule, nil)} -- arguments
   )
 
-  return watch_interval
+  return rule.watch_interval
 end
 
--- Initialization part
+local function ann_push_vector(task)
+  local scores = task:get_metric_score()
 
-local opts = rspamd_config:get_all_opt("fann_redis")
+  for _,rule in ipairs(settings.rules) do
+    local sid = "0"
+    if rule.use_settings then
+      sid = tostring(task:get_settings_id())
+    end
+    if rule.per_user then
+      local r = task:get_principal_recipient()
+      sid = sid .. r
+    end
+    fann_train_callback(rule, task, scores[1], scores[2], sid)
+  end
+end
+
+redis_params = rspamd_parse_redis_server('fann_redis')
+
+-- Initialization part
 if not (opts and type(opts) == 'table') or not redis_params then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
   return
@@ -870,93 +913,75 @@ if not rspamd_fann.is_enabled() then
     'module is eventually disabled')
   return
 else
-  use_settings = opts['use_settings']
-  if opts['spam_symbol'] then
-    fann_symbol_spam = opts['spam_symbol']
+  local rules = opts['rules']
+
+  if not rules then
+    -- Use legacy configuration
+    rules = {}
+    rules['RFANN'] = opts
   end
-  if opts['ham_symbol'] then
-    fann_symbol_ham = opts['ham_symbol']
-  end
-  if opts['prefix'] then
-    fann_prefix = opts['prefix']
-  end
-  if opts['lock_expire'] then
-    lock_expire = tonumber(opts['lock_expire'])
-  end
-  rspamd_config:set_metric_symbol({
-    name = fann_symbol_spam,
-    score = 3.0,
-    description = 'Neural network SPAM',
-    group = 'fann'
-  })
+
   local id = rspamd_config:register_symbol({
-    name = fann_symbol_spam,
-    type = 'postfilter',
-    priority = 5,
+    name = 'FANN_CHECK',
+    type = 'postfilter,nostat',
+    priority = 6,
     callback = fann_scores_filter
   })
-  rspamd_config:set_metric_symbol({
-    name = fann_symbol_ham,
-    score = -2.0,
-    description = 'Neural network HAM',
-    group = 'fann'
-  })
-  rspamd_config:register_symbol({
-    name = fann_symbol_ham,
-    type = 'virtual',
-    parent = id
-  })
-  if opts['train'] then
-    rspamd_config:add_on_load(function(cfg)
-      if opts['train']['max_train'] then
-        max_trains = opts['train']['max_train']
-      end
-      if opts['train']['max_epoch'] then
-        max_epoch = opts['train']['max_epoch']
-      end
-      if opts['train']['max_usages'] then
-        max_usages = opts['train']['max_usages']
-      end
-      if opts['train']['mse'] then
-        mse = opts['train']['mse']
-      end
-      local ret = cfg:register_worker_script("log_helper",
-        function(score, req_score, results, cf, _id, extra, ev_base)
-          -- fun.map (snd x) (fun.filter (fst x == module_id) extra)
-          local extra_fann = fun.map(function(e) return e[2] end,
-            fun.filter(function(e) return e[1] == module_log_id end, extra))
-          if use_settings then
-            fann_train_callback(score, req_score, results, cf,
-              tostring(_id), opts['train'], extra_fann, ev_base)
-          else
-            fann_train_callback(score, req_score, results, cf, '0',
-              opts['train'], extra_fann, ev_base)
-          end
-        end)
 
-      if not ret then
-        rspamd_logger.errx(cfg, 'cannot find worker "log_helper"')
+  for k,r in pairs(rules) do
+    rules[k] = default_options
+    rules[k]['redis'] = redis_params
+    local cur = rules[k]
+    -- Override defaults
+    for sk,v in pairs(r) do
+      cur[sk] = v
+    end
+    if not cur.prefix then
+      cur.prefix = k
+    end
+    rspamd_config:set_metric_symbol({
+      name = cur.symbol_spam,
+      score = 3.0,
+      description = 'Neural network SPAM',
+      group = 'fann'
+    })
+
+    rspamd_config:set_metric_symbol({
+      name = cur.symbol_ham,
+      score = -2.0,
+      description = 'Neural network HAM',
+      group = 'fann'
+    })
+    rspamd_config:register_symbol({
+      name = cur.symbol_ham,
+      type = 'virtual,nostat',
+      parent = id
+    })
+  end
+
+  rspamd_config:register_symbol({
+    name = 'FANN_VECTOR_PUSH',
+    type = 'postfilter,nostat',
+    priority = 5,
+    callback = ann_push_vector
+  })
+
+  settings.rules = rules
+
+  -- Add training scripts
+  for _,rule in pairs(settings.rules) do
+    rspamd_config:add_on_load(function(cfg, ev_base, worker)
+      load_scripts(cfg, ev_base, function(_, _)
+          check_fanns(rule, cfg, ev_base)
+      end)
+
+      if worker:get_name() == 'normal' then
+        -- We also want to train neural nets when they have enough data
+        rspamd_config:add_periodic(ev_base, 0.0,
+          function(_, _)
+            return maybe_train_fanns(rule, cfg, ev_base)
+          end)
       end
     end)
-    -- This is needed to pass extra tokens from worker to log_helper
-    rspamd_plugins["fann_redis"] = {
-      log_callback = function(task)
-        return fun.totable(fun.map(
-          function(tok) return {module_log_id, tok} end,
-          rspamd_gen_metatokens(task)))
-      end
-    }
   end
-  -- Add training scripts
-  rspamd_config:add_on_load(function(cfg, ev_base, worker)
-    load_scripts(cfg, ev_base, check_fanns)
-
-    if worker:get_name() == 'normal' then
-      -- We also want to train neural nets when they have enough data
-      rspamd_config:add_periodic(ev_base, 0.0,
-        function(_cfg, _ev_base)
-          return maybe_train_fanns(_cfg, _ev_base)
-        end)
-    end
-  end)
 end

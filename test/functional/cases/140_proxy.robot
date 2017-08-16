@@ -47,8 +47,3 @@ Proxy Teardown
   Shutdown Process With Children  ${SLAVE_PID}
   Cleanup Temporary Directory  ${PROXY_TMPDIR}
   Cleanup Temporary Directory  ${SLAVE_TMPDIR}
-  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
-  ${port_proxy} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_PROXY}
-  ${ports} =  Create List  ${port_normal}  ${port_proxy}
-  : FOR  ${i}  IN  @{ports}
-  \  Wait For Port  @{i}[0]  @{i}[1]  @{i}[2]

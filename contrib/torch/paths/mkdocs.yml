@@ -1,0 +1,12 @@
+site_name: paths
+theme : simplex
+repo_url : https://github.com/torch/paths
+use_directory_urls : false
+markdown_extensions: [extra]
+docs_dir : doc
+pages:
+- [index.md, Paths]
+- [filenames.md, Manipulating Filenames]
+- [dirfunctions.md, Directory Functions]
+- [dirpaths.md, Directory Paths]
+- [misc.md, Miscellaneous]

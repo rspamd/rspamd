@@ -2196,6 +2196,14 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 					}
 				}
 			}
+			else {
+				msg_debug_dkim (
+						"bh value mismatch: %*xs versus %*xs",
+						dlen, ctx->bh,
+						dlen, cached_bh->digest_normal);
+
+				return DKIM_REJECT;
+			}
 		}
 
 		if (cpy_ctx) {
@@ -2691,8 +2699,15 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 		return NULL;
 	}
 
-	b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
-			task->nlines_type);
+	if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+		b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+				RSPAMD_TASK_NEWLINES_LF);
+	}
+	else {
+		b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+				task->nlines_type);
+	}
+
 	rspamd_printf_gstring (hdr, "%s", b64_data);
 	g_free (b64_data);
 

@@ -28,9 +28,14 @@
 #define RSPAMD_MEMPOOL_SPF_DOMAIN "spf_domain"
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
 #define RSPAMD_MEMPOOL_PROFILE "profile"
-#define RSPAMD_MEMPOOL_RMILTER_REPLY "rmilter_reply"
+#define RSPAMD_MEMPOOL_MILTER_REPLY "milter_reply"
 #define RSPAMD_MEMPOOL_DKIM_SIGNATURE "dkim-signature"
 #define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
 #define RSPAMD_MEMPOOL_DKIM_BH_CACHE "dkim_bh_cache"
+#define RSPAMD_MEMPOOL_DKIM_SIGN_KEY "dkim_key"
+#define RSPAMD_MEMPOOL_DKIM_SIGN_SELECTOR "dkim_selector"
+#define RSPAMD_MEMPOOL_ARC_SIGN_KEY "arc_key"
+#define RSPAMD_MEMPOOL_ARC_SIGN_SELECTOR "arc_selector"
+#define RSPAMD_MEMPOOL_STAT_SIGNATURE "stat_signature"
 
 #endif

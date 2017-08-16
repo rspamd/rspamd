@@ -213,6 +213,7 @@ directtrafficlink.com
 disq.us
 dld.bz
 dlvr.it
+dmanalytics1.com
 doiop.com
 do.my
 dopen.us
@@ -227,6 +228,7 @@ easyurl.net
 eepurl.com
 ej.uz
 elurl.com
+email.account.2gis.com
 email.mail.ostrovok.ru
 email.news.ostrovok.ru
 e.mail.ru

@@ -40,7 +40,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 		metric = rspamd_config_new_metric (cfg, metric, name);
 	}
 
-	/* Now iterate throught module table */
+	/* Now iterate through module table */
 	for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 		/* key - -2, value - -1 */
 		symbol =
@@ -125,7 +125,7 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 	gsize keylen;
 	GError *err = NULL;
 
-	/* First check all module options that may be overriden in 'config' global */
+	/* First check all module options that may be overridden in 'config' global */
 	lua_getglobal (L, "config");
 
 	if (lua_istable (L, -1)) {

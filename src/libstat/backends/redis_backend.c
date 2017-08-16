@@ -18,6 +18,7 @@
 #include "stat_internal.h"
 #include "upstream.h"
 #include "lua/lua_common.h"
+#include "libserver/mempool_vars_internal.h"
 
 #ifdef WITH_HIREDIS
 #include "hiredis.h"
@@ -46,6 +47,7 @@ struct redis_stat_ctx {
 	gboolean enable_users;
 	gboolean store_tokens;
 	gboolean new_schema;
+	gboolean enable_signatures;
 	guint expiry;
 	gint cbref_user;
 };
@@ -444,7 +446,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"%s\r\n",
 						cmd_len, command,
 						l0, n0,
-						1, rt->stcf->is_spam ? "1" : "0",
+						1, rt->stcf->is_spam ? "S" : "H",
 						l1, n1);
 			}
 			else {
@@ -465,7 +467,8 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"%s\r\n",
 						cmd_len, command,
 						prefix_len, prefix,
-						l0, n0, l1, n1);
+						l0, n0,
+						l1, n1);
 			}
 
 			ret = redisAsyncFormattedCommand (rt->redis, NULL, NULL,
@@ -476,6 +479,58 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 				rspamd_fstring_free (out);
 
 				return NULL;
+			}
+
+			if (rt->ctx->store_tokens) {
+
+				if (!rt->ctx->new_schema) {
+					/*
+					 * We store tokens in form
+					 * HSET prefix_tokens <token_id> "token_string"
+					 * ZINCRBY prefix_z 1.0 <token_id>
+					 */
+					if (tok->t1 && tok->t2) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b_tokens %b %b:%b",
+								prefix, (size_t) prefix_len,
+								n0, (size_t) l0,
+								tok->t1->begin, tok->t1->len,
+								tok->t2->begin, tok->t2->len);
+					} else if (tok->t1) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b_tokens %b %b",
+								prefix, (size_t) prefix_len,
+								n0, (size_t) l0,
+								tok->t1->begin, tok->t1->len);
+					}
+				}
+				else {
+					/*
+					 * We store tokens in form
+					 * HSET <token_id> "tokens" "token_string"
+					 * ZINCRBY prefix_z 1.0 <token_id>
+					 */
+					if (tok->t1 && tok->t2) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b %s %b:%b",
+								n0, (size_t) l0,
+								"tokens",
+								tok->t1->begin, tok->t1->len,
+								tok->t2->begin, tok->t2->len);
+					} else if (tok->t1) {
+						redisAsyncCommand (rt->redis, NULL, NULL,
+								"HSET %b %s %b",
+								n0, (size_t) l0,
+								"tokens",
+								tok->t1->begin, tok->t1->len);
+					}
+				}
+
+				redisAsyncCommand (rt->redis, NULL, NULL,
+						"ZINCRBY %b_z %b %b",
+						prefix, (size_t)prefix_len,
+						n1, (size_t)l1,
+						n0, (size_t)l0);
 			}
 
 			if (rt->ctx->new_schema && rt->ctx->expiry > 0) {
@@ -495,38 +550,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 						l1, n1);
 				redisAsyncFormattedCommand (rt->redis, NULL, NULL,
 						out->str, out->len);
-				out->len = 0;
 			}
-
-			if (rt->ctx->store_tokens) {
-				/*
-				 * We also store tokens in form
-				 * HSET arg0_keys <token_id> "token_string"
-				 * ZINCRBY arg0_zlist <token_id> 1.0
-				 */
-				if (tok->t1 && tok->t2) {
-					redisAsyncCommand (rt->redis, NULL, NULL,
-							"HSET %b_tokens %b %b:%b",
-							prefix, (size_t)prefix_len,
-							n0, (size_t)l0,
-							tok->t1->begin, tok->t1->len,
-							tok->t2->begin, tok->t2->len);
-				}
-				else if (tok->t1) {
-					redisAsyncCommand (rt->redis, NULL, NULL,
-							"HSET %b_tokens %b %b",
-							prefix, (size_t)prefix_len,
-							n0, (size_t)l0,
-							tok->t1->begin, tok->t1->len);
-				}
-
-				redisAsyncCommand (rt->redis, NULL, NULL,
-						"ZINCRBY %b_z %b %b",
-						prefix, (size_t)prefix_len,
-						n1, (size_t)l1,
-						n0, (size_t)l0);
-			}
-
 
 			out->len = 0;
 		}
@@ -546,7 +570,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"%s\r\n",
 						cmd_len, command,
 						l0, n0,
-						1, rt->stcf->is_spam ? "1" : "0");
+						1, rt->stcf->is_spam ? "S" : "H");
 
 				ret = redisAsyncFormattedCommand (rt->redis, NULL, NULL,
 						out->str, out->len);
@@ -574,6 +598,85 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 	}
 
 	return out;
+}
+
+static void
+rspamd_redis_store_stat_signature (struct rspamd_task *task,
+		struct redis_stat_runtime *rt,
+		GPtrArray *tokens,
+		const gchar *prefix)
+{
+	gchar *sig, keybuf[512], nbuf[64];
+	rspamd_token_t *tok;
+	guint i, blen, klen;
+	rspamd_fstring_t *out;
+
+	out = rspamd_fstring_sized_new (1024);
+	sig = rspamd_mempool_get_variable (task->task_pool,
+			RSPAMD_MEMPOOL_STAT_SIGNATURE);
+
+	if (sig == NULL) {
+		msg_err_task ("cannot get bayes signature");
+		return;
+	}
+
+	klen = rspamd_snprintf (keybuf, sizeof (keybuf), "%s_%s_%s",
+			prefix, sig, rt->stcf->is_spam ? "S" : "H");
+
+	out->len = 0;
+
+	/* Cleanup key */
+	rspamd_printf_fstring (&out, ""
+					"*2\r\n"
+					"$3\r\n"
+					"DEL\r\n"
+					"$%d\r\n"
+					"%s\r\n",
+			klen, keybuf);
+	redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+			out->str, out->len);
+	out->len = 0;
+
+	rspamd_printf_fstring (&out, ""
+					"*%d\r\n"
+					"$5\r\n"
+					"LPUSH\r\n"
+					"$%d\r\n"
+					"%s\r\n",
+			tokens->len + 2,
+			klen, keybuf);
+
+	PTR_ARRAY_FOREACH (tokens, i, tok) {
+		blen = rspamd_snprintf (nbuf, sizeof (nbuf), "%uL", tok->data);
+		rspamd_printf_fstring (&out, ""
+				"$%d\r\n"
+				"%s\r\n", blen, nbuf);
+	}
+
+	redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+			out->str, out->len);
+	out->len = 0;
+
+	if (rt->ctx->expiry > 0) {
+		out->len = 0;
+		blen = rspamd_snprintf (nbuf, sizeof (nbuf), "%d",
+				rt->ctx->expiry);
+
+		rspamd_printf_fstring (&out, ""
+						"*3\r\n"
+						"$6\r\n"
+						"EXPIRE\r\n"
+						"$%d\r\n"
+						"%s\r\n"
+						"$%d\r\n"
+						"%s\r\n",
+				klen, keybuf,
+				blen, nbuf);
+		redisAsyncFormattedCommand (rt->redis, NULL, NULL,
+				out->str, out->len);
+	}
+
+	rspamd_fstring_free (out);
 }
 
 static void
@@ -1208,6 +1311,14 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 		backend->new_schema = FALSE;
 	}
 
+	elt = ucl_object_lookup (obj, "signatures");
+	if (elt) {
+		backend->enable_signatures = ucl_object_toboolean (elt);
+	}
+	else {
+		backend->enable_signatures = FALSE;
+	}
+
 	elt = ucl_object_lookup_any (obj, "expiry", "expire", NULL);
 	if (elt) {
 		backend->expiry = ucl_object_toint (elt);
@@ -1564,10 +1675,17 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	ret = rspamd_printf_fstring (&query, "*1\r\n$4\r\nEXEC\r\n");
 	ret = redisAsyncFormattedCommand (rt->redis, rspamd_redis_learned, rt,
 			query->str + off, ret);
-
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)rspamd_fstring_free, query);
+
 	if (ret == REDIS_OK) {
+
+		/* Add signature if needed */
+		if (rt->ctx->enable_signatures) {
+			rspamd_redis_store_stat_signature (task, rt, tokens,
+					"RSIG");
+		}
+
 		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt,
 				rspamd_redis_stat_quark ());
 		rt->has_event = TRUE;

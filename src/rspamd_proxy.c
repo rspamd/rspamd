@@ -35,6 +35,10 @@
 #include "libserver/milter.h"
 #include "contrib/zstd/zstd.h"
 
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h> /* for TCP_NODELAY */
+#endif
+
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
 #define DEFAULT_RETRIES 5
@@ -70,6 +74,7 @@ worker_t rspamd_proxy_worker = {
 
 struct rspamd_http_upstream {
 	gchar *name;
+	gchar *settings_id;
 	struct upstream_list *u;
 	struct rspamd_cryptobox_pubkey *key;
 	gdouble timeout;
@@ -99,13 +104,15 @@ static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
 
 struct rspamd_proxy_ctx {
 	guint64 magic;
-	gdouble timeout;
-	struct timeval io_tv;
-	struct rspamd_config *cfg;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
+	gdouble timeout;
+	struct timeval io_tv;
 	/* Encryption key for clients */
 	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */
@@ -129,6 +136,12 @@ struct rspamd_proxy_ctx {
 	gboolean has_self_scan;
 	/* It is not HTTP but milter proxy */
 	gboolean milter;
+	/* Discard messages instead of rejecting them */
+	gboolean discard_on_reject;
+	/* Milter spam header */
+	gchar *spam_header;
+	/* Sessions cache */
+	void *sessions_cache;
 };
 
 enum rspamd_backend_flags {
@@ -169,6 +182,7 @@ struct rspamd_proxy_session {
 	rspamd_inet_addr_t *client_addr;
 	struct rspamd_http_connection *client_conn;
 	struct rspamd_milter_session *client_milter_conn;
+	struct rspamd_http_upstream *backend;
 	gpointer map;
 	gchar *fname;
 	gpointer shmem_ref;
@@ -308,18 +322,45 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
+
 	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"upstream option must have some name definition");
 
-		return FALSE;
+		if (ucl_object_key (obj)) {
+			if (strcmp (ucl_object_key (obj), "upstream") == 0) {
+				/* Iterate over the object and find upstream elements */
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+				gboolean ret = TRUE;
+
+				while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+					if (!rspamd_proxy_parse_upstream (pool, cur, ud,
+							section, err)) {
+						ret = FALSE;
+					}
+				}
+
+				return ret;
+			}
+			else {
+				/* Inside upstream */
+				up->name = rspamd_mempool_strdup (pool, ucl_object_key (obj));
+			}
+		}
+		else {
+			g_set_error (err, rspamd_proxy_quark (), 100,
+					"upstream option must have some name definition");
+
+			return FALSE;
+		}
+	}
+	else {
+		up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
-	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
 	up->parser_from_ref = -1;
 	up->parser_to_ref = -1;
-	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->timeout = ctx->timeout;
 
 	elt = ucl_object_lookup (obj, "key");
@@ -372,9 +413,15 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	}
 
 	elt = ucl_object_lookup (obj, "default");
-	if (elt && ucl_object_toboolean (elt)) {
+	if (elt) {
+		if (ucl_object_toboolean (elt)) {
+			ctx->default_upstream = up;
+		}
+	}
+	else if (up->self_scan) {
 		ctx->default_upstream = up;
 	}
+
 
 	elt = ucl_object_lookup (obj, "local");
 	if (elt && ucl_object_toboolean (elt)) {
@@ -384,6 +431,11 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 	elt = ucl_object_lookup (obj, "timeout");
 	if (elt) {
 		ucl_object_todouble_safe (elt, &up->timeout);
+	}
+
+	elt = ucl_object_lookup_any (obj, "settings", "settings_id", NULL);
+	if (elt && ucl_object_type (elt) == UCL_STRING) {
+		up->settings_id = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
 	/*
@@ -434,16 +486,43 @@ rspamd_proxy_parse_mirror (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
+
 	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
-		g_set_error (err, rspamd_proxy_quark (), 100,
-				"mirror option must have some name definition");
 
-		return FALSE;
+		if (ucl_object_key (obj)) {
+			if (strcmp (ucl_object_key (obj), "mirror") == 0) {
+				/* Iterate over the object and find upstream elements */
+				ucl_object_iter_t it = NULL;
+				const ucl_object_t *cur;
+				gboolean ret = TRUE;
+
+				while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
+					if (!rspamd_proxy_parse_mirror (pool, cur, ud,
+							section, err)) {
+						ret = FALSE;
+					}
+				}
+
+				return ret;
+			}
+			else {
+				/* Inside upstream */
+				up->name = rspamd_mempool_strdup (pool, ucl_object_key (obj));
+			}
+		}
+		else {
+			g_set_error (err, rspamd_proxy_quark (), 100,
+					"mirror option must have some name definition");
+
+			return FALSE;
+		}
+	}
+	else {
+		up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	}
 
-	up = rspamd_mempool_alloc0 (pool, sizeof (*up));
-	up->name = rspamd_mempool_strdup (pool, ucl_object_tostring (elt));
 	up->parser_to_ref = -1;
 	up->parser_from_ref = -1;
 	up->timeout = ctx->timeout;
@@ -723,6 +802,22 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, milter),
 			0,
 			"Accept milter connections, not HTTP");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"discard_on_reject",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, discard_on_reject),
+			0,
+			"Tell MTA to discard rejected messages silently");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"spam_header",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, spam_header),
+			0,
+			"Use the specific spam header instead of X-Spam");
 
 	return ctx;
 }
@@ -914,6 +1009,11 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		close (session->client_sock);
 	}
 
+	if (session->ctx->sessions_cache) {
+		rspamd_worker_session_cache_remove (session->ctx->sessions_cache,
+				session);
+	}
+
 	if (session->pool) {
 		rspamd_mempool_delete (session->pool);
 	}
@@ -1046,6 +1146,11 @@ proxy_session_refresh (struct rspamd_proxy_session *session)
 	nsession->mirror_conns = g_ptr_array_sized_new (nsession->ctx->mirrors->len);
 
 	REF_INIT_RETAIN (nsession, proxy_session_dtor);
+
+	if (nsession->ctx->sessions_cache) {
+		rspamd_worker_session_cache_add (nsession->ctx->sessions_cache,
+				nsession->pool->tag.uid, &nsession->ref.refcount, nsession);
+	}
 
 	return nsession;
 }
@@ -1526,7 +1631,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	gsize len;
 
 	msg = session->client_message;
-	task = rspamd_task_new (session->worker, session->ctx->cfg);
+	task = rspamd_task_new (session->worker, session->ctx->cfg,
+			session->pool);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->sock = -1;
 
@@ -1546,6 +1652,12 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	task->s = rspamd_session_create (task->task_pool, rspamd_proxy_task_fin,
 			NULL, (event_finalizer_t )rspamd_task_free, task);
 	data = rspamd_http_message_get_body (msg, &len);
+
+	if (session->backend->settings_id) {
+		rspamd_http_message_remove_header (msg, "Settings-ID");
+		rspamd_http_message_add_header (msg, "Settings-ID",
+				session->backend->settings_id);
+	}
 
 	/* Process message */
 	if (!rspamd_protocol_handle_request (task, msg)) {
@@ -1578,6 +1690,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	session->master_conn->task = task;
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 
+	rspamd_session_pending (task->s);
+
 	return TRUE;
 }
 
@@ -1609,6 +1723,8 @@ proxy_send_master_message (struct rspamd_proxy_session *session)
 		goto err;
 	}
 	else {
+		session->backend = backend;
+
 		if (backend->self_scan) {
 			return rspamd_proxy_self_scan (session);
 		}
@@ -1662,6 +1778,12 @@ retry:
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
 			rspamd_http_connection_set_key (session->master_conn->backend_conn,
 					session->ctx->local_key);
+		}
+
+		if (backend->settings_id != NULL) {
+			rspamd_http_message_remove_header (msg, "Settings-ID");
+			rspamd_http_message_add_header (msg, "Settings-ID",
+					backend->settings_id);
 		}
 
 		if (backend->local ||
@@ -1806,6 +1928,8 @@ proxy_milter_finish_handler (gint fd,
 	struct rspamd_proxy_session *session = ud;
 	struct rspamd_http_message *msg;
 
+	session->client_milter_conn = rms;
+
 	if (rms->message == NULL || rms->message->len == 0) {
 		msg_info_session ("finished milter connection");
 		proxy_backend_close_connection (session->master_conn);
@@ -1817,9 +1941,7 @@ proxy_milter_finish_handler (gint fd,
 					sizeof (*session->master_conn));
 		}
 
-		session->client_milter_conn = rms;
 		msg = rspamd_milter_to_http (rms);
-
 		session->master_conn->s = session;
 		session->master_conn->name = "master";
 		session->client_message = msg;
@@ -1871,9 +1993,15 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	session->client_addr = addr;
 	session->mirror_conns = g_ptr_array_sized_new (ctx->mirrors->len);
 
-	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "proxy");
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"proxy");
 	session->ctx = ctx;
 	session->worker = worker;
+
+	if (ctx->sessions_cache) {
+		rspamd_worker_session_cache_add (ctx->sessions_cache,
+				session->pool->tag.uid, &session->ref.refcount, session);
+	}
 
 	if (!ctx->milter) {
 		session->client_conn = rspamd_http_connection_new (NULL,
@@ -1903,7 +2031,22 @@ proxy_accept_socket (gint fd, short what, void *arg)
 				rspamd_inet_address_to_string (addr),
 				rspamd_inet_address_get_port (addr));
 
-		rspamd_milter_handle_socket (nfd, &ctx->io_tv, ctx->ev_base,
+#ifdef TCP_NODELAY
+
+	#ifndef SOL_TCP
+	#define SOL_TCP IPPROTO_TCP
+	#endif
+
+		gint sopt = 1;
+
+		if (setsockopt (nfd, SOL_TCP, TCP_NODELAY, &sopt, sizeof (sopt)) == -1) {
+			msg_warn_session ("cannot set TCP_NODELAY: %s", strerror (errno));
+		}
+#endif
+
+		rspamd_milter_handle_socket (nfd, NULL,
+				session->pool,
+				ctx->ev_base,
 				proxy_milter_finish_handler,
 				proxy_milter_error_handler,
 				session);
@@ -1935,14 +2078,13 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 
 	ctx->cfg = worker->srv->cfg;
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
-			proxy_accept_socket,
-			TRUE);
+			proxy_accept_socket);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, 0);
 
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
@@ -1962,6 +2104,16 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 		/* Additional initialisation needed */
 		rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
 	}
+
+	if (worker->srv->cfg->enable_sessions_cache) {
+		ctx->sessions_cache = rspamd_worker_session_cache_new (worker,
+				ctx->ev_base);
+	}
+
+	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache,
+			ctx->discard_on_reject);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

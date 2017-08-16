@@ -18,6 +18,18 @@ if confighelp then
   return
 end
 
+-- Some popular UA
+local default_ua = {
+  'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)',
+  'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+  'Wget/1.9.1',
+  'Mozilla/5.0 (Android; Linux armv7l; rv:9.0) Gecko/20111216 Firefox/9.0 Fennec/9.0',
+  'Mozilla/5.0 (Windows NT 5.2; RW; rv:7.0a1) Gecko/20091211 SeaMonkey/9.23a1pre',
+  'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko',
+  'W3C-checklink/4.5 [4.160] libwww-perl/5.823',
+  'Lynx/2.8.8dev.3 libwww-FM/2.14 SSL-MM/1.4.1',
+}
+
 local redis_params
 local N = 'url_redirector'
 local settings = {
@@ -28,7 +40,10 @@ local settings = {
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
   max_size = 10 * 1024, -- maximum body to process
+  user_agent = default_ua,
   redirectors_only = true, -- follow merely redirectors
+  top_urls_key = 'rdr:top_urls', -- key for top urls
+  top_urls_count = 200, -- how many top urls to save
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -36,14 +51,68 @@ local rspamd_http = require "rspamd_http"
 local hash = require "rspamd_cryptobox_hash"
 
 local function cache_url(task, orig_url, url, key, param)
-  local function redis_set_cb(err, data)
+  local function redis_trim_cb(err, data)
     if err then
-      rspamd_logger.errx(task, 'got error while setting redirect keys: %s', err)
+      rspamd_logger.errx(task, 'got error while getting top urls count: %s', err)
+    else
+      rspamd_logger.infox(task, 'trimmed url set to %s elements',
+        settings.top_urls_count)
     end
     rspamd_plugins.surbl.continue_process(url, param)
   end
 
-  local ret = rspamd_redis_make_request(task,
+  -- Cleanup logic
+  local function redis_card_cb(err, data)
+    if err then
+      rspamd_logger.errx(task, 'got error while getting top urls count: %s', err)
+    else
+      if data then
+        if tonumber(data) > settings.top_urls_count * 2 then
+          local ret = rspamd_redis_make_request(task,
+            redis_params, -- connect params
+            key, -- hash key
+            true, -- is write
+            redis_trim_cb, --callback
+            'ZREMRANGEBYRANK', -- command
+            {settings.top_urls_key, '0',
+              tostring(settings.top_urls_count + 1)} -- arguments
+          )
+          if not ret then
+            rspamd_logger.errx(task, 'cannot trim top urls set')
+            rspamd_plugins.surbl.continue_process(url, param)
+          else
+            rspamd_logger.infox(task, 'need to trim urls set from %s to %s elements',
+              data,
+              settings.top_urls_count)
+            return
+          end
+        end
+      end
+    end
+
+    rspamd_plugins.surbl.continue_process(url, param)
+  end
+
+  local function redis_set_cb(err, _)
+    if err then
+      rspamd_logger.errx(task, 'got error while setting redirect keys: %s', err)
+    else
+      local ret = rspamd_redis_make_request(task,
+        redis_params, -- connect params
+        key, -- hash key
+        false, -- is write
+        redis_card_cb, --callback
+        'ZCARD', -- command
+        {settings.top_urls_key} -- arguments
+      )
+      if not ret then
+        rspamd_logger.errx(task, 'cannot make redis request to cache results')
+        rspamd_plugins.surbl.continue_process(url, param)
+      end
+    end
+  end
+
+  local ret,conn,_ = rspamd_redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     true, -- is write
@@ -51,8 +120,11 @@ local function cache_url(task, orig_url, url, key, param)
     'SETEX', -- command
     {key, tostring(settings.expire), url} -- arguments
   )
+
   if not ret then
     rspamd_logger.errx(task, 'cannot make redis request to cache results')
+  else
+    conn:add_cmd('ZINCRBY', {settings.top_urls_key, '1', url})
   end
 end
 
@@ -74,13 +146,20 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
         cache_url(task, orig_url, url, key, param)
       else
         if code == 200 then
-          rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-            orig_url, url)
+          if orig_url == url then
+            rspamd_logger.infox(task, 'direct url %s, err code 200',
+              url)
+          else
+            rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
+              orig_url, url)
+          end
+
           cache_url(task, orig_url, url, key, param)
+
         elseif code == 301 or code == 302 then
-          local loc = headers['Location']
-          rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-            orig_url, loc)
+          local loc = headers['location']
+          rspamd_logger.infox(task, 'found redirect from %s to %s, err code %s',
+            orig_url, loc, code)
           if loc then
             if settings.redirectors_only then
               if rspamd_plugins.surbl.is_redirector(task, loc) then
@@ -94,6 +173,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
               resolve_cached(task, orig_url, loc, key, param, ntries + 1)
             end
           else
+            rspamd_logger.infox(task, "no location, headers: %s", headers)
             cache_url(task, orig_url, url, key, param)
           end
         else
@@ -104,9 +184,16 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
       end
     end
 
+    local ua
+    if type(settings.user_agent) == 'string' then
+      ua = settings.user_agent
+    else
+      ua = settings.user_agent[math.random(#settings.user_agent)]
+    end
+
     rspamd_http.request{
       headers = {
-        ['User-Agent'] = 'Mozilla/5.0 (Maemo; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1',
+        ['User-Agent'] = ua,
       },
       url = url,
       task = task,
@@ -133,7 +220,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
     local function redis_reserve_cb(nerr, ndata)
       if nerr then
         rspamd_logger.errx(task, 'got error while setting redirect keys: %s', nerr)
-      elseif ndata == 1 then
+      elseif ndata == 'OK' then
         orig_url = url
         resolve_url()
       end
@@ -145,11 +232,11 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
         key, -- hash key
         true, -- is write
         redis_reserve_cb, --callback
-        'SETNX', -- command
-        {key, 'processing'} -- arguments
+        'SET', -- command
+        {key, 'processing', 'EX', tostring(settings.timeout * 2), 'NX'} -- arguments
       )
       if not ret then
-        rspamd_logger.errx(task, 'Couldn\'t schedule SETNX')
+        rspamd_logger.errx(task, 'Couldn\'t schedule SET')
       end
     else
       resolve_url()
@@ -170,8 +257,9 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
 end
 
 local function url_redirector_handler(task, url, param)
-  local url_str = tostring(url)
-  local key = settings.key_prefix .. hash.create(url_str):base32()
+  local url_str = url:get_raw()
+  -- 32 base32 characters are roughly 20 bytes of data or 160 bits
+  local key = settings.key_prefix .. hash.create(url_str):base32():sub(1, 32)
   resolve_cached(task, url_str, url_str, key, param, 1)
 end
 

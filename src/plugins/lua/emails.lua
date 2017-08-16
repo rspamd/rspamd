@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2011-2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ end
 local rules = {}
 local logger = require "rspamd_logger"
 local hash = require "rspamd_cryptobox_hash"
+local rspamd_lua_utils = require "lua_util"
+local util = require "rspamd_util"
 local N = "emails"
 
 -- Check rule for a single email
@@ -35,13 +37,9 @@ local function check_email_rule(task, rule, addr)
     local to_resolve
 
     if rule['domain_only'] then
-      email = addr:get_host()
+      email = addr.domain
     else
-      if not rule['hash'] then
-        email = string.format('%s.%s', addr:get_user(), addr:get_host())
-      else
-        email = string.format('%s@%s', addr:get_user(), addr:get_host())
-      end
+      email = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
     end
 
     local function emails_dns_cb(_, _, results, err)
@@ -49,10 +47,26 @@ local function check_email_rule(task, rule, addr)
           and err ~= 'no records with this name') then
         logger.errx(task, 'Error querying DNS: %1', err)
       elseif results then
-        if rule['hash'] then
-          task:insert_result(rule['symbol'], 1.0, {email, to_resolve})
+        local expected_found = false
+
+        if rule['expect_ip'] then
+          for _,result in pairs(results) do
+            local ipstr = result:to_string()
+
+            if ipstr == rule['expect_ip'] then
+              expected_found = true
+            end
+          end
         else
-          task:insert_result(rule['symbol'], 1.0, email)
+          expected_found = true -- Accept any result
+        end
+
+        if expected_found then
+          if rule['hash'] then
+            task:insert_result(rule['symbol'], 1.0, {email, to_resolve})
+          else
+            task:insert_result(rule['symbol'], 1.0, email)
+          end
         end
 
       end
@@ -61,7 +75,19 @@ local function check_email_rule(task, rule, addr)
     logger.debugm(N, task, "check %s on %s", email, rule['dnsbl'])
 
     if rule['hash'] then
-      to_resolve = hash.create_specific(rule['hash'], email):hex()
+      local hkey = hash.create_specific(rule['hash'], email)
+
+      if rule['encoding'] == 'base32' then
+        to_resolve = hkey:base32()
+      else
+        to_resolve = hkey:hex()
+      end
+
+      if rule['hashlen'] and type(rule['hashlen']) == 'number' then
+        if #to_resolve > rule['hashlen'] then
+          to_resolve = string.sub(to_resolve, 1, rule['hashlen'])
+        end
+      end
     else
       to_resolve = email
     end
@@ -76,14 +102,14 @@ local function check_email_rule(task, rule, addr)
       callback = emails_dns_cb})
   elseif rule['map'] then
     if rule['domain_only'] then
-      local key = addr:get_host()
+      local key = addr.domain
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
         logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
           task:get_message_id(), key, rule['symbol'])
       end
     else
-      local key = string.format('%s@%s', addr:get_user(), addr:get_host())
+      local key = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
         logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
@@ -94,63 +120,85 @@ local function check_email_rule(task, rule, addr)
 end
 
 -- Check email
-local function check_emails(task)
-  local emails = task:get_emails()
-  local checked = {}
-  if emails then
-    for _,addr in ipairs(emails) do
-      local to_check = string.format('%s@%s', addr:get_user(), addr:get_host())
-      if not checked['to_check'] then
-        for _,rule in ipairs(rules) do
-          check_email_rule(task, rule, addr)
+local function gen_check_emails(rule)
+  return function(task)
+    local emails = task:get_emails()
+    local checked = {}
+    if emails and not rule.skip_body then
+      for _,addr in ipairs(emails) do
+        local to_check = string.format('%s%s%s', addr:get_user(),
+          rule.delimiter, addr:get_host())
+        local naddr = {
+          user = (addr:get_user() or ''):lower(),
+          domain = (addr:get_host() or ''):lower(),
+          addr = to_check:lower()
+        }
+
+        rspamd_lua_utils.remove_email_aliases(naddr)
+
+        if not checked[naddr.addr] then
+          check_email_rule(task, rule, naddr)
+          checked[naddr.addr] = true
         end
-        checked[to_check] = true
+      end
+    end
+
+    if rule.check_replyto then
+      local function get_raw_header(name)
+        return ((task:get_header_full(name) or {})[1] or {})['value']
+      end
+
+      local replyto = get_raw_header('Reply-To')
+      if not replyto then return false end
+      local rt = util.parse_mail_address(replyto)
+
+      if rt and rt[1] then
+        rspamd_lua_utils.remove_email_aliases(rt[1])
+        if not checked[rt[1].addr] then
+          check_email_rule(task, rule, rt[1])
+          checked[rt[1].addr] = true
+        end
       end
     end
   end
 end
 
-local opts =  rspamd_config:get_all_opt('emails', 'rule')
+local opts = rspamd_config:get_module_opt('emails', 'rules')
 if opts and type(opts) == 'table' then
-  local r = opts['rule']
+  for k,v in pairs(opts) do
+    local rule = v
+    if not rule['symbol'] then
+      rule['symbol'] = k
+    end
 
-  if r then
-    for k,v in pairs(r) do
-      local rule = v
-      if not rule['symbol'] then
-        rule['symbol'] = k
-      end
+    if not rule['delimiter'] then
+      rule['delimiter'] = "@"
+    end
 
-      if rule['map'] then
-        rule['name'] = rule['map']
-        rule['map'] = rspamd_config:add_map({
-           url = rule['name'],
-           description = string.format('Emails rule %s', rule['symbol']),
-           type = 'regexp'
-        })
-      end
-      if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
-        logger.errx(rspamd_config, 'incomplete rule')
-      else
-        table.insert(rules, rule)
-        logger.infox(rspamd_config, 'add emails rule %s',
-          rule['dnsbl'] or rule['name'] or '???')
-      end
+    if rule['map'] then
+      rule['name'] = rule['map']
+      rule['map'] = rspamd_config:add_map({
+        url = rule['name'],
+        description = string.format('Emails rule %s', rule['symbol']),
+        type = 'regexp'
+      })
+    end
+    if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
+      logger.errx(rspamd_config, 'incomplete rule: %s', rule)
+    else
+      table.insert(rules, rule)
+      logger.infox(rspamd_config, 'add emails rule %s',
+        rule['dnsbl'] or rule['name'] or '???')
     end
   end
 end
 
 if #rules > 0 then
-  -- add fake symbol to check all maps inside a single callback
-  local id = rspamd_config:register_symbol({
-    type = 'callback',
-    callback = check_emails
-  })
   for _,rule in ipairs(rules) do
+    local cb = gen_check_emails(rule)
     rspamd_config:register_symbol({
       name = rule['symbol'],
-      type = 'virtual',
-      parent = id
+      callback = cb,
     })
   end
 end

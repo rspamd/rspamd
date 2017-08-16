@@ -1186,7 +1186,7 @@ lua_ucl_to_config (lua_State *L)
  * - `yaml` - embedded yaml
  *
  * If `var` contains function, they are called during output formatting and if
- * they return string value, then this value is used for ouptut.
+ * they return string value, then this value is used for output.
  * @param {variant} var any sort of lua variable (if userdata then metafield `__to_ucl` is searched for output)
  * @param {string} format any available format
  * @return {string} string representation of `var` in the specific `format`.

@@ -67,16 +67,13 @@ Antivirus Setup
 Antivirus Teardown
   Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
-  Wait For Port  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${REDIS_PORT}
 
 Run Dummy Clam
   [Arguments]  ${port}  ${found}=
-  Wait For Port  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${port}
   ${result} =  Start Process  ${TESTDIR}/util/dummy_clam.py  ${port}  ${found}
   Wait Until Created  /tmp/dummy_clamav.pid
 
 Run Dummy Fprot
   [Arguments]  ${port}  ${found}=
-  Wait For Port  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${port}
   ${result} =  Start Process  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}
   Wait Until Created  /tmp/dummy_fprot.pid

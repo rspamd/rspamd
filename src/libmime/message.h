@@ -95,6 +95,12 @@ struct rspamd_mime_text_part {
 	GArray *normalized_words;
 	GArray *normalized_hashes;
 	guint nlines;
+	guint spaces;
+	guint non_ascii_chars;
+	guint ascii_chars;
+	guint double_spaces;
+	guint non_spaces;
+	guint empty_lines;
 };
 
 enum rspamd_received_type {

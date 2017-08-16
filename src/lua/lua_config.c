@@ -187,10 +187,11 @@ LUA_FUNCTION_DEF (config, get_classifier);
  * - `weight`: weight of symbol (should normally be 1 or missing)
  * - `priority`: priority of symbol (normally 0 or missing)
  * - `type`: type of symbol: `normal` (default), `virtual` or `callback`
- * - `flags`: various flags splitted by commas or spaces:
+ * - `flags`: various flags split by commas or spaces:
  *     + `nice` if symbol can produce negative score;
  *     + `empty` if symbol can be called for empty messages
  *     + `skip` if symbol should be skipped now
+ *     + `nostat` if symbol should be excluded from stat tokens
  * - `parent`: id of parent symbol (useful for virtual symbols)
  *
  * @return {number} id of symbol registered
@@ -387,7 +388,7 @@ LUA_FUNCTION_DEF (config, disable_symbol);
 /***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
- * Technically, it is the equialent of @see rspamd_config:register_symbol where `weight` is 1.0.
+ * Technically, it is the equivalent of @see rspamd_config:register_symbol where `weight` is 1.0.
  * There is also table form invocation that allows to control more things:
  *
  * - `callback`: has the same meaning and acts as function of task
@@ -438,7 +439,7 @@ LUA_FUNCTION_DEF (config, newindex);
 /***
  * @method rspamd_config:register_regexp(params)
  * Registers new re for further cached usage
- * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
  * - `re`* : regular expression object
  * - `type`*: type of regular expression:
  *   + `mime`: mime regexp
@@ -455,7 +456,7 @@ LUA_FUNCTION_DEF (config, register_regexp);
 /***
  * @method rspamd_config:replace_regexp(params)
  * Replaces regexp with a new one
- * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
  * - `old_re`* : old regular expression object (must be in the cache)
  * - `new_re`* : old regular expression object (must not be in the cache)
  */
@@ -526,6 +527,17 @@ LUA_FUNCTION_DEF (config, get_symbols_cksum);
 LUA_FUNCTION_DEF (config, get_symbol_callback);
 
 /***
+ * @method rspamd_config:get_symbol_stat(name)
+ * Returns table with statistics for a specific symbol:
+ * - `frequency`: frequency for symbol's hits
+ * - `stddev`: standard deviation of `frequency`
+ * - `time`: average time in seconds (floating point)
+ * - `count`: total number of hits
+ * @return {table} symbol stats
+ */
+LUA_FUNCTION_DEF (config, get_symbol_stat);
+
+/***
  * @method rspamd_config:set_symbol_callback(name, callback)
  * Sets callback for the specified symbol
  * @return {boolean} true if function has been replaced
@@ -537,7 +549,7 @@ LUA_FUNCTION_DEF (config, set_symbol_callback);
  * Adds new callback that is called on worker process termination when all
  * tasks pending are processed
  *
- * @param callback {function} a fucntion with one argument (rspamd_task)
+ * @param callback {function} a function with one argument (rspamd_task)
  */
 LUA_FUNCTION_DEF (config, register_finish_script);
 
@@ -615,6 +627,25 @@ rspamd_config:set_peak_cb(function(ev_base, sym, mean, stddev, value, error)
 end)
  */
 LUA_FUNCTION_DEF (config, set_peak_cb);
+/***
+ *  @method rspamd_config:get_cpu_flags()
+ * Returns architecture dependent flags supported by the CPU
+ * Currently, only x86 flags are supported:
+ * - 'ssse3'
+ * - 'sse42'
+ * - 'avx'
+ * - 'avx2'
+ * @return {table} flag -> true table
+ */
+LUA_FUNCTION_DEF (config, get_cpu_flags);
+
+/***
+ * @method rspamd_config:has_torch()
+ * Returns true if Rspamd is compiled with torch support and the runtime CPU
+ * supports sse4.2 required for torch.
+ * @return {boolean} true if torch is compiled and supported
+ */
+LUA_FUNCTION_DEF (config, has_torch);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -656,11 +687,14 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_cksum),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
+	LUA_INTERFACE_DEF (config, get_symbol_stat),
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
 	LUA_INTERFACE_DEF (config, add_doc),
 	LUA_INTERFACE_DEF (config, add_example),
 	LUA_INTERFACE_DEF (config, set_peak_cb),
+	LUA_INTERFACE_DEF (config, get_cpu_flags),
+	LUA_INTERFACE_DEF (config, get_cpu_flags),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1351,35 +1385,6 @@ lua_config_get_key (lua_State *L)
 }
 
 static gint
-lua_parse_symbol_type (const gchar *str)
-{
-	gint ret = SYMBOL_TYPE_NORMAL;
-
-	if (str) {
-		if (strcmp (str, "virtual") == 0) {
-			ret = SYMBOL_TYPE_VIRTUAL;
-		}
-		else if (strcmp (str, "callback") == 0) {
-			ret = SYMBOL_TYPE_CALLBACK;
-		}
-		else if (strcmp (str, "normal") == 0) {
-			ret = SYMBOL_TYPE_NORMAL;
-		}
-		else if (strcmp (str, "prefilter") == 0) {
-			ret = SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_GHOST;
-		}
-		else if (strcmp (str, "postfilter") == 0) {
-			ret = SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_GHOST;
-		}
-		else {
-			msg_warn ("bad type: %s", str);
-		}
-	}
-
-	return ret;
-}
-
-static gint
 lua_parse_symbol_flags (const gchar *str)
 {
 	int ret = 0;
@@ -1396,6 +1401,62 @@ lua_parse_symbol_flags (const gchar *str)
 		}
 		if (strstr (str, "skip") != NULL) {
 			ret |= SYMBOL_TYPE_SKIPPED;
+		}
+		if (strstr (str, "nostat") != NULL) {
+			ret |= SYMBOL_TYPE_NOSTAT;
+		}
+		if (strstr (str, "idempotent") != NULL) {
+			ret |= SYMBOL_TYPE_IDEMPOTENT;
+		}
+	}
+
+	return ret;
+}
+
+static gint
+lua_parse_symbol_type (const gchar *str)
+{
+	gint ret = SYMBOL_TYPE_NORMAL;
+	gchar **vec;
+	guint i, l;
+
+	if (str) {
+		vec = g_strsplit_set (str, ",;", -1);
+
+		if (vec) {
+			l = g_strv_length (vec);
+
+			for (i = 0; i < l; i ++) {
+				str = vec[i];
+
+				if (g_ascii_strcasecmp (str, "virtual") == 0) {
+					ret = SYMBOL_TYPE_VIRTUAL;
+				} else if (g_ascii_strcasecmp (str, "callback") == 0) {
+					ret = SYMBOL_TYPE_CALLBACK;
+				} else if (g_ascii_strcasecmp (str, "normal") == 0) {
+					ret = SYMBOL_TYPE_NORMAL;
+				} else if (g_ascii_strcasecmp (str, "prefilter") == 0) {
+					ret = SYMBOL_TYPE_PREFILTER | SYMBOL_TYPE_GHOST;
+				} else if (g_ascii_strcasecmp (str, "postfilter") == 0) {
+					ret = SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST;
+				} else if (g_ascii_strcasecmp (str, "idempotent") == 0) {
+					ret = SYMBOL_TYPE_POSTFILTER | SYMBOL_TYPE_GHOST |
+							SYMBOL_TYPE_IDEMPOTENT;
+				} else {
+					gint fl = 0;
+
+					fl = lua_parse_symbol_flags (str);
+
+					if (fl == 0) {
+						msg_warn ("bad type: %s", str);
+					}
+					else {
+						ret |= fl;
+					}
+				}
+			}
+
+			g_strfreev (vec);
 		}
 	}
 
@@ -1996,7 +2057,7 @@ lua_config_newindex (lua_State *L)
 			 * "priority" - optional priority
 			 * "type" - optional type (normal, virtual, callback)
 			 * -- Metric options
-			 * "score" - optional default score (overrided by metric)
+			 * "score" - optional default score (overridden by metric)
 			 * "group" - optional default group
 			 * "one_shot" - optional one shot mode
 			 * "description" - optional description
@@ -2587,6 +2648,43 @@ lua_config_set_symbol_callback (lua_State *L)
 }
 
 static gint
+lua_config_get_symbol_stat (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2);
+	gdouble freq, stddev, tm;
+	guint hits;
+
+	if (cfg != NULL && sym != NULL) {
+		if (!rspamd_symbols_cache_stat_symbol (cfg->cache, sym, &freq,
+				&stddev, &tm, &hits)) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_createtable (L, 0, 4);
+			lua_pushstring (L, "frequency");
+			lua_pushnumber (L, freq);
+			lua_settable (L, -3);
+			lua_pushstring (L, "sttdev");
+			lua_pushnumber (L, stddev);
+			lua_settable (L, -3);
+			lua_pushstring (L, "time");
+			lua_pushnumber (L, tm);
+			lua_settable (L, -3);
+			lua_pushstring (L, "hits");
+			lua_pushnumber (L, hits);
+			lua_settable (L, -3);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+
+static gint
 lua_config_register_finish_script (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
@@ -2618,13 +2716,19 @@ lua_config_register_monitored (lua_State *L)
 
 	if (cfg != NULL && url != NULL && type != NULL) {
 		if (g_ascii_strcasecmp (type, "dns") == 0) {
+			lua_Debug ar;
+
 			if (lua_type (L, 4) == LUA_TTABLE) {
 				params = ucl_object_lua_import (L, 4);
 			}
 
-			m = rspamd_monitored_create (cfg->monitored_ctx, url,
+			/* Get lua line and source */
+			lua_getstack (L, 1, &ar);
+			lua_getinfo (L, "nSl", &ar);
+
+			m = rspamd_monitored_create_ (cfg->monitored_ctx, url,
 					RSPAMD_MONITORED_DNS, RSPAMD_MONITORED_DEFAULT,
-					params);
+					params, ar.short_src);
 
 			if (m) {
 				pm = lua_newuserdata (L, sizeof (*pm));
@@ -2725,6 +2829,86 @@ lua_config_add_example (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_config_get_cpu_flags (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_cryptobox_library_ctx *crypto_ctx;
+
+	if (cfg != NULL) {
+		crypto_ctx = cfg->libs_ctx->crypto_ctx;
+		lua_newtable (L);
+
+		if (crypto_ctx->cpu_config & CPUID_SSSE3) {
+			lua_pushstring (L, "ssse3");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE41) {
+			lua_pushstring (L, "sse41");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE42) {
+			lua_pushstring (L, "sse42");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE2) {
+			lua_pushstring (L, "sse2");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_SSE3) {
+			lua_pushstring (L, "sse3");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_AVX) {
+			lua_pushstring (L, "avx");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (crypto_ctx->cpu_config & CPUID_AVX2) {
+			lua_pushstring (L, "avx2");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_has_torch (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_cryptobox_library_ctx *crypto_ctx;
+
+	if (cfg != NULL) {
+		crypto_ctx = cfg->libs_ctx->crypto_ctx;
+#ifndef WITH_TORCH
+		lua_pushboolean (L, false);
+		(void)crypto_ctx;
+#else
+		if (crypto_ctx->cpu_config & CPUID_SSE42) {
+			lua_pushboolean (L, true);
+		}
+		else {
+			lua_pushboolean (L, false);
+		}
+#endif
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint

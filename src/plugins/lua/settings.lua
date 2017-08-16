@@ -34,8 +34,8 @@ local rspamd_regexp = require "rspamd_regexp"
 local ucl = require "ucl"
 local fun = require "fun"
 
--- Checks for overrided settings within query params and returns 'true' if
--- settings are overrided
+-- Checks for overridden settings within query params and returns 'true' if
+-- settings are overridden
 local function check_query_settings(task)
   -- Try 'settings' attribute
   local query_set = task:get_request_header('settings')
@@ -83,6 +83,14 @@ local function check_query_settings(task)
     local elt = settings_ids[id_str]
     if elt and elt['apply'] then
       task:set_settings(elt['apply'])
+
+      if elt.apply['add_headers'] or elt.apply['remove_headers'] then
+        local rep = {
+          add_headers = elt.apply['add_headers'] or {},
+          remove_headers = elt.apply['remove_headers'] or {},
+        }
+        task:set_rmilter_reply(rep)
+      end
       rspamd_logger.infox(task, "applying settings id %s", id_str)
 
       return true
@@ -558,18 +566,25 @@ local function gen_redis_callback(handler, id)
     local key = handler(task)
 
     local function redis_settings_cb(err, data)
-      if not err and type(data) == 'string' then
-        local parser = ucl.parser()
-        local res,ucl_err = parser:parse_string(data)
-        if not res then
-          rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
-            ucl_err)
-        else
-          local obj = parser:get_object()
-          rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
-            task:get_message_id(), id)
-          task:set_settings(obj)
+      if not err and type(data) == 'table' then
+        for _, d in ipairs(data) do
+          if type(d) == 'string' then
+            local parser = ucl.parser()
+            local res,ucl_err = parser:parse_string(d)
+            if not res then
+              rspamd_logger.warnx(rspamd_config, 'cannot parse settings from redis: %s',
+                ucl_err)
+            else
+              local obj = parser:get_object()
+              rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
+                task:get_message_id(), id)
+              task:set_settings(obj)
+              break
+            end
+          end
         end
+      elseif err then
+        rspamd_logger.errx(task, 'Redis error: %1', err)
       end
     end
 
@@ -578,16 +593,24 @@ local function gen_redis_callback(handler, id)
       return
     end
 
+    local keys
+    if type(key) == 'table' then
+      keys = key
+    else
+      keys = {key}
+    end
+    key = keys[1]
+
     local ret,_,_ = rspamd_redis_make_request(task,
       redis_params, -- connect params
       key, -- hash key
       false, -- is write
       redis_settings_cb, --callback
-      'GET', -- command
-      {key} -- arguments
+      'MGET', -- command
+      keys -- arguments
     )
     if not ret then
-      rspamd_logger.errx(task, 'Redis GET failed: %s', ret)
+      rspamd_logger.errx(task, 'Redis MGET failed: %s', ret)
     end
   end
 end
@@ -621,7 +644,7 @@ if redis_section then
   fun.each(function(id, h)
     rspamd_config:register_symbol({
       name = 'REDIS_SETTINGS' .. tostring(id),
-      type = 'prefilter',
+      type = 'prefilter,nostat',
       callback = gen_redis_callback(h, id),
       priority = 10
     })
@@ -641,7 +664,7 @@ end
 
 rspamd_config:register_symbol({
   name = 'SETTINGS_CHECK',
-  type = 'prefilter',
+  type = 'prefilter,nostat',
   callback = check_settings,
   priority = 10
 })

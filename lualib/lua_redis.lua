@@ -5,7 +5,7 @@ local exports = {}
 -- This function parses redis server definition using either
 -- specific server string for this module or global
 -- redis section
-local function rspamd_parse_redis_server(module_name)
+local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
 
   local result = {}
   local default_port = 6379
@@ -37,7 +37,7 @@ local function rspamd_parse_redis_server(module_name)
     end
 
     -- Store options
-    if not result['timeout'] then
+    if not result['timeout'] and not result['timeout'] == default_timeout then
       if options['timeout'] then
         result['timeout'] = tonumber(options['timeout'])
       else
@@ -48,11 +48,12 @@ local function rspamd_parse_redis_server(module_name)
     if options['prefix'] and not result['prefix'] then
       result['prefix'] = options['prefix']
     end
+
     if not result['db'] then
       if options['db'] then
-        result['db'] = options['db']
+        result['db'] = tostring(options['db'])
       elseif options['dbname'] then
-        result['db'] = options['dbname']
+        result['db'] = tostring(options['dbname'])
       end
     end
     if options['password'] and not result['password'] then
@@ -70,7 +71,12 @@ local function rspamd_parse_redis_server(module_name)
   end
 
   -- Try local options
-  local opts = rspamd_config:get_all_opt(module_name)
+  local opts
+  if not module_opts then
+    opts = rspamd_config:get_all_opt(module_name)
+  else
+    opts = module_opts
+  end
   local ret = false
 
   if opts then
@@ -80,6 +86,8 @@ local function rspamd_parse_redis_server(module_name)
   if ret then
     return result
   end
+
+  if no_fallback then return nil end
 
   -- Try global options
   opts = rspamd_config:get_all_opt('redis')

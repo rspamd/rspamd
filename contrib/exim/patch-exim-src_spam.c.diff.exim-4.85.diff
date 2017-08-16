@@ -174,7 +174,7 @@ diff -ru exim-4.85.orig/src/spam.c exim-4.85/src/spam.c
 +  }
  
    /* now send the file */
-   /* spamd sometimes accepts conections but doesn't read data off
+   /* spamd sometimes accepts connections but doesn't read data off
 @@ -349,60 +404,93 @@
    /* reading done */
    (void)close(spamd_sock);

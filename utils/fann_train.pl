@@ -15,7 +15,7 @@ my @spam;
 my @ham;
 my $max_samples = -1;
 my $split = 1;
-my $preprocessed = 0; # ouptut is in format <score>:<0|1>:<SYM1,...SYMN>
+my $preprocessed = 0; # output is in format <score>:<0|1>:<SYM1,...SYMN>
 my $score_spam = 12;
 my $score_ham = -6;
 

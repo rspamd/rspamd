@@ -40,7 +40,7 @@ struct rspamd_worker_signal_handler;
  */
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *), gboolean load_lua);
+	void (*accept_handler)(int, short, void *));
 
 /**
  * Set special signal handler for a worker
@@ -48,7 +48,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 void rspamd_worker_set_signal_handler (int signo,
 		struct rspamd_worker *worker,
 		struct event_base *base,
-		void (*handler) (struct rspamd_worker_signal_handler *, void *),
+		rspamd_worker_signal_handler handler,
 		void *handler_data);
 
 /**
@@ -137,10 +137,45 @@ void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
 gboolean rspamd_worker_is_normal (struct rspamd_worker *w);
 
 /**
+ * Creates new session cache
+ * @param w
+ * @return
+ */
+void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
+		struct event_base *ev_base);
+
+/**
+ * Adds a new session identified by pointer
+ * @param cache
+ * @param tag
+ * @param pref
+ * @param ptr
+ */
+void rspamd_worker_session_cache_add (void *cache, const gchar *tag,
+		guint *pref, void *ptr);
+
+/**
+ * Removes session from cache
+ * @param cache
+ * @param ptr
+ */
+void rspamd_worker_session_cache_remove (void *cache, void *ptr);
+
+/**
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
 		struct rspamd_worker_conf *, guint idx, struct event_base *ev_base);
+
+/**
+ * Initialise the main monitoring worker
+ * @param worker
+ * @param ev_base
+ * @param resolver
+ */
+void rspamd_worker_init_monitored (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver);
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \

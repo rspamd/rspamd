@@ -298,11 +298,15 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
 	struct rspamd_mime_text_part *part;
+	rspamd_cryptobox_hash_state_t hst;
 	rspamd_stat_token_t *tok;
+	rspamd_token_t *st_tok;
 	GArray *words;
 	gchar *sub = NULL;
 	guint i, reserved_len = 0;
 	gdouble *pdiff;
+	guchar hout[rspamd_cryptobox_HASHBYTES];
+	gchar *b32_hout;
 
 	for (i = 0; i < task->text_parts->len; i++) {
 		part = g_ptr_array_index (task->text_parts, i);
@@ -363,6 +367,24 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	rspamd_stat_tokenize_parts_metadata (st_ctx, task);
+
+	/* Produce signature */
+	rspamd_cryptobox_hash_init (&hst, NULL, 0);
+
+	PTR_ARRAY_FOREACH (task->tokens, i, st_tok) {
+		rspamd_cryptobox_hash_update (&hst, (guchar *)&st_tok->data,
+				sizeof (st_tok->data));
+	}
+
+	rspamd_cryptobox_hash_final (&hst, hout);
+	b32_hout = rspamd_encode_base32 (hout, sizeof (hout));
+	/*
+	 * We need to strip it to 32 characters providing ~160 bits of
+	 * hash distribution
+	 */
+	b32_hout[32] = '\0';
+	rspamd_mempool_set_variable (task->task_pool, RSPAMD_MEMPOOL_STAT_SIGNATURE,
+			b32_hout, g_free);
 }
 
 static void

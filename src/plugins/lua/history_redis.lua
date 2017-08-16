@@ -219,7 +219,7 @@ if opts then
   else
     rspamd_config:register_symbol({
       name = 'HISTORY_SAVE',
-      type = 'postfilter',
+      type = 'idempotent',
       callback = history_save,
       priority = 150
     })

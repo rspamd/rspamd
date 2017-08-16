@@ -29,7 +29,7 @@ local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
 
-local function gen_cb(expr, act, pool, message, subject, raction, honor)
+local function gen_cb(expr, act, pool, message, subject, raction, honor, limit)
 
   local function parse_atom(str)
     local atom = table.concat(fun.totable(fun.take_while(function(c)
@@ -44,7 +44,8 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor)
   local function process_atom(atom, task)
     local f_ret = task:has_symbol(atom)
     if f_ret then
-      return 1
+      f_ret = task:get_symbol(atom)[1].score
+      return f_ret
     end
     return 0
   end
@@ -67,7 +68,8 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor)
       return false
     end
 
-    if e:process(task) == 1 then
+    local ret = e:process(task)
+    if ret > limit then
       if subject then
         task:set_metric_subject(subject)
       end
@@ -146,9 +148,11 @@ local function configure_module()
       if action and expr then
         local subject = sett.subject
         local message = sett.message
+        local lim = sett.limit or 0
         local raction = list_to_hash(sett.require_action)
         local honor = list_to_hash(sett.honor_action)
-        local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(), message, subject, raction, honor)
+        local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(),
+          message, subject, raction, honor, lim)
         if cb and atoms then
           local t = {}
           if (raction or honor) then

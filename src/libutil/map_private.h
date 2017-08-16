@@ -66,7 +66,7 @@ struct rspamd_map_backend {
 struct rspamd_map_cachepoint {
 	gint available;
 	gsize len;
-	time_t last_checked;
+	time_t last_modified;
 	gchar shmem_name[256];
 };
 
@@ -81,6 +81,8 @@ struct rspamd_map {
 	gchar *description;
 	gchar *name;
 	guint32 id;
+	/* Should we check HTTP or just load cached data */
+	gboolean active_http;
 	struct timeval tv;
 	gdouble poll_timeout;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
@@ -107,8 +109,10 @@ struct http_map_data {
 	gchar *path;
 	gchar *host;
 	gchar *last_signature;
+	time_t last_modified;
 	time_t last_checked;
 	gboolean request_sent;
+	guint64 gen;
 	guint16 port;
 };
 

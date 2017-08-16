@@ -82,12 +82,3 @@ Replication Teardown
   Cleanup Temporary Directory  ${SLAVE_TMPDIR}
   Remove File  ${TMP_INCLUDE1}
   Remove File  ${TMP_INCLUDE2}
-  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
-  ${port_fuzzy} =  Create List  ${SOCK_DGRAM}  ${LOCAL_ADDR}  ${PORT_FUZZY}
-  ${port_controller} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_CONTROLLER}
-  ${port_normal_slave} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL_SLAVE}
-  ${port_fuzzy_slave} =  Create List  ${SOCK_DGRAM}  ${LOCAL_ADDR}  ${PORT_FUZZY_SLAVE}
-  ${port_controller_slave} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_CONTROLLER_SLAVE}
-  ${ports} =  Create List  ${port_normal}  ${port_fuzzy}  ${port_controller}  ${port_normal_slave}  ${port_fuzzy_slave}  ${port_controller_slave}
-  : FOR  ${i}  IN  @{ports}
-  \  Wait For Port  @{i}[0]  @{i}[1]  @{i}[2]

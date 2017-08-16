@@ -91,7 +91,7 @@ LUA_FUNCTION_DEF (util, decode_url);
  * @function util.tokenize_text(input[, exceptions])
  * Create tokens from a text using optional exceptions list
  * @param {text/string} input input data
- * @param {table} exceptions, a table of pairs containing <start_pos,lenght> of exceptions in the input
+ * @param {table} exceptions, a table of pairs containing <start_pos,length> of exceptions in the input
  * @return {table/strings} list of strings representing words in the text
  */
 LUA_FUNCTION_DEF (util, tokenize_text);
@@ -473,6 +473,7 @@ LUA_FUNCTION_DEF (util, caseless_hash_fast);
  */
 LUA_FUNCTION_DEF (util, get_hostname);
 
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -649,7 +650,7 @@ lua_util_process_message (lua_State *L)
 	if (cfg != NULL && message != NULL) {
 		base = event_init ();
 		rspamd_init_filters (cfg, FALSE, NULL);
-		task = rspamd_task_new (NULL, cfg);
+		task = rspamd_task_new (NULL, cfg, NULL);
 		task->ev_base = base;
 		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);
 		rspamd_strlcpy ((gpointer)task->msg.begin, message, mlen);
@@ -1127,15 +1128,34 @@ lua_util_parse_addr (lua_State *L)
 static gint
 lua_util_fold_header (lua_State *L)
 {
-	const gchar *name, *value;
+	const gchar *name, *value, *how;
 	GString *folded;
 
 	name = luaL_checkstring (L, 1);
 	value = luaL_checkstring (L, 2);
 
 	if (name && value) {
-		folded = rspamd_header_value_fold (name, value, 0,
-				RSPAMD_TASK_NEWLINES_CRLF);
+
+		if (lua_isstring (L, 3)) {
+			how = lua_tostring (L, 3);
+
+			if (strcmp (how, "cr") == 0) {
+				folded = rspamd_header_value_fold (name, value, 0,
+						RSPAMD_TASK_NEWLINES_CR);
+			}
+			else if (strcmp (how, "lf") == 0) {
+				folded = rspamd_header_value_fold (name, value, 0,
+						RSPAMD_TASK_NEWLINES_LF);
+			}
+			else {
+				folded = rspamd_header_value_fold (name, value, 0,
+						RSPAMD_TASK_NEWLINES_CRLF);
+			}
+		}
+		else {
+			folded = rspamd_header_value_fold (name, value, 0,
+					RSPAMD_TASK_NEWLINES_CRLF);
+		}
 
 		if (folded) {
 			lua_pushlstring (L, folded->str, folded->len);
@@ -1954,8 +1974,8 @@ lua_util_is_utf_spoofed (lua_State *L)
 			uspoof_setChecks (spc_sgl,
 					USPOOF_ALL_CHECKS & ~USPOOF_WHOLE_SCRIPT_CONFUSABLE,
 					&uc_err);
-			uspoof_setAllowedChars (spc_sgl, allowed, &uc_err);
 #if U_ICU_VERSION_MAJOR_NUM >= 51
+			uspoof_setAllowedChars (spc_sgl, allowed, &uc_err);
 			uspoof_setRestrictionLevel (spc_sgl, USPOOF_MODERATELY_RESTRICTIVE);
 #endif
 		}

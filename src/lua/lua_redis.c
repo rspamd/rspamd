@@ -162,7 +162,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 {
 	struct lua_redis_userdata *ud;
 	struct lua_redis_specific_userdata *cur, *tmp;
-	gboolean is_successfull = TRUE;
+	gboolean is_successful = TRUE;
 	struct redisAsyncContext *ac;
 
 	if (IS_ASYNC (ctx)) {
@@ -175,7 +175,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 				event_del (&cur->timeout);
 
 				if (!(cur->flags & LUA_REDIS_SPECIFIC_REPLIED)) {
-					is_successfull = FALSE;
+					is_successful = FALSE;
 				}
 
 				cur->flags |= LUA_REDIS_SPECIFIC_FINISHED;
@@ -184,7 +184,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 			ud->terminated = 1;
 			ac = ud->ctx;
 			ud->ctx = NULL;
-			rspamd_redis_pool_release_connection (ud->pool, ac, is_successfull);
+			rspamd_redis_pool_release_connection (ud->pool, ac, is_successful);
 		}
 
 		LL_FOREACH_SAFE (ud->specific, cur, tmp) {
@@ -1254,7 +1254,7 @@ lua_redis_add_cmd (lua_State *L)
 /***
  * @method rspamd_redis:exec()
  * Executes pending commands (suitable for blocking IO only for now)
- * @return {table} pairs in format [bool, result] for each request pending
+ * @return {boolean}, {table}, ...: pairs in format [bool, result] for each request pending
  */
 static int
 lua_redis_exec (lua_State *L)

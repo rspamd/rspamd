@@ -55,10 +55,12 @@
 #cmakedefine HAVE_NANOSLEEP      1
 #cmakedefine HAVE_NETDB_H        1
 #cmakedefine HAVE_NETINET_IN_H   1
+#cmakedefine HAVE_NETINET_TCP_H  1
 #cmakedefine HAVE_NFTW           1
 #cmakedefine HAVE_OASYNC         1
 #cmakedefine HAVE_ONOFOLLOW      1
-#cmakedefine HAVE_OPENSSL		 1
+#cmakedefine HAVE_OCLOEXEC       1
+#cmakedefine HAVE_OPENSSL        1
 #cmakedefine HAVE_O_DIRECT       1
 #cmakedefine HAVE_PATH_MAX       1
 #cmakedefine HAVE_PCRE_JIT       1
@@ -136,6 +138,7 @@
 #cmakedefine WITH_SNOWBALL       1
 #cmakedefine WITH_SQLITE         1
 #cmakedefine WITH_SYSTEM_HIREDIS 1
+#cmakedefine WITH_TORCH          1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 
@@ -143,7 +146,7 @@
 #define HAVE_EVUTIL_RNG_INIT 1
 #endif
 
-/* Detect endiannes */
+/* Detect endianness */
 
 #ifdef HAVE_ENDIAN_H
  #include <endian.h>
@@ -182,10 +185,6 @@
 
 #endif /* BYTE_ORDER */
 
-/* Configure allocator */
-#define uthash_malloc(sz) g_slice_alloc(sz)
-#define uthash_free(ptr,sz) g_slice_free1(sz, ptr)
-
 #define RSPAMD_CONFDIR "${CONFDIR}"
 #define RSPAMD_LOCAL_CONFDIR "${LOCAL_CONFDIR}"
 #define RSPAMD_RUNDIR "${RUNDIR}"
@@ -197,6 +196,7 @@
 #define RSPAMD_RULESDIR "${RULESDIR}"
 #define RSPAMD_WWWDIR "${WWWDIR}"
 #define RSPAMD_PREFIX "${CMAKE_INSTALL_PREFIX}"
+#define RSPAMD_LIBDIR "${RSPAMD_LIBDIR}"
 
 #define RSPAMD_VERSION_MAJOR "${RSPAMD_VERSION_MAJOR}"
 #define RSPAMD_VERSION_MINOR "${RSPAMD_VERSION_MINOR}"

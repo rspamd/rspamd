@@ -4,6 +4,7 @@ use 5.010;
 use Data::Dumper;
 use Getopt::Long;
 use Pod::Usage;
+use Time::Local;
 use warnings;
 use strict;
 
@@ -21,6 +22,7 @@ my $endTime;
 my $num_logs;
 my $exclude_logs = 0;
 my $man = 0;
+my $json = 0;
 my $help = 0;
 
 # Associate file extensions with decompressors
@@ -45,6 +47,7 @@ GetOptions(
   "end=s" => \$endTime,
   "num-logs|n=i" => \$num_logs,
   "exclude-logs|x=i" => \$exclude_logs,
+  "json|j" => \$json,
   "help|?" => \$help,
   "man" => \$man
 ) or pod2usage(2);
@@ -73,6 +76,8 @@ my %scanTime = (
     total => 0,
 );
 my %bidir_match;
+
+foreach ( $startTime, $endTime ) { $_ = &normalized_time($_) }
 
 # Convert bidirectional symbols
 foreach my $s (@symbols_bidirectional) {
@@ -116,97 +121,215 @@ else {
 
 my $total_ham = $total - ($total_spam + $total_junk);
 
-if ($total > 0) {
-  while (my ($s, $r) = each(%sym_res)) {
-    if ($r->{hits} > 0) {
-      my $th = $r->{hits};
-      my $sh = $r->{spam_hits};
-      my $jh = $r->{junk_hits};
-      my $hh = $r->{hits} - $sh - $jh;
-      my $htp = $hh * 100.0 / $total_ham if $total_ham != 0;
-      my $stp = $sh * 100.0 / $total_spam if $total_spam != 0;
-      my $jtp = $jh * 100.0 / $total_junk if $total_junk != 0;
+if ($json) {
+  print "{";
+  &Summary();
+  print '"symbols":{';
+  &SymbolsStat();
+  print "}}\n";
+}
+else {
+  &SymbolsStat();
+  &Summary();
+}
 
-      printf "%s   avg. weight %.3f, hits %d(%.3f%%):
+exit;
+
+sub SymbolsStat() {
+  if ($total > 0) {
+    my $has_comma = 0;
+    while (my ($s, $r) = each(%sym_res)) {
+      if ($r->{hits} > 0) {
+        my $th = $r->{hits};
+        my $sh = $r->{spam_hits};
+        my $jh = $r->{junk_hits};
+        my $hh = $r->{hits} - $sh - $jh;
+        my $htp = $hh * 100.0 / $total_ham if $total_ham != 0;
+        my $stp = $sh * 100.0 / $total_spam if $total_spam != 0;
+        my $jtp = $jh * 100.0 / $total_junk if $total_junk != 0;
+
+        if ($json) {
+          if ($has_comma) {
+            print ",";
+          }
+          else {
+            $has_comma = 1;
+          }
+          print "\"$s\":{";
+          JsonObjectElt("avg_weight", $r->{'weight'},"%.4f");
+          print ",";
+          JsonObjectElt("hits", $th, "%d");
+          print ",";
+          JsonObjectElt("hits_percentage", $th/$total, "%.4f");
+          print ",";
+          JsonObjectElt("spam_hits", $sh, "%d");
+          print ",";
+          JsonObjectElt("spam_to_total", $sh/$th, "%.4f");
+          print ",";
+          JsonObjectElt("spam_percentage", $stp/100.0 || 0, "%.4f");
+          print ",";
+          JsonObjectElt("ham_hits", $hh, "%d");
+          print ",";
+          JsonObjectElt("ham_to_total", $hh/$th, "%.4f");
+          print ",";
+          JsonObjectElt("ham_percentage", $htp/100.0 || 0, "%.4f");
+          print ",";
+          JsonObjectElt("junk_hits", $jh, "%d");
+          print ",";
+          JsonObjectElt("junk_to_total", $jh/$th, "%.4f");
+          print ",";
+          JsonObjectElt("junk_percentage", $jtp/100.0 || 0, "%.4f");
+        }
+        else {
+          printf "%s   avg. weight %.3f, hits %d(%.3f%%):
   Ham  %7.3f%%, %6d/%-6d (%7.3f%%)
   Spam %7.3f%%, %6d/%-6d (%7.3f%%)
   Junk %7.3f%%, %6d/%-6d (%7.3f%%)
 ",
-        $s, $r->{weight} / $r->{hits}, $th, ( $th / $total * 100 ),
-        ( $hh / $th * 100 ), $hh, $total_ham,  ( $htp or 0 ),
-        ( $sh / $th * 100 ), $sh, $total_spam, ( $stp or 0 ),
-        ( $jh / $th * 100 ), $jh, $total_junk, ( $jtp or 0 );
+            $s, $r->{weight} / $r->{hits}, $th, ($th / $total * 100),
+            ($hh / $th * 100), $hh, $total_ham, ($htp or 0),
+            ($sh / $th * 100), $sh, $total_spam, ($stp or 0),
+            ($jh / $th * 100), $jh, $total_junk, ($jtp or 0);
+        }
 
-      my $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
-      my $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
+        my $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
+        my $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
 
-      if ($r->{weight} != 0) {
-        if ($r->{weight} > 0) {
-          printf "
+        if ($r->{weight} != 0) {
+          if (!$json) {
+            if ($r->{weight} > 0) {
+              printf "
 Spam changes (ham/junk -> spam): %6d/%-6d (%7.3f%%)
 Spam  changes / total spam hits: %6d/%-6d (%7.3f%%)
 Junk changes      (ham -> junk): %6d/%-6d (%7.3f%%)
 Junk  changes / total junk hits: %6d/%-6d (%7.3f%%)
 ",
-            $r->{spam_change}, $th, ( $r->{spam_change} / $th * 100 ),
-            $r->{spam_change}, $total_spam, ( $schp or 0 ),
-            $r->{junk_change}, $th, ( $r->{junk_change} / $th * 100 ),
-            $r->{junk_change}, $total_junk, ( $jchp or 0 );
-        }
-        else {
-          printf "
+                $r->{spam_change}, $th, ($r->{spam_change} / $th * 100),
+                $r->{spam_change}, $total_spam, ($schp or 0),
+                $r->{junk_change}, $th, ($r->{junk_change} / $th * 100),
+                $r->{junk_change}, $total_junk, ($jchp or 0);
+            }
+            else {
+              printf "
 Spam changes (spam -> junk/ham): %6d/%-6d (%7.3f%%)
 Spam changes / total spam hits : %6d/%-6d (%7.3f%%)
 Junk changes (junk -> ham)     : %6d/%-6d (%7.3f%%)
 Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
 ",
-            $r->{spam_change}, $th, ( $r->{spam_change} / $th * 100 ),
-            $r->{spam_change}, $total_spam, ( $schp or 0 ),
-            $r->{junk_change}, $th, ( $r->{junk_change} / $th * 100 ),
-            $r->{junk_change}, $total_junk, ( $jchp or 0 );
+                $r->{spam_change}, $th, ($r->{spam_change} / $th * 100),
+                $r->{spam_change}, $total_spam, ($schp or 0),
+                $r->{junk_change}, $th, ($r->{junk_change} / $th * 100),
+                $r->{junk_change}, $total_junk, ($jchp or 0);
+            }
+          }
+          else {
+            print ",";
+            JsonObjectElt("spam_change", $r->{spam_change}, "%.4f");
+            print ",";
+            JsonObjectElt("junk_change", $r->{junk_change}, "%.4f");
+          }
         }
+
+        if ($correlations) {
+          if (!$json) {
+            print "Correlations report:\n";
+
+            while (my ($cs, $hits) = each %{$r->{corr}}) {
+              my $corr_prob = $hits / $total;
+              my $sym_prob = $r->{hits} / $total;
+              printf "Probability of %s when %s fires: %.3f\n", $s, $cs,
+                ($corr_prob / $sym_prob);
+            }
+          }
+          else {
+            print ",";
+            print "\"correllations\":{";
+
+            my $has_comma = 0;
+            while (my ($cs, $hits) = each %{$r->{corr}}) {
+              if ($has_comma) {
+                print ",";
+              }
+              else {
+                $has_comma = 1;
+              }
+              my $corr_prob = $hits / $total;
+              my $sym_prob = $r->{hits} / $total;
+              JsonObjectElt($cs, ($corr_prob / $sym_prob) ,"%.4f");
+            }
+
+            print "}";
+          }
+        }
+
+        print "}" if $json;
+      }
+      else {
+        print "Symbol $s has not been met\n" if !$json;
       }
 
-      if ($correlations) {
-        print "Correlations report:\n";
-
-        while (my ($cs,$hits) = each %{$r->{corr}}) {
-          my $corr_prob = $hits / $total;
-          my $sym_prob = $r->{hits} / $total;
-          printf "Probability of %s when %s fires: %.3f\n", $s, $cs, ($corr_prob / $sym_prob);
-        }
-      }
-
+      print '-' x 80 . "\n" if !$json;
     }
-    else {
-      print "Symbol $s has not been met\n";
-    }
-
-    print '-' x 80 . "\n";
   }
 }
 
-print "
+sub Summary() {
+  if (!$json) {
+    print "
 === Summary ", '=' x 68, "
 Messages scanned: $total";
-printf " [ %s / %s ]
+    printf " [ %s / %s ]
 ", $timeStamp{'start'}, $timeStamp{'end'}
-  if defined $timeStamp{'start'};
-say '';
-printf "%11s: %6.2f%%, %d\n", $_, 100 * $action{$_} / $total, $action{$_}
-  for sort keys %action;
-say '';
-printf "scan time min/avg/max = %.2f/%.2f/%.2f s
+      if defined $timeStamp{'start'};
+    say '';
+    printf "%11s: %6.2f%%, %d\n", $_, 100 * $action{$_} / $total, $action{$_}
+      for sort keys %action;
+    say '';
+    printf "scan time min/avg/max = %.2f/%.2f/%.2f s
 ", $scanTime{'min'} / 1000,
-  ($total) ? $scanTime{'total'} / $total / 1000 : undef,
-  $scanTime{'max'} / 1000
-  if exists $scanTime{'min'};
-say '=' x 80;
+        ($total) ? $scanTime{'total'} / $total / 1000 : undef,
+      $scanTime{'max'} / 1000
+      if exists $scanTime{'min'};
+    say '=' x 80;
+  }
+  else {
+    JsonObjectElt("total", $total, "%d");
+    print ",";
 
-exit;
+    if (defined $timeStamp{'start'}) {
+      JsonObjectElt("start", $timeStamp{'start'});
+      print ",";
+    }
+
+    if (defined $timeStamp{'end'}) {
+      JsonObjectElt("end", $timeStamp{'end'});
+      print ",";
+    }
+
+    print "\"actions\":{";
+
+    my $has_comma = 0;
+    foreach my $a (sort keys %action) {
+      if ($has_comma) {
+        print ",";
+      }
+      else {
+        $has_comma = 1;
+      }
+      JsonObjectElt($a, $action{$a}, "%d");
+    }
+    print "},";
+  }
+}
 
 sub ProcessLog {
-  while(<$rspamd_log>) {
+  my ( $ts_format, @line ) = &log_time_format($rspamd_log);
+  my $is_syslog = defined $ts_format && $ts_format eq 'syslog';
+
+  while() {
+    last if eof $rspamd_log;
+    $_ = (@line) ? shift @line : <$rspamd_log>;
+
     if (!$enabled && ($search_pattern eq "" || /$search_pattern/)) {
       $enabled = 1;
     }
@@ -214,7 +337,10 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
-      my $ts = join ' ', ( split /\s+/ )[ 0 .. 2 ];
+      my $ts =
+        ($is_syslog)
+        ? syslog2iso( join ' ', ( split /\s+/ )[ 0 .. 2 ] )
+        : join ' ', ( split /\s+/ )[ 0 .. 1 ];
 
       next if ( $ts lt $startTime );
       next if ( defined $endTime && $ts gt $endTime );
@@ -366,46 +492,117 @@ sub ProcessLog {
   }
 }
 
+sub JsonObjectElt() {
+  my ($k, $v) = @_;
+  my $f = defined $_[2] ? $_[2] : '%s';
+
+  if ($f eq "%s") {
+    $f = "\"%s\"";
+  }
+
+  printf "\"%s\":$f", $k, $v;
+}
+
 sub GetLogfilesList {
-    my ($dir) = @_;
-    opendir( DIR, $dir ) or die $!;
+  my ($dir) = @_;
+  opendir( DIR, $dir ) or die $!;
 
-    my $pattern = join( '|', keys %decompressor );
-    my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
+  my $pattern = join( '|', keys %decompressor );
+  my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
 
-    # Add unnumbered logs first
-    my @logs =
-      grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
+  # Add unnumbered logs first
+  my @logs =
+    grep { -f "$dir/$_" && !/$re/ } readdir(DIR);
 
-    # Add numbered logs
-    rewinddir(DIR);
-    push( @logs,
-        ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
+  # Add numbered logs
+  rewinddir(DIR);
+  push( @logs,
+    ( sort numeric ( grep { -f "$dir/$_" && /$re/ } readdir(DIR) ) ) );
 
-    closedir(DIR);
+  closedir(DIR);
 
-    # Select required logs and revers their order
-    @logs =
-      reverse
+  # Select required logs and revers their order
+  @logs =
+    reverse
       splice( @logs, $exclude_logs, $num_logs ||= @logs - $exclude_logs );
 
-    # Loop through array printing out filenames
+  # Loop through array printing out filenames
+  if (!$json) {
     print "\nParsing log files:\n";
     foreach my $file (@logs) {
-        print "  $file\n";
+      print "  $file\n";
     }
     print "\n";
+  }
 
-    return @logs;
+  return @logs;
+}
+
+sub log_time_format {
+  my $fh = shift;
+  my ( $format, $line );
+  while (<$fh>) {
+    $line = $_;
+
+    # 2017-08-08 00:00:01 #66984(
+    # 2017-08-08 00:00:01.001 #66984(
+    if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3})? #\d+\(/) {
+      $format = 'rspamd';
+      last;
+    }
+
+    # Aug  8 00:02:50 #66986(
+    elsif (/^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d #\d+\(/) {
+      $format = 'syslog';
+      last;
+    }
+
+    # Skip newsyslog messages
+    # Aug  8 00:00:00 hostname newsyslog[63284]: logfile turned over
+    elsif ( /^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\ \S+ newsyslog\[\d+\]: logfile turned over$/ ) {
+      next;
+    }
+    else {
+      print "Unknown log format\n";
+      exit 1;
+    }
+  }
+  return ( $format, $line );
+}
+
+sub normalized_time {
+  return undef
+    if !defined( $_ = shift );
+
+  /^\d\d(?::\d\d){0,2}$/
+    ? sprintf '%04d-%02d-%02d %s', 1900 + (localtime)[5], 1 + (localtime)[4],
+    (localtime)[3], $_
+    : $_;
 }
 
 sub numeric {
-    $a =~ /\.(\d+)\./;
-    my $a_num = $1;
-    $b =~ /\.(\d+)\./;
-    my $b_num = $1;
+  $a =~ /\.(\d+)\./;
+  my $a_num = $1;
+  $b =~ /\.(\d+)\./;
+  my $b_num = $1;
 
-    $a_num <=> $b_num;
+  $a_num <=> $b_num;
+}
+
+# Convert syslog timestamp to "ISO 8601 like" format
+# using current year as syslog does not record the year (nor the timezone)
+# or the last year if the guessed time is in the future.
+sub syslog2iso {
+  my %month_map;
+  @month_map{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = 0 .. 11;
+
+  my ( $month, @t ) =
+    $_[0] =~ m/^(\w{3}) \s\s? (\d\d?) \s (\d\d):(\d\d):(\d\d)/x;
+  my $epoch =
+    timelocal( ( reverse @t ), $month_map{$month}, 1900 + (localtime)[5] );
+  sprintf '%04d-%02d-%02d %02d:%02d:%02d',
+    1900 + (localtime)[5] - ( $epoch > time ),
+    $month_map{$month} + 1, @t;
 }
 
 __END__
@@ -430,6 +627,7 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
    --end                  ending time (newest) for log parsing
    --num-logs=integer     number of recent logfiles to analyze (all files in the directory by default)
    --exclude-logs=integer number of latest logs to exclude (0 by default)
+   --json                 print json output instead of human readable
    --help                 brief help message
    --man                  full documentation
 
@@ -473,7 +671,7 @@ Number of latest logs to exclude (0 by default).
 
 =item B<--correlations>
 
-Additionaly print correlation rate for each symbol displayed. This routine calculates merely paired correlations between symbols.
+Additionally print correlation rate for each symbol displayed. This routine calculates merely paired correlations between symbols.
 
 =item B<--search-pattern>
 
@@ -487,13 +685,15 @@ Exclude log lines if certain symbols are fired (e.g. GTUBE). You may specify thi
 
 Select log entries after this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
 truncated to any desired accuracy). If used with B<--end> select entries between
-B<--start> and B<--end>.
+B<--start> and B<--end>. The omitted date defaults to the current date if you
+supply the time.
 
 =item B<--end>
 
 Select log entries before this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
 truncated to any desired accuracy). If used with B<--start> select entries between
-B<--start> and B<--end>.
+B<--start> and B<--end>. The omitted date defaults to the current date if you
+supply the time.
 
 =item B<--help>
 

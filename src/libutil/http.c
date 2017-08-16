@@ -2385,6 +2385,7 @@ rspamd_http_message_from_url (const gchar *url)
 
 	urllen = strlen (url);
 	memset (&pu, 0, sizeof (pu));
+
 	if (http_parser_parse_url (url, urllen, FALSE, &pu) != 0) {
 		msg_warn ("cannot parse URL: %s", url);
 		return NULL;
@@ -2408,7 +2409,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 	else {
 		path = url + pu.field_data[UF_PATH].off;
-		pathlen = pu.field_data[UF_PATH].len;
+		pathlen = urllen - pu.field_data[UF_PATH].off;
 	}
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
@@ -3208,6 +3209,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 
 	GError *err;
 	rspamd_ftok_t lookup;
+	const rspamd_ftok_t *encoding;
 	struct http_parser_url u;
 	guint i;
 	rspamd_regexp_t *re;
@@ -3278,6 +3280,13 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		entry->is_reply = TRUE;
+
+		encoding = rspamd_http_message_find_header (msg, "Accept-Encoding");
+
+		if (encoding && rspamd_substring_search (encoding->begin, encoding->len,
+				"gzip", 4) != -1) {
+			entry->support_gzip = TRUE;
+		}
 
 		if (handler != NULL) {
 			return handler (entry, msg);
@@ -3450,7 +3459,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 {
 	struct rspamd_http_connection_entry *conn;
 
-	conn = g_slice_alloc (sizeof (struct rspamd_http_connection_entry));
+	conn = g_slice_alloc0 (sizeof (struct rspamd_http_connection_entry));
 	conn->rt = router;
 	conn->ud = ud;
 	conn->is_reply = FALSE;

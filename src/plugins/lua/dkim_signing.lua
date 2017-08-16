@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+local lutil = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "dkim_sign_tools"
 
@@ -46,18 +47,6 @@ local N = 'dkim_signing'
 local redis_params
 local sign_func = rspamd_plugins.dkim.sign
 
-local function simple_template(tmpl, keys)
-  local lpeg = require "lpeg"
-
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
-
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
-
-  return lpeg.match(template_grammar, tmpl)
-end
-
 local function dkim_signing_cb(task)
   local ret,p = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
@@ -76,13 +65,13 @@ local function dkim_signing_cb(task)
             rk, err)
         else
           p.rawkey = data
-          local ret, _ = sign_func(task, p)
-          if ret then
+          local sret, _ = sign_func(task, p)
+          if sret then
             task:insert_result(settings.symbol, 1.0)
           end
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         rk, -- hash key
         false, -- is write
@@ -90,7 +79,7 @@ local function dkim_signing_cb(task)
         'HGET', -- command
         {settings.key_prefix, rk} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
       end
     end
@@ -103,7 +92,7 @@ local function dkim_signing_cb(task)
           try_redis_key(data)
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         p.domain, -- hash key
         false, -- is write
@@ -111,7 +100,7 @@ local function dkim_signing_cb(task)
         'HGET', -- command
         {settings.selector_prefix, p.domain} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for %s", p.domain)
       end
     else
@@ -123,9 +112,9 @@ local function dkim_signing_cb(task)
     end
   else
     if (p.key and p.selector) then
-      p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
-      local ret, _ = sign_func(task, p)
-      return ret
+      p.key = lutil.template(p.key, {domain = p.domain, selector = p.selector})
+      local sret, _ = sign_func(task, p)
+      return sret
     else
       rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
       return false

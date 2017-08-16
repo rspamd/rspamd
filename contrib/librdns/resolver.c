@@ -402,6 +402,8 @@ rdns_process_timer (void *arg)
 		if (!renew) {
 			req->async->del_timer (req->async->data,
 					req->async_event);
+			req->async_event = NULL;
+			HASH_DEL (req->io->requests, req);
 		}
 
 		/* We have not scheduled timeout actually due to send error */
@@ -480,6 +482,7 @@ rdns_process_retransmit (int fd, void *arg)
 
 	resolver->async->del_write (resolver->async->data,
 			req->async_event);
+	req->async_event = NULL;
 
 	r = rdns_send_request (req, fd, false);
 
@@ -530,7 +533,7 @@ rdns_make_request_full (
 	const char *cur_name, *last_name = NULL;
 	struct rdns_compression_entry *comp = NULL;
 
-	if (!resolver->initialized) {
+	if (resolver == NULL || !resolver->initialized) {
 		return NULL;
 	}
 

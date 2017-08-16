@@ -32,7 +32,7 @@ context("Rspamd expressions", function()
        {'(((A))', nil},
        -- Balanced braces
        {'(((A)))', '(A)'},
-       -- Plus and comparision operators
+       -- Plus and comparison operators
        {'A + B + C + D > 2', '2 (A) (B) (C) (D) +(4) >'},
        -- Plus and logic operators
        {'((A + B + C + D) > 2) & D', '(D) 2 (A) (B) (C) (D) +(4) > &'},

@@ -73,7 +73,7 @@ rspamd_inet_addr_t * rspamd_inet_address_from_rnds (
  * Parse string with ipv6 address of length `len` to `target` which should be
  * at least sizeof (in6_addr_t)
  * @param text input string
- * @param len lenth of `text` (if 0, then `text` must be zero terminated)
+ * @param len length of `text` (if 0, then `text` must be zero terminated)
  * @param target target structure
  * @return TRUE if the address has been parsed, otherwise `target` content is undefined
  */
@@ -84,7 +84,7 @@ gboolean rspamd_parse_inet_address_ip6 (const guchar *text, gsize len,
  * Parse string with ipv4 address of length `len` to `target` which should be
  * at least sizeof (in4_addr_t)
  * @param text input string
- * @param len lenth of `text` (if 0, then `text` must be zero terminated)
+ * @param len length of `text` (if 0, then `text` must be zero terminated)
  * @param target target structure
  * @return TRUE if the address has been parsed, otherwise `target` content is undefined
  */

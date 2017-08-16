@@ -77,7 +77,7 @@ rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
 		char c, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
- * Erase `len` characters at postion `pos`
+ * Erase `len` characters at position `pos`
  */
 void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
 

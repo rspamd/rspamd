@@ -75,7 +75,7 @@ GList * rspamd_sockets_list (const gchar *credits,
 /*
  * Create socketpair
  */
-gboolean rspamd_socketpair (gint pair[2]);
+gboolean rspamd_socketpair (gint pair[2], gboolean is_stream);
 
 /*
  * Write pid to file
@@ -207,6 +207,7 @@ void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data);
 #define tv_to_double(tv) ((double)(tv)->tv_sec + (tv)->tv_usec / 1.0e6)
 #define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
 	(ts)->tv_nsec / 1000LLU)
+#define ts_to_double(tv) ((double)(tv)->tv_sec + (tv)->tv_nsec / 1.0e9)
 
 /**
  * Try to allocate a file on filesystem (using fallocate or posix_fallocate)
@@ -296,16 +297,6 @@ void rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx);
  * @param mtx
  */
 void rspamd_rwlock_free (rspamd_rwlock_t *mtx);
-
-static inline void
-rspamd_cond_wait (GCond *cond, rspamd_mutex_t *mtx)
-{
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
-	g_cond_wait (cond, &mtx->mtx);
-#else
-	g_cond_wait (cond, g_static_mutex_get_mutex (&mtx->mtx));
-#endif
-}
 
 /**
  * Create new named thread
@@ -519,5 +510,12 @@ guint64 rspamd_tm_to_time (const struct tm *tm, glong tz);
 
 #define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = g_ptr_array_index((ar), (i))) || 1); ++(i))
 
+/**
+ * Compresses the input string using gzip+zlib. Old string is replaced and freed
+ * if compressed. If not compressed it is untouched.
+ * @param in
+ * @return TRUE if a string has been compressed
+ */
+gboolean rspamd_fstring_gzip (rspamd_fstring_t **in);
 
 #endif

@@ -134,6 +134,9 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		if (CMD_CHECK (p, MSG_CMD_SYMBOLS, pathlen)) {
 			task->cmd = CMD_SYMBOLS;
 		}
+		else if (CMD_CHECK (p, MSG_CMD_SCAN, pathlen)) {
+			task->cmd = CMD_CHECK_V2;
+		}
 		else if (CMD_CHECK (p, MSG_CMD_SKIP, pathlen)) {
 			task->cmd = CMD_SKIP;
 		}
@@ -438,6 +441,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							RSPAMD_MEMPOOL_MTA_NAME,
 							mta_name, NULL);
 					debug_task ("read MTA-Name header, value: %s", mta_name);
+				}
+				IF_HEADER (MILTER_HEADER) {
+					task->flags |= RSPAMD_TASK_FLAG_MILTER;
+					debug_task ("read Milter header, value: %V", hv);
 				}
 				break;
 			default:
@@ -1060,6 +1067,7 @@ rspamd_protocol_output_profiling (struct rspamd_task *task,
 
 struct rspamd_saved_protocol_reply {
 	ucl_object_t *obj;
+	guint metric_changes;
 	enum rspamd_protocol_flags flags;
 };
 
@@ -1077,7 +1085,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 {
 	ucl_object_t *top = NULL;
 	GString *dkim_sig;
-	const ucl_object_t *rmilter_reply;
+	const ucl_object_t *milter_reply;
 	struct rspamd_saved_protocol_reply *cached;
 	static const gchar *varname = RSPAMD_MEMPOOL_CACHED_REPLY;
 
@@ -1094,12 +1102,43 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		flags ^= cached->flags;
 		cached->flags |= flags;
 
+		if (task->result &&
+				cached->metric_changes != task->result->changes) {
+			msg_info_task ("found metric modifications (%d) before we have "
+					"generated protocol results (%d), regenerate them",
+					task->result->changes, cached->metric_changes);
+
+			flags |= RSPAMD_PROTOCOL_METRICS;
+
+			if (task->cmd == CMD_CHECK_V2) {
+				ucl_object_delete_key (top, "symbols");
+			}
+			else {
+				ucl_object_delete_key (top, DEFAULT_METRIC);
+			}
+
+			/* That all is related to metric unfortunately */
+			ucl_object_delete_key (top, "is_spam");
+			ucl_object_delete_key (top, "is_skipped");
+			ucl_object_delete_key (top, "score");
+			ucl_object_delete_key (top, "required_score");
+			ucl_object_delete_key (top, "action");
+			ucl_object_delete_key (top, "subject");
+		}
+		if (task->result) {
+			cached->metric_changes = task->result->changes;
+		}
 	}
 	else {
 		top = ucl_object_typed_new (UCL_OBJECT);
 		cached = rspamd_mempool_alloc (task->task_pool, sizeof (*cached));
 		cached->obj = top;
 		cached->flags = flags;
+
+		if (task->result) {
+			cached->metric_changes = task->result->changes;
+		}
+
 		rspamd_mempool_set_variable (task->task_pool, varname,
 				cached, rspamd_protocol_cached_dtor);
 
@@ -1169,8 +1208,31 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				RSPAMD_MEMPOOL_DKIM_SIGNATURE);
 
 		if (dkim_sig) {
-			GString *folded_header = rspamd_header_value_fold ("DKIM-Signature",
-					dkim_sig->str, 80, task->nlines_type);
+			GString *folded_header;
+
+			if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+				folded_header = rspamd_header_value_fold ("DKIM-Signature",
+						dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF);
+			}
+			else {
+				folded_header = rspamd_header_value_fold ("DKIM-Signature",
+						dkim_sig->str, 80, task->nlines_type);
+			}
+			/*
+			 * According to milter docs, we need to be extra careful
+			 * when folding headers:
+			 * Neither the name nor the value of the header is checked for standards
+			 * compliance. However, each line of the header must be under 2048
+			 * characters and should be under 998 characters.
+			 * If longer headers are needed, make them multi-line.
+			 * To make a multi-line header, insert a line feed (ASCII 0x0a, or \n
+			 * in C) followed by at least one whitespace character such as a
+			 * space (ASCII 0x20) or tab (ASCII 0x09, or \t in C).
+			 * The line feed should NOT be preceded by a carriage return (ASCII 0x0d);
+			 * the MTA will add this automatically.
+			 * It is the filter writer's responsibility to ensure that no s
+			 * tandards are violated.
+			 */
 			ucl_object_insert_key (top,
 					ucl_object_fromstring_common (folded_header->str,
 							folded_header->len, UCL_STRING_RAW),
@@ -1180,12 +1242,18 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_RMILTER) {
-		rmilter_reply = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_RMILTER_REPLY);
+		milter_reply = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_MILTER_REPLY);
 
-		if (rmilter_reply) {
-			ucl_object_insert_key (top, ucl_object_ref (rmilter_reply),
-					"rmilter", 0, false);
+		if (milter_reply) {
+			if (task->cmd == CMD_CHECK_V2) {
+				ucl_object_insert_key (top, ucl_object_ref (milter_reply),
+						"milter", 0, false);
+			}
+			else {
+				ucl_object_insert_key (top, ucl_object_ref (milter_reply),
+						"rmilter", 0, false);
+			}
 		}
 	}
 

@@ -22,6 +22,7 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_util = require "rspamd_util"
+local rspamd_lua_utils = require "lua_util"
 
 -- Default settings
 local redis_params = nil
@@ -96,6 +97,7 @@ end
 
 -- Set score based on metric's action
 local ip_score_set = function(task)
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local function new_score_set(score, old_score, old_total)
     local new_total
     if old_total == -1 or old_total ~= old_total then

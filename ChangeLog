@@ -1,3 +1,292 @@
+1.6.2: 08 Jul 2017
+	* [Conf] Remove Rambler email bl for now
+	* [Conf] Switch RAMBLER_URIBL to a locally managed source
+	* [CritFix] Switch from ragel to C for Content-Type parsing
+	* [Feature] Add `-e` option for lua_repl
+	* [Feature] Add per-domain emails normalisation rules
+	* [Feature] Add sessions cache to debug dangling sessions
+	* [Feature] Add short_text_direct_hash for fuzzy check module
+	* [Feature] Add text_part:get_stats function
+	* [Feature] Allow to add custom processing script for surbl
+	* [Feature] Allow to check reply-to email
+	* [Feature] Allow to customize spam header, remove existing spam headers
+	* [Feature] Allow to disable specific workers in the config
+	* [Feature] Allow to discard messages instead of rejection
+	* [Feature] Allow to specify custom delimiter in emails plugin
+	* [Feature] Allow to specify custom User-Agent for rspamc
+	* [Feature] Allow to store symbols data in Clickhouse
+	* [Feature] Allow to use HTTPS when connecting to Clickhouse
+	* [Feature] Enable sessions cache tracking for milter connections
+	* [Feature] Implement per-line mode in lua_repl (like `perl -p`)
+	* [Feature] Implement rdns-curve plugin based on rspamd cryptobox
+	* [Feature] Improve maps cached data lifetime
+	* [Feature] Improve maps checking frequency
+	* [Feature] Improve monitored timeouts logic
+	* [Feature] milter_headers: add `extended_headers_rcpt` option
+	* [Feature] Milter headers: Add X-Spam-Flag to rmilter-compatibility headers
+	* [Feature] Milter headers: remove-header routine
+	* [Feature] Multimap: received filters for extracting TLDs from hostnames
+	* [Feature] Normalize email aliases in emails module
+	* [Feature] Re-add rambler email bl (as hashed list)
+	* [Feature] Reload file maps more frequently
+	* [Feature] Rework newlines strip parser one more time
+	* [Feature] Skip updates for messages scanned via controller
+	* [Feature] Split long DKIM public keys
+	* [Feature] Store more data when stripping newlines
+	* [Feature] Support SPF macros transformations
+	* [Feature] Support suppressing DMARC reports for some domains
+	* [Fix] Add missing `break` statement
+	* [Fix] Allow modifiers in SPF macros
+	* [Fix] DKIM sign tools: edge-cases around use_esld
+	* [Fix] Do not cache SPF records with macros
+	* [Fix] Do not overwrite score when setting pre-action
+	* [Fix] Fix comparision logic
+	* [Fix] Fix DKIM base64 folding for milter flagged messages
+	* [Fix] Fix emails module configuration
+	* [Fix] Fix folding for arc headers when milter interface is used
+	* [Fix] Fix gmail dots removal
+	* [Fix] Fix rspamc detection in greylist module
+	* [Fix] Fix some more issues with HTTP maps
+	* [Fix] Milter sessions can live forever
+	* [Fix] Normalize fuzzy probability better
+	* [Fix] Plug memory leak
+	* [Fix] RBL: Fixed hashed email address lookups
+	* [Fix] Try to deal with brain-damaged milter behaviour
+	* [Fix] Use `\n` to fold headers for milter
+	* [Rework] Allow to use custom callback for monitored checks
+	* [Rework] Further steps towards one process monitoring
+	* [Rework] Send health checks from a single worker
+	* [WebUI] Round-up throughput summary values
+
+1.6.1: 14 Jun 2017
+	* [Fix] Allow to init resolver without rspamd_config
+	* [Fix] Do not crash when resolver failed to initialize
+	* [Fix] Fix abstract context layout
+	* [Fix] Fix CGP helper reply parsing
+	* [Fix] Fix crashes when socket write errors occur
+	* [Fix] Fix parsing IPv6 nameservers in resolv.conf
+	* [Fix] Milter: Don't defer on "greylist" action
+
+1.6.0: 12 Jun 2017
+	* [Conf] Add rspamd_proxy to the default configuration set
+	* [Conf] Add sample arc module config
+	* [Conf] Do away with systemd specifics completely
+	* [Conf] Increase min_bytes to avoid FP
+	* [Conf] Remove ratelimits from default configuration
+	* [CritFix] Fix accepting on IPv6 sockets
+	* [CritFix] Fix corruption when multiple fuzzy are defined
+	* [CritFix] Fix learn condition in fuzzy check
+	* [CritFix] Fix memory leak in fuzzy check
+	* [CritFix] Fix memory leak in maps scheduling
+	* [CritFix] Paese the last character in DKIM signature correctly
+	* [CritFix] Zero fill sockaddr_un
+	* [Feature] Add ability to add doc strings by example
+	* [Feature] Add API to verify DKIM (and ARC) signatures
+	* [Feature] Add compression/decompression to proxy
+	* [Feature] Add count to url structure
+	* [Feature] Add initial support of the new protocol reply
+	* [Feature] Add Lua plugin spamtrap
+	* [Feature] Add `monitored_address` for rbls
+	* [Feature] Add new schema for bayes tokens
+	* [Feature] Add preliminary ARC support to dkim code
+	* [Feature] Add preliminary support of ARC signing
+	* [Feature] Add rules to detect bad 8bit characters in From and To
+	* [Feature] Add scanning support for milter protocol
+	* [Feature] Add support for bidirectional symbols in rspamd_stats
+	* [Feature] Add support for static maps
+	* [Feature] Add support of maps with multiple regexps matches
+	* [Feature] Add `text_multiplier` param
+	* [Feature] Add the preliminary ARC plugin
+	* [Feature] Add top redirector targets rank
+	* [Feature] Allow async events to be registered from LUA rules
+	* [Feature] Allow storing bayes tokens in Redis
+	* [Feature] Allow to exclude specific domains from mx check
+	* [Feature] Allow to have a stack of watcher finalisers
+	* [Feature] Allow to pass hostname to `-i` flag in Rspamc
+	* [Feature] Allow to set custom user agent in url redirector
+	* [Feature] Allow to use custom callback when parsing resolv.conf
+	* [Feature] Allow to use domain from authenticated user
+	* [Feature] Bayes expiry plugin
+	* [Feature] Check dkim sign keys for modifications
+	* [Feature] DKIM signing: sign_networks/local address specific use_domain settings
+	* [Feature] DMARC: Support excluding domains from sampling
+	* [Feature] Expire processing items for URL redirector aggressively
+	* [Feature] Fix surbl monitored for IP lists, add `monitored_domain` option
+	* [Feature] Implement caching for dkim body hashes
+	* [Feature] Implement milter protocol scan reply
+	* [Feature] Improve omograph phishing detection
+	* [Feature] Initial support of self-scan in Rspamd proxy
+	* [Feature] Keep track of headers in milter interface
+	* [Feature] Milter headers: better controls for local/authenticated
+	* [Feature] Multimap: email:domain:tld filter
+	* [Feature] Preliminary DMARC reporting implementation
+	* [Feature] Reuse stemmers in the cache
+	* [Feature] Rework confighelp to load Lua plugins
+	* [Feature] Rework hfilter to use hyperscan if possible
+	* [Feature] Rework lua RSA API
+	* [Feature] Rmilter_headers: approximate rmilter's extended_spam_headers
+	* [Feature] Start integration of milter support in proxy
+	* [Feature] Store average words length and short words count
+	* [Feature] Store hash of headers order and names
+	* [Feature] Support MTA name header
+	* [Feature] Support multiple types of dkim signing in Lua
+	* [Feature] Support numeric arguments for Redis requests
+	* [Feature] Use headers hash in bayes metatokens
+	* [Feature] Use normal resolv.conf rules of rotation in Rspamd
+	* [Feature] Use version 2 proto for checking messages
+	* [Fix] Allow to follow symlinks when safe
+	* [Fix] Append MX name for authentication results as required
+	* [Fix] Change default text multiplier from 0.5 to 2.0
+	* [Fix] Check min_bytes for images as well
+	* [Fix] Deal with 7bit charsets properly
+	* [Fix] Deal with 8bit characters in email addresses
+	* [Fix] Deal with unpaired <a> tags
+	* [Fix] Detect confighelp in plugins initialisation
+	* [Fix] Disable certain checks for utf spoof detection
+	* [Fix] DKIM Signing: avoid nil index when From header is missing
+	* [Fix] Do not add exact hashes from different parts
+	* [Fix] Do not check DMARC if SPF or DKIM were not checked
+	* [Fix] Do not check URLs that are resolved to be redirected
+	* [Fix] Do not set bayes probability if we don't use it
+	* [Fix] Do not stop on illegal unicode points - replace them
+	* [Fix] Fix another race condition in arc checks
+	* [Fix] Fix arc count logic
+	* [Fix] Fix ARC signing
+	* [Fix] Fix brain-damaged spamc protocol for now
+	* [Fix] Fix calling for peak functions
+	* [Fix] Fix couple of issues in FORWARDED rule
+	* [Fix] Fix CTE propagation from parent containers to children parts
+	* [Fix] Fix errors processing in the controller
+	* [Fix] Fix format string in milter
+	* [Fix] Fix issues in SPF macros parsing
+	* [Fix] Fix logging format string
+	* [Fix] Fix logic of cached passwords check
+	* [Fix] Fix lowercasing of stemmed words
+	* [Fix] Fix LRU elements removal
+	* [Fix] Fix memory leak when accepting from unix sockets
+	* [Fix] Fix milter connections persistence
+	* [Fix] Fix objects merging in UCL
+	* [Fix] Fix order of operations to avoid race condition
+	* [Fix] Fix parsing of long regexp types
+	* [Fix] Fix passing data to log helper when many symbols defined
+	* [Fix] Fix pools management for milter session
+	* [Fix] Fix processing of the watchers
+	* [Fix] Fix queue id macro in milter
+	* [Fix] Fix R_BAD_CTE_7BIT rule
+	* [Fix] Fix Redis timeout set
+	* [Fix] Fix REPLYTO_UNPARSEABLE rule
+	* [Fix] Fix setting of email address
+	* [Fix] Fix some more issues about duplicated fuzzy requests
+	* [Fix] Fix spamc support in rspamd proxy
+	* [Fix] Fix syntax error in spamtrap plugin
+	* [Fix] Fix url counts for href urls
+	* [Fix] Fix url handling in the protocol
+	* [Fix] Multimap: Received IP filters with Redis
+	* [Fix] Oops, fix d9d0fa5e86db2f4470d34395a233b450478b2f60
+	* [Fix] Parse rgb[a](x,x,x[,x]) css colors
+	* [Fix] Phishing: strict_domains
+	* [Fix] Reduce maps aggressiveness
+	* [Fix] Reresolve upstreams even if there is a single server there
+	* [Fix] Rspamadm grep: Disable Lua patterns in string search by default
+	* [Fix] Skip text parts when checking binary parts in fuzzy check
+	* [Fix] Support v2 checks in controller
+	* [Fix] Treat empty address as valid
+	* [Fix] Try harder to detect CTE
+	* [Fix] Try to deal with v4 mapped to v6 addresses on accept
+	* [Fix] Use dkim signing callback properly
+	* [Fix] Use non-volatile memory for storing data
+	* [Fix] Use static maps instead of ugly hack for radix_from_config
+	* [Fix] Use the same pool for related sessions
+	* [Rework] Continue modularisation for lua library
+	* [Rework] Initial milter protocol support
+	* [Rework] Make log pipes worker agnostic, add scanners API
+	* [Rework] Move authentication results generation to a separate routine
+	* [Rework] Move common DKIM functions to a separate lua module
+	* [Rework] Move global functions to a separate directory
+	* [Rework] Prepare dkim module for ARC checks
+	* [Rework] Propagate ucl variables from the command line
+	* [Rework] Remove multiple metrics support from Rspamd
+	* [Rework] Stop using name 'rmilter' for the modern protocol
+	* [Rework] Use LFU algorithm in LRU cache
+	* [Rules] Fix received TLS rules
+	* [Rules] Improve URL_COUNT_ODD rule
+	* [WebUI] Fix add header filter in history
+	* [WebUI] Use modern protocol for checking messages
+
+1.5.9:
+	* [Conf] Increase min_bytes to avoid FP
+	* [Conf] Remove ratelimits from default configuration
+	* [CritFix] Fix accepting on IPv6 sockets
+	* [CritFix] Zero fill sockaddr_un
+	* [Feature] Add `text_multiplier` param
+	* [Fix] Check min_bytes for images as well
+	* [Fix] Do not add exact hashes from different parts
+	* [Fix] Fix memory leak when accepting from unix sockets
+	* [Fix] Fix some more issues about duplicated fuzzy requests
+	* [Fix] Phishing: strict_domains
+	* [Fix] Skip text parts when checking binary parts in fuzzy check
+	* [Minor] Add the same duplicates protection for all fuzzy hashes types
+	* [Minor] Fix braces
+	* [Minor] Fix test
+	* [Minor] SPOOF_DISPLAY_NAME: Use all SMTP/MIME recipients
+	* [Minor] Validate assumed spoofed display name domains to contain a dot
+
+
+1.5.8:
+	* [CritFix] Fix memory leak in fuzzy check
+	* [CritFix] Fix memory leak in maps scheduling
+	* [Feature] Multimap: email:domain:tld filter
+	* [Fix] DKIM Signing: avoid nil index when From header is missing
+	* [Fix] Do not set bayes probability if we don't use it
+	* [Fix] Do not stop on illegal unicode points - replace them
+	* [Fix] Fix brain-damaged spamc protocol for now
+	* [Fix] Fix Redis timeout set
+	* [Fix] Fix spamc support in rspamd proxy
+	* [Fix] Multimap: Received IP filters with Redis
+	* [Fix] Parse rgb[a](x,x,x[,x]) css colors
+	* [Fix] Reresolve upstreams even if there is a single server there
+	* [Fix] Treat empty address as valid
+	* [Fix] Try harder to detect CTE
+	* [Fix] Try to deal with v4 mapped to v6 addresses on accept
+	* [Minor] Add `wsf` and `hta` bad archive extensions
+	* [Minor] Fix configuration option
+	* [Minor] Fix result parsing for SAVAPI
+	* [Minor] Further logging improvements
+	* [Minor] Improve logging of errors
+	* [Minor] Prevent MID_CONTAINS_FROM from firing on empty address
+	* [Minor] Reduce digit->number transmission penalty
+	* [Minor] Relax CTYPE_MISSING_DISPOSITION rule
+
+
+1.5.7:
+	* [CritFix] Fix corruption when multiple fuzzy are defined
+	* [CritFix] Fix learn condition in fuzzy check
+	* [Feature] Add rules to detect bad 8bit characters in From and To
+	* [Feature] DKIM signing: sign_networks/local address specific use_domain settings
+	* [Feature] Support numeric arguments for Redis requests
+	* [Fix] Deal with 8bit characters in email addresses
+	* [Fix] Fix couple of issues in FORWARDED rule
+	* [Fix] Fix passing data to log helper when many symbols defined
+	* [Fix] Fix R_BAD_CTE_7BIT rule
+	* [Fix] Fix REPLYTO_UNPARSEABLE rule
+	* [Fix] Fix setting of email address
+	* [Fix] Rspamadm grep: Disable Lua patterns in string search by default
+	* [Minor] Add Lua 5.3 workaround
+	* [Minor] Add lua methods to detect if a part has 8bit characters
+	* [Minor] Allow session-less lua dns requests
+	* [Minor] Allow to append greylist end time to message reported
+	* [Minor] Avoid `nil` table
+	* [Minor] Disable dkim_signing if redis is specified but not configured
+	* [Minor] Fix build with pcre2
+	* [Minor] Fix rule
+	* [Minor] Fix warnings
+	* [Minor] Format floating point number
+	* [Minor] Push email flags to the lua API
+	* [Minor] Silence some warnings
+	* [Minor] Silence warning
+	* [Minor] Try all hostname regexps to find the most significant one
+	* [WebUI] Fix add header filter in history
+
 1.5.6:
 	* [Feature] Add unigramms support in bayes
 	* [Feature] Allow configurable sign headers for DKIM
@@ -1182,7 +1471,7 @@
 	* [Feature] Add replies plugin
 	* [Feature] Add results parsing code
 	* [Feature] Add routines to compare and check pubkeys
-	* [Feature] Add simplier versions of refcounts
+	* [Feature] Add simpler versions of refcounts
 	* [Feature] Add some time manipulation functions for lua APi
 	* [Feature] Add support for non-standard BATV signatures
 	* [Feature] Add support of address with at-domain list
@@ -1282,7 +1571,7 @@
 	* [Feature] Implement zero-copy mode for HTTP reading
 	* [Feature] Improve SPF domain detection logic
 	* [Feature] Improve config:register_symbol function
-	* [Feature] Improve error report for type missmatch in lua
+	* [Feature] Improve error report for type mismatch in lua
 	* [Feature] Improve fstrings API
 	* [Feature] Improve getting SMTP data from lua_task
 	* [Feature] Improve levenshtein distance function
@@ -1876,7 +2165,7 @@
 		- Fix html images rules to reduce FP rates
 	* New rules:
 		- LONG_SUBJ - too long subject
-		- MIME_BAD_ATTACHMENT - bad attachement type
+		- MIME_BAD_ATTACHMENT - bad attachment type
 		- RDNS_NONE - no reverse DNS record for sender's IP
 		- Fix MISSING_MIMEOLE rule for modern OE
 	* Many other bugfixes, memory leaks plugs thanks to:
@@ -2324,7 +2613,7 @@
 	* Cache correct passwords to avoid too high CPU usage when working with webui
 	* Controller sockets are owned by router do not export them to task
 	* Optimize logging by skipping hash table search if it's empty
-	* Fix loading issue whith broken statfiles
+	* Fix loading issue with broken statfiles
 	* Print assertions from glib to rspamd logger
 	* Load legacy `lua/rspamd.local.lua`
 	* Update webui with some fixes to learning and scanning
@@ -2548,7 +2837,7 @@
 		- aggressive optimizations based on the abstract syntax tree;
 		- abstract expressions support (regular expressions, functions, lua modules
 		  composites and so on)
-		- New comparision and '+' operators support
+		- New comparison and '+' operators support
 		- New greedy algorithm to minimize execution time of expressions and
 		  all symbols
 		- Dynamic expressions benchmark and reoptimizations
@@ -2722,7 +3011,7 @@
 			- converted to UTF-8
 			- normalized if needed (e.g. HTML tags are stripped)
 	* Rework DKIM canonization to line based
-	* Fix fuzzy hashes addding
+	* Fix fuzzy hashes adding
 	* Use more specific hash function for fuzzy
 	* Fix leaking of iconv descriptors
 	* Fix PTR resolving in lua resolver
@@ -2771,7 +3060,7 @@
 		- Free IP list on upstream destruction
 		- Add test cases for addresses selection
 		- Allow adding of free form IP addresses to upstreams
-    * Fix endiannes in lua_radix search (reported by @citrin)
+    * Fix endianness in lua_radix search (reported by @citrin)
     * Soft shutdown should also set wanna_die flag (reported by @citrin)
     * Stop use-after-free in event loop termination
     * Fix processing of very short messages in DKIM (reported by @citrin)
@@ -3076,7 +3365,7 @@
 	* Do not output control characters if output is not terminal
 	* Fix some logic errors in learning
 	* Consider lua plugins errors as fatal configuration errors
-	* Fix wirting message id during fuzzy_add command
+	* Fix writing message id during fuzzy_add command
 	* Display weight of symbols correctly
 	* Fixes to winnow learning
 	* One more try to improve accuracy of winnow algorithm
@@ -3101,7 +3390,7 @@
 	* Add ability to set minimum dimensions for images
 	* Assume all text/* content types as text/plain
 	* Fix getting data wrapper for gmime24
-	* Many fixes to statfile syncronization system
+	* Many fixes to statfile synchronization system
 	* Fixed statfile pool initialization and synchronization with disk
 	* Prepare 0.3.2
 	* Fix Mail::Rspamd::Config for new rspamd features
@@ -3254,7 +3543,7 @@
 	* Make valgrind happy about comparing symbols
 	* Add more debug to comparing parts distance function
 	* Write action even if message has no symbols
-	* Make improvements to HTML entites decoder: now it replaces entities with common characters and
+	* Make improvements to HTML entities decoder: now it replaces entities with common characters and
 	* Add -d option to force debug output
 	* Assume 7bit as default transfer encoding
 	* Do not overwrite lua plugins and configs if they already exists in target directory
@@ -3279,7 +3568,7 @@
 	* Stupid error in calculation compressed label length
 	* Some optimizations to client library
 	* Do not compare empty parts
-	* Empty and non-empty parts are allways different
+	* Empty and non-empty parts are always different
 	* Save in regexp cache the whole regexp with header name (if exists) and with flags
 	* Add rspamd_log variable to lua plugins to access logging functions
 	* Each part in rspamd task now can have parent part

@@ -34,7 +34,9 @@ static gchar **lua_args = NULL;
 static gchar *histfile = NULL;
 static guint max_history = 2000;
 static gchar *serve = NULL;
+static gchar *exec_line = NULL;
 static gint batch = -1;
+static gboolean per_line = FALSE;
 
 static const char *default_history_file = ".rspamd_repl.hist";
 
@@ -98,7 +100,7 @@ static GHashTable *cmds_hash = NULL;
 static GOptionEntry entries[] = {
 		{"script", 's', 0, G_OPTION_ARG_STRING_ARRAY, &scripts,
 				"Load specified scripts", NULL},
-		{"path", 'p', 0, G_OPTION_ARG_STRING_ARRAY, &paths,
+		{"path", 'P', 0, G_OPTION_ARG_STRING_ARRAY, &paths,
 				"Add specified paths to lua paths", NULL},
 		{"history-file", 'H', 0, G_OPTION_ARG_FILENAME, &histfile,
 				"Load history from the specified file", NULL},
@@ -108,6 +110,10 @@ static GOptionEntry entries[] = {
 				"Serve http lua server", NULL},
 		{"batch", 'b', 0, G_OPTION_ARG_NONE, &batch,
 				"Batch execution mode", NULL},
+		{"per-line", 'p', 0, G_OPTION_ARG_NONE, &per_line,
+				"Pass each line of input to the specified lua script", NULL},
+		{"exec", 'e', 0, G_OPTION_ARG_STRING, &exec_line,
+				"Execute specified script", NULL},
 		{"args", 'a', 0, G_OPTION_ARG_STRING_ARRAY, &lua_args,
 				"Arguments to pass to Lua", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
@@ -120,12 +126,14 @@ rspamadm_lua_help (gboolean full_help)
 
 	if (full_help) {
 		help_str = "Run lua read/execute/print loop\n\n"
-				"Usage: rspamadm lua [-p paths] [-s scripts]\n"
+				"Usage: rspamadm lua [-P paths] [-s scripts]\n"
 				"Where options are:\n\n"
-				"-p: add additional lua paths (may be repeated)\n"
+				"-P: add additional lua paths (may be repeated)\n"
+				"-p: split input to lines and feed each line to the script\n"
 				"-s: load scripts on start from specified files (may be repeated)\n"
 				"-S: listen on a specified address as HTTP server\n"
 				"-a: pass argument to lua (may be repeated)\n"
+				"-e: execute script specified in command line"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -165,10 +173,12 @@ static gboolean
 rspamadm_lua_load_script (lua_State *L, const gchar *path)
 {
 	GString *tb;
-	gint err_idx;
+	gint err_idx = 0;
 
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
+	if (!per_line) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+	}
 
 	if (luaL_loadfile (L, path) != 0) {
 		rspamd_fprintf (stderr, "cannot load script %s: %s\n",
@@ -178,16 +188,18 @@ rspamadm_lua_load_script (lua_State *L, const gchar *path)
 		return FALSE;
 	}
 
-	if (lua_pcall (L, 0, 0, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		rspamd_fprintf (stderr, "call to %s failed: %v", path, tb);
-		g_string_free (tb, TRUE);
+	if (!per_line) {
+		if (lua_pcall (L, 0, 0, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			rspamd_fprintf (stderr, "call to %s failed: %v", path, tb);
+			g_string_free (tb, TRUE);
+			lua_settop (L, 0);
+
+			return FALSE;
+		}
+
 		lua_settop (L, 0);
-
-		return FALSE;
 	}
-
-	lua_settop (L, 0);
 
 	return TRUE;
 }
@@ -223,29 +235,30 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 
 	g_string_free (tb, TRUE);
 
-	if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		rspamd_fprintf (stderr, "call failed: %v\n", tb);
-		g_string_free (tb, TRUE);
+	if (!per_line) {
+		if (lua_pcall (L, 0, LUA_MULTRET, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			rspamd_fprintf (stderr, "call failed: %v\n", tb);
+			g_string_free (tb, TRUE);
+			lua_settop (L, 0);
+			return;
+		}
+
+		/* Print output */
+		for (i = err_idx + 1; i <= lua_gettop (L); i++) {
+			if (lua_isfunction (L, i)) {
+				lua_pushvalue (L, i);
+				cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+				rspamd_printf ("local function: %d\n", cbref);
+			} else {
+				lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
+				rspamd_printf ("%s\n", outbuf);
+			}
+		}
+
 		lua_settop (L, 0);
-		return;
 	}
-
-	/* Print output */
-	for (i = err_idx + 1; i <= lua_gettop (L); i ++) {
-		if (lua_isfunction (L, i)) {
-			lua_pushvalue (L, i);
-			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-
-			rspamd_printf ("local function: %d\n", cbref);
-		}
-		else {
-			lua_logger_out_type (L, i, outbuf, sizeof (outbuf));
-			rspamd_printf ("%s\n", outbuf);
-		}
-	}
-
-	lua_settop (L, 0);
 }
 
 static void
@@ -358,7 +371,7 @@ rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv)
 			rspamd_printf ("cannot open %s: %s\n", argv[i], strerror (errno));
 		}
 		else {
-			task = rspamd_task_new (NULL, NULL);
+			task = rspamd_task_new (NULL, NULL, NULL);
 
 			if (!rspamd_task_load_message (task, NULL, map, len)) {
 				rspamd_printf ("cannot load %s\n", argv[i]);
@@ -685,14 +698,17 @@ rspamadm_lua (gint argc, gchar **argv)
 	}
 
 	if (lua_args) {
-		int i = 1;
+		i = 1;
+
 		lua_newtable (L);
+
 		for (elt = lua_args; *elt != NULL; elt ++) {
-			lua_pushnumber(L, i);
-			lua_pushstring(L, *elt);
+			lua_pushnumber (L, i);
+			lua_pushstring (L, *elt);
 			lua_settable (L, -3);
 			i++;
 		}
+
 		lua_setglobal (L, "arg");
 	}
 
@@ -702,6 +718,10 @@ rspamadm_lua (gint argc, gchar **argv)
 				exit (EXIT_FAILURE);
 			}
 		}
+	}
+
+	if (exec_line) {
+		rspamadm_exec_input (L, exec_line);
 	}
 
 	if (serve) {
@@ -791,13 +811,65 @@ rspamadm_lua (gint argc, gchar **argv)
 		g_hash_table_insert (cmds_hash, (gpointer)cmds[i].name, &cmds[i]);
 	}
 
-	if (!batch) {
-		linenoiseHistorySetMaxLen (max_history);
-		linenoiseHistoryLoad (histfile);
-		rspamadm_lua_run_repl (L);
-		linenoiseHistorySave (histfile);
+	if (per_line) {
+		GIOChannel *in;
+		GString *buf;
+		gsize end_pos;
+		GIOStatus ret;
+		gint old_top;
+		GError *err = NULL;
+
+		in = g_io_channel_unix_new (STDIN_FILENO);
+		buf = g_string_sized_new (BUFSIZ);
+
+again:
+		while ((ret = g_io_channel_read_line_string (in, buf, &end_pos, &err)) ==
+				G_IO_STATUS_NORMAL) {
+			old_top = lua_gettop (L);
+			lua_pushvalue (L, -1);
+			lua_pushlstring (L, buf->str, MIN (buf->len, end_pos));
+			lua_setglobal (L, "input");
+
+			if (lua_pcall (L, 0, 0, 0) != 0) {
+				rspamd_fprintf (stderr, "call to script failed: %s",
+						lua_tostring (L, -1));
+				lua_settop (L, 0);
+				break;
+			}
+
+			lua_settop (L, old_top);
+		}
+
+		if (ret == G_IO_STATUS_AGAIN) {
+			goto again;
+		}
+
+		g_string_free (buf, TRUE);
+		g_io_channel_shutdown (in, FALSE, NULL);
+
+		if (ret == G_IO_STATUS_EOF) {
+			if (err) {
+				g_error_free (err);
+			}
+		}
+		else {
+			rspamd_fprintf (stderr, "IO error: %e\n", err);
+
+			if (err) {
+				g_error_free (err);
+			}
+
+			exit (-errno);
+		}
 	}
 	else {
-		rspamadm_lua_run_repl (L);
+		if (!batch) {
+			linenoiseHistorySetMaxLen (max_history);
+			linenoiseHistoryLoad (histfile);
+			rspamadm_lua_run_repl (L);
+			linenoiseHistorySave (histfile);
+		} else {
+			rspamadm_lua_run_repl (L);
+		}
 	}
 }

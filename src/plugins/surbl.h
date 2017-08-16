@@ -21,11 +21,8 @@
 struct surbl_ctx {
 	struct module_ctx ctx;
 	guint16 weight;
-	gdouble connect_timeout;
 	gdouble read_timeout;
 	gboolean use_tags;
-	guint max_urls;
-	guint url_expire;
 	GList *suffixes;
 	gchar *metric;
 	const gchar *redirector_symbol;
@@ -41,6 +38,7 @@ struct surbl_ctx {
 
 struct suffix_item {
 	guint64 magic;
+	const gchar *monitored_domain;
 	const gchar *suffix;
 	const gchar *symbol;
 	guint32 options;
@@ -48,6 +46,7 @@ struct suffix_item {
 	GHashTable *ips;
 	struct rspamd_monitored *m;
 	gint callback_id;
+	gint url_process_cbref;
 };
 
 struct dns_param {

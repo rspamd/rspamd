@@ -118,10 +118,10 @@ function($, D3Evolution, unused) {
             return {
                 label: graph_options.legend.entries[i].label,
                 value: avg && (avg * timeInterval / scaleFactor) ^ 0,
-                min: yExtents[0],
-                avg: avg && avg.toFixed(6),
-                max: yExtents[1],
-                last: curr[curr.length - 1].y,
+                min: +yExtents[0].toFixed(6),
+                avg: avg && +avg.toFixed(6),
+                max: +yExtents[1].toFixed(6),
+                last: +curr[curr.length - 1].y.toFixed(6),
                 color: graph_options.legend.entries[i].color,
             };
         }, []);

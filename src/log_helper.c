@@ -48,11 +48,15 @@ static const guint64 rspamd_log_helper_magic = 0x1090bb46aaa74c9aULL;
  */
 struct log_helper_ctx {
 	guint64 magic;
-	struct rspamd_config *cfg;
+	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
 	struct event log_ev;
 	struct rspamd_worker_lua_script *scripts;
-	struct rspamd_dns_resolver *resolver;
 	lua_State *L;
 	gint pair[2];
 };
@@ -186,8 +190,7 @@ start_log_helper (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"log_helper",
-			NULL,
-			TRUE);
+			NULL);
 	ctx->cfg = worker->srv->cfg;
 	ctx->scripts = worker->cf->scripts;
 	ctx->L = ctx->cfg->lua_state;
@@ -200,15 +203,15 @@ start_log_helper (struct rspamd_worker *worker)
 	DL_COUNT (worker->cf->scripts, tmp, nscripts);
 	msg_info ("started log_helper worker with %d scripts", nscripts);
 
-#ifdef HAVE_SOCK_SEQPACKET
-	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, ctx->pair);
-#endif
-	if (r == -1 && socketpair (AF_LOCAL, SOCK_DGRAM, 0, ctx->pair) == -1) {
+	r = rspamd_socketpair (ctx->pair, FALSE);
+
+	if (r == -1) {
 		msg_err ("cannot create socketpair: %s, exiting now", strerror (errno));
 		/* Prevent new processes spawning */
 		exit (EXIT_SUCCESS);
 	}
 
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_LOG_PIPE;
 	srv_cmd.cmd.log_pipe.type = RSPAMD_LOG_PIPE_SYMBOLS;
 
@@ -218,6 +221,8 @@ start_log_helper (struct rspamd_worker *worker)
 	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, ctx->pair[1],
 			rspamd_log_helper_reply_handler, ctx);
 	rspamd_mempool_unlock_mutex (worker->srv->start_mtx);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 	event_base_loop (ctx->ev_base, 0);
 	close (ctx->pair[0]);
 	rspamd_worker_block_signals ();

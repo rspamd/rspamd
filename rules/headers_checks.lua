@@ -177,7 +177,7 @@ rspamd_config:register_symbol{
 }
 
 local function get_raw_header(task, name)
-  return ((task:get_header_full(name) or {})[1] or {})['raw']
+  return ((task:get_header_full(name) or {})[1] or {})['value']
 end
 
 local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
@@ -185,21 +185,19 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
     local replyto = get_raw_header(task, 'Reply-To')
     if not replyto then return false end
     local rt = util.parse_mail_address(replyto)
-    if not (rt and rt[1]) then
+    if not (rt and rt[1] and (string.len(rt[1].addr) > 0)) then
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
       return false
     else
-      task:insert_result('HAS_REPLYTO', 1.0)
       local rta = rt[1].addr
-      if rta then
-        -- Check if Reply-To address starts with title seen in display name
-        local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
-        local title = (((sym or E)[1] or E).options or E)[1]
-        if title then
-          rta = rta:lower()
-          if rta:find('^' .. title) then
-            task:insert_result('REPLYTO_EMAIL_HAS_TITLE', 1.0)
-          end
+      task:insert_result('HAS_REPLYTO', 1.0, rta)
+      -- Check if Reply-To address starts with title seen in display name
+      local sym = task:get_symbol('FROM_NAME_HAS_TITLE')
+      local title = (((sym or E)[1] or E).options or E)[1]
+      if title then
+        rta = rta:lower()
+        if rta:find('^' .. title) then
+          task:insert_result('REPLYTO_EMAIL_HAS_TITLE', 1.0)
         end
       end
     end
@@ -918,13 +916,60 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
     if (not ct) then return false end
     local parts = task:get_parts()
     if (not parts) then return false end
-    if (ct:lower():match('^multipart/mixed') ~= nil and #parts < 3)
-    then
-      return true, tostring(#parts)
+    if (not ct:lower():match('^multipart/mixed')) then return false end
+    local found = false
+    -- Check each part and look for a part that isn't multipart/* or text/plain or text/html
+    for _,p in ipairs(parts) do
+      local pct = p:get_header('Content-Type')
+      if (pct) then
+        pct = pct:lower()
+        if not ((pct:match('^multipart/') or
+            pct:match('^text/plain') or
+            pct:match('^text/html'))) then
+          found = true
+        end
+      end
+    end
+    if (not found) then return true end
+    return false
+  end,
+  description = 'multipart/mixed without non-textual part',
+  score = 1.0,
+  group = 'headers'
+}
+
+local function check_for_base64_text(part)
+  local ct = part:get_header('Content-Type')
+  if (not ct) then return false end
+  ct = ct:lower()
+  if (ct:match('^text')) then
+    -- Check encoding
+    local cte = part:get_header('Content-Transfer-Encoding')
+    if (cte and cte:lower():match('^base64')) then
+      return true
+    end
+  end
+  return false
+end
+
+rspamd_config.MIME_BASE64_TEXT = {
+  callback = function(task)
+    -- Check outer part
+    if (check_for_base64_text(task)) then
+      return true
+    else
+      local parts = task:get_parts()
+      if (not parts) then return false end
+      -- Check each part and look for base64 encoded text parts
+      for _, part in ipairs(parts) do
+        if (check_for_base64_text(part)) then
+          return true
+        end
+      end
     end
     return false
   end,
-  description = 'multipart/mixed with less than 3 total parts',
+  description = 'Has text part encoded in base64',
   score = 0.1,
   group = 'headers'
 }

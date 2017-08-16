@@ -18,6 +18,7 @@
  */
 
 #include <libserver/rspamd_control.h>
+#include <src/libserver/rspamd_control.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -96,13 +97,13 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 {
 	struct rspamd_task *task;
 	struct rspamd_config *cfg = worker->srv->cfg;
-	struct rspamd_worker_ctx *ctx;
+	struct rspamd_abstract_worker_ctx *ctx;
 	struct rspamd_config_post_load_script *sc;
 
 	if (cfg->finish_callbacks) {
 		ctx = worker->ctx;
 		/* Create a fake task object for async events */
-		task = rspamd_task_new (worker, cfg);
+		task = rspamd_task_new (worker, cfg, NULL);
 		task->resolver = ctx->resolver;
 		task->ev_base = ctx->ev_base;
 		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
@@ -369,7 +370,7 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	task = rspamd_task_new (worker, ctx->cfg);
+	task = rspamd_task_new (worker, ctx->cfg, NULL);
 
 	msg_info_task ("accepted connection from %s port %d, task ptr: %p",
 		rspamd_inet_address_to_string (addr),
@@ -477,6 +478,45 @@ rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
 	else {
 		rep.reply.log_pipe.status = ENOENT;
 		msg_err ("cannot attach log pipe: invalid fd");
+	}
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_worker_monitored_handler (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_monitored *m;
+	struct rspamd_monitored_ctx *mctx = worker->srv->cfg->monitored_ctx;
+	struct rspamd_config *cfg = ud;
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_MONITORED_CHANGE;
+
+	if (cmd->cmd.monitored_change.sender != getpid ()) {
+		m = rspamd_monitored_by_tag (mctx, cmd->cmd.monitored_change.tag);
+
+		if (m != NULL) {
+			rspamd_monitored_set_alive (m, cmd->cmd.monitored_change.alive);
+			rep.reply.monitored_change.status = 1;
+			msg_info_config ("updated monitored status for %s: %s",
+					cmd->cmd.monitored_change.tag,
+					cmd->cmd.monitored_change.alive ? "alive" : "dead");
+		} else {
+			msg_err ("cannot find monitored by tag: %*s", 32,
+					cmd->cmd.monitored_change.tag);
+			rep.reply.monitored_change.status = 0;
+		}
 	}
 
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
@@ -603,8 +643,6 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct event_base *ev_base,
 		struct rspamd_dns_resolver *resolver)
 {
-	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
-			worker->srv->cfg, ev_base, resolver->r);
 	rspamd_stat_init (worker->srv->cfg, ev_base);
 	g_ptr_array_add (worker->finish_actions,
 			(gpointer) rspamd_worker_on_terminate);
@@ -618,6 +656,10 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 			RSPAMD_CONTROL_LOG_PIPE,
 			rspamd_worker_log_pipe_handler,
 			worker->srv->cfg);
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_MONITORED_CHANGE,
+			rspamd_worker_monitored_handler,
+			worker->srv->cfg);
 }
 
 /*
@@ -629,7 +671,7 @@ start_worker (struct rspamd_worker *worker)
 	struct rspamd_worker_ctx *ctx = worker->ctx;
 
 	ctx->cfg = worker->srv->cfg;
-	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket, TRUE);
+	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
@@ -637,13 +679,15 @@ start_worker (struct rspamd_worker *worker)
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, 0);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
 	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

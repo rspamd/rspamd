@@ -28,6 +28,7 @@ enum rspamd_milter_reply {
 	RSPAMD_MILTER_ACCEPT = 'a',
 	RSPAMD_MILTER_CONTINUE = 'c',
 	RSPAMD_MILTER_DISCARD = 'd',
+	RSPAMD_MILTER_CHGFROM = 'e',
 	RSPAMD_MILTER_ADDHEADER = 'h',
 	RSPAMD_MILTER_CHGHEADER = 'm',
 	RSPAMD_MILTER_REJECT = 'r',
@@ -68,6 +69,7 @@ typedef void (*rspamd_milter_error) (gint fd,
  * @return
  */
 gboolean rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
+		rspamd_mempool_t *pool,
 		struct event_base *ev_base, rspamd_milter_finish finish_cb,
 		rspamd_milter_error error_cb, void *ud);
 
@@ -142,5 +144,20 @@ struct rspamd_http_message * rspamd_milter_to_http (
  */
 void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		const ucl_object_t *results);
+
+/**
+ * Init internal milter context
+ * @param spam_header spam header name (must NOT be NULL)
+ */
+void rspamd_milter_init_library (const gchar *spam_header,
+		void *sessions_cache, gboolean discard_on_reject);
+
+/**
+ * Returns pool for a session
+ * @param session
+ * @return
+ */
+rspamd_mempool_t *rspamd_milter_get_session_pool (
+		struct rspamd_milter_session *session);
 
 #endif

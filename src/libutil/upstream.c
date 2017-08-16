@@ -563,20 +563,50 @@ rspamd_upstream_name (struct upstream *up)
 }
 
 gboolean
-rspamd_upstreams_add_upstream (struct upstream_list *ups,
-		const gchar *str, guint16 def_port, void *data)
+rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
+		guint16 def_port, enum rspamd_upstream_parse_type parse_type,
+		void *data)
 {
 	struct upstream *up;
 	GPtrArray *addrs = NULL;
 	guint i;
 	rspamd_inet_addr_t *addr;
+	gboolean ret = FALSE;
 
 	up = g_slice_alloc0 (sizeof (*up));
 
-	if (!rspamd_parse_host_port_priority (str, &addrs,
-			&up->weight,
-			&up->name, def_port, ups->ctx->pool)) {
+	switch (parse_type) {
+	case RSPAMD_UPSTREAM_PARSE_DEFAULT:
+		ret = rspamd_parse_host_port_priority (str, &addrs,
+				&up->weight,
+				&up->name, def_port, ups->ctx->pool);
+		break;
+	case RSPAMD_UPSTREAM_PARSE_NAMESERVER:
+		addrs = g_ptr_array_sized_new (1);
 
+		ret = rspamd_parse_inet_address (&addr, str, strlen (str));
+
+		if (ret) {
+			if (rspamd_inet_address_get_port (addr) == 0) {
+				rspamd_inet_address_set_port (addr, def_port);
+			}
+
+			g_ptr_array_add (addrs, addr);
+			rspamd_mempool_add_destructor (ups->ctx->pool,
+					(rspamd_mempool_destruct_t)rspamd_inet_address_free,
+					addr);
+			rspamd_mempool_add_destructor (ups->ctx->pool,
+					(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard,
+					addrs);
+		}
+		else {
+			g_ptr_array_free (addrs, TRUE);
+		}
+
+		break;
+	}
+
+	if (!ret) {
 		g_slice_free1 (sizeof (*up), up);
 		return FALSE;
 	}
@@ -691,7 +721,9 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 			tmp = g_malloc (len + 1);
 			rspamd_strlcpy (tmp, p, len + 1);
 
-			if (rspamd_upstreams_add_upstream (ups, tmp, def_port, data)) {
+			if (rspamd_upstreams_add_upstream (ups, tmp, def_port,
+					RSPAMD_UPSTREAM_PARSE_DEFAULT,
+					data)) {
 				ret = TRUE;
 			}
 

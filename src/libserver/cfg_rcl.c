@@ -1851,6 +1851,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, log_error_elt_maxlen),
 			RSPAMD_CL_FLAG_UINT,
 			"Size of each element in error log buffer (1000 by default)");
+	rspamd_rcl_add_default_handler (sub,
+			"log_usec",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, log_usec),
+			0,
+			"Use microseconds resolution for timestamps");
 	/**
 	 * Options section
 	 */
@@ -1983,6 +1989,24 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, map_timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"Interval for checking maps");
+	rspamd_rcl_add_default_handler (sub,
+			"map_file_watch_multiplier",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_config, map_file_watch_multiplier),
+			0,
+			"Multiplier for map watch interval when map is file");
+	rspamd_rcl_add_default_handler (sub,
+			"monitoring_watch_interval",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, monitored_interval),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Interval for checking monitored instances");
+	rspamd_rcl_add_default_handler (sub,
+			"disable_monitoring",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, disable_monitored),
+			0,
+			"Disable monitoring completely");
 	rspamd_rcl_add_default_handler (sub,
 			"dynamic_conf",
 			rspamd_rcl_parse_struct_string,
@@ -2199,6 +2223,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, default_max_shots),
 			0,
 			"Maximum number of hits per a single symbol (default: 100)");
+	rspamd_rcl_add_default_handler (sub,
+			"sessions_cache",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, enable_sessions_cache),
+			0,
+			"Enable sessions cache to debug dangling sessions");
+	rspamd_rcl_add_default_handler (sub,
+			"max_sessions_cache",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_sessions_cache),
+			0,
+			"Maximum number of sessions in cache before warning (default: 100)");
 
 	/* Neighbours configuration */
 	rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
@@ -2400,6 +2436,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
 			RSPAMD_CL_FLAG_INT_32,
 			"Max size of core file in bytes");
+	rspamd_rcl_add_default_handler (sub,
+			"enabled",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, enabled),
+			0,
+			"Enable or disable a worker (true by default)");
 
 	/**
 	 * Modules handler

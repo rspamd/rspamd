@@ -110,6 +110,11 @@ gsize rspamd_upstreams_count (struct upstream_list *ups);
  */
 gsize rspamd_upstreams_alive (struct upstream_list *ups);
 
+enum rspamd_upstream_parse_type {
+	RSPAMD_UPSTREAM_PARSE_DEFAULT = 0,
+	RSPAMD_UPSTREAM_PARSE_NAMESERVER,
+};
+
 /**
  * Add upstream from the string
  * @param ups upstream list
@@ -118,8 +123,9 @@ gsize rspamd_upstreams_alive (struct upstream_list *ups);
  * @param data optional userdata
  * @return TRUE if upstream has been added
  */
-gboolean rspamd_upstreams_add_upstream (struct upstream_list *ups,
-		const gchar *str, guint16 def_port, void *data);
+gboolean rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
+		guint16 def_port, enum rspamd_upstream_parse_type parse_type,
+		void *data);
 
 /**
  * Add multiple upstreams from comma, semicolon or space separated line

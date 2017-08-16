@@ -40,6 +40,8 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_EMPTY = (1 << 8), /* Allow execution on empty tasks */
 	SYMBOL_TYPE_PREFILTER = (1 << 9),
 	SYMBOL_TYPE_POSTFILTER = (1 << 10),
+	SYMBOL_TYPE_NOSTAT = (1 << 11), /* Skip as statistical symbol */
+	SYMBOL_TYPE_IDEMPOTENT = (1 << 12), /* Symbol cannot change metric */
 };
 
 /**
@@ -141,10 +143,8 @@ gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache,
  * @return
  */
 gboolean rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
-		const gchar *name,
-		gdouble *frequency,
-		gdouble *freq_stddev,
-		gdouble *tm);
+		const gchar *name, gdouble *frequency, gdouble *freq_stddev,
+		gdouble *tm, guint *nhits);
 /**
  * Find symbol in cache by its id
  * @param cache
@@ -171,7 +171,7 @@ gboolean rspamd_symbols_cache_process_symbols (struct rspamd_task *task,
 	struct symbols_cache *cache, gint stage);
 
 /**
- * Validate cache items agains theirs weights defined in metrics
+ * Validate cache items against theirs weights defined in metrics
  * @param cache symbols cache
  * @param cfg configuration
  * @param strict do strict checks - symbols MUST be described in metrics
@@ -292,4 +292,15 @@ guint64 rspamd_symbols_cache_get_cksum (struct symbols_cache *cache);
  */
 gboolean rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol);
+/**
+ * Process specific function for each cache element (in order they are added)
+ * @param cache
+ * @param func
+ * @param ud
+ */
+void rspamd_symbols_cache_foreach (struct symbols_cache *cache,
+		void (*func)(gint /* id */, const gchar * /* name */,
+				gint /* flags */, gpointer /* userdata */),
+		gpointer ud);
+
 #endif

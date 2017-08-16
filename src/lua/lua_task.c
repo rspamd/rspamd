@@ -75,7 +75,13 @@ LUA_FUNCTION_DEF (task, get_session);
  */
 LUA_FUNCTION_DEF (task, get_ev_base);
 /***
- * @method task:insert_result(symbol, weigth[, option1, ...])
+ * @method task:get_worker()
+ * Returns a worker object associated with the task
+ * @return {rspamd_worker} worker object
+ */
+LUA_FUNCTION_DEF (task, get_worker);
+/***
+ * @method task:insert_result(symbol, weight[, option1, ...])
  * Insert specific symbol to the tasks scanning results assigning the initial
  * weight to it.
  * @param {string} symbol symbol to insert
@@ -102,7 +108,7 @@ LUA_FUNCTION_DEF (task, insert_result);
  * - `greylist`: greylist message
  * - `accept` or `no action`: whitelist message
  * @param {rspamd_action or string} action a numeric or string action value
- * @param {string} description optional descripton
+ * @param {string} description optional description
 @example
 local function cb(task)
 	local gr = task:get_header('Greylist')
@@ -262,7 +268,7 @@ LUA_FUNCTION_DEF (task, get_raw_headers);
  * - `real_ip` - string representation of IP as resolved by PTR request of MTA
  * - `by_hostname` - MTA hostname
  * - `proto` - protocol, e.g. ESMTP or ESMTPS
- * - `timestamp` - received timetamp
+ * - `timestamp` - received timestamp
  * - `for` - for value (unparsed mailbox)
  *
  * Please note that in some situations rspamd cannot parse all the fields of received headers.
@@ -334,6 +340,18 @@ LUA_FUNCTION_DEF (task, has_recipients);
  * @return {list of addresses} list of recipients or `nil`
  */
 LUA_FUNCTION_DEF (task, get_recipients);
+
+/***
+ * @method task:get_principal_recipient()
+ * Returns a single string with so called `principal recipient` for a message. The order
+ * of check is the following:
+ *
+ * - deliver-to request header
+ * - the first recipient (envelope)
+ * - the first recipient (mime)
+ * @return {string} principal recipient
+ */
+LUA_FUNCTION_DEF (task, get_principal_recipient);
 
 /***
  * @method task:set_recipients([type], {rcpt1, rcpt2...})
@@ -491,6 +509,13 @@ LUA_FUNCTION_DEF (task, get_symbols);
 LUA_FUNCTION_DEF (task, get_symbols_numeric);
 
 /***
+ * @method task:get_symbols_tokens()
+ * Returns array of all symbols as statistical tokens
+ * @return {table|number} table of numbers
+ */
+LUA_FUNCTION_DEF (task, get_symbols_tokens);
+
+/***
  * @method task:has_symbol(name)
  * Fast path to check if a specified symbol is in the task's results
  * @param {string} name symbol's name
@@ -610,22 +635,22 @@ LUA_FUNCTION_DEF (task, lookup_settings);
 LUA_FUNCTION_DEF (task, get_settings_id);
 
 /***
- * @method task:set_rmilter_reply(obj)
- * Set special reply for rmilter
+ * @method task:set_milter_reply(obj)
+ * Set special reply for milter
  * @param {any} obj any lua object that corresponds to the settings format
  * @example
-task:set_rmilter_reply({
+task:set_milter_reply({
 	add_headers = {['X-Lua'] = 'test'},
 	-- 1 is the position of header to remove
 	remove_headers = {['DKIM-Signature'] = 1},
 })
  */
-LUA_FUNCTION_DEF (task, set_rmilter_reply);
+LUA_FUNCTION_DEF (task, set_milter_reply);
 
 /***
  * @method task:process_re(params)
  * Processes the specified regexp and returns number of captures (cached or new)
- * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * Params is the table with the following fields (mandatory fields are marked with `*`):
  * - `re`* : regular expression object
  * - `type`*: type of regular expression:
  *   + `mime`: mime regexp
@@ -636,7 +661,7 @@ LUA_FUNCTION_DEF (task, set_rmilter_reply);
  *   + `url`: url regexp
  * - `header`: for header and rawheader regexp means the name of header
  * - `strong`: case sensitive match for headers
- * @return {number} number of regexp occurences in the task (limited by 255 so far)
+ * @return {number} number of regexp occurrences in the task (limited by 255 so far)
  */
 LUA_FUNCTION_DEF (task, process_regexp);
 
@@ -730,6 +755,7 @@ LUA_FUNCTION_DEF (task, has_flag);
  * - `learn_spam`: learn message as spam
  * - `learn_ham`: learn message as ham
  * - `broken_headers`: header data is broken for a message
+ * - `milter`: task is initiated by milter connection
  * @return {array of strings} table with all flags as strings
  */
 LUA_FUNCTION_DEF (task, get_flags);
@@ -765,7 +791,7 @@ LUA_FUNCTION_DEF (task, store_in_file);
  * - `metrics`: metrics and symbols
  * - `messages`: messages
  * - `dkim`: dkim signature
- * - `rmilter`: rmilter control block
+ * - `milter`: milter control block
  * - `extra`: extra data, such as profiling
  * - `urls`: list of all urls in a message
  *
@@ -801,6 +827,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_mempool),
 	LUA_INTERFACE_DEF (task, get_session),
 	LUA_INTERFACE_DEF (task, get_ev_base),
+	LUA_INTERFACE_DEF (task, get_worker),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, append_message),
@@ -826,6 +853,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, has_recipients),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, set_recipients),
+	LUA_INTERFACE_DEF (task, get_principal_recipient),
 	LUA_INTERFACE_DEF (task, has_from),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, set_from),
@@ -849,6 +877,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_symbols),
 	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
+	LUA_INTERFACE_DEF (task, get_symbols_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
@@ -870,7 +899,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_flag),
 	LUA_INTERFACE_DEF (task, get_flags),
 	LUA_INTERFACE_DEF (task, has_flag),
-	LUA_INTERFACE_DEF (task, set_rmilter_reply),
+	{"set_rmilter_reply", lua_task_set_milter_reply},
+	LUA_INTERFACE_DEF (task, set_milter_reply),
 	LUA_INTERFACE_DEF (task, get_digest),
 	LUA_INTERFACE_DEF (task, store_in_file),
 	LUA_INTERFACE_DEF (task, get_protocol_reply),
@@ -1144,6 +1174,29 @@ lua_task_get_ev_base (lua_State * L)
 	return 1;
 }
 
+static int
+lua_task_get_worker (lua_State * L)
+{
+	struct rspamd_worker **pworker;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task != NULL) {
+		if (task->worker) {
+			pworker = lua_newuserdata (L, sizeof (struct rspamd_worker *));
+			rspamd_lua_setclass (L, "rspamd{worker}", -1);
+			*pworker = task->worker;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+	return 1;
+}
+
+
 static gint
 lua_task_insert_result (lua_State * L)
 {
@@ -1208,10 +1261,15 @@ lua_task_set_pre_result (lua_State * L)
 
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
-			mres = rspamd_create_metric_result (task);
-			if (mres != NULL) {
-				mres->score = mres->metric->actions[action].score;
-				mres->action = action;
+			if (!task->result) {
+				mres = rspamd_create_metric_result (task);
+				if (mres != NULL) {
+					mres->score = mres->metric->actions[action].score;
+					mres->action = action;
+				}
+			}
+			else {
+				task->result->action = action;
 			}
 
 			task->pre_result.action = action;
@@ -2515,6 +2573,28 @@ lua_task_set_from (lua_State *L)
 }
 
 static gint
+lua_task_get_principal_recipient (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *r;
+
+	if (task) {
+		r = rspamd_task_get_principal_recipient (task);
+		if (r != NULL) {
+			lua_pushstring (L, r);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_task_get_user (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
@@ -3050,6 +3130,50 @@ lua_task_get_symbols_numeric (lua_State *L)
 	return 2;
 }
 
+struct tokens_foreach_cbdata {
+	struct rspamd_task *task;
+	lua_State *L;
+	gint idx;
+};
+
+static void
+tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
+{
+	struct rspamd_metric_result *mres;
+	struct tokens_foreach_cbdata *cbd = ud;
+	struct rspamd_symbol_result *s;
+
+	if (flags & SYMBOL_TYPE_NOSTAT) {
+		return;
+	}
+
+	mres = cbd->task->result;
+
+	if (mres && (s = g_hash_table_lookup (mres->symbols, sym)) != NULL) {
+		lua_pushnumber (cbd->L, tanh (s->score));
+	}
+	else {
+		lua_pushnumber (cbd->L, 0.0);
+	}
+
+	lua_rawseti (cbd->L, -2, cbd->idx++);
+}
+
+static gint
+lua_task_get_symbols_tokens (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct tokens_foreach_cbdata cbd;
+
+	cbd.task = task;
+	cbd.L = L;
+	cbd.idx = 1;
+	lua_createtable (L, rspamd_symbols_cache_symbols_count (task->cfg->cache), 0);
+	rspamd_symbols_cache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
+
+	return 1;
+}
+
 enum lua_date_type {
 	DATE_CONNECT = 0,
 	DATE_MESSAGE,
@@ -3324,6 +3448,8 @@ lua_task_has_flag (lua_State *L)
 		LUA_TASK_GET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
 		LUA_TASK_GET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS);
+		LUA_TASK_GET_FLAG (flag, "milter",
+				RSPAMD_TASK_FLAG_MILTER);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -3388,6 +3514,10 @@ lua_task_get_flags (lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_GREYLISTED:
 					lua_pushstring (L, "greylisted");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_MILTER:
+					lua_pushstring (L, "milter");
 					lua_rawseti (L, -2, idx++);
 					break;
 				default:
@@ -3467,7 +3597,8 @@ lua_task_set_settings (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *settings;
-	const ucl_object_t *act, *elt, *metric_elt;
+	const ucl_object_t *act, *elt, *metric_elt, *vars, *cur;
+	ucl_object_iter_t it = NULL;
 	struct rspamd_metric_result *mres;
 	guint i;
 
@@ -3507,6 +3638,20 @@ lua_task_set_settings (lua_State *L)
 			}
 		}
 
+		vars = ucl_object_lookup (task->settings, "variables");
+		if (vars && ucl_object_type (vars) == UCL_OBJECT) {
+			/* Set memory pool variables */
+			while ((cur = ucl_object_iterate (vars, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_STRING) {
+					rspamd_mempool_set_variable (task->task_pool,
+							ucl_object_key (cur), rspamd_mempool_strdup (
+									task->task_pool,
+									ucl_object_tostring (cur)
+							), NULL);
+				}
+			}
+		}
+
 		rspamd_symbols_cache_process_settings (task, task->cfg->cache);
 	}
 	else {
@@ -3517,7 +3662,7 @@ lua_task_set_settings (lua_State *L)
 }
 
 static gint
-lua_task_set_rmilter_reply (lua_State *L)
+lua_task_set_milter_reply (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *reply, *prev;
@@ -3526,7 +3671,7 @@ lua_task_set_rmilter_reply (lua_State *L)
 
 	if (reply != NULL && task != NULL) {
 		prev = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_RMILTER_REPLY);
+				RSPAMD_MEMPOOL_MILTER_REPLY);
 
 		if (prev) {
 			ucl_object_merge (prev, reply, false);
@@ -3534,7 +3679,7 @@ lua_task_set_rmilter_reply (lua_State *L)
 		}
 		else {
 			rspamd_mempool_set_variable (task->task_pool,
-					RSPAMD_MEMPOOL_RMILTER_REPLY,
+					RSPAMD_MEMPOOL_MILTER_REPLY,
 					reply, (rspamd_mempool_destruct_t) ucl_object_unref);
 		}
 	}
@@ -3825,7 +3970,13 @@ lua_task_get_metric_action (lua_State *L)
 
 	if (task) {
 		if ((metric_res = task->result) != NULL) {
-			action = rspamd_check_action_metric (task, metric_res);
+			if (task->result->action == METRIC_ACTION_MAX) {
+				action = rspamd_check_action_metric (task, metric_res);
+			}
+			else {
+				action = task->result->action;
+			}
+
 			lua_pushstring (L, rspamd_action_to_str (action));
 		}
 		else {

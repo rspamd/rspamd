@@ -22,6 +22,7 @@ end
 -- A plugin that pushes metadata (or whole messages) to external services
 
 local redis_params
+local lutil = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
@@ -40,7 +41,7 @@ local settings = {
   mail_to = 'postmaster@localhost',
   helo = 'rspamd',
   email_template = [[From: "Rspamd" <$mail_from>
-To: <$mail_to>
+To: $mail_to
 Subject: Spam alert
 Date: $date
 MIME-Version: 1.0
@@ -59,6 +60,7 @@ MIME Date: $header_date
 Subject: $header_subject
 Message-ID: $message_id
 Action: $action
+Score: $score
 Symbols: $symbols]],
 }
 
@@ -68,7 +70,10 @@ local function get_general_metadata(task, flatten, no_content)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
-  r.score = task:get_metric_score('default')[1]
+
+  local s = task:get_metric_score('default')[1]
+  r.score = flatten and string.format('%.2f', s) or s
+
   local rcpt = task:get_recipients('smtp')
   if rcpt then
     local l = {}
@@ -96,9 +101,9 @@ local function get_general_metadata(task, flatten, no_content)
       local txt
       if sym.options then
         local topt = table.concat(sym.options, ', ')
-        txt = sym.name .. '(' .. sym.score .. ')' .. ' [' .. topt .. ']'
+        txt = sym.name .. '(' .. string.format('%.2f', sym.score) .. ')' .. ' [' .. topt .. ']'
       else
-        txt = sym.name .. '(' .. sym.score .. ')'
+        txt = sym.name .. '(' .. string.format('%.2f', sym.score) .. ')'
       end
       table.insert(l, txt)
     end
@@ -132,29 +137,52 @@ local function get_general_metadata(task, flatten, no_content)
   return r
 end
 
-local function simple_template(tmpl, keys)
-  local lpeg = require "lpeg"
-
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
-
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
-
-  return lpeg.match(template_grammar, tmpl)
-end
-
 local formatters = {
   default = function(task)
     return task:get_content()
   end,
-  email_alert = function(task, rule)
+  email_alert = function(task, rule, extra)
     local meta = get_general_metadata(task, true)
+    local display_emails = {}
     meta.mail_from = rule.mail_from or settings.mail_from
-    meta.mail_to = rule.mail_to or settings.mail_to
+    local mail_targets = rule.mail_to or settings.mail_to
+    if type(mail_targets) ~= 'table' then
+      table.insert(display_emails, string.format('<%s>', mail_targets))
+      mail_targets = {[mail_targets] = true}
+    else
+      for _, e in ipairs(mail_targets) do
+        table.insert(display_emails, string.format('<%s>', e))
+      end
+    end
+    if rule.email_alert_sender then
+      local x = task:get_from('smtp')
+      if x and string.len(x[1].addr) > 0 then
+        mail_targets[x] = true
+        table.insert(display_emails, string.format('<%s>', x[1].addr))
+      end
+    end
+    if rule.email_alert_user then
+      local x = task:get_user()
+      if x then
+        mail_targets[x] = true
+        table.insert(display_emails, string.format('<%s>', x))
+      end
+    end
+    if rule.email_alert_recipients then
+      local x = task:get_recipients('smtp')
+      if x then
+        for _, e in ipairs(x) do
+          if string.len(e.addr) > 0 then
+            mail_targets[e.addr] = true
+            table.insert(display_emails, string.format('<%s>', e.addr))
+          end
+        end
+      end
+    end
+    meta.mail_to = table.concat(display_emails, ', ')
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return simple_template(rule.email_template or settings.email_template, meta)
+    return lutil.template(rule.email_template or settings.email_template, meta), {mail_targets = mail_targets}
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -253,7 +281,7 @@ local pushers = {
       headers=hdrs,
     })
   end,
-  send_mail = function(task, formatted, rule)
+  send_mail = function(task, formatted, rule, extra)
     local function mail_cb(err, data, conn)
       local function no_error(merr, mdata, wantcode)
         wantcode = wantcode or '2'
@@ -316,9 +344,15 @@ local pushers = {
           conn:add_read(data_done_cb, '\r\n')
         end
       end
+      local from_done_cb
       local function rcpt_done_cb(merr, mdata)
         if no_error(merr, mdata) then
-          conn:add_write(data_cb, 'DATA\r\n')
+          local k = next(extra.mail_targets)
+          if not k then
+            conn:add_write(data_cb, 'DATA\r\n')
+          else
+            from_done_cb('2', '2')
+          end
         end
       end
       local function rcpt_cb(merr, mdata)
@@ -326,10 +360,10 @@ local pushers = {
           conn:add_read(rcpt_done_cb, '\r\n')
         end
       end
-      local function from_done_cb(merr, mdata)
-        if no_error(merr, mdata) then
-          conn:add_write(rcpt_cb, {'RCPT TO: <', rule.mail_to, '>\r\n'})
-        end
+      from_done_cb = function(merr, mdata)
+        local k = next(extra.mail_targets)
+        extra.mail_targets[k] = nil
+        conn:add_write(rcpt_cb, {'RCPT TO: <', k, '>\r\n'})
       end
       local function from_cb(merr, mdata)
         if no_error(merr, '2') then
@@ -636,9 +670,9 @@ local function gen_exporter(rule)
     if selected then
       rspamd_logger.debugm(N, task, 'Message selected for processing')
       local formatter = rule.formatter or 'default'
-      local formatted = formatters[formatter](task, rule)
+      local formatted, extra = formatters[formatter](task, rule)
       if formatted then
-        pushers[rule.backend](task, formatted, rule)
+        pushers[rule.backend](task, formatted, rule, extra)
       else
         rspamd_logger.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
       end
@@ -654,7 +688,7 @@ end
 for k, r in pairs(settings.rules) do
   rspamd_config:register_symbol({
     name = 'EXPORT_METADATA_' .. k,
-    type = 'postfilter',
+    type = 'postfilter,idempotent',
     callback = gen_exporter(r),
     priority = 10
   })

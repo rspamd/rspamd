@@ -33,6 +33,7 @@ end
 
 local N = 'dmarc'
 local no_sampling_domains
+local no_reporting_domains
 local statefile = string.format('%s/%s', rspamd_paths['DBDIR'], 'dmarc_reports_last_sent')
 local VAR_NAME = 'dmarc_reports_last_sent'
 local INTERVAL = 86400
@@ -53,7 +54,7 @@ Subject: Report Domain: %s
 Date: %s
 MIME-Version: 1.0
 Message-ID: <%s>
-Content-Type: multipart/alternative;
+Content-Type: multipart/mixed;
 	boundary="----=_NextPart_000_024E_01CC9B0A.AFE54C00"
 
 This is a multipart message in MIME format.
@@ -196,11 +197,14 @@ end
 
 local dmarc_grammar = gen_dmarc_grammar()
 
-local function dmarc_report(task, spf_ok, dkim_ok, disposition, sampled_out, hfromdom, spfdom, dres, spf_result)
+local function dmarc_report(task, spf_ok, dkim_ok, disposition,
+    sampled_out, hfromdom, spfdom, dres, spf_result)
   local ip = task:get_from_ip()
   if not ip:is_valid() then
     return nil
   end
+  local rspamd_lua_utils = require "lua_util"
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local dkim_pass = table.concat(dres.pass or E, '|')
   local dkim_fail = table.concat(dres.fail or E, '|')
   local dkim_temperror = table.concat(dres.temperror or E, '|')
@@ -515,6 +519,13 @@ local function dmarc_callback(task)
 
     if rua and redis_params and dmarc_reporting then
 
+      if no_reporting_domains then
+        if no_reporting_domains:get_key(dmarc_domain) or no_reporting_domains:get_key(rspamd_util.get_tld(dmarc_domain)) then
+          rspamd_logger.infox(task, 'DMARC reporting suppressed for %1', dmarc_domain)
+          return maybe_force_action(disposition)
+        end
+      end
+
       local spf_result
       if spf_ok then
         spf_result = 'pass'
@@ -597,6 +608,7 @@ if not opts or type(opts) ~= 'table' then
   return
 end
 no_sampling_domains = rspamd_map_add(N, 'no_sampling_domains', 'map', 'Domains not to apply DMARC sampling to')
+no_reporting_domains = rspamd_map_add(N, 'no_reporting_domains', 'map', 'Domains not to apply DMARC reporting to')
 
 if opts['symbols'] then
   for k,_ in pairs(dmarc_symbols) do
@@ -884,6 +896,7 @@ if opts['reporting'] == true then
         rspamd_tcp.request({
           ev_base = ev_base,
           callback = mail_cb,
+          config = rspamd_config,
           stop_pattern = '\r\n',
           host = report_settings.smtp,
           port = report_settings.smtp_port,
@@ -893,6 +906,9 @@ if opts['reporting'] == true then
       local function make_report()
         if type(report_settings.override_address) == 'string' then
           reporting_addr = {[report_settings.override_address] = true}
+        end
+        if type(report_settings.additional_address) == 'string' then
+          reporting_addr[report_settings.additional_address] = true
         end
         rspamd_logger.infox(ev_base, 'sending report for %s <%s>', reporting_domain, table.concat(reporting_addr, ','))
         local dmarc_xml = dmarc_report_xml()
@@ -983,7 +999,7 @@ if opts['reporting'] == true then
               end
             else
               local is_authed = false
-              -- XXX: reporting address could be overidden
+              -- XXX: reporting address could be overridden
               for _, r in ipairs(results) do
                 if string.match(r, 'v=DMARC1') then
                   is_authed = true

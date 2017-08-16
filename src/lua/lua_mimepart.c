@@ -108,6 +108,18 @@ LUA_FUNCTION_DEF (textpart, get_urls_length);
  */
 LUA_FUNCTION_DEF (textpart, get_lines_count);
 /***
+ * @method mime_part:get_stats()
+ * Returns a table with the following data:
+ * - `lines`: number of lines
+ * - `spaces`: number of spaces
+ * - `double_spaces`: double spaces
+ * - `empty_lines`: number of empty lines
+ * - `non_ascii_characters`: number of non ascii characters
+ * - `ascii_characters`: number of ascii characters
+ * @return {table} table of stats
+ */
+LUA_FUNCTION_DEF (textpart, get_stats);
+/***
  * @method mime_part:get_words_count()
  * Get words number in the part
  * @return {integer} number of words in the part
@@ -161,6 +173,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_html),
 	LUA_INTERFACE_DEF (textpart, get_language),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
+	LUA_INTERFACE_DEF (textpart, get_stats),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -248,6 +261,13 @@ LUA_FUNCTION_DEF (mimepart, get_length);
 LUA_FUNCTION_DEF (mimepart, get_type);
 
 /***
+ * @method mime_part:get_type_full()
+ * Extract content-type string of the mime part with all attributes
+ * @return {string,string,table} content type in form 'type','subtype', {attrs}
+ */
+LUA_FUNCTION_DEF (mimepart, get_type_full);
+
+/***
  * @method mime_part:get_cte()
  * Extract content-transfer-encoding for a part
  * @return {string} content transfer encoding (e.g. `base64` or `7bit`)
@@ -256,7 +276,7 @@ LUA_FUNCTION_DEF (mimepart, get_cte);
 
 /***
  * @method mime_part:get_filename()
- * Extract filename associated with mime part if it is an attachement
+ * Extract filename associated with mime part if it is an attachment
  * @return {string} filename or `nil` if no file is associated with this part
  */
 LUA_FUNCTION_DEF (mimepart, get_filename);
@@ -342,6 +362,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
+	LUA_INTERFACE_DEF (mimepart, get_type_full),
 	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
 	LUA_INTERFACE_DEF (mimepart, get_header),
@@ -715,6 +736,55 @@ lua_textpart_get_mimepart (lua_State * L)
 	return 1;
 }
 
+/***
+ * @method mime_part:get_stats()
+ * Returns a table with the following data:
+ * -
+ * - `lines`: number of lines
+ * - `spaces`: number of spaces
+ * - `double_spaces`: double spaces
+ * - `empty_lines`: number of empty lines
+ * - `non_ascii_characters`: number of non ascii characters
+ * - `ascii_characters`: number of ascii characters
+ * @return {table} table of stats
+ */
+static gint
+lua_textpart_get_stats (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+
+	if (part != NULL) {
+		lua_createtable (L, 0, 7);
+
+		lua_pushstring (L, "lines");
+		lua_pushnumber (L, part->nlines);
+		lua_settable (L, -3);
+		lua_pushstring (L, "empty_lines");
+		lua_pushnumber (L, part->empty_lines);
+		lua_settable (L, -3);
+		lua_pushstring (L, "spaces");
+		lua_pushnumber (L, part->spaces);
+		lua_settable (L, -3);
+		lua_pushstring (L, "non_spaces");
+		lua_pushnumber (L, part->non_spaces);
+		lua_settable (L, -3);
+		lua_pushstring (L, "double_spaces");
+		lua_pushnumber (L, part->double_spaces);
+		lua_settable (L, -3);
+		lua_pushstring (L, "ascii_characters");
+		lua_pushnumber (L, part->ascii_chars);
+		lua_settable (L, -3);
+		lua_pushstring (L, "non_ascii_characters");
+		lua_pushnumber (L, part->non_ascii_chars);
+		lua_settable (L, -3);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 /* Mimepart implementation */
 
 static gint
@@ -753,9 +823,12 @@ lua_mimepart_get_length (lua_State * L)
 }
 
 static gint
-lua_mimepart_get_type (lua_State * L)
+lua_mimepart_get_type_common (lua_State * L, gboolean full)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_content_type_param *param;
 
 	if (part == NULL) {
 		lua_pushnil (L);
@@ -766,7 +839,53 @@ lua_mimepart_get_type (lua_State * L)
 	lua_pushlstring (L, part->ct->type.begin, part->ct->type.len);
 	lua_pushlstring (L, part->ct->subtype.begin, part->ct->subtype.len);
 
-	return 2;
+	if (!full) {
+		return 2;
+	}
+
+	lua_createtable (L, 0, 2 + (part->ct->attrs ?
+			g_hash_table_size (part->ct->attrs) : 0));
+
+	if (part->ct->charset.len > 0) {
+		lua_pushstring (L, "charset");
+		lua_pushlstring (L, part->ct->charset.begin, part->ct->charset.len);
+		lua_settable (L, -3);
+	}
+
+	if (part->ct->boundary.len > 0) {
+		lua_pushstring (L, "charset");
+		lua_pushlstring (L, part->ct->boundary.begin, part->ct->boundary.len);
+		lua_settable (L, -3);
+	}
+
+	if (part->ct->attrs) {
+		g_hash_table_iter_init (&it, part->ct->attrs);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			param = v;
+
+			if (param->name.len > 0 && param->name.len > 0) {
+				/* TODO: think about multiple values here */
+				lua_pushlstring (L, param->name.begin, param->name.len);
+				lua_pushlstring (L, param->value.begin, param->value.len);
+				lua_settable (L, -3);
+			}
+		}
+	}
+
+	return 3;
+}
+
+static gint
+lua_mimepart_get_type (lua_State * L)
+{
+	return lua_mimepart_get_type_common (L, FALSE);
+}
+
+static gint
+lua_mimepart_get_type_full (lua_State * L)
+{
+	return lua_mimepart_get_type_common (L, TRUE);
 }
 
 static gint

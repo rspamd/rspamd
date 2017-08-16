@@ -1453,7 +1453,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	const gchar *p, *s;
 	gchar *d;
 	guint i, dlen;
-	gboolean has_bad_chars = FALSE;
+	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
 	p = start;
@@ -1495,8 +1495,19 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
+	if (rspamd_substring_search (s, len, "://", 3) == (-1)) {
+		/* We have no prefix */
+		dlen += sizeof ("http://") - 1;
+		no_prefix = TRUE;
+	}
+
 	decoded = rspamd_mempool_alloc (pool, dlen + 1);
 	d = decoded;
+
+	if (no_prefix) {
+		memcpy (d, "http://", sizeof ("http://") - 1);
+		d += sizeof ("http://") - 1;
+	}
 
 	/* We also need to remove all internal newlines and encode unsafe characters */
 	for (i = 0; i < len; i ++) {
@@ -1578,7 +1589,7 @@ static void
 rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 		GHashTable *target)
 {
-	struct rspamd_url *query_url;
+	struct rspamd_url *query_url, *existing;
 	gchar *url_str;
 	gint rc;
 
@@ -1599,11 +1610,14 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 				msg_debug_html ("found url %s in query of url"
 						" %*s", url_str, url->querylen, url->query);
 
-				if (!g_hash_table_lookup (target,
-						query_url)) {
+				if ((existing = g_hash_table_lookup (target,
+						query_url)) == NULL) {
 					g_hash_table_insert (target,
 							query_url,
 							query_url);
+				}
+				else {
+					existing->count ++;
 				}
 			}
 		}
@@ -2102,6 +2116,8 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 					turl->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 					turl->flags &= ~RSPAMD_URL_FLAG_FROM_TEXT;
 				}
+
+				turl->count ++;
 			}
 			else {
 				g_hash_table_insert (target_tbl,
@@ -2497,13 +2513,11 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							if (target_tbl != NULL) {
 								turl = g_hash_table_lookup (target_tbl, url);
 
-								if (turl != NULL && turl->phished_url == NULL) {
-									g_hash_table_insert (target_tbl, url, url);
-								}
-								else if (turl == NULL) {
+								if (turl == NULL) {
 									g_hash_table_insert (target_tbl, url, url);
 								}
 								else {
+									turl->count ++;
 									url = NULL;
 								}
 

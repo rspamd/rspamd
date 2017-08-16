@@ -189,7 +189,7 @@ struct rspamd_worker_conf {
 	GQuark type;                                    /**< type of worker										*/
 	struct rspamd_worker_bind_conf *bind_conf;      /**< bind configuration									*/
 	guint16 count;                                  /**< number of workers									*/
-	GList *listen_socks;                            /**< listening sockets desctiptors						*/
+	GList *listen_socks;                            /**< listening sockets descriptors						*/
 	guint32 rlimit_nofile;                          /**< max files limit									*/
 	guint32 rlimit_maxcore;                         /**< maximum core file size								*/
 	GHashTable *params;                             /**< params for worker									*/
@@ -198,6 +198,7 @@ struct rspamd_worker_conf {
 	gpointer *ctx;                                  /**< worker's context									*/
 	ucl_object_t *options;                          /**< other worker's options								*/
 	struct rspamd_worker_lua_script *scripts;       /**< registered lua scripts								*/
+	gboolean enabled;
 	ref_entry_t ref;
 };
 
@@ -307,6 +308,7 @@ struct rspamd_config {
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
 	gboolean check_local;				/** Don't disable any checks for local networks */
 	gboolean check_authed;				/** Don't disable any checks for authenticated users */
+	gboolean enable_sessions_cache;                 /**< Enable session cache for debug */
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
@@ -332,6 +334,7 @@ struct rspamd_config {
 	gboolean log_extended;                          /**< log extended information							*/
 	gboolean log_systemd;                           /**< special case for systemd logger					*/
 	gboolean log_re_cache;                          /**< show statistics about regexps						*/
+	gboolean log_usec;                              /**< log microseconds if possible						*/
 	guint log_error_elts;                           /**< number of elements in error logbuf					*/
 	guint log_error_elt_maxlen;                     /**< maximum size of error log element					*/
 	struct rspamd_worker_log_pipe *log_pipes;
@@ -375,6 +378,10 @@ struct rspamd_config {
 
 	GList *maps;                                    /**< maps active										*/
 	gdouble map_timeout;                            /**< maps watch timeout									*/
+	gdouble map_file_watch_multiplier;              /**< multiplier for watch timeout when maps are files */
+
+	gdouble monitored_interval;                     /**< interval between monitored checks					*/
+	gboolean disable_monitored;                     /**< disable monitoring completely						*/
 
 	struct symbols_cache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/
@@ -410,6 +417,7 @@ struct rspamd_config {
 	guint max_word_len;								/**< maximum length of the word to be considered		*/
 	guint words_decay;								/**< limit for words for starting adaptive ignoring		*/
 	guint history_rows;								/**< number of history rows stored						*/
+	guint max_sessions_cache;                        /**< maximum number of sessions cache elts				*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/

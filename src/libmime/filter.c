@@ -59,6 +59,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	metric_res->metric = metric;
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
+	metric_res->changes = 0;
 
 	for (i = 0; i < METRIC_ACTION_MAX; i++) {
 		metric_res->actions_limits[i] = metric->actions[i].score;
@@ -251,6 +252,7 @@ insert_metric_result (struct rspamd_task *task,
 		s->score,
 		metric->name,
 		w);
+	metric_res->changes ++;
 
 	return s;
 }

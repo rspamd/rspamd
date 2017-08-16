@@ -16,6 +16,8 @@ limitations under the License.
 
 -- Rules to detect forwarding
 
+local rspamd_util = require "rspamd_util"
+
 rspamd_config.FWD_GOOGLE = {
   callback = function (task)
     if not (task:has_from(1) and task:has_recipients(1)) then
@@ -108,7 +110,7 @@ rspamd_config.FWD_SRS = {
 rspamd_config.FORWARDED = {
   callback = function (task)
     local function normalize_addr(addr)
-      addr = string.match(addr, '^<?([^<]*)>?$') or addr
+      addr = string.match(addr, '^<?([^>]*)>?$') or addr
       local cap, _,domain = string.match(addr, '^([^%+][^%+]*)(%+[^@]*)@(.*)$')
       if cap then
         addr = string.format('%s@%s', cap, domain)
@@ -135,9 +137,9 @@ rspamd_config.FORWARDED = {
           addr = normalize_addr(addr)
           matches = matches + 1
           -- Check that it doesn't match the envrcpt
-          if addr ~= envrcpts[1].addr:lower() then
+          if not rspamd_util.strequal_caseless(addr, envrcpts[1].addr) then
             -- Check for mailing-lists as they will have the same signature
-            if matches < 2 and lu and to and to[1].addr:lower() == addr then
+            if matches < 2 and lu and to and rspamd_util.strequal_caseless(to[1].addr, addr) then
               return false
             else
               return true, 1.0, addr

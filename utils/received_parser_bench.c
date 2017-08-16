@@ -60,7 +60,7 @@ rspamd_process_file (const gchar *fname)
 		}
 
 		t1 = rspamd_get_virtual_ticks ();
-		rspamd_smtp_recieved_parse (task, buf->str, buf->len, &rh);
+		rspamd_smtp_received_parse (task, buf->str, buf->len, &rh);
 		t2 = rspamd_get_virtual_ticks ();
 
 		total_time += t2 - t1;

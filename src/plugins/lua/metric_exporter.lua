@@ -123,6 +123,7 @@ local function graphite_push(kwargs)
 
   tcp.request({
     ev_base = kwargs['ev_base'],
+    config = rspamd_config,
     pool = pool,
     host = settings['host'],
     port = settings['port'],

@@ -53,10 +53,13 @@ static const guint64 rspamd_lua_ctx_magic = 0x8055e2652aacf96eULL;
  */
 struct rspamd_lua_worker_ctx {
 	guint64 magic;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
 	/* Other params */
 	GHashTable *params;
 	/* Lua script to load */
@@ -67,8 +70,6 @@ struct rspamd_lua_worker_ctx {
 	gint cbref_accept;
 	/* Callback for finishing */
 	gint cbref_fin;
-	/* Config file */
-	struct rspamd_config *cfg;
 	/* The rest options */
 	ucl_object_t *opts;
 };
@@ -176,7 +177,7 @@ lua_worker_register_exit_callback (lua_State *L)
 	return 1;
 }
 
-/* XXX: This fucntions should be rewritten completely */
+/* XXX: This functions should be rewritten completely */
 static int
 lua_worker_get_option (lua_State *L)
 {
@@ -351,8 +352,7 @@ start_lua_worker (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"lua_worker",
-			lua_accept_socket,
-			TRUE);
+			lua_accept_socket);
 
 	L = worker->srv->cfg->lua_state;
 	ctx->L = L;
@@ -391,9 +391,8 @@ start_lua_worker (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 
-	/* Maps events */
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
-
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
+			worker);
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 

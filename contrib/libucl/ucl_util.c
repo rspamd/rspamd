@@ -2195,7 +2195,7 @@ ucl_object_insert_key_common (ucl_object_t *top, ucl_object_t *elt,
 				while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
 					tmp = ucl_object_ref (cur);
 					ucl_object_insert_key_common (found, tmp, cur->key,
-							cur->keylen, copy_key, false, false);
+							cur->keylen, copy_key, true, false);
 				}
 				ucl_object_unref (elt);
 			}
@@ -2292,29 +2292,97 @@ ucl_object_merge (ucl_object_t *top, ucl_object_t *elt, bool copy)
 	ucl_object_t *cur = NULL, *cp = NULL, *found = NULL;
 	ucl_object_iter_t iter = NULL;
 
-	if (top == NULL || top->type != UCL_OBJECT || elt == NULL || elt->type != UCL_OBJECT) {
+	if (top == NULL || elt == NULL) {
 		return false;
 	}
 
-	/* Mix two hashes */
-	while ((cur = (ucl_object_t*)ucl_hash_iterate (elt->value.ov, &iter))) {
-		if (copy) {
-			cp = ucl_object_copy (cur);
+	if (top->type == UCL_ARRAY) {
+		if (elt->type == UCL_ARRAY) {
+			/* Merge two arrays */
+			return ucl_array_merge (top, elt, copy);
 		}
 		else {
-			cp = ucl_object_ref (cur);
+			if (copy) {
+				ucl_array_append (top, ucl_object_copy (elt));
+
+				return true;
+			}
+			else {
+				ucl_array_append (top, ucl_object_ref (elt));
+
+				return true;
+			}
 		}
-		found = __DECONST(ucl_object_t *, ucl_hash_search (top->value.ov, cp->key, cp->keylen));
-		if (found == NULL) {
-			/* The key does not exist */
-			top->value.ov = ucl_hash_insert_object (top->value.ov, cp, false);
-			top->len ++;
+	}
+	else if (top->type == UCL_OBJECT) {
+		if (elt->type == UCL_OBJECT) {
+			/* Mix two hashes */
+			while ((cur = (ucl_object_t *) ucl_hash_iterate (elt->value.ov,
+					&iter))) {
+
+				if (copy) {
+					cp = ucl_object_copy (cur);
+				} else {
+					cp = ucl_object_ref (cur);
+				}
+
+				found = __DECONST(ucl_object_t *,
+						ucl_hash_search (top->value.ov, cp->key, cp->keylen));
+
+				if (found == NULL) {
+					/* The key does not exist */
+					top->value.ov = ucl_hash_insert_object (top->value.ov, cp,
+							false);
+					top->len++;
+				}
+				else {
+					/* The key already exists, merge it recursively */
+					if (found->type == UCL_OBJECT || found->type == UCL_ARRAY) {
+						if (!ucl_object_merge (found, cp, copy)) {
+							return false;
+						}
+					}
+					else {
+						ucl_hash_replace (top->value.ov, found, cp);
+						ucl_object_unref (found);
+					}
+				}
+			}
 		}
 		else {
-			/* The key already exists, replace it */
-			ucl_hash_replace (top->value.ov, found, cp);
-			ucl_object_unref (found);
+			if (copy) {
+				cp = ucl_object_copy (elt);
+			}
+			else {
+				cp = ucl_object_ref (elt);
+			}
+
+			found = __DECONST(ucl_object_t *,
+					ucl_hash_search (top->value.ov, cp->key, cp->keylen));
+
+			if (found == NULL) {
+				/* The key does not exist */
+				top->value.ov = ucl_hash_insert_object (top->value.ov, cp,
+						false);
+				top->len++;
+			}
+			else {
+				/* The key already exists, merge it recursively */
+				if (found->type == UCL_OBJECT || found->type == UCL_ARRAY) {
+					if (!ucl_object_merge (found, cp, copy)) {
+						return false;
+					}
+				}
+				else {
+					ucl_hash_replace (top->value.ov, found, cp);
+					ucl_object_unref (found);
+				}
+			}
 		}
+	}
+	else {
+		/* Cannot merge trivial objects */
+		return false;
 	}
 
 	return true;
@@ -3002,7 +3070,7 @@ ucl_object_todouble_safe (const ucl_object_t *obj, double *target)
 	}
 	switch (obj->type) {
 	case UCL_INT:
-		*target = obj->value.iv; /* Probaly could cause overflow */
+		*target = obj->value.iv; /* Probably could cause overflow */
 		break;
 	case UCL_FLOAT:
 	case UCL_TIME:

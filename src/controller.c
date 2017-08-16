@@ -26,7 +26,6 @@
 #include "cryptobox.h"
 #include "ottery.h"
 #include "fuzzy_wire.h"
-#include "libutil/rrd.h"
 #include "unix-std.h"
 #include "utlist.h"
 #include <math.h>
@@ -60,6 +59,7 @@
 #define PATH_ERRORS "/errors"
 #define PATH_NEIGHBOURS "/neighbours"
 #define PATH_PLUGINS "/plugins"
+#define PATH_PING "/ping"
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
@@ -126,12 +126,15 @@ worker_t controller_worker = {
  */
 struct rspamd_controller_worker_ctx {
 	guint64 magic;
-	guint32 timeout;
-	struct timeval io_tv;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Events base */
 	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+	/* END OF COMMON PART */
+	guint32 timeout;
+	struct timeval io_tv;
 	/* Whether we use ssl for this server */
 	gboolean use_ssl;
 	/* Webui password */
@@ -147,8 +150,6 @@ struct rspamd_controller_worker_ctx {
 	time_t start_time;
 	/* Main server */
 	struct rspamd_main *srv;
-	/* Configuration */
-	struct rspamd_config *cfg;
 	/* SSL cert */
 	gchar *ssl_cert;
 	/* SSL private key */
@@ -291,13 +292,34 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 		if (password->len != ctx->cached_password.len ||
 				!rspamd_constant_memcmp (password->begin,
 						ctx->cached_password.begin, password->len)) {
-			msg_info_ctx ("incorrect or absent password has been specified");
-			return FALSE;
-		}
+			/* We still need to check enable password here */
+			if (ctx->cached_enable_password.len != 0) {
+				if (password->len != ctx->cached_enable_password.len ||
+						!rspamd_constant_memcmp (password->begin,
+								ctx->cached_enable_password.begin,
+								password->len)) {
+					msg_info_ctx (
+							"incorrect or absent password has been specified");
 
-		return TRUE;
+					return FALSE;
+				}
+				else {
+					/* Cached matched */
+					return TRUE;
+				}
+			}
+			else {
+				/* We might want to check uncached version */
+				goto check_uncached;
+			}
+		}
+		else {
+			/* Cached matched */
+			return TRUE;
+		}
 	}
 
+check_uncached:
 	g_assert (pbkdf != NULL);
 	/* get salt */
 	salt = rspamd_encrypted_password_get_str (check, 3, &salt_len);
@@ -794,7 +816,7 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 			}
 
 			if (rspamd_symbols_cache_stat_symbol (session->ctx->cfg->cache,
-					sym->name, &freq, &freq_dev, &tm)) {
+					sym->name, &freq, &freq_dev, &tm, NULL)) {
 				ucl_object_insert_key (sym_obj,
 						ucl_object_fromdouble (freq),
 						"frequency", 0, false);
@@ -1464,7 +1486,8 @@ rspamd_controller_handle_lua_history (lua_State *L,
 			lua_gettable (L, -2);
 
 			if (lua_isfunction (L, -1)) {
-				task = rspamd_task_new (session->ctx->worker, session->cfg);
+				task = rspamd_task_new (session->ctx->worker, session->cfg,
+						session->pool);
 
 				task->resolver = ctx->resolver;
 				task->ev_base = ctx->ev_base;
@@ -1762,7 +1785,7 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -1871,7 +1894,7 @@ static void
 rspamd_controller_scan_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
-	struct rspamd_http_connection_entry *conn_ent = task->fin_arg;
+	struct rspamd_http_connection_entry *conn_ent;
 
 	conn_ent = task->fin_arg;
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
@@ -1889,8 +1912,17 @@ static gboolean
 rspamd_controller_check_fin_task (void *ud)
 {
 	struct rspamd_task *task = ud;
+	struct rspamd_http_connection_entry *conn_ent;
 
 	msg_debug_task ("finish task");
+	conn_ent = task->fin_arg;
+
+	if (task->err) {
+		msg_info_task ("cannot check <%s>: %e", task->message_id, task->err);
+		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
+				task->err->message);
+		return TRUE;
+	}
 
 	if (RSPAMD_TASK_IS_PROCESSED (task)) {
 		rspamd_controller_scan_reply (task);
@@ -1936,7 +1968,7 @@ rspamd_controller_handle_learn_common (
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -1961,20 +1993,17 @@ rspamd_controller_handle_learn_common (
 	}
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
-		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-				task->err->message);
-		return 0;
+		goto end;
 	}
 
 	rspamd_learn_task_spam (task, is_spam, session->classifier, NULL);
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_warn_session ("<%s> message cannot be processed", task->message_id);
-		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-				task->err->message);
-		return 0;
+		goto end;
 	}
 
+end:
 	session->is_spam = is_spam;
 	rspamd_session_pending (task->s);
 
@@ -2039,7 +2068,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
 	task->ev_base = session->ctx->ev_base;
 
 	task->resolver = ctx->resolver;
@@ -2057,45 +2086,18 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
-		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-					task->err->message);
-		}
-		else {
-			rspamd_controller_send_error (conn_ent, 500,
-					"Message load error: unknown error");
-		}
-		rspamd_session_destroy (task->s);
-		return 0;
+		goto end;
 	}
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
-		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-					task->err->message);
-		}
-		else {
-			rspamd_controller_send_error (conn_ent, 500,
-					"Message load error: unknown error");
-		}
-		rspamd_session_destroy (task->s);
-		return 0;
+		goto end;
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
-		msg_warn_session ("message cannot be processed for %s", task->message_id);
-		if (task->err) {
-			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
-					task->err->message);
-		}
-		else {
-			rspamd_controller_send_error (conn_ent, 500,
-					"Message process error: unknown error");
-		}
-		rspamd_session_destroy (task->s);
-		return 0;
+		goto end;
 	}
 
+end:
 	session->task = task;
 	rspamd_session_pending (task->s);
 
@@ -2564,7 +2566,7 @@ rspamd_controller_handle_stat_common (
 	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
 
 	ctx = session->ctx;
 	task->resolver = ctx->resolver;
@@ -2806,6 +2808,34 @@ rspamd_controller_handle_plugins (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+static int
+rspamd_controller_handle_ping (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_http_message *rep_msg;
+	rspamd_fstring_t *reply;
+
+	rep_msg = rspamd_http_new_message (HTTP_RESPONSE);
+	rep_msg->date = time (NULL);
+	rep_msg->code = 200;
+	rep_msg->status = rspamd_fstring_new_init ("OK", 2);
+	reply = rspamd_fstring_new_init ("pong" CRLF, strlen ("pong" CRLF));
+	rspamd_http_message_set_body_from_fstring_steal (rep_msg, reply);
+	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_router_insert_headers (conn_ent->rt, rep_msg);
+	rspamd_http_connection_write_message (conn_ent->conn,
+			rep_msg,
+			NULL,
+			"text/plain",
+			conn_ent,
+			conn_ent->conn->fd,
+			conn_ent->rt->ptv,
+			conn_ent->rt->ev_base);
+	conn_ent->is_reply = TRUE;
+
+	return 0;
+}
+
 /*
  * Called on unknown methods and is used to deal with CORS as per
  * https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS
@@ -2898,7 +2928,7 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -3575,8 +3605,7 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"controller",
-			rspamd_controller_accept_socket,
-			TRUE);
+			rspamd_controller_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	ctx->start_time = time (NULL);
@@ -3710,6 +3739,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_PLUGINS,
 			rspamd_controller_handle_plugins);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_PING,
+			rspamd_controller_handle_ping);
 	rspamd_controller_register_plugins_paths (ctx);
 
 #if 0
@@ -3754,12 +3786,24 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
-	/* Maps events */
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
 	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 
+	if (worker->index == 0) {
+		if (!ctx->cfg->disable_monitored) {
+			rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
+		}
+
+		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, TRUE);
+	}
+	else {
+		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, FALSE);
+	}
+
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);
+
+	/* Start event loop */
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 

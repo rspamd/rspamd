@@ -11,7 +11,7 @@ PROJECT(rspamd C)
 ENABLE_LANGUAGE(ASM)
 
 SET(RSPAMD_VERSION_MAJOR 1)
-SET(RSPAMD_VERSION_MINOR 6)
+SET(RSPAMD_VERSION_MINOR 7)
 SET(RSPAMD_VERSION_PATCH 0)
 
 # Keep two digits all the time
@@ -57,13 +57,13 @@ OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: ON]" ON)
-OPTION(ENABLE_HIREDIS      "Enable redis support [default: ON]" ON)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
-OPTION(ENABLE_GD           "Enable libgd for images processing [default: ON]" ON)
+OPTION(ENABLE_GD           "Enable libgd for images processing [default: OFF]" OFF)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
+OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -581,9 +581,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES resolv)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES nsl)
 	MESSAGE(STATUS "Configuring for Linux")
-	IF(ENABLE_STATIC MATCHES "ON")
-		LIST(APPEND CMAKE_REQUIRED_LIBRARIES z)
-	ENDIF()
 	IF(EXISTS "/etc/debian_version")
 		SET(LINUX_START_SCRIPT "rspamd_debian.in")
 	ELSE(EXISTS "/etc/debian_version")
@@ -702,6 +699,8 @@ ProcessPackage(LIBSSL LIBRARY ssl INCLUDE ssl.h INCLUDE_SUFFIXES include/openssl
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libssl)
 ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libmagic
 	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
+ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
+		ROOT ${LIBZ_ROOT_DIR} MODULES z)
 
 IF(ENABLE_HYPERSCAN MATCHES "ON")
 	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
@@ -905,6 +904,7 @@ CHECK_INCLUDE_FILES(sys/file.h  HAVE_SYS_FILE_H)
 CHECK_INCLUDE_FILES(sys/utsname.h  HAVE_SYS_UTSNAME_H)
 CHECK_INCLUDE_FILES(sys/resource.h  HAVE_SYS_RESOURCE_H)
 CHECK_INCLUDE_FILES(netinet/in.h  HAVE_NETINET_IN_H)
+CHECK_INCLUDE_FILES(netinet/tcp.h  HAVE_NETINET_TCP_H)
 CHECK_INCLUDE_FILES(arpa/inet.h  HAVE_ARPA_INET_H)
 CHECK_INCLUDE_FILES(netdb.h  HAVE_NETDB_H)
 CHECK_INCLUDE_FILES(syslog.h HAVE_SYSLOG_H)
@@ -1001,6 +1001,7 @@ CHECK_SYMBOL_EXISTS(SOCK_SEQPACKET "sys/types.h;sys/socket.h" HAVE_SOCK_SEQPACKE
 CHECK_SYMBOL_EXISTS(I_SETSIG "sys/types.h;sys/ioctl.h" HAVE_SETSIG)
 CHECK_SYMBOL_EXISTS(O_ASYNC "sys/types.h;sys/fcntl.h" HAVE_OASYNC)
 CHECK_SYMBOL_EXISTS(O_NOFOLLOW "sys/types.h;sys/fcntl.h" HAVE_ONOFOLLOW)
+CHECK_SYMBOL_EXISTS(O_CLOEXEC "sys/types.h;sys/fcntl.h" HAVE_OCLOEXEC)
 LIST(APPEND CMAKE_REQUIRED_INCLUDES "${LIBSSL_INCLUDE}")
 CHECK_SYMBOL_EXISTS(SSL_set_tlsext_host_name "openssl/ssl.h" HAVE_SSL_TLSEXT_HOSTNAME)
 CHECK_SYMBOL_EXISTS(dirfd "sys/types.h;unistd.h;dirent.h" HAVE_DIRFD)
@@ -1200,11 +1201,9 @@ ENDIF(NOT DESTDIR)
 
 
 ################################ SUBDIRS SECTION ###########################
-IF(ENABLE_HIREDIS MATCHES "ON")
-	ADD_SUBDIRECTORY(contrib/hiredis)
-	SET(WITH_HIREDIS 1)
-	INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
-ENDIF(ENABLE_HIREDIS MATCHES "ON")
+ADD_SUBDIRECTORY(contrib/hiredis)
+SET(WITH_HIREDIS 1)
+INCLUDE_DIRECTORIES(BEFORE "${CMAKE_SOURCE_DIR}/contrib/hiredis")
 
 ADD_SUBDIRECTORY(contrib/lgpl)
 IF(GLIB_COMPAT)
@@ -1263,6 +1262,17 @@ IF(ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_SUBDIRECTORY(clang-plugin)
 ENDIF()
 
+IF(ENABLE_TORCH MATCHES "ON")
+	IF(WITH_LUAJIT)
+		ADD_SUBDIRECTORY(contrib/torch/paths)
+		ADD_SUBDIRECTORY(contrib/torch/torch7)
+		ADD_SUBDIRECTORY(contrib/torch/nn)
+		SET(WITH_TORCH 1)
+	ELSE()
+		MESSAGE(FATAL_ERROR "Cannot enable torch without luajit")
+	ENDIF()
+ENDIF()
+
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(test)
 ADD_SUBDIRECTORY(utils)
@@ -1297,21 +1307,12 @@ FOREACH(CONF_FILE ${CONF_FILES})
 		DESTINATION ${CONFDIR}/${_rp})
 ENDFOREACH(CONF_FILE)
 
-# Main config is special due to systemd
-IF(WANT_SYSTEMD_UNITS MATCHES "ON")
-	SET(MAIN_CONF "conf/rspamd.systemd.conf")
-ELSE(WANT_SYSTEMD_UNITS MATCHES "ON")
-	SET(MAIN_CONF "conf/rspamd.sysvinit.conf")
-ENDIF(WANT_SYSTEMD_UNITS MATCHES "ON")
+SET(MAIN_CONF "conf/rspamd.conf")
 IF(BUILD_PORT)
 	INSTALL_IF_NOT_EXISTS(${MAIN_CONF} ${CONFDIR} "rspamd.conf" ".sample")
 ELSE(BUILD_PORT)
 	INSTALL_IF_NOT_EXISTS(${MAIN_CONF} ${CONFDIR} "rspamd.conf" "")
 ENDIF(BUILD_PORT)
-# Debian is also special
-IF(DEBIAN_BUILD)
-	INSTALL_IF_NOT_EXISTS("conf/rspamd.sysvinit.conf" ${CONFDIR} "rspamd.sysvinit.conf" "")
-ENDIF(DEBIAN_BUILD)
 IF(INSTALL_EXAMPLES MATCHES "ON")
 	INSTALL(FILES ${MAIN_CONF} DESTINATION ${EXAMPLESDIR})
 ENDIF(INSTALL_EXAMPLES MATCHES "ON")
@@ -1351,6 +1352,10 @@ ENDFOREACH(LUA_LIB)
 
 # Install lua fun library
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
+
+IF(ENABLE_TORCH MATCHES "ON")
+	INSTALL(FILES "contrib/moses/moses.lua" DESTINATION ${LUALIBDIR})
+ENDIF()
 
 # systemd unit
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")

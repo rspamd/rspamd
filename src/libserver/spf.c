@@ -1355,156 +1355,221 @@ parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 	return FALSE;
 }
 
-static void
-reverse_spf_ip (gchar *ip, gint len)
+static gsize
+rspamd_spf_split_elt (const gchar *val, gsize len, gint *pos,
+		gsize poslen, gchar delim)
 {
-	gchar ipbuf[sizeof ("255.255.255.255") - 1], *p, *c;
-	gint t = 0, l = len;
+	const gchar *p, *end;
+	guint cur_pos = 0, cur_st = 0, nsub = 0;
 
-	if (len > (gint) sizeof (ipbuf)) {
-		msg_info ("cannot reverse string of length %d", len);
-		return;
-	}
+	p = val;
+	end = val + len;
 
-	p = ipbuf + len;
-	c = ip;
-	while (--l) {
-		if (*c == '.') {
-			memcpy (p, c - t, t);
-			*--p = '.';
-			c++;
-			t = 0;
-			continue;
+	while (p < end && cur_pos + 2 < poslen) {
+		if (*p == delim) {
+			if (p - val > cur_st) {
+				pos[cur_pos] = cur_st;
+				pos[cur_pos + 1] = p - val;
+				cur_st = p - val + 1;
+				cur_pos += 2;
+				nsub ++;
+			}
+
+			p ++;
 		}
-
-		t++;
-		c++;
-		p--;
+		else {
+			p ++;
+		}
 	}
 
-	memcpy (p - 1, c - t, t + 1);
-	memcpy (ip, ipbuf, len);
+	if (cur_pos + 2 < poslen) {
+		if (end - val > cur_st) {
+			pos[cur_pos] = cur_st;
+			pos[cur_pos + 1] = end - val;
+			nsub ++;
+		}
+	}
+	else {
+		pos[cur_pos] = p - val;
+		pos[cur_pos + 1] = end - val;
+		nsub ++;
+	}
+
+	return nsub;
+}
+
+static gsize
+rspamd_spf_process_substitution (const gchar *macro_value,
+		gsize macro_len, guint ndelim, gchar delim, gboolean reversed,
+		gchar *dest)
+{
+	gchar *d = dest;
+	const gchar canon_delim = '.';
+	guint vlen, i;
+	gint pos[49 * 2], tlen;
+
+	if (!reversed && ndelim == 0 && delim == canon_delim) {
+		/* Trivial case */
+		memcpy (dest, macro_value, macro_len);
+
+		return macro_len;
+	}
+
+	vlen = rspamd_spf_split_elt (macro_value, macro_len,
+			pos, G_N_ELEMENTS (pos), delim);
+
+	if (vlen > 0) {
+		if (reversed) {
+			for (i = vlen - 1; ; i--) {
+				tlen = pos[i * 2 + 1] - pos[i * 2];
+
+				if (i != 0) {
+					memcpy (d, &macro_value[pos[i * 2]], tlen);
+					d += tlen;
+					*d++ = canon_delim;
+				}
+				else {
+					memcpy (d, &macro_value[pos[i * 2]], tlen);
+					d += tlen;
+					break;
+				}
+			}
+		}
+		else {
+			for (i = 0; i < vlen; i++) {
+				tlen = pos[i * 2 + 1] - pos[i * 2];
+
+				if (i != vlen - 1) {
+					memcpy (d, &macro_value[pos[i * 2]], tlen);
+					d += tlen;
+					*d++ = canon_delim;
+				}
+				else {
+					memcpy (d, &macro_value[pos[i * 2]], tlen);
+					d += tlen;
+				}
+			}
+		}
+	}
+	else {
+		/* Trivial case */
+		memcpy (dest, macro_value, macro_len);
+
+		return macro_len;
+	}
+
+	return (d - dest);
 }
 
 static const gchar *
-expand_spf_macro (struct spf_record *rec,
+expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 		const gchar *begin)
 {
-	const gchar *p;
-	gchar *c, *new, *tmp;
-	gsize len = 0, slen = 0;
-	gint state = 0;
-	gchar ip_buf[INET6_ADDRSTRLEN];
-	gboolean need_expand = FALSE;
+	const gchar *p, *macro_value;
+	gchar *c, *new, *tmp, delim;
+	gsize len = 0, slen = 0, macro_len;
+	gint state = 0, ndelim = 0;
+	gchar ip_buf[INET6_ADDRSTRLEN + 1];
+	gboolean need_expand = FALSE, reversed;
 	struct rspamd_task *task;
-	struct spf_resolved_element *resolved;
 
 	g_assert (rec != NULL);
 	g_assert (begin != NULL);
 
 	task = rec->task;
-	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	p = begin;
 	/* Calculate length */
 	while (*p) {
 		switch (state) {
-			case 0:
-				/* Skip any character and wait for % in input */
-				if (*p == '%') {
-					state = 1;
-				}
-				else {
-					len++;
-				}
+		case 0:
+			/* Skip any character and wait for % in input */
+			if (*p == '%') {
+				state = 1;
+			}
+			else {
+				len++;
+			}
 
-				slen++;
-				p++;
+			slen++;
+			p++;
+			break;
+		case 1:
+			/* We got % sign, so we should whether wait for { or for - or for _ or for % */
+			if (*p == '%' || *p == '_') {
+				/* Just a single % sign or space */
+				len++;
+				state = 0;
+			}
+			else if (*p == '-') {
+				/* %20 */
+				len += sizeof ("%20") - 1;
+				state = 0;
+			}
+			else if (*p == '{') {
+				state = 2;
+			}
+			else {
+				/* Something unknown */
+				msg_info_spf (
+						"<%s>: spf error for domain %s: unknown spf element",
+						task->message_id, rec->sender_domain);
+				return begin;
+			}
+			p++;
+			slen++;
+			break;
+		case 2:
+			/* Read macro name */
+			switch (g_ascii_tolower (*p)) {
+			case 'i':
+				len += INET6_ADDRSTRLEN - 1;
 				break;
-			case 1:
-				/* We got % sign, so we should whether wait for { or for - or for _ or for % */
-				if (*p == '%' || *p == '_') {
-					/* Just a single % sign or space */
-					len++;
-					state = 0;
-				}
-				else if (*p == '-') {
-					/* %20 */
-					len += sizeof ("%20") - 1;
-					state = 0;
-				}
-				else if (*p == '{') {
-					state = 2;
-				}
-				else {
-					/* Something unknown */
-					msg_info_spf (
-							"<%s>: spf error for domain %s: unknown spf element",
-							task->message_id, rec->sender_domain);
-					return begin;
-				}
-				p++;
-				slen++;
+			case 's':
+				len += strlen (rec->sender);
 				break;
-			case 2:
-				/* Read macro name */
-				switch (g_ascii_tolower (*p)) {
-					case 'i':
-						len += INET6_ADDRSTRLEN - 1;
-						break;
-					case 's':
-						len += strlen (rec->sender);
-						break;
-					case 'l':
-						len += strlen (rec->local_part);
-						break;
-					case 'o':
-						len += strlen (rec->sender_domain);
-						break;
-					case 'd':
-						len += strlen (resolved->cur_domain);
-						break;
-					case 'v':
-						len += sizeof ("in-addr") - 1;
-						break;
-					case 'h':
-						if (task->helo) {
-							len += strlen (task->helo);
-						}
-						break;
-					default:
-						msg_info_spf (
-								"<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
-								task->message_id,
-								rec->sender_domain,
-								*p,
-								begin);
-						return begin;
-				}
-				p++;
-				slen++;
-				state = 3;
+			case 'l':
+				len += strlen (rec->local_part);
 				break;
-			case 3:
-				/* Read modifier */
-				if (*p == '}') {
-					state = 0;
-					need_expand = TRUE;
-				}
-				else if (*p != 'r' && !g_ascii_isdigit (*p)) {
-					msg_info_spf (
-							"<%s>: spf error for domain %s: unknown or unsupported spf modifier %c in %s",
-							task->message_id,
-							rec->sender_domain,
-							*p,
-							begin);
-					return begin;
-				}
-				p++;
-				slen++;
+			case 'o':
+				len += strlen (rec->sender_domain);
 				break;
-
+			case 'd':
+				len += strlen (resolved->cur_domain);
+				break;
+			case 'v':
+				len += sizeof ("in-addr") - 1;
+				break;
+			case 'h':
+				if (task->helo) {
+					len += strlen (task->helo);
+				}
+				break;
 			default:
-				assert (0);
+				msg_info_spf (
+						"<%s>: spf error for domain %s: unknown or "
+								"unsupported spf macro %c in %s",
+						task->message_id,
+						rec->sender_domain,
+						*p,
+						begin);
+				return begin;
+			}
+			p++;
+			slen++;
+			state = 3;
+			break;
+		case 3:
+			/* Read modifier */
+			if (*p == '}') {
+				state = 0;
+				need_expand = TRUE;
+			}
+			p++;
+			slen++;
+			break;
+
+		default:
+			assert (0);
 		}
 	}
 
@@ -1515,6 +1580,12 @@ expand_spf_macro (struct spf_record *rec,
 
 	new = rspamd_mempool_alloc (task->task_pool, len + 1);
 
+	/* Reduce TTL to avoid caching of records with macros */
+	if (rec->ttl != 0) {
+		rec->ttl = 0;
+		msg_debug_spf ("disable SPF caching as there is macro expansion");
+	}
+
 	c = new;
 	p = begin;
 	state = 0;
@@ -1522,128 +1593,156 @@ expand_spf_macro (struct spf_record *rec,
 
 	while (*p) {
 		switch (state) {
-			case 0:
-				/* Skip any character and wait for % in input */
-				if (*p == '%') {
-					state = 1;
-				}
-				else {
-					*c = *p;
-					c++;
-				}
+		case 0:
+			/* Skip any character and wait for % in input */
+			if (*p == '%') {
+				state = 1;
+			}
+			else {
+				*c = *p;
+				c++;
+			}
 
-				p++;
+			p++;
+			break;
+		case 1:
+			/* We got % sign, so we should whether wait for { or for - or for _ or for % */
+			if (*p == '%') {
+				/* Just a single % sign or space */
+				*c++ = '%';
+				state = 0;
+			}
+			else if (*p == '_') {
+				*c++ = ' ';
+				state = 0;
+			}
+			else if (*p == '-') {
+				/* %20 */
+				*c++ = '%';
+				*c++ = '2';
+				*c++ = '0';
+				state = 0;
+			}
+			else if (*p == '{') {
+				state = 2;
+			}
+			else {
+				/* Something unknown */
+				msg_info_spf (
+						"<%s>: spf error for domain %s: unknown spf element",
+						task->message_id, rec->sender_domain);
+				return begin;
+			}
+			p++;
+			break;
+		case 2:
+			/* Read macro name */
+			switch (g_ascii_tolower (*p)) {
+			case 'i':
+				macro_len = rspamd_strlcpy (ip_buf,
+						rspamd_inet_address_to_string (task->from_addr),
+						sizeof (ip_buf));
+				macro_value = ip_buf;
 				break;
-			case 1:
-				/* We got % sign, so we should whether wait for { or for - or for _ or for % */
-				if (*p == '%') {
-					/* Just a single % sign or space */
-					*c++ = '%';
-					state = 0;
-				}
-				else if (*p == '_') {
-					*c++ = ' ';
-					state = 0;
-				}
-				else if (*p == '-') {
-					/* %20 */
-					*c++ = '%';
-					*c++ = '2';
-					*c++ = '0';
-					state = 0;
-				}
-				else if (*p == '{') {
-					state = 2;
+			case 's':
+				macro_len = strlen (rec->sender);
+				macro_value = rec->sender;
+				break;
+			case 'l':
+				macro_len = strlen (rec->local_part);
+				macro_value = rec->local_part;
+				break;
+			case 'o':
+				macro_len = strlen (rec->sender_domain);
+				macro_value = rec->sender_domain;
+				break;
+			case 'd':
+				macro_len = strlen (resolved->cur_domain);
+				macro_value = resolved->cur_domain;
+				break;
+			case 'v':
+				if (rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
+					macro_len = sizeof ("in-addr") - 1;
+					macro_value = "in-addr";
 				}
 				else {
-					/* Something unknown */
-					msg_info_spf (
-							"<%s>: spf error for domain %s: unknown spf element",
-							task->message_id, rec->sender_domain);
-					return begin;
+					macro_len = sizeof ("ip6") - 1;
+					macro_value = "ip6";
 				}
-				p++;
 				break;
-			case 2:
-				/* Read macro name */
-				switch (g_ascii_tolower (*p)) {
-					case 'i':
-						len = rspamd_strlcpy (ip_buf,
-								rspamd_inet_address_to_string (task->from_addr),
-								sizeof (ip_buf));
-						memcpy (c, ip_buf, len);
-						c += len;
-						break;
-					case 's':
-						len = strlen (rec->sender);
-						memcpy (c, rec->sender, len);
-						c += len;
-						break;
-					case 'l':
-						len = strlen (rec->local_part);
-						memcpy (c, rec->local_part, len);
-						c += len;
-						break;
-					case 'o':
-						len = strlen (rec->sender_domain);
-						memcpy (c, rec->sender_domain, len);
-						c += len;
-						break;
-					case 'd':
-						len = strlen (resolved->cur_domain);
-						memcpy (c, resolved->cur_domain, len);
-						c += len;
-						break;
-					case 'v':
-						len = sizeof ("in-addr") - 1;
-						memcpy (c, "in-addr", len);
-						c += len;
-						break;
-					case 'h':
-						if (task->helo) {
-							tmp = strchr (task->helo, '@');
-							if (tmp) {
-								len = strlen (tmp + 1);
-								memcpy (c, tmp + 1, len);
-								c += len;
-							}
-						}
-						break;
-					default:
-						msg_info_spf (
-								"<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
-								task->message_id,
-								rec->sender_domain,
-								*p,
-								begin);
-						return begin;
+			case 'h':
+				if (task->helo) {
+					tmp = strchr (task->helo, '@');
+					if (tmp) {
+						macro_len = strlen (tmp + 1);
+						macro_value = tmp + 1;
+					}
+					else {
+						macro_len = strlen (task->helo);
+						macro_value = task->helo;
+					}
 				}
-				p++;
-				state = 3;
 				break;
-			case 3:
-				/* Read modifier */
-				if (*p == '}') {
-					state = 0;
-				}
-				else if (*p == 'r' && len != 0) {
-					reverse_spf_ip (c - len, len);
-					len = 0;
-				}
-				else if (g_ascii_isdigit (*p)) {
-					/*XXX: try to implement domain trimming */
+			default:
+				macro_len = 0;
+				macro_value = NULL;
+				msg_info_spf (
+						"<%s>: spf error for domain %s: unknown or "
+								"unsupported spf macro %c in %s",
+						task->message_id,
+						rec->sender_domain,
+						*p,
+						begin);
+				return begin;
+			}
+
+			p++;
+			state = 3;
+			ndelim = 0;
+			delim = '.';
+			reversed = FALSE;
+			break;
+
+		case 3:
+			/* Read modifier */
+			if (*p == '}') {
+				state = 0;
+				len = rspamd_spf_process_substitution (macro_value,
+						macro_len, ndelim, delim, reversed, c);
+				c += len;
+			}
+			else if (*p == 'r' && len != 0) {
+				reversed = TRUE;
+			}
+			else if (g_ascii_isdigit (*p)) {
+				ndelim = strtoul (p, &tmp, 10);
+
+				if (tmp == NULL || tmp == p) {
+					p ++;
 				}
 				else {
-					msg_info_spf (
-							"<%s>: spf error for domain %s: unknown or unsupported spf macro %c in %s",
-							task->message_id,
-							rec->sender_domain,
-							*p,
-							begin);
-					return begin;
+					p = tmp;
+
+					continue;
 				}
-				p++;
-				break;
+			}
+			else if (*p == '+' || *p == '-' ||
+					*p == '.' || *p == ',' || *p == '/' || *p == '_' ||
+					*p == '=') {
+				delim = *p;
+			}
+			else {
+				msg_info_spf (
+						"<%s>: spf error for domain %s: unknown or "
+								"unsupported spf macro %c (%s) in %s",
+						task->message_id,
+						rec->sender_domain,
+						*p,
+						begin);
+				return begin;
+			}
+			p++;
+			break;
 		}
 	}
 	/* Null terminate */
@@ -1672,7 +1771,7 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 	}
 
 	task = rec->task;
-	begin = expand_spf_macro (rec, elt);
+	begin = expand_spf_macro (rec, resolved, elt);
 	addr = rspamd_spf_new_addr (rec, resolved, begin);
 	g_assert (addr != NULL);
 	t = g_ascii_tolower (addr->spf_string[0]);
@@ -1802,7 +1901,7 @@ parse_spf_scopes (struct spf_record *rec, gchar **begin)
 		}
 		else if (g_ascii_strncasecmp (*begin, SPF_SCOPE_MFROM,
 				sizeof (SPF_SCOPE_MFROM) - 1) == 0) {
-			/* mfrom is standart spf1 check */
+			/* mfrom is standard spf1 check */
 			*begin += sizeof (SPF_SCOPE_MFROM) - 1;
 			continue;
 		}

@@ -50,8 +50,9 @@ enum rspamd_task_stage {
 	RSPAMD_TASK_STAGE_LEARN_PRE = (1 << 10),
 	RSPAMD_TASK_STAGE_LEARN = (1 << 11),
 	RSPAMD_TASK_STAGE_LEARN_POST = (1 << 12),
-	RSPAMD_TASK_STAGE_DONE = (1 << 13),
-	RSPAMD_TASK_STAGE_REPLIED = (1 << 14)
+	RSPAMD_TASK_STAGE_IDEMPOTENT = (1 << 13),
+	RSPAMD_TASK_STAGE_DONE = (1 << 14),
+	RSPAMD_TASK_STAGE_REPLIED = (1 << 15)
 };
 
 #define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT | \
@@ -67,6 +68,7 @@ enum rspamd_task_stage {
 		RSPAMD_TASK_STAGE_LEARN_PRE | \
 		RSPAMD_TASK_STAGE_LEARN | \
 		RSPAMD_TASK_STAGE_LEARN_POST | \
+		RSPAMD_TASK_STAGE_IDEMPOTENT | \
 		RSPAMD_TASK_STAGE_DONE)
 #define RSPAMD_TASK_PROCESS_LEARN (RSPAMD_TASK_STAGE_CONNECT | \
 		RSPAMD_TASK_STAGE_ENVELOPE | \
@@ -106,6 +108,8 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_COMPRESSED (1 << 24)
 #define RSPAMD_TASK_FLAG_PROFILE (1 << 25)
 #define RSPAMD_TASK_FLAG_GREYLISTED (1 << 26)
+#define RSPAMD_TASK_FLAG_OWN_POOL (1 << 27)
+#define RSPAMD_TASK_FLAG_MILTER (1 << 28)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -181,7 +185,7 @@ struct rspamd_task {
 	double time_virtual_finish;
 	struct timeval tv;
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
-													/**< calback for filters finalizing					*/
+													/**< callback for filters finalizing					*/
 	void *fin_arg;									/**< argument for fin callback						*/
 
 	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
@@ -205,8 +209,9 @@ struct rspamd_task {
 /**
  * Construct new task for worker
  */
-struct rspamd_task * rspamd_task_new (struct rspamd_worker *worker,
-		struct rspamd_config *cfg);
+struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
+		struct rspamd_config *cfg,
+		rspamd_mempool_t *pool);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */
@@ -249,7 +254,7 @@ gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
 struct rspamd_email_address* rspamd_task_get_sender (struct rspamd_task *task);
 
 /**
- * Return addresses in the following precendence:
+ * Return addresses in the following precedence:
  * - deliver to
  * - the first smtp recipient
  * - the first mime recipient

@@ -254,13 +254,13 @@ void rspamd_mempool_unlock_mutex (rspamd_mempool_mutex_t *mutex);
 rspamd_mempool_rwlock_t * rspamd_mempool_get_rwlock (rspamd_mempool_t *pool);
 
 /**
- * Aquire read lock
+ * Acquire read lock
  * @param lock rwlock object
  */
 void rspamd_mempool_rlock_rwlock (rspamd_mempool_rwlock_t *lock);
 
 /**
- * Aquire write lock
+ * Acquire write lock
  * @param lock rwlock object
  */
 void rspamd_mempool_wlock_rwlock (rspamd_mempool_rwlock_t *lock);

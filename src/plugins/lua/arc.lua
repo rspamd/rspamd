@@ -29,10 +29,21 @@ if confighelp then
 end
 
 local N = 'arc'
+
+if not rspamd_plugins.dkim then
+  rspamd_logger.errx(rspamd_config, "cannot enable arc plugin: dkim is disabled")
+  return
+end
+
 local dkim_verify = rspamd_plugins.dkim.verify
 local dkim_sign = rspamd_plugins.dkim.sign
 local dkim_canonicalize = rspamd_plugins.dkim.canon_header_relaxed
 local redis_params
+
+if not dkim_verify or not dkim_sign or not dkim_canonicalize then
+  rspamd_logger.errx(rspamd_config, "cannot enable arc plugin: dkim is disabled")
+  return
+end
 
 local arc_symbols = {
   allow = 'ARC_ALLOW',
@@ -217,7 +228,9 @@ local function arc_callback(task)
         task:insert_result(arc_symbols['allow'], 1.0, 'i=' ..
             tostring(cbdata.checked))
       else
-        task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
+        task:insert_result(arc_symbols['reject'], 1.0,
+          rspamd_logger.slog('seal check failed: %s, %s', cbdata.res,
+            cbdata.errors))
       end
     end
   end
@@ -251,12 +264,15 @@ local function arc_callback(task)
             end
           end, cbdata.seals)
       else
-        task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
+        task:insert_result(arc_symbols['reject'], 1.0,
+          rspamd_logger.slog('signature check failed: %s, %s', cbdata.res,
+            cbdata.errors))
       end
     end
   end
 
   -- Now we can verify all signatures
+  local processed = 0
   fun.each(
     function(sig)
       local ret,err = dkim_verify(task, sig.header, arc_signature_cb, 'arc-sign')
@@ -264,14 +280,17 @@ local function arc_callback(task)
       if not ret then
         cbdata.res = 'fail'
         table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
-        cbdata.checked = cbdata.checked + 1
-        rspamd_logger.debugm(N, task, 'checked arc sig %s: %s(%s), %s processed',
+      else
+        processed = processed + 1
+        rspamd_logger.debugm(N, task, 'processed arc signature %s: %s(%s), %s processed',
           sig.d, ret, err, cbdata.checked)
       end
     end, cbdata.sigs)
 
-  if cbdata.checked == #arc_sig_headers then
-    task:insert_result(arc_symbols['reject'], 1.0, cbdata.errors)
+  if processed ~= #arc_sig_headers then
+    task:insert_result(arc_symbols['reject'], 1.0,
+      rspamd_logger.slog('cannot verify %s of %s signatures: %s',
+        #arc_sig_headers - processed, #arc_sig_headers, cbdata.errors))
   end
 end
 
@@ -335,25 +354,17 @@ rspamd_config:register_symbol({
 rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
 rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
 
--- Signatures part
-local function simple_template(tmpl, keys)
-  local lpeg = require "lpeg"
-
-  local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
-  local var = lpeg.P { (lpeg.P("$") / "") * ((var_lit^1) / keys) }
-  local var_braced = lpeg.P { (lpeg.P("${") / "") * ((var_lit^1) / keys) * (lpeg.P("}") / "") }
-
-  local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
-
-  return lpeg.match(template_grammar, tmpl)
-end
-
 local function arc_sign_seal(task, params, header)
+  local fold_type = "crlf"
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
   local arc_auth_results = task:get_header_full('ARC-Authentication-Results') or {}
   local cur_auth_results = auth_results.gen_auth_results(task) or ''
   local privkey
+
+  if task:has_flag("milter") then
+    fold_type = "lf"
+  end
 
   if params.rawkey then
     privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
@@ -395,11 +406,11 @@ local function arc_sign_seal(task, params, header)
 
   header = rspamd_util.fold_header(
     'ARC-Message-Signature',
-    header)
+    header, fold_type)
 
   cur_auth_results = rspamd_util.fold_header(
     'ARC-Authentication-Results',
-    cur_auth_results)
+    cur_auth_results, fold_type)
 
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
   local s = dkim_canonicalize('ARC-Authentication-Results',
@@ -411,7 +422,7 @@ local function arc_sign_seal(task, params, header)
   rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
-      cur_idx, params.selector, params.domain, rspamd_util.get_time(), params.arc_cv)
+      cur_idx, params.selector, params.domain, math.floor(rspamd_util.get_time()), params.arc_cv)
   s = string.format('%s:%s', 'arc-seal', cur_arc_seal)
   sha_ctx:update(s)
   rspamd_logger.debugm(N, task, 'initial update signature with header: %s', s)
@@ -420,20 +431,19 @@ local function arc_sign_seal(task, params, header)
   cur_arc_seal = string.format('%s%s', cur_arc_seal,
     sig:base64())
 
-  task:set_rmilter_reply({
+  task:set_milter_reply({
     add_headers = {
       ['ARC-Authentication-Results'] = cur_auth_results,
       ['ARC-Message-Signature'] = header,
       ['ARC-Seal'] = rspamd_util.fold_header(
         'ARC-Seal',
-        cur_arc_seal),
+        cur_arc_seal, fold_type),
     }
   })
   task:insert_result(settings.sign_symbol, 1.0, string.format('i=%d', cur_idx))
 end
 
 local function arc_signing_cb(task)
-  local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
 
   local ret,p = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
@@ -468,13 +478,13 @@ local function arc_signing_cb(task)
             rk, err)
         else
           p.rawkey = data
-          local ret, hdr = dkim_sign(task, p)
-          if ret then
+          local dret, hdr = dkim_sign(task, p)
+          if dret then
             return arc_sign_seal(task, p, hdr)
           end
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         rk, -- hash key
         false, -- is write
@@ -482,7 +492,7 @@ local function arc_signing_cb(task)
         'HGET', -- command
         {settings.key_prefix, rk} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
       end
     end
@@ -495,7 +505,7 @@ local function arc_signing_cb(task)
           try_redis_key(data)
         end
       end
-      local ret = rspamd_redis_make_request(task,
+      local rret = rspamd_redis_make_request(task,
         redis_params, -- connect params
         p.domain, -- hash key
         false, -- is write
@@ -503,7 +513,7 @@ local function arc_signing_cb(task)
         'HGET', -- command
         {settings.selector_prefix, p.domain} -- arguments
       )
-      if not ret then
+      if not rret then
         rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for %s", p.domain)
       end
     else
@@ -515,9 +525,9 @@ local function arc_signing_cb(task)
     end
   else
     if (p.key and p.selector) then
-      p.key = simple_template(p.key, {domain = p.domain, selector = p.selector})
-      local ret, hdr = dkim_sign(task, p)
-      if ret then
+      p.key = lua_util.template(p.key, {domain = p.domain, selector = p.selector})
+      local dret, hdr = dkim_sign(task, p)
+      if dret then
         return arc_sign_seal(task, p, hdr)
       end
     else
@@ -527,8 +537,6 @@ local function arc_signing_cb(task)
   end
 end
 
-local opts =  rspamd_config:get_all_opt('arc')
-if not opts then return end
 for k,v in pairs(opts) do
   if k == 'sign_networks' then
     settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')

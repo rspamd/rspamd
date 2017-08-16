@@ -89,7 +89,7 @@ function($) {
                 xhr.setRequestHeader('Password', rspamd.getPassword());
             },
             success: function (input) {
-                var data = input['default'];
+                var data = input;
                 if (data.action) {
                     rspamd.alertMessage('alert-success', 'Data successfully scanned');
                     var action = '';
@@ -119,7 +119,7 @@ function($) {
                     var sym_desc = {};
                     var nsym = 0;
 
-                    $.each(data, function (i, item) {
+                    $.each(data.symbols, function (i, item) {
                         if (typeof item == 'object') {
                             var sym_id = "sym_" + nsym;
                             if (item.description) {

@@ -124,6 +124,7 @@ struct rspamd_http_connection_entry {
 	struct rspamd_http_connection *conn;
 	gpointer ud;
 	gboolean is_reply;
+	gboolean support_gzip;
 	struct rspamd_http_connection_entry *prev, *next;
 };
 
@@ -545,7 +546,7 @@ void rspamd_http_router_handle_socket (
 void rspamd_http_router_free (struct rspamd_http_connection_router *router);
 
 /**
- * Extract arguments from a messsage's URI contained inside query string decoding
+ * Extract arguments from a message's URI contained inside query string decoding
  * them if needed
  * @param msg HTTP request message
  * @return new GHashTable which maps rspamd_ftok_t* to rspamd_ftok_t*

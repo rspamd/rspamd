@@ -153,7 +153,7 @@ rspamd_process_file (struct rspamd_config *cfg, const gchar *fname, gint mode)
 		exit (EXIT_FAILURE);
 	}
 
-	task = rspamd_task_new (NULL, cfg);
+	task = rspamd_task_new (NULL, cfg, NULL);
 	task->msg.begin = map;
 	task->msg.len = st.st_size;
 

@@ -50,6 +50,7 @@ local function symbols_to_fann_vector(syms, scores)
   local n = rspamd_config:get_symbols_count()
 
   fun.each(function(s, score)
+    if score ~= score then score = 0.0 end -- nan sanity
      matched_symbols[s + 1] = rspamd_util.tanh(score)
   end, fun.zip(syms, scores))
 

@@ -24,7 +24,7 @@ man pages and many others).
 Doxydown is extremely simple as it can output markdown only but it is very
 convenient tool to generate nice markdown with all features required from the
 documentation system. Doxydown uses input format that is very close to `doxygen`
-that allows to re-use the existing documentation comments. Currenly, doxydown
+that allows to re-use the existing documentation comments. Currently, doxydown
 does not support many features but they could be easily added on demand.
 
 ## Input format

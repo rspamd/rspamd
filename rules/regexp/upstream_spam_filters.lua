@@ -29,7 +29,7 @@ reconf['MICROSOFT_SPAM'] = {
     -- https://technet.microsoft.com/en-us/library/dn205071(v=exchg.150).aspx
     re = 'X-Forefront-Antispam-Report=/SFV:SPM/H',
     score = 10,
-    description = "Microsoft says the messge is spam",
+    description = "Microsoft says the message is spam",
     group = 'upstream_spam_filters'
 }
 

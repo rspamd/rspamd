@@ -547,7 +547,7 @@ if ( !$language ) {
     $language = $languages{c};
 }
 
-## TODO: select language based on file extention
+## TODO: select language based on file extension
 ## TODO: change calling structure to allow looping through directory
 
 use constant {

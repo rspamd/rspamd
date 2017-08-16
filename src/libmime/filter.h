@@ -1,6 +1,6 @@
 /**
  * @file filter.h
- * Filters logic implemetation
+ * Filters logic implementation
  */
 
 #ifndef RSPAMD_FILTER_H
@@ -41,6 +41,7 @@ struct rspamd_metric_result {
 	GHashTable *symbols;                            /**< symbols of metric						*/
 	GHashTable *sym_groups;							/**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
+	guint changes;
 	enum rspamd_metric_action action;               /**< the current action						*/
 };
 

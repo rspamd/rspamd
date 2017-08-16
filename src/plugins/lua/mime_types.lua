@@ -248,7 +248,7 @@ if opts then
   if map then
     local id = rspamd_config:register_symbol({
       callback = check_mime_type,
-      type = 'callback'
+      type = 'callback,nostat'
     })
 
     rspamd_config:register_symbol({

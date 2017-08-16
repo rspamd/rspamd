@@ -106,7 +106,6 @@ SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_whitespace.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl"
-	"${CMAKE_SOURCE_DIR}/src/ragel/content_type.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/content_disposition.rl")
 RAGEL_TARGET(ragel_smtp_addr
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_addr_parser.rl
@@ -118,16 +117,6 @@ RAGEL_TARGET(ragel_smtp_received
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -T1
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_received_parser.rl.c)
-RAGEL_TARGET(ragel_newlines_strip
-	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/newlines_strip.rl
-	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -G2
-	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/newlines_strip.rl.c)
-RAGEL_TARGET(ragel_content_type
-	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/content_type_parser.rl
-	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -G2
-	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/content_type.rl.c)
 RAGEL_TARGET(ragel_content_disposition
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/content_disposition_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}

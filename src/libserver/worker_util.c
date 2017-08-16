@@ -42,6 +42,7 @@
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
 #endif
+#include "zlib.h"
 
 static void rspamd_worker_ignore_signal (int signo);
 /**
@@ -87,7 +88,7 @@ rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 /*
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
  */
-static void
+static gboolean
 rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	/* Do not accept new connections, preparing to end worker's process */
@@ -108,18 +109,24 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 		event_base_loopexit (sigh->base, &tv);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
+
+	/* No more signals */
+	return FALSE;
 }
 
 /*
  * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
  */
-static void
+static gboolean
 rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	rspamd_log_reopen (sigh->worker->srv->logger);
+
+	/* Get more signals */
+	return TRUE;
 }
 
-static void
+static gboolean
 rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	struct timeval tv;
@@ -147,21 +154,23 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 #endif
 		rspamd_worker_stop_accept (sigh->worker);
 	}
+
+	/* Stop reacting on signals */
+	return FALSE;
 }
 
 static void
-rspamd_worker_signal_handler (int fd, short what, void *arg)
+rspamd_worker_signal_handle (int fd, short what, void *arg)
 {
 	struct rspamd_worker_signal_handler *sigh =
 			(struct rspamd_worker_signal_handler *) arg;
-	struct rspamd_worker_signal_cb *cb;
-
-	cb = sigh->cb;
+	struct rspamd_worker_signal_cb *cb, *cbtmp;
 
 	/* Call all signal handlers registered */
-	while (cb) {
-		cb->handler (sigh, cb->handler_data);
-		cb = cb->next;
+	DL_FOREACH_SAFE (sigh->cb, cb, cbtmp) {
+		if (!cb->handler (sigh, cb->handler_data)) {
+			DL_DELETE (sigh->cb, cb);
+		}
 	}
 }
 
@@ -180,7 +189,7 @@ rspamd_worker_ignore_signal (int signo)
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		struct event_base *base,
-		void (*handler)(struct rspamd_worker_signal_handler *sigh, void *),
+		rspamd_worker_signal_handler handler,
 		void *handler_data)
 {
 	struct rspamd_worker_signal_handler *sigh;
@@ -195,7 +204,7 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		sigh->base = base;
 		sigh->enabled = TRUE;
 
-		signal_set (&sigh->ev, signo, rspamd_worker_signal_handler, sigh);
+		signal_set (&sigh->ev, signo, rspamd_worker_signal_handle, sigh);
 		event_base_set (base, &sigh->ev);
 		signal_add (&sigh->ev, NULL);
 
@@ -249,7 +258,7 @@ rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *bas
 
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *), gboolean load_lua)
+	void (*accept_handler)(int, short, void *))
 {
 	struct event_base *ev_base;
 	struct event *accept_events;
@@ -297,12 +306,6 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 		}
 	}
 
-	if (load_lua) {
-		struct rspamd_config *cfg = worker->srv->cfg;
-
-		rspamd_lua_run_postloads (cfg->lua_state, cfg, ev_base, worker);
-	}
-
 	return ev_base;
 }
 
@@ -311,9 +314,6 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
 	GList *cur;
 	struct event *events;
-	GHashTableIter it;
-	struct rspamd_worker_signal_handler *sigh;
-	gpointer k, v;
 	struct rspamd_map *map;
 
 	/* Remove all events */
@@ -336,19 +336,23 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	if (worker->accept_events != NULL) {
 		g_list_free (worker->accept_events);
 	}
-
+	/* XXX: we need to do it much later */
+#if 0
 	g_hash_table_iter_init (&it, worker->signal_events);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		sigh = (struct rspamd_worker_signal_handler *)v;
 		g_hash_table_iter_steal (&it);
+
 		if (sigh->enabled) {
 			event_del (&sigh->ev);
 		}
+
 		g_free (sigh);
 	}
 
 	g_hash_table_unref (worker->signal_events);
+#endif
 
 	/* Cleanup maps */
 	for (cur = worker->srv->cfg->maps; cur != NULL; cur = g_list_next (cur)) {
@@ -360,6 +364,19 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 
 		map->dtor = NULL;
 	}
+}
+
+static rspamd_fstring_t *
+rspamd_controller_maybe_compress (struct rspamd_http_connection_entry *entry,
+		rspamd_fstring_t *buf, struct rspamd_http_message *msg)
+{
+	if (entry->support_gzip) {
+		if (rspamd_fstring_gzip (&buf)) {
+			rspamd_http_message_add_header (msg, "Content-Encoding", "gzip");
+		}
+	}
+
+	return buf;
 }
 
 void
@@ -381,7 +398,8 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	msg->code = code;
 	reply = rspamd_fstring_sized_new (msg->status->len + 16);
 	rspamd_printf_fstring (&reply, "{\"error\":\"%V\"}", msg->status);
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg,
+			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
@@ -407,7 +425,8 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
 	reply = rspamd_fstring_new_init (str, strlen (str));
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg,
+			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
@@ -434,7 +453,8 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	msg->status = rspamd_fstring_new_init ("OK", 2);
 	reply = rspamd_fstring_sized_new (BUFSIZ);
 	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &reply);
-	rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+	rspamd_http_message_set_body_from_fstring_steal (msg,
+			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_router_insert_headers (entry->rt, msg);
 	rspamd_http_connection_write_message (entry->conn,
@@ -527,12 +547,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	/* Starting worker process */
 	wrk = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
 
-	if (!rspamd_socketpair (wrk->control_pipe)) {
+	if (!rspamd_socketpair (wrk->control_pipe, 0)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}
 
-	if (!rspamd_socketpair (wrk->srv_pipe)) {
+	if (!rspamd_socketpair (wrk->srv_pipe, 0)) {
 		msg_err ("socketpair failure: %s", strerror (errno));
 		rspamd_hard_terminate (rspamd_main);
 	}
@@ -544,13 +564,14 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->index = index;
 	wrk->ctx = cf->ctx;
 	wrk->finish_actions = g_ptr_array_new ();
-
+	wrk->ppid = getpid ();
 	wrk->pid = fork ();
 
 	switch (wrk->pid) {
 	case 0:
 		/* Update pid for logging */
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
+		wrk->pid = getpid ();
 
 		/* Init PRNG after fork */
 		rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);
@@ -617,7 +638,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		close (wrk->srv_pipe[1]);
 		rspamd_socket_nonblocking (wrk->control_pipe[0]);
 		rspamd_socket_nonblocking (wrk->srv_pipe[0]);
-		rspamd_srv_start_watching (wrk, ev_base);
+		rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
 		/* Insert worker into worker's table, pid is index */
 		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
 				wrk->pid), wrk);
@@ -693,4 +714,148 @@ rspamd_worker_is_normal (struct rspamd_worker *w)
 	}
 
 	return FALSE;
+}
+
+struct rspamd_worker_session_elt {
+	void *ptr;
+	guint *pref;
+	const gchar *tag;
+	time_t when;
+};
+
+struct rspamd_worker_session_cache {
+	struct event_base *ev_base;
+	GHashTable *cache;
+	struct rspamd_config *cfg;
+	struct timeval tv;
+	struct event periodic;
+};
+
+static gint
+rspamd_session_cache_sort_cmp (gconstpointer pa, gconstpointer pb)
+{
+	const struct rspamd_worker_session_elt
+			*e1 = *(const struct rspamd_worker_session_elt **)pa,
+			*e2 = *(const struct rspamd_worker_session_elt **)pb;
+
+	return e2->when < e1->when;
+}
+
+static void
+rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
+{
+	struct rspamd_worker_session_cache *c = p;
+	GHashTableIter it;
+	gchar timebuf[32];
+	gpointer k, v;
+	struct rspamd_worker_session_elt *elt;
+	struct tm *tms;
+	GPtrArray *res;
+	guint i;
+
+	if (g_hash_table_size (c->cache) > c->cfg->max_sessions_cache) {
+		res = g_ptr_array_sized_new (g_hash_table_size (c->cache));
+		g_hash_table_iter_init (&it, c->cache);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			g_ptr_array_add (res, v);
+		}
+
+		msg_err ("sessions cache is overflowed %d elements where %d is limit",
+				(gint)res->len, (gint)c->cfg->max_sessions_cache);
+		g_ptr_array_sort (res, rspamd_session_cache_sort_cmp);
+
+		PTR_ARRAY_FOREACH (res, i, elt) {
+			tms = localtime (&elt->when);
+			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+
+			msg_warn ("redundant session; ptr: %p, "
+					"tag: %s, refcount: %d, time: %s",
+					elt->ptr, elt->tag ? elt->tag : "unknown",
+					elt->pref ? *elt->pref : 0,
+					timebuf);
+		}
+	}
+}
+
+void *
+rspamd_worker_session_cache_new (struct rspamd_worker *w,
+		struct event_base *ev_base)
+{
+	struct rspamd_worker_session_cache *c;
+	static const gdouble periodic_interval = 60.0;
+
+	c = g_malloc0 (sizeof (*c));
+	c->ev_base = ev_base;
+	c->cache = g_hash_table_new_full (g_direct_hash, g_direct_equal,
+			NULL, g_free);
+	c->cfg = w->srv->cfg;
+	double_to_tv (periodic_interval, &c->tv);
+	event_set (&c->periodic, -1, EV_TIMEOUT|EV_PERSIST,
+			rspamd_sessions_cache_periodic, c);
+	event_base_set (ev_base, &c->periodic);
+	event_add (&c->periodic, &c->tv);
+
+	return c;
+}
+
+
+void
+rspamd_worker_session_cache_add (void *cache, const gchar *tag,
+		guint *pref, void *ptr)
+{
+	struct rspamd_worker_session_cache *c = cache;
+	struct rspamd_worker_session_elt *elt;
+
+	elt = g_malloc0 (sizeof (*elt));
+	elt->pref = pref;
+	elt->ptr = ptr;
+	elt->tag = tag;
+	elt->when = time (NULL);
+
+	g_hash_table_insert (c->cache, elt->ptr, elt);
+}
+
+
+void
+rspamd_worker_session_cache_remove (void *cache, void *ptr)
+{
+	struct rspamd_worker_session_cache *c = cache;
+
+	g_hash_table_remove (c->cache, ptr);
+}
+
+static void
+rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
+		struct rspamd_monitored *m, gboolean alive,
+		void *ud)
+{
+	struct rspamd_worker *worker = ud;
+	struct rspamd_config *cfg = worker->srv->cfg;
+	struct event_base *ev_base;
+	guchar tag[RSPAMD_MONITORED_TAG_LEN];
+	static struct rspamd_srv_command srv_cmd;
+
+	rspamd_monitored_get_tag (m, tag);
+	ev_base = rspamd_monitored_ctx_get_ev_base (ctx);
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_MONITORED_CHANGE;
+	rspamd_strlcpy (srv_cmd.cmd.monitored_change.tag, tag,
+			sizeof (srv_cmd.cmd.monitored_change.tag));
+	srv_cmd.cmd.monitored_change.alive = alive;
+	srv_cmd.cmd.monitored_change.sender = getpid ();
+	msg_info_config ("broadcast monitored update for %s: %s",
+			srv_cmd.cmd.monitored_change.tag, alive ? "alive" : "dead");
+
+	rspamd_srv_send_command (worker, ev_base, &srv_cmd, -1, NULL, NULL);
+}
+
+void
+rspamd_worker_init_monitored (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver)
+{
+	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
+			worker->srv->cfg, ev_base, resolver->r,
+			rspamd_worker_monitored_on_change, worker);
 }

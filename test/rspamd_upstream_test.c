@@ -78,7 +78,9 @@ rspamd_upstream_test_func (void)
 	 * Test v4/v6 priorities
 	 */
 	nls = rspamd_upstreams_create (cfg->ups_ctx);
-	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
+	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0,
+			RSPAMD_UPSTREAM_PARSE_DEFAULT,
+			NULL));
 	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM, NULL, 0);
 	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
 	g_assert (rspamd_upstream_add_addr (up, paddr));

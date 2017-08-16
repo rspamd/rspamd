@@ -127,7 +127,7 @@ void rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segment
 /**
  * Decrypt and verify data chunk inplace
  * @param data data to decrypt
- * @param len lenght of data
+ * @param len length of data
  * @param pk remote pubkey
  * @param sk local privkey
  * @param sig signature input
@@ -169,7 +169,7 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 /**
  * Decrypt and verify data chunk inplace
  * @param data data to decrypt
- * @param len lenght of data
+ * @param len length of data
  * @param pk remote pubkey
  * @param sk local privkey
  * @param sig signature input
@@ -207,7 +207,7 @@ void rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
  * pubkey
  * @param sig signature source
  * @param m input message
- * @param mlen message lenght
+ * @param mlen message length
  * @param pk public key for verification
  * @return true if signature is valid, false otherwise
  */

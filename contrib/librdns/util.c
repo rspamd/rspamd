@@ -409,12 +409,16 @@ rdns_request_free (struct rdns_request *req)
 						req->async_event);
 				/* Remove from id hashes */
 				HASH_DEL (req->io->requests, req);
+				req->async_event = NULL;
 			}
 			else if (req->state == RDNS_REQUEST_WAIT_SEND) {
 				/* Remove retransmit event */
 				req->async->del_write (req->async->data,
 						req->async_event);
+				HASH_DEL (req->io->requests, req);
+				req->async_event = NULL;
 			}
+
 		}
 #ifdef TWEETNACL
 		if (req->curve_plugin_data != NULL) {
@@ -556,6 +560,7 @@ rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
 {
 	FILE *in;
 	char buf[BUFSIZ];
+	char *p;
 
 	in = fopen (path, "r");
 
@@ -566,6 +571,13 @@ rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
 	while (!feof (in)) {
 		if (fgets (buf, sizeof (buf) - 1, in) == NULL) {
 			break;
+		}
+
+		/* Strip trailing spaces */
+		p = buf + strlen (buf) - 1;
+		while (p > buf &&
+				(*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
+			*p-- = '\0';
 		}
 
 		if (!rdns_resolver_conf_process_line (resolver, buf, cb, ud)) {

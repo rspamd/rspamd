@@ -36,12 +36,14 @@
 #define DEFAULT_RLIMIT_NOFILE 2048
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 60.0 * 5
+#define DEFAULT_MAP_FILE_WATCH_MULTIPLIER 1
 #define DEFAULT_MIN_WORD 4
 #define DEFAULT_MAX_WORD 40
 #define DEFAULT_WORDS_DECAY 200
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
 #define DEFAULT_MAX_SHOTS 100
+#define DEFAULT_MAX_SESSIONS 100
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -136,6 +138,7 @@ rspamd_config_new (void)
 				rspamd_str_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
+	cfg->map_file_watch_multiplier = DEFAULT_MAP_FILE_WATCH_MULTIPLIER;
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;
@@ -181,6 +184,7 @@ rspamd_config_new (void)
 	cfg->redis_pool = rspamd_redis_pool_init ();
 #endif
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
+	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -987,6 +991,7 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 #endif
 		c->rlimit_nofile = 0;
 		c->rlimit_maxcore = 0;
+		c->enabled = TRUE;
 
 		REF_INIT_RETAIN (c, rspamd_worker_conf_dtor);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -1113,7 +1118,7 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 
 	/* Actually, statistics should act like any ordinary symbol */
 	rspamd_symbols_cache_add_symbol (cfg->cache, key, 0, NULL, NULL,
-			SYMBOL_TYPE_CLASSIFIER, -1);
+			SYMBOL_TYPE_CLASSIFIER|SYMBOL_TYPE_NOSTAT, -1);
 }
 
 void

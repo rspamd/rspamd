@@ -1,6 +1,5 @@
 import demjson
 import grp
-import ipaddress
 import os
 import os.path
 import psutil
@@ -200,22 +199,3 @@ def shutdown_process_with_children(pid):
             shutdown_process(child.pid)
         except:
             pass
-
-def wait_for_port(proto, addr, num):
-    i = ipaddress.ip_address(addr)
-    if (i.version == 6):
-        af = socket.AF_INET6
-    else:
-        af = socket.AF_INET
-    while True:
-        try:
-            s = socket.socket(af, proto)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((addr, num))
-            if (proto == socket.SOCK_STREAM):
-                s.listen(0)
-            break
-        except:
-            pass
-            time.sleep(0.01)
-    s.close()

@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "http_private.h"
 #include "unix-std.h"
+#include "zlib.h"
 
 /***
  * @module rspamd_http
@@ -68,11 +69,13 @@ struct lua_http_cbdata {
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
 	gchar *host;
+	const gchar *url;
 	gsize max_size;
 	gint flags;
 	gint fd;
 	gint cbref;
 	gint bodyref;
+	gboolean gzip;
 };
 
 static const int default_http_timeout = 5000;
@@ -202,6 +205,10 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	lua_newtable (cbd->L);
 
 	HASH_ITER (hh, msg->headers, h, htmp) {
+		/*
+		 * Lowercase header name, as Lua cannot search in caseless matter
+		 */
+		rspamd_str_lc (h->combined->str, h->name->len);
 		lua_pushlstring (cbd->L, h->name->begin, h->name->len);
 		lua_pushlstring (cbd->L, h->value->begin, h->value->len);
 		lua_settable (cbd->L, -3);
@@ -339,15 +346,11 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
- * @return {boolean} `true` if a request has been successfuly scheduled. If this value is `false` then some error occurred, the callback thus will not be called
+ * @return {boolean} `true` if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called
  */
 static gint
 lua_http_request (lua_State *L)
 {
-	const gchar *url, *lua_body;
-	gchar *to_resolve;
-	gint cbref;
-	gsize bodylen;
 	struct event_base *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
@@ -358,21 +361,30 @@ lua_http_request (lua_State *L)
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
+	const gchar *url, *lua_body;
+	rspamd_fstring_t *body = NULL;
+	gchar *to_resolve;
+	gint cbref;
+	gsize bodylen;
 	gdouble timeout = default_http_timeout;
 	gint flags = 0;
 	gchar *mime_type = NULL;
 	gsize max_size = 0;
+	gboolean gzip = FALSE;
 
 	if (lua_gettop (L) >= 2) {
 		/* url, callback and event_base format */
 		url = luaL_checkstring (L, 1);
+
 		if (url == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
 			msg_err ("http request has bad params");
 			lua_pushboolean (L, FALSE);
 			return 1;
 		}
+
 		lua_pushvalue (L, 2);
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+
 		if (lua_gettop (L) >= 3 && rspamd_lua_check_udata_maybe (L, 3, "rspamd{ev_base}")) {
 			ev_base = *(struct event_base **)lua_touserdata (L, 3);
 		}
@@ -511,13 +523,13 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			lua_body = lua_tolstring (L, -1, &bodylen);
-			rspamd_http_message_set_body (msg, lua_body, bodylen);
+			body = rspamd_fstring_new_init (lua_body, bodylen);
 		}
 		else if (lua_type (L, -1) == LUA_TUSERDATA) {
 			t = lua_check_text (L, -1);
 			/* TODO: think about zero-copy possibilities */
 			if (t) {
-				rspamd_http_message_set_body (msg, t->start, t->len);
+				body = rspamd_fstring_new_init (t->start, t->len);
 			}
 		}
 		lua_pop (L, 1);
@@ -553,6 +565,15 @@ lua_http_request (lua_State *L)
 
 		if (!!lua_toboolean (L, -1)) {
 			flags |= RSPAMD_LUA_HTTP_FLAG_TEXT;
+		}
+
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "gzip");
+		lua_gettable (L, 1);
+
+		if (!!lua_toboolean (L, -1)) {
+			gzip = TRUE;
 		}
 
 		lua_pop (L, 1);
@@ -604,9 +625,25 @@ lua_http_request (lua_State *L)
 	cbd->local_kp = local_kp;
 	cbd->flags = flags;
 	cbd->max_size = max_size;
+	cbd->url = url;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
+	}
+
+	if (body) {
+		if (gzip) {
+			if (rspamd_fstring_gzip (&body)) {
+				rspamd_http_message_add_header (msg, "Content-Encoding", "gzip");
+			}
+		}
+
+		rspamd_http_message_set_body_from_fstring_steal (msg, body);
+	}
+
+	if (gzip) {
+		cbd->gzip = TRUE;
+		/* TODO: Add client support for gzip */
 	}
 
 	if (session) {
@@ -616,7 +653,7 @@ lua_http_request (lua_State *L)
 				cbd,
 				g_quark_from_static_string ("lua http"));
 		cbd->w = rspamd_session_get_watcher (session);
-		rspamd_session_watcher_push (session);
+		rspamd_session_watcher_push_specific (session, cbd->w);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {

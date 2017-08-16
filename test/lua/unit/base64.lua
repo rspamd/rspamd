@@ -119,7 +119,7 @@ vehemence of any carnal pleasure.]]
     local res = ffi.C.base64_test(true, 1000000, 1024)
     local t2 = ffi.C.rspamd_get_ticks()
 
-    print("Refrence base64 (1K): " .. tostring(t2 - t1) .. " sec")
+    print("Reference base64 (1K): " .. tostring(t2 - t1) .. " sec")
     assert_not_equal(res, 0)
   end)
   test("Base64 test optimized vectors 1K", function()
@@ -135,7 +135,7 @@ vehemence of any carnal pleasure.]]
     local res = ffi.C.base64_test(true, 1000000, 512)
     local t2 = ffi.C.rspamd_get_ticks()
 
-    print("Refrence base64 (512): " .. tostring(t2 - t1) .. " sec")
+    print("Reference base64 (512): " .. tostring(t2 - t1) .. " sec")
     assert_not_equal(res, 0)
   end)
   test("Base64 test optimized vectors 512", function()
@@ -151,7 +151,7 @@ vehemence of any carnal pleasure.]]
     local res = ffi.C.base64_test(true, 100000, 10240)
     local t2 = ffi.C.rspamd_get_ticks()
 
-    print("Refrence base64 (10K): " .. tostring(t2 - t1) .. " sec")
+    print("Reference base64 (10K): " .. tostring(t2 - t1) .. " sec")
     assert_not_equal(res, 0)
   end)
   test("Base64 test optimized vectors 10K", function()

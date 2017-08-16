@@ -169,6 +169,7 @@ so-net.ne.jp
 southwest.com
 spotify.com
 squarespace.com
+steampowered.com
 stumbleupon.com
 surveymonkey.com
 swagbucks.com

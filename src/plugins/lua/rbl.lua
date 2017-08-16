@@ -33,6 +33,7 @@ local hash = require 'rspamd_cryptobox_hash'
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
+local default_monitored = '1.0.0.127'
 
 local symbols = {
   dkim_allow_symbol = 'R_DKIM_ALLOW',
@@ -158,12 +159,17 @@ local function rbl_cb (task)
     return params[to_resolve]
   end
 
-  local havegot = {}
+  local havegot = {
+    emails = {},
+    received = {}
+  }
   local notgot = {}
 
   local alive_rbls = fun.filter(function(_, rbl)
-    if not rbl.monitored:alive() then
-      return false
+    if rbl.monitored then
+      if not rbl.monitored:alive() then
+        return false
+      end
     end
 
     return true
@@ -239,10 +245,11 @@ local function rbl_cb (task)
       if notgot['emails'] then
         return false
       end
-      if not havegot['emails'] then
+      if #havegot['emails'] == 0 then
         havegot['emails'] = task:get_emails()
         if havegot['emails'] == nil then
           notgot['emails'] = true
+          havegot['emails'] = {}
           return false
         end
       end
@@ -261,10 +268,11 @@ local function rbl_cb (task)
       if notgot['received'] then
         return false
       end
-      if not havegot['received'] then
+      if #havegot['received'] == 0 then
         havegot['received'] = task:get_received_headers()
         if next(havegot['received']) == nil then
           notgot['received'] = true
+          havegot['received'] = {}
           return false
         end
       end
@@ -330,7 +338,7 @@ local function rbl_cb (task)
       for _, email in ipairs(havegot['emails']) do
         local to_resolve
         if rbl['hash'] then
-          to_resolve = make_hash(tostring(email), rbl['hash']) .. '.' .. rbl['rbl']
+          to_resolve = make_hash(email:get_user() .. '@' .. email:get_host(), rbl['hash']) .. '.' .. rbl['rbl']
         else
           local upart = email:get_user()
           if validate_dns(upart) then
@@ -453,6 +461,7 @@ local id = rspamd_config:register_symbol({
   flags = 'empty,nice'
 })
 
+local is_monitored = {}
 for key,rbl in pairs(opts['rbls']) do
   (function()
     if rbl['disabled'] then return end
@@ -516,7 +525,7 @@ for key,rbl in pairs(opts['rbls']) do
       if rbl['dkim'] then
         need_dkim = true
       end
-      if(rbl['is_whitelist']) then
+      if (rbl['is_whitelist']) then
             if type(rbl['whitelist_exception']) == 'string' then
               if (rbl['whitelist_exception'] ~= rbl['symbol']) then
                 table.insert(white_symbols, rbl['symbol'])
@@ -542,8 +551,15 @@ for key,rbl in pairs(opts['rbls']) do
       end
     end
     if rbl['rbl'] then
-      rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
-        {rcode = 'nxdomain', prefix = '1.0.0.127'})
+      if not rbl['disable_monitoring'] and not rbl['is_whitelist'] and not is_monitored[rbl['rbl']] then
+        is_monitored[rbl['rbl']] = true
+        rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
+          {
+            rcode = 'nxdomain',
+            prefix = rbl['monitored_address'] or default_monitored
+          })
+      end
+
       rbls[key] = rbl
     end
   end)()

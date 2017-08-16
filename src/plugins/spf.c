@@ -529,7 +529,10 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 
 			l = spf_record_ref (record);
 
-			if (!record->temp_failed && !record->perm_failed && !record->na) {
+			if (record->ttl > 0 &&
+					!record->temp_failed &&
+					!record->perm_failed &&
+					!record->na) {
 				rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
 						record->domain, l,
 						task->tv.tv_sec, record->ttl);

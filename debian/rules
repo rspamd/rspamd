@@ -29,6 +29,7 @@ override_dh_auto_configure:
 		-DENABLE_PCRE2=OFF \
 		-DENABLE_HIREDIS=ON \
 		-DENABLE_LUAJIT=ON \
+		-DENABLE_TORCH=ON \
 		-DWANT_SYSTEMD_UNITS=ON
 
 override_dh_makeshlibs:
@@ -47,3 +48,4 @@ override_dh_auto_clean:
 override_dh_fixperms:
 	dh_fixperms
 	chmod 750 $(CURDIR)/debian/rspamd/var/lib/rspamd
+	chmod 750 $(CURDIR)/debian/rspamd/var/log/rspamd

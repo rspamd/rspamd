@@ -1,5 +1,5 @@
 /*-
- * Copyright 2016 Vsevolod Stakhov
+ * Copyright 2017 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,7 @@
 #include <math.h> /* for pow */
 
 #include "cryptobox.h"
+#include "zlib.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -181,9 +182,10 @@ static gint
 rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 	gboolean async, GList **list)
 {
-	gint fd = -1, r, optlen, on = 1, s_error;
+	gint fd = -1, r, on = 1, s_error;
 	struct addrinfo *cur;
 	gpointer ptr;
+	socklen_t optlen;
 
 	cur = addr;
 	while (cur) {
@@ -294,7 +296,9 @@ rspamd_socket_unix (const gchar *path,
 	gboolean is_server,
 	gboolean async)
 {
-	gint fd = -1, s_error, r, optlen, serrno, on = 1;
+
+	socklen_t optlen;
+	gint fd = -1, s_error, r, serrno, on = 1;
 	struct stat st;
 
 	if (path == NULL)
@@ -604,22 +608,27 @@ err:
 }
 
 gboolean
-rspamd_socketpair (gint pair[2])
+rspamd_socketpair (gint pair[2], gboolean is_stream)
 {
 	gint r, serrno;
 
+	if (!is_stream) {
 #ifdef HAVE_SOCK_SEQPACKET
-	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, pair);
+		r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, pair);
 
-	if (r == -1) {
-		msg_warn ("seqpacket socketpair failed: %d, '%s'",
-				errno,
-				strerror (errno));
-		r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
-	}
+		if (r == -1) {
+			msg_warn ("seqpacket socketpair failed: %d, '%s'",
+					errno,
+					strerror (errno));
+			r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
+		}
 #else
-	r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
+		r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
 #endif
+	}
+	else {
+		r = socketpair (AF_LOCAL, SOCK_STREAM, 0, pair);
+	}
 
 	if (r == -1) {
 		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (
@@ -1613,7 +1622,6 @@ rspamd_thread_func (gpointer ud)
 
 	/* Ignore signals in thread */
 	sigemptyset (&s_mask);
-	sigaddset (&s_mask, SIGTERM);
 	sigaddset (&s_mask, SIGINT);
 	sigaddset (&s_mask, SIGHUP);
 	sigaddset (&s_mask, SIGCHLD);
@@ -1622,7 +1630,7 @@ rspamd_thread_func (gpointer ud)
 	sigaddset (&s_mask, SIGALRM);
 	sigaddset (&s_mask, SIGPIPE);
 
-	sigprocmask (SIG_BLOCK, &s_mask, NULL);
+	pthread_sigmask (SIG_BLOCK, &s_mask, NULL);
 
 	ud = td->func (td->data);
 	g_free (td->name);
@@ -1860,7 +1868,7 @@ rspamd_get_ticks (void)
 	struct timeval tv;
 
 	(void)gettimeofday (&tv, NULL);
-	res = (double)tv.tv_sec + tv.tv_nsec / 1000000.;
+	res = (double)tv.tv_sec + tv.tv_usec / 1000000.;
 #endif
 
 	return res;
@@ -1895,14 +1903,21 @@ gdouble
 rspamd_get_calendar_ticks (void)
 {
 	gdouble res;
+#ifdef HAVE_CLOCK_GETTIME
+	struct timespec ts;
+
+	clock_gettime (CLOCK_REALTIME, &ts);
+	res = ts_to_double (&ts);
+#else
 	struct timeval tv;
 
 	if (gettimeofday (&tv, NULL) == 0) {
-		res = (gdouble)tv.tv_sec + tv.tv_usec / 1e6f;
+		res = tv_to_double (&tv);
 	}
 	else {
 		res = time (NULL);
 	}
+#endif
 
 	return res;
 }
@@ -1922,7 +1937,7 @@ rspamd_random_hex (guchar *buf, guint64 len)
 
 	g_assert (len > 0);
 
-	ottery_rand_bytes (buf, (len / 2.0 + 0.5));
+	ottery_rand_bytes (buf, ceil (len / 2.0));
 
 	for (i = (gint64)len - 1; i >= 0; i -= 2) {
 		buf[i] = hexdigests[buf[i / 2] & 0xf];
@@ -2422,7 +2437,7 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode,
 		gboolean allow_symlink)
 {
 	struct stat sb;
-	int fd;
+	int fd, flags = oflags;
 
 	if (lstat (fname, &sb) == -1) {
 
@@ -2431,18 +2446,39 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode,
 		}
 	}
 	else if (!S_ISREG (sb.st_mode)) {
-		return -1;
+		if (S_ISLNK (sb.st_mode)) {
+			if (!allow_symlink) {
+				return -1;
+			}
+		}
+		else {
+			return -1;
+		}
 	}
+
+#ifdef HAVE_OCLOEXEC
+	flags |= O_CLOEXEC;
+#endif
 
 #ifdef HAVE_ONOFOLLOW
 	if (!allow_symlink) {
-		fd = open (fname, oflags | O_NOFOLLOW, mode);
+		flags |= O_NOFOLLOW;
+		fd = open (fname, flags, mode);
 	}
 	else {
-		fd = open (fname, oflags, mode);
+		fd = open (fname, flags, mode);
 	}
 #else
-	fd = open (fname, oflags, mode);
+	fd = open (fname, flags, mode);
+#endif
+
+#ifndef HAVE_OCLOEXEC
+	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		close (fd);
+
+		return -1;
+	}
 #endif
 
 	return (fd);
@@ -2652,4 +2688,66 @@ rspamd_tm_to_time (const struct tm *tm, glong tz)
 	result -= offset;
 
 	return result;
+}
+
+gboolean
+rspamd_fstring_gzip (rspamd_fstring_t **in)
+{
+	z_stream strm;
+	gint rc;
+	rspamd_fstring_t *comp, *buf = *in;
+	gchar *p;
+	gsize remain;
+
+	memset (&strm, 0, sizeof (strm));
+	rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
+
+	if (rc != Z_OK) {
+		return FALSE;
+	}
+
+	comp = rspamd_fstring_sized_new (MIN (buf->len, 32768));
+
+	strm.avail_in = buf->len;
+	strm.next_in = (guchar *)buf->str;
+	p = comp->str;
+	remain = comp->allocated;
+
+	while (strm.avail_in != 0) {
+		strm.avail_out = remain;
+		strm.next_out = p;
+
+		rc = deflate (&strm, Z_FINISH);
+
+		if (rc != Z_OK) {
+			if (rc == Z_STREAM_END) {
+				break;
+			}
+			else {
+				rspamd_fstring_free (comp);
+				deflateEnd (&strm);
+
+				return FALSE;
+			}
+		}
+
+		comp->len = strm.total_out;
+
+		if (strm.avail_out == 0 && strm.avail_in != 0) {
+			/* Need to allocate more */
+			remain = comp->len;
+			comp = rspamd_fstring_grow (comp, comp->allocated +
+					strm.avail_in + 10);
+			p = comp->str + remain;
+			remain = comp->allocated - remain;
+		}
+	}
+
+	deflateEnd (&strm);
+	comp->len = strm.total_out;
+	rspamd_fstring_free (buf); /* We replace buf with its compressed version */
+	*in = comp;
+
+	return TRUE;
 }

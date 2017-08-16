@@ -63,6 +63,7 @@ static gboolean profile = FALSE;
 static gboolean skip_images = FALSE;
 static gboolean skip_attachments = FALSE;
 static gchar *key = NULL;
+static gchar *user_agent = "rspamc";
 static GList *children;
 
 #define ADD_CLIENT_HEADER(o, n, v) do { \
@@ -131,7 +132,7 @@ static GOptionEntry entries[] =
 	   "Use specified pubkey to encrypt request", NULL },
 	{ "exec", 'e', 0, G_OPTION_ARG_STRING, &execute,
 	   "Execute the specified command and pass output to it", NULL },
-	{ "mime", 'e', 0, G_OPTION_ARG_NONE, &mime_output,
+	{ "mime", 'm', 0, G_OPTION_ARG_NONE, &mime_output,
 	   "Write mime body of message with headers instead of just a scan's result", NULL },
 	{"header", 0, 0, G_OPTION_ARG_STRING_ARRAY, &http_headers,
 		"Add custom HTTP header to query (can be repeated)", NULL},
@@ -151,6 +152,8 @@ static GOptionEntry entries[] =
 	   "Skip images when learning/unlearning fuzzy", NULL },
 	{ "skip-attachments", '\0', 0, G_OPTION_ARG_NONE, &skip_attachments,
 	   "Skip attachments when learning/unlearning fuzzy", NULL },
+	{ "user-agent", 'U', 0, G_OPTION_ARG_STRING, &user_agent,
+	   "Use specific User-Agent instead of \"rspamc\"", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -553,7 +556,9 @@ add_options (GQueue *opts)
 	GString *numbuf;
 	gchar **hdr, **rcpt;
 
-	ADD_CLIENT_HEADER (opts, "User-Agent", "rspamc");
+	if (user_agent) {
+		ADD_CLIENT_HEADER (opts, "User-Agent", user_agent);
+	}
 
 	if (ip != NULL) {
 		rspamd_inet_addr_t *addr = NULL;

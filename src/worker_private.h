@@ -27,6 +27,13 @@ static const guint64 rspamd_worker_magic = 0xb48abc69d601dc1dULL;
 
 struct rspamd_worker_ctx {
 	guint64 magic;
+	/* Events base */
+	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
+
 	guint32 timeout;
 	struct timeval io_tv;
 	/* Detect whether this worker is mime worker    */
@@ -35,22 +42,16 @@ struct rspamd_worker_ctx {
 	gboolean is_http;
 	/* JSON output                                  */
 	gboolean is_json;
-	/* Allow learning throught worker				*/
+	/* Allow learning through worker				*/
 	gboolean allow_learn;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
 	/* Limit of tasks */
 	guint32 max_tasks;
 	/* Maximum time for task processing */
 	gdouble task_timeout;
-	/* Events base */
-	struct event_base *ev_base;
 	/* Encryption key */
 	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */
 	struct rspamd_keypair_cache *keys_cache;
-	/* Configuration */
-	struct rspamd_config *cfg;
 };
 
 /*

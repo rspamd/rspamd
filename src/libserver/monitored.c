@@ -27,7 +27,7 @@ struct rspamd_monitored_methods {
 	void * (*monitored_config) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx,
 			const ucl_object_t *opts);
-	void (*monitored_update) (struct rspamd_monitored *m,
+	gboolean (*monitored_update) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx, gpointer ud);
 	void (*monitored_dtor) (struct rspamd_monitored *m,
 			struct rspamd_monitored_ctx *ctx, gpointer ud);
@@ -39,6 +39,9 @@ struct rspamd_monitored_ctx {
 	struct rdns_resolver *resolver;
 	struct event_base *ev_base;
 	GPtrArray *elts;
+	GHashTable *helts;
+	mon_change_cb change_cb;
+	gpointer ud;
 	gdouble monitoring_interval;
 	guint max_errors;
 	gboolean initialized;
@@ -47,6 +50,7 @@ struct rspamd_monitored_ctx {
 struct rspamd_monitored {
 	gchar *url;
 	gdouble monitoring_interval;
+	gdouble monitoring_mult;
 	gdouble offline_time;
 	gdouble total_offline_time;
 	gdouble latency;
@@ -59,7 +63,7 @@ struct rspamd_monitored {
 	struct rspamd_monitored_ctx *ctx;
 	struct rspamd_monitored_methods proc;
 	struct event periodic;
-	gchar tag[MEMPOOL_UID_LEN];
+	gchar tag[RSPAMD_MONITORED_TAG_LEN];
 };
 
 #define msg_err_mon(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -88,12 +92,40 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			msg_debug_mon ("%s on resolving %s, %d retries left",
 					error, m->url,  m->max_errors - m->cur_errors);
 			m->cur_errors ++;
+			/* Reduce timeout */
+			rspamd_monitored_stop (m);
+
+			if (m->monitoring_mult > 0.1) {
+				m->monitoring_mult /= 2.0;
+			}
+
+			rspamd_monitored_start (m);
 		}
 		else {
 			msg_info_mon ("%s on resolving %s, disable object",
 					error, m->url);
 			m->alive = FALSE;
 			m->offline_time = rspamd_get_calendar_ticks ();
+			rspamd_monitored_stop (m);
+			m->monitoring_mult = 1.0;
+			rspamd_monitored_start (m);
+
+			if (m->ctx->change_cb) {
+				m->ctx->change_cb (m->ctx, m, FALSE, m->ctx->ud);
+			}
+		}
+	}
+	else {
+		if (m->monitoring_mult < 8.0) {
+			/* Increase timeout */
+			rspamd_monitored_stop (m);
+			m->monitoring_mult *= 2.0;
+			rspamd_monitored_start (m);
+		}
+		else {
+			rspamd_monitored_stop (m);
+			m->monitoring_mult = 8.0;
+			rspamd_monitored_start (m);
 		}
 	}
 }
@@ -104,6 +136,7 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 	gdouble t;
 
 	m->cur_errors = 0;
+	m->monitoring_mult = 1.0;
 
 	if (!m->alive) {
 		t = rspamd_get_calendar_ticks ();
@@ -115,6 +148,12 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 		m->offline_time = 0;
 		m->nchecks = 1;
 		m->latency = lat;
+		rspamd_monitored_stop (m);
+		rspamd_monitored_start (m);
+
+		if (m->ctx->change_cb) {
+			m->ctx->change_cb (m->ctx, m, TRUE, m->ctx->ud);
+		}
 	}
 	else {
 		m->latency = (lat + m->latency * m->nchecks) / (m->nchecks + 1);
@@ -128,15 +167,19 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 	struct rspamd_monitored *m = ud;
 	struct timeval tv;
 	gdouble jittered;
+	gboolean ret = FALSE;
 
-	jittered = rspamd_time_jitter (m->monitoring_interval, 0.0);
+	jittered = rspamd_time_jitter (m->monitoring_interval * m->monitoring_mult,
+			0.0);
 	double_to_tv (jittered, &tv);
 
 	if (m->proc.monitored_update) {
-		m->proc.monitored_update (m, m->ctx, m->proc.ud);
+		ret = m->proc.monitored_update (m, m->ctx, m->proc.ud);
 	}
 
-	event_add (&m->periodic, &tv);
+	if (ret) {
+		event_add (&m->periodic, &tv);
+	}
 }
 
 struct rspamd_dns_monitored_conf {
@@ -299,7 +342,7 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 	}
 }
 
-void
+static gboolean
 rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 		struct rspamd_monitored_ctx *ctx, gpointer ud)
 {
@@ -312,10 +355,14 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 
 		m->cur_errors ++;
 		rspamd_monitored_propagate_error (m, "failed to make DNS request");
+
+		return FALSE;
 	}
 	else {
 		conf->check_tm = rspamd_get_calendar_ticks ();
 	}
+
+	return TRUE;
 }
 
 void
@@ -342,6 +389,7 @@ rspamd_monitored_ctx_init (void)
 	ctx->monitoring_interval = default_monitoring_interval;
 	ctx->max_errors = default_max_errors;
 	ctx->elts = g_ptr_array_new ();
+	ctx->helts = g_hash_table_new (g_str_hash, g_str_equal);
 
 	return ctx;
 }
@@ -351,7 +399,9 @@ void
 rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 		struct rspamd_config *cfg,
 		struct event_base *ev_base,
-		struct rdns_resolver *resolver)
+		struct rdns_resolver *resolver,
+		mon_change_cb change_cb,
+		gpointer ud)
 {
 	struct rspamd_monitored *m;
 	guint i;
@@ -361,21 +411,37 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	ctx->resolver = resolver;
 	ctx->cfg = cfg;
 	ctx->initialized = TRUE;
+	ctx->change_cb = change_cb;
+	ctx->ud = ud;
+
+	if (cfg->monitored_interval != 0) {
+		ctx->monitoring_interval = cfg->monitored_interval;
+	}
 
 	/* Start all events */
 	for (i = 0; i < ctx->elts->len; i ++) {
 		m = g_ptr_array_index (ctx->elts, i);
+		m->monitoring_mult = 0;
 		rspamd_monitored_start (m);
+		m->monitoring_mult = 1.0;
 	}
 }
 
 
+struct event_base *
+rspamd_monitored_ctx_get_ev_base (struct rspamd_monitored_ctx *ctx)
+{
+	return ctx->ev_base;
+}
+
+
 struct rspamd_monitored *
-rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
+rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 		const gchar *line,
 		enum rspamd_monitored_type type,
 		enum rspamd_monitored_flags flags,
-		const ucl_object_t *opts)
+		const ucl_object_t *opts,
+		const gchar *loc)
 {
 	struct rspamd_monitored *m;
 	rspamd_cryptobox_hash_state_t st;
@@ -390,6 +456,7 @@ rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
 	m->url = g_strdup (line);
 	m->ctx = ctx;
 	m->monitoring_interval = ctx->monitoring_interval;
+	m->monitoring_mult = 1.0;
 	m->max_errors = ctx->max_errors;
 	m->alive = TRUE;
 
@@ -415,9 +482,19 @@ rspamd_monitored_create (struct rspamd_monitored_ctx *ctx,
 	/* Create a persistent tag */
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
 	rspamd_cryptobox_hash_update (&st, m->url, strlen (m->url));
+	rspamd_cryptobox_hash_update (&st, loc, strlen (loc));
 	rspamd_cryptobox_hash_final (&st, cksum);
 	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
 	rspamd_strlcpy (m->tag, cksum_encoded, sizeof (m->tag));
+
+	if (g_hash_table_lookup (ctx->helts, m->tag) != NULL) {
+		msg_err ("monitored error: tag collision detected for %s; "
+				"url: %s", m->tag, m->url);
+	}
+	else {
+		g_hash_table_insert (ctx->helts, m->tag, m);
+	}
+
 	g_free (cksum_encoded);
 
 	g_ptr_array_add (ctx->elts, m);
@@ -435,6 +512,18 @@ rspamd_monitored_alive (struct rspamd_monitored *m)
 	g_assert (m != NULL);
 
 	return m->alive;
+}
+
+gboolean
+rspamd_monitored_set_alive (struct rspamd_monitored *m, gboolean alive)
+{
+	gboolean st;
+
+	g_assert (m != NULL);
+	st = m->alive;
+	m->alive = alive;
+
+	return st;
 }
 
 gdouble
@@ -475,7 +564,6 @@ rspamd_monitored_stop (struct rspamd_monitored *m)
 {
 	g_assert (m != NULL);
 
-	m->alive = FALSE;
 	if (event_get_base (&m->periodic)) {
 		event_del (&m->periodic);
 	}
@@ -489,7 +577,8 @@ rspamd_monitored_start (struct rspamd_monitored *m)
 
 	g_assert (m != NULL);
 	msg_debug_mon ("started monitored object %s", m->url);
-	jittered = rspamd_time_jitter (m->monitoring_interval, 0.0);
+	jittered = rspamd_time_jitter (m->monitoring_interval * m->monitoring_mult,
+			0.0);
 	double_to_tv (jittered, &tv);
 
 	if (event_get_base (&m->periodic)) {
@@ -519,4 +608,27 @@ rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx)
 
 	g_ptr_array_free (ctx->elts, TRUE);
 	g_slice_free1 (sizeof (*ctx), ctx);
+}
+
+struct rspamd_monitored *
+rspamd_monitored_by_tag (struct rspamd_monitored_ctx *ctx,
+		guchar tag[RSPAMD_MONITORED_TAG_LEN])
+{
+	struct rspamd_monitored *res;
+	gchar rtag[RSPAMD_MONITORED_TAG_LEN];
+
+	rspamd_strlcpy (rtag, tag, sizeof (rtag));
+	res = g_hash_table_lookup (ctx->helts, rtag);
+
+	return res;
+}
+
+
+void
+rspamd_monitored_get_tag (struct rspamd_monitored *m,
+		guchar tag_out[RSPAMD_MONITORED_TAG_LEN])
+{
+	g_assert (m != NULL);
+
+	rspamd_strlcpy (tag_out, m->tag, RSPAMD_MONITORED_TAG_LEN);
 }

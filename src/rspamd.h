@@ -57,6 +57,7 @@
  */
 struct rspamd_worker {
 	pid_t pid;                      /**< pid of worker									*/
+	pid_t ppid;                     /**< pid of parent									*/
 	guint index;                    /**< index number									*/
 	guint nconns;                   /**< current connections count						*/
 	gboolean wanna_die;             /**< worker is terminating							*/
@@ -78,13 +79,21 @@ struct rspamd_worker {
 
 struct rspamd_abstract_worker_ctx {
 	guint64 magic;
+	/* Events base */
+	struct event_base *ev_base;
+	/* DNS resolver */
+	struct rspamd_dns_resolver *resolver;
+	/* Config */
+	struct rspamd_config *cfg;
 	char data[];
 };
 
 struct rspamd_worker_signal_handler;
+typedef gboolean (*rspamd_worker_signal_handler) (
+		struct rspamd_worker_signal_handler *, void *ud);
 
 struct rspamd_worker_signal_cb {
-	void (*handler) (struct rspamd_worker_signal_handler *, void *ud);
+	rspamd_worker_signal_handler handler;
 	void *handler_data;
 	struct rspamd_worker_signal_cb *next, *prev;
 };
