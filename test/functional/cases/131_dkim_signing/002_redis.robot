@@ -14,7 +14,7 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -u  bob@rspamd.tk
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -u  bob@cacophony.za.org
   Check Rspamc  ${result}  DKIM-Signature:
   Should Contain  ${result.stdout}  DKIM_SIGNED (1.00)
 
@@ -29,9 +29,9 @@ DKIM Signing Setup
   Set Suite Variable  ${PLUGIN_CONFIG}
   Generic Setup  PLUGIN_CONFIG
   Run Redis
-  Redis HSET  TEST_DKIM_SELECTORS  rspamd.tk  test
+  Redis HSET  TEST_DKIM_SELECTORS  cacophony.za.org  dkim
   ${key} =  Get File  ${TESTDIR}/configs/dkim.key
-  Redis HSET  TEST_DKIM_KEYS  test.rspamd.tk  ${key}
+  Redis HSET  TEST_DKIM_KEYS  dkim.cacophony.za.org  ${key}
 
 DKIM Signing Teardown
   Normal Teardown

@@ -14,7 +14,7 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 TEST SIGNED
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -u  bob@rspamd.tk
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -u  bob@cacophony.za.org
   Check Rspamc  ${result}  DKIM-Signature:
   Should Contain  ${result.stdout}  DKIM_SIGNED (1.00)
 

@@ -17,7 +17,7 @@ DMARC NONE PASS DKIM
 
 DMARC NONE PASS SPF
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/fail_none.eml
-  ...  -i  212.47.245.199  --from  foo@rspamd.tk
+  ...  -i  8.8.4.4  --from  foo@spf.cacophony.za.org
   Check Rspamc  ${result}  DMARC_POLICY_ALLOW
 
 DMARC NONE FAIL
