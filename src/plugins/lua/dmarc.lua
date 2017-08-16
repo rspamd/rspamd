@@ -54,7 +54,7 @@ Subject: Report Domain: %s
 Date: %s
 MIME-Version: 1.0
 Message-ID: <%s>
-Content-Type: multipart/alternative;
+Content-Type: multipart/mixed;
 	boundary="----=_NextPart_000_024E_01CC9B0A.AFE54C00"
 
 This is a multipart message in MIME format.
