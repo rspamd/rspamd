@@ -21,28 +21,30 @@ function utility.print_table(_table)
 end
 
 function utility.get_all_symbols(logs)
-   -- Returns a list of all symbols in ascending order
+   -- Returns a list of all symbols
    
-   local symbols_table = {}
-
+   local symbols_set = {}
+   local cnt = 0
+   
    for _, line in pairs(logs) do
       line = utility.string_split(line, " ")
-      for i=5,#line do
-	 if symbols_table[line[i]] == nil then
-	    symbols_table[line[i]] = true
+      for i=4,#line do
+	 line[i] = line[i]:gsub("%s+", "")
+	 if not symbols_set[line[i]] then
+	    symbols_set[line[i]] = true
 	 end
       end
    end
 
-   local symbols_set = {}
+   local all_symbols = {}
    
-   for key, value in pairs(symbols_table) do
-      symbols_set[#symbols_set + 1] = key
+   for symbol, value in pairs(symbols_set) do
+      all_symbols[#all_symbols + 1] = symbol
    end
 
-   table.sort(symbols_set)
+   table.sort(all_symbols)
    
-   return symbols_set   
+   return all_symbols
 end
 
 function utility.list_directory(dir_path)

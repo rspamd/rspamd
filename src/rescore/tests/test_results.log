@@ -1,7 +1,7 @@
-f1 HAM 11 action A
-f2 HAM 11 action A
-f3 HAM 0 action A C
-f4 HAM 0 action A C
-f5 SPAM 11 action A B C
-f6 SPAM 12 action A B C
-f7 SPAM 0 action A B
+HAM 11 action A
+HAM 11 action A
+HAM 0 action A C
+HAM 0 action A C
+SPAM 11 action A B C
+SPAM 12 action A B C
+SPAM 0 action A B
