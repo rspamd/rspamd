@@ -62,7 +62,7 @@ void rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *bk,
  * @param src
  */
 void rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
-		GQueue *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+		GArray *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
 		void *ud);
 
 /**

@@ -34,7 +34,7 @@ static void rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_check_cb cb, void *ud,
 		void *subr_ud);
 static void rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
-		GQueue *updates, const gchar *src,
+		GArray *updates, const gchar *src,
 		rspamd_fuzzy_update_cb cb, void *ud,
 		void *subr_ud);
 static void rspamd_fuzzy_backend_count_sqlite (struct rspamd_fuzzy_backend *bk,
@@ -60,7 +60,7 @@ struct rspamd_fuzzy_backend_subr {
 			rspamd_fuzzy_check_cb cb, void *ud,
 			void *subr_ud);
 	void (*update) (struct rspamd_fuzzy_backend *bk,
-			GQueue *updates, const gchar *src,
+			GArray *updates, const gchar *src,
 			rspamd_fuzzy_update_cb cb, void *ud,
 			void *subr_ud);
 	void (*count) (struct rspamd_fuzzy_backend *bk,
@@ -155,23 +155,21 @@ rspamd_fuzzy_backend_check_sqlite (struct rspamd_fuzzy_backend *bk,
 
 static void
 rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
-		GQueue *updates, const gchar *src,
+		GArray *updates, const gchar *src,
 		rspamd_fuzzy_update_cb cb, void *ud,
 		void *subr_ud)
 {
 	struct rspamd_fuzzy_backend_sqlite *sq = subr_ud;
 	gboolean success = FALSE;
-	GList *cur;
+	guint i;
 	struct fuzzy_peer_cmd *io_cmd;
 	struct rspamd_fuzzy_cmd *cmd;
 	gpointer ptr;
 	guint nupdates = 0;
 
 	if (rspamd_fuzzy_backend_sqlite_prepare_update (sq, src)) {
-		cur = updates->head;
-
-		while (cur) {
-			io_cmd = cur->data;
+		for (i = 0; i < updates->len; i ++) {
+			io_cmd = &g_array_index (updates, struct fuzzy_peer_cmd, i);
 
 			if (io_cmd->is_shingle) {
 				cmd = &io_cmd->cmd.shingle.basic;
@@ -190,7 +188,6 @@ rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 			}
 
 			nupdates ++;
-			cur = g_list_next (cur);
 		}
 
 		if (rspamd_fuzzy_backend_sqlite_finish_update (sq, src,
@@ -326,7 +323,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *bk,
 
 void
 rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
-		GQueue *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
+		GArray *updates, const gchar *src, rspamd_fuzzy_update_cb cb,
 		void *ud)
 {
 	g_assert (bk != NULL);

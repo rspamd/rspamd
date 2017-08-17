@@ -29,7 +29,7 @@ void rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_check_cb cb, void *ud,
 		void *subr_ud);
 void rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
-		GQueue *updates, const gchar *src,
+		GArray *updates, const gchar *src,
 		rspamd_fuzzy_update_cb cb, void *ud,
 		void *subr_ud);
 void rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
