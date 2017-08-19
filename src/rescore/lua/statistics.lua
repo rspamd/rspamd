@@ -1,7 +1,7 @@
 local utility = require "utility"
 local argparse = require "argparse"
 
-local function generate_statistics(logs, threshold)
+function generate_statistics(logs, threshold)
 
    -- Returns file_stats table and list of symbol_stats table.
 
@@ -29,8 +29,9 @@ local function generate_statistics(logs, threshold)
    local no_of_ham = 0
 
    for _, log in pairs(logs) do
+      log = utility.trim(log)
       log = utility.string_split(log, " ")
-
+      
       local is_spam = (log[1] == "SPAM")
       local score = tonumber(log[2])
 
@@ -52,7 +53,7 @@ local function generate_statistics(logs, threshold)
 	 true_negatives = true_negatives + 1
       end
 
-      for i=4, #log do
+      for i=4, #log do	 
 	 if all_symbols_stats[log[i]] == nil then
 	    all_symbols_stats[log[i]] =
 	       {
@@ -109,11 +110,11 @@ local function generate_statistics(logs, threshold)
       symbol_stats.spam_overall = symbol_stats.spam_percent /
 	 (symbol_stats.spam_percent + symbol_stats.ham_percent)
    end
-
+   
    return file_stats, all_symbols_stats
 end
 
-local function write_statistics(file_stats, all_symbol_stats, threshold)
+function write_statistics(file_stats, all_symbol_stats, threshold)
 
    local file_stat_format = [[
 Number of emails: %d
@@ -139,7 +140,7 @@ Overall accuracy: %.2f %%
 	       file_stats.false_negative_rate,
 	       file_stats.overall_accuracy))
 
-   local symbol_stat_format = "%-30s %-9s %-8s %-8s %-5s\n"
+   local symbol_stat_format = "%-35s %-9s %-8s %-8s %-5s\n"
    io.write("\nSymbol statistics\n")
    io.write(string.format(symbol_stat_format,
 			  "NAME",
@@ -173,6 +174,3 @@ local logs = utility.read_log_file(args.path)
 file_stats, all_symbol_stats = generate_statistics(logs, args.threshold)
 
 write_statistics(file_stats, all_symbol_stats, args.threshold)
-
-
-
