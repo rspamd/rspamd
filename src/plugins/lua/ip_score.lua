@@ -20,7 +20,6 @@ end
 
 -- IP score is a module that set ip score of specific ip, asn, country
 local rspamd_logger = require "rspamd_logger"
-local rspamd_regexp = require "rspamd_regexp"
 local rspamd_util = require "rspamd_util"
 local rspamd_lua_utils = require "lua_util"
 
