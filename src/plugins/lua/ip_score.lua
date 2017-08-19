@@ -57,8 +57,6 @@ local options = {
   score_divisor = 1,
 }
 
-local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
-
 local function ip_score_hash_key(asn, country, ipnet, ip)
   -- We use the most common attribute as hashing key
   if country then
@@ -231,7 +229,7 @@ local ip_score_check = function(task)
       -- XXX: upstreams
     end
     local function calculate_score(score)
-      local parts = asn_re:split(score)
+      local parts = rspamd_lua_utils.rspamd_str_split(score, '|')
       local rep = tonumber(parts[1])
       local total = tonumber(parts[2])
 
@@ -372,7 +370,7 @@ if redis_params then
   -- Register ip_score module
   rspamd_config:register_symbol({
     name = 'IPSCORE_SAVE',
-    type = 'postfilter',
+    type = 'postfilter,nostat',
     priority = 5,
     callback = ip_score_set,
   })
