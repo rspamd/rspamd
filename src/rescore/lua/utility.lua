@@ -1,3 +1,5 @@
+local json = require "json"
+
 local utility = {}
 
 function utility.round(num, places)
@@ -93,6 +95,27 @@ function utility.get_all_logs(dir_path)
    end
 
    return all_logs
+end
+
+function utility.get_all_symbol_scores()
+
+   local output = assert(io.popen("rspamc counters -j --compact"))
+   output = output:read("*all")
+   output = json.decode(output)
+
+   symbol_scores = {}
+   
+   for _, symbol_info in pairs(output) do
+      symbol_scores[symbol_info.symbol] = symbol_info.weight
+   end
+
+   return symbol_scores
+end
+
+function utility.trim(str)
+
+   return (str:gsub("^%s*(.-)%s*$", "%1"))
+
 end
 
 return utility
