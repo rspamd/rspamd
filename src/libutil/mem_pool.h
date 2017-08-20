@@ -110,6 +110,7 @@ typedef struct memory_pool_stat_s {
 	guint shared_chunks_allocated;      /**< shared chunks allocated							*/
 	guint chunks_freed;                 /**< chunks freed										*/
 	guint oversized_chunks;             /**< oversized chunks									*/
+	guint fragmented_size;                /**< fragmentation size								*/
 } rspamd_mempool_stat_t;
 
 

@@ -317,6 +317,8 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 			}
 			else {
 				mem_pool_stat->oversized_chunks++;
+				g_atomic_int_add (&mem_pool_stat->fragmented_size,
+						free);
 				new = rspamd_mempool_chain_new (
 						size + pool->elt_len + MEM_ALIGNMENT, pool_type);
 			}

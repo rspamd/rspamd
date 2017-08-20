@@ -2646,6 +2646,8 @@ rspamd_controller_handle_stat_common (
 	ucl_object_insert_key (top,
 		ucl_object_fromint (
 			mem_st.oversized_chunks), "chunks_oversized", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (mem_st.fragmented_size), "fragmented", 0, false);
 
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;
