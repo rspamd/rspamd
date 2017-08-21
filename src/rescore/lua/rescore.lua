@@ -7,10 +7,6 @@ local json = require "json"
 
 local rescore_utility = require "rescore_utility"
 
-local function inspect(tab)
-   rspamd_logger.infox("%s", tab)
-end
-
 local function weight_to_score(weight, bias, threshold) 
    return weight * threshold / bias
 end
