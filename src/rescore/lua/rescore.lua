@@ -5,7 +5,7 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local json = require "json"
 
-local utility = require "utility"
+local rescore_utility = require "rescore_utility"
 
 local function inspect(tab)
    rspamd_logger.infox("%s", tab)
@@ -76,31 +76,59 @@ local function init_weights(all_symbols, original_symbol_scores)
    return weights   
 end
 
-local function write_new_log_file(logs, all_symbols, new_score, file_path)
+local function shuffle(logs)
+
+   local size = #logs
+   for i = size, 1, -1 do
+      local rand = math.random(size)
+      logs[i], logs[rand] = logs[rand], logs[i]
+   end
+
+end
+
+local function split_train_test(logs, split_percent)
+
+   if not split_percent then
+      split_percent = 70
+   end
+   
+   local split_index = #logs * split_percent / 100
+
+   local test_logs = {}
+   local train_logs = {}
+
+   for i=1,split_index do
+      train_logs[#train_logs + 1] = logs[i]
+   end   
+   
+   for i=split_index + 1, #logs do
+      test_logs[#test_logs + 1] = logs[i]
+   end
+
+   return train_logs, test_logs
+end
+
+
+local function update_logs(logs, all_symbols, new_scores)
 
    local new_symbol_scores = {}
 
    for idx, symbol in pairs(all_symbols) do
-      new_symbol_scores[symbol] = new_score[idx]
+      new_symbol_scores[symbol] = new_scores[idx]
    end
 
-   local f = io.open(file_path, "w")
-
-   for _, log in pairs(logs) do
-      log = utility.string_split(log, " ")
+   for i, log in ipairs(logs) do
+      log = rescore_utility.string_split(log, " ")
       local score = 0
       for i=4,#log do
 	 log[i] = log[i]:gsub("%s+", "")
 	 score = score + new_symbol_scores[log[i]]
       end
-      log[2] = utility.round(score, 2)
+      log[2] = rescore_utility.round(score, 2)
 
-      for k, v in pairs(log) do
-	 f:write(v .. " ")
-      end
-      f:write("\r\n")
+      logs[i] = table.concat(log, " ")
    end
-   
+
 end
 
 local function write_scores(all_symbols, new_scores, file_path)
@@ -122,8 +150,46 @@ local function print_score_diff(all_symbols, new_scores, original_symbol_scores)
       print(string.format("%-35s %-10s %-10s",
 			  symbol,
 			  original_symbol_scores[symbol] or 0,
-			  utility.round(new_scores[idx], 2)))
+			  rescore_utility.round(new_scores[idx], 2)))
    end
+
+   print "\nClass changes \n"
+   for idx, symbol in pairs(all_symbols) do
+      if original_symbol_scores[symbol] ~= nil then
+	 if (original_symbol_scores[symbol] > 0 and new_scores[idx] < 0) or
+	 (original_symbol_scores[symbol] < 0 and new_scores[idx] > 0) then
+	       print(string.format("%-35s %-10s %-10s",
+				   symbol,
+				   original_symbol_scores[symbol] or 0,
+				   rescore_utility.round(new_scores[idx], 2)))
+	 end
+      end
+
+   end
+
+   
+   
+end
+
+local function print_stats(logs, threshold)
+
+   local file_stats, _ = rescore_utility.generate_statistics_from_logs(logs, threshold)
+
+   local file_stat_format = [[
+F-score: %.2f
+False positive rate: %.2f %%
+False negative rate: %.2f %%
+Overall accuracy: %.2f %%
+]]
+
+   io.write("\nStatistics at threshold: " .. threshold .. "\n")
+   
+   io.write(string.format(file_stat_format,
+			  file_stats.fscore,
+			  file_stats.false_positive_rate,
+			  file_stats.false_negative_rate,
+			  file_stats.overall_accuracy))
+
 end
 
 local parser = argparse() {
@@ -141,36 +207,42 @@ parser:flag("--diff", "Print score diff")
 
 local params = parser:parse()
 
-local logs = utility.get_all_logs(params.logdir)
-local all_symbols = utility.get_all_symbols(logs)
-local original_symbol_scores = utility.get_all_symbol_scores()
+local logs = rescore_utility.get_all_logs(params.logdir)
+local all_symbols = rescore_utility.get_all_symbols(logs)
+local original_symbol_scores = rescore_utility.get_all_symbol_scores()
 
-local dataset = make_dataset_from_logs(logs, all_symbols)
+shuffle(logs)
+
+local train_logs, test_logs = split_train_test(logs)
+
+local dataset = make_dataset_from_logs(train_logs, all_symbols)
 
 -- Start of perceptron training
 
 local input_size = #all_symbols
-local module = nn.Linear(input_size, 1)
+local linear_module = nn.Linear(input_size, 1)
 
-module.weight[1] = init_weights(all_symbols, original_symbol_scores)
-module.bias[1] = 15
+linear_module.weight[1] = init_weights(all_symbols, original_symbol_scores)
 
 local perceptron = nn.Sequential()
-perceptron:add(module)
-perceptron:add(nn.Sigmoid())
+perceptron:add(linear_module)
+perceptron:add(nn.Tanh())
 
 local criterion = nn.MSECriterion()
+criterion.sizeAverage = false
+
 trainer = nn.StochasticGradient(perceptron, criterion)
 trainer.maxIteration = params.iters
 trainer.learningRate = params.rate
 trainer.learningRateDecay = params.decay
+
 trainer:train(dataset)
 
 -- End perceptron training
 
-local scale_factor = params.threshold / module.bias[1]
+local scale_factor = params.threshold / linear_module.bias[1]
 
-local new_scores = module.weight[1]:clone()
+local new_scores = linear_module.weight[1]:clone()
 
 new_scores:apply( function(wt) wt = wt * scale_factor end )
 
@@ -182,8 +254,13 @@ if params.diff then
    print_score_diff(all_symbols, new_scores, original_symbol_scores)
 end
 
+-- Pre-rescore test stats
+print("\n\nPre-rescore test stats\n")
+print_stats(test_logs, 15)
 
--- TESTING
--- Writing log file with new scores to be used by statistics.lua
-write_new_log_file(logs, all_symbols, new_scores, "newlogs/results.log")
+-- Post-rescore test stats
+update_logs(test_logs, all_symbols, new_scores)
+print("\n\nPost-rescore test stats\n")
+print_stats(test_logs, 15)
+
 
