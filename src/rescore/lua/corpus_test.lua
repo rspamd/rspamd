@@ -1,7 +1,6 @@
 local argparse = require "argparse"
 local json = require "json"
-local inspect = require "inspect"
-local utility = require "utility"
+local rescore_utility = require "rescore_utility"
 
 local HAM = "HAM"
 local SPAM = "SPAM"
@@ -55,7 +54,7 @@ local function scan_results_to_logs(results, actual_email_type)
 
    logs = {}
    
-   results = utility.string_split(results, "\n")
+   results = rescore_utility.string_split(results, "\n")
 
    for _, result in pairs(results) do
       local result = encoded_json_to_log(result)
