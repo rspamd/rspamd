@@ -108,14 +108,19 @@ local function split_train_test(logs, split_percent)
    return train_logs, test_logs
 end
 
-
-local function update_logs(logs, all_symbols, new_scores)
+local function stitch_new_scores(all_symbols, new_scores)
 
    local new_symbol_scores = {}
 
    for idx, symbol in pairs(all_symbols) do
       new_symbol_scores[symbol] = new_scores[idx]
    end
+
+   return new_symbol_scores
+end
+
+
+local function update_logs(logs, new_symbol_scores)
 
    for i, log in ipairs(logs) do
       log = rescore_utility.string_split(log, " ")
@@ -131,44 +136,42 @@ local function update_logs(logs, all_symbols, new_scores)
 
 end
 
-local function write_scores(all_symbols, new_scores, file_path)
+local function write_scores(new_symbol_scores, file_path)
    
    local file = assert(io.open(file_path, "w"))
 
-   for idx, symbol in pairs(all_symbols) do
-      file:write(string.format("%-35s %.2f\n", symbol, new_scores[idx]))
-   end
+   local new_scores_json = json.encode(new_symbol_scores)
+
+   file:write(new_scores_json)
    
    file:close()
 end
 
-local function print_score_diff(all_symbols, new_scores, original_symbol_scores)
+local function print_score_diff(new_symbol_scores, original_symbol_scores)
 
    print(string.format("%-35s %-10s %-10s", "SYMBOL", "OLD_SCORE", "NEW_SCORE"))
 
-   for idx, symbol in pairs(all_symbols) do
+   for symbol, new_score in pairs(new_symbol_scores) do
       print(string.format("%-35s %-10s %-10s",
 			  symbol,
 			  original_symbol_scores[symbol] or 0,
-			  rescore_utility.round(new_scores[idx], 2)))
+			  rescore_utility.round(new_score, 2)))
    end
 
    print "\nClass changes \n"
-   for idx, symbol in pairs(all_symbols) do
+   for symbol, new_score in pairs(new_symbol_scores) do
       if original_symbol_scores[symbol] ~= nil then
-	 if (original_symbol_scores[symbol] > 0 and new_scores[idx] < 0) or
-	 (original_symbol_scores[symbol] < 0 and new_scores[idx] > 0) then
+	 if (original_symbol_scores[symbol] > 0 and new_score < 0) or
+	 (original_symbol_scores[symbol] < 0 and new_score > 0) then
 	       print(string.format("%-35s %-10s %-10s",
 				   symbol,
 				   original_symbol_scores[symbol] or 0,
-				   rescore_utility.round(new_scores[idx], 2)))
+				   rescore_utility.round(new_score, 2)))
 	 end
       end
 
    end
-
-   
-   
+      
 end
 
 local function print_stats(logs, threshold)
@@ -242,16 +245,18 @@ trainer:train(dataset)
 
 local scale_factor = params.threshold / linear_module.bias[1]
 
-local new_scores = linear_module.weight[1]:clone()
+local new_symbol_scores = linear_module.weight[1]:clone()
 
-new_scores:apply( function(wt) wt = wt * scale_factor end )
+new_symbol_scores:apply( function(wt) wt = wt * scale_factor end )
+
+new_symbol_scores = stitch_new_scores(all_symbols, new_symbol_scores)
 
 if params.output then
-   write_scores(all_symbols, new_scores, params.output)
+   write_scores(new_symbol_scores, params.output)
 end
 
 if params.diff then
-   print_score_diff(all_symbols, new_scores, original_symbol_scores)
+   print_score_diff(new_symbol_scores, original_symbol_scores)
 end
 
 -- Pre-rescore test stats
@@ -259,7 +264,7 @@ print("\n\nPre-rescore test stats\n")
 print_stats(test_logs, 15)
 
 -- Post-rescore test stats
-update_logs(test_logs, all_symbols, new_scores)
+update_logs(test_logs, new_symbol_scores)
 print("\n\nPost-rescore test stats\n")
 print_stats(test_logs, 15)
 
