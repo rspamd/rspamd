@@ -89,6 +89,7 @@ struct rspamd_mempool_tag {
 /**
  * Memory pool type
  */
+struct rspamd_mempool_entry_point;
 struct rspamd_mutex_s;
 typedef struct memory_pool_s {
 	GPtrArray *pools[RSPAMD_MEMPOOL_MAX];
@@ -96,6 +97,7 @@ typedef struct memory_pool_s {
 	GPtrArray *trash_stack;
 	GHashTable *variables;                  /**< private memory pool variables			*/
 	gsize elt_len;							/**< size of an element						*/
+	struct rspamd_mempool_entry_point *entry;
 	struct rspamd_mempool_tag tag;          /**< memory pool tag						*/
 } rspamd_mempool_t;
 
@@ -120,7 +122,8 @@ typedef struct memory_pool_stat_s {
  * @param size size of pool's page
  * @return new memory pool object
  */
-rspamd_mempool_t *rspamd_mempool_new (gsize size, const gchar *tag);
+rspamd_mempool_t * rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc);
+#define rspamd_mempool_new(size, tag) rspamd_mempool_new_((size), (tag), G_STRLOC)
 
 /**
  * Get memory from pool
@@ -293,7 +296,8 @@ void rspamd_mempool_stat_reset (void);
  * Get optimal pool size based on page size for this system
  * @return size of memory page in system
  */
-gsize rspamd_mempool_suggest_size (void);
+#define rspamd_mempool_suggest_size() rspamd_mempool_suggest_size_(G_STRLOC)
+gsize rspamd_mempool_suggest_size_ (const char *loc);
 
 /**
  * Set memory pool variable

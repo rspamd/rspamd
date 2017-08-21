@@ -19,6 +19,8 @@
 #include "logger.h"
 #include "ottery.h"
 #include "unix-std.h"
+#include "khash.h"
+#include "cryptobox.h"
 
 #ifdef HAVE_SCHED_YIELD
 #include <sched.h>
@@ -41,6 +43,42 @@
  */
 #undef MEMORY_GREEDY
 
+
+#define ENTRY_LEN 128
+#define ENTRY_NELTS 64
+
+struct entry_elt {
+	gsize fragmentation;
+	gsize leftover;
+};
+
+struct rspamd_mempool_entry_point {
+	gchar src[ENTRY_LEN];
+	guint32 cur_suggestion;
+	guint32 cur_elts;
+	struct entry_elt elts[ENTRY_NELTS];
+};
+
+
+static inline uint32_t
+rspamd_entry_hash (const char *str)
+{
+	return rspamd_cryptobox_fast_hash (str, strlen (str), rspamd_hash_seed ());
+}
+
+static inline int
+rspamd_entry_equal (const char *k1, const char *k2)
+{
+	return strcmp (k1, k2) == 0;
+}
+
+
+KHASH_INIT(mempool_entry, const gchar *, struct rspamd_mempool_entry_point,
+		1, rspamd_entry_hash, rspamd_entry_equal)
+
+static khash_t(mempool_entry) *mempool_entries = NULL;
+
+
 /* Internal statistic */
 static rspamd_mempool_stat_t *mem_pool_stat = NULL;
 /* Environment variable */
@@ -58,6 +96,56 @@ pool_chain_free (struct _pool_chain *chain)
 
 	return (occupied < (gint64)chain->len ?
 			chain->len - occupied : 0);
+}
+
+/* By default allocate 8Kb chunks of memory */
+#define FIXED_POOL_SIZE 4096
+
+static inline struct rspamd_mempool_entry_point *
+rspamd_mempool_entry_new (const gchar *loc)
+{
+	struct rspamd_mempool_entry_point *entry;
+	gint r;
+	khiter_t k;
+
+	k = kh_put (mempool_entry, mempool_entries, loc, &r);
+
+	if (r >= 0) {
+		entry = &kh_value (mempool_entries, k);
+		memset (entry, 0, sizeof (*entry));
+#ifdef HAVE_GETPAGESIZE
+		entry->cur_suggestion =  MAX (getpagesize (), FIXED_POOL_SIZE);
+#else
+		entry->cur_suggestion =  MAX (sysconf (_SC_PAGESIZE), FIXED_POOL_SIZE);
+#endif
+	}
+	else {
+		g_assert_not_reached ();
+	}
+
+	return entry;
+}
+
+static inline struct rspamd_mempool_entry_point *
+rspamd_mempool_get_entry (const gchar *loc)
+{
+	khiter_t k;
+	struct rspamd_mempool_entry_point *elt;
+
+	if (mempool_entries == NULL) {
+		mempool_entries = kh_init (mempool_entry);
+	}
+	else {
+		k = kh_get (mempool_entry, mempool_entries, loc);
+
+		if (k != kh_end (mempool_entries)) {
+			elt = &kh_value (mempool_entries, k);
+
+			return elt;
+		}
+	}
+
+	return rspamd_mempool_entry_new (loc);
 }
 
 static struct _pool_chain *
@@ -192,7 +280,7 @@ rspamd_mempool_append_chain (rspamd_mempool_t * pool,
  * @return new memory pool object
  */
 rspamd_mempool_t *
-rspamd_mempool_new (gsize size, const gchar *tag)
+rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 {
 	rspamd_mempool_t *new;
 	gpointer map;
@@ -614,10 +702,8 @@ rspamd_mempool_stat_reset (void)
 	}
 }
 
-/* By default allocate 8Kb chunks of memory */
-#define FIXED_POOL_SIZE 8192
 gsize
-rspamd_mempool_suggest_size (void)
+rspamd_mempool_suggest_size_ (const char *loc)
 {
 #ifdef HAVE_GETPAGESIZE
 	return MAX (getpagesize (), FIXED_POOL_SIZE);
