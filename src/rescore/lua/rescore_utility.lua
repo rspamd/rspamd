@@ -1,4 +1,4 @@
-local json = require "json"
+local ucl = require "ucl"
 
 local utility = {}
 
@@ -101,7 +101,16 @@ function utility.get_all_symbol_scores()
 
    local output = assert(io.popen("rspamc counters -j --compact"))
    output = output:read("*all")
-   output = json.decode(output)
+
+   local parser = ucl.parser()
+   local result, err = parser:parse_string(output)
+
+   if not result then
+      print(err)
+      os.exit()
+   end
+
+   output = parser:get_object()
 
    symbol_scores = {}
    
