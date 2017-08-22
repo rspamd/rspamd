@@ -119,7 +119,7 @@ end
 local function update_logs(logs, new_symbol_scores)
 
    for i, log in ipairs(logs) do
-      log = rescore_utility.string_split(log, " ")
+      log = lua_util.rspamd_str_split(log, " ")
       local score = 0
       for i=4,#log do
 	 log[i] = log[i]:gsub("%s+", "")
