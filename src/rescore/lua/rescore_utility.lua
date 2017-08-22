@@ -1,25 +1,11 @@
 local ucl = require "ucl"
+local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 
 local utility = {}
 
 function utility.round(num, places)
    return string.format("%." .. (places or 0) .. "f", num)
-end
-
-function utility.string_split(str, delimiter)   
-   local t={}; i = 1
-   for s in string.gmatch(str, "([^"..delimiter.."]+)") do
-      t[i] = s
-      i = i + 1
-   end
-
-   return t
-end
-
-function utility.print_table(_table)
-   for key, value in pairs(_table) do
-      print(key, value)
-   end
 end
 
 function utility.get_all_symbols(logs)
@@ -29,7 +15,7 @@ function utility.get_all_symbols(logs)
    local cnt = 0
    
    for _, line in pairs(logs) do
-      line = utility.string_split(line, " ")
+      line = lua_util.rspamd_str_split(line, " ")
       for i=4,#line do
 	 line[i] = line[i]:gsub("%s+", "")
 	 if not symbols_set[line[i]] then
@@ -47,22 +33,6 @@ function utility.get_all_symbols(logs)
    table.sort(all_symbols)
    
    return all_symbols
-end
-
-function utility.list_directory(dir_path)
-
-   local files = {}
-   local i = 0
-   
-   -- finds all files, ignores dot files.
-   local f = io.popen(string.format('find %s -type f \\( ! -iname ".*" \\)', dir_path))
-   
-   for file in f:lines() do
-      i = i + 1
-      files[i] = file
-   end
-
-   return files
 end
 
 function utility.read_log_file(file)
@@ -83,7 +53,11 @@ end
 function utility.get_all_logs(dir_path)
    -- Reads all log files in the directory and returns a list of logs.
 
-   local files = utility.list_directory(dir_path)
+   if dir_path:sub(#dir_path, #dir_path) == "/" then
+      dir_path = dir_path:sub(1, #dir_path -1)
+   end
+   
+   local files = rspamd_util.glob(dir_path .. "/*")
    local all_logs = {}
    local i = 0
 
@@ -157,7 +131,7 @@ function utility.generate_statistics_from_logs(logs, threshold)
 
    for _, log in pairs(logs) do
       log = utility.trim(log)
-      log = utility.string_split(log, " ")
+      log = lua_util.rspamd_str_split(log, " ")
       
       local is_spam = (log[1] == "SPAM")
       local score = tonumber(log[2])
