@@ -3,7 +3,7 @@ local torch = require "torch"
 local nn = require "nn"
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
-local json = require "json"
+local ucl = require "ucl"
 
 local rescore_utility = require "rescore_utility"
 
@@ -136,7 +136,7 @@ local function write_scores(new_symbol_scores, file_path)
    
    local file = assert(io.open(file_path, "w"))
 
-   local new_scores_json = json.encode(new_symbol_scores)
+   local new_scores_json = ucl.to_format(new_symbol_scores, "json")
 
    file:write(new_scores_json)
    

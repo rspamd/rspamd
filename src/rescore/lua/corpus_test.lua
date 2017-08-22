@@ -1,6 +1,6 @@
 local argparse = require "argparse"
-local json = require "json"
 local rescore_utility = require "rescore_utility"
+local ucl = require "ucl"
 
 local HAM = "HAM"
 local SPAM = "SPAM"
@@ -34,8 +34,17 @@ end
 local function encoded_json_to_log(result)
    -- Returns table containing score, action, list of symbols
    local filtered_result = {}
-   result = json.decode(result)
+   local parser = ucl.parser()
 
+   local is_good, err = parser:parse_string(result)
+
+   if not is_good then
+      print(err)
+      os.exit()
+   end
+   
+   result = parser:get_object()
+   
    filtered_result.score = result.score
 
    local action = result.action:gsub("%s+", "_")
