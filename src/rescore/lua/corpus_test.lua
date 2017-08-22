@@ -1,6 +1,7 @@
 local argparse = require "argparse"
 local rescore_utility = require "rescore_utility"
 local ucl = require "ucl"
+local lua_util = require "lua_util"
 
 local HAM = "HAM"
 local SPAM = "SPAM"
@@ -33,6 +34,7 @@ end
 
 local function encoded_json_to_log(result)
    -- Returns table containing score, action, list of symbols
+
    local filtered_result = {}
    local parser = ucl.parser()
 
@@ -44,7 +46,7 @@ local function encoded_json_to_log(result)
    end
    
    result = parser:get_object()
-   
+
    filtered_result.score = result.score
 
    local action = result.action:gsub("%s+", "_")
@@ -63,9 +65,13 @@ local function scan_results_to_logs(results, actual_email_type)
 
    logs = {}
    
-   results = rescore_utility.string_split(results, "\n")
+   results = lua_util.rspamd_str_split(results, "\n")
 
-   for _, result in pairs(results) do
+   if results[#results] == "" then
+      results[#results] = nil
+   end
+   
+   for _, result in pairs(results) do      
       local result = encoded_json_to_log(result)
       result['type'] = actual_email_type
       table.insert(logs, result)
