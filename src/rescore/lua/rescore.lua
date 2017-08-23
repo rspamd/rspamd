@@ -82,12 +82,12 @@ local function shuffle(logs)
 
 end
 
-local function split_train_test(logs, split_percent)
+local function split_logs(logs, split_percent)
 
    if not split_percent then
-      split_percent = 70
+      split_percent = 60
    end
-   
+
    local split_index = #logs * split_percent / 100
 
    local test_logs = {}
@@ -116,20 +116,21 @@ local function stitch_new_scores(all_symbols, new_scores)
 end
 
 
-local function update_logs(logs, new_symbol_scores)
+local function update_logs(logs, symbol_scores)
 
    for i, log in ipairs(logs) do
       log = lua_util.rspamd_str_split(log, " ")
       local score = 0
       for i=4,#log do
 	 log[i] = log[i]:gsub("%s+", "")
-	 score = score + new_symbol_scores[log[i]]
+	 score = score + (symbol_scores[log[i]] or 0)
       end
       log[2] = rescore_utility.round(score, 2)
 
       logs[i] = table.concat(log, " ")
    end
 
+   return logs
 end
 
 local function write_scores(new_symbol_scores, file_path)
@@ -170,6 +171,21 @@ local function print_score_diff(new_symbol_scores, original_symbol_scores)
       
 end
 
+local function calculate_fscore_from_weights(logs, all_symbols, weights, bias, threshold)
+
+   local scale_factor = threshold / bias
+   local new_symbol_scores = weights:clone()
+
+   new_symbol_scores:apply( function(wt) wt = wt * scale_factor end )
+   new_symbol_scores = stitch_new_scores(all_symbols, new_symbol_scores)
+
+   logs = update_logs(logs, new_symbol_scores)
+
+   local file_stats, _ = rescore_utility.generate_statistics_from_logs(logs, threshold)
+   
+   return file_stats.fscore
+end
+
 local function print_stats(logs, threshold)
 
    local file_stats, _ = rescore_utility.generate_statistics_from_logs(logs, threshold)
@@ -196,13 +212,13 @@ local parser = argparse() {
    description = "Rescore symbols using perceptron"
 }
 
-parser:option("-i --iters", "Number of iterations", 1000, tonumber)
+parser:option("-i --iters", "Number of iterations", 500, tonumber)
 parser:option("-l --logdir", "Path to log files")
 parser:option("-r --rate", "Learning rate", 1, tonumber)
 parser:option("-t --threshold", "Set spam threshold", 15, tonumber)
-parser:option("-d --decay", "Set learning rate decay", 1, tonumber)
 parser:option("-o --output", "Write new scores to file in json")
 parser:flag("--diff", "Print score diff")
+parser:flag("--tanh", "Use tanh as activation function instead of sigmoid")
 
 local params = parser:parse()
 
@@ -212,36 +228,77 @@ local original_symbol_scores = rescore_utility.get_all_symbol_scores()
 
 shuffle(logs)
 
-local train_logs, test_logs = split_train_test(logs)
+local train_logs, test_logs = split_logs(logs, 70)
+local cv_logs, test_logs = split_logs(test_logs, 50)
 
 local dataset = make_dataset_from_logs(train_logs, all_symbols)
+
+local learning_rates = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10}
 
 -- Start of perceptron training
 
 local input_size = #all_symbols
 local linear_module = nn.Linear(input_size, 1)
-
-linear_module.weight[1] = init_weights(all_symbols, original_symbol_scores)
-
+   
 local perceptron = nn.Sequential()
 perceptron:add(linear_module)
-perceptron:add(nn.Tanh())
+
+local activation
+if params.tanh then
+   activation = nn.Tanh()
+else
+   activation = nn.Sigmoid()
+end
+
+perceptron:add(activation)
 
 local criterion = nn.MSECriterion()
 criterion.sizeAverage = false
 
+local best_fscore = -math.huge
+local best_weights = linear_module.weight[1]:clone()
+local best_weights_bias = linear_module.bias[1]
+
 trainer = nn.StochasticGradient(perceptron, criterion)
 trainer.maxIteration = params.iters
-trainer.learningRate = params.rate
-trainer.learningRateDecay = params.decay
+trainer.verbose = false
 
-trainer:train(dataset)
+trainer.hookIteration = function(self, iteration, error)
+   if iteration == trainer.maxIteration then
+
+      fscore = calculate_fscore_from_weights(cv_logs,
+					     all_symbols,
+					     linear_module.weight[1],
+					     linear_module.bias[1],
+					     params.threshold)
+      
+      print("Cross-validation fscore: " .. fscore)
+      
+      if best_fscore < fscore then
+	 best_fscore = fscore
+	 best_weights = linear_module.weight[1]:clone()
+	 best_weights_bias = linear_module.bias[1]
+      end
+   end
+end
+
+for _, learning_rate in pairs(learning_rates) do
+   
+   print("Learning with learning_rate: " .. learning_rate)
+   
+   linear_module.weight[1] = init_weights(all_symbols, original_symbol_scores)
+
+   trainer.learningRate = learning_rate
+   trainer:train(dataset)
+
+   print()
+end
 
 -- End perceptron training
 
-local scale_factor = params.threshold / linear_module.bias[1]
+local scale_factor = params.threshold / best_weights_bias
 
-local new_symbol_scores = linear_module.weight[1]:clone()
+local new_symbol_scores = best_weights
 
 new_symbol_scores:apply( function(wt) wt = wt * scale_factor end )
 
@@ -255,13 +312,14 @@ if params.diff then
    print_score_diff(new_symbol_scores, original_symbol_scores)
 end
 
+
 -- Pre-rescore test stats
 print("\n\nPre-rescore test stats\n")
+test_logs = update_logs(test_logs, original_symbol_scores)
 print_stats(test_logs, 15)
 
 -- Post-rescore test stats
-update_logs(test_logs, new_symbol_scores)
+test_logs = update_logs(test_logs, new_symbol_scores)
 print("\n\nPost-rescore test stats\n")
 print_stats(test_logs, 15)
-
 
