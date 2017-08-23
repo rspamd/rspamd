@@ -73,7 +73,7 @@ rspamd_entry_equal (const char *k1, const char *k2)
 }
 
 
-KHASH_INIT(mempool_entry, const gchar *, struct rspamd_mempool_entry_point,
+KHASH_INIT(mempool_entry, const gchar *, struct rspamd_mempool_entry_point *,
 		1, rspamd_entry_hash, rspamd_entry_equal)
 
 static khash_t(mempool_entry) *mempool_entries = NULL;
@@ -104,14 +104,16 @@ pool_chain_free (struct _pool_chain *chain)
 static inline struct rspamd_mempool_entry_point *
 rspamd_mempool_entry_new (const gchar *loc)
 {
-	struct rspamd_mempool_entry_point *entry;
+	struct rspamd_mempool_entry_point **pentry, *entry;
 	gint r;
 	khiter_t k;
 
 	k = kh_put (mempool_entry, mempool_entries, loc, &r);
 
 	if (r >= 0) {
-		entry = &kh_value (mempool_entries, k);
+		pentry = &kh_value (mempool_entries, k);
+		entry = g_malloc0 (sizeof (*entry));
+		*pentry = entry;
 		memset (entry, 0, sizeof (*entry));
 		rspamd_strlcpy (entry->src, loc, sizeof (entry->src));
 #ifdef HAVE_GETPAGESIZE
@@ -140,7 +142,7 @@ rspamd_mempool_get_entry (const gchar *loc)
 		k = kh_get (mempool_entry, mempool_entries, loc);
 
 		if (k != kh_end (mempool_entries)) {
-			elt = &kh_value (mempool_entries, k);
+			elt = kh_value (mempool_entries, k);
 
 			return elt;
 		}
