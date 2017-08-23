@@ -629,6 +629,8 @@ rspamd_mempool_adjust_entry (struct rspamd_mempool_entry_point *e)
 		/* We still want to grow */
 		e->cur_suggestion *= (1 + (((double)sel_pos) / e->cur_suggestion)) * 1.5;
 	}
+
+	memset (e->elts, 0, sizeof (e->elts));
 }
 
 void
