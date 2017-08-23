@@ -48,8 +48,8 @@
 #define ENTRY_NELTS 64
 
 struct entry_elt {
-	gsize fragmentation;
-	gsize leftover;
+	guint32 fragmentation;
+	guint32 leftover;
 };
 
 struct rspamd_mempool_entry_point {
@@ -113,6 +113,7 @@ rspamd_mempool_entry_new (const gchar *loc)
 	if (r >= 0) {
 		entry = &kh_value (mempool_entries, k);
 		memset (entry, 0, sizeof (*entry));
+		rspamd_strlcpy (entry->src, loc, sizeof (entry->src));
 #ifdef HAVE_GETPAGESIZE
 		entry->cur_suggestion =  MAX (getpagesize (), FIXED_POOL_SIZE);
 #else
@@ -288,7 +289,6 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 	const gchar hexdigits[] = "0123456789abcdef";
 	unsigned i;
 
-	g_return_val_if_fail (size > 0, NULL);
 	/* Allocate statistic structure if it is not allocated before */
 	if (mem_pool_stat == NULL) {
 #if defined(HAVE_MMAP_ANON)
@@ -339,11 +339,12 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 	}
 
 	new = g_slice_alloc0 (sizeof (rspamd_mempool_t));
+	new->entry = rspamd_mempool_get_entry (loc);
 	new->destructors = g_array_sized_new (FALSE, FALSE,
 			sizeof (struct _pool_destructors), 32);
 	rspamd_mempool_create_pool_type (new, RSPAMD_MEMPOOL_NORMAL);
 	/* Set it upon first call of set variable */
-	new->elt_len = size;
+	new->elt_len = new->entry->cur_suggestion;
 
 	if (tag) {
 		rspamd_strlcpy (new->tag.tagname, tag, sizeof (new->tag.tagname));
@@ -407,6 +408,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 				mem_pool_stat->oversized_chunks++;
 				g_atomic_int_add (&mem_pool_stat->fragmented_size,
 						free);
+				pool->entry->elts[pool->entry->cur_elts].fragmentation += free;
 				new = rspamd_mempool_chain_new (
 						size + pool->elt_len + MEM_ALIGNMENT, pool_type);
 			}
@@ -589,6 +591,46 @@ rspamd_mempool_replace_destructor (rspamd_mempool_t * pool,
 	}
 }
 
+static gint
+cmp_int (gconstpointer a, gconstpointer b)
+{
+	gint i1 = *(const gint *)a, i2 = *(const gint *)b;
+
+	return i1 - i2;
+}
+
+static void
+rspamd_mempool_adjust_entry (struct rspamd_mempool_entry_point *e)
+{
+	gint sz[G_N_ELEMENTS (e->elts)], sel_pos, sel_neg;
+	guint i, jitter;
+
+	for (i = 0; i < G_N_ELEMENTS (sz); i ++) {
+		sz[i] = e->elts[i].fragmentation - (gint)e->elts[i].leftover;
+	}
+
+	qsort (sz, G_N_ELEMENTS (sz), sizeof (gint), cmp_int);
+	jitter = rspamd_random_uint64_fast () % 10;
+	/*
+	 * Take stochaistic quantiles
+	 */
+	sel_pos = sz[50 + jitter];
+	sel_neg = sz[4 + jitter];
+
+	if (sel_neg > 0) {
+		/* We need to increase our suggestion */
+		e->cur_suggestion *= (1 + (((double)sel_pos) / e->cur_suggestion)) * 1.5;
+	}
+	else if (-sel_neg > sel_pos) {
+		/* We need to reduce current suggestion */
+		e->cur_suggestion /= (1 + (((double)-sel_neg) / e->cur_suggestion)) * 1.5;
+	}
+	else {
+		/* We still want to grow */
+		e->cur_suggestion *= (1 + (((double)sel_pos) / e->cur_suggestion)) * 1.5;
+	}
+}
+
 void
 rspamd_mempool_delete (rspamd_mempool_t * pool)
 {
@@ -599,6 +641,23 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	gsize len;
 
 	POOL_MTX_LOCK ();
+
+	/* Find free space in pool chain */
+	cur = pool->pools[RSPAMD_MEMPOOL_NORMAL] != NULL ?
+		g_ptr_array_index (pool->pools[RSPAMD_MEMPOOL_NORMAL],
+				pool->pools[RSPAMD_MEMPOOL_NORMAL]->len - 1) : NULL;
+
+	if (cur) {
+		pool->entry->elts[pool->entry->cur_elts].leftover +=
+				pool_chain_free (cur);
+	}
+
+	pool->entry->cur_elts = (pool->entry->cur_elts + 1) %
+			G_N_ELEMENTS (pool->entry->elts);
+
+	if (pool->entry->cur_elts == 0) {
+		rspamd_mempool_adjust_entry (pool->entry);
+	}
 
 	/* Call all pool destructors */
 	for (i = 0; i < pool->destructors->len; i ++) {
@@ -705,11 +764,7 @@ rspamd_mempool_stat_reset (void)
 gsize
 rspamd_mempool_suggest_size_ (const char *loc)
 {
-#ifdef HAVE_GETPAGESIZE
-	return MAX (getpagesize (), FIXED_POOL_SIZE);
-#else
-	return MAX (sysconf (_SC_PAGESIZE), FIXED_POOL_SIZE);
-#endif
+	return 0;
 }
 
 #if !defined(HAVE_PTHREAD_PROCESS_SHARED) || defined(DISABLE_PTHREAD_MUTEX)
