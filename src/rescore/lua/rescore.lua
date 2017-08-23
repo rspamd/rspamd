@@ -4,6 +4,7 @@ local nn = require "nn"
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
+local nninit = require "nninit"
 
 local rescore_utility = require "rescore_utility"
 
@@ -58,15 +59,29 @@ end
 
 local function init_weights(all_symbols, original_symbol_scores)
 
-   weights = torch.Tensor(#all_symbols)
-
+   local weights = torch.Tensor(#all_symbols)
+   local size = weights:size()[1]
+   
+   local mean = 0
+   
    for i, symbol in pairs(all_symbols) do
       local score = original_symbol_scores[symbol]
       if not score then score = 0 end
-
-      score = score + math.random() - 0.5
-      
       weights[i] = score
+      mean = mean + score
+   end
+
+   mean = mean / size
+
+   local dev = 0
+   for i=1,size do
+      dev = dev + (weights[i] - mean) * (weights[i] - mean)
+   end
+
+   dev = math.sqrt(dev / size)
+   
+   for i=1,size do
+      weights[i] = (weights[i] - mean) / dev
    end
 
    return weights   
