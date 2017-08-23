@@ -1490,8 +1490,6 @@ rspamd_lua_cld_handler (struct rspamd_worker_signal_handler *sigh, void *ud)
 		g_string_free (cbdata->out_buf, TRUE);
 	}
 
-	g_free (cbdata);
-
 	/* Notify main */
 	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_ON_FORK;
@@ -1500,6 +1498,7 @@ rspamd_lua_cld_handler (struct rspamd_worker_signal_handler *sigh, void *ud)
 	srv_cmd.cmd.on_fork.ppid = getpid ();
 	rspamd_srv_send_command (cbdata->wrk, cbdata->ev_base, &srv_cmd, -1,
 			NULL, NULL);
+	g_free (cbdata);
 
 	/* We are done with this SIGCHLD */
 	return FALSE;
