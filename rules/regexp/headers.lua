@@ -572,6 +572,14 @@ reconf['YANDEX_RU_MAILER'] = {
   group = 'header'
 }
 
+-- Detect 1C v8.2 and v8.3 mailers
+reconf['MAILER_1C_8'] = {
+    re = 'X-Mailer=/^1C:Enterprise 8\\.[23]$/H',
+    score = 0,
+    description = 'Sent with 1C:Enterprise 8',
+    group = 'header'
+}
+
 -- Two received headers with ip addresses
 local double_ip_spam_1 = 'Received=/from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3} with/H'
 local double_ip_spam_2 = 'Received=/from\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s+by\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3};/H'
