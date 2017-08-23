@@ -50,7 +50,7 @@ Use rescore.lua on logs generated from corpus-test to find optimal symbol scores
 
 ### Example:
 	
-	rspamadm lua -a -l -a path/to/log/dir -a -i -a 1000 -a -r -a 1 -a --diff -a -o -a new.scores
+	rspamadm lua -a -l -a path/to/log/dir -a --diff -a -o -a new.scores
   
   
   
