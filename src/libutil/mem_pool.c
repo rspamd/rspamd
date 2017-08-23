@@ -645,9 +645,13 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	POOL_MTX_LOCK ();
 
 	/* Find free space in pool chain */
-	cur = pool->pools[RSPAMD_MEMPOOL_NORMAL] != NULL ?
-		g_ptr_array_index (pool->pools[RSPAMD_MEMPOOL_NORMAL],
-				pool->pools[RSPAMD_MEMPOOL_NORMAL]->len - 1) : NULL;
+	cur = NULL;
+
+	if (pool->pools[RSPAMD_MEMPOOL_NORMAL] != NULL &&
+			pool->pools[RSPAMD_MEMPOOL_NORMAL]->len > 0) {
+		cur = g_ptr_array_index (pool->pools[RSPAMD_MEMPOOL_NORMAL],
+				pool->pools[RSPAMD_MEMPOOL_NORMAL]->len - 1);
+	}
 
 	if (cur) {
 		pool->entry->elts[pool->entry->cur_elts].leftover +=
