@@ -656,15 +656,15 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	}
 
 	if (cur) {
-		pool->entry->elts[pool->entry->cur_elts].leftover +=
+		pool->entry->elts[pool->entry->cur_elts].leftover =
 				pool_chain_free (cur);
-	}
 
-	pool->entry->cur_elts = (pool->entry->cur_elts + 1) %
-			G_N_ELEMENTS (pool->entry->elts);
+		pool->entry->cur_elts = (pool->entry->cur_elts + 1) %
+				G_N_ELEMENTS (pool->entry->elts);
 
-	if (pool->entry->cur_elts == 0) {
-		rspamd_mempool_adjust_entry (pool->entry);
+		if (pool->entry->cur_elts == 0) {
+			rspamd_mempool_adjust_entry (pool->entry);
+		}
 	}
 
 	/* Call all pool destructors */
