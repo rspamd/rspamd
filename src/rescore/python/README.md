@@ -1,8 +1,8 @@
 # Requirements
 
 Python Dependencies:  
-       * Python version: 2.7+  
-       * requests  
+* Python version: 2.7+  
+* requests  
 
 # CORPUS TESTING
 
