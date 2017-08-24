@@ -403,6 +403,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		if (cur == NULL || free < size) {
 			/* Allocate new chain element */
 			if (pool->elt_len >= size + MEM_ALIGNMENT) {
+				pool->entry->elts[pool->entry->cur_elts].fragmentation += size;
 				new = rspamd_mempool_chain_new (pool->elt_len + MEM_ALIGNMENT,
 						pool_type);
 			}
@@ -630,6 +631,14 @@ rspamd_mempool_adjust_entry (struct rspamd_mempool_entry_point *e)
 	else {
 		/* We still want to grow */
 		e->cur_suggestion *= (1 + (((double)sel_pos) / e->cur_suggestion)) * 1.5;
+	}
+
+	/* Some sane limits counting mempool architecture */
+	if (e->cur_suggestion < 1024) {
+		e->cur_suggestion = 1024;
+	}
+	else if (e->cur_suggestion > 1024 * 1024 * 10) {
+		e->cur_suggestion = 1024 * 1024 * 10;
 	}
 
 	memset (e->elts, 0, sizeof (e->elts));
