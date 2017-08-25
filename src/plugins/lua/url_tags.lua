@@ -378,7 +378,6 @@ end
 settings.ignore_tags = list_to_hash(settings.ignore_tags)
 
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
-  if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
   load_scripts(cfg, ev_base)
 end)
 rspamd_config:register_symbol({
