@@ -768,6 +768,51 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 
 	/* Validate cache */
 	if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
+		/* Check for actions sanity */
+		int i, prev_act = 0;
+		struct rspamd_metric *metric = cfg->default_metric;
+		gdouble prev_score = NAN;
+		gboolean seen_controller = FALSE;
+		GList *cur;
+		struct rspamd_worker_conf *wcf;
+
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			if (!isnan (prev_score) && !isnan (metric->actions[i].score)) {
+				if (prev_score <= isnan (metric->actions[i].score)) {
+					msg_warn_config ("incorrect metrics scores: action %s"
+							" has lower score: %.2f than action %s: %.2f",
+							rspamd_action_to_str (prev_act), prev_score,
+							rspamd_action_to_str (i), metric->actions[i].score);
+					ret = FALSE;
+				}
+			}
+
+			if (!isnan (metric->actions[i].score)) {
+				prev_score = metric->actions[i].score;
+				prev_act = i;
+			}
+		}
+
+		cur = cfg->workers;
+		while (cur) {
+			wcf = cur->data;
+
+			if (wcf->type == g_quark_from_static_string ("controller")) {
+				seen_controller = TRUE;
+				break;
+			}
+
+			cur = g_list_next (cur);
+		}
+
+		if (!seen_controller) {
+			msg_warn_config ("controller worker is unconfigured: learning,"
+					" periodic scripts, maps watching and many other"
+					" Rspamd features will be broken");
+
+			ret = FALSE;
+		}
+
 		return rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
 	}
 
