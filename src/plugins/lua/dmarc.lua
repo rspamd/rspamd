@@ -642,7 +642,7 @@ if opts['reporting'] == true then
     end
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       load_scripts(cfg, ev_base)
-      if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
+      if not (worker:get_name() == 'controller' and worker:get_index() == 0) then return end
       local rresolver = rspamd_resolver.init(ev_base, rspamd_config)
       rspamd_config:register_finish_script(function ()
         local stamp = pool:get_variable(VAR_NAME, 'double')
