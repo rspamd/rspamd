@@ -197,8 +197,6 @@ gchar * rspamd_mempool_ftokdup (rspamd_mempool_t *pool,
  */
 void * rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size);
 void * rspamd_mempool_alloc0_shared (rspamd_mempool_t *pool, gsize size);
-gchar * rspamd_mempool_strdup_shared (rspamd_mempool_t * pool,
-	const gchar *src);
 /**
  * Add destructor callback to pool
  * @param pool memory pool object

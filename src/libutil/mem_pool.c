@@ -537,24 +537,6 @@ rspamd_mempool_ftokdup (rspamd_mempool_t *pool, const rspamd_ftok_t *src)
 	return newstr;
 }
 
-gchar *
-rspamd_mempool_strdup_shared (rspamd_mempool_t * pool, const gchar *src)
-{
-	gsize len;
-	gchar *newstr;
-
-	if (src == NULL) {
-		return NULL;
-	}
-
-	len = strlen (src);
-	newstr = rspamd_mempool_alloc_shared (pool, len + 1);
-	memcpy (newstr, src, len);
-	newstr[len] = '\0';
-
-	return newstr;
-}
-
 void
 rspamd_mempool_add_destructor_full (rspamd_mempool_t * pool,
 	rspamd_mempool_destruct_t func,

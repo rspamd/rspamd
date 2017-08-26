@@ -229,14 +229,6 @@ typedef struct rspamd_mutex_s {
 #endif
 } rspamd_mutex_t;
 
-typedef struct rspamd_rwlock_s {
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
-	GRWLock rwlock;
-#else
-	GStaticRWLock rwlock;
-#endif
-} rspamd_rwlock_t;
-
 
 /**
  * Create new mutex
@@ -261,42 +253,6 @@ void rspamd_mutex_unlock (rspamd_mutex_t *mtx);
  * @param mtx
  */
 void rspamd_mutex_free (rspamd_mutex_t *mtx);
-
-/**
- * Create new rwloc
- * @return
- */
-rspamd_rwlock_t * rspamd_rwlock_new (void);
-
-/**
- * Lock rwlock for writing
- * @param mtx
- */
-void rspamd_rwlock_writer_lock (rspamd_rwlock_t *mtx);
-
-/**
- * Lock rwlock for reading
- * @param mtx
- */
-void rspamd_rwlock_reader_lock (rspamd_rwlock_t *mtx);
-
-/**
- * Unlock rwlock from writing
- * @param mtx
- */
-void rspamd_rwlock_writer_unlock (rspamd_rwlock_t *mtx);
-
-/**
- * Unlock rwlock from reading
- * @param mtx
- */
-void rspamd_rwlock_reader_unlock (rspamd_rwlock_t *mtx);
-
-/**
- * Free rwlock
- * @param mtx
- */
-void rspamd_rwlock_free (rspamd_rwlock_t *mtx);
 
 /**
  * Create new named thread
