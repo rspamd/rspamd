@@ -213,6 +213,28 @@ static int torch_Storage_(string)(lua_State *L)
 }
 #endif
 
+static int torch_Storage_(text)(lua_State *L)
+{
+  THStorage *storage = luaT_checkudata(L, 1, torch_Storage);
+  struct _rspamd_lua_text *t;
+
+  if(lua_type(L, -1) == LUA_TUSERDATA)
+  {
+    t = lua_touserdata(L, -1);
+    THStorage_(resize)(storage, t->len);
+    memmove(storage->data, t->start, t->len);
+    lua_settop(L, 1);
+  }
+  else {
+    t = lua_newuserdata (L, sizeof (*t));
+    t->start = (const char *)storage->data;
+    t->len = t->len;
+    t->flags = 0;
+  }
+
+  return 1; /* either storage or string */
+}
+
 static int torch_Storage_(totable)(lua_State *L)
 {
   THStorage *storage = luaT_checkudata(L, 1, torch_Storage);
@@ -274,6 +296,7 @@ static const struct luaL_Reg torch_Storage_(_) [] = {
   {"totable", torch_Storage_(totable)},
   {"write", torch_Storage_(write)},
   {"read", torch_Storage_(read)},
+  {"text", torch_Storage_(text)},
 #if defined(TH_REAL_IS_CHAR) || defined(TH_REAL_IS_BYTE)
   {"string", torch_Storage_(string)},
 #endif

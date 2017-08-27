@@ -1,5 +1,11 @@
 #include "general.h"
 
+struct _rspamd_lua_text {
+	const char *start;
+	unsigned int len;
+	unsigned int flags;
+};
+
 #define torch_Storage_(NAME) TH_CONCAT_4(torch_,Real,Storage_,NAME)
 #define THFile_readRealRaw TH_CONCAT_3(THFile_read, Real, Raw)
 #define THFile_writeRealRaw TH_CONCAT_3(THFile_write, Real, Raw)
