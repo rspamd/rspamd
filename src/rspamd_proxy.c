@@ -2037,10 +2037,14 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	#define SOL_TCP IPPROTO_TCP
 	#endif
 
-		gint sopt = 1;
+		if (rspamd_inet_address_get_af (addr) != AF_UNIX) {
+			gint sopt = 1;
 
-		if (setsockopt (nfd, SOL_TCP, TCP_NODELAY, &sopt, sizeof (sopt)) == -1) {
-			msg_warn_session ("cannot set TCP_NODELAY: %s", strerror (errno));
+			if (setsockopt (nfd, SOL_TCP, TCP_NODELAY, &sopt, sizeof (sopt)) ==
+					-1) {
+				msg_warn_session ("cannot set TCP_NODELAY: %s",
+						strerror (errno));
+			}
 		}
 #endif
 
