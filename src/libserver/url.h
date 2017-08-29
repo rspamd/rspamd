@@ -17,6 +17,10 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_HTML_DISPLAYED = 1 << 4,
 	RSPAMD_URL_FLAG_FROM_TEXT = 1 << 5,
 	RSPAMD_URL_FLAG_SUBJECT = 1 << 6,
+	RSPAMD_URL_FLAG_HOSTENCODED = 1 << 7,
+	RSPAMD_URL_FLAG_SCHEMAENCODED = 1 << 8,
+	RSPAMD_URL_FLAG_PATHENCODED = 1 << 9,
+	RSPAMD_URL_FLAG_QUERYENCODED = 1 << 10,
 };
 
 struct rspamd_url_tag {
@@ -25,6 +29,7 @@ struct rspamd_url_tag {
 };
 
 struct rspamd_url {
+	gchar *raw;
 	gchar *string;
 	gint protocol;
 	guint port;
@@ -48,6 +53,7 @@ struct rspamd_url {
 	guint surbllen;
 	guint tldlen;
 	guint urllen;
+	guint rawlen;
 
 	enum rspamd_url_flags flags;
 	guint count;

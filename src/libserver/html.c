@@ -1009,7 +1009,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		/* Block tag */
 		nnode = g_node_new (tag);
 
-		if (tag->flags & FL_CLOSING) {
+		if (tag->flags & (FL_CLOSING|FL_CLOSED)) {
 			if (!*cur_level) {
 				msg_debug_html ("bad parent node");
 				g_node_destroy (nnode);
@@ -1426,10 +1426,17 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		if (g_ascii_isspace (*in)) {
 			state = spaces_after_param;
 		}
+		else if (*in == '/' && *(in + 1) == '>') {
+			tag->flags |= FL_CLOSED;
+		}
 		break;
 
 	case spaces_after_param:
 		if (!g_ascii_isspace (*in)) {
+			if (*in == '/' && *(in + 1) == '>') {
+				tag->flags |= FL_CLOSED;
+			}
+
 			state = parse_attr_name;
 			*savep = in;
 		}

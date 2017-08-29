@@ -572,6 +572,14 @@ reconf['YANDEX_RU_MAILER'] = {
   group = 'header'
 }
 
+-- Detect 1C v8.2 and v8.3 mailers
+reconf['MAILER_1C_8'] = {
+    re = 'X-Mailer=/^1C:Enterprise 8\\.[23]$/H',
+    score = 0,
+    description = 'Sent with 1C:Enterprise 8',
+    group = 'header'
+}
+
 -- Two received headers with ip addresses
 local double_ip_spam_1 = 'Received=/from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by \\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3} with/H'
 local double_ip_spam_2 = 'Received=/from\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s+by\\s+\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3};/H'
@@ -898,17 +906,6 @@ reconf['X_PHPOS_FAKE'] = {
 reconf['HAS_XOIP'] = {
   re = "header_exists('X-Originating-IP')",
   description = "Has X-Originating-IP header",
-  score = 0.0,
-  group = 'headers'
-}
-
-reconf['MIME_BASE64_TEXT'] = {
-  re = string.format('(%s && %s) || (%s && %s)',
-                     'Content-Type=/^text/Hi',
-                     'Content-Transfer-Encoding=/^base64/Hi',
-                     'Content-Type=/^text/Bi',
-                     'Content-Transfer-Encoding=/^base64/Bi'),
-  description = 'Message text disguised using base64 encoding',
   score = 0.0,
   group = 'headers'
 }

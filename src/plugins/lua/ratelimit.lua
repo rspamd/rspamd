@@ -191,7 +191,7 @@ local keywords = {
     ['get_value'] = function(task)
       local from = task:get_from(0)
       if ((from or E)[1] or E).addr then
-        return from[1]['addr']
+        return string.lower(from[1]['addr'])
       end
       return nil
     end,
@@ -270,7 +270,7 @@ local function dynamic_rate_key(task, rtype)
     local total_rcpt = 0
     for _, r in ipairs(rcpts) do
       if r['addr'] and total_rcpt < max_rcpt then
-        local key_f = string.format(key_s, r['addr'])
+        local key_f = string.format(key_s, string.lower(r['addr']))
         table.insert(rate_keys, key_f)
         total_rcpt = total_rcpt + 1
       end

@@ -35,6 +35,13 @@ local settings = {
   authenticated_headers = {},
   extended_headers_rcpt = {},
   routines = {
+    ['remove-headers'] = {
+      headers = {},
+    },
+    ['add-headers'] = {
+      headers = {},
+      remove = 1,
+    },
     ['remove-header'] = {
       remove = 1,
     },
@@ -198,6 +205,21 @@ local function milter_headers(task)
     if skip_wanted('remove-header') then return end
     if settings.routines['remove-header'].header and settings.routines['remove-header'].remove then
       remove[settings.routines['remove-header'].header] = settings.routines['remove-header'].remove
+    end
+  end
+
+  routines['remove-headers'] = function()
+    if skip_wanted('remove-headers') then return end
+    for h, r in pairs(settings.routines['remove-headers'].headers) do
+      remove[h] = r
+    end
+  end
+
+  routines['add-headers'] = function()
+    if skip_wanted('add-headers') then return end
+    for h, r in pairs(settings.routines['add-headers'].headers) do
+      add[h] = r
+      remove[h] = settings.routines['add-headers'].remove
     end
   end
 

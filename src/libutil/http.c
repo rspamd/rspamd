@@ -2385,6 +2385,7 @@ rspamd_http_message_from_url (const gchar *url)
 
 	urllen = strlen (url);
 	memset (&pu, 0, sizeof (pu));
+
 	if (http_parser_parse_url (url, urllen, FALSE, &pu) != 0) {
 		msg_warn ("cannot parse URL: %s", url);
 		return NULL;
@@ -2408,7 +2409,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 	else {
 		path = url + pu.field_data[UF_PATH].off;
-		pathlen = pu.field_data[UF_PATH].len;
+		pathlen = urllen - pu.field_data[UF_PATH].off;
 	}
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);

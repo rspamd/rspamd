@@ -117,6 +117,9 @@ function($, _, Humanize) {
             preprocess_item(item);
             Object.keys(item.symbols).map(function(key) {
                 var sym = item.symbols[key];
+                if (!sym.name) {
+                    sym.name = key;
+                }
                 var str = '<strong>' + sym.name + '</strong>' + "(" + sym.score + ")";
 
                if (sym.options) {

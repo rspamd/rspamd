@@ -12,14 +12,7 @@ Version:        1.1.0
 Release: 1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons
-
-# BSD License (two clause)
-# http://www.freebsd.org/copyright/freebsd-license.html
-%if 0%{?suse_version}
-License:        BSD-2-Clause
-%else
-License:        BSD2c
-%endif
+License:        ASL 2.0
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel
@@ -146,7 +139,7 @@ systemctl --no-reload preset %{name}.service >/dev/null 2>&1 || :
 %if 0%{?el6}
 /sbin/chkconfig --add %{name}
 %else
-%{__chown} %{rspamd_user}:%{rspamd_group} %{buildroot}%{rspamd_logdir}
+%{__chown} %{rspamd_user}:%{rspamd_group} %{rspamd_logdir}
 %endif
 
 %preun
@@ -210,7 +203,7 @@ fi
 %config(noreplace) %{rspamd_confdir}/worker-fuzzy.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
 %config(noreplace) %{rspamd_confdir}/modules.d/*
-%attr(-, _rspamd, _rspamd) %dir %{rspamd_home}
+%attr(-, %{rspamd_user}, %{rspamd_group}) %dir %{rspamd_home}
 %dir %{rspamd_rulesdir}/regexp
 %dir %{rspamd_rulesdir}
 %dir %{rspamd_confdir}
@@ -225,6 +218,7 @@ fi
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %config(noreplace) %{rspamd_confdir}/spf_dkim_whitelist.inc
 %config(noreplace) %{rspamd_confdir}/dmarc_whitelist.inc
+%{rspamd_pluginsdir}/lib/*.lua
 %{rspamd_pluginsdir}/lua/*.lua
 %{rspamd_rulesdir}/regexp/*.lua
 %{rspamd_rulesdir}/*.lua

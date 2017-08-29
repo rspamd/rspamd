@@ -597,13 +597,25 @@ rspamd_config.R_BAD_CTE_7BIT = {
     for _,p in ipairs(tp) do
       local cte = p:get_mimepart():get_cte() or ''
       if cte ~= '8bit' and p:has_8bit_raw() then
-        return true,1.0,cte
+        local _,_,attrs = p:get_mimepart():get_type_full()
+        local mul = 1.0
+        local params = {cte}
+        if attrs then
+          if attrs.charset and attrs.charset:lower() == "utf-8" then
+            -- Penalise rule as people don't know that utf8 is surprisingly
+            -- eight bit encoding
+            mul = 0.3
+            table.insert(params, "utf8")
+          end
+        end
+
+        return true,mul,params
       end
     end
 
     return false
   end,
-  score = 4.0,
+  score = 3.5,
   description = 'Detects bad content-transfer-encoding for text parts',
   group = 'header'
 }

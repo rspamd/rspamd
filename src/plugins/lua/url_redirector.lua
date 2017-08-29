@@ -18,6 +18,18 @@ if confighelp then
   return
 end
 
+-- Some popular UA
+local default_ua = {
+  'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)',
+  'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+  'Wget/1.9.1',
+  'Mozilla/5.0 (Android; Linux armv7l; rv:9.0) Gecko/20111216 Firefox/9.0 Fennec/9.0',
+  'Mozilla/5.0 (Windows NT 5.2; RW; rv:7.0a1) Gecko/20091211 SeaMonkey/9.23a1pre',
+  'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko',
+  'W3C-checklink/4.5 [4.160] libwww-perl/5.823',
+  'Lynx/2.8.8dev.3 libwww-FM/2.14 SSL-MM/1.4.1',
+}
+
 local redis_params
 local N = 'url_redirector'
 local settings = {
@@ -28,7 +40,7 @@ local settings = {
   key_prefix = 'rdr:', -- default hash name
   check_ssl = false, -- check ssl certificates
   max_size = 10 * 1024, -- maximum body to process
-  user_agent = 'Mozilla/5.0 (Maemo; Linux armv7l; rv:10.0.1) Gecko/20100101 Firefox/10.0.1 Fennec/10.0.1',
+  user_agent = default_ua,
   redirectors_only = true, -- follow merely redirectors
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
@@ -134,11 +146,18 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
         cache_url(task, orig_url, url, key, param)
       else
         if code == 200 then
-          rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
-            orig_url, url)
+          if orig_url == url then
+            rspamd_logger.infox(task, 'direct url %s, err code 200',
+              url)
+          else
+            rspamd_logger.infox(task, 'found redirect from %s to %s, err code 200',
+              orig_url, url)
+          end
+
           cache_url(task, orig_url, url, key, param)
+
         elseif code == 301 or code == 302 then
-          local loc = headers['Location']
+          local loc = headers['location']
           rspamd_logger.infox(task, 'found redirect from %s to %s, err code %s',
             orig_url, loc, code)
           if loc then
@@ -154,6 +173,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
               resolve_cached(task, orig_url, loc, key, param, ntries + 1)
             end
           else
+            rspamd_logger.infox(task, "no location, headers: %s", headers)
             cache_url(task, orig_url, url, key, param)
           end
         else
@@ -164,9 +184,16 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
       end
     end
 
+    local ua
+    if type(settings.user_agent) == 'string' then
+      ua = settings.user_agent
+    else
+      ua = settings.user_agent[math.random(#settings.user_agent)]
+    end
+
     rspamd_http.request{
       headers = {
-        ['User-Agent'] = settings.user_agent,
+        ['User-Agent'] = ua,
       },
       url = url,
       task = task,
@@ -230,7 +257,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
 end
 
 local function url_redirector_handler(task, url, param)
-  local url_str = tostring(url)
+  local url_str = url:get_raw()
   -- 32 base32 characters are roughly 20 bytes of data or 160 bits
   local key = settings.key_prefix .. hash.create(url_str):base32():sub(1, 32)
   resolve_cached(task, url_str, url_str, key, param, 1)

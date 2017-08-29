@@ -106,7 +106,7 @@ rspamd_config:add_condition("R_DKIM_ALLOW", function(task)
   return true
 end)
 
--- Disable DKIM checks if passed via HTTP headers
+-- Disable SPF checks if passed via HTTP headers
 rspamd_config:add_condition("R_SPF_ALLOW", function(task)
   local hdr = task:get_request_header('SPF')
 

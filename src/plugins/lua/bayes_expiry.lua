@@ -119,8 +119,8 @@ end
 
 rspamd_config:add_on_load(function (_, ev_base, worker)
   local processed_symbols, expire_script_sha
-  -- Exit unless we're the first 'normal' worker
-  if not (worker:get_name() == 'normal' and worker:get_index() == 0) then return end
+  -- Exit unless we're the first 'controller' worker
+  if not (worker:get_name() == 'controller' and worker:get_index() == 0) then return end
   -- Persist mempool variable to statefile on shutdown
   rspamd_config:register_finish_script(function ()
     local stamp = pool:get_variable(VAR_NAME, 'double')
