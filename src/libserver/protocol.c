@@ -793,27 +793,6 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 }
 
 static ucl_object_t *
-rspamd_str_hash_ucl (GHashTable *ht)
-{
-	GHashTableIter it;
-	gpointer k, v;
-	ucl_object_t *top = NULL, *obj;
-
-	top = ucl_object_typed_new (UCL_ARRAY);
-
-	if (ht) {
-		g_hash_table_iter_init (&it, ht);
-
-		while (g_hash_table_iter_next (&it, &k, &v)) {
-			obj = ucl_object_fromstring ((const char *)v);
-			ucl_array_append (top, obj);
-		}
-	}
-
-	return top;
-}
-
-static ucl_object_t *
 rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
 	struct rspamd_symbol_result *sym)
 {
