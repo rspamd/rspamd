@@ -375,86 +375,8 @@ local function dynamic_rate_key(task, rtype)
   end
 end
 
-local function get_buckets(task)
-  local args = {}
-  -- Get initial task data
-  local ip = task:get_from_ip()
-  if ip and ip:is_valid() and whitelisted_ip then
-    if whitelisted_ip:get_key(ip) then
-      -- Do not check whitelisted ip
-      rspamd_logger.infox(task, 'skip ratelimit for whitelisted IP')
-      return
-    end
-  end
-  -- Parse all rcpts
-  local rcpts = task:get_recipients()
-  local rcpts_user = {}
-  if rcpts then
-    fun.each(function(r)
-      fun.each(function(type) table.insert(rcpts_user, r[type]) end, {'user', 'addr'})
-    end, rcpts)
-    if fun.any(
-      function(r)
-        if fun.any(function(w) return r == w end, whitelisted_rcpts) then return true end
-      end,
-      rcpts_user) then
-
-      rspamd_logger.infox(task, 'skip ratelimit for whitelisted recipient')
-      return
-    end
-  end
-  -- Get user (authuser)
-  if whitelisted_user then
-    local auser = task:get_user()
-    if whitelisted_user:get_key(auser) then
-      rspamd_logger.infox(task, 'skip ratelimit for whitelisted user')
-      return
-    end
-  end
-
-  local rate_key
-  for k in pairs(settings) do
-    rate_key = dynamic_rate_key(task, k)
-    if rate_key then
-      if type(rate_key) == 'table' then
-        for _, rk in ipairs(rate_key) do
-          if type(settings[k]) == 'string' and
-              (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
-            local res = custom_keywords[settings[k]]['get_limit'](task)
-            if type(res) == 'string' then res = {res} end
-            for _, r in ipairs(res) do
-              local plim, size = parse_string_limit(r)
-              if plim then
-                table.insert(args, {{plim, size}, rk})
-              end
-            end
-          end
-        end
-      else
-        if type(settings[k]) == 'string' and
-          (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
-          local res = custom_keywords[settings[k]]['get_limit'](task)
-          if type(res) == 'string' then res = {res} end
-          for _, r in ipairs(res) do
-            local plim, size = parse_string_limit(r)
-            if plim then
-              table.insert(args, {{plim, size}, rate_key})
-            end
-          end
-        elseif type(settings[k]) == 'table' then
-          for _, rl in ipairs(settings[k]) do
-            table.insert(args, {{rl[1], rl[2]}, rate_key})
-          end
-        end
-      end
-    end
-  end
-
-  return args
-end
-
-local function ratelimit_cb(task)
-  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+local function process_buckets(task, buckets)
+  if not buckets then return end
   local function rl_redis_cb(err, data)
     if err then
       rspamd_logger.infox(task, 'got error while setting limit: %1', err)
@@ -479,8 +401,6 @@ local function ratelimit_cb(task)
   end
   local redis_cb = rl_redis_cb
   if ratelimit_symbol then redis_cb = rl_symbol_redis_cb end
-  local buckets = get_buckets(task)
-  if not buckets then return end
   local args = {redis_script_sha, #buckets}
   for _, bucket in ipairs(buckets) do
     table.insert(args, bucket[2])
@@ -530,6 +450,145 @@ local function ratelimit_cb(task)
   )
   if not ret then
     rspamd_logger.errx(task, 'got error connecting to redis')
+  end
+end
+
+local function ratelimit_cb(task)
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  local args = {}
+  -- Get initial task data
+  local ip = task:get_from_ip()
+  if ip and ip:is_valid() and whitelisted_ip then
+    if whitelisted_ip:get_key(ip) then
+      -- Do not check whitelisted ip
+      rspamd_logger.infox(task, 'skip ratelimit for whitelisted IP')
+      return
+    end
+  end
+  -- Parse all rcpts
+  local rcpts = task:get_recipients()
+  local rcpts_user = {}
+  if rcpts then
+    fun.each(function(r)
+      fun.each(function(type) table.insert(rcpts_user, r[type]) end, {'user', 'addr'})
+    end, rcpts)
+    if fun.any(
+      function(r)
+        if fun.any(function(w) return r == w end, whitelisted_rcpts) then return true end
+      end,
+      rcpts_user) then
+
+      rspamd_logger.infox(task, 'skip ratelimit for whitelisted recipient')
+      return
+    end
+  end
+  -- Get user (authuser)
+  if whitelisted_user then
+    local auser = task:get_user()
+    if whitelisted_user:get_key(auser) then
+      rspamd_logger.infox(task, 'skip ratelimit for whitelisted user')
+      return
+    end
+  end
+
+  local redis_keys = {}
+  local redis_keys_rev = {}
+  local function collect_redis_keys()
+    local function collect_cb(err, data)
+      if err then
+        rspamd_logger.errx(task, 'redis error: %1', err)
+      else
+        for i, d in ipairs(data) do
+          if type(d) == 'string' then
+            local plim, size = parse_string_limit(d)
+            if plim then
+              table.insert(args, {{plim, size}, redis_keys_rev[i]})
+            end
+          end
+        end
+        return process_buckets(task, args)
+      end
+    end
+    local requested_keys = rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      nil, -- hash key
+      true, -- is write
+      collect_cb, --callback
+      'MGET', -- command
+      redis_keys -- arguments
+    )
+    if not requested_keys then
+      rspamd_logger.errx(task, 'got error connecting to redis')
+      return process_buckets(task, args)
+    end
+  end
+
+  local rate_key
+  for k in pairs(settings) do
+    rate_key = dynamic_rate_key(task, k)
+    if rate_key then
+      if type(rate_key) == 'table' then
+        for _, rk in ipairs(rate_key) do
+          if type(settings[k]) == 'string' and
+              (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
+            local res = custom_keywords[settings[k]]['get_limit'](task)
+            if type(res) == 'string' then res = {res} end
+            for _, r in ipairs(res) do
+              local plim, size = parse_string_limit(r)
+              if plim then
+                table.insert(args, {{plim, size}, rk})
+              else
+                local rkey = string.match(settings[k], 'redis:(.*)')
+                if rkey then
+                  table.insert(redis_keys, rkey)
+                  redis_keys_rev[#redis_keys] = rk
+                else
+                  rspamd_logger.infox(task, "Don't know what to do with limit: %1", settings[k])
+                end
+              end
+            end
+          end
+        end
+      else
+        if type(settings[k]) == 'string' and
+          (custom_keywords[settings[k]] and type(custom_keywords[settings[k]]['get_limit']) == 'function') then
+          local res = custom_keywords[settings[k]]['get_limit'](task)
+          if type(res) == 'string' then res = {res} end
+          for _, r in ipairs(res) do
+            local plim, size = parse_string_limit(r)
+            if plim then
+              table.insert(args, {{plim, size}, rate_key})
+            else
+              local rkey = string.match(settings[k], 'redis:(.*)')
+              if rkey then
+                table.insert(redis_keys, rkey)
+                redis_keys_rev[#redis_keys] = rate_key
+              else
+                rspamd_logger.infox(task, "Don't know what to do with limit: %1", settings[k])
+              end
+            end
+          end
+        elseif type(settings[k]) == 'table' then
+          for _, rl in ipairs(settings[k]) do
+            table.insert(args, {{rl[1], rl[2]}, rate_key})
+          end
+        elseif type(settings[k]) == 'string' then
+          local rkey = string.match(settings[k], 'redis:(.*)')
+          if rkey then
+            table.insert(redis_keys, rkey)
+            redis_keys_rev[#redis_keys] = rate_key
+          else
+            rspamd_logger.infox(task, "Don't know what to do with limit: %1", settings[k])
+          end
+        end
+      end
+    end
+  end
+
+  if redis_keys[1] then
+    return collect_redis_keys()
+  else
+    return process_buckets(task, args)
   end
 end
 
