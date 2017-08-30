@@ -182,7 +182,7 @@ local function load_scripts(cfg, ev_base)
 end
 
 local limit_parser
-local function parse_string_limit(lim)
+local function parse_string_limit(lim, no_error)
   local function parse_time_suffix(s)
     if s == 's' then
       return 1
@@ -238,7 +238,9 @@ local function parse_string_limit(lim)
     return t[2], t[1]
   end
 
-  rspamd_logger.errx(rspamd_config, 'bad limit: %s', lim)
+  if not no_error then
+    rspamd_logger.errx(rspamd_config, 'bad limit: %s', lim)
+  end
 
   return nil
 end
@@ -534,7 +536,7 @@ local function ratelimit_cb(task)
             local res = custom_keywords[settings[k]]['get_limit'](task)
             if type(res) == 'string' then res = {res} end
             for _, r in ipairs(res) do
-              local plim, size = parse_string_limit(r)
+              local plim, size = parse_string_limit(r, true)
               if plim then
                 table.insert(args, {{plim, size}, rk})
               else
@@ -555,11 +557,11 @@ local function ratelimit_cb(task)
           local res = custom_keywords[settings[k]]['get_limit'](task)
           if type(res) == 'string' then res = {res} end
           for _, r in ipairs(res) do
-            local plim, size = parse_string_limit(r)
+            local plim, size = parse_string_limit(r, true)
             if plim then
               table.insert(args, {{plim, size}, rate_key})
             else
-              local rkey = string.match(settings[k], 'redis:(.*)')
+              local rkey = string.match(r, 'redis:(.*)')
               if rkey then
                 table.insert(redis_keys, rkey)
                 redis_keys_rev[#redis_keys] = rate_key
