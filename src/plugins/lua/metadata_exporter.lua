@@ -154,20 +154,24 @@ local formatters = {
   end
 }
 
+local function is_spam(action)
+  return (action == 'reject' or action == 'add header' or action == 'rewrite subject')
+end
+
 local selectors = {
   default = function(task)
     return true
   end,
   is_spam = function(task)
     local action = task:get_metric_action('default')
-    return (action == 'reject' or action == 'add header')
+    return is_spam(action)
   end,
   is_spam_authed = function(task)
     if not task:get_user() then
       return false
     end
     local action = task:get_metric_action('default')
-    return (action == 'reject' or action == 'add header')
+    return is_spam(action)
   end,
   is_reject = function(task)
     local action = task:get_metric_action('default')
