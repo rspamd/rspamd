@@ -38,6 +38,7 @@ local rl_prefix = 'RL'
 local ip_score_lower_bound = 10
 local ip_score_ham_multiplier = 1.1
 local ip_score_spam_divisor = 1.1
+local limits_hash
 
 local message_func = function(_, limit_type)
   return string.format('Ratelimit "%s" exceeded', limit_type)
@@ -511,13 +512,21 @@ local function ratelimit_cb(task)
         return process_buckets(task, args)
       end
     end
+    local params, method
+    if limits_hash then
+      params = {limits_hash, rspamd_lua_utils.unpack(redis_keys)}
+      method = 'HMGET'
+    else
+      method = 'MGET'
+      params = redis_keys
+    end
     local requested_keys = rspamd_redis_make_request(task,
       redis_params, -- connect params
       nil, -- hash key
       true, -- is write
       collect_cb, --callback
-      'MGET', -- command
-      redis_keys -- arguments
+      method, -- command
+      params -- arguments
     )
     if not requested_keys then
       rspamd_logger.errx(task, 'got error connecting to redis')
@@ -676,6 +685,10 @@ if opts then
 
   if opts['message_func'] then
     message_func = assert(load(opts['message_func']))()
+  end
+
+  if opts['limits_hash'] then
+    limits_hash = opts['limits_hash']
   end
 
   redis_params = rspamd_parse_redis_server('ratelimit')

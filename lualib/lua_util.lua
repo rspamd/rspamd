@@ -144,4 +144,9 @@ exports.is_rspamc_or_controller = function(task)
   return is_rspamc
 end
 
+local unpack_function = table.unpack or unpack
+exports.unpack = function(t)
+  return unpack_function(t)
+end
+
 return exports

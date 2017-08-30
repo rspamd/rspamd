@@ -41,6 +41,10 @@ files['/**/src/plugins/lua/greylist.lua'].globals = {
   'math.ifloor',
 }
 
+files['/**/lualib/lua_util.lua'].globals = {
+  'unpack',
+}
+
 files['/**/src/rspamadm/*'].globals = {
   'ansicolors',
   'getopt',
