@@ -42,6 +42,7 @@ files['/**/src/plugins/lua/greylist.lua'].globals = {
 }
 
 files['/**/lualib/lua_util.lua'].globals = {
+  'table.unpack',
   'unpack',
 }
 
