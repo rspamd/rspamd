@@ -580,11 +580,10 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					monitored_domain = "1.0.0.127";
 				}
 			}
-			else {
-				if (!monitored_domain) {
-					monitored_domain = rspamd_surbl_default_monitored;
-				}
-			}
+		}
+
+		if (!monitored_domain) {
+			monitored_domain = rspamd_surbl_default_monitored;
 		}
 
 		ropts = ucl_object_typed_new (UCL_OBJECT);
