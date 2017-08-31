@@ -154,9 +154,22 @@ read_exceptions_list (gchar * chunk,
 	struct map_cb_data *data,
 	gboolean final)
 {
+	GHashTable **t;
+	guint i;
+
 	if (data->cur_data == NULL) {
+		t = data->prev_data;
+
+		for (i = 0; i < MAX_LEVELS; i++) {
+			if (t[i] != NULL) {
+				g_hash_table_destroy (t[i]);
+			}
+			t[i] = NULL;
+		}
+
 		data->cur_data = data->prev_data;
 	}
+
 	return rspamd_parse_kv_list (
 			   chunk,
 			   len,
@@ -176,9 +189,12 @@ fin_exceptions_list (struct map_cb_data *data)
 		t = data->prev_data;
 		for (i = 0; i < MAX_LEVELS; i++) {
 			if (t[i] != NULL) {
-				g_hash_table_destroy (t[i]);
+				rspamd_default_log_function (G_LOG_LEVEL_DEBUG,
+						"surbl", "",
+						G_STRFUNC,
+						"exceptions level %d: %d elements",
+						i, g_hash_table_size (t[i]));
 			}
-			t[i] = NULL;
 		}
 	}
 }
