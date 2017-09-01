@@ -19,6 +19,7 @@ limitations under the License.
 require "global_functions" ()
 
 config['regexp'] = {}
+rspamd_maps = {} -- Global maps
 
 local local_conf = rspamd_paths['CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
@@ -36,24 +37,38 @@ dofile(local_rules .. '/forwarding.lua')
 dofile(local_rules .. '/mid.lua')
 
 local function file_exists(filename)
-	local file = io.open(filename)
-	if file then
-		io.close(file)
-		return true
-	else
-		return false
-	end
+  local file = io.open(filename)
+  if file then
+    io.close(file)
+    return true
+  else
+    return false
+  end
 end
 
 if file_exists(local_conf .. '/rspamd.local.lua') then
-	dofile(local_conf .. '/rspamd.local.lua')
+  dofile(local_conf .. '/rspamd.local.lua')
 else
-	-- Legacy lua/rspamd.local.lua
-	if file_exists(local_conf .. '/lua/rspamd.local.lua') then
-		dofile(local_conf .. '/lua/rspamd.local.lua')
-	end
+  -- Legacy lua/rspamd.local.lua
+  if file_exists(local_conf .. '/lua/rspamd.local.lua') then
+    dofile(local_conf .. '/lua/rspamd.local.lua')
+  end
 end
 
 if file_exists(local_rules .. '/rspamd.classifiers.lua') then
-	dofile(local_rules .. '/rspamd.classifiers.lua')
+  dofile(local_rules .. '/rspamd.classifiers.lua')
+end
+
+local rmaps =  rspamd_config:get_all_opt("lua_maps")
+if rmaps and type(rmaps) == 'table' then
+  local rspamd_logger = require "rspamd_logger"
+  for k,v in pairs(rmaps) do
+    local status,map_or_err = pcall(rspamd_config:add_map(v))
+
+    if not status then
+      rspamd_logger.errx(rspamd_config, "cannot add map %s: %s", k, map_or_err)
+    else
+      rspamd_maps[k] = map_or_err
+    end
+  end
 end
