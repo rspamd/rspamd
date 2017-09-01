@@ -261,6 +261,13 @@ LUA_FUNCTION_DEF (mimepart, get_length);
 LUA_FUNCTION_DEF (mimepart, get_type);
 
 /***
+ * @method mime_part:get_type_full()
+ * Extract content-type string of the mime part with all attributes
+ * @return {string,string,table} content type in form 'type','subtype', {attrs}
+ */
+LUA_FUNCTION_DEF (mimepart, get_type_full);
+
+/***
  * @method mime_part:get_cte()
  * Extract content-transfer-encoding for a part
  * @return {string} content transfer encoding (e.g. `base64` or `7bit`)
@@ -355,6 +362,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
+	LUA_INTERFACE_DEF (mimepart, get_type_full),
 	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
 	LUA_INTERFACE_DEF (mimepart, get_header),
@@ -815,9 +823,12 @@ lua_mimepart_get_length (lua_State * L)
 }
 
 static gint
-lua_mimepart_get_type (lua_State * L)
+lua_mimepart_get_type_common (lua_State * L, gboolean full)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_content_type_param *param;
 
 	if (part == NULL) {
 		lua_pushnil (L);
@@ -828,7 +839,53 @@ lua_mimepart_get_type (lua_State * L)
 	lua_pushlstring (L, part->ct->type.begin, part->ct->type.len);
 	lua_pushlstring (L, part->ct->subtype.begin, part->ct->subtype.len);
 
-	return 2;
+	if (!full) {
+		return 2;
+	}
+
+	lua_createtable (L, 0, 2 + (part->ct->attrs ?
+			g_hash_table_size (part->ct->attrs) : 0));
+
+	if (part->ct->charset.len > 0) {
+		lua_pushstring (L, "charset");
+		lua_pushlstring (L, part->ct->charset.begin, part->ct->charset.len);
+		lua_settable (L, -3);
+	}
+
+	if (part->ct->boundary.len > 0) {
+		lua_pushstring (L, "charset");
+		lua_pushlstring (L, part->ct->boundary.begin, part->ct->boundary.len);
+		lua_settable (L, -3);
+	}
+
+	if (part->ct->attrs) {
+		g_hash_table_iter_init (&it, part->ct->attrs);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			param = v;
+
+			if (param->name.len > 0 && param->name.len > 0) {
+				/* TODO: think about multiple values here */
+				lua_pushlstring (L, param->name.begin, param->name.len);
+				lua_pushlstring (L, param->value.begin, param->value.len);
+				lua_settable (L, -3);
+			}
+		}
+	}
+
+	return 3;
+}
+
+static gint
+lua_mimepart_get_type (lua_State * L)
+{
+	return lua_mimepart_get_type_common (L, FALSE);
+}
+
+static gint
+lua_mimepart_get_type_full (lua_State * L)
+{
+	return lua_mimepart_get_type_common (L, TRUE);
 }
 
 static gint
