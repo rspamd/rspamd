@@ -384,8 +384,11 @@ lua_config_add_map (lua_State *L)
 
 		g_assert (map_obj != NULL);
 
-		if (type == NULL) {
+		if (type == NULL && cbidx != -1) {
 			type = "callback";
+		}
+		else if (type == NULL) {
+			return luaL_error (L, "invalid map type");
 		}
 
 		if (strcmp (type, "callback") == 0) {
