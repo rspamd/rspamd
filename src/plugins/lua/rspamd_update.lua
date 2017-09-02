@@ -126,7 +126,7 @@ if section then
     if k == 'key' then
       trusted_key = elt
     else
-      local map = rspamd_config:add_map(elt, "rspamd updates map", nil)
+      local map = rspamd_config:add_map(elt, "rspamd updates map", nil, "callback")
       if not map then
         rspamd_logger.errx(rspamd_config, 'cannot load updates from %1', elt)
       else
