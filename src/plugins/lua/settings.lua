@@ -23,6 +23,7 @@ end
 -- https://rspamd.com/doc/configuration/settings.html
 
 local rspamd_logger = require "rspamd_logger"
+local rspamd_maps = require "maps"
 local redis_params
 
 local settings = {}
@@ -105,17 +106,17 @@ local function check_settings(task)
   local function check_addr_setting(rule, addr)
     local function check_specific_addr(elt)
       if rule['name'] then
-        if rule['name']:lower() == elt['addr']:lower() then
+        if rspamd_maps.rspamd_maybe_check_map(rule['name'], elt['addr']) then
           return true
         end
       end
       if rule['user'] then
-        if rule['user']:lower() == elt['user']:lower() then
+        if rspamd_maps.rspamd_maybe_check_map(rule['user'], elt['user']) then
           return true
         end
       end
       if rule['domain'] and elt['domain'] then
-        if rule['domain']:lower() == elt['domain']:lower() then
+        if rspamd_maps.rspamd_maybe_check_map(rule['domain'], elt['domain']) then
           return true
         end
       end
@@ -137,13 +138,19 @@ local function check_settings(task)
   end
 
   local function check_ip_setting(rule, ip)
-    if rule[2] ~= 0 then
-      local nip = ip:apply_mask(rule[2])
-      if nip and nip:to_string() == rule[1]:to_string() then
+    if not rule[2] then
+      if rspamd_maps.rspamd_maybe_check_map(rule[1], ip:to_string()) then
         return true
       end
-    elseif ip:to_string() == rule[1]:to_string() then
-      return true
+    else
+      if rule[2] ~= 0 then
+        local nip = ip:apply_mask(rule[2])
+        if nip and nip:to_string() == rule[1]:to_string() then
+          return true
+        end
+      elseif ip:to_string() == rule[1]:to_string() then
+        return true
+      end
     end
 
     return false
@@ -376,8 +383,8 @@ local function process_settings_table(tbl)
             out[1] = res
             out[2] = 0
           else
-            rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
-            return nil
+            -- It can still be a map
+            out[1] = res
           end
         else
           local res = rspamd_ip.from_string(string.sub(ip, 1, slash - 1))
@@ -405,29 +412,34 @@ local function process_settings_table(tbl)
           table.insert(out, process_addr(v))
         end
       elseif type(addr) == "string" then
-        local start = string.sub(addr, 1, 1)
-        if start == '/' then
-          -- It is a regexp
-          local re = rspamd_regexp.create(addr)
-          if re then
-            out['regexp'] = re
-          else
-            rspamd_logger.errx(rspamd_config, "bad regexp: " .. addr)
-            return nil
-          end
-
-        elseif start == '@' then
-          -- It is a domain if form @domain
-          out['domain'] = string.sub(addr, 2)
+        if string.sub(addr, 1, 4) == "map:" then
+          -- It is map, don't apply any extra logic
+          out['name'] = addr
         else
-          -- Check user@domain parts
-          local at = string.find(addr, '@')
-          if at then
-            -- It is full address
-            out['name'] = addr
+          local start = string.sub(addr, 1, 1)
+          if start == '/' then
+            -- It is a regexp
+            local re = rspamd_regexp.create(addr)
+            if re then
+              out['regexp'] = re
+            else
+              rspamd_logger.errx(rspamd_config, "bad regexp: " .. addr)
+              return nil
+            end
+
+          elseif start == '@' then
+            -- It is a domain if form @domain
+            out['domain'] = string.sub(addr, 2)
           else
-            -- It is a user
-            out['user'] = addr
+            -- Check user@domain parts
+            local at = string.find(addr, '@')
+            if at then
+              -- It is full address
+              out['name'] = addr
+            else
+              -- It is a user
+              out['user'] = addr
+            end
           end
         end
       else

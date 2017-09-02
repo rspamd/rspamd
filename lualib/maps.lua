@@ -131,4 +131,35 @@ end
 
 exports.rspamd_map_add = rspamd_map_add
 
+-- Check `what` for being lua_map name, otherwise just compares key with what
+local function rspamd_maybe_check_map(key, what)
+  local fun = require "fun"
+
+  local function starts(where,st)
+    return string.sub(where,1,string.len(st))==st
+  end
+
+  if type(what) == "table" then
+    return fun.any(function(elt) return rspamd_maybe_check_map(key, elt) end, what)
+  end
+  if type(rspamd_maps) == "table" then
+    local mn
+    if starts(what, "map:") then
+      mn = string.sub(what, 4)
+    elseif starts(what, "map://") then
+      mn = string.sub(what, 6)
+    end
+
+    if mn and rspamd_maps[mn] then
+      return rspamd_maps[mn]:get_key(key)
+    end
+  else
+    return what:lower() == key
+  end
+
+  return false
+end
+
+exports.rspamd_maybe_check_map = rspamd_maybe_check_map
+
 return exports
