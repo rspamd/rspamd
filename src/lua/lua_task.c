@@ -3134,6 +3134,7 @@ struct tokens_foreach_cbdata {
 	struct rspamd_task *task;
 	lua_State *L;
 	gint idx;
+	gboolean normalize;
 };
 
 static void
@@ -3150,7 +3151,12 @@ tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
 	mres = cbd->task->result;
 
 	if (mres && (s = g_hash_table_lookup (mres->symbols, sym)) != NULL) {
-		lua_pushnumber (cbd->L, tanh (s->score));
+		if (cbd->normalize) {
+			lua_pushnumber (cbd->L, tanh (s->score));
+		}
+		else {
+			lua_pushnumber (cbd->L, s->score);
+		}
 	}
 	else {
 		lua_pushnumber (cbd->L, 0.0);
@@ -3168,6 +3174,15 @@ lua_task_get_symbols_tokens (lua_State *L)
 	cbd.task = task;
 	cbd.L = L;
 	cbd.idx = 1;
+	cbd.normalize = TRUE;
+
+	if (lua_type (L, 2) == LUA_TBOOLEAN) {
+		cbd.normalize = lua_toboolean (L, 2);
+	}
+	else {
+		cbd.normalize = TRUE;
+	}
+
 	lua_createtable (L, rspamd_symbols_cache_symbols_count (task->cfg->cache), 0);
 	rspamd_symbols_cache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
 

@@ -694,7 +694,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_example),
 	LUA_INTERFACE_DEF (config, set_peak_cb),
 	LUA_INTERFACE_DEF (config, get_cpu_flags),
-	LUA_INTERFACE_DEF (config, get_cpu_flags),
+	LUA_INTERFACE_DEF (config, has_torch),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
