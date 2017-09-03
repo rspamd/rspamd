@@ -770,7 +770,7 @@ local function train_fann(rule, _, ev_base, elt, worker)
             local out = torch.MemoryFile()
             out:writeObject(fanns[elt].fann_train)
             local st = out:storage():string()
-            return out
+            return st
           end
 
           worker:spawn_process{
