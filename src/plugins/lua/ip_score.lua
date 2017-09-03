@@ -29,6 +29,7 @@ local whitelist = nil
 local asn_cc_whitelist = nil
 local check_authed = false
 local check_local = false
+local M = "ip_score"
 
 local options = {
   actions = { -- how each action is treated in scoring
@@ -140,6 +141,11 @@ local ip_score_set = function(task)
         ipnet_score,total_ipnet,
         ip_score, total_ip = pool:get_variable('ip_score',
         'double,double,double,double,double,double,double,double')
+  rspamd_logger.debugm(M, task, "raw scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
+    asn_score,total_asn,
+    country_score,total_country,
+    ipnet_score,total_ipnet,
+    ip_score, total_ip)
 
   local score_mult = 0
   if options['actions'][action] then
@@ -158,6 +164,11 @@ local ip_score_set = function(task)
   country_score,total_country = new_score_set(score, country_score, total_country)
   ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
   ip_score,total_ip = new_score_set(score, ip_score, total_ip)
+  rspamd_logger.debugm(M, task, "processed scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
+    asn_score,total_asn,
+    country_score,total_country,
+    ipnet_score,total_ipnet,
+    ip_score, total_ip)
   local redis_args = {options['hash'],
     options['asn_prefix'] .. asn, string.format('%f|%d', asn_score, total_asn),
     options['country_prefix'] .. country, string.format('%f|%d', country_score, total_country),
