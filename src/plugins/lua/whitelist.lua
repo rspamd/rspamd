@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2015-2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ local function whitelist_cb(symbol, rule, task)
   if rule['valid_spf'] then
     if not task:has_symbol(options['spf_allow_symbol']) then
       -- Not whitelisted
-      if not rule['blacklist'] or rule['strict'] then
+      if not rule['blacklist'] and not rule['strict'] then
         return
       end
 
@@ -117,35 +117,37 @@ local function whitelist_cb(symbol, rule, task)
   if rule['valid_dkim'] then
     local sym = task:get_symbol(options['dkim_allow_symbol'])
     if not sym then
-      if not rule['blacklist'] or rule['strict'] then
+      if not rule['blacklist'] and not rule['strict'] then
         return
       end
 
       dkim_violated = true
-    end
+    else
+      found = false
+      local dkim_opts = sym[1]['options']
+      if dkim_opts then
+        fun.each(function(val)
+          if not found then
+            local tld = rspamd_util.get_tld(val)
 
-    local dkim_opts = sym[1]['options']
-    if dkim_opts then
-      fun.each(function(val)
-        if not found then
-          local tld = rspamd_util.get_tld(val)
-
-          if tld then
-            found, mult = find_domain(tld)
+            if tld then
+              found, mult = find_domain(tld)
+            end
           end
-        end
-      end, dkim_opts)
+        end, dkim_opts)
+      end
     end
   end
 
   if rule['valid_dmarc'] then
     if not task:has_symbol(options['dmarc_allow_symbol']) then
-      if not rule['blacklist'] or rule['strict'] then
+      if not rule['blacklist'] and not rule['strict'] then
         return
       end
 
       dmarc_violated = true
     end
+
     local from = task:get_from(2)
 
     if ((from or E)[1] or E).domain then
@@ -158,7 +160,7 @@ local function whitelist_cb(symbol, rule, task)
   end
 
   if found then
-    if not rule['blacklist'] or rule['strict'] then
+    if not rule['blacklist'] and not rule['strict'] then
       task:insert_result(symbol, mult, domains)
     else
       -- Additional constraints for blacklist
@@ -256,14 +258,24 @@ local configure_whitelist_module = function()
           callback = gen_whitelist_cb(symbol, rule)
         })
 
+        local spf_dep = false
+        local dkim_dep = false
         if rule['valid_spf'] then
           rspamd_config:register_dependency(id, options['spf_allow_symbol'])
+          spf_dep = true
         end
         if rule['valid_dkim'] then
           rspamd_config:register_dependency(id, options['dkim_allow_symbol'])
+          dkim_dep = true
         end
         if rule['valid_dmarc'] then
-          rspamd_config:register_dependency(id, options['dmarc_allow_symbol'])
+          if not spf_dep then
+            rspamd_config:register_dependency(id, options['spf_allow_symbol'])
+          end
+          if not dkim_dep then
+            rspamd_config:register_dependency(id, options['dkim_allow_symbol'])
+          end
+          rspamd_config:register_dependency(id, 'DMARC_CALLBACK')
         end
 
         if rule['score'] then
