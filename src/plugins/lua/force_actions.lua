@@ -69,7 +69,10 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor)
 
     if e:process(task) == 1 then
       if subject then
-        task:set_metric_subject(subject)
+        --task:set_metric_subject(subject)
+        --XXX: alewis: it won't work this way, we need to either remove this
+        --feature or to rewrite it completely so far
+        rspamd_logger.warnx("subject is now not supported by this module")
       end
       if type(message) == 'string' then
         task:set_pre_result(act, message)
