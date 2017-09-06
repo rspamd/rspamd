@@ -86,7 +86,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				s->weight_ptr = score;
 			}
 			else {
-				s = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*s));
+				s = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*s));
 				s->name = symbol;
 				s->weight_ptr = score;
 				g_hash_table_insert (metric->symbols, symbol, s);
