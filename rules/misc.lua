@@ -257,7 +257,8 @@ rspamd_config:register_symbol{
   type = 'virtual',
   parent = check_rcvd,
   name = 'RCVD_VIA_SMTP_AUTH',
-  description = 'Message injected via SMTP AUTH',
+  -- NB This does not mean sender was authenticated; see task:get_user()
+  description = 'Authenticated hand-off was seen in Received headers',
   score = 0.0,
   group = 'authentication'
 }
