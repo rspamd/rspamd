@@ -133,14 +133,14 @@ local function gen_auth_results(task, settings)
         end
         table.insert(hdr_parts, hdr)
       elseif auth_type == 'dkim' and key ~= 'none' then
-        local dkim_parts = {}
         if common.symbols[auth_types['dkim'][key]][1] then
+          local dkim_parts = {}
           local opts = common.symbols[auth_types['dkim'][key]][1]['options']
           for _, v in ipairs(opts) do
             table.insert(dkim_parts, auth_type .. '=' .. key .. ' header.d=' .. v)
           end
+          table.insert(hdr_parts, table.concat(dkim_parts, '; '))
         end
-        table.insert(hdr_parts, table.concat(dkim_parts, '; '))
       elseif auth_type == 'arc' and key ~= 'none' then
         if common.symbols[auth_types['arc'][key]][1] then
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
