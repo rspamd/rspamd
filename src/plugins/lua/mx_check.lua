@@ -31,7 +31,7 @@ local settings = {
   symbol_good_mx = 'MX_GOOD',
   expire = 86400, -- 1 day by default
   expire_novalid = 7200, -- 2 hours by default for no valid mxes
-  greylist_invalid = false, -- Greylist first message with invalid MX (require greylist plugin)
+  greylist_invalid = true, -- Greylist first message with invalid MX (require greylist plugin)
   key_prefix = 'rmx',
 }
 local redis_params
@@ -84,11 +84,8 @@ local function mx_check(task)
       if not valid then
         -- Greylist message
         if settings.greylist_invalid then
-          local grey_is_whitelisted = task:get_mempool():get_variable("grey_whitelisted")
-          if not grey_is_whitelisted then
-            task:get_mempool():set_variable("grey_greylisted_required", "1")
-            task:insert_result(settings.symbol_bad_mx, 1.0, "greylisted")
-          end
+          task:get_mempool():set_variable("grey_greylisted_required", "1")
+          task:insert_result(settings.symbol_bad_mx, 1.0, "greylisted")
         else
           task:insert_result(settings.symbol_bad_mx, 1.0)
         end
@@ -294,7 +291,7 @@ if opts then
 
   rspamd_config:set_metric_symbol({
     name = settings.symbol_bad_mx,
-    score = 4.0,
+    score = 0.5,
     description = 'Domain has no working MX',
     group = 'MX',
     one_shot = true,
@@ -302,7 +299,7 @@ if opts then
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_good_mx,
-    score = -0.1,
+    score = -0.01,
     description = 'Domain has working MX',
     group = 'MX',
     one_shot = true,
@@ -310,7 +307,7 @@ if opts then
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_no_mx,
-    score = 1.5,
+    score = 3.5,
     description = 'Domain has no resolvable MX',
     group = 'MX',
     one_shot = true,
