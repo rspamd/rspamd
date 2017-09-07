@@ -561,6 +561,12 @@ LUA_FUNCTION_DEF (task, set_metric_score);
  * @param {string} action name to set
  */
 LUA_FUNCTION_DEF (task, set_metric_action);
+/***
+ * @method task:set_metric_subject(subject)
+ * Set the subject in the default metric
+ * @param {string} subject subject to set
+ */
+LUA_FUNCTION_DEF (task, set_metric_subject);
 
 /***
  * @method task:learn(is_spam[, classifier)
@@ -852,6 +858,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_score),
 	LUA_INTERFACE_DEF (task, set_metric_action),
+	LUA_INTERFACE_DEF (task, set_metric_subject),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
 	LUA_INTERFACE_DEF (task, get_settings),
