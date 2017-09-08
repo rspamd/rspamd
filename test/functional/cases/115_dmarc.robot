@@ -189,6 +189,26 @@ SPF PASS INCLUDE
   ...  -i  8.8.8.8  -F  x@pass1.org.org.za
   Check Rspamc  ${result}  R_SPF_ALLOW
 
+SPF PTRS
+  ${result} =  Scan Message With Rspamc  /dev/null
+  ...  -i  88.99.142.95  -F  foo@crazyspf.cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_ALLOW
+  ${result} =  Scan Message With Rspamc  /dev/null
+  ...  -i  128.66.0.1  -F  foo@crazyspf.cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  ${result} =  Scan Message With Rspamc  /dev/null
+  ...  -i  209.85.216.182  -F  foo@crazyspf.cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_FAIL
+  ${result} =  Scan Message With Rspamc  /dev/null
+  ...  -i  98.138.91.166  -F  foo@crazyspf.cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_ALLOW
+  ${result} =  Scan Message With Rspamc  /dev/null
+  ...  -i  98.138.91.167  -F  foo@crazyspf.cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_ALLOW
+  ${result} =  Scan Message With Rspamc  /dev/null
+  ...  -i  98.138.91.168  -F  foo@crazyspf.cacophony.za.org
+  Check Rspamc  ${result}  R_SPF_ALLOW
+
 *** Keywords ***
 DMARC Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
