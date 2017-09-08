@@ -3922,6 +3922,26 @@ lua_task_set_metric_action (lua_State *L)
 }
 
 static gint
+lua_task_set_metric_subject (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *subject;
+
+	subject = luaL_checkstring (L, 2);
+
+	if (task && subject) {
+		rspamd_mempool_set_variable (task->task_pool, "metric_subject",
+			rspamd_mempool_strdup(task->task_pool, subject), NULL);
+		lua_pushboolean (L, true);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_task_get_protocol_reply (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
