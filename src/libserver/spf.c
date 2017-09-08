@@ -673,6 +673,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					}
 					else {
 						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+						cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
 						spf_record_process_addr (rec, addr, elt_data);
 					}
 					break;
