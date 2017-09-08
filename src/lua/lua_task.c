@@ -4080,13 +4080,12 @@ lua_task_set_metric_subject (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *subject;
-	struct rspamd_metric *metric;
 
-	metric = task->cfg->default_metric;
 	subject = luaL_checkstring (L, 2);
 
-	if (task && metric && subject) {
-		metric->subject = rspamd_mempool_strdup (task->task_pool, subject);
+	if (task && subject) {
+		rspamd_mempool_set_variable (task->task_pool, "metric_subject",
+			rspamd_mempool_strdup(task->task_pool, subject), NULL);
 		lua_pushboolean (L, true);
 	}
 	else {

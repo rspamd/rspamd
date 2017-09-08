@@ -747,7 +747,11 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 	const gchar *s, *c, *p;
 	gsize slen = 0;
 
-	c = metric->subject;
+	c = rspamd_mempool_get_variable (task->task_pool, "metric_subject");
+
+	if (c == NULL) {
+		c = metric->subject;
+	}
 
 	if (c == NULL) {
 		c = SPAM_SUBJECT;
