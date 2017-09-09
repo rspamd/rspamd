@@ -586,6 +586,12 @@ LUA_FUNCTION_DEF (task, set_metric_score);
  * @param {string} action name to set
  */
 LUA_FUNCTION_DEF (task, set_metric_action);
+/***
+ * @method task:set_metric_subject(subject)
+ * Set the subject in the default metric
+ * @param {string} subject subject to set
+ */
+LUA_FUNCTION_DEF (task, set_metric_subject);
 
 /***
  * @method task:learn(is_spam[, classifier)
@@ -880,6 +886,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_score),
 	LUA_INTERFACE_DEF (task, set_metric_action),
+	LUA_INTERFACE_DEF (task, set_metric_subject),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
 	LUA_INTERFACE_DEF (task, get_settings),
@@ -4060,6 +4067,26 @@ lua_task_set_metric_action (lua_State *L)
 		else {
 			lua_pushboolean (L, false);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_set_metric_subject (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *subject;
+
+	subject = luaL_checkstring (L, 2);
+
+	if (task && subject) {
+		rspamd_mempool_set_variable (task->task_pool, "metric_subject",
+			rspamd_mempool_strdup(task->task_pool, subject), NULL);
+		lua_pushboolean (L, true);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
