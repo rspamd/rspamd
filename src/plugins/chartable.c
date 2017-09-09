@@ -200,8 +200,11 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		if (u_isalpha (uc)) {
 			sc = ublock_getCode (uc);
 
-			if (sc <= UBLOCK_LATIN_EXTENDED_B) {
-				/* Assume all latin characters as basic latin */
+			if (sc <= UBLOCK_COMBINING_DIACRITICAL_MARKS ||
+					sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) {
+				/* Assume all latin, IPA, diacritic and space modifiers
+				 * characters as basic latin
+				 */
 				sc = UBLOCK_BASIC_LATIN;
 			}
 
