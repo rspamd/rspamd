@@ -39,9 +39,9 @@ local options = {
     ['no action'] = 1.0
   },
   scores = { -- how each component is evaluated
-    ['asn'] = 0.5,
-    ['country'] = 0.1,
-    ['ipnet'] = 0.8,
+    ['asn'] = 0.4,
+    ['country'] = 0.01,
+    ['ipnet'] = 0.5,
     ['ip'] = 1.0
   },
   symbol = 'IP_SCORE', -- symbol to be inserted
