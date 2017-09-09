@@ -14,16 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local rspamd_util = require "rspamd_util"
+local rspamd_logger = require "rspamd_logger"
 local torch
-local nn
 local exports = {}
 
 local lua_nn_models = {}
 
 if rspamd_config:has_torch() then
   torch = require "torch"
-  nn = require "nn"
 end
 
 if torch then
