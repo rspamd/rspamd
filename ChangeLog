@@ -1,3 +1,36 @@
+1.6.4: 10 Sep 2017
+	* [Feature] Add method to get all content-type attributes in Lua
+	* [Feature] Add some sanity checks for actions and controller
+	* [Feature] Allow randomly select User-Agent from a list
+	* [Feature] Deal with obscured URLs with @ symbols
+	* [Feature] Milter headers: support adding/removing arbitrary headers from config
+	* [Fix] Add another workaround to display history properly
+	* [Fix] Add missing rspamadm control options to help
+	* [Fix] Auth-Results: Multiple DKIM signatures
+	* [Fix] Crash in URL processing
+	* [Fix] Default monitoring domain for surbl plugin
+	* [Fix] Detection of maillist optimized and fixed
+	* [Fix] Do not cache SPF records with PTR elements
+	* [Fix] Fix blacklists and DMARC in whitelist
+	* [Fix] Fix exceptions list in surbl
+	* [Fix] Fix processing of closed tags
+	* [Fix] Fix PTR processing in SPF
+	* [Fix] Lowercase HTTP headers to make them searchable from Lua
+	* [Fix] options.local_networks setting
+	* [Fix] Ratelimit: lowercase email addresses
+	* [Fix] Rebalance and slightly rework MX check plugin
+	* [Fix] Redis script loading in DMARC; URL tags; URL reputation
+	* [Fix] Reject invalid bh for DKIM signatures earlier
+	* [Fix] Remove incorrect method `task:set_metric_subject`
+	* [Fix] Rewriting subjects via force actions module
+	* [Fix] RPM postinstall
+	* [Fix] Treat 'rewrite subject' as spam action
+	* [Fix] Try harder to find urls
+	* [Fix] Use full URL when making an HTTP request
+	* [Fix] Use raw urls when sending requests to redirector
+	* [Fix] Use weight from map for fuzzy scoring
+	* [Rules] Penalise R_BAD_CTE_7BIT for utf8 messages
+
 1.6.3: 26 Jul 2017
 	* [CritFix] Fix semicolons parsing in the content type
 	* [Feature] Add EBL to the default config
