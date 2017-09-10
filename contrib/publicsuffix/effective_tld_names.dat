@@ -6702,6 +6702,17 @@ lib.wy.us
 pvt.k12.ma.us
 chtr.k12.ma.us
 paroch.k12.ma.us
+// Merit Network, Inc. maintains the registry for =~ /(k12|cc|lib).mi.us/ and the following
+//    see also: http://domreg.merit.edu
+//    see also: whois -h whois.domreg.merit.edu help
+ann-arbor.mi.us
+cog.mi.us
+dst.mi.us
+eaton.mi.us
+gen.mi.us
+mus.mi.us
+tec.mi.us
+washtenaw.mi.us
 
 // uy : http://www.nic.org.uy/
 uy
@@ -6826,6 +6837,10 @@ xn--y9a3aq
 xn--54b7fta0cc
 বাংলা
 
+// xn--90ae ("bg", Bulgarian) : BG
+xn--90ae
+бг
+
 // xn--90ais ("bel", Belarusian/Russian Cyrillic) : BY
 // Operated by .by registry
 xn--90ais
@@ -6869,6 +6884,41 @@ xn--qxam
 // https://www2.hkirc.hk/register/rules.jsp
 xn--j6w193g
 香港
+
+// xn--2scrj9c ("Bharat", Kannada) : IN
+// India
+xn--2scrj9c
+ಭಾರತ
+
+// xn--3hcrj9c ("Bharat", Oriya) : IN
+// India
+xn--3hcrj9c
+ଭାରତ
+
+// xn--45br5cyl ("Bharatam", Assamese) : IN
+// India
+xn--45br5cyl
+ভাৰত
+
+// xn--h2breg3eve ("Bharatam", Sanskrit) : IN
+// India
+xn--h2breg3eve
+भारतम्
+
+// xn--h2brj9c8c ("Bharot", Santali) : IN
+// India
+xn--h2brj9c8c
+भारोत
+
+// xn--mgbgu82a ("Bharat", Sindhi) : IN
+// India
+xn--mgbgu82a
+ڀارت
+
+// xn--rvc1e0am3e ("Bharatam", Malayalam) : IN
+// India
+xn--rvc1e0am3e
+ഭാരതം
 
 // xn--h2brj9c ("Bharat", Devanagari) : IN
 // India
@@ -10943,8 +10993,23 @@ us-east-1.amazonaws.com
 
 // Amazon Elastic Beanstalk : https://aws.amazon.com/elasticbeanstalk/
 // Submitted by Luke Wells <psl-maintainers@amazon.com>
-elasticbeanstalk.cn-north-1.amazonaws.com.cn
-*.elasticbeanstalk.com
+cn-north-1.eb.amazonaws.com.cn
+elasticbeanstalk.com
+ap-northeast-1.elasticbeanstalk.com
+ap-northeast-2.elasticbeanstalk.com
+ap-south-1.elasticbeanstalk.com
+ap-southeast-1.elasticbeanstalk.com
+ap-southeast-2.elasticbeanstalk.com
+ca-central-1.elasticbeanstalk.com
+eu-central-1.elasticbeanstalk.com
+eu-west-1.elasticbeanstalk.com
+eu-west-2.elasticbeanstalk.com
+sa-east-1.elasticbeanstalk.com
+us-east-1.elasticbeanstalk.com
+us-east-2.elasticbeanstalk.com
+us-gov-west-1.elasticbeanstalk.com
+us-west-1.elasticbeanstalk.com
+us-west-2.elasticbeanstalk.com
 
 // Amazon Elastic Load Balancing : https://aws.amazon.com/elasticloadbalancing/
 // Submitted by Luke Wells <psl-maintainers@amazon.com>
@@ -11048,6 +11113,10 @@ betainabox.com
 // BinaryLane : http://www.binarylane.com
 // Submitted by Nathan O'Sullivan <nathan@mammoth.com.au>
 bnr.la
+
+// Boomla : https://boomla.com
+// Submitted by Tibor Halter <thalter@boomla.com>
+boomla.net
 
 // Boxfuse : https://boxfuse.com
 // Submitted by Axel Fontaine <axel@boxfuse.com>
@@ -11227,6 +11296,10 @@ co.dk
 firm.dk
 reg.dk
 store.dk
+
+// Debian : https://www.debian.org/
+// Submitted by Peter Palfrader / Debian Sysadmin Team <dsa-publicsuffixlist@debian.org>
+debian.net
 
 // deSEC : https://desec.io/
 // Submitted by Peter Thomassen <peter@desec.io>
@@ -11560,6 +11633,26 @@ ddnss.org
 definima.net
 definima.io
 
+// Dynu.com : https://www.dynu.com/
+// Submitted by Sue Ye <sue@dynu.com>
+ddnsfree.com
+ddnsgeek.com
+giize.com
+gleeze.com
+kozow.com
+loseyourip.com
+ooguy.com
+theworkpc.com
+casacam.net
+dynu.net
+accesscam.org
+camdvr.org
+freeddns.org
+mywire.org
+webredirect.org
+myddns.rocks
+blogsite.xyz
+
 // dynv6 : https://dynv6.com
 // Submitted by Dominik Menke <dom@digineo.de>
 dynv6.net
@@ -11641,9 +11734,11 @@ us.eu.org
 eu-1.evennode.com
 eu-2.evennode.com
 eu-3.evennode.com
+eu-4.evennode.com
 us-1.evennode.com
 us-2.evennode.com
 us-3.evennode.com
+us-4.evennode.com
 
 // eDirect Corp. : https://hosting.url.com.tw/
 // Submitted by C.S. chang <cschang@corp.url.com.tw>
@@ -11733,6 +11828,10 @@ vladikavkaz.su
 vladimir.su
 vologda.su
 
+// Fancy Bits, LLC : http://getchannels.com
+// Submitted by Aman Gupta <aman@getchannels.com>
+channelsdvr.net
+
 // Fastly Inc. : http://www.fastly.com/
 // Submitted by Fastly Security <security@fastly.com>
 fastlylb.net
@@ -11783,6 +11882,7 @@ myfusion.cloud
 
 // Futureweb OG : http://www.futureweb.at
 // Submitted by Andreas Schnederle-Wagner <schnederle@futureweb.at>
+*.futurecms.at
 futurehosting.at
 futuremailing.at
 *.ex.ortsinfo.at
@@ -11965,6 +12065,10 @@ se.leg.br
 sp.leg.br
 to.leg.br
 
+// intermetrics GmbH : https://pixolino.com/
+// Submitted by Wolfgang Schwarz <admin@intermetrics.de>
+pixolino.com
+
 // IPiFony Systems, Inc. : https://www.ipifony.com/
 // Submitted by Matthew Hardeman <mhardeman@ipifony.com>
 ipifony.net
@@ -11995,6 +12099,10 @@ edu.krd
 git-repos.de
 lcube-server.de
 svn-repos.de
+
+// LiquidNet Ltd : http://www.liquidnetlimited.com/
+// Submitted by Victor Velchev <admin@liquidnetlimited.com>
+we.bs
 
 // Lukanet Ltd : https://lukanet.com
 // Submitted by Anton Avramov <register@lukanet.com>
@@ -12037,6 +12145,17 @@ cloudapp.net
 // Mozilla Foundation : https://mozilla.org/
 // Submitted by glob <glob@mozilla.com>
 bmoattachments.org
+
+// MSK-IX : https://www.msk-ix.ru/
+// Submitted by Khannanov Roman <r.khannanov@msk-ix.ru>
+net.ru
+org.ru
+pp.ru
+
+// Netlify : https://www.netlify.com
+// Submitted by Jessica Parsons <jessica@netlify.com>
+bitballoon.com
+netlify.com
 
 // Neustar Inc.
 // Submitted by Trung Tran <Trung.Tran@neustar.biz>
@@ -12143,6 +12262,10 @@ sytes.net
 webhop.me
 zapto.org
 
+// NodeArt : https://nodeart.io
+// Submitted by Konstantin Nosov <Nosov@nodeart.io>
+stage.nodeart.io
+
 // Nodum B.V. : https://nodum.io/
 // Submitted by Wietse Wind <hello+publicsuffixlist@nodum.io>
 nodum.co
@@ -12151,6 +12274,46 @@ nodum.io
 // NYC.mn : http://www.information.nyc.mn
 // Submitted by Matthew Brown <mattbrown@nyc.mn>
 nyc.mn
+
+// NymNom : https://nymnom.com/
+// Submitted by Dave McCormack <dave.mccormack@nymnom.com>
+nom.ae
+nom.ai
+nom.al
+nym.by
+nym.bz
+nom.cl
+nom.gd
+nom.gl
+nym.gr
+nom.gt
+nom.hn
+nom.im
+nym.kz
+nym.la
+nom.li
+nym.li
+nym.lt
+nym.lu
+nym.me
+nom.mk
+nym.mx
+nom.nu
+nym.nz
+nym.pe
+nym.pt
+nom.pw
+nom.qa
+nom.rs
+nom.si
+nym.sk
+nym.su
+nym.sx
+nym.tw
+nom.ug
+nom.uy
+nom.vc
+nom.vg
 
 // Octopodal Solutions, LLC. : https://ulterius.io/
 // Submitted by Andrew Sampson <andrew@ulterius.io>
@@ -12229,6 +12392,7 @@ protonet.io
 // Publication Presse Communication SARL : https://ppcom.fr
 // Submitted by Yaacov Akiba Slama <admin@chirurgiens-dentistes-en-france.fr>
 chirurgiens-dentistes-en-france.fr
+byen.site
 
 // QA2
 // Submitted by Daniel Dent (https://www.danieldent.com/)
@@ -12345,6 +12509,10 @@ stackspace.space
 // Submitted by Philip Hutchins <hostmaster@storj.io>
 storj.farm
 
+// Sub 6 Limited: http://www.sub6.com
+// Submitted by Dan Miller <dm@sub6.com>
+temp-dns.com
+
 // Synology, Inc. : https://www.synology.com/
 // Submitted by Rony Weng <ronyweng@synology.com>
 diskstation.me
@@ -12452,10 +12620,15 @@ lib.de.us
 // Submitted by Simon Kissel <hostmaster@viprinet.com>
 router.management
 
+// Virtual-Info : https://www.virtual-info.info/
+// Submitted by Adnan RIHAN <hostmaster@v-info.info>
+v-info.info
+
 // WeDeploy by Liferay, Inc. : https://www.wedeploy.com
 // Submitted by Henrique Vicente <security@wedeploy.com>
 wedeploy.io
 wedeploy.me
+wedeploy.sh
 
 // Western Digital Technologies, Inc : https://www.wdc.com
 // Submitted by Jung Jin <jungseok.jin@wdc.com>
