@@ -6,8 +6,8 @@ Library         Process
 *** Keywords ***
 Check Controller Errors
   @{result} =  HTTP  GET  ${LOCAL_ADDR}  ${PORT_CONTROLLER}  /errors
-  Check Errors JSON  @{result}[1]
   Should Be Equal As Integers  @{result}[0]  200
+  Log  @{result}[1]
 
 Check Pidfile
   [Arguments]  ${pidfile}
