@@ -268,7 +268,11 @@ end
 local function message_not_too_large(task, rule)
   local max_size = tonumber(rule['max_size'])
   if not max_size then return true end
-  if task:get_size() > max_size then return false end
+  if task:get_size() > max_size then
+    rspamd_loger.infox("skip %s AV check as it is too large: %s (%s is allowed)",
+      rule.type, task:get_size(), max_size)
+    return false
+  end
   return true
 end
 
@@ -279,6 +283,9 @@ local function need_av_check(task, rule)
         return message_not_too_large(task, rule)
       end
     end
+
+    rspamd_loger.infox("skip %s AV check as there are no attachments in a message",
+      rule.type)
 
     return false
   else
@@ -753,6 +760,7 @@ local function add_antivirus_rule(sym, opts)
   end
 
   rule = cfg.configure(opts)
+  rule.type = opts.type
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
