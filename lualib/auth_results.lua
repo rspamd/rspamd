@@ -50,6 +50,7 @@ local default_settings = {
     none = 'ARC_NA',
     reject = 'ARC_REJECT',
   },
+  add_smtp_user = true,
 }
 
 local exports = {}
@@ -172,10 +173,19 @@ local function gen_auth_results(task, settings)
     local hdr
 
     if #smtp_from[1]['addr'] > 0 then
-      hdr = string.format('auth=pass smtp.auth=%s smtp.mailfrom=%s',
-        u, smtp_from[1]['addr'])
+      if settings['add_smtp_user'] then
+        hdr = string.format('auth=pass smtp.auth=%s smtp.mailfrom=%s',
+          u, smtp_from[1]['addr'])
+      else
+        hdr = string.format('auth=pass smtp.mailfrom=%s',
+          smtp_from[1]['addr'])
+      end
     else
-      hdr = string.format('auth=pass smtp.auth=%s', u)
+      if settings['add_smtp_user'] then
+        hdr = string.format('auth=pass smtp.auth=%s', u)
+      else
+        hdr = 'auth=pass'
+      end
     end
 
     table.insert(hdr_parts, hdr)

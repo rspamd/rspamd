@@ -111,6 +111,7 @@ local settings = {
         softfail = 'DMARC_POLICY_SOFTFAIL',
         quarantine = 'DMARC_POLICY_QUARANTINE',
       },
+      add_smtp_user = true,
     },
   },
 }
