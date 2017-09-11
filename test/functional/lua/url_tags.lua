@@ -1,3 +1,4 @@
+
 local rspamd_logger = require 'rspamd_logger'
 
 rspamd_config:register_symbol({
