@@ -173,13 +173,12 @@ rspamd_config.R_WHITE_ON_WHITE = {
     local tp = task:get_text_parts() -- get text parts in a message
     local ret = false
     local diff = 0.0
-    local normal_len = 0
     local transp_rate = 0
     local arg
 
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
       if p:is_html() and p:get_html() then -- if the current part is html part
-        normal_len = p:get_length()
+        local normal_len = p:get_length()
         local transp_len = 0
         local hc = p:get_html() -- we get HTML context
 
