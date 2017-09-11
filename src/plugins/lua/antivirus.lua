@@ -728,7 +728,6 @@ local av_types = {
 }
 
 local function add_antivirus_rule(sym, opts)
-  local rule = {}
   if not opts['type'] then
     return nil
   end
@@ -741,7 +740,7 @@ local function add_antivirus_rule(sym, opts)
       opts['type'])
   end
 
-  rule = cfg.configure(opts)
+  local rule = cfg.configure(opts)
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
