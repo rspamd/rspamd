@@ -269,7 +269,7 @@ local function message_not_too_large(task, rule)
   local max_size = tonumber(rule['max_size'])
   if not max_size then return true end
   if task:get_size() > max_size then
-    rspamd_loger.infox("skip %s AV check as it is too large: %s (%s is allowed)",
+    rspamd_logger.infox("skip %s AV check as it is too large: %s (%s is allowed)",
       rule.type, task:get_size(), max_size)
     return false
   end
@@ -284,7 +284,7 @@ local function need_av_check(task, rule)
       end
     end
 
-    rspamd_loger.infox("skip %s AV check as there are no attachments in a message",
+    rspamd_logger.infox("skip %s AV check as there are no attachments in a message",
       rule.type)
 
     return false
