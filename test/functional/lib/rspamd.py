@@ -24,29 +24,6 @@ try:
 except:
     import httplib
 
-ignore_message = [
-    re.compile("^cannot load controller stats from .*/stats\\.ucl: No such file or directory$"),
-    re.compile("^regexp module enabled, but no rules are defined$"),
-    re.compile("^cannot find dependency on symbol FREEMAIL_FROM$"),
-    re.compile("^cannot find dependency on symbol FREEMAIL_REPLYTO$"),
-    re.compile("^cannot register delayed condition for DMARC_POLICY_ALLOW$"),
-    re.compile("^failed to scan: Socket error detected: Connection refused$"),
-]
-
-def Check_Errors_JSON(j):
-    d = demjson.decode(j, strict=True)
-    assert type(d) is list, j
-    e = []
-    for c in d:
-        filtered = False
-        for r in ignore_message:
-            if r.match(c['message']):
-                filtered = True
-                break
-        if not filtered:
-            e.append(c)
-    assert len(e) == 0, str(e)
-
 def Check_JSON(j):
     d = demjson.decode(j, strict=True)
     assert len(d) > 0
