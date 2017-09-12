@@ -1172,33 +1172,28 @@ lua_util_fold_header (lua_State *L)
 static gint
 lua_util_is_uppercase (lua_State *L)
 {
-	const gchar *str, *p;
-	gsize sz, remain;
-	gunichar uc;
+	const gchar *str;
+	gsize sz;
+	gint32 i = 0;
+	UChar32 uc;
 	guint nlc = 0, nuc = 0;
 
 	str = luaL_checklstring (L, 1, &sz);
-	remain = sz;
 
-	if (str && remain > 0) {
-		while (remain > 0) {
-			uc = g_utf8_get_char_validated (str, remain);
-			p = g_utf8_next_char (str);
+	if (str && sz > 0) {
+		while (i >= 0 && i < sz) {
+			U8_NEXT (str, i, sz, uc);
 
-			if (p - str > (gint) remain) {
+			if (uc < 0) {
 				break;
 			}
 
-			remain -= p - str;
-
-			if (g_unichar_isupper (uc)) {
+			if (u_isupper (uc)) {
 				nuc++;
 			}
-			else if (g_unichar_islower (uc)) {
+			else if (u_islower (uc)) {
 				nlc++;
 			}
-
-			str = p;
 		}
 	}
 
