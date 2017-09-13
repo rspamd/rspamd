@@ -61,7 +61,10 @@ enum rspamd_dkim_param_type {
 enum rspamd_sign_type {
 	DKIM_SIGN_UNKNOWN = -2,
 	DKIM_SIGN_RSASHA1 = 0,
-	DKIM_SIGN_RSASHA256
+	DKIM_SIGN_RSASHA256,
+	DKIM_SIGN_RSASHA512,
+	DKIM_SIGN_ECDSASHA256,
+	DKIM_SIGN_ECDSASHA512
 };
 
 #define RSPAMD_DKIM_MAX_ARC_IDX 10
@@ -270,6 +273,20 @@ rspamd_dkim_parse_signalg (rspamd_dkim_context_t * ctx,
 	else if (len == 10) {
 		if (memcmp (param, "rsa-sha256", len) == 0) {
 			ctx->sig_alg = DKIM_SIGN_RSASHA256;
+			return TRUE;
+		}
+		else if (memcmp (param, "rsa-sha512", len) == 0) {
+			ctx->sig_alg = DKIM_SIGN_RSASHA512;
+			return TRUE;
+		}
+	}
+	else if (len == sizeof ("ecdsa256-sha256") - 1) {
+		if (memcmp (param, "ecdsa256-sha256", len) == 0) {
+			ctx->sig_alg = DKIM_SIGN_ECDSASHA256;
+			return TRUE;
+		}
+		else if (memcmp (param, "ecdsa256-sha512", len) == 0) {
+			ctx->sig_alg = DKIM_SIGN_ECDSASHA512;
 			return TRUE;
 		}
 	}
@@ -1014,9 +1031,21 @@ rspamd_create_dkim_context (const gchar *sig,
 				return NULL;
 			}
 
-		} else if (ctx->sig_alg == DKIM_SIGN_RSASHA256) {
+		} else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
+				ctx->sig_alg == DKIM_SIGN_ECDSASHA256) {
 			if (ctx->bhlen !=
 					(guint) EVP_MD_size (EVP_sha256 ())) {
+				g_set_error (err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_BADSIG,
+						"signature has incorrect length: %zu",
+						ctx->bhlen);
+				return NULL;
+			}
+		} else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
+				ctx->sig_alg == DKIM_SIGN_ECDSASHA512) {
+			if (ctx->bhlen !=
+					(guint) EVP_MD_size (EVP_sha512 ())) {
 				g_set_error (err,
 						DKIM_ERROR,
 						DKIM_SIGERROR_BADSIG,
@@ -1079,8 +1108,13 @@ rspamd_create_dkim_context (const gchar *sig,
 	if (ctx->sig_alg == DKIM_SIGN_RSASHA1) {
 		md_alg = EVP_sha1 ();
 	}
-	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256) {
+	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
+			ctx->sig_alg == DKIM_SIGN_ECDSASHA256) {
 		md_alg = EVP_sha256 ();
+	}
+	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
+			ctx->sig_alg == DKIM_SIGN_ECDSASHA512) {
+		md_alg = EVP_sha512 ();
 	}
 	else {
 		g_set_error (err,
