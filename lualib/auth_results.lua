@@ -116,7 +116,7 @@ local function gen_auth_results(task, settings)
           hdr = hdr .. key
         end
         if key == 'pass' then
-          hdr = hdr .. ' policy=' .. opts[2]
+          hdr = hdr .. ' (policy=' .. opts[2] .. ')'
           hdr = hdr .. ' header.from=' .. opts[1]
         elseif key ~= 'none' then
           local t = global.rspamd_str_split(opts[1], ' : ')
@@ -127,9 +127,9 @@ local function gen_auth_results(task, settings)
           end
           hdr = hdr .. ' header.from=' .. dom
           if key == 'softfail' then
-            hdr = hdr .. ' policy=none'
+            hdr = hdr .. ' (policy=none)'
           else
-            hdr = hdr .. ' policy=' .. key
+            hdr = hdr .. ' (policy=' .. key .. ')'
           end
         end
         table.insert(hdr_parts, hdr)
