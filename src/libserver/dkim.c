@@ -1297,57 +1297,110 @@ static rspamd_dkim_key_t *
 rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt,
 		gsize *keylen, GError **err)
 {
-	const gchar *c, *p, *end;
-	gint state = 0;
-	gsize len;
+	const gchar *c, *p, *end, *key = NULL, *alg = "rsa";
+	enum {
+		read_tag = 0,
+		read_eqsign,
+		read_p_tag,
+		read_k_tag,
+	} state = read_tag;
+	gchar tag = '\0';
+	gsize klen = 0, alglen = 0;
 
 	c = txt;
 	p = txt;
 	end = txt + strlen (txt);
 
-	while (p <= end) {
+	while (p < end) {
 		switch (state) {
-		case 0:
-			if (p != end && p[0] == 'p' && p[1] == '=') {
-				/* We got something like public key */
-				c = p + 2;
-				p = c;
-				state = 1;
+		case read_tag:
+			if (*p == '=') {
+				state = read_eqsign;
+			} else {
+				tag = *p;
 			}
-			else {
-				/* Ignore everything */
+			p++;
+			break;
+		case read_eqsign:
+			if (tag == 'p') {
+				state = read_p_tag;
+				c = p;
+			} else if (tag == 'k') {
+				state = read_k_tag;
+				c = p;
+			} else {
+				/* Unknown tag, ignore */
+				state = read_tag;
+				tag = '\0';
 				p++;
 			}
 			break;
-		case 1:
-			/* State when we got p= and looking for some public key */
-			if ((*p == ';' || p == end) && p > c) {
-				len = p - c;
-
-				if (keylen) {
-					*keylen = len;
-				}
-
-				return rspamd_dkim_make_key (ctx, c, len,
-						RSPAMD_DKIM_KEY_RSA, err);
+		case read_p_tag:
+			if (*p == ';') {
+				klen = p - c;
+				key = c;
+				state = read_tag;
+				tag = '\0';
 			}
-			else {
-				p++;
+			p++;
+			break;
+		case read_k_tag:
+			if (*p == ';') {
+				alglen = p - c;
+				alg = c;
+				state = read_tag;
+				tag = '\0';
 			}
+			p++;
+			break;
+		default:
 			break;
 		}
 	}
 
-	if (p - c == 0) {
+	/* Leftover */
+	switch (state) {
+	case read_p_tag:
+		klen = p - c;
+		key = c;
+		break;
+	case read_k_tag:
+		alglen = p - c;
+		alg = c;
+		break;
+	default:
+		break;
+	}
+
+	if (klen == 0 || key == NULL) {
 		g_set_error (err,
-			DKIM_ERROR,
-			DKIM_SIGERROR_KEYREVOKED,
-			"key was revoked");
+				DKIM_ERROR,
+				DKIM_SIGERROR_KEYFAIL,
+				"key is missing");
+	}
+
+	if (alglen == 0 || alg == NULL) {
+		alg = "rsa"; /* Implicit */
+	}
+
+	if (alglen == 8 && rspamd_lc_cmp (alg, "ecdsa256", alglen) == 0) {
+		if (keylen) {
+			*keylen = klen;
+		}
+
+		return rspamd_dkim_make_key (ctx, c, klen,
+				RSPAMD_DKIM_KEY_ECDSA, err);
 	}
 	else {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
-			"key was not found");
+		/* We assume RSA default in all cases */
+		if (alglen != 3 || rspamd_lc_cmp (alg, "rsa", alglen) != 0) {
+			msg_info_dkim ("invalid key algorithm: %*s", (gint)alglen, alg);
+		}
+		return rspamd_dkim_make_key (ctx, c, klen,
+				RSPAMD_DKIM_KEY_RSA, err);
 	}
+
+	g_assert_not_reached ();
 
 	return NULL;
 }
