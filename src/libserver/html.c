@@ -30,8 +30,9 @@ static sig_atomic_t tags_sorted = 0;
 static sig_atomic_t entities_sorted = 0;
 
 struct html_tag_def {
-	gint id;
 	const gchar *name;
+	gint16 id;
+	guint16 len;
 	guint flags;
 };
 
@@ -40,130 +41,131 @@ struct html_tag_def {
         G_STRFUNC, \
         __VA_ARGS__)
 
+#define TAG_DEF(id, name, flags) {(name), (id), (sizeof(name) - 1), (flags)}
+
 static struct html_tag_def tag_defs[] = {
 	/* W3C defined elements */
-	{Tag_A, "a", (0)},
-	{Tag_ABBR, "abbr", (CM_INLINE)},
-	{Tag_ACRONYM, "acronym", (CM_INLINE)},
-	{Tag_ADDRESS, "address", (CM_BLOCK)},
-	{Tag_APPLET, "applet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)},
-	{Tag_AREA, "area", (CM_BLOCK | CM_EMPTY)},
-	{Tag_B, "b", (CM_INLINE|FL_BLOCK)},
-	{Tag_BASE, "base", (CM_HEAD | CM_EMPTY)},
-	{Tag_BASEFONT, "basefont", (CM_INLINE | CM_EMPTY)},
-	{Tag_BDO, "bdo", (CM_INLINE)},
-	{Tag_BIG, "big", (CM_INLINE)},
-	{Tag_BLOCKQUOTE, "blockquote", (CM_BLOCK)},
-	{Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE | FL_BLOCK)},
-	{Tag_BR, "br", (CM_INLINE | CM_EMPTY)},
-	{Tag_BUTTON, "button", (CM_INLINE|FL_BLOCK)},
-	{Tag_CAPTION, "caption", (CM_TABLE)},
-	{Tag_CENTER, "center", (CM_BLOCK)},
-	{Tag_CITE, "cite", (CM_INLINE)},
-	{Tag_CODE, "code", (CM_INLINE)},
-	{Tag_COL, "col", (CM_TABLE | CM_EMPTY)},
-	{Tag_COLGROUP, "colgroup", (CM_TABLE | CM_OPT)},
-	{Tag_DD, "dd", (CM_DEFLIST | CM_OPT | CM_NO_INDENT)},
-	{Tag_DEL, "del", (CM_INLINE | CM_BLOCK | CM_MIXED)},
-	{Tag_DFN, "dfn", (CM_INLINE)},
-	{Tag_DIR, "dir", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_DIV, "div", (CM_BLOCK|FL_BLOCK)},
-	{Tag_DL, "dl", (CM_BLOCK|FL_BLOCK)},
-	{Tag_DT, "dt", (CM_DEFLIST | CM_OPT | CM_NO_INDENT)},
-	{Tag_EM, "em", (CM_INLINE)},
-	{Tag_FIELDSET, "fieldset", (CM_BLOCK)},
-	{Tag_FONT, "font", (FL_BLOCK)},
-	{Tag_FORM, "form", (CM_BLOCK)},
-	{Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY)},
-	{Tag_FRAMESET, "frameset", (CM_HTML | CM_FRAMES)},
-	{Tag_H1, "h1", (CM_BLOCK | CM_HEADING)},
-	{Tag_H2, "h2", (CM_BLOCK | CM_HEADING)},
-	{Tag_H3, "h3", (CM_BLOCK | CM_HEADING)},
-	{Tag_H4, "h4", (CM_BLOCK | CM_HEADING)},
-	{Tag_H5, "h5", (CM_BLOCK | CM_HEADING)},
-	{Tag_H6, "h6", (CM_BLOCK | CM_HEADING)},
-	{Tag_HEAD, "head", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
-	{Tag_HR, "hr", (CM_BLOCK | CM_EMPTY)},
-	{Tag_HTML, "html", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
-	{Tag_I, "i", (CM_INLINE)},
-	{Tag_IFRAME, "iframe", (0)},
-	{Tag_IMG, "img", (CM_INLINE | CM_IMG | CM_EMPTY)},
-	{Tag_INPUT, "input", (CM_INLINE | CM_IMG | CM_EMPTY)},
-	{Tag_INS, "ins", (CM_INLINE | CM_BLOCK | CM_MIXED)},
-	{Tag_ISINDEX, "isindex", (CM_BLOCK | CM_EMPTY)},
-	{Tag_KBD, "kbd", (CM_INLINE)},
-	{Tag_LABEL, "label", (CM_INLINE)},
-	{Tag_LEGEND, "legend", (CM_INLINE)},
-	{Tag_LI, "li", (CM_LIST | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
-	{Tag_LINK, "link", (CM_HEAD | CM_EMPTY)},
-	{Tag_LISTING, "listing", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_MAP, "map", (CM_INLINE)},
-	{Tag_MENU, "menu", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_META, "meta", (CM_HEAD | CM_INLINE | CM_EMPTY)},
-	{Tag_NOFRAMES, "noframes", (CM_BLOCK | CM_FRAMES)},
-	{Tag_NOSCRIPT, "noscript", (CM_BLOCK | CM_INLINE | CM_MIXED)},
-	{Tag_OBJECT, "object",
-	 (CM_OBJECT | CM_HEAD | CM_IMG | CM_INLINE | CM_PARAM)},
-	{Tag_OL, "ol", (CM_BLOCK | FL_BLOCK)},
-	{Tag_OPTGROUP, "optgroup", (CM_FIELD | CM_OPT)},
-	{Tag_OPTION, "option", (CM_FIELD | CM_OPT)},
-	{Tag_P, "p", (CM_BLOCK | CM_OPT | FL_BLOCK)},
-	{Tag_PARAM, "param", (CM_INLINE | CM_EMPTY)},
-	{Tag_PLAINTEXT, "plaintext", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_PRE, "pre", (CM_BLOCK)},
-	{Tag_Q, "q", (CM_INLINE)},
-	{Tag_RB, "rb", (CM_INLINE)},
-	{Tag_RBC, "rbc", (CM_INLINE)},
-	{Tag_RP, "rp", (CM_INLINE)},
-	{Tag_RT, "rt", (CM_INLINE)},
-	{Tag_RTC, "rtc", (CM_INLINE)},
-	{Tag_RUBY, "ruby", (CM_INLINE)},
-	{Tag_S, "s", (CM_INLINE)},
-	{Tag_SAMP, "samp", (CM_INLINE)},
-	{Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)},
-	{Tag_SELECT, "select", (CM_INLINE | CM_FIELD)},
-	{Tag_SMALL, "small", (CM_INLINE)},
-	{Tag_SPAN, "span", (CM_BLOCK|FL_BLOCK)},
-	{Tag_STRIKE, "strike", (CM_INLINE)},
-	{Tag_STRONG, "strong", (CM_INLINE)},
-	{Tag_STYLE, "style", (CM_HEAD)},
-	{Tag_SUB, "sub", (CM_INLINE)},
-	{Tag_SUP, "sup", (CM_INLINE)},
-	{Tag_TABLE, "table", (CM_BLOCK | FL_BLOCK)},
-	{Tag_TBODY, "tbody", (CM_TABLE | CM_ROWGRP | CM_OPT| FL_BLOCK)},
-	{Tag_TD, "td", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
-	{Tag_TEXTAREA, "textarea", (CM_INLINE | CM_FIELD)},
-	{Tag_TFOOT, "tfoot", (CM_TABLE | CM_ROWGRP | CM_OPT)},
-	{Tag_TH, "th", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
-	{Tag_THEAD, "thead", (CM_TABLE | CM_ROWGRP | CM_OPT)},
-	{Tag_TITLE, "title", (CM_HEAD | CM_UNIQUE)},
-	{Tag_TR, "tr", (CM_TABLE | CM_OPT| FL_BLOCK)},
-	{Tag_TT, "tt", (CM_INLINE)},
-	{Tag_U, "u", (CM_INLINE)},
-	{Tag_UL, "ul", (CM_BLOCK|FL_BLOCK)},
-	{Tag_VAR, "var", (CM_INLINE)},
-	{Tag_XMP, "xmp", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_NEXTID, "nextid", (CM_HEAD | CM_EMPTY)},
+	TAG_DEF(Tag_A, "a", 0),
+	TAG_DEF(Tag_ABBR, "abbr", (CM_INLINE)),
+	TAG_DEF(Tag_ACRONYM, "acronym", (CM_INLINE)),
+	TAG_DEF(Tag_ADDRESS, "address", (CM_BLOCK)),
+	TAG_DEF(Tag_APPLET, "applet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)),
+	TAG_DEF(Tag_AREA, "area", (CM_BLOCK | CM_EMPTY)),
+	TAG_DEF(Tag_B, "b", (CM_INLINE|FL_BLOCK)),
+	TAG_DEF(Tag_BASE, "base", (CM_HEAD | CM_EMPTY)),
+	TAG_DEF(Tag_BASEFONT, "basefont", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_BDO, "bdo", (CM_INLINE)),
+	TAG_DEF(Tag_BIG, "big", (CM_INLINE)),
+	TAG_DEF(Tag_BLOCKQUOTE, "blockquote", (CM_BLOCK)),
+	TAG_DEF(Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE | FL_BLOCK)),
+	TAG_DEF(Tag_BR, "br", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_BUTTON, "button", (CM_INLINE|FL_BLOCK)),
+	TAG_DEF(Tag_CAPTION, "caption", (CM_TABLE)),
+	TAG_DEF(Tag_CENTER, "center", (CM_BLOCK)),
+	TAG_DEF(Tag_CITE, "cite", (CM_INLINE)),
+	TAG_DEF(Tag_CODE, "code", (CM_INLINE)),
+	TAG_DEF(Tag_COL, "col", (CM_TABLE | CM_EMPTY)),
+	TAG_DEF(Tag_COLGROUP, "colgroup", (CM_TABLE | CM_OPT)),
+	TAG_DEF(Tag_DD, "dd", (CM_DEFLIST | CM_OPT | CM_NO_INDENT)),
+	TAG_DEF(Tag_DEL, "del", (CM_INLINE | CM_BLOCK | CM_MIXED)),
+	TAG_DEF(Tag_DFN, "dfn", (CM_INLINE)),
+	TAG_DEF(Tag_DIR, "dir", (CM_BLOCK | CM_OBSOLETE)),
+	TAG_DEF(Tag_DIV, "div", (CM_BLOCK|FL_BLOCK)),
+	TAG_DEF(Tag_DL, "dl", (CM_BLOCK|FL_BLOCK)),
+	TAG_DEF(Tag_DT, "dt", (CM_DEFLIST | CM_OPT | CM_NO_INDENT)),
+	TAG_DEF(Tag_EM, "em", (CM_INLINE)),
+	TAG_DEF(Tag_FIELDSET, "fieldset", (CM_BLOCK)),
+	TAG_DEF(Tag_FONT, "font", (FL_BLOCK)),
+	TAG_DEF(Tag_FORM, "form", (CM_BLOCK)),
+	TAG_DEF(Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY)),
+	TAG_DEF(Tag_FRAMESET, "frameset", (CM_HTML | CM_FRAMES)),
+	TAG_DEF(Tag_H1, "h1", (CM_BLOCK | CM_HEADING)),
+	TAG_DEF(Tag_H2, "h2", (CM_BLOCK | CM_HEADING)),
+	TAG_DEF(Tag_H3, "h3", (CM_BLOCK | CM_HEADING)),
+	TAG_DEF(Tag_H4, "h4", (CM_BLOCK | CM_HEADING)),
+	TAG_DEF(Tag_H5, "h5", (CM_BLOCK | CM_HEADING)),
+	TAG_DEF(Tag_H6, "h6", (CM_BLOCK | CM_HEADING)),
+	TAG_DEF(Tag_HEAD, "head", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)),
+	TAG_DEF(Tag_HR, "hr", (CM_BLOCK | CM_EMPTY)),
+	TAG_DEF(Tag_HTML, "html", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)),
+	TAG_DEF(Tag_I, "i", (CM_INLINE)),
+	TAG_DEF(Tag_IFRAME, "iframe", (0)),
+	TAG_DEF(Tag_IMG, "img", (CM_INLINE | CM_IMG | CM_EMPTY)),
+	TAG_DEF(Tag_INPUT, "input", (CM_INLINE | CM_IMG | CM_EMPTY)),
+	TAG_DEF(Tag_INS, "ins", (CM_INLINE | CM_BLOCK | CM_MIXED)),
+	TAG_DEF(Tag_ISINDEX, "isindex", (CM_BLOCK | CM_EMPTY)),
+	TAG_DEF(Tag_KBD, "kbd", (CM_INLINE)),
+	TAG_DEF(Tag_LABEL, "label", (CM_INLINE)),
+	TAG_DEF(Tag_LEGEND, "legend", (CM_INLINE)),
+	TAG_DEF(Tag_LI, "li", (CM_LIST | CM_OPT | CM_NO_INDENT | FL_BLOCK)),
+	TAG_DEF(Tag_LINK, "link", (CM_HEAD | CM_EMPTY)),
+	TAG_DEF(Tag_LISTING, "listing", (CM_BLOCK | CM_OBSOLETE)),
+	TAG_DEF(Tag_MAP, "map", (CM_INLINE)),
+	TAG_DEF(Tag_MENU, "menu", (CM_BLOCK | CM_OBSOLETE)),
+	TAG_DEF(Tag_META, "meta", (CM_HEAD | CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_NOFRAMES, "noframes", (CM_BLOCK | CM_FRAMES)),
+	TAG_DEF(Tag_NOSCRIPT, "noscript", (CM_BLOCK | CM_INLINE | CM_MIXED)),
+	TAG_DEF(Tag_OBJECT, "object", (CM_OBJECT | CM_HEAD | CM_IMG | CM_INLINE | CM_PARAM)),
+	TAG_DEF(Tag_OL, "ol", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_OPTGROUP, "optgroup", (CM_FIELD | CM_OPT)),
+	TAG_DEF(Tag_OPTION, "option", (CM_FIELD | CM_OPT)),
+	TAG_DEF(Tag_P, "p", (CM_BLOCK | CM_OPT | FL_BLOCK)),
+	TAG_DEF(Tag_PARAM, "param", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_PLAINTEXT, "plaintext", (CM_BLOCK | CM_OBSOLETE)),
+	TAG_DEF(Tag_PRE, "pre", (CM_BLOCK)),
+	TAG_DEF(Tag_Q, "q", (CM_INLINE)),
+	TAG_DEF(Tag_RB, "rb", (CM_INLINE)),
+	TAG_DEF(Tag_RBC, "rbc", (CM_INLINE)),
+	TAG_DEF(Tag_RP, "rp", (CM_INLINE)),
+	TAG_DEF(Tag_RT, "rt", (CM_INLINE)),
+	TAG_DEF(Tag_RTC, "rtc", (CM_INLINE)),
+	TAG_DEF(Tag_RUBY, "ruby", (CM_INLINE)),
+	TAG_DEF(Tag_S, "s", (CM_INLINE)),
+	TAG_DEF(Tag_SAMP, "samp", (CM_INLINE)),
+	TAG_DEF(Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)),
+	TAG_DEF(Tag_SELECT, "select", (CM_INLINE | CM_FIELD)),
+	TAG_DEF(Tag_SMALL, "small", (CM_INLINE)),
+	TAG_DEF(Tag_SPAN, "span", (CM_BLOCK|FL_BLOCK)),
+	TAG_DEF(Tag_STRIKE, "strike", (CM_INLINE)),
+	TAG_DEF(Tag_STRONG, "strong", (CM_INLINE)),
+	TAG_DEF(Tag_STYLE, "style", (CM_HEAD)),
+	TAG_DEF(Tag_SUB, "sub", (CM_INLINE)),
+	TAG_DEF(Tag_SUP, "sup", (CM_INLINE)),
+	TAG_DEF(Tag_TABLE, "table", (CM_BLOCK | FL_BLOCK)),
+	TAG_DEF(Tag_TBODY, "tbody", (CM_TABLE | CM_ROWGRP | CM_OPT| FL_BLOCK)),
+	TAG_DEF(Tag_TD, "td", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)),
+	TAG_DEF(Tag_TEXTAREA, "textarea", (CM_INLINE | CM_FIELD)),
+	TAG_DEF(Tag_TFOOT, "tfoot", (CM_TABLE | CM_ROWGRP | CM_OPT)),
+	TAG_DEF(Tag_TH, "th", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)),
+	TAG_DEF(Tag_THEAD, "thead", (CM_TABLE | CM_ROWGRP | CM_OPT)),
+	TAG_DEF(Tag_TITLE, "title", (CM_HEAD | CM_UNIQUE)),
+	TAG_DEF(Tag_TR, "tr", (CM_TABLE | CM_OPT| FL_BLOCK)),
+	TAG_DEF(Tag_TT, "tt", (CM_INLINE)),
+	TAG_DEF(Tag_U, "u", (CM_INLINE)),
+	TAG_DEF(Tag_UL, "ul", (CM_BLOCK|FL_BLOCK)),
+	TAG_DEF(Tag_VAR, "var", (CM_INLINE)),
+	TAG_DEF(Tag_XMP, "xmp", (CM_BLOCK | CM_OBSOLETE)),
+	TAG_DEF(Tag_NEXTID, "nextid", (CM_HEAD | CM_EMPTY)),
 
 	/* proprietary elements */
-	{Tag_ALIGN, "align", (CM_BLOCK)},
-	{Tag_BGSOUND, "bgsound", (CM_HEAD | CM_EMPTY)},
-	{Tag_BLINK, "blink", (CM_INLINE)},
-	{Tag_COMMENT, "comment", (CM_INLINE)},
-	{Tag_EMBED, "embed", (CM_INLINE | CM_IMG | CM_EMPTY)},
-	{Tag_ILAYER, "ilayer", (CM_INLINE)},
-	{Tag_KEYGEN, "keygen", (CM_INLINE | CM_EMPTY)},
-	{Tag_LAYER, "layer", (CM_BLOCK)},
-	{Tag_MARQUEE, "marquee", (CM_INLINE | CM_OPT)},
-	{Tag_MULTICOL, "multicol", (CM_BLOCK)},
-	{Tag_NOBR, "nobr", (CM_INLINE)},
-	{Tag_NOEMBED, "noembed", (CM_INLINE)},
-	{Tag_NOLAYER, "nolayer", (CM_BLOCK | CM_INLINE | CM_MIXED)},
-	{Tag_NOSAVE, "nosave", (CM_BLOCK)},
-	{Tag_SERVER, "server", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)},
-	{Tag_SERVLET, "servlet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)},
-	{Tag_SPACER, "spacer", (CM_INLINE | CM_EMPTY)},
-	{Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)},
+	TAG_DEF(Tag_ALIGN, "align", (CM_BLOCK)),
+	TAG_DEF(Tag_BGSOUND, "bgsound", (CM_HEAD | CM_EMPTY)),
+	TAG_DEF(Tag_BLINK, "blink", (CM_INLINE)),
+	TAG_DEF(Tag_COMMENT, "comment", (CM_INLINE)),
+	TAG_DEF(Tag_EMBED, "embed", (CM_INLINE | CM_IMG | CM_EMPTY)),
+	TAG_DEF(Tag_ILAYER, "ilayer", (CM_INLINE)),
+	TAG_DEF(Tag_KEYGEN, "keygen", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_LAYER, "layer", (CM_BLOCK)),
+	TAG_DEF(Tag_MARQUEE, "marquee", (CM_INLINE | CM_OPT)),
+	TAG_DEF(Tag_MULTICOL, "multicol", (CM_BLOCK)),
+	TAG_DEF(Tag_NOBR, "nobr", (CM_INLINE)),
+	TAG_DEF(Tag_NOEMBED, "noembed", (CM_INLINE)),
+	TAG_DEF(Tag_NOLAYER, "nolayer", (CM_BLOCK | CM_INLINE | CM_MIXED)),
+	TAG_DEF(Tag_NOSAVE, "nosave", (CM_BLOCK)),
+	TAG_DEF(Tag_SERVER, "server", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)),
+	TAG_DEF(Tag_SERVLET, "servlet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)),
+	TAG_DEF(Tag_SPACER, "spacer", (CM_INLINE | CM_EMPTY)),
+	TAG_DEF(Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)),
 };
 
 struct _entity;
@@ -457,16 +459,12 @@ tag_cmp (const void *m1, const void *m2)
 {
 	const struct html_tag_def *p1 = m1;
 	const struct html_tag_def *p2 = m2;
-	gsize l1, l2;
 
-	l1 = strlen (p1->name);
-	l2 = strlen (p2->name);
-
-	if (l1 == l2) {
-		return g_ascii_strcasecmp (p1->name, p2->name);
+	if (p1->len == p2->len) {
+		return rspamd_lc_cmp (p1->name, p2->name, p1->len);
 	}
 
-	return l1 - l2;
+	return p1->len - p2->len;
 }
 
 static gint
@@ -492,15 +490,12 @@ tag_find (const void *skey, const void *elt)
 {
 	const struct html_tag *tag = skey;
 	const struct html_tag_def *d = elt;
-	gsize tlen;
 
-	tlen = strlen (d->name);
-
-	if (tlen == tag->name.len) {
-		return g_ascii_strncasecmp (tag->name.start, d->name, tag->name.len);
+	if (d->len == tag->name.len) {
+		return rspamd_lc_cmp (tag->name.start, d->name, tag->name.len);
 	}
 
-	return tag->name.len - tlen;
+	return tag->name.len - d->len;
 }
 
 static gint
