@@ -70,7 +70,7 @@ local function init_weights(all_symbols, original_symbol_scores)
       weights[i] = score
       mean = mean + score
    end
-
+--[[
    mean = mean / size
 
    local dev = 0
@@ -83,7 +83,7 @@ local function init_weights(all_symbols, original_symbol_scores)
    for i=1,size do
       weights[i] = (weights[i] - mean) / dev
    end
-
+]]
    return weights   
 end
 
@@ -233,7 +233,13 @@ parser:option("-r --rate", "Learning rate", 1, tonumber)
 parser:option("-t --threshold", "Set spam threshold", 15, tonumber)
 parser:option("-o --output", "Write new scores to file in json")
 parser:flag("--diff", "Print score diff")
-parser:flag("--tanh", "Use tanh as activation function instead of sigmoid")
+
+parser:mutex(
+   parser:flag("--tanh", "Use tanh as activation function instead of sigmoid"),
+   parser:flag("--relu", "Use ReLU as activation function instead of sigmoid"),
+   parser:flag("--leakyrelu", "Use leaky ReLU as activation function instead of sigmoid")
+)
+
 
 local params = parser:parse()
 
@@ -248,7 +254,8 @@ local cv_logs, test_logs = split_logs(test_logs, 50)
 
 local dataset = make_dataset_from_logs(train_logs, all_symbols)
 
-local learning_rates = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10}
+local learning_rates = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2.5, 5, 7.5, 10}
+local penalty_weights = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10, 15, 20, 25, 50, 75, 100}
 
 -- Start of perceptron training
 
@@ -259,8 +266,13 @@ local perceptron = nn.Sequential()
 perceptron:add(linear_module)
 
 local activation
+
 if params.tanh then
    activation = nn.Tanh()
+elseif params.relu then
+   activation = nn.ReLU()
+elseif params.leakyrelu then
+   activation = nn.LeakyReLU()
 else
    activation = nn.Sigmoid()
 end
@@ -273,12 +285,25 @@ criterion.sizeAverage = false
 local best_fscore = -math.huge
 local best_weights = linear_module.weight[1]:clone()
 local best_weights_bias = linear_module.bias[1]
+local l1_weight = 0
+local l2_weight = 0
 
 trainer = nn.StochasticGradient(perceptron, criterion)
 trainer.maxIteration = params.iters
 trainer.verbose = false
 
+local function regularize_parameters(network, l1_weight, l2_weight)
+
+   local parameters, _ = network:parameters()
+   for i = 1, table.getn(parameters) do
+      local update = torch.clamp(parameters[i], -l1_weight, l1_weight)
+      update:add(parameters[i]:mul(-l2_weight))
+      parameters[i]:csub(update)      
+   end
+end
+
 trainer.hookIteration = function(self, iteration, error)
+
    if iteration == trainer.maxIteration then
 
       fscore = calculate_fscore_from_weights(cv_logs,
@@ -298,15 +323,18 @@ trainer.hookIteration = function(self, iteration, error)
 end
 
 for _, learning_rate in pairs(learning_rates) do
-   
-   print("Learning with learning_rate: " .. learning_rate)
-   
-   linear_module.weight[1] = init_weights(all_symbols, original_symbol_scores)
+   for _, weight in pairs(penalty_weights) do
 
-   trainer.learningRate = learning_rate
-   trainer:train(dataset)
+      trainer.weightDecay = weight
+      print("Learning with learning_rate: " .. learning_rate .. " | l2_weight: " .. weight)
+   
+      linear_module.weight[1] = init_weights(all_symbols, original_symbol_scores)
 
-   print()
+      trainer.learningRate = learning_rate
+      trainer:train(dataset)
+   
+      print()
+   end   
 end
 
 -- End perceptron training
