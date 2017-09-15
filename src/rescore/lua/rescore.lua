@@ -255,7 +255,7 @@ local cv_logs, test_logs = split_logs(test_logs, 50)
 local dataset = make_dataset_from_logs(train_logs, all_symbols)
 
 local learning_rates = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 2.5, 5, 7.5, 10}
-local penalty_weights = {0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10, 15, 20, 25, 50, 75, 100}
+local penalty_weights = {0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10, 15, 20, 25, 50, 75, 100}
 
 -- Start of perceptron training
 
