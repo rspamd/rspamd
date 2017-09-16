@@ -367,7 +367,7 @@ local function fann_scores_filter(task)
       id = id .. r
     end
 
-    if fanns[id].fann then
+    if fanns[id] and fanns[id].fann then
       local fann_data = task:get_symbols_tokens()
       local mt = meta_functions.rspamd_gen_metatokens(task)
       -- Add filtered meta tokens
@@ -1093,13 +1093,13 @@ else
   local function override_defaults(def, override)
     for k,v in pairs(override) do
       if def[k] then
-        if type(override[k]) == 'table' then
-          override_defaults(def[k], override[k])
+        if type(v) == 'table' then
+          override_defaults(def[k], v)
         else
-          def[k] = override[k]
+          def[k] = v
         end
       else
-        def[k] = override[k]
+        def[k] = v
       end
     end
   end
