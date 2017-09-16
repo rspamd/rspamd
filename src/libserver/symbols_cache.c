@@ -769,18 +769,24 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->parent = parent;
 	cache->used_items ++;
 
+	if (!(item->type &
+			(SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_NOSTAT|SYMBOL_TYPE_CLASSIFIER))) {
+		if (name != NULL) {
+			cache->cksum = t1ha (name, strlen (name),
+					cache->cksum);
+		} else {
+			cache->cksum = t1ha (&item->id, sizeof (item->id),
+					cache->cksum);
+		}
+	}
+
 	if (name != NULL) {
 		item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
 		msg_debug_cache ("used items: %d, added symbol: %s, %d",
 				cache->used_items, name, item->id);
-		cache->cksum = t1ha (item->symbol, strlen (item->symbol),
-				cache->cksum);
-	}
-	else {
+	} else {
 		msg_debug_cache ("used items: %d, added unnamed symbol: %d",
 				cache->used_items, item->id);
-		cache->cksum = t1ha (&item->id, sizeof (item->id),
-				cache->cksum);
 	}
 
 	g_ptr_array_add (cache->items_by_id, item);
