@@ -2892,11 +2892,11 @@ lua_config_has_torch (lua_State *L)
 
 	if (cfg != NULL) {
 		crypto_ctx = cfg->libs_ctx->crypto_ctx;
-#ifndef WITH_TORCH
+#if !defined(WITH_TORCH) || !defined(WITH_LUAJIT)
 		lua_pushboolean (L, false);
 		(void)crypto_ctx;
 #else
-		if (crypto_ctx->cpu_config & CPUID_SSE42) {
+		if (crypto_ctx->cpu_config & CPUID_SSE41) {
 			lua_pushboolean (L, true);
 		}
 		else {
