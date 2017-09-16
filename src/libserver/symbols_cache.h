@@ -159,7 +159,7 @@ const gchar * rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
  * @param cache
  * @return number of symbols in the cache
  */
-guint rspamd_symbols_cache_symbols_count (struct symbols_cache *cache);
+guint rspamd_symbols_cache_stats_symbols_count (struct symbols_cache *cache);
 
 /**
  * Call function for cached symbol using saved callback

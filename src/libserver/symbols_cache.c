@@ -74,6 +74,7 @@ struct symbols_cache {
 	guint64 cksum;
 	gdouble total_weight;
 	guint used_items;
+	guint stats_symbols_count;
 	guint64 total_hits;
 	struct rspamd_config *cfg;
 	rspamd_mempool_mutex_t *mtx;
@@ -778,6 +779,8 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 			cache->cksum = t1ha (&item->id, sizeof (item->id),
 					cache->cksum);
 		}
+
+		cache->stats_symbols_count ++;
 	}
 
 	if (name != NULL) {
@@ -2290,11 +2293,11 @@ rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
 }
 
 guint
-rspamd_symbols_cache_symbols_count (struct symbols_cache *cache)
+rspamd_symbols_cache_stats_symbols_count (struct symbols_cache *cache)
 {
 	g_assert (cache != NULL);
 
-	return cache->items_by_id->len;
+	return cache->stats_symbols_count;
 }
 
 static void

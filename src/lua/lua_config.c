@@ -2548,7 +2548,7 @@ lua_config_get_symbols_count (lua_State *L)
 	guint res = 0;
 
 	if (cfg != NULL) {
-		res = rspamd_symbols_cache_symbols_count (cfg->cache);
+		res = rspamd_symbols_cache_stats_symbols_count (cfg->cache);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

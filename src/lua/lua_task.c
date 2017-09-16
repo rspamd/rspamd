@@ -3183,7 +3183,8 @@ lua_task_get_symbols_tokens (lua_State *L)
 		cbd.normalize = TRUE;
 	}
 
-	lua_createtable (L, rspamd_symbols_cache_symbols_count (task->cfg->cache), 0);
+	lua_createtable (L,
+			rspamd_symbols_cache_stats_symbols_count (task->cfg->cache), 0);
 	rspamd_symbols_cache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
 
 	return 1;
