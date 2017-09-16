@@ -42,7 +42,7 @@ if torch then
         end
       end
     end
-    local section = rspamd_config:get_all_opts("nn_models")
+    local section = rspamd_config:get_all_opt("nn_models")
 
     if section and type(section) == 'table' then
       for k,v in pairs(section) do
