@@ -684,19 +684,25 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_worker *w = value;
 	struct rspamd_main *rspamd_main;
 	gint res = 0;
+	gboolean nowait = FALSE;
 
 	rspamd_main = w->srv;
 
 	if (w->ppid != getpid ()) {
-		return TRUE;
+		nowait = TRUE;
 	}
 
-	if (waitpid (w->pid, &res, WNOHANG) <= 0) {
+	if (nowait || waitpid (w->pid, &res, WNOHANG) <= 0) {
 		if (term_attempts < 0) {
 			if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
 				msg_warn_main ("terminate worker %s(%P) with SIGKILL",
 						g_quark_to_string (w->type), w->pid);
-				kill (w->pid, SIGKILL);
+				if (kill (w->pid, SIGKILL) == -1) {
+					if (nowait && errno == ESRCH) {
+						/* We have actually killed the process */
+						goto finished;
+					}
+				}
 			}
 			else {
 				if (term_attempts > -(TERMINATION_ATTEMPTS * 2)) {
@@ -706,6 +712,10 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 								g_quark_to_string (w->type), w->pid,
 								(TERMINATION_ATTEMPTS * 2 + term_attempts) / 5);
 						kill (w->pid, SIGTERM);
+						if (nowait && errno == ESRCH) {
+							/* We have actually killed the process */
+							goto finished;
+						}
 					}
 				}
 				else {
@@ -713,6 +723,10 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 							"special worker %s(%P) with SIGKILL",
 							g_quark_to_string (w->type), w->pid);
 					kill (w->pid, SIGKILL);
+					if (nowait && errno == ESRCH) {
+						/* We have actually killed the process */
+						goto finished;
+					}
 				}
 			}
 		}
@@ -720,11 +734,17 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 		return FALSE;
 	}
 
+	finished:
 	msg_info_main ("%s process %P terminated %s",
 			g_quark_to_string (w->type), w->pid,
-			WTERMSIG (res) == SIGKILL ? "hardly" : "softly");
-	event_del (&w->srv_ev);
-	g_ptr_array_free (w->finish_actions, TRUE);
+			nowait ? "with no result available" :
+					(WTERMSIG (res) == SIGKILL ? "hardly" : "softly"));
+	if (w->srv_pipe[0] != -1) {
+		event_del (&w->srv_ev);
+	}
+	if (w->finish_actions) {
+		g_ptr_array_free (w->finish_actions, TRUE);
+	}
 	REF_RELEASE (w->cf);
 	g_free (w);
 
@@ -1162,10 +1182,6 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
 	memset (&signals, 0, sizeof (struct sigaction));
 	other_workers = g_array_new (FALSE, TRUE, sizeof (pid_t));
-#ifdef WITH_TORCH
-	/* We don't need multithreaded BLAS mode, disable it by default */
-	setenv ("OPENBLAS_NUM_THREADS", "1", 0);
-#endif
 
 	read_cmd_line (&argc, &argv, rspamd_main->cfg);
 
