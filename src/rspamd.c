@@ -730,9 +730,21 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 				}
 			}
 		}
+		else if (nowait) {
+			kill (w->pid, 0);
+
+			if (errno != ESRCH) {
+				return FALSE;
+			}
+			else {
+				goto finished;
+			}
+		}
 
 		return FALSE;
 	}
+
+
 
 	finished:
 	msg_info_main ("%s process %P terminated %s",

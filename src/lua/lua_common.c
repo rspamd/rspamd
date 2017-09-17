@@ -1695,6 +1695,8 @@ lua_worker_spawn_process (lua_State *L)
 		/* Here we assume that we can block on writing results */
 		rspamd_socket_blocking (cbdata->sp[1]);
 		event_reinit (cbdata->ev_base);
+		g_hash_table_remove_all (w->signal_events);
+		rspamd_worker_unblock_signals ();
 		rspamd_lua_execute_lua_subprocess (L, cbdata);
 
 		/* Wait for parent to reply and exit */

@@ -186,6 +186,34 @@ rspamd_worker_ignore_signal (int signo)
 	sigaction (signo, &sig, NULL);
 }
 
+static void
+rspamd_worker_default_signal (int signo)
+{
+	struct sigaction sig;
+
+	sigemptyset (&sig.sa_mask);
+	sigaddset (&sig.sa_mask, signo);
+	sig.sa_handler = SIG_DFL;
+	sig.sa_flags = 0;
+	sigaction (signo, &sig, NULL);
+}
+
+static void
+rspamd_sigh_free (void *p)
+{
+	struct rspamd_worker_signal_handler *sigh = p;
+	struct rspamd_worker_signal_cb *cb, *tmp;
+
+	DL_FOREACH_SAFE (sigh->cb, cb, tmp) {
+		DL_DELETE (sigh->cb, cb);
+		g_free (cb);
+	}
+
+	event_del (&sigh->ev);
+	rspamd_worker_default_signal (sigh->signo);
+	g_free (sigh);
+}
+
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		struct event_base *base,
@@ -219,7 +247,7 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 	DL_APPEND (sigh->cb, cb);
 }
 
-static void
+void
 rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base)
 {
 	struct sigaction signals;
@@ -274,7 +302,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 
 	worker->srv->pid = getpid ();
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
-			NULL, g_free);
+			NULL, rspamd_sigh_free);
 
 	ev_base = event_init ();
 
@@ -660,6 +688,20 @@ rspamd_worker_block_signals (void)
 	sigaddset (&set, SIGUSR1);
 	sigaddset (&set, SIGUSR2);
 	sigprocmask (SIG_BLOCK, &set, NULL);
+}
+
+void
+rspamd_worker_unblock_signals (void)
+{
+	sigset_t set;
+
+	sigemptyset (&set);
+	sigaddset (&set, SIGTERM);
+	sigaddset (&set, SIGINT);
+	sigaddset (&set, SIGHUP);
+	sigaddset (&set, SIGUSR1);
+	sigaddset (&set, SIGUSR2);
+	sigprocmask (SIG_UNBLOCK, &set, NULL);
 }
 
 void

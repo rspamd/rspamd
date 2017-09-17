@@ -31,6 +31,12 @@ struct rspamd_worker;
 struct rspamd_worker_signal_handler;
 
 /**
+ * Init basic signals for a worker
+ * @param worker
+ * @param base
+ */
+void rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base);
+/**
  * Prepare worker's startup
  * @param worker worker structure
  * @param name name of the worker
@@ -122,6 +128,11 @@ void rspamd_worker_stop_accept (struct rspamd_worker *worker);
  * Block signals before terminations
  */
 void rspamd_worker_block_signals (void);
+
+/**
+ * Unblock signals
+ */
+void rspamd_worker_unblock_signals (void);
 
 /**
  * Kill rspamd main and all workers
