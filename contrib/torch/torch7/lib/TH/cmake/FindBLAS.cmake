@@ -235,7 +235,17 @@ if((NOT BLAS_LIBRARIES)
   ""
   "blas")
   if (BLAS_LIBRARIES)
-    set(BLAS_INFO "generic")
+    check_fortran_libraries(
+            TMP_BLAS_LIBRARIES
+            TMP_BLAS
+            openblas_get_num_threads
+            ""
+            "blas")
+    if (TMP_BLAS_LIBRARIES)
+      set(BLAS_INFO "open")
+    else()
+      set(BLAS_INFO "generic")
+    endif()
   endif (BLAS_LIBRARIES)
 endif()
 

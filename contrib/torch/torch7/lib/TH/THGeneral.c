@@ -324,15 +324,26 @@ void THSetNumThreads(int num_threads)
 #ifdef _OPENMP
   omp_set_num_threads(num_threads);
 #endif
+#ifdef TH_BLAS_OPEN
+  extern void openblas_set_num_threads(int);
+  openblas_set_num_threads(num_threads);
+#endif
 }
 
 int THGetNumThreads(void)
 {
+  int nthreads = 1;
 #ifdef _OPENMP
-  return omp_get_max_threads();
-#else
-  return 1;
+  nthreads = omp_get_max_threads();
 #endif
+#ifdef TH_BLAS_OPEN
+  int bl_threads = 1;
+  extern int openblas_get_num_threads(void);
+  bl_threads = openblas_get_num_threads();
+  nthreads = nthreads > bl_threads ? bl_threads : nthreads;
+#endif
+
+  return nthreads;
 }
 
 int THGetNumCores(void)
