@@ -47,6 +47,7 @@ local default_options = {
     mse = 0.001,
     autotrain = true,
     train_prob = 1.0,
+    learn_threads = 1,
   },
   use_settings = false,
   per_user = false,
@@ -781,6 +782,9 @@ local function train_fann(rule, _, ev_base, elt, worker)
           dataset.size = function() return #dataset end
 
           local function train_torch()
+            if rule.train.learn_threads > 1 then
+              torch.setnumthreads(rule.train.learn_threads)
+            end
             local criterion = nn.MSECriterion()
             local trainer = nn.StochasticGradient(fanns[elt].fann_train,
               criterion)

@@ -22,6 +22,7 @@ local lua_nn_models = {}
 
 if rspamd_config:has_torch() then
   torch = require "torch"
+  torch.setnumthreads(1)
 end
 
 if torch then
