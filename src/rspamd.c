@@ -1162,6 +1162,10 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
 	memset (&signals, 0, sizeof (struct sigaction));
 	other_workers = g_array_new (FALSE, TRUE, sizeof (pid_t));
+#ifdef WITH_TORCH
+	/* We don't need multithreaded BLAS mode, disable it by default */
+	setenv ("OPENBLAS_NUM_THREADS", "1", 0);
+#endif
 
 	read_cmd_line (&argc, &argv, rspamd_main->cfg);
 
