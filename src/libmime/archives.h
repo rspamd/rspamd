@@ -21,6 +21,7 @@
 enum rspamd_archive_type {
 	RSPAMD_ARCHIVE_ZIP,
 	RSPAMD_ARCHIVE_RAR,
+	RSPAMD_ARCHIVE_7ZIP,
 };
 
 enum rspamd_archive_flags {

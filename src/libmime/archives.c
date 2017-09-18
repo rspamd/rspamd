@@ -558,6 +558,130 @@ part->flags |= RSPAMD_MIME_PART_ARCHIVE;
 	arch->size = part->parsed_data.len;
 }
 
+static inline gint
+rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
+{
+	/*
+	 * REAL_UINT64 means real UINT64.
+	 * UINT64 means real UINT64 encoded with the following scheme:
+	 *
+	 * Size of encoding sequence depends from first byte:
+	 * First_Byte  Extra_Bytes        Value
+	 * (binary)
+	 * 0xxxxxxx               : ( xxxxxxx           )
+	 * 10xxxxxx    BYTE y[1]  : (  xxxxxx << (8 * 1)) + y
+	 * 110xxxxx    BYTE y[2]  : (   xxxxx << (8 * 2)) + y
+	 * ...
+	 * 1111110x    BYTE y[6]  : (       x << (8 * 6)) + y
+	 * 11111110    BYTE y[7]  :                         y
+	 * 11111111    BYTE y[8]  :                         y
+	 */
+	guchar t;
+
+	if (remain == 0) {
+		return -1;
+	}
+
+	t = *start;
+
+	if (!isset (&t, 7)) {
+		/* Trivial case */
+		*res = t;
+		return 1;
+	}
+	else if (t == 0xFF) {
+		if (remain >= sizeof (guint64) + 1) {
+			memcpy (res, start + 1, sizeof (guint64));
+			*res = GUINT64_FROM_LE (*res);
+
+			return sizeof (guint64) + 1;
+		}
+	}
+	else {
+		gint cur_bit = 6, intlen = 1;
+		const guchar bmask = 0xFF;
+		guint64 tgt;
+
+		while (cur_bit > 0) {
+			if (!isset (&t, cur_bit)) {
+				if (remain >= intlen + 1) {
+					memcpy (&tgt, start + 1, intlen);
+					tgt = GUINT64_FROM_LE (tgt);
+					/* Shift back */
+					tgt >>= sizeof (tgt) - NBBY * intlen;
+					/* Add masked value */
+					tgt += (guint64)(t & (bmask >> (NBBY - cur_bit)))
+							<< (NBBY * intlen);
+					*res = tgt;
+
+					return intlen + 1;
+				}
+			}
+			cur_bit --;
+			intlen ++;
+		}
+	}
+
+	return -1;
+}
+
+#define SZ_READ_VINT_SKIP() do { \
+	r = rspamd_archive_7zip_read_vint (p, end - p, &vint); \
+	if (r == -1) { \
+		msg_debug_task ("7z archive is invalid (bad vint)"); \
+		return; \
+	} \
+	p += r; \
+} while (0)
+#define SZ_READ_VINT(var) do { \
+	r = rspamd_archive_7zip_read_vint (p, end - p, &(var)); \
+	if (r == -1) { \
+		msg_debug_task ("7z archive is invalid (bad vint)"); \
+		return; \
+	} \
+	p += r; \
+} while (0)
+
+static void
+rspamd_archive_process_7zip (struct rspamd_task *task,
+		struct rspamd_mime_part *part)
+{
+	struct rspamd_archive *arch;
+	const guchar *p, *end;
+	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
+	guint64 section_offset = 0, section_length = 0;
+	gint r;
+
+	p = part->parsed_data.begin;
+	end = p + part->parsed_data.len;
+
+	if (end - p <= sizeof (guint64) + sizeof (guint32) ||
+			memcmp (p, sz_magic, sizeof (sz_magic)) != 0) {
+		msg_debug_task ("7z archive is invalid (no 7z magic)");
+
+		return;
+	}
+
+	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
+	arch->files = g_ptr_array_new ();
+	arch->type = RSPAMD_ARCHIVE_7ZIP;
+	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
+			arch);
+
+	/* Magic (6 bytes) + version (2 bytes) + crc32 (4 bytes) */
+	p += sizeof (guint64) + sizeof (guint32);
+
+	SZ_READ_VINT(section_offset);
+	SZ_READ_VINT(section_length);
+
+	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->specific.arch = arch;
+	if (part->cd != NULL) {
+		arch->archive_name = &part->cd->filename;
+	}
+	arch->size = part->parsed_data.len;
+}
+
 static gboolean
 rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
 		const guchar *magic_start, gsize magic_len)
@@ -608,6 +732,7 @@ rspamd_archives_process (struct rspamd_task *task)
 	struct rspamd_mime_part *part;
 	const guchar rar_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07};
 	const guchar zip_magic[] = {0x50, 0x4b, 0x03, 0x04};
+	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
@@ -621,6 +746,11 @@ rspamd_archives_process (struct rspamd_task *task)
 					rar_magic, sizeof (rar_magic))) {
 				rspamd_archive_process_rar (task, part);
 			}
+			else if (rspamd_archive_cheat_detect (part, "7z",
+					sz_magic, sizeof (sz_magic))) {
+				rspamd_archive_process_7zip (task, part);
+			}
+
 		}
 	}
 }
@@ -637,6 +767,9 @@ rspamd_archive_type_str (enum rspamd_archive_type type)
 		break;
 	case RSPAMD_ARCHIVE_RAR:
 		ret = "rar";
+		break;
+	case RSPAMD_ARCHIVE_7ZIP:
+		ret = "7z";
 		break;
 	}
 
