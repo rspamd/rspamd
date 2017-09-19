@@ -1006,9 +1006,7 @@ local function check_fanns(rule, _, ev_base)
           elseif _data and type(_data) == 'table' then
             load_or_invalidate_fann(rule, _data, elt, ev_base)
           else
-            if type(_data) == 'number' then
-              -- no new version
-            else
+            if type(_data) ~= 'number' then
               rspamd_logger.errx(rspamd_config, 'invalid ANN type returned from Redis: %s; prefix: %s',
                 type(_data), elt)
             end
