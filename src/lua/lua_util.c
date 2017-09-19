@@ -1712,11 +1712,11 @@ lua_util_random_hex (lua_State *L)
 static gint
 lua_util_zstd_compress (lua_State *L)
 {
-	struct rspamd_lua_text *t = NULL, *res;
+	struct rspamd_lua_text *t = NULL, *res, tmp;
 	gsize sz, r;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
-		t = g_alloca (sizeof (*t));
+		t = &tmp;
 		t->start = lua_tolstring (L, 1, &sz);
 		t->len = sz;
 	}
