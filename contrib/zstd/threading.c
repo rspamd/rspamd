@@ -2,9 +2,9 @@
  * Copyright (c) 2016 Tino Reichardt
  * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
  *
  * You can contact the author at:
  * - zstdmt source repository: https://github.com/mcmilk/zstdmt
@@ -14,12 +14,8 @@
  * This file will hold wrapper for systems, which do not support pthreads
  */
 
-/* When ZSTD_MULTITHREAD is not defined, this file would become an empty translation unit.
-* Include some ISO C header code to prevent this and portably avoid related warnings.
-* (Visual C++: C4206 / GCC: -Wpedantic / Clang: -Wempty-translation-unit)
-*/
-#include <stddef.h>
-
+/* create fake symbol to avoid empty trnaslation unit warning */
+int g_ZSTD_threading_useles_symbol;
 
 #if defined(ZSTD_MULTITHREAD) && defined(_WIN32)
 
