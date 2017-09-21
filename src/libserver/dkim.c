@@ -93,6 +93,7 @@ enum rspamd_dkim_key_type {
 
 struct rspamd_dkim_common_ctx {
 	rspamd_mempool_t *pool;
+	guint64 sig_hash;
 	gsize len;
 	gint header_canon_type;
 	gint body_canon_type;
@@ -746,6 +747,8 @@ rspamd_create_dkim_context (const gchar *sig,
 	p = sig;
 	c = sig;
 	end = p + strlen (p);
+	ctx->common.sig_hash = rspamd_cryptobox_fast_hash (sig, end - sig,
+			rspamd_hash_seed ());
 
 	while (p <= end) {
 		switch (state) {
@@ -2099,9 +2102,10 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				}
 
 				PTR_ARRAY_FOREACH (ar, i, rh) {
-					if (rspamd_substring_search (rh->raw_value,
-							rh->raw_len, dkim_domain,
-							strlen (dkim_domain)) != -1) {
+					guint64 th = rspamd_cryptobox_fast_hash (rh->decoded,
+							strlen (rh->decoded), rspamd_hash_seed ());
+
+					if (th == ctx->sig_hash) {
 						rspamd_dkim_signature_update (ctx, rh->raw_value,
 								rh->raw_len);
 						break;
