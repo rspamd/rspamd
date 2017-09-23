@@ -7,9 +7,13 @@
 .d3evolution .y.label {
     font-weight: normal;
 }
-.d3evolution .grid .tick {
+.d3evolution .grid line {
     stroke: lightgrey;
+    stroke-opacity: .7;
     shape-rendering: crispEdges;
+}
+.d3evolution .grid path {
+  stroke-width: 0;
 }
 .d3evolution .axis,
 .d3evolution .legend {
@@ -19,6 +23,7 @@
 .d3evolution .axis line {
     fill: none;
     stroke: grey;
+    shape-rendering: crispEdges;
 }
 .d3evolution .legend circle {
     stroke-width: 2px;
