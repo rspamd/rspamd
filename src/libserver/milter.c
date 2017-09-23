@@ -1158,6 +1158,7 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 		memcpy (pos, value->str, value->len + 1);
 		break;
 	case RSPAMD_MILTER_CHGHEADER:
+	case RSPAMD_MILTER_INSHEADER:
 		idx = htonl (va_arg (ap, guint32));
 		name = va_arg (ap, GString *);
 		value = va_arg (ap, GString *);
