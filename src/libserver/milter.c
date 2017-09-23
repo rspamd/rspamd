@@ -1419,6 +1419,7 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 	ucl_object_iter_t it;
 	struct rspamd_milter_private *priv = session->priv;
 	GString *hname, *hvalue;
+	gint idx = -1;
 
 	if (obj && ucl_object_type (obj) == UCL_OBJECT) {
 		elt = ucl_object_lookup (obj, "remove_headers");
@@ -1442,6 +1443,8 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 		/*
 		 * add_headers: {"name": "value", ... }
 		 * name could have multiple values
+		 * -or- (since 1.7)
+		 * {"name": {"value": "val", "order": 0}, ... }
 		 */
 		if (elt && ucl_object_type (elt) == UCL_OBJECT) {
 			it = NULL;
@@ -1457,6 +1460,39 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 								hname, hvalue);
 						g_string_free (hname, TRUE);
 						g_string_free (hvalue, TRUE);
+					}
+					else if (ucl_object_type (cur_elt) == UCL_OBJECT) {
+						const ucl_object_t *val;
+
+						val = ucl_object_lookup (cur_elt, "value");
+
+						if (val && ucl_object_type (val) == UCL_STRING) {
+							const ucl_object_t *idx_obj;
+
+							idx_obj = ucl_object_lookup_any (cur_elt, "order",
+									"index", NULL);
+							if (idx_obj) {
+								idx = ucl_object_toint (idx_obj);
+							}
+
+							hname = g_string_new (ucl_object_key (cur));
+							hvalue = g_string_new (ucl_object_tostring (val));
+
+							if (idx >= 0) {
+								rspamd_milter_send_action (session,
+										RSPAMD_MILTER_INSHEADER,
+										idx,
+										hname, hvalue);
+							}
+							else {
+								rspamd_milter_send_action (session,
+										RSPAMD_MILTER_ADDHEADER,
+										hname, hvalue);
+							}
+
+							g_string_free (hname, TRUE);
+							g_string_free (hvalue, TRUE);
+						}
 					}
 				}
 			}
@@ -1595,8 +1631,8 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		hname = g_string_new (RSPAMD_MILTER_DKIM_HEADER);
 		hvalue = g_string_new (ucl_object_tostring (elt));
 
-		rspamd_milter_send_action (session, RSPAMD_MILTER_ADDHEADER,
-				hname, hvalue);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_INSHEADER,
+				0, hname, hvalue);
 		g_string_free (hname, TRUE);
 		g_string_free (hvalue, TRUE);
 	}
