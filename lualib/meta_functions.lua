@@ -16,6 +16,8 @@ limitations under the License.
 
 local exports = {}
 
+local N = "metatokens"
+
 -- Metafunctions
 local function meta_size_function(task)
   local sizes = {
@@ -196,10 +198,45 @@ local function meta_urls_function(task)
   return {0}
 end
 
+local function meta_words_function(task)
+  local avg_len = task:get_mempool():get_variable("avg_words_len", "double") or 0.0
+  local short_words = task:get_mempool():get_variable("short_words_cnt", "double") or 0.0
+  local ret_len = 0
+
+  local lens = {
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    15,
+    20,
+  }
+
+  for i = 1,#lens do
+    if lens[i] >= avg_len then
+      ret_len = (1.0 * i) / #lens
+      break
+    end
+  end
+
+  return {
+    short_words,
+    ret_len,
+  }
+end
+
 local metafunctions = {
   {
     cb = meta_size_function,
     ninputs = 1,
+    desc = {
+      "size"
+    }
   },
   {
     cb = meta_images_function,
@@ -209,36 +246,73 @@ local metafunctions = {
     -- 3 - number of jpeg images
     -- 4 - number of large images (> 128 x 128)
     -- 5 - number of small images (< 128 x 128)
+    desc = {
+      'nimages',
+      'npng_images',
+      'njpeg_images',
+      'nlarge_images',
+      'nsmall_images'
+    }
   },
   {
     cb = meta_nparts_function,
     ninputs = 2,
     -- 1 - number of text parts
     -- 2 - number of attachments
+    desc = {
+      'ntext_parts',
+      'nattachments'
+    }
   },
   {
     cb = meta_encoding_function,
     ninputs = 2,
     -- 1 - number of utf parts
     -- 2 - number of non-utf parts
+    desc = {
+      'nutf_parts',
+      'nascii_parts'
+    }
   },
   {
     cb = meta_recipients_function,
     ninputs = 2,
     -- 1 - number of mime rcpt
     -- 2 - number of smtp rcpt
+    desc = {
+      'nmime_rcpt',
+      'nsmtp_rcpt'
+    }
   },
   {
     cb = meta_received_function,
     ninputs = 4,
+    desc = {
+      'nreceived',
+      'nreceived_invalid',
+      'nreceived_bad_time',
+      'nreceived_secure'
+    }
   },
   {
     cb = meta_urls_function,
     ninputs = 1,
+    desc = {
+      'nurls'
+    }
+  },
+  {
+    cb = meta_words_function,
+    ninputs = 2,
+    desc = {
+      'avg_words_len',
+      'nshort_words'
+    }
   },
 }
 
 local function rspamd_gen_metatokens(task)
+  local rspamd_logger = require "rspamd_logger"
   local ipairs = ipairs
   local metatokens = {}
   local cached = task:cache_get('metatokens')
@@ -248,8 +322,8 @@ local function rspamd_gen_metatokens(task)
   else
     for _,mt in ipairs(metafunctions) do
       local ct = mt.cb(task)
-
-      for _,tok in ipairs(ct) do
+      for i,tok in ipairs(ct) do
+        rspamd_logger.debugm(N, task, "metatoken: %s = %s", mt.desc[i], tok)
         table.insert(metatokens, tok)
       end
     end
