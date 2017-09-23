@@ -101,6 +101,8 @@ struct rspamd_mime_text_part {
 	guint double_spaces;
 	guint non_spaces;
 	guint empty_lines;
+	guint capital_letters;
+	guint numeric_characters;
 };
 
 enum rspamd_received_type {

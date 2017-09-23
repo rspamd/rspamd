@@ -202,6 +202,7 @@ rspamd_extract_words (struct rspamd_task *task,
 	gchar *temp_word;
 	const guchar *r;
 	guint i, nlen, total_len = 0, short_len = 0;
+	gdouble avg_len = 0;
 
 #ifdef WITH_SNOWBALL
 	static GHashTable *stemmers = NULL;
@@ -252,6 +253,8 @@ rspamd_extract_words (struct rspamd_task *task,
 #endif
 
 			if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
+				avg_len = avg_len + (w->len - avg_len) / (double)i;
+
 				if (r != NULL) {
 					nlen = strlen (r);
 					nlen = MIN (nlen, w->len);
@@ -462,6 +465,13 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 						part->non_ascii_chars ++;
 					}
 					else {
+						if (g_ascii_isupper (*p)) {
+							part->capital_letters ++;
+						}
+						else if (g_ascii_isdigit (*p)) {
+							part->numeric_characters ++;
+						}
+
 						part->ascii_chars ++;
 					}
 				}

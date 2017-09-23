@@ -170,7 +170,8 @@ chartable_module_reconfig (struct rspamd_config *cfg)
 static gdouble
 rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		rspamd_stat_token_t *w,
-		gboolean is_url)
+		gboolean is_url,
+		guint *ncap)
 {
 	const gchar *p, *end;
 	gdouble badness = 0.0;
@@ -206,6 +207,12 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 				 * characters as basic latin
 				 */
 				sc = UBLOCK_BASIC_LATIN;
+			}
+
+			if (sc != UBLOCK_BASIC_LATIN && u_isupper (uc)) {
+				if (ncap) {
+					(*ncap) ++;
+				}
 			}
 
 			if (state == got_digit) {
@@ -363,7 +370,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 	rspamd_stat_token_t *w;
-	guint i;
+	guint i, ncap = 0;
 	gdouble cur_score = 0.0;
 
 	if (part == NULL || part->normalized_words == NULL ||
@@ -377,13 +384,21 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 		if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 
 			if (IS_PART_UTF (part)) {
-				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE);
+				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
+						&ncap);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, w, FALSE);
 			}
 		}
 	}
+
+	/*
+	 * TODO: perhaps, we should do this analysis somewhere else and get
+	 * something like: <SYM_SC><SYM_SC><SYM_SC> representing classes for all
+	 * symbols in the text
+	 */
+	part->capital_letters += ncap;
 
 	cur_score /= (gdouble)part->normalized_words->len;
 
@@ -425,7 +440,8 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 		if (words && words->len > 0) {
 			for (i = 0; i < words->len; i++) {
 				w = &g_array_index (words, rspamd_stat_token_t, i);
-				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE);
+				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
+						NULL);
 			}
 
 			cur_score /= (gdouble)words->len;
@@ -471,7 +487,7 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 			w.len = u->hostlen;
 
 			if (g_utf8_validate (w.begin, w.len, NULL)) {
-				cur_score += rspamd_chartable_process_word_utf (task, &w, TRUE);
+				cur_score += rspamd_chartable_process_word_utf (task, &w, TRUE, NULL);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, &w, TRUE);
@@ -494,7 +510,7 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 			w.len = u->hostlen;
 
 			if (g_utf8_validate (w.begin, w.len, NULL)) {
-				cur_score += rspamd_chartable_process_word_utf (task, &w, TRUE);
+				cur_score += rspamd_chartable_process_word_utf (task, &w, TRUE, NULL);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, &w, TRUE);
