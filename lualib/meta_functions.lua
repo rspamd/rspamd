@@ -117,7 +117,7 @@ local function meta_encoding_function(task)
   local nother = 0
 
   local tp = task:get_text_parts()
-  if tp then
+  if tp and #tp > 0 then
     for _,p in ipairs(tp) do
       if p:is_utf() then
         nutf = nutf + 1
@@ -125,9 +125,11 @@ local function meta_encoding_function(task)
         nother = nother + 1
       end
     end
+
+    return {nutf / #tp, nother / #tp}
   end
 
-  return {nutf, nother}
+  return {0, 0}
 end
 
 local function meta_recipients_function(task)
@@ -224,10 +226,40 @@ local function meta_words_function(task)
     end
   end
 
-  return {
+  local tp = task:get_text_parts()
+  local wres = {
+    0, -- spaces rate
+    0, -- double spaces rate
+    0, -- non spaces rate
+    0, -- ascii characters rate
+    0, -- non-ascii characters rate
+    0, -- capital characters rate
+    0, -- numeric cahracters
+  }
+  for _,p in ipairs(tp) do
+    local stats = p:get_stats()
+    local len = p:get_length()
+
+    if len > 0 then
+      wres[1] = wres[1] + stats['spaces'] / len
+      wres[2] = wres[2] + stats['double_spaces'] / len
+      wres[3] = wres[3] + stats['non_spaces'] / len
+      wres[4] = wres[4] + stats['ascii_characters'] / len
+      wres[5] = wres[5] + stats['non_ascii_characters'] / len
+      wres[6] = wres[6] + stats['capital_letters'] / len
+      wres[7] = wres[7] + stats['numeric_characters'] / len
+    end
+  end
+
+  local ret = {
     short_words,
     ret_len,
   }
+  for _,wr in ipairs(wres) do
+    table.insert(ret, wr / #tp)
+  end
+
+  return ret
 end
 
 local metafunctions = {
@@ -303,10 +335,17 @@ local metafunctions = {
   },
   {
     cb = meta_words_function,
-    ninputs = 2,
+    ninputs = 9,
     desc = {
       'avg_words_len',
-      'nshort_words'
+      'nshort_words',
+      'spaces_rate',
+      'double_spaces_rate',
+      'non_spaces_rate',
+      'ascii_characters_rate',
+      'non_ascii_characters_rate',
+      'capital_characters_rate',
+      'numeric_cahracters'
     }
   },
 }

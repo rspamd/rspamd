@@ -754,7 +754,7 @@ lua_textpart_get_stats (lua_State * L)
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 
 	if (part != NULL) {
-		lua_createtable (L, 0, 7);
+		lua_createtable (L, 0, 9);
 
 		lua_pushstring (L, "lines");
 		lua_pushnumber (L, part->nlines);
@@ -776,6 +776,12 @@ lua_textpart_get_stats (lua_State * L)
 		lua_settable (L, -3);
 		lua_pushstring (L, "non_ascii_characters");
 		lua_pushnumber (L, part->non_ascii_chars);
+		lua_settable (L, -3);
+		lua_pushstring (L, "capital_letters");
+		lua_pushnumber (L, part->capital_letters);
+		lua_settable (L, -3);
+		lua_pushstring (L, "numeric_characters");
+		lua_pushnumber (L, part->numeric_characters);
 		lua_settable (L, -3);
 	}
 	else {
