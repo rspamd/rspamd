@@ -1147,50 +1147,48 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 		}
 	}
 
-	elt = ucl_object_lookup (obj, "prefix");
-	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
-		/* Default non-users statistics */
-		backend->redis_object = REDIS_DEFAULT_OBJECT;
+	users_enabled = ucl_object_lookup_any (obj, "per_user",
+			"users_enabled", NULL);
 
-		/*
-		 * Make redis backend compatible with sqlite3 backend in users settings
-		 */
-		users_enabled = ucl_object_lookup_any (obj, "per_user",
-				"users_enabled", NULL);
+	if (users_enabled != NULL) {
+		if (ucl_object_type (users_enabled) == UCL_BOOLEAN) {
+			backend->enable_users = ucl_object_toboolean (users_enabled);
+			backend->cbref_user = -1;
+		}
+		else if (ucl_object_type (users_enabled) == UCL_STRING) {
+			lua_script = ucl_object_tostring (users_enabled);
 
-		if (users_enabled != NULL) {
-			if (ucl_object_type (users_enabled) == UCL_BOOLEAN) {
-				backend->enable_users = ucl_object_toboolean (users_enabled);
-				backend->cbref_user = -1;
-
-				if (backend->enable_users) {
-					backend->redis_object = REDIS_DEFAULT_USERS_OBJECT;
-				}
+			if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
+				msg_err_config ("cannot execute lua script for users "
+						"extraction: %s", lua_tostring (cfg->lua_state, -1));
 			}
-			else if (ucl_object_type (users_enabled) == UCL_STRING) {
-				lua_script = ucl_object_tostring (users_enabled);
-
-				if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
-					msg_err_config ("cannot execute lua script for users "
-							"extraction: %s", lua_tostring (cfg->lua_state, -1));
+			else {
+				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
+					backend->enable_users = TRUE;
+					backend->cbref_user = luaL_ref (cfg->lua_state,
+							LUA_REGISTRYINDEX);
 				}
 				else {
-					if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
-						backend->enable_users = TRUE;
-						backend->cbref_user = luaL_ref (cfg->lua_state,
-								LUA_REGISTRYINDEX);
-					}
-					else {
-						msg_err_config ("lua script must return "
-								"function(task) and not %s",
-								lua_typename (cfg->lua_state, lua_type (
-										cfg->lua_state, -1)));
-					}
+					msg_err_config ("lua script must return "
+							"function(task) and not %s",
+							lua_typename (cfg->lua_state, lua_type (
+									cfg->lua_state, -1)));
 				}
 			}
 		}
+	}
+	else {
+		backend->enable_users = FALSE;
+	}
+
+	elt = ucl_object_lookup (obj, "prefix");
+	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
+		/* Default non-users statistics */
+		if (backend->enable_users && backend->cbref_user == -1) {
+			backend->redis_object = REDIS_DEFAULT_USERS_OBJECT;
+		}
 		else {
-			backend->enable_users = FALSE;
+			backend->redis_object = REDIS_DEFAULT_OBJECT;
 		}
 	}
 	else {
