@@ -521,7 +521,7 @@ if type(opts['extended_headers_rcpt']) == 'table' and opts['extended_headers_rcp
 end
 rspamd_config:register_symbol({
   name = 'MILTER_HEADERS',
-  type = 'postfilter,idempotent',
+  type = 'postfilter',
   callback = milter_headers,
   priority = 10
 })
