@@ -95,6 +95,18 @@ local function cb(task)
 end
  */
 LUA_FUNCTION_DEF (task, insert_result);
+
+/***
+ * @method task:adjust_result(symbol, score[, option1, ...])
+ * Alters the existing symbol's score to a new score. It is not affected by
+ * metric score or grow factor. You can also add new options
+ * using this method. Symbol must be already inserted into metric or an error
+ * will be emitted.
+ * @param {string} symbol symbol to adjust
+ * @param {number} score this value is NOT multiplied by the metric score
+ * @param {string/table} options list of optional options attached to a symbol adjusted
+ */
+LUA_FUNCTION_DEF (task, adjust_result);
 /***
  * @method task:set_pre_result(action, description)
  * Sets pre-result for a task. It is used in pre-filters to specify early result
@@ -829,6 +841,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, get_worker),
 	LUA_INTERFACE_DEF (task, insert_result),
+	LUA_INTERFACE_DEF (task, adjust_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, append_message),
 	LUA_INTERFACE_DEF (task, has_urls),
@@ -1212,6 +1225,68 @@ lua_task_insert_result (lua_State * L)
 		flag = luaL_checknumber (L, 3);
 		top = lua_gettop (L);
 		s = rspamd_task_insert_result (task, symbol_name, flag, NULL);
+
+		/* Get additional options */
+		if (s) {
+			for (i = 4; i <= top; i++) {
+				if (lua_type (L, i) == LUA_TSTRING) {
+					param = luaL_checkstring (L, i);
+					rspamd_task_add_result_option (task, s, param);
+				}
+				else if (lua_type (L, i) == LUA_TTABLE) {
+					lua_pushvalue (L, i);
+					lua_pushnil (L);
+
+					while (lua_next (L, -2)) {
+						param = lua_tostring (L, -1);
+						rspamd_task_add_result_option (task, s, param);
+						lua_pop (L, 1);
+					}
+
+					lua_pop (L, 1);
+				}
+			}
+		}
+
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_task_adjust_result (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol_name, *param;
+	struct rspamd_metric_result *metric_res;
+	struct rspamd_symbol_result *s = NULL;
+	struct rspamd_symbol_option *opt;
+	double weight;
+	gint i, top;
+
+	if (task != NULL) {
+
+		symbol_name = luaL_checkstring (L, 2);
+		weight = luaL_checknumber (L, 3);
+		top = lua_gettop (L);
+		metric_res = task->result;
+
+		if (metric_res) {
+			s = g_hash_table_lookup (metric_res->symbols, symbol_name);
+		}
+		else {
+			return luaL_error (L, "no metric result");
+		}
+
+		if (s) {
+			s->score = weight;
+		}
+		else {
+			return luaL_error (L, "symbol not found: %s", symbol_name);
+		}
 
 		/* Get additional options */
 		if (s) {
