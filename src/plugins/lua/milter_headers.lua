@@ -357,7 +357,10 @@ local function milter_headers(task)
       settings.routines['authentication-results'])
 
     if res then
-      add[settings.routines['authentication-results'].header] = res
+      add[settings.routines['authentication-results'].header] = {
+        value = res,
+        order = 0
+      }
     end
   end
 
