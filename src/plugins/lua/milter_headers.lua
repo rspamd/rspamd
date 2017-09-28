@@ -170,7 +170,11 @@ local function milter_headers(task)
     if skip_wanted('x-spamd-result') then return end
     if not common.symbols then
       common.symbols = task:get_symbols_all()
+    end
+    if not common['metric_score'] then
       common['metric_score'] = task:get_metric_score('default')
+    end
+    if not common['metric_action'] then
       common['metric_action'] = task:get_metric_action('default')
     end
     if settings.routines['x-spamd-result'].remove then
@@ -293,26 +297,26 @@ local function milter_headers(task)
 
   routines['x-virus'] = function()
     if skip_wanted('x-virus') then return end
-    if not common.symbols then
-      common.symbols = {}
+    if not common.symbols_hash then
+      if not common.symbols then
+        common.symbols = task:get_symbols_all()
+      end
+      local h = {}
+      for _, s in ipairs(common.symbols) do
+        h[s.name] = s
+      end
+      common.symbols_hash = h
     end
     if settings.routines['x-virus'].remove then
       remove[settings.routines['x-virus'].header] = settings.routines['x-virus'].remove
     end
     local virii = {}
     for _, sym in ipairs(settings.routines['x-virus'].symbols) do
-      if not (common.symbols[sym] == false) then
-        local s = task:get_symbol(sym)
-        if not s then
-          common.symbols[sym] = false
-        else
-          common.symbols[sym] = s
-          if (((s or E)[1] or E).options or E)[1] then
-            table.insert(virii, s[1].options[1])
-          else
-            table.insert(virii, 'unknown')
-          end
-        end
+      local s = common.symbols_hash[sym]
+      if ((s or E).options or E)[1] then
+        table.insert(virii, table.concat(s.options, ','))
+      elseif s then
+        table.insert(virii, 'unknown')
       end
     end
     if #virii > 0 then
