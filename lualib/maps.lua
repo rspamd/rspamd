@@ -168,6 +168,8 @@ local function rspamd_maybe_check_map(key, what)
 
     if mn and rspamd_maps[mn] then
       return rspamd_maps[mn]:get_key(key)
+    else
+      return what:lower() == key
     end
   else
     return what:lower() == key
