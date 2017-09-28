@@ -175,7 +175,6 @@ local function rspamd_maybe_check_map(key, what)
     return what:lower() == key
   end
 
-  return false
 end
 
 exports.rspamd_maybe_check_map = rspamd_maybe_check_map
