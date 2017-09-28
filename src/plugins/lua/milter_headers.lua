@@ -478,11 +478,11 @@ if opts['extended_spam_headers'] then
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
 end
-if opts['skip_local'] then
-  settings.skip_local = true
+if type(opts['skip_local']) == 'boolean' then
+  settings.skip_local = opts['skip_local']
 end
-if opts['skip_authenticated'] then
-  settings.skip_authenticated = true
+if type(opts['skip_authenticated']) == 'boolean' then
+  settings.skip_authenticated = opts['skip_authenticated']
 end
 for _, s in ipairs(opts['use']) do
   if not have_routine[s] then
