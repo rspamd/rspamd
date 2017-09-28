@@ -221,6 +221,9 @@ rspamd_config.R_WHITE_ON_WHITE = {
 
     if ret then
       if transp_rate > 0.1 then
+        if transp_rate > 0.5 or transp_rate ~= transp_rate then
+          transp_rate = 0.5
+        end
         return true,(transp_rate * 2.0),arg
       end
     end
@@ -228,8 +231,9 @@ rspamd_config.R_WHITE_ON_WHITE = {
     return false
   end,
 
-  score = 6.0,
+  score = 4.0,
   group = 'html',
+  one_shot = true,
   description = 'Message contains low contrast text'
 }
 
