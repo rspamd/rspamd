@@ -965,8 +965,16 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 
 							p = p + i;
 						}
-						else {
+						else if (is_urlsafe (*p)) {
 							p ++;
+						}
+						else {
+							if (strict) {
+								goto out;
+							}
+							else {
+								goto set;
+							}
 						}
 					}
 					else {
