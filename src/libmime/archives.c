@@ -634,25 +634,302 @@ rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
 	p += r; \
 } while (0)
 #define SZ_READ_VINT(var) do { \
+	int r; \
 	r = rspamd_archive_7zip_read_vint (p, end - p, &(var)); \
 	if (r == -1) { \
-		msg_debug_task ("7z archive is invalid (bad vint)"); \
-		return; \
+		msg_debug_task ("7z archive is invalid (bad vint): %s", G_STRLOC); \
+		return NULL; \
 	} \
 	p += r; \
 } while (0)
+
+#define SZ_READ_UINT64(n) do { \
+	if (end - p < (goffset)sizeof (guint64)) { \
+		msg_debug_task ("7zip archive is invalid (bad vint): %s", G_STRLOC); \
+		return; \
+	} \
+	n = *(guint64 *)p; \
+	n = GUINT64_FROM_LE(n); \
+	p += sizeof (guint64); \
+} while (0)
+#define SZ_SKIP_BYTES(n) do { \
+	if (end - p > (n)) { \
+		p += (n); \
+	} \
+	else { \
+		msg_debug_task ("7zip archive is invalid (truncated); wanted to read %d bytes, %d avail: %s", (gint)(n), (gint)(end - p), G_STRLOC); \
+		return NULL; \
+	} \
+} while (0)
+
+enum rspamd_7zip_header_mark {
+	kEnd = 0x00,
+	kHeader = 0x01,
+	kArchiveProperties = 0x02,
+	kAdditionalStreamsInfo = 0x03,
+	kMainStreamsInfo = 0x04,
+	kFilesInfo = 0x05,
+	kPackInfo = 0x06,
+	kUnPackInfo = 0x07,
+	kSubStreamsInfo = 0x08,
+	kSize = 0x09,
+	kCRC = 0x0A,
+	kFolder = 0x0B,
+	kCodersUnPackSize = 0x0C,
+	kNumUnPackStream = 0x0D,
+	kEmptyStream = 0x0E,
+	kEmptyFile = 0x0F,
+	kAnti = 0x10,
+	kName = 0x11,
+	kCTime = 0x12,
+	kATime = 0x13,
+	kMTime = 0x14,
+	kWinAttributes = 0x15,
+	kComment = 0x16,
+	kEncodedHeader = 0x17,
+	kStartPos = 0x18,
+	kDummy = 0x19,
+};
+
+static const guchar *
+rspamd_7zip_read_digest (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch,
+		guint64 num_streams)
+{
+	guchar all_defined = *p;
+	guint64 i, num_defined = 0;
+	unsigned mask, avail;
+	gboolean defined;
+
+	/*
+	 * BYTE AllAreDefined
+	 *  if (AllAreDefined == 0)
+	 *  {
+	 *    for(NumStreams)
+	 *    BIT Defined
+	 *  }
+	 *  UINT32 CRCs[NumDefined]
+	 */
+	SZ_SKIP_BYTES(1);
+
+	if (all_defined) {
+		num_defined = num_streams;
+	}
+	else {
+		if (num_streams > 8192) {
+			/* Gah */
+			return NULL;
+		}
+
+		for (i = 0; i < num_streams; i++) {
+			if (mask == 0) {
+				avail = *p;
+				SZ_SKIP_BYTES(1);
+				mask = 0x80;
+			}
+
+			defined = (avail & mask)?1:0;
+
+			if (defined) {
+				num_defined ++;
+			}
+
+			mask >>= 1;
+		}
+	}
+
+	for (i = 0; i < num_defined; i ++) {
+		SZ_SKIP_BYTES(sizeof(guint32));
+	}
+
+	return p;
+}
+
+static const guchar *
+rspamd_7zip_read_pack_info (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch)
+{
+	guint64 pack_pos = 0, pack_streams = 0, i, cur_sz;
+	guchar t;
+	/*
+	 *  UINT64 PackPos
+	 *  UINT64 NumPackStreams
+	 *
+	 *  []
+	 *  BYTE NID::kSize    (0x09)
+	 *  UINT64 PackSizes[NumPackStreams]
+	 *  []
+	 *
+	 *  []
+	 *  BYTE NID::kCRC      (0x0A)
+	 *  PackStreamDigests[NumPackStreams]
+	 *  []
+	 *  BYTE NID::kEnd
+	 */
+
+	SZ_READ_VINT(pack_pos);
+	SZ_READ_VINT(pack_streams);
+
+	t = *p;
+	SZ_SKIP_BYTES(1);
+
+	switch (t) {
+	case kSize:
+		/* We need to skip pack_streams VINTS */
+		for (i = 0; i < pack_streams; i ++) {
+			SZ_READ_VINT(cur_sz);
+		}
+		break;
+	case kCRC:
+		/* CRCs are more complicated */
+		p = rspamd_7zip_read_digest (task, p, end, arch, pack_streams);
+		break;
+	case kEnd:
+		break;
+	default:
+		p = NULL;
+		msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+		break;
+	}
+
+	return p;
+}
+
+static const guchar *
+rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch)
+{
+	guchar t = *p;
+
+	SZ_SKIP_BYTES(1);
+
+	/*
+	 *
+	 *  []
+	 *  PackInfo
+	 *  []
+
+	 *  []
+	 *  CodersInfo
+	 *  []
+	 *
+	 *  []
+	 *  SubStreamsInfo
+	 *  []
+	 *
+	 *  BYTE NID::kEnd
+	 */
+	switch (t) {
+	case kPackInfo:
+		p = rspamd_7zip_read_pack_info (task, p, end, arch);
+		break;
+	case kUnPackInfo:
+		break;
+	case kSubStreamsInfo:
+		break;
+	case kEnd:
+		break;
+	default:
+		p = NULL;
+		msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+		break;
+	}
+
+	return p;
+}
+
+static const guchar *
+rspamd_7zip_read_archive_props (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch)
+{
+	guchar proptype;
+	uint64_t proplen;
+
+	/*
+	 * for (;;)
+	 * {
+	 *   BYTE PropertyType;
+	 *   if (aType == 0)
+	 *     break;
+	 *   UINT64 PropertySize;
+	 *   BYTE PropertyData[PropertySize];
+	 * }
+	 */
+
+	proptype = *p;
+	SZ_SKIP_BYTES(1);
+
+	if (p != NULL) {
+		while (proptype != 0) {
+			SZ_READ_VINT(proplen);
+
+			if (p + proplen < end) {
+				p += proplen;
+			}
+			else {
+				return NULL;
+			}
+
+			proptype = *p;
+			SZ_SKIP_BYTES(1);
+		}
+	}
+
+	return p;
+}
+
+static const guchar *
+rspamd_7zip_read_next_section (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch)
+{
+	guchar t = *p;
+
+	SZ_SKIP_BYTES(1);
+
+	switch (t) {
+	case kHeader:
+		/* We just skip byte and go further */
+		break;
+	case kEncodedHeader:
+		/*
+		 * In fact, headers are just packed, but we assume it as
+		 * encrypted to distinguish from the normal archives
+		 */
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		p = NULL; /* Cannot get anything useful */
+		break;
+	case kArchiveProperties:
+		p = rspamd_7zip_read_archive_props (task, p, end, arch);
+		break;
+	case kMainStreamsInfo:
+		p = rspamd_7zip_read_main_streams_info (task, p, end, arch);
+		break;
+	default:
+		p = NULL;
+		msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+		break;
+	}
+
+	return p;
+}
 
 static void
 rspamd_archive_process_7zip (struct rspamd_task *task,
 		struct rspamd_mime_part *part)
 {
 	struct rspamd_archive *arch;
-	const guchar *p, *end;
+	const guchar *start, *p, *end;
 	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
 	guint64 section_offset = 0, section_length = 0;
 	gint r;
 
-	p = part->parsed_data.begin;
+	start = part->parsed_data.begin;
+	p = start;
 	end = p + part->parsed_data.len;
 
 	if (end - p <= sizeof (guint64) + sizeof (guint32) ||
@@ -671,8 +948,28 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 	/* Magic (6 bytes) + version (2 bytes) + crc32 (4 bytes) */
 	p += sizeof (guint64) + sizeof (guint32);
 
-	SZ_READ_VINT(section_offset);
-	SZ_READ_VINT(section_length);
+	SZ_READ_UINT64(section_offset);
+	SZ_READ_UINT64(section_length);
+
+	if (end - p > sizeof (guint32)) {
+		p += sizeof (guint32);
+	}
+	else {
+		msg_debug_task ("7z archive is invalid (truncated crc)");
+
+		return;
+	}
+
+	if (end - p > section_offset) {
+		p += section_offset;
+	}
+	else {
+		msg_debug_task ("7z archive is invalid (incorrect section offset)");
+
+		return;
+	}
+
+	while ((p = rspamd_7zip_read_next_section (task, p, end, arch)) != NULL);
 
 	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
