@@ -98,7 +98,7 @@ static const struct luaL_reg exprlib_f[] = {
 
 static rspamd_expression_atom_t * lua_atom_parse (const gchar *line, gsize len,
 			rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gint lua_atom_process (gpointer input, rspamd_expression_atom_t *atom);
+static gdouble lua_atom_process (gpointer input, rspamd_expression_atom_t *atom);
 
 static const struct rspamd_atom_subr lua_atom_subr = {
 	.parse = lua_atom_parse,
@@ -165,11 +165,11 @@ lua_atom_parse (const gchar *line, gsize len,
 	return atom;
 }
 
-static gint
+static gdouble
 lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct lua_expression *e = (struct lua_expression *)atom->data;
-	gint ret = 0;
+	gdouble ret = 0;
 
 	lua_rawgeti (e->L, LUA_REGISTRYINDEX, e->process_idx);
 	lua_pushlstring (e->L, atom->str, atom->len);
@@ -191,7 +191,7 @@ static gint
 lua_expr_process (lua_State *L)
 {
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
-	gint res;
+	gdouble res;
 	gint flags = 0;
 
 	if (lua_gettop (L) >= 3) {

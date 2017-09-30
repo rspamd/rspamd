@@ -46,7 +46,7 @@ struct symbol_remove_data {
 
 static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gint rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
+static gdouble rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
 static gint rspamd_composite_expr_priority (rspamd_expression_atom_t *atom);
 static void rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom);
 
@@ -132,7 +132,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	return rc;
 }
 
-static gint
+static gdouble
 rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct composites_data *cd = (struct composites_data *)input;
