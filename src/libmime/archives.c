@@ -18,6 +18,8 @@
 #include "message.h"
 #include "task.h"
 #include "archives.h"
+#include <unicode/uchar.h>
+#include <unicode/utf8.h>
 
 static void
 rspamd_archive_dtor (gpointer p)
@@ -692,6 +694,34 @@ enum rspamd_7zip_header_mark {
 };
 
 static const guchar *
+rspamd_7zip_read_bits (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch, guint nbits,
+		guint *pbits_set)
+{
+	unsigned mask, avail, i;
+	gboolean bit_set = 0;
+
+	for (i = 0; i < nbits; i++) {
+		if (mask == 0) {
+			avail = *p;
+			SZ_SKIP_BYTES(1);
+			mask = 0x80;
+		}
+
+		bit_set = (avail & mask)?1:0;
+
+		if (bit_set && pbits_set) {
+			(*pbits_set) ++;
+		}
+
+		mask >>= 1;
+	}
+
+	return p;
+}
+
+static const guchar *
 rspamd_7zip_read_digest (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
 		struct rspamd_archive *arch,
@@ -699,10 +729,8 @@ rspamd_7zip_read_digest (struct rspamd_task *task,
 		guint *pdigest_read)
 {
 	guchar all_defined = *p;
-	guint64 i, num_defined = 0;
-	unsigned mask, avail;
-	gboolean defined;
-
+	guint64 i;
+	guint num_defined = 0;
 	/*
 	 * BYTE AllAreDefined
 	 *  if (AllAreDefined == 0)
@@ -723,20 +751,10 @@ rspamd_7zip_read_digest (struct rspamd_task *task,
 			return NULL;
 		}
 
-		for (i = 0; i < num_streams; i++) {
-			if (mask == 0) {
-				avail = *p;
-				SZ_SKIP_BYTES(1);
-				mask = 0x80;
-			}
+		p = rspamd_7zip_read_bits (task, p, end, arch, num_streams, &num_defined);
 
-			defined = (avail & mask)?1:0;
-
-			if (defined) {
-				num_defined ++;
-			}
-
-			mask >>= 1;
+		if (p == NULL) {
+			return NULL;
 		}
 	}
 
@@ -1192,6 +1210,157 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 }
 
 static const guchar *
+rspamd_7zip_read_files_info (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch)
+{
+	guint64 nfiles = 0, sz, i;
+	guint num_defined = 0;
+	guchar t, b;
+	struct rspamd_archive_file *fentry;
+
+	SZ_READ_VINT (nfiles);
+
+	for (;p != NULL && p < end;) {
+		t = *p;
+		SZ_SKIP_BYTES (1);
+
+		if (t == kEnd) {
+			goto end;
+		}
+
+		/* This is SO SPECIAL, gah */
+		SZ_READ_VINT (sz);
+
+		switch (t) {
+		case kEmptyStream:
+		case kEmptyFile:
+		case kAnti: /* AntiFile, OMFG */
+			/* We don't care about these bits */
+			p = rspamd_7zip_read_bits (task, p, end, arch, nfiles, NULL);
+			break;
+		case kCTime:
+		case kATime:
+		case kMTime:
+			/* We don't care of these guys, but we still have to parse them, gah */
+			/*
+			 * BYTE AllAreDefined
+			 * if (AllAreDefined == 0)
+			 * {
+			 *   for(NumFiles)
+			 *      BIT TimeDefined
+			 * }
+			 * BYTE External;
+			 * if(External != 0)
+			 *   UINT64 DataIndex
+			 * []
+			 * for(Definded Items)
+			 *   UINT32 Time
+			 * []
+			 */
+			b = *p; /* All defined flag */
+			SZ_SKIP_BYTES (1);
+
+			if (b == 1) {
+				num_defined = nfiles;
+			}
+			else {
+				p = rspamd_7zip_read_bits (task, p, end, arch, nfiles,
+						&num_defined);
+			}
+			b = *p; /* External flag, gah */
+			SZ_SKIP_BYTES (1);
+
+			if (b) {
+				guint64 tmp;
+
+				SZ_READ_VINT (tmp);
+			}
+			else {
+				for (i = 0; i < num_defined; i ++) {
+					SZ_SKIP_BYTES (sizeof (guint32)); /* Real attr */
+				}
+			}
+			break;
+		case kName:
+			/* The most useful part in this whole bloody format */
+			b = *p; /* External flag */
+
+			if (b) {
+				/* TODO: for the god sake, do something about external
+				 * filenames...
+				 */
+				guint64 tmp;
+
+				SZ_READ_VINT (tmp);
+			}
+			else {
+				for (i = 0; i < nfiles; i ++) {
+					/* Zero terminated wchar_t: happy converting... */
+					/* First, find terminator */
+					const guchar *fend = NULL, *tp = p;
+					GString *res;
+					gchar *utf8_str;
+					glong utf8_len = 0;
+
+					while (tp < end - 1) {
+						if (*tp == 0 && *(tp + 1) == 0) {
+							fend = tp + 2;
+							break;
+						}
+
+						tp += 2;
+					}
+
+					if (fend == NULL || fend - p == 0) {
+						/* Crap instead of fname */
+						msg_debug_task ("bad 7zip name; %s", G_STRLOC);
+					}
+
+					utf8_str = g_utf16_to_utf8 ((gunichar2 *)p,
+							(fend - p) / sizeof (gunichar2), NULL, &utf8_len,
+							NULL);
+
+					if (utf8_len > 0) {
+						fentry = g_slice_alloc0 (sizeof (fentry));
+						res = g_malloc0 (sizeof (*res));
+						res->len = utf8_len;
+						res->allocated_len = utf8_len;
+						res->str = utf8_str;
+						fentry->fname = res;
+					}
+					else {
+						if (utf8_str) {
+							g_free (utf8_str);
+						}
+					}
+
+					p = fend + 1;
+				}
+			}
+			break;
+		case kDummy:
+		case kWinAttributes:
+			if (sz == 0) {
+				goto end;
+			}
+			else {
+				SZ_SKIP_BYTES (sz);
+			}
+			break;
+		default:
+			p = NULL;
+			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			goto end;
+			break;
+		}
+	}
+
+end:
+	return p;
+}
+
+static const guchar *
 rspamd_7zip_read_next_section (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
 		struct rspamd_archive *arch)
@@ -1217,6 +1386,9 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 		break;
 	case kMainStreamsInfo:
 		p = rspamd_7zip_read_main_streams_info (task, p, end, arch);
+		break;
+	case kFilesInfo:
+		p = rspamd_7zip_read_files_info (task, p, end, arch);
 		break;
 	default:
 		p = NULL;
