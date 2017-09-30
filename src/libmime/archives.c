@@ -695,7 +695,8 @@ static const guchar *
 rspamd_7zip_read_digest (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
 		struct rspamd_archive *arch,
-		guint64 num_streams)
+		guint64 num_streams,
+		guint *pdigest_read)
 {
 	guchar all_defined = *p;
 	guint64 i, num_defined = 0;
@@ -743,6 +744,10 @@ rspamd_7zip_read_digest (struct rspamd_task *task,
 		SZ_SKIP_BYTES(sizeof(guint32));
 	}
 
+	if (pdigest_read) {
+		*pdigest_read = num_defined;
+	}
+
 	return p;
 }
 
@@ -752,6 +757,7 @@ rspamd_7zip_read_pack_info (struct rspamd_task *task,
 		struct rspamd_archive *arch)
 {
 	guint64 pack_pos = 0, pack_streams = 0, i, cur_sz;
+	guint num_digests = 0;
 	guchar t;
 	/*
 	 *  UINT64 PackPos
@@ -772,26 +778,233 @@ rspamd_7zip_read_pack_info (struct rspamd_task *task,
 	SZ_READ_VINT(pack_pos);
 	SZ_READ_VINT(pack_streams);
 
-	t = *p;
-	SZ_SKIP_BYTES(1);
+	while (p != NULL && p < end) {
+		t = *p;
+		SZ_SKIP_BYTES(1);
 
-	switch (t) {
-	case kSize:
-		/* We need to skip pack_streams VINTS */
-		for (i = 0; i < pack_streams; i ++) {
-			SZ_READ_VINT(cur_sz);
+		switch (t) {
+		case kSize:
+			/* We need to skip pack_streams VINTS */
+			for (i = 0; i < pack_streams; i++) {
+				SZ_READ_VINT(cur_sz);
+			}
+			break;
+		case kCRC:
+			/* CRCs are more complicated */
+			p = rspamd_7zip_read_digest (task, p, end, arch, pack_streams,
+					&num_digests);
+			break;
+		case kEnd:
+			goto end;
+			break;
+		default:
+			p = NULL;
+			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			goto end;
+			break;
 		}
-		break;
-	case kCRC:
-		/* CRCs are more complicated */
-		p = rspamd_7zip_read_digest (task, p, end, arch, pack_streams);
-		break;
-	case kEnd:
-		break;
-	default:
-		p = NULL;
-		msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
-		break;
+	}
+
+end:
+
+	return p;
+}
+
+static const guchar *
+rspamd_7zip_read_folder (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch, guint *pnstreams)
+{
+	guint64 ncoders = 0, i, noutstreams = 0, ninstreams = 0;
+
+	SZ_READ_VINT (ncoders);
+
+	for (i = 0; i < ncoders && p != NULL && p < end; i ++) {
+		guint64 sz, tmp;
+		guchar t;
+		/*
+		 * BYTE
+		 * {
+		 *   0:3 CodecIdSize
+		 *   4:  Is Complex Coder
+		 *   5:  There Are Attributes
+		 *   6:  Reserved
+		 *   7:  There are more alternative methods. (Not used anymore, must be 0).
+		 * }
+		 * BYTE CodecId[CodecIdSize]
+		 * if (Is Complex Coder)
+		 * {
+		 *   UINT64 NumInStreams;
+		 *   UINT64 NumOutStreams;
+		 * }
+		 * if (There Are Attributes)
+		 * {
+		 *   UINT64 PropertiesSize
+		 *   BYTE Properties[PropertiesSize]
+		 * }
+		 */
+		t = *p;
+		SZ_SKIP_BYTES(1);
+		sz = t & 0x7;
+		/* Codec ID */
+		SZ_SKIP_BYTES (sz);
+
+		if (t & (1u << 4)) {
+			/* Complex */
+			SZ_READ_VINT (tmp); /* InStreams */
+			ninstreams += tmp;
+			SZ_READ_VINT (tmp); /* OutStreams */
+			noutstreams += tmp;
+		}
+		else {
+			/* XXX: is it correct ? */
+			noutstreams ++;
+			ninstreams ++;
+		}
+		if (t & (1u << 5)) {
+			/* Attributes ... */
+			SZ_READ_VINT (tmp); /* Size of attrs */
+			SZ_SKIP_BYTES (tmp);
+		}
+	}
+
+	if (noutstreams > 1) {
+		/* BindPairs, WTF, huh */
+		for (i = 0; i < noutstreams - 1; i ++) {
+			guint64 tmp;
+
+			SZ_READ_VINT (tmp);
+			SZ_READ_VINT (tmp);
+		}
+	}
+
+	gint64 npacked = (gint64)ninstreams - (gint64)noutstreams + 1;
+
+	if (npacked > 1) {
+		/* Gah... */
+		for (i = 0; i < npacked; i ++) {
+			guint64 tmp;
+
+			SZ_READ_VINT (tmp);
+		}
+	}
+
+	*pnstreams = noutstreams;
+
+	return p;
+}
+
+static const guchar *
+rspamd_7zip_read_coders_info (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch,
+		guint *pnum_folders, guint *pnum_nodigest)
+{
+	guint64 num_folders = 0, i, tmp;
+	guchar t;
+	guint *folder_nstreams = NULL, num_digests = 0, digests_read = 0;
+
+	while (p != NULL && p < end) {
+		/*
+		 * BYTE NID::kFolder  (0x0B)
+		 *  UINT64 NumFolders
+		 *  BYTE External
+		 *  switch(External)
+		 *  {
+		 * 	case 0:
+		 * 	  Folders[NumFolders]
+		 * 	case 1:
+		 * 	  UINT64 DataStreamIndex
+		 *   }
+		 *   BYTE ID::kCodersUnPackSize  (0x0C)
+		 *   for(Folders)
+		 * 	for(Folder.NumOutStreams)
+		 * 	 UINT64 UnPackSize;
+		 *   []
+		 *   BYTE NID::kCRC   (0x0A)
+		 *   UnPackDigests[NumFolders]
+		 *   []
+		 *   BYTE NID::kEnd
+		 */
+
+		t = *p;
+		SZ_SKIP_BYTES(1);
+
+		switch (t) {
+		case kFolder:
+			SZ_READ_VINT (num_folders);
+			if (*p != 0) {
+				/* External folders */
+				SZ_SKIP_BYTES(1);
+				SZ_READ_VINT (tmp);
+			}
+			else {
+				SZ_SKIP_BYTES(1);
+
+				if (num_folders > 8192) {
+					/* Gah */
+					return NULL;
+				}
+
+				folder_nstreams = g_alloca (sizeof (int) * num_folders);
+
+				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
+					p = rspamd_7zip_read_folder (task, p, end, arch,
+							&folder_nstreams[i]);
+
+					num_digests += folder_nstreams[i];
+				}
+			}
+			break;
+		case kCodersUnPackSize:
+			for (i = 0; i < num_folders && p != NULL && p < end; i++) {
+				if (folder_nstreams) {
+					for (guint j = 0; j < folder_nstreams[i]; j++) {
+						guint64 tmp;
+
+						SZ_READ_VINT (tmp); /* Unpacked size */
+					}
+				}
+				else {
+					msg_err_task ("internal 7zip error");
+				}
+			}
+			break;
+		case kCRC:
+			/*
+			 * Here are dragons. Spec tells that here there could be up
+			 * to nfolders digests. However, according to the actual source
+			 * code, in case of multiple out streams there should be digests
+			 * for all out streams.
+			 *
+			 * In the real life (tm) it is even more idiotic: all these digests
+			 * are in another section! But that section needs number of digests
+			 * that are absent here. It is the most stupid thing I've ever seen
+			 * in any file format.
+			 *
+			 * I hope there *WAS* some reason to do such shit...
+			 */
+			p = rspamd_7zip_read_digest (task, p, end, arch, num_digests,
+					&digests_read);
+			break;
+		case kEnd:
+			goto end;
+			break;
+		default:
+			p = NULL;
+			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			goto end;
+			break;
+		}
+	}
+
+end:
+
+	if (pnum_nodigest) {
+		*pnum_nodigest = num_digests - digests_read;
+	}
+	if (pnum_folders) {
+		*pnum_folders = num_folders;
 	}
 
 	return p;
@@ -802,42 +1015,51 @@ rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
 		struct rspamd_archive *arch)
 {
-	guchar t = *p;
+	guchar t;
+	guint num_folders = 0, unknown_digests = 0;
 
-	SZ_SKIP_BYTES(1);
+	while (p != NULL && p < end) {
+		t = *p;
+		SZ_SKIP_BYTES(1);
 
-	/*
-	 *
-	 *  []
-	 *  PackInfo
-	 *  []
+		/*
+		 *
+		 *  []
+		 *  PackInfo
+		 *  []
 
-	 *  []
-	 *  CodersInfo
-	 *  []
-	 *
-	 *  []
-	 *  SubStreamsInfo
-	 *  []
-	 *
-	 *  BYTE NID::kEnd
-	 */
-	switch (t) {
-	case kPackInfo:
-		p = rspamd_7zip_read_pack_info (task, p, end, arch);
-		break;
-	case kUnPackInfo:
-		break;
-	case kSubStreamsInfo:
-		break;
-	case kEnd:
-		break;
-	default:
-		p = NULL;
-		msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
-		break;
+		 *  []
+		 *  CodersInfo
+		 *  []
+		 *
+		 *  []
+		 *  SubStreamsInfo
+		 *  []
+		 *
+		 *  BYTE NID::kEnd
+		 */
+		switch (t) {
+		case kPackInfo:
+			p = rspamd_7zip_read_pack_info (task, p, end, arch);
+			break;
+		case kUnPackInfo:
+			p = rspamd_7zip_read_coders_info (task, p, end, arch, &num_folders,
+					&unknown_digests);
+			break;
+		case kSubStreamsInfo:
+			break;
+		case kEnd:
+			goto end;
+			break;
+		default:
+			p = NULL;
+			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			goto end;
+			break;
+		}
 	}
 
+end:
 	return p;
 }
 
