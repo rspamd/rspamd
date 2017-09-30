@@ -1011,6 +1011,90 @@ end:
 }
 
 static const guchar *
+rspamd_7zip_read_substreams_info (struct rspamd_task *task,
+		const guchar *p, const guchar *end,
+		struct rspamd_archive *arch,
+		guint num_folders, guint num_nodigest)
+{
+	guchar t;
+	guint i;
+	guint64 *folder_nstreams;
+
+	if (num_folders > 8192) {
+		/* Gah */
+		return NULL;
+	}
+
+	folder_nstreams = g_alloca (sizeof (guint64) * num_folders);
+
+	while (p != NULL && p < end) {
+		/*
+		 * []
+		 *  BYTE NID::kNumUnPackStream; (0x0D)
+		 *  UINT64 NumUnPackStreamsInFolders[NumFolders];
+		 *  []
+		 *
+		 *  []
+		 *  BYTE NID::kSize  (0x09)
+		 *  UINT64 UnPackSizes[??]
+		 *  []
+		 *
+		 *
+		 *  []
+		 *  BYTE NID::kCRC  (0x0A)
+		 *  Digests[Number of streams with unknown CRC]
+		 *  []
+
+		 */
+		t = *p;
+		SZ_SKIP_BYTES(1);
+
+		switch (t) {
+		case kNumUnPackStream:
+			for (i = 0; i < num_folders; i ++) {
+				guint64 tmp;
+
+				SZ_READ_VINT (tmp);
+				folder_nstreams[i] = tmp;
+			}
+			break;
+		case kCRC:
+			/*
+			 * Read the comment in the rspamd_7zip_read_coders_info
+			 */
+			p = rspamd_7zip_read_digest (task, p, end, arch, num_nodigest,
+					NULL);
+			break;
+		case kSize:
+			/*
+			 * Another brain damaged logic, but we have to support it
+			 * as there are no ways to proceed without it.
+			 * In fact, it is just absent in the real life...
+			 */
+			for (i = 0; i < num_folders; i ++) {
+				for (guint j = 0; j < folder_nstreams[i]; j++) {
+					guint64 tmp;
+
+					SZ_READ_VINT (tmp); /* Who cares indeed */
+				}
+			}
+			break;
+		case kEnd:
+			goto end;
+			break;
+		default:
+			p = NULL;
+			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			goto end;
+			break;
+		}
+	}
+
+end:
+	return p;
+}
+
+static const guchar *
 rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
 		struct rspamd_archive *arch)
@@ -1047,6 +1131,9 @@ rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 					&unknown_digests);
 			break;
 		case kSubStreamsInfo:
+			p = rspamd_7zip_read_substreams_info (task, p, end, arch, num_folders,
+					unknown_digests);
+			break;
 			break;
 		case kEnd:
 			goto end;
