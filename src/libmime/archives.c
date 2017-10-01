@@ -20,6 +20,7 @@
 #include "archives.h"
 #include <unicode/uchar.h>
 #include <unicode/utf8.h>
+#include <unicode/utf16.h>
 
 static void
 rspamd_archive_dtor (gpointer p)
@@ -1209,40 +1210,22 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 	return p;
 }
 
-#define UCS_SURROGATE(h,l) (((h) - 0xd800) * 0x400 + (l) - 0xdc00 + 0x10000)
-
 static GString *
 rspamd_7zip_ucs2_to_utf8 (struct rspamd_task *task, const guchar *p,
 		const guchar *end)
 {
 	GString *res;
-	goffset dest_pos = 0;
+	goffset dest_pos = 0, src_pos = 0;
+	const gsize len = (end - p) / sizeof (guint16);
 	guint16 *up;
-	UChar wc, high_surrogate, t;
+	UChar32 wc;
 	UBool is_error = 0;
 
-	res = g_string_sized_new ((end - p) + sizeof (t) + sizeof (wc));
+	res = g_string_sized_new ((end - p) + sizeof (wc) * 2 + 1);
 	up = (guint16 *)p;
 
-	high_surrogate = 0;
-
-	while (up < (guint16 *)end) {
-		t = GUINT16_FROM_LE (*up);
-
-		if (t >= 0xdc00 && t < 0xe000) {
-			wc = UCS_SURROGATE (high_surrogate, t);
-			high_surrogate = 0;
-		}
-		else if (t >= 0xd800 && t < 0xdc00) {
-			high_surrogate = t;
-			up ++;
-			continue;
-		}
-		else {
-			high_surrogate = 0;
-			wc = t;
-		}
-
+	while (src_pos < len) {
+		U16_NEXT (up, src_pos, len, wc);
 		U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
 
 		if (is_error) {
@@ -1250,8 +1233,6 @@ rspamd_7zip_ucs2_to_utf8 (struct rspamd_task *task, const guchar *p,
 
 			return NULL;
 		}
-
-		up ++;
 	}
 
 	g_assert (dest_pos < res->allocated_len);
@@ -1455,7 +1436,6 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 	const guchar *start, *p, *end;
 	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
 	guint64 section_offset = 0, section_length = 0;
-	gint r;
 
 	start = part->parsed_data.begin;
 	p = start;
