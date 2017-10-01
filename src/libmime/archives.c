@@ -1249,7 +1249,6 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		struct rspamd_archive *arch)
 {
 	guint64 nfiles = 0, sz, i;
-	guint num_defined = 0;
 	guchar t, b;
 	struct rspamd_archive_file *fentry;
 
@@ -1271,49 +1270,15 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		case kEmptyFile:
 		case kAnti: /* AntiFile, OMFG */
 			/* We don't care about these bits */
-			p = rspamd_7zip_read_bits (task, p, end, arch, nfiles, NULL);
-			break;
 		case kCTime:
 		case kATime:
 		case kMTime:
 			/* We don't care of these guys, but we still have to parse them, gah */
-			/*
-			 * BYTE AllAreDefined
-			 * if (AllAreDefined == 0)
-			 * {
-			 *   for(NumFiles)
-			 *      BIT TimeDefined
-			 * }
-			 * BYTE External;
-			 * if(External != 0)
-			 *   UINT64 DataIndex
-			 * []
-			 * for(Definded Items)
-			 *   UINT32 Time
-			 * []
-			 */
-			b = *p; /* All defined flag */
-			SZ_SKIP_BYTES (1);
-
-			if (b == 1) {
-				num_defined = nfiles;
+			if (sz == 0) {
+				goto end;
 			}
 			else {
-				p = rspamd_7zip_read_bits (task, p, end, arch, nfiles,
-						&num_defined);
-			}
-			b = *p; /* External flag, gah */
-			SZ_SKIP_BYTES (1);
-
-			if (b) {
-				guint64 tmp;
-
-				SZ_READ_VINT (tmp);
-			}
-			else {
-				for (i = 0; i < num_defined; i ++) {
-					SZ_SKIP_BYTES (sizeof (guint32)); /* Real attr */
-				}
+				SZ_SKIP_BYTES (sz);
 			}
 			break;
 		case kName:
@@ -1338,7 +1303,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 
 					while (tp < end - 1) {
 						if (*tp == 0 && *(tp + 1) == 0) {
-							fend = tp + 2;
+							fend = tp;
 							break;
 						}
 
@@ -1360,8 +1325,8 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 					else {
 						msg_debug_task ("bad 7zip name; %s", G_STRLOC);
 					}
-
-					p = fend + 1;
+					/* Skip zero terminating character */
+					p = fend + 2;
 				}
 			}
 			break;
