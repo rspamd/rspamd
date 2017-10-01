@@ -1209,6 +1209,59 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 	return p;
 }
 
+#define UCS_SURROGATE(h,l) (((h) - 0xd800) * 0x400 + (l) - 0xdc00 + 0x10000)
+
+static GString *
+rspamd_7zip_ucs2_to_utf8 (struct rspamd_task *task, const guchar *p,
+		const guchar *end)
+{
+	GString *res;
+	goffset dest_pos = 0;
+	guint16 *up;
+	UChar wc, high_surrogate, t;
+	UBool is_error = 0;
+
+	res = g_string_sized_new ((end - p) + sizeof (t) + sizeof (wc));
+	up = (guint16 *)p;
+
+	high_surrogate = 0;
+
+	while (up < (guint16 *)end) {
+		t = GUINT16_FROM_LE (*up);
+
+		if (t >= 0xdc00 && t < 0xe000) {
+			wc = UCS_SURROGATE (high_surrogate, t);
+			high_surrogate = 0;
+		}
+		else if (t >= 0xd800 && t < 0xdc00) {
+			high_surrogate = t;
+			up ++;
+			continue;
+		}
+		else {
+			high_surrogate = 0;
+			wc = t;
+		}
+
+		U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
+
+		if (is_error) {
+			g_string_free (res, TRUE);
+
+			return NULL;
+		}
+
+		up ++;
+	}
+
+	g_assert (dest_pos < res->allocated_len);
+
+	res->len = dest_pos;
+	res->str[dest_pos] = '\0';
+
+	return res;
+}
+
 static const guchar *
 rspamd_7zip_read_files_info (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
@@ -1285,6 +1338,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		case kName:
 			/* The most useful part in this whole bloody format */
 			b = *p; /* External flag */
+			SZ_SKIP_BYTES (1);
 
 			if (b) {
 				/* TODO: for the god sake, do something about external
@@ -1300,8 +1354,6 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 					/* First, find terminator */
 					const guchar *fend = NULL, *tp = p;
 					GString *res;
-					gchar *utf8_str;
-					glong utf8_len = 0;
 
 					while (tp < end - 1) {
 						if (*tp == 0 && *(tp + 1) == 0) {
@@ -1317,22 +1369,15 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 						msg_debug_task ("bad 7zip name; %s", G_STRLOC);
 					}
 
-					utf8_str = g_utf16_to_utf8 ((gunichar2 *)p,
-							(fend - p) / sizeof (gunichar2), NULL, &utf8_len,
-							NULL);
+					res = rspamd_7zip_ucs2_to_utf8 (task, p, fend);
 
-					if (utf8_len > 0) {
+					if (res != NULL) {
 						fentry = g_slice_alloc0 (sizeof (fentry));
-						res = g_malloc0 (sizeof (*res));
-						res->len = utf8_len;
-						res->allocated_len = utf8_len;
-						res->str = utf8_str;
 						fentry->fname = res;
+						g_ptr_array_add (arch->files, fentry);
 					}
 					else {
-						if (utf8_str) {
-							g_free (utf8_str);
-						}
+						msg_debug_task ("bad 7zip name; %s", G_STRLOC);
 					}
 
 					p = fend + 1;
@@ -1385,6 +1430,9 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 		p = rspamd_7zip_read_archive_props (task, p, end, arch);
 		break;
 	case kMainStreamsInfo:
+		p = rspamd_7zip_read_main_streams_info (task, p, end, arch);
+		break;
+	case kAdditionalStreamsInfo:
 		p = rspamd_7zip_read_main_streams_info (task, p, end, arch);
 		break;
 	case kFilesInfo:
