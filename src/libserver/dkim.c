@@ -2062,6 +2062,22 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		ar = g_hash_table_lookup (task->raw_headers, header_name);
 
 		if (ar) {
+			/* Check uniqueness of the header */
+			rh = g_ptr_array_index (ar, 0);
+			if ((rh->type & RSPAMD_HEADER_UNIQUE) && ar->len > 1) {
+				guint64 random_cookie = ottery_rand_uint64 ();
+
+				msg_warn_dkim ("header %s is intended to be unique by"
+						" email standards, but we have %d headers of this"
+						" type, artificially break DKIM check", header_name,
+						ar->len);
+				rspamd_dkim_hash_update (ctx->headers_hash,
+						(const gchar *)&random_cookie,
+						sizeof (random_cookie));
+
+				return FALSE;
+			}
+
 			if (ar->len > count) {
 				/* Set skip count */
 				rh_num = ar->len - count - 1;
