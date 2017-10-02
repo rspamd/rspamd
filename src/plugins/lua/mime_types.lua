@@ -92,39 +92,50 @@ local function check_mime_type(task)
   local function gen_extension(fname)
     local parts = rspamd_str_split(fname, '.')
 
-    local ext
-    if #parts > 1 then
-      ext = string.lower(parts[#parts])
-    else
-      ext = nil
+    local ext = {}
+    for n = 1, 2 do
+        ext[n] = #parts > n and string.lower(parts[#parts + 1 - n]) or nil
     end
 
-    return ext,parts
+    return ext[1],ext[2],parts
   end
-  local function check_filename(fname, ct, is_archive)
-    local ext,parts = gen_extension(fname)
 
-    local function check_extension(badness_mult)
-      if badness_mult then
-        if #parts > 2
+  local function check_filename(fname, ct, is_archive)
+    local ext,ext2,parts = gen_extension(fname)
+
+    local function check_extension(badness_mult, badness_mult2)
+      if #parts > 2 then
+        if ( badness_mult
           -- We need to ensure that it is an extension, so we check for its length
           and #parts[#parts - 1] <= 4
           -- Check if next-to-last extension is not a number
-          and not string.match(parts[#parts - 1], '^%d+$') then
+          and not string.match(ext2, '^%d+$') )
+          -- Check length of the last extension if next-to-last extension is bad
+          or ( badness_mult2 and #parts[#parts] <= 4 ) then
+
+          -- Use the greatest badness multiplier
+          if not badness_mult or badness_mult2 and badness_mult < badness_mult2 then
+            badness_mult = badness_mult2
+          end
+
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult, {
-            '.' .. parts[#parts - 1] .. '.' .. ext
+            '.' .. ext2 .. '.' .. ext
           })
-        else
+        end
+      else
+        if badness_mult then
           -- Just bad extension
           task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
         end
       end
-
     end
 
     if ext then
-      check_extension(settings['bad_extensions'][ext:lower()])
+      check_extension(
+        settings['bad_extensions'][ext:lower()],
+        ext2 and settings['bad_extensions'][ext2:lower()] or nil
+      )
 
       -- Also check for archive bad extension
       if is_archive then
