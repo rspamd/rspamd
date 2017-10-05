@@ -745,8 +745,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 								t += g_unichar_to_utf8 (val, t);
 							}
 							else {
-								memmove (t, e, h - e);
-								t += h - e;
+								/* Remove unknown entities */
 							}
 						}
 					}
