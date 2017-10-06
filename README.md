@@ -4,11 +4,11 @@
 
 [Rspamd](https://rspamd.com) is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
-such as URL black lists. Each message is analysed by Rspamd and given a `spam score`. 
+such as URL black lists. Each message is analysed by Rspamd and given a `spam score`.
 
 According to this spam score and the user's settings Rspamd recommends an action for
 the MTA to apply to the message, for example, to pass, reject or add a header.
-Rspamd is designed to process hundreds of messages per second simultaneously and has a number of 
+Rspamd is designed to process hundreds of messages per second simultaneously and has a number of
 features available.
 
 You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from the [FOSDEM-2016](http://fosdem.org) where I describe the main features of Rspamd and explain why Rspamd runs so fast.
@@ -20,7 +20,7 @@ Rspamd is [packaged](https://rspamd.com/downloads.html) for the major Linux dist
 Rspamd distribution contains a number of mail processing features, including such techniques as:
 
 * **Regular expressions filtering** - allows basic processing of messages, their textual parts, MIME headers and
-SMTP data received by MTA against a set of expressions that includes both normal regular expressions and 
+SMTP data received by MTA against a set of expressions that includes both normal regular expressions and
 message processing functions. Rspamd expressions are the powerful tool that allows to filter messages based on
 some pre-defined rules. This feature is similar to regular expressions in SpamAssassin spam filter.
 
