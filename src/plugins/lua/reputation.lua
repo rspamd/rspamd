@@ -34,6 +34,9 @@ local default_expiry = 864000 -- 10 day by default
 
 -- IP Selector functions
 
+local function ip_reputation_filter(task, rule)
+
+end
 
 -- Selectors are used to extract reputation tokens
 local ip_selector = {
@@ -64,6 +67,8 @@ local ip_selector = {
     score_divisor = 1,
   },
   --dependencies = {"ASN"}, -- ASN is a prefilter now...
+  filter = ip_reputation_filter, -- used to get scores
+  idempotent = ip_reputation_idempotent -- used to set scores
 }
 
 local selectors = {
