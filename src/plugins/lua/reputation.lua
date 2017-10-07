@@ -25,7 +25,9 @@ local N = 'reputation'
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 local rspamd_lua_utils = require "lua_util"
+local hash = require 'rspamd_cryptobox_hash'
 local fun = require "fun"
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
@@ -75,16 +77,114 @@ local function reputation_dns_init(rule)
   return true
 end
 
-local function reputation_dns_get_token(task, token)
+
+local function gen_token_key(token, rule)
+  local res = token
+  if rule.backend.config.hashed then
+    local hash_alg = rule.backend.config.hash_alg or "blake2"
+    local encoding = "base32"
+
+    if rule.backend.config.hash_encoding then
+      encoding = rule.backend.config.hash_encoding
+    end
+
+    local h = hash.create_specific(hash_alg, res)
+    if encoding == 'hex' then
+      res = h:hex()
+    elseif encoding == 'base64' then
+      res = h:base64()
+    else
+      res = h:base32()
+    end
+  end
+
+  if rule.backend.config.hashlen then
+    res = string.sub(res, 1, rule.backend.config.hashlen)
+  end
+
+  return res
 end
 
-local function reputation_redis_get_token(task, token)
+--[[
+-- Generic interface for get and set tokens functions:
+-- get_token(task, rule, token, continuation), where `continuation` is the following function:
+--
+-- function(err, token, values) ... end
+-- `err`: string value for error (similar to redis or DNS callbacks)
+-- `token`: string value of a token
+-- `values`: table of key=number, parsed from backend. It is selector's duty
+--  to deal with missing, invalid or other values
+--
+-- set_token(task, rule, token, values, continuation_cb)
+-- This function takes values, encodes them using whatever suitable format
+-- and calls for continuation:
+--
+-- function(err, token) ... end
+-- `err`: string value for error (similar to redis or DNS callbacks)
+-- `token`: string value of a token
+--
+-- example of tokens: {'s': 0, 'h': 0, 'p': 1}
+--]]
+
+local function reputation_dns_get_token(task, rule, token, continuation_cb)
+  local r = task:get_resolver()
+  local to_resolve = gen_token_key(token)
+  local dns_name = to_resolve .. '.' .. rule.backend.config.list
+
+  local function dns_callback(_, to_resolve, results, err)
+    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
+      rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
+    end
+    if not results then
+      rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 list=%4',
+        to_resolve, false, err, rule.backend.config.list)
+    else
+      rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 list=%4',
+        to_resolve, true, err, rule.backend.config.list)
+    end
+
+    -- Now split tokens to list of values
+    if not err and results then
+      local values = {}
+      -- Format: key1=num1;key2=num2...keyn=numn
+      fun.each(function(e)
+          local vals = lua_util.rspamd_str_split(e, "=")
+          if vals and #vals == 2 then
+            local nv = tonumber[vals[2]]
+            if nv then
+              values[vals[1]] = nv
+            end
+          end
+        end,
+        lua_util.rspamd_str_split(results[1], ";"))
+      continuation_cb(nil, to_resolve, values)
+    else
+      continuation_cb(err, to_resolve, nil)
+    end
+
+    task:inc_dns_req()
+  end
+  r:resolve_a({
+    task = task,
+    name = dns_name,
+    callback = dns_callback,
+    forced = true,
+  })
 end
 
-local function reputation_redis_set_token(task, token, value)
+local function reputation_redis_get_token(task, token, continuation_cb)
 end
 
--- Backends are responsible for getting reputation tokens
+local function reputation_redis_set_token(task, token, values, continuation_cb)
+end
+
+--[[ Backends are responsible for getting reputation tokens
+  -- Common config options:
+  -- `hashed`: if `true` then apply hash function to the key
+  -- `hash_alg`: use specific hash type (`blake2` by default)
+  -- `hash_len`: strip hash to this amount of bytes (no strip by default)
+  -- `hash_encoding`: use specific hash encoding (base32 by default)
+--]]
 local backends = {
   redis = {
     config = {
