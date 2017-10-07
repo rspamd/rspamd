@@ -303,6 +303,7 @@ lua_mempool_set_variable (lua_State *L)
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	gpointer value;
+	struct lua_numbers_bucket *bucket;
 	gchar *vp;
 	union {
 		gdouble d;
@@ -310,7 +311,7 @@ lua_mempool_set_variable (lua_State *L)
 		gboolean b;
 	} val;
 	gsize slen;
-	gint i, len = 0, type;
+	gint i, j, len = 0, type;
 
 	if (mempool && var) {
 
@@ -330,7 +331,8 @@ lua_mempool_set_variable (lua_State *L)
 			}
 			else if (type == LUA_TTABLE) {
 				/* We assume it as a bucket of numbers so far */
-
+				slen = rspamd_lua_table_size (L, i);
+				len += sizeof (gdouble) * slen + sizeof (*bucket);
 			}
 			else {
 				msg_err ("cannot handle lua type %s", lua_typename (L, type));
@@ -361,6 +363,20 @@ lua_mempool_set_variable (lua_State *L)
 					val.s = lua_tolstring (L, i, &slen);
 					memcpy (vp, val.s, slen + 1);
 					vp += slen + 1;
+				}
+				else if (type == LUA_TTABLE) {
+					slen = rspamd_lua_table_size (L, i);
+					/* XXX: Ret, ret, ret: alignment issues */
+					bucket = (struct lua_numbers_bucket *)vp;
+					bucket->nelts = slen;
+
+					for (j = 0; j < slen; j ++) {
+						lua_rawgeti (L, i, j + 1);
+						bucket->elts[j] = lua_tonumber (L, -1);
+						lua_pop (L, 1);
+					}
+
+					vp += sizeof (gdouble) * slen + sizeof (*bucket);
 				}
 				else {
 					msg_err ("cannot handle lua type %s", lua_typename (L, type));
