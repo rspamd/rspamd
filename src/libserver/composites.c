@@ -102,8 +102,8 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 		if ((ncomp =
 				g_hash_table_lookup (cd->task->cfg->composite_symbols,
 						sym)) != NULL) {
-			/* Set checked for this symbol to avoid cyclic references */
 			if (isclr (cd->checked, ncomp->id * 2)) {
+				/* Set checked for this symbol to avoid cyclic references */
 				setbit (cd->checked, cd->composite->id * 2);
 				rc = rspamd_process_expression (ncomp->expr,
 						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
@@ -111,10 +111,10 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 
 				if (rc) {
 					setbit (cd->checked, ncomp->id * 2 + 1);
+					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
 				}
-				setbit (cd->checked, ncomp->id * 2);
 
-				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+				setbit (cd->checked, ncomp->id * 2);
 			}
 			else {
 				/*
