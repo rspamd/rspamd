@@ -264,29 +264,15 @@ insert_result_common (struct rspamd_task *task,
 	const gchar *opt,
 	gboolean single)
 {
-	struct rspamd_metric *metric;
-	GList *cur, *metric_list;
 	struct rspamd_symbol_result *s = NULL;
 
-	metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
-	if (metric_list) {
-		cur = metric_list;
-
-		while (cur) {
-			metric = cur->data;
-			s = insert_metric_result (task, metric, symbol, flag, opt, single);
-			cur = g_list_next (cur);
-		}
-	}
-	else {
-		/* Insert symbol to default metric */
-		s = insert_metric_result (task,
+	/* Insert symbol to default metric */
+	s = insert_metric_result (task,
 			task->cfg->default_metric,
 			symbol,
 			flag,
 			opt,
 			single);
-	}
 
 	/* Process cache item */
 	if (task->cfg->cache) {
