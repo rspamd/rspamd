@@ -546,6 +546,9 @@ dkim_module_config (struct rspamd_config *cfg)
 					rspamd_config_add_metric_symbol (cfg,
 							"DKIM_SIGN", 0.0, "DKIM signature fake symbol",
 							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
+					rspamd_config_add_metric_symbol (cfg,
+							"DKIM_TRACE", 0.0, "DKIM trace symbol",
+							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
 
 				}
 				else {
@@ -886,7 +889,7 @@ dkim_module_check (struct dkim_check_result *res)
 
 	if (all_done) {
 		DL_FOREACH (first, cur) {
-			const gchar *symbol = NULL;
+			const gchar *symbol = NULL, *trace = NULL;
 			int symbol_weight = 1;
 
 			if (cur->ctx == NULL) {
@@ -894,24 +897,41 @@ dkim_module_check (struct dkim_check_result *res)
 			}
 			if (cur->res == DKIM_REJECT) {
 				symbol = dkim_module_ctx->symbol_reject;
+				trace = "-";
 				symbol_weight = cur->mult_deny * 1.0;
 			}
 			else if (cur->res == DKIM_CONTINUE) {
 				symbol = dkim_module_ctx->symbol_allow;
+				trace = "+";
 				symbol_weight = cur->mult_allow * 1.0;
 			}
 			else if (cur->res == DKIM_PERM_ERROR) {
+				trace = "~";
 				symbol = dkim_module_ctx->symbol_permfail;
 			}
 			else if (cur->res == DKIM_TRYAGAIN) {
+				trace = "?";
 				symbol = dkim_module_ctx->symbol_tempfail;
 			}
 
 			if (symbol != NULL) {
+				const gchar *domain = rspamd_dkim_get_domain (cur->ctx);
+				gsize tracelen;
+				gchar *tracebuf;
+
+				tracelen = strlen (domain) + 3; /* :<trace>\0 */
+				tracebuf = rspamd_mempool_alloc (cur->task->task_pool,
+						tracelen);
+				rspamd_snprintf (tracebuf, tracelen, "%s:%s", domain, trace);
+
 				rspamd_task_insert_result (cur->task,
 						symbol,
 						symbol_weight,
-						rspamd_dkim_get_domain (cur->ctx));
+						domain);
+				rspamd_task_insert_result (cur->task,
+						"DKIM_TRACE",
+						0.0,
+						tracebuf);
 			}
 		}
 		rspamd_session_watcher_pop (res->task->s, res->w);
