@@ -266,6 +266,13 @@ insert_result_common (struct rspamd_task *task,
 {
 	struct rspamd_symbol_result *s = NULL;
 
+	if (task->processed_stages & RSPAMD_TASK_STAGE_IDEMPOTENT) {
+		msg_err_task ("cannot insert symbol %s on idempotent phase",
+			symbol);
+
+		return NULL;
+	}
+
 	/* Insert symbol to default metric */
 	s = insert_metric_result (task,
 			task->cfg->default_metric,
