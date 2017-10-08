@@ -1263,7 +1263,6 @@ lua_task_adjust_result (lua_State * L)
 	const gchar *symbol_name, *param;
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
-	struct rspamd_symbol_option *opt;
 	double weight;
 	gint i, top;
 
@@ -1282,7 +1281,9 @@ lua_task_adjust_result (lua_State * L)
 		}
 
 		if (s) {
+			metric_res->score -= s->score;
 			s->score = weight;
+			metric_res->score += s->score;
 		}
 		else {
 			return luaL_error (L, "symbol not found: %s", symbol_name);
