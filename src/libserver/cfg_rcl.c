@@ -345,7 +345,6 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_symbol_data *sd = ud;
-	struct rspamd_metric *metric;
 	struct rspamd_config *cfg;
 	const ucl_object_t *elt;
 	const gchar *description = NULL;
@@ -354,8 +353,6 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	gint nshots;
 
 	g_assert (key != NULL);
-	metric = sd->metric;
-	g_assert (metric != NULL);
 	cfg = sd->cfg;
 	nshots = cfg->default_max_shots;
 
@@ -406,11 +403,11 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	if (sd->gr) {
-		rspamd_config_add_metric_symbol (cfg, metric->name, key, score,
+		rspamd_config_add_metric_symbol (cfg, key, score,
 				description, sd->gr->name, flags, priority, nshots);
 	}
 	else {
-		rspamd_config_add_metric_symbol (cfg, metric->name, key, score,
+		rspamd_config_add_metric_symbol (cfg, key, score,
 				description, NULL, flags, priority, nshots);
 	}
 
@@ -1434,7 +1431,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	struct rspamd_expression *expr;
 	struct rspamd_config *cfg = ud;
 	struct rspamd_composite *composite;
-	const gchar *composite_name, *composite_expression, *group, *metric,
+	const gchar *composite_name, *composite_expression, *group,
 		*description;
 	gdouble score;
 	gboolean new = TRUE;
@@ -1494,14 +1491,6 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			group = "composite";
 		}
 
-		val = ucl_object_lookup (obj, "metric");
-		if (val != NULL) {
-			metric = ucl_object_tostring (val);
-		}
-		else {
-			metric = DEFAULT_METRIC;
-		}
-
 		val = ucl_object_lookup (obj, "description");
 		if (val != NULL) {
 			description = ucl_object_tostring (val);
@@ -1510,7 +1499,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			description = composite_expression;
 		}
 
-		rspamd_config_add_metric_symbol (cfg, metric, composite_name, score,
+		rspamd_config_add_metric_symbol (cfg, composite_name, score,
 				description, group, FALSE, FALSE,
 				1);
 	}

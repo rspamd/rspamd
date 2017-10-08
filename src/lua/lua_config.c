@@ -1518,7 +1518,7 @@ lua_config_register_symbol (lua_State * L)
 				nshots = 1;
 			}
 
-			rspamd_config_add_metric_symbol (cfg, DEFAULT_METRIC, name,
+			rspamd_config_add_metric_symbol (cfg, name,
 					score, description, group, flags, (guint)priority, nshots);
 		}
 	}
@@ -1823,7 +1823,7 @@ lua_config_set_metric_symbol (lua_State * L)
 			msg_err_config ("metric named %s is not defined", metric_name);
 		}
 		else if (name != NULL && weight != 0) {
-			rspamd_config_add_metric_symbol (cfg, metric_name, name,
+			rspamd_config_add_metric_symbol (cfg, name,
 					weight, description, group, flags, (guint)priority, nshots);
 		}
 	}
@@ -2190,7 +2190,7 @@ lua_config_newindex (lua_State *L)
 					 * Do not override the existing symbols (using zero priority),
 					 * since we are defining default values here
 					 */
-					rspamd_config_add_metric_symbol (cfg, NULL, name, score,
+					rspamd_config_add_metric_symbol (cfg, name, score,
 							description, group, flags, 0, nshots);
 				}
 				else {
