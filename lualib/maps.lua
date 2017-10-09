@@ -16,7 +16,7 @@ limitations under the License.
 
 local exports = {}
 
-local function rspamd_map_add(mname, optname, mtype, description)
+local function rspamd_map_add_from_ucl(opt, mtype, description)
   local ret = {
     get_key = function(t, k)
       if t.__data then
@@ -35,7 +35,6 @@ local function rspamd_map_add(mname, optname, mtype, description)
       return nil
     end
   }
-  local opt = rspamd_config:get_module_opt(mname, optname)
 
   if not opt then
     return nil
@@ -60,7 +59,7 @@ local function rspamd_map_add(mname, optname, mtype, description)
       if mtype == 'radix' then
 
         if string.find(opt[1], '^%d') then
-          local map = rspamd_config:radix_from_config(mname, optname)
+          local map = rspamd_config:radix_from_ucl(opt)
 
           if map then
             ret.__data = map
@@ -145,7 +144,14 @@ local function rspamd_map_add(mname, optname, mtype, description)
   return nil
 end
 
+local function rspamd_map_add(mname, optname, mtype, description)
+  local opt = rspamd_config:get_module_opt(mname, optname)
+
+  return rspamd_map_add_from_ucl(opt, mtype, description)
+end
+
 exports.rspamd_map_add = rspamd_map_add
+exports.rspamd_map_add_from_ucl = rspamd_map_add_from_ucl
 
 -- Check `what` for being lua_map name, otherwise just compares key with what
 local function rspamd_maybe_check_map(key, what)
