@@ -49,6 +49,8 @@ local rspamd_util = require "rspamd_util"
 local rspamd_lua_utils = require "lua_util"
 local lua_redis = require "lua_redis"
 local fun = require "fun"
+local lua_maps = require "maps"
+local lua_util = require "lua_util"
 
 local user_keywords = {'user'}
 
@@ -475,12 +477,8 @@ local function ratelimit_cb(task)
     fun.each(function(r)
       fun.each(function(type) table.insert(rcpts_user, r[type]) end, {'user', 'addr'})
     end, rcpts)
-    if fun.any(
-      function(r)
-        if fun.any(function(w) return r == w end, whitelisted_rcpts) then return true end
-      end,
-      rcpts_user) then
 
+    if fun.any(function(r) return whitelisted_rcpts:get_key(r) end, rcpts_user) then
       rspamd_logger.infox(task, 'skip ratelimit for whitelisted recipient')
       return
     end
@@ -642,19 +640,35 @@ if opts then
   end, settings))
   rspamd_logger.infox(rspamd_config, 'enabled rate buckets: [%1]', table.concat(enabled_limits, ','))
 
-  if opts['whitelisted_rcpts'] and type(opts['whitelisted_rcpts']) == 'string' then
-    whitelisted_rcpts = rspamd_str_split(opts['whitelisted_rcpts'], ',')
+  -- Ret, ret, ret: stupid legacy stuff:
+  -- If we have a string with commas then load it as as static map
+  -- otherwise, apply normal logic of Rspamd maps
+
+  local wrcpts = opts['whitelisted_rcpts']
+  if type(wrcpts) == 'string' then
+    if string.find(wrcpts, ',') then
+      whitelisted_rcpts = lua_maps.rspamd_map_add_from_ucl(
+        lua_util.rspamd_str_split(wrcpts, ','), 'set', 'Ratelimit whitelisted rcpts')
+    else
+      whitelisted_rcpts = lua_maps.rspamd_map_add_from_ucl(wrcpts, 'set',
+        'Ratelimit whitelisted rcpts')
+    end
   elseif type(opts['whitelisted_rcpts']) == 'table' then
-    whitelisted_rcpts = opts['whitelisted_rcpts']
+    whitelisted_rcpts = lua_maps.rspamd_map_add_from_ucl(wrcpts, 'set',
+      'Ratelimit whitelisted rcpts')
+  else
+    -- Stupid default...
+    whitelisted_rcpts = lua_maps.rspamd_map_add_from_ucl(whitelisted_rcpts, 'set',
+      'Ratelimit whitelisted rcpts')
   end
 
   if opts['whitelisted_ip'] then
-    whitelisted_ip = rspamd_map_add('ratelimit', 'whitelisted_ip', 'radix',
+    whitelisted_ip = lua_maps.rspamd_map_add('ratelimit', 'whitelisted_ip', 'radix',
       'Ratelimit whitelist ip map')
   end
 
   if opts['whitelisted_user'] then
-    whitelisted_user = rspamd_map_add('ratelimit', 'whitelisted_user', 'set',
+    whitelisted_user = lua_maps.rspamd_map_add('ratelimit', 'whitelisted_user', 'set',
       'Ratelimit whitelist user map')
   end
 
