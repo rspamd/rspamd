@@ -111,6 +111,12 @@ local function foo(task)
 end
  */
 /***
+* @method rspamd_config:radix_from_ucl(obj)
+* Creates new embedded map of IP/mask addresses from object.
+* @param {ucl} obj object
+* @return {map} radix tree object
+*/
+/***
  * @method rspamd_config:add_hash_map(mapline[, description])
  * Creates new dynamic map string objects.
  * @param {string} mapline URL for a map
@@ -655,6 +661,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_ucl),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, radix_from_config),
+	LUA_INTERFACE_DEF (config, radix_from_ucl),
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, add_kv_map),
 	LUA_INTERFACE_DEF (config, add_map),
