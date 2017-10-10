@@ -189,8 +189,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			nlua ++;
 		}
 		else if (value->type == UCL_OBJECT) {
-			const gchar *description = NULL, *group = NULL,
-					*metric = DEFAULT_METRIC;
+			const gchar *description = NULL, *group = NULL;
 			gdouble score = 0.0;
 			guint flags = 0, priority = 0;
 			gboolean is_lua = FALSE, valid_expression = TRUE;
@@ -254,12 +253,6 @@ regexp_module_config (struct rspamd_config *cfg)
 							conddata->L, conddata->idx);
 				}
 
-				elt = ucl_object_lookup (value, "metric");
-
-				if (elt) {
-					metric = ucl_object_tostring (elt);
-				}
-
 				elt = ucl_object_lookup (value, "description");
 
 				if (elt) {
@@ -310,7 +303,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					priority = ucl_object_toint (elt);
 				}
 
-				rspamd_config_add_metric_symbol (cfg, metric, cur_item->symbol,
+				rspamd_config_add_metric_symbol (cfg, cur_item->symbol,
 						score, description, group, flags, priority, nshots);
 			}
 		}

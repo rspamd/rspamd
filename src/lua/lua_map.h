@@ -20,6 +20,7 @@
 
 LUA_PUBLIC_FUNCTION_DEF (config, add_radix_map);
 LUA_PUBLIC_FUNCTION_DEF (config, radix_from_config);
+LUA_PUBLIC_FUNCTION_DEF (config, radix_from_ucl);
 LUA_PUBLIC_FUNCTION_DEF (config, add_map);
 LUA_PUBLIC_FUNCTION_DEF (config, add_hash_map);
 LUA_PUBLIC_FUNCTION_DEF (config, add_kv_map);

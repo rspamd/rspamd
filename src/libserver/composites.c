@@ -46,7 +46,7 @@ struct symbol_remove_data {
 
 static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gint rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
+static gdouble rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
 static gint rspamd_composite_expr_priority (rspamd_expression_atom_t *atom);
 static void rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom);
 
@@ -102,8 +102,8 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 		if ((ncomp =
 				g_hash_table_lookup (cd->task->cfg->composite_symbols,
 						sym)) != NULL) {
-			/* Set checked for this symbol to avoid cyclic references */
 			if (isclr (cd->checked, ncomp->id * 2)) {
+				/* Set checked for this symbol to avoid cyclic references */
 				setbit (cd->checked, cd->composite->id * 2);
 				rc = rspamd_process_expression (ncomp->expr,
 						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
@@ -111,10 +111,10 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 
 				if (rc) {
 					setbit (cd->checked, ncomp->id * 2 + 1);
+					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
 				}
-				setbit (cd->checked, ncomp->id * 2);
 
-				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+				setbit (cd->checked, ncomp->id * 2);
 			}
 			else {
 				/*
@@ -132,7 +132,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	return rc;
 }
 
-static gint
+static gdouble
 rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct composites_data *cd = (struct composites_data *)input;

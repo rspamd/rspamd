@@ -123,6 +123,7 @@ rspamd_config_new (void)
 	cfg->max_diff = 20480;
 
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	rspamd_config_new_metric (cfg, NULL, DEFAULT_METRIC);
 	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->composite_symbols =
 		g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
@@ -649,7 +650,6 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 #endif
-	struct rspamd_metric *def_metric;
 	gboolean ret = TRUE;
 
 #ifdef HAVE_CLOCK_GETTIME
@@ -691,12 +691,6 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		}
 	}
 #endif
-
-	if ((def_metric =
-		g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
-		def_metric = rspamd_config_new_metric (cfg, NULL, DEFAULT_METRIC);
-		def_metric->actions[METRIC_ACTION_REJECT].score = DEFAULT_SCORE;
-	}
 
 	if (opts & RSPAMD_CONFIG_INIT_URL) {
 		if (cfg->tld_file == NULL) {
@@ -1498,7 +1492,7 @@ rspamd_config_new_metric_symbol (struct rspamd_config *cfg,
 
 gboolean
 rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
-		const gchar *metric_name, const gchar *symbol,
+		const gchar *symbol,
 		gdouble score, const gchar *description, const gchar *group,
 		guint flags, guint priority, gint nshots)
 {
@@ -1508,17 +1502,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	g_assert (cfg != NULL);
 	g_assert (symbol != NULL);
 
-	if (metric_name == NULL) {
-		metric_name = DEFAULT_METRIC;
-	}
-
-	metric = g_hash_table_lookup (cfg->metrics, metric_name);
-
-	if (metric == NULL) {
-		msg_err_config ("metric %s has not been found", metric_name);
-		return FALSE;
-	}
-
+	metric = cfg->default_metric;
 	sym_def = g_hash_table_lookup (metric->symbols, symbol);
 
 	if (sym_def != NULL) {

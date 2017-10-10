@@ -45,8 +45,9 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit)
     local f_ret = task:has_symbol(atom)
     if f_ret then
       f_ret = task:get_symbol(atom)[1].score
-      if f_ret <= 0 then
-        f_ret = 1
+      if f_ret < 0.001 then
+        -- Adjust some low score to distinguish from pure zero
+        f_ret = 0.001
       end
       return f_ret
     end

@@ -70,7 +70,7 @@ extern PSSTAT psstat[];
 ac_trie_t*
 acism_create(ac_trie_pat_t const* strv, int nstrs)
 {
-    TNODE *tp, **v1 = NULL, **v2 = NULL;
+    TNODE **v1 = NULL, **v2 = NULL;
     ac_trie_t *psp = g_malloc0(sizeof(*psp));
 
     fill_symv(psp, strv, nstrs);
@@ -80,14 +80,14 @@ acism_create(ac_trie_pat_t const* strv, int nstrs)
     NOTE(nnodes);
 
     // v1, v2: breadth-first work vectors for add_backlink and interleave.
-    int nhash = 0, i = (nstrs + 1) * sizeof*tp;
+    int i = (nstrs + 1) * sizeof(TNODE);
+    add_backlinks(troot, v1 = g_malloc(i), v2 = g_malloc(i));
+    int     nhash = 0;
+    TNODE*  tp = troot + nnodes;
 
-    for (tp = troot + nnodes; --tp > troot;) {
+    while (--tp > troot) {
         nhash += tp->match && tp->child;
     }
-    v1 = g_malloc(i);
-    v2 = g_malloc(i);
-    add_backlinks(troot, v1, v2);
 
     // Calculate each node's offset in tranv[]:
     psp->tran_size = interleave(troot, nnodes, psp->nsyms, v1, v2);
@@ -151,7 +151,7 @@ fill_symv(ac_trie_t *psp, ac_trie_pat_t const *strv, int nstrs)
     ++psp->nsyms;
 #if ACISM_SIZE < 8
     psp->sym_bits = bitwid(psp->nsyms);
-    psp->sym_mask = ~(((TRAN)-1) << psp->sym_bits);
+    psp->sym_mask = ~(-1 << psp->sym_bits);
 #endif
 }
 
@@ -212,9 +212,22 @@ add_backlinks(TNODE *troot, TNODE **v1, TNODE **v2)
         while ((srcp = *spp++)) {
             for (dstp = srcp->child; dstp; dstp = dstp->next) {
                 TNODE *bp = NULL;
-                *dpp++ = dstp;
+
+                if (dstp->child)
+                    *dpp++ = dstp;
+
+                // Go through the parent (srcp) node's backlink chain,
+                //  looking for a useful backlink for the child (dstp).
+                // If the parent (srcp) has a backlink to (tp), and (tp) has a child (with children)
+                //  matching the transition sym for (srcp -> dstp),
+                //  then it is a useful backlink for the child (dstp).
+                // Note that backlinks do not point at the suffix match;
+                //  they point at the PARENT of that match.
+
                 for (tp = srcp->back; tp; tp = tp->back)
-                   if ((bp = find_child(tp, dstp->sym)) && bp->child) break;
+                    if ((bp = find_child(tp, dstp->sym)) && bp->child)
+                        break;
+
                 if (!bp)
                     bp = troot;
 

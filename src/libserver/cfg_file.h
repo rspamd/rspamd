@@ -607,7 +607,6 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig,
  * @return TRUE if symbol has been inserted or FALSE if symbol already exists with higher priority
  */
 gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
-		const gchar *metric,
 		const gchar *symbol, gdouble score, const gchar *description,
 		const gchar *group, guint flags,
 		guint priority,

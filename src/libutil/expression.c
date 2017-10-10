@@ -20,12 +20,14 @@
 #include "util.h"
 #include "utlist.h"
 #include "ottery.h"
+#include <math.h>
 
 #define RSPAMD_EXPR_FLAG_NEGATE (1 << 0)
 #define RSPAMD_EXPR_FLAG_PROCESSED (1 << 1)
 
 #define MIN_RESORT_EVALS 50
 #define MAX_RESORT_EVALS 150
+#define DOUBLE_EPSILON 1e-9
 
 enum rspamd_expression_elt_type {
 	ELT_OP = 0,
@@ -44,7 +46,7 @@ struct rspamd_expression_elt {
 		} lim;
 	} p;
 	gint flags;
-	gint value;
+	gdouble value;
 	gint priority;
 };
 
@@ -879,7 +881,7 @@ err:
 
 static gboolean
 rspamd_ast_node_done (struct rspamd_expression_elt *elt,
-		struct rspamd_expression_elt *parelt, gint acc, gint lim)
+		struct rspamd_expression_elt *parelt, gdouble acc, gdouble lim)
 {
 	gboolean ret = FALSE;
 
@@ -939,17 +941,17 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 	return ret;
 }
 
-static gint
+static gdouble
 rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val,
-		gint acc, gint lim, gboolean first_elt)
+		gdouble acc, gdouble lim, gboolean first_elt)
 {
-	gint ret = val;
+	gdouble ret = val;
 
 	g_assert (elt->type == ELT_OP);
 
 	switch (elt->p.op) {
 	case OP_NOT:
-		ret = !val;
+		ret = fabs (val) > DOUBLE_EPSILON ? 0.0 : 1.0;
 		break;
 	case OP_PLUS:
 		ret = acc + val;
@@ -968,10 +970,10 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val,
 		break;
 	case OP_MULT:
 	case OP_AND:
-		ret = first_elt ? (val) : (acc && val);
+		ret = first_elt ? (val) : (acc * val);
 		break;
 	case OP_OR:
-		ret = first_elt ? (val) : (acc || val);
+		ret = first_elt ? (val) : (acc + val);
 		break;
 	default:
 		g_assert (0);
@@ -981,14 +983,14 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val,
 	return ret;
 }
 
-static gint
+static gdouble
 rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node,
 		gpointer data, GPtrArray *track)
 {
 	struct rspamd_expression_elt *elt, *celt, *parelt = NULL;
 	GNode *cld;
-	gint acc = G_MININT, lim = G_MININT, val;
-	gdouble t1, t2;
+	gdouble acc = NAN, lim = 0;
+	gdouble t1, t2, val;
 	gboolean calc_ticks = FALSE;
 
 	elt = node->data;
@@ -1010,7 +1012,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 
 			elt->value = expr->subr->process (data, elt->p.atom);
 
-			if (elt->value) {
+			if (fabs (elt->value) > 1e-9) {
 				elt->p.atom->hits ++;
 
 				if (track) {
@@ -1027,15 +1029,14 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			elt->flags |= RSPAMD_EXPR_FLAG_PROCESSED;
 		}
 
-		return elt->value;
+		acc = elt->value;
 		break;
 	case ELT_LIMIT:
 
-		return elt->p.lim.val;
+		acc = elt->p.lim.val;
 		break;
 	case ELT_OP:
 		g_assert (node->children != NULL);
-		cld = node->children;
 
 		/* Try to find limit at the parent node */
 		if (node->parent) {
@@ -1058,7 +1059,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 
 			val = rspamd_ast_process_node (expr, flags, cld, data, track);
 
-			if (acc == G_MININT) {
+			if (isnan (acc)) {
 				acc = rspamd_ast_do_op (elt, val, 0, lim, TRUE);
 			}
 			else {
@@ -1088,11 +1089,11 @@ rspamd_ast_cleanup_traverse (GNode *n, gpointer d)
 	return FALSE;
 }
 
-gint
+gdouble
 rspamd_process_expression_track (struct rspamd_expression *expr, gint flags,
 		gpointer data, GPtrArray *track)
 {
-	gint ret = 0;
+	gdouble ret = 0;
 
 	g_assert (expr != NULL);
 	/* Ensure that stack is empty at this point */
@@ -1122,7 +1123,7 @@ rspamd_process_expression_track (struct rspamd_expression *expr, gint flags,
 	return ret;
 }
 
-gint
+gdouble
 rspamd_process_expression (struct rspamd_expression *expr, gint flags,
 		gpointer data)
 {

@@ -566,17 +566,24 @@ local function fann_train_callback(rule, task, score, required_score, id)
         local mt = meta_functions.rspamd_gen_metatokens(task)
         -- Add filtered meta tokens
         fun.each(function(e) table.insert(fann_data, e) end, mt)
-        local str = rspamd_util.zstd_compress(table.concat(fann_data, ';'))
-        vec_len = #str
+        -- Check NaNs in train data
+        if fun.all(function(e) return e == e end, fann_data) then
+          local str = rspamd_util.zstd_compress(table.concat(fann_data, ';'))
+          vec_len = #str
 
-        rspamd_redis.redis_make_request(task,
-          rule.redis,
-          nil,
-          true, -- is write
-          learn_vec_cb, --callback
-          'LPUSH', -- command
-          {fname .. '_' .. k, str} -- arguments
-        )
+          rspamd_redis.redis_make_request(task,
+            rule.redis,
+            nil,
+            true, -- is write
+            learn_vec_cb, --callback
+            'LPUSH', -- command
+            {fname .. '_' .. k, str} -- arguments
+          )
+        else
+          rspamd_logger.errx(task, "do not store learn vector as it contains %s NaN values",
+            fun.length(fun.filter(function(e) return e ~= e end, fann_data)))
+        end
+
       else
         if err then
           rspamd_logger.errx(task, 'cannot check if we can train %s: %s', fname, err)

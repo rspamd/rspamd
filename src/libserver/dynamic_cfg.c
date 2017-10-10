@@ -79,7 +79,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 					/*
 					 * We use priority = 3 here
 					 */
-					rspamd_config_add_metric_symbol (cfg, real_metric->name,
+					rspamd_config_add_metric_symbol (cfg,
 							ucl_object_tostring (n), nscore, NULL, NULL,
 							0, priority, cfg->default_max_shots);
 				}

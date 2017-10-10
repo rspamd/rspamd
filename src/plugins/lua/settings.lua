@@ -44,7 +44,9 @@ local function check_query_settings(task)
     local parser = ucl.parser()
     local res,err = parser:parse_string(tostring(query_set))
     if res then
-      task:set_settings(parser:get_object())
+      local settings_obj = parser:get_object()
+      task:set_settings(settings_obj)
+      task:cache_set('settings', settings_obj)
 
       return true
     else
@@ -72,6 +74,7 @@ local function check_query_settings(task)
       end
 
       task:set_settings(nset)
+      task:cache_set('settings', nset)
 
       return true
     end
@@ -84,6 +87,7 @@ local function check_query_settings(task)
     local elt = settings_ids[id_str]
     if elt and elt['apply'] then
       task:set_settings(elt['apply'])
+      task:cache_set('settings', elt['apply'])
 
       if elt.apply['add_headers'] or elt.apply['remove_headers'] then
         local rep = {
@@ -322,6 +326,7 @@ local function check_settings(task)
             task:get_message_id(), s.name)
           if rule['apply'] then
             task:set_settings(rule['apply'])
+            task:cache_set('settings', rule['apply'])
             applied = true
           end
           if rule['symbols'] then
@@ -617,6 +622,7 @@ local function gen_redis_callback(handler, id)
               rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
                 task:get_message_id(), id)
               task:set_settings(obj)
+              task:cache_set('settings', obj)
               break
             end
           end

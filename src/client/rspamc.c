@@ -1522,6 +1522,18 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 					rspamc_output_headers (out, msg);
 				}
 				if (raw || cmd->command_output_func == NULL) {
+					if (cmd->need_input) {
+						ucl_object_insert_key (result,
+								ucl_object_fromstring (cbdata->filename),
+								"filename", 0,
+								false);
+					}
+
+					ucl_object_insert_key (result,
+							ucl_object_fromdouble (diff),
+							"scan_time", 0,
+							false);
+
 					if (json) {
 						ucl_out = ucl_object_emit (result,
 								compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
@@ -1530,6 +1542,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 						ucl_out = ucl_object_emit (result,
 								compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 					}
+
 					rspamd_fprintf (out, "%s", ucl_out);
 					free (ucl_out);
 				}

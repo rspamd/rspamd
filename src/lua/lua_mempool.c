@@ -67,6 +67,15 @@ LUA_FUNCTION_DEF (mempool, suggest_size);
  */
 LUA_FUNCTION_DEF (mempool, set_variable);
 /***
+ * @method mempool:set_bucket(name, num_values, [value1...valuen]|[table])
+ * Stores a variable bucket of numbers where the first number is number of elements to pack
+ * and then there should be either n numeric values or a plain table of numeric values
+ * @param {string} name variable's name to set
+ * @param {number} num_values number of variables in the bucket
+ * @param {table|list} values values
+ */
+LUA_FUNCTION_DEF (mempool, set_bucket);
+/***
  * @method mempool:get_variable(name[, type])
  * Unpacks mempool variable to lua If `type` is not specified, then a variable is
  * assumed to be zero-terminated C string. Otherwise, `type` is a comma separated (spaces are ignored)
@@ -78,6 +87,7 @@ LUA_FUNCTION_DEF (mempool, set_variable);
  * - `int`: unpack a single integer
  * - `int64`: unpack 64-bits integer
  * - `boolean`: unpack boolean
+ * - `bucket`: bucket of numbers represented as a table
  * @param {string} name variable's name to get
  * @param {string} type list of types to be extracted
  * @return {variable list} list of variables extracted (but **not** a table)
@@ -104,6 +114,7 @@ static const struct luaL_reg mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, stat),
 	LUA_INTERFACE_DEF (mempool, suggest_size),
 	LUA_INTERFACE_DEF (mempool, set_variable),
+	LUA_INTERFACE_DEF (mempool, set_bucket),
 	LUA_INTERFACE_DEF (mempool, get_variable),
 	LUA_INTERFACE_DEF (mempool, has_variable),
 	LUA_INTERFACE_DEF (mempool, delete_variable),
@@ -245,12 +256,54 @@ lua_mempool_suggest_size (lua_State *L)
 	return 1;
 }
 
+struct lua_numbers_bucket {
+	guint nelts;
+	gdouble elts[0];
+};
+
+static int
+lua_mempool_set_bucket (lua_State *L)
+{
+	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
+	const gchar *var = luaL_checkstring (L, 2);
+	struct lua_numbers_bucket *bucket;
+	gint nelts = luaL_checknumber (L, 3), i;
+
+	if (var && nelts > 0) {
+		bucket = rspamd_mempool_alloc (mempool,
+				sizeof (*bucket) + sizeof (gdouble) * nelts);
+		bucket->nelts = nelts;
+
+		if (lua_type (L, 4) == LUA_TTABLE) {
+			/* Table version */
+			for (i = 1; i <= nelts; i ++) {
+				lua_rawgeti (L, 4, i);
+				bucket->elts[i - 1] = lua_tonumber (L, -1);
+				lua_pop (L, 1);
+			}
+		}
+		else {
+			for (i = 0; i <= nelts; i ++) {
+				bucket->elts[i] = lua_tonumber (L, 4 + i);
+			}
+		}
+
+		rspamd_mempool_set_variable (mempool, var, bucket, NULL);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
 static int
 lua_mempool_set_variable (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	gpointer value;
+	struct lua_numbers_bucket *bucket;
 	gchar *vp;
 	union {
 		gdouble d;
@@ -258,7 +311,7 @@ lua_mempool_set_variable (lua_State *L)
 		gboolean b;
 	} val;
 	gsize slen;
-	gint i, len = 0, type;
+	gint i, j, len = 0, type;
 
 	if (mempool && var) {
 
@@ -275,6 +328,11 @@ lua_mempool_set_variable (lua_State *L)
 			else if (type == LUA_TSTRING) {
 				(void)lua_tolstring (L, i, &slen);
 				len += slen + 1;
+			}
+			else if (type == LUA_TTABLE) {
+				/* We assume it as a bucket of numbers so far */
+				slen = rspamd_lua_table_size (L, i);
+				len += sizeof (gdouble) * slen + sizeof (*bucket);
 			}
 			else {
 				msg_err ("cannot handle lua type %s", lua_typename (L, type));
@@ -306,6 +364,20 @@ lua_mempool_set_variable (lua_State *L)
 					memcpy (vp, val.s, slen + 1);
 					vp += slen + 1;
 				}
+				else if (type == LUA_TTABLE) {
+					slen = rspamd_lua_table_size (L, i);
+					/* XXX: Ret, ret, ret: alignment issues */
+					bucket = (struct lua_numbers_bucket *)vp;
+					bucket->nelts = slen;
+
+					for (j = 0; j < slen; j ++) {
+						lua_rawgeti (L, i, j + 1);
+						bucket->elts[j] = lua_tonumber (L, -1);
+						lua_pop (L, 1);
+					}
+
+					vp += sizeof (gdouble) * slen + sizeof (*bucket);
+				}
 				else {
 					msg_err ("cannot handle lua type %s", lua_typename (L, type));
 				}
@@ -330,8 +402,9 @@ lua_mempool_get_variable (lua_State *L)
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	const gchar *type = NULL, *pt;
+	struct lua_numbers_bucket *bucket;
 	gchar *value, *pv;
-	guint len, nvar, slen;
+	guint len, nvar, slen, i;
 
 	if (mempool && var) {
 		value = rspamd_mempool_get_variable (mempool, var);
@@ -379,6 +452,19 @@ lua_mempool_get_variable (lua_State *L)
 						GString *st = (GString *)pv;
 						lua_pushlstring (L, st->str, st->len);
 						pv += sizeof (GString *);
+					}
+					else if (len == sizeof ("bucket") - 1 &&
+							g_ascii_strncasecmp (pt, "bucket", len) == 0) {
+						bucket = (struct lua_numbers_bucket *)pv;
+						lua_createtable (L, bucket->nelts, 0);
+
+						for (i = 0; i < bucket->nelts; i ++) {
+							lua_pushnumber (L, bucket->elts[i]);
+							lua_rawseti (L, -1, i + 1);
+						}
+
+						pv += sizeof (struct lua_numbers_bucket) +
+								bucket->nelts * sizeof (gdouble);
 					}
 					else {
 						msg_err ("unknown type for get_variable: %s", pt);

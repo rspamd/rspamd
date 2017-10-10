@@ -83,7 +83,7 @@ static gboolean rspamd_is_empty_body (struct rspamd_task *task,
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gint rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom);
+static gdouble rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom);
 static gint rspamd_mime_expr_priority (rspamd_expression_atom_t *atom);
 static void rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom);
 
@@ -912,13 +912,13 @@ rspamd_mime_expr_process_function (struct rspamd_function_atom * func,
 	return selected->func (task, func->args, selected->user_data);
 }
 
-static gint
+static gdouble
 rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct rspamd_task *task = input;
 	struct rspamd_mime_atom *mime_atom;
 	lua_State *L;
-	gint ret = 0;
+	gdouble ret = 0;
 
 	g_assert (task != NULL);
 	g_assert (atom != NULL);

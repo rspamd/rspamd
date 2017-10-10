@@ -888,11 +888,18 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				break;
 			case parse_at:
 				c = p;
-				st = parse_domain;
-				if (t == '[') {
+
+				if (t == '@') {
+					*flags |= RSPAMD_URL_FLAG_OBSCURED;
+					p ++;
+				}
+				else if (t == '[') {
 					st = parse_ipv6;
 					p++;
 					c = p;
+				}
+				else {
+					st = parse_domain;
 				}
 				break;
 			case parse_domain:
@@ -965,8 +972,16 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 
 							p = p + i;
 						}
-						else {
+						else if (is_urlsafe (*p)) {
 							p ++;
+						}
+						else {
+							if (strict) {
+								goto out;
+							}
+							else {
+								goto set;
+							}
 						}
 					}
 					else {
