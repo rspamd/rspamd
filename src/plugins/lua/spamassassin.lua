@@ -360,6 +360,7 @@ local function gen_eval_rule(arg)
                 if r:match(h) then
                   return 1
                 end
+                return 0
               else
                 rspamd_logger.infox(rspamd_config, 'cannot create regexp %1', re)
                 return 0
