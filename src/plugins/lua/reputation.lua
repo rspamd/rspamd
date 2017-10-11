@@ -26,7 +26,7 @@ local N = 'reputation'
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
-local rspamd_lua_utils = require "lua_util"
+local lua_maps = require "maps"
 local hash = require 'rspamd_cryptobox_hash'
 local fun = require "fun"
 local redis_params = nil
@@ -35,6 +35,11 @@ local default_expiry = 864000 -- 10 day by default
 -- IP Selector functions
 
 local function ip_reputation_filter(task, rule)
+
+end
+
+-- Used to set scores
+local function ip_reputation_idempotent(task, rule)
 
 end
 
@@ -285,16 +290,42 @@ local backends = {
   }
 }
 
+local function is_rule_applicable(task, rule)
+  if rule.outbound then
+    if not (task:get_user() or (ip and ip:is_local())) then
+      return false
+    end
+  elseif rule.inbound then
+    if task:get_user() or (ip and ip:is_local()) then
+      return false
+    end
+  end
+
+  if rule.whitelisted_ip_map then
+    if rule.whitelisted_ip_map:get_key(task:get_from_ip()) then
+      return false
+    end
+  end
+
+  return true
+end
+
 local function reputation_filter_cb(task, rule)
-  rule.selector.filter(task, rule, rule.backend)
+  if (is_rule_applicable(task, rule)) then
+    rule.selector.filter(task, rule, rule.backend)
+  end
 end
 
 local function reputation_postfilter_cb(task, rule)
-  rule.selector.postfilter(task, rule, rule.backend)
+  if (is_rule_applicable(task, rule)) then
+    rule.selector.postfilter(task, rule, rule.backend)
+  end
 end
 
 local function reputation_idempotent_cb(task, rule)
-  rule.selector.idempotent(task, rule, rule.backend)
+  if (is_rule_applicable(task, rule)) then
+    rule.selector.idempotent(task, rule, rule.backend)
+  end
 end
 
 local function deepcopy(orig)
@@ -313,14 +344,16 @@ local function deepcopy(orig)
 end
 local function override_defaults(def, override)
   for k,v in pairs(override) do
-    if def[k] then
-      if type(v) == 'table' then
-        override_defaults(def[k], v)
+    if k ~= 'selector' and k ~= 'backend' then
+      if def[k] then
+        if type(v) == 'table' then
+          override_defaults(def[k], v)
+        else
+          def[k] = v
+        end
       else
         def[k] = v
       end
-    else
-      def[k] = v
     end
   end
 end
@@ -363,6 +396,14 @@ local function parse_rule(name, tbl)
   -- Override default config params
   override_defaults(rule.backend.config, tbl.backend)
   override_defaults(rule.selector.config, tbl.selector)
+  -- Generic options
+  override_defaults(rule.config, tbl)
+
+  if rule.whitelisted_ip then
+    rule.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,
+      'radix',
+      'Reputation whiteliist for ' .. name)
+  end
 
   local symbol = name
   if tbl.symbol then
