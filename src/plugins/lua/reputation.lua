@@ -291,18 +291,18 @@ local backends = {
 }
 
 local function is_rule_applicable(task, rule)
-  if rule.outbound then
+  if rule.config.outbound then
     if not (task:get_user() or (ip and ip:is_local())) then
       return false
     end
-  elseif rule.inbound then
+  elseif rule.config.inbound then
     if task:get_user() or (ip and ip:is_local()) then
       return false
     end
   end
 
-  if rule.whitelisted_ip_map then
-    if rule.whitelisted_ip_map:get_key(task:get_from_ip()) then
+  if rule.config.whitelisted_ip_map then
+    if rule.config.whitelisted_ip_map:get_key(task:get_from_ip()) then
       return false
     end
   end
@@ -390,7 +390,8 @@ local function parse_rule(name, tbl)
   -- Allow config override
   local rule = {
     selector = deepcopy(selector),
-    backend = deepcopy(backend)
+    backend = deepcopy(backend),
+    config = {}
   }
 
   -- Override default config params
@@ -399,8 +400,8 @@ local function parse_rule(name, tbl)
   -- Generic options
   override_defaults(rule.config, tbl)
 
-  if rule.whitelisted_ip then
-    rule.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,
+  if rule.config.whitelisted_ip then
+    rule.config.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,
       'radix',
       'Reputation whiteliist for ' .. name)
   end
