@@ -773,7 +773,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 						g_error_free (stat_error);
 					}
 
-					task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+					task->processed_stages |= st;
 				}
 			}
 		}
