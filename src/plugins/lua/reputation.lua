@@ -141,8 +141,8 @@ end
 
 local function reputation_dns_get_token(task, rule, token, continuation_cb)
   local r = task:get_resolver()
-  local to_resolve = gen_token_key(token)
-  local dns_name = to_resolve .. '.' .. rule.backend.config.list
+  local key = gen_token_key(token, rule)
+  local dns_name = key .. '.' .. rule.backend.config.list
 
   local function dns_callback(_, to_resolve, results, err)
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
@@ -163,7 +163,7 @@ local function reputation_dns_get_token(task, rule, token, continuation_cb)
       fun.each(function(e)
           local vals = lua_util.rspamd_str_split(e, "=")
           if vals and #vals == 2 then
-            local nv = tonumber[vals[2]]
+            local nv = tonumber(vals[2])
             if nv then
               values[vals[1]] = nv
             end
@@ -186,7 +186,7 @@ local function reputation_dns_get_token(task, rule, token, continuation_cb)
 end
 
 local function reputation_redis_get_token(task, rule, token, continuation_cb)
-  local key = gen_token_key(token)
+  local key = gen_token_key(token, rule)
 
   local function redis_get_cb(err, data)
     if data then
@@ -228,9 +228,9 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
 end
 
 local function reputation_redis_set_token(task, rule, token, values, continuation_cb)
-  local key = gen_token_key(token)
+  local key = gen_token_key(token, rule)
 
-  local ret,conn,upstream
+  local ret,conn
 
   local function redis_set_cb(err, data)
     if err then
@@ -243,7 +243,7 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
   end
 
   -- We start from expiry update
-  ret,conn,upstream = rspamd_redis_make_request(task,
+  ret,conn = rspamd_redis_make_request(task,
     redis_params, -- connect params
     nil, -- hash key
     true, -- is write
@@ -291,6 +291,7 @@ local backends = {
 }
 
 local function is_rule_applicable(task, rule)
+  local ip = task:get_from_ip()
   if rule.config.outbound then
     if not (task:get_user() or (ip and ip:is_local())) then
       return false
@@ -302,7 +303,7 @@ local function is_rule_applicable(task, rule)
   end
 
   if rule.config.whitelisted_ip_map then
-    if rule.config.whitelisted_ip_map:get_key(task:get_from_ip()) then
+    if rule.config.whitelisted_ip_map:get_key(ip) then
       return false
     end
   end
@@ -357,8 +358,6 @@ local function override_defaults(def, override)
     end
   end
 end
-
-local rules = {}
 
 local function callback_gen(cb, rule)
   return function(task)
@@ -456,7 +455,6 @@ local function parse_rule(name, tbl)
     }
   end
 
-  rules.symbol = rule
 end
 
 redis_params = rspamd_parse_redis_server('reputation')
@@ -469,8 +467,8 @@ if not (opts and type(opts) == 'table') then
 end
 
 if opts['rules'] then
-  for k,v in opts['rules'] do
-    if not v.selector or not v.selector.type then
+  for k,v in pairs(opts['rules']) do
+    if not ((v or E).selector or E).type then
       rspamd_logger.errx(rspamd_config, "no selector defined for rule %s", k)
     else
       parse_rule(k, v)
