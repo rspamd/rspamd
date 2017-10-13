@@ -85,6 +85,7 @@ struct rspamd_map {
 	gboolean active_http;
 	struct timeval tv;
 	gdouble poll_timeout;
+	time_t next_check;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	/* Shared cache data */

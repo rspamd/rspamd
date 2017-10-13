@@ -376,6 +376,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 	struct rspamd_map_backend *bk;
 	struct rspamd_http_map_cached_cbdata *cache_cbd;
 	struct timeval tv;
+	const rspamd_ftok_t *expires_hdr;
 	guchar *aux_data, *in = NULL;
 	gsize inlen = 0, dlen = 0;
 
@@ -528,6 +529,34 @@ read_data:
 			goto err;
 		}
 
+		/* Check for expires */
+		expires_hdr = rspamd_http_message_find_header (msg, "Expires");
+
+		if (expires_hdr) {
+			time_t hdate;
+
+			hdate = rspamd_http_parse_date (expires_hdr->begin, expires_hdr->len);
+
+			if (hdate != (time_t)-1 && hdate > msg->date) {
+				if (map->next_check) {
+					/* If we have multiple backends */
+					hdate = MIN (map->next_check, hdate);
+				}
+
+				double cached_timeout = map->next_check - msg->date +
+					map->poll_timeout * 2;
+
+				map->next_check = hdate;
+				double_to_tv (cached_timeout, &tv);
+			}
+			else {
+				double_to_tv (map->poll_timeout * 2, &tv);
+			}
+		}
+		else {
+			double_to_tv (map->poll_timeout * 2, &tv);
+		}
+
 		MAP_RETAIN (cbd->shmem_data, "shmem_data");
 		cbd->data->gen ++;
 		/*
@@ -546,10 +575,10 @@ read_data:
 		cache_cbd->last_checked = cbd->data->last_checked;
 		cache_cbd->gen = cbd->data->gen;
 		MAP_RETAIN (cache_cbd->shm, "shmem_data");
+
 		event_set (&cache_cbd->timeout, -1, EV_TIMEOUT, rspamd_map_cache_cb,
 				cache_cbd);
 		event_base_set (cbd->ev_base, &cache_cbd->timeout);
-		double_to_tv (map->poll_timeout * 2, &tv);
 		event_add (&cache_cbd->timeout, &tv);
 
 
@@ -633,6 +662,23 @@ read_data:
 		}
 		else {
 			cbd->data->last_modified = msg->date;
+		}
+
+		expires_hdr = rspamd_http_message_find_header (msg, "Expires");
+
+		if (expires_hdr) {
+			time_t hdate;
+
+			hdate = rspamd_http_parse_date (expires_hdr->begin, expires_hdr->len);
+
+			if (hdate != (time_t)-1 && hdate > msg->date) {
+				if (map->next_check) {
+					/* If we have multiple backends */
+					hdate = MIN (map->next_check, hdate);
+				}
+
+				map->next_check = hdate;
+			}
 		}
 
 		cbd->periodic->cur_backend ++;
@@ -884,17 +930,43 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
 
-	timeout = map->poll_timeout;
+	if (map->next_check != 0) {
+		timeout = map->next_check - rspamd_get_calendar_ticks ();
 
-	if (initial) {
-		timeout = 0.0;
+		if (timeout < map->poll_timeout) {
+			timeout = map->poll_timeout;
+
+			if (errored) {
+				timeout = map->poll_timeout * error_mult;
+			}
+			else if (locked) {
+				timeout = map->poll_timeout * lock_mult;
+			}
+
+			jittered_sec = rspamd_time_jitter (timeout, 0);
+		}
+		else {
+			jittered_sec = rspamd_time_jitter (timeout, map->poll_timeout);
+		}
+
+		/* Reset till the next usage */
+		map->next_check = 0;
 	}
 	else {
-		if (errored) {
-			timeout = map->poll_timeout * error_mult;
-		} else if (locked) {
-			timeout = map->poll_timeout * lock_mult;
+		timeout = map->poll_timeout;
+
+		if (initial) {
+			timeout = 0.0;
+		} else {
+			if (errored) {
+				timeout = map->poll_timeout * error_mult;
+			}
+			else if (locked) {
+				timeout = map->poll_timeout * lock_mult;
+			}
 		}
+
+		jittered_sec = rspamd_time_jitter (timeout, 0);
 	}
 
 	cbd = g_slice_alloc0 (sizeof (*cbd));
@@ -908,7 +980,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	evtimer_set (&cbd->ev, rspamd_map_periodic_callback, cbd);
 	event_base_set (map->ev_base, &cbd->ev);
 
-	jittered_sec = rspamd_time_jitter (timeout, 0);
+
 	msg_debug_map ("schedule new periodic event %p in %.2f seconds",
 			cbd, jittered_sec);
 	double_to_tv (jittered_sec, &map->tv);
