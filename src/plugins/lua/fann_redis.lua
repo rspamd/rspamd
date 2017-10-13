@@ -128,7 +128,7 @@ local redis_lua_script_maybe_load = [[
     return {redis.call('GET', KEYS[1] .. '_data'), ret}
   end
 
-  return tonumber(ret)
+  return tonumber(ret) or 0
 ]]
 local redis_maybe_load_sha = nil
 
