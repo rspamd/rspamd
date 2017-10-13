@@ -768,12 +768,18 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 					if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
 						task->err = stat_error;
+						task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 					}
-					else if (stat_error) {
-						g_error_free (stat_error);
-					}
+					else {
+						/* Do not skip idempotent in case of learn error */
+						if (stat_error) {
+							g_error_free (stat_error);
+						}
 
-					task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+						task->processed_stages |= RSPAMD_TASK_STAGE_LEARN|
+								RSPAMD_TASK_STAGE_LEARN_PRE|
+								RSPAMD_TASK_STAGE_LEARN_POST;
+					}
 				}
 			}
 		}
