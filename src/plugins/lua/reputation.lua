@@ -33,9 +33,144 @@ local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 
 -- IP Selector functions
+local function ip_reputation_calc(rule, token, mult)
+  local cfg = rule.selector.config
+
+  if cfg.score_calc_func then
+    return cfg.score_calc_func(rule, token, mult)
+  end
+
+  local ham_samples = token.h or 0
+  local spam_samples = token.s or 0
+  local probable_samples = token.p or 0
+  local total_samples = ham_samples + spam_samples + probable_samples
+
+  if total_samples < cfg.lower_bound then return 0 end
+
+  local score = (ham_samples / total_samples) * -1.0 +
+      (spam_samples / total_samples) +
+      (probable_samples / total_samples) * 0.5
+  return score
+end
+
+local function ip_reputation_init(rule)
+  local cfg = rule.selector.config
+
+  if cfg.asn_cc_whitelist then
+    cfg.asn_cc_whitelist = rspamd_map_add('reputation',
+      'asn_cc_whitelist',
+      'map',
+      'IP score whitelisted ASNs/countries')
+  end
+end
 
 local function ip_reputation_filter(task, rule)
 
+  local ip = task:get_from_ip()
+
+  if not ip or not ip:is_valid() then return end
+  if lua_util.is_rspamc_or_controller(task) then return end
+
+  local cfg = rule.selector.config
+
+  local pool = task:get_mempool()
+  local asn = pool:get_variable("asn")
+  local country = pool:get_variable("country")
+  local ipnet = pool:get_variable("ipnet")
+
+  if country and cfg.asn_cc_whitelist then
+    if cfg.asn_cc_whitelist:get_key(country) then
+      return
+    end
+    if asn and cfg.asn_cc_whitelist:get_key(asn) then
+      return
+    end
+  end
+
+  -- These variables are used to define if we have some specific token
+  local has_asn = not asn
+  local has_country = not country
+  local has_ipnet = not ipnet
+  local has_ip = false
+
+  local asn_stats, country_stats, ipnet_stats, ip_stats
+
+  local function ipstats_check()
+    local score = 0.0
+    local description_t = {}
+
+    if asn_stats then
+      local asn_score = ip_reputation_calc(asn_stats, rule, cfg.scores.asn)
+      score = score + asn_score
+      table.insert(description_t, string.format('asn: %s(%.2f)', asn, asn_score))
+    end
+    if country_stats then
+      local country_score = ip_reputation_calc(country_stats, rule, cfg.scores.country)
+      score = score + country_score
+      table.insert(description_t, string.format('country: %s(%.2f)', country, country_score))
+    end
+    if ipnet_stats then
+      local ipnet_score = ip_reputation_calc(ipnet_stats, rule, cfg.scores.ipnet)
+      score = score + ipnet_score
+      table.insert(description_t, string.format('ipnet: %s(%.2f)', ipnet, ipnet_score))
+    end
+    if ip_stats then
+      local ip_score = ip_reputation_calc(ip_stats, rule, cfg.scores.ip)
+      score = score + ip_score
+      table.insert(description_t, string.format('ip: %s(%.2f)', ip, ip_score))
+    end
+
+    if math.abs(score) > 1e-3 then
+      task:insert_result(rule.symbol, score, table.concat(description_t, ', '))
+    end
+  end
+
+  local function gen_token_callback(what)
+    return function(err, _, values)
+      if not err and values then
+        if what == 'asn' then
+          has_asn = true
+          asn_stats = values
+        elseif what == 'country' then
+          has_country = true
+          country_stats = values
+        elseif what == 'ipnet' then
+          has_ipnet = true
+          ipnet_stats = values
+        elseif what == 'ip' then
+          has_ip = true
+          ip_stats = values
+        end
+      else
+        if what == 'asn' then
+          has_asn = true
+        elseif what == 'country' then
+          has_country = true
+        elseif what == 'ipnet' then
+          has_ipnet = true
+        elseif what == 'ip' then
+          has_ip = true
+        end
+      end
+
+      if has_asn and has_country and has_ipnet and has_ip then
+        -- Check reputation
+        ipstats_check()
+      end
+    end
+  end
+
+  if asn then
+    rule.backend.get_token(task, rule, cfg.asn_prefix .. asn, gen_token_callback('asn'))
+  end
+  if country then
+    rule.backend.get_token(task, rule, cfg.country_prefix .. country, gen_token_callback('country'))
+  end
+  if ipnet then
+    rule.backend.get_token(task, rule, cfg.ipnet_prefix .. ipnet, gen_token_callback('ipnet'))
+  end
+
+  rule.backend.get_token(task, rule, cfg.ip_prefix .. tostring(ip), gen_token_callback('ip'))
 end
 
 -- Used to set scores
@@ -63,15 +198,19 @@ local ip_selector = {
       ['ip'] = 1.0
     },
     symbol = 'IP_SCORE', -- symbol to be inserted
-    asn_suffix = 'a:', -- prefix for ASN hashes
-    country_suffix = 'c:', -- prefix for country hashes
-    ipnet_suffix = 'n:', -- prefix for ipnet hashes
+    asn_prefix = 'a:', -- prefix for ASN hashes
+    country_prefix = 'c:', -- prefix for country hashes
+    ipnet_prefix = 'n:', -- prefix for ipnet hashes
+    ip_prefix = 'i:',
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
     max_score = nil,
     score_divisor = 1,
+    outbound = false,
+    inbound = true,
   },
   --dependencies = {"ASN"}, -- ASN is a prefilter now...
+  init = ip_reputation_init,
   filter = ip_reputation_filter, -- used to get scores
   idempotent = ip_reputation_idempotent -- used to set scores
 }
@@ -236,9 +375,13 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
     if err then
       rspamd_logger.errx(task, 'got error while setting reputation keys %s: %s',
         key, err)
-      continuation_cb(err, key)
+      if continuation_cb then
+        continuation_cb(err, key)
+      end
     else
-      continuation_cb(nil, key)
+      if continuation_cb then
+        continuation_cb(nil, key)
+      end
     end
   end
 
@@ -292,17 +435,17 @@ local backends = {
 
 local function is_rule_applicable(task, rule)
   local ip = task:get_from_ip()
-  if rule.config.outbound then
+  if rule.selector.config.outbound then
     if not (task:get_user() or (ip and ip:is_local())) then
       return false
     end
-  elseif rule.config.inbound then
+  elseif rule.selector.config.inbound then
     if task:get_user() or (ip and ip:is_local()) then
       return false
     end
   end
 
-  if rule.config.whitelisted_ip_map then
+  if rule.selector.config.whitelisted_ip_map then
     if rule.config.whitelisted_ip_map:get_key(ip) then
       return false
     end
