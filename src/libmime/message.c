@@ -454,7 +454,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				if (G_UNLIKELY (*p) == ' ') {
 					part->spaces ++;
 
-					if (*(p - 1) == ' ') {
+					if (p > begin && *(p - 1) == ' ') {
 						part->double_spaces ++;
 					}
 				}
@@ -524,7 +524,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				else {
 					part->non_spaces ++;
 
-					if (G_UNLIKELY (*p & 0x80)) {
+					if (G_UNLIKELY (*c & 0x80)) {
 						part->non_ascii_chars ++;
 					}
 					else {
