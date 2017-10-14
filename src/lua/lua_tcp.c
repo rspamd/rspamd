@@ -333,12 +333,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	va_start (ap, err);
 
 	for (;;) {
-		if (is_fatal) {
-			hdl = g_queue_pop_head (cbd->handlers);
-		}
-		else {
-			hdl = g_queue_peek_head (cbd->handlers);
-		}
+		hdl = g_queue_peek_head (cbd->handlers);
 
 		if (hdl == NULL) {
 			va_end (ap_copy);
@@ -379,6 +374,9 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 		if (!is_fatal) {
 			/* Stop on the first callback found */
 			break;
+		}
+		else {
+			lua_tcp_shift_handler (cbd);
 		}
 	}
 

@@ -539,6 +539,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 			}
 
 		}
+
 		spf_record_ref (l);
 		spf_check_list (l, task);
 		spf_record_unref (l);
