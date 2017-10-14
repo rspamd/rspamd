@@ -175,7 +175,54 @@ end
 
 -- Used to set scores
 local function ip_reputation_idempotent(task, rule)
+  if not rule.backend.set_token then return end -- Read only backend
+  local ip = task:get_from_ip()
 
+  if not ip or not ip:is_valid() then return end
+  if lua_util.is_rspamc_or_controller(task) then return end
+
+  local cfg = rule.selector.config
+
+  local pool = task:get_mempool()
+  local asn = pool:get_variable("asn")
+  local country = pool:get_variable("country")
+  local ipnet = pool:get_variable("ipnet")
+
+  if country and cfg.asn_cc_whitelist then
+    if cfg.asn_cc_whitelist:get_key(country) then
+      return
+    end
+    if asn and cfg.asn_cc_whitelist:get_key(asn) then
+      return
+    end
+  end
+
+  local action = task:get_metric_action()
+  local token = {
+  }
+  local need_set = false
+
+  -- TODO: take metric score into consideration
+  local k = cfg.keys_map[action]
+
+  if k then
+    token[k] = 1.0
+    need_set = true
+  end
+
+  if need_set then
+    if asn then
+      rule.backend.set_token(task, rule, cfg.asn_prefix .. asn, token)
+    end
+    if country then
+      rule.backend.set_token(task, rule, cfg.country_prefix .. country, token)
+    end
+    if ipnet then
+      rule.backend.set_token(task, rule, cfg.ipnet_prefix .. ipnet, token)
+    end
+
+    rule.backend.set_token(task, rule, cfg.ip_prefix .. tostring(ip), token)
+  end
 end
 
 -- Selectors are used to extract reputation tokens
