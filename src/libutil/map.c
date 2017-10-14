@@ -367,6 +367,61 @@ rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 	}
 }
 
+static gboolean
+rspamd_http_check_pubkey (struct http_callback_data *cbd,
+		struct rspamd_http_message *msg)
+{
+	const rspamd_ftok_t *pubkey_hdr;
+
+	pubkey_hdr = rspamd_http_message_find_header (msg, "Pubkey");
+
+	if (pubkey_hdr) {
+		cbd->pk = rspamd_pubkey_from_base32 (pubkey_hdr->begin,
+				pubkey_hdr->len,
+				RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+
+		return cbd->pk != NULL;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_http_check_signature (struct rspamd_map *map,
+		struct http_callback_data *cbd,
+		struct rspamd_http_message *msg)
+{
+	const rspamd_ftok_t *sig_hdr;
+	guchar *in;
+	size_t dlen;
+
+	sig_hdr = rspamd_http_message_find_header (msg, "Signature");
+
+	if (sig_hdr && cbd->pk) {
+		in = rspamd_shmem_xmap (cbd->shmem_data->shm_name, PROT_READ, &dlen);
+
+		if (in == NULL) {
+			msg_err_map ("cannot read tempfile %s: %s",
+					cbd->shmem_data->shm_name,
+					strerror (errno));
+			return FALSE;
+		}
+
+		if (!rspamd_map_check_sig_pk_mem (sig_hdr->begin, sig_hdr->len,
+				map, in,
+				cbd->data_len, cbd->pk)) {
+			munmap (in, dlen);
+			return FALSE;
+		}
+
+		munmap (in, dlen);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static int
 http_map_finish (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
@@ -408,17 +463,30 @@ http_map_finish (struct rspamd_http_connection *conn,
 			/* Maybe we need to check signature ? */
 			if (bk->is_signed) {
 
-				if (bk->trusted_pubkey) {
-					/* No need to load key */
-					cbd->stage = map_load_signature;
-					cbd->pk = rspamd_pubkey_ref (bk->trusted_pubkey);
-				}
-				else {
-					cbd->stage = map_load_pubkey;
-				}
-
 				cbd->shmem_data = rspamd_http_message_shmem_ref (msg);
 				cbd->data_len = msg->body_buf.len;
+
+				if (bk->trusted_pubkey) {
+					/* No need to load key */
+					cbd->pk = rspamd_pubkey_ref (bk->trusted_pubkey);
+					cbd->stage = map_load_signature;
+				}
+				else {
+					if (!rspamd_http_check_pubkey (cbd, msg)) {
+						cbd->stage = map_load_pubkey;
+					}
+					else {
+						cbd->stage = map_load_signature;
+					}
+				}
+
+				if (cbd->stage == map_load_signature) {
+					/* Try HTTP header */
+					if (rspamd_http_check_signature (map, cbd, msg)) {
+						goto read_data;
+					}
+				}
+
 				rspamd_http_connection_reset (cbd->conn);
 				write_http_request (cbd);
 				MAP_RELEASE (cbd, "http_callback_data");
