@@ -178,6 +178,7 @@ struct rspamd_controller_worker_ctx {
 
 	struct event *rrd_event;
 	struct rspamd_rrd_file *rrd;
+	struct event save_stats_event;
 };
 
 struct rspamd_controller_plugin_cbdata {
@@ -3207,6 +3208,14 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 }
 
 static void
+rspamd_controller_stats_save_periodic (int fd, short what, gpointer ud)
+{
+	struct rspamd_controller_worker_ctx *ctx = ud;
+
+	rspamd_controller_store_saved_stats (ctx);
+}
+
+static void
 rspamd_controller_password_sane (struct rspamd_controller_worker_ctx *ctx,
 		const gchar *password, const gchar *type)
 {
@@ -3603,6 +3612,8 @@ start_controller_worker (struct rspamd_worker *worker)
 	GHashTableIter iter;
 	gpointer key, value;
 	struct rspamd_keypair_cache *cache;
+	struct timeval stv;
+	const guint save_stats_interval = 60 * 1000; /* 1 minute */
 	gpointer m;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
@@ -3804,6 +3815,13 @@ start_controller_worker (struct rspamd_worker *worker)
 	}
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);
+
+	/* Schedule periodic stats saving, see #1823 */
+	evtimer_set (&ctx->save_stats_event, rspamd_controller_stats_save_periodic,
+			ctx);
+	event_base_set (ctx->ev_base, &ctx->save_stats_event);
+	msec_to_tv (save_stats_interval, &stv);
+	evtimer_add (&ctx->save_stats_event, &stv);
 
 	/* Start event loop */
 	event_base_loop (ctx->ev_base, 0);
