@@ -3203,6 +3203,7 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 	ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
 			ucl_object_emit_fd_funcs (fd), NULL);
 
+	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
 }
