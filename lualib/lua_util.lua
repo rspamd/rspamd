@@ -165,4 +165,38 @@ exports.unpack = function(t)
   return unpack_function(t)
 end
 
+-- Sorted iteration:
+-- for k,v in spairs(t) do ... end
+--
+-- or with custom comparison:
+-- for k, v in spairs(t, function(t, a, b) return t[a] < t[b] end)
+--
+-- optional limit is also available (e.g. return top X elements)
+local function spairs(t, order, lim)
+  -- collect the keys
+  local keys = {}
+  for k in pairs(t) do keys[#keys+1] = k end
+
+  -- if order function given, sort by it by passing the table and keys a, b,
+  -- otherwise just sort the keys
+  if order then
+    table.sort(keys, function(a,b) return order(t, a, b) end)
+  else
+    table.sort(keys)
+  end
+
+  -- return the iterator function
+  local i = 0
+  return function()
+    i = i + 1
+    if not lim or i <= lim then
+      if keys[i] then
+        return keys[i], t[keys[i]]
+      end
+    end
+  end
+end
+
+exports.spairs = spairs
+
 return exports
