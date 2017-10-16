@@ -402,14 +402,22 @@ if opts then
   if opts['message_func'] then
     settings.message_func = assert(load(opts['message_func']))()
   end
+
   for k,v in pairs(opts) do
     if k ~= 'message_func' then
       settings[k] = v
     end
   end
+
   if settings['greylist_min_score'] then
     settings['greylist_min_score'] = tonumber(settings['greylist_min_score'])
+  else
+    local greylist_threshold = rspamd_config:get_metric_action('greylist')
+    if greylist_threshold == greylist_threshold then
+      settings['greylist_min_score'] = greylist_threshold
+    end
   end
+
   whitelisted_ip = rspamd_map_add('greylist', 'whitelisted_ip', 'radix',
     'Greylist whitelist ip map')
   whitelist_domains_map = rspamd_map_add('greylist', 'whitelist_domains_url',
