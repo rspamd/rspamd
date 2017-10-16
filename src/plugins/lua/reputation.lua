@@ -32,8 +32,8 @@ local fun = require "fun"
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 
--- IP Selector functions
-local function ip_reputation_calc(rule, token, mult)
+-- Get reputation from ham/spam/probable hits
+local function generic_reputation_calc(rule, token, mult)
   local cfg = rule.selector.config
 
   if cfg.score_calc_func then
@@ -52,6 +52,130 @@ local function ip_reputation_calc(rule, token, mult)
       (probable_samples / total_samples) * 0.5
   return score
 end
+-- URL Selector functions
+
+local function gen_url_queries(task, rule)
+  local domains = {}
+
+  fun.each(function(u)
+    if u:is_redirected() then
+      local redir = u:get_redirected() -- get the original url
+      local redir_tld = redir:get_tld()
+      if domains[redir_tld] then
+        domains[redir_tld] = domains[redir_tld] - 1
+      end
+    end
+    local dom = u:get_tld()
+    if not domains[dom] then
+      domains[dom] = 1
+    else
+      domains[dom] = domains[dom] + 1
+    end
+  end, fun.filter(function(u) return not u:is_html_displayed() end,
+    task:get_urls(true)))
+
+  local results = {}
+  for k,v in lua_util.spairs(domains,
+    function(t, a, b) return t[a] > t[b] end, rule.selector.config.max_urls) do
+    if v > 0 then
+      table.insert(results, {k,v})
+    end
+  end
+
+  return results
+end
+
+local function url_reputation_filter(task, rule)
+  local requests = gen_url_queries(task, rule)
+  local results = {}
+  local nchecked = 0
+
+  local function tokens_cb(err, token, values)
+    nchecked = nchecked + 1
+
+    if values then
+      results[token] = values
+    end
+
+    if nchecked == #requests then
+      -- Check the url with maximum hits
+      local mhits = 0
+      for k,_ in pairs(results) do
+        if requests[k][2] > mhits then
+          mhits = requests[k][2]
+        end
+      end
+
+      if mhits > 0 then
+        local score = 0
+        for k,v in pairs(results) do
+          score = score + generic_reputation_calc(v, rule, requests[k][2] / mhits)
+        end
+
+        if math.abs(score) > 1e-3 then
+          -- TODO: add description
+          task:insert_result(rule.symbol, score)
+        end
+      end
+    end
+  end
+
+  for _,tld in ipairs(requests) do
+    rule.backend.get_token(task, rule, tld[1], tokens_cb)
+  end
+end
+
+local function url_reputation_idempotent(task, rule)
+  local action = task:get_metric_action()
+  local token = {
+  }
+  local cfg = rule.selector.config
+  local need_set = false
+
+  -- TODO: take metric score into consideration
+  local k = cfg.keys_map[action]
+
+  if k then
+    token[k] = 1.0
+    need_set = true
+  end
+
+  if need_set then
+
+    local requests = gen_url_queries(task, rule)
+
+    for _,tld in ipairs(requests) do
+      rule.backend.set_token(task, rule, tld[1], token)
+    end
+  end
+end
+
+local url_selector = {
+  config = {
+    -- keys map between actions and hash elements in bucket,
+    -- h is for ham,
+    -- s is for spam,
+    -- p is for probable spam
+    keys_map = {
+      ['reject'] = 's',
+      ['add header'] = 'p',
+      ['rewrite subject'] = 'p',
+      ['no action'] = 'h'
+    },
+    symbol = 'URL_SCORE', -- symbol to be inserted
+    lower_bound = 10, -- minimum number of messages to be scored
+    min_score = nil,
+    max_score = nil,
+    max_urls = 10,
+    check_from = true,
+    outbound = true,
+    inbound = true,
+  },
+  dependencies = {"SURBL_CALLBACK"},
+  filter = url_reputation_filter, -- used to get scores
+  idempotent = url_reputation_idempotent -- used to set scores
+}
+-- IP Selector functions
 
 local function ip_reputation_init(rule)
   local cfg = rule.selector.config
@@ -100,22 +224,22 @@ local function ip_reputation_filter(task, rule)
     local description_t = {}
 
     if asn_stats then
-      local asn_score = ip_reputation_calc(asn_stats, rule, cfg.scores.asn)
+      local asn_score = generic_reputation_calc(asn_stats, rule, cfg.scores.asn)
       score = score + asn_score
       table.insert(description_t, string.format('asn: %s(%.2f)', asn, asn_score))
     end
     if country_stats then
-      local country_score = ip_reputation_calc(country_stats, rule, cfg.scores.country)
+      local country_score = generic_reputation_calc(country_stats, rule, cfg.scores.country)
       score = score + country_score
       table.insert(description_t, string.format('country: %s(%.2f)', country, country_score))
     end
     if ipnet_stats then
-      local ipnet_score = ip_reputation_calc(ipnet_stats, rule, cfg.scores.ipnet)
+      local ipnet_score = generic_reputation_calc(ipnet_stats, rule, cfg.scores.ipnet)
       score = score + ipnet_score
       table.insert(description_t, string.format('ipnet: %s(%.2f)', ipnet, ipnet_score))
     end
     if ip_stats then
-      local ip_score = ip_reputation_calc(ip_stats, rule, cfg.scores.ip)
+      local ip_score = generic_reputation_calc(ip_stats, rule, cfg.scores.ip)
       score = score + ip_score
       table.insert(description_t, string.format('ip: %s(%.2f)', ip, ip_score))
     end
