@@ -19,6 +19,7 @@
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
 #include "libmime/email_addr.h"
+#include "linenoise.h"
 #include <math.h>
 #include <glob.h>
 
@@ -375,6 +376,13 @@ LUA_FUNCTION_DEF (util, is_utf_spoofed);
 LUA_FUNCTION_DEF (util, is_valid_utf8);
 
 /***
+ * @function util.readline([prompt])
+ * Returns string read from stdin with history and editing support
+ * @return {boolean} true if a string is spoofed
+ */
+LUA_FUNCTION_DEF (util, readline);
+
+/***
  * @function util.pack(fmt, ...)
  *
  * Backport of Lua 5.3 `string.pack` function:
@@ -516,6 +524,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
+	LUA_INTERFACE_DEF (util, readline),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -2041,6 +2050,30 @@ lua_util_is_valid_utf8 (lua_State *L)
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_readline (lua_State *L)
+{
+	const gchar *prompt = NULL;
+	gchar *input;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		prompt = lua_tostring (L, 1);
+	}
+
+	input = linenoise (prompt);
+
+	if (input) {
+		lua_pushstring (L, input);
+		linenoiseHistoryAdd (input);
+		linenoiseFree (input);
+	}
+	else {
+		lua_pushnil (L);
 	}
 
 	return 1;
