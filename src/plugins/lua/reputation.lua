@@ -388,6 +388,7 @@ local ip_selector = {
 
 local selectors = {
   ip = ip_selector,
+  url = url_selector,
 }
 
 local function reputation_dns_init(rule)
