@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "lua_common.h"
 #include "message.h"
+#include "libstat/stat_api.h"
 
 /* Textpart methods */
 /***
@@ -125,6 +127,14 @@ LUA_FUNCTION_DEF (textpart, get_stats);
  * @return {integer} number of words in the part
  */
 LUA_FUNCTION_DEF (textpart, get_words_count);
+
+/***
+ * @method mime_part:get_words()
+ * Get words in the part
+ * @return {table/strings} words in the part
+ */
+LUA_FUNCTION_DEF (textpart, get_words);
+
 /***
  * @method text_part:is_empty()
  * Returns `true` if the specified part is empty
@@ -168,6 +178,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_urls_length),
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
 	LUA_INTERFACE_DEF (textpart, get_words_count),
+	LUA_INTERFACE_DEF (textpart, get_words),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_html),
@@ -647,6 +658,34 @@ lua_textpart_get_words_count (lua_State *L)
 	}
 	else {
 		lua_pushnumber (L, part->normalized_words->len);
+	}
+
+	return 1;
+}
+
+static gint
+lua_textpart_get_words (lua_State *L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	rspamd_stat_token_t *w;
+	guint i;
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (IS_PART_EMPTY (part) || part->normalized_words == NULL) {
+		lua_createtable (L, 0, 0);
+	}
+	else {
+		lua_createtable (L, part->normalized_words->len, 0);
+
+		for (i = 0; i < part->normalized_words->len; i ++) {
+			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+
+			lua_pushlstring (L, w->begin, w->len);
+			lua_rawseti (L, -2, i + 1);
+		}
 	}
 
 	return 1;
