@@ -413,7 +413,7 @@ if opts then
     settings['greylist_min_score'] = tonumber(settings['greylist_min_score'])
   else
     local greylist_threshold = rspamd_config:get_metric_action('greylist')
-    if greylist_threshold == greylist_threshold then
+    if greylist_threshold then
       settings['greylist_min_score'] = greylist_threshold
     end
   end
