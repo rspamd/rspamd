@@ -168,7 +168,6 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 	enum {
 		skip_delimiters = 0,
 		feed_token,
-		skip_exception,
 		process_signature
 	} state = skip_delimiters;
 
@@ -215,17 +214,10 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 		switch (state) {
 		case skip_delimiters:
 			if (ex != NULL && p - buf->begin == ex->pos) {
-				if (ex->type == RSPAMD_EXCEPTION_URL) {
-					token->begin = "!!EX!!";
-					token->len = sizeof ("!!EX!!") - 1;
-					token->flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
-					processed = token->len;
-				}
-				state = skip_exception;
-				continue;
+				goto process_exception;
 			}
 			else if (u_isgraph (uc)) {
-				if (!u_ispunct (uc)) {
+				if (u_isalnum (uc)) {
 					state = feed_token;
 					token->begin = p;
 					continue;
@@ -241,18 +233,13 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 		case feed_token:
 			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
-				goto set_token;
+				goto process_exception;
 			}
 			else if (!u_isgraph (uc) || u_ispunct (uc)) {
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
 			processed ++;
-			break;
-		case skip_exception:
-			*cur = p + ex->len;
-			*exceptions = g_list_next (*exceptions);
-			goto set_token;
 			break;
 		case process_signature:
 			if (*p == '\r' || *p == '\n') {
@@ -278,6 +265,22 @@ set_token:
 	}
 
 	*cur = &s[i];
+
+	return TRUE;
+
+process_exception:
+	if (ex->type == RSPAMD_EXCEPTION_URL) {
+		token->begin = "!!EX!!";
+		token->len = sizeof ("!!EX!!") - 1;
+		token->flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+		processed = token->len;
+	}
+	*cur = p + ex->len;
+	*exceptions = g_list_next (*exceptions);
+
+	if (rl) {
+		*rl = processed;
+	}
 
 	return TRUE;
 }

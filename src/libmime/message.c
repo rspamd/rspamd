@@ -231,10 +231,20 @@ rspamd_extract_words (struct rspamd_task *task,
 	}
 #endif
 	/* Ugly workaround */
-	part->normalized_words = rspamd_tokenize_text (part->content->data,
-			part->content->len, IS_PART_UTF (part), task->cfg,
-			part->exceptions, FALSE,
-			NULL);
+	if (IS_PART_HTML (part)) {
+		part->normalized_words = rspamd_tokenize_text (
+				part->content->data,
+				part->content->len, IS_PART_UTF (part), task->cfg,
+				part->exceptions, FALSE,
+				NULL);
+	}
+	else {
+		part->normalized_words = rspamd_tokenize_text (
+				part->stripped_content->data,
+				part->stripped_content->len, IS_PART_UTF (part), task->cfg,
+				part->exceptions, FALSE,
+				NULL);
+	}
 
 	if (part->normalized_words) {
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
