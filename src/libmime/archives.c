@@ -573,7 +573,19 @@ rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
 			&srch) == 0) {
 		if (rspamd_substring_search_caseless (ct->subtype.begin, ct->subtype.len,
 				str, strlen (str)) != -1) {
-			return TRUE;
+			/* We still need to check magic, see #1848 */
+			if (magic_start != NULL) {
+				if (part->parsed_data.len > magic_len &&
+						memcmp (part->parsed_data.begin,
+								magic_start, magic_len) == 0) {
+					return TRUE;
+				}
+				/* No magic, refuse this type of archive */
+				return FALSE;
+			}
+			else {
+				return TRUE;
+			}
 		}
 	}
 
@@ -585,6 +597,16 @@ rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
 
 			if (rspamd_lc_cmp (p, str, strlen (str)) == 0) {
 				if (*(p - 1) == '.') {
+					if (magic_start != NULL) {
+						if (part->parsed_data.len > magic_len &&
+								memcmp (part->parsed_data.begin,
+										magic_start, magic_len) == 0) {
+							return TRUE;
+						}
+						/* No magic, refuse this type of archive */
+						return FALSE;
+					}
+
 					return TRUE;
 				}
 			}

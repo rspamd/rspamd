@@ -923,7 +923,7 @@ lua_util_tokenize_text (lua_State *L)
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		in = luaL_checklstring (L, 1, &len);
 	}
-	else if (lua_type (L, 1) == LUA_TTABLE) {
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
 		t = lua_check_text (L, 1);
 
 		if (t) {

@@ -152,8 +152,8 @@ local function gen_auth_results(task, settings)
       elseif auth_type == 'spf' and key ~= 'none' then
         hdr = hdr .. auth_type .. '=' .. key
         local smtp_from = task:get_from('smtp')
-        if smtp_from['addr'] ~= '' and smtp_from['addr'] ~= nil then
-          hdr = hdr .. ' smtp.mailfrom=' .. smtp_from['addr']
+        if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' and smtp_from[1]['addr'] ~= nil then
+          hdr = hdr .. ' smtp.mailfrom=' .. smtp_from[1]['addr']
         else
           local helo = task:get_helo()
           if helo then

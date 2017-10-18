@@ -745,8 +745,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 								t += g_unichar_to_utf8 (val, t);
 							}
 							else {
-								memmove (t, e, h - e);
-								t += h - e;
+								/* Remove unknown entities */
 							}
 						}
 					}
@@ -1502,7 +1501,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	if (rspamd_substring_search (s, len, "://", 3) == (-1)) {
+	if (memchr (s, ':', len) == NULL) {
 		/* We have no prefix */
 		dlen += sizeof ("http://") - 1;
 		no_prefix = TRUE;
