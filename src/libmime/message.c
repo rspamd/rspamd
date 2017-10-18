@@ -258,14 +258,12 @@ rspamd_extract_words (struct rspamd_task *task,
 					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
 					memcpy (temp_word, r, nlen);
 
-#if 0
 					if (IS_PART_UTF (part)) {
 						rspamd_str_lc_utf8 (temp_word, nlen);
 					}
 					else {
 						rspamd_str_lc (temp_word, nlen);
 					}
-#endif
 
 					w->begin = temp_word;
 					w->len = nlen;
