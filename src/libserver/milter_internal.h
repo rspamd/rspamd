@@ -48,7 +48,8 @@ struct rspamd_milter_outbuf {
 enum rspamd_milter_io_state {
 	RSPAMD_MILTER_READ_MORE,
 	RSPAMD_MILTER_WRITE_REPLY,
-	RSPAMD_MILTER_WANNA_DIE
+	RSPAMD_MILTER_WANNA_DIE,
+	RSPAMD_MILTER_WRITE_AND_DIE,
 };
 
 struct rspamd_milter_private {

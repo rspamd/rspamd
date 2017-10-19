@@ -644,13 +644,24 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			version, actions, protocol);
 		break;
 	case RSPAMD_MILTER_CMD_QUIT:
-		msg_debug_milter ("quit command, refcount: %d", session->ref.refcount);
-		priv->state = RSPAMD_MILTER_WANNA_DIE;
-		REF_RETAIN (session);
-		priv->fin_cb (priv->fd, session, priv->ud);
-		REF_RELEASE (session);
+		if (priv->out_chain) {
+			msg_debug_milter ("quit command, refcount: %d, "
+					"some output buffers left - draining",
+					session->ref.refcount);
 
-		return FALSE;
+			priv->state = RSPAMD_MILTER_WRITE_AND_DIE;
+		}
+		else {
+			msg_debug_milter ("quit command, refcount: %d",
+					session->ref.refcount);
+
+			priv->state = RSPAMD_MILTER_WANNA_DIE;
+			REF_RETAIN (session);
+			priv->fin_cb (priv->fd, session, priv->ud);
+			REF_RELEASE (session);
+
+			return FALSE;
+		}
 		break;
 	case RSPAMD_MILTER_CMD_RCPT:
 		msg_debug_milter ("rcpt command");
@@ -935,10 +946,25 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 			return rspamd_milter_consume_input (session, priv);
 		}
 	case RSPAMD_MILTER_WRITE_REPLY:
+	case RSPAMD_MILTER_WRITE_AND_DIE:
 		if (priv->out_chain == NULL) {
-			/* We have written everything, so we can read something */
-			priv->state = RSPAMD_MILTER_READ_MORE;
-			rspamd_milter_plan_io (session, priv, EV_READ);
+			if (priv->state == RSPAMD_MILTER_WRITE_AND_DIE) {
+				/* Finished writing, let's die finally */
+				msg_debug_milter ("output drained, terminating, refcount: %d",
+						session->ref.refcount);
+
+				/* Session should be destroyed by fin_cb... */
+				REF_RETAIN (session);
+				priv->fin_cb (priv->fd, session, priv->ud);
+				REF_RELEASE (session);
+
+				return FALSE;
+			}
+			else {
+				/* We have written everything, so we can read something */
+				priv->state = RSPAMD_MILTER_READ_MORE;
+				rspamd_milter_plan_io (session, priv, EV_READ);
+			}
 		}
 		else {
 			DL_FOREACH_SAFE (priv->out_chain, obuf, obuf_tmp) {
