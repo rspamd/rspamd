@@ -270,8 +270,16 @@ set_token:
 
 process_exception:
 	if (token->len == 0 && processed > 0) {
+		/*
+		 * We have processed something before the next exception, so
+		 * continue processing on next iteration of this function call
+		 */
 		token->len = p - token->begin;
 		g_assert (token->len > 0);
+
+		*cur = p;
+
+		return TRUE;
 	}
 
 	if (ex->type == RSPAMD_EXCEPTION_URL) {
