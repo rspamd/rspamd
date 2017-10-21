@@ -20,6 +20,7 @@
 #include "mem_pool.h"
 #include "keypair.h"
 #include "unix-std.h"
+#include "map.h"
 #include "ref.h"
 
 typedef void (*rspamd_map_dtor) (gpointer p);
