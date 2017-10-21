@@ -235,7 +235,7 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto process_exception;
 			}
-			else if (!u_isgraph (uc) || u_ispunct (uc)) {
+			else if (!u_isalnum (uc)) {
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
