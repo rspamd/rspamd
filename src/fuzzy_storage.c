@@ -2863,9 +2863,7 @@ start_fuzzy (struct rspamd_worker *worker)
 					ucl_object_tostring (ctx->skip_map));
 		}
 		else {
-			if (worker->index == 0) {
-				m->active_http = TRUE;
-			}
+			m->active_http = TRUE;
 		}
 	}
 
