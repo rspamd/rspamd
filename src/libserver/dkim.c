@@ -440,7 +440,6 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 				count = GPOINTER_TO_UINT (found);
 				new->count = count;
 				count ++;
-				g_hash_table_insert (htb, h, GUINT_TO_POINTER (count));
 			}
 			else {
 				/* Insert new header order to the list */
