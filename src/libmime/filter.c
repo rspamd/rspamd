@@ -266,7 +266,7 @@ insert_result_common (struct rspamd_task *task,
 {
 	struct rspamd_symbol_result *s = NULL;
 
-	if (task->processed_stages & RSPAMD_TASK_STAGE_IDEMPOTENT) {
+	if (task->processed_stages & (RSPAMD_TASK_STAGE_IDEMPOTENT >> 1)) {
 		msg_err_task ("cannot insert symbol %s on idempotent phase",
 			symbol);
 
