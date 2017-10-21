@@ -165,6 +165,7 @@ struct rspamd_dkim_sign_key_s {
 struct rspamd_dkim_header {
 	const gchar *name;
 	guint count;
+	guint count_total;
 };
 
 /* Parser of dkim params */
@@ -452,6 +453,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 					sizeof (struct rspamd_dkim_header));
 			new->name = h;
 			new->count = 0;
+			new->count_total = 1;
 
 			/* Check mandatory from */
 			if (!from_found && g_ascii_strcasecmp (h, "from") == 0) {
@@ -460,8 +462,10 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 
 			g_ptr_array_add (ctx->hlist, new);
 
-			if (g_hash_table_lookup (htb, h) != NULL) {
-				new->count++;
+			struct rspamd_dkim_header * old = g_hash_table_lookup (htb, h);
+			if (old != NULL) {
+				new->count += old->count_total;
+				old->count_total++;
 			}
 			else {
 				/* Insert new header to the list */
