@@ -122,7 +122,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_RUBY, "ruby", (CM_INLINE)),
 	TAG_DEF(Tag_S, "s", (CM_INLINE)),
 	TAG_DEF(Tag_SAMP, "samp", (CM_INLINE)),
-	TAG_DEF(Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)),
+	TAG_DEF(Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED)),
 	TAG_DEF(Tag_SELECT, "select", (CM_INLINE | CM_FIELD)),
 	TAG_DEF(Tag_SMALL, "small", (CM_INLINE)),
 	TAG_DEF(Tag_SPAN, "span", (CM_BLOCK|FL_BLOCK)),
