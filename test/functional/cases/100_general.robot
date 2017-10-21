@@ -40,3 +40,9 @@ GTUBE - RSPAMC
   ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${GTUBE}
   Follow Rspamd Log
   Should Contain  ${result}  GTUBE
+
+EMAILS DETECTION 1
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emails1.eml
+  Check Rspamc  ${result}  "jim@example.net"
+  Should Contain  ${result.stdout}  "bob@example.net"
+  Should Contain  ${result.stdout}  "rupert@example.net"
