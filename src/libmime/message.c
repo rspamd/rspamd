@@ -234,8 +234,8 @@ rspamd_extract_words (struct rspamd_task *task,
 	/* Ugly workaround */
 	if (IS_PART_HTML (part)) {
 		part->normalized_words = rspamd_tokenize_text (
-				part->content->data,
-				part->content->len, IS_PART_UTF (part), task->cfg,
+				part->stripped_content->data,
+				part->stripped_content->len, IS_PART_UTF (part), task->cfg,
 				part->exceptions, FALSE,
 				NULL);
 	}
