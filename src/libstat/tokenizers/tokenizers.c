@@ -198,9 +198,9 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 	p = s;
 	token->begin = s;
 
-	for (i = 0; i < remain; ) {
+	for (i = 0; i <= remain; ) {
 		p = &s[i];
-		U8_NEXT (s, i, remain, uc);
+		U8_NEXT (s, i, remain, uc); /* This also advances i */
 
 		if (uc < 0) {
 			if (i < remain) {
