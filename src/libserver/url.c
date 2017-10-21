@@ -229,7 +229,7 @@ static const unsigned int url_scanner_table[256] = {
 		IS_MAILSAFE /* ! */, IS_URLSAFE|IS_DOMAIN_END|IS_MAILSAFE /* " */,
 		IS_MAILSAFE /* # */, IS_MAILSAFE /* $ */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* % */, 0 /* & */, IS_MAILSAFE /* ' */,
-		IS_MAILSAFE /* ( */, IS_MAILSAFE /* ) */, IS_MAILSAFE /* * */,
+		0 /* ( */, 0 /* ) */, IS_MAILSAFE /* * */,
 		IS_MAILSAFE /* + */, IS_MAILSAFE /* , */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* - */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* . */, IS_DOMAIN_END|IS_MAILSAFE /* / */,
@@ -243,8 +243,8 @@ static const unsigned int url_scanner_table[256] = {
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* 7 */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* 8 */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* 9 */, IS_DOMAIN_END /* : */,
-		IS_MAILSAFE /* ; */, IS_URLSAFE|IS_DOMAIN_END|IS_MAILSAFE /* < */, 0 /* = */,
-		IS_URLSAFE|IS_DOMAIN_END|IS_MAILSAFE /* > */, IS_DOMAIN_END /* ? */, 0 /* @ */,
+		0 /* ; */, IS_URLSAFE|IS_DOMAIN_END /* < */, 0 /* = */,
+		IS_URLSAFE|IS_DOMAIN_END /* > */, IS_DOMAIN_END /* ? */, 0 /* @ */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* A */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* B */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* C */,
@@ -270,11 +270,11 @@ static const unsigned int url_scanner_table[256] = {
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* W */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* X */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* Y */,
-		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* Z */, IS_MAILSAFE /* [ */,
-		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* \ */, IS_MAILSAFE /* ] */,
+		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* Z */, 0 /* [ */,
+		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* \ */, 0 /* ] */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* ^ */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* _ */,
-		IS_URLSAFE|IS_DOMAIN_END|IS_MAILSAFE /* ` */,
+		IS_URLSAFE|IS_DOMAIN_END /* ` */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* a */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* b */,
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE /* c */,
@@ -2141,7 +2141,8 @@ url_email_end (struct url_callback_data *cb,
 			p --;
 		}
 
-		if (p < cb->end && p < match->newline_pos && g_ascii_isalnum (*p)) {
+		if (p < cb->end && g_ascii_isalnum (*p) &&
+				(match->newline_pos == NULL || p < match->newline_pos)) {
 			p ++;
 		}
 
