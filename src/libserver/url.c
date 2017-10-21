@@ -2111,7 +2111,14 @@ url_email_end (struct url_callback_data *cb,
 		}
 
 		c = pos - 1;
-		while (c > cb->begin && is_mailsafe (*c)) {
+		while (c > cb->begin) {
+			if (!is_mailsafe (*c)) {
+				break;
+			}
+			if (c == match->prev_newline_pos) {
+				break;
+			}
+
 			c --;
 		}
 		/* Rewind to the first alphanumeric character */
@@ -2122,14 +2129,19 @@ url_email_end (struct url_callback_data *cb,
 		/* Find the end of email */
 		p = pos + 1;
 		while (p < cb->end && is_domain (*p)) {
+			if (p == match->newline_pos) {
+				break;
+			}
+
 			p ++;
 		}
+
 		/* Rewind it again to avoid bad emails to be detected */
 		while (p > pos && p < cb->end && !g_ascii_isalnum (*p)) {
 			p --;
 		}
 
-		if (p < cb->end && g_ascii_isalnum (*p)) {
+		if (p < cb->end && p < match->newline_pos && g_ascii_isalnum (*p)) {
 			p ++;
 		}
 
