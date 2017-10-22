@@ -109,6 +109,12 @@ insert_metric_result (struct rspamd_task *task,
 
 	metric_res = rspamd_create_metric_result (task);
 
+	if (!isfinite (flag)) {
+		msg_warn_task ("detected %s score for symbol %s, replace it with zero",
+				isnan (flag) ? "NaN" : "infinity", symbol);
+		flag = 0.0;
+	}
+
 	sdef = g_hash_table_lookup (metric->symbols, symbol);
 	if (sdef == NULL) {
 		w = 0.0;

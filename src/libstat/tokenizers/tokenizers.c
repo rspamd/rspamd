@@ -198,9 +198,9 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 	p = s;
 	token->begin = s;
 
-	for (i = 0; i < remain; ) {
+	for (i = 0; i <= remain; ) {
 		p = &s[i];
-		U8_NEXT (s, i, remain, uc);
+		U8_NEXT (s, i, remain, uc); /* This also advances i */
 
 		if (uc < 0) {
 			if (i < remain) {
@@ -235,7 +235,7 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto process_exception;
 			}
-			else if (!u_isgraph (uc) || u_ispunct (uc)) {
+			else if (!u_isalnum (uc)) {
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 				goto set_token;
 			}
@@ -269,14 +269,52 @@ set_token:
 	return TRUE;
 
 process_exception:
+	if (token->len == 0 && processed > 0) {
+		/*
+		 * We have processed something before the next exception, so
+		 * continue processing on next iteration of this function call
+		 */
+		token->len = p - token->begin;
+		g_assert (token->len > 0);
+
+		*cur = p;
+
+		return TRUE;
+	}
+
 	if (ex->type == RSPAMD_EXCEPTION_URL) {
 		token->begin = "!!EX!!";
 		token->len = sizeof ("!!EX!!") - 1;
 		token->flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 		processed = token->len;
 	}
-	*cur = p + ex->len;
+
+	p += ex->len;
+
+	/* We need to skip all exceptions that are within this exception */
 	*exceptions = g_list_next (*exceptions);
+
+	while (*exceptions) {
+		ex = (*exceptions)->data;
+
+		if (ex->pos < p - buf->begin) {
+			/* Nested exception */
+			if (ex->pos + ex->len > p - buf->begin) {
+				/*
+				 * We have somehow overlapping nesting exception,
+				 * extend current offset
+				 */
+				p = buf->begin + ex->pos + ex->len;
+			}
+
+			*exceptions = g_list_next (*exceptions);
+		}
+		else {
+			break;
+		}
+	}
+
+	*cur = p;
 
 	if (rl) {
 		*rl = processed;

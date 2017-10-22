@@ -18,6 +18,7 @@
  */
 
 #include <libserver/rspamd_control.h>
+#include <src/libutil/map_private.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
@@ -2853,11 +2854,16 @@ start_fuzzy (struct rspamd_worker *worker)
 				&ctx->master_ips, NULL);
 	}
 	if (ctx->skip_map != NULL) {
-		if (!rspamd_map_add_from_ucl (cfg, ctx->skip_map,
+		struct rspamd_map *m;
+
+		if ((m = rspamd_map_add_from_ucl (cfg, ctx->skip_map,
 				"Skip hashes", rspamd_kv_list_read, rspamd_kv_list_fin,
-				(void **)&ctx->skip_hashes)) {
+				(void **)&ctx->skip_hashes)) == NULL) {
 			msg_warn_config ("cannot load hashes list from %s",
 					ucl_object_tostring (ctx->skip_map));
+		}
+		else {
+			m->active_http = TRUE;
 		}
 	}
 

@@ -1495,7 +1495,10 @@ rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
 		map = cur->data;
 		map->ev_base = ev_base;
 		map->r = resolver;
-		map->active_http = active_http;
+
+		if (active_http) {
+			map->active_http = active_http;
+		}
 
 		rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
 
