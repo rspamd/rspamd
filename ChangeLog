@@ -1,3 +1,40 @@
+1.6.5: 22 Oct 2017
+	* [CritFix] Another portion of tokenization fixes
+	* [CritFix] Fix memory leak in spf caching logic
+	* [CritFix] Fix milter commands pipelining
+	* [CritFix] Fix newlines detection
+	* [Feature] Filter nan and inf when adding scores
+	* [Feature] Implement headers flags in mime parser
+	* [Feature] Support Expires header when using HTTP maps
+	* [Fix] Actively load skip hashes map in fuzzy storage
+	* [Fix] Add workaround for IPv6 in sendmail
+	* [Fix] Authentication Results: Fix SPF smtp.mail_from
+	* [Fix] Check for magic when checking for an archive
+	* [Fix] Deal with another case when processing exceptions
+	* [Fix] Deal with URLs with no slashes after protocol
+	* [Fix] Do not allow garbadge when checking url domain
+	* [Fix] Do not ignore short words
+	* [Fix] Do not strip last character in the last word
+	* [Fix] Do not treat script content as text
+	* [Fix] Erase unknown HTML entities
+	* [Fix] Fix another tokenization issue
+	* [Fix] Fix DKIM forgeries via multiple headers
+	* [Fix] Fix emails detection
+	* [Fix] Fix empty threshold check in greylisting module
+	* [Fix] Fix enormous scores for R_WHITE_ON_WHITE
+	* [Fix] Fix loading of per-user redis backend for statistics
+	* [Fix] Fix multiple headers in DKIM headers list
+	* [Fix] Fix obscured url in format user@@example.com
+	* [Fix] Further tokenization fixes
+	* [Fix] Load skip map from all processes as shared cache is unavailable
+	* [Fix] Lowercase words
+	* [Fix] Milter headers: skip_local / skip_authenticated settings
+	* [Fix] Milter headers: X-Spamd-Result header if X-Virus ran first
+	* [Fix] Ratelimit: fix whitelisted_rcpts matching
+	* [Fix] Some more fixes towards emails detection
+	* [Fix] SpamAssassin: Fail check_freemail_header if regexp didn't match
+	* [Fix] Use greylisting threshold in greylisting module
+
 1.6.4: 10 Sep 2017
 	* [Feature] Add method to get all content-type attributes in Lua
 	* [Feature] Add some sanity checks for actions and controller
