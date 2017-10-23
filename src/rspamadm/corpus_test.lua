@@ -1,5 +1,3 @@
-local argparse = require "argparse"
-local rescore_utility = require "rescore_utility"
 local ucl = require "ucl"
 local lua_util = require "lua_util"
 
@@ -80,53 +78,49 @@ local function scan_results_to_logs(results, actual_email_type)
    return logs
 end
 
-local parser = argparse() {
-   name = "corpus_test",
-   description = "Produces log files for ham and spam corpus"
-}
-
-parser:option("-a --ham", "Ham directory", nil)
-parser:option("-s --spam", "Spam directory", nil)
-parser:option("-o --output", "Log output file", "results.log")
-parser:option("-n", "Maximum parellel connections", 10)
-
-local args = parser:parse()
-
-local results = {}
-
-local start_time = os.time()
-local no_of_ham = 0
-local no_of_spam = 0
-
-if args.ham then
-   io.write("Scanning ham corpus...\n")
-   local ham_results = scan_email(path, args.n, args.ham)
-   ham_results = scan_results_to_logs(ham_results, HAM)
-
-   no_of_ham = #ham_results
+return function (_, res)
    
-   for _, result in pairs(ham_results) do
-      table.insert(results, result)
+   local ham_directory = res['ham_directory']
+   local spam_directory = res['spam_directory']
+   local n_conn = 10
+   local output = "results.log"
+
+   local results = {}
+
+   local start_time = os.time()
+   local no_of_ham = 0
+   local no_of_spam = 0
+
+   if ham_directory then
+      io.write("Scanning ham corpus...\n")
+      local ham_results = scan_email(path, n_conn, ham_directory)
+      ham_results = scan_results_to_logs(ham_results, HAM)
+
+      no_of_ham = #ham_results
+      
+      for _, result in pairs(ham_results) do
+         table.insert(results, result)
+      end
    end
-end
 
-if args.spam then
-   io.write("Scanning spam corpus...\n")
-   local spam_results = scan_email(path, args.n, args.spam)
-   spam_results = scan_results_to_logs(spam_results, SPAM)
+   if spam_directory then
+      io.write("Scanning spam corpus...\n")
+      local spam_results = scan_email(path, n_conn, spam_directory)
+      spam_results = scan_results_to_logs(spam_results, SPAM)
 
-   no_of_spam = #spam_results
-   
-   for _, result in pairs(spam_results) do
-      table.insert(results, result)
+      no_of_spam = #spam_results
+      
+      for _, result in pairs(spam_results) do
+         table.insert(results, result)
+      end
    end
+
+   io.write(string.format("Writing results to %s\n", out))
+   write_results(results, out)
+
+   io.write("\nStats: \n")
+   io.write(string.format("Elapsed time: %ds\n", os.time() - start_time))
+   io.write(string.format("No of ham: %d\n", no_of_ham))
+   io.write(string.format("No of spam: %d\n", no_of_spam))
+
 end
-
-io.write(string.format("Writing results to %s\n", args.output))
-write_results(results, args.output)
-
-io.write("\nStats: \n")
-io.write(string.format("Elapsed time: %ds\n", os.time() - start_time))
-io.write(string.format("No of ham: %d\n", no_of_ham))
-io.write(string.format("No of spam: %d\n", no_of_spam))
-
