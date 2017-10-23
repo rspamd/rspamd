@@ -202,7 +202,7 @@ local function check_mime_type(task)
             for _,f in ipairs(fl) do
               -- Strip bad characters
               if f['name'] then
-                f['name'] = f['name']:gsub('[^%s%g]', '?')
+                f['name'] = f['name']:gsub('[\128-\255%s%G]', '?')
               end
 
               if f['encrypted'] then
