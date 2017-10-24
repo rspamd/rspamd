@@ -122,12 +122,12 @@ local function check_mime_type(task)
           task:insert_result(settings['symbol_double_extension'], badness_mult, {
             '.' .. ext2 .. '.' .. ext
           })
+          return
         end
-      else
-        if badness_mult then
-          -- Just bad extension
-          task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
-        end
+      end
+      if badness_mult then
+        -- Just bad extension
+        task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
       end
     end
 
