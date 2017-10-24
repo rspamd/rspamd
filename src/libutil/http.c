@@ -471,17 +471,17 @@ static inline void
 rspamd_http_check_special_header (struct rspamd_http_connection *conn,
 		struct rspamd_http_connection_private *priv)
 {
-	if (rspamd_ftok_casecmp (priv->header->name, &date_header) == 0) {
-		priv->msg->date = rspamd_http_parse_date (priv->header->value->begin,
-				priv->header->value->len);
+	if (rspamd_ftok_casecmp (&priv->header->name, &date_header) == 0) {
+		priv->msg->date = rspamd_http_parse_date (priv->header->value.begin,
+				priv->header->value.len);
 	}
-	else if (rspamd_ftok_casecmp (priv->header->name, &key_header) == 0) {
-		rspamd_http_parse_key (priv->header->value, conn, priv);
+	else if (rspamd_ftok_casecmp (&priv->header->name, &key_header) == 0) {
+		rspamd_http_parse_key (&priv->header->value, conn, priv);
 	}
-	else if (rspamd_ftok_casecmp (priv->header->name, &last_modified_header) == 0) {
+	else if (rspamd_ftok_casecmp (&priv->header->name, &last_modified_header) == 0) {
 		priv->msg->last_modified = rspamd_http_parse_date (
-				priv->header->value->begin,
-				priv->header->value->len);
+				priv->header->value.begin,
+				priv->header->value.len);
 	}
 }
 
@@ -527,18 +527,18 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 
 	priv->header->combined = rspamd_fstring_append (priv->header->combined,
 			"\r\n", 2);
-	priv->header->value->len = priv->header->combined->len -
-			priv->header->name->len - 4;
-	priv->header->value->begin = priv->header->combined->str +
-			priv->header->name->len + 2;
-	priv->header->name->begin = priv->header->combined->str;
+	priv->header->value.len = priv->header->combined->len -
+			priv->header->name.len - 4;
+	priv->header->value.begin = priv->header->combined->str +
+			priv->header->name.len + 2;
+	priv->header->name.begin = priv->header->combined->str;
 
-	HASH_FIND (hh, priv->msg->headers, priv->header->name->begin,
-			priv->header->name->len, hdr);
+	HASH_FIND (hh, priv->msg->headers, priv->header->name.begin,
+			priv->header->name.len, hdr);
 
 	if (hdr == NULL) {
-		HASH_ADD_KEYPTR (hh, priv->msg->headers, priv->header->name->begin,
-				priv->header->name->len, priv->header);
+		HASH_ADD_KEYPTR (hh, priv->msg->headers, priv->header->name.begin,
+				priv->header->name.len, priv->header);
 	}
 
 	DL_APPEND (hdr, priv->header);
@@ -550,8 +550,6 @@ static void
 rspamd_http_init_header (struct rspamd_http_connection_private *priv)
 {
 	priv->header = g_slice_alloc0 (sizeof (struct rspamd_http_header));
-	priv->header->name = g_slice_alloc0 (sizeof (*priv->header->name));
-	priv->header->value = g_slice_alloc0 (sizeof (*priv->header->value));
 	priv->header->combined = rspamd_fstring_new ();
 }
 
@@ -601,7 +599,7 @@ rspamd_http_on_header_value (http_parser * parser,
 		priv->flags |= RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 		priv->header->combined = rspamd_fstring_append (priv->header->combined,
 				": ", 2);
-		priv->header->name->len = priv->header->combined->len - 2;
+		priv->header->name.len = priv->header->combined->len - 2;
 	}
 
 	priv->header->combined = rspamd_fstring_append (priv->header->combined,
@@ -862,8 +860,6 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 
 		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
 			rspamd_fstring_free (hcur->combined);
-			g_slice_free1 (sizeof (*hcur->name), hcur->name);
-			g_slice_free1 (sizeof (*hcur->value), hcur->value);
 			g_slice_free1 (sizeof (struct rspamd_http_header), hcur);
 		}
 	}
@@ -1490,21 +1486,20 @@ rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 
 		DL_FOREACH (hdr, hcur) {
 			nhdr = g_slice_alloc (sizeof (struct rspamd_http_header));
-			nhdr->name = g_slice_alloc (sizeof (*hcur->name));
-			nhdr->value = g_slice_alloc (sizeof (*hcur->value));
+
 			nhdr->combined = rspamd_fstring_new_init (hcur->combined->str,
 					hcur->combined->len);
-			nhdr->name->begin = nhdr->combined->str +
-					(hcur->name->begin - hcur->combined->str);
-			nhdr->name->len = hcur->name->len;
-			nhdr->value->begin = nhdr->combined->str +
-					(hcur->value->begin - hcur->combined->str);
-			nhdr->value->len = hcur->value->len;
+			nhdr->name.begin = nhdr->combined->str +
+					(hcur->name.begin - hcur->combined->str);
+			nhdr->name.len = hcur->name.len;
+			nhdr->value.begin = nhdr->combined->str +
+					(hcur->value.begin - hcur->combined->str);
+			nhdr->value.len = hcur->value.len;
 			DL_APPEND (nhdrs, nhdr);
 		}
 
-		HASH_ADD_KEYPTR (hh, new_msg->headers, nhdrs->name->begin,
-				nhdrs->name->len, nhdrs);
+		HASH_ADD_KEYPTR (hh, new_msg->headers, nhdrs->name.begin,
+				nhdrs->name.len, nhdrs);
 	}
 
 	return new_msg;
@@ -2808,8 +2803,6 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 
 		DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
 			rspamd_fstring_free (hcur->combined);
-			g_slice_free1 (sizeof (*hcur->name), hcur->name);
-			g_slice_free1 (sizeof (*hcur->value), hcur->value);
 			g_slice_free1 (sizeof (struct rspamd_http_header), hcur);
 		}
 	}
@@ -2865,19 +2858,17 @@ rspamd_http_message_add_header_len (struct rspamd_http_message *msg,
 		hdr->combined = rspamd_fstring_sized_new (nlen + vlen + 4);
 		rspamd_printf_fstring (&hdr->combined, "%s: %*s\r\n", name, (gint)vlen,
 				value);
-		hdr->value = g_slice_alloc (sizeof (*hdr->value));
-		hdr->name = g_slice_alloc (sizeof (*hdr->name));
-		hdr->name->begin = hdr->combined->str;
-		hdr->name->len = nlen;
-		hdr->value->begin = hdr->combined->str + nlen + 2;
-		hdr->value->len = vlen;
+		hdr->name.begin = hdr->combined->str;
+		hdr->name.len = nlen;
+		hdr->value.begin = hdr->combined->str + nlen + 2;
+		hdr->value.len = vlen;
 
-		HASH_FIND (hh, msg->headers, hdr->name->begin,
-				hdr->name->len, found);
+		HASH_FIND (hh, msg->headers, hdr->name.begin,
+				hdr->name.len, found);
 
 		if (found == NULL) {
-			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name->begin,
-					hdr->name->len, hdr);
+			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name.begin,
+					hdr->name.len, hdr);
 		}
 
 		DL_APPEND (found, hdr);
@@ -2908,19 +2899,17 @@ rspamd_http_message_add_header_fstr (struct rspamd_http_message *msg,
 		vlen = value->len;
 		hdr->combined = rspamd_fstring_sized_new (nlen + vlen + 4);
 		rspamd_printf_fstring (&hdr->combined, "%s: %V\r\n", name, value);
-		hdr->value = g_slice_alloc (sizeof (*hdr->value));
-		hdr->name = g_slice_alloc (sizeof (*hdr->name));
-		hdr->name->begin = hdr->combined->str;
-		hdr->name->len = nlen;
-		hdr->value->begin = hdr->combined->str + nlen + 2;
-		hdr->value->len = vlen;
+		hdr->name.begin = hdr->combined->str;
+		hdr->name.len = nlen;
+		hdr->value.begin = hdr->combined->str + nlen + 2;
+		hdr->value.len = vlen;
 
-		HASH_FIND (hh, msg->headers, hdr->name->begin,
-				hdr->name->len, found);
+		HASH_FIND (hh, msg->headers, hdr->name.begin,
+				hdr->name.len, found);
 
 		if (found == NULL) {
-			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name->begin,
-					hdr->name->len, hdr);
+			HASH_ADD_KEYPTR (hh, msg->headers, hdr->name.begin,
+					hdr->name.len, hdr);
 		}
 
 		DL_APPEND (found, hdr);
@@ -2939,7 +2928,7 @@ rspamd_http_message_find_header (struct rspamd_http_message *msg,
 		HASH_FIND (hh, msg->headers, name, slen, hdr);
 
 		if (hdr) {
-			res = hdr->value;
+			res = &hdr->value;
 		}
 	}
 
@@ -2963,7 +2952,7 @@ rspamd_http_message_find_header_multiple (
 			res = g_ptr_array_sized_new (4);
 
 			LL_FOREACH (hdr, cur) {
-				g_ptr_array_add (res, cur->value);
+				g_ptr_array_add (res, &cur->value);
 			}
 		}
 	}
@@ -2990,8 +2979,6 @@ rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 
 			DL_FOREACH_SAFE (hdr, hcur, hcurtmp) {
 				rspamd_fstring_free (hcur->combined);
-				g_slice_free1 (sizeof (*hcur->value), hcur->value);
-				g_slice_free1 (sizeof (*hcur->name), hcur->name);
 				g_slice_free1 (sizeof (*hcur), hcur);
 			}
 		}

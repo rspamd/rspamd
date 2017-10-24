@@ -220,8 +220,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 	HASH_ITER (hh, msg->headers, header, htmp) {
 		DL_FOREACH (header, h) {
-			hn = rspamd_fstring_new_init (h->name->begin, h->name->len);
-			hv = rspamd_fstring_new_init (h->value->begin, h->value->len);
+			hn = rspamd_fstring_new_init (h->name.begin, h->name.len);
+			hv = rspamd_fstring_new_init (h->value.begin, h->value.len);
 			hn_tok = rspamd_ftok_map (hn);
 			hv_tok = rspamd_ftok_map (hv);
 

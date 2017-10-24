@@ -26,9 +26,9 @@
  * HTTP header structure
  */
 struct rspamd_http_header {
-	rspamd_ftok_t *name;
-	rspamd_ftok_t *value;
 	rspamd_fstring_t *combined;
+	rspamd_ftok_t name;
+	rspamd_ftok_t value;
 	UT_hash_handle hh;
 	struct rspamd_http_header *prev, *next;
 };

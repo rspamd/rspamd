@@ -208,9 +208,9 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		/*
 		 * Lowercase header name, as Lua cannot search in caseless matter
 		 */
-		rspamd_str_lc (h->combined->str, h->name->len);
-		lua_pushlstring (cbd->L, h->name->begin, h->name->len);
-		lua_pushlstring (cbd->L, h->value->begin, h->value->len);
+		rspamd_str_lc (h->combined->str, h->name.len);
+		lua_pushlstring (cbd->L, h->name.begin, h->name.len);
+		lua_pushlstring (cbd->L, h->value.begin, h->value.len);
 		lua_settable (cbd->L, -3);
 	}
 
