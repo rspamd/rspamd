@@ -52,6 +52,123 @@ local function generic_reputation_calc(rule, token, mult)
       (probable_samples / total_samples) * 0.5
   return score
 end
+
+-- DKIM Selector functions
+local gr
+local function gen_dkim_queries(task, rule)
+  local dkim_trace = task:get_symbol('DKIM_TRACE')
+  local lpeg = require 'lpeg'
+  local ret = {}
+
+  if not gr then
+    local semicolon = lpeg.P(':')
+    local domain = lpeg.C((1 - semicolon)^0)
+    local res = lpeg.S'+-?~'
+    gr = domain * semicolon * lpeg.C(res)
+  end
+  if dkim_trace and dkim_trace.options then
+    for _,opt in ipairs(dkim_trace.options) do
+      local dom,res = lpeg.match(gr, opt)
+
+      if dom and res then
+        ret[dom] = res
+      end
+    end
+  end
+
+  return ret
+end
+
+local function dkim_reputation_filter(task, rule)
+  local requests = gen_dkim_queries(task, rule)
+  local results = {}
+  local nchecked = 0
+
+  local function tokens_cb(err, token, values)
+    nchecked = nchecked + 1
+
+    if values then
+      results[token] = values
+    end
+
+    if nchecked == #requests then
+      -- Check the url with maximum hits
+      local mhits = 0
+      for k,_ in pairs(results) do
+        if requests[k][2] > mhits then
+          mhits = requests[k][2]
+        end
+      end
+
+      if mhits > 0 then
+        local score = 0
+        for k,v in pairs(results) do
+          score = score + generic_reputation_calc(v, rule, requests[k][2] / mhits)
+        end
+
+        if math.abs(score) > 1e-3 then
+          -- TODO: add description
+          task:insert_result(rule.symbol, score)
+        end
+      end
+    end
+  end
+
+  for dom,res in pairs(requests) do
+    rule.backend.get_token(task, rule, dom, tokens_cb)
+  end
+end
+
+local function dkim_reputation_idempotent(task, rule)
+  local action = task:get_metric_action()
+  local token = {
+  }
+  local cfg = rule.selector.config
+  local need_set = false
+
+  -- TODO: take metric score into consideration
+  local k = cfg.keys_map[action]
+
+  if k then
+    token[k] = 1.0
+    need_set = true
+  end
+
+  if need_set then
+
+    local requests = gen_dkim_queries(task, rule)
+
+    for dom,res in ipairs(requests) do
+      rule.backend.set_token(task, rule, dom, token)
+    end
+  end
+end
+
+local dkim_selector = {
+  config = {
+    -- keys map between actions and hash elements in bucket,
+    -- h is for ham,
+    -- s is for spam,
+    -- p is for probable spam
+    keys_map = {
+      ['reject'] = 's',
+      ['add header'] = 'p',
+      ['rewrite subject'] = 'p',
+      ['no action'] = 'h'
+    },
+    symbol = 'DKIM_SCORE', -- symbol to be inserted
+    lower_bound = 10, -- minimum number of messages to be scored
+    min_score = nil,
+    max_score = nil,
+    max_urls = 10,
+    outbound = true,
+    inbound = true,
+  },
+  dependencies = {"DKIM_TRACE"},
+  filter = dkim_reputation_filter, -- used to get scores
+  idempotent = dkim_reputation_idempotent -- used to set scores
+}
+
 -- URL Selector functions
 
 local function gen_url_queries(task, rule)
