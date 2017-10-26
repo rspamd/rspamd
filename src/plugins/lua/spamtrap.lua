@@ -29,13 +29,23 @@ local settings = {
   learn_spam = false,
   fuzzy_flag = 1,
   fuzzy_weight = 10.0,
-  key_prefix = 'sptr_'
+  key_prefix = 'sptr_',
+  check_authed = true,
+  check_local = true
 }
 
 local function spamtrap_cb(task)
   local rcpts = task:get_recipients('smtp')
+  local authed_user = task:get_user()
+  local ip_addr = task:get_ip()
   local called_for_domain = false
   local target
+
+  if ((not settings['check_authed'] and authed_user) or
+      (not settings['check_local'] and ip_addr and ip_addr:is_local())) then
+    rspamd_logger.infox(task, "skip spamtrap checks for local networks or authenticated user");
+    return
+  end
 
   local function do_action(rcpt)
     if settings['learn_fuzzy'] then
