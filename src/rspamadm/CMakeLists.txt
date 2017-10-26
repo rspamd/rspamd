@@ -3,6 +3,7 @@ SET(RSPAMADMSRC rspamadm.c
         pw.c
         keypair.c
         configtest.c
+        corpus_test.c
         fuzzy_convert.c
         fuzzy_merge.c
         grep.c
