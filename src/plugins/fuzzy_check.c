@@ -1310,7 +1310,8 @@ fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
  * Create fuzzy command from a text part
  */
 static struct fuzzy_cmd_io *
-fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
+fuzzy_cmd_from_text_part (struct rspamd_task *task,
+		struct fuzzy_rule *rule,
 		int c,
 		gint flag,
 		guint32 weight,
@@ -1356,12 +1357,16 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		if (short_text) {
 			enccmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
 			cmd = &enccmd->cmd;
-			rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
-			words = fuzzy_preprocess_words (part, pool);
+			rspamd_cryptobox_hash_init (&st, rule->hash_key->str,
+					rule->hash_key->len);
 
-			for (i = 0; i < words->len; i ++) {
-				word = &g_array_index (words, rspamd_stat_token_t, i);
-				rspamd_cryptobox_hash_update (&st, word->begin, word->len);
+			rspamd_cryptobox_hash_update (&st, part->stripped_content->data,
+					part->stripped_content->len);
+
+			if (task->subject) {
+				/* We also include subject */
+				rspamd_cryptobox_hash_update (&st, task->subject,
+						strlen (task->subject));
 			}
 
 			rspamd_cryptobox_hash_final (&st, cmd->digest);
@@ -2498,7 +2503,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				}
 			}
 
-			io = fuzzy_cmd_from_text_part (rule,
+			io = fuzzy_cmd_from_text_part (task, rule,
 					c,
 					flag,
 					value,
