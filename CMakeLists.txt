@@ -1120,6 +1120,23 @@ ELSE()
 	MESSAGE(STATUS "atomic builtins are supported")
 ENDIF()
 
+CHECK_C_SOURCE_RUNS("
+#include <x86intrin.h>
+int main(int argc, char **argv) {
+        unsigned l;
+        if (__builtin_ia32_rdtscp(&l)) {
+                return 0;
+        }
+        return -1;
+}
+" HAVE_RDTSCP)
+
+IF(NOT HAVE_RDTSCP)
+	MESSAGE(STATUS "rdtscp intrinsic is -NOT- supported")
+ELSE()
+	MESSAGE(STATUS "rdtscp intrinsic is supported")
+ENDIF()
+
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	# In linux, we need to mount /run/shm to test which could be unavailable
 	# on a build system. On the other hand, we know that linux has stupid

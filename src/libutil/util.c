@@ -70,6 +70,9 @@
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
+#ifdef HAVE_RDTSCP
+#include <x86intrin.h>
+#endif
 #include <math.h> /* for pow */
 
 #include "cryptobox.h"
@@ -1761,24 +1764,36 @@ restart:
 }
 
 gdouble
-rspamd_get_ticks (void)
+rspamd_get_ticks (gboolean rdtsc_ok)
 {
 	gdouble res;
 
+#ifdef HAVE_RDTSCP
+	guint tmp;
+	guint64 r64;
+
+	if (rdtsc_ok) {
+		r64 = __builtin_ia32_rdtscp (&tmp);
+		/* Preserve lower 52 bits */
+		res = r64 & ((1ULL << 53) - 1);
+		return res;
+	}
+
+#endif
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 	gint clk_id = CLOCK_MONOTONIC;
 
-#ifdef CLOCK_MONOTONIC_FAST
+# ifdef CLOCK_MONOTONIC_FAST
 	clk_id = CLOCK_MONOTONIC_FAST;
-#endif
-#ifdef CLOCK_MONOTONIC_COARSE
+# endif
+# ifdef CLOCK_MONOTONIC_COARSE
 	clk_id = CLOCK_MONOTONIC_COARSE;
-#endif
+# endif
 	clock_gettime (clk_id, &ts);
 
 	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
-#elif defined(__APPLE__)
+# elif defined(__APPLE__)
 	res = mach_absolute_time () / 1000000000.;
 #else
 	struct timeval tv;

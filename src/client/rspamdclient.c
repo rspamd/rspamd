@@ -114,7 +114,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 
 	if (!c->req_sent) {
 		c->req_sent = TRUE;
-		c->send_time = rspamd_get_ticks ();
+		c->send_time = rspamd_get_ticks (FALSE);
 		rspamd_http_connection_reset (c->http_conn);
 		rspamd_http_connection_read_message (c->http_conn,
 			c->req,
@@ -435,7 +435,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	req->msg->url = rspamd_fstring_append (req->msg->url, command, strlen (command));
 
 	conn->req = req;
-	conn->start_time = rspamd_get_ticks ();
+	conn->start_time = rspamd_get_ticks (FALSE);
 
 	if (compressed) {
 		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,

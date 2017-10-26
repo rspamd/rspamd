@@ -1439,8 +1439,13 @@ static gint
 lua_util_get_ticks (lua_State *L)
 {
 	gdouble ticks;
+	gboolean rdtsc = FALSE;
 
-	ticks = rspamd_get_ticks ();
+	if (lua_isboolean (L, 1)) {
+		rdtsc = lua_toboolean (L, 1);
+	}
+
+	ticks = rspamd_get_ticks (rdtsc);
 	lua_pushnumber (L, ticks);
 
 	return 1;

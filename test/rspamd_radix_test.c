@@ -242,17 +242,17 @@ rspamd_radix_test_func (void)
 	btrie = btrie_init (pool);
 	msg_info ("btrie performance (%z elts)", nelts);
 
-	ts1 = rspamd_get_ticks ();
+	ts1 = rspamd_get_ticks (TRUE);
 	for (i = 0; i < nelts; i ++) {
 		btrie_add_prefix (btrie, addrs[i].addr6,
 				addrs[i].mask6, GSIZE_TO_POINTER (i + 1));
 	}
-	ts2 = rspamd_get_ticks ();
+	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Added %hz elements in %.6f ms", nelts, diff);
+	msg_info ("Added %hz elements in %.0f ticks", nelts, diff);
 
-	ts1 = rspamd_get_ticks ();
+	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
 		for (i = 0; i < nelts / lookup_divisor; i ++) {
 			check = ottery_rand_range (nelts - 1);
@@ -272,26 +272,26 @@ rspamd_radix_test_func (void)
 		}
 	}
 	g_assert (all_good);
-	ts2 = rspamd_get_ticks ();
+	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Checked %hz elements in %.6f ms",
+	msg_info ("Checked %hz elements in %.0f ticks",
 			nelts * lookup_cycles / lookup_divisor, diff);
 
 	msg_info ("new radix performance (%z elts)", nelts);
-	ts1 = rspamd_get_ticks ();
+	ts1 = rspamd_get_ticks (TRUE);
 
 	for (i = 0; i < nelts; i ++) {
 		radix_insert_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6),
 				128 - addrs[i].mask6, i + 1);
 	}
 
-	ts2 = rspamd_get_ticks ();
+	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Added %hz elements in %.6f ms", nelts, diff);
+	msg_info ("Added %hz elements in %.0f ticks", nelts, diff);
 
-	ts1 = rspamd_get_ticks ();
+	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
 		for (i = 0; i < nelts / lookup_divisor; i ++) {
 			check = ottery_rand_range (nelts - 1);
@@ -324,10 +324,10 @@ rspamd_radix_test_func (void)
 #endif
 
 	g_assert (all_good);
-	ts2 = rspamd_get_ticks ();
+	ts2 = rspamd_get_ticks (TRUE);
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Checked %hz elements in %.6f ms",
+	msg_info ("Checked %hz elements in %.0f ticks",
 			nelts * lookup_cycles / lookup_divisor, diff);
 	radix_destroy_compressed (comp_tree);
 

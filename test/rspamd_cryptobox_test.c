@@ -174,89 +174,89 @@ rspamd_cryptobox_test_func (void)
 	seg = g_slice_alloc0 (sizeof (*seg) * max_seg * 10);
 
 	/* Test baseline */
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encrypt_nm_inplace (begin, end - begin, nonce, key, mac,
 			mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("baseline encryption: %.6f", t2 - t1);
+	msg_info ("baseline encryption: %.0f", t2 - t1);
 
 	mode = RSPAMD_CRYPTOBOX_MODE_NIST;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encrypt_nm_inplace (begin,
 			end - begin,
 			nonce,
 			key,
 			mac,
 			mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("openssl baseline encryption: %.6f", t2 - t1);
+	msg_info ("openssl baseline encryption: %.0f", t2 - t1);
 	mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
 start:
 	/* A single chunk as vector */
 	seg[0].data = begin;
 	seg[0].len = end - begin;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, 1, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("bulk encryption: %.6f", t2 - t1);
+	msg_info ("bulk encryption: %.0f", t2 - t1);
 
 	/* Two chunks as vector */
 	seg[0].data = begin;
 	seg[0].len = (end - begin) / 2;
 	seg[1].data = begin + seg[0].len;
 	seg[1].len = (end - begin) - seg[0].len;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, 2, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("2 equal chunks encryption: %.6f", t2 - t1);
+	msg_info ("2 equal chunks encryption: %.0f", t2 - t1);
 
 	seg[0].data = begin;
 	seg[0].len = 1;
 	seg[1].data = begin + seg[0].len;
 	seg[1].len = (end - begin) - seg[0].len;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, 2, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("small and large chunks encryption: %.6f", t2 - t1);
+	msg_info ("small and large chunks encryption: %.0f", t2 - t1);
 
 	seg[0].data = begin;
 	seg[0].len = (end - begin) - 3;
 	seg[1].data = begin + seg[0].len;
 	seg[1].len = (end - begin) - seg[0].len;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, 2, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("large and small chunks encryption: %.6f", t2 - t1);
+	msg_info ("large and small chunks encryption: %.0f", t2 - t1);
 
 	/* Random two chunks as vector */
 	seg[0].data = begin;
 	seg[0].len = ottery_rand_range (end - begin - 1) + 1;
 	seg[1].data = begin + seg[0].len;
 	seg[1].len = (end - begin) - seg[0].len;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, 2, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("random 2 chunks encryption: %.6f", t2 - t1);
+	msg_info ("random 2 chunks encryption: %.0f", t2 - t1);
 
 	/* 3 specific chunks */
 	seg[0].data = begin;
@@ -265,47 +265,47 @@ start:
 	seg[1].len = 2049;
 	seg[2].data = begin + seg[0].len + seg[1].len;
 	seg[2].len = (end - begin) - seg[0].len - seg[1].len;
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, 3, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("small, medium and large chunks encryption: %.6f", t2 - t1);
+	msg_info ("small, medium and large chunks encryption: %.0f", t2 - t1);
 
 	cnt = create_random_split (seg, max_seg, begin, end);
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("random split of %d chunks encryption: %.6f", cnt, t2 - t1);
+	msg_info ("random split of %d chunks encryption: %.0f", cnt, t2 - t1);
 
 	cnt = create_realistic_split (seg, max_seg, begin, end);
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("realistic split of %d chunks encryption: %.6f", cnt, t2 - t1);
+	msg_info ("realistic split of %d chunks encryption: %.0f", cnt, t2 - t1);
 
 	cnt = create_constrainted_split (seg, max_seg + 1, 32, begin, end);
-	t1 = rspamd_get_ticks ();
+	t1 = rspamd_get_ticks (TRUE);
 	rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
-	t2 = rspamd_get_ticks ();
+	t2 = rspamd_get_ticks (TRUE);
 
 	check_result (key, nonce, mac, begin, end);
 
-	msg_info ("constrainted split of %d chunks encryption: %.6f", cnt, t2 - t1);
+	msg_info ("constrainted split of %d chunks encryption: %.0f", cnt, t2 - t1);
 
 	for (i = 0; i < random_fuzz_cnt; i ++) {
 		ms = ottery_rand_range (i % max_seg * 2) + 1;
 		cnt = create_random_split (seg, ms, begin, end);
-		t1 = rspamd_get_ticks ();
+		t1 = rspamd_get_ticks (TRUE);
 		rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
-		t2 = rspamd_get_ticks ();
+		t2 = rspamd_get_ticks (TRUE);
 
 		check_result (key, nonce, mac, begin, end);
 
@@ -316,9 +316,9 @@ start:
 	for (i = 0; i < random_fuzz_cnt; i ++) {
 		ms = ottery_rand_range (i % max_seg * 2) + 1;
 		cnt = create_realistic_split (seg, ms, begin, end);
-		t1 = rspamd_get_ticks ();
+		t1 = rspamd_get_ticks (TRUE);
 		rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
-		t2 = rspamd_get_ticks ();
+		t2 = rspamd_get_ticks (TRUE);
 
 		check_result (key, nonce, mac, begin, end);
 
@@ -329,9 +329,9 @@ start:
 	for (i = 0; i < random_fuzz_cnt; i ++) {
 		ms = ottery_rand_range (i % max_seg * 10) + 1;
 		cnt = create_constrainted_split (seg, ms, i, begin, end);
-		t1 = rspamd_get_ticks ();
+		t1 = rspamd_get_ticks (TRUE);
 		rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac, mode);
-		t2 = rspamd_get_ticks ();
+		t2 = rspamd_get_ticks (TRUE);
 
 		check_result (key, nonce, mac, begin, end);
 

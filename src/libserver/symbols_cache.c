@@ -1270,7 +1270,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	lua_State *L;
 	gboolean check = TRUE;
-	const gdouble slow_diff_limit = 1e5;
+	const gdouble slow_diff_limit = 1e7;
 
 	if (item->func) {
 
@@ -1309,10 +1309,10 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 					rspamd_symbols_cache_watcher_cb,
 					item);
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
-			t1 = rspamd_get_ticks ();
+			t1 = rspamd_get_ticks (TRUE);
 			item->func (task, item->user_data);
-			t2 = rspamd_get_ticks ();
-			diff = (t2 - t1) * 1e6;
+			t2 = rspamd_get_ticks (TRUE);
+			diff = (t2 - t1);
 
 			if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
 				rspamd_task_profile_set (task, item->symbol, diff);
@@ -1323,8 +1323,8 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			}
 
 			if (diff > slow_diff_limit) {
-				msg_info_task ("slow rule: %s: %d ms", item->symbol,
-						(gint)(diff / 1000.));
+				msg_info_task ("slow rule: %s: %.0f ticks", item->symbol,
+						diff);
 			}
 
 			if (rspamd_worker_is_normal (task->worker)) {
@@ -2038,7 +2038,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	cache = cbdata->cache;
 	/* Plan new event */
 	tm = rspamd_time_jitter (cache->reload_time, 0);
-	cur_ticks = rspamd_get_ticks ();
+	cur_ticks = rspamd_get_ticks (TRUE);
 	msg_debug_cache ("resort symbols cache, next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
 	evtimer_set (&cbdata->resort_ev, rspamd_symbols_cache_resort_cb, cbdata);
@@ -2138,7 +2138,7 @@ rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
 	struct rspamd_cache_refresh_cbdata *cbdata;
 
 	cbdata = rspamd_mempool_alloc0 (cache->static_pool, sizeof (*cbdata));
-	cbdata->last_resort = rspamd_get_ticks ();
+	cbdata->last_resort = rspamd_get_ticks (TRUE);
 	cbdata->ev_base = ev_base;
 	cbdata->w = w;
 	cbdata->cache = cache;

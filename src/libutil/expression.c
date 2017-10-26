@@ -1007,7 +1007,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			 */
 			if ((expr->evals & 0x1F) == (GPOINTER_TO_UINT (node) >> 4 & 0x1F)) {
 				calc_ticks = TRUE;
-				t1 = rspamd_get_ticks ();
+				t1 = rspamd_get_ticks (TRUE);
 			}
 
 			elt->value = expr->subr->process (data, elt->p.atom);
@@ -1021,7 +1021,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			}
 
 			if (calc_ticks) {
-				t2 = rspamd_get_ticks ();
+				t2 = rspamd_get_ticks (TRUE);
 				elt->p.atom->avg_ticks += ((t2 - t1) - elt->p.atom->avg_ticks) /
 						(expr->evals);
 			}

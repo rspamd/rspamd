@@ -1481,7 +1481,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamc_callback_data *cbdata = (struct rspamc_callback_data *)ud;
 	struct rspamc_command *cmd;
 	FILE *out = stdout;
-	gdouble finish = rspamd_get_ticks (), diff;
+	gdouble finish = rspamd_get_ticks (FALSE), diff;
 	const gchar *body;
 	gsize body_len;
 

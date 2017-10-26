@@ -295,7 +295,7 @@ gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
  * Portably return the current clock ticks as seconds
  * @return
  */
-gdouble rspamd_get_ticks (void);
+gdouble rspamd_get_ticks (gboolean rdtsc_ok);
 
 /**
  * Portably return the current virtual clock ticks as seconds

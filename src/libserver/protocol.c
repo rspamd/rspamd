@@ -1126,7 +1126,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				cached, rspamd_protocol_cached_dtor);
 
 		/* We also set scan time here */
-		task->time_real_finish = rspamd_get_ticks ();
+		task->time_real_finish = rspamd_get_ticks (FALSE);
 		task->time_virtual_finish = rspamd_get_virtual_ticks ();
 	}
 

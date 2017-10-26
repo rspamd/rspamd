@@ -508,7 +508,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		pr = rspamd_random_double_fast ();
 
 		if (pr > 0.9) {
-			t1 = rspamd_get_ticks ();
+			t1 = rspamd_get_ticks (TRUE);
 		}
 
 		while (rspamd_regexp_search (re,
@@ -536,7 +536,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		}
 
 		if (pr > 0.9) {
-			t2 = rspamd_get_ticks ();
+			t2 = rspamd_get_ticks (TRUE);
 
 			if (t2 - t1 > slow_time) {
 				msg_info_task ("regexp '%16s' took %.2f seconds to execute",

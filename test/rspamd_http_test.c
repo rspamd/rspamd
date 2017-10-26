@@ -134,7 +134,7 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 {
 	struct client_cbdata *cb = conn->ud;
 
-	*(cb->lat) = rspamd_get_ticks () * 1000. - cb->ts;
+	*(cb->lat) = rspamd_get_ticks (FALSE) * 1000. - cb->ts;
 	close (conn->fd);
 	rspamd_http_connection_unref (conn);
 	g_free (cb);
@@ -175,7 +175,7 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	}
 
 	cb = g_malloc (sizeof (*cb));
-	cb->ts = rspamd_get_ticks () * 1000.;
+	cb->ts = rspamd_get_ticks (FALSE) * 1000.;
 	cb->lat = latency;
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, cb,
 			fd, NULL, ev_base);
@@ -319,9 +319,9 @@ rspamd_http_test_func (void)
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
 					NULL, NULL, c, ev_base, &latency[i * pconns + j]);
 		}
-		ts1 = rspamd_get_ticks ();
+		ts1 = rspamd_get_ticks (FALSE);
 		event_base_loop (ev_base, 0);
-		ts2 = rspamd_get_ticks ();
+		ts2 = rspamd_get_ticks (FALSE);
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
@@ -355,9 +355,9 @@ rspamd_http_test_func (void)
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
 					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
-		ts1 = rspamd_get_ticks ();
+		ts1 = rspamd_get_ticks (FALSE);
 		event_base_loop (ev_base, 0);
-		ts2 = rspamd_get_ticks ();
+		ts2 = rspamd_get_ticks (FALSE);
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
@@ -385,9 +385,9 @@ rspamd_http_test_func (void)
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
 					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
-		ts1 = rspamd_get_ticks ();
+		ts1 = rspamd_get_ticks (FALSE);
 		event_base_loop (ev_base, 0);
-		ts2 = rspamd_get_ticks ();
+		ts2 = rspamd_get_ticks (FALSE);
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
@@ -434,9 +434,9 @@ rspamd_http_test_func (void)
 					ev_base,
 					&latency[i * pconns + j]);
 		}
-		ts1 = rspamd_get_ticks ();
+		ts1 = rspamd_get_ticks (FALSE);
 		event_base_loop (ev_base, 0);
-		ts2 = rspamd_get_ticks ();
+		ts2 = rspamd_get_ticks (FALSE);
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
@@ -472,9 +472,9 @@ rspamd_http_test_func (void)
 					ev_base,
 					&latency[i * pconns + j]);
 		}
-		ts1 = rspamd_get_ticks ();
+		ts1 = rspamd_get_ticks (FALSE);
 		event_base_loop (ev_base, 0);
-		ts2 = rspamd_get_ticks ();
+		ts2 = rspamd_get_ticks (FALSE);
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}

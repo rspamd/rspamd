@@ -80,7 +80,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	}
 
 	gettimeofday (&new_task->tv, NULL);
-	new_task->time_real = rspamd_get_ticks ();
+	new_task->time_real = rspamd_get_ticks (FALSE);
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
 
 	if (pool == NULL) {
