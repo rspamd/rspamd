@@ -9,7 +9,7 @@ such as URL black lists. Each message is analysed by Rspamd and given a `spam sc
 According to this spam score and the user's settings, Rspamd recommends an action for
 the MTA to apply to the message, for example, to pass, reject or add a header.
 Rspamd is designed to process hundreds of messages per second simultaneously, and sports a number of
-usefulrfeatures.
+useful features.
 
 You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from [FOSDEM-2016](http://fosdem.org) where I describe the main features of Rspamd and explain why Rspamd is so fast.
 
@@ -34,7 +34,7 @@ this technique is widely spread and allows to validate that a message is sent fr
 
 
 * **DNS black lists** allows to estimate reputation of sender's IP address or network. Rspamd uses a number of DNS lists including such lists as
-`SORBS` or `Spamhaus`. However, Rspamd doesn't trust any specific DNS list, and uses a conjunction of estimations instead that allows to
+`SORBS` or `Spamhaus`. However, Rspamd doesn't trust any specific DNS list and instead uses a conjunction of estimations that allows to
 avoid mistakes and false positives. Rspamd also uses positive and grey DNS lists for checking for trusted senders.
 
 
@@ -48,7 +48,7 @@ traditionally used monograms (or words literally speaking), that are described i
 
 
 * **Fuzzy hashes** - for checking of malicious mail patterns, Rspamd uses the so called "fuzzy hashes". Unlike normal hashes, these structures are targeted to hide
-the small differences between text patterns, allowing it to find eimilar messages quickly. Rspamd has an internal storage of such hashes and can block mass spam sendings
+the small differences between text patterns, allowing it to find similar messages quickly. Rspamd has an internal storage of such hashes and can block mass spam sendings
 quickly based on feedback from the user that specifies messages’ reputation. Moreover, this allows to feed Rspamd with data from ["honeypots"](http://en.wikipedia.org/wiki/Honeypot_(computing)#Spam_versions)
 without polluting the statistical module.
 
