@@ -527,6 +527,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			}
 		}
 
+		rt->results[id] += r;
 		rt->stat.regexp_checked++;
 		rt->stat.bytes_scanned_pcre += len;
 		rt->stat.bytes_scanned += len;
@@ -593,13 +594,12 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 			processed = 0;
 
 			for (i = 0; i < cbdata->count; i ++) {
-				ret = rspamd_re_cache_process_pcre (rt,
+				rspamd_re_cache_process_pcre (rt,
 						pcre_elt->re,
 						cbdata->task,
 						cbdata->ins[i],
 						cbdata->lens[i],
 						FALSE);
-				rt->results[id] = ret;
 				setbit (rt->checked, id);
 
 				processed += cbdata->lens[i];
@@ -665,7 +665,6 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 					in[i],
 					lens[i],
 					is_raw);
-			rt->results[re_id] += ret;
 		}
 
 		setbit (rt->checked, re_id);
