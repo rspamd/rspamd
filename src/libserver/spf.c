@@ -1474,9 +1474,9 @@ static const gchar *
 expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 		const gchar *begin)
 {
-	const gchar *p, *macro_value;
-	gchar *c, *new, *tmp, delim;
-	gsize len = 0, slen = 0, macro_len;
+	const gchar *p, *macro_value = NULL;
+	gchar *c, *new, *tmp, delim = '.';
+	gsize len = 0, slen = 0, macro_len = 0;
 	gint state = 0, ndelim = 0;
 	gchar ip_buf[INET6_ADDRSTRLEN + 1];
 	gboolean need_expand = FALSE, reversed;

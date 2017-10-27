@@ -1608,8 +1608,17 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			break;
 		case '{':
 			obj = ucl_parser_get_container (parser);
+			if (obj == NULL) {
+				return false;
+			}
 			/* We have a new object */
-			obj = ucl_parser_add_container (obj, parser, false, parser->stack->level);
+			if (parser->stack) {
+				obj = ucl_parser_add_container (obj, parser, false,
+						parser->stack->level);
+			}
+			else {
+				return false;
+			}
 			if (obj == NULL) {
 				return false;
 			}
@@ -1620,8 +1629,18 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			break;
 		case '[':
 			obj = ucl_parser_get_container (parser);
+			if (obj == NULL) {
+				return false;
+			}
 			/* We have a new array */
-			obj = ucl_parser_add_container (obj, parser, true, parser->stack->level);
+			if (parser->stack) {
+				obj = ucl_parser_add_container (obj, parser, true,
+						parser->stack->level);
+			}
+			else {
+				return false;
+			}
+
 			if (obj == NULL) {
 				return false;
 			}

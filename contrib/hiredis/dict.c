@@ -172,9 +172,11 @@ static int dictReplace(dict *ht, void *key, void *val) {
      * as the previous one. In this context, think to reference counting,
      * you want to increment (set), and then decrement (free), and not the
      * reverse. */
-    auxentry = *entry;
-    dictSetHashVal(ht, entry, val);
-    dictFreeEntryVal(ht, &auxentry);
+    if (entry) {
+        auxentry = *entry;
+        dictSetHashVal(ht, entry, val);
+        dictFreeEntryVal(ht, &auxentry);
+    }
     return 0;
 }
 

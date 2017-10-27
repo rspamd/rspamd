@@ -364,7 +364,7 @@ rspamd_tls_set_error (gint retcode, const gchar *stage, GError **err)
 {
 	GString *reason;
 	gchar buf[120];
-	gint err_code, last_err;
+	gint err_code = 0, last_err = 0;
 
 	reason = g_string_sized_new (sizeof (buf));
 

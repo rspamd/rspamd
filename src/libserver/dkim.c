@@ -2820,6 +2820,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	switch (ctx->common.type) {
 	case RSPAMD_DKIM_NORMAL:
+	default:
 		hname = RSPAMD_DKIM_SIGNHEADER;
 		break;
 	case RSPAMD_DKIM_ARC_SIG:

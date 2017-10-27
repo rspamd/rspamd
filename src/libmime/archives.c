@@ -700,7 +700,7 @@ rspamd_7zip_read_bits (struct rspamd_task *task,
 		struct rspamd_archive *arch, guint nbits,
 		guint *pbits_set)
 {
-	unsigned mask, avail, i;
+	unsigned mask = 0, avail = 0, i;
 	gboolean bit_set = 0;
 
 	for (i = 0; i < nbits; i++) {
@@ -710,7 +710,7 @@ rspamd_7zip_read_bits (struct rspamd_task *task,
 			mask = 0x80;
 		}
 
-		bit_set = (avail & mask)?1:0;
+		bit_set = (avail & mask) ? 1 : 0;
 
 		if (bit_set && pbits_set) {
 			(*pbits_set) ++;

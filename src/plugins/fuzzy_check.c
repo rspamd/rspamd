@@ -2830,7 +2830,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct fuzzy_rule *rule;
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_task *task, **ptask;
-	gboolean processed = FALSE, res = TRUE, skip;
+	gboolean processed = FALSE, res = TRUE, skip = FALSE;
 	guint i;
 	GError **err;
 	GPtrArray *commands;
@@ -2935,7 +2935,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		if (is_hash) {
 			GPtrArray *args;
 			const rspamd_ftok_t *arg;
-			guint i;
+			guint j;
 
 			args = rspamd_http_message_find_header_multiple (msg, "Hash");
 
@@ -2943,8 +2943,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				struct fuzzy_cmd_io *io;
 				commands = g_ptr_array_sized_new (args->len);
 
-				for (i = 0; i < args->len; i ++) {
-					arg = g_ptr_array_index (args, i);
+				for (j = 0; j < args->len; j ++) {
+					arg = g_ptr_array_index (args, j);
 					io = fuzzy_cmd_hash (rule, cmd, arg, flag, value,
 							task->task_pool);
 
@@ -2996,6 +2996,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 				strerror (errno));
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
 		rspamd_task_free (task);
+
 		return;
 	}
 	else if (!processed) {
@@ -3019,11 +3020,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			}
 		}
 		rspamd_task_free (task);
-
-		return;
 	}
-
-	return;
 }
 
 static int
