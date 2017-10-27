@@ -1787,19 +1787,13 @@ rspamd_get_ticks (gboolean rdtsc_ok)
 	struct timespec ts;
 	gint clk_id = CLOCK_MONOTONIC;
 
-# ifdef CLOCK_MONOTONIC_FAST
-	clk_id = CLOCK_MONOTONIC_FAST;
-# endif
-# ifdef CLOCK_MONOTONIC_COARSE
-	clk_id = CLOCK_MONOTONIC_COARSE;
-# endif
 	clock_gettime (clk_id, &ts);
 
 	if (rdtsc_ok) {
-		res = (double) ts.tv_sec + ts.tv_nsec / 1000000000.;
+		res = (double) ts.tv_sec * 1e9 + ts.tv_nsec;
 	}
 	else {
-		res = (double) ts.tv_sec * 1e9 + ts.tv_nsec;
+		res = (double) ts.tv_sec + ts.tv_nsec / 1000000000.;
 	}
 # elif defined(__APPLE__)
 	if (rdtsc_ok) {
