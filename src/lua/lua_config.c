@@ -2782,7 +2782,7 @@ lua_config_add_doc (lua_State *L)
 
 	if (cfg && option && doc_string) {
 		if (lua_type (L, 5) == LUA_TTABLE) {
-			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+			if (!rspamd_lua_parse_table_arguments (L, 5, &err,
 					"type=S;default=S;required=B",
 					&type_str, &default_value, &required)) {
 				msg_err_config ("cannot get parameters list: %e", err);
