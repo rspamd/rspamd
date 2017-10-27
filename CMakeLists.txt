@@ -1123,18 +1123,18 @@ ENDIF()
 CHECK_C_SOURCE_RUNS("
 #include <x86intrin.h>
 int main(int argc, char **argv) {
-        unsigned l;
-        if (__builtin_ia32_rdtscp(&l)) {
+        __builtin_ia32_lfence ();
+        if (__builtin_ia32_rdtsc()) {
                 return 0;
         }
         return -1;
 }
-" HAVE_RDTSCP)
+" HAVE_RDTSC)
 
-IF(NOT HAVE_RDTSCP)
-	MESSAGE(STATUS "rdtscp intrinsic is -NOT- supported")
+IF(NOT HAVE_RDTSC)
+	MESSAGE(STATUS "rdtsc intrinsic is -NOT- supported")
 ELSE()
-	MESSAGE(STATUS "rdtscp intrinsic is supported")
+	MESSAGE(STATUS "rdtsc intrinsic is supported")
 ENDIF()
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")

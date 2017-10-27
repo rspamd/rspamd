@@ -70,8 +70,10 @@
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
-#ifdef HAVE_RDTSCP
+#ifdef HAVE_RDTSC
+#ifdef __x86_64__
 #include <x86intrin.h>
+#endif
 #endif
 #include <math.h> /* for pow */
 
@@ -1768,17 +1770,18 @@ rspamd_get_ticks (gboolean rdtsc_ok)
 {
 	gdouble res;
 
-#ifdef HAVE_RDTSCP
-	guint tmp;
+#ifdef HAVE_RDTSC
+# ifdef __x86_64__
 	guint64 r64;
 
 	if (rdtsc_ok) {
-		r64 = __builtin_ia32_rdtscp (&tmp);
+		__builtin_ia32_lfence ();
+		r64 = __rdtsc ();
 		/* Preserve lower 52 bits */
 		res = r64 & ((1ULL << 53) - 1);
 		return res;
 	}
-
+# endif
 #endif
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
