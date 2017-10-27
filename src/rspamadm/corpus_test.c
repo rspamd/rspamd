@@ -101,6 +101,8 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 	ucl_object_insert_key (obj, ucl_object_fromstring (spam_directory),
 											"spam_directory", 0, false);
 
+	rspamd_lua_set_path (L, NULL, ucl_vars);
+
 	rspamadm_execute_lua_ucl_subr (L,
 						argc,
 						argv,
