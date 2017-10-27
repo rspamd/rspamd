@@ -201,7 +201,7 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 		g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
 	}
 	else {
-		map = g_slice_alloc (sizeof (struct _pool_chain) + size);
+		map = g_malloc (sizeof (struct _pool_chain) + size);
 		chain = map;
 		chain->begin = ((guint8 *) chain) + sizeof (struct _pool_chain);
 		g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
@@ -340,7 +340,7 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 		env_checked = TRUE;
 	}
 
-	new = g_slice_alloc0 (sizeof (rspamd_mempool_t));
+	new = g_malloc0 (sizeof (rspamd_mempool_t));
 	new->entry = rspamd_mempool_get_entry (loc);
 	new->destructors = g_array_sized_new (FALSE, FALSE,
 			sizeof (struct _pool_destructors), 32);
@@ -683,7 +683,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 					munmap ((void *)cur, len);
 				}
 				else {
-					g_slice_free1 (len, cur);
+					g_free (cur);
 				}
 			}
 
@@ -706,7 +706,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 	g_atomic_int_inc (&mem_pool_stat->pools_freed);
 	POOL_MTX_UNLOCK ();
-	g_slice_free (rspamd_mempool_t, pool);
+	g_free (pool);
 }
 
 void
@@ -726,7 +726,7 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 			g_atomic_int_add (&mem_pool_stat->chunks_allocated, -1);
 			len = cur->len + sizeof (struct _pool_chain);
 
-			g_slice_free1 (len, cur);
+			g_free (cur);
 		}
 
 		g_ptr_array_free (pool->pools[RSPAMD_MEMPOOL_TMP], TRUE);

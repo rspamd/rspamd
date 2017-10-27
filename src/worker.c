@@ -468,7 +468,7 @@ rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
 	rep.type = RSPAMD_CONTROL_LOG_PIPE;
 
 	if (attached_fd != -1) {
-		lp = g_slice_alloc0 (sizeof (*lp));
+		lp = g_malloc0 (sizeof (*lp));
 		lp->fd = attached_fd;
 		lp->type = cmd->cmd.log_pipe.type;
 

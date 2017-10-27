@@ -1018,7 +1018,7 @@ proxy_session_dtor (struct rspamd_proxy_session *session)
 		rspamd_mempool_delete (session->pool);
 	}
 
-	g_slice_free1 (sizeof (*session), session);
+	g_free (session);
 }
 
 static void
@@ -1131,7 +1131,7 @@ proxy_session_refresh (struct rspamd_proxy_session *session)
 {
 	struct rspamd_proxy_session *nsession;
 
-	nsession = g_slice_alloc0 (sizeof (*nsession));
+	nsession = g_malloc0 (sizeof (*nsession));
 	nsession->client_milter_conn = session->client_milter_conn;
 	session->client_milter_conn = NULL;
 	rspamd_milter_update_userdata (nsession->client_milter_conn,
@@ -1987,7 +1987,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	REF_INIT_RETAIN (session, proxy_session_dtor);
 	session->client_sock = nfd;
 	session->client_addr = addr;

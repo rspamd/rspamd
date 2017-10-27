@@ -65,7 +65,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 {
 	struct rspamd_task *new_task;
 
-	new_task = g_slice_alloc0 (sizeof (struct rspamd_task));
+	new_task = g_malloc0 (sizeof (struct rspamd_task));
 	new_task->worker = worker;
 
 	if (cfg) {
@@ -307,7 +307,7 @@ rspamd_task_free (struct rspamd_task *task)
 			rspamd_mempool_delete (task->task_pool);
 		}
 
-		g_slice_free1 (sizeof (struct rspamd_task), task);
+		g_free (task);
 	}
 }
 

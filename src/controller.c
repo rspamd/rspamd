@@ -1365,7 +1365,7 @@ rspamd_controller_handle_legacy_history (
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Set lock on history */
-	copied_rows = g_slice_alloc (sizeof (*copied_rows) * ctx->srv->history->nrows);
+	copied_rows = g_malloc (sizeof (*copied_rows) * ctx->srv->history->nrows);
 	memcpy (copied_rows, ctx->srv->history->rows,
 			sizeof (*copied_rows) * ctx->srv->history->nrows);
 
@@ -1434,6 +1434,7 @@ rspamd_controller_handle_legacy_history (
 
 	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
+	g_free (copied_rows);
 }
 
 static gboolean
@@ -3008,7 +3009,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 		rspamd_mempool_delete (session->pool);
 	}
 
-	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
+	g_free (session);
 }
 
 static void
@@ -3032,7 +3033,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	session = g_slice_alloc0 (sizeof (struct rspamd_controller_session));
+	session = g_malloc0 (sizeof (struct rspamd_controller_session));
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"csession");
 	session->ctx = ctx;
@@ -3507,6 +3508,7 @@ rspamd_plugin_cbdata_dtor (gpointer p)
 
 	g_free (cbd->plugin);
 	ucl_object_unref (cbd->obj); /* This also releases lua references */
+	g_free (cbd);
 }
 
 static void
@@ -3521,7 +3523,7 @@ rspamd_controller_register_plugin_path (lua_State *L,
 	const ucl_object_t *elt;
 	GString *full_path;
 
-	cbd = g_slice_alloc0 (sizeof (*cbd));
+	cbd = g_malloc0 (sizeof (*cbd));
 	cbd->L = L;
 	cbd->ctx = ctx;
 	cbd->handler = ucl_object_toclosure (handler);
@@ -3536,7 +3538,7 @@ rspamd_controller_register_plugin_path (lua_State *L,
 
 	elt = ucl_object_lookup (webui_data, "enable");
 
-	if (elt && !!ucl_object_toboolean (elt)) {
+	if (elt && ucl_object_toboolean (elt)) {
 		cbd->is_enable = TRUE;
 	}
 
@@ -3655,7 +3657,7 @@ start_controller_worker (struct rspamd_worker *worker)
 		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, &rrd_err);
 
 		if (ctx->rrd) {
-			ctx->rrd_event = g_slice_alloc0 (sizeof (*ctx->rrd_event));
+			ctx->rrd_event = g_malloc0 (sizeof (*ctx->rrd_event));
 			evtimer_set (ctx->rrd_event, rspamd_controller_rrd_update, ctx);
 			event_base_set (ctx->ev_base, ctx->rrd_event);
 			event_add (ctx->rrd_event, &rrd_update_time);

@@ -321,7 +321,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 			ls = cur->data;
 
 			if (ls->fd != -1) {
-				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				accept_events = g_malloc0 (sizeof (struct event) * 2);
 				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_handler, worker);
 				event_base_set (ev_base, &accept_events[0]);
@@ -358,7 +358,7 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 		}
 
 		cur = g_list_next (cur);
-		g_slice_free1 (sizeof (struct event) * 2, events);
+		g_free (events);
 	}
 
 	if (worker->accept_events != NULL) {

@@ -296,7 +296,7 @@ fuzzy_mirror_close_connection (struct fuzzy_slave_connection *conn)
 
 		close (conn->sock);
 
-		g_slice_free1 (sizeof (*conn), conn);
+		g_free (conn);
 	}
 }
 
@@ -326,7 +326,7 @@ fuzzy_mirror_updates_version_cb (guint64 rev64, void *ud)
 	ctx = cbdata->ctx;
 	msg = cbdata->msg;
 	m = cbdata->m;
-	g_slice_free1 (sizeof (*cbdata), cbdata);
+	g_free (cbdata);
 	rev32 = GUINT32_TO_LE (rev32);
 	len = sizeof (guint32) * 2; /* revision + last chunk */
 
@@ -386,7 +386,7 @@ fuzzy_mirror_updates_to_http (struct rspamd_fuzzy_mirror *m,
 
 	struct rspamd_fuzzy_updates_cbdata *cbdata;
 
-	cbdata = g_slice_alloc (sizeof (*cbdata));
+	cbdata = g_malloc (sizeof (*cbdata));
 	cbdata->ctx = ctx;
 	cbdata->msg = msg;
 	cbdata->conn = conn;
@@ -427,7 +427,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	struct fuzzy_slave_connection *conn;
 	struct rspamd_http_message *msg;
 
-	conn = g_slice_alloc0 (sizeof (*conn));
+	conn = g_malloc0 (sizeof (*conn));
 	conn->up = rspamd_upstream_get (m->u,
 			RSPAMD_UPSTREAM_MASTER_SLAVE, NULL, 0);
 	conn->mirror = m;
@@ -552,7 +552,7 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 	}
 
 	g_free (cbdata->source);
-	g_slice_free1 (sizeof (*cbdata), cbdata);
+	g_free (cbdata);
 }
 
 static void
@@ -563,7 +563,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 	struct rspamd_updates_cbdata *cbdata;
 
 	if ((forced ||ctx->updates_pending->len > 0)) {
-		cbdata = g_slice_alloc (sizeof (*cbdata));
+		cbdata = g_malloc (sizeof (*cbdata));
 		cbdata->ctx = ctx;
 		cbdata->source = g_strdup (source);
 		rspamd_fuzzy_backend_process_updates (ctx->backend, ctx->updates_pending,
@@ -629,7 +629,7 @@ fuzzy_peer_send_io (gint fd, gshort what, gpointer d)
 	}
 
 	event_del (&up_req->io_ev);
-	g_slice_free1 (sizeof (*up_req), up_req);
+	g_free (up_req);
 }
 
 static void
@@ -817,7 +817,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 		if (ip_stat == NULL) {
 			naddr = rspamd_inet_address_copy (session->addr);
-			ip_stat = g_slice_alloc0 (sizeof (*ip_stat));
+			ip_stat = g_malloc0 (sizeof (*ip_stat));
 			rspamd_lru_hash_insert (session->key_stat->last_ips,
 					naddr, ip_stat, -1, 0);
 		}
@@ -881,7 +881,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 			}
 			else {
 				/* We need to send request to the peer */
-				up_req = g_slice_alloc0 (sizeof (*up_req));
+				up_req = g_malloc0 (sizeof (*up_req));
 				up_req->cmd.is_shingle = is_shingle;
 				ptr = is_shingle ?
 						(gpointer)&up_req->cmd.cmd.shingle :
@@ -1234,7 +1234,7 @@ fuzzy_session_destroy (gpointer d)
 	rspamd_inet_address_free (session->addr);
 	rspamd_explicit_memzero (session->nm, sizeof (session->nm));
 	session->worker->nconns--;
-	g_slice_free1 (sizeof (*session), session);
+	g_free (session);
 }
 
 static void
@@ -1249,7 +1249,7 @@ rspamd_fuzzy_mirror_session_destroy (struct fuzzy_master_update_session *session
 		if (session->psrc) {
 			g_free (session->psrc);
 		}
-		g_slice_free1 (sizeof (*session), session);
+		g_free (session);
 	}
 }
 
@@ -1389,9 +1389,7 @@ rspamd_fuzzy_collection_finish_handler (struct rspamd_http_connection_entry *con
 
 
 	rspamd_inet_address_free (session->from_addr);
-
-
-	g_slice_free1 (sizeof (struct rspamd_fuzzy_collection_session), session);
+	g_free (session);
 }
 
 void
@@ -1605,7 +1603,7 @@ accept_fuzzy_collection_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->ctx = ctx;
 	session->worker = worker;
 	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
@@ -1700,7 +1698,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->name = rspamd_inet_address_to_string (addr);
 	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
 	session->uid[sizeof (session->uid) - 1] = '\0';
@@ -1765,7 +1763,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 				return;
 			}
 
-			session = g_slice_alloc0 (sizeof (*session));
+			session = g_malloc0 (sizeof (*session));
 			REF_INIT_RETAIN (session, fuzzy_session_destroy);
 			session->worker = worker;
 			session->fd = fd;
@@ -2146,7 +2144,7 @@ fuzzy_storage_parse_mirror (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	up = g_slice_alloc0 (sizeof (*up));
+	up = g_malloc0 (sizeof (*up));
 	up->name = g_strdup (ucl_object_tostring (elt));
 
 	elt = ucl_object_lookup (obj, "key");
@@ -2191,7 +2189,7 @@ err:
 		rspamd_pubkey_unref (up->key);
 	}
 
-	g_slice_free1 (sizeof (*up), up);
+	g_free (up);
 
 	return FALSE;
 }
@@ -2607,7 +2605,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 
 		if (ls->fd != -1) {
 			if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
-				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				accept_events = g_malloc0 (sizeof (struct event) * 2);
 				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
 						accept_fuzzy_socket, worker);
 				event_base_set (ctx->ev_base, &accept_events[0]);
@@ -2617,7 +2615,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 			}
 			else if (worker->index == 0) {
 				/* We allow TCP listeners only for a update worker */
-				accept_events = g_slice_alloc0 (sizeof (struct event) * 2);
+				accept_events = g_malloc0 (sizeof (struct event) * 2);
 
 				if (ctx->collection_mode) {
 					event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,

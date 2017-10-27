@@ -325,7 +325,7 @@ rspamd_fork_delayed_cb (gint signo, short what, gpointer arg)
 	rspamd_fork_worker (w->rspamd_main, w->cf, w->oldindex,
 			w->rspamd_main->ev_base);
 	REF_RELEASE (w->cf);
-	g_slice_free1 (sizeof (*w), w);
+	g_free (w);
 }
 
 static void
@@ -336,7 +336,7 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 	struct waiting_worker *nw;
 	struct timeval tv;
 
-	nw = g_slice_alloc0 (sizeof (*nw));
+	nw = g_malloc0 (sizeof (*nw));
 	nw->cf = cf;
 	nw->oldindex = index;
 	nw->rspamd_main = rspamd_main;
@@ -364,7 +364,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
 					SOCK_STREAM, TRUE);
 			if (fd != -1) {
-				ls = g_slice_alloc0 (sizeof (*ls));
+				ls = g_malloc0 (sizeof (*ls));
 				ls->addr = g_ptr_array_index (addrs, i);
 				ls->fd = fd;
 				ls->type = RSPAMD_WORKER_SOCKET_TCP;
@@ -375,7 +375,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
 					SOCK_DGRAM, TRUE);
 			if (fd != -1) {
-				ls = g_slice_alloc0 (sizeof (*ls));
+				ls = g_malloc0 (sizeof (*ls));
 				ls->addr = g_ptr_array_index (addrs, i);
 				ls->fd = fd;
 				ls->type = RSPAMD_WORKER_SOCKET_UDP;
@@ -436,7 +436,7 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 				return NULL;
 			}
 
-			ls = g_slice_alloc0 (sizeof (*ls));
+			ls = g_malloc0 (sizeof (*ls));
 			ls->addr = rspamd_inet_address_from_sa (&addr_storage.sa, slen);
 			ls->fd = sock;
 
