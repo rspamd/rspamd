@@ -1792,14 +1792,29 @@ rspamd_get_ticks (gboolean rdtsc_ok)
 # endif
 	clock_gettime (clk_id, &ts);
 
-	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
+	if (rdtsc_ok) {
+		res = (double) ts.tv_sec + ts.tv_nsec / 1000000000.;
+	}
+	else {
+		res = (double) ts.tv_sec * 1e9 + ts.tv_nsec;
+	}
 # elif defined(__APPLE__)
-	res = mach_absolute_time () / 1000000000.;
+	if (rdtsc_ok) {
+		res = mach_absolute_time ();
+	}
+	else {
+		res = mach_absolute_time () / 1000000000.;
+	}
 #else
 	struct timeval tv;
 
 	(void)gettimeofday (&tv, NULL);
-	res = (double)tv.tv_sec + tv.tv_usec / 1000000.;
+	if (rdtsc_ok) {
+		res = (double) ts.tv_sec * 1e9 + tv.tv_usec * 1e3;
+	}
+	else {
+		res = (double)tv.tv_sec + tv.tv_usec / 1000000.;
+	}
 #endif
 
 	return res;

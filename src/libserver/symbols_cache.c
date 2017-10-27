@@ -1613,10 +1613,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct cache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
 	gint i;
-	gdouble total_microseconds = 0;
+	gdouble total_ticks = 0;
 	gboolean all_done;
 	gint saved_priority;
-	const gdouble max_microseconds = 3e5;
+	const gdouble max_ticks = 3e8;
 	guint start_events_pending;
 
 	g_assert (cache != NULL);
@@ -1669,7 +1669,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_ticks);
 			}
 		}
 
@@ -1746,10 +1746,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_ticks);
 			}
 
-			if (total_microseconds > max_microseconds) {
+			if (total_ticks > max_ticks) {
 				/* Maybe we should stop and check pending events? */
 				if (rspamd_session_events_pending (task->s) > start_events_pending) {
 					/* Add some timeout event to avoid too long waiting */
@@ -1769,8 +1769,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 							(rspamd_mempool_destruct_t)event_del, ev);
 #endif
 					msg_info_task ("trying to check async events after spending "
-							"%d microseconds processing symbols",
-							(gint)total_microseconds);
+							"%.0f ticks processing symbols",
+							total_ticks);
 
 					return TRUE;
 				}
@@ -1792,16 +1792,16 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_ticks);
 			}
 
-			if (total_microseconds > max_microseconds) {
+			if (total_ticks > max_ticks) {
 				/* Maybe we should stop and check pending events? */
 				if (rspamd_session_events_pending (task->s) >
 						start_events_pending) {
 					msg_debug_task ("trying to check async events after spending "
-							"%d microseconds processing symbols",
-							(gint)total_microseconds);
+							"%.0f microseconds processing symbols",
+							total_ticks);
 					return TRUE;
 				}
 			}
@@ -1842,8 +1842,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						return TRUE;
 					}
 				}
+
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_ticks);
 			}
 		}
 		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_POSTFILTERS;
@@ -1901,7 +1902,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					}
 				}
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_microseconds);
+						checkpoint, &total_ticks);
 			}
 		}
 		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_IDEMPOTENT;

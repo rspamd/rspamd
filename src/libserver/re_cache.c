@@ -488,7 +488,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	guint max_hits = rspamd_regexp_get_maxhits (re);
 	guint64 id = rspamd_regexp_get_cache_id (re);
 	gdouble t1, t2, pr;
-	const gdouble slow_time = 0.1;
+	const gdouble slow_time = 1e8;
 
 	if (in == NULL) {
 		return rt->results[id];
@@ -540,7 +540,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			t2 = rspamd_get_ticks (TRUE);
 
 			if (t2 - t1 > slow_time) {
-				msg_info_task ("regexp '%16s' took %.2f seconds to execute",
+				msg_info_task ("regexp '%16s' took %.0f ticks to execute",
 						rspamd_regexp_get_pattern (re), t2 - t1);
 			}
 		}
