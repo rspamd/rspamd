@@ -143,7 +143,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 		g_list_free (conn->entry);
 	}
 
-	g_slice_free1 (sizeof (*conn), conn);
+	g_free (conn);
 }
 
 static void
@@ -167,7 +167,7 @@ rspamd_redis_pool_elt_dtor (gpointer p)
 
 	g_queue_free (elt->active);
 	g_queue_free (elt->inactive);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 static void
@@ -256,7 +256,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			return NULL;
 		}
 		else {
-			conn = g_slice_alloc0 (sizeof (*conn));
+			conn = g_malloc0 (sizeof (*conn));
 			conn->entry = g_list_prepend (NULL, conn);
 			conn->elt = elt;
 			conn->active = TRUE;
@@ -291,7 +291,7 @@ rspamd_redis_pool_new_elt (struct rspamd_redis_pool *pool)
 {
 	struct rspamd_redis_pool_elt *elt;
 
-	elt = g_slice_alloc0 (sizeof (*elt));
+	elt = g_malloc0 (sizeof (*elt));
 	elt->active = g_queue_new ();
 	elt->inactive = g_queue_new ();
 	elt->pool = pool;
@@ -304,7 +304,7 @@ rspamd_redis_pool_init (void)
 {
 	struct rspamd_redis_pool *pool;
 
-	pool = g_slice_alloc0 (sizeof (*pool));
+	pool = g_malloc0 (sizeof (*pool));
 	pool->elts_by_key = g_hash_table_new_full (g_int64_hash, g_int64_equal, NULL,
 			rspamd_redis_pool_elt_dtor);
 	pool->elts_by_ctx = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -452,7 +452,7 @@ rspamd_redis_pool_destroy (struct rspamd_redis_pool *pool)
 	g_hash_table_unref (pool->elts_by_ctx);
 	g_hash_table_unref (pool->elts_by_key);
 
-	g_slice_free1 (sizeof (*pool), pool);
+	g_free (pool);
 }
 
 const gchar*

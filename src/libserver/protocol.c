@@ -1565,7 +1565,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 					sz = sizeof (*ls) +
 							sizeof (struct rspamd_protocol_log_symbol_result) *
 							(n + nextra);
-					ls = g_slice_alloc (sz);
+					ls = g_malloc0 (sz);
 
 					/* Handle settings id */
 					sid = rspamd_mempool_get_variable (task->task_pool,
@@ -1608,7 +1608,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 				}
 				else {
 					sz = sizeof (*ls);
-					ls = g_slice_alloc0 (sz);
+					ls = g_malloc0 (sz);
 					ls->nresults = 0;
 				}
 
@@ -1618,7 +1618,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 							strerror (errno));
 				}
 
-				g_slice_free1 (sz, ls);
+				g_free (ls);
 				break;
 			default:
 				msg_err_task ("unknown log format %d", lp->type);

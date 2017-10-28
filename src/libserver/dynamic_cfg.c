@@ -147,7 +147,7 @@ json_config_read_cb (gchar * chunk,
 	g_assert (pd != NULL);
 
 	if (data->cur_data == NULL) {
-		jb = g_slice_alloc (sizeof (*jb));
+		jb = g_malloc0 (sizeof (*jb));
 		jb->cfg = pd->cfg;
 		jb->buf = pd->buf;
 		data->cur_data = jb;
@@ -176,7 +176,7 @@ json_config_fin_cb (struct map_cb_data *data)
 	if (data->prev_data) {
 		jb = data->prev_data;
 		/* Clean prev data */
-		g_slice_free1 (sizeof (*jb), jb);
+		g_free (jb);
 	}
 
 	/* Now parse json */
@@ -230,7 +230,7 @@ init_dynamic_config (struct rspamd_config *cfg)
 	}
 
 	/* Now try to add map with json data */
-	jb = g_slice_alloc (sizeof (struct config_json_buf));
+	jb = g_malloc (sizeof (struct config_json_buf));
 	pjb = g_malloc (sizeof (struct config_json_buf *));
 	jb->buf = NULL;
 	jb->cfg = cfg;

@@ -166,12 +166,12 @@ rspamd_control_connection_close (struct rspamd_control_session *session)
 
 	DL_FOREACH_SAFE (session->replies, elt, telt) {
 		event_del (&elt->io_ev);
-		g_slice_free1 (sizeof (*elt), elt);
+		g_free (elt);
 	}
 
 	rspamd_http_connection_unref (session->conn);
 	close (session->fd);
-	g_slice_free1 (sizeof (*session), session);
+	g_free (session);
 }
 
 static void
@@ -424,7 +424,7 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 
 		if (r == sizeof (*cmd)) {
 
-			rep_elt = g_slice_alloc0 (sizeof (*rep_elt));
+			rep_elt = g_malloc0 (sizeof (*rep_elt));
 			rep_elt->wrk = wrk;
 			rep_elt->ud = ud;
 			event_set (&rep_elt->io_ev, wrk->control_pipe[0],
@@ -506,7 +506,7 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 {
 	struct rspamd_control_session *session;
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 
 	session->fd = fd;
 	session->conn = rspamd_http_connection_new (NULL,
@@ -669,7 +669,7 @@ rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
 {
 	struct rspamd_worker_control_data *cd;
 
-	cd = g_slice_alloc0 (sizeof (*cd));
+	cd = g_malloc0 (sizeof (*cd));
 	cd->worker = worker;
 	cd->ev_base = ev_base;
 
@@ -717,7 +717,7 @@ rspamd_control_hs_io_handler (gint fd, short what, gpointer ud)
 	/* At this point we just ignore replies from the workers */
 	(void)read (fd, &rep, sizeof (rep));
 	event_del (&elt->io_ev);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 static void
@@ -729,7 +729,7 @@ rspamd_control_log_pipe_io_handler (gint fd, short what, gpointer ud)
 	/* At this point we just ignore replies from the workers */
 	(void) read (fd, &rep, sizeof (rep));
 	event_del (&elt->io_ev);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 static void
@@ -827,7 +827,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 					(gint) r);
 		}
 		else {
-			rdata = g_slice_alloc0 (sizeof (*rdata));
+			rdata = g_malloc0 (sizeof (*rdata));
 			rdata->worker = worker;
 			rdata->srv = srv;
 			rdata->rep.id = cmd.id;
@@ -947,7 +947,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 					strerror (errno));
 		}
 
-		g_slice_free1 (sizeof (*rdata), rdata);
+		g_free (rdata);
 		event_del (&worker->srv_ev);
 		event_set (&worker->srv_ev,
 				worker->srv_pipe[0],
@@ -1062,7 +1062,7 @@ cleanup:
 		rd->handler (rd->worker, &rd->rep, rfd, rd->ud);
 	}
 	event_del (&rd->io_ev);
-	g_slice_free1 (sizeof (*rd), rd);
+	g_free (rd);
 }
 
 void
@@ -1078,7 +1078,7 @@ rspamd_srv_send_command (struct rspamd_worker *worker,
 	g_assert (cmd != NULL);
 	g_assert (worker != NULL);
 
-	rd = g_slice_alloc0 (sizeof (*rd));
+	rd = g_malloc0 (sizeof (*rd));
 	cmd->id = ottery_rand_uint64 ();
 	memcpy (&rd->cmd, cmd, sizeof (rd->cmd));
 	rd->handler = handler;

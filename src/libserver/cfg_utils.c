@@ -109,7 +109,7 @@ rspamd_config_new (void)
 {
 	struct rspamd_config *cfg;
 
-	cfg = g_slice_alloc0 (sizeof (*cfg));
+	cfg = g_malloc0 (sizeof (*cfg));
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "cfg");
 	cfg->dns_timeout = 1000;
 	cfg->dns_retransmits = 5;
@@ -202,12 +202,12 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		g_slice_free1 (sizeof (*sc), sc);
+		g_free (sc);
 	}
 
 	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		g_slice_free1 (sizeof (*sc), sc);
+		g_free (sc);
 	}
 
 	if (cfg->monitored_ctx) {
@@ -253,10 +253,10 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	DL_FOREACH_SAFE (cfg->log_pipes, lp, ltmp) {
 		close (lp->fd);
-		g_slice_free1 (sizeof (*lp), lp);
+		g_free (lp);
 	}
 
-	g_slice_free1 (sizeof (*cfg), cfg);
+	g_free (cfg);
 }
 
 const ucl_object_t *
@@ -1003,7 +1003,7 @@ rspamd_worker_conf_dtor (struct rspamd_worker_conf *wcf)
 		ucl_object_unref (wcf->options);
 		g_queue_free (wcf->active_workers);
 		g_hash_table_unref (wcf->params);
-		g_slice_free1 (sizeof (*wcf), wcf);
+		g_free (wcf);
 	}
 }
 
@@ -1020,7 +1020,7 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 	struct rspamd_worker_conf *c)
 {
 	if (c == NULL) {
-		c = g_slice_alloc0 (sizeof (struct rspamd_worker_conf));
+		c = g_malloc0 (sizeof (struct rspamd_worker_conf));
 		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
 #ifdef HAVE_SC_NPROCESSORS_ONLN
@@ -1387,7 +1387,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig, GHashTable *vars)
 			mod = *pmod;
 
 			if (rspamd_check_module (cfg, mod)) {
-				mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+				mod_ctx = g_malloc0 (sizeof (struct module_ctx));
 
 				if (mod->module_init_func (cfg, &mod_ctx) == 0) {
 					g_hash_table_insert (cfg->c_modules,

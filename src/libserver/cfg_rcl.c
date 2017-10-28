@@ -1643,7 +1643,7 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 	struct rspamd_rcl_section *new;
 	ucl_object_t *parent_doc;
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
+	new = g_malloc0 (sizeof (struct rspamd_rcl_section));
 	new->name = name;
 	new->key_attr = key_attr;
 	new->handler = handler;
@@ -1677,16 +1677,16 @@ rspamd_rcl_add_section_doc (struct rspamd_rcl_section **top,
 		ucl_object_t *doc_target,
 		const gchar *doc_string)
 {
-	struct rspamd_rcl_section *new;
+	struct rspamd_rcl_section *new_section;
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
-	new->name = name;
-	new->key_attr = key_attr;
-	new->handler = handler;
-	new->type = type;
-	new->strict_type = strict_type;
+	new_section = g_malloc0 (sizeof (struct rspamd_rcl_section));
+	new_section->name = name;
+	new_section->key_attr = key_attr;
+	new_section->handler = handler;
+	new_section->type = type;
+	new_section->strict_type = strict_type;
 
-	new->doc_ref =  ucl_object_ref (rspamd_rcl_add_doc_obj (doc_target,
+	new_section->doc_ref =  ucl_object_ref (rspamd_rcl_add_doc_obj (doc_target,
 			doc_string,
 			name,
 			type,
@@ -1695,8 +1695,8 @@ rspamd_rcl_add_section_doc (struct rspamd_rcl_section **top,
 			NULL,
 			0));
 
-	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
-	return new;
+	HASH_ADD_KEYPTR (hh, *top, new_section->name, strlen (new_section->name), new_section);
+	return new_section;
 }
 
 struct rspamd_rcl_default_handler_data *
@@ -1709,7 +1709,7 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 {
 	struct rspamd_rcl_default_handler_data *nhandler;
 
-	nhandler = g_slice_alloc0 (sizeof (struct rspamd_rcl_default_handler_data));
+	nhandler = g_malloc0 (sizeof (struct rspamd_rcl_default_handler_data));
 	nhandler->key = g_strdup (name);
 	nhandler->handler = handler;
 	nhandler->pd.offset = offset;
@@ -3549,11 +3549,11 @@ rspamd_rcl_section_free (gpointer p)
 		HASH_ITER (hh, cur->default_parser, dh, dhtmp) {
 			HASH_DEL (cur->default_parser, dh);
 			g_free (dh->key);
-			g_slice_free1 (sizeof (*dh), dh);
+			g_free (dh);
 		}
 
 		ucl_object_unref (cur->doc_ref);
-		g_slice_free1 (sizeof (*cur), cur);
+		g_free (cur);
 	}
 }
 

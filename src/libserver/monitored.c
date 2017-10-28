@@ -385,7 +385,7 @@ rspamd_monitored_ctx_init (void)
 {
 	struct rspamd_monitored_ctx *ctx;
 
-	ctx = g_slice_alloc0 (sizeof (*ctx));
+	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->monitoring_interval = default_monitoring_interval;
 	ctx->max_errors = default_max_errors;
 	ctx->elts = g_ptr_array_new ();
@@ -450,7 +450,7 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 	g_assert (ctx != NULL);
 	g_assert (line != NULL);
 
-	m = g_slice_alloc0 (sizeof (*m));
+	m = g_malloc0 (sizeof (*m));
 	m->type = type;
 	m->flags = flags;
 	m->url = g_strdup (line);
@@ -466,7 +466,7 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 		m->proc.monitored_dtor = rspamd_monitored_dns_dtor;
 	}
 	else {
-		g_slice_free1 (sizeof (*m), m);
+		g_free (m);
 
 		return NULL;
 	}
@@ -474,7 +474,7 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 	m->proc.ud = m->proc.monitored_config (m, ctx, opts);
 
 	if (m->proc.ud == NULL) {
-		g_slice_free1 (sizeof (*m), m);
+		g_free (m);
 
 		return NULL;
 	}
@@ -603,11 +603,11 @@ rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx)
 		rspamd_monitored_stop (m);
 		g_free (m->url);
 		m->proc.monitored_dtor (m, m->ctx, m->proc.ud);
-		g_slice_free1 (sizeof (*m), m);
+		g_free (m);
 	}
 
 	g_ptr_array_free (ctx->elts, TRUE);
-	g_slice_free1 (sizeof (*ctx), ctx);
+	g_free (ctx);
 }
 
 struct rspamd_monitored *

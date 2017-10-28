@@ -123,7 +123,7 @@ rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session,
 	rspamd_fuzzy_redis_session_free_args (session);
 
 	REF_RELEASE (session->backend);
-	g_slice_free1 (sizeof (*session), session);
+	g_free (session);
 }
 
 static gboolean
@@ -223,7 +223,7 @@ rspamd_fuzzy_backend_redis_dtor (struct rspamd_fuzzy_backend_redis *backend)
 		g_free (backend->id);
 	}
 
-	g_slice_free1 (sizeof (*backend), backend);
+	g_free (backend);
 }
 
 void*
@@ -236,7 +236,7 @@ rspamd_fuzzy_backend_init_redis (struct rspamd_fuzzy_backend *bk,
 	guchar id_hash[rspamd_cryptobox_HASHBYTES];
 	rspamd_cryptobox_hash_state_t st;
 
-	backend = g_slice_alloc0 (sizeof (*backend));
+	backend = g_malloc0 (sizeof (*backend));
 
 	backend->timeout = REDIS_DEFAULT_TIMEOUT;
 	backend->redis_object = REDIS_DEFAULT_OBJECT;
@@ -265,7 +265,8 @@ rspamd_fuzzy_backend_init_redis (struct rspamd_fuzzy_backend *bk,
 
 	if (!ret) {
 		msg_err_config ("cannot init redis backend for fuzzy storage");
-		g_slice_free1 (sizeof (*backend), backend);
+		g_free (backend);
+
 		return NULL;
 	}
 
@@ -606,7 +607,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
 
@@ -737,7 +738,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
 
@@ -859,7 +860,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
 
@@ -1240,7 +1241,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 
 	g_assert (backend != NULL);
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->backend = backend;
 	REF_RETAIN (session->backend);
 

@@ -295,14 +295,14 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 		}
 	}
 
-	bk = g_slice_alloc0 (sizeof (*bk));
+	bk = g_malloc0 (sizeof (*bk));
 	bk->ev_base = ev_base;
 	bk->expire = expire;
 	bk->type = type;
 	bk->subr = &fuzzy_subrs[type];
 
 	if ((bk->subr_ud = bk->subr->init (bk, config, cfg, err)) == NULL) {
-		g_slice_free1 (sizeof (*bk), bk);
+		g_free (bk);
 
 		return NULL;
 	}
@@ -445,7 +445,7 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *bk)
 
 	bk->subr->close (bk, bk->subr_ud);
 
-	g_slice_free1 (sizeof (*bk), bk);
+	g_free (bk);
 }
 
 struct event_base*

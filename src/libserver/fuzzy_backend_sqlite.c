@@ -426,7 +426,7 @@ rspamd_fuzzy_backend_sqlite_open_db (const gchar *path, GError **err)
 
 	g_assert (path != NULL);
 
-	bk = g_slice_alloc (sizeof (*bk));
+	bk = g_malloc0 (sizeof (*bk));
 	bk->path = g_strdup (path);
 	bk->expired = 0;
 	bk->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "fuzzy_backend");
@@ -1000,7 +1000,7 @@ rspamd_fuzzy_backend_sqlite_close (struct rspamd_fuzzy_backend_sqlite *backend)
 			rspamd_mempool_delete (backend->pool);
 		}
 
-		g_slice_free1 (sizeof (*backend), backend);
+		g_free (backend);
 	}
 }
 

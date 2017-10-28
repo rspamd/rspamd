@@ -34,7 +34,7 @@ rspamd_keypair_destroy (gpointer ptr)
 	struct rspamd_keypair_elt *elt = (struct rspamd_keypair_elt *)ptr;
 
 	REF_RELEASE (elt->nm);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 static guint
@@ -62,7 +62,7 @@ rspamd_keypair_cache_new (guint max_items)
 
 	g_assert (max_items > 0);
 
-	c = g_slice_alloc (sizeof (*c));
+	c = g_malloc0 (sizeof (*c));
 	c->hash = rspamd_lru_hash_new_full (max_items, NULL,
 			rspamd_keypair_destroy, rspamd_keypair_hash, rspamd_keypair_equal);
 
@@ -94,7 +94,7 @@ rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 	}
 
 	if (new == NULL) {
-		new = g_slice_alloc0 (sizeof (*new));
+		new = g_malloc0 (sizeof (*new));
 
 		if (posix_memalign ((void **)&new->nm, 32, sizeof (*new->nm)) != 0) {
 			abort ();
@@ -137,6 +137,6 @@ rspamd_keypair_cache_destroy (struct rspamd_keypair_cache *c)
 {
 	if (c != NULL) {
 		rspamd_lru_hash_destroy (c->hash);
-		g_slice_free1 (sizeof (*c), c);
+		g_free (c);
 	}
 }

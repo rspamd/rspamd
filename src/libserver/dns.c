@@ -57,7 +57,7 @@ rspamd_dns_fin_cb (gpointer arg)
 	rdns_request_release (reqdata->req);
 
 	if (reqdata->pool == NULL) {
-		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
+		g_free (reqdata);
 	}
 }
 
@@ -77,7 +77,7 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 		rspamd_session_remove_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
 	}
 	else if (reqdata->pool == NULL) {
-		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
+		g_free (reqdata);
 	}
 }
 
@@ -104,7 +104,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
 	}
 	else {
-		reqdata = g_slice_alloc (sizeof (struct rspamd_dns_request_ud));
+		reqdata = g_malloc (sizeof (struct rspamd_dns_request_ud));
 	}
 	reqdata->pool = pool;
 	reqdata->session = session;
@@ -127,7 +127,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	if (req == NULL) {
 		if (pool == NULL) {
-			g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
+			g_free (reqdata);
 		}
 		return FALSE;
 	}
@@ -218,7 +218,7 @@ rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 
 	g_assert (serv != NULL);
 
-	elt = g_slice_alloc0 (sizeof (*elt));
+	elt = g_malloc0 (sizeof (*elt));
 	elt->server = serv;
 	elt->lib_data = up;
 
@@ -252,7 +252,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 {
 	struct rspamd_dns_resolver *dns_resolver;
 
-	dns_resolver = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
+	dns_resolver = g_malloc0 (sizeof (struct rspamd_dns_resolver));
 	dns_resolver->ev_base = ev_base;
 	if (cfg != NULL) {
 		dns_resolver->request_timeout = cfg->dns_timeout;

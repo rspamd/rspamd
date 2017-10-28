@@ -1184,9 +1184,9 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 		return NULL;
 	}
 
-	key = g_slice_alloc0 (sizeof (rspamd_dkim_key_t));
+	key = g_malloc0 (sizeof (rspamd_dkim_key_t));
 	REF_INIT_RETAIN (key, rspamd_dkim_key_free);
-	key->keydata = g_slice_alloc0 (keylen + 1);
+	key->keydata = g_malloc0 (keylen + 1);
 	key->decoded_len = keylen;
 	key->keylen = keylen;
 	key->type = type;
@@ -1273,8 +1273,8 @@ rspamd_dkim_key_free (rspamd_dkim_key_t *key)
 		BIO_free (key->key_bio);
 	}
 
-	g_slice_free1 (key->keylen,				   key->keydata);
-	g_slice_free1 (sizeof (rspamd_dkim_key_t), key);
+	g_free (key->keydata);
+	g_free (key);
 }
 
 void
@@ -1300,7 +1300,7 @@ rspamd_dkim_sign_key_free (rspamd_dkim_sign_key_t *key)
 		}
 	}
 
-	g_slice_free1 (sizeof (rspamd_dkim_sign_key_t), key);
+	g_free (key);
 }
 
 static rspamd_dkim_key_t *
@@ -2511,7 +2511,7 @@ rspamd_dkim_sign_key_load (const gchar *what, gsize len,
 		}
 	}
 
-	nkey = g_slice_alloc0 (sizeof (*nkey));
+	nkey = g_malloc0 (sizeof (*nkey));
 	nkey->type = type;
 	nkey->mtime = mtime;
 
