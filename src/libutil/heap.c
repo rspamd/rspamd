@@ -90,7 +90,7 @@ rspamd_min_heap_create (gsize reserved_size)
 {
 	struct rspamd_min_heap *heap;
 
-	heap = g_slice_alloc (sizeof (*heap));
+	heap = g_malloc (sizeof (*heap));
 	heap->ar = g_ptr_array_sized_new (reserved_size);
 
 	return heap;
@@ -185,7 +185,7 @@ rspamd_min_heap_destroy (struct rspamd_min_heap *heap)
 {
 	if (heap) {
 		g_ptr_array_free (heap->ar, TRUE);
-		g_slice_free1 (sizeof (*heap), heap);
+		g_free (heap);
 	}
 }
 

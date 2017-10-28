@@ -393,7 +393,7 @@ rspamd_init_lua_locked (struct rspamd_config *cfg)
 {
 	struct lua_locked_state *new;
 
-	new = g_slice_alloc (sizeof (struct lua_locked_state));
+	new = g_malloc0 (sizeof (struct lua_locked_state));
 	new->L = rspamd_lua_init ();
 	new->m = rspamd_mutex_new ();
 
@@ -413,7 +413,7 @@ rspamd_free_lua_locked (struct lua_locked_state *st)
 
 	rspamd_mutex_free (st->m);
 
-	g_slice_free1 (sizeof (struct lua_locked_state), st);
+	g_free (st);
 }
 
 gboolean

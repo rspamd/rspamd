@@ -717,7 +717,7 @@ rspamd_redis_async_cbdata_cleanup (struct rspamd_redis_stat_cbdata *cbdata)
 			ucl_object_unref (cbdata->cur);
 		}
 
-		g_slice_free1 (sizeof (*cbdata), cbdata);
+		g_free (cbdata);
 	}
 }
 
@@ -913,7 +913,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 	/* Disable further events unless needed */
 	elt->enabled = FALSE;
 
-	cbdata = g_slice_alloc0 (sizeof (*cbdata));
+	cbdata = g_malloc0 (sizeof (*cbdata));
 	cbdata->selected = rspamd_upstream_get (ctx->read_servers,
 					RSPAMD_UPSTREAM_ROUND_ROBIN,
 					NULL,
@@ -1346,7 +1346,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	const ucl_object_t *obj;
 	gboolean ret = FALSE;
 
-	backend = g_slice_alloc0 (sizeof (*backend));
+	backend = g_malloc0 (sizeof (*backend));
 
 	/* First search in backend configuration */
 	obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
@@ -1387,14 +1387,14 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 
 	if (!ret) {
 		msg_err_config ("cannot init redis backend for %s", stf->symbol);
-		g_slice_free1 (sizeof (*backend), backend);
+		g_free (backend);
 		return NULL;
 	}
 
 	stf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 	backend->stcf = stf;
 
-	st_elt = g_slice_alloc0 (sizeof (*st_elt));
+	st_elt = g_malloc0 (sizeof (*st_elt));
 	st_elt->ev_base = ctx->ev_base;
 	st_elt->ctx = backend;
 	backend->stat_elt = rspamd_stat_ctx_register_async (
@@ -1486,7 +1486,7 @@ rspamd_redis_close (gpointer p)
 		rspamd_upstreams_destroy (ctx->write_servers);
 	}
 
-	g_slice_free1 (sizeof (*ctx), ctx);
+	g_free (ctx);
 }
 
 gboolean

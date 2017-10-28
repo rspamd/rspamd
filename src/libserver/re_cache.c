@@ -156,7 +156,7 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 		g_hash_table_unref (re_class->re);
 
 		if (re_class->type_data) {
-			g_slice_free1 (re_class->type_len, re_class->type_data);
+			g_free (re_class->type_data);
 		}
 
 #ifdef WITH_HYPERSCAN
@@ -170,12 +170,12 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 			g_free (re_class->hs_ids);
 		}
 #endif
-		g_slice_free1 (sizeof (*re_class), re_class);
+		g_free (re_class);
 	}
 
 	g_hash_table_unref (cache->re_classes);
 	g_ptr_array_free (cache->re, TRUE);
-	g_slice_free1 (sizeof (*cache), cache);
+	g_free (cache);
 }
 
 static void
@@ -184,7 +184,7 @@ rspamd_re_cache_elt_dtor (gpointer e)
 	struct rspamd_re_cache_elt *elt = e;
 
 	rspamd_regexp_unref (elt->re);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 struct rspamd_re_cache *
@@ -192,7 +192,7 @@ rspamd_re_cache_new (void)
 {
 	struct rspamd_re_cache *cache;
 
-	cache = g_slice_alloc0 (sizeof (*cache));
+	cache = g_malloc0 (sizeof (*cache));
 	cache->re_classes = g_hash_table_new (g_int64_hash, g_int64_equal);
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full (256, rspamd_re_cache_elt_dtor);
@@ -232,7 +232,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 	re_class = g_hash_table_lookup (cache->re_classes, &class_id);
 
 	if (re_class == NULL) {
-		re_class = g_slice_alloc0 (sizeof (*re_class));
+		re_class = g_malloc0 (sizeof (*re_class));
 		re_class->id = class_id;
 		re_class->type_len = datalen;
 		re_class->type = type;
@@ -240,7 +240,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 				rspamd_regexp_equal, NULL, (GDestroyNotify)rspamd_regexp_unref);
 
 		if (datalen > 0) {
-			re_class->type_data = g_slice_alloc (datalen);
+			re_class->type_data = g_malloc0 (datalen);
 			memcpy (re_class->type_data, type_data, datalen);
 		}
 
@@ -252,7 +252,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 		/*
 		 * We set re id based on the global position in the cache
 		 */
-		elt = g_slice_alloc0 (sizeof (*elt));
+		elt = g_malloc0 (sizeof (*elt));
 		/* One ref for re_class */
 		nre = rspamd_regexp_ref (re);
 		rspamd_regexp_set_cache_id (re, cache->nre++);
@@ -343,7 +343,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		rspamd_regexp_set_cache_id (re, i);
 
 		if (re_class->st == NULL) {
-			re_class->st = g_slice_alloc (sizeof (*re_class->st));
+			re_class->st = g_malloc (sizeof (*re_class->st));
 			rspamd_cryptobox_hash_init (re_class->st, NULL, 0);
 		}
 
@@ -405,7 +405,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 			rspamd_cryptobox_hash_final (re_class->st, hash_out);
 			rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
 					(gint) rspamd_cryptobox_HASHBYTES, hash_out);
-			g_slice_free1 (sizeof (*re_class->st), re_class->st);
+			g_free (re_class->st);
 			re_class->st = NULL;
 		}
 	}
@@ -456,11 +456,11 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	struct rspamd_re_runtime *rt;
 	g_assert (cache != NULL);
 
-	rt = g_slice_alloc0 (sizeof (*rt));
+	rt = g_malloc0 (sizeof (*rt));
 	rt->cache = cache;
 	REF_RETAIN (cache);
-	rt->checked = g_slice_alloc0 (NBYTES (cache->nre));
-	rt->results = g_slice_alloc0 (cache->nre);
+	rt->checked = g_malloc0 (NBYTES (cache->nre));
+	rt->results = g_malloc0 (cache->nre);
 	rt->stat.regexp_total = cache->nre;
 #ifdef WITH_HYPERSCAN
 	rt->has_hs = cache->hyperscan_loaded;
@@ -1135,10 +1135,10 @@ rspamd_re_cache_runtime_destroy (struct rspamd_re_runtime *rt)
 {
 	g_assert (rt != NULL);
 
-	g_slice_free1 (NBYTES (rt->cache->nre), rt->checked);
-	g_slice_free1 (rt->cache->nre, rt->results);
+	g_free (rt->checked);
+	g_free (rt->results);
 	REF_RELEASE (rt->cache);
-	g_slice_free1 (sizeof (*rt), rt);
+	g_free (rt);
 }
 
 void

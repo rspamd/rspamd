@@ -231,7 +231,7 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 				if (ev_data->io_buf) {
 					free (ev_data->io_buf);
 				}
-				g_slice_free1 (sizeof (struct io_cbdata), ev_data);
+				g_free (ev_data);
 			}
 		}
 		else if (done == 0) {
@@ -337,7 +337,7 @@ rspamd_aio_read (gint fd,
 		struct iocb *iocb[1];
 		struct io_cbdata *cbdata;
 
-		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
+		cbdata = g_malloc0 (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
 		cbdata->buf = buf;
 		cbdata->len = len;
@@ -414,7 +414,7 @@ rspamd_aio_write (gint fd,
 		struct iocb *iocb[1];
 		struct io_cbdata *cbdata;
 
-		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
+		cbdata = g_malloc0 (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
 		cbdata->buf = buf;
 		cbdata->len = len;

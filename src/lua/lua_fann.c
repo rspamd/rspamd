@@ -637,7 +637,7 @@ lua_fann_thread_notify (gint fd, short what, gpointer ud)
 
 	fann_destroy_train (cbdata->train);
 	luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
-	g_slice_free1 (sizeof (*cbdata), cbdata);
+	g_free (cbdata);
 }
 
 static void *
@@ -701,7 +701,7 @@ lua_fann_train_threaded (lua_State *L)
 		ndata = rspamd_lua_table_size (L, 2);
 		ninputs = fann_get_num_input (f);
 		noutputs = fann_get_num_output (f);
-		cbdata = g_slice_alloc0 (sizeof (*cbdata));
+		cbdata = g_malloc0 (sizeof (*cbdata));
 		cbdata->L = L;
 		cbdata->f = f;
 		cbdata->train = rspamd_fann_create_train (ndata, ninputs, noutputs);
@@ -791,7 +791,7 @@ err:
 
 	fann_destroy_train (cbdata->train);
 	luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cbref);
-	g_slice_free1 (sizeof (*cbdata), cbdata);
+	g_free (cbdata);
 	return luaL_error (L, "invalid arguments");
 #endif
 }
@@ -831,7 +831,7 @@ lua_fann_test (lua_State *L)
 			}
 		}
 
-		cur_input = g_slice_alloc (ninputs * sizeof (fann_type));
+		cur_input = g_malloc0 (ninputs * sizeof (fann_type));
 
 		for (i = 0; i < ninputs; i++) {
 			lua_rawgeti (L, tbl_idx, i + 1);
@@ -848,7 +848,7 @@ lua_fann_test (lua_State *L)
 			lua_rawseti (L, -2, i + 1);
 		}
 
-		g_slice_free1 (ninputs * sizeof (fann_type), cur_input);
+		g_free (cur_input);
 	}
 	else {
 		lua_pushnil (L);

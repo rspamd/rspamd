@@ -216,7 +216,7 @@ rspamd_symbols_cache_order_dtor (gpointer p)
 	struct symbols_cache_order *ord = p;
 
 	g_ptr_array_free (ord->d, TRUE);
-	g_slice_free1 (sizeof (*ord), ord);
+	g_free (ord);
 }
 
 static void
@@ -232,7 +232,7 @@ rspamd_symbols_cache_order_new (gsize nelts)
 {
 	struct symbols_cache_order *ord;
 
-	ord = g_slice_alloc (sizeof (*ord));
+	ord = g_malloc0 (sizeof (*ord));
 	ord->d = g_ptr_array_sized_new (nelts);
 	REF_INIT_RETAIN (ord, rspamd_symbols_cache_order_dtor);
 
@@ -880,7 +880,7 @@ rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 		return rspamd_symbols_cache_add_condition (cache, id, L, cbref);
 	}
 
-	ncond = g_slice_alloc (sizeof (*ncond));
+	ncond = g_malloc0 (sizeof (*ncond));
 	ncond->sym = g_strdup (sym);
 	ncond->cbref = cbref;
 	ncond->L = L;
@@ -923,7 +923,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 				ddep = cur->data;
 				g_free (ddep->from);
 				g_free (ddep->to);
-				g_slice_free1 (sizeof (*ddep), ddep);
+				g_free (ddep);
 				cur = g_list_next (cur);
 			}
 
@@ -936,7 +936,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 			while (cur) {
 				dcond = cur->data;
 				g_free (dcond->sym);
-				g_slice_free1 (sizeof (*dcond), dcond);
+				g_free (dcond);
 				cur = g_list_next (cur);
 			}
 
@@ -956,7 +956,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 			luaL_unref (cache->cfg->lua_state, LUA_REGISTRYINDEX, cache->peak_cb);
 		}
 
-		g_slice_free1 (sizeof (*cache), cache);
+		g_free (cache);
 	}
 }
 
@@ -965,7 +965,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 {
 	struct symbols_cache *cache;
 
-	cache = g_slice_alloc0 (sizeof (struct symbols_cache));
+	cache = g_malloc0 (sizeof (struct symbols_cache));
 	cache->static_pool =
 			rspamd_mempool_new (rspamd_mempool_suggest_size (), "symcache");
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
@@ -2197,7 +2197,7 @@ rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
 	g_assert (from != NULL);
 	g_assert (to != NULL);
 
-	ddep = g_slice_alloc (sizeof (*ddep));
+	ddep = g_malloc0 (sizeof (*ddep));
 	ddep->from = g_strdup (from);
 	ddep->to = g_strdup (to);
 

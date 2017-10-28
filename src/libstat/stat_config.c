@@ -107,7 +107,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	guint lua_classifiers_cnt = 0, i;
 
 	if (stat_ctx == NULL) {
-		stat_ctx = g_slice_alloc0 (sizeof (*stat_ctx));
+		stat_ctx = g_malloc0 (sizeof (*stat_ctx));
 	}
 
 	lua_getglobal (L, "rspamd_classifiers");
@@ -168,21 +168,21 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	while (cur) {
 		bk = NULL;
 		clf = cur->data;
-		cl = g_slice_alloc0 (sizeof (*cl));
+		cl = g_malloc0 (sizeof (*cl));
 		cl->cfg = clf;
 		cl->ctx = stat_ctx;
 		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
 		cl->subrs = rspamd_stat_get_classifier (clf->classifier);
 
 		if (cl->subrs == NULL) {
-			g_slice_free1 (sizeof (*cl), cl);
+			g_free (cl);
 			msg_err_config ("cannot init classifier type %s", clf->name);
 			cur = g_list_next (cur);
 			continue;
 		}
 
 		if (!cl->subrs->init_func (cfg->cfg_pool, cl)) {
-			g_slice_free1 (sizeof (*cl), cl);
+			g_free (cl);
 			msg_err_config ("cannot init classifier type %s", clf->name);
 			cur = g_list_next (cur);
 			continue;
@@ -236,7 +236,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 
 		while (curst) {
 			stf = curst->data;
-			st = g_slice_alloc0 (sizeof (*st));
+			st = g_malloc0 (sizeof (*st));
 			st->classifier = cl;
 			st->stcf = stf;
 
@@ -273,7 +273,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 				msg_err_config ("cannot init backend %s for statfile %s",
 						clf->backend, stf->symbol);
 
-				g_slice_free1 (sizeof (*st), st);
+				g_free (st);
 			}
 			else {
 				st->id = stat_ctx->statfiles->len;
@@ -314,7 +314,7 @@ rspamd_stat_close (void)
 				st->backend->close (st->bkcf);
 			}
 
-			g_slice_free1 (sizeof (*st), st);
+			g_free (st);
 		}
 
 		if (cl->cache && cl->cachecf) {
@@ -322,7 +322,7 @@ rspamd_stat_close (void)
 		}
 
 		g_array_free (cl->statfiles_ids, TRUE);
-		g_slice_free1 (sizeof (*cl), cl);
+		g_free (cl);
 	}
 
 	cur = st_ctx->async_elts->head;
@@ -336,7 +336,7 @@ rspamd_stat_close (void)
 	g_queue_free (stat_ctx->async_elts);
 	g_ptr_array_free (st_ctx->statfiles, TRUE);
 	g_ptr_array_free (st_ctx->classifiers, TRUE);
-	g_slice_free1 (sizeof (*st_ctx), st_ctx);
+	g_free (st_ctx);
 
 	/* Set global var to NULL */
 	stat_ctx = NULL;
@@ -436,7 +436,7 @@ rspamd_async_elt_dtor (struct rspamd_stat_async_elt *elt)
 	}
 
 	event_del (&elt->timer_ev);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 static void
@@ -468,7 +468,7 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
 
-	elt = g_slice_alloc (sizeof (*elt));
+	elt = g_malloc0 (sizeof (*elt));
 	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
 	elt->handler = handler;
 	elt->cleanup = cleanup;

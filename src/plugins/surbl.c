@@ -110,7 +110,7 @@ exceptions_free_value (gpointer v)
 	rspamd_ftok_t *val = v;
 
 	g_free ((gpointer)val->begin);
-	g_slice_free1 (sizeof (*val), val);
+	g_free (val);
 }
 
 static void
@@ -134,7 +134,7 @@ exception_insert (gpointer st, gconstpointer key, gconstpointer value)
 		return;
 	}
 
-	val = g_slice_alloc (sizeof (rspamd_ftok_t));
+	val = g_malloc (sizeof (rspamd_ftok_t));
 	val->begin = g_strdup (key);
 	val->len = strlen (key);
 
@@ -214,7 +214,7 @@ redirector_insert (gpointer st, gconstpointer key, gconstpointer value)
 	}
 
 	pat = rspamd_fstring_new_init (begin, p - begin);
-	tok = g_slice_alloc (sizeof (*tok));
+	tok = g_malloc0 (sizeof (*tok));
 	tok->begin = pat->str;
 	tok->len = pat->len;
 

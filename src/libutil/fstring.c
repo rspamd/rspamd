@@ -383,7 +383,7 @@ rspamd_fstring_mapped_ftok_free (gpointer p)
 
 	storage = (rspamd_fstring_t *) (tok->begin - 2 * sizeof (gsize));
 	rspamd_fstring_free (storage);
-	g_slice_free1 (sizeof (*tok), tok);
+	g_free (tok);
 }
 
 rspamd_ftok_t *
@@ -393,7 +393,7 @@ rspamd_ftok_map (const rspamd_fstring_t *s)
 
 	g_assert (s != NULL);
 
-	tok = g_slice_alloc (sizeof (*tok));
+	tok = g_malloc (sizeof (*tok));
 	tok->begin = s->str;
 	tok->len = s->len;
 

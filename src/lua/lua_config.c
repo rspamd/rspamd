@@ -2438,7 +2438,7 @@ lua_config_add_on_load (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	sc = g_slice_alloc0 (sizeof (*sc));
+	sc = g_malloc0 (sizeof (*sc));
 	lua_pushvalue (L, 2);
 	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 	DL_APPEND (cfg->on_load, sc);
@@ -2505,7 +2505,7 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	}
 	else {
 		luaL_unref (L, LUA_REGISTRYINDEX, periodic->cbref);
-		g_slice_free1 (sizeof (*periodic), periodic);
+		g_free (periodic);
 	}
 }
 
@@ -2527,7 +2527,7 @@ lua_config_add_periodic (lua_State *L)
 		need_jitter = lua_toboolean (L, 5);
 	}
 
-	periodic = g_slice_alloc0 (sizeof (*periodic));
+	periodic = g_malloc0 (sizeof (*periodic));
 	periodic->timeout = timeout;
 	periodic->L = L;
 	periodic->cfg = cfg;
@@ -2698,7 +2698,7 @@ lua_config_register_finish_script (lua_State *L)
 	struct rspamd_config_post_load_script *sc;
 
 	if (cfg != NULL && lua_type (L, 2) == LUA_TFUNCTION) {
-		sc = g_slice_alloc0 (sizeof (*sc));
+		sc = g_malloc0 (sizeof (*sc));
 		lua_pushvalue (L, 2);
 		sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		DL_APPEND (cfg->finish_callbacks, sc);

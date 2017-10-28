@@ -114,7 +114,7 @@ radix_create_compressed (void)
 {
 	radix_compressed_t *tree;
 
-	tree = g_slice_alloc (sizeof (*tree));
+	tree = g_malloc0 (sizeof (*tree));
 	if (tree == NULL) {
 		return NULL;
 	}
@@ -131,7 +131,7 @@ radix_destroy_compressed (radix_compressed_t *tree)
 {
 	if (tree) {
 		rspamd_mempool_delete (tree->pool);
-		g_slice_free1 (sizeof (*tree), tree);
+		g_free (tree);
 	}
 }
 

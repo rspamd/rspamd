@@ -131,7 +131,7 @@ lua_http_fin (gpointer arg)
 		rspamd_pubkey_unref (cbd->peer_pk);
 	}
 
-	g_slice_free1 (sizeof (struct lua_http_cbdata), cbd);
+	g_free (cbd);
 }
 
 static void
@@ -612,7 +612,7 @@ lua_http_request (lua_State *L)
 		return 1;
 	}
 
-	cbd = g_slice_alloc0 (sizeof (*cbd));
+	cbd = g_malloc0 (sizeof (*cbd));
 	cbd->L = L;
 	cbd->cbref = cbref;
 	cbd->msg = msg;

@@ -193,7 +193,7 @@ rspamd_spf_new_addr (struct spf_record *rec,
 	gboolean need_shift = FALSE;
 	struct spf_addr *naddr;
 
-	naddr = g_slice_alloc0 (sizeof (*naddr));
+	naddr = g_malloc0 (sizeof (*naddr));
 	naddr->mech = check_spf_mech (elt, &need_shift);
 
 	if (need_shift) {
@@ -218,7 +218,7 @@ rspamd_spf_free_addr (gpointer a)
 	if (addr) {
 		g_free (addr->spf_string);
 		DL_FOREACH_SAFE (addr, cur, tmp) {
-			g_slice_free1 (sizeof (*cur), cur);
+			g_free (cur);
 		}
 	}
 }
@@ -228,7 +228,7 @@ rspamd_spf_new_addr_list (struct spf_record *rec, const gchar *domain)
 {
 	struct spf_resolved_element *resolved;
 
-	resolved = g_slice_alloc (sizeof (*resolved));
+	resolved = g_malloc0 (sizeof (*resolved));
 	resolved->redirected = FALSE;
 	resolved->cur_domain = g_strdup (domain);
 	resolved->elts = g_ptr_array_new_full (8, rspamd_spf_free_addr);
@@ -253,7 +253,7 @@ spf_record_destructor (gpointer r)
 			elt = g_ptr_array_index (rec->resolved, i);
 			g_ptr_array_free (elt->elts, TRUE);
 			g_free (elt->cur_domain);
-			g_slice_free1 (sizeof (*elt), elt);
+			g_free (elt);
 		}
 
 		g_ptr_array_free (rec->resolved, TRUE);
@@ -273,7 +273,7 @@ rspamd_flatten_record_dtor (struct spf_resolved *r)
 
 	g_free (r->domain);
 	g_array_free (r->elts, TRUE);
-	g_slice_free1 (sizeof (*r), r);
+	g_free (r);
 }
 
 static void
@@ -384,7 +384,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	g_assert (rec != NULL);
 
 	if (rec->resolved) {
-		res = g_slice_alloc0 (sizeof (*res));
+		res = g_malloc0 (sizeof (*res));
 		res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
 				rec->resolved->len);
 		res->domain = g_strdup (rec->sender_domain);
@@ -396,7 +396,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 		}
 	}
 	else {
-		res = g_slice_alloc0 (sizeof (*res));
+		res = g_malloc0 (sizeof (*res));
 		res->elts = g_array_new (FALSE, FALSE, sizeof (struct spf_addr));
 		res->domain = g_strdup (rec->sender_domain);
 		res->ttl = rec->ttl;
@@ -511,7 +511,7 @@ spf_record_process_addr (struct spf_record *rec, struct spf_addr *addr, struct
 	}
 	else {
 		/* We need to create a new address */
-		naddr = g_slice_alloc0 (sizeof (*naddr));
+		naddr = g_malloc0 (sizeof (*naddr));
 		memcpy (naddr, addr, sizeof (*naddr));
 		naddr->next = NULL;
 		naddr->prev = NULL;
@@ -2005,7 +2005,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
 			&& rec->dns_requests == 0) {
 		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
-		addr = g_slice_alloc0 (sizeof(*addr));
+		addr = g_malloc0 (sizeof(*addr));
 		addr->flags = 0;
 		addr->flags |= RSPAMD_SPF_FLAG_NA;
 		g_ptr_array_insert (resolved->elts, 0, addr);
@@ -2013,7 +2013,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else if (reply->code != RDNS_RC_NOREC && reply->code != RDNS_RC_NXDOMAIN
 			&& rec->dns_requests == 0) {
 		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
-		addr = g_slice_alloc0 (sizeof(*addr));
+		addr = g_malloc0 (sizeof(*addr));
 		addr->flags = 0;
 		addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		g_ptr_array_insert (resolved->elts, 0, addr);
@@ -2032,7 +2032,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 				}
 			}
 			else {
-				addr = g_slice_alloc0 (sizeof(*addr));
+				addr = g_malloc0 (sizeof(*addr));
 				addr->flags = 0;
 				if (reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN
 						|| reply->code == RDNS_RC_NOERROR) {

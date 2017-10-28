@@ -355,7 +355,7 @@ static void
 rspamd_image_cache_entry_dtor (gpointer p)
 {
 	struct rspamd_image_cache_entry *entry = p;
-	g_slice_free1 (sizeof (*entry), entry);
+	g_free (entry);
 }
 
 static guint32
@@ -416,7 +416,7 @@ rspamd_image_save_hash (struct rspamd_task *task, struct rspamd_image *img)
 				task->tv.tv_sec);
 
 		if (!found) {
-			found = g_slice_alloc0 (sizeof (*found));
+			found = g_malloc0 (sizeof (*found));
 			memcpy (found->dct, img->dct, RSPAMD_DCT_LEN / NBBY);
 			memcpy (found->digest, img->parent->digest, sizeof (found->digest));
 

@@ -192,7 +192,7 @@ lua_ip_new (lua_State *L, struct rspamd_lua_ip *old)
 {
 	struct rspamd_lua_ip *ip, **pip;
 
-	ip = g_slice_alloc (sizeof (*ip));
+	ip = g_malloc0 (sizeof (*ip));
 
 	if (old != NULL && old->addr != NULL) {
 		ip->addr = rspamd_inet_address_copy (old->addr);
@@ -406,7 +406,7 @@ lua_ip_destroy (lua_State *L)
 		if (ip->addr) {
 			rspamd_inet_address_free (ip->addr);
 		}
-		g_slice_free1 (sizeof (struct rspamd_lua_ip), ip);
+		g_free (ip);
 	}
 
 	return 0;
@@ -519,7 +519,7 @@ rspamd_lua_ip_push (lua_State *L, rspamd_inet_addr_t *addr)
 {
 	struct rspamd_lua_ip *ip, **pip;
 
-	ip = g_slice_alloc0 (sizeof (struct rspamd_lua_ip));
+	ip = g_malloc0 (sizeof (struct rspamd_lua_ip));
 	ip->addr = rspamd_inet_address_copy (addr);
 	pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
 	rspamd_lua_setclass (L, "rspamd{ip}", -1);
@@ -535,7 +535,7 @@ rspamd_lua_ip_push_fromstring (lua_State *L, const gchar *ip_str)
 		lua_pushnil (L);
 	}
 	else {
-		ip = g_slice_alloc0 (sizeof (struct rspamd_lua_ip));
+		ip = g_malloc0 (sizeof (struct rspamd_lua_ip));
 
 		if (rspamd_parse_inet_address (&ip->addr, ip_str, 0)) {
 
@@ -544,7 +544,7 @@ rspamd_lua_ip_push_fromstring (lua_State *L, const gchar *ip_str)
 			*pip = ip;
 		}
 		else {
-			g_slice_free1 (sizeof (*ip), ip);
+			g_free (ip);
 			lua_pushnil (L);
 		}
 	}

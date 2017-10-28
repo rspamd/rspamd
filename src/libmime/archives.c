@@ -35,7 +35,8 @@ rspamd_archive_dtor (gpointer p)
 		if (f->fname) {
 			g_string_free (f->fname, TRUE);
 		}
-		g_slice_free1 (sizeof (*f), f);
+
+		g_free (f);
 	}
 
 	g_ptr_array_free (arch->files, TRUE);
@@ -145,7 +146,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 			return;
 		}
 
-		f = g_slice_alloc0 (sizeof (*f));
+		f = g_malloc0 (sizeof (*f));
 		f->fname = g_string_new_len (cd + cd_basic_len, fname_len);
 		f->compressed_size = comp_size;
 		f->uncompressed_size = uncomp_size;
@@ -339,7 +340,7 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 				uncomp_sz += tmp;
 			}
 
-			f = g_slice_alloc0 (sizeof (*f));
+			f = g_malloc0 (sizeof (*f));
 
 			if (flags & 0x200) {
 				/* We have unicode + normal version */
@@ -540,7 +541,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 				return;
 			}
 
-			f = g_slice_alloc0 (sizeof (*f));
+			f = g_malloc0 (sizeof (*f));
 			f->uncompressed_size = uncomp_sz;
 			f->compressed_size = comp_sz;
 			f->fname = g_string_new_len (p, fname_len);
@@ -1318,7 +1319,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 					res = rspamd_7zip_ucs2_to_utf8 (task, p, fend);
 
 					if (res != NULL) {
-						fentry = g_slice_alloc0 (sizeof (fentry));
+						fentry = g_malloc0 (sizeof (fentry));
 						fentry->fname = res;
 						g_ptr_array_add (arch->files, fentry);
 					}

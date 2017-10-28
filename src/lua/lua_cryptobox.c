@@ -735,7 +735,7 @@ rspamd_lua_hash_create (const gchar *type)
 {
 	struct rspamd_lua_cryptobox_hash *h;
 
-	h = g_slice_alloc0 (sizeof (*h));
+	h = g_malloc0 (sizeof (*h));
 
 	if (type) {
 		if (g_ascii_strcasecmp (type, "md5") == 0) {
@@ -776,7 +776,7 @@ rspamd_lua_hash_create (const gchar *type)
 		}
 	}
 
-	h->h = g_slice_alloc0 (sizeof (*h->h));
+	h->h = g_malloc0 (sizeof (*h->h));
 	rspamd_cryptobox_hash_init (h->h, NULL, 0);
 
 ret:
@@ -1147,10 +1147,10 @@ lua_cryptobox_hash_gc (lua_State *L)
 	}
 	else {
 		rspamd_explicit_memzero (h->h, sizeof (*h->h));
-		g_slice_free1 (sizeof (*h->h), h->h);
+		g_free (h->h);
 	}
 
-	g_slice_free1 (sizeof (*h), h);
+	g_free (h);
 
 	return 0;
 }

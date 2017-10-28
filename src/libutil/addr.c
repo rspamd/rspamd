@@ -109,10 +109,10 @@ rspamd_inet_addr_create (gint af)
 {
 	rspamd_inet_addr_t *addr;
 
-	addr = g_slice_alloc0 (sizeof (rspamd_inet_addr_t));
+	addr = g_malloc0 (sizeof (rspamd_inet_addr_t));
 
 	if (af == AF_UNIX) {
-		addr->u.un = g_slice_alloc0 (sizeof (*addr->u.un));
+		addr->u.un = g_malloc0 (sizeof (*addr->u.un));
 		addr->slen = sizeof (addr->u.un->addr);
 	}
 
@@ -129,10 +129,10 @@ rspamd_inet_address_free (rspamd_inet_addr_t *addr)
 	if (addr) {
 		if (addr->af == AF_UNIX) {
 			if (addr->u.un) {
-				g_slice_free1 (sizeof (*addr->u.un), addr->u.un);
+				g_free (addr->u.un);
 			}
 		}
-		g_slice_free1 (sizeof (rspamd_inet_addr_t), addr);
+		g_free (addr);
 	}
 }
 
@@ -1096,7 +1096,7 @@ rspamd_inet_address_recvfrom (gint fd, void *buf, gsize len, gint fl,
 		addr->slen = slen;
 
 		if (addr->af == AF_UNIX) {
-			addr->u.un = g_slice_alloc (sizeof (*addr->u.un));
+			addr->u.un = g_malloc (sizeof (*addr->u.un));
 			memcpy (&addr->u.un->addr, &su.su, sizeof (struct sockaddr_un));
 		}
 		else {

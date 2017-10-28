@@ -366,7 +366,7 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 			g_node_destroy (expr->ast);
 		}
 
-		g_slice_free1 (sizeof (*expr), expr);
+		g_free (expr);
 	}
 }
 
@@ -598,7 +598,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	p = line;
 	c = line;
 	end = line + len;
-	e = g_slice_alloc (sizeof (*e));
+	e = g_malloc0 (sizeof (*e));
 	e->expressions = g_array_new (FALSE, FALSE,
 			sizeof (struct rspamd_expression_elt));
 	operand_stack = g_ptr_array_sized_new (32);

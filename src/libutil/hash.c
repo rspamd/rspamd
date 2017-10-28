@@ -60,7 +60,7 @@ rspamd_lru_destroy_node (gpointer value)
 			elt->hash->value_destroy (elt->data);
 		}
 
-		g_slice_free1 (sizeof (*elt), elt);
+		g_free (elt);
 	}
 }
 
@@ -190,7 +190,7 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 {
 	rspamd_lru_element_t *node;
 
-	node = g_slice_alloc (sizeof (rspamd_lru_element_t));
+	node = g_malloc (sizeof (rspamd_lru_element_t));
 	node->data = value;
 	node->key = key;
 	node->ttl = TIME_TO_TS (ttl);

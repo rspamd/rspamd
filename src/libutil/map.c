@@ -277,7 +277,7 @@ free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 
 	MAP_RELEASE (cbd->bk, "rspamd_map_backend");
 	MAP_RELEASE (periodic, "periodic");
-	g_slice_free1 (sizeof (struct http_callback_data), cbd);
+	g_free (cbd);
 }
 
 static void
@@ -346,7 +346,7 @@ rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
 		msg_debug_map ("cached data is now expired (gen missmatch) for %s", map->name);
 		event_del (&cache_cbd->timeout);
-		g_slice_free1 (sizeof (*cache_cbd), cache_cbd);
+		g_free (cache_cbd);
 	}
 	else if (cache_cbd->data->last_checked > cache_cbd->last_checked) {
 		/*
@@ -363,7 +363,7 @@ rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
 		msg_debug_map ("cached data is now expired for %s", map->name);
 		event_del (&cache_cbd->timeout);
-		g_slice_free1 (sizeof (*cache_cbd), cache_cbd);
+		g_free (cache_cbd);
 	}
 }
 
@@ -636,7 +636,7 @@ read_data:
 				sizeof (map->cache->shmem_name));
 		map->cache->len = cbd->data_len;
 		map->cache->last_modified = cbd->data->last_modified;
-		cache_cbd = g_slice_alloc0 (sizeof (*cache_cbd));
+		cache_cbd = g_malloc0 (sizeof (*cache_cbd));
 		cache_cbd->shm = cbd->shmem_data;
 		cache_cbd->map = map;
 		cache_cbd->data = cbd->data;
@@ -986,7 +986,7 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 		msg_debug_map ("unlocked map");
 	}
 
-	g_slice_free1 (sizeof (*periodic), periodic);
+	g_free (periodic);
 }
 
 static void
@@ -1037,7 +1037,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 		jittered_sec = rspamd_time_jitter (timeout, 0);
 	}
 
-	cbd = g_slice_alloc0 (sizeof (*cbd));
+	cbd = g_malloc0 (sizeof (*cbd));
 	cbd->cbdata.state = 0;
 	cbd->cbdata.prev_data = *map->user_data;
 	cbd->cbdata.cur_data = NULL;
@@ -1267,7 +1267,7 @@ rspamd_map_common_http_callback (struct rspamd_map *map,
 	}
 
 check:
-	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
+	cbd = g_malloc0 (sizeof (struct http_callback_data));
 
 	cbd->ev_base = map->ev_base;
 	cbd->map = map;
@@ -1741,7 +1741,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 	case MAP_PROTO_FILE:
 		if (bk->data.fd) {
 			g_free (bk->data.fd->filename);
-			g_slice_free1 (sizeof (*bk->data.fd), bk->data.fd);
+			g_free (bk->data.fd);
 		}
 		break;
 	case MAP_PROTO_STATIC:
@@ -1756,7 +1756,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 		if (bk->data.hd) {
 			g_free (bk->data.hd->host);
 			g_free (bk->data.hd->path);
-			g_slice_free1 (sizeof (*bk->data.hd), bk->data.hd);
+			g_free (bk->data.hd);
 		}
 		break;
 	}
@@ -1765,7 +1765,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 		rspamd_pubkey_unref (bk->trusted_pubkey);
 	}
 
-	g_slice_free1 (sizeof (*bk), bk);
+	g_free (bk);
 }
 
 static struct rspamd_map_backend *
@@ -1779,7 +1779,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	const gchar *end, *p;
 	rspamd_ftok_t tok;
 
-	bk = g_slice_alloc0 (sizeof (*bk));
+	bk = g_malloc0 (sizeof (*bk));
 	REF_INIT_RETAIN (bk, rspamd_map_backend_dtor);
 
 	if (!rspamd_map_check_proto (cfg, map_line, bk)) {
@@ -1800,7 +1800,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 
 	/* Now check for each proto separately */
 	if (bk->protocol == MAP_PROTO_FILE) {
-		fdata = g_slice_alloc0 (sizeof (struct file_map_data));
+		fdata = g_malloc0 (sizeof (struct file_map_data));
 		fdata->st.st_mtime = -1;
 
 		if (access (bk->uri, R_OK) == -1) {
@@ -1818,7 +1818,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		bk->data.fd = fdata;
 	}
 	else if (bk->protocol == MAP_PROTO_HTTP || bk->protocol == MAP_PROTO_HTTPS) {
-		hdata = g_slice_alloc0 (sizeof (struct http_map_data));
+		hdata = g_malloc0 (sizeof (struct http_map_data));
 
 		memset (&up, 0, sizeof (up));
 		if (http_parser_parse_url (bk->uri, strlen (bk->uri), FALSE,
@@ -1858,7 +1858,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 
 		bk->data.hd = hdata;
 	}else if (bk->protocol == MAP_PROTO_STATIC) {
-		sdata = g_slice_alloc0 (sizeof (*sdata));
+		sdata = g_malloc0 (sizeof (*sdata));
 		bk->data.sd = sdata;
 	}
 
@@ -1871,7 +1871,7 @@ err:
 	MAP_RELEASE (bk, "rspamd_map_backend");
 
 	if (hdata) {
-		g_slice_free1 (sizeof (*hdata), hdata);
+		g_free (hdata);
 	}
 
 	return NULL;
@@ -2647,7 +2647,7 @@ rspamd_regexp_map_create (struct rspamd_map *map,
 {
 	struct rspamd_regexp_map *re_map;
 
-	re_map = g_slice_alloc0 (sizeof (*re_map));
+	re_map = g_malloc0 (sizeof (*re_map));
 	re_map->values = g_ptr_array_new ();
 	re_map->regexps = g_ptr_array_new ();
 	re_map->map = map;
@@ -2693,7 +2693,7 @@ rspamd_regexp_map_destroy (struct rspamd_regexp_map *re_map)
 	}
 #endif
 
-	g_slice_free1 (sizeof (*re_map), re_map);
+	g_free (re_map);
 }
 
 static void

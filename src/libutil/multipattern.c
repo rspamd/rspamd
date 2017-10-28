@@ -338,7 +338,7 @@ rspamd_multipattern_create (enum rspamd_multipattern_flags flags)
 {
 	struct rspamd_multipattern *mp;
 
-	mp = g_slice_alloc0 (sizeof (*mp));
+	mp = g_malloc0 (sizeof (*mp));
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
@@ -363,7 +363,7 @@ rspamd_multipattern_create_sized (guint npatterns,
 {
 	struct rspamd_multipattern *mp;
 
-	mp = g_slice_alloc0 (sizeof (*mp));
+	mp = g_malloc0 (sizeof (*mp));
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
@@ -744,7 +744,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 			g_array_free (mp->hs_pats, TRUE);
 			g_array_free (mp->hs_ids, TRUE);
 			g_array_free (mp->hs_flags, TRUE);
-			g_slice_free1 (sizeof (*mp), mp);
+			g_free (mp);
 
 			return;
 		}
@@ -762,7 +762,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 
 		g_array_free (mp->pats, TRUE);
 
-		g_slice_free1 (sizeof (*mp), mp);
+		g_free (mp);
 	}
 }
 

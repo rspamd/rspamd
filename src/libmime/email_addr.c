@@ -31,7 +31,7 @@ rspamd_email_addr_dtor (struct rspamd_email_address *addr)
 		g_free ((void *)addr->user);
 	}
 
-	g_slice_free1 (sizeof (*addr), addr);
+	g_free (addr);
 }
 
 static void
@@ -74,7 +74,7 @@ rspamd_email_address_from_smtp (const gchar *str, guint len)
 	rspamd_smtp_addr_parse (str, len, &addr);
 
 	if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
-		ret = g_slice_alloc (sizeof (*ret));
+		ret = g_malloc (sizeof (*ret));
 		memcpy (ret, &addr, sizeof (addr));
 
 		if ((ret->flags & RSPAMD_EMAIL_ADDR_QUOTED) && ret->addr[0] == '"') {
@@ -123,7 +123,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	struct rspamd_email_address *elt;
 	guint nlen;
 
-	elt = g_slice_alloc0 (sizeof (*elt));
+	elt = g_malloc0 (sizeof (*elt));
 
 	if (addr != NULL) {
 		memcpy (elt, addr, sizeof (*addr));

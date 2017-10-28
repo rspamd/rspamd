@@ -1018,7 +1018,7 @@ rspamd_mime_parse_stack_free (struct rspamd_mime_parser_ctx *st)
 	if (st) {
 		g_ptr_array_free (st->stack, TRUE);
 		g_array_free (st->boundaries, TRUE);
-		g_slice_free1 (sizeof (*st), st);
+		g_free (st);
 	}
 }
 
@@ -1147,7 +1147,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		 * Here are dragons:
 		 * We allocate new parser context as we need to shift pointers
 		 */
-		nst = g_slice_alloc0 (sizeof (*st));
+		nst = g_malloc0 (sizeof (*st));
 		nst->stack = g_ptr_array_sized_new (4);
 		nst->pos = task->raw_headers_content.body_start;
 		nst->end = task->msg.begin + task->msg.len;
@@ -1270,7 +1270,7 @@ rspamd_mime_parse_task (struct rspamd_task *task, GError **err)
 		lib_ctx->key_usages = 0;
 	}
 
-	st = g_slice_alloc0 (sizeof (*st));
+	st = g_malloc0 (sizeof (*st));
 	st->stack = g_ptr_array_sized_new (4);
 	st->pos = task->raw_headers_content.body_start;
 	st->end = task->msg.begin + task->msg.len;

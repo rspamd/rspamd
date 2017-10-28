@@ -474,7 +474,7 @@ rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base,
 	struct rspamd_ssl_connection *c;
 
 	g_assert (ssl_ctx != NULL);
-	c = g_slice_alloc0 (sizeof (*c));
+	c = g_malloc0 (sizeof (*c));
 	c->ssl = SSL_new (ssl_ctx);
 	c->ev_base = ev_base;
 	c->verify_peer = verify_peer;
@@ -753,6 +753,6 @@ rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 			g_free (conn->hostname);
 		}
 
-		g_slice_free1 (sizeof (*conn), conn);
+		g_free (conn);
 	}
 }

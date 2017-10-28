@@ -371,7 +371,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	rspamd_logger_t *logger;
 
 	if (plogger == NULL || *plogger == NULL) {
-		logger = g_slice_alloc0 (sizeof (rspamd_logger_t));
+		logger = g_malloc0 (sizeof (rspamd_logger_t));
 
 		if (cfg->log_error_elts > 0 && pool) {
 			logger->errlog = rspamd_mempool_alloc0_shared (pool,

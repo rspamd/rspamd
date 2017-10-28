@@ -961,7 +961,7 @@ lua_util_tokenize_text (lua_State *L)
 				lua_pop (L, 1);
 
 				if (ex_len > 0) {
-					ex = g_slice_alloc (sizeof (*ex));
+					ex = g_malloc0 (sizeof (*ex));
 					ex->pos = pos;
 					ex->len = ex_len;
 					exceptions = g_list_prepend (exceptions, ex);
@@ -1000,7 +1000,7 @@ lua_util_tokenize_text (lua_State *L)
 	cur = exceptions;
 	while (cur) {
 		ex = cur->data;
-		g_slice_free1 (sizeof (*ex), ex);
+		g_free (ex);
 		cur = g_list_next (cur);
 	}
 
