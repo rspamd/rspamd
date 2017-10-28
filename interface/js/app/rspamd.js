@@ -510,7 +510,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                         "tooltips": {
                             "enabled": true,
                             "type": "placeholder",
-                            "string": "{label}: {value}, {percentage}%"
+                            "string": "{label}: {value} ({percentage}%)"
                         },
                         "effects": {
                             "pullOutSegmentOnClick": {
