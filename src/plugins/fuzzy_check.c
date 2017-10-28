@@ -108,8 +108,23 @@ struct fuzzy_ctx {
 	gboolean enabled;
 };
 
+enum fuzzy_result_type {
+	FUZZY_RESULT_TXT,
+	FUZZY_RESULT_IMG,
+	FUZZY_RESULT_BIN
+};
+
+struct fuzzy_client_result {
+	const gchar *symbol;
+	gchar *option;
+	gdouble score;
+	gdouble prob;
+	enum fuzzy_result_type type;
+};
+
 struct fuzzy_client_session {
 	GPtrArray *commands;
+	GPtrArray *results;
 	struct rspamd_task *task;
 	struct upstream *server;
 	rspamd_inet_addr_t *addr;
@@ -1131,6 +1146,10 @@ fuzzy_io_fin (void *ud)
 		g_ptr_array_free (session->commands, TRUE);
 	}
 
+	if (session->results) {
+		g_ptr_array_free (session->results, TRUE);
+	}
+
 	event_del (&session->ev);
 	event_del (&session->timev);
 	close (session->fd);
@@ -1784,6 +1803,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	double nval;
 	guchar buf[2048];
 	const gchar *type = "bin";
+	struct fuzzy_client_result *res;
 
 	/* Get mapping by flag */
 	if ((map =
@@ -1799,7 +1819,9 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		weight = map->weight;
 	}
 
-
+	res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+	res->prob = rep->prob;
+	res->symbol = symbol;
 	/*
 	 * Hash is assumed to be found if probability is more than 0.5
 	 * In that case `value` means number of matches
@@ -1811,15 +1833,21 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
 		nval *= rspamd_normalize_probability (rep->prob, 0.5);
 		type = "img";
+		res->type = FUZZY_RESULT_IMG;
 	}
 	else {
 		if (cmd->shingles_count > 0) {
 			type = "txt";
+			res->type = FUZZY_RESULT_TXT;
+		}
+		else {
+			res->type = FUZZY_RESULT_BIN;
 		}
 
 		nval *= rspamd_normalize_probability (rep->prob, 0.5);
 	}
 
+	res->score = nval;
 	msg_info_task (
 			"found fuzzy hash(%s) %*xs with weight: "
 			"%.2f, probability %.2f, in list: %s:%d%s",
@@ -1830,6 +1858,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 			symbol,
 			rep->flag,
 			map == NULL ? "(unknown)" : "");
+
 	if (map != NULL || !session->rule->skip_unknown) {
 		rspamd_snprintf (buf,
 				sizeof (buf),
@@ -1838,10 +1867,8 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 				rspamd_fuzzy_hash_len, cmd->digest,
 				rep->prob,
 				type);
-		rspamd_task_insert_result_single (session->task,
-				symbol,
-				nval,
-				buf);
+		res->option = rspamd_mempool_strdup (task->task_pool, buf);
+		g_ptr_array_add (session->results, res);
 	}
 }
 
@@ -1923,6 +1950,48 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 	return ret;
 }
 
+static void
+fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
+{
+	struct fuzzy_client_result *res;
+	guint i;
+	gboolean seen_text = FALSE, seen_img = FALSE;
+	gdouble prob_txt = 0.0, mult;
+
+	PTR_ARRAY_FOREACH (results, i, res) {
+		if (res->type == FUZZY_RESULT_TXT) {
+			seen_text = TRUE;
+			prob_txt = MAX (prob_txt, res->prob);
+		}
+		else if (res->type == FUZZY_RESULT_IMG) {
+			seen_img = TRUE;
+		}
+	}
+
+	PTR_ARRAY_FOREACH (results, i, res) {
+		mult = 1.0;
+
+		if (res->type == FUZZY_RESULT_IMG) {
+			if (!seen_text) {
+				mult *= 0.25;
+			}
+			else if (prob_txt < 0.75) {
+				/* Penalize sole image without matching text */
+				mult *= prob_txt;
+			}
+		}
+		else if (res->type == FUZZY_RESULT_TXT) {
+			if (seen_img) {
+				/* Slightly increase score */
+				mult = 1.1;
+			}
+		}
+
+		rspamd_task_insert_result_single (task, res->symbol,
+				res->score * mult, res->option);
+	}
+}
+
 static gboolean
 fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
 {
@@ -1940,6 +2009,7 @@ fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
 	}
 
 	if (nreplied == session->commands->len) {
+		fuzzy_insert_metric_results (session->task, session->results);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 
 		return TRUE;
@@ -2691,6 +2761,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 			session->server = selected;
 			session->rule = rule;
 			session->addr = addr;
+			session->results = g_ptr_array_sized_new (32);
 
 			event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
 					session);
