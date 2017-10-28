@@ -139,13 +139,13 @@ rspamd_shingles_from_text (GArray *input,
 	row = rspamd_fstring_sized_new (256);
 
 	/* Init hashes pipes and keys */
-	hashes = g_slice_alloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
+	hashes = g_malloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
 	hlen = input->len > SHINGLES_WINDOW ?
 			(input->len - SHINGLES_WINDOW + 1) : 1;
 	keys = rspamd_shingles_get_keys_cached (key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-		hashes[i] = g_slice_alloc (hlen * sizeof (guint64));
+		hashes[i] = g_malloc (hlen * sizeof (guint64));
 	}
 
 	/* Now parse input words into a vector of hashes using rolling window */
@@ -222,10 +222,10 @@ rspamd_shingles_from_text (GArray *input,
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		res->hashes[i] = filter (hashes[i], hlen,
 				i, key, filterd);
-		g_slice_free1 (hlen * sizeof (guint64), hashes[i]);
+		g_free (hashes[i]);
 	}
 
-	g_slice_free1 (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE, hashes);
+	g_free (hashes);
 
 	rspamd_fstring_free (row);
 
@@ -258,12 +258,12 @@ rspamd_shingles_from_image (guchar *dct,
 	}
 
 	/* Init hashes pipes and keys */
-	hashes = g_slice_alloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
+	hashes = g_malloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
 	hlen = RSPAMD_DCT_LEN / NBBY  + 1;
 	keys = rspamd_shingles_get_keys_cached (key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-		hashes[i] = g_slice_alloc (hlen * sizeof (guint64));
+		hashes[i] = g_malloc (hlen * sizeof (guint64));
 	}
 
 	switch (alg) {
@@ -303,10 +303,10 @@ rspamd_shingles_from_image (guchar *dct,
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		shingle->hashes[i] = filter (hashes[i], hlen,
 				i, key, filterd);
-		g_slice_free1 (hlen * sizeof (guint64), hashes[i]);
+		g_free (hashes[i]);
 	}
 
-	g_slice_free1 (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE, hashes);
+	g_free (hashes);
 
 	return shingle;
 }

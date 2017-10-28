@@ -156,7 +156,7 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 			g_free (re->pattern);
 		}
 
-		g_slice_free1 (sizeof (*re), re);
+		g_free (re);
 	}
 }
 
@@ -464,7 +464,7 @@ fin:
 	}
 
 	/* Now allocate the target structure */
-	res = g_slice_alloc0 (sizeof (*res));
+	res = g_malloc0 (sizeof (*res));
 	REF_INIT_RETAIN (res, rspamd_regexp_dtor);
 	res->flags = rspamd_flags;
 	res->pattern = real_pattern;
@@ -946,7 +946,7 @@ rspamd_regexp_cache_new (void)
 {
 	struct rspamd_regexp_cache *ncache;
 
-	ncache = g_slice_alloc (sizeof (*ncache));
+	ncache = g_malloc0 (sizeof (*ncache));
 	ncache->tbl = g_hash_table_new_full (rspamd_regexp_hash, rspamd_regexp_equal,
 			NULL, (GDestroyNotify)rspamd_regexp_unref);
 

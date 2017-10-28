@@ -1481,7 +1481,7 @@ rspamd_mutex_new (void)
 {
 	rspamd_mutex_t *new;
 
-	new = g_slice_alloc (sizeof (rspamd_mutex_t));
+	new = g_malloc0 (sizeof (rspamd_mutex_t));
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
 	g_mutex_init (&new->mtx);
 #else
@@ -1525,7 +1525,7 @@ rspamd_mutex_free (rspamd_mutex_t *mtx)
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
 	g_mutex_clear (&mtx->mtx);
 #endif
-	g_slice_free1 (sizeof (rspamd_mutex_t), mtx);
+	g_free (mtx);
 }
 
 struct rspamd_thread_data {
@@ -1973,7 +1973,7 @@ rspamd_init_libs (void)
 	struct ottery_config *ottery_cfg;
 	gint ssl_options;
 
-	ctx = g_slice_alloc0 (sizeof (*ctx));
+	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->crypto_ctx = rspamd_cryptobox_init ();
 	ottery_cfg = g_malloc0 (ottery_get_sizeof_config ());
 	ottery_config_init (ottery_cfg);
@@ -2071,18 +2071,20 @@ rspamd_open_zstd_dictionary (const char *path)
 {
 	struct zstd_dictionary *dict;
 
-	dict = g_slice_alloc0 (sizeof (*dict));
+	dict = g_malloc0 (sizeof (*dict));
 	dict->dict = rspamd_file_xmap (path, PROT_READ, &dict->size, TRUE);
 
 	if (dict->dict == NULL) {
-		g_slice_free1 (sizeof (*dict), dict);
+		g_free (dict);
+
 		return NULL;
 	}
 
 	dict->id = ZDICT_getDictID (dict->dict, dict->size);
 
 	if (dict->id == 0) {
-		g_slice_free1 (sizeof (*dict), dict);
+		g_free (dict);
+
 		return NULL;
 	}
 
@@ -2094,7 +2096,7 @@ rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
 {
 	if (dict) {
 		munmap (dict->dict, dict->size);
-		g_slice_free1 (sizeof (*dict), dict);
+		g_free (dict);
 	}
 }
 
@@ -2250,7 +2252,7 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		rspamd_free_zstd_dictionary (ctx->out_dict);
 		ZSTD_freeCStream (ctx->out_zstream);
 		ZSTD_freeDStream (ctx->in_zstream);
-		g_slice_free1 (sizeof (*ctx), ctx);
+		g_free (ctx);
 	}
 }
 

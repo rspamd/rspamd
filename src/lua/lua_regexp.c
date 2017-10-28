@@ -141,7 +141,7 @@ lua_regexp_create (lua_State *L)
 		g_error_free (err);
 	}
 	else {
-		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
+		new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
 		new->re = re;
 		new->re_pattern = g_strdup (string);
 		new->module = rspamd_lua_get_module_name (L);
@@ -176,7 +176,7 @@ lua_regexp_get_cached (lua_State *L)
 	re = rspamd_regexp_cache_query (NULL, string, flags_str);
 
 	if (re) {
-		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
+		new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
 		new->re = rspamd_regexp_ref (re);
 		new->re_pattern = g_strdup (string);
 		new->module = rspamd_lua_get_module_name (L);
@@ -222,7 +222,7 @@ lua_regexp_create_cached (lua_State *L)
 	re = rspamd_regexp_cache_query (NULL, string, flags_str);
 
 	if (re) {
-		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
+		new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
 		new->re = rspamd_regexp_ref (re);
 		new->re_pattern = g_strdup (string);
 		new->module = rspamd_lua_get_module_name (L);
@@ -241,7 +241,7 @@ lua_regexp_create_cached (lua_State *L)
 			g_error_free (err);
 		}
 		else {
-			new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
+			new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
 			new->re = rspamd_regexp_ref (re);
 			new->re_pattern = g_strdup (string);
 			new->module = rspamd_lua_get_module_name (L);
@@ -714,7 +714,7 @@ lua_regexp_gc (lua_State *L)
 
 		g_free (to_del->re_pattern);
 		g_free (to_del->module);
-		g_slice_free1 (sizeof (*to_del), to_del);
+		g_free (to_del);
 	}
 
 	return 0;

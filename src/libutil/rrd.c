@@ -406,7 +406,7 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 		return NULL;
 	}
 
-	file = g_slice_alloc0 (sizeof (struct rspamd_rrd_file));
+	file = g_malloc0 (sizeof (struct rspamd_rrd_file));
 
 	if (file == NULL) {
 		g_set_error (err, rrd_error_quark (), ENOMEM, "not enough memory");
@@ -438,7 +438,7 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), ENOMEM, "mmap failed: %s", strerror (errno));
-		g_slice_free1 (sizeof (struct rspamd_rrd_file), file);
+		g_free (file);
 		return NULL;
 	}
 
@@ -754,7 +754,7 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), ENOMEM, "mmap failed: %s", strerror (errno));
-		g_slice_free1 (sizeof (struct rspamd_rrd_file), file);
+		g_free (file);
 		return FALSE;
 	}
 
@@ -1265,7 +1265,7 @@ rspamd_rrd_close (struct rspamd_rrd_file * file)
 	g_free (file->filename);
 	g_free (file->id);
 
-	g_slice_free1 (sizeof (struct rspamd_rrd_file), file);
+	g_free (file);
 
 	return 0;
 }
@@ -1489,7 +1489,7 @@ rspamd_rrd_query (struct rspamd_rrd_file *file,
 		return NULL;
 	}
 
-	res = g_slice_alloc0 (sizeof (*res));
+	res = g_malloc0 (sizeof (*res));
 	res->ds_count = file->stat_head->ds_cnt;
 	res->last_update = (gdouble)file->live_head->last_up +
 			((gdouble)file->live_head->last_up_usec / 1e6f);

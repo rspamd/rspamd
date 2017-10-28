@@ -85,10 +85,10 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 
 
 	if (pool != NULL) {
-		cf = rspamd_mempool_alloc (pool, sizeof (*cf));
+		cf = rspamd_mempool_alloc0 (pool, sizeof (*cf));
 	}
 	else {
-		cf = g_slice_alloc (sizeof (*cf));
+		cf = g_malloc0 (sizeof (*cf));
 	}
 
 	/* Use default config */

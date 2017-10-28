@@ -146,7 +146,7 @@ rspamd_upstream_ctx_dtor (struct upstream_ctx *ctx)
 
 	g_queue_free (ctx->upstreams);
 	rspamd_mempool_delete (ctx->pool);
-	g_slice_free1 (sizeof (*ctx), ctx);
+	g_free (ctx);
 }
 
 void
@@ -160,7 +160,7 @@ rspamd_upstreams_library_init (void)
 {
 	struct upstream_ctx *ctx;
 
-	ctx = g_slice_alloc0 (sizeof (*ctx));
+	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->error_time = default_error_time;
 	ctx->max_errors = default_max_errors;
 	ctx->dns_retransmits = default_dns_retransmits;
@@ -227,7 +227,7 @@ rspamd_upstream_addr_elt_dtor (gpointer a)
 	struct upstream_addr_elt *elt = a;
 
 	rspamd_inet_address_free (elt->addr);
-	g_slice_free1 (sizeof (*elt), elt);
+	g_free (elt);
 }
 
 static void
@@ -262,7 +262,7 @@ rspamd_upstream_update_addrs (struct upstream *up)
 		/* Copy addrs back */
 		LL_FOREACH (up->new_addrs, cur) {
 			rspamd_inet_address_set_port (cur->addr, port);
-			addr_elt = g_slice_alloc (sizeof (*addr_elt));
+			addr_elt = g_malloc0 (sizeof (*addr_elt));
 			addr_elt->addr = cur->addr;
 			addr_elt->errors = 0;
 			g_ptr_array_add (new_addrs, addr_elt);
@@ -488,7 +488,7 @@ rspamd_upstreams_create (struct upstream_ctx *ctx)
 {
 	struct upstream_list *ls;
 
-	ls = g_slice_alloc0 (sizeof (*ls));
+	ls = g_malloc0 (sizeof (*ls));
 	ls->hash_seed = SEED_CONSTANT;
 	ls->ups = g_ptr_array_new ();
 	ls->alive = g_ptr_array_new ();
@@ -536,7 +536,7 @@ rspamd_upstream_dtor (struct upstream *up)
 		REF_RELEASE (up->ctx);
 	}
 
-	g_slice_free1 (sizeof (*up), up);
+	g_free (up);
 }
 
 rspamd_inet_addr_t*
@@ -573,7 +573,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 	rspamd_inet_addr_t *addr;
 	gboolean ret = FALSE;
 
-	up = g_slice_alloc0 (sizeof (*up));
+	up = g_malloc0 (sizeof (*up));
 
 	switch (parse_type) {
 	case RSPAMD_UPSTREAM_PARSE_DEFAULT:
@@ -607,7 +607,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 	}
 
 	if (!ret) {
-		g_slice_free1 (sizeof (*up), up);
+		g_free (up);
 		return FALSE;
 	}
 	else {
@@ -667,7 +667,7 @@ rspamd_upstream_add_addr (struct upstream *up, rspamd_inet_addr_t *addr)
 		up->addrs.addr = g_ptr_array_new_full (8, rspamd_upstream_addr_elt_dtor);
 	}
 
-	elt = g_slice_alloc0 (sizeof (*elt));
+	elt = g_malloc0 (sizeof (*elt));
 	elt->addr = addr;
 	g_ptr_array_add (up->addrs.addr, elt);
 	g_ptr_array_sort (up->addrs.addr, rspamd_upstream_addr_sort_func);
@@ -777,7 +777,7 @@ rspamd_upstreams_destroy (struct upstream_list *ups)
 
 		g_ptr_array_free (ups->ups, TRUE);
 		rspamd_mutex_free (ups->lock);
-		g_slice_free1 (sizeof (*ups), ups);
+		g_free (ups);
 	}
 }
 

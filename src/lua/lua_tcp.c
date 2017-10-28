@@ -263,7 +263,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 		}
 	}
 
-	g_slice_free1 (sizeof (*hdl), hdl);
+	g_free (hdl);
 
 	return TRUE;
 }
@@ -294,11 +294,11 @@ lua_tcp_fin (gpointer arg)
 
 	LL_FOREACH_SAFE (cbd->dtors, dtor, dttmp) {
 		dtor->dtor (dtor->data);
-		g_slice_free1 (sizeof (*dtor), dtor);
+		g_free (dtor);
 	}
 
 	g_byte_array_unref (cbd->in);
-	g_slice_free1 (sizeof (struct lua_tcp_cbdata), cbd);
+	g_free (cbd);
 }
 
 static struct lua_tcp_cbdata *
@@ -860,7 +860,7 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, struct lua_tcp_cbdata *cbd,
 			if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
 				/* Steal ownership */
 				t->flags = 0;
-				dtor = g_slice_alloc0 (sizeof (*dtor));
+				dtor = g_malloc0 (sizeof (*dtor));
 				dtor->dtor = g_free;
 				dtor->data = (void *)t->start;
 				LL_PREPEND (cbd->dtors, dtor);
@@ -874,7 +874,7 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, struct lua_tcp_cbdata *cbd,
 	else if (lua_type (L, pos) == LUA_TSTRING) {
 		str = luaL_checklstring (L, pos, &len);
 		vec->iov_base = g_malloc (len);
-		dtor = g_slice_alloc0 (sizeof (*dtor));
+		dtor = g_malloc0 (sizeof (*dtor));
 		dtor->dtor = g_free;
 		dtor->data = vec->iov_base;
 		LL_PREPEND (cbd->dtors, dtor);
@@ -961,7 +961,7 @@ lua_tcp_request (lua_State *L)
 		}
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-		cbd = g_slice_alloc0 (sizeof (*cbd));
+		cbd = g_malloc0 (sizeof (*cbd));
 
 		lua_pushstring (L, "task");
 		lua_gettable (L, -2);
@@ -1081,7 +1081,7 @@ lua_tcp_request (lua_State *L)
 				msg_err ("tcp request has bad data argument");
 				lua_pushboolean (L, FALSE);
 				g_free (iov);
-				g_slice_free1 (sizeof (*cbd), cbd);
+				g_free (cbd);
 
 				return 1;
 			}
@@ -1106,7 +1106,7 @@ lua_tcp_request (lua_State *L)
 					msg_err ("tcp request has bad data argument at pos %d", niov);
 					lua_pushboolean (L, FALSE);
 					g_free (iov);
-					g_slice_free1 (sizeof (*cbd), cbd);
+					g_free (cbd);
 
 					return 1;
 				}
@@ -1135,7 +1135,7 @@ lua_tcp_request (lua_State *L)
 	if (total_out > 0) {
 		struct lua_tcp_handler *wh;
 
-		wh = g_slice_alloc0 (sizeof (*wh));
+		wh = g_malloc0 (sizeof (*wh));
 		wh->type = LUA_WANT_WRITE;
 		wh->h.w.iov = iov;
 		wh->h.w.iovlen = niov;
@@ -1180,7 +1180,7 @@ lua_tcp_request (lua_State *L)
 	if (do_read) {
 		struct lua_tcp_handler *rh;
 
-		rh = g_slice_alloc0 (sizeof (*rh));
+		rh = g_malloc0 (sizeof (*rh));
 		rh->type = LUA_WANT_READ;
 		rh->h.r.cbref = cbref;
 		rh->h.r.stop_pattern = stop_pattern;
@@ -1291,7 +1291,7 @@ lua_tcp_add_read (lua_State *L)
 		}
 	}
 
-	rh = g_slice_alloc0 (sizeof (*rh));
+	rh = g_malloc0 (sizeof (*rh));
 	rh->type = LUA_WANT_READ;
 	rh->h.r.cbref = cbref;
 	rh->h.r.stop_pattern = stop_pattern;
@@ -1356,7 +1356,7 @@ lua_tcp_add_write (lua_State *L)
 				msg_err ("tcp request has bad data argument at pos %d", niov);
 				lua_pushboolean (L, FALSE);
 				g_free (iov);
-				g_slice_free1 (sizeof (*cbd), cbd);
+				g_free (cbd);
 
 				return 1;
 			}
@@ -1370,7 +1370,7 @@ lua_tcp_add_write (lua_State *L)
 		lua_pop (L, 1);
 	}
 
-	wh = g_slice_alloc0 (sizeof (*wh));
+	wh = g_malloc0 (sizeof (*wh));
 	wh->type = LUA_WANT_WRITE;
 	wh->h.w.iov = iov;
 	wh->h.w.iovlen = niov;
