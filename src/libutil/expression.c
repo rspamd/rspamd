@@ -942,7 +942,7 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 }
 
 static gdouble
-rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val,
+rspamd_ast_do_op (struct rspamd_expression_elt *elt, gdouble val,
 		gdouble acc, gdouble lim, gboolean first_elt)
 {
 	gdouble ret = val;
