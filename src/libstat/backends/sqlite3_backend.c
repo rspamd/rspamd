@@ -437,13 +437,13 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 			.tv_nsec = 1000000
 	};
 
-	bk = g_slice_alloc0 (sizeof (*bk));
+	bk = g_malloc0 (sizeof (*bk));
 	bk->sqlite = rspamd_sqlite3_open_or_create (pool, path, create_tables_sql,
 			0, err);
 	bk->pool = pool;
 
 	if (bk->sqlite == NULL) {
-		g_slice_free1 (sizeof (*bk), bk);
+		g_free (bk);
 
 		return NULL;
 	}
@@ -455,7 +455,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 	if (bk->prstmt == NULL) {
 		sqlite3_close (bk->sqlite);
-		g_slice_free1 (sizeof (*bk), bk);
+		g_free (bk);
 
 		return NULL;
 	}
@@ -472,7 +472,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 		msg_err_pool ("failed to stard transaction: %d, %s", ret,
 				sqlite3_errmsg (bk->sqlite));
 		sqlite3_close (bk->sqlite);
-		g_slice_free1 (sizeof (*bk), bk);
+		g_free (bk);
 
 		return NULL;
 	}
@@ -496,7 +496,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 				(gint64)strlen (tok_conf_encoded),
 				tok_conf_encoded) != SQLITE_OK) {
 			sqlite3_close (bk->sqlite);
-			g_slice_free1 (sizeof (*bk), bk);
+			g_free (bk);
 			g_free (tok_conf_encoded);
 
 			return NULL;
@@ -642,7 +642,7 @@ rspamd_sqlite3_close (gpointer p)
 		rspamd_sqlite3_close_prstmt (bk->sqlite, bk->prstmt);
 		sqlite3_close (bk->sqlite);
 		g_free (bk->fname);
-		g_slice_free1 (sizeof (*bk), bk);
+		g_free (bk);
 	}
 }
 

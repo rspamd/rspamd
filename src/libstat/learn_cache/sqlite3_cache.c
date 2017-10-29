@@ -143,7 +143,7 @@ rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 		err = NULL;
 	}
 	else {
-		new = g_slice_alloc (sizeof (*new));
+		new = g_malloc0 (sizeof (*new));
 		new->db = sqlite;
 		new->prstmt = rspamd_sqlite3_init_prstmt (sqlite, prepared_stmts,
 				RSPAMD_STAT_CACHE_MAX, &err);
@@ -153,7 +153,7 @@ rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 			g_error_free (err);
 			err = NULL;
 			sqlite3_close (sqlite);
-			g_slice_free1 (sizeof (*new), new);
+			g_free (new);
 			new = NULL;
 		}
 	}
@@ -285,7 +285,7 @@ rspamd_stat_cache_sqlite3_close (gpointer c)
 	if (ctx != NULL) {
 		rspamd_sqlite3_close_prstmt (ctx->db, ctx->prstmt);
 		sqlite3_close (ctx->db);
-		g_slice_free1 (sizeof (*ctx), ctx);
+		g_free (ctx);
 	}
 
 }

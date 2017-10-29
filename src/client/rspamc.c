@@ -1572,7 +1572,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 
 	rspamd_client_destroy (conn);
 	g_free (cbdata->filename);
-	g_slice_free1 (sizeof (struct rspamc_callback_data), cbdata);
+	g_free (cbdata);
 }
 
 static void
@@ -1623,7 +1623,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	conn = rspamd_client_init (ev_base, hostbuf, port, timeout, key);
 
 	if (conn != NULL) {
-		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
+		cbdata = g_malloc0 (sizeof (struct rspamc_callback_data));
 		cbdata->cmd = cmd;
 		cbdata->filename = g_strdup (name);
 

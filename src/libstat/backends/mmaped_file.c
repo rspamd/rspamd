@@ -597,13 +597,13 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 			size);
 	}
 
-	new_file = g_slice_alloc0 (sizeof (rspamd_mmaped_file_t));
+	new_file = g_malloc0 (sizeof (rspamd_mmaped_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1) {
 		msg_info_pool ("cannot open file %s, error %d, %s",
 			filename,
 			errno,
 			strerror (errno));
-		g_slice_free1 (sizeof (*new_file), new_file);
+		g_free (new_file);
 		return NULL;
 	}
 
@@ -615,7 +615,7 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 			filename,
 			errno,
 			strerror (errno));
-		g_slice_free1 (sizeof (*new_file), new_file);
+		g_free (new_file);
 		return NULL;
 
 	}
@@ -632,7 +632,7 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 				filename,
 				errno,
 				strerror (errno));
-		g_slice_free1 (sizeof (*new_file), new_file);
+		g_free (new_file);
 		return NULL;
 	}
 
@@ -640,7 +640,7 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 		close (new_file->fd);
 		rspamd_file_unlock (new_file->fd, FALSE);
 		munmap (new_file->map, st.st_size);
-		g_slice_free1 (sizeof (*new_file), new_file);
+		g_free (new_file);
 		return NULL;
 	}
 
@@ -669,7 +669,7 @@ rspamd_mmaped_file_close_file (rspamd_mempool_t *pool,
 		close (file->fd);
 	}
 
-	g_slice_free1 (sizeof (*file), file);
+	g_free (file);
 
 	return 0;
 }

@@ -302,7 +302,7 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 	const ucl_object_t *obj;
 	gboolean ret = FALSE;
 
-	cache_ctx = g_slice_alloc0 (sizeof (*cache_ctx));
+	cache_ctx = g_malloc0 (sizeof (*cache_ctx));
 
 	/* First search in backend configuration */
 	obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
@@ -344,7 +344,7 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 
 	if (!ret) {
 		msg_err_config ("cannot init redis cache for %s", stf->symbol);
-		g_slice_free1 (sizeof (*cache_ctx), cache_ctx);
+		g_free (cache_ctx);
 		return NULL;
 	}
 

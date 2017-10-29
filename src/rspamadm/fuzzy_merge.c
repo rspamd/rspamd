@@ -332,7 +332,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 				 * local one then we replace dest value with the src value
 				 */
 				if (src_value > value && src_flag == flag) {
-					nop = g_slice_alloc (sizeof (*nop));
+					nop = g_malloc0 (sizeof (*nop));
 					nop->op = OP_UPDATE;
 					memcpy (nop->digest, digest,
 							sizeof (nop->digest));
@@ -355,7 +355,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 						else {
 							ndup_other ++;
 						}
-						g_slice_free1 (sizeof (*nop), nop);
+						g_free (nop);
 					}
 				}
 				else {
@@ -366,7 +366,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 				/* Digest has not been found, but maybe we have the same in other
 				 * sources ?
 				 */
-				nop = g_slice_alloc (sizeof (*nop));
+				nop = g_malloc0 (sizeof (*nop));
 				nop->op = OP_INSERT;
 				memcpy (nop->digest, digest,
 						sizeof (nop->digest));
@@ -393,7 +393,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					else {
 						ndup_other++;
 					}
-					g_slice_free1 (sizeof (*nop), nop);
+					g_free (nop);
 				}
 			}
 		}
@@ -414,7 +414,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 
 				if ((op = g_hash_table_lookup (digests_id, &id)) != NULL) {
 					/* value, number, digest_id */
-					nop = g_slice_alloc (sizeof (*nop));
+					nop = g_malloc0 (sizeof (*nop));
 					nop->op = OP_INSERT_SHINGLE;
 					memcpy (nop->digest, op->digest, sizeof (nop->digest));
 					nop->data.shgl.number = sqlite3_column_int64 (shgl_stmt, 1);
@@ -547,7 +547,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 	sqlite3_close (dest_db);
 	for (i = 0; i < ops->len; i++) {
 		op = g_ptr_array_index (ops, i);
-		g_slice_free1 (sizeof (*op), op);
+		g_free (op);
 	}
 	g_ptr_array_free (ops, TRUE);
 	rspamd_mempool_delete (pool);
@@ -572,7 +572,7 @@ err:
 	sqlite3_close (dest_db);
 	for (i = 0; i < ops->len; i++) {
 		op = g_ptr_array_index (ops, i);
-		g_slice_free1 (sizeof (*op), op);
+		g_free (op);
 	}
 	g_ptr_array_free (ops, TRUE);
 	rspamd_mempool_delete (pool);

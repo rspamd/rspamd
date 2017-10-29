@@ -137,12 +137,12 @@ gboolean rspamd_ftok_cstr_equal (const rspamd_ftok_t *s,
  * | len | allocated | <data> -- fstring_t
  *                     <begin> -- tok
  *
- * tok is expected to be allocated with g_slice_alloc
+ * tok is expected to be allocated with g_malloc
  */
 void rspamd_fstring_mapped_ftok_free (gpointer p);
 
 /**
- * Map token to a specified string. Token must be freed using g_slice_free1
+ * Map token to a specified string. Token must be freed using g_free
  */
 rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
 

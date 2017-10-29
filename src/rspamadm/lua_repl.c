@@ -548,7 +548,7 @@ rspamadm_lua_accept_cb (gint fd, short what, void *arg)
 		return;
 	}
 
-	session = g_slice_alloc0 (sizeof (*session));
+	session = g_malloc0 (sizeof (*session));
 	session->rt = ctx->rt;
 	session->ctx = ctx;
 	session->addr = addr;
@@ -571,7 +571,7 @@ rspamadm_lua_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 {
 	struct rspamadm_lua_repl_session *session = conn_ent->ud;
 
-	g_slice_free1 (sizeof (*session), session);
+	g_free (session);
 }
 
 /*
@@ -740,7 +740,7 @@ rspamadm_lua (gint argc, gchar **argv)
 		}
 
 		ev_base = event_init ();
-		ctx = g_slice_alloc0  (sizeof (*ctx));
+		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,
 						NULL, ev_base,
@@ -758,7 +758,7 @@ rspamadm_lua (gint argc, gchar **argv)
 			if (fd != -1) {
 				struct event *ev;
 
-				ev = g_slice_alloc0 (sizeof (*ev));
+				ev = g_malloc0 (sizeof (*ev));
 				event_set (ev, fd, EV_READ|EV_PERSIST, rspamadm_lua_accept_cb,
 						ctx);
 				event_base_set (ev_base, ev);

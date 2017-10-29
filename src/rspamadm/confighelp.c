@@ -235,7 +235,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	/* Init modules to get documentation strings */
 	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod++) {
 		mod = *pmod;
-		mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+		mod_ctx = g_malloc0 (sizeof (struct module_ctx));
 
 		if (mod->module_init_func (cfg, &mod_ctx) == 0) {
 			g_hash_table_insert (cfg->c_modules,
