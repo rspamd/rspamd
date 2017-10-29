@@ -108,3 +108,9 @@ ottery_rand_range64(uint64_t top)
   CHECK_INIT(0);
   return ottery_st_rand_range64(&ottery_global_state_, top);
 }
+
+const char *ottery_get_impl_name(void)
+{
+	CHECK_INIT(0);
+	return ottery_global_state_.prf.name;
+}

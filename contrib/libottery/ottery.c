@@ -33,6 +33,10 @@
 #define OTTERY_NO_PID_CHECK
 #endif
 
+#ifdef BUILD_RSPAMD
+#include "cryptobox.h"
+#endif
+
 /** Magic number for deciding whether an ottery_state is initialized. */
 #define MAGIC_BASIS 0x11b07734
 
@@ -183,7 +187,11 @@ ottery_get_impl(const char *impl)
     &ottery_prf_chacha12_krovetz_1_,
     &ottery_prf_chacha8_krovetz_1_,
 #endif
+
 #ifdef BUILD_RSPAMD
+#if defined(__x86_64__) && defined(RSPAMD_HAS_TARGET_ATTR)
+    &ottery_prf_aes_cryptobox_,
+#endif
     &ottery_prf_chacha20_cryptobox_,
 #endif
 	&ottery_prf_chacha20_merged_,

@@ -2,7 +2,9 @@ SET(OTTERYSRC            chacha_merged.c
                          ottery.c
                          ottery_cpuinfo.c
                          ottery_entropy.c
-                         ottery_global.c chacha_cryptobox.c)
+                         ottery_global.c
+                         chacha_cryptobox.c
+                         aes_cryptobox.c)
 ADD_LIBRARY(ottery STATIC ${OTTERYSRC})
 
 SET(OTTERY_CFLAGS "-DBUILD_RSPAMD")

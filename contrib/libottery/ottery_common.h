@@ -346,4 +346,6 @@ uint32_t ottery_get_version(void);
  */
 const char *ottery_get_version_string(void);
 
+const char *ottery_get_impl_name(void);
+
 #endif

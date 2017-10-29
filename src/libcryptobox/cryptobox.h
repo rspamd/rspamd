@@ -23,8 +23,10 @@ struct rspamd_cryptobox_segment {
 	gsize len;
 };
 
-#if defined(__GNUC__) && ((__GNUC__ == 4) &&  (__GNUC_MINOR__ >= 8) || (__GNUC__ > 4))
-#define RSPAMD_HAS_TARGET_ATTR
+#if defined(__GNUC__) && \
+	((defined(__clang__) && (__clang_major__ >= 4 || (__clang_major__ >= 3 && __clang_minor__ >= 8))) || \
+	((__GNUC__ == 4) &&  (__GNUC_MINOR__ >= 8) || (__GNUC__ > 4)))
+#define RSPAMD_HAS_TARGET_ATTR 1
 #endif
 
 #define rspamd_cryptobox_MAX_NONCEBYTES 24

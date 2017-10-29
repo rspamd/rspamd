@@ -306,6 +306,9 @@ extern const struct ottery_prf ottery_prf_chacha12_merged_;
 extern const struct ottery_prf ottery_prf_chacha20_merged_;
 
 #ifdef BUILD_RSPAMD
+#ifdef __x86_64__
+extern const struct ottery_prf ottery_prf_aes_cryptobox_;
+#endif
 extern const struct ottery_prf ottery_prf_chacha20_cryptobox_;
 #endif
 /**@}*/

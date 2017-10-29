@@ -1338,6 +1338,7 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->libs_ctx->crypto_ctx->siphash_impl,
 			rspamd_main->cfg->libs_ctx->crypto_ctx->blake2_impl,
 			rspamd_main->cfg->libs_ctx->crypto_ctx->base64_impl);
+	msg_info_main ("libottery prf: %s", ottery_get_impl_name ());
 
 	/* Daemonize */
 	if (!no_fork && daemon (0, 0) == -1) {

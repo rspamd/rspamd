@@ -33,7 +33,7 @@
 #define OUTPUT_LEN  (IDX_STEP * 64)
 
 static void
-chacha_cryptobox_state_setup (void *state_, const uint8_t *bytes)
+chacha20_cryptobox_state_setup (void *state_, const uint8_t *bytes)
 {
 	chacha_state *x = state_;
 	chacha_init (x, (chacha_key *)bytes, (chacha_iv *)(bytes + 32), 20);
@@ -50,15 +50,15 @@ chacha20_cryptobox_generate (void *state_, uint8_t *output, uint32_t idx)
 }
 
 #define PRF_CHACHA(r) {                         \
-  "CHACHA" #r,                                  \
-  "CHACHA" #r "-NOSIMD",                        \
-  "CHACHA" #r "-NOSIMD-DEFAULT",                \
+  "CHACHA" #r "-CRYPTOBOX",                    \
+  "CHACHA" #r "-CRYPTOBOX",                    \
+  "CHACHA" #r "-CRYPTOBOX",                    \
   STATE_LEN,                                    \
   STATE_BYTES,                                  \
   OUTPUT_LEN,                                   \
-  0,                                            \
-  chacha_cryptobox_state_setup,                    \
-  chacha ## r ## _cryptobox_generate               \
+  0,                                             \
+  chacha ## r ## _cryptobox_state_setup,         \
+  chacha ## r ## _cryptobox_generate             \
 }
 
 const struct ottery_prf ottery_prf_chacha20_cryptobox_ = PRF_CHACHA(20);
