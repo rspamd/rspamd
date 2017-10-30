@@ -437,8 +437,10 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 			DL_APPEND (res, rep_elt);
 		}
 		else {
-			msg_err ("cannot write request to the worker %P(%s), fd: %d: %s",
-					wrk->pid, g_quark_to_string (wrk->type),
+			msg_err ("cannot write command %d(%z) to the worker %P(%s), fd: %d: %s",
+					(int)cmd->type, iov.iov_len,
+					wrk->pid,
+					g_quark_to_string (wrk->type),
 					wrk->control_pipe[0],
 					strerror (errno));
 		}
