@@ -32,6 +32,7 @@ local whitelisted_user
 local max_rcpt = 5
 local redis_params
 local ratelimit_symbol
+local info_symbol
 -- Do not delay mail after 1 day
 local use_ip_score = false
 local rl_prefix = 'RL'
@@ -388,6 +389,9 @@ local function process_buckets(task, buckets)
     end
     if not data then return end
     if data[1] == 1 then
+      if info_symbol then
+        task:insert_result(info_symbol, 1.0, data[2])
+      end
       rspamd_logger.infox(task,
         'ratelimit "%s" exceeded',
         data[2])
@@ -677,6 +681,11 @@ if opts then
     ratelimit_symbol = opts['symbol']
   end
 
+  if opts['info_symbol'] then
+    -- We want symbol in addition to pre-result
+    info_symbol = opts['info_symbol']
+  end
+
   if opts['max_rcpt'] then
     max_rcpt = tonumber(opts['max_rcpt'])
   end
@@ -720,6 +729,8 @@ if opts then
     end
     if ratelimit_symbol then
       s.name = ratelimit_symbol
+    elseif info_symbol then
+      s.name = info_symbol
     end
     local id = rspamd_config:register_symbol(s)
     if use_ip_score then
