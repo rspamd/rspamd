@@ -612,6 +612,21 @@ local function multimap_callback(task, rule)
           end
         end
       end
+      local match_flags = r['flags']
+      local nmatch_flags = r['nflags']
+      if match_flags or nmatch_flags then
+        local got_flags = h['flags']
+        if match_flags then
+          for _, flag in ipairs(match_flags) do
+            if not got_flags[flag] then return end
+          end
+        end
+        if nmatch_flags then
+          for _, flag in ipairs(nmatch_flags) do
+            if got_flags[flag] then return end
+          end
+        end
+      end
       if filter == 'real_ip' or filter == 'from_ip' then
         if type(v) == 'string' then
           v = rspamd_ip.from_string(v)
@@ -883,6 +898,16 @@ local function add_multimap_rule(key, newrule)
             newrule['map'])
         end
       elseif newrule['type'] == 'received' then
+        if type(newrule['flags']) == 'table' and newrule['flags'][1] then
+          newrule['flags'] = newrule['flags']
+        elseif type(newrule['flags']) == 'string' then
+          newrule['flags'] = {newrule['flags']}
+        end
+        if type(newrule['nflags']) == 'table' and newrule['nflags'][1] then
+          newrule['nflags'] = newrule['nflags']
+        elseif type(newrule['nflags']) == 'string' then
+          newrule['nflags'] = {newrule['nflags']}
+        end
         local filter = newrule['filter'] or 'real_ip'
         if filter == 'real_ip' or filter == 'from_ip' then
           newrule['radix'] = rspamd_config:add_map ({
