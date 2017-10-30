@@ -1,10 +1,10 @@
 local ucl = require "ucl"
-local lua_util = require "lua_util"
 
 local HAM = "HAM"
 local SPAM = "SPAM"
 
-local function scan_email(path, n_parellel, path)
+local function scan_email(n_parellel, path)
+
    local rspamc_command = string.format("rspamc -j --compact -n %s %s", n_parellel, path)
    local result = assert(io.popen(rspamc_command))
    result = result:read("*all")
@@ -13,13 +13,13 @@ end
 
 local function write_results(results, file)
    
-   f = io.open(file, 'w')
+   local f = io.open(file, 'w')
 
    for _, result in pairs(results) do
       local log_line = string.format("%s %.2f %s", result.type, result.score, result.action)
      
       for _, sym in pairs(result.symbols) do
-	 log_line = log_line .. " " .. sym
+	     log_line = log_line .. " " .. sym
       end
 
       log_line = log_line .. "\r\n"
@@ -36,6 +36,8 @@ local function encoded_json_to_log(result)
    local filtered_result = {}
    local parser = ucl.parser()
 
+   io.write(result)
+   
    local is_good, err = parser:parse_string(result)
 
    if not is_good then
@@ -45,8 +47,14 @@ local function encoded_json_to_log(result)
    
    result = parser:get_object()
 
-   filtered_result.score = result.score
+   io.write("good 1\n")
+   for key, val in pairs(result) do 
+      io.write(key)
+    end
 
+   io.write("good 2\n")
+
+   filtered_result.score = result.score
    local action = result.action:gsub("%s+", "_")
    filtered_result.action = action
 
@@ -59,18 +67,34 @@ local function encoded_json_to_log(result)
    return filtered_result   
 end
 
+local function str_split (str, sep)
+        
+        if sep == nil then
+                sep = "%s"
+        end
+
+        local results = {}
+        local i = 1
+        for part in string.gmatch(str, "([^"..sep.."]+)") do
+                results[i] = part
+                i = i + 1
+        end
+
+        return results
+end
+
 local function scan_results_to_logs(results, actual_email_type)
 
-   logs = {}
+   local logs = {}
    
-   results = lua_util.rspamd_str_split(results, "\n")
+   results = str_split(results, "\n")
 
    if results[#results] == "" then
       results[#results] = nil
    end
    
    for _, result in pairs(results) do      
-      local result = encoded_json_to_log(result)
+      result = encoded_json_to_log(result)
       result['type'] = actual_email_type
       table.insert(logs, result)
    end
@@ -93,7 +117,7 @@ return function (_, res)
 
    if ham_directory then
       io.write("Scanning ham corpus...\n")
-      local ham_results = scan_email(path, n_conn, ham_directory)
+      local ham_results = scan_email(n_conn, ham_directory)
       ham_results = scan_results_to_logs(ham_results, HAM)
 
       no_of_ham = #ham_results
@@ -105,7 +129,7 @@ return function (_, res)
 
    if spam_directory then
       io.write("Scanning spam corpus...\n")
-      local spam_results = scan_email(path, n_conn, spam_directory)
+      local spam_results = scan_email(n_conn, spam_directory)
       spam_results = scan_results_to_logs(spam_results, SPAM)
 
       no_of_spam = #spam_results
@@ -115,8 +139,8 @@ return function (_, res)
       end
    end
 
-   io.write(string.format("Writing results to %s\n", out))
-   write_results(results, out)
+   io.write(string.format("Writing results to %s\n", output))
+   write_results(results, output)
 
    io.write("\nStats: \n")
    io.write(string.format("Elapsed time: %ds\n", os.time() - start_time))
