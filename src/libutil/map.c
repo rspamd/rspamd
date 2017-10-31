@@ -687,6 +687,7 @@ read_data:
 	else {
 		msg_info_map ("cannot load map %s from %s: HTTP error %d",
 				bk->uri, cbd->data->host, msg->code);
+		goto err;
 	}
 
 	MAP_RELEASE (cbd, "http_callback_data");
