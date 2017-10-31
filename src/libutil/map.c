@@ -755,6 +755,7 @@ read_data:
 	else {
 		msg_info_map ("cannot load map %s from %s: HTTP error %d",
 				bk->uri, cbd->data->host, msg->code);
+		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	}
 
 	MAP_RELEASE (cbd, "http_callback_data");
