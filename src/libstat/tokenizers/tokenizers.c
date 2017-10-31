@@ -256,6 +256,7 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 
 	/* Last character */
 	if (state == feed_token) {
+		p = &s[i];
 		goto set_token;
 	}
 
