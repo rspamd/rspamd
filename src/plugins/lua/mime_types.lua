@@ -47,7 +47,7 @@ local settings = {
     bat = 2,
     -- Have you ever seen that in legit email?
     ace = 4,
-    arj = 4,
+    arj = 2,
     cab = 3,
   },
 
@@ -102,48 +102,52 @@ local function check_mime_type(task)
 
   local function check_filename(fname, ct, is_archive)
     local ext,ext2,parts = gen_extension(fname)
+    -- ext is the last extension, LOWERCASED
+    -- ext2 is the one before last extension LOWERCASED
 
-    local function check_extension(badness_mult, badness_mult2)
+    local function check_extension(badness_mult, badness_mult2, is_archive)
       if #parts > 2 then
-        if ( badness_mult
-          -- We need to ensure that it is an extension, so we check for its length
-          and #parts[#parts - 1] <= 4
-          -- Check if next-to-last extension is not a number
-          and not string.match(ext2, '^%d+$') )
-          -- Check length of the last extension if next-to-last extension is bad
-          or ( badness_mult2 and #parts[#parts] <= 4 ) then
+        -- We need to ensure that it is an extension, so we check for its length
+        -- Check if next-to-last extension is not a number or date
+        if #ext > 4 or (ext2 and string.match(ext2, '^%d+$')) then return end
 
-          -- Use the greatest badness multiplier
-          if not badness_mult or badness_mult2 and badness_mult < badness_mult2 then
-            badness_mult = badness_mult2
-          end
-
-          -- Double extension + bad extension == VERY bad
-          task:insert_result(settings['symbol_double_extension'], badness_mult, {
-            '.' .. ext2 .. '.' .. ext
-          })
-          return
+        -- Use the greatest badness multiplier
+        if not badness_mult or
+            (badness_mult2 and #ext2 <= 4 and badness_mult < badness_mult2) then
+          badness_mult = badness_mult2
         end
-      end
-      if badness_mult then
-        -- Just bad extension
-        task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
+
+        -- Double extension + bad extension == VERY bad
+        task:insert_result(settings['symbol_double_extension'], badness_mult,
+          string.format(".%s.%s", ext2, ext))
+      else
+        if badness_mult then
+          -- Just bad extension
+          task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
+        end
       end
     end
 
     if ext then
-      check_extension(
-        settings['bad_extensions'][ext:lower()],
-        ext2 and settings['bad_extensions'][ext2:lower()] or nil
-      )
-
       -- Also check for archive bad extension
       if is_archive then
-        check_extension(settings['bad_archive_extensions'][ext:lower()])
+        if ext2 then
+          check_extension(settings['bad_archive_extensions'][ext],
+            settings['bad_archive_extensions'][ext2], true)
+        else
+          check_extension(settings['bad_archive_extensions'][ext], nil, true)
+        end
 
-        if settings['archive_extensions'][ext:lower()] then
+        if settings['archive_extensions'][ext] then
           -- Archive in archive
           task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
+        end
+      else
+        if ext2 then
+          check_extension(settings['bad_extensions'][ext],
+            settings['bad_extensions'][ext2], false)
+        else
+          check_extension(settings['bad_extensions'][ext], nil, false)
         end
       end
 
