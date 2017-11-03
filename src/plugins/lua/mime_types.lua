@@ -105,7 +105,7 @@ local function check_mime_type(task)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
 
-    local function check_extension(badness_mult, badness_mult2, is_archive)
+    local function check_extension(badness_mult, badness_mult2)
       if #parts > 2 then
         -- We need to ensure that it is an extension, so we check for its length
         -- Check if next-to-last extension is not a number or date
@@ -132,10 +132,15 @@ local function check_mime_type(task)
       -- Also check for archive bad extension
       if is_archive then
         if ext2 then
-          check_extension(settings['bad_archive_extensions'][ext],
-            settings['bad_archive_extensions'][ext2], true)
+          local score1 = settings['bad_archive_extensions'][ext] or
+              settings['bad_extensions'][ext]
+          local score2 = settings['bad_archive_extensions'][ext2] or
+              settings['bad_extensions'][ext2]
+          check_extension(score1, score2)
         else
-          check_extension(settings['bad_archive_extensions'][ext], nil, true)
+          local score1 = settings['bad_archive_extensions'][ext] or
+              settings['bad_extensions'][ext]
+          check_extension(score1, nil)
         end
 
         if settings['archive_extensions'][ext] then
@@ -145,9 +150,9 @@ local function check_mime_type(task)
       else
         if ext2 then
           check_extension(settings['bad_extensions'][ext],
-            settings['bad_extensions'][ext2], false)
+            settings['bad_extensions'][ext2])
         else
-          check_extension(settings['bad_extensions'][ext], nil, false)
+          check_extension(settings['bad_extensions'][ext], nil)
         end
       end
 
