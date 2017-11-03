@@ -255,8 +255,14 @@ local function meta_words_function(task)
     short_words,
     ret_len,
   }
+
+  local divisor = 1.0
+  if #tp > 0 then
+    divisor = tp
+  end
+
   for _,wr in ipairs(wres) do
-    table.insert(ret, wr / #tp)
+    table.insert(ret, wr / divisor)
   end
 
   return ret
