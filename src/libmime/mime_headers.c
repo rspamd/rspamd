@@ -365,8 +365,9 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 			/* Header has only name, no value */
 			nh->value = "";
 			nh->decoded = "";
-			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			nh->raw_len = p - nh->raw_value;
 			nh->order = norder ++;
+			rspamd_mime_header_add (task, target, order, nh, check_newlines);
 			state = 0;
 			break;
 		case 99:
