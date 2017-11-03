@@ -169,7 +169,9 @@ function($, D3Evolution, unused) {
                 scaleFactor = 60;
                 unit = "msg/min";
                 data.forEach(function (s) {
-                    s.forEach(function (d) { d.y *= scaleFactor; });
+                    s.forEach(function (d) {
+                        if (d.y !== null) { d.y *= scaleFactor; }
+                    });
                 });
             }
 
