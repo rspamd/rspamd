@@ -258,7 +258,7 @@ local function meta_words_function(task)
 
   local divisor = 1.0
   if #tp > 0 then
-    divisor = tp
+    divisor = #tp
   end
 
   for _,wr in ipairs(wres) do
