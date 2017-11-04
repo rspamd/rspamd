@@ -52,6 +52,7 @@ struct rspamd_rcl_section {
 	enum ucl_type type;         /**< type of attribute */
 	gboolean required;                  /**< whether this param is required */
 	gboolean strict_type;               /**< whether we need strict type */
+	gboolean processed;
 	UT_hash_handle hh;                  /** hash handle */
 	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
 	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
@@ -2596,6 +2597,10 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 	g_assert (obj != NULL);
 	g_assert (sec->handler != NULL);
 
+	if (sec->processed) {
+		return TRUE;
+	}
+
 	if (sec->key_attr != NULL) {
 		it = ucl_object_iterate_new (obj);
 
@@ -2619,12 +2624,14 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 		while ((cur = ucl_object_iterate_full (it, UCL_ITERATE_EXPLICIT)) != NULL) {
 			if (!sec->handler (pool, cur, ucl_object_key (cur), ptr, sec, err)) {
 				ucl_object_iterate_free (it);
+				sec->processed = TRUE;
 
 				return FALSE;
 			}
 		}
 
 		ucl_object_iterate_free (it);
+		sec->processed = TRUE;
 
 		return TRUE;
 	}
@@ -2640,6 +2647,8 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 							sec->key_attr,
 							sec->name,
 							ucl_object_emit (obj, UCL_EMIT_CONFIG));
+					sec->processed = TRUE;
+
 					return FALSE;
 				}
 				else {
@@ -2653,6 +2662,8 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "required attribute %s"
 						" is not a string for section %s",
 						sec->key_attr, sec->name);
+				sec->processed = TRUE;
+
 				return FALSE;
 			}
 			else {
@@ -2660,6 +2671,8 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 			}
 		}
 	}
+
+	sec->processed = TRUE;
 
 	return sec->handler (pool, obj, key, ptr, sec, err);
 }
@@ -3557,6 +3570,90 @@ rspamd_rcl_section_free (gpointer p)
 	}
 }
 
+/**
+ * Calls for an external lua function to apply potential config transformations
+ * if needed. This function can change the cfg->rcl_obj.
+ *
+ * Example of transformation function:
+ *
+ * function(obj)
+ *   if obj.something == 'foo' then
+ *     obj.something = "bla"
+ *     return true, obj
+ *   end
+ *
+ *   return false, nil
+ * end
+ *
+ * If function returns 'false' then rcl_obj is not touched. Otherwise,
+ * it is changed, then rcl_obj is imported from lua. Old config is dereferenced.
+ * @param cfg
+ */
+static void
+rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
+{
+	lua_State *L = cfg->lua_state;
+	gint err_idx, ret;
+	GString *tb;
+	gchar str[PATH_MAX];
+	static const char *transform_script = "rspamd_config_transform";
+
+	g_assert (L != NULL);
+
+	msg_err ("hui");
+
+	rspamd_snprintf (str, sizeof (str), "return require \"%s\"",
+			transform_script);
+
+	if (luaL_dostring (L, str) != 0) {
+		msg_warn_config ("cannot execute lua script %s: %s",
+				str, lua_tostring (L, -1));
+		return;
+	}
+	else {
+		if (lua_type (L, -1) != LUA_TFUNCTION) {
+			msg_warn_config ("lua script must return "
+					"function and not %s",
+					lua_typename (L, lua_type (L, -1)));
+
+			return;
+		}
+	}
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Push function */
+	lua_pushvalue (L, -2);
+
+	/* Push the existing config */
+	ucl_object_push_lua (L, cfg->rcl_obj, true);
+
+	if ((ret = lua_pcall (L, 1, 2, err_idx)) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err ("call to rspamadm lua script failed (%d): %v", ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+
+		lua_settop (L, 0);
+
+		return;
+	}
+
+	if (lua_toboolean (L, -2)) {
+		ucl_object_t *old_cfg = cfg->rcl_obj;
+
+		msg_info_config ("configuration has been transformed in Lua");
+		cfg->rcl_obj = ucl_object_lua_import (L, -1);
+		ucl_object_unref (old_cfg);
+	}
+
+	/* error function */
+	lua_settop (L, 0);
+}
+
 gboolean
 rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
@@ -3566,8 +3663,9 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	gint fd;
 	gchar *data;
 	GError *err = NULL;
-	struct rspamd_rcl_section *top, *logger;
+	struct rspamd_rcl_section *top, *logger_section;
 	struct ucl_parser *parser;
+	const ucl_object_t *logger_obj;
 	rspamd_cryptobox_hash_state_t hs;
 	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
 	struct ucl_emitter_functions f;
@@ -3608,6 +3706,39 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	cfg->config_comments = ucl_object_ref (ucl_parser_get_comments (parser));
 	ucl_parser_free (parser);
 
+	top = rspamd_rcl_config_init (cfg);
+	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
+	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
+	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);
+	err = NULL;
+
+	if (logger_fin != NULL) {
+		HASH_FIND_STR (top, "logging", logger_section);
+
+		if (logger_section != NULL) {
+			logger_obj = ucl_object_lookup_any (cfg->rcl_obj, "logging",
+					"logger", NULL);
+
+			if (logger_obj == NULL) {
+				logger_fin (cfg->cfg_pool, logger_ud);
+			}
+			else {
+				if (!rspamd_rcl_process_section (cfg, logger_section, cfg,
+						logger_obj, cfg->cfg_pool, &err)) {
+					msg_err_config_forced ("cannot init logger: %e", err);
+					g_error_free (err);
+
+					return FALSE;
+				} else {
+					logger_fin (cfg->cfg_pool, logger_ud);
+				}
+			}
+		}
+	}
+
+	/* Transform config if needed */
+	rspamd_rcl_maybe_apply_lua_transform (cfg);
+
 	/* Calculate checksum */
 	f.ucl_emitter_append_character = rspamd_rcl_emitter_append_c;
 	f.ucl_emitter_append_double = rspamd_rcl_emitter_append_double;
@@ -3623,19 +3754,6 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
 			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
 
-	top = rspamd_rcl_config_init (cfg);
-	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
-	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
-	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);
-	err = NULL;
-
-	if (logger_fin != NULL) {
-		HASH_FIND_STR (top, "logging", logger);
-		if (logger != NULL) {
-			logger->fin = logger_fin;
-			logger->fin_ud = logger_ud;
-		}
-	}
 
 	if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
 		msg_err_config ("rcl parse error: %e", err);
