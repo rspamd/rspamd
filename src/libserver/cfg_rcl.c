@@ -290,7 +290,6 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 }
 
 struct rspamd_rcl_symbol_data {
-	struct rspamd_metric *metric;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_config *cfg;
 };
@@ -300,37 +299,36 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
-	struct rspamd_rcl_symbol_data *sd = ud;
-	struct rspamd_metric *metric;
+	struct rspamd_config *cfg = ud;
 	struct rspamd_symbols_group *gr;
 	const ucl_object_t *val, *cur;
 	struct rspamd_rcl_section *subsection;
+	struct rspamd_rcl_symbol_data sd;
 
 	g_assert (key != NULL);
 
-	metric = sd->metric;
-
-	gr = g_hash_table_lookup (metric->groups, key);
+	gr = g_hash_table_lookup (cfg->groups, key);
 
 	if (gr == NULL) {
-		gr = rspamd_config_new_group (sd->cfg, metric, key);
+		gr = rspamd_config_new_group (cfg, key);
 	}
 
-	if (!rspamd_rcl_section_parse_defaults (sd->cfg, section, pool, obj,
+	if (!rspamd_rcl_section_parse_defaults (cfg, section, pool, obj,
 			gr, err)) {
 		return FALSE;
 	}
 
-	sd->gr = gr;
+	sd.gr = gr;
+	sd.cfg = cfg;
 
 	/* Handle symbols */
-	val = ucl_object_lookup (obj, "symbol");
+	val = ucl_object_lookup (obj, "symbols");
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
-		HASH_FIND_STR (section->subsections, "symbol", subsection);
+		HASH_FIND_STR (section->subsections, "symbols", subsection);
 		g_assert (subsection != NULL);
 
 		LL_FOREACH (val, cur) {
-			if (!rspamd_rcl_process_section (sd->cfg, subsection, sd, cur,
+			if (!rspamd_rcl_process_section (cfg, subsection, &sd, cur,
 					pool, err)) {
 				return FALSE;
 			}
@@ -404,21 +402,16 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	if (sd->gr) {
-		rspamd_config_add_metric_symbol (cfg, key, score,
+		rspamd_config_add_symbol (cfg, key, score,
 				description, sd->gr->name, flags, priority, nshots);
 	}
 	else {
-		rspamd_config_add_metric_symbol (cfg, key, score,
+		rspamd_config_add_symbol (cfg, key, score,
 				description, NULL, flags, priority, nshots);
 	}
 
 	return TRUE;
 }
-
-struct metric_actions_cbdata {
-	struct rspamd_config *cfg;
-	struct rspamd_metric *metric;
-};
 
 static gboolean
 rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
@@ -426,15 +419,11 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	gdouble action_score;
-	struct metric_actions_cbdata *cbdata = ud;
+	struct rspamd_config *cfg = ud;
 	gint action_value;
 	const ucl_object_t *cur;
 	ucl_object_iter_t it;
-	struct rspamd_metric *metric;
-	struct rspamd_config *cfg;
 
-	metric = cbdata->metric;
-	cfg = cbdata->cfg;
 	it = ucl_object_iterate_new (obj);
 
 	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
@@ -450,125 +439,14 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			return FALSE;
 		}
 		else {
-			rspamd_config_set_action_score (cfg, metric->name,
-					ucl_object_key (cur), action_score,
+			rspamd_config_set_action_score (cfg,
+					ucl_object_key (cur),
+					action_score,
 					ucl_object_get_priority (cur));
 		}
 	}
 
 	ucl_object_iterate_free (it);
-
-	return TRUE;
-}
-
-static gboolean
-rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
-		const gchar *key, gpointer ud,
-		struct rspamd_rcl_section *section, GError **err)
-{
-	const ucl_object_t *val, *cur, *elt;
-	ucl_object_iter_t it;
-	struct rspamd_config *cfg = ud;
-	struct rspamd_metric *metric;
-	struct rspamd_rcl_section *subsection;
-	struct rspamd_rcl_symbol_data sd;
-	struct rspamd_symbol *sym_def;
-	struct metric_actions_cbdata acts_cbdata;
-
-	g_assert (key != NULL);
-
-	metric = g_hash_table_lookup (cfg->metrics, key);
-	if (metric == NULL) {
-		metric = rspamd_config_new_metric (cfg, metric, key);
-	}
-
-	if (!rspamd_rcl_section_parse_defaults (cfg, section, cfg->cfg_pool, obj,
-			metric, err)) {
-		return FALSE;
-	}
-
-	if (metric->unknown_weight > 0) {
-		metric->accept_unknown_symbols = TRUE;
-	}
-
-	/* Handle actions */
-	val = ucl_object_lookup (obj, "actions");
-	if (val != NULL) {
-		if (val->type != UCL_OBJECT) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL,
-				"actions must be an object");
-			return FALSE;
-		}
-
-		HASH_FIND_STR (section->subsections, "actions", subsection);
-		g_assert (subsection != NULL);
-		acts_cbdata.cfg = cfg;
-		acts_cbdata.metric = metric;
-
-		if (!rspamd_rcl_process_section (cfg, subsection, &acts_cbdata, val,
-				cfg->cfg_pool, err)) {
-			return FALSE;
-		}
-	}
-
-	/* No more legacy mode */
-
-	/* Handle grouped symbols */
-	val = ucl_object_lookup (obj, "group");
-	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
-		HASH_FIND_STR (section->subsections, "group", subsection);
-		g_assert (subsection != NULL);
-		sd.gr = NULL;
-		sd.cfg = cfg;
-		sd.metric = metric;
-
-		LL_FOREACH (val, cur) {
-			if (!rspamd_rcl_process_section (cfg, subsection, &sd, cur,
-					cfg->cfg_pool, err)) {
-				return FALSE;
-			}
-		}
-	}
-
-	/* Handle symbols */
-	val = ucl_object_lookup (obj, "symbol");
-	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
-		HASH_FIND_STR (section->subsections, "symbol", subsection);
-		g_assert (subsection != NULL);
-		sd.gr = NULL;
-		sd.cfg = cfg;
-		sd.metric = metric;
-
-		LL_FOREACH (val, cur) {
-			if (!rspamd_rcl_process_section (cfg, subsection, &sd, cur,
-					cfg->cfg_pool, err)) {
-				return FALSE;
-			}
-		}
-	}
-
-	/* Handle ignored symbols */
-	val = ucl_object_lookup (obj, "ignore");
-	if (val != NULL && ucl_object_type (val) == UCL_ARRAY) {
-		LL_FOREACH (val, cur) {
-			it = NULL;
-
-			while ((elt = ucl_object_iterate (cur, &it, true)) != NULL) {
-				if (ucl_object_type (elt) == UCL_STRING) {
-					sym_def = g_hash_table_lookup (metric->symbols,
-							ucl_object_tostring (elt));
-
-					if (sym_def != NULL) {
-						sym_def->flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
-					}
-					else {
-						msg_warn ("cannot find symbol %s to set ignore flag",
-								ucl_object_tostring (elt));
-					}
-				}
-			}
-		}
-	}
 
 	return TRUE;
 }
@@ -1500,7 +1378,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			description = composite_expression;
 		}
 
-		rspamd_config_add_metric_symbol (cfg, composite_name, score,
+		rspamd_config_add_symbol (cfg, composite_name, score,
 				description, group, FALSE, FALSE,
 				1);
 	}
@@ -2307,27 +2185,26 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Time before attempting to recover upstream after an error");
 
 	/**
-	 * Metric section
+	 * Symbols and actions sections
 	 */
 	sub = rspamd_rcl_add_section_doc (&new,
-			"metric", "name",
-			rspamd_rcl_metric_handler,
+			"actions", NULL,
+			rspamd_rcl_actions_handler,
 			UCL_OBJECT,
 			FALSE,
 			TRUE,
 			cfg->doc_strings,
-			"Metrics configuration");
-	sub->default_key = DEFAULT_METRIC;
+			"Actions configuration");
 	rspamd_rcl_add_default_handler (sub,
 			"unknown_weight",
 			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_metric, unknown_weight),
+			G_STRUCT_OFFSET (struct rspamd_config, unknown_weight),
 			0,
 			"Accept unknown symbols with the specified weight");
 	rspamd_rcl_add_default_handler (sub,
 			"grow_factor",
 			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_metric, grow_factor),
+			G_STRUCT_OFFSET (struct rspamd_config, grow_factor),
 			0,
 			"Multiply the subsequent symbols by this number "
 					"(does not affect symbols with score less or "
@@ -2335,34 +2212,23 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	rspamd_rcl_add_default_handler (sub,
 			"subject",
 			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_metric, subject),
+			G_STRUCT_OFFSET (struct rspamd_config, subject),
 			0,
 			"Rewrite subject with this value");
 
-	/* Ungrouped symbols */
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
-			"symbol", "name",
-			rspamd_rcl_symbol_handler,
+	sub = rspamd_rcl_add_section_doc (&new,
+			"groups", "name",
+			rspamd_rcl_group_handler,
 			UCL_OBJECT,
+			FALSE,
 			TRUE,
-			TRUE,
-			sub->doc_ref,
-			"Symbols settings");
-
-	/* Actions part */
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
-			"actions", NULL,
-			rspamd_rcl_actions_handler,
-			UCL_OBJECT,
-			TRUE,
-			TRUE,
-			sub->doc_ref,
-			"Actions settings");
+			cfg->doc_strings,
+			"Symbol groups configuration");
 
 	/* Group part */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
-			"group", "name",
-			rspamd_rcl_group_handler,
+			"symbols", "name",
+			rspamd_rcl_symbol_handler,
 			UCL_OBJECT,
 			TRUE,
 			TRUE,

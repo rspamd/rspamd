@@ -303,7 +303,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					priority = ucl_object_toint (elt);
 				}
 
-				rspamd_config_add_metric_symbol (cfg, cur_item->symbol,
+				rspamd_config_add_symbol (cfg, cur_item->symbol,
 						score, description, group, flags, priority, nshots);
 			}
 		}

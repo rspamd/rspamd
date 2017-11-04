@@ -630,7 +630,7 @@ lua_fann_thread_notify (gint fd, short what, gpointer ud)
 		lua_fann_push_train_result (cbdata, rep.errcode, rep.mse, rep.errmsg);
 	}
 
-	write (cbdata->pair[0], "", 1);
+	g_assert (write (cbdata->pair[0], "", 1) == 1);
 	g_thread_join (cbdata->t);
 	close (cbdata->pair[0]);
 	close (cbdata->pair[1]);

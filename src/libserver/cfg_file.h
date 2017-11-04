@@ -243,7 +243,7 @@ struct rspamd_log_format {
 	struct rspamd_log_format *prev, *next;
 };
 
-enum rspamd_metric_action {
+enum rspamd_action_type {
 	METRIC_ACTION_REJECT = 0,
 	METRIC_ACTION_SOFT_REJECT,
 	METRIC_ACTION_REWRITE_SUBJECT,
@@ -253,25 +253,10 @@ enum rspamd_metric_action {
 	METRIC_ACTION_MAX
 };
 
-struct metric_action {
-	enum rspamd_metric_action action;
+struct rspamd_action {
+	enum rspamd_action_type action;
 	gdouble score;
 	guint priority;
-};
-
-/**
- * Common definition of metric
- */
-struct rspamd_metric {
-	const gchar *name;                              /**< name of metric									*/
-	gchar *func_name;                               /**< name of consolidation function					*/
-	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
-	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
-	gdouble grow_factor;                            /**< grow factor for metric							*/
-	GHashTable *symbols;                            /**< weights of symbols in metric					*/
-	const gchar *subject;                           /**< subject rewrite string							*/
-	GHashTable * groups; 		                    /**< groups of symbols								*/
-	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
 };
 
 struct rspamd_config_post_load_script {
@@ -294,6 +279,14 @@ struct rspamd_config {
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif
+
+	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
+	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
+	gdouble grow_factor;                            /**< grow factor for metric							*/
+	GHashTable *symbols;                            /**< weights of symbols in metric					*/
+	const gchar *subject;                           /**< subject rewrite string							*/
+	GHashTable * groups; 		                    /**< groups of symbols								*/
+	struct rspamd_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
 
 	gboolean raw_mode;                              /**< work in raw mode instead of utf one				*/
 	gboolean one_shot_mode;                         /**< rules add only one symbol							*/
@@ -359,9 +352,6 @@ struct rspamd_config {
 	ucl_object_t *rcl_obj;                          /**< rcl object											*/
 	ucl_object_t *config_comments;                  /**< comments saved from the config						*/
 	ucl_object_t *doc_strings;                      /**< documentation strings for config options			*/
-	GHashTable * metrics;                           /**< hash of metrics indexed by metric name				*/
-	GList * metrics_list;                           /**< linked list of metrics								*/
-	GHashTable * metrics_symbols;                   /**< hash table of metrics indexed by symbol			*/
 	GHashTable * c_modules;                         /**< hash of c modules indexed by module name			*/
 	GHashTable * composite_symbols;                 /**< hash of composite symbols indexed by its name		*/
 	GList *classifiers;                             /**< list of all classifiers defined                    */
@@ -386,8 +376,6 @@ struct rspamd_config {
 	struct symbols_cache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/
 	gdouble cache_reload_time;                      /**< how often cache reload should be performed			*/
-	struct rspamd_metric *default_metric;           /**< default metric										*/
-
 	gchar * checksum;                               /**< real checksum of config file						*/
 	gchar * dump_checksum;                          /**< dump checksum of config file						*/
 	gpointer lua_state;                             /**< pointer to lua state								*/
@@ -537,14 +525,13 @@ struct rspamd_worker_conf * rspamd_config_new_worker (struct rspamd_config *cfg,
 /*
  * Return a new metric structure, setting default and non-conflicting attributes
  */
-struct rspamd_metric * rspamd_config_new_metric (struct rspamd_config *cfg,
-	struct rspamd_metric *c, const gchar *name);
+void rspamd_config_init_metric (struct rspamd_config *cfg);
 
 /*
  * Return new symbols group definition
  */
 struct rspamd_symbols_group * rspamd_config_new_group (
-		struct rspamd_config *cfg, struct rspamd_metric *metric,
+		struct rspamd_config *cfg,
 		const gchar *name);
 /*
  * Return a new statfile structure, setting default and non-conflicting attributes
@@ -552,14 +539,6 @@ struct rspamd_symbols_group * rspamd_config_new_group (
 struct rspamd_statfile_config * rspamd_config_new_statfile (
 	struct rspamd_config *cfg,
 	struct rspamd_statfile_config *c);
-
-/*
- * Read XML configuration file
- */
-gboolean rspamd_config_read (struct rspamd_config *cfg,
-	const gchar *filename, const gchar *convert_to,
-	rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud,
-	GHashTable *vars);
 
 /*
  * Register symbols of classifiers inside metrics
@@ -605,7 +584,7 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
  * @param nshots means maximum number of hits for a symbol in metric (-1 for unlimited)
  * @return TRUE if symbol has been inserted or FALSE if symbol already exists with higher priority
  */
-gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
+gboolean rspamd_config_add_symbol (struct rspamd_config *cfg,
 		const gchar *symbol, gdouble score, const gchar *description,
 		const gchar *group, guint flags,
 		guint priority,
@@ -621,7 +600,6 @@ gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
  * @return TRUE if symbol has been inserted or FALSE if action already exists with higher priority
  */
 gboolean rspamd_config_set_action_score (struct rspamd_config *cfg,
-		const gchar *metric,
 		const gchar *action_name,
 		gdouble score,
 		guint priority);
@@ -650,8 +628,8 @@ gboolean rspamd_action_from_str (const gchar *data, gint *result);
 /*
  * Return textual representation of action enumeration
  */
-const gchar * rspamd_action_to_str (enum rspamd_metric_action action);
-const gchar * rspamd_action_to_str_alt (enum rspamd_metric_action action);
+const gchar * rspamd_action_to_str (enum rspamd_action_type action);
+const gchar * rspamd_action_to_str_alt (enum rspamd_action_type action);
 
 /**
  * Parse radix tree or radix map from ucl object

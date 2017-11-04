@@ -774,7 +774,6 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	GHashTableIter it, sit;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_symbol *sym;
-	struct rspamd_metric *metric;
 	ucl_object_t *obj, *top, *sym_obj, *group_symbols;
 	gpointer k, v;
 
@@ -785,9 +784,7 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Go through all symbols groups in the default metric */
-	metric = g_hash_table_lookup (session->ctx->cfg->metrics, DEFAULT_METRIC);
-	g_assert (metric != NULL);
-	g_hash_table_iter_init (&it, metric->groups);
+	g_hash_table_iter_init (&it, session->cfg->groups);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		gr = v;
@@ -856,8 +853,7 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_metric *metric;
-	struct metric_action *act;
+	struct rspamd_action *act;
 	gint i;
 	ucl_object_t *obj, *top;
 
@@ -868,19 +864,16 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Get actions for default metric */
-	metric = g_hash_table_lookup (session->ctx->cfg->metrics, DEFAULT_METRIC);
-	if (metric != NULL) {
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-			act = &metric->actions[i];
-			if (act->score >= 0) {
-				obj = ucl_object_typed_new (UCL_OBJECT);
-				ucl_object_insert_key (obj,
+	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
+		act = &session->cfg->actions[i];
+		if (act->score >= 0) {
+			obj = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (obj,
 					ucl_object_fromstring (rspamd_action_to_str (
-						act->action)), "action", 0, false);
-				ucl_object_insert_key (obj, ucl_object_fromdouble (
-						act->score), "value", 0, false);
-				ucl_array_append (top, obj);
-			}
+							act->action)), "action", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (
+					act->score), "value", 0, false);
+			ucl_array_append (top, obj);
 		}
 	}
 
@@ -1076,7 +1069,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static ucl_object_t *
-rspamd_controller_pie_element (enum rspamd_metric_action action,
+rspamd_controller_pie_element (enum rspamd_action_type action,
 		const char *label, gdouble data)
 {
 	ucl_object_t *res = ucl_object_typed_new (UCL_OBJECT);
@@ -2120,14 +2113,13 @@ rspamd_controller_handle_saveactions (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct ucl_parser *parser;
-	struct rspamd_metric *metric;
 	ucl_object_t *obj;
 	const ucl_object_t *cur;
 	struct rspamd_controller_worker_ctx *ctx;
 	const gchar *error;
 	gdouble score;
 	gint i, added = 0;
-	enum rspamd_metric_action act;
+	enum rspamd_action_type act;
 	ucl_object_iter_t it = NULL;
 
 	ctx = session->ctx;
@@ -2141,14 +2133,6 @@ rspamd_controller_handle_saveactions (
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
-		return 0;
-	}
-
-	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
-	if (metric == NULL) {
-		msg_err_session ("cannot find default metric");
-		rspamd_controller_send_error (conn_ent, 500,
-			"Default metric is absent");
 		return 0;
 	}
 
@@ -2166,8 +2150,6 @@ rspamd_controller_handle_saveactions (
 		ucl_parser_free (parser);
 		return 0;
 	}
-
-
 
 	obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
@@ -2198,7 +2180,7 @@ rspamd_controller_handle_saveactions (
 			break;
 		}
 		score = ucl_object_todouble (cur);
-		if (metric->actions[act].score != score) {
+		if (session->cfg->actions[act].score != score) {
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
 			added ++;
 		}
@@ -2241,7 +2223,6 @@ rspamd_controller_handle_savesymbols (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct ucl_parser *parser;
-	struct rspamd_metric *metric;
 	ucl_object_t *obj;
 	const ucl_object_t *cur, *jname, *jvalue;
 	ucl_object_iter_t iter = NULL;
@@ -2262,14 +2243,6 @@ rspamd_controller_handle_savesymbols (
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
-		return 0;
-	}
-
-	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
-	if (metric == NULL) {
-		msg_err_session ("cannot find default metric");
-		rspamd_controller_send_error (conn_ent, 500,
-			"Default metric is absent");
 		return 0;
 	}
 
@@ -2313,7 +2286,7 @@ rspamd_controller_handle_savesymbols (
 		jname = ucl_object_lookup (cur, "name");
 		jvalue = ucl_object_lookup (cur, "value");
 		val = ucl_object_todouble (jvalue);
-		sym = g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
+		sym = g_hash_table_lookup (session->cfg->symbols, ucl_object_tostring (jname));
 
 		if (sym && fabs (*sym->weight_ptr - val) > 0.01) {
 			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,

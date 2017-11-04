@@ -1389,7 +1389,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			/* Read number of regexps */
 			g_assert (fd != -1);
 			lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET);
-			read (fd, &n, sizeof (n));
+			g_assert (read (fd, &n, sizeof (n)) == sizeof (n));
 			close (fd);
 
 			if (re_class->type_len > 0) {

@@ -740,7 +740,7 @@ rspamd_emails_tree_ucl (GHashTable *input, struct rspamd_task *task)
 
 /* Write new subject */
 static const gchar *
-make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
+make_rewritten_subject (struct rspamd_task *task)
 {
 	GString *subj_buf;
 	gchar *res;
@@ -750,7 +750,7 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 	c = rspamd_mempool_get_variable (task->task_pool, "metric_subject");
 
 	if (c == NULL) {
-		c = metric->subject;
+		c = task->cfg->subject;
 	}
 
 	if (c == NULL) {
@@ -797,8 +797,7 @@ make_rewritten_subject (struct rspamd_metric *metric, struct rspamd_task *task)
 }
 
 static ucl_object_t *
-rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_metric *m,
-	struct rspamd_symbol_result *sym)
+rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_symbol_result *sym)
 {
 	ucl_object_t *obj = NULL, *ar;
 	const gchar *description = NULL;
@@ -849,14 +848,11 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 {
 	GHashTableIter hiter;
 	struct rspamd_symbol_result *sym;
-	struct rspamd_metric *m;
 	gboolean is_spam;
-	enum rspamd_metric_action action = METRIC_ACTION_NOACTION;
+	enum rspamd_action_type action = METRIC_ACTION_NOACTION;
 	ucl_object_t *obj = NULL, *sobj;
 	gpointer h, v;
 	const gchar *subject;
-
-	m = mres->metric;
 
 	if (mres->action == METRIC_ACTION_MAX) {
 		mres->action = rspamd_check_action_metric (task, mres);
@@ -895,7 +891,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 			"action", 0, false);
 
 	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
-		subject = make_rewritten_subject (m, task);
+		subject = make_rewritten_subject (task);
 
 		if (subject) {
 			ucl_object_insert_key (obj, ucl_object_fromstring (subject),
@@ -912,7 +908,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		sym = (struct rspamd_symbol_result *)v;
-		sobj = rspamd_metric_symbol_ucl (task, m, sym);
+		sobj = rspamd_metric_symbol_ucl (task, sym);
 		ucl_object_insert_key (obj, sobj, h, 0, false);
 	}
 

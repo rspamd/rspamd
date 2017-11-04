@@ -1525,8 +1525,8 @@ lua_config_register_symbol (lua_State * L)
 				nshots = 1;
 			}
 
-			rspamd_config_add_metric_symbol (cfg, name,
-					score, description, group, flags, (guint)priority, nshots);
+			rspamd_config_add_symbol (cfg, name,
+					score, description, group, flags, (guint) priority, nshots);
 		}
 	}
 	else {
@@ -1754,10 +1754,9 @@ static gint
 lua_config_set_metric_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *metric_name = DEFAULT_METRIC, *description = NULL,
+	const gchar *description = NULL,
 			*group = NULL, *name = NULL, *flags_str = NULL;
 	double weight;
-	struct rspamd_metric *metric;
 	gboolean one_shot = FALSE, one_param = FALSE;
 	GError *err = NULL;
 	gdouble priority = 0.0;
@@ -1769,11 +1768,11 @@ lua_config_set_metric_symbol (lua_State * L)
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*name=S;score=N;description=S;"
-					"group=S;one_shot=B;one_param=B;metric=S;priority=N;flags=S;"
+					"group=S;one_shot=B;one_param=B;priority=N;flags=S;"
 					"nshots=I",
 					&name, &weight, &description,
 					&group, &one_shot, &one_param,
-					&metric_name, &priority, &flags_str, &nshots)) {
+					&priority, &flags_str, &nshots)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
@@ -1788,7 +1787,7 @@ lua_config_set_metric_symbol (lua_State * L)
 				description = luaL_checkstring (L, 4);
 			}
 			if (lua_gettop (L) > 4 && lua_type (L, 5) == LUA_TSTRING) {
-				metric_name = luaL_checkstring (L, 5);
+				/* XXX: metrics */
 			}
 			if (lua_gettop (L) > 5 && lua_type (L, 6) == LUA_TSTRING) {
 				group = luaL_checkstring (L, 6);
@@ -1798,15 +1797,10 @@ lua_config_set_metric_symbol (lua_State * L)
 			}
 		}
 
-		if (metric_name == NULL) {
-			metric_name = DEFAULT_METRIC;
-		}
-
 		if (nshots == 0) {
 			nshots = cfg->default_max_shots;
 		}
 
-		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 		if (one_shot) {
 			nshots = 1;
 		}
@@ -1826,13 +1820,8 @@ lua_config_set_metric_symbol (lua_State * L)
 			}
 		}
 
-		if (metric == NULL) {
-			msg_err_config ("metric named %s is not defined", metric_name);
-		}
-		else if (name != NULL && weight != 0) {
-			rspamd_config_add_metric_symbol (cfg, name,
-					weight, description, group, flags, (guint)priority, nshots);
-		}
+		rspamd_config_add_symbol (cfg, name,
+				weight, description, group, flags, (guint) priority, nshots);
 	}
 	else {
 		return luaL_error (L, "invalid arguments, rspamd_config expected");
@@ -1845,41 +1834,31 @@ static gint
 lua_config_get_metric_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *sym_name = luaL_checkstring (L, 2),
-			*metric_name = DEFAULT_METRIC;
+	const gchar *sym_name = luaL_checkstring (L, 2);
 	struct rspamd_symbol *sym_def;
-	struct rspamd_metric *metric;
 
 	if (cfg && sym_name) {
-		metric = g_hash_table_lookup (cfg->metrics, metric_name);
+		sym_def = g_hash_table_lookup (cfg->symbols, sym_name);
 
-		if (metric == NULL) {
-			msg_err_config ("metric named %s is not defined", metric_name);
+		if (sym_def == NULL) {
 			lua_pushnil (L);
 		}
 		else {
-			sym_def = g_hash_table_lookup (metric->symbols, sym_name);
+			lua_createtable (L, 0, 3);
+			lua_pushstring (L, "score");
+			lua_pushnumber (L, sym_def->score);
+			lua_settable (L, -3);
 
-			if (sym_def == NULL) {
-				lua_pushnil (L);
-			}
-			else {
-				lua_createtable (L, 0, 3);
-				lua_pushstring (L, "score");
-				lua_pushnumber (L, sym_def->score);
+			if (sym_def->description) {
+				lua_pushstring (L, "description");
+				lua_pushstring (L, sym_def->description);
 				lua_settable (L, -3);
+			}
 
-				if (sym_def->description) {
-					lua_pushstring (L, "description");
-					lua_pushstring (L, sym_def->description);
-					lua_settable (L, -3);
-				}
-
-				if (sym_def->gr) {
-					lua_pushstring (L, "group");
-					lua_pushstring (L, sym_def->gr->name);
-					lua_settable (L, -3);
-				}
+			if (sym_def->gr) {
+				lua_pushstring (L, "group");
+				lua_pushstring (L, sym_def->gr->name);
+				lua_settable (L, -3);
 			}
 		}
 	}
@@ -1894,9 +1873,8 @@ static gint
 lua_config_set_metric_action (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *metric_name = DEFAULT_METRIC, *name = NULL;
+	const gchar *name = NULL;
 	double weight;
-	struct rspamd_metric *metric;
 	GError *err = NULL;
 	gdouble priority = 0.0;
 
@@ -1905,9 +1883,9 @@ lua_config_set_metric_action (lua_State * L)
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*action=S;score=N;"
-					"metric=S;priority=N",
+					"priority=N",
 					&name, &weight,
-					&metric_name, &priority)) {
+					&priority)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
@@ -1918,18 +1896,8 @@ lua_config_set_metric_action (lua_State * L)
 			return luaL_error (L, "invalid arguments, table expected");
 		}
 
-		if (metric_name == NULL) {
-			metric_name = DEFAULT_METRIC;
-		}
-
-		metric = g_hash_table_lookup (cfg->metrics, metric_name);
-
-		if (metric == NULL) {
-			msg_err_config ("metric named %s is not defined", metric_name);
-		}
-		else if (name != NULL && weight != 0) {
-			rspamd_config_set_action_score (cfg, metric_name, name,
-					weight, (guint)priority);
+		if (name != NULL && weight != 0) {
+			rspamd_config_set_action_score (cfg, name, weight, (guint)priority);
 		}
 	}
 	else {
@@ -1943,30 +1911,20 @@ static gint
 lua_config_get_metric_action (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *metric_name = DEFAULT_METRIC,
-			*act_name = luaL_checkstring (L, 2);
-	struct rspamd_metric *metric;
+	const gchar *act_name = luaL_checkstring (L, 2);
 	gint act = 0;
 
 	if (cfg && act_name) {
-		metric = g_hash_table_lookup (cfg->metrics, metric_name);
-
-		if (metric == NULL) {
-			msg_err_config ("metric named %s is not defined", metric_name);
-			lua_pushnil (L);
-		}
-		else {
-			if (rspamd_action_from_str (act_name, &act)) {
-				if (!isnan (metric->actions[act].score)) {
-					lua_pushnumber (L, metric->actions[act].score);
-				}
-				else {
-					lua_pushnil (L);
-				}
+		if (rspamd_action_from_str (act_name, &act)) {
+			if (!isnan (cfg->actions[act].score)) {
+				lua_pushnumber (L, cfg->actions[act].score);
 			}
 			else {
 				lua_pushnil (L);
 			}
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
 	else {
@@ -2147,7 +2105,7 @@ lua_config_newindex (lua_State *L)
 			 * Now check if a symbol has not been registered in any metric and
 			 * insert default value if applicable
 			 */
-			if (g_hash_table_lookup (cfg->metrics_symbols, name) == NULL) {
+			if (g_hash_table_lookup (cfg->symbols, name) == NULL) {
 				nshots = cfg->default_max_shots;
 				lua_pushstring (L, "score");
 				lua_gettable (L, -2);
@@ -2197,7 +2155,7 @@ lua_config_newindex (lua_State *L)
 					 * Do not override the existing symbols (using zero priority),
 					 * since we are defining default values here
 					 */
-					rspamd_config_add_metric_symbol (cfg, name, score,
+					rspamd_config_add_symbol (cfg, name, score,
 							description, group, flags, 0, nshots);
 				}
 				else {

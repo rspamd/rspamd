@@ -17,6 +17,7 @@
 #define CFG_RCL_H_
 
 #include "config.h"
+#include "cfg_file.h"
 #include "ucl.h"
 #include "mem_pool.h"
 
@@ -56,6 +57,7 @@ struct rspamd_rcl_struct_parser {
 	goffset offset;
 	enum rspamd_rcl_flag flags;
 };
+
 
 /**
  * Common handler type
@@ -457,4 +459,12 @@ ucl_object_t *rspamd_rcl_add_doc_by_example (struct rspamd_config *cfg,
 gboolean rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 		const gchar *path,
 		GError **err);
+
+/*
+ * Read configuration file
+ */
+gboolean rspamd_config_read (struct rspamd_config *cfg,
+		const gchar *filename, const gchar *convert_to,
+		rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud,
+		GHashTable *vars);
 #endif /* CFG_RCL_H_ */

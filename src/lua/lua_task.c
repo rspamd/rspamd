@@ -1323,11 +1323,14 @@ static gint
 lua_task_set_pre_result (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_config *cfg;
 	struct rspamd_metric_result *mres;
 	gchar *action_str;
 	gint action = METRIC_ACTION_MAX;
 
 	if (task != NULL) {
+		cfg = task->cfg;
+
 		if (lua_type (L, 2) == LUA_TNUMBER) {
 			action = lua_tointeger (L, 2);
 		}
@@ -1340,7 +1343,7 @@ lua_task_set_pre_result (lua_State * L)
 			if (!task->result) {
 				mres = rspamd_create_metric_result (task);
 				if (mres != NULL) {
-					mres->score = mres->metric->actions[action].score;
+					mres->score = cfg->actions[action].score;
 					mres->action = action;
 				}
 			}
@@ -4058,7 +4061,7 @@ lua_task_get_metric_action (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *metric_res;
-	enum rspamd_metric_action action;
+	enum rspamd_action_type action;
 
 	if (task) {
 		if ((metric_res = task->result) != NULL) {

@@ -1698,8 +1698,8 @@ restart:
 		return 0;
 	}
 
-	(void)write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") -
-		1);
+	g_assert (write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") -
+		1) != -1);
 
 	/* Save the current sighandler */
 	for (i = 0; i < NSIG; i++) {
@@ -1727,7 +1727,7 @@ restart:
 		}
 	}
 	*p = '\0';
-	(void)write (output, "\n", 1);
+	g_assert (write (output, "\n", 1) == 1);
 
 	/* Restore terminal state */
 	if (memcmp (&term, &oterm, sizeof (term)) != 0) {

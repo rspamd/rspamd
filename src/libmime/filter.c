@@ -29,7 +29,6 @@ struct rspamd_metric_result *
 rspamd_create_metric_result (struct rspamd_task *task)
 {
 	struct rspamd_metric_result *metric_res;
-	struct rspamd_metric *metric;
 	guint i;
 
 	metric_res = task->result;
@@ -38,14 +37,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 		return metric_res;
 	}
 
-	metric = task->cfg->default_metric;
-
-	if (metric == NULL) {
-		return NULL;
-	}
-
-	metric_res =
-			rspamd_mempool_alloc (task->task_pool,
+	metric_res = rspamd_mempool_alloc (task->task_pool,
 					sizeof (struct rspamd_metric_result));
 	metric_res->symbols = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
@@ -56,13 +48,12 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
 			metric_res->sym_groups);
-	metric_res->metric = metric;
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
 	metric_res->changes = 0;
 
 	for (i = 0; i < METRIC_ACTION_MAX; i++) {
-		metric_res->actions_limits[i] = metric->actions[i].score;
+		metric_res->actions_limits[i] = task->cfg->actions[i].score;
 	}
 
 	metric_res->action = METRIC_ACTION_MAX;
@@ -94,7 +85,6 @@ rspamd_check_group_score (struct rspamd_task *task,
 
 static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
-	struct rspamd_metric *metric,
 	const gchar *symbol,
 	double flag,
 	const gchar *opt,
@@ -116,7 +106,7 @@ insert_metric_result (struct rspamd_task *task,
 		flag = 0.0;
 	}
 
-	sdef = g_hash_table_lookup (metric->symbols, symbol);
+	sdef = g_hash_table_lookup (task->cfg->symbols, symbol);
 	if (sdef == NULL) {
 		w = 0.0;
 	}
@@ -192,10 +182,10 @@ insert_metric_result (struct rspamd_task *task,
 			/* Handle grow factor */
 			if (metric_res->grow_factor && diff > 0) {
 				diff *= metric_res->grow_factor;
-				next_gf *= metric->grow_factor;
+				next_gf *= task->cfg->grow_factor;
 			}
 			else if (diff > 0) {
-				next_gf = metric->grow_factor;
+				next_gf = task->cfg->grow_factor;
 			}
 
 			diff = rspamd_check_group_score (task, symbol, gr, gr_score, diff);
@@ -223,10 +213,10 @@ insert_metric_result (struct rspamd_task *task,
 		/* Handle grow factor */
 		if (metric_res->grow_factor && w > 0) {
 			w *= metric_res->grow_factor;
-			next_gf *= metric->grow_factor;
+			next_gf *= task->cfg->grow_factor;
 		}
 		else if (w > 0) {
-			next_gf = metric->grow_factor;
+			next_gf = task->cfg->grow_factor;
 		}
 
 		s->name = symbol;
@@ -253,10 +243,9 @@ insert_metric_result (struct rspamd_task *task,
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
 
-	msg_debug_task ("symbol %s, score %.2f, metric %s, factor: %f",
+	msg_debug_task ("symbol %s, score %.2f, factor: %f",
 		symbol,
 		s->score,
-		metric->name,
 		w);
 	metric_res->changes ++;
 
@@ -281,7 +270,6 @@ insert_result_common (struct rspamd_task *task,
 
 	/* Insert symbol to default metric */
 	s = insert_metric_result (task,
-			task->cfg->default_metric,
 			symbol,
 			flag,
 			opt,
@@ -359,16 +347,16 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	return ret;
 }
 
-enum rspamd_metric_action
+enum rspamd_action_type
 rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_result *mres)
 {
-	struct metric_action *action, *selected_action = NULL;
+	struct rspamd_action *action, *selected_action = NULL;
 	double max_score = 0, sc;
 	int i;
 
 	if (task->pre_result.action == METRIC_ACTION_MAX) {
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-			action = &mres->metric->actions[i];
+			action = &task->cfg->actions[i];
 			sc = mres->actions_limits[i];
 
 			if (isnan (sc)) {
@@ -385,7 +373,7 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 		sc = NAN;
 
 		for (i = task->pre_result.action; i < METRIC_ACTION_MAX; i ++) {
-			selected_action = &mres->metric->actions[i];
+			selected_action = &task->cfg->actions[i];
 			sc = mres->actions_limits[i];
 
 			if (isnan (sc)) {

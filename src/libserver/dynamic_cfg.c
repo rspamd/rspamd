@@ -37,7 +37,6 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 	gint test_act;
 	const ucl_object_t *cur_elt, *cur_nm, *it_val;
 	ucl_object_iter_t it = NULL;
-	struct rspamd_metric *real_metric;
 	const gchar *name;
 	gdouble nscore;
 	static const guint priority = 3;
@@ -52,12 +51,6 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 		if (!cur_nm || ucl_object_type (cur_nm) != UCL_STRING) {
 			msg_err (
 					"loaded json metric object element has no 'metric' attribute");
-			continue;
-		}
-		real_metric = g_hash_table_lookup (cfg->metrics,
-							ucl_object_tostring (cur_nm));
-		if (real_metric == NULL) {
-			msg_warn ("cannot find metric %s", ucl_object_tostring (cur_nm));
 			continue;
 		}
 
@@ -79,7 +72,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 					/*
 					 * We use priority = 3 here
 					 */
-					rspamd_config_add_metric_symbol (cfg,
+					rspamd_config_add_symbol (cfg,
 							ucl_object_tostring (n), nscore, NULL, NULL,
 							0, priority, cfg->default_max_shots);
 				}
@@ -114,8 +107,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 					}
 					nscore = ucl_object_todouble (ucl_object_lookup (it_val,
 							"value"));
-					rspamd_config_set_action_score (cfg, real_metric->name,
-							name, nscore, priority);
+					rspamd_config_set_action_score (cfg, name, nscore, priority);
 				}
 				else {
 					msg_info (

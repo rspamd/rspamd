@@ -28,31 +28,22 @@
 static void
 lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 {
-	GList *metric_list;
 	gchar *symbol;
 	const gchar *desc = NULL;
-	struct rspamd_metric *metric;
 	gdouble *score;
 	struct rspamd_symbol *s;
-
-	/* Get module opt structure */
-	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
-		metric = rspamd_config_new_metric (cfg, metric, name);
-	}
 
 	/* Now iterate through module table */
 	for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 		/* key - -2, value - -1 */
-		symbol =
-			rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
+		symbol = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
 		if (symbol != NULL) {
 			if (lua_istable (L, -1)) {
 				/* We got a table, so extract individual attributes */
 				lua_pushstring (L, "weight");
 				lua_gettable (L, -2);
 				if (lua_isnumber (L, -1)) {
-					score =
-						rspamd_mempool_alloc (cfg->cfg_pool, sizeof (double));
+					score = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (double));
 					*score = lua_tonumber (L, -1);
 				}
 				else {
@@ -78,36 +69,22 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 			}
 			/* Insert symbol */
 			if ((s =
-				g_hash_table_lookup (metric->symbols, symbol)) != NULL) {
+					g_hash_table_lookup (cfg->symbols, symbol)) != NULL) {
 				msg_info_config("replacing weight for symbol %s: %.2f -> %.2f",
-					symbol,
-					*s->weight_ptr,
-					*score);
+						symbol,
+						*s->weight_ptr,
+						*score);
 				s->weight_ptr = score;
 			}
 			else {
 				s = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*s));
 				s->name = symbol;
 				s->weight_ptr = score;
-				g_hash_table_insert (metric->symbols, symbol, s);
+				g_hash_table_insert (cfg->symbols, symbol, s);
 			}
 
 			if (desc) {
 				s->description = rspamd_mempool_strdup (cfg->cfg_pool, desc);
-			}
-
-			if ((metric_list =
-				g_hash_table_lookup (cfg->metrics_symbols, symbol)) == NULL) {
-				metric_list = g_list_prepend (NULL, metric);
-				rspamd_mempool_add_destructor (cfg->cfg_pool,
-					(rspamd_mempool_destruct_t)g_list_free, metric_list);
-				g_hash_table_insert (cfg->metrics_symbols, symbol, metric_list);
-			}
-			else {
-				/* Slow but keep start element of list in safe */
-				if (!g_list_find (metric_list, metric)) {
-					metric_list = g_list_append (metric_list, metric);
-				}
 			}
 		}
 	}

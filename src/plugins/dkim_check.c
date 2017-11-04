@@ -543,10 +543,10 @@ dkim_module_config (struct rspamd_config *cfg)
 								"DKIM_SIGN", dkim_module_ctx->symbol_reject);
 					}
 
-					rspamd_config_add_metric_symbol (cfg,
+					rspamd_config_add_symbol (cfg,
 							"DKIM_SIGN", 0.0, "DKIM signature fake symbol",
 							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
-					rspamd_config_add_metric_symbol (cfg,
+					rspamd_config_add_symbol (cfg,
 							"DKIM_TRACE", 0.0, "DKIM trace symbol",
 							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
 

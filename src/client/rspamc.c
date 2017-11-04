@@ -158,7 +158,7 @@ static GOptionEntry entries[] =
 };
 
 /* Copy to avoid linking with librspamdserver */
-enum rspamd_metric_action {
+enum rspamd_action_type {
 	METRIC_ACTION_REJECT = 0,
 	METRIC_ACTION_SOFT_REJECT,
 	METRIC_ACTION_REWRITE_SUBJECT,

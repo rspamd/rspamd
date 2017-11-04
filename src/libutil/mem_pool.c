@@ -714,7 +714,6 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 {
 	struct _pool_chain *cur;
 	guint i;
-	gsize len;
 
 	POOL_MTX_LOCK ();
 
@@ -724,7 +723,6 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 			g_atomic_int_add (&mem_pool_stat->bytes_allocated,
 					-((gint)cur->len));
 			g_atomic_int_add (&mem_pool_stat->chunks_allocated, -1);
-			len = cur->len + sizeof (struct _pool_chain);
 
 			g_free (cur);
 		}

@@ -1013,48 +1013,35 @@ static void
 rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 {
 	struct cache_item *item = v, *parent;
+	struct rspamd_config *cfg;
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
-	GList *cur;
-	struct rspamd_metric *m;
 	struct rspamd_symbol *s;
 	gboolean skipped, ghost;
 	gint p1, p2;
 
 	ghost = item->st->weight == 0 ? TRUE : FALSE;
+	cfg = cache->cfg;
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	g_assert (cache->cfg != NULL);
+	g_assert (cfg != NULL);
 
 	if ((item->type &
 			(SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER))
-			&& g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
-		cur = g_list_first (cache->cfg->metrics_list);
-		while (cur) {
-			m = cur->data;
+			&& g_hash_table_lookup (cfg->symbols, item->symbol) == NULL) {
 
-			if (m->accept_unknown_symbols) {
-				GList *mlist;
+		if (cfg->accept_unknown_symbols) {
 
-				skipped = FALSE;
-				item->st->weight = m->unknown_weight;
-				s = rspamd_mempool_alloc0 (cache->static_pool,
-						sizeof (*s));
-				s->name = item->symbol;
-				s->weight_ptr = &item->st->weight;
-				g_hash_table_insert (m->symbols, item->symbol, s);
-				mlist = g_hash_table_lookup (cache->cfg->metrics_symbols,
-						item->symbol);
-				mlist = g_list_append (mlist, m);
-				g_hash_table_insert (cache->cfg->metrics_symbols,
-						item->symbol, mlist);
+			skipped = FALSE;
+			item->st->weight = cfg->unknown_weight;
+			s = rspamd_mempool_alloc0 (cache->static_pool,
+					sizeof (*s));
+			s->name = item->symbol;
+			s->weight_ptr = &item->st->weight;
+			g_hash_table_insert (cfg->symbols, item->symbol, s);
 
-				msg_info_cache ("adding unknown symbol %s to metric %s", item->symbol,
-						m->name);
-				ghost = FALSE;
-			}
-
-			cur = g_list_next (cur);
+			msg_info_cache ("adding unknown symbol %s", item->symbol);
+			ghost = FALSE;
 		}
 	}
 	else {
@@ -1120,10 +1107,8 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 {
 	struct cache_item *item;
 	GHashTableIter it;
-	GList *cur;
 	gpointer k, v;
 	struct rspamd_symbol *sym_def;
-	struct rspamd_metric *metric;
 	gboolean ignore_symbol = FALSE, ret = TRUE;
 
 	if (cache == NULL) {
@@ -1132,32 +1117,23 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	}
 
 	/* Now adjust symbol weights according to default metric */
-	if (cfg->default_metric != NULL) {
-		g_hash_table_foreach (cfg->default_metric->symbols,
+	g_hash_table_foreach (cfg->symbols,
 			rspamd_symbols_cache_metric_validate_cb,
 			cache);
-	}
 
 	g_hash_table_foreach (cache->items_by_symbol,
 			rspamd_symbols_cache_validate_cb,
 			cache);
 	/* Now check each metric item and find corresponding symbol in a cache */
-	g_hash_table_iter_init (&it, cfg->metrics_symbols);
+	g_hash_table_iter_init (&it, cfg->symbols);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		ignore_symbol = FALSE;
-		cur = v;
+		sym_def = v;
 
-		while (cur) {
-			metric = cur->data;
-			sym_def = g_hash_table_lookup (metric->symbols, k);
-
-			if (sym_def && (sym_def->flags & RSPAMD_SYMBOL_FLAG_IGNORE)) {
-				ignore_symbol = TRUE;
-				break;
-			}
-
-			cur = g_list_next (cur);
+		if (sym_def && (sym_def->flags & RSPAMD_SYMBOL_FLAG_IGNORE)) {
+			ignore_symbol = TRUE;
+			break;
 		}
 
 		if (!ignore_symbol) {
@@ -1518,7 +1494,6 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
 	const ucl_object_t *wl, *cur, *disabled, *enabled;
-	struct rspamd_metric *def;
 	struct rspamd_symbols_group *gr;
 	GHashTableIter gr_it;
 	ucl_object_iter_t it = NULL;
@@ -1547,15 +1522,14 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 
 	/* Enable groups of symbols */
 	enabled = ucl_object_lookup (task->settings, "groups_enabled");
-	def = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
 
-	if (def && enabled) {
+	if (enabled) {
 		it = NULL;
 		rspamd_symbols_cache_disable_all_symbols (task, cache);
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
 			if (ucl_object_type (cur) == UCL_STRING) {
-				gr = g_hash_table_lookup (def->groups,
+				gr = g_hash_table_lookup (task->cfg->groups,
 						ucl_object_tostring (cur));
 
 				if (gr) {
@@ -1582,14 +1556,13 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 
 	/* Disable groups of symbols */
 	disabled = ucl_object_lookup (task->settings, "groups_disabled");
-	def = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
 
-	if (def && disabled) {
+	if (disabled) {
 		it = NULL;
 
 		while ((cur = ucl_iterate_object (disabled, &it, true)) != NULL) {
 			if (ucl_object_type (cur) == UCL_STRING) {
-				gr = g_hash_table_lookup (def->groups,
+				gr = g_hash_table_lookup (task->cfg->groups,
 						ucl_object_tostring (cur));
 
 				if (gr) {
