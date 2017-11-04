@@ -218,6 +218,7 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 			*rulesdir = RSPAMD_RULESDIR,
 			*lualibdir = RSPAMD_LUALIBDIR,
 			*libdir = RSPAMD_LIBDIR;
+	const gchar *t;
 
 	gchar path_buf[PATH_MAX];
 
@@ -241,9 +242,33 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 		}
 	}
 
-	if (vars) {
-		gchar *t;
+	/* Try environment */
+	t = getenv ("PLUGINSDIR");
+	if (t) {
+		pluginsdir = t;
+	}
 
+	t = getenv ("RULESDIR");
+	if (t) {
+		rulesdir = t;
+	}
+
+	t = getenv ("LUALIBDIR");
+	if (t) {
+		lualibdir = t;
+	}
+
+	t = getenv ("LIBDIR");
+	if (t) {
+		libdir = t;
+	}
+
+	t = getenv ("RSPAMD_LIBDIR");
+	if (t) {
+		libdir = t;
+	}
+
+	if (vars) {
 		t = g_hash_table_lookup (vars, "PLUGINSDIR");
 		if (t) {
 			pluginsdir = t;
