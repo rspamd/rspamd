@@ -900,7 +900,7 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 	/* Clear stack from globals */
 	lua_pop (L, 4);
 
-	rspamd_lua_set_path (L, cfg, vars);
+	rspamd_lua_set_path (L, cfg->rcl_obj, vars);
 
 	/* Set known paths as rspamd_paths global */
 	lua_getglobal (L, "rspamd_paths");

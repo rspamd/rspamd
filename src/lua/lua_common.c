@@ -210,7 +210,7 @@ lua_add_actions_global (lua_State *L)
 }
 
 void
-rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
+rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars)
 {
 	const gchar *old_path, *additional_path = NULL;
 	const ucl_object_t *opts;
@@ -232,8 +232,8 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg, GHashTable *vars)
 		return;
 	}
 
-	if (cfg) {
-		opts = ucl_object_lookup (cfg->rcl_obj, "options");
+	if (cfg_obj) {
+		opts = ucl_object_lookup (cfg_obj, "options");
 		if (opts != NULL) {
 			opts = ucl_object_lookup (opts, "lua_path");
 			if (opts != NULL && ucl_object_type (opts) == UCL_STRING) {
@@ -452,7 +452,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load,
 	GString *tb;
 	gint err_idx;
 
-	rspamd_lua_set_path (L, cfg, vars);
+	rspamd_lua_set_path (L, cfg->rcl_obj, vars);
 	cur = g_list_first (cfg->script_modules);
 
 	while (cur) {
