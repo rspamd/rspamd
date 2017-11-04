@@ -52,7 +52,6 @@ struct rspamd_rcl_section {
 	enum ucl_type type;         /**< type of attribute */
 	gboolean required;                  /**< whether this param is required */
 	gboolean strict_type;               /**< whether we need strict type */
-	gboolean processed;
 	UT_hash_handle hh;                  /** hash handle */
 	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
 	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
@@ -2217,7 +2216,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Rewrite subject with this value");
 
 	sub = rspamd_rcl_add_section_doc (&new,
-			"groups", "name",
+			"group", "name",
 			rspamd_rcl_group_handler,
 			UCL_OBJECT,
 			FALSE,
@@ -2252,16 +2251,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_symbols_group, max_score),
 			0,
 			"Maximum score that could be reached by this symbols group");
-
-	/* Grouped symbols */
-	rspamd_rcl_add_section_doc (&ssub->subsections,
-			"symbol", "name",
-			rspamd_rcl_symbol_handler,
-			UCL_OBJECT,
-			TRUE,
-			TRUE,
-			ssub->doc_ref,
-			"Symbols settings");
 
 	/**
 	 * Worker section
@@ -2463,10 +2452,6 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 	g_assert (obj != NULL);
 	g_assert (sec->handler != NULL);
 
-	if (sec->processed) {
-		return TRUE;
-	}
-
 	if (sec->key_attr != NULL) {
 		it = ucl_object_iterate_new (obj);
 
@@ -2490,14 +2475,12 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 		while ((cur = ucl_object_iterate_full (it, UCL_ITERATE_EXPLICIT)) != NULL) {
 			if (!sec->handler (pool, cur, ucl_object_key (cur), ptr, sec, err)) {
 				ucl_object_iterate_free (it);
-				sec->processed = TRUE;
 
 				return FALSE;
 			}
 		}
 
 		ucl_object_iterate_free (it);
-		sec->processed = TRUE;
 
 		return TRUE;
 	}
@@ -2513,7 +2496,6 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 							sec->key_attr,
 							sec->name,
 							ucl_object_emit (obj, UCL_EMIT_CONFIG));
-					sec->processed = TRUE;
 
 					return FALSE;
 				}
@@ -2528,7 +2510,6 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "required attribute %s"
 						" is not a string for section %s",
 						sec->key_attr, sec->name);
-				sec->processed = TRUE;
 
 				return FALSE;
 			}
@@ -2537,8 +2518,6 @@ rspamd_rcl_process_section (struct rspamd_config *cfg,
 			}
 		}
 	}
-
-	sec->processed = TRUE;
 
 	return sec->handler (pool, obj, key, ptr, sec, err);
 }
@@ -3506,7 +3485,7 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 		return;
 	}
 
-	if (lua_toboolean (L, -2)) {
+	if (lua_toboolean (L, -2) && lua_type (L, -1) == LUA_TTABLE) {
 		ucl_object_t *old_cfg = cfg->rcl_obj;
 
 		msg_info_config ("configuration has been transformed in Lua");
