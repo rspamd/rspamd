@@ -3600,8 +3600,6 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 
 	g_assert (L != NULL);
 
-	msg_err ("hui");
-
 	rspamd_snprintf (str, sizeof (str), "return require \"%s\"",
 			transform_script);
 
