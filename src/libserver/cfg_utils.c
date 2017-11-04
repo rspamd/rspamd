@@ -1375,7 +1375,7 @@ rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk)
 }
 
 gboolean
-rspamd_init_filters (struct rspamd_config *cfg, bool reconfig, GHashTable *vars)
+rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 {
 	GList *cur;
 	module_t *mod, **pmod;
@@ -1427,7 +1427,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig, GHashTable *vars)
 		cur = g_list_next (cur);
 	}
 
-	return rspamd_init_lua_filters (cfg, 0, vars);
+	return rspamd_init_lua_filters (cfg, 0);
 }
 
 static void

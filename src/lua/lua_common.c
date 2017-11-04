@@ -442,8 +442,7 @@ rspamd_free_lua_locked (struct lua_locked_state *st)
 }
 
 gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load,
-		GHashTable *vars)
+rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 {
 	struct rspamd_config **pcfg;
 	GList *cur;
@@ -452,7 +451,6 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load,
 	GString *tb;
 	gint err_idx;
 
-	rspamd_lua_set_path (L, cfg->rcl_obj, vars);
 	cur = g_list_first (cfg->script_modules);
 
 	while (cur) {

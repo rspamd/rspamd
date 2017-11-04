@@ -146,7 +146,7 @@ rspamadm_configtest (gint argc, gchar **argv)
 		/* Do post-load actions */
 		rspamd_lua_post_load_config (cfg);
 
-		if (!rspamd_init_filters (rspamd_main->cfg, FALSE, ucl_vars)) {
+		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			ret = FALSE;
 		}
 

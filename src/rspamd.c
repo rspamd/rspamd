@@ -68,8 +68,7 @@ static gboolean load_rspamd_config (struct rspamd_main *rspamd_main,
 		struct rspamd_config *cfg,
 		gboolean init_modules,
 		enum rspamd_post_load_options opts,
-		gboolean reload,
-		GHashTable *vars);
+		gboolean reload);
 
 /* Control socket */
 static gint control_fd;
@@ -289,7 +288,7 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
 			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE,
-			TRUE, ucl_vars)) {
+			TRUE)) {
 		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
 					rspamd_main->workers_uid,
@@ -871,8 +870,7 @@ static gboolean
 load_rspamd_config (struct rspamd_main *rspamd_main,
 		struct rspamd_config *cfg, gboolean init_modules,
 		enum rspamd_post_load_options opts,
-		gboolean reload,
-		GHashTable *vars)
+		gboolean reload)
 {
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
@@ -901,7 +899,7 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	rspamd_lua_post_load_config (cfg);
 
 	if (init_modules) {
-		rspamd_init_filters (cfg, reload, vars);
+		rspamd_init_filters (cfg, reload);
 	}
 
 	/* Do post-load actions */
@@ -1278,7 +1276,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	if (config_test || dump_cache) {
 		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, 0,
-				FALSE, ucl_vars)) {
+				FALSE)) {
 			exit (EXIT_FAILURE);
 		}
 
@@ -1301,7 +1299,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Load config */
 	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE,
-			RSPAMD_CONFIG_LOAD_ALL, FALSE, ucl_vars)) {
+			RSPAMD_CONFIG_LOAD_ALL, FALSE)) {
 		exit (EXIT_FAILURE);
 	}
 

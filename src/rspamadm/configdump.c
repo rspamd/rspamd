@@ -284,9 +284,10 @@ rspamadm_configdump (gint argc, gchar **argv)
 	}
 	else {
 		/* Do post-load actions */
+		rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, ucl_vars);
 		rspamd_lua_post_load_config (cfg);
 
-		if (!rspamd_init_filters (rspamd_main->cfg, FALSE, ucl_vars)) {
+		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			ret = FALSE;
 		}
 

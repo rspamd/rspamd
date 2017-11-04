@@ -3624,6 +3624,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
 
 	top = rspamd_rcl_config_init (cfg);
+	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
 	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);
 	err = NULL;

@@ -24,7 +24,6 @@
 #include <event.h>
 #include "libutil/util.h"
 #include "lua/lua_common.h"
-#include "fuzzy_stat.lua.h"
 
 static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
 static gboolean json = FALSE;
@@ -135,7 +134,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 						cbdata->argc,
 						cbdata->argv,
 						obj,
-						rspamadm_script_fuzzy_stat);
+						"fuzzy_stat");
 
 				rspamd_fstring_free (out);
 				ucl_object_unref (obj);

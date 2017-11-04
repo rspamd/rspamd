@@ -20,7 +20,6 @@
 #include "cfg_rcl.h"
 #include "rspamd.h"
 #include "lua/lua_common.h"
-#include "confighelp.lua.h"
 
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
@@ -251,7 +250,8 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	}
 
 	/* Init lua modules */
-	rspamd_init_lua_filters (cfg, TRUE, ucl_vars);
+	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, ucl_vars);
+	rspamd_init_lua_filters (cfg, TRUE);
 
 	if (argc > 1) {
 		for (i = 1; i < argc; i ++) {
