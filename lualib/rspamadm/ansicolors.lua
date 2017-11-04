@@ -10,7 +10,7 @@ function colormt:__concat(other)
 end
 
 function colormt:__call(s)
-  return self .. s .. _M.reset
+  return self .. s .. ansicolors.reset
 end
 
 colormt.__metatable = {}
@@ -54,3 +54,5 @@ local colors = {
 for c, v in pairs(colors) do
   ansicolors[c] = makecolor(v)
 end
+
+return ansicolors

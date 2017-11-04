@@ -7,9 +7,8 @@ local known_attrs = {
   default = 1,
 }
 
---.USE "getopt"
---.USE "ansicolors"
-
+local getopt = require "rspamadm/getopt"
+local ansicolors = require "rspamadm/ansicolors"
 
 local function maybe_print_color(key)
   if not opts['no-color'] then
@@ -101,7 +100,7 @@ local function print_help(key, value, tabs)
 end
 
 return function(args, res)
-  opts = getopt(args, '')
+  opts = getopt.getopt(args, '')
 
   local sorted = sort_values(res)
 

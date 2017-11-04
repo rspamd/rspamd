@@ -29,3 +29,6 @@ local function getopt(arg, options)
   return tab
 end
 
+return {
+  getopt = getopt
+}

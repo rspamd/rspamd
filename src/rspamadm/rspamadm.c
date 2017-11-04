@@ -187,28 +187,30 @@ rspamadm_parse_ucl_var (const gchar *option_name,
 
 gboolean
 rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
-		const ucl_object_t *res, const gchar *script)
+		const ucl_object_t *res, const gchar *script_name)
 {
 	lua_State *L = pL;
 	gint err_idx, i, ret;
 	GString *tb;
+	gchar str[PATH_MAX];
 
-	g_assert (script != NULL);
+	g_assert (script_name != NULL);
 	g_assert (res != NULL);
 	g_assert (L != NULL);
 
-	if (luaL_dostring (L, script) != 0) {
-		msg_err ("cannot execute lua script: %s",
-				lua_tostring (L, -1));
+	rspamd_snprintf (str, sizeof (str), "return require \"%s.%s\"", "rspamadm",
+			script_name);
+
+	if (luaL_dostring (L, str) != 0) {
+		msg_err ("cannot execute lua script %s: %s",
+				str, lua_tostring (L, -1));
 		return FALSE;
 	}
 	else {
 		if (lua_type (L, -1) != LUA_TFUNCTION) {
 			msg_err ("lua script must return "
 					"function and not %s",
-					lua_typename (L,
-							lua_type (L, -1)));
-			lua_settop (L, 0);
+					lua_typename (L, lua_type (L, -1)));
 
 			return FALSE;
 		}
@@ -233,7 +235,7 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 
 	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
 		tb = lua_touserdata (L, -1);
-		msg_err ("call to adm lua script failed (%d): %v", ret, tb);
+		msg_err ("call to rspamadm lua script failed (%d): %v", ret, tb);
 
 		if (tb) {
 			g_string_free (tb, TRUE);

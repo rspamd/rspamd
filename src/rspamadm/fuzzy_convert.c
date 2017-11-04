@@ -17,7 +17,6 @@
 #include "config.h"
 #include "rspamadm.h"
 #include "lua/lua_common.h"
-#include "fuzzy_convert.lua.h"
 
 static gchar *source_db = NULL;
 static gchar *redis_host = NULL;
@@ -109,6 +108,7 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv)
 	}
 
 	L = rspamd_lua_init ();
+	rspamd_lua_set_path (L, NULL, NULL);
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (source_db),
@@ -132,7 +132,7 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv)
 			argc,
 			argv,
 			obj,
-			rspamadm_script_fuzzy_convert);
+			"fuzzy_convert");
 
 	lua_close (L);
 	ucl_object_unref (obj);

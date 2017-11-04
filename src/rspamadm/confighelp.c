@@ -85,6 +85,7 @@ rspamadm_confighelp_show (struct rspamd_config *cfg, gint argc, gchar **argv,
 {
 	rspamd_fstring_t *out;
 
+	rspamd_lua_set_path (cfg->lua_state, NULL, NULL);
 	out = rspamd_fstring_new ();
 
 	if (json) {
@@ -107,7 +108,7 @@ rspamadm_confighelp_show (struct rspamd_config *cfg, gint argc, gchar **argv,
 				argc,
 				argv,
 				obj,
-				rspamadm_script_confighelp);
+				"confighelp");
 
 		rspamd_fstring_free (out);
 		return;

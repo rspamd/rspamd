@@ -141,13 +141,13 @@ local function print_result(r)
   return print_num(r)
 end
 
---.USE "getopt"
+local getopt = require "rspamadm/getopt"
 
 return function(args, res)
   local res_ips = {}
   local res_databases = {}
   local wrk = res['workers']
-  opts = getopt(args, '')
+  opts = getopt.getopt(args, '')
 
   if wrk then
     for _,pr in pairs(wrk) do

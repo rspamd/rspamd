@@ -41,6 +41,6 @@ extern struct rspamadm_command help_command;
 const struct rspamadm_command *rspamadm_search_command (const gchar *name);
 
 gboolean rspamadm_execute_lua_ucl_subr (gpointer L, gint argc, gchar **argv,
-		const ucl_object_t *res, const gchar *script);
+		const ucl_object_t *res, const gchar *script_name);
 
 #endif
