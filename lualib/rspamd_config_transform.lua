@@ -118,6 +118,28 @@ local function group_transform(cfg, k, v)
   logger.warnx("overriding group %s from the legacy metric settings", k)
 end
 
+local function symbol_transform(cfg, k, v)
+  -- first try to find any group where there is a definition of this symbol
+  for gr_n, gr in pairs(cfg.group) do
+    if gr.symbols and gr.symbols[k] then
+      -- We override group symbol with ungrouped symbol
+      logger.warnx("overriding group symbol %s in the group %s", k, gr_n)
+      gr.symbols[k] = override_defaults(gr.symbols[k], v)
+      return
+    end
+  end
+
+  -- Otherwise we just use group 'ungrouped'
+  if not cfg.group.ungrouped then
+    cfg.group.ungrouped = {
+      symbols = {}
+    }
+  end
+
+  cfg.group.ungrouped.symbols[k] = v
+  logger.warnx("adding symbol %s to the group 'ungrouped'", k)
+end
+
 local function convert_metric(cfg, metric)
   if type(metric[1]) == 'table' then
     logger.warnx("multiple metrics have never been supported")
@@ -139,6 +161,12 @@ local function convert_metric(cfg, metric)
   if metric.group then
     for k, v in metric_pairs(metric.group) do
       group_transform(cfg, k, v)
+    end
+  end
+
+  if metric.symbol then
+    for k, v in metric_pairs(metric.symbol) do
+      symbol_transform(cfg, k, v)
     end
   end
 
