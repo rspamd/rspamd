@@ -140,6 +140,24 @@ local function symbol_transform(cfg, k, v)
   logger.warnx("adding symbol %s to the group 'ungrouped'", k)
 end
 
+local function test_groups(groups)
+  local all_symbols = {}
+  for gr_name, gr in pairs(groups) do
+    if not gr.symbols then
+      logger.errx('group %s has no symbols', gr_name)
+    else
+      for sn,_ in pairs(gr.symbols) do
+        if all_symbols[sn] then
+          logger.errx('symbol %s has registered in multiple groups: %s and %s',
+              sn, all_symbols[sn], gr_name)
+        else
+          all_symbols[sn] = gr_name
+        end
+      end
+    end
+  end
+end
+
 local function convert_metric(cfg, metric)
   if type(metric[1]) == 'table' then
     logger.warnx("multiple metrics have never been supported")
@@ -170,12 +188,26 @@ local function convert_metric(cfg, metric)
     end
   end
 
-  return true, cfg
+  return cfg
 end
 
 return function(cfg)
+  local ret = false
+
   if cfg['metric'] then
-    return convert_metric(cfg, cfg.metric)
+    cfg = convert_metric(cfg, cfg.metric)
+    ret = true
   end
-  return false, nil
+
+  if not cfg.actions then
+    logger.errx('no actions defined')
+  end
+
+  if not cfg.group then
+    logger.errx('no symbol groups defined')
+  else
+    test_groups(cfg.group)
+  end
+
+  return ret, cfg
 end
