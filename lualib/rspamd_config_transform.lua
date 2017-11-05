@@ -14,6 +14,140 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+local logger = require "rspamd_logger"
+local fun = require "fun"
+
+local function override_defaults(def, override)
+  if not override then
+    return def
+  end
+  for k,v in pairs(override) do
+    if k ~= 'selector' and k ~= 'backend' then
+      if def[k] then
+        if type(v) == 'table' then
+          override_defaults(def[k], v)
+        else
+          def[k] = v
+        end
+      else
+        def[k] = v
+      end
+    end
+  end
+end
+
+local function metric_pairs(t)
+  -- collect the keys
+  local keys = {}
+  local mt = getmetatable(t)
+  local implicit_array = mt and mt.class and mt.class == 'ucl.type.impl_array'
+
+  local function gen_keys(tbl)
+    if implicit_array then
+      for _,v in ipairs(tbl) do
+        if v.name then
+          table.insert(keys, {v.name, v})
+          v.name = nil
+        else
+          -- Very tricky to distinguish:
+          -- group {name = "foo" ... } + group "blah" { ... }
+          for k,v in pairs(tbl) do
+            if type(k) ~= 'number' then
+              table.insert(keys, {k, v})
+            end
+          end
+        end
+      end
+    else
+      if tbl.name then
+        table.insert(keys, {tbl.name, tbl})
+        tbl.name = nil
+      else
+        for k,v in pairs(tbl) do
+          if type(k) ~= 'number' then
+            table.insert(keys, {k, v})
+          end
+        end
+      end
+    end
+  end
+
+  gen_keys(t)
+
+  -- return the iterator function
+  local i = 0
+  return function()
+    i = i + 1
+    if keys[i] then
+      return keys[i][1], keys[i][2]
+    end
+  end
+end
+
+local function group_transform(cfg, k, v)
+  if v.name then k = v.name end
+
+  local new_group = {
+    symbols = {}
+  }
+
+  if v.enabled then new_group.enabled = v.enabled end
+  if v.disabled then new_group.disabled = v.disabled end
+  if v.max_score then new_group.max_score = v.max_score end
+
+  if v.symbol then
+    for sk,sv in metric_pairs(v.symbol) do
+      if sv.name then
+        sk = sv.name
+        sv.name = nil -- Remove field
+      end
+
+      new_group.symbols[sk] = sv
+    end
+  end
+
+  if not cfg.group then cfg.group = {} end
+
+  if cfg.group[k] then
+    local merged = override_defaults(new_group, cfg.group[k])
+    cfg.group[k] = merged
+  else
+    cfg.group[k] = new_group
+  end
+
+  logger.warnx("overriding group %s from the legacy metric settings", k)
+end
+
+local function convert_metric(cfg, metric)
+  if type(metric[1]) == 'table' then
+    logger.warnx("multiple metrics have never been supported")
+    metric = metric[1]
+  end
+  if metric.actions then
+    cfg.actions = override_defaults(metric.actions)
+    logger.warnx("overriding actions from the legacy metric settings")
+  end
+  if metric.unknown_weight then
+    cfg.actions.unknown_weight = metric.unknown_weight
+  end
+
+  if metric.subject then
+    logger.warnx("overriding subject from the legacy metric settings")
+    cfg.actions.subject = metric.subject
+  end
+
+  if metric.group then
+    for k, v in metric_pairs(metric.group) do
+      group_transform(cfg, k, v)
+    end
+  end
+
+  return true, cfg
+end
+
 return function(cfg)
+  if cfg['metric'] then
+    return convert_metric(cfg, cfg.metric)
+  end
   return false, nil
 end
