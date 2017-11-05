@@ -279,8 +279,6 @@ struct rspamd_config {
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif
-
-	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
 	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
 	gdouble grow_factor;                            /**< grow factor for metric							*/
 	GHashTable *symbols;                            /**< weights of symbols in metric					*/

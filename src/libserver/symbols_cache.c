@@ -1030,7 +1030,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 			(SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER))
 			&& g_hash_table_lookup (cfg->symbols, item->symbol) == NULL) {
 
-		if (cfg->accept_unknown_symbols) {
+		if (cfg->unknown_weight != 0) {
 
 			skipped = FALSE;
 			item->st->weight = cfg->unknown_weight;
@@ -1043,14 +1043,17 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 			msg_info_cache ("adding unknown symbol %s", item->symbol);
 			ghost = FALSE;
 		}
+		else {
+			skipped = TRUE;
+		}
 	}
 	else {
 		skipped = FALSE;
 	}
 
-	if (skipped) {
+	if (!ghost && skipped) {
 		item->type |= SYMBOL_TYPE_SKIPPED;
-		msg_warn_cache ("symbol %s is not registered in any metric, so skip its check",
+		msg_warn_cache ("symbol %s has no score registered, skip its check",
 				item->symbol);
 	}
 
