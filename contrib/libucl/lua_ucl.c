@@ -68,8 +68,11 @@ func = "huh";
 
 #define PARSER_META "ucl.parser.meta"
 #define EMITTER_META "ucl.emitter.meta"
-#define NULL_META "null.emitter.meta"
+#define NULL_META "ucl.null.meta"
 #define OBJECT_META "ucl.object.meta"
+#define UCL_OBJECT_TYPE_META "ucl.type.object"
+#define UCL_ARRAY_TYPE_META "ucl.type.array"
+#define UCL_IMPL_ARRAY_TYPE_META "ucl.type.impl_array"
 
 static int ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj);
 static int ucl_object_lua_push_scalar (lua_State *L, const ucl_object_t *obj, bool allow_array);
@@ -141,24 +144,21 @@ ucl_object_lua_push_object (lua_State *L, const ucl_object_t *obj,
 {
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
-	int nelt = 0;
 
 	if (allow_array && obj->next != NULL) {
 		/* Actually we need to push this as an array */
 		return ucl_object_lua_push_array (L, obj);
 	}
 
-	/* Optimize allocation by preallocation of table */
-	while (ucl_object_iterate (obj, &it, true) != NULL) {
-		nelt ++;
-	}
-
-	lua_createtable (L, 0, nelt);
+	lua_createtable (L, 0, obj->len);
 	it = NULL;
 
 	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		ucl_object_lua_push_element (L, ucl_object_key (cur), cur);
 	}
+
+	luaL_getmetatable (L, UCL_OBJECT_TYPE_META);
+	lua_setmetatable (L, -2);
 
 	return 1;
 }
@@ -187,6 +187,9 @@ ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
 			i ++;
 		}
 
+		luaL_getmetatable (L, UCL_ARRAY_TYPE_META);
+		lua_setmetatable (L, -2);
+
 		ucl_object_iterate_free (it);
 	}
 	else {
@@ -202,6 +205,9 @@ ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
 			lua_rawseti (L, -2, i);
 			i ++;
 		}
+
+		luaL_getmetatable (L, UCL_IMPL_ARRAY_TYPE_META);
+		lua_setmetatable (L, -2);
 	}
 
 	return 1;
@@ -294,50 +300,93 @@ ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags)
 	ucl_object_t *obj, *top = NULL;
 	size_t keylen;
 	const char *k;
-	bool is_array = true;
+	bool is_array = true, is_implicit = false, found_mt = false;
 	int max = INT_MIN;
 
 	if (idx < 0) {
 		/* For negative indicies we want to invert them */
 		idx = lua_gettop (L) + idx + 1;
 	}
-	/* Check for array */
-	lua_pushnil (L);
-	while (lua_next (L, idx) != 0) {
-		if (lua_type (L, -2) == LUA_TNUMBER) {
-			double num = lua_tonumber (L, -2);
-			if (num == (int)num) {
-				if (num > max) {
-					max = num;
-				}
+
+	/* First, we check from metatable */
+	if (luaL_getmetafield (L, idx, "class") != 0) {
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			const char *classname = lua_tostring (L, -1);
+
+			if (strcmp (classname, UCL_OBJECT_TYPE_META) == 0) {
+				is_array = false;
+				found_mt = true;
+			} else if (strcmp (classname, UCL_ARRAY_TYPE_META) == 0) {
+				is_array = true;
+				found_mt = true;
+			} else if (strcmp (classname, UCL_IMPL_ARRAY_TYPE_META) == 0) {
+				is_array = true;
+				is_implicit = true;
+				found_mt = true;
 			}
-			else {
-				/* Keys are not integer */
+		}
+
+		lua_pop (L, 1);
+	}
+
+	if (!found_mt) {
+		/* Check for array */
+		lua_pushnil (L);
+		while (lua_next (L, idx) != 0) {
+			if (lua_type (L, -2) == LUA_TNUMBER) {
+				double num = lua_tonumber (L, -2);
+				if (num == (int) num) {
+					if (num > max) {
+						max = num;
+					}
+				} else {
+					/* Keys are not integer */
+					lua_pop (L, 2);
+					is_array = false;
+					break;
+				}
+			} else {
+				/* Keys are not numeric */
 				lua_pop (L, 2);
 				is_array = false;
 				break;
 			}
+			lua_pop (L, 1);
 		}
-		else {
-			/* Keys are not numeric */
-			lua_pop (L, 2);
-			is_array = false;
-			break;
-		}
-		lua_pop (L, 1);
+	}
+	else if (is_array) {
+#if LUA_VERSION_NUM >= 502
+		max = lua_rawlen (L, idx);
+#else
+		max = lua_objlen (L, idx);
+#endif
 	}
 
 	/* Table iterate */
 	if (is_array) {
 		int i;
 
-		top = ucl_object_typed_new (UCL_ARRAY);
+		if (!is_implicit) {
+			top = ucl_object_typed_new (UCL_ARRAY);
+		}
+		else {
+			top = NULL;
+		}
+
 		for (i = 1; i <= max; i ++) {
 			lua_pushinteger (L, i);
 			lua_gettable (L, idx);
+
 			obj = ucl_object_lua_fromelt (L, lua_gettop (L), flags);
+
 			if (obj != NULL) {
-				ucl_array_append (top, obj);
+				if (is_implicit) {
+					DL_APPEND (top, obj);
+				}
+				else {
+					ucl_array_append (top, obj);
+				}
 			}
 			lua_pop (L, 1);
 		}
@@ -1134,6 +1183,49 @@ lua_ucl_object_mt (lua_State *L)
 	lua_pop (L, 1);
 }
 
+static void
+lua_ucl_types_mt (lua_State *L)
+{
+	luaL_newmetatable (L, UCL_OBJECT_TYPE_META);
+
+	lua_pushcfunction (L, lua_ucl_object_tostring);
+	lua_setfield (L, -2, "__tostring");
+
+	lua_pushcfunction (L, lua_ucl_object_tostring);
+	lua_setfield (L, -2, "tostring");
+
+	lua_pushstring (L, UCL_OBJECT_TYPE_META);
+	lua_setfield (L, -2, "class");
+
+	lua_pop (L, 1);
+
+	luaL_newmetatable (L, UCL_ARRAY_TYPE_META);
+
+	lua_pushcfunction (L, lua_ucl_object_tostring);
+	lua_setfield (L, -2, "__tostring");
+
+	lua_pushcfunction (L, lua_ucl_object_tostring);
+	lua_setfield (L, -2, "tostring");
+
+	lua_pushstring (L, UCL_ARRAY_TYPE_META);
+	lua_setfield (L, -2, "class");
+
+	lua_pop (L, 1);
+
+	luaL_newmetatable (L, UCL_IMPL_ARRAY_TYPE_META);
+
+	lua_pushcfunction (L, lua_ucl_object_tostring);
+	lua_setfield (L, -2, "__tostring");
+
+	lua_pushcfunction (L, lua_ucl_object_tostring);
+	lua_setfield (L, -2, "tostring");
+
+	lua_pushstring (L, UCL_IMPL_ARRAY_TYPE_META);
+	lua_setfield (L, -2, "class");
+
+	lua_pop (L, 1);
+}
+
 static int
 lua_ucl_to_json (lua_State *L)
 {
@@ -1281,6 +1373,7 @@ luaopen_ucl (lua_State *L)
 	lua_ucl_parser_mt (L);
 	lua_ucl_null_mt (L);
 	lua_ucl_object_mt (L);
+	lua_ucl_types_mt (L);
 
 	/* Create the refs weak table: */
 	lua_createtable (L, 0, 2);
