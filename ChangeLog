@@ -1,3 +1,73 @@
+1.6.5: 22 Oct 2017
+	* [CritFix] Another portion of tokenization fixes
+	* [CritFix] Fix memory leak in spf caching logic
+	* [CritFix] Fix milter commands pipelining
+	* [CritFix] Fix newlines detection
+	* [Feature] Filter nan and inf when adding scores
+	* [Feature] Implement headers flags in mime parser
+	* [Feature] Support Expires header when using HTTP maps
+	* [Fix] Actively load skip hashes map in fuzzy storage
+	* [Fix] Add workaround for IPv6 in sendmail
+	* [Fix] Authentication Results: Fix SPF smtp.mail_from
+	* [Fix] Check for magic when checking for an archive
+	* [Fix] Deal with another case when processing exceptions
+	* [Fix] Deal with URLs with no slashes after protocol
+	* [Fix] Do not allow garbadge when checking url domain
+	* [Fix] Do not ignore short words
+	* [Fix] Do not strip last character in the last word
+	* [Fix] Do not treat script content as text
+	* [Fix] Erase unknown HTML entities
+	* [Fix] Fix another tokenization issue
+	* [Fix] Fix DKIM forgeries via multiple headers
+	* [Fix] Fix emails detection
+	* [Fix] Fix empty threshold check in greylisting module
+	* [Fix] Fix enormous scores for R_WHITE_ON_WHITE
+	* [Fix] Fix loading of per-user redis backend for statistics
+	* [Fix] Fix multiple headers in DKIM headers list
+	* [Fix] Fix obscured url in format user@@example.com
+	* [Fix] Further tokenization fixes
+	* [Fix] Load skip map from all processes as shared cache is unavailable
+	* [Fix] Lowercase words
+	* [Fix] Milter headers: skip_local / skip_authenticated settings
+	* [Fix] Milter headers: X-Spamd-Result header if X-Virus ran first
+	* [Fix] Ratelimit: fix whitelisted_rcpts matching
+	* [Fix] Some more fixes towards emails detection
+	* [Fix] SpamAssassin: Fail check_freemail_header if regexp didn't match
+	* [Fix] Use greylisting threshold in greylisting module
+
+1.6.4: 10 Sep 2017
+	* [Feature] Add method to get all content-type attributes in Lua
+	* [Feature] Add some sanity checks for actions and controller
+	* [Feature] Allow randomly select User-Agent from a list
+	* [Feature] Deal with obscured URLs with @ symbols
+	* [Feature] Milter headers: support adding/removing arbitrary headers from config
+	* [Fix] Add another workaround to display history properly
+	* [Fix] Add missing rspamadm control options to help
+	* [Fix] Auth-Results: Multiple DKIM signatures
+	* [Fix] Crash in URL processing
+	* [Fix] Default monitoring domain for surbl plugin
+	* [Fix] Detection of maillist optimized and fixed
+	* [Fix] Do not cache SPF records with PTR elements
+	* [Fix] Fix blacklists and DMARC in whitelist
+	* [Fix] Fix exceptions list in surbl
+	* [Fix] Fix processing of closed tags
+	* [Fix] Fix PTR processing in SPF
+	* [Fix] Lowercase HTTP headers to make them searchable from Lua
+	* [Fix] options.local_networks setting
+	* [Fix] Ratelimit: lowercase email addresses
+	* [Fix] Rebalance and slightly rework MX check plugin
+	* [Fix] Redis script loading in DMARC; URL tags; URL reputation
+	* [Fix] Reject invalid bh for DKIM signatures earlier
+	* [Fix] Remove incorrect method `task:set_metric_subject`
+	* [Fix] Rewriting subjects via force actions module
+	* [Fix] RPM postinstall
+	* [Fix] Treat 'rewrite subject' as spam action
+	* [Fix] Try harder to find urls
+	* [Fix] Use full URL when making an HTTP request
+	* [Fix] Use raw urls when sending requests to redirector
+	* [Fix] Use weight from map for fuzzy scoring
+	* [Rules] Penalise R_BAD_CTE_7BIT for utf8 messages
+
 1.6.3: 26 Jul 2017
 	* [CritFix] Fix semicolons parsing in the content type
 	* [Feature] Add EBL to the default config
