@@ -393,6 +393,7 @@ rspamd_lua_init ()
 
 	rspamd_lua_new_class (L, "rspamd{worker}", worker_reg);
 	rspamd_lua_add_preload (L, "lpeg", luaopen_lpeg);
+	luaopen_ucl (L);
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
 	/* Add plugins global */
