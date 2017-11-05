@@ -51,9 +51,9 @@ local function metric_pairs(t)
         else
           -- Very tricky to distinguish:
           -- group {name = "foo" ... } + group "blah" { ... }
-          for k,v in pairs(tbl) do
-            if type(k) ~= 'number' then
-              table.insert(keys, {k, v})
+          for gr_name,gr in pairs(v) do
+            if type(gr_name) ~= 'number' then
+              table.insert(keys, {gr_name, gr})
             end
           end
         end
@@ -159,10 +159,6 @@ local function test_groups(groups)
 end
 
 local function convert_metric(cfg, metric)
-  if type(metric[1]) == 'table' then
-    logger.warnx("multiple metrics have never been supported")
-    metric = metric[1]
-  end
   if metric.actions then
     cfg.actions = override_defaults(metric.actions)
     logger.warnx("overriding actions from the legacy metric settings")
@@ -195,7 +191,9 @@ return function(cfg)
   local ret = false
 
   if cfg['metric'] then
-    cfg = convert_metric(cfg, cfg.metric)
+    for _, v in metric_pairs(cfg.metric) do
+      cfg = convert_metric(cfg, v)
+    end
     ret = true
   end
 
