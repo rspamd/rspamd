@@ -300,7 +300,7 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 {
 	struct rspamd_config *cfg = ud;
 	struct rspamd_symbols_group *gr;
-	const ucl_object_t *val, *cur;
+	const ucl_object_t *val;
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
 
@@ -325,12 +325,10 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
 		HASH_FIND_STR (section->subsections, "symbols", subsection);
 		g_assert (subsection != NULL);
+		if (!rspamd_rcl_process_section (cfg, subsection, &sd, val,
+				pool, err)) {
 
-		LL_FOREACH (val, cur) {
-			if (!rspamd_rcl_process_section (cfg, subsection, &sd, cur,
-					pool, err)) {
-				return FALSE;
-			}
+			return FALSE;
 		}
 	}
 
@@ -426,18 +424,20 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	it = ucl_object_iterate_new (obj);
 
 	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
-		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
-				!ucl_object_todouble_safe (cur, &action_score)) {
-			g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"invalid action definition: '%s'",
-					ucl_object_key (cur));
-			ucl_object_iterate_free (it);
-
-			return FALSE;
+		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value)) {
+			continue;
 		}
 		else {
+			if (!ucl_object_todouble_safe (cur, &action_score)) {
+				g_set_error (err,
+						CFG_RCL_ERROR,
+						EINVAL,
+						"invalid action definition: '%s'",
+						ucl_object_key (cur));
+				ucl_object_iterate_free (it);
+
+				return FALSE;
+			}
 			rspamd_config_set_action_score (cfg,
 					ucl_object_key (cur),
 					action_score,
@@ -447,7 +447,7 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	ucl_object_iterate_free (it);
 
-	return TRUE;
+	return rspamd_rcl_section_parse_defaults (cfg, section, pool, obj, cfg, err);
 }
 
 static gboolean
@@ -2223,29 +2223,26 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			TRUE,
 			cfg->doc_strings,
 			"Symbol groups configuration");
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "symbols", "name",
+			rspamd_rcl_symbol_handler,
+			UCL_OBJECT, FALSE, TRUE,
+			cfg->doc_strings,
+			"Symbols configuration");
 
 	/* Group part */
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
-			"symbols", "name",
-			rspamd_rcl_symbol_handler,
-			UCL_OBJECT,
-			TRUE,
-			TRUE,
-			sub->doc_ref,
-			"Symbol groups settings");
-	rspamd_rcl_add_default_handler (ssub,
+	rspamd_rcl_add_default_handler (sub,
 			"disabled",
 			rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
 			0,
 			"Disable symbols group");
-	rspamd_rcl_add_default_handler (ssub,
+	rspamd_rcl_add_default_handler (sub,
 			"enabled",
 			rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
 			RSPAMD_CL_FLAG_BOOLEAN_INVERSE,
 			"Enable or disable symbols group");
-	rspamd_rcl_add_default_handler (ssub,
+	rspamd_rcl_add_default_handler (sub,
 			"max_score",
 			rspamd_rcl_parse_struct_double,
 			G_STRUCT_OFFSET (struct rspamd_symbols_group, max_score),
@@ -2622,7 +2619,9 @@ rspamd_rcl_section_parse_defaults (struct rspamd_config *cfg,
 		g_set_error (err,
 			CFG_RCL_ERROR,
 			EINVAL,
-			"default configuration must be an object");
+			"default configuration must be an object for section %s "
+					"(actual type is %s)",
+				section->name, ucl_object_type_to_string (obj->type));
 		return FALSE;
 	}
 
@@ -3057,7 +3056,7 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
-				"an array of strings is expected: %s",
+				"non-empty array of strings is expected: %s",
 				ucl_object_key (obj));
 		return FALSE;
 	}
