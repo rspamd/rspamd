@@ -345,7 +345,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	struct group gr, *pgr;
 	rspamd_inet_addr_t *addr;
 
-	tokens = g_strsplit_set (src, " ", -1);
+	tokens = g_strsplit_set (src, " ,", -1);
 
 	addr = rspamd_inet_addr_create (AF_UNIX);
 
