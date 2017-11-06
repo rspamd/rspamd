@@ -114,7 +114,7 @@ local function check_mime_type(task)
 
         -- Use the greatest badness multiplier
         if not badness_mult or
-            (badness_mult2 and #ext2 <= 4 and badness_mult < badness_mult2) then
+            (badness_mult2 and badness_mult < badness_mult2) then
           badness_mult = badness_mult2
         end
 
