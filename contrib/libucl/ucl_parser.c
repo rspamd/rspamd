@@ -1067,12 +1067,20 @@ bool
 ucl_parser_process_object_element (struct ucl_parser *parser, ucl_object_t *nobj)
 {
 	ucl_hash_t *container;
-	ucl_object_t *tobj;
+	ucl_object_t *tobj = NULL, *cur;
 	char errmsg[256];
 
 	container = parser->stack->obj->value.ov;
 
-	tobj = __DECONST (ucl_object_t *, ucl_hash_search_obj (container, nobj));
+	DL_FOREACH (parser->stack->obj, cur) {
+		tobj = __DECONST (ucl_object_t *, ucl_hash_search_obj (cur->value.ov, nobj));
+
+		if (tobj != NULL) {
+			break;
+		}
+	}
+
+
 	if (tobj == NULL) {
 		container = ucl_hash_insert_object (container, nobj,
 				parser->flags & UCL_PARSER_KEY_LOWERCASE);
@@ -1094,8 +1102,6 @@ ucl_parser_process_object_element (struct ucl_parser *parser, ucl_object_t *nobj
 			 * - if a new object has bigger priority, then we overwrite an old one
 			 * - if a new object has lower priority, then we ignore it
 			 */
-
-
 			/* Special case for inherited objects */
 			if (tobj->flags & UCL_OBJECT_INHERITED) {
 				prinew = priold + 1;
