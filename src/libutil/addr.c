@@ -344,6 +344,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	struct passwd pw, *ppw;
 	struct group gr, *pgr;
 	rspamd_inet_addr_t *addr;
+	bool has_group = false;
 
 	tokens = g_strsplit_set (src, " ,", -1);
 
@@ -369,7 +370,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	pwlen = 8192;
 #endif
 
-	pwbuf = g_alloca (pwlen);
+	pwbuf = g_malloc0 (pwlen);
 
 	while (*cur_tok) {
 		if (g_ascii_strncasecmp (*cur_tok, "mode=", sizeof ("mode=") - 1) == 0) {
@@ -395,7 +396,10 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 				goto err;
 			}
 			addr->u.un->owner = pw.pw_uid;
-			addr->u.un->group = pw.pw_gid;
+
+			if (!has_group) {
+				addr->u.un->group = pw.pw_gid;
+			}
 		}
 		else if (g_ascii_strncasecmp (*cur_tok, "group=",
 				sizeof ("group=") - 1) == 0) {
@@ -408,10 +412,14 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 				}
 				goto err;
 			}
+
+			has_group = true;
 			addr->u.un->group = gr.gr_gid;
 		}
 		cur_tok ++;
 	}
+
+	g_free (pwbuf);
 
 	if (target) {
 		rspamd_ip_validate_af (addr);
@@ -425,6 +433,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 
 err:
 
+	g_free (pwbuf);
 	rspamd_inet_address_free (addr);
 	return FALSE;
 }
