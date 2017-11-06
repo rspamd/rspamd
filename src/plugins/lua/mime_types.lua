@@ -106,6 +106,7 @@ local function check_mime_type(task)
     -- ext2 is the one before last extension LOWERCASED
 
     local function check_extension(badness_mult, badness_mult2)
+      if not badness_mult and not badness_mult2 then return end
       if #parts > 2 then
         -- We need to ensure that it is an extension, so we check for its length
         -- Check if next-to-last extension is not a number or date
@@ -113,7 +114,7 @@ local function check_mime_type(task)
 
         -- Use the greatest badness multiplier
         if not badness_mult or
-            (badness_mult2 and #ext2 <= 4 and badness_mult < badness_mult2) then
+            (badness_mult2 and badness_mult < badness_mult2) then
           badness_mult = badness_mult2
         end
 
