@@ -21,26 +21,34 @@ local function override_defaults(def, override)
   if not override then
     return def
   end
+  if not def then
+    return override
+  end
   for k,v in pairs(override) do
-    if k ~= 'selector' and k ~= 'backend' then
-      if def[k] then
-        if type(v) == 'table' then
-          override_defaults(def[k], v)
-        else
-          def[k] = v
-        end
+    if def[k] then
+      if type(v) == 'table' then
+        def[k] = override_defaults(def[k], v)
       else
         def[k] = v
       end
+    else
+      def[k] = v
     end
   end
+
+  return def
+end
+
+local function is_implicit(t)
+  local mt = getmetatable(t)
+
+  return mt and mt.class and mt.class == 'ucl.type.impl_array'
 end
 
 local function metric_pairs(t)
   -- collect the keys
   local keys = {}
-  local mt = getmetatable(t)
-  local implicit_array = mt and mt.class and mt.class == 'ucl.type.impl_array'
+  local implicit_array = is_implicit(t)
 
   local function gen_keys(tbl)
     if implicit_array then
@@ -53,7 +61,16 @@ local function metric_pairs(t)
           -- group {name = "foo" ... } + group "blah" { ... }
           for gr_name,gr in pairs(v) do
             if type(gr_name) ~= 'number' then
-              table.insert(keys, {gr_name, gr})
+              -- We can also have implicit arrays here
+              local gr_implicit = is_implicit(gr)
+
+              if gr_implicit then
+                for _,gr_elt in ipairs(gr) do
+                  table.insert(keys, {gr_name, gr_elt})
+                end
+              else
+                table.insert(keys, {gr_name, gr})
+              end
             end
           end
         end
@@ -65,7 +82,16 @@ local function metric_pairs(t)
       else
         for k,v in pairs(tbl) do
           if type(k) ~= 'number' then
-            table.insert(keys, {k, v})
+            -- We can also have implicit arrays here
+            local is_implicit = is_implicit(v)
+
+            if is_implicit then
+              for _,elt in ipairs(v) do
+                table.insert(keys, {k, elt})
+              end
+            else
+              table.insert(keys, {k, v})
+            end
           end
         end
       end
@@ -109,8 +135,7 @@ local function group_transform(cfg, k, v)
   if not cfg.group then cfg.group = {} end
 
   if cfg.group[k] then
-    local merged = override_defaults(new_group, cfg.group[k])
-    cfg.group[k] = merged
+    cfg.group[k] = override_defaults(cfg.group[k], new_group)
   else
     cfg.group[k] = new_group
   end
@@ -160,7 +185,7 @@ end
 
 local function convert_metric(cfg, metric)
   if metric.actions then
-    cfg.actions = override_defaults(metric.actions)
+    cfg.actions = override_defaults(cfg.actions, metric.actions)
     logger.warnx("overriding actions from the legacy metric settings")
   end
   if metric.unknown_weight then
