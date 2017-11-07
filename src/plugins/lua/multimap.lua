@@ -756,7 +756,7 @@ local function multimap_callback(task, rule)
     end,
     hostname = function()
       local hostname = task:get_hostname()
-      if hostname and hostname ~= 'unknown' then
+      if hostname then
         match_hostname(rule, hostname)
       end
     end,

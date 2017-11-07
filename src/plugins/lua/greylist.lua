@@ -284,7 +284,7 @@ local function greylist_set(task)
   -- Third and second level domains whitelist
   if not is_whitelisted and whitelist_domains_map then
     local hostname = task:get_hostname()
-    if hostname and hostname ~= 'unknown' then
+    if hostname then
       local domain = rspamd_util.get_tld(hostname)
       if whitelist_domains_map:get_key(hostname) or (domain and whitelist_domains_map:get_key(domain)) then
         is_whitelisted = 'meta'

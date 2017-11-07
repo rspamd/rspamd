@@ -45,7 +45,7 @@ local function check_dcc (task)
     client = client_ip:to_string()
   end
   local client_host = task:get_hostname()
-  if client_host and client_host ~= 'unknown' then
+  if client_host then
     client = client .. "\r" .. client_host
   end
 

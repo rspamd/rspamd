@@ -90,7 +90,7 @@ local function check_quantity_received (task)
 
   local hn = task:get_hostname()
   -- Here we don't care about received
-  if (not hn or hn == 'unknown') and task_ip and task_ip:is_valid() then
+  if (not hn) and task_ip and task_ip:is_valid() then
     task:get_resolver():resolve_ptr({task = task,
       name = task_ip:to_string(),
       callback = recv_dns_cb,
