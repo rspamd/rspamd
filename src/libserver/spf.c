@@ -1743,7 +1743,7 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			else {
 				msg_info_spf (
 						"<%s>: spf error for domain %s: unknown or "
-								"unsupported spf macro %c (%s) in %s",
+								"unsupported spf macro %c in %s",
 						task->message_id,
 						rec->sender_domain,
 						*p,

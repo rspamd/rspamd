@@ -904,14 +904,15 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 
 			rspamd_cryptobox_siphash ((guchar *)&b.hash, lc_copy, blen,
 					lib_ctx->hkey);
-			msg_debug_mime ("normal hash: %*s -> %L", blen, lc_copy);
+			msg_debug_mime ("normal hash: %*s -> %L", (gint)blen, lc_copy, b.hash);
 
 			if (closing) {
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
 				rspamd_cryptobox_siphash ((guchar *)&b.closed_hash, lc_copy,
 						blen + 2,
 						lib_ctx->hkey);
-				msg_debug_mime ("closing hash: %*s -> %L", blen + 2, lc_copy);
+				msg_debug_mime ("closing hash: %*s -> %L", (gint)blen + 2, lc_copy,
+						b.closed_hash);
 			}
 			else {
 				b.flags = 0;
