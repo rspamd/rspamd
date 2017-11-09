@@ -383,6 +383,14 @@ LUA_FUNCTION_DEF (util, is_valid_utf8);
 LUA_FUNCTION_DEF (util, readline);
 
 /***
+ * @function util.file_exists(file)
+ * Checks if a specified file exists and is available for reading
+ * @return {boolean} true if file exists
+ */
+LUA_FUNCTION_DEF (util, file_exists);
+
+
+/***
  * @function util.pack(fmt, ...)
  *
  * Backport of Lua 5.3 `string.pack` function:
@@ -525,6 +533,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
 	LUA_INTERFACE_DEF (util, readline),
+	LUA_INTERFACE_DEF (util, file_exists),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -2079,6 +2088,21 @@ lua_util_readline (lua_State *L)
 	}
 	else {
 		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_file_exists (lua_State *L)
+{
+	const gchar *fname = luaL_checkstring (L, 1);
+
+	if (fname) {
+		lua_pushboolean (L, access (fname, R_OK) != -1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
