@@ -526,6 +526,10 @@ local function arc_signing_cb(task)
   else
     if (p.key and p.selector) then
       p.key = lua_util.template(p.key, {domain = p.domain, selector = p.selector})
+      if not rspamd_util.file_exists(p.key) then
+        rspamd_logger.debugm(N, task, 'file %s does not exists', p.key)
+        return false
+      end
       local dret, hdr = dkim_sign(task, p)
       if dret then
         return arc_sign_seal(task, p, hdr)
