@@ -117,7 +117,7 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 
 		if (session->rcpts) {
 			PTR_ARRAY_FOREACH (session->rcpts, i, cur) {
-				rspamd_email_address_unref (cur);
+				rspamd_email_address_free (cur);
 			}
 
 			g_ptr_array_free (session->rcpts, TRUE);
@@ -125,7 +125,7 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 		}
 
 		if (session->from) {
-			rspamd_email_address_unref (session->from);
+			rspamd_email_address_free (session->from);
 			session->from = NULL;
 		}
 

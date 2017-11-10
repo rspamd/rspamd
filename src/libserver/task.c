@@ -241,14 +241,14 @@ rspamd_task_free (struct rspamd_task *task)
 		if (task->rcpt_envelope) {
 			for (i = 0; i < task->rcpt_envelope->len; i ++) {
 				addr = g_ptr_array_index (task->rcpt_envelope, i);
-				rspamd_email_address_unref (addr);
+				rspamd_email_address_free (addr);
 			}
 
 			g_ptr_array_free (task->rcpt_envelope, TRUE);
 		}
 
 		if (task->from_envelope) {
-			rspamd_email_address_unref (task->from_envelope);
+			rspamd_email_address_free (task->from_envelope);
 		}
 
 		ucl_object_unref (task->messages);

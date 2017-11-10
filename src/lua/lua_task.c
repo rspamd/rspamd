@@ -2170,9 +2170,9 @@ lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 			lua_settable (L, -3);
 		}
 
-		if (addr->name_len > 0) {
+		if (addr->name) {
 			lua_pushstring (L, "name");
-			lua_pushlstring (L, addr->name, addr->name_len);
+			lua_pushstring (L, addr->name);
 			lua_settable (L, -3);
 		}
 		else {
@@ -2218,6 +2218,7 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 {
 	struct rspamd_email_address *addr;
 	const gchar *p;
+	gchar *dst;
 	gsize len;
 
 	g_assert (paddr != NULL);
@@ -2226,16 +2227,16 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 		return FALSE;
 	}
 
-	addr = rspamd_mempool_alloc0 (task->task_pool, sizeof (*addr));
+	addr = g_malloc0 (sizeof (*addr));
 
 	lua_pushstring (L, "name");
 	lua_gettable (L, pos);
 
 	if (lua_type (L, -1) == LUA_TSTRING) {
 		p = lua_tolstring (L, -1, &len);
-		addr->name = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
-		memcpy ((gchar *)addr->name, p, len);
-		addr->name_len = len;
+		dst = rspamd_mempool_alloc (task->task_pool, len + 1);
+		rspamd_strlcpy (dst, p, len + 1);
+		addr->name = dst;
 	}
 
 	lua_pop (L, 1);
@@ -2295,19 +2296,26 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 	}
 	else {
 		/* Construct raw addr */
-		len = addr->addr_len + addr->name_len + 3;
-		addr->raw = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
-		if (addr->name_len > 0) {
-			addr->raw_len = rspamd_snprintf ((gchar *)addr->raw, len, "%*s <%*s>",
-					(int)addr->name_len, addr->name,
+		len = addr->addr_len + 3;
+
+		if (addr->name) {
+			len += strlen (addr->name) + 1;
+			dst = rspamd_mempool_alloc (task->task_pool, len + 1);
+
+			addr->raw_len = rspamd_snprintf (dst, len, "%s <%*s>",
+					addr->name,
 					(int)addr->addr_len, addr->addr);
 
 		}
 		else {
-			addr->raw_len = rspamd_snprintf ((gchar *)addr->raw, len, "<%*s@%*s>",
-					(int)addr->name_len, addr->name,
-					(int)addr->addr_len, addr->addr);
+			dst = rspamd_mempool_alloc (task->task_pool, len + 1);
+
+			addr->raw_len = rspamd_snprintf (dst, len, "<%*s@%*s>",
+					(int)addr->user_len, addr->user,
+					(int)addr->domain_len, addr->domain);
 		}
+
+		addr->raw = dst;
 	}
 
 	lua_pop (L, 1);
@@ -2401,13 +2409,19 @@ lua_task_set_recipients (lua_State *L)
 			break;
 		}
 		if (ptrs) {
-			lua_pushvalue (L, pos);
+			guint i;
+			struct rspamd_email_address *tmp;
+
+			PTR_ARRAY_FOREACH (ptrs, i, tmp) {
+				rspamd_email_address_free (tmp);
+			}
+
 			g_ptr_array_set_size (ptrs, 0);
+			lua_pushvalue (L, pos);
 
 			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 				if (lua_import_email_address (L, task, lua_gettop (L), &addr)) {
 					g_ptr_array_add (ptrs, addr);
-					addr = NULL;
 				}
 			}
 
@@ -2624,6 +2638,13 @@ lua_task_set_from (lua_State *L)
 
 		if (addrs) {
 			if (lua_import_email_address (L, task, pos, &addr)) {
+				guint i;
+				struct rspamd_email_address *tmp;
+
+				PTR_ARRAY_FOREACH (addrs, i, tmp) {
+					rspamd_email_address_free (tmp);
+				}
+
 				g_ptr_array_set_size (addrs, 0);
 				g_ptr_array_add (addrs, addr);
 				lua_pushboolean (L, true);
@@ -2633,7 +2654,13 @@ lua_task_set_from (lua_State *L)
 			}
 		}
 		else if (paddr) {
-			if (lua_import_email_address (L, task, pos, paddr)) {
+			if (lua_import_email_address (L, task, pos, &addr)) {
+
+				if (paddr) {
+					rspamd_email_address_free (*paddr);
+				}
+
+				*paddr = addr;
 				lua_pushboolean (L, true);
 			}
 			else {

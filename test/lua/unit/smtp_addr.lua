@@ -21,7 +21,7 @@ context("SMTP address check functions", function()
     int flags;
   };
   struct rspamd_email_address * rspamd_email_address_from_smtp (const char *str, unsigned len);
-  void rspamd_email_address_unref (struct rspamd_email_address *addr);
+  void rspamd_email_address_free (struct rspamd_email_address *addr);
   ]]
 
   test("Parse addrs", function()

@@ -21,20 +21,6 @@
 #include "smtp_parsers.h"
 
 static void
-rspamd_email_addr_dtor (struct rspamd_email_address *addr)
-{
-	if (addr->flags & RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED) {
-		g_free ((void *)addr->addr);
-	}
-
-	if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
-		g_free ((void *)addr->user);
-	}
-
-	g_free (addr);
-}
-
-static void
 rspamd_email_address_unescape (struct rspamd_email_address *addr)
 {
 	const char *h, *end;
@@ -92,26 +78,24 @@ rspamd_email_address_from_smtp (const gchar *str, guint len)
 			ret->flags |= RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED;
 		}
 
-		REF_INIT_RETAIN (ret, rspamd_email_addr_dtor);
-
 		return ret;
 	}
 
 	return NULL;
 }
 
-struct rspamd_email_address *
-rspamd_email_address_ref (struct rspamd_email_address *addr)
-{
-	REF_RETAIN (addr);
-
-	return addr;
-}
-
 void
-rspamd_email_address_unref (struct rspamd_email_address *addr)
+rspamd_email_address_free (struct rspamd_email_address *addr)
 {
-	REF_RELEASE (addr);
+	if (addr->flags & RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED) {
+		g_free ((void *)addr->addr);
+	}
+
+	if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
+		g_free ((void *)addr->user);
+	}
+
+	g_free (addr);
 }
 
 static inline void
@@ -152,11 +136,8 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 		elt->flags |= RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED;
 	}
 
-	REF_INIT_RETAIN (elt, rspamd_email_addr_dtor);
-
 	if (name->len > 0) {
 		elt->name = rspamd_mime_header_decode (pool, name->str, name->len);
-		elt->name_len = strlen (elt->name);
 	}
 
 	g_ptr_array_add (ar, elt);
@@ -435,7 +416,7 @@ rspamd_email_address_list_destroy (gpointer ptr)
 	struct rspamd_email_address *addr;
 
 	PTR_ARRAY_FOREACH (ar, i, addr) {
-		REF_RELEASE (addr);
+		rspamd_email_address_free (addr);
 	}
 
 	g_ptr_array_free (ar, TRUE);

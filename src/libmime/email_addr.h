@@ -28,11 +28,10 @@ enum rspamd_email_address_flags {
 	RSPAMD_EMAIL_ADDR_BRACED = (1 << 2),
 	RSPAMD_EMAIL_ADDR_QUOTED = (1 << 3),
 	RSPAMD_EMAIL_ADDR_EMPTY = (1 << 4),
-	RSPAMD_EMAIL_ADDR_SMTP = (1 << 5),
-	RSPAMD_EMAIL_ADDR_HAS_BACKSLASH = (1 << 6),
-	RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED = (1 << 7),
-	RSPAMD_EMAIL_ADDR_USER_ALLOCATED = (1 << 8),
-	RSPAMD_EMAIL_ADDR_HAS_8BIT = (1 << 9),
+	RSPAMD_EMAIL_ADDR_HAS_BACKSLASH = (1 << 5),
+	RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED = (1 << 6),
+	RSPAMD_EMAIL_ADDR_USER_ALLOCATED = (1 << 7),
+	RSPAMD_EMAIL_ADDR_HAS_8BIT = (1 << 8),
 };
 
 /*
@@ -47,12 +46,9 @@ struct rspamd_email_address {
 
 	guint raw_len;
 	guint addr_len;
-	guint user_len;
 	guint domain_len;
-	guint name_len;
-	enum rspamd_email_address_flags flags;
-
-	ref_entry_t ref;
+	guint16 user_len;
+	guchar flags;
 };
 
 /**
@@ -84,9 +80,6 @@ GPtrArray *rspamd_email_address_from_mime (rspamd_mempool_t *pool,
  */
 void rspamd_email_address_list_destroy (gpointer ptr);
 
-struct rspamd_email_address * rspamd_email_address_ref (
-		struct rspamd_email_address *addr);
-
-void rspamd_email_address_unref (struct rspamd_email_address *addr);
+void rspamd_email_address_free (struct rspamd_email_address *addr);
 
 #endif /* SRC_LIBMIME_EMAIL_ADDR_H_ */
