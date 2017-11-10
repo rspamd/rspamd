@@ -2076,6 +2076,11 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	gboolean url_found = FALSE;
 	struct rspamd_process_exception *ex;
 
+	if (href_offset <= 0) {
+		/* No dispalyed url, just some text within <a> tag */
+		return;
+	}
+
 	rspamd_html_url_is_phished (pool, url,
 			dest->data + href_offset,
 			dest->len - href_offset,
