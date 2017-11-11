@@ -320,35 +320,35 @@ rspamd_config:register_symbol({
   parent = id,
   type = 'virtual',
   score = -1.0,
-  group = 'arc',
+  group = 'policies',
 })
 rspamd_config:register_symbol({
   name = arc_symbols['reject'],
   parent = id,
   type = 'virtual',
   score = 2.0,
-  group = 'arc',
+  group = 'policies',
 })
 rspamd_config:register_symbol({
   name = arc_symbols['invalid'],
   parent = id,
   type = 'virtual',
   score = 1.0,
-  group = 'arc',
+  group = 'policies',
 })
 rspamd_config:register_symbol({
   name = arc_symbols['dnsfail'],
   parent = id,
   type = 'virtual',
   score = 0.0,
-  group = 'arc',
+  group = 'policies',
 })
 rspamd_config:register_symbol({
   name = arc_symbols['na'],
   parent = id,
   type = 'virtual',
   score = 0.0,
-  group = 'arc',
+  group = 'policies',
 })
 
 rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
