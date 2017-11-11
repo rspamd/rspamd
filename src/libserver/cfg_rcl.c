@@ -3575,6 +3575,8 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 					logger_fin (cfg->cfg_pool, logger_ud);
 				}
 			}
+
+			HASH_DEL (top, logger_section);
 		}
 	}
 
