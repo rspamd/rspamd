@@ -248,8 +248,8 @@ end
 local function rspamd_str_split_fun(s, sep, func)
   local lpeg = require "lpeg"
   sep = lpeg.P(sep)
-  local elem = lpeg.C((1 - sep)^0 / func)
-  local p = lpeg.C(elem * (sep * elem)^0)   -- make a table capture
+  local elem = lpeg.P((1 - sep)^0 / func)
+  local p = lpeg.P(elem * (sep * elem)^0)
   return p:match(s)
 end
 
