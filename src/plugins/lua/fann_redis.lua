@@ -1155,6 +1155,11 @@ else
       description = 'Neural network SPAM',
       group = 'fann'
     })
+    rspamd_config:register_symbol({
+      name = def_rules.symbol_spam,
+      type = 'virtual,nostat',
+      parent = id
+    })
 
     rspamd_config:set_metric_symbol({
       name = def_rules.symbol_ham,
