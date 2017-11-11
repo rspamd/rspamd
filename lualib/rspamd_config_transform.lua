@@ -140,7 +140,7 @@ local function group_transform(cfg, k, v)
     cfg.group[k] = new_group
   end
 
-  logger.warnx("overriding group %s from the legacy metric settings", k)
+  logger.infox("overriding group %s from the legacy metric settings", k)
 end
 
 local function symbol_transform(cfg, k, v)
@@ -148,7 +148,7 @@ local function symbol_transform(cfg, k, v)
   for gr_n, gr in pairs(cfg.group) do
     if gr.symbols and gr.symbols[k] then
       -- We override group symbol with ungrouped symbol
-      logger.warnx("overriding group symbol %s in the group %s", k, gr_n)
+      logger.infox("overriding group symbol %s in the group %s", k, gr_n)
       gr.symbols[k] = override_defaults(gr.symbols[k], v)
       return
     end
@@ -162,7 +162,7 @@ local function symbol_transform(cfg, k, v)
   end
 
   cfg.group.ungrouped.symbols[k] = v
-  logger.warnx("adding symbol %s to the group 'ungrouped'", k)
+  logger.infox("adding symbol %s to the group 'ungrouped'", k)
 end
 
 local function test_groups(groups)
@@ -186,14 +186,14 @@ end
 local function convert_metric(cfg, metric)
   if metric.actions then
     cfg.actions = override_defaults(cfg.actions, metric.actions)
-    logger.warnx("overriding actions from the legacy metric settings")
+    logger.infox("overriding actions from the legacy metric settings")
   end
   if metric.unknown_weight then
     cfg.actions.unknown_weight = metric.unknown_weight
   end
 
   if metric.subject then
-    logger.warnx("overriding subject from the legacy metric settings")
+    logger.infox("overriding subject from the legacy metric settings")
     cfg.actions.subject = metric.subject
   end
 
