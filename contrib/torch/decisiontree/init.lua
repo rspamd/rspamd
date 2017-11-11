@@ -1,10 +1,8 @@
 require 'paths'
-require 'xlua'
+--require 'xlua'
 require 'string'
 require 'os'
-require 'sys'
-require 'image'
-require 'lfs'
+--require 'sys'
 require 'nn'
 
 -- these actually return local variables but we will re-require them
@@ -31,7 +29,7 @@ require 'decisiontree.math'
 require 'decisiontree.utils'
 
 -- for multi-threading
-require 'decisiontree.WorkPool'
+--require 'decisiontree.WorkPool'
 
 -- abstract classes
 require 'decisiontree.DecisionTree'
@@ -62,8 +60,8 @@ require 'decisiontree.GradientBoostTrainer'
 require 'decisiontree.GradientBoostState' -- TreeState subclass
 
 -- unit tests and benchmarks
-require 'decisiontree.test'
-require 'decisiontree.benchmark'
+--require 'decisiontree.test'
+--require 'decisiontree.benchmark'
 
 -- nn.Module
 require 'decisiontree.DFD'

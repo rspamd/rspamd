@@ -177,7 +177,7 @@ function GradientBoostTrainer:train(trainSet, featureIds, validSet, verbose)
          timer:reset()
          local stop, validLoss, bestDecisionForest = self:validate(trainSet, validSet, decisionForest, bestDecisionForest)
          if dt.PROFILE then print("validate tree time: "..timer:time().real) end
-         if verbose then print(string.format("Loss: train=%7.4f, valid=%7.4f", trainLoss, validLoss)) end
+         if verbose then print(string.format("Loss: train=%7.4f, valid=%7.4f", 0, validLoss)) end
          if stop then
             if verbose then print(string.format("GBDT early stopped on tree %d", treeId)) end
             break

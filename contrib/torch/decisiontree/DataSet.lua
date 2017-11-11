@@ -1,5 +1,4 @@
 local dt = require "decisiontree._env"
-local ipc = require 'libipc'
 
 local DataSet = torch.class("dt.DataSet", dt)
 
@@ -77,31 +76,10 @@ function DataSet:sortFeatureValues(inputs)
       assert(torch.isTensor(inputs))
       featureIds:range(1,inputs:size(2))
 
-      local wq = ipc.workqueue()
       for i=1,inputs:size(2) do
-         wq:write({i, inputs:select(2, i)})
-      end
-      for i=1,self.nThreads do
-         wq:write(nil)
-      end
-
-      ipc.map(self.nThreads, function(wq)
-         while true do
-            local data = wq:read()
-            if data == nil then break end
-            local featureId = data[1]
-            local values = data[2]
-            local sortFeatureValues, sortExampleIds = values:sort(1, false)
-            sortFeatureValues = nil
-            wq:write({featureId, sortExampleIds})
-            collectgarbage()
-         end
-      end, wq)
-
-      for _=1,inputs:size(2) do
-         local data = wq:read()
-         local featureId = data[1]
-         local sortedFeatureExampleIds = data[2]
+         local featureId = i
+         local values = inputs:select(2, i)
+         local _, sortedFeatureExampleIds = values:sort(1, false)
          dataset[featureId] = sortedFeatureExampleIds
       end
    end
