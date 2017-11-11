@@ -158,8 +158,8 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L,
 			p++;
 		}
 
-		if (strlen (p) > 20) {
-			rspamd_snprintf (func_buf, sizeof (func_buf), "%10s...]:%d", p,
+		if (strlen (p) > 30) {
+			rspamd_snprintf (func_buf, sizeof (func_buf), "%27s...:%d", p,
 					d.currentline);
 		}
 		else {
