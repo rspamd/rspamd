@@ -59,7 +59,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = 'No received',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCVD_COUNT_ONE',
@@ -67,7 +67,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = 'One received',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCVD_COUNT_TWO',
@@ -83,7 +83,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = '3-5 received',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCVD_COUNT_FIVE',
@@ -91,7 +91,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = '5-7 received',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCVD_COUNT_SEVEN',
@@ -99,7 +99,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = '7-11 received',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCVD_COUNT_TWELVE',
@@ -107,7 +107,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = '12+ received',
-  group = 'header',
+  group = 'headers',
 }
 
 local prio_cb_id = rspamd_config:register_symbol {
@@ -141,7 +141,7 @@ rspamd_config:register_symbol{
   parent = prio_cb_id,
   type = 'virtual',
   description = 'Priority 0',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'HAS_X_PRIO_ONE',
@@ -149,7 +149,7 @@ rspamd_config:register_symbol{
   parent = prio_cb_id,
   type = 'virtual',
   description = 'Priority 1',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'HAS_X_PRIO_TWO',
@@ -157,7 +157,7 @@ rspamd_config:register_symbol{
   parent = prio_cb_id,
   type = 'virtual',
   description = 'Priority 2',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'HAS_X_PRIO_THREE',
@@ -165,7 +165,7 @@ rspamd_config:register_symbol{
   parent = prio_cb_id,
   type = 'virtual',
   description = 'Priority 3-4',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'HAS_X_PRIO_FIVE',
@@ -173,7 +173,7 @@ rspamd_config:register_symbol{
   parent = prio_cb_id,
   type = 'virtual',
   description = 'Priority 5+',
-  group = 'header',
+  group = 'headers',
 }
 
 local function get_raw_header(task, name)
@@ -237,7 +237,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To header could not be parsed',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'HAS_REPLYTO',
@@ -245,7 +245,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Has Reply-To header',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'REPLYTO_EQ_FROM',
@@ -253,7 +253,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To header is identical to From header',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'REPLYTO_ADDR_EQ_FROM',
@@ -261,7 +261,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To header is identical to SMTP From',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'REPLYTO_DOM_EQ_FROM_DOM',
@@ -269,7 +269,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To domain matches the From domain',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'REPLYTO_DOM_NEQ_FROM_DOM',
@@ -277,7 +277,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To domain does not match the From domain',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'REPLYTO_DN_EQ_FROM_DN',
@@ -285,7 +285,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To display name matches From',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'REPLYTO_EMAIL_HAS_TITLE',
@@ -293,7 +293,7 @@ rspamd_config:register_symbol{
   parent = check_replyto_id,
   type = 'virtual',
   description = 'Reply-To header has title',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_dependency(check_replyto_id, 'FROM_NAME_HAS_TITLE')
 
@@ -359,7 +359,7 @@ rspamd_config:register_symbol{
   parent = check_mime_id,
   type = 'virtual',
   description = 'MIME-Version header is missing',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'MIME_MA_MISSING_TEXT',
@@ -367,7 +367,7 @@ rspamd_config:register_symbol{
   parent = check_mime_id,
   type = 'virtual',
   description = 'MIME multipart/alternative missing text/plain part',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'MIME_MA_MISSING_HTML',
@@ -375,7 +375,7 @@ rspamd_config:register_symbol{
   parent = check_mime_id,
   type = 'virtual',
   description = 'MIME multipart/alternative missing text/html part',
-  group = 'header',
+  group = 'headers',
 }
 
 -- Used to be called IS_LIST
@@ -405,7 +405,7 @@ rspamd_config.BROKEN_HEADERS = {
     return task:has_flag('broken_headers')
   end,
   score = 10.0,
-  group = 'header',
+  group = 'headers',
   description = 'Headers structure is likely broken'
 }
 
@@ -415,7 +415,7 @@ rspamd_config.BROKEN_CONTENT_TYPE = {
       task:get_parts())
   end,
   score = 1.5,
-  group = 'header',
+  group = 'headers',
   description = 'Message has part with broken content type'
 }
 
@@ -444,7 +444,7 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
   end,
 
   score = 2.0,
-  group = 'header',
+  group = 'headers',
   description = 'Read confirmation address is different to from address'
 }
 
@@ -477,7 +477,7 @@ rspamd_config.HEADER_FORGED_MDN = {
   end,
 
   score = 2.0,
-  group = 'header',
+  group = 'headers',
   description = 'Read confirmation address is different to return path'
 }
 
@@ -520,7 +520,8 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
   end,
 
   score = 5.0,
-  group = 'header',
+  group = 'headers',
+  one_shot = true,
   description = 'Repeated unique headers'
 }
 
@@ -533,7 +534,7 @@ rspamd_config.MISSING_FROM = {
     return false
   end,
   score = 2.0,
-  group = 'header',
+  group = 'headers',
   description = 'Missing From: header'
 }
 rspamd_config.MV_CASE = {
@@ -542,7 +543,8 @@ rspamd_config.MV_CASE = {
     if (mv) then return true end
   end,
   description = 'Mime-Version .vs. MIME-Version',
-  score = 0.5
+  score = 0.5,
+  group = 'headers',
 }
 
 rspamd_config.FAKE_REPLY = {
@@ -556,7 +558,8 @@ rspamd_config.FAKE_REPLY = {
     return false
   end,
   description = 'Fake reply',
-  score = 1.0
+  score = 1.0,
+  group = 'headers'
 }
 
 local check_from_id = rspamd_config:register_symbol{
@@ -612,7 +615,7 @@ local check_from_id = rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_NO_DN',
   score = 0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From header does not have a display name',
@@ -620,7 +623,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_DN_EQ_ADDR',
   score = 1.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From header display name is the same as the address',
@@ -628,7 +631,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_HAS_DN',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From header has a display name',
@@ -636,7 +639,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_NAME_EXCESS_SPACE',
   score = 1.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From header display name contains excess whitespace',
@@ -644,7 +647,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_NAME_HAS_TITLE',
   score = 1.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From header display name has a title (Mr/Mrs/Dr)',
@@ -652,7 +655,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_EQ_ENVFROM',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From address is the same as the envelope',
@@ -660,7 +663,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'FROM_NEQ_ENVFROM',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'From address is different to the envelope',
@@ -668,7 +671,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_EQ_FROM',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'To address matches the From address',
@@ -676,7 +679,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_DOM_EQ_FROM_DOM',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_from_id,
   type = 'virtual',
   description = 'To domain is the same as the From domain',
@@ -761,7 +764,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'No recipients',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_ONE',
@@ -769,7 +772,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'One recipient',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_TWO',
@@ -777,7 +780,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'Two recipients',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_THREE',
@@ -785,7 +788,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = '3-5 recipients',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_FIVE',
@@ -793,7 +796,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = '5-7 recipients',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_SEVEN',
@@ -801,7 +804,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = '7-11 recipients',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_TWELVE',
@@ -809,7 +812,7 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = '12-50 recipients',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCPT_COUNT_GT_50',
@@ -817,13 +820,13 @@ rspamd_config:register_symbol{
   parent = check_to_cc_id,
   type = 'virtual',
   description = '50+ recipients',
-  group = 'header',
+  group = 'headers',
 }
 
 rspamd_config:register_symbol{
   name = 'TO_DN_RECIPIENTS',
   score = 2.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'To header display name is "Recipients"',
@@ -831,7 +834,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_DN_NONE',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'None of the recipients have display names',
@@ -839,7 +842,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_DN_ALL',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'All the recipients have display names',
@@ -847,7 +850,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_DN_SOME',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'Some of the recipients have display names',
@@ -855,7 +858,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_DN_EQ_ADDR_ALL',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'All of the recipients have display names that are the same as their address',
@@ -863,7 +866,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_DN_EQ_ADDR_SOME',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'Some of the recipients have display names that are the same as their address',
@@ -871,7 +874,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_MATCH_ENVRCPT_ALL',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'All of the recipients match the envelope',
@@ -879,7 +882,7 @@ rspamd_config:register_symbol{
 rspamd_config:register_symbol{
   name = 'TO_MATCH_ENVRCPT_SOME',
   score = 0.0,
-  group = 'header',
+  group = 'headers',
   parent = check_to_cc_id,
   type = 'virtual',
   description = 'Some of the recipients match the envelope',
@@ -907,7 +910,7 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
   end,
   description = 'Binary content-type not specified as an attachment',
   score = 4.0,
-  group = 'header'
+  group = 'headers'
 }
 
 rspamd_config.CTYPE_MIXED_BOGUS = {

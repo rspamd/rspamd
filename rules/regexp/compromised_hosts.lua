@@ -93,12 +93,14 @@ reconf['X_PHP_EVAL'] = {
 reconf['HAS_WP_URI'] = {
   re = '/\\/wp-[^\\/]+\\//Ui',
   description = "Contains WordPress URIs",
+  one_shot = true,
   group = "compromised_hosts"
 }
 
 reconf['WP_COMPROMISED'] = {
   re = '/\\/wp-(?:content|includes)[^\\/]+\\//Ui',
   description = "URL that is pointing to a compromised WordPress installation",
+  one_shot = true,
   group = "compromised_hosts"
 }
 
@@ -140,6 +142,7 @@ reconf['URI_HIDDEN_PATH'] = {
   re = "/\\/\\..+/U",
   description = "URL contains a UNIX hidden file/directory",
   score = 1.0,
+  one_shot = true,
   group = "compromised_hosts"
 }
 

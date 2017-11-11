@@ -65,7 +65,7 @@ rspamd_config.MISSING_DATE = {
   end,
   score = 1.0,
   description = 'Message date is missing',
-  group = 'date'
+  group = 'headers'
 }
 
 rspamd_config.DATE_IN_FUTURE = {
@@ -80,7 +80,7 @@ rspamd_config.DATE_IN_FUTURE = {
   end,
   score = 4.0,
   description = 'Message date is in future',
-  group = 'date'
+  group = 'headers'
 }
 
 rspamd_config.DATE_IN_PAST = {
@@ -95,7 +95,7 @@ rspamd_config.DATE_IN_PAST = {
   end,
   score = 1.0,
   description = 'Message date is in past',
-  group = 'date'
+  group = 'headers'
 }
 
 rspamd_config.R_SUSPICIOUS_URL = {
@@ -157,7 +157,7 @@ rspamd_config.ENVFROM_PRVS = {
   end,
   score = 0.0,
   description = "Envelope From is a PRVS address that matches the From address",
-  group = 'prvs'
+  group = 'headers'
 }
 
 rspamd_config.ENVFROM_VERP = {
@@ -185,7 +185,7 @@ rspamd_config.ENVFROM_VERP = {
   end,
   score = 0.0,
   description = "Envelope From is a VERP address",
-  group = "mailing_list"
+  group = "headers"
 }
 
 local check_rcvd = rspamd_config:register_symbol{
@@ -232,7 +232,7 @@ rspamd_config:register_symbol{
   name = 'RCVD_TLS_ALL',
   description = 'All hops used encrypted transports',
   score = 0.0,
-  group = 'encryption'
+  group = 'headers'
 }
 
 rspamd_config:register_symbol{
@@ -241,7 +241,7 @@ rspamd_config:register_symbol{
   name = 'RCVD_TLS_LAST',
   description = 'Last hop used encrypted transports',
   score = 0.0,
-  group = 'encryption'
+  group = 'headers'
 }
 
 rspamd_config:register_symbol{
@@ -250,7 +250,7 @@ rspamd_config:register_symbol{
   name = 'RCVD_NO_TLS_LAST',
   description = 'Last hop did not use encrypted transports',
   score = 0.0,
-  group = 'encryption'
+  group = 'headers'
 }
 
 rspamd_config:register_symbol{
@@ -260,7 +260,7 @@ rspamd_config:register_symbol{
   -- NB This does not mean sender was authenticated; see task:get_user()
   description = 'Authenticated hand-off was seen in Received headers',
   score = 0.0,
-  group = 'authentication'
+  group = 'headers'
 }
 
 rspamd_config.RCVD_HELO_USER = {
@@ -280,6 +280,7 @@ rspamd_config.RCVD_HELO_USER = {
     end
   end,
   description = 'HELO User spam pattern',
+  group = 'headers',
   score = 3.0
 }
 
@@ -298,7 +299,8 @@ rspamd_config.URI_COUNT_ODD = {
     end
   end,
   description = 'Odd number of URIs in multipart/alternative message',
-  score = 1.0
+  score = 1.0,
+  group = 'url',
 }
 
 rspamd_config.HAS_ATTACHMENT = {
@@ -313,7 +315,8 @@ rspamd_config.HAS_ATTACHMENT = {
       end
     end
   end,
-  description = 'Message contains attachments'
+  description = 'Message contains attachments',
+  group = 'body',
 }
 
 -- Requires freemail maps loaded in multimap
@@ -332,7 +335,8 @@ local freemail_reply_neq_from_id = rspamd_config:register_symbol({
   name = 'FREEMAIL_REPLYTO_NEQ_FROM_DOM',
   callback = freemail_reply_neq_from,
   description = 'Freemail From and Reply-To, but to different Freemail services',
-  score = 3.0
+  score = 3.0,
+  group = 'headers',
 })
 rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_REPLYTO')
 rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
@@ -379,6 +383,7 @@ rspamd_config.OMOGRAPH_URL = {
     return false
   end,
   score = 5.0,
+  group = 'url',
   description = 'Url contains both latin and non-latin characters'
 }
 
@@ -404,7 +409,9 @@ rspamd_config.URL_IN_SUBJECT = {
     return false
   end,
   score = 4.0,
+  group = 'subject',
   description = 'Url found in Subject'
+
 }
 
 local aliases_id = rspamd_config:register_symbol{
@@ -453,6 +460,7 @@ local aliases_id = rspamd_config:register_symbol{
   end,
   priority = 150,
   description = 'Removes plus aliases from the email',
+  group = 'headers',
 }
 
 rspamd_config:register_symbol{
@@ -460,6 +468,7 @@ rspamd_config:register_symbol{
   parent = aliases_id,
   name = 'TAGGED_RCPT',
   description = 'SMTP recipients have plus tags',
+  group = 'headers',
   score = 0,
 }
 rspamd_config:register_symbol{
@@ -467,6 +476,7 @@ rspamd_config:register_symbol{
   parent = aliases_id,
   name = 'TAGGED_FROM',
   description = 'SMTP from has plus tags',
+  group = 'headers',
   score = 0,
 }
 
@@ -513,6 +523,7 @@ rspamd_config:register_symbol{
   parent = check_from_display_name,
   name = 'SPOOF_DISPLAY_NAME',
   description = 'Display name is being used to spoof and trick the recipient',
+  group = 'headers',
   score = 8,
 }
 
@@ -520,6 +531,7 @@ rspamd_config:register_symbol{
   type = 'virtual',
   parent = check_from_display_name,
   name = 'FROM_NEQ_DISPLAY_NAME',
+  group = 'headers',
   description = 'Display name contains an email address different to the From address',
   score = 4,
 }
@@ -562,6 +574,7 @@ rspamd_config.SPOOF_REPLYTO = {
     end
     return false
   end,
+  group = 'headers',
   description = 'Reply-To is being used to spoof and trick the recipient to send an off-domain reply',
   score = 6.0
 }
@@ -586,6 +599,7 @@ rspamd_config.INFO_TO_INFO_LU = {
     return false
   end,
   description = 'info@ From/To address with List-Unsubscribe headers',
+  group = 'headers',
   score = 2.0
 }
 
@@ -618,5 +632,5 @@ rspamd_config.R_BAD_CTE_7BIT = {
   end,
   score = 3.5,
   description = 'Detects bad content-transfer-encoding for text parts',
-  group = 'header'
+  group = 'headers'
 }

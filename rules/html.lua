@@ -20,7 +20,7 @@ reconf['MIME_HTML_ONLY'] = {
   re = 'has_only_html_part()',
   score = 0.2,
   description = 'Messages that have only HTML part',
-  group = 'header'
+  group = 'headers'
 }
 
 local function check_html_image(task, min, max)

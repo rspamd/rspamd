@@ -22,6 +22,7 @@ reconf['HTML_META_REFRESH_URL'] = {
   re = '/<meta\\s+http-equiv="refresh"\\s+content="\\d+\\s*;\\s*url=/{sa_raw_body}i',
   description = "Has HTML Meta refresh URL",
   score = 5.0,
+  one_shot = true,
   group = 'HTML'
 }
 
@@ -29,7 +30,8 @@ reconf['HAS_DATA_URI'] = {
   -- Requires options { check_attachements = true; }
   re = '/data:[^\\/]+\\/[^; ]+;base64,/{sa_raw_body}i',
   description = "Has Data URI encoding",
-  group = 'HTML'
+  group = 'HTML',
+  one_shot = true,
 }
 
 reconf['DATA_URI_OBFU'] = {
@@ -37,6 +39,7 @@ reconf['DATA_URI_OBFU'] = {
   re = '/data:text\\/(?:plain|html);base64,/{sa_raw_body}i',
   description = "Uses Data URI encoding to obfuscate plain or HTML in base64",
   group = 'HTML',
+  one_shot = true,
   score = 2.0
 }
 
@@ -44,6 +47,7 @@ reconf['INTRODUCTION'] = {
   re = '/\\b(?:my name is\\b|(?:i am|this is)\\s+(?:mr|mrs|ms|miss|master|sir|prof(?:essor)?|d(?:octo)?r|rev(?:erend)?)(?:\\.|\\b))/{sa_body}i',
   description = "Sender introduces themselves",
   score = 2.0,
+  one_shot = true,
   group = 'scams'
 }
 
