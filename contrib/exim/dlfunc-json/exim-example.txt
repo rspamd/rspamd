@@ -1,0 +1,75 @@
+acl_smtp_data = acl_check_data
+
+.....
+
+acl_check_data:
+
+.....
+
+# RSPAMD: START
+	warn
+		!authenticated = *
+		add_header = X-Spam-Checker-Version: Rspamd
+		add_header = :at_start:Authentication-Results: ip=$sender_host_address:$sender_host_port, host=$sender_host_name, helo=$sender_helo_name, mailfrom=$sender_address
+	warn
+		#spam = nobody:true
+		#set acl_m0_rspamd = $spam_report
+		set acl_m0_rspamd	= ${dlfunc{/usr/local/libexec/exim/exim-rspamd-http-dlfunc.so}{rspamd}{/var/run/rspamd/rspamd.sock}{defer_ok}}
+	accept
+		authenticated = *
+	warn
+		condition	= ${if eq{$acl_m0_rspamd}{}}
+		logwrite	= RSPAMD check failed
+		add_header	= X-Spam-Info: Check failed
+	warn
+		condition	= ${if match{$acl_m0_rspamd}{\N^rspamd dlfunc:\s*\N}{yes}{no}}
+		logwrite	= RSPAMD check defer: ${sg{$acl_m0_rspamd}{\N^rspamd dlfunc:\s*\N}{}}
+		add_header	= X-Spam-Info: Check deffered
+
+	warn
+		remove_header  = X-Spam-Checker-Version:X-Spam-Status:X-Spam-Info:X-Spam-Result
+		set acl_m1 = No
+	warn
+		condition	= ${if !eq{$acl_m0_rspamd}{}}
+		set acl_m1_yesno	= ${if match{$acl_m0_rspamd}{\NAction: (.+?)\n\N}{$1}{}}
+		set acl_m2_status = ${if eq{$acl_m1_yesno}{reject}{REJECT}{\
+								${if eq{$acl_m1_yesno}{add header}{PROBABLY}{\
+									${if eq{$acl_m1_yesno}{rewrite subject}{PROBABLY}{\
+										${if eq{$acl_m1_yesno}{soft reject}{SOFT}{\
+											${if eq{$acl_m1_yesno}{greylist}{GREYLIST}{NO}}\
+										}}\
+									}}\
+								}}\
+							}}
+		set acl_m1_yesno	=	${if eq{$acl_m1_yesno}{}{unknown}{\
+							${if eq{$acl_m1_yesno}{reject}{Yes}{\
+								${if eq{$acl_m1_yesno}{add header}{Yes}{\
+									${if eq{$acl_m1_yesno}{rewrite subject}{Yes}{\
+										${if eq{$acl_m1_yesno}{soft reject}{Probably}{\
+											${if eq{$acl_m1_yesno}{greylist}{Probably}{No}}\
+										}}\
+									}}\
+								}}\
+							}}\
+						}}
+		#logwrite	= RSPAMD: status: $acl_m2_status
+		#logwrite	= RSPAMD DEBUG: $acl_m0_rspamd
+		set acl_m0_rspamd	= ${sg{$acl_m0_rspamd}{ Action:.+\n}{}}
+	warn
+		condition	= ${if !eq{$acl_m0_rspamd}{}}
+		logwrite	= RSPAMD: $acl_m2_status, $acl_m0_rspamd
+		add_header	= X-Spam-Result: $acl_m0_rspamd
+		add_header	= X-Spam-Status: $acl_m1_yesno
+	defer
+        condition	= ${if eq{$acl_m2_status}{GREYLIST}}
+		log_message = Rspamd $acl_m2_status
+        message = Try again later. Message greylisted
+	defer
+        condition	= ${if eq{$acl_m2_status}{SOFT}}
+		log_message = Rspamd $acl_m2_status
+        message = Try again later. Message previously greylisted
+	deny
+		condition	= ${if eq{$acl_m2_status}{REJECT}}
+		log_message = Rspamd $acl_m2_status
+		message = This message detected as SPAM and rejected
+# RSPAMD: END
