@@ -1,0 +1,6 @@
+INSTALL
+
+1) Install cJSON (https://github.com/DaveGamble/cJSON)
+2) Compile dlfunc library:
+ cc rspamd.c -fPIC -fpic -shared -I/root/rpmbuild/BUILD/exim-4.89/build-Linux-x86_64/ -lcjson -o exim-rspamd-http-dlfunc.so
+3) See exim-example.txt
