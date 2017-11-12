@@ -23,6 +23,7 @@
 #include "ottery.h"
 #include "cryptobox.h"
 #include "libutil/map.h"
+#define ZSTD_STATIC_LINKING_ONLY
 #include "contrib/zstd/zstd.h"
 #include "contrib/zstd/zdict.h"
 
@@ -2105,12 +2106,14 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		struct rspamd_config *cfg)
 {
 	static const char secure_ciphers[] = "HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4";
+	size_t r;
 
 	g_assert (cfg != NULL);
 
 	if (ctx != NULL) {
 		if (cfg->local_addrs) {
-			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs, "Local addresses",
+			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs,
+					"Local addresses",
 					ctx->local_addrs, NULL);
 		}
 
@@ -2121,15 +2124,15 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 						cfg->ssl_ca_path,
 						ERR_error_string (ERR_get_error (), NULL));
 			}
-		}
-		else {
+		} else {
 			msg_debug_config ("ssl_ca_path is not set, using default CA path");
 			SSL_CTX_set_default_verify_paths (ctx->ssl_ctx);
 		}
 
 		if (cfg->ssl_ciphers) {
 			if (SSL_CTX_set_cipher_list (ctx->ssl_ctx, cfg->ssl_ciphers) != 1) {
-				msg_err_config ("cannot set ciphers set to %s: %s; fallback to %s",
+				msg_err_config (
+						"cannot set ciphers set to %s: %s; fallback to %s",
 						cfg->ssl_ciphers,
 						ERR_error_string (ERR_get_error (), NULL),
 						secure_ciphers);
@@ -2143,7 +2146,8 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		}
 
 		if (cfg->zstd_input_dictionary) {
-			ctx->in_dict = rspamd_open_zstd_dictionary (cfg->zstd_input_dictionary);
+			ctx->in_dict = rspamd_open_zstd_dictionary (
+					cfg->zstd_input_dictionary);
 
 			if (ctx->in_dict == NULL) {
 				msg_err_config ("cannot open zstd dictionary in %s",
@@ -2151,7 +2155,8 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			}
 		}
 		if (cfg->zstd_output_dictionary) {
-			ctx->out_dict = rspamd_open_zstd_dictionary (cfg->zstd_output_dictionary);
+			ctx->out_dict = rspamd_open_zstd_dictionary (
+					cfg->zstd_output_dictionary);
 
 			if (ctx->out_dict == NULL) {
 				msg_err_config ("cannot open zstd dictionary in %s",
@@ -2161,11 +2166,25 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 
 		/* Init decompression */
 		ctx->in_zstream = ZSTD_createDStream ();
-		rspamd_libs_reset_decompression (ctx);
+		r = ZSTD_initDStream (ctx->in_zstream);
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init decompression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
+		}
 
 		/* Init compression */
 		ctx->out_zstream = ZSTD_createCStream ();
-		rspamd_libs_reset_compression (ctx);
+		r = ZSTD_initCStream (ctx->out_zstream, 1);
+
+		if (ZSTD_isError (r)) {
+			msg_err ("cannot init compression stream: %s",
+					ZSTD_getErrorName (r));
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+		}
 	}
 }
 
@@ -2175,17 +2194,10 @@ rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx)
 	gsize r;
 
 	if (ctx->in_zstream == NULL) {
-		msg_err ("cannot create decompression stream");
 		return FALSE;
 	}
 	else {
-		if (ctx->in_dict) {
-			r = ZSTD_initDStream_usingDict (ctx->in_zstream,
-					ctx->in_dict->dict, ctx->in_dict->size);
-		}
-		else {
-			r = ZSTD_initDStream (ctx->in_zstream);
-		}
+		r = ZSTD_resetDStream (ctx->in_zstream);
 
 		if (ZSTD_isError (r)) {
 			msg_err ("cannot init decompression stream: %s",
@@ -2206,18 +2218,11 @@ rspamd_libs_reset_compression (struct rspamd_external_libs_ctx *ctx)
 	gsize r;
 
 	if (ctx->out_zstream == NULL) {
-		msg_err ("cannot create compression stream");
-
 		return FALSE;
 	}
 	else {
-		if (ctx->out_dict) {
-			r = ZSTD_initCStream_usingDict (ctx->out_zstream,
-					ctx->out_dict->dict, ctx->out_dict->size, 1);
-		}
-		else {
-			r = ZSTD_initCStream (ctx->out_zstream, 1);
-		}
+		/* Dictionary will be reused automatically if specified */
+		r = ZSTD_resetCStream (ctx->out_zstream, 0);
 
 		if (ZSTD_isError (r)) {
 			msg_err ("cannot init compression stream: %s",
@@ -2250,8 +2255,15 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		rspamd_inet_library_destroy ();
 		rspamd_free_zstd_dictionary (ctx->in_dict);
 		rspamd_free_zstd_dictionary (ctx->out_dict);
-		ZSTD_freeCStream (ctx->out_zstream);
-		ZSTD_freeDStream (ctx->in_zstream);
+
+		if (ctx->out_zstream) {
+			ZSTD_freeCStream (ctx->out_zstream);
+		}
+
+		if (ctx->in_zstream) {
+			ZSTD_freeDStream (ctx->in_zstream);
+		}
+
 		g_free (ctx);
 	}
 }

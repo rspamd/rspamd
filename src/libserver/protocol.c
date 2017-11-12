@@ -1334,6 +1334,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 			}
 		}
 
+		ZSTD_flushStream (zstream, &zout);
 		r = ZSTD_endStream (zstream, &zout);
 
 		if (ZSTD_isError (r)) {
