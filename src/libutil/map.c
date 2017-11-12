@@ -432,6 +432,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 	struct rspamd_http_map_cached_cbdata *cache_cbd;
 	struct timeval tv;
 	const rspamd_ftok_t *expires_hdr;
+	char next_check_date[128];
 	guchar *aux_data, *in = NULL;
 	gsize inlen = 0, dlen = 0;
 
@@ -649,6 +650,15 @@ read_data:
 		event_base_set (cbd->ev_base, &cache_cbd->timeout);
 		event_add (&cache_cbd->timeout, &tv);
 
+		if (map->next_check) {
+			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
+					map->next_check);
+		}
+		else {
+			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
+					time (NULL) + map->poll_timeout);
+		}
+
 
 		if (cbd->bk->is_compressed) {
 			ZSTD_DStream *zstream;
@@ -698,18 +708,18 @@ read_data:
 
 			ZSTD_freeDStream (zstream);
 			msg_info_map ("%s(%s): read map data %z bytes compressed, "
-					"%z uncompressed",
+					"%z uncompressed, next check at %s",
 					cbd->bk->uri,
 					rspamd_inet_address_to_string_pretty (cbd->addr),
-					dlen, zout.pos);
+					dlen, zout.pos, next_check_date);
 			map->read_callback (out, zout.pos, &cbd->periodic->cbdata, TRUE);
 			g_free (out);
 		}
 		else {
-			msg_info_map ("%s(%s): read map data %z bytes",
+			msg_info_map ("%s(%s): read map data %z bytes, next check at %s",
 					cbd->bk->uri,
 					rspamd_inet_address_to_string_pretty (cbd->addr),
-					dlen);
+					dlen, next_check_date);
 			map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 		}
 
@@ -720,9 +730,6 @@ read_data:
 		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 	}
 	else if (msg->code == 304 && (cbd->check && cbd->stage == map_load_file)) {
-		msg_debug_map ("data is not modified for server %s",
-				cbd->data->host);
-
 		cbd->data->last_checked = msg->date;
 
 		if (msg->last_modified) {
@@ -748,6 +755,17 @@ read_data:
 				map->next_check = hdate;
 			}
 		}
+
+		if (map->next_check) {
+			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
+					map->next_check);
+		}
+		else {
+			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
+					time (NULL) + map->poll_timeout);
+		}
+		msg_info_map ("data is not modified for server %s, next check at %s",
+				cbd->data->host, next_check_date);
 
 		cbd->periodic->cur_backend ++;
 		rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
