@@ -25,11 +25,17 @@ and source code of Victor Ustugov http://mta.org.ua/
 #include <sys/wait.h>
 #include <stdarg.h>
 #include <errno.h>
-#include <cJSON.h>
+#include "cJSON.h"
+#include "cJSON.c"
 
 #define RSPAMD_TIMEOUT		120
 
 extern uschar *tod_stamp(int);
+//extern BOOL    split_spool_directory;  /* TRUE to use multiple subdirs */
+//extern uschar *spool_directory;        /* Name of spool directory */
+//extern uschar  message_subdir[];       /* Subdirectory for messages */
+
+//-------------------------------------------------------------------------
 
 int strpos(char *hay, char *needle, int offset)
 {
@@ -49,6 +55,7 @@ int rspamd(uschar **yield, int argc, uschar *argv[]) {
     char	tcp_addr[15];
     int		tcp_port;
     FILE	*mbox_file = NULL;
+//    unsigned long mbox_size;
     off_t	mbox_size;
     uschar	*s, *p;
     header_line *my_header, *header_new, *header_last, *tmp_headerlist;
@@ -89,7 +96,7 @@ int rspamd(uschar **yield, int argc, uschar *argv[]) {
     } else {
 	defer_ok = 0;
     }
-debug_printf("  defer_ok: %d\n", defer_ok);
+//debug_printf("  defer_ok: %d\n", defer_ok);
 
     if ((arg_socket_addr == NULL) || (arg_socket_addr[0] == 0)) {
 	log_write(0, LOG_MAIN|LOG_PANIC,
@@ -105,7 +112,7 @@ debug_printf("  defer_ok: %d\n", defer_ok);
     } else {
 	sprintf(mbox_path, "%s/input/%s/%s-D", spool_directory, message_subdir, message_id);
     }
-debug_printf("  Open spool file: %s\n", mbox_path);
+//debug_printf("  Open spool file: %s\n", mbox_path);
     mbox_file = fopen(mbox_path,"rb");
 
     if (!mbox_file) {
@@ -115,10 +122,10 @@ debug_printf("  Open spool file: %s\n", mbox_path);
 
     (void)fseek(mbox_file, 0, SEEK_END);
     mbox_size = ftell(mbox_file);
-debug_printf("  Total spool file size: %d\n", mbox_size);
+//debug_printf("  Total spool file size: %d\n", mbox_size);
     mbox_size -= SPOOL_DATA_START_OFFSET;
-debug_printf("  Spool file size: %d\n", mbox_size);
-debug_printf("  fseek %d, %d\n", SPOOL_DATA_START_OFFSET, SEEK_SET);
+//debug_printf("  Spool file size: %d\n", mbox_size);
+//debug_printf("  fseek %d, %d\n", SPOOL_DATA_START_OFFSET, SEEK_SET);
     (void)fseek(mbox_file, SPOOL_DATA_START_OFFSET, SEEK_SET);
 
     start = time(NULL);
@@ -157,7 +164,7 @@ debug_printf("  fseek %d, %d\n", SPOOL_DATA_START_OFFSET, SEEK_SET);
 	    goto RETURN_DEFER;
 	}
 
-debug_printf("  Use TCP socket %s:%d\n", tcp_addr, tcp_port);
+//debug_printf("  Use TCP socket %s:%d\n", tcp_addr, tcp_port);
     } else {
 	if ((rspamd_sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
 	    log_write(0, LOG_MAIN|LOG_PANIC,
@@ -176,7 +183,7 @@ debug_printf("  Use TCP socket %s:%d\n", tcp_addr, tcp_port);
 	    goto RETURN_DEFER;
 	}
 
-debug_printf("  Use UNIX Domain socket %s\n", arg_socket_addr);
+//debug_printf("  Use UNIX Domain socket %s\n", arg_socket_addr);
     }
 
 // now we are connected to rspamd on rspamd_sock
@@ -184,163 +191,30 @@ debug_printf("  Use UNIX Domain socket %s\n", arg_socket_addr);
     memset(spamd_buffer2, 0, sizeof(spamd_buffer2));
     offset = 0;
 
-    address = expand_string(US"${sender_address}");
-
-    if (address && *address) {
-	s = string_sprintf("Return-path: <%s>\n", address);
-	max_len = sizeof(spamd_buffer2) - offset - 1;
-	len = Ustrlen(s);
-	if (len > max_len) len = max_len;
-        Ustrncpy(spamd_buffer2 + offset, s, len);
-	offset += len;
-    }
-
-//    address = expand_string(US"${if def:received_for{$received_for}}");
-    address = expand_string(US"${received_for}");
-    if (!address || !*address) address = expand_string(US"${recipients}");
-    if (!address || !*address) address = expand_string(US"${local_part}@${domain}");
-
-    if (address && *address) {
-	s = string_sprintf("Envelope-To: %s\n", address);
-	max_len = sizeof(spamd_buffer2) - offset - 1;
-	len = Ustrlen(s);
-	if (len > max_len) len = max_len;
-	Ustrncpy(spamd_buffer2 + offset, s, len);
-	offset += len;
-    }
-
-    s = string_sprintf("Delivery-date: %s\n", tod_stamp(tod_full));
-    max_len = sizeof(spamd_buffer2) - offset - 1;
-    len = Ustrlen(s);
-    if (len > max_len) len = max_len;
-    Ustrncpy(spamd_buffer2 + offset, s, len);
-    offset += len;
-
-    // create links to original headers list
+    // headers list
     tmp_headerlist = NULL;
     header_last = NULL;
     for (my_header = header_list; my_header; my_header = my_header->next) {
-	if ((my_header->type != '*') && (my_header->type != htype_old)) {
+		if ((my_header->type != '*') && (my_header->type != htype_old)) {
+			header_new = store_get(sizeof(header_line));
+			header_new->text = my_header->text;
 
-	    header_new = store_get(sizeof(header_line));
-
-////	    header_new->text = string_copyn(my_header->text, my_header->slen);
-//	    header_new->text = store_get(my_header->slen);
-//	    memcpy(header_new->text, my_header->text, my_header->slen);
-	    header_new->text = my_header->text;
-
-	    header_new->slen = my_header->slen;
-	    header_new->type = my_header->type;
-	    header_new->next = NULL;
-//debug_printf("  create a copy of header item: '%s'\n", header_new->text);
-
-	    if (tmp_headerlist == NULL) tmp_headerlist = header_new;
-	    if (header_last != NULL) header_last->next = header_new;
-	    header_last = header_new;
-	}
-    }
-
-#ifdef WITH_EXPERIMENTAL_REMOVE_HEADER
-    // headers removed by acl_check_data
-    if (acl_removed_headers != NULL) {
-	for (my_header = tmp_headerlist; my_header != NULL; my_header = my_header->next) {
-	    uschar *list;
-
-	    list = acl_removed_headers;
-
-	    int sep = ':';         // This is specified as a colon-separated list
-	    uschar buffer[128];
-	    while ((s = string_nextinlist(&list, &sep, buffer, sizeof(buffer))) != NULL) {
-		int len = Ustrlen(s);
-		if (header_testname(my_header, s, len, FALSE)) {
-//debug_printf("  header removed by acl_check_data: '%s'; '%s'\n", s, my_header->text);
-		    my_header->type = htype_old;
+			header_new->slen = my_header->slen;
+			header_new->type = my_header->type;
+			header_new->next = NULL;
+	//debug_printf("  copy header item: '%s'\n", my_header->text);
+			
+			max_len = sizeof(spamd_buffer2) - offset - 1;
+			len = my_header->slen;
+			if (len > max_len) len = max_len;
+			Ustrncpy(spamd_buffer2 + offset, my_header->text, len);
+			offset += len;			
+			
+			if (header_last != NULL) header_last->next = header_new;
+			header_last = header_new;
 		}
-	    }
-	}
-    }
-#endif
-
-    // headers added by acl_check_data
-    my_header = acl_added_headers;
-    while (my_header != NULL) {
-//debug_printf("  header added by acl_check_data: '%s'\n", my_header->text);
-
-	header_new = store_get(sizeof(header_line));
-
-////	header_new->text = string_copyn(my_header->text, my_header->slen);
-//	header_new->text = store_get(my_header->slen);
-//	memcpy(header_new->text, my_header->text, my_header->slen);
-	header_new->text = my_header->text;
-
-	header_new->slen = my_header->slen;
-
-	switch(my_header->type) {
-	case htype_add_top:
-	// add header at top
-	    header_new->next = tmp_headerlist;
-	    tmp_headerlist = header_new;
-	    break;
-
-	case htype_add_rec:
-	// add header after Received:
-	    if (last_received == NULL) {
-		last_received = tmp_headerlist;
-		while (!header_testname(last_received, US"Received", 8, FALSE))
-		    last_received = last_received->next;
-		while (last_received->next != NULL && header_testname(last_received->next, US"Received", 8, FALSE))
-		    last_received = last_received->next;
-	    }
-	    header_new->next = last_received->next;
-	    last_received->next = header_new;
-	    break;
-
-	case htype_add_rfc:
-	// add header before any header which is NOT Received: or Resent-
-	    last_received = tmp_headerlist;
-	    while ( (last_received->next != NULL) &&
-	    ( (header_testname(last_received->next, US"Received", 8, FALSE)) ||
-		(header_testname_incomplete(last_received->next, US"Resent-", 7, FALSE)) ) )
-		last_received = last_received->next;
-	// last_received now points to the last Received: or Resent-* header
-	// in an uninterrupted chain of those header types (seen from the beginning
-	// of all headers. Our current header must follow it.
-	    header_new->next = last_received->next;
-	    last_received->next = header_new;
-	    break;
-
-	default:
-	// htype_add_bot
-	// add header at bottom
-	    header_new->next = NULL;
-	    header_last->next = header_new;
-	    break;
-	}
-
-	if (header_new->next == NULL) header_last = header_new;
-
-	my_header = my_header->next;
     }
 
-    // copy all the headers to data buffer
-    my_header = tmp_headerlist;
-    while (my_header) {
-	if ((my_header->type != '*') && (my_header->type != htype_old)) {
-	    max_len = sizeof(spamd_buffer2) - offset - 1;
-	    len = my_header->slen;
-	    if (len > max_len) len = max_len;
-	    Ustrncpy(spamd_buffer2 + offset, my_header->text, len);
-	    offset += len;
-//debug_printf("  copy header item: '%s'\n", my_header->text);
-	}
-
-////	if (my_header->text) store_release(my_header->text);
-	header_last = my_header;
-	my_header = my_header->next;
-//	if (header_last) store_release(header_last);
-    }
-
-//    s = string_sprintf("\r\n");
     s = string_sprintf("\n");
     max_len = sizeof(spamd_buffer2) - offset - 1;
     len = Ustrlen(s);
@@ -348,9 +222,9 @@ debug_printf("  Use UNIX Domain socket %s\n", arg_socket_addr);
     Ustrncpy(spamd_buffer2 + offset, s, len);
     offset += len;
 
-debug_printf("  Headers size: %d\n", offset);
+//debug_printf("  Headers size: %d\n", offset);
     mbox_size += offset;
-debug_printf("  Total message size: %d\n", mbox_size);
+//debug_printf("  Total message size: %d\n", mbox_size);
 
 // copy request to buffer
     memset(spamd_buffer, 0, sizeof(spamd_buffer));
@@ -379,7 +253,7 @@ debug_printf("  Total message size: %d\n", mbox_size);
 
     string_format(spamd_buffer+Ustrlen(spamd_buffer), sizeof(spamd_buffer)-Ustrlen(spamd_buffer), "\r\n");
 
-debug_printf("  Send to socket: %s", spamd_buffer);
+//debug_printf("  Send to socket: %s", spamd_buffer);
 // send our request
     if (send(rspamd_sock, spamd_buffer, Ustrlen(spamd_buffer), 0) < 0) {
 	log_write(0, LOG_MAIN|LOG_PANIC,
@@ -392,12 +266,12 @@ debug_printf("  Send to socket: %s", spamd_buffer);
    */
 
     Ustrcpy(big_buffer, "sending data block");
-debug_printf("sending data block\n");
+//debug_printf("sending data block\n");
 
-debug_printf("  Send to socket: %s", spamd_buffer2);
+//debug_printf("  Send to socket: %s", spamd_buffer2);
     wrote = send(rspamd_sock, spamd_buffer2, strlen(spamd_buffer2), 0);
     if (wrote == -1) goto WRITE_FAILED;
-debug_printf("  wrote to socket %d bytes\n", wrote);
+//debug_printf("  wrote to socket %d bytes\n", wrote);
 
   /*
    * Note: poll() is not supported in OSX 10.2.
@@ -411,7 +285,7 @@ debug_printf("  wrote to socket %d bytes\n", wrote);
     do {
         read = fread(spamd_buffer,1,sizeof(spamd_buffer),mbox_file);
 if (read < sizeof(spamd_buffer)) spamd_buffer[read] = 0;
-debug_printf("  Read from spool file: %s", spamd_buffer);
+//debug_printf("  Read from spool file: %s", spamd_buffer);
         if (read > 0) {
 	    offset = 0;
 again:
@@ -435,8 +309,8 @@ again:
 	    }
 #endif
 	    wrote = send(rspamd_sock, spamd_buffer + offset, read - offset, 0);
-debug_printf("  Send to socket %d bytes: %s", read - offset, spamd_buffer + offset);
-debug_printf("  wrote to socket %d bytes\n", wrote);
+//debug_printf("  Send to socket %d bytes: %s", read - offset, spamd_buffer + offset);
+//debug_printf("  wrote to socket %d bytes\n", wrote);
 	    if (wrote == -1) goto WRITE_FAILED;
 	    if (offset + wrote != read) {
 		offset += wrote;
@@ -456,7 +330,7 @@ debug_printf("  wrote to socket %d bytes\n", wrote);
    read rspamd response using what's left of the timeout.
    */
 
-debug_printf("read rspamd response using what's left of the timeout (%d sec)\n", RSPAMD_TIMEOUT - time(NULL) + start);
+//debug_printf("read rspamd response using what's left of the timeout (%d sec)\n", RSPAMD_TIMEOUT - time(NULL) + start);
 
     memset(spamd_buffer, 0, sizeof(spamd_buffer));
     offset = 0;
@@ -465,10 +339,10 @@ debug_printf("read rspamd response using what's left of the timeout (%d sec)\n",
 		sizeof(spamd_buffer) - offset - 1,
 	RSPAMD_TIMEOUT - time(NULL) + start)) > 0
     ) {
-		debug_printf("  read %d bytes from socket\n", i);
+		//debug_printf("  read %d bytes from socket\n", i);
 		offset += i;
     }
-debug_printf("  total read %d bytes from socket\n", offset);
+//debug_printf("  total read %d bytes from socket\n", offset);
 
 /* error handling */
     if((i <= 0) && (errno != 0)) {
@@ -478,7 +352,7 @@ debug_printf("  total read %d bytes from socket\n", offset);
 	goto RETURN_DEFER;
     }
 
-debug_printf("read from socket: %s\n", spamd_buffer);
+//debug_printf("read from socket: %s\n", spamd_buffer);
 
     if (rspamd_sock > 0) {
 	(void)close(rspamd_sock);
