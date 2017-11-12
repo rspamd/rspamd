@@ -461,6 +461,8 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 	else {
 		cd->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
 				rspamd_ftok_icase_equal);
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)g_hash_table_unref, cd->attrs);
 	}
 
 	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
@@ -498,11 +500,6 @@ rspamd_content_disposition_parse (const gchar *in,
 	if (rspamd_content_disposition_parser (in, len, &val, pool)) {
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
-
-		if (res->attrs) {
-			rspamd_mempool_add_destructor (pool,
-					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
-		}
 	}
 	else {
 		msg_warn_pool ("cannot parse content disposition: %*s",
