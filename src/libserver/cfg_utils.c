@@ -44,6 +44,7 @@
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
 #define DEFAULT_MAX_SHOTS 100
 #define DEFAULT_MAX_SESSIONS 100
+#define DEFAULT_MAX_WORKERS 4
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -1001,9 +1002,10 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
 #ifdef HAVE_SC_NPROCESSORS_ONLN
-		c->count = sysconf (_SC_NPROCESSORS_ONLN);
+		c->count = MIN (DEFAULT_MAX_WORKERS,
+				MAX (1, sysconf (_SC_NPROCESSORS_ONLN) - 2));
 #else
-		c->count = DEFAULT_WORKERS_NUM;
+		c->count = DEFAULT_MAX_WORKERS;
 #endif
 		c->rlimit_nofile = 0;
 		c->rlimit_maxcore = 0;
