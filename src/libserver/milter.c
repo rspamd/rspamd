@@ -311,6 +311,8 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		else {
 			guchar proto;
 			guint16 port;
+			gchar ip6_str[INET6_ADDRSTRLEN + 3];
+			gsize r;
 
 			/*
 			 * Important notice: Postfix do NOT use this command to pass
@@ -373,16 +375,28 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 						break;
 
 					case RSPAMD_MILTER_CONN_INET6:
-						session->addr = rspamd_inet_address_new (AF_INET, NULL);
+						session->addr = rspamd_inet_address_new (AF_INET6, NULL);
 
 						if (zero - pos > sizeof ("IPv6:") &&
 								rspamd_lc_cmp (pos, "IPv6:",
 										sizeof ("IPv6:") - 1) == 0) {
 							/* Kill sendmail please */
 							pos += sizeof ("IPv6:") - 1;
+
+							if (*pos != '[') {
+								/* Add explicit braces */
+								r = rspamd_snprintf (ip6_str, sizeof (ip6_str),
+										"[%*s]", (int)(zero - pos), pos);
+							}
+							else {
+								r = rspamd_strlcpy (ip6_str, pos, sizeof (ip6_str));
+							}
+						}
+						else {
+							r = rspamd_strlcpy (ip6_str, pos, sizeof (ip6_str));
 						}
 
-						if (!rspamd_parse_inet_address_ip (pos, zero - pos,
+						if (!rspamd_parse_inet_address_ip (ip6_str, r,
 								session->addr)) {
 							err = g_error_new (rspamd_milter_quark (), EINVAL,
 									"invalid connect command (bad IPv6)");
@@ -1364,8 +1378,14 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 	}
 
 	if (session->addr) {
-		rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
-				rspamd_inet_address_to_string (session->addr));
+		if (rspamd_inet_address_get_af (session->addr) != AF_UNIX) {
+			rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
+					rspamd_inet_address_to_string_pretty (session->addr));
+		}
+		else {
+			rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
+					rspamd_inet_address_to_string (session->addr));
+		}
 	}
 
 	rspamd_milter_macro_http (session, msg);
