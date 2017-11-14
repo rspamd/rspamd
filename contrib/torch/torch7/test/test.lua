@@ -19,7 +19,7 @@ local function maxdiff(x,y)
    end
 end
 
--- workarounds for non-existant functions
+-- workarounds for non-existent functions
 function torch.HalfTensor:__sub(other)
    return (self:real() - other:real()):half()
 end
