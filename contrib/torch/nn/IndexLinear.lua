@@ -262,7 +262,7 @@ function IndexLinear:accGradParameters(input, gradOutput, scale)
    )
 
    -- Increment the running counter to create a new buffer
-   -- if we don't flush them in zerogradParamters
+   -- if we don't flush them in zerogradParameters
    self.running.counter = self.running.counter + 1
 end
 
