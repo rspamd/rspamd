@@ -129,7 +129,7 @@
 	* [Fix] DKIM sign tools: edge-cases around use_esld
 	* [Fix] Do not cache SPF records with macros
 	* [Fix] Do not overwrite score when setting pre-action
-	* [Fix] Fix comparision logic
+	* [Fix] Fix comparison logic
 	* [Fix] Fix DKIM base64 folding for milter flagged messages
 	* [Fix] Fix emails module configuration
 	* [Fix] Fix folding for arc headers when milter interface is used
