@@ -1071,7 +1071,7 @@ ZSTDLIB_API size_t ZSTD_CCtx_loadDictionary_advanced(ZSTD_CCtx* cctx, const void
 /*! ZSTD_CCtx_refCDict() :
  *  Reference a prepared dictionary, to be used for all next compression jobs.
  *  Note that compression parameters are enforced from within CDict,
- *  and supercede any compression parameter previously set within CCtx.
+ *  and supersede any compression parameter previously set within CCtx.
  *  The dictionary will remain valid for future compression jobs using same CCtx.
  * @result : 0, or an error code (which can be tested with ZSTD_isError()).
  *  Special : adding a NULL CDict means "return to no-dictionary mode".
