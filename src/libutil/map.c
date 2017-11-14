@@ -1589,6 +1589,15 @@ rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
 			map->active_http = active_http;
 		}
 
+		if (!map->active_http) {
+			/* Check cached version more frequently as it is cheap */
+
+			if (map->poll_timeout >= cfg->map_timeout &&
+					cfg->map_file_watch_multiplier < 1.0) {
+				map->poll_timeout = map->poll_timeout * cfg->map_file_watch_multiplier;
+			}
+		}
+
 		rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
 
 		cur = g_list_next (cur);
@@ -2018,7 +2027,8 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 
 				if (bk != NULL) {
 					if (bk->protocol == MAP_PROTO_FILE) {
-						map->poll_timeout = (map->poll_timeout * cfg->map_file_watch_multiplier);
+						map->poll_timeout = (map->poll_timeout *
+								cfg->map_file_watch_multiplier);
 					}
 					g_ptr_array_add (map->backends, bk);
 
