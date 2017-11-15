@@ -169,7 +169,15 @@ local function test_groups(groups)
   local all_symbols = {}
   for gr_name, gr in pairs(groups) do
     if not gr.symbols then
-      logger.errx('group %s has no symbols', gr_name)
+      local cnt = 0
+      for _,_ in pairs(gr) do cnt = cnt + 1 end
+
+      if cnt == 0 then
+        logger.errx('group %s is empty', gr_name)
+      else
+        logger.infox('group %s has no symbols', gr_name)
+      end
+
     else
       for sn,_ in pairs(gr.symbols) do
         if all_symbols[sn] then
