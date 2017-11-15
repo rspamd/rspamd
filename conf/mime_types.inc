@@ -1124,7 +1124,12 @@ application/wita 0
 application/wordperfect5.1 0
 application/wsdl+xml 0
 application/wspolicy+xml 0
+application/x-msdownload 0
+application/x-pkcs12
 application/x-www-form-urlencoded 0
+application/x-tar
+application/x-x509-ca-cert
+application/x-zip-compressed 0
 application/x400-bp 0
 application/xacml+xml 0
 application/xcap-att+xml 0
