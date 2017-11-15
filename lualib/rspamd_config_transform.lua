@@ -212,6 +212,23 @@ local function convert_metric(cfg, metric)
   return cfg
 end
 
+-- Converts a table of groups indexed by number (implicit array) to a
+-- merged group definition
+local function merge_groups(groups)
+  local ret = {}
+  for k,gr in pairs(groups) do
+    if type(k) == 'number' then
+      for key,sec in pairs(gr) do
+        ret[key] = sec
+      end
+    else
+      ret[k] = gr
+    end
+  end
+
+  return ret
+end
+
 return function(cfg)
   local ret = false
 
@@ -229,6 +246,11 @@ return function(cfg)
   if not cfg.group then
     logger.errx('no symbol groups defined')
   else
+    if cfg.group[1] then
+      -- We need to merge groups
+      cfg.group = merge_groups(cfg.group)
+      ret = true
+    end
     test_groups(cfg.group)
   end
 
