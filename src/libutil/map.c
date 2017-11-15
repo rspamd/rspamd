@@ -344,7 +344,7 @@ rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 		/* We have another update, so this cache element is obviously expired */
 		/* Important: we do not set cache availability to zero here */
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
-		msg_debug_map ("cached data is now expired (gen missmatch) for %s", map->name);
+		msg_debug_map ("cached data is now expired (gen mismatch) for %s", map->name);
 		event_del (&cache_cbd->timeout);
 		g_free (cache_cbd);
 	}

@@ -580,7 +580,7 @@ int luaT_fullparentname(const char *tname, char *parent_name)
   return tname[idx] == '.';
 }
 
-/* alias for ensuring backwards compatibilty;
+/* alias for ensuring backwards compatibility;
  * use of luaT_fullparentname is preferred.
  */
 int luaT_classmodulename(const char *tname, char *parent_name)
