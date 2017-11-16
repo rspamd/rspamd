@@ -207,15 +207,18 @@ ucl_utstring_append_double (double val, void *ud)
 	UT_string *buf = ud;
 	const double delta = 0.0000001;
 
-	if (val == (double)(int)val) {
-		utstring_printf (buf, "%.1lf", val);
-	}
-	else if (fabs (val - (double)(int)val) < delta) {
-		/* Write at maximum precision */
-		utstring_printf (buf, "%.*lg", DBL_DIG, val);
+	if (isfinite (val)) {
+		if (val == (double) (int) val) {
+			utstring_printf (buf, "%.1lf", val);
+		} else if (fabs (val - (double) (int) val) < delta) {
+			/* Write at maximum precision */
+			utstring_printf (buf, "%.*lg", DBL_DIG, val);
+		} else {
+			utstring_printf (buf, "%lf", val);
+		}
 	}
 	else {
-		utstring_printf (buf, "%lf", val);
+		utstring_append_len (buf, "null", 5);
 	}
 
 	return 0;
@@ -262,15 +265,19 @@ ucl_file_append_double (double val, void *ud)
 	FILE *fp = ud;
 	const double delta = 0.0000001;
 
-	if (val == (double)(int)val) {
-		fprintf (fp, "%.1lf", val);
-	}
-	else if (fabs (val - (double)(int)val) < delta) {
-		/* Write at maximum precision */
-		fprintf (fp, "%.*lg", DBL_DIG, val);
+	if (isfinite (val)) {
+		if (val == (double) (int) val) {
+			fprintf (fp, "%.1lf", val);
+		} else if (fabs (val - (double) (int) val) < delta) {
+			/* Write at maximum precision */
+			fprintf (fp, "%.*lg", DBL_DIG, val);
+		} else {
+			fprintf (fp, "%lf", val);
+		}
 	}
 	else {
-		fprintf (fp, "%lf", val);
+		/* Encode as null */
+		fprintf (fp, "null");
 	}
 
 	return 0;
@@ -336,15 +343,18 @@ ucl_fd_append_double (double val, void *ud)
 	const double delta = 0.0000001;
 	char nbuf[64];
 
-	if (val == (double)(int)val) {
-		snprintf (nbuf, sizeof (nbuf), "%.1lf", val);
-	}
-	else if (fabs (val - (double)(int)val) < delta) {
-		/* Write at maximum precision */
-		snprintf (nbuf, sizeof (nbuf), "%.*lg", DBL_DIG, val);
+	if (isfinite (val)) {
+		if (val == (double) (int) val) {
+			snprintf (nbuf, sizeof (nbuf), "%.1lf", val);
+		} else if (fabs (val - (double) (int) val) < delta) {
+			/* Write at maximum precision */
+			snprintf (nbuf, sizeof (nbuf), "%.*lg", DBL_DIG, val);
+		} else {
+			snprintf (nbuf, sizeof (nbuf), "%lf", val);
+		}
 	}
 	else {
-		snprintf (nbuf, sizeof (nbuf), "%lf", val);
+		memcpy (nbuf, "null", 5);
 	}
 
 	return write (fd, nbuf, strlen (nbuf));
