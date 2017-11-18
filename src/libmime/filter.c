@@ -351,7 +351,7 @@ enum rspamd_action_type
 rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_result *mres)
 {
 	struct rspamd_action *action, *selected_action = NULL;
-	double max_score = 0, sc;
+	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
 
 	if (task->pre_result.action == METRIC_ACTION_MAX) {
