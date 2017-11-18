@@ -429,7 +429,7 @@ if opts then
   else
     rspamd_config:register_symbol({
       name = 'GREYLIST_SAVE',
-      type = 'idempotent',
+      type = 'postfilter',
       callback = greylist_set,
       priority = 6
     })
