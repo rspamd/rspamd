@@ -1002,6 +1002,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 						priv->err_cb (priv->fd, session, priv->ud, err);
 						REF_RELEASE (session);
 						g_error_free (err);
+
+						return FALSE;
 					}
 				}
 				else if (r == 0) {
@@ -1011,6 +1013,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 					priv->err_cb (priv->fd, session, priv->ud, err);
 					REF_RELEASE (session);
 					g_error_free (err);
+
+					return FALSE;
 				}
 				else {
 					if (r == to_write) {
