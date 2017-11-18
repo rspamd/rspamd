@@ -46,3 +46,10 @@ reconf['SPAM_FLAG'] = {
     description = "Message was already marked as spam",
     group = 'upstream_spam_filters'
 }
+
+reconf['UNITEDINTERNET_SPAM'] = {
+    re = 'X-UI-Out-Filterresults=/^junk:/H',
+    score = 5,
+    description = "United Internet says this message is spam",
+    group = 'upstream_spam_filters'
+}
