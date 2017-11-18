@@ -1444,7 +1444,7 @@ rspamd_task_get_required_score (struct rspamd_task *task, struct rspamd_metric_r
 		}
 	}
 
-	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_NOACTION; i ++) {
 		if (!isnan (m->actions_limits[i])) {
 			return m->actions_limits[i];
 		}
