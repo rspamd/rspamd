@@ -90,12 +90,12 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	return res;
 }
 
-static gint
+static gdouble
 rspamd_composite_process_single_symbol (struct composites_data *cd,
 		const gchar *sym, struct rspamd_symbol_result **pms)
 {
 	struct rspamd_symbol_result *ms = NULL;
-	gint rc = 0;
+	gdouble rc = 0;
 	struct rspamd_composite *ncomp;
 
 	if ((ms = g_hash_table_lookup (cd->metric_res->symbols, sym)) == NULL) {
@@ -109,7 +109,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
 				clrbit (cd->checked, cd->composite->id * 2);
 
-				if (rc) {
+				if (rc != 0) {
 					setbit (cd->checked, ncomp->id * 2 + 1);
 					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
 				}
@@ -120,12 +120,20 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				/*
 				 * XXX: in case of cyclic references this would return 0
 				 */
-				rc = isset (cd->checked, ncomp->id * 2 + 1);
+				if (isset (cd->checked, ncomp->id * 2 + 1)) {
+					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+				}
 			}
 		}
 	}
-	else {
-		rc = 1;
+
+	if (ms) {
+		if (ms->score == 0) {
+			rc = 0.001; /* Distinguish from 0 */
+		}
+		else {
+			rc = ms->score;
+		}
 	}
 
 	*pms = ms;
@@ -144,11 +152,23 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	struct rspamd_symbol *sdef;
 	GHashTableIter it;
 	gpointer k, v;
-	gint rc = 0;
+	gdouble rc = 0;
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
-		rc = isset (cd->checked, cd->composite->id * 2 + 1);
+		if (isset (cd->checked, cd->composite->id * 2 + 1)) {
+			ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+		}
+
+		if (ms) {
+			if (ms->score == 0) {
+				rc = 0.001; /* Distinguish from 0 */
+			}
+			else {
+				rc = ms->score;
+			}
+		}
+
 		return rc;
 	}
 
@@ -178,7 +198,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		rc = rspamd_composite_process_single_symbol (cd, sym, &ms);
 	}
 
-	if (rc && ms) {
+	if (rc != 0 && ms) {
 		/*
 		 * At this point we know that we need to do something about this symbol,
 		 * however, we don't know whether we need to delete it unfortunately,

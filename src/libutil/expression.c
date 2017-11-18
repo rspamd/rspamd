@@ -40,14 +40,12 @@ struct rspamd_expression_elt {
 	union {
 		rspamd_expression_atom_t *atom;
 		enum rspamd_expression_op op;
-		struct {
-			gint val;
-			gint op_idx;
-		} lim;
+		gdouble lim;
 	} p;
+
 	gint flags;
-	gdouble value;
 	gint priority;
+	gdouble value;
 };
 
 struct rspamd_expression {
@@ -593,7 +591,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	}
 
 	memset (&elt, 0, sizeof (elt));
-	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(?:\\s+|[)]|$)/", NULL, NULL);
+	num_re = rspamd_regexp_cache_create (NULL,
+			"/^(?:[+-]?([0-9]*[.])?[0-9]+)(?:\\s+|[)]|$)/", NULL, NULL);
 
 	p = line;
 	c = line;
@@ -689,7 +688,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			}
 			break;
 		case PARSE_LIM:
-			if (g_ascii_isdigit (*p) && p != end - 1) {
+			if ((g_ascii_isdigit (*p) || *p == '-' || *p == '.')
+					&& p < end - 1) {
 				p ++;
 			}
 			else {
@@ -699,7 +699,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 
 				if (p - c > 0) {
 					elt.type = ELT_LIMIT;
-					elt.p.lim.val = strtoul (c, NULL, 10);
+					elt.p.lim = strtod (c, NULL);
 					g_array_append_val (e->expressions, elt);
 					rspamd_expr_stack_elt_push (operand_stack,
 							g_node_new (rspamd_expr_dup_elt (pool, &elt)));
@@ -1033,7 +1033,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 		break;
 	case ELT_LIMIT:
 
-		acc = elt->p.lim.val;
+		acc = elt->p.lim;
 		break;
 	case ELT_OP:
 		g_assert (node->children != NULL);
@@ -1044,7 +1044,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			celt = node->parent->children->data;
 
 			if (celt->type == ELT_LIMIT) {
-				lim = celt->p.lim.val;
+				lim = celt->p.lim;
 			}
 		}
 
@@ -1053,7 +1053,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 
 			/* Save limit if we've found it */
 			if (celt->type == ELT_LIMIT) {
-				lim = celt->p.lim.val;
+				lim = celt->p.lim;
 				continue;
 			}
 
@@ -1144,7 +1144,7 @@ rspamd_ast_string_traverse (GNode *n, gpointer d)
 				(int)elt->p.atom->len, elt->p.atom->str);
 	}
 	else if (elt->type == ELT_LIMIT) {
-		rspamd_printf_gstring (res, "%d", elt->p.lim.val);
+		rspamd_printf_gstring (res, "%f", elt->p.lim);
 	}
 	else {
 		op_str = rspamd_expr_op_to_str (elt->p.op);
