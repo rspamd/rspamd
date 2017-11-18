@@ -959,6 +959,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 			return rspamd_milter_consume_input (session, priv);
 		}
+
+		break;
 	case RSPAMD_MILTER_WRITE_REPLY:
 	case RSPAMD_MILTER_WRITE_AND_DIE:
 		if (priv->out_chain == NULL) {
