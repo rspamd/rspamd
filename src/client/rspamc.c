@@ -410,45 +410,36 @@ read_cmd_line (gint *argc, gchar ***argv)
 }
 
 static gboolean
-rspamd_action_from_str (const gchar *data, gint *result)
+rspamd_action_from_str_rspamc (const gchar *data, gint *result)
 {
-	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
+	if (strcmp (data, "reject") == 0) {
 		*result = METRIC_ACTION_REJECT;
 	}
-	else if (g_ascii_strncasecmp (data, "greylist",
-			sizeof ("greylist") - 1) == 0) {
+	else if (strcmp (data, "greylist") == 0) {
 		*result = METRIC_ACTION_GREYLIST;
 	}
-	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") -
-			1) == 0) {
+	else if (strcmp (data, "add_header") == 0) {
 		*result = METRIC_ACTION_ADD_HEADER;
 	}
-	else if (g_ascii_strncasecmp (data, "rewrite_subject",
-			sizeof ("rewrite_subject") - 1) == 0) {
+	else if (strcmp (data, "rewrite_subject") == 0) {
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
-	else if (g_ascii_strncasecmp (data, "add header", sizeof ("add header") -
-			1) == 0) {
+	else if (strcmp (data, "add header") == 0) {
 		*result = METRIC_ACTION_ADD_HEADER;
 	}
-	else if (g_ascii_strncasecmp (data, "rewrite subject",
-			sizeof ("rewrite subject") - 1) == 0) {
+	else if (strcmp (data, "rewrite subject") == 0) {
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
-	else if (g_ascii_strncasecmp (data, "soft_reject",
-			sizeof ("soft_reject") - 1) == 0) {
+	else if (strcmp (data, "soft_reject") == 0) {
 		*result = METRIC_ACTION_SOFT_REJECT;
 	}
-	else if (g_ascii_strncasecmp (data, "soft reject",
-			sizeof ("soft reject") - 1) == 0) {
+	else if (strcmp (data, "soft reject") == 0) {
 		*result = METRIC_ACTION_SOFT_REJECT;
 	}
-	else if (g_ascii_strncasecmp (data, "no_action",
-			sizeof ("soft_reject") - 1) == 0) {
+	else if (strcmp (data, "no_action") == 0) {
 		*result = METRIC_ACTION_NOACTION;
 	}
-	else if (g_ascii_strncasecmp (data, "no action",
-			sizeof ("soft reject") - 1) == 0) {
+	else if (strcmp (data, "no action") == 0) {
 		*result = METRIC_ACTION_NOACTION;
 	}
 	else {
@@ -774,7 +765,7 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 
 	PRINT_PROTOCOL_STRING ("action", "Action");
 	/* Defined by previous macro */
-	if (elt && rspamd_action_from_str (ucl_object_tostring (elt), &action)) {
+	if (elt && rspamd_action_from_str_rspamc (ucl_object_tostring (elt), &action)) {
 		rspamd_fprintf (out, "Spam: %s\n", action < METRIC_ACTION_GREYLIST ?
 				"true" : "false");
 	}
@@ -1298,7 +1289,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			required_score = ucl_object_todouble (res);
 		}
 
-		rspamd_action_from_str (action, &act);
+		rspamd_action_from_str_rspamc (action, &act);
 
 		if (act < METRIC_ACTION_GREYLIST) {
 			is_spam = TRUE;
