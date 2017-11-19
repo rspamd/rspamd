@@ -1,0 +1,10 @@
+FEATURES
+1) Support new http-protocol (/checkv2)
+2) Return action, symbols, symbol options, messages, scan time
+
+INSTALL
+
+1) Get cJSON.c,	cJSON.h, put to dlfunc src dir (https://github.com/DaveGamble/cJSON)
+2) Compile dlfunc library:
+ cc rspamd.c -fPIC -fpic -shared -I/root/rpmbuild/BUILD/exim-4.89/build-Linux-x86_64/ -o exim-rspamd-http-dlfunc.so
+3) See exim-example.txt for exim configure
