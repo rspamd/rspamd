@@ -1186,8 +1186,7 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 		struct rspamd_config *cfg,
 		const gchar *symbol)
 {
-	const ucl_object_t *elt, *relt, *users_enabled;
-	const gchar *lua_script;
+	const ucl_object_t *elt, *relt;
 
 	elt = ucl_object_lookup_any (obj, "read_servers", "servers", NULL);
 
@@ -1227,6 +1226,33 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 			backend->write_servers = NULL;
 		}
 	}
+
+	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
+	if (elt) {
+		backend->dbname = ucl_object_tostring (elt);
+	}
+	else {
+		backend->dbname = NULL;
+	}
+
+	elt = ucl_object_lookup (obj, "password");
+	if (elt) {
+		backend->password = ucl_object_tostring (elt);
+	}
+	else {
+		backend->password = NULL;
+	}
+
+	return TRUE;
+}
+
+static void
+rspamd_redis_parse_classifier_opts (struct redis_stat_ctx *backend,
+		const ucl_object_t *obj,
+		struct rspamd_config *cfg)
+{
+	const gchar *lua_script;
+	const ucl_object_t *elt, *users_enabled;
 
 	users_enabled = ucl_object_lookup_any (obj, "per_user",
 			"users_enabled", NULL);
@@ -1285,14 +1311,6 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 		backend->timeout = REDIS_DEFAULT_TIMEOUT;
 	}
 
-	elt = ucl_object_lookup (obj, "password");
-	if (elt) {
-		backend->password = ucl_object_tostring (elt);
-	}
-	else {
-		backend->password = NULL;
-	}
-
 	elt = ucl_object_lookup (obj, "store_tokens");
 	if (elt) {
 		backend->store_tokens = ucl_object_toboolean (elt);
@@ -1324,16 +1342,6 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 	else {
 		backend->expiry = 0;
 	}
-
-	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
-	if (elt) {
-		backend->dbname = ucl_object_tostring (elt);
-	}
-	else {
-		backend->dbname = NULL;
-	}
-
-	return TRUE;
 }
 
 gpointer
@@ -1391,6 +1399,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		return NULL;
 	}
 
+	rspamd_redis_parse_classifier_opts (backend, st->classifier->cfg->opts, cfg);
 	stf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 	backend->stcf = stf;
 
