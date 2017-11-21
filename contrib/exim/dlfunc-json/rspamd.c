@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2013-2015, Alexey Savelyev <info@homeweb.ru>
+ * Copyright 2017 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,19 +40,7 @@ extern uschar *tod_stamp (int);
 //-------------------------------------------------------------------------
 
 int
-strpos (char *hay, char *needle, int offset)
-{
-	char haystack[strlen (hay)];
-	strncpy (haystack, hay + offset, strlen (hay) - offset);
-	char *p = strstr (haystack, needle);
-	if (p)
-		return p - haystack + offset;
-	return -1;
-}
-
-int
-rspamd (uschar **yield, int argc, uschar *argv[])
-{
+rspamd (uschar **yield, int argc, uschar *argv[]) {
 	char *arg_socket_addr;
 	char *arg_defer_ok;
 	int defer_ok;
@@ -68,7 +57,7 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	uschar *helo;
 	uschar *sender_host_name;
 	uschar *authenticated_id;
-	char mbox_path[512];
+	char mbox_path[8192];
 	int max_len, len;
 	int rspamd_sock = 0;
 	struct hostent *he;
@@ -90,21 +79,17 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 
 	if (argc < 2) {
 		defer_ok = 0;
-	} else if (
-			(strcmpic (arg_defer_ok, US
-		"1") == 0)
+	} else if (strcmpic (arg_defer_ok, US"1") == 0)
 	|| (strcmpic (arg_defer_ok, US
 	"yes") == 0)
 	|| (strcmpic (arg_defer_ok, US
 	"true") == 0)
 	|| (strcmpic (arg_defer_ok, US
-	"defer_ok") == 0)
-	) {
+	"defer_ok") == 0) {
 		defer_ok = 1;
 	} else {
 		defer_ok = 0;
 	}
-//debug_printf("  defer_ok: %d\n", defer_ok);
 
 	if ((arg_socket_addr == NULL) || (arg_socket_addr[0] == 0)) {
 		log_write (0, LOG_MAIN | LOG_PANIC,
@@ -113,15 +98,16 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 		goto RETURN_DEFER;
 	}
 
-// get message body stream
 
 	if (split_spool_directory == 0) {
-		sprintf (mbox_path, "%s/input/%s-D", spool_directory, message_id);
-	} else {
-		sprintf (mbox_path, "%s/input/%s/%s-D", spool_directory, message_subdir,
+		snprintf (mbox_path, sizeof (mbox_path), "%s/input/%s-D",
+				spool_directory,
 				message_id);
+	} else {
+		snprintf (mbox_path, sizeof (mbox_path), "%s/input/%s/%s-D",
+				spool_directory, message_subdir, message_id);
 	}
-//debug_printf("  Open spool file: %s\n", mbox_path);
+
 	mbox_file = fopen (mbox_path, "rb");
 
 	if (!mbox_file) {
@@ -139,7 +125,7 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	(void) fseek (mbox_file, SPOOL_DATA_START_OFFSET, SEEK_SET);
 
 	start = time (NULL);
-/* socket does not start with '/' -> network socket */
+	/* socket does not start with '/' -> network socket */
 	if (arg_socket_addr[0] != '/') {
 		if (sscanf (CS arg_socket_addr, "%s %u", tcp_addr, &tcp_port) != 2 ) {
 			log_write (0, LOG_MAIN | LOG_PANIC,
@@ -258,48 +244,49 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	memset (spamd_buffer, 0, sizeof (spamd_buffer));
 	string_format (spamd_buffer,
 			sizeof (spamd_buffer),
-			"POST /checkv2 HTTP/1.0\r\nContent-length: "
-	OFF_T_FMT
-	"\r\nPass: all\r\nQueue-Id: %s\r\nFrom: %s\r\nRecipient-Number: %d\r\n",
-			mbox_size, message_id, sender_address, recipients_count);
+			"POST /checkv2 HTTP/1.0\r\nContent-length: "OFF_T_FMT
+			"\r\nQueue-Id: %s\r\nFrom: %s\r\n",
+			mbox_size, message_id, sender_address);
+
 	for (i = 0; i < recipients_count; i++) {
 		string_format (spamd_buffer + Ustrlen (spamd_buffer),
 				sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "Rcpt: %s\r\n",
 				recipients_list[i].address);
 	}
-	if ((helo = expand_string (US"$sender_helo_name")) != NULL && *helo != '\0')
-	string_format (spamd_buffer + Ustrlen (spamd_buffer),
-			sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "Helo: %s\r\n",
-			helo);
+
+	if ((helo = expand_string (US"$sender_helo_name")) != NULL && *helo != '\0') {
+		string_format (spamd_buffer + Ustrlen (spamd_buffer),
+				sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "Helo: %s\r\n",
+				helo);
+	}
 
 	if ((sender_host_name = expand_string (US"$sender_host_name")) != NULL &&
-			*sender_host_name != '\0')
-	string_format (spamd_buffer + Ustrlen (spamd_buffer),
-			sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "Hostname: %s\r\n",
-			sender_host_name);
+			*sender_host_name != '\0') {
+		string_format (spamd_buffer + Ustrlen (spamd_buffer),
+				sizeof (spamd_buffer) - Ustrlen (spamd_buffer),
+				"Hostname: %s\r\n",
+				sender_host_name);
+	}
 	//else
 	//string_format(spamd_buffer+Ustrlen(spamd_buffer), sizeof(spamd_buffer)-Ustrlen(spamd_buffer), "Hostname: unknown\r\n");
 
-	if (sender_host_address != NULL)
-
+	if (sender_host_address != NULL) {
 		string_format (spamd_buffer + Ustrlen (spamd_buffer),
 				sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "IP: %s\r\n",
 				sender_host_address);
-	string_format (spamd_buffer + Ustrlen (spamd_buffer),
-			sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "Pass: all\r\n");
+	}
 
 	//authenticated_id
 	if ((authenticated_id = expand_string (US"$authenticated_id")) != NULL &&
-			*authenticated_id != '\0')
-	string_format (spamd_buffer + Ustrlen (spamd_buffer),
-			sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "User: %s\r\n",
-			authenticated_id);
+			*authenticated_id != '\0') {
+		string_format (spamd_buffer + Ustrlen (spamd_buffer),
+				sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "User: %s\r\n",
+				authenticated_id);
+	}
 
 	string_format (spamd_buffer + Ustrlen (spamd_buffer),
 			sizeof (spamd_buffer) - Ustrlen (spamd_buffer), "\r\n");
 
-//debug_printf("  Send to socket: %s", spamd_buffer);
-// send our request
 	if (send (rspamd_sock, spamd_buffer, Ustrlen (spamd_buffer), 0) < 0) {
 		log_write (0, LOG_MAIN | LOG_PANIC,
 				"rspamd dlfunc: rspamd send failed: %s", strerror (errno));
@@ -309,14 +296,12 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	/*
 	 * now send the data buffer and spool file
 	 */
-
 	Ustrcpy (big_buffer, "sending data block");
-//debug_printf("sending data block\n");
 
-//debug_printf("  Send to socket: %s", spamd_buffer2);
 	wrote = send (rspamd_sock, spamd_buffer2, strlen (spamd_buffer2), 0);
-	if (wrote == -1) goto WRITE_FAILED;
-//debug_printf("  wrote to socket %d bytes\n", wrote);
+	if (wrote == -1) {
+		goto WRITE_FAILED;
+	}
 
 	/*
 	 * Note: poll() is not supported in OSX 10.2.
@@ -328,8 +313,11 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 #endif
 //    (void)fcntl(rspamd_sock, F_SETFL, O_NONBLOCK);
 	do {
-		read = fread (spamd_buffer, 1, sizeof (spamd_buffer), mbox_file);
-		if (read < sizeof (spamd_buffer)) spamd_buffer[read] = 0;
+		read = fread (spamd_buffer, 1, sizeof (spamd_buffer) - 1, mbox_file);
+
+		if (read < sizeof (spamd_buffer)) {
+			spamd_buffer[read] = 0;
+		}
 //debug_printf("  Read from spool file: %s", spamd_buffer);
 		if (read > 0) {
 			offset = 0;
@@ -337,8 +325,9 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 
 #ifndef NO_POLL_H
 			result = poll (&pollfd, 1, 1000);
-			if (result == -1 && errno == EINTR)
+			if (result == -1 && errno == EINTR) {
 				continue;
+			}
 			else if (result < 1) {
 				if (result == -1)
 					log_write (0, LOG_MAIN | LOG_PANIC,
@@ -356,9 +345,11 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 			}
 #endif
 			wrote = send (rspamd_sock, spamd_buffer + offset, read - offset, 0);
-//debug_printf("  Send to socket %d bytes: %s", read - offset, spamd_buffer + offset);
-//debug_printf("  wrote to socket %d bytes\n", wrote);
-			if (wrote == -1) goto WRITE_FAILED;
+
+			if (wrote == -1) {
+				goto WRITE_FAILED;
+			}
+
 			if (offset + wrote != read) {
 				offset += wrote;
 				goto again;
@@ -378,8 +369,6 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	/*
 	 read rspamd response using what's left of the timeout.
 	 */
-
-//debug_printf("read rspamd response using what's left of the timeout (%d sec)\n", RSPAMD_TIMEOUT - time(NULL) + start);
 
 	memset (spamd_buffer, 0, sizeof (spamd_buffer));
 	offset = 0;
@@ -424,13 +413,14 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	}
 
 	//Parse http response
-	int pos = strpos (spamd_buffer, "\r\n\r\n", 0);
-	if (pos == -1) {
+	const char *crlf_pos = strstr (spamd_buffer, "\r\n\r\n");
+	if (crlf_pos == NULL) {
 		*yield = string_sprintf ("rspamd dlfunc: HTTP response error: %s",
 				spamd_buffer);
 		goto RETURN_DEFER;
 	}
-	char *json_answer = string_sprintf ("%s", spamd_buffer + pos + 4);
+
+	char *json_answer = string_sprintf ("%s", crlf_pos + 4);
 
 	//Parse json
 	cJSON *json = NULL;
@@ -489,23 +479,31 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 		symbol_score = cJSON_GetObjectItem (symbol, "score");
 		symbol_options = cJSON_GetObjectItem (symbol, "options");
 
-		if (cJSON_IsString (symbol_name))
+		if (cJSON_IsString (symbol_name)) {
 			*yield = string_sprintf ("%s %s", *yield, symbol_name->valuestring);
-		if (cJSON_IsNumber (symbol_score))
+		}
+		if (cJSON_IsNumber (symbol_score)) {
 			*yield = string_sprintf ("%s(%.2f)", *yield,
 					symbol_score->valuedouble);
+		}
 
 		//parse options
 		c = cJSON_GetArraySize (symbol_options);
-		if (c > 0) *yield = string_sprintf ("%s[", *yield);
+		if (c > 0) {
+			*yield = string_sprintf ("%s[", *yield);
+		}
+
 		for (j = 0; j < c; j++) {
 			option = cJSON_GetArrayItem (symbol_options, j);
+
 			if (cJSON_IsString (option)) {
 				*yield = string_sprintf ("%s%s", *yield, option->valuestring);
 				if (j < c - 1) *yield = string_sprintf ("%s, ", *yield);
 			}
 		}
-		if (c > 0) *yield = string_sprintf ("%s]", *yield);
+		if (c > 0) {
+			*yield = string_sprintf ("%s]", *yield);
+		}
 
 		*yield = string_sprintf ("%s\n", *yield);
 	}
@@ -514,11 +512,16 @@ rspamd (uschar **yield, int argc, uschar *argv[])
 	cJSON *mess = NULL;
 	cJSON *messages = cJSON_GetObjectItem (json, "messages");
 	c = cJSON_GetArraySize (messages);
+
 	for (i = 0; i < c; i++) {
 		mess = cJSON_GetArrayItem (messages, i);
-		if (cJSON_IsString (mess))
+		if (cJSON_IsString (mess)) {
 			*yield = string_sprintf ("%s %s", *yield, mess->valuestring);
-		if (i < c - 1) *yield = string_sprintf ("%s\n", *yield);
+		}
+
+		if (i < c - 1) {
+			*yield = string_sprintf ("%s\n", *yield);
+		}
 	}
 
 	return OK;
