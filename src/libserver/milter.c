@@ -50,6 +50,7 @@ struct rspamd_milter_context {
 	gchar *spam_header;
 	void *sessions_cache;
 	gboolean discard_on_reject;
+	gboolean quarantine_on_reject;
 };
 
 static struct rspamd_milter_context *milter_ctx = NULL;
@@ -1072,6 +1073,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->state = RSPAMD_MILTER_READ_MORE;
 	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
 	priv->discard_on_reject = milter_ctx->discard_on_reject;
+	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
 
 	if (pool) {
 		/* Copy tag */
@@ -1567,8 +1569,13 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 				priv->discard_on_reject = TRUE;
 				msg_info_milter ("discard message instead of rejection");
 			}
+			else if (strcmp (ucl_object_tostring (elt), "quarantine") == 0) {
+				priv->quarantine_on_reject = TRUE;
+				msg_info_milter ("quarantine message instead of rejection");
+			}
 			else {
 				priv->discard_on_reject = FALSE;
+				priv->quarantine_on_reject = FALSE;
 			}
 		}
 
@@ -1713,6 +1720,10 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		if (priv->discard_on_reject) {
 			rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
 		}
+		else if (priv->quarantine_on_reject) {
+			/* TODO: need to add quarantine message */
+			rspamd_milter_send_action (session, RSPAMD_MILTER_QUARANTINE);
+		}
 		else {
 			rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_REJECT,
 					sizeof (RSPAMD_MILTER_RCODE_REJECT) - 1);
@@ -1789,7 +1800,7 @@ cleanup:
 
 void
 rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache,
-		gboolean discard_on_reject)
+		gboolean discard_on_reject, gboolean quarantine_on_reject)
 {
 	if (milter_ctx) {
 		g_free (milter_ctx->spam_header);
@@ -1807,6 +1818,7 @@ rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache,
 
 	milter_ctx->sessions_cache = sessions_cache;
 	milter_ctx->discard_on_reject = discard_on_reject;
+	milter_ctx->quarantine_on_reject = quarantine_on_reject;
 }
 
 rspamd_mempool_t *

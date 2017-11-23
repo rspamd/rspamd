@@ -138,6 +138,8 @@ struct rspamd_proxy_ctx {
 	gboolean milter;
 	/* Discard messages instead of rejecting them */
 	gboolean discard_on_reject;
+	/* Quarantine messages instead of rejecting them */
+	gboolean quarantine_on_reject;
 	/* Milter spam header */
 	gchar *spam_header;
 	/* Sessions cache */
@@ -810,6 +812,14 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, discard_on_reject),
 			0,
 			"Tell MTA to discard rejected messages silently");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"quarantine_on_reject",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, quarantine_on_reject),
+			0,
+			"Tell MTA to quarantine rejected messages");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"spam_header",
@@ -2115,7 +2125,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	}
 
 	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache,
-			ctx->discard_on_reject);
+			ctx->discard_on_reject, ctx->quarantine_on_reject);
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
 			worker);
 
