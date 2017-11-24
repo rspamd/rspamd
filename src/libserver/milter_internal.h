@@ -153,6 +153,7 @@ enum rspamd_milter_connect_proto {
 #define RSPAMD_MILTER_XCODE_REJECT "5.7.1"
 #define RSPAMD_MILTER_XCODE_TEMPFAIL "4.7.1"
 #define RSPAMD_MILTER_REJECT_MESSAGE "Spam message rejected"
+#define RSPAMD_MILTER_QUARANTINE_MESSAGE "Spam message quarantined"
 #define RSPAMD_MILTER_TEMPFAIL_MESSAGE "Try again later"
 #define RSPAMD_MILTER_SPAM_HEADER "X-Spam"
 #define RSPAMD_MILTER_DKIM_HEADER "DKIM-Signature"

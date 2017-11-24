@@ -1139,7 +1139,9 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 	va_list ap;
 	guchar cmd, *pos;
 	rspamd_fstring_t *reply = NULL;
+	gsize len;
 	GString *name, *value;
+	const char *reason;
 	struct rspamd_milter_outbuf *obuf;
 	struct rspamd_milter_private *priv = session->priv;
 
@@ -1155,6 +1157,17 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_TEMPFAIL:
 		/* No additional arguments */
 		SET_COMMAND (cmd, 0, reply, pos);
+		break;
+	case RSPAMD_MILTER_QUARANTINE:
+		reason = va_arg (ap, const char *);
+
+		if (reason == NULL) {
+			reason = "";
+		}
+
+		len = strlen (reason);
+		SET_COMMAND (cmd, len + 1, reply, pos);
+		memcpy (pos, reason, len + 1);
 		break;
 	case RSPAMD_MILTER_ADDHEADER:
 		name = va_arg (ap, GString *);
@@ -1721,8 +1734,9 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 			rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
 		}
 		else if (priv->quarantine_on_reject) {
-			/* TODO: need to add quarantine message */
-			rspamd_milter_send_action (session, RSPAMD_MILTER_QUARANTINE);
+			/* TODO: be more flexible about SMTP messages */
+			rspamd_milter_send_action (session, RSPAMD_MILTER_QUARANTINE,
+					RSPAMD_MILTER_QUARANTINE_MESSAGE);
 		}
 		else {
 			rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_REJECT,
