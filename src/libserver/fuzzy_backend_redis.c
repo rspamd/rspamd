@@ -649,6 +649,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
+		rspamd_upstream_fail (up);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
@@ -772,6 +773,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
+		rspamd_upstream_fail (up);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
@@ -894,6 +896,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
+		rspamd_upstream_fail (up);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
@@ -1326,6 +1329,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
+		rspamd_upstream_fail (up);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {

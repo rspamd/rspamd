@@ -479,10 +479,11 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write, call
     end
   end
 
+  local ip_addr = addr:get_addr()
   local options = {
     task = task,
     callback = rspamd_redis_make_request_cb,
-    host = addr:get_addr(),
+    host = ip_addr,
     timeout = redis_params['timeout'],
     cmd = command,
     args = args
@@ -497,6 +498,12 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write, call
   end
 
   local ret,conn = rspamd_redis.make_request(options)
+
+  if not ret then
+    addr:fail()
+    logger.warnx(task, "cannot make redis request to: %s", tostring(ip_addr))
+  end
+
   return ret,conn,addr
 end
 
@@ -550,6 +557,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
   local ret,conn = rspamd_redis.make_request(options)
   if not ret then
     logger.errx('cannot execute redis request')
+    addr:fail()
   end
   return ret,conn,addr
 end

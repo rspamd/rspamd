@@ -310,6 +310,10 @@ static int _redisContextConnectTcp(redisContext *c, const char *addr, int port,
     memset(&hints,0,sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
+    if (!blocking) {
+        /* Rspamd specific: never try to resolve on non-blocking conn requests */
+        hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+    }
 
     /* Try with IPv6 if no IPv4 address was found. We do it in this order since
      * in a Redis client you can't afford to test if you have IPv6 connectivity
