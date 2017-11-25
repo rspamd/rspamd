@@ -209,6 +209,12 @@ local function convert_metric(cfg, metric)
     for k, v in metric_pairs(metric.group) do
       group_transform(cfg, k, v)
     end
+  else
+    cfg.group = {
+      ungrouped = {
+        symbols = {}
+      }
+    }
   end
 
   if metric.symbol then

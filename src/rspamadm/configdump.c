@@ -284,7 +284,6 @@ rspamadm_configdump (gint argc, gchar **argv)
 	}
 	else {
 		/* Do post-load actions */
-		rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, ucl_vars);
 		rspamd_lua_post_load_config (cfg);
 
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
@@ -328,9 +327,5 @@ rspamadm_configdump (gint argc, gchar **argv)
 		}
 	}
 
-	if (!ret) {
-		exit (EXIT_FAILURE);
-	}
-
-	exit (EXIT_SUCCESS);
+	exit (ret ? EXIT_SUCCESS  : EXIT_FAILURE);
 }
