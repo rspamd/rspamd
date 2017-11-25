@@ -1804,6 +1804,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	guchar buf[2048];
 	const gchar *type = "bin";
 	struct fuzzy_client_result *res;
+	gboolean is_fuzzy = FALSE;
 
 	/* Get mapping by flag */
 	if ((map =
@@ -1848,23 +1849,43 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	}
 
 	res->score = nval;
-	msg_info_task (
-			"found fuzzy hash(%s) %*xs with weight: "
-			"%.2f, probability %.2f, in list: %s:%d%s",
-			type,
-			(gint)sizeof (rep->digest), rep->digest,
-			nval,
-			(gdouble)rep->v1.prob,
-			symbol,
-			rep->v1.flag,
-			map == NULL ? "(unknown)" : "");
+
+	if (memcmp (rep->digest, cmd->digest, sizeof (rep->digest)) != 0) {
+		is_fuzzy = TRUE;
+	}
+
+	if (is_fuzzy) {
+		msg_info_task (
+				"found fuzzy hash(%s) %*xs (%*xs requested) with weight: "
+						"%.2f, probability %.2f, in list: %s:%d%s",
+				type,
+				(gint) sizeof (rep->digest), rep->digest,
+				(gint) sizeof (cmd->digest), cmd->digest,
+				nval,
+				(gdouble) rep->v1.prob,
+				symbol,
+				rep->v1.flag,
+				map == NULL ? "(unknown)" : "");
+	}
+	else {
+		msg_info_task (
+				"found exact fuzzy hash(%s) %*xs with weight: "
+						"%.2f, probability %.2f, in list: %s:%d%s",
+				type,
+				(gint) sizeof (rep->digest), rep->digest,
+				nval,
+				(gdouble) rep->v1.prob,
+				symbol,
+				rep->v1.flag,
+				map == NULL ? "(unknown)" : "");
+	}
 
 	if (map != NULL || !session->rule->skip_unknown) {
 		rspamd_snprintf (buf,
 				sizeof (buf),
 				"%d:%*xs:%.2f:%s",
 				rep->v1.flag,
-				(gint)sizeof (rep->digest), rep->digest,
+				(gint)MIN(rspamd_fuzzy_hash_len, sizeof (rep->digest)), rep->digest,
 				rep->v1.prob,
 				type);
 		res->option = rspamd_mempool_strdup (task->task_pool, buf);

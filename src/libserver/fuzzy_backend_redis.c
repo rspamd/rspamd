@@ -86,6 +86,7 @@ struct rspamd_fuzzy_redis_session {
 	gchar **argv;
 	gsize *argv_lens;
 	struct upstream *up;
+	guchar found_digest[rspamd_cryptobox_HASHBYTES];
 };
 
 static inline void
@@ -416,10 +417,11 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 					session->argv_lens[2] = 1;
 					session->argv[3] = g_strdup ("F");
 					session->argv_lens[3] = 1;
-					session->argv[3] = g_strdup ("C");
-					session->argv_lens[3] = 1;
+					session->argv[4] = g_strdup ("C");
+					session->argv_lens[4] = 1;
 					g_string_free (key, FALSE); /* Do not free underlying array */
-					memcpy (rep.digest, sel->digest, sizeof (rep.digest));
+					memcpy (session->found_digest, sel->digest,
+							sizeof (session->cmd->digest));
 
 					g_assert (session->ctx != NULL);
 					if (redisAsyncCommandArgv (session->ctx,
@@ -476,7 +478,7 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 	struct rspamd_fuzzy_reply rep;
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 	GString *key;
-	guint i;
+	guint i, init_len;
 
 	rspamd_fuzzy_redis_session_free_args (session);
 	/* First of all check digest */
@@ -487,10 +489,13 @@ rspamd_fuzzy_backend_check_shingles (struct rspamd_fuzzy_redis_session *session)
 
 	session->argv[0] = g_strdup ("MGET");
 	session->argv_lens[0] = 4;
+	init_len = strlen (session->backend->redis_object);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-		key = g_string_new (session->backend->redis_object);
-		rspamd_printf_gstring (key, "_%d_%uL", i, shcmd->sgl.hashes[i]);
+
+		key = g_string_sized_new (init_len + 2 + 2 + sizeof ("18446744073709551616"));
+		rspamd_printf_gstring (key, "%s_%d_%uL", session->backend->redis_object,
+				i, shcmd->sgl.hashes[i]);
 		session->argv[i + 1] = key->str;
 		session->argv_lens[i + 1] = key->len;
 		g_string_free (key, FALSE); /* Do not free underlying array */
@@ -557,7 +562,7 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 
 			if (found_elts >= 2) {
 				rep.v1.prob = session->prob;
-				memcpy (rep.digest, session->cmd->digest, sizeof (rep.digest));
+				memcpy (rep.digest, session->found_digest, sizeof (rep.digest));
 			}
 
 			rep.ts = 0;
@@ -630,6 +635,8 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 	session->command = RSPAMD_FUZZY_REDIS_COMMAND_CHECK;
 	session->cmd = cmd;
 	session->prob = 1.0;
+	memcpy (rep.digest, session->cmd->digest, sizeof (rep.digest));
+	memcpy (session->found_digest, session->cmd->digest, sizeof (rep.digest));
 	session->ev_base = rspamd_fuzzy_backend_event_base (bk);
 
 	/* First of all check digest */
