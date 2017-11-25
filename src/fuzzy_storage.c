@@ -591,11 +591,23 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session)
 				session->cmd_type == CMD_ENCRYPTED_SHINGLE) {
 		/* Encrypted reply */
 		data = &session->reply;
-		len = sizeof (session->reply);
+
+		if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+			len = sizeof (session->reply);
+		}
+		else {
+			len = sizeof (session->reply.hdr + session->reply.rep.v1);
+		}
 	}
 	else {
 		data = &session->reply.rep;
-		len = sizeof (session->reply.rep);
+
+		if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+			len = sizeof (session->reply.rep);
+		}
+		else {
+			len = sizeof (session->reply.rep.v1);
+		}
 	}
 
 	r = rspamd_inet_address_sendto (session->fd, data, len, 0,
@@ -700,18 +712,18 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 		gboolean encrypted, gboolean is_shingle)
 {
 	if (cmd) {
-		result->tag = cmd->tag;
+		result->v1.tag = cmd->tag;
 
 		memcpy (&session->reply.rep, result, sizeof (*result));
 
 		rspamd_fuzzy_update_stats (session->ctx,
 				session->epoch,
-				result->prob > 0.5,
+				result->v1.prob > 0.5,
 				is_shingle,
 				session->key_stat,
 				session->ip_stat,
 				cmd->cmd,
-				result->value);
+				result->v1.value);
 
 		if (encrypted) {
 			/* We need also to encrypt reply */
@@ -825,13 +837,13 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		session->ip_stat = ip_stat;
 	}
 
-	result.flag = cmd->flag;
+	result.v1.flag = cmd->flag;
 
 	if (cmd->cmd == FUZZY_CHECK) {
 		if (G_UNLIKELY (session->ctx->collection_mode)) {
-			result.prob = 0;
-			result.value = 500;
-			result.flag = 0;
+			result.v1.prob = 0;
+			result.v1.value = 500;
+			result.v1.flag = 0;
 			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 		else {
@@ -842,15 +854,15 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
 		if (G_UNLIKELY (session->ctx->collection_mode)) {
-			result.prob = 0;
-			result.value = 500;
-			result.flag = 0;
+			result.v1.prob = 0;
+			result.v1.value = 500;
+			result.v1.flag = 0;
 			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 		else {
-			result.prob = 1.0;
-			result.value = 0;
-			result.flag = session->ctx->stat.fuzzy_hashes;
+			result.v1.prob = 1.0;
+			result.v1.value = 0;
+			result.v1.flag = session->ctx->stat.fuzzy_hashes;
 			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 	}
@@ -863,8 +875,8 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 				hexbuf[sizeof (hexbuf) - 1] = '\0';
 
 				if (g_hash_table_lookup (session->ctx->skip_hashes, hexbuf)) {
-					result.value = 401;
-					result.prob = 0.0;
+					result.v1.value = 401;
+					result.v1.prob = 0.0;
 
 					goto reply;
 				}
@@ -893,12 +905,12 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 				event_add (&up_req->io_ev, NULL);
 			}
 
-			result.value = 0;
-			result.prob = 1.0;
+			result.v1.value = 0;
+			result.v1.prob = 1.0;
 		}
 		else {
-			result.value = 403;
-			result.prob = 0.0;
+			result.v1.value = 403;
+			result.v1.prob = 0.0;
 		}
 reply:
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
@@ -912,6 +924,18 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 	enum rspamd_fuzzy_epoch ret = RSPAMD_FUZZY_EPOCH_MAX;
 
 	switch (cmd->version) {
+	case 4:
+		if (cmd->shingles_count > 0) {
+			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH11;
+			}
+		}
+		else {
+			if (r == sizeof (*cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH11;
+			}
+		}
+		break;
 	case 3:
 		if (cmd->shingles_count > 0) {
 			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {

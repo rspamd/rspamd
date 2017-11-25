@@ -396,13 +396,13 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 
 				if (max_found > RSPAMD_SHINGLE_SIZE / 2) {
 					session->prob = ((float)max_found) / RSPAMD_SHINGLE_SIZE;
-					rep.prob = session->prob;
+					rep.v1.prob = session->prob;
 
 					g_assert (sel != NULL);
 
 					/* Prepare new check command */
 					rspamd_fuzzy_redis_session_free_args (session);
-					session->nargs = 4;
+					session->nargs = 5;
 					session->argv = g_malloc (sizeof (gchar *) * session->nargs);
 					session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
 
@@ -416,7 +416,10 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 					session->argv_lens[2] = 1;
 					session->argv[3] = g_strdup ("F");
 					session->argv_lens[3] = 1;
+					session->argv[3] = g_strdup ("C");
+					session->argv_lens[3] = 1;
 					g_string_free (key, FALSE); /* Do not free underlying array */
+					memcpy (rep.digest, sel->digest, sizeof (rep.digest));
 
 					g_assert (session->ctx != NULL);
 					if (redisAsyncCommandArgv (session->ctx,
@@ -535,12 +538,12 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 	if (c->err == 0) {
 		rspamd_upstream_ok (session->up);
 
-		if (reply->type == REDIS_REPLY_ARRAY && reply->elements == 2) {
+		if (reply->type == REDIS_REPLY_ARRAY && reply->elements >= 2) {
 			cur = reply->element[0];
 
 			if (cur->type == REDIS_REPLY_STRING) {
 				value = strtoul (cur->str, NULL, 10);
-				rep.value = value;
+				rep.v1.value = value;
 				found_elts ++;
 			}
 
@@ -548,12 +551,23 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 
 			if (cur->type == REDIS_REPLY_STRING) {
 				value = strtoul (cur->str, NULL, 10);
-				rep.flag = value;
+				rep.v1.flag = value;
 				found_elts ++;
 			}
 
-			if (found_elts == 2) {
-				rep.prob = session->prob;
+			if (found_elts >= 2) {
+				rep.v1.prob = session->prob;
+				memcpy (rep.digest, session->cmd->digest, sizeof (rep.digest));
+			}
+
+			rep.ts = 0;
+
+			if (reply->elements > 2) {
+				cur = reply->element[2];
+
+				if (cur->type == REDIS_REPLY_STRING) {
+					rep.ts = strtoul (cur->str, NULL, 10);
+				}
 			}
 		}
 
@@ -619,7 +633,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 	session->ev_base = rspamd_fuzzy_backend_event_base (bk);
 
 	/* First of all check digest */
-	session->nargs = 4;
+	session->nargs = 5;
 	session->argv = g_malloc (sizeof (gchar *) * session->nargs);
 	session->argv_lens = g_malloc (sizeof (gsize) * session->nargs);
 
@@ -633,6 +647,8 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 	session->argv_lens[2] = 1;
 	session->argv[3] = g_strdup ("F");
 	session->argv_lens[3] = 1;
+	session->argv[4] = g_strdup ("C");
+	session->argv_lens[4] = 1;
 	g_string_free (key, FALSE); /* Do not free underlying array */
 
 	up = rspamd_upstream_get (backend->read_servers,
@@ -963,8 +979,9 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 
 	if (cmd->cmd == FUZZY_WRITE) {
 		/*
-		 * For each normal hash addition we do 3 redis commands:
+		 * For each normal hash addition we do 5 redis commands:
 		 * HSET <key> F <flag>
+		 * HSETNX <key> C <time>
 		 * HINCRBY <key> V <weight>
 		 * EXPIRE <key> <expire>
 		 * Where <key> is <prefix> || <digest>
@@ -984,6 +1001,33 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 		session->argv_lens[cur_shift++] = key->len;
 		session->argv[cur_shift] = g_strdup ("F");
 		session->argv_lens[cur_shift++] = sizeof ("F") - 1;
+		session->argv[cur_shift] = value->str;
+		session->argv_lens[cur_shift++] = value->len;
+		g_string_free (key, FALSE);
+		g_string_free (value, FALSE);
+
+		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+				4,
+				(const gchar **)&session->argv[cur_shift - 4],
+				&session->argv_lens[cur_shift - 4]) != REDIS_OK) {
+
+			return FALSE;
+		}
+
+		/* HSETNX */
+		klen = strlen (session->backend->redis_object) +
+				sizeof (cmd->digest) + 1;
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
+		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
+		value = g_string_sized_new (30);
+		rspamd_printf_gstring (value, "%L", (gint64)rspamd_get_calendar_ticks ());
+		session->argv[cur_shift] = g_strdup ("HSETNX");
+		session->argv_lens[cur_shift++] = sizeof ("HSETNX") - 1;
+		session->argv[cur_shift] = key->str;
+		session->argv_lens[cur_shift++] = key->len;
+		session->argv[cur_shift] = g_strdup ("C");
+		session->argv_lens[cur_shift++] = sizeof ("C") - 1;
 		session->argv[cur_shift] = value->str;
 		session->argv_lens[cur_shift++] = value->len;
 		g_string_free (key, FALSE);
@@ -1282,8 +1326,8 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		}
 
 		if (cmd->cmd == FUZZY_WRITE) {
-			ncommands += 4;
-			nargs += 13;
+			ncommands += 5;
+			nargs += 17;
 
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;

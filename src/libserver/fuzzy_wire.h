@@ -6,7 +6,7 @@
 #include "shingles.h"
 #include "cryptobox.h"
 
-#define RSPAMD_FUZZY_VERSION 3
+#define RSPAMD_FUZZY_VERSION 4
 #define RSPAMD_FUZZY_KEYLEN 8
 
 /* Commands for fuzzy storage */
@@ -24,6 +24,7 @@ enum rspamd_fuzzy_epoch {
 	RSPAMD_FUZZY_EPOCH8, /**< 0.8 till 0.9 */
 	RSPAMD_FUZZY_EPOCH9, /**< 0.9 + */
 	RSPAMD_FUZZY_EPOCH10, /**< 1.0+ encryption */
+	RSPAMD_FUZZY_EPOCH11, /**< 1.7+ extended reply */
 	RSPAMD_FUZZY_EPOCH_MAX
 };
 
@@ -42,11 +43,18 @@ RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd) {
 	struct rspamd_shingle sgl;
 };
 
-RSPAMD_PACKED(rspamd_fuzzy_reply) {
+RSPAMD_PACKED(rspamd_fuzzy_reply_v1) {
 	gint32 value;
 	guint32 flag;
 	guint32 tag;
 	float prob;
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_reply) {
+	struct rspamd_fuzzy_reply_v1 v1;
+	gchar digest[rspamd_cryptobox_HASHBYTES];
+	guint32 ts;
+	guchar reserved[12];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
