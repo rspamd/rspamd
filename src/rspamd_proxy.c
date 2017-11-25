@@ -20,6 +20,7 @@
 #include "libutil/http.h"
 #include "libutil/http_private.h"
 #include "libserver/protocol.h"
+#include "libserver/protocol_internal.h"
 #include "libserver/cfg_file.h"
 #include "libserver/url.h"
 #include "libserver/dns.h"
@@ -1885,16 +1886,17 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
 				session->legacy_support = LEGACY_SUPPORT_SPAMC;
+				msg_info_session ("enabling legacy spamc mode for session");
 			}
 			else {
-				session->legacy_support = LEGACY_SUPPORT_SPAMC;
+				session->legacy_support = LEGACY_SUPPORT_RSPAMC;
+				msg_info_session ("enabling legacy rspamc mode for session");
 			}
-
-			msg_info_session ("enabling legacy rspamc mode for session");
 		}
 
 		if (msg->url->len == 0) {
-			msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
+			msg->url = rspamd_fstring_append (msg->url,
+					"/" MSG_CMD_CHECK_V2, strlen ("/" MSG_CMD_CHECK_V2));
 		}
 
 		if (!proxy_check_file (msg, session)) {

@@ -583,11 +583,11 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 	gboolean ret = TRUE;
 
 	if (msg->method == HTTP_SYMBOLS) {
-		task->cmd = CMD_SYMBOLS;
+		task->cmd = CMD_CHECK_V2;
 		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
 	}
 	else if (msg->method == HTTP_CHECK) {
-		task->cmd = CMD_CHECK;
+		task->cmd = CMD_CHECK_V2;
 		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
 	}
 	else {
@@ -926,28 +926,35 @@ void
 rspamd_ucl_torspamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
-	const ucl_object_t *metric, *score,
+	const ucl_object_t *symbols, *score,
 	*required_score, *is_spam, *elt, *cur;
 	ucl_object_iter_t iter = NULL;
 
-	metric = ucl_object_lookup (top, DEFAULT_METRIC);
-	if (metric != NULL) {
-		score = ucl_object_lookup (metric, "score");
-		required_score = ucl_object_lookup (metric, "required_score");
-		is_spam = ucl_object_lookup (metric, "is_spam");
-		rspamd_printf_fstring (out,
+	score = ucl_object_lookup (top, "score");
+	required_score = ucl_object_lookup (top, "required_score");
+	is_spam = ucl_object_lookup (top, "is_spam");
+	rspamd_printf_fstring (out,
 			"Metric: default; %s; %.2f / %.2f / 0.0\r\n",
 			ucl_object_toboolean (is_spam) ? "True" : "False",
 			ucl_object_todouble (score),
 			ucl_object_todouble (required_score));
-		elt = ucl_object_lookup (metric, "action");
-		if (elt != NULL) {
-			rspamd_printf_fstring (out, "Action: %s\r\n",
+	elt = ucl_object_lookup (top, "action");
+	if (elt != NULL) {
+		rspamd_printf_fstring (out, "Action: %s\r\n",
 				ucl_object_tostring (elt));
-		}
+	}
 
+	elt = ucl_object_lookup (top, "subject");
+	if (elt != NULL) {
+		rspamd_printf_fstring (out, "Subject: %s\r\n",
+				ucl_object_tostring (elt));
+	}
+
+	symbols = ucl_object_lookup (top, "symbols");
+
+	if (symbols != NULL) {
 		iter = NULL;
-		while ((elt = ucl_object_iterate (metric, &iter, true)) != NULL) {
+		while ((elt = ucl_object_iterate (symbols, &iter, true)) != NULL) {
 			if (elt->type == UCL_OBJECT) {
 				const ucl_object_t *sym_score;
 				sym_score = ucl_object_lookup (elt, "score");
@@ -955,12 +962,6 @@ rspamd_ucl_torspamc_output (const ucl_object_t *top,
 					ucl_object_key (elt),
 					ucl_object_todouble (sym_score));
 			}
-		}
-
-		elt = ucl_object_lookup (metric, "subject");
-		if (elt != NULL) {
-			rspamd_printf_fstring (out, "Subject: %s\r\n",
-				ucl_object_tostring (elt));
 		}
 	}
 
@@ -986,23 +987,24 @@ void
 rspamd_ucl_tospamc_output (const ucl_object_t *top,
 	rspamd_fstring_t **out)
 {
-	const ucl_object_t *metric, *score,
+	const ucl_object_t *symbols, *score,
 		*required_score, *is_spam, *elt;
 	ucl_object_iter_t iter = NULL;
 	rspamd_fstring_t *f;
 
-	metric = ucl_object_lookup (top, DEFAULT_METRIC);
-	if (metric != NULL) {
-		score = ucl_object_lookup (metric, "score");
-		required_score = ucl_object_lookup (metric, "required_score");
-		is_spam = ucl_object_lookup (metric, "is_spam");
-		rspamd_printf_fstring (out,
+	score = ucl_object_lookup (top, "score");
+	required_score = ucl_object_lookup (top, "required_score");
+	is_spam = ucl_object_lookup (top, "is_spam");
+	rspamd_printf_fstring (out,
 			"Spam: %s ; %.2f / %.2f\r\n\r\n",
 			ucl_object_toboolean (is_spam) ? "True" : "False",
 			ucl_object_todouble (score),
 			ucl_object_todouble (required_score));
 
-		while ((elt = ucl_object_iterate (metric, &iter, true)) != NULL) {
+	symbols = ucl_object_lookup (top, "symbols");
+
+	if (symbols != NULL) {
+		while ((elt = ucl_object_iterate (symbols, &iter, true)) != NULL) {
 			if (elt->type == UCL_OBJECT) {
 				rspamd_printf_fstring (out, "%s,",
 					ucl_object_key (elt));
