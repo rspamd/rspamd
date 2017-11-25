@@ -616,12 +616,24 @@ if opts then
     fun.each(function(t, lim)
       if type(lim) == 'table' then
         settings[t] = {}
-        fun.each(function(l)
-          local plim, size = parse_string_limit(l)
-          if plim then
-            table.insert(settings[t], {plim, size})
+        if #lim == 2 and tonumber(lim[1]) and tonumber(lim[2]) then
+          -- Old style ratelimit
+          rspamd_logger.warnx(rspamd_config, 'old style ratelimit for %s', t)
+          if tonumber(lim[1]) > 0 and tonumber(lim[2]) > 0 then
+            table.insert(settings[t], {1.0/lim[2], lim[1]})
+          elseif lim[1] ~= 0 then
+            rspamd_logger.warnx(rspamd_config, 'invalid numbers for %s', t)
+          else
+            rspamd_logger.infox(rspamd_config, 'disable limit %s, burst is zero', t)
           end
-        end, lim)
+        else
+          fun.each(function(l)
+            local plim, size = parse_string_limit(l)
+            if plim then
+              table.insert(settings[t], {plim, size})
+            end
+          end, lim)
+        end
       elseif type(lim) == 'string' then
         local plim, size = parse_string_limit(lim)
         if plim then
