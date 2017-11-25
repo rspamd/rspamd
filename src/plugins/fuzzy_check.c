@@ -1764,7 +1764,7 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 	for (i = 0; i < req->len; i ++) {
 		io = g_ptr_array_index (req, i);
 
-		if (io->tag == rep->tag) {
+		if (io->tag == rep->v1.tag) {
 			if (!(io->flags & FUZZY_CMD_FLAG_REPLIED)) {
 				io->flags |= FUZZY_CMD_FLAG_REPLIED;
 
@@ -1783,7 +1783,7 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 	}
 
 	if (!found) {
-		msg_info ("unexpected tag: %ud", rep->tag);
+		msg_info ("unexpected tag: %ud", rep->v1.tag);
 	}
 
 	return NULL;
@@ -1808,7 +1808,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	/* Get mapping by flag */
 	if ((map =
 			g_hash_table_lookup (session->rule->mappings,
-					GINT_TO_POINTER (rep->flag))) == NULL) {
+					GINT_TO_POINTER (rep->v1.flag))) == NULL) {
 		/* Default symbol and default weight */
 		symbol = session->rule->symbol;
 		weight = session->rule->max_score;
@@ -1820,7 +1820,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	}
 
 	res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-	res->prob = rep->prob;
+	res->prob = rep->v1.prob;
 	res->symbol = symbol;
 	/*
 	 * Hash is assumed to be found if probability is more than 0.5
@@ -1828,10 +1828,10 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	 * Otherwise `value` means error code
 	 */
 
-	nval = fuzzy_normalize (rep->value, weight);
+	nval = fuzzy_normalize (rep->v1.value, weight);
 
 	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
-		nval *= rspamd_normalize_probability (rep->prob, 0.5);
+		nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
 		type = "img";
 		res->type = FUZZY_RESULT_IMG;
 	}
@@ -1844,7 +1844,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 			res->type = FUZZY_RESULT_BIN;
 		}
 
-		nval *= rspamd_normalize_probability (rep->prob, 0.5);
+		nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
 	}
 
 	res->score = nval;
@@ -1852,20 +1852,20 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 			"found fuzzy hash(%s) %*xs with weight: "
 			"%.2f, probability %.2f, in list: %s:%d%s",
 			type,
-			(gint)sizeof (cmd->digest), cmd->digest,
+			(gint)sizeof (rep->digest), rep->digest,
 			nval,
-			(gdouble)rep->prob,
+			(gdouble)rep->v1.prob,
 			symbol,
-			rep->flag,
+			rep->v1.flag,
 			map == NULL ? "(unknown)" : "");
 
 	if (map != NULL || !session->rule->skip_unknown) {
 		rspamd_snprintf (buf,
 				sizeof (buf),
 				"%d:%*xs:%.2f:%s",
-				rep->flag,
-				rspamd_fuzzy_hash_len, cmd->digest,
-				rep->prob,
+				rep->v1.flag,
+				(gint)sizeof (rep->digest), rep->digest,
+				rep->v1.prob,
 				type);
 		res->option = rspamd_mempool_strdup (task->task_pool, buf);
 		g_ptr_array_add (session->results, res);
@@ -1899,9 +1899,9 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 
 		while ((rep = fuzzy_process_reply (&p, &r,
 				session->commands, session->rule, &cmd, &io)) != NULL) {
-			if (rep->prob > 0.5) {
+			if (rep->v1.prob > 0.5) {
 				if (cmd->cmd == FUZZY_CHECK) {
-					fuzzy_insert_result (session, rep, cmd, io, rep->flag);
+					fuzzy_insert_result (session, rep, cmd, io, rep->v1.flag);
 				}
 				else if (cmd->cmd == FUZZY_STAT) {
 					/* Just set pool variable to extract it in further */
@@ -1909,7 +1909,7 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 					GList *res;
 
 					pval = rspamd_mempool_alloc (task->task_pool, sizeof (*pval));
-					pval->fuzzy_cnt = rep->flag;
+					pval->fuzzy_cnt = rep->v1.flag;
 					pval->name = session->rule->name;
 
 					res = rspamd_mempool_get_variable (task->task_pool, "fuzzy_stat");
@@ -1924,23 +1924,23 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 					}
 				}
 			}
-			else if (rep->value == 403) {
+			else if (rep->v1.value == 403) {
 				msg_info_task (
 						"fuzzy check error for %d: forbidden",
-						rep->flag);
+						rep->v1.flag);
 			}
-			else if (rep->value == 401) {
+			else if (rep->v1.value == 401) {
 				if (cmd->cmd != FUZZY_CHECK) {
 					msg_info_task (
 							"fuzzy check error for %d: skipped by server",
-							rep->flag);
+							rep->v1.flag);
 				}
 			}
-			else if (rep->value != 0) {
+			else if (rep->v1.value != 0) {
 				msg_info_task (
 						"fuzzy check error for %d: unknown error (%d)",
-						rep->flag,
-						rep->value);
+						rep->v1.flag,
+						rep->v1.value);
 			}
 
 			ret = 1;
@@ -2202,7 +2202,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					session->commands, session->rule, &cmd, &io)) != NULL) {
 				if ((map =
 						g_hash_table_lookup (session->rule->mappings,
-								GINT_TO_POINTER (rep->flag))) == NULL) {
+								GINT_TO_POINTER (rep->v1.flag))) == NULL) {
 					/* Default symbol and default weight */
 					symbol = session->rule->symbol;
 
@@ -2228,18 +2228,18 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					op = "deleted";
 				}
 
-				if (rep->prob > 0.5) {
+				if (rep->v1.prob > 0.5) {
 					msg_info_task ("%s fuzzy hash (%s) %*xs, list: %s:%d for "
 							"message <%s>",
 							op,
 							ftype,
-							(gint)sizeof (cmd->digest), cmd->digest,
+							(gint)sizeof (rep->digest), rep->digest,
 							symbol,
-							rep->flag,
+							rep->v1.flag,
 							session->task->message_id);
 				}
 				else {
-					if (rep->value == 401) {
+					if (rep->v1.value == 401) {
 						msg_info_task (
 								"fuzzy hash (%s) for message cannot be %s"
 										"<%s>, %*xs, "
@@ -2247,14 +2247,14 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 								ftype,
 								op,
 								session->task->message_id,
-								(gint) sizeof (cmd->digest), cmd->digest,
+								(gint)sizeof (rep->digest), rep->digest,
 								symbol,
-								rep->flag);
+								rep->v1.flag);
 
 						if (*(session->err) == NULL) {
 							g_set_error (session->err,
 									g_quark_from_static_string ("fuzzy check"),
-									rep->value, "fuzzy hash is skipped");
+									rep->v1.value, "fuzzy hash is skipped");
 						}
 					}
 					else {
@@ -2265,15 +2265,15 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 								ftype,
 								op,
 								session->task->message_id,
-								(gint) sizeof (cmd->digest), cmd->digest,
+								(gint)sizeof (rep->digest), rep->digest,
 								symbol,
-								rep->flag,
-								rep->value);
+								rep->v1.flag,
+								rep->v1.value);
 
 						if (*(session->err) == NULL) {
 							g_set_error (session->err,
 									g_quark_from_static_string ("fuzzy check"),
-									rep->value, "process fuzzy error");
+									rep->v1.value, "process fuzzy error");
 						}
 					}
 

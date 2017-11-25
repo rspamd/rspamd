@@ -596,7 +596,7 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session)
 			len = sizeof (session->reply);
 		}
 		else {
-			len = sizeof (session->reply.hdr + session->reply.rep.v1);
+			len = sizeof (session->reply.hdr) + sizeof (session->reply.rep.v1);
 		}
 	}
 	else {
@@ -809,16 +809,16 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	}
 
 	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
-		result.value = 500;
-		result.prob = 0.0;
+		result.v1.value = 500;
+		result.v1.prob = 0.0;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		return;
 	}
 
 	if (session->ctx->encrypted_only && !encrypted) {
 		/* Do not accept unencrypted commands */
-		result.value = 403;
-		result.prob = 0.0;
+		result.v1.value = 403;
+		result.v1.prob = 0.0;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		return;
 	}
