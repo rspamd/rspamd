@@ -519,6 +519,15 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
   end
 
   local addr
+  local function rspamd_redis_make_request_cb(err, data)
+    if err then
+      addr:fail()
+    else
+      addr:ok()
+    end
+    callback(err, data, addr)
+  end
+
   local rspamd_redis = require "rspamd_redis"
 
   if key then
@@ -542,7 +551,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
   local options = {
     ev_base = ev_base,
     config = cfg,
-    callback = callback,
+    callback = rspamd_redis_make_request_cb,
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
     cmd = command,
@@ -562,6 +571,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
     logger.errx('cannot execute redis request')
     addr:fail()
   end
+
   return ret,conn,addr
 end
 
