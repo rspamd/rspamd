@@ -226,18 +226,20 @@ rspamd_upstream_addr_elt_dtor (gpointer a)
 {
 	struct upstream_addr_elt *elt = a;
 
-	rspamd_inet_address_free (elt->addr);
-	g_free (elt);
+	if (elt) {
+		rspamd_inet_address_free (elt->addr);
+		g_free (elt);
+	}
 }
 
 static void
 rspamd_upstream_update_addrs (struct upstream *up)
 {
-	guint16 port;
-	guint addr_cnt;
+	guint addr_cnt, i, port;
+	gboolean seen_addr;
 	struct upstream_inet_addr_entry *cur, *tmp;
 	GPtrArray *new_addrs;
-	struct upstream_addr_elt *addr_elt;
+	struct upstream_addr_elt *addr_elt, *naddr;
 
 	/*
 	 * We need first of all get the saved port, since DNS gives us no
@@ -249,24 +251,43 @@ rspamd_upstream_update_addrs (struct upstream *up)
 		addr_elt = g_ptr_array_index (up->addrs.addr, 0);
 		port = rspamd_inet_address_get_port (addr_elt->addr);
 
-		/* Free old addresses */
-		g_ptr_array_free (up->addrs.addr, TRUE);
-
 		/* Now calculate new addrs count */
 		addr_cnt = 0;
 		LL_FOREACH (up->new_addrs, cur) {
 			addr_cnt++;
 		}
+
 		new_addrs = g_ptr_array_new_full (addr_cnt, rspamd_upstream_addr_elt_dtor);
 
 		/* Copy addrs back */
 		LL_FOREACH (up->new_addrs, cur) {
+			seen_addr = FALSE;
+			naddr = NULL;
+			/* Ports are problematic, set to compare in the next block */
 			rspamd_inet_address_set_port (cur->addr, port);
-			addr_elt = g_malloc0 (sizeof (*addr_elt));
-			addr_elt->addr = cur->addr;
-			addr_elt->errors = 0;
-			g_ptr_array_add (new_addrs, addr_elt);
+
+			PTR_ARRAY_FOREACH (up->addrs.addr, i, addr_elt) {
+				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr) == 0) {
+					naddr = g_malloc0 (sizeof (*addr_elt));
+					naddr->addr = cur->addr;
+					naddr->errors = addr_elt->errors; /* Preserve errors */
+					seen_addr = TRUE;
+
+					break;
+				}
+			}
+
+			if (!seen_addr) {
+				addr_elt = g_malloc0 (sizeof (*addr_elt));
+				addr_elt->addr = cur->addr;
+				addr_elt->errors = 0;
+			}
+
+			g_ptr_array_add (new_addrs, naddr);
 		}
+
+		/* Free old addresses */
+		g_ptr_array_free (up->addrs.addr, TRUE);
 
 		up->addrs.cur = 0;
 		up->addrs.addr = new_addrs;
@@ -277,8 +298,8 @@ rspamd_upstream_update_addrs (struct upstream *up)
 		/* Do not free inet address pointer since it has been transferred to up */
 		g_free (cur);
 	}
-	up->new_addrs = NULL;
 
+	up->new_addrs = NULL;
 	RSPAMD_UPSTREAM_UNLOCK (up->lock);
 }
 
@@ -438,6 +459,7 @@ rspamd_upstream_fail (struct upstream *up)
 					}
 					else {
 						/* Just re-resolve addresses */
+						up->errors = 0;
 						rspamd_upstream_resolve_addrs (up->ls, up);
 					}
 				}
