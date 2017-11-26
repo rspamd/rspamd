@@ -41,7 +41,7 @@ struct upstream {
 	gint active_idx;
 	gchar *name;
 	struct event ev;
-	struct timeval tv;
+	gdouble last_fail;
 	gpointer ud;
 	struct upstream_list *ls;
 	GList *ctx_pos;
@@ -392,6 +392,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	gdouble ntim;
 	guint i;
 	struct upstream *cur;
+	struct timeval tv;
 
 	RSPAMD_UPSTREAM_LOCK (ls->lock);
 	g_ptr_array_remove_index (ls->alive, up->active_idx);
@@ -412,8 +413,8 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	}
 
 	ntim = rspamd_time_jitter (up->ctx->revive_time, up->ctx->revive_jitter);
-	double_to_tv (ntim, &up->tv);
-	event_add (&up->ev, &up->tv);
+	double_to_tv (ntim, &tv);
+	event_add (&up->ev, &tv);
 
 	RSPAMD_UPSTREAM_UNLOCK (ls->lock);
 }
@@ -421,30 +422,29 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 void
 rspamd_upstream_fail (struct upstream *up)
 {
-	struct timeval tv;
 	gdouble error_rate, max_error_rate;
 	gdouble sec_last, sec_cur;
 	struct upstream_addr_elt *addr_elt;
 
 	if (up->active_idx != -1) {
-		gettimeofday (&tv, NULL);
+		sec_cur = rspamd_get_ticks (FALSE);
 
 		RSPAMD_UPSTREAM_LOCK (up->lock);
 		if (up->errors == 0) {
 			/* We have the first error */
-			up->tv = tv;
+			up->last_fail = sec_cur;
 			up->errors = 1;
 		}
 		else {
-			sec_last = tv_to_double (&up->tv);
-			sec_cur = tv_to_double (&tv);
+			sec_last = up->last_fail;
 
 			if (sec_cur >= sec_last) {
 				up->errors ++;
 
 				if (sec_cur > sec_last) {
 					error_rate = ((gdouble)up->errors) / (sec_cur - sec_last);
-					max_error_rate = ((gdouble)up->ctx->max_errors) / up->ctx->error_time;
+					max_error_rate = ((gdouble)up->ctx->max_errors) /
+							up->ctx->error_time;
 				}
 				else {
 					error_rate = 1;
@@ -459,8 +459,10 @@ rspamd_upstream_fail (struct upstream *up)
 					}
 					else {
 						/* Just re-resolve addresses */
-						up->errors = 0;
-						rspamd_upstream_resolve_addrs (up->ls, up);
+						if (sec_cur - sec_last > up->ctx->revive_time) {
+							up->errors = 0;
+							rspamd_upstream_resolve_addrs (up->ls, up);
+						}
 					}
 				}
 			}
