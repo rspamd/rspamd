@@ -612,8 +612,8 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 		break;
 	case RSPAMD_UPSTREAM_PARSE_NAMESERVER:
 		addrs = g_ptr_array_sized_new (1);
-
 		ret = rspamd_parse_inet_address (&addr, str, strlen (str));
+		up->name = rspamd_mempool_strdup (ups->ctx->pool, str);
 
 		if (ret) {
 			if (rspamd_inet_address_get_port (addr) == 0) {
