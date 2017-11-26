@@ -236,7 +236,7 @@ static void
 rspamd_upstream_update_addrs (struct upstream *up)
 {
 	guint addr_cnt, i, port;
-	gboolean seen_addr;
+	gboolean seen_addr, reset_errors = FALSE;
 	struct upstream_inet_addr_entry *cur, *tmp;
 	GPtrArray *new_addrs;
 	struct upstream_addr_elt *addr_elt, *naddr;
@@ -257,6 +257,11 @@ rspamd_upstream_update_addrs (struct upstream *up)
 			addr_cnt++;
 		}
 
+		/* At 10% probability reset errors on addr elements */
+		if (rspamd_random_double_fast () > 0.9) {
+			reset_errors = TRUE;
+		}
+
 		new_addrs = g_ptr_array_new_full (addr_cnt, rspamd_upstream_addr_elt_dtor);
 
 		/* Copy addrs back */
@@ -270,7 +275,7 @@ rspamd_upstream_update_addrs (struct upstream *up)
 				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr) == 0) {
 					naddr = g_malloc0 (sizeof (*addr_elt));
 					naddr->addr = cur->addr;
-					naddr->errors = addr_elt->errors; /* Preserve errors */
+					naddr->errors = reset_errors ? 0 : addr_elt->errors;
 					seen_addr = TRUE;
 
 					break;
