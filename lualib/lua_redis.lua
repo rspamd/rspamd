@@ -103,9 +103,10 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   else
     opts = module_opts
   end
-  local ret = false
 
   if opts then
+    local ret
+
     if opts.redis then
       ret = try_load_redis_servers(opts.redis, result)
 
@@ -127,6 +128,8 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   opts = rspamd_config:get_all_opt('redis')
 
   if opts then
+    local ret
+
     if opts[module_name] then
       ret = try_load_redis_servers(opts[module_name], result)
       if ret then
