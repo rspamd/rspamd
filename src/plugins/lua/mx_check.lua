@@ -313,8 +313,8 @@ if opts then
   })
   rspamd_config:set_metric_symbol({
     name = settings.symbol_white_mx,
-    score = -0.00,
-    description = 'Domain has whitelist MX',
+    score = 0.0,
+    description = 'Domain is whitelisted from MX check',
     group = 'MX',
     one_shot = true,
     one_param = true,
