@@ -711,6 +711,8 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 		struct fuzzy_session *session,
 		gboolean encrypted, gboolean is_shingle)
 {
+	gsize len;
+
 	if (cmd) {
 		result->v1.tag = cmd->tag;
 
@@ -729,8 +731,21 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 			/* We need also to encrypt reply */
 			ottery_rand_bytes (session->reply.hdr.nonce,
 					sizeof (session->reply.hdr.nonce));
+
+			/*
+			 * For old replies we need to encrypt just old part, otherwise
+			 * decryption would fail due to mac verification mistake
+			 */
+
+			if (session->epoch > RSPAMD_FUZZY_EPOCH10) {
+				len = sizeof (session->reply.rep);
+			}
+			else {
+				len = sizeof (session->reply.rep.v1);
+			}
+
 			rspamd_cryptobox_encrypt_nm_inplace ((guchar *)&session->reply.rep,
-					sizeof (session->reply.rep),
+					len,
 					session->reply.hdr.nonce,
 					session->nm,
 					session->reply.hdr.mac,
@@ -807,6 +822,9 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		is_shingle = TRUE;
 		break;
 	}
+
+	memcpy (session->reply.rep.digest, cmd->digest,
+			sizeof (session->reply.rep.digest));
 
 	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
 		result.v1.value = 500;
