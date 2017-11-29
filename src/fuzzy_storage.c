@@ -715,7 +715,6 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 
 	if (cmd) {
 		result->v1.tag = cmd->tag;
-
 		memcpy (&session->reply.rep, result, sizeof (*result));
 
 		rspamd_fuzzy_update_stats (session->ctx,
@@ -823,8 +822,10 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		break;
 	}
 
-	memcpy (session->reply.rep.digest, cmd->digest,
-			sizeof (session->reply.rep.digest));
+	memset (&result, 0, sizeof (result));
+	memcpy (result.digest, cmd->digest, sizeof (result.digest));
+	result.v1.flag = cmd->flag;
+	result.v1.tag = cmd->tag;
 
 	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
 		result.v1.value = 500;
@@ -854,8 +855,6 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 		session->ip_stat = ip_stat;
 	}
-
-	result.v1.flag = cmd->flag;
 
 	if (cmd->cmd == FUZZY_CHECK) {
 		if (G_UNLIKELY (session->ctx->collection_mode)) {
