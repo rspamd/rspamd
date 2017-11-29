@@ -90,10 +90,14 @@ function($, D3Evolution, unused) {
 
     function initGraph() {
         var graph = new D3Evolution("graph", $.extend({}, graph_options, {
+            yScale:      getSelector("selYScale"),
             type:        getSelector("selType"),
             interpolate: getSelector("selInterpolate"),
             convert:     getSelector("selConvert"),
         }));
+        $("#selYScale").change(function() {
+            graph.yScale(this.value);
+        });
         $("#selConvert").change(function () {
             graph.convert(this.value);
         });
