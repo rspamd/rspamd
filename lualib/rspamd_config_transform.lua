@@ -209,11 +209,13 @@ local function convert_metric(cfg, metric)
       group_transform(cfg, k, v)
     end
   else
-    cfg.group = {
-      ungrouped = {
-        symbols = {}
+    if not cfg.group then
+      cfg.group = {
+        ungrouped = {
+          symbols = {}
+        }
       }
-    }
+    end
   end
 
   if metric.symbol then
