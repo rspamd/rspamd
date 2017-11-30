@@ -1333,6 +1333,11 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 				found->begin, found->len);
 	}
 
+	IF_MACRO("{cert_subject}") {
+		rspamd_http_message_add_header_len (msg, USER_HEADER,
+				found->begin, found->len);
+	}
+
 	if (!session->hostname || session->hostname->len == 0) {
 		IF_MACRO("{client_name}") {
 			rspamd_http_message_add_header_len (msg, HOSTNAME_HEADER,
