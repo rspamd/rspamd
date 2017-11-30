@@ -17,12 +17,11 @@
 #include "rspamadm.h"
 #include "config.h"
 #include "lua/lua_common.h"
-#include "corpus_test.lua.h"
 
 static gchar *ham_directory = NULL;
 static gchar *spam_directory = NULL;
-static gchar *output_location = NULL;
-static int64_t n_connections = 10;
+static gchar *output_location = "results.log";
+static gint n_connections = 10;
 
 static void rspamadm_corpus_test (gint argc, gchar **argv);
 static const char *rspamadm_corpus_test_help (gboolean full_help);
@@ -40,6 +39,10 @@ static GOptionEntry entries[] = {
 												"Ham directory", NULL},
 			{"spam", 's', 0, G_OPTION_ARG_FILENAME, &spam_directory,
 												"Spam directory", NULL},
+			{"output", 'o', 0, G_OPTION_ARG_FILENAME, &output_location,
+												"Log output location", NULL},
+			{"n_connections", 'n', 0, G_OPTION_ARG_INT, &n_connections,
+						"Number of parellel connections [Default: 10]", NULL},
 			{NULL,	0,	0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -94,12 +97,18 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 	}
 
 	L = rspamd_lua_init ();
+	rspamd_lua_set_path(L, NULL, NULL);
+
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (ham_directory),
 											"ham_directory", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromstring (spam_directory),
 											"spam_directory", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring (output_location),
+											"output_location", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromint (n_connections),
+											"n_connections", 0, false);
 
 	rspamd_lua_set_path (L, NULL, ucl_vars);
 
@@ -107,7 +116,7 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 						argc,
 						argv,
 						obj,
-						rspamadm_script_corpus_test);
+						"corpus_test");
 
 	lua_close (L);
 	ucl_object_unref (obj);

@@ -35,8 +35,6 @@ local function encoded_json_to_log(result)
 
    local filtered_result = {}
    local parser = ucl.parser()
-
-   io.write(result)
    
    local is_good, err = parser:parse_string(result)
 
@@ -46,13 +44,6 @@ local function encoded_json_to_log(result)
    end
    
    result = parser:get_object()
-
-   io.write("good 1\n")
-   for key, val in pairs(result) do 
-      io.write(key)
-    end
-
-   io.write("good 2\n")
 
    filtered_result.score = result.score
    local action = result.action:gsub("%s+", "_")
@@ -106,8 +97,8 @@ return function (_, res)
    
    local ham_directory = res['ham_directory']
    local spam_directory = res['spam_directory']
-   local n_conn = 10
-   local output = "results.log"
+   local n_conn = res["n_connections"]
+   local output = res["output_location"]
 
    local results = {}
 
