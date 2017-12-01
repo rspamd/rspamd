@@ -1609,6 +1609,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			RSPAMD_CACHE_PASS_POSTFILTERS) {
 		checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
 	}
+
 	if (stage == RSPAMD_TASK_STAGE_IDEMPOTENT && checkpoint->pass <
 			RSPAMD_CACHE_PASS_IDEMPOTENT) {
 		checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
