@@ -16,6 +16,7 @@ limitations under the License.
 
 local logger = require "rspamd_logger"
 local lutil = require "lua_util"
+local rspamd_util = require "rspamd_util"
 
 local exports = {}
 
@@ -386,30 +387,57 @@ local function get_key_indexes(cmd, args)
   return idx_l
 end
 
-local function get_key_expansion_metadata(task)
+local gen_meta = {
+  principal_recipient = function(task)
+    return task:get_principal_recipient()
+  end,
+  principal_recipient_domain = function(task)
+    local p = task:get_principal_recipient()
+    if not p then return end
+    return string.match(p, '.*@(.*)')
+  end,
+  ip = function(task)
+    local i = task:get_ip()
+    if i and i:is_valid() then return i:to_string() end
+  end,
+  from = function(task)
+    return ((task:get_from('smtp') or E)[1] or E)['addr']
+  end,
+  from_domain = function(task)
+    return ((task:get_from('smtp') or E)[1] or E)['domain']
+  end,
+  from_domain_or_helo_domain = function(task)
+    local d = ((task:get_from('smtp') or E)[1] or E)['domain']
+    if d and #d > 0 then return d end
+    return task:get_helo()
+  end,
+  mime_from = function(task)
+    return ((task:get_from('mime') or E)[1] or E)['addr']
+  end,
+  mime_from_domain = function(task)
+    return ((task:get_from('mime') or E)[1] or E)['domain']
+  end,
+}
 
-  local gen_meta = {
-    principal_recipient = function()
-      local a = (task:get_principal_recipient() or E)['addr']
-      if a and string.len(a) == 0 then
-        a = '<>'
-      end
-      return a
-    end,
-    principal_recipient_domain = function()
-      return (task:get_principal_recipient() or E)['domain']
-    end,
-    ip = function()
-      local i = task:get_ip()
-      if i and i:is_valid() then return i:to_string() end
-    end,
-    from = function()
-      return task:get_from('smtp')
-    end,
-    from_domain = function()
-      return (task:get_from('smtp') or E)['domain']
-    end,
-  }
+local function gen_get_esld(f)
+  return function(task)
+    local d = f(task)
+    if not d then return end
+    return rspamd_util.get_tld(d)
+  end
+end
+
+gen_meta.smtp_from = gen_meta.from
+gen_meta.smtp_from_domain = gen_meta.from_domain
+gen_meta.smtp_from_domain_or_helo_domain = gen_meta.from_domain_or_helo_domain
+gen_meta.esld_principal_recipient_domain = gen_get_esld(gen_meta.principal_recipient_domain)
+gen_meta.esld_from_domain = gen_get_esld(gen_meta.from_domain)
+gen_meta.esld_smtp_from_domain = gen_meta.esld_from_domain
+gen_meta.esld_mime_from_domain = gen_get_esld(gen_meta.mime_from_domain)
+gen_meta.esld_from_domain_or_helo_domain = gen_get_esld(gen_meta.from_domain_or_helo_domain)
+gen_meta.esld_smtp_from_domain_or_helo_domain = gen_meta.esld_from_domain_or_helo_domain
+
+local function get_key_expansion_metadata(task)
 
   local md_mt = {
     __index = function(self, k)
@@ -419,7 +447,7 @@ local function get_key_expansion_metadata(task)
         return v
       end
       if gen_meta[k] then
-        v = gen_meta[k]()
+        v = gen_meta[k](task)
         rawset(self, k, v)
       end
       return v
