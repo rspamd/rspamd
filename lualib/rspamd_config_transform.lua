@@ -15,7 +15,6 @@ limitations under the License.
 ]]--
 
 local logger = require "rspamd_logger"
-local fun = require "fun"
 
 local function override_defaults(def, override)
   if not override then
@@ -83,9 +82,9 @@ local function metric_pairs(t)
         for k,v in pairs(tbl) do
           if type(k) ~= 'number' then
             -- We can also have implicit arrays here
-            local is_implicit = is_implicit(v)
+            local sym_implicit = is_implicit(v)
 
-            if is_implicit then
+            if sym_implicit then
               for _,elt in ipairs(v) do
                 table.insert(keys, {k, elt})
               end
@@ -210,11 +209,13 @@ local function convert_metric(cfg, metric)
       group_transform(cfg, k, v)
     end
   else
-    cfg.group = {
-      ungrouped = {
-        symbols = {}
+    if not cfg.group then
+      cfg.group = {
+        ungrouped = {
+          symbols = {}
+        }
       }
-    }
+    end
   end
 
   if metric.symbol then

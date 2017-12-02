@@ -64,8 +64,17 @@ local function gen_dkim_queries(task, rule)
     local semicolon = lpeg.P(':')
     local domain = lpeg.C((1 - semicolon)^0)
     local res = lpeg.S'+-?~'
-    gr = domain * semicolon * lpeg.C(res)
+
+    local function res_to_label(ch)
+      if ch == '+' then return 'a'
+      elseif ch == '-' then return 'r'
+        else return 'u'
+      end
+    end
+
+    gr = domain * semicolon * lpeg.C(res / res_to_label)
   end
+
   if dkim_trace and dkim_trace.options then
     for _,opt in ipairs(dkim_trace.options) do
       local dom,res = lpeg.match(gr, opt)
@@ -83,6 +92,8 @@ local function dkim_reputation_filter(task, rule)
   local requests = gen_dkim_queries(task, rule)
   local results = {}
   local nchecked = 0
+  local rep_accepted = 0.0
+  local rep_rejected = 0.0
 
   local function tokens_cb(err, token, values)
     nchecked = nchecked + 1
@@ -92,30 +103,33 @@ local function dkim_reputation_filter(task, rule)
     end
 
     if nchecked == #requests then
-      -- Check the url with maximum hits
-      local mhits = 0
-      for k,_ in pairs(results) do
-        if requests[k][2] > mhits then
-          mhits = requests[k][2]
+      for k,v in pairs(results) do
+        if requests[k] == 'a' then
+          rep_accepted = rep_accepted + generic_reputation_calc(v, rule, 1.0)
+        elseif requests[k] == 'r' then
+          rep_rejected = rep_rejected + generic_reputation_calc(v, rule, 1.0)
         end
       end
 
-      if mhits > 0 then
-        local score = 0
-        for k,v in pairs(results) do
-          score = score + generic_reputation_calc(v, rule, requests[k][2] / mhits)
+      -- Set local reputation symbol
+      if rep_accepted > 0 or rep_rejected > 0 then
+        if rep_accepted > rep_rejected then
+          task:insert_result(rule.symbol, -(rep_accepted - rep_rejected))
+        else
+          task:insert_result(rule.symbol, (rep_rejected - rep_accepted))
         end
 
-        if math.abs(score) > 1e-3 then
-          -- TODO: add description
-          task:insert_result(rule.symbol, score)
-        end
+        -- Store results for future DKIM results adjustments
+        task:get_mempool():set_variable("dkim_reputation_accept", tostring(rep_accepted))
+        task:get_mempool():set_variable("dkim_reputation_reject", tostring(rep_rejected))
       end
     end
   end
 
   for dom,res in pairs(requests) do
-    rule.backend.get_token(task, rule, dom, tokens_cb)
+    -- tld + "." + check_result, e.g. example.com.+ - reputation for valid sigs
+    local query = string.format('%s.%s', dom, res)
+    rule.backend.get_token(task, rule, query, tokens_cb)
   end
 end
 
@@ -138,9 +152,31 @@ local function dkim_reputation_idempotent(task, rule)
 
     local requests = gen_dkim_queries(task, rule)
 
-    for dom,res in ipairs(requests) do
-      rule.backend.set_token(task, rule, dom, token)
+    for dom,res in pairs(requests) do
+      -- tld + "." + check_result, e.g. example.com.+ - reputation for valid sigs
+      local query = string.format('%s.%s', dom, res)
+      rule.backend.set_token(task, rule, query, token)
     end
+  end
+end
+
+local function dkim_reputation_postfilter(task, rule)
+  local sym_accepted = task:get_symbol('R_DKIM_ALLOW')
+  local accept_adjustment = task:get_mempool():get_variable("dkim_reputation_accept")
+
+  if sym_accepted and accept_adjustment then
+    local final_adjustment = rule.cfg.max_accept_adjustment *
+        rspamd_util.tanh(tonumber(accept_adjustment))
+    task:adjust_result('R_DKIM_ALLOW', sym_accepted.score * final_adjustment)
+  end
+
+  local sym_rejected = task:get_symbol('R_DKIM_REJECT')
+  local reject_adjustment = task:get_mempool():get_variable("dkim_reputation_reject")
+
+  if sym_rejected and reject_adjustment then
+    local final_adjustment = rule.cfg.max_reject_adjustment *
+        rspamd_util.tanh(tonumber(reject_adjustment))
+    task:adjust_result('R_DKIM_REJECT', sym_rejected.score * final_adjustment)
   end
 end
 
@@ -160,12 +196,14 @@ local dkim_selector = {
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
     max_score = nil,
-    max_urls = 10,
     outbound = true,
     inbound = true,
+    max_accept_adjustment = 2.0, -- How to adjust accepted DKIM score
+    max_reject_adjustment = 3.0 -- How to adjust rejected DKIM score
   },
   dependencies = {"DKIM_TRACE"},
   filter = dkim_reputation_filter, -- used to get scores
+  postfilter = dkim_reputation_postfilter, -- used to adjust DKIM scores
   idempotent = dkim_reputation_idempotent -- used to set scores
 }
 
@@ -506,6 +544,7 @@ local ip_selector = {
 local selectors = {
   ip = ip_selector,
   url = url_selector,
+  dkim = dkim_selector
 }
 
 local function reputation_dns_init(rule)

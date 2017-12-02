@@ -729,8 +729,6 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 		GHashTable *vars)
 {
 	struct rspamd_config **pcfg;
-	GHashTableIter it;
-	gpointer k, v;
 
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
@@ -783,25 +781,108 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 	/* Set known paths as rspamd_paths global */
 	lua_getglobal (L, "rspamd_paths");
 	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, RSPAMD_CONFDIR);
-		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, RSPAMD_RUNDIR);
-		rspamd_lua_table_set (L, RSPAMD_DBDIR_INDEX, RSPAMD_DBDIR);
-		rspamd_lua_table_set (L, RSPAMD_LOGDIR_INDEX, RSPAMD_LOGDIR);
-		rspamd_lua_table_set (L, RSPAMD_WWWDIR_INDEX, RSPAMD_WWWDIR);
-		rspamd_lua_table_set (L, RSPAMD_PLUGINSDIR_INDEX, RSPAMD_PLUGINSDIR);
-		rspamd_lua_table_set (L, RSPAMD_RULESDIR_INDEX, RSPAMD_RULESDIR);
-		rspamd_lua_table_set (L, RSPAMD_LUALIBDIR_INDEX, RSPAMD_LUALIBDIR);
-		rspamd_lua_table_set (L, RSPAMD_PREFIX_INDEX, RSPAMD_PREFIX);
+		const gchar *confdir = RSPAMD_CONFDIR, *rundir = RSPAMD_RUNDIR,
+				*dbdir = RSPAMD_DBDIR, *logdir = RSPAMD_LOGDIR,
+				*wwwdir = RSPAMD_WWWDIR, *pluginsdir = RSPAMD_PLUGINSDIR,
+				*rulesdir = RSPAMD_RULESDIR, *lualibdir = RSPAMD_LUALIBDIR,
+				*prefix = RSPAMD_PREFIX;
+		const gchar *t;
 
-		/* Override from vars if needed */
-		if (vars != NULL) {
-			g_hash_table_iter_init (&it, vars);
+		/* Try environment */
+		t = getenv ("PLUGINSDIR");
+		if (t) {
+			pluginsdir = t;
+		}
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				rspamd_lua_table_set (L, k, v);
+		t = getenv ("RULESDIR");
+		if (t) {
+			rulesdir = t;
+		}
+
+		t = getenv ("DBDIR");
+		if (t) {
+			dbdir = t;
+		}
+
+		t = getenv ("RUNDIR");
+		if (t) {
+			rundir = t;
+		}
+
+		t = getenv ("LUALIBDIR");
+		if (t) {
+			lualibdir = t;
+		}
+
+		t = getenv ("LOGDIR");
+		if (t) {
+			logdir = t;
+		}
+
+		t = getenv ("WWWDIR");
+		if (t) {
+			wwwdir = t;
+		}
+
+		t = getenv ("CONFDIR");
+		if (t) {
+			confdir = t;
+		}
+
+
+		if (vars) {
+			t = g_hash_table_lookup (vars, "PLUGINSDIR");
+			if (t) {
+				pluginsdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "RULESDIR");
+			if (t) {
+				rulesdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "LUALIBDIR");
+			if (t) {
+				lualibdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "RUNDIR");
+			if (t) {
+				rundir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "WWWDIR");
+			if (t) {
+				wwwdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "CONFDIR");
+			if (t) {
+				confdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "DBDIR");
+			if (t) {
+				dbdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "LOGDIR");
+			if (t) {
+				logdir = t;
 			}
 		}
+
+		lua_createtable (L, 0, 9);
+
+		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, confdir);
+		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, rundir);
+		rspamd_lua_table_set (L, RSPAMD_DBDIR_INDEX, dbdir);
+		rspamd_lua_table_set (L, RSPAMD_LOGDIR_INDEX, logdir);
+		rspamd_lua_table_set (L, RSPAMD_WWWDIR_INDEX, wwwdir);
+		rspamd_lua_table_set (L, RSPAMD_PLUGINSDIR_INDEX, pluginsdir);
+		rspamd_lua_table_set (L, RSPAMD_RULESDIR_INDEX, rulesdir);
+		rspamd_lua_table_set (L, RSPAMD_LUALIBDIR_INDEX, lualibdir);
+		rspamd_lua_table_set (L, RSPAMD_PREFIX_INDEX, prefix);
 
 		lua_setglobal (L, "rspamd_paths");
 	}

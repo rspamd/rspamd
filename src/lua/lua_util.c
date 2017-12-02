@@ -378,9 +378,16 @@ LUA_FUNCTION_DEF (util, is_valid_utf8);
 /***
  * @function util.readline([prompt])
  * Returns string read from stdin with history and editing support
- * @return {boolean} true if a string is spoofed
+ * @return {string} string read from the input (with line endings stripped)
  */
 LUA_FUNCTION_DEF (util, readline);
+
+/***
+ * @function util.readpassphrase([prompt])
+ * Returns string read from stdin disabling echo
+ * @return {string} string read from the input (with line endings stripped)
+ */
+LUA_FUNCTION_DEF (util, readpassphrase);
 
 /***
  * @function util.file_exists(file)
@@ -388,6 +395,21 @@ LUA_FUNCTION_DEF (util, readline);
  * @return {boolean} true if file exists
  */
 LUA_FUNCTION_DEF (util, file_exists);
+
+/***
+ * @function util.mkdir(dir[, recursive])
+ * Creates a specified directory
+ * @return {boolean[,error]} true if directory has been created
+ */
+LUA_FUNCTION_DEF (util, mkdir);
+
+/***
+ * @function util.umask(mask)
+ * Sets new umask. Accepts either numeric octal string, e.g. '022' or a plain
+ * number, e.g. 0x12 (since Lua does not support octal integrals)
+ * @return {number} old umask
+ */
+LUA_FUNCTION_DEF (util, umask);
 
 
 /***
@@ -533,7 +555,10 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
 	LUA_INTERFACE_DEF (util, readline),
+	LUA_INTERFACE_DEF (util, readpassphrase),
 	LUA_INTERFACE_DEF (util, file_exists),
+	LUA_INTERFACE_DEF (util, mkdir),
+	LUA_INTERFACE_DEF (util, umask),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -2094,6 +2119,32 @@ lua_util_readline (lua_State *L)
 }
 
 static gint
+lua_util_readpassphrase (lua_State *L)
+{
+	const gchar *prompt = NULL;
+	gchar test_password[8192];
+	gsize r;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		prompt = lua_tostring (L, 1);
+	}
+
+	r = rspamd_read_passphrase (test_password, sizeof (test_password), 0, NULL);
+
+	if (r > 0) {
+		lua_pushlstring (L, test_password, r);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	/* In fact, we still pass it to Lua which is not very safe */
+	rspamd_explicit_memzero (test_password, sizeof (test_password));
+
+	return 1;
+}
+
+static gint
 lua_util_file_exists (lua_State *L)
 {
 	const gchar *fname = luaL_checkstring (L, 1);
@@ -2104,6 +2155,100 @@ lua_util_file_exists (lua_State *L)
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_mkdir (lua_State *L)
+{
+	const gchar *dname = luaL_checkstring (L, 1);
+	gboolean recursive = FALSE;
+	gint r = -1;
+
+	if (dname) {
+		if (lua_isboolean (L, 2)) {
+			recursive = lua_toboolean (L, 2);
+		}
+
+		if (recursive) {
+			char path[PATH_MAX];
+			gsize len, i;
+
+			len = rspamd_strlcpy (path, dname, sizeof (path));
+
+			/* Strip last / */
+			if (path[len - 1] == '/') {
+				path[len - 1] = '\0';
+				len --;
+			}
+
+			for (i = 1; i < len; i ++) {
+				if (path[i] == '/') {
+					path[i] = '\0';
+
+					errno = 0;
+					r = mkdir (path, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+
+					if (r == -1 && errno != EEXIST) {
+						break;
+					}
+
+					path[i] = '/';
+				}
+			}
+
+			/* Final path component */
+			r = mkdir (path, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+		}
+		else {
+			r = mkdir (dname, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+		}
+
+		if (r == -1 && errno != EEXIST) {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		lua_pushboolean (L, true);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+
+static gint
+lua_util_umask (lua_State *L)
+{
+	mode_t mask = 0, old;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		const gchar *str = lua_tostring (L, 1);
+
+		if (str[0] == '0') {
+			/* e.g. '022' */
+			mask = strtol (str, NULL, 8);
+		}
+		else {
+			/* XXX: implement modestring parsing at some point */
+			return luaL_error (L, "invalid arguments");
+		}
+	}
+	else if (lua_type (L, 1) == LUA_TNUMBER) {
+		mask = lua_tonumber (L, 1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	old = umask (mask);
+
+	lua_pushnumber (L, old);
 
 	return 1;
 }

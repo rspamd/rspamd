@@ -285,7 +285,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
 	struct composites_data *cd = data;
 	struct rspamd_composite *comp = value;
-	gint rc;
+	gdouble rc;
 
 	cd->composite = comp;
 
@@ -311,7 +311,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			setbit (cd->checked, comp->id * 2);
 
 			/* Result bit */
-			if (rc) {
+			if (rc != 0) {
 				setbit (cd->checked, comp->id * 2 + 1);
 				rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
 			}

@@ -23,6 +23,7 @@
 
 static void rspamadm_pw (gint argc, gchar **argv);
 static const char *rspamadm_pw_help (gboolean full_help);
+static void rspamadm_pw_lua_subrs (gpointer pL);
 
 static gboolean do_encrypt = FALSE;
 static gboolean do_check = FALSE;
@@ -35,7 +36,8 @@ struct rspamadm_command pw_command = {
 	.name = "pw",
 	.flags = 0,
 	.help = rspamadm_pw_help,
-	.run = rspamadm_pw
+	.run = rspamadm_pw,
+	.lua_subrs = rspamadm_pw_lua_subrs,
 };
 
 static GOptionEntry entries[] = {
@@ -96,12 +98,13 @@ rspamadm_get_pbkdf (void)
 	return NULL;
 }
 
-static void
-rspamadm_pw_encrypt (void)
+static char *
+rspamadm_pw_encrypt (char *password)
 {
 	const struct rspamd_controller_pbkdf *pbkdf;
 	guchar *salt, *key;
 	gchar *encoded_salt, *encoded_key;
+	GString *result;
 	gsize plen;
 
 	pbkdf = rspamadm_get_pbkdf ();
@@ -132,13 +135,18 @@ rspamadm_pw_encrypt (void)
 	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
 	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
 
-	rspamd_printf ("$%d$%s$%s\n", pbkdf->id, encoded_salt,
+	result = g_string_new ("");
+	rspamd_printf_gstring (result, "$%d$%s$%s", pbkdf->id, encoded_salt,
 			encoded_key);
 
 	g_free (encoded_salt);
 	g_free (encoded_key);
 	rspamd_explicit_memzero (password, plen);
 	g_free (password);
+	password = result->str;
+	g_string_free (result, FALSE); /* Not freeing memory */
+
+	return password;
 }
 
 static const gchar *
@@ -301,6 +309,36 @@ rspamadm_pw_check (void)
 	}
 }
 
+static gint
+rspamadm_pw_lua_encrypt (lua_State *L)
+{
+	const gchar *pw_in = NULL;
+	gchar *ret, *tmp = NULL;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		pw_in = lua_tostring (L, 1);
+		tmp = g_strdup (pw_in);
+	}
+
+	ret = rspamadm_pw_encrypt (tmp);
+
+	lua_pushstring (L, ret);
+	g_free (ret);
+
+	return 1;
+}
+
+
+static void
+rspamadm_pw_lua_subrs (gpointer pL)
+{
+	lua_State *L = pL;
+
+	lua_pushstring (L, "pw_encrypt");
+	lua_pushcfunction (L, rspamadm_pw_lua_encrypt);
+	lua_settable (L, -3);
+}
+
 static void
 rspamadm_alg_list (void)
 {
@@ -345,7 +383,9 @@ rspamadm_pw (gint argc, gchar **argv)
 	}
 
 	if (do_encrypt) {
-		rspamadm_pw_encrypt ();
+		gchar *encr = rspamadm_pw_encrypt (password);
+		rspamd_printf ("%s\n", encr);
+		g_free (encr);
 	}
 	else if (do_check) {
 		rspamadm_pw_check ();

@@ -103,9 +103,10 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   else
     opts = module_opts
   end
-  local ret = false
 
   if opts then
+    local ret
+
     if opts.redis then
       ret = try_load_redis_servers(opts.redis, result)
 
@@ -127,6 +128,8 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   opts = rspamd_config:get_all_opt('redis')
 
   if opts then
+    local ret
+
     if opts[module_name] then
       ret = try_load_redis_servers(opts[module_name], result)
       if ret then
@@ -516,6 +519,15 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
   end
 
   local addr
+  local function rspamd_redis_make_request_cb(err, data)
+    if err then
+      addr:fail()
+    else
+      addr:ok()
+    end
+    callback(err, data, addr)
+  end
+
   local rspamd_redis = require "rspamd_redis"
 
   if key then
@@ -539,7 +551,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
   local options = {
     ev_base = ev_base,
     config = cfg,
-    callback = callback,
+    callback = rspamd_redis_make_request_cb,
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
     cmd = command,
@@ -559,6 +571,7 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
     logger.errx('cannot execute redis request')
     addr:fail()
   end
+
   return ret,conn,addr
 end
 

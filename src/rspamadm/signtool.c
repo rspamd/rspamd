@@ -46,7 +46,8 @@ struct rspamadm_command signtool_command = {
 		.name = "signtool",
 		.flags = 0,
 		.help = rspamadm_signtool_help,
-		.run = rspamadm_signtool
+		.run = rspamadm_signtool,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

@@ -1,5 +1,5 @@
 /*-
- * Copyright 2016 Vsevolod Stakhov
+ * Copyright 2017 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,53 +17,47 @@
 #include "rspamadm.h"
 #include "cfg_file.h"
 #include "cfg_rcl.h"
+#include "utlist.h"
 #include "rspamd.h"
 #include "lua/lua_common.h"
+#include "utlist.h"
 
-static gboolean quiet = FALSE;
 static gchar *config = NULL;
-static gboolean strict = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_configtest (gint argc, gchar **argv);
-static const char *rspamadm_configtest_help (gboolean full_help);
+static void rspamadm_configwizard (gint argc, gchar **argv);
+static const char *rspamadm_configwizard_help (gboolean full_help);
 
-struct rspamadm_command configtest_command = {
-		.name = "configtest",
+struct rspamadm_command configwizard_command = {
+		.name = "configwizard",
 		.flags = 0,
-		.help = rspamadm_configtest_help,
-		.run = rspamadm_configtest,
+		.help = rspamadm_configwizard_help,
+		.run = rspamadm_configwizard,
 		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {
-		{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
-				"Suppress output", NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
-				"Config file to test",     NULL},
-		{"strict", 's', 0, G_OPTION_ARG_NONE, &strict,
-				"Stop on any error in config", NULL},
+				"Config file to use",     NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
 static const char *
-rspamadm_configtest_help (gboolean full_help)
+rspamadm_configwizard_help (gboolean full_help)
 {
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Perform configuration file test\n\n"
-				"Usage: rspamadm configtest [-q -c <config_name>]\n"
+		help_str = "Perform initial configuration for Rspamd daemon\n\n"
+				"Usage: rspamadm configwizard [-c <config_name>]\n"
 				"Where options are:\n\n"
-				"-q: quiet output\n"
-				"-c: config file to test\n"
 				"--help: shows available options and commands";
 	}
 	else {
-		help_str = "Perform configuration file test";
+		help_str = "Perform initial configuration for Rspamd daemon";
 	}
 
 	return help_str;
@@ -73,19 +67,13 @@ static void
 config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rm = ud;
-	GQuark configtest_quark = g_quark_from_static_string ("configtest");
 
 	rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
+	rm->cfg->log_level = G_LOG_LEVEL_CRITICAL;
 
-	if (quiet) {
-		rm->cfg->log_level = G_LOG_LEVEL_CRITICAL;
-	}
-	else {
-		rm->cfg->log_level = G_LOG_LEVEL_WARNING;
-	}
-
-	rspamd_set_logger (rm->cfg, configtest_quark, &rm->logger,
+	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), &rm->logger,
 			rm->server_pool);
+
 	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) ==
 			-1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
@@ -94,7 +82,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 }
 
 static void
-rspamadm_configtest (gint argc, gchar **argv)
+rspamadm_configwizard (gint argc, gchar **argv)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -102,10 +90,11 @@ rspamadm_configtest (gint argc, gchar **argv)
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
-	const guint64 *log_cnt;
+	lua_State *L;
+	gint i;
 
 	context = g_option_context_new (
-			"configtest - perform configuration file test");
+			"keypair - create encryption keys");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd administration utility version "
 					RVERSION
@@ -134,6 +123,7 @@ rspamadm_configtest (gint argc, gchar **argv)
 		(void) g_quark_from_static_string ((*pworker)->name);
 		pworker++;
 	}
+
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
@@ -154,32 +144,21 @@ rspamadm_configtest (gint argc, gchar **argv)
 		if (ret) {
 			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 		}
-
-		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
-				rspamd_main->cfg,
-				FALSE)) {
-			ret = FALSE;
-		}
 	}
 
-	if (strict && ret) {
-		log_cnt = rspamd_log_counters (rspamd_main->logger);
+	if (ret) {
+		L = cfg->lua_state;
+		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (cfg->cfg_name),
+				"config_path", 0, false);
 
-		if (log_cnt && log_cnt[0] > 0) {
-			if (!quiet) {
-				rspamd_printf ("%L errors found\n", log_cnt[0]);
-			}
-			ret = FALSE;
-		}
+		rspamadm_execute_lua_ucl_subr (L,
+				argc,
+				argv,
+				cfg->rcl_obj,
+				"configwizard");
+
+		lua_close (L);
 	}
 
-	if (!quiet) {
-		rspamd_printf ("syntax %s\n", ret ? "OK" : "BAD");
-	}
-
-	if (!ret) {
-		exit (EXIT_FAILURE);
-	}
-
-	exit (EXIT_SUCCESS);
+	exit (ret ? EXIT_SUCCESS  : EXIT_FAILURE);
 }

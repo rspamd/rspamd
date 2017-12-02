@@ -39,7 +39,8 @@ struct rspamadm_command configdump_command = {
 		.name = "configdump",
 		.flags = 0,
 		.help = rspamadm_configdump_help,
-		.run = rspamadm_configdump
+		.run = rspamadm_configdump,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {
@@ -244,7 +245,7 @@ rspamadm_configdump (gint argc, gchar **argv)
 	gint i;
 
 	context = g_option_context_new (
-			"keypair - create encryption keys");
+			"configdump - dumps Rspamd configuration");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd administration utility version "
 					RVERSION

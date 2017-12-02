@@ -33,7 +33,8 @@ struct rspamadm_command dkim_keygen_command = {
 		.name = "dkim_keygen",
 		.flags = 0,
 		.help = rspamadm_dkim_keygen_help,
-		.run = rspamadm_dkim_keygen
+		.run = rspamadm_dkim_keygen,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

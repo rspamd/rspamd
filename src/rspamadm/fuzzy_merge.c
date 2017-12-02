@@ -29,7 +29,8 @@ struct rspamadm_command fuzzy_merge_command = {
 		.name = "fuzzy_merge",
 		.flags = 0,
 		.help = rspamadm_fuzzy_merge_help,
-		.run = rspamadm_fuzzy_merge
+		.run = rspamadm_fuzzy_merge,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

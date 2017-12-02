@@ -32,7 +32,8 @@ struct rspamadm_command statconvert_command = {
 		.name = "statconvert",
 		.flags = 0,
 		.help = rspamadm_statconvert_help,
-		.run = rspamadm_statconvert
+		.run = rspamadm_statconvert,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

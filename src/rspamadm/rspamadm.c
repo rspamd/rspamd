@@ -193,10 +193,25 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	gint err_idx, i, ret;
 	GString *tb;
 	gchar str[PATH_MAX];
+	const struct rspamadm_command **cmd;
 
 	g_assert (script_name != NULL);
 	g_assert (res != NULL);
 	g_assert (L != NULL);
+
+	/* Init internal rspamadm routines */
+	lua_newtable (L);
+	cmd = commands;
+
+	while (*cmd) {
+		if ((*cmd)->lua_subrs != NULL) {
+			(*cmd)->lua_subrs (L);
+		}
+
+		cmd ++;
+	}
+
+	lua_setglobal (L, "rspamadm");
 
 	rspamd_snprintf (str, sizeof (str), "return require \"%s.%s\"", "rspamadm",
 			script_name);

@@ -54,7 +54,8 @@ struct rspamadm_command lua_command = {
 		.name = "lua",
 		.flags = 0,
 		.help = rspamadm_lua_help,
-		.run = rspamadm_lua
+		.run = rspamadm_lua,
+		.lua_subrs = NULL,
 };
 
 /*
