@@ -396,6 +396,13 @@ LUA_FUNCTION_DEF (util, readpassphrase);
  */
 LUA_FUNCTION_DEF (util, file_exists);
 
+/***
+ * @function util.mkdir(dir[, recursive])
+ * Creates a specified directory
+ * @return {boolean[,error]} true if directory has been created
+ */
+LUA_FUNCTION_DEF (util, mkdir);
+
 
 /***
  * @function util.pack(fmt, ...)
@@ -542,6 +549,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, readline),
 	LUA_INTERFACE_DEF (util, readpassphrase),
 	LUA_INTERFACE_DEF (util, file_exists),
+	LUA_INTERFACE_DEF (util, mkdir),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -2134,6 +2142,68 @@ lua_util_file_exists (lua_State *L)
 
 	if (fname) {
 		lua_pushboolean (L, access (fname, R_OK) != -1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_mkdir (lua_State *L)
+{
+	const gchar *dname = luaL_checkstring (L, 1);
+	gboolean recursive = FALSE;
+	gint r = -1;
+
+	if (dname) {
+		if (lua_isboolean (L, 2)) {
+			recursive = lua_toboolean (L, 2);
+		}
+
+		if (recursive) {
+			char path[PATH_MAX];
+			gsize len, i;
+
+			len = rspamd_strlcpy (path, dname, sizeof (path));
+
+			/* Strip last / */
+			if (path[len - 1] == '/') {
+				path[len - 1] = '\0';
+				len --;
+			}
+
+			for (i = 1; i < len; i ++) {
+				if (path[i] == '/') {
+					path[i] = '\0';
+
+					errno = 0;
+					r = mkdir (path, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+
+					if (r == -1 && errno != EEXIST) {
+						break;
+					}
+
+					path[i] = '/';
+				}
+			}
+
+			/* Final path component */
+			r = mkdir (path, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+		}
+		else {
+			r = mkdir (dname, S_IRWXU|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
+		}
+
+		if (r == -1 && errno != EEXIST) {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		lua_pushboolean (L, true);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
