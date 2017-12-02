@@ -18,6 +18,7 @@ local ansicolors = require "rspamadm/ansicolors"
 local local_conf = rspamd_paths['CONFDIR']
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
+local lua_util = require "lua_util"
 
 local function is_implicit(t)
   local mt = getmetatable(t)
@@ -45,7 +46,8 @@ local function ask_yes_no(greet, default)
 
   local reply = rspamd_util.readline(greet)
 
-  if not reply or #reply == 0 then reply = def_str end
+  if not reply then os.exit(0) end
+  if #reply == 0 then reply = def_str end
   reply = reply:lower()
   if reply == 'y' or reply == 'yes' then return true end
 
@@ -137,6 +139,43 @@ local function setup_controller(controller, changes)
   end
 end
 
+local function setup_redis(cfg, changes)
+  local function parse_servers(servers)
+    local ls = lua_util.rspamd_str_split(servers, ",")
+
+    return ls
+  end
+
+  printf("Setup %s for storage:", highlight("Redis"))
+
+  if ask_yes_no("Redis servers are not set, do you wish to set them?", true) then
+    local read_servers = rspamd_util.readline("Input read only servers separated by `,` [default: localhost]: ")
+
+    if not read_servers or #read_servers == 0 then
+      read_servers = "localhost"
+    end
+
+    local rs = parse_servers(read_servers)
+    if rs and #rs > 0 then
+      changes.l['redis.conf'] = {
+        read_servers = table.concat(rs, ",")
+      }
+    end
+    local write_servers = rspamd_util.readline("Input write only servers separated by `,` [default: "
+        .. read_servers .. "]: ")
+
+    if not write_servers or #write_servers == 0 then
+      printf("Use read servers %s as write servers", highlight(table.concat(rs, ",")))
+      write_servers = read_servers
+    end
+
+    local ws = parse_servers(write_servers)
+    if ws and #ws > 0 then
+      changes.l['redis.conf']['write_servers'] = table.concat(ws, ",")
+    end
+  end
+end
+
 local function find_worker(cfg, wtype)
   if cfg.worker then
     for k,s in pairs(cfg.worker) do
@@ -169,22 +208,26 @@ return function(args, cfg)
     if controller then
       setup_controller(controller, changes)
     end
-  end
 
-  local nchanges = 0
-  for _,_ in pairs(changes.l) do nchanges = nchanges + 1 end
-  for _,_ in pairs(changes.o) do nchanges = nchanges + 1 end
-
-  if nchanges > 0 then
-    print_changes(changes)
-    if ask_yes_no("Apply changes?", true) then
-      apply_changes(changes)
-      printf("%d changes applied, the wizard is finished now", nchanges)
-    else
-      printf("No changes applied, the wizard is finished now")
+    if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
+      setup_redis(cfg, changes)
     end
-  else
-    printf("No changes found, the wizard is finished now")
+
+    local nchanges = 0
+    for _,_ in pairs(changes.l) do nchanges = nchanges + 1 end
+    for _,_ in pairs(changes.o) do nchanges = nchanges + 1 end
+
+    if nchanges > 0 then
+      print_changes(changes)
+      if ask_yes_no("Apply changes?", true) then
+        apply_changes(changes)
+        printf("%d changes applied, the wizard is finished now", nchanges)
+      else
+        printf("No changes applied, the wizard is finished now")
+      end
+    else
+      printf("No changes found, the wizard is finished now")
+    end
   end
 end
 
