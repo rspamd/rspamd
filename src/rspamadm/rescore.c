@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-
-// TODO CHECK IF LOGDIR IS NULL
-
 #include "rspamadm.h"
 #include "config.h"
 #include "lua/lua_common.h"
