@@ -25,23 +25,23 @@ local function make_dataset_from_logs(logs, all_symbols)
       log = lua_util.rspamd_str_split(log, " ")
 
       if log[1] == "SPAM" then
-	 output[1] = 1
+         output[1] = 1
       else
-	 output[1] = 0
+         output[1] = 0
       end
       
       local symbols_set = {}
 
       for i=4,#log do
-	 symbols_set[log[i]] = true
+         symbols_set[log[i]] = true
       end
 
       for index, symbol in pairs(all_symbols) do
-	 if symbols_set[symbol] then
-	    input[index] = 1
-	 else
-	    input[index] = 0
-	 end	 
+        if symbols_set[symbol] then
+           input[index] = 1
+        else
+           input[index] = 0
+        end     
       end
 
       dataset[#dataset + 1] = {input, output}
@@ -122,8 +122,8 @@ local function update_logs(logs, symbol_scores)
       log = lua_util.rspamd_str_split(log, " ")
       local score = 0
       for i=4,#log do
-	 log[i] = log[i]:gsub("%s+", "")
-	 score = score + (symbol_scores[log[i]] or 0)
+         log[i] = log[i]:gsub("%s+", "")
+         score = score + (symbol_scores[log[i]] or 0)
       end
       log[2] = rescore_utility.round(score, 2)
 
@@ -150,21 +150,21 @@ local function print_score_diff(new_symbol_scores, original_symbol_scores)
 
    for symbol, new_score in pairs(new_symbol_scores) do
       print(string.format("%-35s %-10s %-10s",
-			  symbol,
-			  original_symbol_scores[symbol] or 0,
-			  rescore_utility.round(new_score, 2)))
+              symbol,
+              original_symbol_scores[symbol] or 0,
+              rescore_utility.round(new_score, 2)))
    end
 
    print "\nClass changes \n"
    for symbol, new_score in pairs(new_symbol_scores) do
       if original_symbol_scores[symbol] ~= nil then
-	 if (original_symbol_scores[symbol] > 0 and new_score < 0) or
-	 (original_symbol_scores[symbol] < 0 and new_score > 0) then
-	       print(string.format("%-35s %-10s %-10s",
-				   symbol,
-				   original_symbol_scores[symbol] or 0,
-				   rescore_utility.round(new_score, 2)))
-	 end
+        if (original_symbol_scores[symbol] > 0 and new_score < 0) or
+        (original_symbol_scores[symbol] < 0 and new_score > 0) then
+              print(string.format("%-35s %-10s %-10s",
+                      symbol,
+                      original_symbol_scores[symbol] or 0,
+                      rescore_utility.round(new_score, 2)))
+         end
       end
 
    end
@@ -200,10 +200,10 @@ Overall accuracy: %.2f %%
    io.write("\nStatistics at threshold: " .. threshold .. "\n")
    
    io.write(string.format(file_stat_format,
-			  file_stats.fscore,
-			  file_stats.false_positive_rate,
-			  file_stats.false_negative_rate,
-			  file_stats.overall_accuracy))
+              file_stats.fscore,
+              file_stats.false_positive_rate,
+              file_stats.false_negative_rate,
+              file_stats.overall_accuracy))
 
 end
 
@@ -263,17 +263,17 @@ return function (_, res)
       if iteration == trainer.maxIteration then
 
          fscore = calculate_fscore_from_weights(cv_logs,
-   					     all_symbols,
-   					     linear_module.weight[1],
-   					     linear_module.bias[1],
-   					     res["threshold"])
+                         all_symbols,
+                         linear_module.weight[1],
+                         linear_module.bias[1],
+                         res["threshold"])
          
          print("Cross-validation fscore: " .. fscore)
          
          if best_fscore < fscore then
-   	 best_fscore = fscore
-   	 best_weights = linear_module.weight[1]:clone()
-   	 best_weights_bias = linear_module.bias[1]
+            best_fscore = fscore
+            best_weights = linear_module.weight[1]:clone()
+            best_weights_bias = linear_module.bias[1]
          end
       end
    end
