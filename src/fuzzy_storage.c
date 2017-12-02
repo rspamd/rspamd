@@ -820,6 +820,9 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;
+	default:
+		msg_err ("invalid command type: %d", session->cmd_type);
+		return;
 	}
 
 	memset (&result, 0, sizeof (result));
