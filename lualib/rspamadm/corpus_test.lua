@@ -19,7 +19,7 @@ local function write_results(results, file)
       local log_line = string.format("%s %.2f %s", result.type, result.score, result.action)
      
       for _, sym in pairs(result.symbols) do
-	     log_line = log_line .. " " .. sym
+       log_line = log_line .. " " .. sym
       end
 
       log_line = log_line .. "\r\n"
@@ -60,18 +60,18 @@ end
 
 local function str_split (str, sep)
         
-        if sep == nil then
-                sep = "%s"
-        end
+   if sep == nil then
+      sep = "%s"
+   end
 
-        local results = {}
-        local i = 1
-        for part in string.gmatch(str, "([^"..sep.."]+)") do
-                results[i] = part
-                i = i + 1
-        end
+   local results = {}
+   local i = 1
+   for part in string.gmatch(str, "([^"..sep.."]+)") do
+      results[i] = part
+      i = i + 1
+  end
 
-        return results
+  return results
 end
 
 local function scan_results_to_logs(results, actual_email_type)

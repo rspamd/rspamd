@@ -68,20 +68,7 @@ local function init_weights(all_symbols, original_symbol_scores)
       weights[i] = score
       mean = mean + score
    end
---[[
-   mean = mean / size
 
-   local dev = 0
-   for i=1,size do
-      dev = dev + (weights[i] - mean) * (weights[i] - mean)
-   end
-
-   dev = math.sqrt(dev / size)
-   
-   for i=1,size do
-      weights[i] = (weights[i] - mean) / dev
-   end
-]]
    return weights   
 end
 
