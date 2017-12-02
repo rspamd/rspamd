@@ -35,7 +35,8 @@ struct rspamadm_command pw_command = {
 	.name = "pw",
 	.flags = 0,
 	.help = rspamadm_pw_help,
-	.run = rspamadm_pw
+	.run = rspamadm_pw,
+	.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

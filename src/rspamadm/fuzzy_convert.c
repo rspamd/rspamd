@@ -31,7 +31,8 @@ struct rspamadm_command fuzzyconvert_command = {
 		.name = "fuzzyconvert",
 		.flags = 0,
 		.help = rspamadm_fuzzyconvert_help,
-		.run = rspamadm_fuzzyconvert
+		.run = rspamadm_fuzzyconvert,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

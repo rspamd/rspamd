@@ -38,7 +38,8 @@ struct rspamadm_command control_command = {
 		.name = "control",
 		.flags = 0,
 		.help = rspamadm_control_help,
-		.run = rspamadm_control
+		.run = rspamadm_control,
+		.lua_subrs = NULL,
 };
 
 struct rspamadm_control_cbdata {

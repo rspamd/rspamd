@@ -35,7 +35,8 @@ struct rspamadm_command configtest_command = {
 		.name = "configtest",
 		.flags = 0,
 		.help = rspamadm_configtest_help,
-		.run = rspamadm_configtest
+		.run = rspamadm_configtest,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

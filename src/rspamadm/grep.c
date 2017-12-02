@@ -33,7 +33,8 @@ struct rspamadm_command grep_command = {
 		.name = "grep",
 		.flags = 0,
 		.help = rspamadm_grep_help,
-		.run = rspamadm_grep
+		.run = rspamadm_grep,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {

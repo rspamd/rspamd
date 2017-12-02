@@ -32,7 +32,8 @@ struct rspamadm_command keypair_command = {
 		.name = "keypair",
 		.flags = 0,
 		.help = rspamadm_keypair_help,
-		.run = rspamadm_keypair
+		.run = rspamadm_keypair,
+		.lua_subrs = NULL,
 };
 
 static GOptionEntry entries[] = {
