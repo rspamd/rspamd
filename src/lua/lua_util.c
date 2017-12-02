@@ -403,6 +403,14 @@ LUA_FUNCTION_DEF (util, file_exists);
  */
 LUA_FUNCTION_DEF (util, mkdir);
 
+/***
+ * @function util.umask(mask)
+ * Sets new umask. Accepts either numeric octal string, e.g. '022' or a plain
+ * number, e.g. 0x12 (since Lua does not support octal integrals)
+ * @return {number} old umask
+ */
+LUA_FUNCTION_DEF (util, umask);
+
 
 /***
  * @function util.pack(fmt, ...)
@@ -550,6 +558,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, readpassphrase),
 	LUA_INTERFACE_DEF (util, file_exists),
 	LUA_INTERFACE_DEF (util, mkdir),
+	LUA_INTERFACE_DEF (util, umask),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -2208,6 +2217,38 @@ lua_util_mkdir (lua_State *L)
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+
+static gint
+lua_util_umask (lua_State *L)
+{
+	mode_t mask = 0, old;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		const gchar *str = lua_tostring (L, 1);
+
+		if (str[0] == '0') {
+			/* e.g. '022' */
+			mask = strtol (str, NULL, 8);
+		}
+		else {
+			/* XXX: implement modestring parsing at some point */
+			return luaL_error (L, "invalid arguments");
+		}
+	}
+	else if (lua_type (L, 1) == LUA_TNUMBER) {
+		mask = lua_tonumber (L, 1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	old = umask (mask);
+
+	lua_pushnumber (L, old);
 
 	return 1;
 }
