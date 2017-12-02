@@ -378,9 +378,16 @@ LUA_FUNCTION_DEF (util, is_valid_utf8);
 /***
  * @function util.readline([prompt])
  * Returns string read from stdin with history and editing support
- * @return {boolean} true if a string is spoofed
+ * @return {string} string read from the input (with line endings stripped)
  */
 LUA_FUNCTION_DEF (util, readline);
+
+/***
+ * @function util.readpassphrase([prompt])
+ * Returns string read from stdin disabling echo
+ * @return {string} string read from the input (with line endings stripped)
+ */
+LUA_FUNCTION_DEF (util, readpassphrase);
 
 /***
  * @function util.file_exists(file)
@@ -533,6 +540,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
 	LUA_INTERFACE_DEF (util, readline),
+	LUA_INTERFACE_DEF (util, readpassphrase),
 	LUA_INTERFACE_DEF (util, file_exists),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
@@ -2089,6 +2097,32 @@ lua_util_readline (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_readpassphrase (lua_State *L)
+{
+	const gchar *prompt = NULL;
+	gchar test_password[8192];
+	gsize r;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		prompt = lua_tostring (L, 1);
+	}
+
+	r = rspamd_read_passphrase (test_password, sizeof (test_password), 0, NULL);
+
+	if (r > 0) {
+		lua_pushlstring (L, test_password, r);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	/* In fact, we still pass it to Lua which is not very safe */
+	rspamd_explicit_memzero (test_password, sizeof (test_password));
 
 	return 1;
 }
