@@ -1,6 +1,9 @@
 local colormt = {}
 local ansicolors = {}
 
+local rspamd_util = require "rspamd_util"
+local isatty = rspamd_util.isatty()
+
 function colormt:__tostring()
   return self.value
 end
@@ -14,9 +17,16 @@ function colormt:__call(s)
 end
 
 colormt.__metatable = {}
-
 local function makecolor(value)
-  return setmetatable({ value = string.char(27) .. '[' .. tostring(value) .. 'm' }, colormt)
+  if isatty then
+    return setmetatable({
+      value = string.char(27) .. '[' .. tostring(value) .. 'm'
+    }, colormt)
+  else
+    return setmetatable({
+      value = ''
+    }, colormt)
+  end
 end
 
 local colors = {

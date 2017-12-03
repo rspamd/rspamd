@@ -411,6 +411,12 @@ LUA_FUNCTION_DEF (util, mkdir);
  */
 LUA_FUNCTION_DEF (util, umask);
 
+/***
+ * @function util.isatty()
+ * Returns if stdout is a tty
+ * @return {boolean} true in case of output being tty
+ */
+LUA_FUNCTION_DEF (util, isatty);
 
 /***
  * @function util.pack(fmt, ...)
@@ -559,6 +565,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, file_exists),
 	LUA_INTERFACE_DEF (util, mkdir),
 	LUA_INTERFACE_DEF (util, umask),
+	LUA_INTERFACE_DEF (util, isatty),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
@@ -2249,6 +2256,19 @@ lua_util_umask (lua_State *L)
 	old = umask (mask);
 
 	lua_pushnumber (L, old);
+
+	return 1;
+}
+
+static gint
+lua_util_isatty (lua_State *L)
+{
+	if (isatty (STDOUT_FILENO)) {
+		lua_pushboolean (L, true);
+	}
+	else {
+		lua_pushboolean (L, false);
+	}
 
 	return 1;
 }
