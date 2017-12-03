@@ -30,6 +30,7 @@ local asn_cc_whitelist = nil
 local check_authed = false
 local check_local = false
 local M = "ip_score"
+local N = M
 
 local options = {
   actions = { -- how each action is treated in scoring
@@ -388,4 +389,6 @@ if redis_params then
     name = options['symbol'],
     callback = ip_score_check,
   })
+else
+  rspamd_lua_utils.disable_module(N, "redis")
 end

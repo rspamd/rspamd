@@ -25,11 +25,13 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
 local rspamd_redis = require "lua_redis"
+local lua_util = require "lua_util"
 local fun = require "fun"
 local meta_functions = require "meta_functions"
 local use_torch = false
 local torch
 local nn
+local N = "fann_redis"
 
 if rspamd_config:has_torch() then
   use_torch = true
@@ -1078,12 +1080,14 @@ redis_params = rspamd_parse_redis_server('fann_redis')
 -- Initialization part
 if not (opts and type(opts) == 'table') or not redis_params then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
+  lua_util.disable_module(N, "redis")
   return
 end
 
 if not rspamd_fann.is_enabled() then
   rspamd_logger.errx(rspamd_config, 'fann is not compiled in rspamd, this ' ..
     'module is eventually disabled')
+  lua_util.disable_module(N, "fail")
   return
 else
   local rules = opts['rules']

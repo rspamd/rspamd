@@ -63,6 +63,7 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_lua_utils = require "lua_util"
+local N = "greylist"
 
 local function data_key(task)
   local cached = task:get_mempool():get_variable("grey_bodyhash")
@@ -426,6 +427,7 @@ if opts then
   redis_params = rspamd_parse_redis_server('greylist')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    rspamd_lua_utils.disable_module(N, "redis")
   else
     rspamd_config:register_symbol({
       name = 'GREYLIST_SAVE',

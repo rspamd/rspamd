@@ -20,6 +20,8 @@ end
 
 -- This plugin implements mime types checks for mail messages
 local logger = require "rspamd_logger"
+local lua_util = require "lua_util"
+local N = "mime_types"
 local settings = {
   file = '',
   symbol_unknown = 'MIME_UNKNOWN',
@@ -313,5 +315,7 @@ if opts then
       name = settings['symbol_bad_extension'],
       parent = id
     })
+  else
+    lua_util.disable_module(N, "config")
   end
 end

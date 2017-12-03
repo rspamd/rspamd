@@ -63,6 +63,7 @@ local scale = {
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 
 -- This function is used for taskless redis requests (to load scripts)
 local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
@@ -407,6 +408,7 @@ if not opts then return end
 redis_params = rspamd_parse_redis_server(N)
 if not redis_params then
   rspamd_logger.warnx(rspamd_config, 'no servers are specified, disabling module')
+  lua_util.disable_module(N, "redis")
   return
 end
 for k, v in pairs(opts) do
@@ -427,6 +429,7 @@ for k, v in pairs(opts) do
 end
 if settings.threshold < 1 then
   rspamd_logger.errx(rspamd_config, 'threshold should be >= 1, disabling module')
+  lua_util.disable_module(N, "config")
   return
 end
 

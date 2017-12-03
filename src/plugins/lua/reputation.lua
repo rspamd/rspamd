@@ -945,4 +945,6 @@ if opts['rules'] then
       parse_rule(k, v)
     end
   end
+else
+  lua_util.disable_module(N, "config")
 end

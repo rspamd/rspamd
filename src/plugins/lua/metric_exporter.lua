@@ -24,6 +24,7 @@ local logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"
 local util = require "rspamd_util"
 local tcp = require "rspamd_tcp"
+local lua_util = require "lua_util"
 
 local pool = mempool.create()
 local settings = {
@@ -166,7 +167,10 @@ local function configure_metric_exporter()
   return backends[be]['configure']()
 end
 
-if not configure_metric_exporter() then return end
+if not configure_metric_exporter() then
+  lua_util.disable_module(N, "config")
+  return
+end
 
 rspamd_config:add_on_load(function (_, ev_base, worker)
   -- Exit unless we're the first 'controller' worker

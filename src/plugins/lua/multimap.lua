@@ -27,6 +27,7 @@ local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_ip = require "rspamd_ip"
+local lua_util = require "lua_util"
 local redis_params
 local fun = require "fun"
 local N = 'multimap'
@@ -1104,4 +1105,8 @@ if opts and type(opts) == 'table' then
     })
   end,
   fun.filter(function(r) return r['prefilter'] end, rules))
+
+  if #rules == 0 then
+    lua_util.disable_module(N, "config")
+  end
 end

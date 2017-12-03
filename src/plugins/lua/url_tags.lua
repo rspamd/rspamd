@@ -35,6 +35,7 @@ local settings = {
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 local ucl = require "ucl"
 
 -- This function is used for taskless redis requests (to load scripts)
@@ -350,6 +351,7 @@ local opts = rspamd_config:get_all_opt(N)
 if not opts then return end
 redis_params = rspamd_parse_redis_server(N)
 if not redis_params then
+  lua_util.disable_module(N, "redis")
   rspamd_logger.warnx(rspamd_config, 'no servers are specified, disabling module')
   return
 end

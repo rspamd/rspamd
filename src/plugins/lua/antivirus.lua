@@ -19,6 +19,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_regexp = require "rspamd_regexp"
 local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
+local lua_util = require "lua_util"
 local redis_params
 
 local N = "antivirus"
@@ -802,6 +803,7 @@ end
 local opts = rspamd_config:get_all_opt('antivirus')
 if opts and type(opts) == 'table' then
   redis_params = rspamd_parse_redis_server('antivirus')
+  local has_valid = false
   for k, m in pairs(opts) do
     if type(m) == 'table' and m['type'] and m['servers'] then
       local cb = add_antivirus_rule(k, m)
@@ -813,6 +815,7 @@ if opts and type(opts) == 'table' then
           name = m['symbol'],
           callback = cb,
         })
+        has_valid = true
         if type(m['patterns']) == 'table' then
           if m['patterns'][1] then
             for _, p in ipairs(m['patterns']) do
@@ -856,4 +859,9 @@ if opts and type(opts) == 'table' then
       end
     end
   end
+
+  if not has_valid then
+    lua_util.disable_module(N, 'config')
+  end
 end
+

@@ -33,6 +33,7 @@ local hash = require 'rspamd_cryptobox_hash'
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
+local lua_util = require 'lua_util'
 local default_monitored = '1.0.0.127'
 
 local symbols = {
@@ -417,6 +418,7 @@ end
 local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
+  lua_util.disable_module(N, "config")
   return
 end
 
@@ -564,6 +566,11 @@ for key,rbl in pairs(opts['rbls']) do
     end
   end)()
 end
+
+if #opts.rbls == 0 then
+  lua_util.disable_module(N, "config")
+end
+
 for _, w in pairs(white_symbols) do
   for _, b in pairs(black_symbols) do
     local csymbol = 'RBL_COMPOSITE_' .. w .. '_' .. b

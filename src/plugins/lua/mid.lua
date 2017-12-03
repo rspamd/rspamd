@@ -25,6 +25,8 @@ end
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
+local lua_util = require "lua_util"
+local N = "mid"
 
 local settings = {
   url = '',
@@ -97,5 +99,6 @@ if opts then
     rspamd_config:register_dependency(id, settings['symbol_dkim_allow'])
   else
     rspamd_logger.infox(rspamd_config, 'source is not specified, disabling module')
+    lua_util.disable_module(N, "config")
   end
 end

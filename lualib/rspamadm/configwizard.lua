@@ -20,12 +20,6 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 
-local function is_implicit(t)
-  local mt = getmetatable(t)
-
-  return mt and mt.class and mt.class == 'ucl.type.impl_array'
-end
-
 local function printf(fmt, ...)
   print(string.format(fmt, ...))
 end

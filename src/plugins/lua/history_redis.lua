@@ -28,9 +28,11 @@ local settings = {
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 local fun = require "fun"
 local ucl = require("ucl")
 local E = {}
+local N = "history_redis"
 local hostname = rspamd_util.get_hostname()
 
 local function process_addr(addr)
@@ -216,6 +218,7 @@ if opts then
   redis_params = rspamd_parse_redis_server('history_redis')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    lua_util.disable_module(N, "redis")
   else
     rspamd_config:register_symbol({
       name = 'HISTORY_SAVE',

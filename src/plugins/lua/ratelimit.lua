@@ -729,6 +729,7 @@ if opts then
   redis_params = rspamd_parse_redis_server('ratelimit')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    lua_util.disable_module(N, "redis")
   else
     local s = {
       type = 'prefilter,nostat',

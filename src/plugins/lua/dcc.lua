@@ -23,6 +23,7 @@ local opts = rspamd_config:get_all_opt(N)
 local logger = require "rspamd_logger"
 local tcp = require "rspamd_tcp"
 local fun = require "fun"
+local lua_util = require "lua_util"
 
 if confighelp then
   rspamd_config:add_example(nil, 'dcc',
@@ -139,5 +140,6 @@ if opts and opts['host'] then
     name = symbol_bulk
   })
 else
+  lua_util.disable_module(N, "config")
   logger.infox('DCC module not configured');
 end

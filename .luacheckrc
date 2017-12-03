@@ -24,7 +24,9 @@ globals = {
   'rspamd_str_split',
   'rspamd_version',
   'rspamd_map_add',
-  'rspamd_maps'
+  'rspamd_maps',
+  'rspamd_plugins_state',
+  'rspamadm',
 }
 
 ignore = {

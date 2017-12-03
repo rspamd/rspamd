@@ -555,6 +555,7 @@ end
 if not (settings.use_redis or settings.path or
     settings.domain or settings.path_map or settings.selector_map) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
+  lua_util.disable_module(N, "fail")
   return
 end
 
@@ -562,7 +563,8 @@ if settings.use_redis then
   redis_params = rspamd_parse_redis_server('arc')
 
   if not redis_params then
-    rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
+    rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable arc signing')
+    lua_util.disable_module(N, "config")
     return
   end
 end

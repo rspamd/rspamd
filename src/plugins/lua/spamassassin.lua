@@ -29,6 +29,7 @@ local rspamd_regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_trie = require "rspamd_trie"
 local util = require "rspamd_util"
+local lua_util = require "lua_util"
 local fun = require "fun"
 
 -- Known plugins
@@ -1647,4 +1648,6 @@ end
 
 if has_rules then
   post_process()
+else
+  lua_util.disable_module(N, "config")
 end

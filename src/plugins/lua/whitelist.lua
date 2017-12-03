@@ -21,6 +21,9 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
+local lua_util = require "lua_util"
+
+local N = "whitelist"
 
 local options = {
   dmarc_allow_symbol = 'DMARC_POLICY_ALLOW',
@@ -287,6 +290,8 @@ local configure_whitelist_module = function()
         end
       end
     end, options['rules'])
+  else
+    lua_util.disable_module(N, "config")
   end
 end
 

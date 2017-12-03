@@ -142,6 +142,7 @@ for k,v in pairs(opts) do
 end
 if not (settings.use_redis or settings.path or settings.domain or settings.path_map or settings.selector_map) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
+  lutil.disable_module(N, "config")
   return
 end
 if settings.use_redis then
@@ -149,6 +150,7 @@ if settings.use_redis then
 
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
+    lutil.disable_module(N, "redis")
     return
   end
 end

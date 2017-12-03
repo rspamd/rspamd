@@ -49,6 +49,7 @@ local settings = {
 local rspamd_logger = require "rspamd_logger"
 local rspamd_http = require "rspamd_http"
 local hash = require "rspamd_cryptobox_hash"
+local lua_util = require "lua_util"
 
 local function cache_url(task, orig_url, url, key, param)
   local function redis_trim_cb(err, data)
@@ -271,11 +272,13 @@ if opts then
   redis_params = rspamd_parse_redis_server('url_redirector')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    lua_util.disable_module(N, "redis")
   else
     if rspamd_plugins.surbl then
       rspamd_plugins.surbl.register_redirect(url_redirector_handler)
     else
       rspamd_logger.infox(rspamd_config, 'surbl module is not enabled, disabling module')
+      lua_util.disable_module(N, "fail")
     end
   end
 end

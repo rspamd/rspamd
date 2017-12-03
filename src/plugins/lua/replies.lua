@@ -34,6 +34,8 @@ local settings = {
 
 local rspamd_logger = require 'rspamd_logger'
 local hash = require 'rspamd_cryptobox_hash'
+local lua_util = require 'lua_util'
+local N = "replies"
 
 local function make_key(goop)
   local h = hash.create()
@@ -125,6 +127,7 @@ if opts then
   redis_params = rspamd_parse_redis_server('replies')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+    lua_util.disable_module(N, "redis")
   else
     rspamd_config:register_symbol({
       name = 'REPLIES_SET',

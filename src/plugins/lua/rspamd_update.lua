@@ -25,6 +25,8 @@ local fun = require "fun"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_config = rspamd_config
 local hash = require "rspamd_cryptobox_hash"
+local lua_util = require "lua_util"
+local N = "rspamd_update"
 local rspamd_version = rspamd_version
 local maps = {}
 
@@ -149,4 +151,5 @@ if section then
   end, maps)
 else
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
+  lua_util.disable_module(N, "config")
 end

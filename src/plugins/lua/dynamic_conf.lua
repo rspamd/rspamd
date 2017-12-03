@@ -18,6 +18,8 @@ local rspamd_logger = require "rspamd_logger"
 local redis_params
 local ucl = require "ucl"
 local fun = require "fun"
+local lua_util = require "lua_util"
+local N = "dynamic_conf"
 
 if confighelp then
   return
@@ -359,4 +361,5 @@ if redis_params then
     add_symbol = add_dynamic_symbol,
     add_action = add_dynamic_action,
   }
+  lua_util.disable_module(N, "redis")
 end

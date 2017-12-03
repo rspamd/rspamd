@@ -91,7 +91,10 @@ local function configure_bayes_expiry()
   return true
 end
 
-if not configure_bayes_expiry() then return end
+if not configure_bayes_expiry() then
+  lutil.disable_module(N, 'config')
+  return
+end
 
 local function get_redis_params(ev_base, symbol)
   local redis_params

@@ -22,6 +22,8 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
+local N = "mx_check"
 local fun = require "fun"
 
 local settings = {
@@ -268,6 +270,7 @@ if opts then
   redis_params = rspamd_parse_redis_server('mx_check')
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'no redis servers are specified, disabling module')
+    lua_util.disable_module(N, "redis")
     return
   end
   for k,v in pairs(opts) do

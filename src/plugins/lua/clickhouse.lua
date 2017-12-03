@@ -18,6 +18,7 @@ local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
 local rspamd_lua_utils = require "lua_util"
 local upstream_list = require "rspamd_upstream_list"
+local N = "clickhouse"
 
 if confighelp then
   return
@@ -653,6 +654,7 @@ if opts then
 
     if not settings['server'] and not settings['servers'] then
       rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+      rspamd_lua_utils.disable_module(N, "config")
     else
       settings['from_map'] = rspamd_map_add('clickhouse', 'from_tables',
         'regexp', 'clickhouse specific domains')
@@ -666,6 +668,7 @@ if opts then
       if not settings.upstream then
         rspamd_logger.errx('cannot parse clickhouse address: %s',
             settings['server'] or settings['servers'])
+        rspamd_lua_utils.disable_module(N, "config")
         return
       end
 

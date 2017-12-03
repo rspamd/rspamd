@@ -688,6 +688,7 @@ end
 
 if not next(settings.rules) then
   rspamd_logger.errx(rspamd_config, 'No rules enabled')
+  lutil.disable_module(N, "config")
 end
 for k, r in pairs(settings.rules) do
   rspamd_config:register_symbol({

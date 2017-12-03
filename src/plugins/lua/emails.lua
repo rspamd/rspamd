@@ -201,4 +201,6 @@ if #rules > 0 then
       callback = cb,
     })
   end
+else
+  rspamd_lua_utils.disable_module(N, "conf")
 end

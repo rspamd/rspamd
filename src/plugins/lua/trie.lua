@@ -24,6 +24,7 @@ local N = 'trie'
 local rspamd_logger = require "rspamd_logger"
 local rspamd_trie = require "rspamd_trie"
 local fun = require "fun"
+local lua_util = require "lua_util"
 
 local mime_trie
 local raw_trie
@@ -176,4 +177,5 @@ if opts then
   end
 else
   rspamd_logger.infox(rspamd_config, "Module is unconfigured")
+  lua_util.disable_module(N, "config")
 end

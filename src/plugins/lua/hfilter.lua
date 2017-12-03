@@ -25,6 +25,7 @@ end
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
+local lua_util = require "lua_util"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = [[
 /[0-9][.-]?nat/i 5
@@ -623,4 +624,6 @@ end
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
   rspamd_config:register_symbols(hfilter, 1.0, "HFILTER", symbols_enabled);
+else
+  lua_util.disable_module(N, "config")
 end
