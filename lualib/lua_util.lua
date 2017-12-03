@@ -200,19 +200,16 @@ end
 exports.spairs = spairs
 
 local function disable_module(modname, how)
-  for i,mn in ipairs(rspamd_plugins_state.enabled) do
-    if modname == mn then
-      table.remove(rspamd_plugins_state.enabled, i)
-      break
-    end
+  if rspamd_plugins_state.enabled[modname] then
+    rspamd_plugins_state.enabled[modname] = nil
   end
 
   if how == 'redis' then
-    table.insert(rspamd_plugins_state.disabled_redis, modname)
+    rspamd_plugins_state.disabled_redis[modname] = {}
   elseif how == 'config' then
-    table.insert(rspamd_plugins_state.disabled_unconfigured, modname)
+    rspamd_plugins_state.disabled_unconfigured[modname] = {}
   else
-    table.insert(rspamd_plugins_state.disabled_failed, modname)
+    rspamd_plugins_state.disabled_failed[modname] = {}
   end
 end
 

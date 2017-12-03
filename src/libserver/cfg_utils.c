@@ -1383,12 +1383,11 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 	while (cur) {
 		/* Perform modules configuring */
-		mod_ctx = NULL;
 		mod_ctx = g_hash_table_lookup (cfg->c_modules, cur->data);
 
 		if (mod_ctx) {
 			mod = mod_ctx->mod;
-			mod_ctx->enabled = TRUE;
+			mod_ctx->enabled = rspamd_config_is_module_enabled (cfg, mod->name);
 
 			if (reconfig) {
 				(void)mod->module_reconfig_func (cfg);
@@ -1530,9 +1529,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 	if (g_hash_table_lookup (cfg->explicit_modules, module_name) != NULL) {
 		/* Always load module */
-		rspamd_table_push_global_elt (L,
-				rspamd_modules_state_global,
-				"enabled", module_name);
+		rspamd_plugins_table_push_elt (L, "enabled", module_name);
 
 		return TRUE;
 	}
@@ -1554,8 +1551,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		if (!found) {
 			msg_info_config ("internal module %s is disable in `filters` line",
 					module_name);
-			rspamd_table_push_global_elt (L,
-					rspamd_modules_state_global,
+			rspamd_plugins_table_push_elt (L,
 					"disabled_explicitly", module_name);
 
 			return FALSE;
@@ -1565,9 +1561,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	conf = ucl_object_lookup (cfg->rcl_obj, module_name);
 
 	if (conf == NULL) {
-		rspamd_table_push_global_elt (L,
-				rspamd_modules_state_global,
-				"disabled_unconfigured", module_name);
+		rspamd_plugins_table_push_elt (L, "disabled_unconfigured", module_name);
 
 		msg_info_config ("%s module %s is enabled but has not been configured",
 				is_c ? "internal" : "lua", module_name);
@@ -1582,8 +1576,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 		if (enabled && ucl_object_type (enabled) == UCL_BOOLEAN) {
 			if (!ucl_object_toboolean (enabled)) {
-				rspamd_table_push_global_elt (L,
-						rspamd_modules_state_global,
+				rspamd_plugins_table_push_elt (L,
 						"disabled_explicitly", module_name);
 
 				msg_info_config ("%s module %s is disabled in the configuration",
@@ -1598,8 +1591,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 	if (gr) {
 		if (gr->disabled) {
-			rspamd_table_push_global_elt (L,
-					rspamd_modules_state_global,
+			rspamd_plugins_table_push_elt (L,
 					"disabled_explicitly", module_name);
 			msg_info_config ("%s module %s is disabled in the configuration as "
 					"its group has been disabled",
@@ -1608,6 +1600,8 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 			return FALSE;
 		}
 	}
+
+	rspamd_plugins_table_push_elt (L, "enabled", module_name);
 
 	return TRUE;
 }

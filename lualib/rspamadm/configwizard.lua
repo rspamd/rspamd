@@ -20,6 +20,8 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 
+local plugins_stat = require "rspamadm/plugins_stats"
+
 local function printf(fmt, ...)
   print(string.format(fmt, ...))
 end
@@ -196,6 +198,7 @@ return function(args, cfg)
   printf("Welcome to %s configuration tool", highlight("Rspamd"))
   printf("We use %s configuration file, writing results to %s",
     highlight(cfg.config_path), highlight(local_conf))
+  plugins_stat(nil, nil)
   if ask_yes_no("Do you wish to continue?", true) then
 
     local controller = find_worker(cfg, 'controller')
