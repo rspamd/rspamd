@@ -48,6 +48,7 @@ luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 #define LUA_INTERFACE_DEF(class, name) { # name, lua_ ## class ## _ ## name }
 
 extern const luaL_reg null_reg[];
+static const char rspamd_modules_state_global[] = "rspamd_plugins_state";
 
 #define RSPAMD_LUA_API_VERSION 12
 
@@ -159,6 +160,17 @@ gpointer rspamd_lua_check_class (lua_State *L, gint index, const gchar *name);
  */
 lua_State *rspamd_lua_init (void);
 
+
+/**
+ * Sets field in a global variable
+ * @param L
+ * @param global_name
+ * @param field_name
+ * @param new_elt
+ */
+void
+rspamd_table_push_global_elt (lua_State *L, const gchar *global_name,
+		const gchar *field_name, const gchar *new_elt);
 /**
  * Load and initialize lua plugins
  */

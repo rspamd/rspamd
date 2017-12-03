@@ -49,8 +49,6 @@ const luaL_reg worker_reg[] = {
 	{NULL, NULL}
 };
 
-static const char rspamd_modules_state_global[] = "rspamd_plugins_state";
-
 static GQuark
 lua_error_quark (void)
 {
@@ -410,65 +408,7 @@ rspamd_lua_init ()
 	lua_pcall (L, 1, 0, 0);
 	lua_pop (L, 1); /* math table */
 
-	return L;
-}
-
-/**
- * Initialize new locked lua_State structure
- */
-struct lua_locked_state *
-rspamd_init_lua_locked (struct rspamd_config *cfg)
-{
-	struct lua_locked_state *new;
-
-	new = g_malloc0 (sizeof (struct lua_locked_state));
-	new->L = rspamd_lua_init ();
-	new->m = rspamd_mutex_new ();
-
-	return new;
-}
-
-
-/**
- * Free locked state structure
- */
-void
-rspamd_free_lua_locked (struct lua_locked_state *st)
-{
-	g_assert (st != NULL);
-
-	lua_close (st->L);
-
-	rspamd_mutex_free (st->m);
-
-	g_free (st);
-}
-
-static void
-rspamd_table_push_global_elt (lua_State *L, const gchar *global_name,
-		const gchar *field_name, const gchar *new_elt)
-{
-	gsize last;
-
-	lua_getglobal (L, global_name);
-	lua_pushstring (L, field_name);
-	lua_gettable (L, -2);
-	last = lua_rawlen (L, -1);
-	lua_pushstring (L, new_elt);
-	lua_rawseti (L, -2, last + 1);
-	lua_pop (L, 2); /* Global + element */
-}
-
-gboolean
-rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
-{
-	struct rspamd_config **pcfg;
-	GList *cur;
-	struct script_module *module;
-	lua_State *L = cfg->lua_state;
-	GString *tb;
-	gint err_idx;
-
+	/* Modules state */
 	lua_newtable (L);
 	/*
 	 * rspamd_plugins_state = {
@@ -494,6 +434,64 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 #undef ADD_TABLE
 	lua_setglobal (L, rspamd_modules_state_global);
 
+	return L;
+}
+
+/**
+ * Initialize new locked lua_State structure
+ */
+struct lua_locked_state *
+rspamd_init_lua_locked (struct rspamd_config *cfg)
+{
+	struct lua_locked_state *new;
+
+	new = g_malloc0 (sizeof (struct lua_locked_state));
+	new->L = rspamd_lua_init ();
+	new->m = rspamd_mutex_new ();
+
+	return new;
+}
+
+/**
+ * Free locked state structure
+ */
+void
+rspamd_free_lua_locked (struct lua_locked_state *st)
+{
+	g_assert (st != NULL);
+
+	lua_close (st->L);
+
+	rspamd_mutex_free (st->m);
+
+	g_free (st);
+}
+
+void
+rspamd_table_push_global_elt (lua_State *L, const gchar *global_name,
+		const gchar *field_name, const gchar *new_elt)
+{
+	gsize last;
+
+	lua_getglobal (L, global_name);
+	lua_pushstring (L, field_name);
+	lua_gettable (L, -2);
+	last = lua_rawlen (L, -1);
+	lua_pushstring (L, new_elt);
+	lua_rawseti (L, -2, last + 1);
+	lua_pop (L, 2); /* Global + element */
+}
+
+gboolean
+rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
+{
+	struct rspamd_config **pcfg;
+	GList *cur;
+	struct script_module *module;
+	lua_State *L = cfg->lua_state;
+	GString *tb;
+	gint err_idx;
+
 	cur = g_list_first (cfg->script_modules);
 
 	while (cur) {
@@ -502,9 +500,6 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 		if (module->path) {
 			if (!force_load) {
 				if (!rspamd_config_is_module_enabled (cfg, module->name)) {
-					rspamd_table_push_global_elt (L,
-							rspamd_modules_state_global,
-							"disabled_explicitly", module->name);
 					cur = g_list_next (cur);
 					continue;
 				}
