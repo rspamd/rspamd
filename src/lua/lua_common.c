@@ -49,6 +49,8 @@ const luaL_reg worker_reg[] = {
 	{NULL, NULL}
 };
 
+static const char rspamd_modules_state_global[] = "rspamd_plugins_state";
+
 static GQuark
 lua_error_quark (void)
 {
@@ -442,6 +444,21 @@ rspamd_free_lua_locked (struct lua_locked_state *st)
 	g_free (st);
 }
 
+static void
+rspamd_table_push_global_elt (lua_State *L, const gchar *global_name,
+		const gchar *field_name, const gchar *new_elt)
+{
+	gsize last;
+
+	lua_getglobal (L, global_name);
+	lua_pushstring (L, field_name);
+	lua_gettable (L, -2);
+	last = lua_rawlen (L, -1);
+	lua_pushstring (L, new_elt);
+	lua_rawseti (L, -2, last + 1);
+	lua_pop (L, 2); /* Global + element */
+}
+
 gboolean
 rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 {
@@ -452,13 +469,42 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 	GString *tb;
 	gint err_idx;
 
+	lua_newtable (L);
+	/*
+	 * rspamd_plugins_state = {
+	 *   enabled = {},
+	 *   disabled_unconfigured = {},
+	 *   disabled_redis = {},
+	 *   disabled_explicitly = {},
+	 *   disabled_failed = {},
+	 * }
+	 */
+#define ADD_TABLE(name) do { \
+	lua_pushstring (L, #name); \
+	lua_newtable (L); \
+	lua_settable (L, -3); \
+} while (0)
+
+	ADD_TABLE (enabled);
+	ADD_TABLE (disabled_unconfigured);
+	ADD_TABLE (disabled_redis);
+	ADD_TABLE (disabled_explicitly);
+	ADD_TABLE (disabled_failed);
+
+#undef ADD_TABLE
+	lua_setglobal (L, rspamd_modules_state_global);
+
 	cur = g_list_first (cfg->script_modules);
 
 	while (cur) {
 		module = cur->data;
+
 		if (module->path) {
 			if (!force_load) {
 				if (!rspamd_config_is_module_enabled (cfg, module->name)) {
+					rspamd_table_push_global_elt (L,
+							rspamd_modules_state_global,
+							"disabled_explicitly", module->name);
 					cur = g_list_next (cur);
 					continue;
 				}
@@ -470,8 +516,12 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 			if (luaL_loadfile (L, module->path) != 0) {
 				msg_err_config ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
-				cur = g_list_next (cur);
 				lua_pop (L, 1); /*  Error function */
+
+				rspamd_table_push_global_elt (L, rspamd_modules_state_global,
+						"disabled_failed", module->name);
+
+				cur = g_list_next (cur);
 				continue;
 			}
 
@@ -486,9 +536,14 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 				msg_err_config ("init of %s failed: %v",
 						module->path,
 						tb);
-				cur = g_list_next (cur);
+
 				g_string_free (tb, TRUE);
 				lua_pop (L, 2); /* Result and error function */
+
+				rspamd_table_push_global_elt (L, rspamd_modules_state_global,
+						"disabled_failed", module->name);
+
+				cur = g_list_next (cur);
 				continue;
 			}
 
@@ -498,6 +553,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 
 			lua_pop (L, 1); /* Error function */
 		}
+
 		cur = g_list_next (cur);
 	}
 
