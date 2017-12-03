@@ -142,9 +142,14 @@ local function setup_redis(cfg, changes)
     return ls
   end
 
-  printf("Setup %s for storage:", highlight("Redis"))
+  printf("%s servers are not set:", highlight("Redis"))
+  printf("The following modules will be enabled if you add Redis servers:")
 
-  if ask_yes_no("Redis servers are not set, do you wish to set them?", true) then
+  for k,_ in pairs(rspamd_plugins_state.disabled_redis) do
+    printf("\t* %s", highlight(k))
+  end
+
+  if ask_yes_no("Do you wish to set Redis servers?", true) then
     local read_servers = rspamd_util.readline("Input read only servers separated by `,` [default: localhost]: ")
 
     if not read_servers or #read_servers == 0 then
