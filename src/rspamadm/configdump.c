@@ -26,6 +26,7 @@ static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_comments = FALSE;
+static gboolean modules_state = FALSE;
 static gchar *config = NULL;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
@@ -54,6 +55,8 @@ static GOptionEntry entries[] = {
 				"Show help as comments for each option", NULL },
 		{"show-comments", 's', 0, G_OPTION_ARG_NONE, &show_comments,
 				"Show saved comments from the configuration file", NULL },
+		{"modules-state", 'm', 0, G_OPTION_ARG_NONE, &modules_state,
+				"Show modules state only", NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -64,11 +67,12 @@ rspamadm_configdump_help (gboolean full_help)
 
 	if (full_help) {
 		help_str = "Perform configuration file dump\n\n"
-				"Usage: rspamadm configdump [-c <config_name> -j --compact [<path1> [<path2> ...]]]\n"
+				"Usage: rspamadm configdump [-c <config_name> [-j --compact -m] [<path1> [<path2> ...]]]\n"
 				"Where options are:\n\n"
 				"-j: output plain json\n"
 				"--compact: output compacted json\n"
 				"-c: config file to test\n"
+				"-m: show state of modules only\n"
 				"-h: show help for dumped options\n"
 				"--help: shows available options and commands";
 	}
@@ -297,6 +301,19 @@ rspamadm_configdump (gint argc, gchar **argv)
 	}
 
 	if (ret) {
+		if (modules_state) {
+			lua_State *L = cfg->lua_state;
+
+			rspamadm_execute_lua_ucl_subr (L,
+					argc,
+					argv,
+					cfg->rcl_obj,
+					"plugins_stats");
+
+			lua_close (L);
+
+			exit (EXIT_SUCCESS);
+		}
 		/* Output configuration */
 		if (argc == 1) {
 			rspamadm_dump_section_obj (cfg, cfg->rcl_obj, cfg->doc_strings);
