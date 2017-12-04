@@ -88,6 +88,7 @@ struct fuzzy_rule {
 	gboolean fuzzy_images;
 	gboolean short_text_direct_hash;
 	gint learn_condition_cb;
+	struct rspamd_map *skip_map;
 };
 
 struct fuzzy_ctx {
@@ -413,6 +414,15 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 			fuzzy_module_ctx->fuzzy_pool);
 	rule->learn_condition_cb = -1;
 	rule->alg = RSPAMD_SHINGLES_OLD;
+
+	if ((value = ucl_object_lookup (obj, "skip_hashes")) != NULL) {
+		rspamd_map_add_from_ucl (cfg, value,
+			"Fuzzy hashes whitelist", rspamd_kv_list_read, rspamd_kv_list_fin,
+			(void **)&rule->skip_map);
+	}
+	else {
+		rule->skip_map = NULL;
+	}
 
 	if ((value = ucl_object_lookup (obj, "mime_types")) != NULL) {
 		it = NULL;
@@ -796,6 +806,15 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"Headers that are used to make a separate hash",
 			"headers",
 			UCL_ARRAY,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Whitelisted hashes map",
+			"skip_hashes",
+			UCL_STRING,
 			NULL,
 			0,
 			NULL,
@@ -1805,6 +1824,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	const gchar *type = "bin";
 	struct fuzzy_client_result *res;
 	gboolean is_fuzzy = FALSE;
+	gchar hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
 
 	/* Get mapping by flag */
 	if ((map =
@@ -1881,6 +1901,14 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	}
 
 	if (map != NULL || !session->rule->skip_unknown) {
+		if (session->rule->skip_map) {
+			rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
+				hexbuf, sizeof (hexbuf) - 1);
+			hexbuf[sizeof (hexbuf) - 1] = '\0';
+			if (g_hash_table_lookup (session->rule->skip_map, hexbuf)) {
+				return;
+			}
+		}
 		rspamd_snprintf (buf,
 				sizeof (buf),
 				"%d:%*xs:%.2f:%s",
