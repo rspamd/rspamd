@@ -256,21 +256,21 @@ return function(cfg)
 
   if not cfg.actions then
     logger.errx('no actions defined')
-  end
+  else
+    -- Perform sanity check for actions
+    local actions_defs = {'greylist', 'add header', 'add_header',
+      'rewrite subject', 'rewrite_subject', 'reject'}
 
-  -- Perform sanity check for actions
-  local actions_defs = {'greylist', 'add header', 'add_header',
-    'rewrite subject', 'rewrite_subject', 'reject'}
-
-  if not cfg.actions['no action'] and not cfg.actions['no_action'] and
-      not cfg.actions['accept'] then
-    for _,d in ipairs(actions_defs) do
-      if cfg.actions[d] then
-        if cfg.actions[d] < 0 then
-          cfg.actions['no action'] = cfg.actions[d] - 0.001
-          logger.infox('set no action score to: %s, as action %s has negative score',
+    if not cfg.actions['no action'] and not cfg.actions['no_action'] and
+        not cfg.actions['accept'] then
+      for _,d in ipairs(actions_defs) do
+        if cfg.actions[d] then
+          if cfg.actions[d] < 0 then
+            cfg.actions['no action'] = cfg.actions[d] - 0.001
+            logger.infox('set no action score to: %s, as action %s has negative score',
               cfg.actions['no action'], d)
-          break
+            break
+          end
         end
       end
     end
