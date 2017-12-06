@@ -88,7 +88,7 @@ struct fuzzy_rule {
 	gboolean fuzzy_images;
 	gboolean short_text_direct_hash;
 	gint learn_condition_cb;
-	struct rspamd_map *skip_map;
+	GHashTable *skip_map;
 };
 
 struct fuzzy_ctx {
