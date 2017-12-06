@@ -112,22 +112,23 @@ local function check_mime_type(task)
       if #parts > 2 then
         -- We need to ensure that it is an extension, so we check for its length
         -- Check if next-to-last extension is not a number or date
-        if #ext > 4 or (ext2 and string.match(ext2, '^%d+$')) then return end
+        if #ext <= 4 and ext2 and not string.match(ext2, '^%d+$') then
 
-        -- Use the greatest badness multiplier
-        if not badness_mult or
-            (badness_mult2 and badness_mult < badness_mult2) then
-          badness_mult = badness_mult2
-        end
+          -- Use the greatest badness multiplier
+          if not badness_mult or
+              (badness_mult2 and badness_mult < badness_mult2) then
+            badness_mult = badness_mult2
+          end
 
-        -- Double extension + bad extension == VERY bad
-        task:insert_result(settings['symbol_double_extension'], badness_mult,
-          string.format(".%s.%s", ext2, ext))
-      else
-        if badness_mult then
-          -- Just bad extension
-          task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
+          -- Double extension + bad extension == VERY bad
+          task:insert_result(settings['symbol_double_extension'], badness_mult,
+            string.format(".%s.%s", ext2, ext))
+          return
         end
+      end
+      if badness_mult then
+        -- Just bad extension
+        task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
       end
     end
 
