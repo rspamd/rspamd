@@ -2090,7 +2090,10 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				rh_num = ar->len - count - 1;
 			}
 			else {
-				/* Absence of header is just NULL signature update */
+				/*
+				 * If DKIM has less headers requested than there are in a
+				 * message, then it's fine, it allows adding extra headers
+				 */
 				return TRUE;
 			}
 
@@ -2791,10 +2794,11 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 		if (g_hash_table_lookup (task->raw_headers, dh->name)) {
 			rspamd_dkim_canonize_header (&ctx->common, task, dh->name, dh->count,
 					NULL, NULL);
+		}
 
-			for (j = 0; j < dh->count + 1; j++) {
-				rspamd_printf_gstring (hdr, "%s:", dh->name);
-			}
+		/* We allow oversigning if dh->count > number of headers with this name */
+		for (j = 0; j < dh->count + 1; j++) {
+			rspamd_printf_gstring (hdr, "%s:", dh->name);
 		}
 	}
 
