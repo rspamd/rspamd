@@ -10,10 +10,12 @@ SET(RSPAMADMSRC rspamadm.c
         control.c
         confighelp.c
         configwizard.c
+        corpus_test.c
         stat_convert.c
         signtool.c
         lua_repl.c
         dkim_keygen.c
+        rescore.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
