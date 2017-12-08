@@ -26,6 +26,12 @@ Next-to-last Double Bad Extension
 Date is followed by Bad Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rar-date-bad-ext.eml
   Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[scr\\]\\n  re=1
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
+
+Dotted file name is followed by Bad Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/bad_ext.dotted_file_name.eml
+  Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[exe\\]\\n  re=1
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
 
 Rar4
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rar4.eml
