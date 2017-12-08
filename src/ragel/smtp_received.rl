@@ -11,11 +11,11 @@
   Addtl_Link     = Atom;
   Link           = "TCP" | Addtl_Link;
   Attdl_Protocol = Atom;
-  Protocol       = "ESMTP" %ESMTP_proto |
-                   "SMTP" %SMTP_proto |
-                   "ESMTPS" %ESMTPS_proto |
-                   "ESMTPA" %ESMTPA_proto |
-                   "ESMTPSA" %ESMTPSA_proto |
+  Protocol       = "ESMTP"i %ESMTP_proto |
+                   "SMTP"i %SMTP_proto |
+                   "ESMTPS"i %ESMTPS_proto |
+                   "ESMTPA"i %ESMTPA_proto |
+                   "ESMTPSA"i %ESMTPSA_proto |
                    "LMTP" %LMTP_proto |
                    "IMAP" %IMAP_proto |
                    Attdl_Protocol;
