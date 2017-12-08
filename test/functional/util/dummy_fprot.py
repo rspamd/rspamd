@@ -32,7 +32,10 @@ if __name__ == "__main__":
     alen = len(sys.argv)
     if alen > 1:
         port = int(sys.argv[1])
-        if alen >= 3:
+        if alen >= 4:
+            PID = sys.argv[3]
+            foundvirus = bool(sys.argv[2])
+        elif alen >= 3:
             foundvirus = bool(sys.argv[2])
         else:
             foundvirus = False

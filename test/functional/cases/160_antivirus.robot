@@ -44,14 +44,22 @@ FPROT MISS
 
 FPROT HIT - PATTERN
   Run Dummy Fprot  ${PORT_FPROT}  1
+  Run Dummy Fprot  ${PORT_FPROT_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  FPROT_EICAR (1.00)[EICAR_Test_File]
   Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
+  # Also check ordered pattern match
+  Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN
+  Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_DEFAULT
+  Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_NOPE
 
 FPROT CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  FPROT_EICAR (1.00)[EICAR_Test_File]
   Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
+  # Also check ordered pattern match
+  Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN
+  Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_DEFAULT
 
 FPROT CACHE MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
@@ -74,6 +82,6 @@ Run Dummy Clam
   Wait Until Created  /tmp/dummy_clamav.pid
 
 Run Dummy Fprot
-  [Arguments]  ${port}  ${found}=
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}
-  Wait Until Created  /tmp/dummy_fprot.pid
+  [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
+  ${result} =  Start Process  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
+  Wait Until Created  ${pid}

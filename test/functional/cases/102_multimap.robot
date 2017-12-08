@@ -148,6 +148,15 @@ MAP - REDIS - HOSTNAME MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
   Check Rspamc  ${result}  REDIS_HOSTNAME  inverse=1
 
+MAP - REDIS - HOSTNAME - EXPANSION - HIT
+  Redis HSET  127.0.0.1.foo.com  redistest.example.net  ${EMPTY}
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  redistest.example.net  --rcpt  bob@foo.com
+  Check Rspamc  ${result}  REDIS_HOSTNAME_EXPANSION
+
+MAP - REDIS - HOSTNAME - EXPANSION - MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  redistest.example.net  --rcpt  bob@bar.com
+  Check Rspamc  ${result}  REDIS_HOSTNAME_EXPANSION  inverse=1
+
 MAP - REDIS - IP
   Redis HSET  ipaddr  127.0.0.1  ${EMPTY}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1
