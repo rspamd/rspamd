@@ -1,0 +1,9 @@
+Content-Type: multipart/mixed; boundary="------------D6BBFC1853527FEEDD26DC71"
+
+--------------D6BBFC1853527FEEDD26DC71
+Content-Type: application/x-msdownload; name="bad_ext.dotted_file_name.exe"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="bad_ext.dotted_file_name.exe"
+
+MAo=
+--------------D6BBFC1853527FEEDD26DC71--

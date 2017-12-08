@@ -110,9 +110,9 @@ local function check_mime_type(task)
     local function check_extension(badness_mult, badness_mult2)
       if not badness_mult and not badness_mult2 then return end
       if #parts > 2 then
-        -- We need to ensure that it is an extension, so we check for its length
-        -- Check if next-to-last extension is not a number or date
-        if #ext <= 4 and ext2 and not string.match(ext2, '^%d+$') then
+        -- We need to ensure that next-to-last extension is an extension,
+        -- so we check for its length and if it is not a number or date
+        if #ext2 <= 4 and not string.match(ext2, '^%d+$') then
 
           -- Use the greatest badness multiplier
           if not badness_mult or
