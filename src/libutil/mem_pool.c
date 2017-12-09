@@ -22,6 +22,10 @@
 #include "khash.h"
 #include "cryptobox.h"
 
+#ifdef WITH_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#endif
+
 #ifdef HAVE_SCHED_YIELD
 #include <sched.h>
 #endif
@@ -155,6 +159,7 @@ static struct _pool_chain *
 rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 {
 	struct _pool_chain *chain;
+	gsize total_size = size + sizeof (struct _pool_chain);
 	gpointer map;
 
 	g_return_val_if_fail (size > 0, NULL);
@@ -162,7 +167,7 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 	if (pool_type == RSPAMD_MEMPOOL_SHARED) {
 #if defined(HAVE_MMAP_ANON)
 		map = mmap (NULL,
-				size + sizeof (struct _pool_chain),
+				total_size,
 				PROT_READ | PROT_WRITE,
 				MAP_ANON | MAP_SHARED,
 				-1,
@@ -198,18 +203,21 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 #error No mmap methods are defined
 #endif
 		g_atomic_int_inc (&mem_pool_stat->shared_chunks_allocated);
-		g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, total_size);
 	}
 	else {
-		map = g_malloc (sizeof (struct _pool_chain) + size);
+#ifdef WITH_JEMALLOC
+		total_size = nallocx (total_size, 0);
+#endif
+		map = g_malloc (total_size);
 		chain = map;
 		chain->begin = ((guint8 *) chain) + sizeof (struct _pool_chain);
-		g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, total_size);
 		g_atomic_int_inc (&mem_pool_stat->chunks_allocated);
 	}
 
 	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
-	chain->len = size;
+	chain->len = total_size - sizeof (struct _pool_chain);
 	chain->lock = NULL;
 
 	return chain;
