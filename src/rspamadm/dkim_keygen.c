@@ -17,6 +17,7 @@
 #include "rspamadm.h"
 #include "printf.h"
 #include "str_util.h"
+#include "lua/lua_common.h"
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
 #include <openssl/pem.h>
@@ -28,13 +29,14 @@ static guint bits = 1024;
 
 static void rspamadm_dkim_keygen (gint argc, gchar **argv);
 static const char *rspamadm_dkim_keygen_help (gboolean full_help);
+static void rspamadm_dkim_keygen_lua_subrs (gpointer pL);
 
 struct rspamadm_command dkim_keygen_command = {
 		.name = "dkim_keygen",
 		.flags = 0,
 		.help = rspamadm_dkim_keygen_help,
 		.run = rspamadm_dkim_keygen,
-		.lua_subrs = NULL,
+		.lua_subrs = rspamadm_dkim_keygen_lua_subrs,
 };
 
 static GOptionEntry entries[] = {
@@ -72,10 +74,9 @@ rspamadm_dkim_keygen_help (gboolean full_help)
 }
 
 static void
-rspamadm_dkim_keygen (gint argc, gchar **argv)
+rspamadm_dkim_generate_keypair (const gchar *domain, const gchar *selector,
+		const gchar *priv_fname, const gchar *pub_fname, guint keylen)
 {
-	GOptionContext *context;
-	GError *error = NULL;
 	BIGNUM *e;
 	RSA *r;
 	BIO *pubout, *privout;
@@ -84,6 +85,146 @@ rspamadm_dkim_keygen (gint argc, gchar **argv)
 	glong publen;
 	gsize b64_len;
 	gchar *pubdata, *b64_data;
+	FILE *pubfile = NULL;
+
+	if (bits > 4096 || bits < 512) {
+		fprintf (stderr, "Bits number must be in the interval 512...4096\n");
+		exit (EXIT_FAILURE);
+	}
+
+	e = BN_new ();
+	r = RSA_new ();
+	pk = EVP_PKEY_new ();
+	g_assert (BN_set_word (e, RSA_F4) == 1);
+	g_assert (RSA_generate_key_ex (r, bits, e, NULL) == 1);
+	g_assert (EVP_PKEY_set1_RSA (pk, r) == 1);
+
+	if (priv_fname) {
+		privout = BIO_new_file (priv_fname, "w");
+
+		if (privout == NULL) {
+			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
+					priv_fname, strerror (errno));
+			exit (EXIT_FAILURE);
+		}
+	}
+	else {
+		privout = BIO_new_fp (stdout, 0);
+	}
+
+	rc = PEM_write_bio_PrivateKey (privout, pk, NULL, NULL, 0, NULL, NULL);
+
+	if (rc != 1) {
+		rspamd_fprintf (stderr, "cannot write key to the output file %s: %s\n",
+				priv_fname ? priv_fname : "stdout", strerror (errno));
+		exit (EXIT_FAILURE);
+	}
+
+	BIO_free (privout);
+	fflush (stdout);
+
+	pubout = BIO_new (BIO_s_mem());
+
+	rc = i2d_RSA_PUBKEY_bio (pubout, r);
+	publen = BIO_get_mem_data (pubout, &pubdata);
+
+	g_assert (publen > 0);
+	b64_data = rspamd_encode_base64 (pubdata, publen, -1, &b64_len);
+
+	if (pub_fname) {
+		pubfile = fopen (pub_fname, "w");
+
+		if (pubfile == NULL) {
+			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
+					pub_fname, strerror (errno));
+			exit (EXIT_FAILURE);
+		}
+	}
+	else {
+		pubfile = stdout;
+	}
+
+	if (b64_len < 255 - 2) {
+		rspamd_fprintf (pubfile, "%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n"
+						"\t\"p=%s\" ) ;\n",
+				selector ? selector : "selector",
+				b64_data);
+	}
+	else {
+		guint i;
+		gint step = 253, remain = b64_len;
+
+		rspamd_fprintf (pubfile, "%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n",
+				selector ? selector : "selector");
+
+		for (i = 0; i < b64_len; i += step, remain -= step) {
+			if (i == 0) {
+				rspamd_fprintf (pubfile, "\t\"p=%*s\"\n", MIN(step, remain), &b64_data[i]);
+			}
+			else {
+				step = 255;
+				rspamd_fprintf (pubfile, "\t\"%*s\"\n", MIN(step, remain), &b64_data[i]);
+			}
+		}
+
+		rspamd_fprintf (pubfile, ") ; \n");
+	}
+
+	if (pubfile != stdout) {
+		fclose (pubfile);
+	}
+
+	g_free (b64_data);
+	BIO_free (pubout);
+	EVP_PKEY_free (pk);
+	RSA_free (r);
+	BN_free (e);
+}
+
+static gint
+rspamadm_dkim_keygen_lua_generate (lua_State *L)
+{
+	const gchar *domain = luaL_checkstring (L, 1);
+	const gchar *selector = luaL_checkstring (L, 2);
+	const gchar *privfile = NULL, *pubfile = NULL;
+	guint key_bits = 1024;
+
+	if (domain == NULL || selector == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 3) == LUA_TSTRING) {
+		privfile = lua_tostring (L, 3);
+	}
+
+	if (lua_type (L, 4) == LUA_TSTRING) {
+		pubfile = lua_tostring (L, 4);
+	}
+
+	if (lua_type (L, 5) == LUA_TNUMBER) {
+		key_bits = lua_tonumber (L, 5);
+	}
+
+	rspamadm_dkim_generate_keypair (domain, selector, privfile, pubfile, key_bits);
+
+	return 0;
+}
+
+static void
+rspamadm_dkim_keygen_lua_subrs (gpointer pL)
+{
+	lua_State *L = pL;
+
+	lua_pushstring (L, "dkim_keygen");
+	lua_pushcfunction (L, rspamadm_dkim_keygen_lua_generate);
+	lua_settable (L, -3);
+}
+
+static void
+rspamadm_dkim_keygen (gint argc, gchar **argv)
+{
+	GOptionContext *context;
+	GError *error = NULL;
 
 	context = g_option_context_new (
 			"dkim_keygen - create dkim keys");
@@ -100,79 +241,5 @@ rspamadm_dkim_keygen (gint argc, gchar **argv)
 		exit (1);
 	}
 
-	if (bits > 4096 || bits < 512) {
-		fprintf (stderr, "Bits number must be in the interval 512...4096\n");
-		exit (EXIT_FAILURE);
-	}
-
-	e = BN_new ();
-	r = RSA_new ();
-	pk = EVP_PKEY_new ();
-	g_assert (BN_set_word (e, RSA_F4) == 1);
-	g_assert (RSA_generate_key_ex (r, bits, e, NULL) == 1);
-	g_assert (EVP_PKEY_set1_RSA (pk, r) == 1);
-
-	if (privkey_file) {
-		privout = BIO_new_file (privkey_file, "w");
-
-		if (privout == NULL) {
-			rspamd_fprintf (stderr, "cannot open output file %s: %s\n",
-					privkey_file, strerror (errno));
-			exit (EXIT_FAILURE);
-		}
-	}
-	else {
-		privout = BIO_new_fp (stdout, 0);
-	}
-
-	rc = PEM_write_bio_PrivateKey (privout, pk, NULL, NULL, 0, NULL, NULL);
-
-	if (rc != 1) {
-		rspamd_fprintf (stderr, "cannot write key to the output file %s: %s\n",
-				privkey_file ? privkey_file : "stdout", strerror (errno));
-		exit (EXIT_FAILURE);
-	}
-
-	BIO_free (privout);
-	fflush (stdout);
-
-	pubout = BIO_new (BIO_s_mem());
-
-	rc = i2d_RSA_PUBKEY_bio (pubout, r);
-	publen = BIO_get_mem_data (pubout, &pubdata);
-
-	g_assert (publen > 0);
-	b64_data = rspamd_encode_base64 (pubdata, publen, -1, &b64_len);
-
-	if (b64_len < 255 - 2) {
-		rspamd_printf ("%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n"
-						"\t\"p=%s\" ) ;\n",
-				selector ? selector : "selector",
-				b64_data);
-	}
-	else {
-		guint i;
-		gint step = 253, remain = b64_len;
-
-		rspamd_printf ("%s._domainkey IN TXT ( \"v=DKIM1; k=rsa; \"\n",
-				selector ? selector : "selector");
-
-		for (i = 0; i < b64_len; i += step, remain -= step) {
-			if (i == 0) {
-				rspamd_printf ("\t\"p=%*s\"\n", MIN(step, remain), &b64_data[i]);
-			}
-			else {
-				step = 255;
-				rspamd_printf ("\t\"%*s\"\n", MIN(step, remain), &b64_data[i]);
-			}
-		}
-
-		rspamd_printf (") ; \n");
-	}
-
-	g_free (b64_data);
-	BIO_free (pubout);
-	EVP_PKEY_free (pk);
-	RSA_free (r);
-	BN_free (e);
+	rspamadm_dkim_generate_keypair (domain, selector, privkey_file, NULL, bits);
 }
