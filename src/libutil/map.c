@@ -1053,6 +1053,11 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
 
+	if (map->scheduled_check) {
+		/* Do not schedule check if some check is already scheduled */
+		return;
+	}
+
 	if (map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks ();
 
@@ -1098,6 +1103,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	cbd->cbdata.cur_data = NULL;
 	cbd->cbdata.map = map;
 	cbd->map = map;
+	map->scheduled_check = TRUE;
 	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
 
 	evtimer_set (&cbd->ev, rspamd_map_periodic_callback, cbd);
@@ -1531,6 +1537,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 	struct rspamd_map *map;
 
 	map = cbd->map;
+	map->scheduled_check = FALSE;
 
 	if (!cbd->locked) {
 		if (!g_atomic_int_compare_and_exchange (cbd->map->locked, 0, 1)) {

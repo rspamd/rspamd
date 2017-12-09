@@ -113,6 +113,7 @@ struct rspamd_map {
 	gchar *description;
 	gchar *name;
 	guint32 id;
+	gboolean scheduled_check;
 	/* Should we check HTTP or just load cached data */
 	gboolean active_http;
 	struct timeval tv;
@@ -142,8 +143,8 @@ struct map_periodic_cbdata {
 	struct event ev;
 	gboolean need_modify;
 	gboolean errored;
-	guint cur_backend;
 	gboolean locked;
+	guint cur_backend;
 	ref_entry_t ref;
 };
 
