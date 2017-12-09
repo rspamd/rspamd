@@ -22,7 +22,7 @@ local redis_params
 
 local settings = {
   key_prefix = 'rs_history', -- default key name
-  nrows = 2000, -- default rows limit
+  nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
 }
 

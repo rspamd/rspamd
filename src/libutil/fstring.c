@@ -16,7 +16,11 @@
 #include "fstring.h"
 #include "str_util.h"
 
-static const gsize default_initial_size = 48;
+#ifdef WITH_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#endif
+
+static const gsize default_initial_size = 16;
 
 #define fstravail(s) ((s)->allocated - (s)->len)
 
@@ -110,35 +114,12 @@ inline gsize
 rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len)
 {
 	gsize newlen;
-	/* Maximum size when we double the size of new string */
-	static const gsize max_grow = 1024 * 1024;
 
-	newlen = allocated;
+	newlen = MAX (len + needed_len, 1 + allocated * 3 / 2);
 
-	/*
-	 * Stop exponential grow at some point, since it might be slow for the
-	 * vast majority of cases
-	 */
-	if (newlen < max_grow) {
-		newlen *= 2;
-	}
-	else {
-		newlen += max_grow;
-	}
-
-	/*
-	 * Check for overflow
-	 */
-	if (newlen <= len + needed_len) {
-		newlen = len + needed_len;
-
-		if (newlen < max_grow) {
-			newlen *= 2;
-		}
-		else {
-			newlen += max_grow;
-		}
-	}
+#ifdef WITH_JEMALLOC
+	newlen = nallocx (newlen + sizeof (rspamd_fstring_t), 0);
+#endif
 
 	return newlen;
 }
