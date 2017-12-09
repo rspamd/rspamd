@@ -1113,7 +1113,6 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	msg_debug_map ("schedule new periodic event %p in %.2f seconds",
 			cbd, jittered_sec);
 	double_to_tv (jittered_sec, &map->tv);
-
 	evtimer_add (&cbd->ev, &map->tv);
 }
 
