@@ -49,17 +49,48 @@ enum fetch_proto {
 	MAP_PROTO_STATIC
 };
 
+/**
+ * Data specific to file maps
+ */
+struct file_map_data {
+	gchar *filename;
+	struct stat st;
+};
+
+/**
+ * Data specific to HTTP maps
+ */
+struct http_map_data {
+	gchar *path;
+	gchar *host;
+	gchar *last_signature;
+	rspamd_fstring_t *etag;
+	time_t last_modified;
+	time_t last_checked;
+	gboolean request_sent;
+	guint64 gen;
+	guint16 port;
+};
+
+struct static_map_data {
+	guchar *data;
+	gsize len;
+	gboolean processed;
+};
+
+union rspamd_map_backend_data {
+	struct file_map_data *fd;
+	struct http_map_data *hd;
+	struct static_map_data *sd;
+};
+
 struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
 	guint32 id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
-	union {
-		struct file_map_data *fd;
-		struct http_map_data *hd;
-		struct static_map_data *sd;
-	} data;
+	union rspamd_map_backend_data data;
 	gchar *uri;
 	ref_entry_t ref;
 };
@@ -94,34 +125,6 @@ struct rspamd_map {
 	gchar tag[MEMPOOL_UID_LEN];
 	rspamd_map_dtor dtor;
 	gpointer dtor_data;
-};
-
-/**
- * Data specific to file maps
- */
-struct file_map_data {
-	gchar *filename;
-	struct stat st;
-};
-
-/**
- * Data specific to HTTP maps
- */
-struct http_map_data {
-	gchar *path;
-	gchar *host;
-	gchar *last_signature;
-	time_t last_modified;
-	time_t last_checked;
-	gboolean request_sent;
-	guint64 gen;
-	guint16 port;
-};
-
-struct static_map_data {
-	guchar *data;
-	gsize len;
-	gboolean processed;
 };
 
 enum rspamd_map_http_stage {

@@ -99,11 +99,17 @@ write_http_request (struct http_callback_data *cbd)
 			msg->url = rspamd_fstring_append (msg->url,
 					cbd->data->path, strlen (cbd->data->path));
 
-			if (cbd->check &&
-					cbd->data->last_modified != 0 && cbd->stage == map_load_file) {
-				rspamd_http_date_format (datebuf, sizeof (datebuf),
-						cbd->data->last_modified);
-				rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
+			if (cbd->check && cbd->stage == map_load_file) {
+				if (cbd->data->last_modified != 0) {
+					rspamd_http_date_format (datebuf, sizeof (datebuf),
+							cbd->data->last_modified);
+					rspamd_http_message_add_header (msg, "If-Modified-Since",
+							datebuf);
+				}
+				if (cbd->data->etag) {
+					rspamd_http_message_add_header_len (msg, "If-None-Match",
+							cbd->data->etag->str, cbd->data->etag->len);
+				}
 			}
 		}
 		else if (cbd->stage == map_load_pubkey) {
@@ -431,7 +437,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 	struct rspamd_map_backend *bk;
 	struct rspamd_http_map_cached_cbdata *cache_cbd;
 	struct timeval tv;
-	const rspamd_ftok_t *expires_hdr;
+	const rspamd_ftok_t *expires_hdr, *etag_hdr;
 	char next_check_date[128];
 	guchar *aux_data, *in = NULL;
 	gsize inlen = 0, dlen = 0;
@@ -626,6 +632,25 @@ read_data:
 			double_to_tv (map->poll_timeout * 2, &tv);
 		}
 
+		/* Check for etag */
+		etag_hdr = rspamd_http_message_find_header (msg, "ETag");
+
+		if (etag_hdr) {
+			if (cbd->data->etag) {
+				/* Remove old etag */
+				rspamd_fstring_free (cbd->data->etag);
+				cbd->data->etag = rspamd_fstring_new_init (etag_hdr->begin,
+						etag_hdr->len);
+			}
+		}
+		else {
+			if (cbd->data->etag) {
+				/* Remove and clear old etag */
+				rspamd_fstring_free (cbd->data->etag);
+				cbd->data->etag = NULL;
+			}
+		}
+
 		MAP_RETAIN (cbd->shmem_data, "shmem_data");
 		cbd->data->gen ++;
 		/*
@@ -753,6 +778,17 @@ read_data:
 				}
 
 				map->next_check = hdate;
+			}
+		}
+
+		etag_hdr = rspamd_http_message_find_header (msg, "ETag");
+
+		if (etag_hdr) {
+			if (cbd->data->etag) {
+				/* Remove old etag */
+				rspamd_fstring_free (cbd->data->etag);
+				cbd->data->etag = rspamd_fstring_new_init (etag_hdr->begin,
+						etag_hdr->len);
 			}
 		}
 
@@ -1784,6 +1820,11 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 		if (bk->data.hd) {
 			g_free (bk->data.hd->host);
 			g_free (bk->data.hd->path);
+
+			if (bk->data.hd->etag) {
+				rspamd_fstring_free (bk->data.hd->etag);
+			}
+
 			g_free (bk->data.hd);
 		}
 		break;
