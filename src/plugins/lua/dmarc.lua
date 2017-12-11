@@ -594,7 +594,7 @@ local function dmarc_callback(task)
 end
 
 local opts = rspamd_config:get_all_opt('options')
-if opts and type(opts) ~= 'table' then
+if type(opts) == 'table' then
   if type(opts['check_local']) == 'boolean' then
     check_local = opts['check_local']
   end
