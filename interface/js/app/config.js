@@ -125,7 +125,7 @@ function($) {
                     disabled = 'disabled="disabled"';
                 }
 
-                $('<form class="form-horizontal form-map" method="post "action="/savemap" data-type="map" id="' +
+                $('<form class="form-horizontal form-map" method="post" action="savemap" data-type="map" id="' +
                     item.map + '" style="display:none">' +
                     '<textarea class="list-textarea"' + disabled + '>' + text +
                     '</textarea>' +
