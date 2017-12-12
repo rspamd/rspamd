@@ -182,6 +182,78 @@ local function setup_redis(cfg, changes)
   end
 end
 
+local function setup_dkim_signing(cfg, changes)
+  local domains = {}
+  local has_domains = false
+
+  local dkim_keys_dir = rspamd_paths["DBDIR"] .. "/dkim/"
+
+  local prompt = string.format("Enter output directory for the keys [default: %s]: ",
+    highlight(dkim_keys_dir))
+  dkim_keys_dir = readline_default(prompt, dkim_keys_dir)
+
+  local ret, err = rspamd_util.mkdir(dkim_keys_dir, true)
+
+  if not ret then
+    printf("Cannot make directory %s: %s", dkim_keys_dir, highlight(err))
+    os.exit(1)
+  end
+
+  local function print_domains()
+    print("Domains configured:")
+    for k,v in pairs(domains) do
+      printf("Domain: %s, selector: %s, privkey: %s", highlight(k),
+          v.selector, v.privkey)
+    end
+    print("--")
+  end
+
+  repeat
+    if has_domains then
+      print_domains()
+    end
+
+    local domain
+    repeat
+      domain = rspamd_util.readline("Enter domain to sign: ")
+      if not domain then
+        os.exit(1)
+      end
+    until #domain ~= 0
+
+    local selector = readline_default("Enter domain to sign [default: dkim]: ", 'dkim')
+    if not selector then selector = 'dkim' end
+
+    local privkey_file = string.format("%s/%s.%s.key", dkim_keys_dir, domain,
+        selector)
+    if not rspamd_util.file_exists(privkey_file) then
+      if ask_yes_no("Do you want to create privkey " .. highlight(privkey_file),
+        true) then
+        local pubkey_file = privkey_file .. ".pub"
+        rspamadm.dkim_keygen(domain, selector, privkey_file, pubkey_file, 2048)
+
+        local f = io.open(pubkey_file)
+        if not f then
+          printf("Cannot open pubkey file %s, fatal error", highlight(pubkey_file))
+          os.exit(1)
+        end
+
+        local content = f:read("*all")
+        f:close()
+        print("To make dkim signing working, you need to place the following record in your DNS zone:")
+        print(content)
+      end
+    end
+
+    domains[domain] = {
+      selector = selector,
+      privkey = privkey_file,
+    }
+  until not ask_yes_no("Do you wish to add another DKIM domain?")
+
+  changes.l.dkim_signing= {domain = domains}
+end
+
 local function find_worker(cfg, wtype)
   if cfg.worker then
     for k,s in pairs(cfg.worker) do
@@ -218,6 +290,12 @@ return function(args, cfg)
 
     if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
       setup_redis(cfg, changes)
+    end
+
+    if cfg.dkim_signing and not cfg.dkim_signing.domain then
+      if ask_yes_no('Do you want to setup dkim signing feature?') then
+        setup_dkim_signing(cfg, changes)
+      end
     end
 
     local nchanges = 0
