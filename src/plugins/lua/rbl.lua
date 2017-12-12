@@ -87,6 +87,72 @@ local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), '.') .. '.' .. rbl
 end
 
+local function gen_check_rcvd_conditions(rbl, received_total)
+  local min_pos = tonumber(rbl['received_min_pos'])
+  local max_pos = tonumber(rbl['received_max_pos'])
+  local match_flags = rbl['received_flags']
+  local nmatch_flags = rbl['received_nflags']
+  local function basic_received_check(rh)
+    if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
+      (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
+      ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
+      not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
+      not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
+        return true
+    else
+      return false
+    end
+  end
+  if not (max_pos or min_pos or match_flags or nmatch_flags) then
+    return basic_received_check
+  end
+  return function(rh, pos)
+    if not basic_received_check() then return false end
+    local got_flags = rh['flags']
+    if min_pos then
+      if min_pos < 0 then
+        if min_pos == -1 then
+          if (pos ~= received_total) then
+            return false
+          end
+        else
+          if pos <= (received_total - (min_pos*-1)) then
+            return false
+          end
+        end
+      elseif pos < min_pos then
+        return false
+      end
+    end
+    if max_pos then
+      if max_pos < -1 then
+        if (received_total - (max_pos*-1)) >= pos then
+          return false
+        end
+      elseif max_pos > 0 then
+        if pos > max_pos then
+          return false
+        end
+      end
+    end
+    if match_flags then
+      for _, flag in ipairs(match_flags) do
+        if not got_flags[flag] then
+          return false
+        end
+      end
+    end
+    if nmatch_flags then
+      for _, flag in ipairs(nmatch_flags) do
+        if got_flags[flag] then
+          return false
+        end
+      end
+    end
+    return true
+  end
+end
+
 local function rbl_cb (task)
   local function gen_rbl_callback(rule)
     return function (_, to_resolve, results, err)
@@ -380,21 +446,21 @@ local function rbl_cb (task)
     return false
   end, enabled_rbls))
 
+  havegot['received'] = fun.filter(function(h)
+    return not h['flags']['artificial']
+  end, havegot['received']):totable()
+
+  local received_total = #havegot['received']
   -- Received lists
   fun.each(function(_, rbl)
-    for _,rh in ipairs(havegot['received']) do
-      if rh['real_ip'] and rh['real_ip']:is_valid() then
-        if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
-          (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
-          ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
-          not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
-          not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
-          -- Disable forced for received resolving, as we have no control on
-          -- those headers count
-          local to_resolve = ip_to_rbl(rh['real_ip'], rbl['rbl'])
-          local rule = gen_rbl_rule(to_resolve, rbl)
-          rule.forced = false
-        end
+    local check_conditions = gen_check_rcvd_conditions(rbl, received_total)
+    for pos,rh in ipairs(havegot['received']) do
+      if check_conditions(rh, pos) then
+        local to_resolve = ip_to_rbl(rh['real_ip'], rbl['rbl'])
+        local rule = gen_rbl_rule(to_resolve, rbl)
+        -- Disable forced for received resolving, as we have no control on
+        -- those headers count
+        rule.forced = false
       end
     end
   end,
