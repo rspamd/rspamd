@@ -525,6 +525,7 @@ is_url_start (gchar c)
 {
 	if (c == '(' ||
 			c == '{' ||
+			c == '[' ||
 			c == '<' ||
 			c == '\'') {
 		return TRUE;
@@ -538,6 +539,7 @@ is_url_end (gchar c)
 {
 	if (c == ')' ||
 			c == '}' ||
+			c == ']' ||
 			c == '>' ||
 			c == '\'') {
 		return TRUE;
