@@ -19,6 +19,7 @@ local local_conf = rspamd_paths['CONFDIR']
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local ucl = require "ucl"
 
 local plugins_stat = require "rspamadm/plugins_stats"
 
@@ -50,6 +51,15 @@ local function ask_yes_no(greet, default)
   return false
 end
 
+local function readline_default(greet, def_value)
+  local reply = rspamd_util.readline(greet)
+  if not reply then os.exit(0) end
+
+  if #reply == 0 then return def_value end
+
+  return reply
+end
+
 local function print_changes(changes)
   local function print_change(k, c, where)
     printf('File: %s, changes list:', highlight(local_conf .. '/'
@@ -79,7 +89,7 @@ local function apply_changes(changes)
   end
 
   local function apply_change(k, c, where)
-    local fname = local_conf .. '/' .. where .. '/'.. k
+    local fname = local_conf .. '/' .. where .. '/'.. k .. '.conf'
 
     if not rspamd_util.file_exists(fname) then
       printf("Create file %s", highlight(fname))
@@ -103,9 +113,7 @@ local function apply_changes(changes)
       os.exit(1)
     end
 
-    for ek,ev in pairs(c) do
-      f:write(rspamd_logger.slog("%s = %s; # Set from configwizard\n", ek, ev))
-    end
+    f:write(ucl.to_config(c))
 
     f:close()
   end
@@ -150,11 +158,8 @@ local function setup_redis(cfg, changes)
   end
 
   if ask_yes_no("Do you wish to set Redis servers?", true) then
-    local read_servers = rspamd_util.readline("Input read only servers separated by `,` [default: localhost]: ")
-
-    if not read_servers or #read_servers == 0 then
-      read_servers = "localhost"
-    end
+    local read_servers = readline_default("Input read only servers separated by `,` [default: localhost]: ",
+      "localhost")
 
     local rs = parse_servers(read_servers)
     if rs and #rs > 0 then
@@ -162,8 +167,8 @@ local function setup_redis(cfg, changes)
         read_servers = table.concat(rs, ",")
       }
     end
-    local write_servers = rspamd_util.readline("Input write only servers separated by `,` [default: "
-        .. read_servers .. "]: ")
+    local write_servers = readline_default("Input write only servers separated by `,` [default: "
+        .. read_servers .. "]: ", read_servers)
 
     if not write_servers or #write_servers == 0 then
       printf("Use read servers %s as write servers", highlight(table.concat(rs, ",")))
