@@ -997,6 +997,11 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 				nnode);
 	}
 
+	if (tag->id == -1) {
+		/* Ignore unknown tags */
+		return FALSE;
+	}
+
 	tag->parent = *cur_level;
 
 	if (!(tag->flags & CM_INLINE)) {
@@ -1178,6 +1183,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		if (!g_ascii_isalpha (*in) && !g_ascii_isspace (*in)) {
 			hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 			state = ignore_bad_tag;
+			tag->id = -1;
+			tag->flags |= FL_BROKEN;
 		}
 		else if (g_ascii_isalpha (*in)) {
 			state = parse_name;
@@ -1197,6 +1204,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 			if (tag->name.len == 0) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				tag->id = -1;
 				tag->flags |= FL_BROKEN;
 				state = ignore_bad_tag;
 			}
@@ -1206,8 +1214,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 				s = rspamd_mempool_alloc (pool, tag->name.len);
 				memcpy (s, tag->name.start, tag->name.len);
-				tag->name.len = rspamd_html_decode_entitles_inplace (
-						s,
+				tag->name.len = rspamd_html_decode_entitles_inplace (s,
 						tag->name.len);
 				tag->name.start = s;
 
@@ -2430,6 +2437,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
 				state = tag_end;
+				/* We don't know a lot about sgml tags, ignore them */
+				cur_tag = NULL;
 				continue;
 			}
 			p ++;
