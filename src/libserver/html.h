@@ -17,6 +17,7 @@
 #define RSPAMD_HTML_FLAG_UNBALANCED (1 << 3)
 #define RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS (1 << 4)
 #define RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS (1 << 5)
+#define RSPAMD_HTML_FLAG_TOO_MANY_TAGS (1 << 6)
 
 /*
  * Image flags
@@ -107,6 +108,7 @@ struct rspamd_task;
 struct html_content {
 	GNode *html_tags;
 	gint flags;
+	guint total_tags;
 	struct html_color bgcolor;
 	guchar *tags_seen;
 	GPtrArray *images;
