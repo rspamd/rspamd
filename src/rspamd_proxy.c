@@ -1314,6 +1314,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 	guint i;
 	struct rspamd_proxy_backend_connection *bk_conn;
 	struct rspamd_http_message *msg;
+	GError *err = NULL;
 
 	coin = rspamd_random_double ();
 
@@ -1351,11 +1352,14 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			continue;
 		}
 
-		msg = rspamd_http_connection_copy_msg (session->client_message);
+		msg = rspamd_http_connection_copy_msg (session->client_message, &err);
 
 		if (msg == NULL) {
-			msg_err_session ("cannot copy message to send to a mirror %s: %s",
-					m->name, strerror (errno));
+			msg_err_session ("cannot copy message to send to a mirror %s: %e",
+					m->name, err);
+			if (err) {
+				g_error_free (err);
+			}
 			continue;
 		}
 
@@ -1712,6 +1716,7 @@ proxy_send_master_message (struct rspamd_proxy_session *session)
 	struct rspamd_http_message *msg;
 	struct rspamd_http_upstream *backend = NULL;
 	const rspamd_ftok_t *host;
+	GError *err = NULL;
 	gchar hostbuf[512];
 
 	host = rspamd_http_message_find_header (session->client_message, "Host");
@@ -1771,6 +1776,18 @@ retry:
 			goto retry;
 		}
 
+		msg = rspamd_http_connection_copy_msg (session->client_message, &err);
+		if (msg == NULL) {
+			msg_err_session ("cannot copy message to send it to the upstream: %e",
+					err);
+
+			if (err) {
+				g_error_free (err);
+			}
+
+			goto err; /* No fallback here */
+		}
+
 		session->master_conn->backend_conn = rspamd_http_connection_new (
 				NULL,
 				proxy_backend_master_error_handler,
@@ -1782,8 +1799,6 @@ retry:
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
-
-		msg = rspamd_http_connection_copy_msg (session->client_message);
 
 		if (backend->key) {
 			msg->peer_key = rspamd_pubkey_ref (backend->key);

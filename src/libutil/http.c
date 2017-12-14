@@ -1398,7 +1398,7 @@ rspamd_http_connection_steal_msg (struct rspamd_http_connection *conn)
 }
 
 struct rspamd_http_message *
-rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
+rspamd_http_connection_copy_msg (struct rspamd_http_message *msg, GError **err)
 {
 	struct rspamd_http_message *new_msg;
 	struct rspamd_http_header *hdr, *nhdr, *nhdrs, *thdr, *hcur;
@@ -1421,11 +1421,19 @@ rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 
 			if (storage->shared.shm_fd == -1) {
 				rspamd_http_message_unref (new_msg);
+				g_set_error (err, http_error_quark (), errno,
+						"cannot dup shmem fd: %d: %s",
+						msg->body_buf.c.shared.shm_fd, strerror (errno));
+
 				return NULL;
 			}
 
 			if (fstat (storage->shared.shm_fd, &st) == -1) {
+				g_set_error (err, http_error_quark (), errno,
+						"cannot stat shmem fd: %d: %s",
+						storage->shared.shm_fd, strerror (errno));
 				rspamd_http_message_unref (new_msg);
+
 				return NULL;
 			}
 
@@ -1441,7 +1449,11 @@ rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 					storage->shared.shm_fd, 0);
 
 			if (new_msg->body_buf.str == MAP_FAILED) {
+				g_set_error (err, http_error_quark (), errno,
+						"cannot mmap shmem fd: %d: %s",
+						storage->shared.shm_fd, strerror (errno));
 				rspamd_http_message_unref (new_msg);
+
 				return NULL;
 			}
 
@@ -1454,7 +1466,11 @@ rspamd_http_connection_copy_msg (struct rspamd_http_message *msg)
 			old_body = rspamd_http_message_get_body (msg, &old_len);
 
 			if (!rspamd_http_message_set_body (new_msg, old_body, old_len)) {
+				g_set_error (err, http_error_quark (), errno,
+						"cannot set body for message, length: %zd",
+						old_len);
 				rspamd_http_message_unref (new_msg);
+
 				return NULL;
 			}
 		}
