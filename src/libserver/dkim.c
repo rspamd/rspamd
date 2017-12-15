@@ -1744,18 +1744,20 @@ rspamd_dkim_hash_update (EVP_MD_CTX *ck, const gchar *begin, gsize len)
 	end = begin + len;
 	p = begin;
 	c = p;
-	while (p != end) {
+
+	while (p < end) {
 		if (*p == '\r') {
-			EVP_DigestUpdate (ck, c,	 p - c);
+			EVP_DigestUpdate (ck, c, p - c);
 			EVP_DigestUpdate (ck, CRLF, sizeof (CRLF) - 1);
 			p++;
-			if (*p == '\n') {
+
+			if (p < end && *p == '\n') {
 				p++;
 			}
 			c = p;
 		}
 		else if (*p == '\n') {
-			EVP_DigestUpdate (ck, c,	 p - c);
+			EVP_DigestUpdate (ck, c, p - c);
 			EVP_DigestUpdate (ck, CRLF, sizeof (CRLF) - 1);
 			p++;
 			c = p;
@@ -1764,7 +1766,8 @@ rspamd_dkim_hash_update (EVP_MD_CTX *ck, const gchar *begin, gsize len)
 			p++;
 		}
 	}
-	if (p != c) {
+
+	if (p > c) {
 		EVP_DigestUpdate (ck, c, p - c);
 	}
 }
