@@ -763,7 +763,6 @@ end
 exports.add_redis_script = add_redis_script
 
 local function exec_redis_script(id, params, callback, args)
-  local logger = require "rspamd_logger"
   local args_modified = false
 
   if not redis_scripts[id] then
