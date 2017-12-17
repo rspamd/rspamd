@@ -8,7 +8,7 @@ such as URL black lists. Each message is analysed by Rspamd and given a `spam sc
 
 According to this spam score and the user's settings, Rspamd recommends an action for
 the MTA to apply to the message, for example, to pass, reject or add a header.
-Rspamd is designed to process hundreds of messages per second simultaneously, and sports a number of
+Rspamd is designed to process hundreds of messages per second simultaneously, and provides a number of
 useful features.
 
 You can watch the following [introduction video](https://www.youtube.com/watch?v=_fl9i-az_Q0) from [FOSDEM-2016](http://fosdem.org) where I describe the main features of Rspamd and explain why Rspamd is so fast.
