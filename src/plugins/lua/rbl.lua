@@ -93,6 +93,7 @@ local function gen_check_rcvd_conditions(rbl, received_total)
   local match_flags = rbl['received_flags']
   local nmatch_flags = rbl['received_nflags']
   local function basic_received_check(rh)
+    if not (rh['real_ip'] and rh['real_ip']:is_valid()) then return false end
     if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
       (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
       ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
@@ -108,7 +109,7 @@ local function gen_check_rcvd_conditions(rbl, received_total)
   end
   return function(rh, pos)
     if not basic_received_check() then return false end
-    local got_flags = rh['flags']
+    local got_flags = rh['flags'] or E
     if min_pos then
       if min_pos < 0 then
         if min_pos == -1 then
