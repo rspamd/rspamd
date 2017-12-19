@@ -791,13 +791,17 @@ surbl_module_config (struct rspamd_config *cfg)
 	gint nrules = 0;
 	lua_State *L;
 
+	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
+		return TRUE;
+	}
+
 	/* Register global methods */
 	L = cfg->lua_state;
 	lua_getglobal (L, "rspamd_plugins");
 
 	if (lua_type (L, -1) == LUA_TTABLE) {
 		lua_pushstring (L, "surbl");
-		lua_createtable (L, 0, 2);
+		lua_createtable (L, 0, 3);
 		/* Set methods */
 		lua_pushstring (L, "register_redirect");
 		lua_pushcfunction (L, surbl_register_redirect_handler);
@@ -808,15 +812,11 @@ surbl_module_config (struct rspamd_config *cfg)
 		lua_pushstring (L, "is_redirector");
 		lua_pushcfunction (L, surbl_is_redirector_handler);
 		lua_settable (L, -3);
-		/* Finish fuzzy_check key */
+		/* Finish surbl key */
 		lua_settable (L, -3);
 	}
 
 	lua_pop (L, 1); /* Remove global function */
-
-	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
-		return TRUE;
-	}
 
 	(void)rspamd_symbols_cache_add_symbol (cfg->cache, SURBL_REDIRECTOR_CALLBACK,
 			0, surbl_test_redirector, NULL,

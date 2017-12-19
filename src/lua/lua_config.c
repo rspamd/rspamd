@@ -1995,7 +1995,7 @@ lua_config_newindex (lua_State *L)
 
 	name = luaL_checkstring (L, 2);
 
-	if (cfg != NULL && name != NULL && lua_gettop (L) > 2) {
+	if (cfg != NULL && name != NULL && lua_gettop (L) == 3) {
 		if (lua_type (L, 3) == LUA_TFUNCTION) {
 			/* Normal symbol from just a function */
 			lua_pushvalue (L, 3);
@@ -2070,7 +2070,6 @@ lua_config_newindex (lua_State *L)
 			if (lua_type (L, -1) == LUA_TSTRING) {
 				type_str = lua_tostring (L, -1);
 				type = lua_parse_symbol_type (type_str);
-
 			}
 			lua_pop (L, 1);
 
