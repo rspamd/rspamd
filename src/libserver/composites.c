@@ -21,6 +21,23 @@
 #include "filter.h"
 #include "composites.h"
 
+#define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "composites", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_composites(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "composites", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_composites(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "composites", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_composites(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "composites", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 struct composites_data {
 	struct rspamd_task *task;
 	struct rspamd_composite *composite;
@@ -97,12 +114,21 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	struct rspamd_symbol_result *ms = NULL;
 	gdouble rc = 0;
 	struct rspamd_composite *ncomp;
+	struct rspamd_task *task = cd->task;
 
 	if ((ms = g_hash_table_lookup (cd->metric_res->symbols, sym)) == NULL) {
+		msg_debug_composites ("not found symbol %s in composite %s", sym,
+				cd->composite->sym);
 		if ((ncomp =
 				g_hash_table_lookup (cd->task->cfg->composite_symbols,
 						sym)) != NULL) {
+
+			msg_debug_composites ("symbol %s for composite %s is another composite",
+					sym, cd->composite->sym);
+
 			if (isclr (cd->checked, ncomp->id * 2)) {
+				msg_debug_composites ("composite dependency %s for %s is not checked",
+						sym, cd->composite->sym);
 				/* Set checked for this symbol to avoid cyclic references */
 				setbit (cd->checked, cd->composite->id * 2);
 				rc = rspamd_process_expression (ncomp->expr,
@@ -128,6 +154,8 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	}
 
 	if (ms) {
+		msg_debug_composites ("found symbol %s in composite %s, weight: %.3f",
+				sym, cd->composite->sym, ms->score);
 		if (ms->score == 0) {
 			rc = 0.001; /* Distinguish from 0 */
 		}
@@ -150,6 +178,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	struct rspamd_symbol_result *ms = NULL;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_symbol *sdef;
+	struct rspamd_task *task = cd->task;
 	GHashTableIter it;
 	gpointer k, v;
 	gdouble rc = 0;
@@ -168,6 +197,9 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 				rc = ms->score;
 			}
 		}
+
+		msg_debug_composites ("composite %s is already checked, result: %.2f",
+				cd->composite->sym, rc);
 
 		return rc;
 	}
@@ -252,9 +284,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 
 		if (rd == NULL) {
 			DL_APPEND (rd, nrd);
-			g_hash_table_insert (cd->symbols_to_remove,
-							(gpointer)ms->name,
-							rd);
+			g_hash_table_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
 		}
 		else {
 			DL_APPEND (rd, nrd);
@@ -285,19 +315,25 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
 	struct composites_data *cd = data;
 	struct rspamd_composite *comp = value;
+	struct rspamd_task *task;
 	gdouble rc;
 
 	cd->composite = comp;
+	task = cd->task;
 
 	if (!isset (cd->checked, cd->composite->id * 2)) {
 		if (rspamd_symbols_cache_is_checked (cd->task, cd->task->cfg->cache,
 				key)) {
+			msg_debug_composites ("composite %s is checked in symcache but not "
+					"in composites bitfield", cd->composite->sym);
 			setbit (cd->checked, comp->id * 2);
 			clrbit (cd->checked, comp->id * 2 + 1);
 		}
 		else {
 			if (g_hash_table_lookup (cd->metric_res->symbols, key) != NULL) {
 				/* Already set, no need to check */
+				msg_debug_composites ("composite %s is already in metric "
+						"in composites bitfield", cd->composite->sym);
 				setbit (cd->checked, comp->id * 2);
 				clrbit (cd->checked, comp->id * 2 + 1);
 
@@ -327,11 +363,14 @@ static void
 composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 {
 	struct composites_data *cd = data;
+	struct rspamd_task *task;
 	struct symbol_remove_data *rd = value, *cur;
 	gboolean skip = FALSE, has_valid_op = FALSE,
 			want_remove_score = TRUE, want_remove_symbol = TRUE,
 			want_forced = FALSE;
 	GNode *par;
+
+	task = cd->task;
 
 	DL_FOREACH (rd, cur) {
 		if (!isset (cd->checked, cur->comp->id * 2 + 1)) {
@@ -382,9 +421,12 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	if (has_valid_op) {
 		if (want_remove_symbol || want_forced) {
 			g_hash_table_remove (cd->metric_res->symbols, key);
+			msg_debug_composites ("remove symbol %s", key);
 		}
 
 		if (want_remove_score || want_forced) {
+			msg_debug_composites ("remove symbol weight for %s (was %.2f)",
+					key, rd->ms->score);
 			cd->metric_res->score -= rd->ms->score;
 			rd->ms->score = 0.0;
 		}
