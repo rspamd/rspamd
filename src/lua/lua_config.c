@@ -1966,6 +1966,8 @@ lua_config_add_composite (lua_State * L)
 						sizeof (struct rspamd_composite));
 				composite->expr = expr;
 				composite->id = g_hash_table_size (cfg->composite_symbols);
+				composite->str_expr = rspamd_mempool_strdup (cfg->cfg_pool,
+						expr_str);
 				g_hash_table_insert (cfg->composite_symbols,
 						(gpointer)name,
 						composite);

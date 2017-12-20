@@ -1437,6 +1437,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_composite));
 	composite->expr = expr;
 	composite->id = g_hash_table_size (cfg->composite_symbols);
+	composite->str_expr = composite_expression;
 
 	val = ucl_object_lookup (obj, "score");
 	if (val != NULL && ucl_object_todouble_safe (val, &score)) {

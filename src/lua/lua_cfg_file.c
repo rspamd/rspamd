@@ -95,12 +95,9 @@ void
 rspamd_lua_post_load_config (struct rspamd_config *cfg)
 {
 	lua_State *L = cfg->lua_state;
-	const gchar *name, *val;
-	gchar *sym;
-	struct rspamd_expression *expr, *old_expr;
+	const gchar *name;
 	ucl_object_t *obj;
 	gsize keylen;
-	GError *err = NULL;
 
 	/* First check all module options that may be overridden in 'config' global */
 	lua_getglobal (L, "config");
@@ -135,42 +132,6 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 			name = luaL_checkstring (L, -2);
 			if (name != NULL && lua_istable (L, -1)) {
 				lua_process_metric (L, name, cfg);
-			}
-		}
-	}
-
-	/* Check composites */
-	lua_getglobal (L, "composites");
-
-	if (lua_istable (L, -1)) {
-		/* Iterate */
-		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-			/* 'key' is at index -2 and 'value' is at index -1 */
-			/* Key must be a string and value must be a table */
-			name = luaL_checkstring (L, -2);
-			if (name != NULL && lua_isstring (L, -1)) {
-				val = lua_tostring (L, -1);
-				sym = rspamd_mempool_strdup (cfg->cfg_pool, name);
-				if (!rspamd_parse_expression (val, 0, &composite_expr_subr, NULL,
-							cfg->cfg_pool, &err, &expr)) {
-					msg_err_config("cannot parse composite expression '%s': %s", val,
-							err->message);
-					g_error_free (err);
-					err = NULL;
-					continue;
-				}
-				/* Now check hash table for this composite */
-				if ((old_expr =
-					g_hash_table_lookup (cfg->composite_symbols,
-					name)) != NULL) {
-					msg_info_config("replacing composite symbol %s", name);
-					g_hash_table_replace (cfg->composite_symbols, sym, expr);
-				}
-				else {
-					g_hash_table_insert (cfg->composite_symbols, sym, expr);
-					rspamd_symbols_cache_add_symbol (cfg->cache, sym,
-							0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
-				}
 			}
 		}
 	}
