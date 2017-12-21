@@ -191,7 +191,7 @@ local function milter_headers(task)
         ' ', s.name, '(', string.format('%.2f', s.score), ')[', table.concat(s.options, ','), ']',
       }))
     end
-    add[settings.routines['x-spamd-result'].header] = table.concat(buf, '\n')
+    add[settings.routines['x-spamd-result'].header] = table.concat(buf, '\n\t')
   end
 
   routines['x-rspamd-queue-id'] = function()
