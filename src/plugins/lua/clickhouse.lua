@@ -250,12 +250,12 @@ end
 
 local function clickhouse_send_data(task)
   local upstream = settings.upstream:get_upstream_round_robin()
-  local ip_addr = tostring(upstream:get_addr())
+  local ip_addr = upstream:get_addr():to_string(true)
 
   local function http_cb(err_message, code, _, _)
     if code ~= 200 or err_message then
-      rspamd_logger.errx(task, "cannot send data to clickhouse server %s: %s:%s",
-        ip_addr, code, err_message)
+      rspamd_logger.errx(task, "cannot send data to clickhouse server %s: %s",
+        ip_addr, err_message)
       upstream:fail()
     else
       rspamd_logger.infox(task, "sent %s rows to clickhouse server %s",
@@ -688,12 +688,12 @@ if opts then
       rspamd_config:add_on_load(function(cfg, ev_base, worker)
         -- XXX: need to call this script for all upstreams
         local upstream = settings.upstream:get_upstream_round_robin()
-        local ip_addr = tostring(upstream:get_addr())
+        local ip_addr = upstream:get_addr():to_string(true)
 
         local function http_cb(err_message, code, _, _)
           if code ~= 200 or err_message then
-            rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s:%s",
-              ip_addr, code, err_message)
+            rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s",
+              ip_addr, err_message)
             upstream:fail()
           else
             upstream:ok()
