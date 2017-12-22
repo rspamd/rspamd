@@ -51,8 +51,9 @@ print_octets(ip6)
  */
 
 /***
- * @method ip:to_string()
+ * @method ip:to_string([pretty=false])
  * Converts valid IP address to string
+ * @param {bool} pretty print IP address with port and braces (for IPv6)
  * @return {string or nil} string representation of IP or `nil` if IP is invalid
  */
 LUA_FUNCTION_DEF (ip, to_string);
@@ -325,10 +326,15 @@ lua_ip_to_string (lua_State *L)
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip != NULL && ip->addr) {
-		lua_pushstring (L, rspamd_inet_address_to_string (ip->addr));
+		if (lua_isboolean (L, 2) && lua_toboolean (L, 2) == true) {
+			lua_pushstring (L, rspamd_inet_address_to_string_pretty (ip->addr));
+		}
+		else {
+			lua_pushstring (L, rspamd_inet_address_to_string (ip->addr));
+		}
 	}
 	else {
-		lua_pushnil (L);
+		luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
