@@ -24,6 +24,7 @@
 #include "smtp_parsers.h"
 #include "mime_parser.h"
 #include "mime_encoding.h"
+#include "libutil/multipattern.h"
 #include "libserver/mempool_vars_internal.h"
 
 #ifdef WITH_SNOWBALL
@@ -35,8 +36,13 @@
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 
-static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
+static const gchar gtube_pattern_reject[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static const gchar gtube_pattern_add_header[] = "YJS*C4JDBQADN1.NSBN3*2IDNEN*"
+		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static const gchar gtube_pattern_rewrite_subject[] = "ZJS*C4JDBQADN1.NSBN3*2IDNEN*"
+		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+struct rspamd_multipattern *gtube_matcher = NULL;
 static const guint64 words_hash_seed = 0xdeadbabe;
 
 
@@ -653,27 +659,72 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 	return ret;
 }
 
-static gboolean
+static gint
+rspamd_multipattern_gtube_cb (struct rspamd_multipattern *mp,
+		guint strnum,
+		gint match_start,
+		gint match_pos,
+		const gchar *text,
+		gsize len,
+		void *context)
+{
+	return strnum + 1; /* To distinguish from zero */
+}
+
+static enum rspamd_action_type
 rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part)
 {
 	static const gsize max_check_size = 4 * 1024;
+	gint ret;
+	enum rspamd_action_type act = METRIC_ACTION_NOACTION;
 	g_assert (part != NULL);
 
-	if (part->content && part->content->len > sizeof (gtube_pattern) &&
-			part->content->len <= max_check_size) {
-		if (rspamd_substring_search (part->content->data,
-				part->content->len,
-				gtube_pattern, sizeof (gtube_pattern) - 1) != -1) {
-			task->flags |= RSPAMD_TASK_FLAG_SKIP;
-			task->flags |= RSPAMD_TASK_FLAG_GTUBE;
-			msg_info_task ("<%s>: gtube pattern has been found in part of length %ud",
-					task->message_id, part->content->len);
+	if (gtube_matcher == NULL) {
+		gtube_matcher = rspamd_multipattern_create (RSPAMD_MULTIPATTERN_DEFAULT);
 
-			return TRUE;
+		rspamd_multipattern_add_pattern (gtube_matcher,
+				gtube_pattern_reject,
+				RSPAMD_MULTIPATTERN_DEFAULT);
+		rspamd_multipattern_add_pattern (gtube_matcher,
+				gtube_pattern_add_header,
+				RSPAMD_MULTIPATTERN_DEFAULT);
+		rspamd_multipattern_add_pattern (gtube_matcher,
+				gtube_pattern_rewrite_subject,
+				RSPAMD_MULTIPATTERN_DEFAULT);
+
+		g_assert (rspamd_multipattern_compile (gtube_matcher, NULL));
+	}
+
+	if (part->content && part->content->len > sizeof (gtube_pattern_reject) &&
+			part->content->len <= max_check_size) {
+		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->content->data,
+				part->content->len,
+				rspamd_multipattern_gtube_cb, NULL, NULL)) > 0) {
+
+			switch (ret) {
+			case 1:
+				act = METRIC_ACTION_REJECT;
+				break;
+			case 2:
+				act = METRIC_ACTION_ADD_HEADER;
+				break;
+			case 3:
+				act = METRIC_ACTION_REWRITE_SUBJECT;
+				break;
+			}
+
+			if (act != METRIC_ACTION_NOACTION) {
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+				task->flags |= RSPAMD_TASK_FLAG_GTUBE;
+				msg_info_task (
+						"<%s>: gtube %s pattern has been found in part of length %ud",
+						task->message_id, rspamd_action_to_str (act),
+						part->content->len);
+			}
 		}
 	}
 
-	return FALSE;
+	return act;
 }
 
 static gint
@@ -692,6 +743,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 	rspamd_ftok_t html_tok, xhtml_tok;
 	GByteArray *part_content;
 	gboolean found_html = FALSE, found_txt = FALSE;
+	enum rspamd_action_type act;
 
 	if (IS_CT_TEXT (mime_part->ct)) {
 		html_tok.begin = "html";
@@ -830,18 +882,25 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
 	mime_part->specific.txt = text_part;
 
-	if (rspamd_check_gtube (task, text_part)) {
+	act = rspamd_check_gtube (task, text_part);
+	if (act != METRIC_ACTION_NOACTION) {
 		struct rspamd_metric_result *mres;
 
 		mres = rspamd_create_metric_result (task);
 
 		if (mres != NULL) {
-			mres->score = rspamd_task_get_required_score (task, mres);
-			mres->action = METRIC_ACTION_REJECT;
+			if (act == METRIC_ACTION_REJECT) {
+				mres->score = rspamd_task_get_required_score (task, mres);
+			}
+			else {
+				mres->score = mres->actions_limits[act];
+			}
+
+			mres->action = act;
 		}
 
 		task->result = mres;
-		task->pre_result.action = METRIC_ACTION_REJECT;
+		task->pre_result.action = act;
 		task->pre_result.str = "Gtube pattern";
 		ucl_object_insert_key (task->messages,
 				ucl_object_fromstring ("Gtube pattern"), "smtp_message", 0,
