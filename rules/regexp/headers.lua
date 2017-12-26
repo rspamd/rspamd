@@ -862,14 +862,14 @@ reconf['SUBJECT_HAS_EXCLAIM'] = {
 }
 
 reconf['SUBJECT_ENDS_QUESTION'] = {
-  re = 'Subject=/\\?\\s*$/H',
+  re = 'Subject=/\\?\\s*$/Hu',
   description = 'Subject ends with a question',
   score = 1.0,
   group = 'headers'
 }
 
 reconf['SUBJECT_HAS_QUESTION'] = {
-  re = string.format('%s & !%s', 'Subject=/\\?/H', 'Subject=/\\?\\s*$/H'),
+  re = string.format('%s & !%s', 'Subject=/\\?/H', 'Subject=/\\?\\s*$/Hu'),
   description = 'Subject contains a question',
   score = 0.0,
   group = 'headers'

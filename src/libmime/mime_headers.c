@@ -516,8 +516,14 @@ rspamd_mime_header_sanity_check (GString *str)
 
 	for (i = 0; i < str->len; i ++) {
 		t = str->str[i];
-		if (!((t & 0x80) || g_ascii_isgraph (t) || t == ' ')) {
-			str->str[i] = '?';
+		if (!((t & 0x80) || g_ascii_isgraph (t))) {
+			if (g_ascii_isspace (t)) {
+				/* Replace spaces characters with plain space */
+				str->str[i] = ' ';
+			}
+			else {
+				str->str[i] = '?';
+			}
 		}
 	}
 }

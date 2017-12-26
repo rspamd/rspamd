@@ -809,9 +809,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task, scvec, lenvec, headerlist->len, raw);
-			msg_debug_re_task ("checking header %s regexp: %s -> %d",
+			msg_debug_re_task ("checking header %s regexp: %s=%*s -> %d",
 					re_class->type_data,
-					rspamd_regexp_get_pattern (re), ret);
+					rspamd_regexp_get_pattern (re),
+					(int)lenvec[0], scvec[0], ret);
 			g_free (scvec);
 			g_free (lenvec);
 		}
