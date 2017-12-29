@@ -674,7 +674,7 @@ rspamd_multipattern_gtube_cb (struct rspamd_multipattern *mp,
 static enum rspamd_action_type
 rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part)
 {
-	static const gsize max_check_size = 4 * 1024;
+	static const gsize max_check_size = 8 * 1024;
 	gint ret;
 	enum rspamd_action_type act = METRIC_ACTION_NOACTION;
 	g_assert (part != NULL);
