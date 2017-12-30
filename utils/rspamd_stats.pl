@@ -68,6 +68,8 @@ my $ham_junk_change = 0;
 my %sym_res;
 my $rspamd_log;
 my $enabled = 0;
+my $log_file_num = 1;
+my $spinner_update_time = 0;
 
 my %action;
 my %timeStamp;
@@ -107,6 +109,10 @@ elsif ( -d "$log_file" ) {
 
     open( $rspamd_log, "-|", "$dc $log_dir/$_" )
       or die "cannot execute $dc $log_dir/$_ : $!";
+
+    printf "\033[J  Parsing log files: [%d/%d] %s\033[G", $log_file_num++, scalar @logs, $_;
+    $spinner_update_time = 0;   # Force spinner update
+    &spinner;
 
     &ProcessLog;
 
@@ -337,6 +343,7 @@ sub ProcessLog {
     next if !$enabled;
 
     if (/^.*rspamd_task_write_log.*$/) {
+      &spinner;
       my $ts =
         ($is_syslog)
         ? syslog2iso( join ' ', ( split /\s+/ )[ 0 .. 2 ] )
@@ -528,7 +535,7 @@ sub GetLogfilesList {
 
   # Loop through array printing out filenames
   if (!$json) {
-    print "\nParsing log files:\n";
+    print "\nLog files to process:\n";
     foreach my $file (@logs) {
       print "  $file\n";
     }
@@ -587,6 +594,14 @@ sub numeric {
   my $b_num = $1;
 
   $a_num <=> $b_num;
+}
+
+sub spinner {
+    my @spinner = qw{/ - \ |};
+    return
+      if ( ( time - $spinner_update_time ) < 1 );
+    printf "%s\033[1D", $spinner[ time % @spinner ];
+    $spinner_update_time = time;
 }
 
 # Convert syslog timestamp to "ISO 8601 like" format
