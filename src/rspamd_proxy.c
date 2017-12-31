@@ -1922,6 +1922,9 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 				session->client_conn);
 		session->shmem_ref = rspamd_http_message_shmem_ref (session->client_message);
 		rspamd_http_message_remove_header (msg, "Content-Length");
+		rspamd_http_message_remove_header (msg, "Transfer-Encoding");
+		rspamd_http_message_remove_header (msg, "Keep-Alive");
+		rspamd_http_message_remove_header (msg, "Connection");
 		rspamd_http_message_remove_header (msg, "Key");
 
 		proxy_open_mirror_connections (session);
@@ -1941,6 +1944,9 @@ err:
 	rspamd_http_connection_steal_msg (session->client_conn);
 	rspamd_http_message_remove_header (msg, "Content-Length");
 	rspamd_http_message_remove_header (msg, "Key");
+	rspamd_http_message_remove_header (msg, "Transfer-Encoding");
+	rspamd_http_message_remove_header (msg, "Keep-Alive");
+	rspamd_http_message_remove_header (msg, "Connection");
 	rspamd_http_connection_reset (session->client_conn);
 	proxy_client_write_error (session, 404, "Backend not found");
 
