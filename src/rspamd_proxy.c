@@ -34,6 +34,7 @@
 #include "ottery.h"
 #include "unix-std.h"
 #include "libserver/milter.h"
+#include "libmime/lang_detection.h"
 #include "contrib/zstd/zstd.h"
 
 #ifdef HAVE_NETINET_TCP_H
@@ -145,6 +146,8 @@ struct rspamd_proxy_ctx {
 	gchar *spam_header;
 	/* Sessions cache */
 	void *sessions_cache;
+	/* Language detector */
+	struct rspamd_lang_detector *lang_det;
 };
 
 enum rspamd_backend_flags {
@@ -2139,7 +2142,8 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
-		rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
+		rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver,
+				&ctx->lang_det);
 	}
 
 	if (worker->srv->cfg->enable_sessions_cache) {

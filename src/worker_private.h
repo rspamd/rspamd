@@ -25,6 +25,8 @@
 
 static const guint64 rspamd_worker_magic = 0xb48abc69d601dc1dULL;
 
+struct rspamd_lang_detector;
+
 struct rspamd_worker_ctx {
 	guint64 magic;
 	/* Events base */
@@ -52,14 +54,16 @@ struct rspamd_worker_ctx {
 	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */
 	struct rspamd_keypair_cache *keys_cache;
+	/* Language detector */
+	struct rspamd_lang_detector *lang_det;
 };
-
 /*
  * Init scanning routines
  */
 void rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct event_base *ev_base,
-		struct rspamd_dns_resolver *resolver);
+		struct rspamd_dns_resolver *resolver,
+		struct rspamd_lang_detector **plang_det);
 
 /*
  * Called on forced timeout

@@ -17,8 +17,6 @@
  * Rspamd worker implementation
  */
 
-#include <libserver/rspamd_control.h>
-#include <src/libserver/rspamd_control.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -36,7 +34,7 @@
 #include "worker_private.h"
 #include "utlist.h"
 #include "libutil/http_private.h"
-#include "monitored.h"
+#include "libmime/lang_detection.h"
 #include "unix-std.h"
 
 #include "lua/lua_common.h"
@@ -641,7 +639,8 @@ rspamd_worker_on_terminate (struct rspamd_worker *worker)
 void
 rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct event_base *ev_base,
-		struct rspamd_dns_resolver *resolver)
+		struct rspamd_dns_resolver *resolver,
+		struct rspamd_lang_detector **plang_det)
 {
 	rspamd_stat_init (worker->srv->cfg, ev_base);
 	g_ptr_array_add (worker->finish_actions,
@@ -660,6 +659,8 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 			RSPAMD_CONTROL_MONITORED_CHANGE,
 			rspamd_worker_monitored_handler,
 			worker->srv->cfg);
+
+	*plang_det = rspamd_language_detector_init (worker->srv->cfg);
 }
 
 /*
@@ -685,7 +686,8 @@ start_worker (struct rspamd_worker *worker)
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
-	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver);
+	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver,
+			&ctx->lang_det);
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
 			worker);
 
