@@ -28,6 +28,7 @@
 #include "fuzzy_wire.h"
 #include "unix-std.h"
 #include "utlist.h"
+#include "libmime/lang_detection.h"
 #include <math.h>
 
 /* 60 seconds for worker's IO */
@@ -179,6 +180,7 @@ struct rspamd_controller_worker_ctx {
 	struct event *rrd_event;
 	struct rspamd_rrd_file *rrd;
 	struct event save_stats_event;
+	struct rspamd_lang_detector *lang_det;
 };
 
 struct rspamd_controller_plugin_cbdata {
@@ -1482,7 +1484,7 @@ rspamd_controller_handle_lua_history (lua_State *L,
 
 			if (lua_isfunction (L, -1)) {
 				task = rspamd_task_new (session->ctx->worker, session->cfg,
-						session->pool);
+						session->pool, ctx->lang_det);
 
 				task->resolver = ctx->resolver;
 				task->ev_base = ctx->ev_base;
@@ -1780,7 +1782,8 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
+			ctx->lang_det);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -1963,7 +1966,8 @@ rspamd_controller_handle_learn_common (
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
+			session->ctx->lang_det);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -2063,7 +2067,8 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
+			ctx->lang_det);
 	task->ev_base = session->ctx->ev_base;
 
 	task->resolver = ctx->resolver;
@@ -2541,9 +2546,10 @@ rspamd_controller_handle_stat_common (
 	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
-	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
-
 	ctx = session->ctx;
+
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
+			ctx->lang_det);
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
@@ -2905,7 +2911,8 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool);
+	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
+			ctx->lang_det);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -3622,6 +3629,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	g_ptr_array_add (worker->finish_actions,
 			(gpointer)rspamd_controller_on_terminate);
 	rspamd_controller_load_saved_stats (ctx);
+	ctx->lang_det = ctx->cfg->lang_det;
 
 	/* RRD collector */
 	if (ctx->cfg->rrd_file && worker->index == 0) {

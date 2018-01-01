@@ -26,6 +26,7 @@
 #include "utlist.h"
 #include "contrib/zstd/zstd.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libmime/lang_detection.h"
 #include <math.h>
 
 /*
@@ -61,7 +62,8 @@ rspamd_request_header_dtor (gpointer p)
  */
 struct rspamd_task *
 rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
-		rspamd_mempool_t *pool)
+		rspamd_mempool_t *pool,
+		struct rspamd_lang_detector *lang_det)
 {
 	struct rspamd_task *new_task;
 
@@ -82,6 +84,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	gettimeofday (&new_task->tv, NULL);
 	new_task->time_real = rspamd_get_ticks (FALSE);
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
+	new_task->lang_det = lang_det;
 
 	if (pool == NULL) {
 		new_task->task_pool =

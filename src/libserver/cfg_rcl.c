@@ -28,6 +28,7 @@
 #include "cryptobox.h"
 #include "libutil/multipattern.h"
 #include "libmime/email_addr.h"
+#include "libmime/lang_detection.h"
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
@@ -3687,6 +3688,8 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 		g_error_free (err);
 		return FALSE;
 	}
+
+	cfg->lang_det = rspamd_language_detector_init (cfg);
 
 	return TRUE;
 }

@@ -122,6 +122,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_PROFILING(task) (((task)->flags & RSPAMD_TASK_FLAG_PROFILE))
 
 struct rspamd_email_address;
+struct rspamd_lang_detector;
 enum rspamd_newlines_type;
 
 /**
@@ -205,6 +206,7 @@ struct rspamd_task {
 	ucl_object_t *settings;							/**< Settings applied to task						*/
 
 	const gchar *classifier;						/**< Classifier to learn (if needed)				*/
+	struct rspamd_lang_detector *lang_det;			/**< Languages detector								*/
 	guchar digest[16];
 };
 
@@ -213,7 +215,8 @@ struct rspamd_task {
  */
 struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
 		struct rspamd_config *cfg,
-		rspamd_mempool_t *pool);
+		rspamd_mempool_t *pool,
+		struct rspamd_lang_detector *lang_det);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */

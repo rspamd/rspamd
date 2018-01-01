@@ -264,6 +264,8 @@ struct rspamd_config_post_load_script {
 	struct rspamd_config_post_load_script *prev, *next;
 };
 
+struct rspamd_lang_detector;
+
 /**
  * Structure that stores all config data
  */
@@ -427,6 +429,8 @@ struct rspamd_config {
 	gchar *zstd_input_dictionary;					/**< path to zstd input dictionary						*/
 	gchar *zstd_output_dictionary;					/**< path to zstd output dictionary						*/
 	ucl_object_t *neighbours;						/**< other servers in the cluster						*/
+
+	struct rspamd_lang_detector *lang_det;			/**< language detector									*/
 
 	ref_entry_t ref;								/**< reference counter									*/
 };
