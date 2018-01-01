@@ -24,8 +24,10 @@
 
 struct rspamd_language_elt {
 	const gchar *name; /* e.g. "en" or "ru" */
+	guint unigramms_total; /* total frequencies for unigramms */
+	GHashTable *unigramms; /* unigramms frequencies */
 	guint bigramms_total; /* total frequencies for bigramms */
-	GHashTable *bigramms; /* bigrams frequencies */
+	GHashTable *bigramms; /* bigramms frequencies */
 	guint trigramms_total; /* total frequencies for trigramms */
 	GHashTable *trigramms; /* trigramms frequencies */
 };
@@ -34,6 +36,18 @@ struct rspamd_lang_detector {
 	GPtrArray *languages;
 	UConverter *uchar_converter;
 };
+
+static guint
+rspamd_unigram_hash (gconstpointer key)
+{
+	return rspamd_cryptobox_fast_hash (key, sizeof (UChar), rspamd_hash_seed ());
+}
+
+static gboolean
+rspamd_unigram_equal (gconstpointer v, gconstpointer v2)
+{
+	return memcmp (v, v2, sizeof (UChar)) == 0;
+}
 
 static guint
 rspamd_bigram_hash (gconstpointer key)
@@ -101,6 +115,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	pos = strchr (nelt->name, '.');
 	g_assert (pos != NULL);
 	*pos = '\0';
+	nelt->unigramms = g_hash_table_new (rspamd_unigram_hash, rspamd_unigram_equal);
 	nelt->bigramms = g_hash_table_new (rspamd_bigram_hash, rspamd_bigram_equal);
 	nelt->trigramms = g_hash_table_new (rspamd_trigram_hash, rspamd_trigram_equal);
 
@@ -138,14 +153,21 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 						GUINT_TO_POINTER (freq));
 				nelt->trigramms_total += freq;
 			}
+			else if (nsym == 1) {
+				g_hash_table_insert (nelt->unigramms, ucs_key,
+						GUINT_TO_POINTER (freq));
+				nelt->unigramms_total += freq;
+			}
 			else if (nsym > 3) {
 				msg_warn_config ("have more than 3 characters in key: %d", nsym);
 			}
 		}
 	}
 
-	msg_info_config ("loaded %s language, %d digramms, %d trigramms",
-			nelt->name, (gint)g_hash_table_size (nelt->bigramms),
+	msg_info_config ("loaded %s language, %d unigramms, %d digramms, %d trigramms",
+			nelt->name,
+			(gint)g_hash_table_size (nelt->unigramms),
+			(gint)g_hash_table_size (nelt->bigramms),
 			(gint)g_hash_table_size (nelt->trigramms));
 
 	g_ptr_array_add (d->languages, nelt);
@@ -201,4 +223,27 @@ end:
 	g_string_free (languages_pattern, TRUE);
 
 	return ret;
+}
+
+
+void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
+		rspamd_mempool_t *pool,
+		rspamd_stat_token_t *utf_token, rspamd_stat_token_t *ucs_token)
+{
+	UChar *out;
+	int32_t nsym;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	ucs_token->flags = utf_token->flags;
+	out = rspamd_mempool_alloc (pool, sizeof (*out) * (utf_token->len + 1));
+	nsym = ucnv_toUChars (d->uchar_converter, out, (utf_token->len + 1),
+			utf_token->begin, utf_token->len, &uc_err);
+
+	if (nsym >= 0) {
+		ucs_token->begin = (const gchar *) out;
+		ucs_token->len = nsym;
+	}
+	else {
+		ucs_token->len = 0;
+	}
 }

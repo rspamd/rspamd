@@ -239,6 +239,9 @@ rspamd_task_free (struct rspamd_task *task)
 			if (tp->normalized_hashes) {
 				g_array_free (tp->normalized_hashes, TRUE);
 			}
+			if (tp->ucs32_words) {
+				g_array_free (tp->ucs32_words, TRUE);
+			}
 		}
 
 		if (task->rcpt_envelope) {

@@ -660,7 +660,7 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 			rspamd_worker_monitored_handler,
 			worker->srv->cfg);
 
-	*plang_det = worker->srv->cfg;
+	*plang_det = worker->srv->cfg->lang_det;
 }
 
 /*

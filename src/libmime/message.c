@@ -24,6 +24,7 @@
 #include "smtp_parsers.h"
 #include "mime_parser.h"
 #include "mime_encoding.h"
+#include "lang_detection.h"
 #include "libutil/multipattern.h"
 #include "libserver/mempool_vars_internal.h"
 
@@ -204,10 +205,10 @@ rspamd_extract_words (struct rspamd_task *task,
 #ifdef WITH_SNOWBALL
 	struct sb_stemmer *stem = NULL;
 #endif
-	rspamd_stat_token_t *w;
+	rspamd_stat_token_t *w, ucs_w;
 	gchar *temp_word;
 	const guchar *r;
-	guint i, nlen, total_len = 0, short_len = 0;
+	guint i, nlen, total_len = 0, short_len = 0, ucs_len = 0;
 	gdouble avg_len = 0;
 
 #ifdef WITH_SNOWBALL
@@ -257,10 +258,23 @@ rspamd_extract_words (struct rspamd_task *task,
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
 				sizeof (guint64), part->normalized_words->len);
 
+		if (IS_PART_UTF (part) && task->lang_det) {
+			part->ucs32_words =  g_array_sized_new (FALSE, FALSE,
+					sizeof (rspamd_stat_token_t), part->normalized_words->len);
+		}
+
 		for (i = 0; i < part->normalized_words->len; i ++) {
 			guint64 h;
 
 			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+
+			if (part->ucs32_words) {
+				rspamd_language_detector_to_ucs (task->lang_det, task->task_pool,
+						w, &ucs_w);
+				g_array_append_val (part->ucs32_words, ucs_w);
+				ucs_len += ucs_w.len;
+			}
+
 			r = NULL;
 #ifdef WITH_SNOWBALL
 			if (stem) {

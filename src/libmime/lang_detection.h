@@ -19,9 +19,25 @@
 
 #include "config.h"
 #include "libserver/cfg_file.h"
+#include "libstat/stat_api.h"
 
 struct rspamd_lang_detector;
 
+/**
+ * Create new language detector object using configuration object
+ * @param cfg
+ * @return
+ */
 struct rspamd_lang_detector* rspamd_language_detector_init (struct rspamd_config *cfg);
+/**
+ * Convert string from utf8 to ucs32
+ * @param d
+ * @param utf_token
+ * @param ucs_token
+ */
+void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
+		rspamd_mempool_t *pool,
+		rspamd_stat_token_t *utf_token,
+		rspamd_stat_token_t *ucs_token);
 
 #endif

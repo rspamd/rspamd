@@ -93,6 +93,7 @@ struct rspamd_mime_text_part {
 	GList *exceptions;	/**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 	GArray *normalized_words;
+	GArray *ucs32_words;
 	GArray *normalized_hashes;
 	guint nlines;
 	guint spaces;
