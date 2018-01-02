@@ -16,8 +16,8 @@
                    "ESMTPS"i %ESMTPS_proto |
                    "ESMTPA"i %ESMTPA_proto |
                    "ESMTPSA"i %ESMTPSA_proto |
-                   "LMTP" %LMTP_proto |
-                   "IMAP" %IMAP_proto |
+                   "LMTP"i %LMTP_proto |
+                   "IMAP"i %IMAP_proto |
                    Attdl_Protocol;
 
   TCP_info       = address_literal >Real_IP_Start %Real_IP_End |
