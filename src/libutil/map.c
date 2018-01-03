@@ -841,9 +841,17 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 
 	if (access (data->filename, R_OK) == -1) {
 		/* File does not exist, skipping */
-		msg_err_map ("%s: map file is unavailable for reading",
-				data->filename);
-		return TRUE;
+		if (errno != ENOENT) {
+			msg_err_map ("%s: map file is unavailable for reading: %s",
+					data->filename, strerror (errno));
+
+			return FALSE;
+		}
+		else {
+			msg_info_map ("%s: map file is not found",
+					data->filename);
+			return TRUE;
+		}
 	}
 
 	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
