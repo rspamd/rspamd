@@ -84,7 +84,7 @@ rspamadm_rescore (gint argc, gchar **argv) {
 	ucl_object_t *obj;
 
 	context = g_option_context_new (
-			"rescore - Estimate optimal symbol weights from log files");
+			"rescore - estimate optimal symbol weights from log files");
 
 	g_option_context_set_summary (context,
 			"Summary:\n Rspamd administration utility version "
