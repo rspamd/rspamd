@@ -4,9 +4,10 @@ local lua_util = require "lua_util"
 local HAM = "HAM"
 local SPAM = "SPAM"
 
-local function scan_email(n_parellel, path)
+local function scan_email(n_parellel, path, timeout)
 
-    local rspamc_command = string.format("rspamc -j --compact -n %s %s", n_parellel, path)
+    local rspamc_command = string.format("rspamc -j --compact -n %s -t %.3f %s",
+        n_parellel, timeout, path)
     local result = assert(io.popen(rspamc_command))
     result = result:read("*all")
     return result
@@ -93,7 +94,7 @@ return function (_, res)
 
     if ham_directory then
         io.write("Scanning ham corpus...\n")
-        local ham_results = scan_email(connections, ham_directory)
+        local ham_results = scan_email(connections, ham_directory, res["timeout"])
         ham_results = scan_results_to_logs(ham_results, HAM)
 
         no_of_ham = #ham_results

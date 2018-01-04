@@ -29,6 +29,7 @@ static gchar *output = "new.scores";
 static gdouble threshold = 15; /* Spam threshold */
 static gboolean score_diff = false;  /* Print score diff flag */
 static gint64 iters = 500; /* Perceptron max iterations */
+gdouble timeout = 60.0;
 
 /* TODO: think about adding the config file reading */
 
@@ -52,6 +53,8 @@ static GOptionEntry entries[] = {
 				"Print score diff",                             NULL},
 		{"iters",  'i', 0, G_OPTION_ARG_INT64,    &iters,
 				"Max iterations for perceptron [Default: 500]", NULL},
+		{"timeout", 't', 0, G_OPTION_ARG_DOUBLE, &timeout,
+				"Timeout for connections [Default: 60]", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL,       NULL}
 };
 
@@ -65,9 +68,10 @@ rspamadm_rescore_help (gboolean full_help) {
 				"Usage: rspamadm rescore -l <log_directory>\n"
 				"Where options are:\n\n"
 				"-l: path to logs directory\n"
-				"-o: Scores output file location\n"
-				"-d: Print scores diff\n"
-				"-i: Max iterations for perceptron\n";
+				"-o: scores output file location\n"
+				"-d: print scores diff\n"
+				"-i: max iterations for perceptron\n"
+				"-t: timeout for rspamc operations (default: 60)\n";
 	} else {
 		help_str = "Estimate optimal symbol weights from log files";
 	}
@@ -127,6 +131,8 @@ rspamadm_rescore (gint argc, gchar **argv) {
 			"iters", 0, false);
 	ucl_object_insert_key (obj, ucl_object_frombool (score_diff),
 			"diff", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (timeout),
+			"timeout", 0, false);
 
 	rspamadm_execute_lua_ucl_subr (L,
 			argc,

@@ -202,7 +202,7 @@ return function (_, res)
 
 	local logs = rescore_utility.get_all_logs(res["logdir"])
 	local all_symbols = rescore_utility.get_all_symbols(logs)
-	local original_symbol_scores = rescore_utility.get_all_symbol_scores()
+	local original_symbol_scores = rescore_utility.get_all_symbol_scores(res["timeout"])
 
 	shuffle(logs)
 

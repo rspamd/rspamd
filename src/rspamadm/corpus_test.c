@@ -22,6 +22,7 @@ static gchar *ham_directory = NULL;
 static gchar *spam_directory = NULL;
 static gchar *output_location = "results.log";
 static gint connections = 10;
+static gdouble timeout = 60.0;
 
 static void rspamadm_corpus_test (gint argc, gchar **argv);
 static const char *rspamadm_corpus_test_help (gboolean full_help);
@@ -35,15 +36,17 @@ struct rspamadm_command corpus_test_command = {
 
 // TODO add -nparellel and -o options
 static GOptionEntry entries[] = {
-			{"ham", 'a', 0, G_OPTION_ARG_FILENAME, &ham_directory,
-												"Ham directory", NULL},
-			{"spam", 's', 0, G_OPTION_ARG_FILENAME, &spam_directory,
-												"Spam directory", NULL},
-			{"output", 'o', 0, G_OPTION_ARG_FILENAME, &output_location,
-												"Log output location", NULL},
-			{"connections", 'n', 0, G_OPTION_ARG_INT, &connections,
-						"Number of parellel connections [Default: 10]", NULL},
-			{NULL,	0,	0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
+		{"ham", 'a', 0, G_OPTION_ARG_FILENAME, &ham_directory,
+				"Ham directory", NULL},
+		{"spam", 's', 0, G_OPTION_ARG_FILENAME, &spam_directory,
+				"Spam directory", NULL},
+		{"output", 'o', 0, G_OPTION_ARG_FILENAME, &output_location,
+				"Log output location", NULL},
+		{"connections", 'n', 0, G_OPTION_ARG_INT, &connections,
+				"Number of parellel connections [Default: 10]", NULL},
+		{"timeout", 't', 0, G_OPTION_ARG_DOUBLE, &timeout,
+				"Timeout for connections [Default: 60]", NULL},
+		{NULL,	0,	0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
 static const char *
@@ -53,13 +56,14 @@ rspamadm_corpus_test_help (gboolean full_help)
 
 	if (full_help) {
 		help_str = "Create logs files from email corpus\n\n"
-					"Usage: rspamadm corpus_test [-a <ham_directory>]"
-											" [-s <spam_directory>]\n"
-					"Where option are:\n\n"
-					"-a: path to ham directory\n"
-					"-s: path to spam directory\n"
-					"-n: maximum parellel connections\n"
-					"-o: log output file\n";
+				"Usage: rspamadm corpus_test [-a <ham_directory>]"
+				" [-s <spam_directory>]\n"
+				"Where option are:\n\n"
+				"-a: path to ham directory\n"
+				"-s: path to spam directory\n"
+				"-n: maximum parallel connections\n"
+				"-o: log output file\n"
+				"-t: timeout for rspamc operations (default: 60)\n";
 
 	}
 
@@ -79,7 +83,7 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 	ucl_object_t *obj;
 
 	context = g_option_context_new (
-				"corpus_test - Create logs files from email corpus");
+				"corpus_test - create logs files from email corpus");
 
 	g_option_context_set_summary (context, 
 			"Summary:\n Rspamd administration utility version "
@@ -102,19 +106,21 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (ham_directory),
-											"ham_directory", 0, false);
+			"ham_directory", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromstring (spam_directory),
-											"spam_directory", 0, false);
+			"spam_directory", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromstring (output_location),
-											"output_location", 0, false);
+			"output_location", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromint (connections),
-											"connections", 0, false);
+			"connections", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (timeout),
+			"timeout", 0, false);
 
 	rspamadm_execute_lua_ucl_subr (L,
-						argc,
-						argv,
-						obj,
-						"corpus_test");
+			argc,
+			argv,
+			obj,
+			"corpus_test");
 
 	lua_close (L);
 	ucl_object_unref (obj);

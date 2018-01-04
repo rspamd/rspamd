@@ -69,9 +69,9 @@ function utility.get_all_logs(dir_path)
 	return all_logs
 end
 
-function utility.get_all_symbol_scores()
+function utility.get_all_symbol_scores(timeout)
 
-	local output = assert(io.popen("rspamc counters -j --compact"))
+	local output = assert(io.popen("rspamc counters -j --compact -t " .. tostring(timeout)))
 	output = output:read("*all")
 
 	local parser = ucl.parser()
