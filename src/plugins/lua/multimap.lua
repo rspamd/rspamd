@@ -210,6 +210,14 @@ local function apply_url_filter(task, filter, url, r)
         return nil
       end
     end
+  elseif string.find(filter, '^template:') then
+    if not r['template'] then
+      r['template'] = string.match(filter, '^template:(.+)')
+    end
+
+    if r['template'] then
+      return lua_util.template(r['template'], url:to_table())
+    end
   end
 
   return url:get_host()
