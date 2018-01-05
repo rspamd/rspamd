@@ -190,6 +190,10 @@ void g_queue_free_full (GQueue *queue, GDestroyNotify free_func);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 40))
 void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data);
 #endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 30))
+GPtrArray* g_ptr_array_new_full (guint reserved_size,
+		GDestroyNotify element_free_func);
+#endif
 
 /*
  * Convert milliseconds to timeval fields
