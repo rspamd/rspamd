@@ -281,7 +281,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
 
 		if (uc_err != U_ZERO_ERROR) {
-			msg_err ("cannot open converter for utf8: %s",
+			msg_warn ("cannot open converter for utf8: %s",
 					u_errorName (uc_err));
 
 			return FALSE;
