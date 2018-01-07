@@ -43,7 +43,6 @@
 #define DEFAULT_SYMBOL_PERMFAIL "R_SPF_PERMFAIL"
 #define DEFAULT_SYMBOL_NA "R_SPF_NA"
 #define DEFAULT_CACHE_SIZE 2048
-#define DEFAULT_CACHE_MAXAGE 86400
 
 struct spf_ctx {
 	struct module_ctx ctx;
