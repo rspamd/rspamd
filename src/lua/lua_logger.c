@@ -248,11 +248,12 @@ lua_logger_debug (lua_State *L)
 static gsize
 lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
-	const gchar *str = lua_tostring (L, pos);
+	gsize slen;
+	const gchar *str = lua_tolstring (L, pos, &slen);
 	gsize r = 0;
 
 	if (str) {
-		r = rspamd_strlcpy (outbuf, str, len + 1);
+		r = rspamd_strlcpy (outbuf, str, MIN (slen, len) + 1);
 	}
 
 	return r;
