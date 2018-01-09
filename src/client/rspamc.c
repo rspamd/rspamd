@@ -1224,7 +1224,7 @@ rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 	struct rspamd_http_header *h, *htmp;
 
 	HASH_ITER (hh, msg->headers, h, htmp) {
-		rspamd_fprintf (out, "%T: %T\n", h->name, h->value);
+		rspamd_fprintf (out, "%T: %T\n", &h->name, &h->value);
 	}
 
 	rspamd_fprintf (out, "\n");

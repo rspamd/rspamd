@@ -121,8 +121,8 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 
 	while ((cur = ucl_object_iterate (freqs, &it, true)) != NULL) {
 		const gchar *key;
-		gsize keylen, nsym;
-		guint freq;
+		gsize keylen;
+		guint freq, nsym;
 		UChar *ucs_key;
 
 		key = ucl_object_keyl (cur, &keylen);
