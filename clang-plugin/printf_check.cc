@@ -375,6 +375,10 @@ namespace rspamd {
 
 		bool VisitCallExpr (CallExpr *E)
 		{
+			if (E->getCalleeDecl () == nullptr) {
+				llvm::errs () << "Bad callee\n";
+				return false;
+			}
 			auto callee = dyn_cast<NamedDecl> (E->getCalleeDecl ());
 			if (callee == NULL) {
 				llvm::errs () << "Bad callee\n";
@@ -799,4 +803,4 @@ namespace rspamd {
 				"_GError",
 				"%e");
 	}
-};
+}
