@@ -1680,26 +1680,17 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
 {
 	DIR *d;
-	struct dirent *entry, *pentry;
+	struct dirent *pentry;
 	gint cur_req = 0;
 	gchar fpath[PATH_MAX];
 	FILE *in;
 	struct stat st;
 	gboolean is_reg, is_dir;
-	gsize len;
 
 	d = opendir (name);
 
 	if (d != NULL) {
-		/* Portably allocate struct direntry */
-		len = rspamd_dirent_size (d);
-		g_assert (len != (gsize)-1);
-		entry = g_malloc0 (len);
-
-		while (readdir_r (d, entry, &pentry) == 0 && pentry != NULL) {
-			if (pentry == NULL) {
-				break;
-			}
+		while ((pentry = readdir (d))!= NULL) {
 
 			if (pentry->d_name[0] == '.') {
 				continue;
@@ -1765,8 +1756,6 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 				}
 			}
 		}
-
-		g_free (entry);
 	}
 	else {
 		fprintf (stderr, "cannot open directory %s: %s\n", name, strerror (errno));
