@@ -1140,7 +1140,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 				if ((ucl_object_type (elt1) == UCL_FLOAT ||
 						ucl_object_type (elt1) == UCL_INT) &&
 					(ucl_object_type (elt2) == UCL_FLOAT ||
-						ucl_object_type (elt1) == UCL_INT)) {
+						ucl_object_type (elt2) == UCL_INT)) {
 					ham_score = ucl_object_todouble (elt1);
 					spam_score = ucl_object_todouble (elt2);
 
