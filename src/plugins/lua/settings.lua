@@ -155,7 +155,7 @@ local function check_settings(task)
     end
 
     if rule['ip'] then
-      if not ip then
+      if not ip or not ip:is_valid() then
         return nil
       end
       for _, i in ipairs(rule['ip']) do
