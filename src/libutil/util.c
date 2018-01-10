@@ -51,6 +51,9 @@
 #endif
 #ifdef __APPLE__
 #include <mach/mach_time.h>
+#include <mach/mach_init.h>
+#include <mach/thread_act.h>
+#include <mach/mach_port.h>
 #endif
 #ifdef WITH_GPERF_TOOLS
 #include <gperftools/profiler.h>
@@ -1836,6 +1839,18 @@ rspamd_get_virtual_ticks (void)
 # endif
 
 	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
+#elif defined(__APPLE__)
+	thread_port_t thread = mach_thread_self ();
+
+	mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+	thread_basic_info_data_t info;
+	if (thread_info (thread, THREAD_BASIC_INFO, (thread_info_t)&info, &count) != KERN_SUCCESS) {
+		return -1;
+	}
+
+	res = info.user_time.seconds + info.system_time.seconds;
+	res += ((gdouble)(info.user_time.microseconds + info.system_time.microseconds)) / 1e6;
+	mach_port_deallocate(mach_task_self(), thread);
 #else
 	res = clock () / (double)CLOCKS_PER_SEC;
 #endif
