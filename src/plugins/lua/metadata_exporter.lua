@@ -66,7 +66,12 @@ Symbols: $symbols]],
 
 local function get_general_metadata(task, flatten, no_content)
   local r = {}
-  r.ip = tostring(task:get_from_ip()) or 'unknown'
+  local ip = task:get_from_ip()
+  if ip and ip:is_valid() then
+    r.ip = tostring(ip)
+  else
+    r.ip = 'unknown'
+  end
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
