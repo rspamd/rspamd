@@ -19,6 +19,7 @@ local redis_params
 local ucl = require "ucl"
 local fun = require "fun"
 local lua_util = require "lua_util"
+local rspamd_redis = require "lua_redis"
 local N = "dynamic_conf"
 
 if confighelp then
@@ -47,54 +48,6 @@ local function alpha_cmp(v1, v2)
   end
 
   return false
-end
-
-local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
-  if not ev_base or not redis_params or not callback or not command then
-    return false,nil,nil
-  end
-
-  local addr
-  local rspamd_redis = require "rspamd_redis"
-
-  if key then
-    if is_write then
-      addr = redis_params['write_servers']:get_upstream_by_hash(key)
-    else
-      addr = redis_params['read_servers']:get_upstream_by_hash(key)
-    end
-  else
-    if is_write then
-      addr = redis_params['write_servers']:get_upstream_master_slave(key)
-    else
-      addr = redis_params['read_servers']:get_upstream_round_robin(key)
-    end
-  end
-
-  if not addr then
-    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
-  end
-
-  local options = {
-    ev_base = ev_base,
-    config = cfg,
-    callback = callback,
-    host = addr:get_addr(),
-    timeout = redis_params['timeout'],
-    cmd = command,
-    args = args
-  }
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  local ret,conn = rspamd_redis.make_request(options)
-  return ret,conn,addr
 end
 
 local function apply_dynamic_actions(_, acts)
@@ -186,8 +139,12 @@ local function update_dynamic_conf(cfg, ev_base, recv)
     if err then
       rspamd_logger.errx(cfg, "cannot save dynamic conf to redis: %s", err)
     else
-      redis_make_request(ev_base, cfg, settings.redis_key, true,
-        redis_version_set_cb, 'HINCRBY', {settings.redis_key, 'v', '1'})
+      rspamd_redis.redis_make_request_taskless(ev_base,
+        cfg,
+        settings.redis_key,
+        true,
+        redis_version_set_cb,
+        'HINCRBY', {settings.redis_key, 'v', '1'})
     end
   end
 
