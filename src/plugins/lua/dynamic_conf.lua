@@ -180,7 +180,7 @@ local function update_dynamic_conf(cfg, ev_base, recv)
     end
   end
   local newdata = ucl.to_format(cur_settings.data, 'json-compact')
-  redis_make_request(ev_base, cfg, settings.redis_key, true,
+  rspamd_redis.redis_make_request_taskless(ev_base, cfg, settings.redis_key, true,
           redis_data_set_cb, 'HSET', {settings.redis_key, 'd', newdata})
 end
 
@@ -214,7 +214,7 @@ local function check_dynamic_conf(cfg, ev_base)
         rspamd_logger.infox(cfg, "need to load fresh dynamic settings with version %s, local version is %s",
           rver, cur_settings.version)
         cur_settings.version = rver
-        redis_make_request(ev_base, cfg, settings.redis_key, false,
+        rspamd_redis.redis_make_request_taskless(ev_base, cfg, settings.redis_key, false,
           redis_load_cb, 'HGET', {settings.redis_key, 'd'})
       elseif cur_settings.updates.has_updates then
         -- Need to send our updates to Redis
@@ -226,7 +226,7 @@ local function check_dynamic_conf(cfg, ev_base)
     end
   end
 
-  redis_make_request(ev_base, cfg, settings.redis_key, false,
+  rspamd_redis.redis_make_request_taskless(ev_base, cfg, settings.redis_key, false,
     redis_check_cb, 'HGET', {settings.redis_key, 'v'})
 end
 
