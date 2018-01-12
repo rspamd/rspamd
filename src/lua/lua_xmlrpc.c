@@ -132,6 +132,12 @@ xmlrpc_start_element (GMarkupParseContext *context,
 			lua_newtable (ud->L);
 			ud->depth++;
 		}
+		else if (g_ascii_strcasecmp (name, "array") == 0) {
+			ud->parser_state = 14;
+			/* Create new param of table type */
+			lua_newtable (ud->L);
+			ud->depth++;
+		}
 		else if (g_ascii_strcasecmp (name, "string") == 0) {
 			ud->parser_state = 11;
 			ud->got_text = FALSE;
@@ -198,6 +204,66 @@ xmlrpc_start_element (GMarkupParseContext *context,
 		/* Structure */
 		else if (g_ascii_strcasecmp (name, "struct") == 0) {
 			ud->parser_state = 5;
+			/* Create new param of table type */
+			lua_newtable (ud->L);
+			ud->depth++;
+		}
+		else if (g_ascii_strcasecmp (name, "array") == 0) {
+			ud->parser_state = 14;
+			/* Create new param of table type */
+			lua_newtable (ud->L);
+			ud->depth++;
+		}
+		else {
+			/* Error state */
+			ud->parser_state = 99;
+		}
+		break;
+	case 14:
+		/* Parse array */
+		/* Expect data */
+		if (g_ascii_strcasecmp (name, "data") == 0) {
+			ud->parser_state = 15;
+		}
+		else {
+			/* Error state */
+			ud->parser_state = 99;
+		}
+		break;
+	case 15:
+		/* Accept array value */
+		if (g_ascii_strcasecmp (name, "value") == 0) {
+			ud->parser_state = 16;
+		}
+		else {
+			/* Error state */
+			ud->parser_state = 99;
+		}
+		break;
+	case 16:
+		/* Parse any values */
+		/* Primitives */
+		if (g_ascii_strcasecmp (name, "string") == 0) {
+			ud->parser_state = 11;
+			ud->got_text = FALSE;
+		}
+		else if (g_ascii_strcasecmp (name, "int") == 0) {
+			ud->parser_state = 12;
+			ud->got_text = FALSE;
+		}
+		else if (g_ascii_strcasecmp (name, "double") == 0) {
+			ud->parser_state = 13;
+			ud->got_text = FALSE;
+		}
+		/* Structure */
+		else if (g_ascii_strcasecmp (name, "struct") == 0) {
+			ud->parser_state = 5;
+			/* Create new param of table type */
+			lua_newtable (ud->L);
+			ud->depth++;
+		}
+		else if (g_ascii_strcasecmp (name, "array") == 0) {
+			ud->parser_state = 14;
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			ud->depth++;
@@ -342,6 +408,39 @@ xmlrpc_end_element (GMarkupParseContext *context,
 		}
 		else if (g_ascii_strcasecmp (name, "double") == 0) {
 			ud->parser_state = 8;
+		}
+		else {
+			/* Error state */
+			ud->parser_state = 99;
+		}
+		break;
+	case 14:
+		/* Got tag array */
+		if (g_ascii_strcasecmp (name, "array") == 0) {
+			ud->parser_state = 4;
+			ud->depth--;
+		}
+		else {
+			/* Error state */
+			ud->parser_state = 99;
+		}
+		break;
+	case 15:
+		/* Got tag data */
+		if (g_ascii_strcasecmp (name, "data") == 0) {
+			ud->parser_state = 14;
+		}
+		else {
+			/* Error state */
+			ud->parser_state = 99;
+		}
+		break;
+	case 17:
+		/* Got tag value */
+		if (g_ascii_strcasecmp (name, "value") == 0) {
+			guint tbl_len = rspamd_lua_table_size (ud->L, -2);
+			lua_rawseti (ud->L, -2, tbl_len + 1);
+			ud->parser_state = 15;
 		}
 		else {
 			/* Error state */
