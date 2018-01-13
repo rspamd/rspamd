@@ -21,6 +21,7 @@
 #include <glob.h>
 #include <unicode/utf8.h>
 #include <unicode/ucnv.h>
+#include <math.h>
 
 static const gsize default_short_text_limit = 200;
 static const gsize default_words = 20;
@@ -267,6 +268,7 @@ rspamd_language_detector_random_select (GPtrArray *ucs_tokens, guint nwords,
 {
 	guint step_len, remainder, i, out_idx;
 	guint64 coin, sel;
+	goffset tmp;
 
 	g_assert (nwords != 0);
 	g_assert (offsets_out != NULL);
@@ -300,6 +302,23 @@ rspamd_language_detector_random_select (GPtrArray *ucs_tokens, guint nwords,
 		coin = rspamd_random_uint64_fast ();
 		sel = (coin % step_len) + i;
 		offsets_out[out_idx] = sel;
+	}
+
+	/*
+	 * Fisher-Yates algorithm:
+	 * for i from 0 to n−2 do
+     *   j ← random integer such that i ≤ j < n
+     *   exchange a[i] and a[j]
+     */
+	if (out_idx > 2) {
+		for (i = 0; i < out_idx - 2; i++) {
+			coin = rspamd_random_uint64_fast ();
+			sel = (coin % (out_idx - i)) + i;
+			/* swap */
+			tmp = offsets_out[i];
+			offsets_out[i] = offsets_out[sel];
+			offsets_out[sel] = tmp;
+		}
 	}
 }
 
@@ -466,7 +485,7 @@ rspamd_language_detector_update_guess (struct rspamd_lang_detector *d,
 	/* Split words */
 	while ((cur = rspamd_language_detector_next_ngramm (tok, window, wlen, cur))
 			!= -1) {
-
+		rspamd_language_detector_process_ngramm_update (d, window, type, candidates);
 	}
 }
 
@@ -494,18 +513,95 @@ rspamd_language_detector_detect_word (struct rspamd_lang_detector *d,
 	/* Split words */
 	while ((cur = rspamd_language_detector_next_ngramm (tok, window, wlen, cur))
 			!= -1) {
-
+		rspamd_language_detector_process_ngramm_full (d, window, type, candidates);
 	}
+}
+
+/*
+ * Converts frequencies to log probabilities, filter those candidates who
+ * has the lowest probabilities
+ */
+static void
+rspamd_language_detector_filter_negligible (GHashTable *candidates)
+{
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_lang_detector_res *cand;
+	gdouble max_prob = -(G_MAXDOUBLE);
+
+	/* Normalize step */
+	g_hash_table_iter_init (&it, candidates);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		cand = (struct rspamd_lang_detector_res *)v;
+
+		if (cand->prob == 0) {
+			g_hash_table_iter_remove (&it);
+		}
+		else {
+			cand->prob = log2 (cand->prob / cand->total_words);
+
+			if (cand->prob > max_prob) {
+				max_prob = cand->prob;
+			}
+		}
+	}
+
+	/* Filter step */
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		cand = (struct rspamd_lang_detector_res *) v;
+
+		/*
+		 * Probabilities are logarifmic, so if prob1 - prob2 > 4, it means that
+		 * prob2 is 2^4 less than prob1
+		 */
+		if (max_prob - cand->prob > 256) {
+			g_hash_table_iter_remove (&it);
+		}
+	}
+}
+
+static void
+rspamd_language_detector_detect_type (struct rspamd_lang_detector *d,
+		GPtrArray *ucs_tokens,
+		GHashTable *candidates,
+		enum rspamd_language_gramm_type type)
+{
+	guint nparts = MIN (ucs_tokens->len, default_words);
+	goffset *selected_words;
+	rspamd_stat_token_t *tok;
+	guint i;
+
+	selected_words = g_new0 (goffset, nparts);
+	rspamd_language_detector_random_select (ucs_tokens, nparts, selected_words);
+
+	/* Deal with the first word in a special case */
+	tok = g_ptr_array_index (ucs_tokens, selected_words[0]);
+	rspamd_language_detector_detect_word (d, tok, candidates, type);
+
+	for (i = 1; i < nparts; i ++) {
+		tok = g_ptr_array_index (ucs_tokens, selected_words[i]);
+		rspamd_language_detector_update_guess (d, tok, candidates, type);
+	}
+
+	/* Filter negligible candidates */
+	rspamd_language_detector_filter_negligible (candidates);
 }
 
 const gchar *
 rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 		GPtrArray *ucs_tokens, gsize words_len)
 {
+	GHashTable *candidates;
+
+	candidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
+			NULL, g_free);
 	if (words_len < d->short_text_limit) {
 		/* For short text, start directly from trigramms */
+		rspamd_language_detector_detect_type (d, ucs_tokens, candidates,
+				rs_trigramm);
 	}
-
-	/* Start with unigramms */
-
+	else {
+		/* Start with unigramms */
+	}
 }

@@ -26,6 +26,7 @@ struct rspamd_language_elt;
 
 struct rspamd_lang_detector_res {
 	gdouble prob;
+	gdouble total_words;
 	const gchar *lang;
 	struct rspamd_language_elt *elt;
 };
