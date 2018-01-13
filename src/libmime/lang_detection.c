@@ -748,14 +748,14 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 					gdouble err;
 					cand = (struct rspamd_lang_detector_res *) v;
 					err = cand->prob - mean;
-					std += err * err;
+					std += fabs (err);
 				}
 
 				std /= g_hash_table_size (tcandidates);
 				g_hash_table_unref (candidates);
 				candidates = tcandidates;
 
-				if (std < mean / 100) {
+				if (std / fabs (mean) < 0.3) {
 					/* Try trigramms */
 					tcandidates = g_hash_table_new_full (rspamd_str_hash,
 							rspamd_str_equal,
