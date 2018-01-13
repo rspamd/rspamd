@@ -24,7 +24,8 @@
 #include <math.h>
 
 static const gsize default_short_text_limit = 200;
-static const gsize default_words = 20;
+static const gsize default_words = 30;
+static const gdouble update_prob = 0.6;
 static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
 
 struct rspamd_language_elt {
@@ -503,9 +504,17 @@ rspamd_language_detector_update_guess (struct rspamd_lang_detector *d,
 	/* Split words */
 	while ((cur = rspamd_language_detector_next_ngramm (tok, window, wlen, cur))
 			!= -1) {
-		if (!rspamd_language_detector_process_ngramm_update (d, window,
-				type, candidates)) {
-			ret = FALSE;
+
+		if (rspamd_random_double_fast () > update_prob) {
+			if (!rspamd_language_detector_process_ngramm_update (d, window,
+					type, candidates)) {
+				ret = FALSE;
+			}
+		}
+		else {
+			/* Try to do full update in case if we are missing some candidates */
+			rspamd_language_detector_process_ngramm_full (d, window, type,
+					candidates);
 		}
 	}
 
@@ -576,10 +585,10 @@ rspamd_language_detector_filter_negligible (GHashTable *candidates)
 		cand = (struct rspamd_lang_detector_res *) v;
 
 		/*
-		 * Probabilities are logarifmic, so if prob1 - prob2 > 4, it means that
+		 * Probabilities are logarithmic, so if prob1 - prob2 > 4, it means that
 		 * prob2 is 2^4 less than prob1
 		 */
-		if (max_prob - cand->prob > 256) {
+		if (max_prob - cand->prob > 4) {
 			g_hash_table_iter_remove (&it);
 		}
 	}
@@ -636,55 +645,134 @@ rspamd_language_detector_cmp (gconstpointer a, gconstpointer b)
 	return 0;
 }
 
+enum rspamd_language_detected_type {
+	rs_detect_none = 0,
+	rs_detect_single,
+	rs_detect_multiple,
+};
+
+static enum rspamd_language_detected_type
+rspamd_language_detector_try_ngramm (struct rspamd_lang_detector *d,
+		GArray *ucs_tokens,
+		enum rspamd_language_gramm_type type,
+		GHashTable *candidates)
+{
+	guint cand_len;
+
+	rspamd_language_detector_detect_type (d, ucs_tokens, candidates,
+			type, TRUE);
+
+	cand_len = g_hash_table_size (candidates);
+
+	if (cand_len == 0) {
+		return rs_detect_none;
+	}
+	else if (cand_len == 1) {
+		return rs_detect_single;
+	}
+
+	return rs_detect_multiple;
+}
+
 GPtrArray *
 rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 		GArray *ucs_tokens, gsize words_len)
 {
-	GHashTable *candidates;
+	GHashTable *candidates, *tcandidates;
 	GPtrArray *result;
 	GHashTableIter it;
 	gpointer k, v;
+	gdouble mean, std;
 	struct rspamd_lang_detector_res *cand;
-	guint cand_len, prev_len;
+	enum rspamd_language_detected_type r;
 
 	candidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 			NULL, g_free);
 	if (words_len < d->short_text_limit) {
 		/* For short text, start directly from trigramms */
-		rspamd_language_detector_detect_type (d, ucs_tokens, candidates,
-				rs_trigramm, TRUE);
+		r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
+				candidates);
+
+		if (r == rs_detect_none) {
+			r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_bigramm,
+					candidates);
+
+			if (r == rs_detect_none) {
+				r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_unigramm,
+						candidates);
+			}
+		}
 	}
 	else {
 		/* Start with unigramms */
-		rspamd_language_detector_detect_type (d, ucs_tokens, candidates,
-				rs_unigramm, TRUE);
-		cand_len = g_hash_table_size (candidates);
+		r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_unigramm,
+				candidates);
 
-		if (cand_len > 1) {
-			/* Try bigramms */
-			rspamd_language_detector_detect_type (d, ucs_tokens, candidates,
-					rs_unigramm, FALSE);
+		switch (r) {
+		case rs_detect_none:
+		case rs_detect_single:
+			/* No unigramms found or single set found, no reason to continue */;
+			break;
+		case rs_detect_multiple:
+			/* Try to improve guess */
+			tcandidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
+					NULL, g_free);
+			r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_bigramm,
+					tcandidates);
 
-			cand_len = g_hash_table_size (candidates);
-			if (cand_len > 1) {
-				prev_len = cand_len;
-				/* Try trigramms */
-				GHashTable *ncandidates;
-				ncandidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
-						NULL, g_free);
-				rspamd_language_detector_detect_type (d, ucs_tokens, ncandidates,
-						rs_trigramm, TRUE);
-				cand_len = g_hash_table_size (ncandidates);
+			switch (r) {
+			case rs_detect_none:
+				/* Revert to unigramms result */
+				g_hash_table_unref (tcandidates);
+				break;
+			case rs_detect_single:
+				/* We have good enough result, return it */
+				g_hash_table_unref (candidates);
+				candidates = tcandidates;
+				break;
+			case rs_detect_multiple:
+				mean = 0.0;
+				std = 0.0;
+				g_hash_table_iter_init (&it, tcandidates);
 
-				if (cand_len < prev_len) {
-					g_hash_table_unref (candidates);
-					candidates = ncandidates;
+				/* Check distirbution */
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					cand = (struct rspamd_lang_detector_res *) v;
+					mean += cand->prob;
 				}
-				else {
-					/* Not a better guess */
-					g_hash_table_unref (ncandidates);
+
+				mean /= g_hash_table_size (tcandidates);
+
+				g_hash_table_iter_init (&it, tcandidates);
+				while (g_hash_table_iter_next (&it, &k, &v)) {
+					gdouble err;
+					cand = (struct rspamd_lang_detector_res *) v;
+					err = cand->prob - mean;
+					std += err * err;
 				}
+
+				std /= g_hash_table_size (tcandidates);
+				g_hash_table_unref (candidates);
+				candidates = tcandidates;
+
+				if (std < mean / 100) {
+					/* Try trigramms */
+					tcandidates = g_hash_table_new_full (rspamd_str_hash,
+							rspamd_str_equal,
+							NULL, g_free);
+
+					r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
+							tcandidates);
+
+					if (r != rs_detect_none) {
+						/* TODO: check if we have better distribution here */
+						g_hash_table_unref (candidates);
+						candidates = tcandidates;
+					}
+				}
+				break;
 			}
+			break;
 		}
 	}
 
@@ -694,7 +782,7 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		cand = (struct rspamd_lang_detector_res *) v;
-		msg_err ("%s -> %.2f", cand->lang, cand->prob);
+		msg_debug ("%s -> %.2f", cand->lang, cand->prob);
 		g_ptr_array_add (result, cand);
 		g_hash_table_iter_steal (&it);
 	}

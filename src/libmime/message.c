@@ -98,11 +98,13 @@ rspamd_extract_words (struct rspamd_task *task,
 			for (i = 0; i < part->normalized_words->len; i++) {
 				w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 
-
-				rspamd_language_detector_to_ucs (task->lang_det, task->task_pool,
-						w, &ucs_w);
-				g_array_append_val (part->ucs32_words, ucs_w);
-				ucs_len += ucs_w.len;
+				if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+					rspamd_language_detector_to_ucs (task->lang_det,
+							task->task_pool,
+							w, &ucs_w);
+					g_array_append_val (part->ucs32_words, ucs_w);
+					ucs_len += ucs_w.len;
+				}
 			}
 
 			part->languages = rspamd_language_detector_detect (task->lang_det,
