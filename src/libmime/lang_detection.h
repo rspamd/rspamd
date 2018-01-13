@@ -26,7 +26,6 @@ struct rspamd_language_elt;
 
 struct rspamd_lang_detector_res {
 	gdouble prob;
-	gdouble total_words;
 	const gchar *lang;
 	struct rspamd_language_elt *elt;
 };
@@ -53,9 +52,9 @@ void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
  * @param d
  * @param ucs_tokens
  * @param words_len
- * @return language code or NULL if language has not been detected
+ * @return array of struct rspamd_lang_detector_res sorted by freq descending
  */
-const gchar * rspamd_language_detector_detect (struct rspamd_lang_detector *d,
+GPtrArray * rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 		GPtrArray *ucs_tokens, gsize words_len);
 
 #endif
