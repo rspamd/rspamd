@@ -22,6 +22,10 @@
 #include <unicode/utf8.h>
 #include <unicode/ucnv.h>
 
+static const gsize default_short_text_limit = 200;
+static const gsize default_words = 20;
+static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
+
 struct rspamd_language_elt {
 	const gchar *name; /* e.g. "en" or "ru" */
 	guint unigramms_total; /* total frequencies for unigramms */
@@ -35,6 +39,7 @@ struct rspamd_language_elt {
 struct rspamd_lang_detector {
 	GPtrArray *languages;
 	UConverter *uchar_converter;
+	gsize short_text_limit;
 };
 
 static guint
@@ -178,9 +183,9 @@ struct rspamd_lang_detector*
 rspamd_language_detector_init (struct rspamd_config *cfg)
 {
 	const ucl_object_t *section, *elt;
-	const gchar *languages_path = RSPAMD_PLUGINSDIR "/languages";
+	const gchar *languages_path = default_languages_path;
 	glob_t gl;
-	size_t i;
+	size_t i, short_text_limit = default_short_text_limit;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	GString *languages_pattern;
 	struct rspamd_lang_detector *ret = NULL;
@@ -192,6 +197,12 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 
 		if (elt) {
 			languages_path = ucl_object_tostring (elt);
+		}
+
+		elt = ucl_object_lookup (section, "short_text_limit");
+
+		if (elt) {
+			short_text_limit = ucl_object_toint (elt);
 		}
 	}
 
@@ -207,6 +218,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	ret = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*ret));
 	ret->languages = g_ptr_array_sized_new (gl.gl_pathc);
 	ret->uchar_converter = ucnv_open ("UTF-8", &uc_err);
+	ret->short_text_limit = short_text_limit;
 
 	g_assert (uc_err == U_ZERO_ERROR);
 
@@ -247,4 +259,59 @@ rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 	else {
 		ucs_token->len = 0;
 	}
+}
+
+static void
+rspamd_language_detector_random_select (GPtrArray *ucs_tokens, guint nwords,
+		goffset *offsets_out)
+{
+	guint step_len, remainder, i, out_idx;
+	guint64 coin, sel;
+
+	g_assert (nwords != 0);
+	g_assert (offsets_out != NULL);
+	g_assert (ucs_tokens->len >= nwords);
+	/*
+	 * We split input array into `nwords` parts. For each part we randomly select
+	 * an element from this particular split. Here is an example:
+	 *
+	 * nwords=2, input_len=5
+	 *
+	 * w1 w2 w3   w4 w5
+	 * ^          ^
+	 * part1      part2
+	 *  vv         vv
+	 *  w2         w5
+	 *
+	 * So we have 2 output words from 5 input words selected randomly within
+	 * their splits. It is not uniform distribution but it seems to be better
+	 * to include words from different text parts
+	 */
+	step_len = ucs_tokens->len / nwords;
+	remainder = ucs_tokens->len % nwords;
+
+	out_idx = 0;
+	coin = rspamd_random_uint64_fast ();
+	sel = coin % (step_len + remainder);
+	offsets_out[out_idx] = sel;
+
+	for (i = step_len + remainder; i < ucs_tokens->len;
+			i += step_len, out_idx ++) {
+		coin = rspamd_random_uint64_fast ();
+		sel = (coin % step_len) + i;
+		offsets_out[out_idx] = sel;
+	}
+}
+
+const gchar *
+rspamd_language_detector_detect (struct rspamd_lang_detector *d,
+		GPtrArray *ucs_tokens, gsize words_len)
+{
+	if (words_len < d->short_text_limit) {
+		/* For short text, start directly from trigramms */
+		return rspamd_language_detector_detect_trigramm ();
+	}
+
+	/* Start with unigramms */
+
 }

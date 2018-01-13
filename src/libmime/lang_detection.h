@@ -23,6 +23,11 @@
 
 struct rspamd_lang_detector;
 
+struct rspamd_lang_detector_res {
+	gdouble prob;
+	const gchar *lang;
+};
+
 /**
  * Create new language detector object using configuration object
  * @param cfg
@@ -39,5 +44,15 @@ void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 		rspamd_mempool_t *pool,
 		rspamd_stat_token_t *utf_token,
 		rspamd_stat_token_t *ucs_token);
+
+/**
+ * Try to detect language of words
+ * @param d
+ * @param ucs_tokens
+ * @param words_len
+ * @return language code or NULL if language has not been detected
+ */
+const gchar * rspamd_language_detector_detect (struct rspamd_lang_detector *d,
+		GPtrArray *ucs_tokens, gsize words_len);
 
 #endif
