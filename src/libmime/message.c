@@ -54,150 +54,6 @@ free_byte_array_callback (void *pointer)
 	g_byte_array_free (arr, TRUE);
 }
 
-struct language_match {
-	const char *code;
-	const char *name;
-	GUnicodeScript script;
-};
-
-static int
-language_elts_cmp (const void *a, const void *b)
-{
-	GUnicodeScript sc = *(const GUnicodeScript *)a;
-	const struct language_match *bb = (const struct language_match *)b;
-
-	return (sc - bb->script);
-}
-
-static void
-detect_text_language (struct rspamd_mime_text_part *part)
-{
-	/* Keep sorted */
-	static const struct language_match language_codes[] = {
-			{ "", "english", G_UNICODE_SCRIPT_COMMON },
-			{ "", "", G_UNICODE_SCRIPT_INHERITED },
-			{ "ar", "arabic", G_UNICODE_SCRIPT_ARABIC },
-			{ "hy", "armenian", G_UNICODE_SCRIPT_ARMENIAN },
-			{ "bn", "chineese", G_UNICODE_SCRIPT_BENGALI },
-			{ "", "", G_UNICODE_SCRIPT_BOPOMOFO },
-			{ "chr", "", G_UNICODE_SCRIPT_CHEROKEE },
-			{ "cop", "",  G_UNICODE_SCRIPT_COPTIC  },
-			{ "ru", "russian",  G_UNICODE_SCRIPT_CYRILLIC },
-			/* Deseret was used to write English */
-			{ "", "",  G_UNICODE_SCRIPT_DESERET },
-			{ "hi", "",  G_UNICODE_SCRIPT_DEVANAGARI },
-			{ "am", "",  G_UNICODE_SCRIPT_ETHIOPIC },
-			{ "ka", "",  G_UNICODE_SCRIPT_GEORGIAN },
-			{ "", "",  G_UNICODE_SCRIPT_GOTHIC },
-			{ "el", "greek",  G_UNICODE_SCRIPT_GREEK },
-			{ "gu", "",  G_UNICODE_SCRIPT_GUJARATI },
-			{ "pa", "",  G_UNICODE_SCRIPT_GURMUKHI },
-			{ "han", "chineese",  G_UNICODE_SCRIPT_HAN },
-			{ "ko", "",  G_UNICODE_SCRIPT_HANGUL },
-			{ "he", "hebrew",  G_UNICODE_SCRIPT_HEBREW },
-			{ "ja", "",  G_UNICODE_SCRIPT_HIRAGANA },
-			{ "kn", "",  G_UNICODE_SCRIPT_KANNADA },
-			{ "ja", "",  G_UNICODE_SCRIPT_KATAKANA },
-			{ "km", "",  G_UNICODE_SCRIPT_KHMER },
-			{ "lo", "",  G_UNICODE_SCRIPT_LAO },
-			{ "en", "english",  G_UNICODE_SCRIPT_LATIN },
-			{ "ml", "",  G_UNICODE_SCRIPT_MALAYALAM },
-			{ "mn", "",  G_UNICODE_SCRIPT_MONGOLIAN },
-			{ "my", "",  G_UNICODE_SCRIPT_MYANMAR },
-			/* Ogham was used to write old Irish */
-			{ "", "",  G_UNICODE_SCRIPT_OGHAM },
-			{ "", "",  G_UNICODE_SCRIPT_OLD_ITALIC },
-			{ "or", "",  G_UNICODE_SCRIPT_ORIYA },
-			{ "", "",  G_UNICODE_SCRIPT_RUNIC },
-			{ "si", "",  G_UNICODE_SCRIPT_SINHALA },
-			{ "syr", "",  G_UNICODE_SCRIPT_SYRIAC },
-			{ "ta", "",  G_UNICODE_SCRIPT_TAMIL },
-			{ "te", "",  G_UNICODE_SCRIPT_TELUGU },
-			{ "dv", "",  G_UNICODE_SCRIPT_THAANA },
-			{ "th", "",  G_UNICODE_SCRIPT_THAI },
-			{ "bo", "",  G_UNICODE_SCRIPT_TIBETAN },
-			{ "iu", "",  G_UNICODE_SCRIPT_CANADIAN_ABORIGINAL },
-			{ "", "",  G_UNICODE_SCRIPT_YI },
-			{ "tl", "",  G_UNICODE_SCRIPT_TAGALOG },
-			/* Phillipino languages/scripts */
-			{ "hnn", "",  G_UNICODE_SCRIPT_HANUNOO },
-			{ "bku", "",  G_UNICODE_SCRIPT_BUHID },
-			{ "tbw", "",  G_UNICODE_SCRIPT_TAGBANWA },
-
-			{ "", "",  G_UNICODE_SCRIPT_BRAILLE },
-			{ "", "",  G_UNICODE_SCRIPT_CYPRIOT },
-			{ "", "",  G_UNICODE_SCRIPT_LIMBU },
-			/* Used for Somali (so) in the past */
-			{ "", "",  G_UNICODE_SCRIPT_OSMANYA },
-			/* The Shavian alphabet was designed for English */
-			{ "", "",  G_UNICODE_SCRIPT_SHAVIAN },
-			{ "", "",  G_UNICODE_SCRIPT_LINEAR_B },
-			{ "", "",  G_UNICODE_SCRIPT_TAI_LE },
-			{ "uga", "",  G_UNICODE_SCRIPT_UGARITIC },
-			{ "", "",  G_UNICODE_SCRIPT_NEW_TAI_LUE },
-			{ "bug", "",  G_UNICODE_SCRIPT_BUGINESE },
-			{ "", "",  G_UNICODE_SCRIPT_GLAGOLITIC },
-			/* Used for for Berber (ber), but Arabic script is more common */
-			{ "", "",  G_UNICODE_SCRIPT_TIFINAGH },
-			{ "syl", "",  G_UNICODE_SCRIPT_SYLOTI_NAGRI },
-			{ "peo", "",  G_UNICODE_SCRIPT_OLD_PERSIAN },
-			{ "", "",  G_UNICODE_SCRIPT_KHAROSHTHI },
-			{ "", "",  G_UNICODE_SCRIPT_UNKNOWN },
-			{ "", "",  G_UNICODE_SCRIPT_BALINESE },
-			{ "", "",  G_UNICODE_SCRIPT_CUNEIFORM },
-			{ "", "",  G_UNICODE_SCRIPT_PHOENICIAN },
-			{ "", "",  G_UNICODE_SCRIPT_PHAGS_PA },
-			{ "nqo", "", G_UNICODE_SCRIPT_NKO }
-	};
-	const struct language_match *lm;
-	const int max_chars = 32;
-
-	if (part != NULL) {
-		if (IS_PART_UTF (part)) {
-			/* Try to detect encoding by several symbols */
-			const gchar *p, *pp;
-			gunichar c;
-			gint32 remain = part->content->len, max = 0, processed = 0;
-			gint32 scripts[G_N_ELEMENTS (language_codes)];
-			GUnicodeScript scc, sel = G_UNICODE_SCRIPT_COMMON;
-
-			p = part->content->data;
-			memset (scripts, 0, sizeof (scripts));
-
-			while (remain > 0 && processed < max_chars) {
-				c = g_utf8_get_char_validated (p, remain);
-				if (c == (gunichar) -2 || c == (gunichar) -1) {
-					break;
-				}
-				if (g_unichar_isalpha (c)) {
-					scc = g_unichar_get_script (c);
-					if (scc < (gint)G_N_ELEMENTS (scripts)) {
-						scripts[scc]++;
-					}
-					processed ++;
-				}
-				pp = g_utf8_next_char (p);
-				remain -= pp - p;
-				p = pp;
-			}
-			for (remain = 0; remain < (gint)G_N_ELEMENTS (scripts); remain++) {
-				if (scripts[remain] > max) {
-					max = scripts[remain];
-					sel = remain;
-				}
-			}
-			part->script = sel;
-			lm = bsearch (&sel, language_codes, G_N_ELEMENTS (language_codes),
-					sizeof (language_codes[0]), &language_elts_cmp);
-
-			if (lm != NULL) {
-				part->lang_code = lm->code;
-				part->language = lm->name;
-			}
-		}
-	}
-}
-
 static void
 rspamd_extract_words (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
@@ -211,33 +67,6 @@ rspamd_extract_words (struct rspamd_task *task,
 	guint i, nlen, total_len = 0, short_len = 0, ucs_len = 0;
 	gdouble avg_len = 0;
 
-#ifdef WITH_SNOWBALL
-	static GHashTable *stemmers = NULL;
-
-	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
-
-		if (!stemmers) {
-			stemmers = g_hash_table_new (rspamd_strcase_hash,
-					rspamd_strcase_equal);
-		}
-
-		stem = g_hash_table_lookup (stemmers, part->language);
-
-		if (stem == NULL) {
-
-			stem = sb_stemmer_new (part->language, "UTF_8");
-
-			if (stem == NULL) {
-				msg_debug_task ("<%s> cannot create lemmatizer for %s language",
-						task->message_id, part->language);
-			}
-			else {
-				g_hash_table_insert (stemmers, g_strdup (part->language),
-						stem);
-			}
-		}
-	}
-#endif
 	/* Ugly workaround */
 	if (IS_PART_HTML (part)) {
 		part->normalized_words = rspamd_tokenize_text (
@@ -263,18 +92,50 @@ rspamd_extract_words (struct rspamd_task *task,
 					sizeof (rspamd_stat_token_t), part->normalized_words->len);
 		}
 
-		for (i = 0; i < part->normalized_words->len; i ++) {
-			guint64 h;
+		if (part->ucs32_words) {
+			for (i = 0; i < part->normalized_words->len; i++) {
+				w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 
-			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 
-			if (part->ucs32_words) {
 				rspamd_language_detector_to_ucs (task->lang_det, task->task_pool,
 						w, &ucs_w);
 				g_array_append_val (part->ucs32_words, ucs_w);
 				ucs_len += ucs_w.len;
 			}
 
+#ifdef WITH_SNOWBALL
+			static GHashTable *stemmers = NULL;
+
+			if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
+
+				if (!stemmers) {
+					stemmers = g_hash_table_new (rspamd_strcase_hash,
+							rspamd_strcase_equal);
+				}
+
+				stem = g_hash_table_lookup (stemmers, part->language);
+
+				if (stem == NULL) {
+
+					stem = sb_stemmer_new (part->language, "UTF_8");
+
+					if (stem == NULL) {
+						msg_debug_task ("<%s> cannot create lemmatizer for %s language",
+								task->message_id, part->language);
+					}
+					else {
+						g_hash_table_insert (stemmers, g_strdup (part->language),
+								stem);
+					}
+				}
+			}
+#endif
+		}
+
+		for (i = 0; i < part->normalized_words->len; i ++) {
+			guint64 h;
+
+			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 			r = NULL;
 #ifdef WITH_SNOWBALL
 			if (stem) {
@@ -925,7 +786,6 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 	}
 
 	/* Post process part */
-	detect_text_language (text_part);
 	rspamd_normalize_text_part (task, text_part);
 
 	if (!IS_PART_HTML (text_part)) {

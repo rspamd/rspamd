@@ -226,7 +226,8 @@ end:
 }
 
 
-void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
+void
+rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 		rspamd_mempool_t *pool,
 		rspamd_stat_token_t *utf_token, rspamd_stat_token_t *ucs_token)
 {
