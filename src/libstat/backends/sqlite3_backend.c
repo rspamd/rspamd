@@ -365,8 +365,8 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 		for (i = 0; i < task->text_parts->len; i++) {
 			tp = g_ptr_array_index (task->text_parts, i);
 
-			if (tp->lang_code != NULL && tp->lang_code[0] != '\0' &&
-					strcmp (tp->lang_code, "en") != 0) {
+			if (tp->language != NULL && tp->language[0] != '\0' &&
+					strcmp (tp->language, "en") != 0) {
 				language = tp->language;
 				break;
 			}

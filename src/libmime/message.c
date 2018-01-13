@@ -93,6 +93,8 @@ rspamd_extract_words (struct rspamd_task *task,
 		}
 
 		if (part->ucs32_words) {
+			struct rspamd_lang_detector_res *lang;
+
 			for (i = 0; i < part->normalized_words->len; i++) {
 				w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 
@@ -101,6 +103,16 @@ rspamd_extract_words (struct rspamd_task *task,
 						w, &ucs_w);
 				g_array_append_val (part->ucs32_words, ucs_w);
 				ucs_len += ucs_w.len;
+			}
+
+			part->languages = rspamd_language_detector_detect (task->lang_det,
+					part->ucs32_words, ucs_len);
+
+			if (part->languages->len > 0) {
+				lang = g_ptr_array_index (part->languages, 0);
+				part->language = lang->lang;
+
+				msg_info_task ("detected part language: %s", part->language);
 			}
 
 #ifdef WITH_SNOWBALL
@@ -869,7 +881,6 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
-
 		return TRUE;
 	}
 

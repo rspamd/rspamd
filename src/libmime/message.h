@@ -78,10 +78,8 @@ struct rspamd_mime_part {
 #define IS_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
 
 struct rspamd_mime_text_part {
-	guint flags;
-	GUnicodeScript script;
-	const gchar *lang_code;
 	const gchar *language;
+	GPtrArray *languages;
 	const gchar *real_charset;
 	rspamd_ftok_t raw;
 	rspamd_ftok_t parsed;
@@ -95,6 +93,7 @@ struct rspamd_mime_text_part {
 	GArray *normalized_words;
 	GArray *ucs32_words;
 	GArray *normalized_hashes;
+	guint flags;
 	guint nlines;
 	guint spaces;
 	guint non_ascii_chars;

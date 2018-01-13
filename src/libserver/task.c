@@ -242,6 +242,9 @@ rspamd_task_free (struct rspamd_task *task)
 			if (tp->ucs32_words) {
 				g_array_free (tp->ucs32_words, TRUE);
 			}
+			if (tp->languages) {
+				g_ptr_array_free (tp->languages, TRUE);
+			}
 		}
 
 		if (task->rcpt_envelope) {

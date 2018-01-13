@@ -745,8 +745,8 @@ lua_textpart_get_language (lua_State * L)
 	struct rspamd_mime_text_part *part = lua_check_textpart (L);
 
 	if (part != NULL) {
-		if (part->lang_code != NULL && part->lang_code[0] != '\0') {
-			lua_pushstring (L, part->lang_code);
+		if (part->language != NULL && part->language[0] != '\0') {
+			lua_pushstring (L, part->language);
 			return 1;
 		}
 	}

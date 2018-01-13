@@ -263,7 +263,7 @@ rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 }
 
 static void
-rspamd_language_detector_random_select (GPtrArray *ucs_tokens, guint nwords,
+rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 		goffset *offsets_out)
 {
 	guint step_len, remainder, i, out_idx;
@@ -362,7 +362,7 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 		}
 	}
 	else {
-		if (tok->len >= cur_off) {
+		if (tok->len <= cur_off) {
 			return -1;
 		}
 
@@ -406,17 +406,21 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_lang_detector *d,
 
 		freq = ((gdouble)GPOINTER_TO_UINT (
 				g_hash_table_lookup (ngramms, window))) / class_freq;
-		cand = g_hash_table_lookup (candidates, elt->name);
 
-		if (cand == NULL) {
-			cand = g_malloc (sizeof (*cand));
-			cand->elt = elt;
-			cand->lang = elt->name;
-			cand->prob = freq;
-		}
-		else {
-			/* Update guess */
-			cand->prob += freq;
+		if (freq > 0) {
+			cand = g_hash_table_lookup (candidates, elt->name);
+
+			if (cand == NULL) {
+				cand = g_malloc (sizeof (*cand));
+				cand->elt = elt;
+				cand->lang = elt->name;
+				cand->prob = freq;
+
+				g_hash_table_insert (candidates, (gpointer)elt->name, cand);
+			} else {
+				/* Update guess */
+				cand->prob += freq;
+			}
 		}
 	}
 }
@@ -583,7 +587,7 @@ rspamd_language_detector_filter_negligible (GHashTable *candidates)
 
 static void
 rspamd_language_detector_detect_type (struct rspamd_lang_detector *d,
-		GPtrArray *ucs_tokens,
+		GArray *ucs_tokens,
 		GHashTable *candidates,
 		enum rspamd_language_gramm_type type,
 		gboolean start_over)
@@ -597,7 +601,7 @@ rspamd_language_detector_detect_type (struct rspamd_lang_detector *d,
 	rspamd_language_detector_random_select (ucs_tokens, nparts, selected_words);
 
 	/* Deal with the first word in a special case */
-	tok = g_ptr_array_index (ucs_tokens, selected_words[0]);
+	tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, selected_words[0]);
 
 	if (start_over) {
 		rspamd_language_detector_detect_word (d, tok, candidates, type);
@@ -607,7 +611,7 @@ rspamd_language_detector_detect_type (struct rspamd_lang_detector *d,
 	}
 
 	for (i = 1; i < nparts; i ++) {
-		tok = g_ptr_array_index (ucs_tokens, selected_words[i]);
+		tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, selected_words[i]);
 		rspamd_language_detector_update_guess (d, tok, candidates, type);
 	}
 
@@ -620,13 +624,13 @@ rspamd_language_detector_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_lang_detector_res
 			*canda = *(const struct rspamd_lang_detector_res **)a,
-			*candb = *(const struct rspamd_lang_detector_res **)a;
+			*candb = *(const struct rspamd_lang_detector_res **)b;
 
 	if (canda->prob > candb->prob) {
-		return 1;
+		return -1;
 	}
 	else if (candb->prob > canda->prob) {
-		return -1;
+		return 1;
 	}
 
 	return 0;
@@ -634,7 +638,7 @@ rspamd_language_detector_cmp (gconstpointer a, gconstpointer b)
 
 GPtrArray *
 rspamd_language_detector_detect (struct rspamd_lang_detector *d,
-		GPtrArray *ucs_tokens, gsize words_len)
+		GArray *ucs_tokens, gsize words_len)
 {
 	GHashTable *candidates;
 	GPtrArray *result;
@@ -690,6 +694,7 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		cand = (struct rspamd_lang_detector_res *) v;
+		msg_err ("%s -> %.2f", cand->lang, cand->prob);
 		g_ptr_array_add (result, cand);
 		g_hash_table_iter_steal (&it);
 	}

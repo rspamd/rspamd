@@ -55,6 +55,6 @@ void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
  * @return array of struct rspamd_lang_detector_res sorted by freq descending
  */
 GPtrArray * rspamd_language_detector_detect (struct rspamd_lang_detector *d,
-		GPtrArray *ucs_tokens, gsize words_len);
+		GArray *ucs_tokens, gsize words_len);
 
 #endif
