@@ -303,13 +303,207 @@ rspamd_language_detector_random_select (GPtrArray *ucs_tokens, guint nwords,
 	}
 }
 
+enum rspamd_language_gramm_type {
+	rs_unigramm = 0,
+	rs_bigramm,
+	rs_trigramm
+};
+
+static goffset
+rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
+		guint wlen, goffset cur_off)
+{
+	guint i;
+
+	if (wlen > 1) {
+		/* Deal with spaces at the beginning and ending */
+
+		if (cur_off == 0) {
+			window[0] = (UChar)' ';
+
+			for (i = 0; i < wlen - 1; i ++) {
+				window[i + 1] = *(((UChar *)tok->begin) + i);
+			}
+		}
+		else if (cur_off + wlen == tok->len + 1) {
+			/* Add trailing space */
+			for (i = 0; i < wlen - 1; i ++) {
+				window[i] = *(((UChar *)tok->begin) + cur_off + i);
+			}
+			window[wlen - 1] = (UChar)' ';
+		}
+		else if (cur_off + wlen > tok->len + 1) {
+			/* No more fun */
+			return -1;
+		}
+
+		/* Normal case */
+		for (i = 0; i < wlen; i ++) {
+			window[i] = *(((UChar *)tok->begin) + cur_off + i);
+		}
+	}
+	else {
+		if (tok->len >= cur_off) {
+			return -1;
+		}
+
+		window[0] = *(((UChar *)tok->begin) + cur_off);
+	}
+
+	return cur_off + 1;
+}
+
+/*
+ * Do full guess for a specific ngramm, checking all languages defined
+ */
+static void
+rspamd_language_detector_process_ngramm_full (struct rspamd_lang_detector *d,
+		UChar *window, enum rspamd_language_gramm_type type,
+		GHashTable *candidates)
+{
+	guint i, freq;
+	struct rspamd_language_elt *elt;
+	struct rspamd_lang_detector_res *cand;
+	GHashTable *ngramms;
+
+	for (i = 0; i < d->languages->len; i ++) {
+		elt = g_ptr_array_index (d->languages, i);
+
+		switch (type) {
+		case rs_unigramm:
+			ngramms = elt->unigramms;
+			break;
+		case rs_bigramm:
+			ngramms = elt->bigramms;
+			break;
+		case rs_trigramm:
+			ngramms = elt->trigramms;
+			break;
+		}
+
+		freq = GPOINTER_TO_UINT (g_hash_table_lookup (ngramms, window));
+		cand = g_hash_table_lookup (candidates, elt->name);
+
+		if (cand == NULL) {
+			cand = g_malloc (sizeof (*cand));
+			cand->elt = elt;
+			cand->lang = elt->name;
+			cand->prob = freq;
+		}
+		else {
+			/* Update guess */
+			cand->prob += freq;
+		}
+	}
+}
+
+/*
+ * Check only candidates, if none found, switch to full version
+ */
+static void
+rspamd_language_detector_process_ngramm_update (struct rspamd_lang_detector *d,
+		UChar *window, enum rspamd_language_gramm_type type,
+		GHashTable *candidates)
+{
+	guint freq, total_freq = 0;
+	struct rspamd_language_elt *elt;
+	struct rspamd_lang_detector_res *cand;
+	GHashTableIter it;
+	gpointer k, v;
+	GHashTable *ngramms;
+
+	g_hash_table_iter_init (&it, candidates);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		cand = (struct rspamd_lang_detector_res *)v;
+		elt = cand->elt;
+
+		switch (type) {
+		case rs_unigramm:
+			ngramms = elt->unigramms;
+			break;
+		case rs_bigramm:
+			ngramms = elt->bigramms;
+			break;
+		case rs_trigramm:
+			ngramms = elt->trigramms;
+			break;
+		}
+
+		freq = GPOINTER_TO_UINT (g_hash_table_lookup (ngramms, window));
+
+		cand->prob += freq;
+		total_freq += freq;
+	}
+
+	if (total_freq == 0) {
+		/* Nothing found , do full scan which will also update candidates */
+		rspamd_language_detector_process_ngramm_full (d, window, type, candidates);
+	}
+}
+
+static gboolean
+rspamd_language_detector_update_guess (struct rspamd_lang_detector *d,
+		rspamd_stat_token_t *tok, GHashTable *candidates,
+		enum rspamd_language_gramm_type type)
+{
+	guint wlen;
+	UChar window[3];
+	goffset cur = 0;
+
+	switch (type) {
+	case rs_unigramm:
+		wlen = 1;
+		break;
+	case rs_bigramm:
+		wlen = 2;
+		break;
+	case rs_trigramm:
+		wlen = 3;
+		break;
+	}
+
+	/* Split words */
+	while ((cur = rspamd_language_detector_next_ngramm (tok, window, wlen, cur))
+			!= -1) {
+
+	}
+}
+
+static void
+rspamd_language_detector_detect_word (struct rspamd_lang_detector *d,
+		rspamd_stat_token_t *tok, GHashTable *candidates,
+		enum rspamd_language_gramm_type type)
+{
+	guint wlen;
+	UChar window[3];
+	goffset cur = 0;
+
+	switch (type) {
+	case rs_unigramm:
+		wlen = 1;
+		break;
+	case rs_bigramm:
+		wlen = 2;
+		break;
+	case rs_trigramm:
+		wlen = 3;
+		break;
+	}
+
+	/* Split words */
+	while ((cur = rspamd_language_detector_next_ngramm (tok, window, wlen, cur))
+			!= -1) {
+
+	}
+}
+
 const gchar *
 rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 		GPtrArray *ucs_tokens, gsize words_len)
 {
 	if (words_len < d->short_text_limit) {
 		/* For short text, start directly from trigramms */
-		return rspamd_language_detector_detect_trigramm ();
 	}
 
 	/* Start with unigramms */

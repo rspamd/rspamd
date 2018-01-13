@@ -22,10 +22,12 @@
 #include "libstat/stat_api.h"
 
 struct rspamd_lang_detector;
+struct rspamd_language_elt;
 
 struct rspamd_lang_detector_res {
 	gdouble prob;
 	const gchar *lang;
+	struct rspamd_language_elt *elt;
 };
 
 /**
