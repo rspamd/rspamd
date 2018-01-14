@@ -21,6 +21,7 @@
 #include <glob.h>
 #include <unicode/utf8.h>
 #include <unicode/ucnv.h>
+#include <unicode/uchar.h>
 #include <math.h>
 
 static const gsize default_short_text_limit = 200;
@@ -78,6 +79,16 @@ static gboolean
 rspamd_trigram_equal (gconstpointer v, gconstpointer v2)
 {
 	return memcmp (v, v2, 3 * sizeof (UChar)) == 0;
+}
+
+static void
+rspamd_language_detector_ucs_lowercase (UChar *s, gsize len)
+{
+	gsize i;
+
+	for (i = 0; i < len; i ++) {
+		s[i] = u_tolower (s[i]);
+	}
 }
 
 static void
@@ -148,6 +159,8 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 
 				continue;
 			}
+
+			rspamd_language_detector_ucs_lowercase (ucs_key, nsym);
 
 			if (nsym == 2) {
 				/* We have a digraph */
@@ -270,6 +283,7 @@ rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 			utf_token->begin, utf_token->len, &uc_err);
 
 	if (nsym >= 0) {
+		rspamd_language_detector_ucs_lowercase (out, nsym);
 		ucs_token->begin = (const gchar *) out;
 		ucs_token->len = nsym;
 	}
