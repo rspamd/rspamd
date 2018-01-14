@@ -87,7 +87,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 {
 	struct ucl_parser *parser;
 	ucl_object_t *top;
-	const ucl_object_t *freqs, *cur;
+	const ucl_object_t *freqs, *n_words, *cur;
 	ucl_object_iter_t it = NULL;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	struct rspamd_language_elt *nelt;
@@ -169,6 +169,21 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 				msg_warn_config ("have more than 3 characters in key: %d", nsym);
 			}
 		}
+	}
+
+	n_words = ucl_object_lookup (top, "n_words");
+
+	if (n_words == NULL || ucl_object_type (n_words) != UCL_ARRAY ||
+			n_words->len != 3) {
+		msg_warn_config ("cannot find n_words in language %s", nelt->name);
+	}
+	else {
+		nelt->unigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
+				0));
+		nelt->bigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
+				1));
+		nelt->trigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
+				2));
 	}
 
 	msg_info_config ("loaded %s language, %d unigramms, %d digramms, %d trigramms",
@@ -588,7 +603,7 @@ rspamd_language_detector_filter_negligible (GHashTable *candidates)
 		 * Probabilities are logarithmic, so if prob1 - prob2 > 4, it means that
 		 * prob2 is 2^4 less than prob1
 		 */
-		if (max_prob - cand->prob > 4) {
+		if (max_prob - cand->prob > 1.5) {
 			g_hash_table_iter_remove (&it);
 		}
 	}
@@ -755,6 +770,8 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 				g_hash_table_unref (candidates);
 				candidates = tcandidates;
 
+				msg_err ("bigramms checked, %.3f mean, %.4f stddev", mean, std);
+
 				if (std / fabs (mean) < 0.3) {
 					/* Try trigramms */
 					tcandidates = g_hash_table_new_full (rspamd_str_hash,
@@ -782,7 +799,7 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		cand = (struct rspamd_lang_detector_res *) v;
-		msg_debug ("%s -> %.2f", cand->lang, cand->prob);
+		msg_err ("%s -> %.2f", cand->lang, cand->prob);
 		g_ptr_array_add (result, cand);
 		g_hash_table_iter_steal (&it);
 	}
