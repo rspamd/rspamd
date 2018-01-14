@@ -701,8 +701,13 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 	struct rspamd_lang_detector_res *cand;
 	enum rspamd_language_detected_type r;
 
+	if (ucs_tokens->len == 0) {
+		return g_ptr_array_new ();
+	}
+
 	candidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 			NULL, g_free);
+
 	if (words_len < d->short_text_limit) {
 		/* For short text, start directly from trigramms */
 		r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
