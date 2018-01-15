@@ -107,7 +107,8 @@ rspamd_extract_words (struct rspamd_task *task,
 				}
 			}
 
-			part->languages = rspamd_language_detector_detect (task->lang_det,
+			part->languages = rspamd_language_detector_detect (task,
+					task->lang_det,
 					part->ucs32_words, ucs_len);
 
 			if (part->languages->len > 0) {

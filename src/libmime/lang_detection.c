@@ -45,6 +45,11 @@ struct rspamd_lang_detector {
 	gsize short_text_limit;
 };
 
+#define msg_debug_lang_det(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "langdet", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 static guint
 rspamd_unigram_hash (gconstpointer key)
 {
@@ -406,7 +411,8 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
  * Do full guess for a specific ngramm, checking all languages defined
  */
 static void
-rspamd_language_detector_process_ngramm_full (struct rspamd_lang_detector *d,
+rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
+		struct rspamd_lang_detector *d,
 		UChar *window, enum rspamd_language_gramm_type type,
 		GHashTable *candidates)
 {
@@ -459,7 +465,8 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_lang_detector *d,
  * Check only candidates, if none found, switch to full version
  */
 static gboolean
-rspamd_language_detector_process_ngramm_update (struct rspamd_lang_detector *d,
+rspamd_language_detector_process_ngramm_update (struct rspamd_task *task,
+		struct rspamd_lang_detector *d,
 		UChar *window, enum rspamd_language_gramm_type type,
 		GHashTable *candidates)
 {
@@ -500,7 +507,8 @@ rspamd_language_detector_process_ngramm_update (struct rspamd_lang_detector *d,
 
 	if (total_freq == 0) {
 		/* Nothing found , do full scan which will also update candidates */
-		rspamd_language_detector_process_ngramm_full (d, window, type, candidates);
+		rspamd_language_detector_process_ngramm_full (task, d, window,
+				type, candidates);
 
 		return FALSE;
 	}
@@ -509,7 +517,8 @@ rspamd_language_detector_process_ngramm_update (struct rspamd_lang_detector *d,
 }
 
 static gboolean
-rspamd_language_detector_update_guess (struct rspamd_lang_detector *d,
+rspamd_language_detector_update_guess (struct rspamd_task *task,
+		struct rspamd_lang_detector *d,
 		rspamd_stat_token_t *tok, GHashTable *candidates,
 		enum rspamd_language_gramm_type type)
 {
@@ -535,14 +544,14 @@ rspamd_language_detector_update_guess (struct rspamd_lang_detector *d,
 			!= -1) {
 
 		if (rspamd_random_double_fast () > update_prob) {
-			if (!rspamd_language_detector_process_ngramm_update (d, window,
+			if (!rspamd_language_detector_process_ngramm_update (task, d, window,
 					type, candidates)) {
 				ret = FALSE;
 			}
 		}
 		else {
 			/* Try to do full update in case if we are missing some candidates */
-			rspamd_language_detector_process_ngramm_full (d, window, type,
+			rspamd_language_detector_process_ngramm_full (task, d, window, type,
 					candidates);
 		}
 	}
@@ -551,7 +560,8 @@ rspamd_language_detector_update_guess (struct rspamd_lang_detector *d,
 }
 
 static void
-rspamd_language_detector_detect_word (struct rspamd_lang_detector *d,
+rspamd_language_detector_detect_word (struct rspamd_task *task,
+		struct rspamd_lang_detector *d,
 		rspamd_stat_token_t *tok, GHashTable *candidates,
 		enum rspamd_language_gramm_type type)
 {
@@ -574,7 +584,8 @@ rspamd_language_detector_detect_word (struct rspamd_lang_detector *d,
 	/* Split words */
 	while ((cur = rspamd_language_detector_next_ngramm (tok, window, wlen, cur))
 			!= -1) {
-		rspamd_language_detector_process_ngramm_full (d, window, type, candidates);
+		rspamd_language_detector_process_ngramm_full (task,
+				d, window, type, candidates);
 	}
 }
 
@@ -583,11 +594,13 @@ rspamd_language_detector_detect_word (struct rspamd_lang_detector *d,
  * has the lowest probabilities
  */
 static void
-rspamd_language_detector_filter_negligible (GHashTable *candidates)
+rspamd_language_detector_filter_negligible (struct rspamd_task *task,
+		GHashTable *candidates)
 {
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_lang_detector_res *cand;
+	guint filtered = 0;
 	gdouble max_prob = -(G_MAXDOUBLE);
 
 	/* Normalize step */
@@ -618,43 +631,51 @@ rspamd_language_detector_filter_negligible (GHashTable *candidates)
 		 * prob2 is 2^4 less than prob1
 		 */
 		if (max_prob - cand->prob > 1.5) {
+			msg_debug_lang_det ("exclude language %s: %.3f (%.3f max)",
+					cand->lang, cand->prob, max_prob);
 			g_hash_table_iter_remove (&it);
+			filtered ++;
 		}
 	}
+
+	msg_debug_lang_det ("removed %d languages", filtered);
 }
 
 static void
-rspamd_language_detector_detect_type (struct rspamd_lang_detector *d,
+rspamd_language_detector_detect_type (struct rspamd_task *task,
+		guint nwords,
+		struct rspamd_lang_detector *d,
 		GArray *ucs_tokens,
 		GHashTable *candidates,
 		enum rspamd_language_gramm_type type,
 		gboolean start_over)
 {
-	guint nparts = MIN (ucs_tokens->len, default_words);
+	guint nparts = MIN (ucs_tokens->len, nwords);
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
 	guint i;
 
 	selected_words = g_new0 (goffset, nparts);
 	rspamd_language_detector_random_select (ucs_tokens, nparts, selected_words);
+	msg_debug_lang_det ("randomly selected %d words", nparts);
 
 	/* Deal with the first word in a special case */
 	tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, selected_words[0]);
 
 	if (start_over) {
-		rspamd_language_detector_detect_word (d, tok, candidates, type);
+		rspamd_language_detector_detect_word (task, d, tok, candidates, type);
 	}
 	else {
-		rspamd_language_detector_update_guess (d, tok, candidates, type);
+		rspamd_language_detector_update_guess (task, d, tok, candidates, type);
 	}
 
 	for (i = 1; i < nparts; i ++) {
 		tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, selected_words[i]);
-		rspamd_language_detector_update_guess (d, tok, candidates, type);
+		rspamd_language_detector_update_guess (task, d, tok, candidates, type);
 	}
 
 	/* Filter negligible candidates */
-	rspamd_language_detector_filter_negligible (candidates);
+	rspamd_language_detector_filter_negligible (task, candidates);
 }
 
 static gint
@@ -681,14 +702,16 @@ enum rspamd_language_detected_type {
 };
 
 static enum rspamd_language_detected_type
-rspamd_language_detector_try_ngramm (struct rspamd_lang_detector *d,
+rspamd_language_detector_try_ngramm (struct rspamd_task *task,
+		guint nwords,
+		struct rspamd_lang_detector *d,
 		GArray *ucs_tokens,
 		enum rspamd_language_gramm_type type,
 		GHashTable *candidates)
 {
 	guint cand_len;
 
-	rspamd_language_detector_detect_type (d, ucs_tokens, candidates,
+	rspamd_language_detector_detect_type (task, nwords, d, ucs_tokens, candidates,
 			type, TRUE);
 
 	cand_len = g_hash_table_size (candidates);
@@ -704,7 +727,8 @@ rspamd_language_detector_try_ngramm (struct rspamd_lang_detector *d,
 }
 
 GPtrArray *
-rspamd_language_detector_detect (struct rspamd_lang_detector *d,
+rspamd_language_detector_detect (struct rspamd_task *task,
+		struct rspamd_lang_detector *d,
 		GArray *ucs_tokens, gsize words_len)
 {
 	GHashTable *candidates, *tcandidates;
@@ -724,34 +748,46 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 
 	if (words_len < d->short_text_limit) {
 		/* For short text, start directly from trigramms */
-		r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
+		msg_debug_lang_det ("text is less than %z words: %z, start with trigramms",
+				d->short_text_limit, words_len);
+		r = rspamd_language_detector_try_ngramm (task, default_words, d,
+				ucs_tokens, rs_trigramm,
 				candidates);
 
 		if (r == rs_detect_none) {
-			r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_bigramm,
+			msg_debug_lang_det ("short mode; no trigramms found, switch to bigramms");
+			r = rspamd_language_detector_try_ngramm (task, default_words, d,
+					ucs_tokens, rs_bigramm,
 					candidates);
 
 			if (r == rs_detect_none) {
-				r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_unigramm,
+				msg_debug_lang_det ("short mode; no trigramms found, "
+						"switch to unigramms");
+				r = rspamd_language_detector_try_ngramm (task, default_words,
+						d, ucs_tokens, rs_unigramm,
 						candidates);
 			}
 		}
 	}
 	else {
 		/* Start with unigramms */
-		r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_unigramm,
+		r = rspamd_language_detector_try_ngramm (task, default_words,
+				d, ucs_tokens, rs_unigramm,
 				candidates);
 
 		switch (r) {
 		case rs_detect_none:
 		case rs_detect_single:
-			/* No unigramms found or single set found, no reason to continue */;
+			msg_debug_lang_det ("no unigramms found, try bigramms");
 			break;
 		case rs_detect_multiple:
 			/* Try to improve guess */
+			msg_debug_lang_det ("unigramms pass finished, found %d candidates",
+					(gint)g_hash_table_size (candidates));
 			tcandidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 					NULL, g_free);
-			r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
+			r = rspamd_language_detector_try_ngramm (task, default_words,
+					d, ucs_tokens, rs_trigramm,
 					tcandidates);
 
 			switch (r) {
@@ -789,7 +825,8 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 				g_hash_table_unref (candidates);
 				candidates = tcandidates;
 
-				msg_err ("trigramms checked, %.3f mean, %.4f stddev", mean, std);
+				msg_debug_lang_det ("trigramms checked, %.3f mean, %.4f stddev",
+						mean, std);
 
 				if (std / fabs (mean) < 0.01) {
 					/* Try trigramms */
@@ -797,7 +834,10 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 							rspamd_str_equal,
 							NULL, g_free);
 
-					r = rspamd_language_detector_try_ngramm (d, ucs_tokens,
+					r = rspamd_language_detector_try_ngramm (task,
+							default_words * 2,
+							d,
+							ucs_tokens,
 							rs_trigramm,
 							tcandidates);
 
@@ -819,7 +859,7 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		cand = (struct rspamd_lang_detector_res *) v;
-		msg_err ("%s -> %.2f", cand->lang, cand->prob);
+		msg_debug_lang_det ("final probability %s -> %.2f", cand->lang, cand->prob);
 		g_ptr_array_add (result, cand);
 		g_hash_table_iter_steal (&it);
 	}
