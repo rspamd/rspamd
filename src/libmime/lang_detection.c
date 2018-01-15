@@ -751,7 +751,7 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 			/* Try to improve guess */
 			tcandidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 					NULL, g_free);
-			r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_bigramm,
+			r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
 					tcandidates);
 
 			switch (r) {
@@ -789,15 +789,16 @@ rspamd_language_detector_detect (struct rspamd_lang_detector *d,
 				g_hash_table_unref (candidates);
 				candidates = tcandidates;
 
-				msg_err ("bigramms checked, %.3f mean, %.4f stddev", mean, std);
+				msg_err ("trigramms checked, %.3f mean, %.4f stddev", mean, std);
 
-				if (std / fabs (mean) < 0.3) {
+				if (std / fabs (mean) < 0.01) {
 					/* Try trigramms */
 					tcandidates = g_hash_table_new_full (rspamd_str_hash,
 							rspamd_str_equal,
 							NULL, g_free);
 
-					r = rspamd_language_detector_try_ngramm (d, ucs_tokens, rs_trigramm,
+					r = rspamd_language_detector_try_ngramm (d, ucs_tokens,
+							rs_trigramm,
 							tcandidates);
 
 					if (r != rs_detect_none) {
