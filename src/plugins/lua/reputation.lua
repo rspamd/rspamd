@@ -763,13 +763,15 @@ local backends = {
 
 local function is_rule_applicable(task, rule)
   local ip = task:get_from_ip()
-  if rule.selector.config.outbound then
-    if not (task:get_user() or (ip and ip:is_local())) then
-      return false
-    end
-  elseif rule.selector.config.inbound then
-    if task:get_user() or (ip and ip:is_local()) then
-      return false
+  if not (rule.selector.config.outbound and rule.selector.config.inbound) then
+    if rule.selector.config.outbound then
+      if not (task:get_user() or (ip and ip:is_local())) then
+        return false
+      end
+    elseif rule.selector.config.inbound then
+      if task:get_user() or (ip and ip:is_local()) then
+        return false
+      end
     end
   end
 
