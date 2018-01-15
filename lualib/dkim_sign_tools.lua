@@ -30,16 +30,16 @@ local function prepare_dkim_signing(N, task, settings)
     is_local = true
   end
 
-  if settings.auth_only and not auser then
-    if (settings.sign_networks and settings.sign_networks:get_key(ip)) then
-      is_sign_networks = true
-      rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
-    elseif settings.sign_local and is_local then
-      rspamd_logger.debugm(N, task, 'mail is from local address')
-    else
-      rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
-      return false,{}
-    end
+  if settings.auth_only and auser then
+    rspamd_logger.debugm(N, task, 'user is authenticated')
+  elseif (settings.sign_networks and settings.sign_networks:get_key(ip)) then
+    is_sign_networks = true
+    rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
+  elseif settings.sign_local and is_local then
+    rspamd_logger.debugm(N, task, 'mail is from local address')
+  else
+    rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
+    return false,{}
   end
 
   local efrom = task:get_from('smtp')
