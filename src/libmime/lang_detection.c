@@ -669,6 +669,7 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 
 	/* Filter negligible candidates */
 	rspamd_language_detector_filter_negligible (task, candidates);
+	g_free (selected_words);
 }
 
 static gint
