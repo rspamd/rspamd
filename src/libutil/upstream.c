@@ -273,7 +273,7 @@ rspamd_upstream_update_addrs (struct upstream *up)
 
 			PTR_ARRAY_FOREACH (up->addrs.addr, i, addr_elt) {
 				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr) == 0) {
-					naddr = g_malloc0 (sizeof (*addr_elt));
+					naddr = g_malloc0 (sizeof (*naddr));
 					naddr->addr = cur->addr;
 					naddr->errors = reset_errors ? 0 : addr_elt->errors;
 					seen_addr = TRUE;
@@ -283,9 +283,9 @@ rspamd_upstream_update_addrs (struct upstream *up)
 			}
 
 			if (!seen_addr) {
-				addr_elt = g_malloc0 (sizeof (*addr_elt));
-				addr_elt->addr = cur->addr;
-				addr_elt->errors = 0;
+				naddr = g_malloc0 (sizeof (*naddr));
+				naddr->addr = cur->addr;
+				naddr->errors = 0;
 			}
 
 			g_ptr_array_add (new_addrs, naddr);
