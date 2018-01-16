@@ -262,9 +262,19 @@ local function check_settings(task)
     end
 
     if rule['header'] then
-      for k, v in pairs(rule['header']) do
-        local h = task:get_header(k)
-        res = (h and v:match(h))
+      for _, e in ipairs(rule['header']) do
+        for k, v in pairs(e) do
+          for _, p in ipairs(v) do
+            local h = task:get_header(k)
+            res = (h and p:match(h))
+            if res then
+              break
+            end
+          end
+          if res then
+            break
+          end
+        end
         if res then
           break
         end
@@ -514,17 +524,33 @@ local function process_settings_table(tbl)
       out['request_header'] = rho
     end
     if elt['header'] then
-      local rho = {}
-      for k, v in pairs(elt['header']) do
-        local re = rspamd_regexp.get_cached(v)
-        if not re then
-          re = rspamd_regexp.create_cached(v)
-        end
-        if re then
-          rho[k] = re
-        end
+      if not elt['header'][1] and next(elt['header']) then
+        elt['header'] = {elt['header']}
       end
-      out['header'] = rho
+      for _, e in ipairs(elt['header']) do
+        local rho = {}
+        for k, v in pairs(e) do
+          if type(v) ~= 'table' then
+            v = {v}
+          end
+          for _, r in ipairs(v) do
+            local re = rspamd_regexp.get_cached(r)
+            if not re then
+              re = rspamd_regexp.create_cached(r)
+            end
+            if re then
+              if not out['header'] then out['header'] = {} end
+              if rho[k] then
+                table.insert(rho[k], re)
+              else
+                rho[k] = {re}
+              end
+            end
+          end
+        end
+        if not out['header'] then out['header'] = {} end
+        table.insert(out['header'], rho)
+      end
     end
 
     -- Now we must process actions
