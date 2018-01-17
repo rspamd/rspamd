@@ -26,6 +26,11 @@ static const struct luaL_reg xmlrpclib_m[] = {
 	{NULL, NULL}
 };
 
+#define msg_debug_xmlrpc(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "xmlrpc", "", \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 enum lua_xmlrpc_state {
 	read_method_responce = 0,
 	read_params = 1,
@@ -105,11 +110,13 @@ xmlrpc_start_element (GMarkupParseContext *context,
 
 	last_state = ud->parser_state;
 
+	msg_debug_xmlrpc ("got start element %s on state %d", name, last_state);
+
 	switch (ud->parser_state) {
 	case read_method_responce:
 		/* Expect tag methodResponse */
 		if (g_ascii_strcasecmp (name, "methodResponse") == 0) {
-			ud->parser_state =read_params;
+			ud->parser_state = read_params;
 		}
 		else {
 			/* Error state */
@@ -302,6 +309,9 @@ xmlrpc_start_element (GMarkupParseContext *context,
 		break;
 	}
 
+	msg_debug_xmlrpc ("switched state on start tag %d->%d", last_state,
+			ud->parser_state);
+
 	if (ud->parser_state == error_state) {
 		g_set_error (error,
 			xmlrpc_error_quark (), 1, "xmlrpc parse error on state: %d, while parsing start tag: %s",
@@ -319,6 +329,8 @@ xmlrpc_end_element (GMarkupParseContext *context,
 	enum lua_xmlrpc_state last_state;
 
 	last_state = ud->parser_state;
+
+	msg_debug_xmlrpc ("got end element %s on state %d", name, last_state);
 
 	switch (ud->parser_state) {
 	case read_method_responce:
@@ -483,6 +495,9 @@ xmlrpc_end_element (GMarkupParseContext *context,
 		break;
 	}
 
+	msg_debug_xmlrpc ("switched state on end tag %d->%d",
+			last_state, ud->parser_state);
+
 	if (ud->parser_state == error_state) {
 		g_set_error (error,
 			xmlrpc_error_quark (), 1, "xmlrpc parse error on state: %d, while parsing end tag: %s",
@@ -511,7 +526,7 @@ xmlrpc_text (GMarkupParseContext *context,
 	}
 
 	if (text_len > 0) {
-
+		msg_debug_xmlrpc ("got data on state %d", ud->parser_state);
 		switch (ud->parser_state) {
 		case read_struct_member_value:
 			/* Push key */
