@@ -472,11 +472,11 @@ xmlrpc_end_element (GMarkupParseContext *context,
 	case read_array_value:
 		/* Got tag data */
 		if (g_ascii_strcasecmp (name, "data") == 0) {
-			ud->parser_state = 14;
+			ud->parser_state = read_array;
 		}
 		else {
 			/* Error state */
-			ud->parser_state = 99;
+			ud->parser_state = error_state;
 		}
 		break;
 	case read_array_element:
