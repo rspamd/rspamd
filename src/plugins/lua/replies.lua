@@ -30,6 +30,8 @@ local settings = {
   message = 'Message is reply to one we originated',
   symbol = 'REPLY',
   score = -2, -- Default score
+  use_auth = true,
+  use_local = true,
 }
 
 local rspamd_logger = require 'rspamd_logger'
@@ -56,7 +58,7 @@ local function replies_check(task)
       task:insert_result(settings['symbol'], 1.0)
       if settings['action'] ~= nil then
         local ip_addr = task:get_ip()
-        if task:get_user() or (ip_addr and ip_addr:is_local()) then
+        if (settings.use_auth and task:get_user()) or (settings.use_local and ip_addr and ip_addr:is_local()) then
           rspamd_logger.infox(task, "not forcing action for local network or authorized user");
         else
           task:set_pre_result(settings['action'], settings['message'])
@@ -94,7 +96,11 @@ local function replies_set(task)
   end
   -- If sender is unauthenticated return
   local ip = task:get_ip()
-  if task:get_user() == nil and not (ip and ip:is_local()) then
+  if settings.use_auth and task:get_user() then
+    rspamd_logger.debugm(N, task, 'sender is authenticated')
+  elseif settings.use_local and (ip and ip:is_local()) then
+    rspamd_logger.debugm(N, task, 'sender is from local network')
+  else
     return
   end
   -- If no message-id present return
