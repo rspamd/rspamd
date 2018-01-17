@@ -593,11 +593,11 @@ local check_from_id = rspamd_config:register_symbol{
     then
       task:insert_result('FROM_EQ_ENVFROM', 1.0)
     elseif (envfrom and envfrom[1] and envfrom[1].addr) then
-      task:insert_result('FROM_NEQ_ENVFROM', 1.0, from and from[1].addr or '', envfrom[1].addr)
+      task:insert_result('FROM_NEQ_ENVFROM', 1.0, ((from or E)[1] or E).addr or '', envfrom[1].addr)
     end
 
     local to = task:get_recipients(2)
-    if not (to and to[1] and #to == 1 and from) then return false end
+    if not (to and to[1] and #to == 1 and from and from[1]) then return false end
     -- Check if FROM == TO
     if (util.strequal_caseless(to[1].addr, from[1].addr)) then
       task:insert_result('TO_EQ_FROM', 1.0)
