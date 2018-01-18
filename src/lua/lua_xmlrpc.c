@@ -163,12 +163,14 @@ xmlrpc_start_element (GMarkupParseContext *context,
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			g_queue_push_head (ud->st, GINT_TO_POINTER (st_struct));
+			msg_debug_xmlrpc ("push struct");
 		}
 		else if (g_ascii_strcasecmp (name, "array") == 0) {
 			ud->parser_state = read_array;
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			g_queue_push_head (ud->st, GINT_TO_POINTER (st_array));
+			msg_debug_xmlrpc ("push array");
 		}
 		else if (g_ascii_strcasecmp (name, "string") == 0) {
 			ud->parser_state = read_string;
@@ -239,12 +241,14 @@ xmlrpc_start_element (GMarkupParseContext *context,
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			g_queue_push_head (ud->st, GINT_TO_POINTER (st_struct));
+			msg_debug_xmlrpc ("push struct");
 		}
 		else if (g_ascii_strcasecmp (name, "array") == 0) {
 			ud->parser_state = read_array;
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			g_queue_push_head (ud->st, GINT_TO_POINTER (st_array));
+			msg_debug_xmlrpc ("push array");
 		}
 		else {
 			/* Error state */
@@ -293,12 +297,14 @@ xmlrpc_start_element (GMarkupParseContext *context,
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			g_queue_push_head (ud->st, GINT_TO_POINTER (st_struct));
+			msg_debug_xmlrpc ("push struct");
 		}
 		else if (g_ascii_strcasecmp (name, "array") == 0) {
 			ud->parser_state = read_array;
 			/* Create new param of table type */
 			lua_newtable (ud->L);
 			g_queue_push_head (ud->st, GINT_TO_POINTER (st_array));
+			msg_debug_xmlrpc ("push array");
 		}
 		else {
 			/* Error state */
@@ -327,6 +333,7 @@ xmlrpc_end_element (GMarkupParseContext *context,
 {
 	struct lua_xmlrpc_ud *ud = user_data;
 	enum lua_xmlrpc_state last_state;
+	int last_queued;
 
 	last_state = ud->parser_state;
 
@@ -362,6 +369,7 @@ xmlrpc_end_element (GMarkupParseContext *context,
 		if (g_ascii_strcasecmp (name, "param") == 0) {
 			ud->parser_state = read_param;
 			lua_rawseti (ud->L, -2, ++ud->param_count);
+			msg_debug_xmlrpc ("set param element idx: %d", ud->param_count);
 		}
 		else {
 			/* Error state */
@@ -391,8 +399,22 @@ xmlrpc_end_element (GMarkupParseContext *context,
 	case read_struct:
 		/* Got tag struct */
 		if (g_ascii_strcasecmp (name, "struct") == 0) {
-			ud->parser_state = read_param_element;
-			g_queue_pop_head (ud->st);
+			g_assert (GPOINTER_TO_INT (g_queue_pop_head (ud->st)) == st_struct);
+
+			if (g_queue_get_length (ud->st) == 0) {
+				ud->parser_state = read_param_element;
+			}
+			else {
+				last_queued = GPOINTER_TO_INT (g_queue_peek_head (ud->st));
+				if (last_queued == st_struct) {
+					ud->parser_state = read_struct_element;
+				}
+				else {
+					ud->parser_state = read_array_element;
+				}
+			}
+
+			msg_debug_xmlrpc ("pop struct");
 		}
 		else {
 			/* Error state */
@@ -404,6 +426,8 @@ xmlrpc_end_element (GMarkupParseContext *context,
 		if (g_ascii_strcasecmp (name, "member") == 0) {
 			ud->parser_state = read_struct;
 			/* Set table */
+			msg_debug_xmlrpc ("set struct element idx: %s",
+					lua_tostring (ud->L, -2));
 			lua_settable (ud->L, -3);
 		}
 		else {
@@ -461,8 +485,22 @@ xmlrpc_end_element (GMarkupParseContext *context,
 	case read_array:
 		/* Got tag array */
 		if (g_ascii_strcasecmp (name, "array") == 0) {
-			ud->parser_state = read_param_element;
-			g_queue_pop_head (ud->st);
+			g_assert (GPOINTER_TO_INT (g_queue_pop_head (ud->st)) == st_array);
+
+			if (g_queue_get_length (ud->st) == 0) {
+				ud->parser_state = read_param_element;
+			}
+			else {
+				last_queued = GPOINTER_TO_INT (g_queue_peek_head (ud->st));
+				if (last_queued == st_struct) {
+					ud->parser_state = read_struct_element;
+				}
+				else {
+					ud->parser_state = read_array_element;
+				}
+			}
+
+			msg_debug_xmlrpc ("pop array");
 		}
 		else {
 			/* Error state */
@@ -484,6 +522,7 @@ xmlrpc_end_element (GMarkupParseContext *context,
 		if (g_ascii_strcasecmp (name, "value") == 0) {
 			guint tbl_len = rspamd_lua_table_size (ud->L, -2);
 			lua_rawseti (ud->L, -2, tbl_len + 1);
+			msg_debug_xmlrpc ("set array element idx: %d", tbl_len + 1);
 			ud->parser_state = read_array_value;
 		}
 		else {
