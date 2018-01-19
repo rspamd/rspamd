@@ -3018,6 +3018,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 			"csession");
 	session->ctx = ctx;
 	session->cfg = ctx->cfg;
+	session->lang_det = ctx->lang_det;
 	REF_RETAIN (session->cfg);
 
 	session->from_addr = addr;

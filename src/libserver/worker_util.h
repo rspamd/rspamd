@@ -77,6 +77,7 @@ struct rspamd_custom_controller_command {
 };
 
 struct rspamd_controller_worker_ctx;
+struct rspamd_lang_detector;
 
 struct rspamd_controller_session {
 	struct rspamd_controller_worker_ctx *ctx;
@@ -86,6 +87,7 @@ struct rspamd_controller_session {
 	gchar *classifier;
 	rspamd_inet_addr_t *from_addr;
 	struct rspamd_config *cfg;
+	struct rspamd_lang_detector *lang_det;
 	gboolean is_spam;
 	gboolean is_enable;
 };
