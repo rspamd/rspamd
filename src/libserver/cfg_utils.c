@@ -654,6 +654,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 # else
 	clock_getres (CLOCK_REALTIME,			&ts);
 # endif
+	rspamd_logger_configure_modules (cfg->debug_modules);
 
 	cfg->clock_res = log10 (1000000. / ts.tv_nsec);
 	if (cfg->clock_res < 0) {

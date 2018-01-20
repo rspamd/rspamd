@@ -121,7 +121,8 @@ void rspamd_conditional_debug (rspamd_logger_t *logger,
 		const gchar *function, const gchar *fmt, ...);
 
 void rspamd_conditional_debug_fast (rspamd_logger_t *logger,
-		rspamd_inet_addr_t *addr, guint mod_id, const gchar *id,
+		rspamd_inet_addr_t *addr,
+		guint mod_id, const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...);
 
 /**

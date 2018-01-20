@@ -28,6 +28,7 @@
 #define REPEATS_MIN 3
 #define REPEATS_MAX 300
 #define LOG_ID 6
+#define LOGBUF_LEN 8192
 
 struct rspamd_log_module {
 	gchar *mname;
@@ -36,8 +37,8 @@ struct rspamd_log_module {
 
 struct rspamd_log_modules {
 	guchar *bitset;
-	guint bitset_len;
-	guint bitset_allocated;
+	guint bitset_len; /* Number of BITS used in bitset */
+	guint bitset_allocated; /* Size of bitset allocated in BYTES */
 	GHashTable *modules;
 };
 
@@ -433,7 +434,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 			logger->io_buf.size = cfg->log_buf_size;
 		}
 		else {
-			logger->io_buf.size = BUFSIZ;
+			logger->io_buf.size = LOGBUF_LEN;
 		}
 		logger->is_buffered = TRUE;
 		logger->io_buf.buf = g_malloc (logger->io_buf.size);
@@ -520,7 +521,7 @@ rspamd_log_flush (rspamd_logger_t *rspamd_log)
 
 static inline gboolean
 rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
-		const gchar *module)
+		guint module_id)
 {
 	g_assert (rspamd_log != NULL);
 
@@ -528,10 +529,7 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 		return TRUE;
 	}
 
-	if (rspamd_log->cfg->debug_modules != NULL && module != NULL &&
-		g_hash_table_size (rspamd_log->cfg->debug_modules) > 0 &&
-		g_hash_table_lookup (rspamd_log->cfg->debug_modules, module)) {
-
+	if (module_id != (guint)-1 && isset (log_modules->bitset, module_id)) {
 		return TRUE;
 	}
 
@@ -651,7 +649,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		}
 	}
 	else {
-		if (rspamd_logger_need_log (rspamd_log, level, module)) {
+		if (rspamd_logger_need_log (rspamd_log, level, -1)) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
@@ -1116,19 +1114,57 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
 		const gchar *function, const gchar *fmt, ...)
 {
-	static gchar logbuf[BUFSIZ];
+	static gchar logbuf[LOGBUF_LEN];
 	va_list vp;
-	u_char *end;
+	gchar *end;
+	guint mod_id;
 
 	if (rspamd_log == NULL) {
 		rspamd_log = default_logger;
 	}
 
-	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, module) ||
+	mod_id = rspamd_logger_add_debug_module (module);
+
+	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, mod_id) ||
 		rspamd_log->is_debug) {
 		if (rspamd_log->debug_ip && addr != NULL) {
 			if (radix_find_compressed_addr (rspamd_log->debug_ip, addr)
 				== RADIX_NO_VALUE) {
+				return;
+			}
+		}
+
+		va_start (vp, fmt);
+		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
+		*end = '\0';
+		va_end (vp);
+		rspamd_log->log_func (module, id,
+				function,
+				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
+				logbuf,
+				rspamd_log);
+	}
+}
+
+void
+rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
+		rspamd_inet_addr_t *addr,
+		guint mod_id, const gchar *module, const gchar *id,
+		const gchar *function, const gchar *fmt, ...)
+{
+	static gchar logbuf[LOGBUF_LEN];
+	va_list vp;
+	gchar *end;
+
+	if (rspamd_log == NULL) {
+		rspamd_log = default_logger;
+	}
+
+	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, mod_id) ||
+			rspamd_log->is_debug) {
+		if (rspamd_log->debug_ip && addr != NULL) {
+			if (radix_find_compressed_addr (rspamd_log->debug_ip, addr)
+					== RADIX_NO_VALUE) {
 				return;
 			}
 		}
@@ -1157,7 +1193,7 @@ rspamd_glib_log_function (const gchar *log_domain,
 	rspamd_logger_t *rspamd_log = arg;
 
 	if (rspamd_log->enabled &&
-			rspamd_logger_need_log (rspamd_log, log_level, NULL)) {
+			rspamd_logger_need_log (rspamd_log, log_level, -1)) {
 		rspamd_log->log_func ("glib", NULL,
 				NULL,
 				log_level,
@@ -1321,6 +1357,7 @@ rspamd_logger_add_debug_module (const gchar *mname)
 		m = g_malloc0 (sizeof (*m));
 		m->mname = g_strdup (mname);
 		m->id = rspamd_logger_allocate_mod_bit ();
+		clrbit (log_modules->bitset, m->id);
 	}
 
 	return m->id;
@@ -1341,6 +1378,7 @@ rspamd_logger_configure_modules (GHashTable *mods_enabled)
 	}
 
 	/* Now we have bit in our bitset available */
+	memset (log_modules->bitset, 0, log_modules->bitset_allocated);
 	g_hash_table_iter_init (&it, mods_enabled);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
