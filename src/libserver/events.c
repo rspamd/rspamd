@@ -37,10 +37,12 @@
         "events", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "events", session->pool->tag.uid, \
+#define msg_debug_session(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_events_log_id, "events", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(events)
 
 struct rspamd_watch_stack {
 	event_watcher_t cb;

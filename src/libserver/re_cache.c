@@ -52,14 +52,17 @@
         "re_cache", cache->hash, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_re_cache(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "re_cache", cache->hash, \
+
+#define msg_debug_re_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_re_cache_log_id, "re_cache", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_re_task(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "re_cache", task->task_pool->tag.uid, \
+#define msg_debug_re_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_re_cache_log_id, "re_cache", cache->hash, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(re_cache)
 
 #ifdef WITH_HYPERSCAN
 #define RSPAMD_HS_MAGIC_LEN (sizeof (rspamd_hs_magic))

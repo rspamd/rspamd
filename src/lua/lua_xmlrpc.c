@@ -26,10 +26,12 @@ static const struct luaL_reg xmlrpclib_m[] = {
 	{NULL, NULL}
 };
 
-#define msg_debug_xmlrpc(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "xmlrpc", "", \
+#define msg_debug_xmlrpc(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_xmlrpc_log_id, "xmlrpc", "", \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(xmlrpc)
 
 enum lua_xmlrpc_state {
 	read_method_responce = 0,

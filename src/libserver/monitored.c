@@ -78,10 +78,12 @@ struct rspamd_monitored {
 		"monitored", m->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_mon(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "monitored", m->tag, \
+#define msg_debug_mon(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_monitored_log_id, "monitored", m->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(monitored)
 
 static inline void
 rspamd_monitored_propagate_error (struct rspamd_monitored *m,

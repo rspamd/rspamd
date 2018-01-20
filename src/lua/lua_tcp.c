@@ -204,10 +204,12 @@ struct lua_tcp_cbdata {
 	ref_entry_t ref;
 };
 
-#define msg_debug_tcp(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "lua_tcp", cbd->tag, \
+#define msg_debug_tcp(...)  rspamd_conditional_debug_fast (NULL, cbd->addr, \
+        rspamd_lua_tcp_log_id, "lua_tcp", cbd->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(lua_tcp)
 
 static void lua_tcp_handler (int fd, short what, gpointer ud);
 static void lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd,

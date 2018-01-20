@@ -68,10 +68,6 @@ worker_t normal_worker = {
         "controller", ctx->cfg->cfg_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_ctx(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "controller", ctx->cfg->cfg_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
 
 static gboolean
 rspamd_worker_finalize (gpointer user_data)

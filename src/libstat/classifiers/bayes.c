@@ -33,11 +33,12 @@
         "bayes", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_bayes(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "bayes", task->task_pool->tag.uid, \
+#define msg_debug_bayes(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+        rspamd_bayes_log_id, "bayes", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 
+INIT_LOG_MODULE(bayes)
 
 static inline GQuark
 bayes_error_quark (void)

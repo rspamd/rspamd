@@ -67,10 +67,12 @@ static const guint default_max_conns = 100;
 		"redis_pool", conn->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_rpool(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "redis_pool", conn->tag, \
+#define msg_debug_rpool(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_redis_pool_log_id, "redis_pool", conn->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(redis_pool)
 
 static inline guint64
 rspamd_redis_pool_get_key (const gchar *db, const gchar *password,

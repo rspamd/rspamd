@@ -55,10 +55,12 @@
         "surbl", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_surbl(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "surbl", task->task_pool->tag.uid, \
+#define msg_debug_surbl(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+        rspamd_surbl_log_id, "surbl", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(surbl)
 
 #define SURBL_REDIRECTOR_CALLBACK "SURBL_REDIRECTOR_CALLBACK"
 

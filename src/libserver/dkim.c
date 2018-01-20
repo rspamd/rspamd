@@ -86,10 +86,12 @@ enum rspamd_dkim_key_type {
         "dkim", ctx->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_dkim(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "dkim", ctx->pool->tag.uid, \
+#define msg_debug_dkim(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(dkim)
 
 struct rspamd_dkim_common_ctx {
 	rspamd_mempool_t *pool;

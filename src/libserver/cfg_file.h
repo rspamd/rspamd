@@ -663,9 +663,11 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_config(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        cfg->cfg_pool->tag.tagname, cfg->checksum, \
+extern guint rspamd_config_log_id;
+#define msg_debug_config(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_config_log_id, "config", cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
+
 
 #endif /* ifdef CFG_FILE_H */

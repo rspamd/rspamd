@@ -302,7 +302,7 @@ reread_config (struct rspamd_main *rspamd_main)
 		REF_RELEASE (tmp_cfg);
 	}
 	else {
-		msg_debug_main ("replacing config");
+		msg_info_main ("replacing config");
 		REF_RELEASE (old_cfg);
 		msg_info_main ("config has been reread successfully");
 	}
@@ -984,7 +984,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 	/* Turn off locking for logger */
 	rspamd_log_nolock (rspamd_main->logger);
 
-	msg_debug_main ("catch SIGCHLD signal, finding terminated workers");
+	msg_info_main ("catch SIGCHLD signal, finding terminated workers");
 	/* Remove dead child form children list */
 	while ((wrk = waitpid (0, &res, WNOHANG)) > 0) {
 		if ((cur =

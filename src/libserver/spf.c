@@ -98,11 +98,12 @@ struct spf_record {
         "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_spf(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "spf", rec->task->task_pool->tag.uid, \
+#define msg_debug_spf(...)  rspamd_conditional_debug_fast (NULL, rec->task->from_addr, \
+        rspamd_spf_log_id, "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 
+INIT_LOG_MODULE(spf)
 
 struct spf_dns_cb {
 	struct spf_record *rec;

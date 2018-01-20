@@ -31,10 +31,12 @@ struct rspamd_mime_parser_lib_ctx {
 static const guint max_nested = 32;
 static const guint max_key_usages = 10000;
 
-#define msg_debug_mime(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "mime", task->task_pool->tag.uid, \
+#define msg_debug_mime(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+        rspamd_mime_log_id, "mime", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(mime)
 
 #define RSPAMD_MIME_BOUNDARY_FLAG_CLOSED (1 << 0)
 #define RSPAMD_BOUNDARY_IS_CLOSED(b) ((b)->flags & RSPAMD_MIME_BOUNDARY_FLAG_CLOSED)

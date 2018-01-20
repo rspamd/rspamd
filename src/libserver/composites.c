@@ -33,10 +33,13 @@
         "composites", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_composites(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "composites", task->task_pool->tag.uid, \
+
+#define msg_debug_composites(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+        rspamd_composites_log_id, "composites", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(composites)
 
 struct composites_data {
 	struct rspamd_task *task;

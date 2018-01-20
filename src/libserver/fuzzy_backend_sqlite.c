@@ -46,10 +46,12 @@ static const guint max_retries = 10;
         backend->pool->tag.tagname, backend->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_fuzzy_backend(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        backend->pool->tag.tagname, backend->pool->tag.uid, \
+#define msg_debug_fuzzy_backend(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+       rspamd_fuzzy_sqlite_log_id, backend->pool->tag.tagname, backend->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(fuzzy_sqlite)
 
 static const char *create_tables_sql =
 		"BEGIN;"

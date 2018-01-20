@@ -57,10 +57,13 @@
         session->pool->tag.tagname, session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        session->pool->tag.tagname, session->pool->tag.uid, \
+
+#define msg_debug_session(...)  rspamd_conditional_debug_fast (NULL, session->client_addr, \
+        rspamd_proxy_log_id, "proxy", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(proxy)
 
 gpointer init_rspamd_proxy (struct rspamd_config *cfg);
 void start_rspamd_proxy (struct rspamd_worker *worker);

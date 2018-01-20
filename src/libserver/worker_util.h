@@ -202,9 +202,5 @@ void rspamd_worker_init_monitored (struct rspamd_worker *worker,
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_main(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
 
 #endif /* WORKER_UTIL_H_ */

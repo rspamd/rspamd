@@ -37,10 +37,12 @@
         cache->static_pool->tag.tagname, cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_cache(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        cache->static_pool->tag.tagname, cache->cfg->checksum, \
+#define msg_debug_cache(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_symcache_log_id, "symcache", cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(symcache)
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 

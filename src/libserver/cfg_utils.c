@@ -56,6 +56,12 @@ static gchar * rspamd_ucl_read_cb (gchar * chunk,
 	gboolean final);
 static void rspamd_ucl_fin_cb (struct map_cb_data *data);
 
+guint rspamd_config_log_id = (guint)-1;
+RSPAMD_CONSTRUCTOR(rspamd_config_log_init)
+{
+	rspamd_config_log_id = rspamd_logger_add_debug_module("config");
+}
+
 gboolean
 rspamd_parse_bind_line (struct rspamd_config *cfg,
 	struct rspamd_worker_conf *cf,

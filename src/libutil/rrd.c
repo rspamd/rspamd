@@ -37,11 +37,12 @@
         "rrd", file->id, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_rrd(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "rrd", file->id, \
+#define msg_debug_rrd(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_rrd_log_id, "rrd", file->id, \
         G_STRFUNC, \
         __VA_ARGS__)
 
+INIT_LOG_MODULE(rrd)
 
 static GQuark
 rrd_error_quark (void)

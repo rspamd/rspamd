@@ -58,10 +58,6 @@ static const gchar *local_db_name = "local";
         session->name, session->uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_fuzzy_update(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        session->name, session->uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
 #define msg_err_fuzzy_collection(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "fuzzy_collection", session->uid, \
         G_STRFUNC, \
@@ -72,10 +68,6 @@ static const gchar *local_db_name = "local";
         __VA_ARGS__)
 #define msg_info_fuzzy_collection(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
        "fuzzy_collection", session->uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_debug_fuzzy_collection(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "fuzzy_collection", session->uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 

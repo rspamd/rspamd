@@ -47,10 +47,13 @@
         "chartable", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_chartable(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "chartable", task->task_pool->tag.uid, \
+
+#define msg_debug_chartable(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+        rspamd_chartable_log_id, "chartable", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(chartable)
 
 /* Initialization */
 gint chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);

@@ -74,10 +74,6 @@
         session->pool->tag.tagname, session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        session->pool->tag.tagname, session->pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
 #define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         "controller", ctx->cfg->cfg_pool->tag.uid, \
         G_STRFUNC, \
@@ -90,10 +86,13 @@
         "controller", ctx->cfg->cfg_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_ctx(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "controller", ctx->cfg->cfg_pool->tag.uid, \
+
+#define msg_debug_session(...)  rspamd_conditional_debug_fast (NULL, session->from_addr, \
+        rspamd_controller_log_id, "controller", session->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(controller)
 
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
