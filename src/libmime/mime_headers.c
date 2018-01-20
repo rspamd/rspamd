@@ -124,7 +124,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		if (task->deliver_to == NULL) {
 			task->deliver_to = rh->decoded;
 		}
-		rh->type = RSPAMD_HEADER_DELIVERED_TO|RSPAMD_HEADER_UNIQUE;
+		rh->type = RSPAMD_HEADER_DELIVERED_TO;
 		break;
 	case 0x2EC3BFF3C393FC10ULL: /* date */
 	case 0xAC0DDB1A1D214CAULL: /* sender */
