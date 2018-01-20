@@ -96,10 +96,32 @@ void rspamd_common_logv (rspamd_logger_t *logger, gint level_flags,
 		const gchar *fmt, va_list args);
 
 /**
+ * Add new logging module, returns module ID
+ * @param mod
+ * @return
+ */
+guint rspamd_logger_add_debug_module (const gchar *mod);
+
+/*
+ * Macro to use for faster debug modules
+ */
+#define INIT_LOG_MODULE(mname) \
+	static guint mname##_log_id = (guint)-1; \
+	static RSPAMD_CONSTRUCTOR(mname##_log_init) { \
+		mname##_log_id = rspamd_logger_add_debug_module(#mname); \
+}
+
+void rspamd_logger_configure_modules (GHashTable *mods_enabled);
+
+/**
  * Conditional debug function
  */
 void rspamd_conditional_debug (rspamd_logger_t *logger,
 		rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
+		const gchar *function, const gchar *fmt, ...);
+
+void rspamd_conditional_debug_fast (rspamd_logger_t *logger,
+		rspamd_inet_addr_t *addr, guint mod_id, const gchar *id,
 		const gchar *function, const gchar *fmt, ...);
 
 /**

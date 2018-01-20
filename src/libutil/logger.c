@@ -29,6 +29,18 @@
 #define REPEATS_MAX 300
 #define LOG_ID 6
 
+struct rspamd_log_module {
+	gchar *mname;
+	guint id;
+};
+
+struct rspamd_log_modules {
+	guchar *bitset;
+	guint bitset_len;
+	guint bitset_allocated;
+	GHashTable *modules;
+};
+
 struct rspamd_logger_error_elt {
 	gint completed;
 	GQuark ptype;
@@ -90,14 +102,14 @@ struct rspamd_logger_s {
 static const gchar lf_chr = '\n';
 
 static rspamd_logger_t *default_logger = NULL;
+static struct rspamd_log_modules *log_modules = NULL;
 
 static void syslog_log_function (const gchar *module,
 		const gchar *id, const gchar *function,
 		gint log_level, const gchar *message,
 		gpointer arg);
 
-static void
-		file_log_function (const gchar *module,
+static void file_log_function (const gchar *module,
 		const gchar *id, const gchar *function,
 		gint log_level, const gchar *message,
 		gpointer arg);
@@ -1272,4 +1284,68 @@ rspamd_log_errorbuf_export (const rspamd_logger_t *logger)
 	g_free (cpy);
 
 	return top;
+}
+
+static guint
+rspamd_logger_allocate_mod_bit (void)
+{
+	if (log_modules->bitset_allocated * NBBY > log_modules->bitset_len + 1) {
+		log_modules->bitset_len ++;
+		return log_modules->bitset_len - 1;
+	}
+	else {
+		/* Need to expand */
+		log_modules->bitset_allocated *= 2;
+		log_modules->bitset = g_realloc (log_modules->bitset,
+				log_modules->bitset_allocated);
+
+		return rspamd_logger_allocate_mod_bit ();
+	}
+}
+
+guint
+rspamd_logger_add_debug_module (const gchar *mname)
+{
+	struct rspamd_log_module *m;
+
+	if (log_modules == NULL) {
+		log_modules = g_malloc0 (sizeof (*log_modules));
+		log_modules->modules = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
+		log_modules->bitset_allocated = 16;
+		log_modules->bitset_len = 0;
+		log_modules->bitset = g_malloc0 (log_modules->bitset_allocated);
+	}
+
+	if ((m = g_hash_table_lookup (log_modules->modules, mname)) == NULL) {
+		m = g_malloc0 (sizeof (*m));
+		m->mname = g_strdup (mname);
+		m->id = rspamd_logger_allocate_mod_bit ();
+	}
+
+	return m->id;
+}
+
+void
+rspamd_logger_configure_modules (GHashTable *mods_enabled)
+{
+	GHashTableIter it;
+	gpointer k, v;
+	guint id;
+
+	/* On first iteration, we go through all modules enabled and add missing ones */
+	g_hash_table_iter_init (&it, mods_enabled);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		rspamd_logger_add_debug_module ((const gchar *)k);
+	}
+
+	/* Now we have bit in our bitset available */
+	g_hash_table_iter_init (&it, mods_enabled);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		id = rspamd_logger_add_debug_module ((const gchar *)k);
+
+		setbit (log_modules->bitset, id);
+	}
 }
