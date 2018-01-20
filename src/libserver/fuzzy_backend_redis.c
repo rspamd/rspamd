@@ -41,10 +41,12 @@
         "fuzzy_redis", session->backend->id, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_redis_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "fuzzy_redis", session->backend->id, \
+#define msg_debug_redis_session(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_fuzzy_redis_log_id, "fuzzy_redis", session->backend->id, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(fuzzy_redis)
 
 struct rspamd_fuzzy_backend_redis {
 	struct upstream_list *read_servers;

@@ -31,10 +31,12 @@
         "radix", tree->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_radix(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "radix", tree->pool->tag.uid, \
+#define msg_debug_radix(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_radix_log_id, "radix", tree->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(radix)
 
 struct radix_tree_compressed {
 	rspamd_mempool_t *pool;

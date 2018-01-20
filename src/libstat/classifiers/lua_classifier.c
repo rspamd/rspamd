@@ -39,10 +39,12 @@ static GHashTable *lua_classifiers = NULL;
         "luacl", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_luacl(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "luacl", task->task_pool->tag.uid, \
+#define msg_debug_luacl(...)  rspamd_conditional_debug_fast (NULL, task->from_addr, \
+        rspamd_luacl_log_id, "luacl", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(luacl)
 
 gboolean
 lua_classifier_init (rspamd_mempool_t *pool,

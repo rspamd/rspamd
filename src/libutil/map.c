@@ -66,6 +66,12 @@ struct rspamd_http_map_cached_cbdata {
 	time_t last_checked;
 };
 
+guint rspamd_map_log_id = (guint)-1;
+RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
+{
+	rspamd_map_log_id = rspamd_logger_add_debug_module("map");
+}
+
 /**
  * Write HTTP request
  */

@@ -24,7 +24,7 @@
 #include "ref.h"
 
 typedef void (*rspamd_map_dtor) (gpointer p);
-
+extern guint rspamd_map_log_id;
 #define msg_err_map(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
 		"map", map->tag, \
         G_STRFUNC, \
@@ -37,8 +37,8 @@ typedef void (*rspamd_map_dtor) (gpointer p);
 		"map", map->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug_map(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "map", map->tag, \
+#define msg_debug_map(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_map_log_id, "map", map->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
 

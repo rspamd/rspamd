@@ -56,10 +56,12 @@ struct rspamd_lang_detector {
 	gsize short_text_limit;
 };
 
-#define msg_debug_lang_det(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        "langdet", task->task_pool->tag.uid, \
+#define msg_debug_lang_det(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_langdet_log_id, "langdet", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+INIT_LOG_MODULE(langdet)
 
 static guint
 rspamd_unigram_hash (gconstpointer key)

@@ -115,6 +115,12 @@ static void file_log_function (const gchar *module,
 		gint log_level, const gchar *message,
 		gpointer arg);
 
+guint rspamd_task_log_id = (guint)-1;
+RSPAMD_CONSTRUCTOR(rspamd_task_log_init)
+{
+	rspamd_task_log_id = rspamd_logger_add_debug_module("task");
+}
+
 /**
  * Calculate checksum for log line (used for repeating logic)
  */
@@ -1358,6 +1364,7 @@ rspamd_logger_add_debug_module (const gchar *mname)
 		m->mname = g_strdup (mname);
 		m->id = rspamd_logger_allocate_mod_bit ();
 		clrbit (log_modules->bitset, m->id);
+		g_hash_table_insert (log_modules->modules, m->mname, m);
 	}
 
 	return m->id;
@@ -1383,7 +1390,7 @@ rspamd_logger_configure_modules (GHashTable *mods_enabled)
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		id = rspamd_logger_add_debug_module ((const gchar *)k);
-
+		msg_info ("enable debugging for module %s (%d)", (const gchar *)k, id);
 		setbit (log_modules->bitset, id);
 	}
 }
