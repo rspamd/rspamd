@@ -311,15 +311,37 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	ucl_object_unref (top);
 }
 
+static gboolean
+rspamd_ucl_array_find_str (const gchar *str, const ucl_object_t *ar)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
+
+	if (ar == NULL || ar->len == 0) {
+		return FALSE;
+	}
+
+	while ((cur = ucl_object_iterate (ar, &it, true)) != NULL) {
+		if (ucl_object_type (cur) == UCL_STRING && rspamd_strcase_equal (
+				ucl_object_tostring (cur), str)) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 struct rspamd_lang_detector*
 rspamd_language_detector_init (struct rspamd_config *cfg)
 {
-	const ucl_object_t *section, *elt;
+	const ucl_object_t *section, *elt, *languages_enable = NULL,
+			*languages_disable = NULL;
 	const gchar *languages_path = default_languages_path;
 	glob_t gl;
 	size_t i, short_text_limit = default_short_text_limit;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	GString *languages_pattern;
+	gchar *fname;
 	struct rspamd_lang_detector *ret = NULL;
 
 	section = ucl_object_lookup (cfg->rcl_obj, "lang_detection");
@@ -336,6 +358,9 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		if (elt) {
 			short_text_limit = ucl_object_toint (elt);
 		}
+
+		languages_enable = ucl_object_lookup (section, "languages_enable");
+		languages_disable = ucl_object_lookup (section, "languages_disable");
 	}
 
 	languages_pattern = g_string_sized_new (PATH_MAX);
@@ -362,7 +387,18 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	g_assert (uc_err == U_ZERO_ERROR);
 
 	for (i = 0; i < gl.gl_pathc; i ++) {
-		rspamd_language_detector_read_file (cfg, ret, gl.gl_pathv[i]);
+		fname = g_path_get_basename (gl.gl_pathv[i]);
+
+		if (!rspamd_ucl_array_find_str (fname, languages_disable) ||
+				(languages_enable == NULL ||
+						rspamd_ucl_array_find_str (fname, languages_enable))) {
+			rspamd_language_detector_read_file (cfg, ret, gl.gl_pathv[i]);
+		}
+		else {
+			msg_info_config ("skip language file %s: disabled", fname);
+		}
+
+		g_free (fname);
 	}
 
 	msg_info_config ("loaded %d languages", (gint)ret->languages->len);
