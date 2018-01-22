@@ -15,7 +15,8 @@
  */
 
 #include "lua_common.h"
-#include "message.h"
+#include "libmime/message.h"
+#include "libmime/lang_detection.h"
 #include "libstat/stat_api.h"
 
 /* Textpart methods */
@@ -160,6 +161,14 @@ LUA_FUNCTION_DEF (textpart, get_html);
  */
 LUA_FUNCTION_DEF (textpart, get_language);
 /***
+ * @method text_part:get_languages()
+ * Returns array of tables of all languages detected for a part:
+ * - 'code': language code (short string)
+ * - 'prob': logarithm of probability
+ * @return {array|tables} all languages detected for the part
+ */
+LUA_FUNCTION_DEF (textpart, get_languages);
+/***
  * @method text_part:get_mimepart()
  * Returns the mime part object corresponding to this text part
  * @return {mimepart} mimepart object
@@ -183,6 +192,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_html),
 	LUA_INTERFACE_DEF (textpart, get_language),
+	LUA_INTERFACE_DEF (textpart, get_languages),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
 	LUA_INTERFACE_DEF (textpart, get_stats),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -749,9 +759,48 @@ lua_textpart_get_language (lua_State * L)
 			lua_pushstring (L, part->language);
 			return 1;
 		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_textpart_get_languages (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	guint i;
+	struct rspamd_lang_detector_res *cur;
+
+	if (part != NULL) {
+		if (part->languages != NULL) {
+			lua_createtable (L, part->languages->len, 0);
+
+			PTR_ARRAY_FOREACH (part->languages, i, cur) {
+				lua_createtable (L, 0, 2);
+				lua_pushstring (L, "code");
+				lua_pushstring (L, cur->lang);
+				lua_settable (L, -3);
+				lua_pushstring (L, "prob");
+				lua_pushnumber (L, cur->prob);
+				lua_settable (L, -3);
+
+				lua_rawseti (L, -2, i + 1);
+			}
+		}
+		else {
+			lua_newtable (L);
+		}
+	}
+	else {
+		luaL_error (L, "invalid arguments");
+	}
+
 	return 1;
 }
 
