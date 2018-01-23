@@ -40,6 +40,7 @@ struct rspamd_language_elt {
 	guint unigramms_total; /* total frequencies for unigramms */
 	guint bigramms_total; /* total frequencies for bigramms */
 	guint trigramms_total; /* total frequencies for trigramms */
+	guint occurencies; /* total number of parts with this language */
 };
 
 struct rspamd_ngramm_elt {
@@ -54,6 +55,7 @@ struct rspamd_lang_detector {
 	GHashTable *trigramms; /* trigramms frequencies */
 	UConverter *uchar_converter;
 	gsize short_text_limit;
+	gsize total_occurencies; /* number of all languages found */
 };
 
 #define msg_debug_lang_det(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -372,7 +374,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		goto end;
 	}
 
-	ret = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*ret));
+	ret = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*ret));
 	ret->languages = g_ptr_array_sized_new (gl.gl_pathc);
 	ret->uchar_converter = ucnv_open ("UTF-8", &uc_err);
 	ret->short_text_limit = short_text_limit;
@@ -907,6 +909,12 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 
 	g_ptr_array_sort (result, rspamd_language_detector_cmp);
 	g_hash_table_unref (candidates);
+
+	if (result->len > 0) {
+		cand = g_ptr_array_index (result, 0);
+		cand->elt->occurencies ++;
+		d->total_occurencies ++;
+	}
 
 	return result;
 }
