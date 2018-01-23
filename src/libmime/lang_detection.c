@@ -401,7 +401,12 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		g_free (fname);
 	}
 
-	msg_info_config ("loaded %d languages", (gint)ret->languages->len);
+	msg_info_config ("loaded %d languages, %d unigramms, %d bigramms, "
+			"%d trigramms",
+			(gint)ret->languages->len,
+			g_hash_table_size (ret->unigramms),
+			g_hash_table_size (ret->bigramms),
+			g_hash_table_size (ret->trigramms));
 end:
 	if (gl.gl_pathc > 0) {
 		globfree (&gl);
