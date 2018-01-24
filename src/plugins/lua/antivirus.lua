@@ -391,7 +391,7 @@ local function fprot_check(task, rule)
             rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
           end
         else
-          local vname = string.match(data, '^1 <infected: (.+)>')
+          local vname = string.match(data, '^1 <infected: (.+?)>')
           if not vname then
             rspamd_logger.errx(task, 'Unhandled response: %s', data)
           else
