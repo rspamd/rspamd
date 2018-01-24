@@ -77,7 +77,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   else
     opts = module_opts
   end
-  local ret = false
+  local ret
 
   if opts then
     if opts.redis then
