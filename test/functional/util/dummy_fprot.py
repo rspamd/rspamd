@@ -16,7 +16,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         os.remove(PID)
         self.data = self.request.recv(1024).strip()
         if self.server.foundvirus:
-            self.request.sendall(b"1 <infected: EICAR_Test_File> FOO\n")
+            self.request.sendall(b"1 <infected: EICAR_Test_File> FOO->bar\n")
         else:
             self.request.sendall(b"0 <clean> FOO\n")
         self.request.close()
