@@ -202,8 +202,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		case 1:
 			/* We got something like header's name */
 			if (*p == ':') {
-				nh =
-					rspamd_mempool_alloc0 (task->task_pool,
+				nh = rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct rspamd_mime_header));
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
@@ -357,16 +356,19 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 
 			/* We also validate utf8 and replace all non-valid utf8 chars */
 			rspamd_mime_charset_utf_enforce (nh->decoded, strlen (nh->decoded));
-			rspamd_mime_header_add (task, target, order, nh, check_newlines);
 			nh->order = norder ++;
+			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			nh = NULL;
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			nh->value = "";
 			nh->decoded = "";
-			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			nh->raw_len = p - nh->raw_value;
 			nh->order = norder ++;
+			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			nh = NULL;
 			state = 0;
 			break;
 		case 99:

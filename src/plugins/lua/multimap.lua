@@ -776,7 +776,7 @@ local function multimap_callback(task, rule)
       if hdrs and hdrs[1] then
         if not rule['artificial'] then
           hdrs = fun.filter(function(h)
-            return not h['artificial']
+            return not h['flags']['artificial']
           end, hdrs):totable()
         end
         for pos, h in ipairs(hdrs) do

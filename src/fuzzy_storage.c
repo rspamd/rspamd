@@ -876,8 +876,8 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	else {
 		if (rspamd_fuzzy_check_client (session)) {
 			/* Check whitelist */
-			if (session->ctx->skip_hashes) {
-				rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->cmd),
+			if (session->ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
+				rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
 					hexbuf, sizeof (hexbuf) - 1);
 				hexbuf[sizeof (hexbuf) - 1] = '\0';
 

@@ -37,7 +37,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     end
 
     -- Store options
-    if not result['timeout'] and not result['timeout'] == default_timeout then
+    if not result['timeout'] or result['timeout'] == default_timeout then
       if options['timeout'] then
         result['timeout'] = tonumber(options['timeout'])
       else
@@ -77,14 +77,22 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   else
     opts = module_opts
   end
-  local ret = false
+  local ret
 
   if opts then
-    ret = try_load_redis_servers(opts, result)
-  end
+    if opts.redis then
+      ret = try_load_redis_servers(opts.redis, result)
 
-  if ret then
-    return result
+      if ret then
+        return result
+      end
+    end
+
+    ret = try_load_redis_servers(opts, result)
+
+    if ret then
+      return result
+    end
   end
 
   if no_fallback then return nil end

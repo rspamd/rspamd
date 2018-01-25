@@ -1862,15 +1862,18 @@ rspamd_gstring_append_double (double val, void *ud)
 	GString *buf = ud;
 	const double delta = 0.0000001;
 
-	if (val == (double) (int) val) {
-		rspamd_printf_gstring (buf, "%.1f", val);
-	}
-	else if (fabs (val - (double) (int) val) < delta) {
-		/* Write at maximum precision */
-		rspamd_printf_gstring (buf, "%.*g", DBL_DIG, val);
+	if (isfinite (val)) {
+		if (val == (double) (int) val) {
+			rspamd_printf_gstring (buf, "%.1f", val);
+		} else if (fabs (val - (double) (int) val) < delta) {
+			/* Write at maximum precision */
+			rspamd_printf_gstring (buf, "%.*g", DBL_DIG, val);
+		} else {
+			rspamd_printf_gstring (buf, "%f", val);
+		}
 	}
 	else {
-		rspamd_printf_gstring (buf, "%f", val);
+		rspamd_printf_gstring (buf, "null");
 	}
 
 	return 0;
@@ -1931,15 +1934,18 @@ rspamd_fstring_emit_append_double (double val, void *ud)
 	rspamd_fstring_t **buf = ud;
 	const double delta = 0.0000001;
 
-	if (val == (double)((gint) val)) {
-		rspamd_printf_fstring (buf, "%.1f", val);
-	}
-	else if (fabs (val - (double) (int) val) < delta) {
-		/* Write at maximum precision */
-		rspamd_printf_fstring (buf, "%.*g", DBL_DIG, val);
+	if (isfinite (val)) {
+		if (val == (double) ((gint) val)) {
+			rspamd_printf_fstring (buf, "%.1f", val);
+		} else if (fabs (val - (double) (int) val) < delta) {
+			/* Write at maximum precision */
+			rspamd_printf_fstring (buf, "%.*g", DBL_DIG, val);
+		} else {
+			rspamd_printf_fstring (buf, "%f", val);
+		}
 	}
 	else {
-		rspamd_printf_fstring (buf, "%f", val);
+		rspamd_printf_fstring (buf, "null");
 	}
 
 	return 0;

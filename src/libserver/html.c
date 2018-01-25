@@ -28,6 +28,7 @@
 
 static sig_atomic_t tags_sorted = 0;
 static sig_atomic_t entities_sorted = 0;
+static const guint max_tags = 8192; /* Ignore tags if this maximum is reached */
 
 struct html_tag_def {
 	const gchar *name;
@@ -997,29 +998,40 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 				nnode);
 	}
 
+	if (hc->total_tags > max_tags) {
+		hc->flags |= RSPAMD_HTML_FLAG_TOO_MANY_TAGS;
+	}
+
+	if (tag->id == -1) {
+		/* Ignore unknown tags */
+		hc->total_tags ++;
+		return FALSE;
+	}
+
 	tag->parent = *cur_level;
 
 	if (!(tag->flags & CM_INLINE)) {
 		/* Block tag */
-		nnode = g_node_new (tag);
-
 		if (tag->flags & (FL_CLOSING|FL_CLOSED)) {
 			if (!*cur_level) {
 				msg_debug_html ("bad parent node");
-				g_node_destroy (nnode);
 				return FALSE;
 			}
 
-			g_node_append (*cur_level, nnode);
+			if (hc->total_tags < max_tags) {
+				nnode = g_node_new (tag);
+				g_node_append (*cur_level, nnode);
 
-			if (!rspamd_html_check_balance (nnode, cur_level)) {
-				msg_debug_html (
-						"mark part as unbalanced as it has not pairable closing tags");
-				hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
-				*balanced = FALSE;
-			}
-			else {
-				*balanced = TRUE;
+				if (!rspamd_html_check_balance (nnode, cur_level)) {
+					msg_debug_html (
+							"mark part as unbalanced as it has not pairable closing tags");
+					hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
+					*balanced = FALSE;
+				} else {
+					*balanced = TRUE;
+				}
+
+				hc->total_tags ++;
 			}
 		}
 		else {
@@ -1038,8 +1050,13 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 						hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
 						*balanced = FALSE;
 						tag->parent = parent->parent;
-						g_node_append (parent->parent, nnode);
-						*cur_level = nnode;
+
+						if (hc->total_tags < max_tags) {
+							nnode = g_node_new (tag);
+							g_node_append (parent->parent, nnode);
+							*cur_level = nnode;
+							hc->total_tags ++;
+						}
 
 						return TRUE;
 					}
@@ -1048,10 +1065,15 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 				parent->content_length += tag->content_length;
 			}
 
-			g_node_append (*cur_level, nnode);
+			if (hc->total_tags < max_tags) {
+				nnode = g_node_new (tag);
+				g_node_append (*cur_level, nnode);
 
-			if ((tag->flags & FL_CLOSED) == 0) {
-				*cur_level = nnode;
+				if ((tag->flags & FL_CLOSED) == 0) {
+					*cur_level = nnode;
+				}
+
+				hc->total_tags ++;
 			}
 
 			if (tag->flags & (CM_HEAD|CM_UNKNOWN|FL_IGNORE)) {
@@ -1178,6 +1200,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		if (!g_ascii_isalpha (*in) && !g_ascii_isspace (*in)) {
 			hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 			state = ignore_bad_tag;
+			tag->id = -1;
+			tag->flags |= FL_BROKEN;
 		}
 		else if (g_ascii_isalpha (*in)) {
 			state = parse_name;
@@ -1197,6 +1221,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 			if (tag->name.len == 0) {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				tag->id = -1;
 				tag->flags |= FL_BROKEN;
 				state = ignore_bad_tag;
 			}
@@ -1206,8 +1231,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 				s = rspamd_mempool_alloc (pool, tag->name.len);
 				memcpy (s, tag->name.start, tag->name.len);
-				tag->name.len = rspamd_html_decode_entitles_inplace (
-						s,
+				tag->name.len = rspamd_html_decode_entitles_inplace (s,
 						tag->name.len);
 				tag->name.start = s;
 
@@ -2076,6 +2100,11 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	gboolean url_found = FALSE;
 	struct rspamd_process_exception *ex;
 
+	if (href_offset <= 0) {
+		/* No dispalyed url, just some text within <a> tag */
+		return;
+	}
+
 	rspamd_html_url_is_phished (pool, url,
 			dest->data + href_offset,
 			dest->len - href_offset,
@@ -2425,6 +2454,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			/* TODO: parse DOCTYPE here */
 			if (t == '>') {
 				state = tag_end;
+				/* We don't know a lot about sgml tags, ignore them */
+				cur_tag = NULL;
 				continue;
 			}
 			p ++;

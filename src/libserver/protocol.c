@@ -197,8 +197,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	return TRUE;
 
 err:
-	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command: %.*s",
-			(gint)pathlen, p);
+	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command");
 
 	return FALSE;
 }

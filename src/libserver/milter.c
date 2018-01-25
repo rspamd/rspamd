@@ -311,6 +311,8 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		else {
 			guchar proto;
 			guint16 port;
+			gchar ip6_str[INET6_ADDRSTRLEN + 3];
+			gsize r;
 
 			/*
 			 * Important notice: Postfix do NOT use this command to pass
@@ -373,16 +375,28 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 						break;
 
 					case RSPAMD_MILTER_CONN_INET6:
-						session->addr = rspamd_inet_address_new (AF_INET, NULL);
+						session->addr = rspamd_inet_address_new (AF_INET6, NULL);
 
 						if (zero - pos > sizeof ("IPv6:") &&
 								rspamd_lc_cmp (pos, "IPv6:",
 										sizeof ("IPv6:") - 1) == 0) {
 							/* Kill sendmail please */
 							pos += sizeof ("IPv6:") - 1;
+
+							if (*pos != '[') {
+								/* Add explicit braces */
+								r = rspamd_snprintf (ip6_str, sizeof (ip6_str),
+										"[%*s]", (int)(zero - pos), pos);
+							}
+							else {
+								r = rspamd_strlcpy (ip6_str, pos, sizeof (ip6_str));
+							}
+						}
+						else {
+							r = rspamd_strlcpy (ip6_str, pos, sizeof (ip6_str));
 						}
 
-						if (!rspamd_parse_inet_address_ip (pos, zero - pos,
+						if (!rspamd_parse_inet_address_ip (ip6_str, r,
 								session->addr)) {
 							err = g_error_new (rspamd_milter_quark (), EINVAL,
 									"invalid connect command (bad IPv6)");
@@ -1144,6 +1158,7 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 		memcpy (pos, value->str, value->len + 1);
 		break;
 	case RSPAMD_MILTER_CHGHEADER:
+	case RSPAMD_MILTER_INSHEADER:
 		idx = htonl (va_arg (ap, guint32));
 		name = va_arg (ap, GString *);
 		value = va_arg (ap, GString *);
@@ -1364,8 +1379,14 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 	}
 
 	if (session->addr) {
-		rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
-				rspamd_inet_address_to_string (session->addr));
+		if (rspamd_inet_address_get_af (session->addr) != AF_UNIX) {
+			rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
+					rspamd_inet_address_to_string_pretty (session->addr));
+		}
+		else {
+			rspamd_http_message_add_header (msg, IP_ADDR_HEADER,
+					rspamd_inet_address_to_string (session->addr));
+		}
 	}
 
 	rspamd_milter_macro_http (session, msg);
@@ -1441,6 +1462,7 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 	const ucl_object_t *elt, *cur, *cur_elt;
 	ucl_object_iter_t it;
 	GString *hname, *hvalue;
+	gint idx = -1;
 
 	if (obj && ucl_object_type (obj) == UCL_OBJECT) {
 		elt = ucl_object_lookup (obj, "remove_headers");
@@ -1464,6 +1486,8 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 		/*
 		 * add_headers: {"name": "value", ... }
 		 * name could have multiple values
+		 * -or- (since 1.7)
+		 * {"name": {"value": "val", "order": 0}, ... }
 		 */
 		if (elt && ucl_object_type (elt) == UCL_OBJECT) {
 			it = NULL;
@@ -1479,6 +1503,39 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 								hname, hvalue);
 						g_string_free (hname, TRUE);
 						g_string_free (hvalue, TRUE);
+					}
+					else if (ucl_object_type (cur_elt) == UCL_OBJECT) {
+						const ucl_object_t *val;
+
+						val = ucl_object_lookup (cur_elt, "value");
+
+						if (val && ucl_object_type (val) == UCL_STRING) {
+							const ucl_object_t *idx_obj;
+
+							idx_obj = ucl_object_lookup_any (cur_elt, "order",
+									"index", NULL);
+							if (idx_obj) {
+								idx = ucl_object_toint (idx_obj);
+							}
+
+							hname = g_string_new (ucl_object_key (cur));
+							hvalue = g_string_new (ucl_object_tostring (val));
+
+							if (idx >= 0) {
+								rspamd_milter_send_action (session,
+										RSPAMD_MILTER_INSHEADER,
+										idx,
+										hname, hvalue);
+							}
+							else {
+								rspamd_milter_send_action (session,
+										RSPAMD_MILTER_ADDHEADER,
+										hname, hvalue);
+							}
+
+							g_string_free (hname, TRUE);
+							g_string_free (hvalue, TRUE);
+						}
 					}
 				}
 			}
@@ -1587,8 +1644,8 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		hname = g_string_new (RSPAMD_MILTER_DKIM_HEADER);
 		hvalue = g_string_new (ucl_object_tostring (elt));
 
-		rspamd_milter_send_action (session, RSPAMD_MILTER_ADDHEADER,
-				hname, hvalue);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_INSHEADER,
+				1, hname, hvalue);
 		g_string_free (hname, TRUE);
 		g_string_free (hvalue, TRUE);
 	}

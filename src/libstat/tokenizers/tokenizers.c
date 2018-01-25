@@ -198,7 +198,7 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 	p = s;
 	token->begin = s;
 
-	for (i = 0; i <= remain; ) {
+	for (i = 0; i < remain; ) {
 		p = &s[i];
 		U8_NEXT (s, i, remain, uc); /* This also advances i */
 
@@ -253,6 +253,14 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 			break;
 		}
 	}
+
+	/* Last character */
+	if (state == feed_token) {
+		p = &s[i];
+		goto set_token;
+	}
+
+	return FALSE;
 
 set_token:
 	if (rl) {
