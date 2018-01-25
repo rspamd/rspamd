@@ -447,7 +447,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		while (pos < end) {
 			zero = memchr (pos, '\0', cmdlen);
 
-			if (zero == NULL) {
+			if (zero == NULL || end >= zero) {
 				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
 						"macro command (no name)");
 				rspamd_milter_on_protocol_error (session, priv, err);
@@ -459,9 +459,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 				rspamd_ftok_t *name_tok, *value_tok;
 				const guchar *zero_val;
 
-				zero_val = memchr (zero + 1, '\0', cmdlen);
+				zero_val = memchr (zero + 1, '\0', cmdlen - (end - zero));
 
-				if (end > zero_val) {
+				if (zero_val != NULL && end > zero_val) {
 					name = rspamd_fstring_new_init (pos, zero - pos);
 					value = rspamd_fstring_new_init (zero + 1,
 							zero_val - zero - 1);
