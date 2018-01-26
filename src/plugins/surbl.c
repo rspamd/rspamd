@@ -67,6 +67,7 @@ INIT_LOG_MODULE(surbl)
 static struct surbl_ctx *surbl_module_ctx = NULL;
 static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
 static const gchar *rspamd_surbl_default_monitored = "facebook.com";
+static const guint default_max_redirected_urls = 10;
 
 static void surbl_test_url (struct rspamd_task *task, void *user_data);
 static void surbl_test_redirector (struct rspamd_task *task, void *user_data);
@@ -952,6 +953,13 @@ surbl_module_config (struct rspamd_config *cfg)
 		cur_opt = g_list_next (cur_opt);
 	}
 
+	surbl_module_ctx->max_redirected_urls = default_max_redirected_urls;
+
+	if ((value =
+			rspamd_config_get_module_opt (cfg, "surbl", "max_redirected_urls")) != NULL) {
+		surbl_module_ctx->max_redirected_urls = ucl_obj_toint (value);
+	}
+
 	msg_info_config ("init internal surbls module, %d uribl rules loaded",
 			nrules);
 
@@ -1639,6 +1647,16 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 						found_tld);
 			}
 
+			if (param->redirector_requests >= surbl_module_ctx->max_redirected_urls) {
+				msg_info_surbl ("cannot register redirector request for url domain: "
+						"%s, max_redirected_urls is reached: %d",
+						found_tld, surbl_module_ctx->max_redirected_urls);
+
+				return;
+			}
+
+			param->redirector_requests ++;
+
 			if (surbl_module_ctx->redirector_cbid != -1) {
 				nparam = rspamd_mempool_alloc (task->task_pool,
 						sizeof (*nparam));
@@ -1769,6 +1787,7 @@ surbl_test_redirector (struct rspamd_task *task, void *user_data)
 	param = rspamd_mempool_alloc0 (task->task_pool, sizeof (*param));
 	param->task = task;
 	param->suffix = NULL;
+	param->redirector_requests = 0;
 	g_hash_table_foreach (task->urls, surbl_tree_redirector_callback, param);
 
 	/* We also need to check and process img URLs */
