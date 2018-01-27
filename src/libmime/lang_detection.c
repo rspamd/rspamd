@@ -338,6 +338,11 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			total = nelt->trigramms_total;
 		}
 
+		if (rspamd_language_search_str (nelt->name, tier1_langs,
+				G_N_ELEMENTS (tier1_langs))) {
+			nelt->flags |= RS_LANGUAGE_TIER1;
+		}
+
 		it = NULL;
 		ngramms = g_ptr_array_sized_new (freqs->len);
 
@@ -741,6 +746,7 @@ rspamd_language_detector_detect_word (struct rspamd_task *task,
 	}
 }
 
+static const gdouble cutoff_limit = -8.0;
 /*
  * Converts frequencies to log probabilities, filter those candidates who
  * has the lowest probabilities
@@ -762,12 +768,20 @@ rspamd_language_detector_filter_negligible (struct rspamd_task *task,
 		cand = (struct rspamd_lang_detector_res *)v;
 
 		if (cand->prob == 0) {
+			msg_debug_lang_det ("exclude language %s: %.3f",
+					cand->lang, cand->prob, max_prob);
 			g_hash_table_iter_remove (&it);
+			filtered ++;
 		}
 		else {
 			cand->prob = log2 (cand->prob);
-
-			if (cand->prob > max_prob) {
+			if (cand->prob < cutoff_limit) {
+				msg_debug_lang_det ("exclude language %s: %.3f, cutoff limit: %.3f",
+						cand->lang, cand->prob, cutoff_limit);
+				g_hash_table_iter_remove (&it);
+				filtered ++;
+			}
+			else if (cand->prob > max_prob) {
 				max_prob = cand->prob;
 			}
 		}
@@ -958,6 +972,9 @@ struct rspamd_frequency_sort_cbdata {
 	gdouble mean;
 };
 
+static const gdouble tier1_adjustment = 0.25;
+static const gdouble frequency_adjustment = 0.25;
+
 static gint
 rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 		gpointer ud)
@@ -988,8 +1005,21 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 		freqb = ((gdouble)candb->elt->occurencies) /
 				(gdouble)cbd->d->total_occurencies;
 
-		proba_adjusted = canda->prob * freqa;
-		probb_adjusted = candb->prob * freqb;
+		proba_adjusted = canda->prob;
+		probb_adjusted = candb->prob;
+
+		if (isnormal (freqa) && isnormal (freqb)) {
+			proba_adjusted += cbd->std * (frequency_adjustment * freqa);
+			probb_adjusted += cbd->std * (frequency_adjustment * freqb);
+		}
+
+		if (canda->elt->flags & RS_LANGUAGE_TIER1) {
+			proba_adjusted += cbd->std * tier1_adjustment;
+		}
+
+		if (candb->elt->flags & RS_LANGUAGE_TIER1) {
+			probb_adjusted += cbd->std * tier1_adjustment;
+		}
 
 		if (proba_adjusted > probb_adjusted) {
 			return -1;
@@ -1024,8 +1054,6 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 	candidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 			NULL, g_free);
 
-	msg_debug_lang_det ("text is less than %z words: %z, start with trigramms",
-			d->short_text_limit, words_len);
 	r = rspamd_language_detector_try_ngramm (task, default_words, d,
 			ucs_tokens, rs_trigramm,
 			candidates);
@@ -1038,8 +1066,9 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 	}
 	else if (r == rs_detect_multiple) {
 		/* Check our guess */
-		msg_debug_lang_det ("unigramms pass finished, found %d candidates",
+		msg_debug_lang_det ("trigramms pass finished, found %d candidates",
 				(gint)g_hash_table_size (candidates));
+
 		mean = 0.0;
 		std = 0.0;
 		g_hash_table_iter_init (&it, candidates);
@@ -1065,7 +1094,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		msg_debug_lang_det ("trigramms checked, %.3f mean, %.4f stddev",
 				mean, std);
 
-		if (std / fabs (mean) < 0.1) {
+		if (std / fabs (mean) < 0.25) {
 			msg_debug_lang_det ("apply frequency heuristic sorting");
 			frequency_heuristic_applied = TRUE;
 			cbd.d = d;
