@@ -972,7 +972,7 @@ struct rspamd_frequency_sort_cbdata {
 	gdouble mean;
 };
 
-static const gdouble tier1_adjustment = 0.6;
+static const gdouble tier1_adjustment = 0.8;
 static const gdouble frequency_adjustment = 0.4;
 
 static gint
