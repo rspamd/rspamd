@@ -972,8 +972,8 @@ struct rspamd_frequency_sort_cbdata {
 	gdouble mean;
 };
 
-static const gdouble tier1_adjustment = 0.25;
-static const gdouble frequency_adjustment = 0.25;
+static const gdouble tier1_adjustment = 0.6;
+static const gdouble frequency_adjustment = 0.4;
 
 static gint
 rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
