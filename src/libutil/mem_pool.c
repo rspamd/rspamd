@@ -354,7 +354,13 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 			sizeof (struct _pool_destructors), 32);
 	rspamd_mempool_create_pool_type (new, RSPAMD_MEMPOOL_NORMAL);
 	/* Set it upon first call of set variable */
-	new->elt_len = new->entry->cur_suggestion;
+
+	if (size == 0) {
+		new->elt_len = new->entry->cur_suggestion;
+	}
+	else {
+		new->elt_len = size;
+	}
 
 	if (tag) {
 		rspamd_strlcpy (new->tag.tagname, tag, sizeof (new->tag.tagname));

@@ -117,7 +117,8 @@ rspamd_config_new (void)
 	struct rspamd_config *cfg;
 
 	cfg = g_malloc0 (sizeof (*cfg));
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "cfg");
+	/* Allocate larger pool for cfg */
+	cfg->cfg_pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg");
 	cfg->dns_timeout = 1000;
 	cfg->dns_retransmits = 5;
 	/* After 20 errors do throttling for 10 seconds */
