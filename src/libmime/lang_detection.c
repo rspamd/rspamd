@@ -22,6 +22,7 @@
 #include <unicode/utf8.h>
 #include <unicode/ucnv.h>
 #include <unicode/uchar.h>
+#include <unicode/uscript.h>
 #include <math.h>
 
 static const gsize default_short_text_limit = 200;
@@ -205,7 +206,7 @@ rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 		target = d->unigramms;
 		break;
 	case 2:
-		/* Ignore */
+		g_assert_not_reached ();
 		break;
 	case 3:
 		target = d->trigramms;
@@ -320,6 +321,9 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		g_hash_table_insert (d->unicode_scripts, (gpointer)&uc_match->unicode_code,
 				nelt);
 		nelt->flags |= RS_LANGUAGE_UNISCRIPT;
+		msg_info_config ("loaded unicode script only %s language: %d",
+				nelt->name,
+				uc_match->unicode_code);
 	}
 	else {
 		GPtrArray *ngramms;
@@ -414,12 +418,11 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		}
 
 		g_ptr_array_free (ngramms, TRUE);
+		msg_info_config ("loaded %s language, %d unigramms, %d trigramms",
+				nelt->name,
+				(gint)nelt->unigramms_total,
+				(gint)nelt->trigramms_total);
 	}
-
-	msg_info_config ("loaded %s language, %d unigramms, %d trigramms",
-			nelt->name,
-			(gint)nelt->unigramms_total,
-			(gint)nelt->trigramms_total);
 
 	g_ptr_array_add (d->languages, nelt);
 	ucl_object_unref (top);
@@ -514,11 +517,13 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		g_free (fname);
 	}
 
-	msg_info_config ("loaded %d languages, %d unigramms, "
+	msg_info_config ("loaded %d languages, %d unicode only languages, "
+			"%d unigramms, "
 			"%d trigramms",
 			(gint)ret->languages->len,
-			g_hash_table_size (ret->unigramms),
-			g_hash_table_size (ret->trigramms));
+			(gint)g_hash_table_size (ret->unicode_scripts),
+			(gint)g_hash_table_size (ret->unigramms),
+			(gint)g_hash_table_size (ret->trigramms));
 end:
 	if (gl.gl_pathc > 0) {
 		globfree (&gl);
@@ -788,14 +793,85 @@ rspamd_language_detector_filter_negligible (struct rspamd_task *task,
 	msg_debug_lang_det ("removed %d languages", filtered);
 }
 
+static gboolean
+rspamd_language_detector_is_unicode (struct rspamd_task *task,
+		struct rspamd_lang_detector *d,
+		GArray *ucs_tokens,
+		goffset *selected_words,
+		gsize nparts,
+		GHashTable *candidates)
+{
+	guint i, j, total_found = 0, total_checked = 0;
+	rspamd_stat_token_t *tok;
+	UChar t;
+	gint uc_script;
+	struct rspamd_language_elt *elt;
+	struct rspamd_lang_detector_res *cand;
+	GHashTableIter it;
+	gpointer k, v;
+
+	for (i = 0; i < nparts; i++) {
+		tok = &g_array_index (ucs_tokens, rspamd_stat_token_t,
+				selected_words[i]);
+
+		for (j = 0; j < tok->len; j ++) {
+			t = *(((UChar *)tok->begin) + j);
+
+			uc_script = ublock_getCode (t);
+			elt = g_hash_table_lookup (d->unicode_scripts, &uc_script);
+
+			if (elt) {
+				cand = g_hash_table_lookup (candidates, elt->name);
+
+				if (cand == NULL) {
+					cand = g_malloc (sizeof (*cand));
+					cand->elt = elt;
+					cand->lang = elt->name;
+					cand->prob = 1;
+
+					g_hash_table_insert (candidates, (gpointer)cand->lang, cand);
+				} else {
+					/* Update guess */
+					cand->prob ++;
+				}
+
+				total_found ++;
+			}
+
+			total_checked ++;
+		}
+
+		if (i >= nparts / 2 && total_found == 0) {
+			/* No special scripts found, stop processing */
+			return FALSE;
+		}
+	}
+
+	if (total_found < total_checked / 2) {
+		/* Not enough confidence */
+		return FALSE;
+	}
+	else {
+		/* Filter candidates */
+		g_hash_table_iter_init (&it, candidates);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			cand = (struct rspamd_lang_detector_res *)v;
+
+			cand->prob = cand->prob / total_checked;
+		}
+	}
+
+	return TRUE;
+}
+
 static void
 rspamd_language_detector_detect_type (struct rspamd_task *task,
 		guint nwords,
 		struct rspamd_lang_detector *d,
 		GArray *ucs_tokens,
 		GHashTable *candidates,
-		enum rspamd_language_gramm_type type)
-{
+		enum rspamd_language_gramm_type type) {
 	guint nparts = MIN (ucs_tokens->len, nwords);
 	goffset *selected_words;
 	rspamd_stat_token_t *tok;
@@ -805,18 +881,22 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 	rspamd_language_detector_random_select (ucs_tokens, nparts, selected_words);
 	msg_debug_lang_det ("randomly selected %d words", nparts);
 
-	/* Deal with the first word in a special case */
-	tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, selected_words[0]);
+	/* Check unicode scripts */
+	if (g_hash_table_size (candidates) != 0 ||
+			!rspamd_language_detector_is_unicode (task, d, ucs_tokens,
+					selected_words, nparts, candidates)) {
 
-	rspamd_language_detector_detect_word (task, d, tok, candidates, type);
+		for (i = 0; i < nparts; i++) {
+			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t,
+					selected_words[i]);
+			rspamd_language_detector_detect_word (task, d, tok, candidates,
+					type);
+		}
 
-	for (i = 1; i < nparts; i ++) {
-		tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, selected_words[i]);
-		rspamd_language_detector_detect_word (task, d, tok, candidates, type);
+		/* Filter negligible candidates */
+		rspamd_language_detector_filter_negligible (task, candidates);
 	}
 
-	/* Filter negligible candidates */
-	rspamd_language_detector_filter_negligible (task, candidates);
 	g_free (selected_words);
 }
 
@@ -951,8 +1031,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 			candidates);
 
 	if (r == rs_detect_none) {
-		msg_debug_lang_det ("short mode; no trigramms found, "
-				"switch to unigramms");
+		msg_debug_lang_det ("no trigramms found, switch to unigramms");
 		r = rspamd_language_detector_try_ngramm (task, default_words,
 				d, ucs_tokens, rs_unigramm,
 				candidates);
