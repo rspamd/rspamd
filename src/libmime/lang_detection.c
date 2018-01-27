@@ -31,14 +31,49 @@ static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
 
 enum rspamd_language_elt_flags {
 	RS_LANGUAGE_DEFAULT = 0,
-	RS_LANGUAGE_LATIN = (1 <<0),
+	RS_LANGUAGE_LATIN = (1 << 0),
+	RS_LANGUAGE_TIER1 = (1 << 1),
+	RS_LANGUAGE_TIER2 = (1 << 2),
 };
+
+struct rspamd_language_unicode_match {
+	const gchar *lang;
+	gint unicode_code;
+};
+
+/*
+ * List of languages detected by unicode scripts
+ */
+static const struct rspamd_language_unicode_match unicode_langs[] = {
+		{"el", UBLOCK_GREEK},
+		{"ml", UBLOCK_MALAYALAM},
+		{"te", UBLOCK_TELUGU},
+		{"ta", UBLOCK_TAMIL},
+		{"gu", UBLOCK_GUJARATI},
+		{"th", UBLOCK_THAI},
+		{"kn", UBLOCK_KANNADA},
+		{"ka", UBLOCK_GEORGIAN},
+		{"si", UBLOCK_SINHALA},
+		{"hy", UBLOCK_ARMENIAN},
+		{"lo", UBLOCK_LAO},
+		{"km", UBLOCK_KHMER}
+};
+
+/*
+ * List of languages to apply unigramms only
+ */
+static const gchar *unigramms_langs[] = {
+		"ja",
+		"ko",
+		"zh-CN",
+		"zh-TW"
+};
+
 
 struct rspamd_language_elt {
 	const gchar *name; /* e.g. "en" or "ru" */
 	enum rspamd_language_elt_flags flags;
 	guint unigramms_total; /* total frequencies for unigramms */
-	guint bigramms_total; /* total frequencies for bigramms */
 	guint trigramms_total; /* total frequencies for trigramms */
 	guint occurencies; /* total number of parts with this language */
 };
@@ -51,8 +86,8 @@ struct rspamd_ngramm_elt {
 struct rspamd_lang_detector {
 	GPtrArray *languages;
 	GHashTable *unigramms; /* unigramms frequencies */
-	GHashTable *bigramms; /* bigramms frequencies */
 	GHashTable *trigramms; /* trigramms frequencies */
+	GHashTable *unicode_scripts; /* indexed by unicode script */
 	UConverter *uchar_converter;
 	gsize short_text_limit;
 	gsize total_occurencies; /* number of all languages found */
@@ -75,18 +110,6 @@ static gboolean
 rspamd_unigram_equal (gconstpointer v, gconstpointer v2)
 {
 	return memcmp (v, v2, sizeof (UChar)) == 0;
-}
-
-static guint
-rspamd_bigram_hash (gconstpointer key)
-{
-	return rspamd_cryptobox_fast_hash (key, 2 * sizeof (UChar), rspamd_hash_seed ());
-}
-
-static gboolean
-rspamd_bigram_equal (gconstpointer v, gconstpointer v2)
-{
-	return memcmp (v, v2, 2 * sizeof (UChar)) == 0;
 }
 
 static guint
@@ -144,7 +167,7 @@ rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 		target = d->unigramms;
 		break;
 	case 2:
-		target = d->bigramms;
+		/* Ignore */
 		break;
 	case 3:
 		target = d->trigramms;
@@ -243,8 +266,6 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	else {
 		nelt->unigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
 				0));
-		nelt->bigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
-				1));
 		nelt->trigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
 				2));
 	}
@@ -275,7 +296,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			rspamd_language_detector_ucs_lowercase (ucs_key, nsym);
 			if (nsym == 2) {
 				/* We have a digraph */
-				total = nelt->bigramms_total;
+				continue;
 			}
 			else if (nsym == 3) {
 				total = nelt->trigramms_total;
@@ -303,10 +324,9 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		nelt->flags |= RS_LANGUAGE_LATIN;
 	}
 
-	msg_info_config ("loaded %s language, %d unigramms, %d digramms, %d trigramms",
+	msg_info_config ("loaded %s language, %d unigramms, %d trigramms",
 			nelt->name,
 			(gint)nelt->unigramms_total,
-			(gint)nelt->bigramms_total,
 			(gint)nelt->trigramms_total);
 
 	g_ptr_array_add (d->languages, nelt);
@@ -381,8 +401,6 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	/* Map from ngramm in ucs32 to GPtrArray of rspamd_language_elt */
 	ret->unigramms = g_hash_table_new_full (rspamd_unigram_hash,
 			rspamd_unigram_equal, NULL, rspamd_ptr_array_free_hard);
-	ret->bigramms = g_hash_table_new_full (rspamd_bigram_hash,
-			rspamd_bigram_equal, NULL, rspamd_ptr_array_free_hard);
 	ret->trigramms = g_hash_table_new_full (rspamd_trigram_hash,
 			rspamd_trigram_equal, NULL, rspamd_ptr_array_free_hard);
 
@@ -403,11 +421,10 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		g_free (fname);
 	}
 
-	msg_info_config ("loaded %d languages, %d unigramms, %d bigramms, "
+	msg_info_config ("loaded %d languages, %d unigramms, "
 			"%d trigramms",
 			(gint)ret->languages->len,
 			g_hash_table_size (ret->unigramms),
-			g_hash_table_size (ret->bigramms),
 			g_hash_table_size (ret->trigramms));
 end:
 	if (gl.gl_pathc > 0) {
@@ -506,7 +523,6 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 
 enum rspamd_language_gramm_type {
 	rs_unigramm = 0,
-	rs_bigramm,
 	rs_trigramm
 };
 
@@ -573,9 +589,6 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 	case rs_unigramm:
 		ngramms = d->unigramms;
 		break;
-	case rs_bigramm:
-		ngramms = d->bigramms;
-		break;
 	case rs_trigramm:
 		ngramms = d->trigramms;
 		break;
@@ -616,9 +629,6 @@ rspamd_language_detector_detect_word (struct rspamd_task *task,
 	switch (type) {
 	case rs_unigramm:
 		wlen = 1;
-		break;
-	case rs_bigramm:
-		wlen = 2;
 		break;
 	case rs_trigramm:
 		wlen = 3;
@@ -848,18 +858,11 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 			candidates);
 
 	if (r == rs_detect_none) {
-		msg_debug_lang_det ("short mode; no trigramms found, switch to bigramms");
-		r = rspamd_language_detector_try_ngramm (task, default_words, d,
-				ucs_tokens, rs_bigramm,
+		msg_debug_lang_det ("short mode; no trigramms found, "
+				"switch to unigramms");
+		r = rspamd_language_detector_try_ngramm (task, default_words,
+				d, ucs_tokens, rs_unigramm,
 				candidates);
-
-		if (r == rs_detect_none) {
-			msg_debug_lang_det ("short mode; no trigramms found, "
-					"switch to unigramms");
-			r = rspamd_language_detector_try_ngramm (task, default_words,
-					d, ucs_tokens, rs_unigramm,
-					candidates);
-		}
 	}
 	else if (r == rs_detect_multiple) {
 		/* Check our guess */
