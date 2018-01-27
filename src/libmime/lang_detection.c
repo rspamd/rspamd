@@ -29,12 +29,6 @@ static const gsize default_words = 30;
 static const gdouble update_prob = 0.6;
 static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
 
-enum rspamd_language_elt_flags {
-	RS_LANGUAGE_DEFAULT = 0,
-	RS_LANGUAGE_LATIN = (1 << 0),
-	RS_LANGUAGE_TIER1 = (1 << 1),
-	RS_LANGUAGE_TIER2 = (1 << 2),
-};
 
 struct rspamd_language_unicode_match {
 	const gchar *lang;
@@ -69,6 +63,22 @@ static const gchar *unigramms_langs[] = {
 		"zh-TW"
 };
 
+/*
+ * Top languages
+ */
+static const gchar *tier1_langs[] = {
+		"en", "fr", "it", "de", "es", "nl", "zh-CN", "zh-TW", "ja",
+		"ko", "pt", "ru", "pl", "tk", "th", "ar"
+};
+
+enum rspamd_language_elt_flags {
+	RS_LANGUAGE_DEFAULT = 0,
+	RS_LANGUAGE_LATIN = (1 << 0),
+	RS_LANGUAGE_UNISCRIPT = (1 << 1),
+	RS_LANGUAGE_UNIGRAMM = (1 << 2),
+	RS_LANGUAGE_TIER1 = (1 << 3),
+	RS_LANGUAGE_TIER2 = (1 << 4),
+};
 
 struct rspamd_language_elt {
 	const gchar *name; /* e.g. "en" or "ru" */
@@ -99,6 +109,34 @@ struct rspamd_lang_detector {
         __VA_ARGS__)
 
 INIT_LOG_MODULE(langdet)
+
+static const struct rspamd_language_unicode_match *
+rspamd_language_search_unicode_match (const gchar *key,
+		const struct rspamd_language_unicode_match *elts, size_t nelts)
+{
+	size_t i;
+
+	for (i = 0; i < nelts; i++) {
+		if (strcmp (elts[i].lang, key) == 0) {
+			return &elts[i];
+		}
+	}
+
+	return NULL;
+}
+
+static gboolean
+rspamd_language_search_str (const gchar *key, const gchar *elts[], size_t nelts)
+{
+	size_t i;
+
+	for (i = 0; i < nelts; i++) {
+		if (strcmp (elts[i], key) == 0) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
 
 static guint
 rspamd_unigram_hash (gconstpointer key)
@@ -210,6 +248,11 @@ rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 	}
 }
 
+struct rspamd_language_ucs_elt {
+	guint freq;
+	UChar s[0];
+};
+
 static void
 rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		struct rspamd_lang_detector *d,
@@ -221,8 +264,10 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	ucl_object_iter_t it = NULL;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	struct rspamd_language_elt *nelt;
+	const struct rspamd_language_unicode_match *uc_match;
+	struct rspamd_language_ucs_elt *ucs_elt;
 	gchar *pos;
-	guint total = 0, total_latin = 0, total_ngramms = 0;
+	guint total = 0, total_latin = 0, total_ngramms = 0, i;
 
 	parser = ucl_parser_new (UCL_PARSER_NO_FILEVARS);
 	if (!ucl_parser_add_file (parser, path)) {
@@ -270,58 +315,105 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 				2));
 	}
 
-	while ((cur = ucl_object_iterate (freqs, &it, true)) != NULL) {
-		const gchar *key;
-		gsize keylen;
-		guint freq, nsym;
-		UChar *ucs_key;
-
-		key = ucl_object_keyl (cur, &keylen);
-		freq = ucl_object_toint (cur);
-
-		if (key != NULL) {
-			ucs_key = rspamd_mempool_alloc (cfg->cfg_pool,
-					(keylen + 1) * sizeof (UChar));
-
-			nsym = ucnv_toUChars (d->uchar_converter, ucs_key, keylen + 1, key,
-					keylen, &uc_err);
-
-			if (uc_err != U_ZERO_ERROR) {
-				msg_warn_config ("cannot convert key to unicode: %s",
-						u_errorName (uc_err));
-
-				continue;
-			}
-
-			rspamd_language_detector_ucs_lowercase (ucs_key, nsym);
-			if (nsym == 2) {
-				/* We have a digraph */
-				continue;
-			}
-			else if (nsym == 3) {
-				total = nelt->trigramms_total;
-			}
-			else if (nsym == 1) {
-				total = nelt->unigramms_total;
-			}
-			else if (nsym > 3) {
-				msg_warn_config ("have more than 3 characters in key: %d", nsym);
-				continue;
-			}
-
-			rspamd_language_detector_init_ngramm (cfg, d, nelt, ucs_key, nsym,
-					freq, total);
-
-			if (rspamd_language_detector_ucs_is_latin (ucs_key, nsym)) {
-				total_latin ++;
-			}
-
-			total_ngramms ++;
-		}
+	if ((uc_match = rspamd_language_search_unicode_match (nelt->name, unicode_langs,
+			G_N_ELEMENTS (unicode_langs))) != NULL) {
+		g_hash_table_insert (d->unicode_scripts, (gpointer)&uc_match->unicode_code,
+				nelt);
+		nelt->flags |= RS_LANGUAGE_UNISCRIPT;
 	}
+	else {
+		GPtrArray *ngramms;
+		guint nsym;
 
-	if (total_latin >= total_ngramms * 2 / 3) {
-		nelt->flags |= RS_LANGUAGE_LATIN;
+		if (rspamd_language_search_str (nelt->name, unigramms_langs,
+				G_N_ELEMENTS (unigramms_langs))) {
+			nelt->flags |= RS_LANGUAGE_UNIGRAMM;
+			total = nelt->unigramms_total;
+		}
+		else {
+			total = nelt->trigramms_total;
+		}
+
+		it = NULL;
+		ngramms = g_ptr_array_sized_new (freqs->len);
+
+		while ((cur = ucl_object_iterate (freqs, &it, true)) != NULL) {
+			const gchar *key;
+			gsize keylen;
+			guint freq;
+
+			key = ucl_object_keyl (cur, &keylen);
+			freq = ucl_object_toint (cur);
+
+			if (key != NULL) {
+				ucs_elt = rspamd_mempool_alloc (cfg->cfg_pool,
+						sizeof (*ucs_elt) + (keylen + 1) * sizeof (UChar));
+
+				nsym = ucnv_toUChars (d->uchar_converter,
+						ucs_elt->s, keylen + 1,
+						key,
+						keylen, &uc_err);
+
+				if (uc_err != U_ZERO_ERROR) {
+					msg_warn_config ("cannot convert key to unicode: %s",
+							u_errorName (uc_err));
+
+					continue;
+				}
+
+				rspamd_language_detector_ucs_lowercase (ucs_elt->s, nsym);
+
+				if (nsym == 2) {
+					/* We have a digraph */
+					continue;
+				}
+				else if (nsym == 3 && !(nelt->flags & RS_LANGUAGE_UNIGRAMM)) {
+					g_ptr_array_add (ngramms, ucs_elt);
+				}
+				else if (nsym == 1 && nelt->flags & RS_LANGUAGE_UNIGRAMM) {
+					g_ptr_array_add (ngramms, ucs_elt);
+				}
+				else if (nsym > 3) {
+					msg_warn_config ("have more than 3 characters in key: %d",
+							nsym);
+					continue;
+				}
+
+				if (rspamd_language_detector_ucs_is_latin (ucs_elt->s, nsym)) {
+					total_latin++;
+				}
+
+				ucs_elt->freq = freq;
+
+				total_ngramms++;
+			}
+		}
+
+		if (total_latin >= total_ngramms * 2 / 3) {
+			nelt->flags |= RS_LANGUAGE_LATIN;
+		}
+
+		if (nelt->flags & RS_LANGUAGE_UNIGRAMM) {
+			nsym = 1;
+		}
+		else {
+			nsym = 3;
+		}
+
+		PTR_ARRAY_FOREACH (ngramms, i, ucs_elt) {
+
+			if (!(nelt->flags & RS_LANGUAGE_LATIN) &&
+					rspamd_language_detector_ucs_is_latin (ucs_elt->s, nsym)) {
+				/* Skip latin ngramm for non-latin language to avoid garbadge */
+				continue;
+			}
+
+			rspamd_language_detector_init_ngramm (cfg, d, nelt, ucs_elt->s,
+					nsym,
+					ucs_elt->freq, total);
+		}
+
+		g_ptr_array_free (ngramms, TRUE);
 	}
 
 	msg_info_config ("loaded %s language, %d unigramms, %d trigramms",
@@ -403,6 +495,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 			rspamd_unigram_equal, NULL, rspamd_ptr_array_free_hard);
 	ret->trigramms = g_hash_table_new_full (rspamd_trigram_hash,
 			rspamd_trigram_equal, NULL, rspamd_ptr_array_free_hard);
+	ret->unicode_scripts = g_hash_table_new (g_int_hash, g_int_equal);
 
 	g_assert (uc_err == U_ZERO_ERROR);
 
