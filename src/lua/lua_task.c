@@ -780,12 +780,20 @@ LUA_FUNCTION_DEF (task, get_flags);
 LUA_FUNCTION_DEF (task, get_digest);
 
 /***
- * @method task:store_in_file([mode])
+ * @method task:store_in_file([mode|table])
  * If task was loaded using file scan, then this method just returns its name,
  * otherwise, a fresh temporary file is created and its name is returned. Default
  * mode is 0600. To convert lua number to the octal mode you can use the following
  * trick: `tonumber("0644", 8)`. The file is automatically removed when task is
  * destroyed.
+ *
+ * If table argument is specified, the following extra fields are allowed:
+ *
+ * - `mode`: same as mode argument
+ * - `force_new`: always create a new file
+ * - `filename`: use specific filename instead of a temporary one
+ * - `tmpmask`: use specific tempmask, e.g. '/tmp/file-XXXXX', where XXXX will be replaced by some random letters
+ * - `keep`: do not remove file after task is processed
  *
  * @param {number} mode mode for new file
  * @return {string} file name with task content
@@ -3932,6 +3940,7 @@ lua_task_cache_set (lua_State *L)
 struct lua_file_cbdata {
 	gchar *fname;
 	gint fd;
+	gboolean keep;
 };
 
 static void
@@ -3939,7 +3948,10 @@ lua_tmp_file_dtor (gpointer p)
 {
 	struct lua_file_cbdata *cbdata = p;
 
-	unlink (cbdata->fname);
+	if (!cbdata->keep) {
+		unlink (cbdata->fname);
+	}
+
 	close (cbdata->fd);
 }
 
@@ -3947,35 +3959,68 @@ static gint
 lua_task_store_in_file (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean force_new = FALSE, keep = FALSE;
 	gchar fpath[PATH_MAX];
-	guint mode = 00600;
+	const gchar *tmpmask = NULL, *fname = NULL;
+	guint64 mode = 00600;
 	gint fd;
 	struct lua_file_cbdata *cbdata;
+	GError *err = NULL;
 
 	if (task) {
-		if ((task->flags & RSPAMD_TASK_FLAG_FILE) && task->msg.fpath) {
+		if (lua_istable (L, 2)) {
+			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					"filename=S;tmpmask=S;mode=I;force_new=B;keep=B",
+					&fname, &tmpmask, &mode, &force_new, &keep)) {
+				msg_err_task ("cannot get parameters list: %e", err);
+
+				if (err) {
+					g_error_free (err);
+				}
+
+				return luaL_error (L, "invalid arguments");
+			}
+		}
+		else if (lua_isnumber (L, 2)) {
+			mode = lua_tonumber (L, 2);
+		}
+
+		if (!force_new && (task->flags & RSPAMD_TASK_FLAG_FILE) &&
+				task->msg.fpath) {
 			lua_pushstring (L, task->msg.fpath);
 		}
 		else {
-			if (lua_isnumber (L, 2)) {
-				mode = lua_tonumber (L, 2);
-			}
+			if (fname == NULL) {
+				if (tmpmask == NULL) {
+					rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s",
+							task->cfg->temp_dir,
+							G_DIR_SEPARATOR, "rmsg-XXXXXXXXXX");
+				}
+				else {
+					rspamd_snprintf (fpath, sizeof (fpath), "%s", tmpmask);
+				}
 
-			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s", task->cfg->temp_dir,
-					G_DIR_SEPARATOR, "rmsg-XXXXXXXXXX");
-			fd = mkstemp (fpath);
+				fd = mkstemp (fpath);
+				fname = fpath;
+
+				if (fd != -1) {
+					fchmod (fd, mode);
+				}
+			}
+			else {
+				fd = rspamd_file_xopen (fname, O_WRONLY|O_CREAT|O_EXCL,
+						(guint)mode, FALSE);
+			}
 
 			if (fd == -1) {
 				msg_err_task ("cannot save file: %s", strerror (errno));
 				lua_pushnil (L);
 			}
 			else {
-				fchmod (fd, mode);
-
 				if (write (fd, task->msg.begin, task->msg.len) == -1) {
 					msg_err_task ("cannot write file %s: %s", fpath,
 							strerror (errno));
-					unlink (fpath);
+					unlink (fname);
 					close (fd);
 					lua_pushnil (L);
 
@@ -3984,7 +4029,8 @@ lua_task_store_in_file (lua_State *L)
 
 				cbdata = rspamd_mempool_alloc (task->task_pool, sizeof (*cbdata));
 				cbdata->fd = fd;
-				cbdata->fname = rspamd_mempool_strdup (task->task_pool, fpath);
+				cbdata->fname = rspamd_mempool_strdup (task->task_pool, fname);
+				cbdata->keep = keep;
 				lua_pushstring (L, cbdata->fname);
 				rspamd_mempool_add_destructor (task->task_pool,
 						lua_tmp_file_dtor, cbdata);
@@ -4032,6 +4078,8 @@ lua_task_process_regexp (lua_State *L)
 			if (err) {
 				g_error_free (err);
 			}
+
+			return luaL_error (L, "invalid arguments");
 		}
 		else {
 			type = rspamd_re_cache_type_from_string (type_str);
