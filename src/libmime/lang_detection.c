@@ -973,7 +973,7 @@ struct rspamd_frequency_sort_cbdata {
 };
 
 static const gdouble tier1_adjustment = 0.8;
-static const gdouble frequency_adjustment = 0.4;
+static const gdouble frequency_adjustment = 0.8;
 
 static gint
 rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
@@ -1040,7 +1040,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 	GPtrArray *result;
 	GHashTableIter it;
 	gpointer k, v;
-	gdouble mean, std;
+	gdouble mean, std, start_ticks, end_ticks;
 	struct rspamd_lang_detector_res *cand;
 	enum rspamd_language_detected_type r;
 	struct rspamd_frequency_sort_cbdata cbd;
@@ -1051,6 +1051,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		return g_ptr_array_new ();
 	}
 
+	start_ticks = rspamd_get_ticks (TRUE);
 	candidates = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 			NULL, g_free);
 
@@ -1129,6 +1130,10 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		cand->elt->occurencies ++;
 		d->total_occurencies ++;
 	}
+
+	end_ticks = rspamd_get_ticks (TRUE);
+	msg_debug_lang_det ("detected languages in %.0f ticks",
+			(end_ticks - start_ticks));
 
 	return result;
 }
