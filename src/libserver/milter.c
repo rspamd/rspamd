@@ -450,7 +450,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		while (pos < end) {
 			zero = memchr (pos, '\0', cmdlen);
 
-			if (zero == NULL || end >= zero) {
+			if (zero == NULL || zero >= end) {
 				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
 						"macro command (no name)");
 				rspamd_milter_on_protocol_error (session, priv, err);
