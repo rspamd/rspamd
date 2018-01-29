@@ -159,4 +159,4 @@ Sync Fuzzy Storage
   Log  ${result.stdout}
   Run Keyword If  $len == 0  Follow Rspamd Log
   ...  ELSE  Custom Follow Rspamd Log  @{vargs}[0]/rspamd.log  @{vargs}[1]  @{vargs}[2]  @{vargs}[3] 
-  Sleep  0.005s  Try give fuzzy storage time to sync
+  Sleep  0.1s  Try give fuzzy storage time to sync

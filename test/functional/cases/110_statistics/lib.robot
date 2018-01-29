@@ -11,9 +11,6 @@ ${REDIS_SERVER}  ${EMPTY}
 ${RSPAMD_SCOPE}  Suite
 ${STATS_HASH}   ${EMPTY}
 ${STATS_KEY}    ${EMPTY}
-${STATS_PATH_CACHE}  path = "\${TMPDIR}/bayes-cache.sqlite";
-${STATS_PATH_HAM}  path = "\${TMPDIR}/bayes-ham.sqlite";
-${STATS_PATH_SPAM}  path = "\${TMPDIR}/bayes-spam.sqlite";
 
 *** Keywords ***
 Broken Learn Test
@@ -40,7 +37,9 @@ Relearn Test
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  learn_ham  ${MESSAGE}
   Check Rspamc  ${result}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  BAYES_HAM
+  ${pass} =  Run Keyword And Return Status  Check Rspamc  ${result}  BAYES_HAM
+  Run Keyword If  ${pass}  Pass Execution  What Me Worry
+  Should Not Contain  ${result.stdout}  BAYES_SPAM
 
 Redis Statistics Setup
   ${tmpdir} =  Make Temporary Directory
@@ -51,9 +50,3 @@ Redis Statistics Setup
 Redis Statistics Teardown
   Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
-
-Statistics Setup
-  Generic Setup  STATS_PATH_CACHE  STATS_PATH_HAM  STATS_PATH_SPAM
-
-Statistics Teardown
-  Normal Teardown
