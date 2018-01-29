@@ -183,7 +183,7 @@ rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
 	gboolean ret = TRUE;
 
 	for (i = 0; i < len; i ++) {
-		if (!u_hasBinaryProperty (s[i], UCHAR_POSIX_ALNUM)) {
+		if (!((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z'))) {
 			ret = FALSE;
 			break;
 		}
@@ -256,6 +256,35 @@ struct rspamd_language_ucs_elt {
 	guint freq;
 	UChar s[0];
 };
+
+static const gchar *
+rspamd_language_detector_print_flags (struct rspamd_language_elt *elt)
+{
+	static gchar flags_buf[256];
+	goffset r = 0;
+
+	if (elt->flags & RS_LANGUAGE_UNIGRAMM) {
+		r += rspamd_snprintf (flags_buf + r, sizeof (flags_buf) - r, "unigrams,");
+	}
+	if (elt->flags & RS_LANGUAGE_TIER1) {
+		r += rspamd_snprintf (flags_buf + r, sizeof (flags_buf) - r, "tier1,");
+	}
+	if (elt->flags & RS_LANGUAGE_TIER0) {
+		r += rspamd_snprintf (flags_buf + r, sizeof (flags_buf) - r, "tier0,");
+	}
+	if (elt->flags & RS_LANGUAGE_LATIN) {
+		r += rspamd_snprintf (flags_buf + r, sizeof (flags_buf) - r, "latin,");
+	}
+
+	if (r > 0) {
+		flags_buf[r - 1] = '\0';
+	}
+	else {
+		flags_buf[r] = '\0';
+	}
+
+	return flags_buf;
+}
 
 static void
 rspamd_language_detector_read_file (struct rspamd_config *cfg,
@@ -431,10 +460,11 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		}
 
 		g_ptr_array_free (ngramms, TRUE);
-		msg_info_config ("loaded %s language, %d unigramms, %d trigramms",
+		msg_info_config ("loaded %s language, %d unigramms, %d trigramms; (%s)",
 				nelt->name,
 				(gint)nelt->unigramms_total,
-				(gint)nelt->trigramms_total);
+				(gint)nelt->trigramms_total,
+				rspamd_language_detector_print_flags (nelt));
 	}
 
 	g_ptr_array_add (d->languages, nelt);
