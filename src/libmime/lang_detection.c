@@ -67,8 +67,11 @@ static const gchar *unigramms_langs[] = {
 /*
  * Top languages
  */
+static const gchar *tier0_langs[] = {
+		"en",
+};
 static const gchar *tier1_langs[] = {
-		"en", "fr", "it", "de", "es", "nl", "zh-CN", "zh-TW", "ja",
+		"fr", "it", "de", "es", "nl", "zh-CN", "zh-TW", "ja",
 		"ko", "pt", "ru", "pl", "tk", "th", "ar"
 };
 
@@ -78,7 +81,7 @@ enum rspamd_language_elt_flags {
 	RS_LANGUAGE_UNISCRIPT = (1 << 1),
 	RS_LANGUAGE_UNIGRAMM = (1 << 2),
 	RS_LANGUAGE_TIER1 = (1 << 3),
-	RS_LANGUAGE_TIER2 = (1 << 4),
+	RS_LANGUAGE_TIER0 = (1 << 4),
 };
 
 struct rspamd_language_elt {
@@ -341,6 +344,11 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		if (rspamd_language_search_str (nelt->name, tier1_langs,
 				G_N_ELEMENTS (tier1_langs))) {
 			nelt->flags |= RS_LANGUAGE_TIER1;
+		}
+
+		if (rspamd_language_search_str (nelt->name, tier0_langs,
+				G_N_ELEMENTS (tier0_langs))) {
+			nelt->flags |= RS_LANGUAGE_TIER0;
 		}
 
 		it = NULL;
@@ -972,6 +980,7 @@ struct rspamd_frequency_sort_cbdata {
 	gdouble mean;
 };
 
+static const gdouble tier0_adjustment = 1.2;
 static const gdouble tier1_adjustment = 0.8;
 static const gdouble frequency_adjustment = 0.8;
 
@@ -1019,6 +1028,14 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 
 		if (candb->elt->flags & RS_LANGUAGE_TIER1) {
 			probb_adjusted += cbd->std * tier1_adjustment;
+		}
+
+		if (canda->elt->flags & RS_LANGUAGE_TIER0) {
+			proba_adjusted += cbd->std * tier0_adjustment;
+		}
+
+		if (candb->elt->flags & RS_LANGUAGE_TIER0) {
+			probb_adjusted += cbd->std * tier0_adjustment;
 		}
 
 		if (proba_adjusted > probb_adjusted) {
