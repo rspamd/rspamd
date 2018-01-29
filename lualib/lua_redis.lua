@@ -269,6 +269,7 @@ process_cmd.hincrbyfloat = process_cmd.set
 process_cmd.hkeys = process_cmd.set
 process_cmd.hlen = process_cmd.set
 process_cmd.hmget = process_cmd.set
+process_cmd.hmset = process_cmd.set
 process_cmd.hscan = process_cmd.set
 process_cmd.hset = process_cmd.set
 process_cmd.hsetnx = process_cmd.set
