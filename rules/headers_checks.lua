@@ -217,8 +217,14 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
         elseif from[1].domain and rt[1].domain then
           if (util.strequal_caseless(from[1].domain, rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
-          else
-            task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
+          else 
+            -- See if Reply-To matches the To address
+            local to = task:get_recipients(2)
+            if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
+              task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
+            else
+              task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
+	    end
           end
         end
         -- See if the Display Names match
@@ -295,6 +301,15 @@ rspamd_config:register_symbol{
   description = 'Reply-To header has title',
   group = 'headers',
 }
+rspamd_config:register_symbol{
+  name = 'REPLYTO_EQ_TO_ADDR',
+  score = 5.0,
+  parent = check_replyto_id,
+  type = 'virtual',
+  description = 'Reply-To is the same as the To address',
+  group = 'headers',
+}
+
 rspamd_config:register_dependency(check_replyto_id, 'FROM_NAME_HAS_TITLE')
 
 local check_mime_id = rspamd_config:register_symbol{
