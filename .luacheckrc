@@ -4,6 +4,7 @@ std = 'min'
 exclude_files = {
   '/**/contrib/**',
   '/**/test/lua/**',
+  '/**/test/functional/lua/miltertest/**',
 }
 
 globals = {
