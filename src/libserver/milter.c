@@ -529,6 +529,10 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_HEADER:
 		msg_debug_milter ("got header command");
+		if (!session->message) {
+			session->message = rspamd_fstring_sized_new (
+					RSPAMD_MILTER_MESSAGE_CHUNK);
+		}
 		zero = memchr (pos, '\0', cmdlen);
 
 		if (zero == NULL) {
