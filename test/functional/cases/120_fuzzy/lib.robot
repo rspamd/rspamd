@@ -13,6 +13,7 @@ ${FLAG2_NUMBER}  51
 ${FLAG2_SYMBOL}  R_TEST_FUZZY_WHITE
 @{MESSAGES}      ${TESTDIR}/messages/spam_message.eml  ${TESTDIR}/messages/zip.eml
 @{RANDOM_MESSAGES}  ${TESTDIR}/messages/bad_message.eml  ${TESTDIR}/messages/zip-doublebad.eml
+${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
 ${SETTINGS_FUZZY_WORKER}  ${EMPTY}
 ${SETTINGS_FUZZY_CHECK}  ${EMPTY}
@@ -92,12 +93,13 @@ Fuzzy Setup Keyed
 
 Fuzzy Setup Generic
   [Arguments]  ${algorithm}  ${worker_settings}  ${check_settings}  &{kwargs}
-  ${has_TMPDIR} =  Evaluate  'TMPDIR' in $kwargs
+  ${worker_settings} =  Set Variable  backend \= "redis"; ${worker_settings}
+  ${tmpdir} =  Make Temporary Directory
+  Set Suite Variable  ${TMPDIR}  ${tmpdir}
   Set Suite Variable  ${SETTINGS_FUZZY_WORKER}  ${worker_settings}
   Set Suite Variable  ${SETTINGS_FUZZY_CHECK}  ${check_settings}
-  Set Suite Variable  ${ALGORITHM}  ${algorithm}
-  Run Keyword If  '${has_TMPDIR}' == 'True'  Generic Setup  TMPDIR=&{kwargs}[TMPDIR]
-  ...  ELSE  Generic Setup
+  Run Redis
+  Generic Setup  TMPDIR=${TMPDIR}
 
 Fuzzy Setup Plain Fasthash
   Fuzzy Setup Plain  fasthash
@@ -147,8 +149,5 @@ Fuzzy Multimessage Overwrite Test
   \  Fuzzy Overwrite Test  ${i}
 
 Fuzzy Teardown
-  ${port_normal} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_NORMAL}
-  ${port_fuzzy} =  Create List  ${SOCK_DGRAM}  ${LOCAL_ADDR}  ${PORT_FUZZY}
-  ${port_controller} =  Create List  ${SOCK_STREAM}  ${LOCAL_ADDR}  ${PORT_CONTROLLER}
-  ${ports} =  Create List  ${port_normal}  ${port_fuzzy}  ${port_controller}
-  Generic Teardown  @{ports}
+  Normal Teardown
+  Shutdown Process With Children  ${REDIS_PID}
