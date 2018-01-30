@@ -1,3 +1,4 @@
+local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 local lua_util = require "lua_util"
 
@@ -41,13 +42,17 @@ local function encoded_json_to_log(result)
     local is_good, err = parser:parse_string(result)
 
     if not is_good then
-        print(err)
-        os.exit()
+      io.stderr:write(rspamd_logger.slog("Parser error: %1\n", err))
+      return nil
     end
 
     result = parser:get_object()
 
     filtered_result.score = result.score
+    if not result.action then
+      io.stderr:write(rspamd_logger.slog("Bad JSON: %1\n", result))
+      return nil
+    end
     local action = result.action:gsub("%s+", "_")
     filtered_result.action = action
 
@@ -72,8 +77,10 @@ local function scan_results_to_logs(results, actual_email_type)
 
     for _, result in pairs(results) do      
         result = encoded_json_to_log(result)
-        result['type'] = actual_email_type
-        table.insert(logs, result)
+        if result then
+          result['type'] = actual_email_type
+          table.insert(logs, result)
+        end
     end
 
     return logs
@@ -106,7 +113,7 @@ return function (_, res)
 
     if spam_directory then
         io.write("Scanning spam corpus...\n")
-        local spam_results = scan_email(connections, spam_directory)
+        local spam_results = scan_email(connections, spam_directory, res.timeout)
         spam_results = scan_results_to_logs(spam_results, SPAM)
 
         no_of_spam = #spam_results
