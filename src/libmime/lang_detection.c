@@ -111,6 +111,10 @@ struct rspamd_lang_detector {
         rspamd_langdet_log_id, "langdet", task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_debug_lang_det_cfg(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_langdet_log_id, "langdet", cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 INIT_LOG_MODULE(langdet)
 
@@ -183,7 +187,8 @@ rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
 	gboolean ret = TRUE;
 
 	for (i = 0; i < len; i ++) {
-		if (!((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z'))) {
+		if (!((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')
+				|| s[i] == ' ')) {
 			ret = FALSE;
 			break;
 		}
@@ -254,6 +259,7 @@ rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 
 struct rspamd_language_ucs_elt {
 	guint freq;
+	const gchar *utf;
 	UChar s[0];
 };
 
@@ -284,6 +290,15 @@ rspamd_language_detector_print_flags (struct rspamd_language_elt *elt)
 	}
 
 	return flags_buf;
+}
+
+static gint
+rspamd_language_detector_cmp_ngramm (gconstpointer a, gconstpointer b)
+{
+	struct rspamd_language_ucs_elt *e1 = *(struct rspamd_language_ucs_elt **)a;
+	struct rspamd_language_ucs_elt *e2 = *(struct rspamd_language_ucs_elt **)b;
+
+	return (gint)e2->freq - (gint)e1->freq;
 }
 
 static void
@@ -409,6 +424,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 						ucs_elt->s, keylen + 1,
 						key,
 						keylen, &uc_err);
+				ucs_elt->utf = key;
 
 				if (uc_err != U_ZERO_ERROR) {
 					msg_warn_config ("cannot convert key to unicode: %s",
@@ -464,7 +480,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			}
 
 			/* Now, discriminate low frequency ngramms */
-			if (ucs_elt->freq < mean + std / 8.0) {
+			if (ucs_elt->freq < mean) {
 				ucs_elt->freq = 0;
 				skipped ++;
 				continue;
@@ -474,12 +490,22 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			loaded ++;
 		}
 
+		g_ptr_array_sort (ngramms, rspamd_language_detector_cmp_ngramm);
+
 		PTR_ARRAY_FOREACH (ngramms, i, ucs_elt) {
 			if (ucs_elt->freq > 0) {
 				rspamd_language_detector_init_ngramm (cfg, d, nelt, ucs_elt->s,
 						nsym,
 						ucs_elt->freq, total);
 			}
+		}
+
+		/* Useful for debug */
+		for (i = 0; i < 10; i ++) {
+			ucs_elt = g_ptr_array_index (ngramms, i);
+
+			msg_debug_lang_det_cfg ("%s -> %s: %d", nelt->name,
+					ucs_elt->utf, ucs_elt->freq);
 		}
 
 		g_ptr_array_free (ngramms, TRUE);
@@ -754,6 +780,8 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 	struct rspamd_ngramm_elt *elt;
 	struct rspamd_lang_detector_res *cand;
 	GHashTable *ngramms;
+	/* Ignore if ngramm is found in that amount of languages */
+	static const guint languages_cutoff = 10;
 
 	switch (type) {
 	case rs_unigramm:
@@ -767,7 +795,7 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 
 	ar = g_hash_table_lookup (ngramms, window);
 
-	if (ar) {
+	if (ar && ar->len < languages_cutoff) {
 		PTR_ARRAY_FOREACH (ar, i, elt) {
 			cand = g_hash_table_lookup (candidates, elt->elt->name);
 
