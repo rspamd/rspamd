@@ -98,6 +98,8 @@ local function parse_arc_header(hdr, target)
     end, fun.map(function(elt)
       return lua_util.rspamd_str_split(elt, '=')
     end, elts))
+    target[i].header = hdr[i].decoded
+    target[i].raw_header = hdr[i].value
   end
 end
 
@@ -134,11 +136,6 @@ local function arc_validate_seals(task, seals, sigs, seal_headers, sig_headers)
         return false
       end
     end
-
-    sigs[i].header = sig_headers[i].decoded
-    seals[i].header = seal_headers[i].decoded
-    sigs[i].raw_header = sig_headers[i].value
-    seals[i].raw_header = seal_headers[i].value
   end
 
   return true
@@ -225,8 +222,6 @@ local function arc_callback(task)
   end
 
   local function arc_signature_cb(_, res, err, domain)
-    cbdata.checked = cbdata.checked + 1
-
     rspamd_logger.debugm(N, task, 'checked arc signature %s: %s(%s), %s processed',
       domain, res, err, cbdata.checked)
 
@@ -236,47 +231,42 @@ local function arc_callback(task)
         table.insert(cbdata.errors, string.format('sig:%s:%s', domain, err))
       end
     end
-
-    if cbdata.checked == #arc_sig_headers then
-      if cbdata.res == 'success' then
-        -- Verify seals
-        cbdata.checked = 0
-        fun.each(
-          function(sig)
-            local ret, lerr = dkim_verify(task, sig.header, arc_seal_cb, 'arc-seal')
-            if not ret then
-              cbdata.res = 'fail'
-              table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', lerr))
-              cbdata.checked = cbdata.checked + 1
-              rspamd_logger.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
-                sig.d, ret, lerr, cbdata.checked)
-            end
-          end, cbdata.seals)
-      else
-        task:insert_result(arc_symbols['reject'], 1.0,
-          rspamd_logger.slog('signature check failed: %s, %s', cbdata.res,
-            cbdata.errors))
-      end
+    if cbdata.res == 'success' then
+      -- Verify seals
+      cbdata.checked = 0
+      fun.each(
+        function(sig)
+          local ret, lerr = dkim_verify(task, sig.header, arc_seal_cb, 'arc-seal')
+          if not ret then
+            cbdata.res = 'fail'
+            table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', lerr))
+            cbdata.checked = cbdata.checked + 1
+            rspamd_logger.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
+              sig.d, ret, lerr, cbdata.checked)
+          end
+        end, cbdata.seals)
+    else
+      task:insert_result(arc_symbols['reject'], 1.0,
+        rspamd_logger.slog('signature check failed: %s, %s', cbdata.res,
+          cbdata.errors))
     end
   end
 
   -- Now we can verify all signatures
   local processed = 0
-  fun.each(
-    function(sig)
-      local ret,err = dkim_verify(task, sig.header, arc_signature_cb, 'arc-sign')
+  local sig = cbdata.sigs[#cbdata.sigs]
+  local ret,err = dkim_verify(task, sig.header, arc_signature_cb, 'arc-sign')
 
-      if not ret then
-        cbdata.res = 'fail'
-        table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
-      else
-        processed = processed + 1
-        rspamd_logger.debugm(N, task, 'processed arc signature %s: %s(%s), %s processed',
-          sig.d, ret, err, cbdata.checked)
-      end
-    end, cbdata.sigs)
+  if not ret then
+    cbdata.res = 'fail'
+    table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
+  else
+    processed = processed + 1
+    rspamd_logger.debugm(N, task, 'processed arc signature %s[%s]: %s(%s), %s processed',
+      sig.d, sig.i, ret, err, cbdata.checked)
+  end
 
-  if processed ~= #arc_sig_headers then
+  if processed == 0 then
     task:insert_result(arc_symbols['reject'], 1.0,
       rspamd_logger.slog('cannot verify %s of %s signatures: %s',
         #arc_sig_headers - processed, #arc_sig_headers, cbdata.errors))
