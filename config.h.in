@@ -151,6 +151,13 @@
  #include <sys/endian.h>
 #elif defined(HAVE_MACHINE_ENDIAN_H)
  #include <machine/endian.h>
+#elif defined(__sun)
+ #include <sys/byteorder.h>
+ #ifdef _LITTLE_ENDIAN
+  #define BYTE_ORDER LITTLE_ENDIAN
+ #else
+  #define BYTE_ORDER BIG_ENDIAN
+ #endif
 #endif
 
 #ifndef BYTE_ORDER
