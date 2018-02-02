@@ -632,17 +632,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 			}
 
 			if (!seen) {
-				cf = rspamd_mempool_alloc0 (rspamd_main->cfg->cfg_pool,
-						sizeof (struct rspamd_worker_conf));
-				cf->params = g_hash_table_new (rspamd_str_hash,
-						rspamd_str_equal);
-				cf->active_workers = g_queue_new ();
-				rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
-						(rspamd_mempool_destruct_t) g_hash_table_destroy,
-						cf->params);
-				rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
-						(rspamd_mempool_destruct_t) g_queue_free,
-						cf->active_workers);
+				cf = rspamd_config_new_worker (rspamd_main->cfg, NULL);
 				cf->count = 1;
 				cf->worker = wrk;
 				cf->type = g_quark_from_static_string (wrk->name);
