@@ -646,7 +646,23 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			found_html = TRUE;
 		}
 		else {
-			found_txt = TRUE;
+			/*
+			 * We also need to apply heuristic for text parts that are actually
+			 * HTML.
+			 */
+			RSPAMD_FTOK_ASSIGN (&html_tok, "<!DOCTYPE html");
+			RSPAMD_FTOK_ASSIGN (&xhtml_tok, "<html");
+
+			if (rspamd_lc_cmp (mime_part->parsed_data.begin, html_tok.begin,
+					MIN (html_tok.len, mime_part->parsed_data.len)) == 0 ||
+					rspamd_lc_cmp (mime_part->parsed_data.begin, xhtml_tok.begin,
+							MIN (xhtml_tok.len, mime_part->parsed_data.len)) == 0) {
+				msg_info_task ("found html part pretending to be text/plain part");
+				found_html = TRUE;
+			}
+			else {
+				found_txt = TRUE;
+			}
 		}
 	}
 	else {
