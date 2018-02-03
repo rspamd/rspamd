@@ -923,7 +923,7 @@ rspamd_language_detector_filter_negligible (struct rspamd_task *task,
 		 * Probabilities are logarithmic, so if prob1 - prob2 > 4, it means that
 		 * prob2 is 2^4 less than prob1
 		 */
-		if (max_prob - cand->prob > 1.5) {
+		if (max_prob - cand->prob > 1) {
 			msg_debug_lang_det ("exclude language %s: %.3f (%.3f max)",
 					cand->lang, cand->prob, max_prob);
 			g_hash_table_iter_remove (&it);
