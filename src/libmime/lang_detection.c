@@ -22,7 +22,7 @@
 #include <unicode/utf8.h>
 #include <unicode/ucnv.h>
 #include <unicode/uchar.h>
-#include <unicode/uscript.h>
+#include <unicode/ustring.h>
 #include <math.h>
 
 static const gsize default_short_text_limit = 200;
@@ -647,7 +647,7 @@ rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 	nsym = ucnv_toUChars (d->uchar_converter, out, (utf_token->len + 1),
 			utf_token->begin, utf_token->len, &uc_err);
 
-	if (nsym >= 0) {
+	if (nsym >= 0 && uc_err == U_ZERO_ERROR) {
 		rspamd_language_detector_ucs_lowercase (out, nsym);
 		ucs_token->begin = (const gchar *) out;
 		ucs_token->len = nsym;
@@ -664,6 +664,7 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 	guint step_len, remainder, i, out_idx;
 	guint64 coin, sel;
 	goffset tmp;
+	rspamd_stat_token_t *tok;
 
 	g_assert (nwords != 0);
 	g_assert (offsets_out != NULL);
@@ -694,17 +695,45 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 
 	for (i = step_len + remainder; i < ucs_tokens->len;
 			i += step_len, out_idx ++) {
+		guint ntries = 0;
 		coin = rspamd_random_uint64_fast ();
 		sel = (coin % step_len) + i;
-		offsets_out[out_idx] = sel;
+
+		for (;;) {
+			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, sel);
+			/* Filter bad tokens */
+			if (tok->len >= 2 && u_isalpha (*(UChar *)tok->begin)
+					&& u_isalpha (*(((UChar *)tok->begin) + (tok->len - 1)))) {
+				offsets_out[out_idx] = sel;
+				break;
+			}
+			else {
+				ntries ++;
+				coin = rspamd_random_uint64_fast ();
+
+				if (ntries < step_len) {
+					sel = (coin % step_len) + i;
+				}
+				else if (ntries < ucs_tokens->len) {
+					sel = coin % ucs_tokens->len;
+				}
+				else {
+					offsets_out[out_idx] = sel;
+					break;
+				}
+			}
+		}
 	}
+
+
 
 	/*
 	 * Fisher-Yates algorithm:
 	 * for i from 0 to n−2 do
-     *   j ← random integer such that i ≤ j < n
-     *   exchange a[i] and a[j]
-     */
+	 *   j ← random integer such that i ≤ j < n
+	 *   exchange a[i] and a[j]
+	 */
+#if 0
 	if (out_idx > 2) {
 		for (i = 0; i < out_idx - 2; i++) {
 			coin = rspamd_random_uint64_fast ();
@@ -715,6 +744,7 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 			offsets_out[sel] = tmp;
 		}
 	}
+#endif
 }
 
 enum rspamd_language_gramm_type {
@@ -749,10 +779,11 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 			/* No more fun */
 			return -1;
 		}
-
-		/* Normal case */
-		for (i = 0; i < wlen; i ++) {
-			window[i] = *(((UChar *)tok->begin) + cur_off + i);
+		else {
+			/* Normal case */
+			for (i = 0; i < wlen; i++) {
+				window[i] = *(((UChar *) tok->begin) + cur_off + i);
+			}
 		}
 	}
 	else {
@@ -780,8 +811,7 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 	struct rspamd_ngramm_elt *elt;
 	struct rspamd_lang_detector_res *cand;
 	GHashTable *ngramms;
-	/* Ignore if ngramm is found in that amount of languages */
-	static const guint languages_cutoff = 10;
+	gdouble mult = 1.0, prob;
 
 	switch (type) {
 	case rs_unigramm:
@@ -795,20 +825,22 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 
 	ar = g_hash_table_lookup (ngramms, window);
 
-	if (ar && ar->len < languages_cutoff) {
+	if (ar) {
 		PTR_ARRAY_FOREACH (ar, i, elt) {
 			cand = g_hash_table_lookup (candidates, elt->elt->name);
+
+			prob = elt->prob * mult;
 
 			if (cand == NULL) {
 				cand = g_malloc (sizeof (*cand));
 				cand->elt = elt->elt;
 				cand->lang = elt->elt->name;
-				cand->prob = elt->prob;
+				cand->prob = prob;
 
 				g_hash_table_insert (candidates, (gpointer)cand->lang, cand);
 			} else {
 				/* Update guess */
-				cand->prob += elt->prob;
+				cand->prob += prob;
 			}
 		}
 	}
