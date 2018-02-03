@@ -447,7 +447,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		while (pos < end) {
 			zero = memchr (pos, '\0', cmdlen);
 
-			if (zero == NULL) {
+			if (zero == NULL || zero >= end) {
 				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
 						"macro command (no name)");
 				rspamd_milter_on_protocol_error (session, priv, err);
@@ -459,9 +459,9 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 				rspamd_ftok_t *name_tok, *value_tok;
 				const guchar *zero_val;
 
-				zero_val = memchr (zero + 1, '\0', cmdlen);
+				zero_val = memchr (zero + 1, '\0',  end - zero - 1);
 
-				if (end > zero_val) {
+				if (zero_val != NULL && end > zero_val) {
 					name = rspamd_fstring_new_init (pos, zero - pos);
 					value = rspamd_fstring_new_init (zero + 1,
 							zero_val - zero - 1);
@@ -529,6 +529,10 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		break;
 	case RSPAMD_MILTER_CMD_HEADER:
 		msg_debug_milter ("got header command");
+		if (!session->message) {
+			session->message = rspamd_fstring_sized_new (
+					RSPAMD_MILTER_MESSAGE_CHUNK);
+		}
 		zero = memchr (pos, '\0', cmdlen);
 
 		if (zero == NULL) {
@@ -959,6 +963,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 			return rspamd_milter_consume_input (session, priv);
 		}
+
+		break;
 	case RSPAMD_MILTER_WRITE_REPLY:
 	case RSPAMD_MILTER_WRITE_AND_DIE:
 		if (priv->out_chain == NULL) {
@@ -1000,6 +1006,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 						priv->err_cb (priv->fd, session, priv->ud, err);
 						REF_RELEASE (session);
 						g_error_free (err);
+
+						return FALSE;
 					}
 				}
 				else if (r == 0) {
@@ -1009,6 +1017,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 					priv->err_cb (priv->fd, session, priv->ud, err);
 					REF_RELEASE (session);
 					g_error_free (err);
+
+					return FALSE;
 				}
 				else {
 					if (r == to_write) {

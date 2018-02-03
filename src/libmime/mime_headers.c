@@ -124,7 +124,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		if (task->deliver_to == NULL) {
 			task->deliver_to = rh->decoded;
 		}
-		rh->type = RSPAMD_HEADER_DELIVERED_TO|RSPAMD_HEADER_UNIQUE;
+		rh->type = RSPAMD_HEADER_DELIVERED_TO;
 		break;
 	case 0x2EC3BFF3C393FC10ULL: /* date */
 	case 0xAC0DDB1A1D214CAULL: /* sender */
@@ -508,6 +508,20 @@ rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
 	memcpy (old_charset, new_charset, sizeof (*old_charset));
 }
 
+static void
+rspamd_mime_header_sanity_check (GString *str)
+{
+	gsize i;
+	gchar t;
+
+	for (i = 0; i < str->len; i ++) {
+		t = str->str[i];
+		if (!((t & 0x80) || g_ascii_isgraph (t) || t == ' ')) {
+			str->str[i] = '?';
+		}
+	}
+}
+
 gchar *
 rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen)
@@ -686,6 +700,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 
 	g_byte_array_free (token, TRUE);
 	g_byte_array_free (decoded, TRUE);
+	rspamd_mime_header_sanity_check (out);
 	ret = g_string_free (out, FALSE);
 	rspamd_mempool_add_destructor (pool, g_free, ret);
 

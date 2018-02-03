@@ -112,14 +112,17 @@ function($, D3Evolution, unused) {
         var timeInterval = xExtents[1] - xExtents[0];
 
         return json.map(function (curr, i) {
+            // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
             var avg = d3.mean(curr, function (d) { return d.y; });
+            // To find an integral on the whole time interval we need to convert nulls to zeroes
+            var value = d3.mean(curr, function (d) { return +d.y; }) * timeInterval / scaleFactor;
             var yExtents = d3.extent(curr, function (d) { return d.y; });
 
             return {
                 label: graph_options.legend.entries[i].label,
-                value: avg && (avg * timeInterval / scaleFactor) ^ 0,
+                value: value ^ 0,
                 min: +yExtents[0].toFixed(6),
-                avg: avg && +avg.toFixed(6),
+                avg: +avg.toFixed(6),
                 max: +yExtents[1].toFixed(6),
                 last: +curr[curr.length - 1].y.toFixed(6),
                 color: graph_options.legend.entries[i].color,
@@ -169,7 +172,9 @@ function($, D3Evolution, unused) {
                 scaleFactor = 60;
                 unit = "msg/min";
                 data.forEach(function (s) {
-                    s.forEach(function (d) { d.y *= scaleFactor; });
+                    s.forEach(function (d) {
+                        if (d.y !== null) { d.y *= scaleFactor; }
+                    });
                 });
             }
 
