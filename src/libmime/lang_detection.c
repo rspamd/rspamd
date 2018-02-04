@@ -87,8 +87,11 @@ enum rspamd_language_elt_flags {
 struct rspamd_language_elt {
 	const gchar *name; /* e.g. "en" or "ru" */
 	enum rspamd_language_elt_flags flags;
-	guint unigramms_total; /* total frequencies for unigramms */
-	guint trigramms_total; /* total frequencies for trigramms */
+	guint ngramms_total;
+	guint unigramms_words;
+	guint trigramms_words;
+	gdouble mean;
+	gdouble std;
 	guint occurencies; /* total number of parts with this language */
 };
 
@@ -358,9 +361,9 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		return;
 	}
 	else {
-		nelt->unigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
+		nelt->unigramms_words = ucl_object_toint (ucl_array_find_index (n_words,
 				0));
-		nelt->trigramms_total = ucl_object_toint (ucl_array_find_index (n_words,
+		nelt->trigramms_words = ucl_object_toint (ucl_array_find_index (n_words,
 				2));
 	}
 
@@ -380,10 +383,6 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		if (rspamd_language_search_str (nelt->name, unigramms_langs,
 				G_N_ELEMENTS (unigramms_langs))) {
 			nelt->flags |= RS_LANGUAGE_UNIGRAMM;
-			total = nelt->unigramms_total;
-		}
-		else {
-			total = nelt->trigramms_total;
 		}
 
 		if (rspamd_language_search_str (nelt->name, tier1_langs,
@@ -480,11 +479,6 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			}
 
 			/* Now, discriminate low frequency ngramms */
-			if (ucs_elt->freq < mean) {
-				ucs_elt->freq = 0;
-				skipped ++;
-				continue;
-			}
 
 			total += ucs_elt->freq;
 			loaded ++;
@@ -494,8 +488,8 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 
 		PTR_ARRAY_FOREACH (ngramms, i, ucs_elt) {
 			if (ucs_elt->freq > 0) {
-				rspamd_language_detector_init_ngramm (cfg, d, nelt, ucs_elt->s,
-						nsym,
+				rspamd_language_detector_init_ngramm (cfg, d,
+						nelt, ucs_elt->s, nsym,
 						ucs_elt->freq, total);
 			}
 		}
@@ -509,15 +503,18 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		}
 
 		g_ptr_array_free (ngramms, TRUE);
+		nelt->mean = mean;
+		nelt->std = std;
+		nelt->ngramms_total = total;
 		msg_info_config ("loaded %s language, %d unigramms, %d trigramms, "
 				"%d ngramms loaded; "
-				"std=%.2f, mean=%.2f, discrimination=%.2f, skipped=%d, loaded=%d; "
+				"std=%.2f, mean=%.2f, skipped=%d, loaded=%d; "
 				"(%s)",
 				nelt->name,
-				(gint)nelt->unigramms_total,
-				(gint)nelt->trigramms_total,
+				(gint)nelt->unigramms_words,
+				(gint)nelt->trigramms_words,
 				total,
-				std, mean, mean + std / 2.0,
+				std, mean,
 				skipped, loaded,
 				rspamd_language_detector_print_flags (nelt));
 	}
@@ -663,7 +660,6 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 {
 	guint step_len, remainder, i, out_idx;
 	guint64 coin, sel;
-	goffset tmp;
 	rspamd_stat_token_t *tok;
 
 	g_assert (nwords != 0);
@@ -811,7 +807,7 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 	struct rspamd_ngramm_elt *elt;
 	struct rspamd_lang_detector_res *cand;
 	GHashTable *ngramms;
-	gdouble mult = 1.0, prob;
+	gdouble prob;
 
 	switch (type) {
 	case rs_unigramm:
@@ -828,9 +824,15 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 	if (ar) {
 		PTR_ARRAY_FOREACH (ar, i, elt) {
 			cand = g_hash_table_lookup (candidates, elt->elt->name);
-
-			prob = elt->prob * mult;
-
+			prob = elt->prob;
+#ifdef NGRAMMS_DEBUG
+			UConverter *ucnv;
+			UErrorCode uc_err = U_ZERO_ERROR;
+			char buf[1024];
+			ucnv = ucnv_open ("UTF-8", &uc_err);
+			ucnv_fromUChars (ucnv, buf, sizeof (buf), window, 3, &uc_err);
+			msg_err ("gramm: %s, lang: %s, prob: %.3f", buf, elt->elt->name, log2 (elt->prob));
+#endif
 			if (cand == NULL) {
 				cand = g_malloc (sizeof (*cand));
 				cand->elt = elt->elt;
