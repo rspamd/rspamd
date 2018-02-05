@@ -100,6 +100,11 @@ struct rspamd_ngramm_elt {
 	gdouble prob;
 };
 
+struct rspamd_ngramm_chain {
+	GPtrArray *languages;
+	gchar *utf;
+};
+
 struct rspamd_lang_detector {
 	GPtrArray *languages;
 	GHashTable *unigramms; /* unigramms frequencies */
@@ -200,14 +205,20 @@ rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
 	return ret;
 }
 
+struct rspamd_language_ucs_elt {
+	guint freq;
+	const gchar *utf;
+	UChar s[0];
+};
+
 static void
 rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 		struct rspamd_lang_detector *d,
 		struct rspamd_language_elt *lelt,
-		UChar *s, guint len, guint freq, guint total)
+		struct rspamd_language_ucs_elt *ucs, guint len, guint freq, guint total)
 {
 	GHashTable *target;
-	GPtrArray *ar;
+	struct rspamd_ngramm_chain *chain;
 	struct rspamd_ngramm_elt *elt;
 	guint i;
 	gboolean found;
@@ -227,23 +238,25 @@ rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 		break;
 	}
 
-	ar = g_hash_table_lookup (target, s);
+	chain = g_hash_table_lookup (target, ucs->s);
 
-	if (ar == NULL) {
+	if (chain == NULL) {
 		/* New element */
-		ar = g_ptr_array_sized_new (32);
+		chain = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*chain));
+		chain->languages = g_ptr_array_sized_new (32);
+		chain->utf = rspamd_mempool_strdup (cfg->cfg_pool, ucs->utf);
 		elt = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*elt));
 		elt->elt = lelt;
 		elt->prob = ((gdouble)freq) / ((gdouble)total);
-		g_ptr_array_add (ar, elt);
+		g_ptr_array_add (chain->languages, elt);
 
-		g_hash_table_insert (target, s, ar);
+		g_hash_table_insert (target, ucs->s, chain);
 	}
 	else {
 		/* Check sanity */
 		found = FALSE;
 
-		PTR_ARRAY_FOREACH (ar, i, elt) {
+		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
 			if (strcmp (elt->elt->name, lelt->name) == 0) {
 				found = TRUE;
 				elt->prob += ((gdouble)freq) / ((gdouble)total);
@@ -255,16 +268,11 @@ rspamd_language_detector_init_ngramm (struct rspamd_config *cfg,
 			elt = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*elt));
 			elt->elt = lelt;
 			elt->prob = ((gdouble)freq) / ((gdouble)total);
-			g_ptr_array_add (ar, elt);
+			g_ptr_array_add (chain->languages, elt);
 		}
 	}
 }
 
-struct rspamd_language_ucs_elt {
-	guint freq;
-	const gchar *utf;
-	UChar s[0];
-};
 
 static const gchar *
 rspamd_language_detector_print_flags (struct rspamd_language_elt *elt)
@@ -489,7 +497,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		PTR_ARRAY_FOREACH (ngramms, i, ucs_elt) {
 			if (ucs_elt->freq > 0) {
 				rspamd_language_detector_init_ngramm (cfg, d,
-						nelt, ucs_elt->s, nsym,
+						nelt, ucs_elt, nsym,
 						ucs_elt->freq, total);
 			}
 		}
@@ -803,7 +811,7 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 		GHashTable *candidates)
 {
 	guint i;
-	GPtrArray *ar;
+	struct rspamd_ngramm_chain *chain;
 	struct rspamd_ngramm_elt *elt;
 	struct rspamd_lang_detector_res *cand;
 	GHashTable *ngramms;
@@ -819,19 +827,15 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 	}
 
 
-	ar = g_hash_table_lookup (ngramms, window);
+	chain = g_hash_table_lookup (ngramms, window);
 
-	if (ar) {
-		PTR_ARRAY_FOREACH (ar, i, elt) {
+	if (chain) {
+		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
 			cand = g_hash_table_lookup (candidates, elt->elt->name);
 			prob = elt->prob;
 #ifdef NGRAMMS_DEBUG
-			UConverter *ucnv;
-			UErrorCode uc_err = U_ZERO_ERROR;
-			char buf[1024];
-			ucnv = ucnv_open ("UTF-8", &uc_err);
-			ucnv_fromUChars (ucnv, buf, sizeof (buf), window, 3, &uc_err);
-			msg_err ("gramm: %s, lang: %s, prob: %.3f", buf, elt->elt->name, log2 (elt->prob));
+			msg_err ("gramm: %s, lang: %s, prob: %.3f", chain->utf,
+					elt->elt->name, log2 (elt->prob));
 #endif
 			if (cand == NULL) {
 				cand = g_malloc (sizeof (*cand));
