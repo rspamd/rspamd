@@ -82,18 +82,21 @@ local function prepare_dkim_signing(N, task, settings)
 
   if settings.use_domain_sign_networks and is_sign_networks then
     dkim_domain = get_dkim_domain('use_domain_sign_networks')
+    rspamd_logger.debugm(N, task, 'sign_networks: use domain(%s) for signature: %s',
+      settings.use_domain_sign_networks, dkim_domain)
   elseif settings.use_domain_local and is_local then
     dkim_domain = get_dkim_domain('use_domain_local')
+    rspamd_logger.debugm(N, task, 'local: use domain(%s) for signature: %s',
+      settings.use_domain_local, dkim_domain)
   else
     dkim_domain = get_dkim_domain('use_domain')
+    rspamd_logger.debugm(N, task, 'use domain(%s) for signature: %s',
+      settings.use_domain, dkim_domain)
   end
 
   if not dkim_domain then
     rspamd_logger.debugm(N, task, 'could not extract dkim domain')
     return false,{}
-  else
-    rspamd_logger.debugm(N, task, 'use domain(%s) for signature: %s',
-      settings.use_domain, dkim_domain)
   end
 
   if settings.use_esld then
