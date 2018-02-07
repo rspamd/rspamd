@@ -26,7 +26,7 @@
 #include <math.h>
 
 static const gsize default_short_text_limit = 200;
-static const gsize default_words = 30;
+static const gsize default_words = 80;
 static const gdouble update_prob = 0.6;
 static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
 
