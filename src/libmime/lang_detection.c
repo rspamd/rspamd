@@ -102,6 +102,8 @@ struct rspamd_ngramm_elt {
 
 struct rspamd_ngramm_chain {
 	GPtrArray *languages;
+	gdouble mean;
+	gdouble std;
 	gchar *utf;
 };
 
@@ -551,6 +553,45 @@ rspamd_ucl_array_find_str (const gchar *str, const ucl_object_t *ar)
 	return FALSE;
 }
 
+static void
+rspamd_language_detector_process_chain (struct rspamd_config *cfg,
+		struct rspamd_ngramm_chain *chain)
+{
+	struct rspamd_ngramm_elt *elt;
+	guint i;
+	gdouble delta, mean = 0, delta2, m2 = 0, std;
+
+	if (chain->languages->len > 3) {
+		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
+			delta = elt->prob - mean;
+			mean += delta / (i + 1);
+			delta2 = elt->prob - mean;
+			m2 += delta * delta2;
+		}
+
+		std = sqrt (m2 / (i - 1));
+		chain->mean = mean;
+		chain->std = std;
+
+		/* Now, filter elements that are lower than mean */
+		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
+			if (elt->prob < mean) {
+				g_ptr_array_remove_index_fast (chain->languages, i);
+				msg_debug_lang_det_cfg ("remove %s from %s; prob: %.4f; mean: %.4f, std: %.4f",
+						elt->elt->name, chain->utf, elt->prob, mean, std);
+			}
+		}
+	}
+	else {
+		/* We have a unique ngramm, increase its weigth */
+		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
+			elt->prob *= 4.0;
+			msg_debug_lang_det_cfg ("increase weight of %s in %s; prob: %.4f",
+					elt->elt->name, chain->utf, elt->prob);
+		}
+	}
+}
+
 struct rspamd_lang_detector*
 rspamd_language_detector_init (struct rspamd_config *cfg)
 {
@@ -561,6 +602,9 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	size_t i, short_text_limit = default_short_text_limit;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	GString *languages_pattern;
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_ngramm_chain *chain;
 	gchar *fname;
 	struct rspamd_lang_detector *ret = NULL;
 
@@ -618,6 +662,13 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		}
 
 		g_free (fname);
+	}
+
+	g_hash_table_iter_init (&it, ret->trigramms);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		chain = (struct rspamd_ngramm_chain *)v;
+		rspamd_language_detector_process_chain (cfg, chain);
 	}
 
 	msg_info_config ("loaded %d languages, %d unicode only languages, "
