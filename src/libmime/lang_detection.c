@@ -1150,8 +1150,14 @@ rspamd_language_detector_try_ngramm (struct rspamd_task *task,
 	return rs_detect_multiple;
 }
 
+enum rspamd_language_sort_flags {
+	RSPAMD_LANG_FLAG_DEFAULT = 0,
+	RSPAMD_LANG_FLAG_SHORT = 1 << 0,
+};
+
 struct rspamd_frequency_sort_cbdata {
 	struct rspamd_lang_detector *d;
+	enum rspamd_language_sort_flags flags;
 	gdouble std;
 	gdouble mean;
 };
@@ -1168,60 +1174,59 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 	const struct rspamd_lang_detector_res
 			*canda = *(const struct rspamd_lang_detector_res **)a,
 			*candb = *(const struct rspamd_lang_detector_res **)b;
-	gdouble diff;
+	gdouble adj;
+	gdouble proba_adjusted, probb_adjusted, freqa, freqb;
 
-	diff = fabs (canda->prob - candb->prob);
+	freqa = ((gdouble)canda->elt->occurencies) /
+			(gdouble)cbd->d->total_occurencies;
+	freqb = ((gdouble)candb->elt->occurencies) /
+			(gdouble)cbd->d->total_occurencies;
 
-	if (diff > cbd->std) {
-		/* Generic case */
-		if (canda->prob > candb->prob) {
-			return -1;
-		} else if (candb->prob > canda->prob) {
-			return 1;
-		}
+	proba_adjusted = canda->prob;
+	probb_adjusted = candb->prob;
 
-		return 0;
+	if (isnormal (freqa) && isnormal (freqb)) {
+		proba_adjusted += cbd->std * (frequency_adjustment * freqa);
+		probb_adjusted += cbd->std * (frequency_adjustment * freqb);
+	}
+
+	if (cbd->flags & RSPAMD_LANG_FLAG_SHORT) {
+		adj = tier1_adjustment * 2.0;
 	}
 	else {
-		gdouble proba_adjusted, probb_adjusted, freqa, freqb;
-
-		freqa = ((gdouble)canda->elt->occurencies) /
-				(gdouble)cbd->d->total_occurencies;
-		freqb = ((gdouble)candb->elt->occurencies) /
-				(gdouble)cbd->d->total_occurencies;
-
-		proba_adjusted = canda->prob;
-		probb_adjusted = candb->prob;
-
-		if (isnormal (freqa) && isnormal (freqb)) {
-			proba_adjusted += cbd->std * (frequency_adjustment * freqa);
-			probb_adjusted += cbd->std * (frequency_adjustment * freqb);
-		}
-
-		if (canda->elt->flags & RS_LANGUAGE_TIER1) {
-			proba_adjusted += cbd->std * tier1_adjustment;
-		}
-
-		if (candb->elt->flags & RS_LANGUAGE_TIER1) {
-			probb_adjusted += cbd->std * tier1_adjustment;
-		}
-
-		if (canda->elt->flags & RS_LANGUAGE_TIER0) {
-			proba_adjusted += cbd->std * tier0_adjustment;
-		}
-
-		if (candb->elt->flags & RS_LANGUAGE_TIER0) {
-			probb_adjusted += cbd->std * tier0_adjustment;
-		}
-
-		if (proba_adjusted > probb_adjusted) {
-			return -1;
-		} else if (probb_adjusted > proba_adjusted) {
-			return 1;
-		}
-
-		return 0;
+		adj = tier1_adjustment;
 	}
+	if (canda->elt->flags & RS_LANGUAGE_TIER1) {
+		proba_adjusted += cbd->std * adj;
+	}
+
+	if (candb->elt->flags & RS_LANGUAGE_TIER1) {
+		probb_adjusted += cbd->std * adj;
+	}
+
+	if (cbd->flags & RSPAMD_LANG_FLAG_SHORT) {
+		adj = tier0_adjustment * 16.0;
+	}
+	else {
+		adj = tier0_adjustment;
+	}
+
+	if (canda->elt->flags & RS_LANGUAGE_TIER0) {
+		proba_adjusted += cbd->std * adj;
+	}
+
+	if (candb->elt->flags & RS_LANGUAGE_TIER0) {
+		probb_adjusted += cbd->std * adj;
+	}
+
+	if (proba_adjusted > probb_adjusted) {
+		return -1;
+	}
+	else if (probb_adjusted > proba_adjusted) {
+		return 1;
+	}
+
+	return 0;
 }
 
 GPtrArray *
@@ -1294,6 +1299,11 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 			cbd.d = d;
 			cbd.mean = mean;
 			cbd.std = std;
+			cbd.flags = RSPAMD_LANG_FLAG_DEFAULT;
+
+			if (ucs_tokens->len < default_words / 2) {
+				cbd.flags |= RSPAMD_LANG_FLAG_SHORT;
+			}
 		}
 	}
 
