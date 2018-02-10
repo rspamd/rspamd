@@ -23,6 +23,15 @@ local ucl = require "ucl"
 
 local plugins_stat = require "rspamadm/plugins_stats"
 
+local rspamd_logo = [[
+  ____                                     _
+ |  _ \  ___  _ __    __ _  _ __ ___    __| |
+ | |_) |/ __|| '_ \  / _` || '_ ` _ \  / _` |
+ |  _ < \__ \| |_) || (_| || | | | | || (_| |
+ |_| \_\|___/| .__/  \__,_||_| |_| |_| \__,_|
+             |_|
+]]
+
 local function printf(fmt, ...)
   print(string.format(fmt, ...))
 end
@@ -277,7 +286,8 @@ return function(args, cfg)
   }
 
   rspamd_util.umask('022')
-  printf("Welcome to %s configuration tool", highlight("Rspamd"))
+  printf(highlight(rspamd_logo))
+  printf("Welcome to the configuration tool")
   printf("We use %s configuration file, writing results to %s",
     highlight(cfg.config_path), highlight(local_conf))
   plugins_stat(nil, nil)
