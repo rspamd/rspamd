@@ -314,11 +314,17 @@ fuzzy_check_content_type (struct fuzzy_rule *rule, struct rspamd_content_type *c
 	PTR_ARRAY_FOREACH (rule->mime_types, i, ft) {
 		if (ft->type_re) {
 
-			if (rspamd_regexp_match (ft->type_re, ct->type.begin, ct->type.len,
-					TRUE)) {
+			if (ct->type.len > 0 &&
+					rspamd_regexp_match (ft->type_re,
+							ct->type.begin,
+							ct->type.len,
+							TRUE)) {
 				if (ft->subtype_re) {
-					if (rspamd_regexp_match (ft->subtype_re, ct->subtype.begin,
-							ct->subtype.len, TRUE)) {
+					if (ct->subtype.len > 0 &&
+							rspamd_regexp_match (ft->subtype_re,
+									ct->subtype.begin,
+									ct->subtype.len,
+									TRUE)) {
 						return TRUE;
 					}
 				}
