@@ -988,11 +988,6 @@ rspamd_redis_fin (gpointer data)
 		/* This calls for all callbacks pending */
 		redisAsyncFree (redis);
 	}
-
-	if (rt->err) {
-		g_error_free (rt->err);
-		rt->err = NULL;
-	}
 }
 
 static void
@@ -1012,11 +1007,6 @@ rspamd_redis_fin_learn (gpointer data)
 		rt->redis = NULL;
 		/* This calls for all callbacks pending */
 		redisAsyncFree (redis);
-	}
-
-	if (rt->err) {
-		g_error_free (rt->err);
-		rt->err = NULL;
 	}
 }
 
@@ -1490,6 +1480,8 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	}
 
 	rt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*rt));
+	rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_gerror_free_maybe, &rt->err);
 	rspamd_redis_expand_object (ctx->redis_object, ctx, task,
 			&rt->redis_object_expanded);
 	rt->selected = up;
@@ -1617,9 +1609,6 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	}
 
 	if (rt->err) {
-		g_error_free (rt->err);
-		rt->err = NULL;
-
 		return FALSE;
 	}
 
