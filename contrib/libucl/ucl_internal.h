@@ -321,7 +321,7 @@ ucl_create_err (UT_string **err, const char *fmt, ...)
 	}
 
 #ifdef UCL_FATAL_ERRORS
-	assert (0);
+	abort ();
 #endif
 }
 
