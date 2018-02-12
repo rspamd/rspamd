@@ -1087,21 +1087,24 @@ rspamd_mmaped_file_get_stat (gpointer runtime,
 	return res;
 }
 
-void
+gboolean
 rspamd_mmaped_file_finalize_learn (struct rspamd_task *task, gpointer runtime,
-		gpointer ctx)
+		gpointer ctx, GError **err)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
 
 	if (mf != NULL) {
 		msync (mf->map, mf->len, MS_INVALIDATE | MS_ASYNC);
 	}
+
+	return TRUE;
 }
 
-void
+gboolean
 rspamd_mmaped_file_finalize_process (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
+	return TRUE;
 }
 
 gpointer

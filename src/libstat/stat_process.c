@@ -456,7 +456,7 @@ rspamd_stat_backends_process (struct rspamd_stat_ctx *st_ctx,
 	}
 }
 
-static void
+static gboolean
 rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
@@ -478,9 +478,13 @@ rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
 		bk_run = g_ptr_array_index (task->stat_runtimes, i);
 
 		if (bk_run != NULL) {
-			st->backend->finalize_process (task, bk_run, st_ctx);
+			if (!st->backend->finalize_process (task, bk_run, st_ctx)) {
+				return FALSE;
+			}
 		}
 	}
+
+	return TRUE;
 }
 
 static void
@@ -611,8 +615,10 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 	}
 	else if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS_POST) {
 		/* Process classifiers */
-		rspamd_stat_backends_post_process (st_ctx, task);
-		rspamd_stat_classifiers_process (st_ctx, task);
+		if (rspamd_stat_backends_post_process (st_ctx, task)) {
+			rspamd_stat_classifiers_process (st_ctx, task);
+		}
+		/* Do not process classifiers on backend failures */
 	}
 
 	task->processed_stages |= stage;
@@ -938,8 +944,9 @@ end:
 static gboolean
 rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task,
-		 const gchar *classifier,
-		 gboolean spam)
+		const gchar *classifier,
+		gboolean spam,
+		GError **err)
 {
 	struct rspamd_classifier *cl;
 	struct rspamd_statfile *st;
@@ -955,11 +962,6 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 		if (classifier != NULL && (cl->cfg->name == NULL ||
 				g_ascii_strcasecmp (classifier, cl->cfg->name) != 0)) {
 			continue;
-		}
-
-		if (cl->cache) {
-			cache_run = cl->cache->runtime (task, cl->cachecf, TRUE);
-			cl->cache->learn (task, spam, cache_run);
 		}
 
 		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
@@ -979,7 +981,14 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 				continue;
 			}
 
-			st->backend->finalize_learn (task, bk_run, st_ctx);
+			if (!st->backend->finalize_learn (task, bk_run, st_ctx, err)) {
+				return RSPAMD_STAT_PROCESS_ERROR;
+			}
+		}
+
+		if (cl->cache) {
+			cache_run = cl->cache->runtime (task, cl->cachecf, TRUE);
+			cl->cache->learn (task, spam, cache_run);
 		}
 	}
 
@@ -1029,7 +1038,7 @@ rspamd_stat_learn (struct rspamd_task *task,
 		}
 	}
 	else if (stage == RSPAMD_TASK_STAGE_LEARN_POST) {
-		if (!rspamd_stat_backends_post_learn (st_ctx, task, classifier, spam)) {
+		if (!rspamd_stat_backends_post_learn (st_ctx, task, classifier, spam, err)) {
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}

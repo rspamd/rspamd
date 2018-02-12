@@ -735,7 +735,7 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 	return TRUE;
 }
 
-void
+gboolean
 rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
@@ -754,7 +754,7 @@ rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 	rt->lang_id = -1;
 	rt->user_id = -1;
 
-	return;
+	return TRUE;
 }
 
 gboolean
@@ -819,9 +819,9 @@ rspamd_sqlite3_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	return TRUE;
 }
 
-void
+gboolean
 rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
-		gpointer ctx)
+		gpointer ctx, GError **err)
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
@@ -852,8 +852,15 @@ rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 			&wal_checkpointed) != SQLITE_OK) {
 		msg_warn_task ("cannot commit checkpoint: %s",
 				sqlite3_errmsg (bk->sqlite));
+
+		g_set_error (err, rspamd_sqlite3_backend_quark (), 500,
+				"cannot commit checkpoint: %s",
+				sqlite3_errmsg (bk->sqlite));
+		return FALSE;
 	}
 #endif
+
+	return TRUE;
 }
 
 gulong

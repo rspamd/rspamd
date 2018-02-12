@@ -72,6 +72,7 @@ struct redis_stat_runtime {
 	guint64 learned;
 	gint id;
 	gboolean has_event;
+	GError *err;
 };
 
 /* Used to get statistics from redis */
@@ -987,6 +988,11 @@ rspamd_redis_fin (gpointer data)
 		/* This calls for all callbacks pending */
 		redisAsyncFree (redis);
 	}
+
+	if (rt->err) {
+		g_error_free (rt->err);
+		rt->err = NULL;
+	}
 }
 
 static void
@@ -1006,6 +1012,11 @@ rspamd_redis_fin_learn (gpointer data)
 		rt->redis = NULL;
 		/* This calls for all callbacks pending */
 		redisAsyncFree (redis);
+	}
+
+	if (rt->err) {
+		g_error_free (rt->err);
+		rt->err = NULL;
 	}
 }
 
@@ -1029,6 +1040,10 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 		/* This calls for all callbacks pending */
 		redisAsyncFree (redis);
 	}
+
+	g_set_error (&rt->err, rspamd_redis_stat_quark (), ETIMEDOUT,
+			"error getting reply from redis server %s: timeout",
+			rspamd_upstream_name (rt->selected));
 }
 
 /* Called when we have connected to the redis server and got stats */
@@ -1076,6 +1091,10 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 		msg_err_task ("error getting reply from redis server %s: %s",
 				rspamd_upstream_name (rt->selected), c->errstr);
 		rspamd_upstream_fail (rt->selected);
+
+		g_set_error (&rt->err, rspamd_redis_stat_quark (), c->err,
+				"error getting reply from redis server %s: %s",
+				rspamd_upstream_name (rt->selected), c->errstr);
 	}
 
 }
@@ -1158,6 +1177,9 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 		if (rt->redis) {
 			rspamd_upstream_fail (rt->selected);
 		}
+		g_set_error (&rt->err, rspamd_redis_stat_quark (), c->err,
+				"cannot get values: error getting reply from redis server %s: %s",
+				rspamd_upstream_name (rt->selected), c->errstr);
 	}
 
 	if (rt->has_event) {
@@ -1184,6 +1206,10 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 		if (rt->redis) {
 			rspamd_upstream_fail (rt->selected);
 		}
+
+		g_set_error (&rt->err, rspamd_redis_stat_quark (), c->err,
+				"cannot get learned: error getting reply from redis server %s: %s",
+				rspamd_upstream_name (rt->selected), c->errstr);
 	}
 
 	if (rt->has_event) {
@@ -1573,7 +1599,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 	return FALSE;
 }
 
-void
+gboolean
 rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
@@ -1589,6 +1615,15 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 		rt->redis = NULL;
 		redisAsyncFree (redis);
 	}
+
+	if (rt->err) {
+		g_error_free (rt->err);
+		rt->err = NULL;
+
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 gboolean
@@ -1750,9 +1785,9 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 }
 
 
-void
+gboolean
 rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
-		gpointer ctx)
+		gpointer ctx, GError **err)
 {
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
@@ -1766,6 +1801,15 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		rt->redis = NULL;
 		redisAsyncFree (redis);
 	}
+
+	if (rt->err) {
+		g_propagate_error (err, rt->err);
+		rt->err = NULL;
+
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 gulong
