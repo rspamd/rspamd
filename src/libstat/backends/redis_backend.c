@@ -1702,12 +1702,13 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				"HINCRBY\r\n"
 				"$%d\r\n"
 				"%s\r\n"
-				"$6\r\n"
+				"$%d\r\n"
 				"%s\r\n" /* Learned key */
 				"$1\r\n"
 				"1\r\n",
 				(gint)strlen (rt->redis_object_expanded),
 				rt->redis_object_expanded,
+				(gint)strlen (learned_key),
 				learned_key);
 	}
 	else {
@@ -1717,12 +1718,13 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				"HINCRBY\r\n"
 				"$%d\r\n"
 				"%s\r\n"
-				"$6\r\n"
+				"$%d\r\n"
 				"%s\r\n" /* Learned key */
 				"$2\r\n"
 				"-1\r\n",
 				(gint)strlen (rt->redis_object_expanded),
 				rt->redis_object_expanded,
+				(gint)strlen (learned_key),
 				learned_key);
 	}
 
