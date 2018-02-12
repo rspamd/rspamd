@@ -8,16 +8,33 @@ Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
 ${RSPAMD_SCOPE}  Suite
-${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
-SIMPLE MILTER TEST
-  ${result} =  Run Process  miltertest  -Dport\=${PORT_PROXY}  -Dhost\=${LOCAL_ADDR}  -s  ${TESTDIR}/lua/miltertest/mt1.lua
-  Follow Rspamd Log
-  Should Match Regexp  ${result.stderr}  ^$
-  Should Match Regexp  ${result.stdout}  ^$
-  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stdout}  values=false
+ACCEPT
+  Milter Test  mt1.lua
+
+REJECT
+  Milter Test  mt2.lua
+
+REWRITE SUBJECT
+  Milter Test  mt3.lua
+
+DEFER
+  Milter Test  mt4.lua
+
+COMBINED TEST
+  [Tags]  isbroken
+  Milter Test  combined.lua
 
 *** Keywords ***
 Milter Setup
   Generic Setup  CONFIG=${TESTDIR}/configs/milter.conf
+
+Milter Test
+  [Arguments]  ${mtlua}
+  ${result} =  Run Process  miltertest  -Dport\=${PORT_PROXY}  -Dhost\=${LOCAL_ADDR}  -s  ${TESTDIR}/lua/miltertest/${mtlua}
+  ...  cwd=${TESTDIR}/lua/miltertest
+  Follow Rspamd Log
+  Should Match Regexp  ${result.stderr}  ^$
+  Should Be Equal As Integers  ${result.rc}  0  msg=${result.stdout}  values=false
