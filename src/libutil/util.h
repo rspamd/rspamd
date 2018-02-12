@@ -331,6 +331,12 @@ void rspamd_array_free_hard (gpointer p);
 void rspamd_gstring_free_hard (gpointer p);
 
 /**
+ * Special utility to help GError freeing in rspamd_mempool
+ * @param p
+ */
+void rspamd_gerror_free_maybe (gpointer p);
+
+/**
  * Special utility to help GString freeing (without freeing the memory segment) in rspamd_mempool
  * @param p
  */

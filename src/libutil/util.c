@@ -1973,12 +1973,17 @@ rspamd_gstring_free_hard (gpointer p)
 	g_string_free (ar, TRUE);
 }
 
-void
-rspamd_gstring_free_soft (gpointer p)
+void rspamd_gerror_free_maybe (gpointer p)
 {
-	GString *ar = (GString *)p;
+	GError **err;
 
-	g_string_free (ar, FALSE);
+	if (p) {
+		err = (GError **)p;
+
+		if (*err) {
+			g_error_free (*err);
+		}
+	}
 }
 
 struct rspamd_external_libs_ctx *
