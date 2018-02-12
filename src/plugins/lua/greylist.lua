@@ -151,6 +151,24 @@ local function check_time(task, tm, type)
   end
 end
 
+local function greylist_message(task, end_time, why)
+  task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time, why)
+
+  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if settings.message_func then
+    task:set_pre_result(settings['action'],
+      settings.message_func(task, end_time))
+  else
+    local message = settings['message']
+    if settings.report_time then
+      message = string.format("%s: %s", message, end_time)
+    end
+    task:set_pre_result(settings['action'], message)
+  end
+
+  task:set_flag('greylisted')
+end
+
 local function greylist_check(task)
   local ip = task:get_ip()
 
@@ -204,23 +222,9 @@ local function greylist_check(task)
       elseif greylisted_body and greylisted_meta then
         local end_time = rspamd_util.time_to_string(rspamd_util.get_time() +
           settings['timeout'])
-        rspamd_logger.infox(task, 'greylisted until "%s" using %s key',
-          end_time, type)
-        task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time)
-
-        if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
-        if settings.message_func then
-          task:set_pre_result('soft reject',
-            settings.message_func(task, end_time))
-        else
-          local message = settings['message']
-          if settings.report_time then
-            message = string.format("%s: %s", message, end_time)
-          end
-          task:set_pre_result('soft reject', message)
-        end
-
-        task:set_flag('greylisted')
+        rspamd_logger.infox(task, 'greylisted until "%s"',
+          end_time)
+        greylist_message(task, end_time, 'too early')
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
@@ -306,7 +310,7 @@ local function greylist_set(task)
   local function redis_set_cb(err)
     if err then
       rspamd_logger.errx(task, 'got error %s when setting greylisting record on server %s',
-          err, upstream:get_addr())
+        err, upstream:get_addr())
     end
   end
 
@@ -347,11 +351,7 @@ local function greylist_set(task)
     local t = tostring(toint(rspamd_util.get_time()))
     local end_time = rspamd_util.time_to_string(t + settings['timeout'])
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
-    task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time,
-      'new record')
-
-    task:set_pre_result(settings['action'], settings['message'])
-    task:set_flag('greylisted')
+    greylist_message(task, end_time, 'new record')
     -- Create new record
     ret,conn,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -375,30 +375,21 @@ local function greylist_set(task)
 
       if grey_res then
         -- We need to delay message, hence set a temporary result
-        task:insert_result(settings['symbol'], 0.0, grey_res, 'body')
         rspamd_logger.infox(task, 'greylisting delayed until "%s": body', grey_res)
+        greylist_message(task, grey_res, 'body')
       else
         grey_res = task:get_mempool():get_variable("grey_greylisted_meta")
-
         if grey_res then
-          task:insert_result(settings['symbol'], 0.0, grey_res, 'meta')
-          rspamd_logger.infox(task, 'greylisting delayed until "%s": meta', grey_res)
-        else
-          task:insert_result(settings['symbol'], 0.0, 'greylisted', 'redis fail')
-          return
+          greylist_message(task, grey_res, 'meta')
         end
       end
-      task:set_metric_action('default', settings['action'])
-      if is_rspamc then return end
-      task:set_pre_result(settings['action'], settings['message'])
-      task:set_flag('greylisted')
     else
       task:insert_result(settings['symbol'], 0.0, 'greylisted', 'passed')
     end
   end
 end
 
-local opts =  rspamd_config:get_all_opt('greylist')
+local opts = rspamd_config:get_all_opt('greylist')
 if opts then
   if opts['message_func'] then
     settings.message_func = assert(load(opts['message_func']))()
