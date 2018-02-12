@@ -842,14 +842,25 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 					k = (gchar *)g_ptr_array_index (cbdata->cur_keys, i);
 
 					if (k) {
+						const gchar *learned_key = "learns";
+
+						if (cbdata->elt->ctx->new_schema) {
+							if (cbdata->elt->ctx->stcf->is_spam) {
+								learned_key = "learns_spam";
+							}
+							else {
+								learned_key = "learns_ham";
+							}
+						}
+
 						redisAsyncCommand (cbdata->redis, rspamd_redis_stat_key,
 								cbdata,
 								"HLEN %s",
 								k);
 						redisAsyncCommand (cbdata->redis, rspamd_redis_stat_learns,
 								cbdata,
-								"HGET %s learns",
-								k);
+								"HGET %s %s",
+								k, learned_key);
 						cbdata->inflight += 2;
 					}
 				}
@@ -1507,6 +1518,8 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 	rspamd_fstring_t *query;
 	struct timeval tv;
 	gint ret;
+	const gchar *learned_key = "learns";
+
 
 	if (tokens == NULL || tokens->len == 0 || rt->redis == NULL) {
 		return FALSE;
@@ -1514,8 +1527,17 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 
 	rt->id = id;
 
+	if (rt->ctx->new_schema) {
+		if (rt->ctx->stcf->is_spam) {
+			learned_key = "learns_spam";
+		}
+		else {
+			learned_key = "learns_ham";
+		}
+	}
+
 	if (redisAsyncCommand (rt->redis, rspamd_redis_connected, rt, "HGET %s %s",
-			rt->redis_object_expanded, "learns") == REDIS_OK) {
+			rt->redis_object_expanded, learned_key) == REDIS_OK) {
 
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt,
 				rspamd_redis_stat_quark ());
@@ -1582,6 +1604,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	rspamd_token_t *tok;
 	gint ret;
 	goffset off;
+	const gchar *learned_key = "learns";
 
 	up = rspamd_upstream_get (rt->ctx->write_servers,
 			RSPAMD_UPSTREAM_MASTER_SLAVE,
@@ -1594,6 +1617,15 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	}
 
 	rt->selected = up;
+
+	if (rt->ctx->new_schema) {
+		if (rt->ctx->stcf->is_spam) {
+			learned_key = "learns_spam";
+		}
+		else {
+			learned_key = "learns_ham";
+		}
+	}
 
 	addr = rspamd_upstream_addr (up);
 	g_assert (addr != NULL);
@@ -1647,11 +1679,12 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				"$%d\r\n"
 				"%s\r\n"
 				"$6\r\n"
-				"learns\r\n"
+				"%s\r\n" /* Learned key */
 				"$1\r\n"
 				"1\r\n",
 				(gint)strlen (rt->redis_object_expanded),
-				rt->redis_object_expanded);
+				rt->redis_object_expanded,
+				learned_key);
 	}
 	else {
 		rspamd_printf_fstring (&query, ""
@@ -1661,11 +1694,12 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				"$%d\r\n"
 				"%s\r\n"
 				"$6\r\n"
-				"learns\r\n"
+				"%s\r\n" /* Learned key */
 				"$2\r\n"
 				"-1\r\n",
 				(gint)strlen (rt->redis_object_expanded),
-				rt->redis_object_expanded);
+				rt->redis_object_expanded,
+				learned_key);
 	}
 
 	ret = redisAsyncFormattedCommand (rt->redis, NULL, NULL,
