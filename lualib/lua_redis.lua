@@ -835,4 +835,59 @@ end
 
 exports.exec_redis_script = exec_redis_script
 
+local function redis_connect_sync(redis_params, is_write, key, cfg)
+  if not redis_params then
+    return false,nil
+  end
+
+  local rspamd_redis = require "rspamd_redis"
+  local addr
+
+  if key then
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_by_hash(key)
+    else
+      addr = redis_params['read_servers']:get_upstream_by_hash(key)
+    end
+  else
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_master_slave(key)
+    else
+      addr = redis_params['read_servers']:get_upstream_round_robin(key)
+    end
+  end
+
+  if not addr then
+    logger.errx(cfg, 'cannot select server to make redis request')
+  end
+
+  local options = {
+    host = addr:get_addr(),
+    timeout = redis_params['timeout'],
+  }
+
+
+  local ret,conn = rspamd_redis.connect_sync(options)
+  if not ret then
+    logger.errx('cannot execute redis request: %s', conn)
+    addr:fail()
+  end
+
+  if conn then
+    if redis_params['password'] then
+      conn:add_cmd('AUTH', {redis_params['password']})
+    end
+
+    if redis_params['db'] then
+      conn:add_cmd('SELECT', {tostring(redis_params['db'])})
+    elseif redis_params['dbname'] then
+      conn:add_cmd('SELECT', {tostring(redis_params['dbname'])})
+    end
+  end
+
+  return ret,conn,addr
+end
+
+exports.redis_connect_sync = redis_connect_sync
+
 return exports
