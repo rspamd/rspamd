@@ -24,9 +24,106 @@ local exports = {}
 local N = "stats_tools"
 
 -- Performs synchronous conversation of redis schema
-local function convert_bayes_schema(cfg, redis_params, key)
+local function convert_bayes_schema(redis_params,  symbol_spam, symbol_ham, expire)
 
+  -- Old schema is the following one:
+  -- Keys are named <symbol>[<user>]
+  -- Elements are placed within hash:
+  -- BAYES_SPAM -> {<id1>: <num_hits>, <id2>: <num_hits> ...}
+  -- In new schema it is changed to a more extensible schema:
+  -- Keys are named RS[<user>]_<id> -> {'H': <ham_hits>, 'S': <spam_hits>}
+  -- So we can expire individual records, measure most popular elements by zranges,
+  -- add new fields, such as tokens etc
+
+  local res,conn,_ = lua_redis.redis_connect_sync(redis_params, true)
+
+  if not res then
+    logger.errx("cannot connect to redis server")
+    return false
+  end
+
+  -- KEYS[1]: key to check (e.g. 'BAYES_SPAM')
+  -- KEYS[2]: hash key ('S' or 'H')
+  -- KEYS[3]: expire
+  local lua_script = [[
+local keys = redis.call('SMEMBERS', KEYS[1]..'_keys')
+local nconverted = 0
+
+for _,k in ipairs(keys) do
+  local elts = redis.call('HGETALL', k)
+
+  for k,v in pairs(elts) do
+    local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
+    local nkey = string.format('%s_%s', neutral_prefix, k)
+    redis.call('HSET', nkey, KEYS[2], v)
+    if KEYS[4] and tonumber(KEYS[3]) ~= 0 then
+      redis.call('EXPIRE', nkey, KEYS[3])
+    end
+    nconverted = nconverted + 1
+  end
 end
+
+return nconverted
+]]
+
+  conn:add_cmd('EVAL', {lua_script, '3', symbol_spam, 'S', tostring(expire)})
+  local ret, res = conn:exec()
+
+  if not ret then
+    logger.errx('error converting symbol %s', symbol_spam)
+    return false
+  else
+    logger.infox('converted %s elements from symbol %s', res, symbol_spam)
+  end
+
+  conn:add_cmd('EVAL', {lua_script, '3', symbol_ham, 'H', tostring(expire)})
+  ret, res = conn:exec()
+
+  if not ret then
+    logger.errx('error converting symbol %s', symbol_ham)
+    return false
+  else
+    logger.infox('converted %s elements from symbol %s', res, symbol_ham)
+  end
+
+  -- We can now convert metadata: set + learned + version
+  -- KEYS[1]: key to check (e.g. 'BAYES_SPAM')
+  -- KEYS[2]: learn key (e.g. 'learns_spam' or 'learns_ham')
+  lua_script = [[
+local keys = redis.call('SMEMBERS', KEYS[1]..'_keys')
+
+for _,k in ipairs(keys) do
+  local learns = redis.call('HGET', k, 'learns')
+  local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
+
+  redis.call('HSET', neutral_prefix, KEYS[2], learns)
+  redis.call('SADD', KEYS[1]..'_keys', neutral_prefix)
+  redis.call('SREM', KEYS[1]..'_keys', k)
+  redis.call('DEL', k)
+  redis.call('SET', KEYS[1]..'_version', '2')
+end
+]]
+
+  conn:add_cmd('EVAL', {lua_script, '2', symbol_spam, 'learns_spam'})
+  local ret, _ = conn:exec()
+
+  if not ret then
+    logger.errx('error converting metadata for symbol %s', symbol_spam)
+    return false
+  end
+
+  conn:add_cmd('EVAL', {lua_script, '2', symbol_ham, 'learns_ham'})
+  local ret, _ = conn:exec()
+
+  if not ret then
+    logger.errx('error converting metadata for symbol %s', symbol_ham)
+    return false
+  end
+
+  return true
+end
+
+exports.convert_bayes_schema = convert_bayes_schema
 
 -- It now accepts both ham and spam databases
 -- parameters:
@@ -59,8 +156,7 @@ local function convert_sqlite_to_redis(redis_params,
     return false
   end
 
-
-  local res,conn,addr = lua_redis.redis_connect_sync(redis_params, true)
+  local res,conn,_ = lua_redis.redis_connect_sync(redis_params, true)
 
   if not res then
     logger.errx("cannot connect to redis server")
@@ -71,7 +167,7 @@ local function convert_sqlite_to_redis(redis_params,
     -- Do a more complicated cleanup
     -- execute a lua script that cleans up data
     local script = [[
-local members = redis.call('SMEMBERS', KEYS[1])
+local members = redis.call('SMEMBERS', KEYS[1]..'_keys')
 
 for _,prefix in ipairs(members) do
   local keys = redis.call('KEYS', prefix..'*')
