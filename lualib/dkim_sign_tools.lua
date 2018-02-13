@@ -37,6 +37,8 @@ local function prepare_dkim_signing(N, task, settings)
     rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
   elseif settings.sign_local and is_local then
     rspamd_logger.debugm(N, task, 'mail is from local address')
+  elseif settings.sign_received and not is_local and not auser then
+    rspamd_logger.debugm(N, task, 'mail was sent to us')
   else
     rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
     return false,{}
@@ -55,9 +57,12 @@ local function prepare_dkim_signing(N, task, settings)
     return false,{}
   end
 
+  local eto = task:get_recipients(0)
+
   local dkim_domain
   local hdom = ((hfrom or E)[1] or E).domain
   local edom = ((efrom or E)[1] or E).domain
+  local tdom = ((eto or E)[1] or E).domain
   local udom = string.match(auser or '', '.*@(.*)')
 
   local function get_dkim_domain(dtype)
@@ -67,6 +72,8 @@ local function prepare_dkim_signing(N, task, settings)
       return edom
     elseif settings[dtype] == 'auth' then
       return udom
+    elseif settings[dtype] == 'recipient' then
+      return tdom
     end
   end
 
@@ -78,6 +85,9 @@ local function prepare_dkim_signing(N, task, settings)
   end
   if udom then
     udom = udom:lower()
+  end
+  if tdom then
+    tdom = tdom:lower()
   end
 
   if settings.use_domain_sign_networks and is_sign_networks then
