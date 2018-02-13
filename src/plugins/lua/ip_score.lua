@@ -389,7 +389,7 @@ if redis_params then
     name = options['symbol'],
     callback = ip_score_check,
     group = 'reputation',
-    score = '2.0'
+    score = 2.0
   })
 else
   rspamd_lua_utils.disable_module(N, "redis")
