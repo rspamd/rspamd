@@ -103,6 +103,7 @@ struct rspamd_symbols_group {
 
 #define RSPAMD_SYMBOL_FLAG_IGNORE (1 << 1)
 #define RSPAMD_SYMBOL_FLAG_ONEPARAM (1 << 2)
+#define RSPAMD_SYMBOL_FLAG_UNGROUPPED (1 << 3)
 
 /**
  * Symbol definition

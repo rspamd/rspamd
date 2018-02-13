@@ -1449,6 +1449,7 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	/* Search for symbol group */
 	if (group == NULL) {
 		group = "ungrouped";
+		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
 	}
 
 	sym_group = g_hash_table_lookup (cfg->groups, group);
@@ -1471,10 +1472,25 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 	struct rspamd_symbol *sym_def;
 	g_assert (cfg != NULL);
 	g_assert (symbol != NULL);
+	struct rspamd_symbols_group *sym_group;
 
 	sym_def = g_hash_table_lookup (cfg->symbols, symbol);
 
 	if (sym_def != NULL) {
+		if (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED && group != NULL) {
+			/* Non-empty group has a priority over non-groupped one */
+			sym_group = g_hash_table_lookup (cfg->groups, group);
+
+			if (sym_group == NULL) {
+				/* Create new group */
+				sym_group = rspamd_config_new_group (cfg, group);
+			}
+
+			sym_def->gr = sym_group;
+			g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+			sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPPED);
+		}
+
 		if (sym_def->priority > priority) {
 			msg_debug_config ("symbol %s has been already registered with "
 					"priority %ud, do not override (new priority: %ud)",
@@ -1510,6 +1526,24 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			}
 
 			sym_def->priority = priority;
+
+			/* We also check group information in this case */
+			if (group != NULL && sym_def->gr != NULL &&
+					strcmp (group, sym_def->gr->name) != 0) {
+				msg_debug_config ("move symbol %s from group %s to %s",
+						sym_def->gr->name, group);
+
+				g_hash_table_remove (sym_def->gr->symbols, sym_def->name);
+				sym_group = g_hash_table_lookup (cfg->groups, group);
+
+				if (sym_group == NULL) {
+					/* Create new group */
+					sym_group = rspamd_config_new_group (cfg, group);
+				}
+
+				sym_def->gr = sym_group;
+				g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+			}
 
 			return TRUE;
 		}

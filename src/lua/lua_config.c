@@ -1526,7 +1526,8 @@ lua_config_register_symbol (lua_State * L)
 			}
 
 			rspamd_config_add_symbol (cfg, name,
-					score, description, group, flags, (guint) priority, nshots);
+					score, description, group, flags,
+					(guint) priority, nshots);
 		}
 	}
 	else {
