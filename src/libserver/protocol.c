@@ -1276,7 +1276,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 
 	rspamd_task_write_log (task);
 
-	if (task->cfg->log_re_cache) {
+	if (task->cfg->log_flags & RSPAMD_LOG_FLAG_RE_CACHE) {
 		restat = rspamd_re_cache_get_stat (task->re_rt);
 		g_assert (restat != NULL);
 		msg_info_task (

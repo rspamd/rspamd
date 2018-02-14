@@ -147,7 +147,7 @@ rspamd_config_new (void)
 	cfg->map_file_watch_multiplier = DEFAULT_MAP_FILE_WATCH_MULTIPLIER;
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
-	cfg->log_extended = TRUE;
+	cfg->log_flags = RSPAMD_LOG_FLAG_DEFAULT;
 
 	cfg->check_text_attachements = TRUE;
 
@@ -342,7 +342,7 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	g_assert (var != NULL);
 
 	if (var->len > 3 && rspamd_lc_cmp (var->begin, "if_", 3) == 0) {
-		flags |= RSPAMD_LOG_FLAG_CONDITION;
+		flags |= RSPAMD_LOG_FMT_FLAG_CONDITION;
 		tok.begin = var->begin + 3;
 		tok.len = var->len - 3;
 	}
@@ -375,15 +375,15 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "symbols_scores", TRUE)) {
 		type = RSPAMD_LOG_SYMBOLS;
-		flags |= RSPAMD_LOG_FLAG_SYMBOLS_SCORES;
+		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES;
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "symbols_params", TRUE)) {
 		type = RSPAMD_LOG_SYMBOLS;
-		flags |= RSPAMD_LOG_FLAG_SYMBOLS_PARAMS;
+		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS;
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "symbols_scores_params", TRUE)) {
 		type = RSPAMD_LOG_SYMBOLS;
-		flags |= RSPAMD_LOG_FLAG_SYMBOLS_PARAMS|RSPAMD_LOG_FLAG_SYMBOLS_SCORES;
+		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS|RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES;
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "ip", TRUE)) {
 		type = RSPAMD_LOG_IP;

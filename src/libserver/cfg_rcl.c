@@ -228,6 +228,27 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
+	/* Handle flags */
+	val = ucl_object_lookup_any (obj, "color", "log_color", NULL);
+	if (val && ucl_object_toboolean (val)) {
+		cfg->log_flags |= RSPAMD_LOG_FLAG_COLOR;
+	}
+
+	val = ucl_object_lookup_any (obj, "systemd", "log_systemd", NULL);
+	if (val && ucl_object_toboolean (val)) {
+		cfg->log_flags |= RSPAMD_LOG_FLAG_SYSTEMD;
+	}
+
+	val = ucl_object_lookup (obj, "log_re_cache");
+	if (val && ucl_object_toboolean (val)) {
+		cfg->log_flags |= RSPAMD_LOG_FLAG_RE_CACHE;
+	}
+
+	val = ucl_object_lookup_any (obj, "usec", "log_usec", NULL);
+	if (val && ucl_object_toboolean (val)) {
+		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC;
+	}
+
 	return rspamd_rcl_section_parse_defaults (cfg, section, cfg->cfg_pool, obj,
 			cfg, err);
 }
@@ -1729,12 +1750,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			0,
 			"Write each URL found in a message to the log file");
 	rspamd_rcl_add_default_handler (sub,
-			"log_re_cache",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_re_cache),
-			0,
-			"Write statistics of regexp processing to log (useful for hyperscan)");
-	rspamd_rcl_add_default_handler (sub,
 			"debug_ip",
 			rspamd_rcl_parse_struct_ucl,
 			G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map),
@@ -1746,30 +1761,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
 			0,
 			"Enable debug for the specified symbols");
-	rspamd_rcl_add_default_handler (sub,
-			"log_color",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_color),
-			0,
-			"Enable colored output (for console logging)");
-	rspamd_rcl_add_default_handler (sub,
-			"color",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_color),
-			0,
-			"Enable colored output (for console logging)");
-	rspamd_rcl_add_default_handler (sub,
-			"log_systemd",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_systemd),
-			0,
-			"Enable systemd compatible logging");
-	rspamd_rcl_add_default_handler (sub,
-			"systemd",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_systemd),
-			0,
-			"Enable systemd compatible logging");
 	rspamd_rcl_add_default_handler (sub,
 			"debug_modules",
 			rspamd_rcl_parse_struct_string_list,
@@ -1802,12 +1793,44 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, log_error_elt_maxlen),
 			RSPAMD_CL_FLAG_UINT,
 			"Size of each element in error log buffer (1000 by default)");
-	rspamd_rcl_add_default_handler (sub,
-			"log_usec",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_usec),
+
+	/* Documentation only options, handled in log_handler to map flags */
+	rspamd_rcl_add_doc_by_path (cfg,
+			"logging",
+			"Enable colored output (for console logging)",
+			"log_color",
+			UCL_BOOLEAN,
+			NULL,
 			0,
-			"Use microseconds resolution for timestamps");
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"logging",
+			"Enable systemd compatible logging",
+			"systemd",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"logging",
+			"Write statistics of regexp processing to log (useful for hyperscan)",
+			"log_re_cache",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"logging",
+			"Use microseconds resolution for timestamps",
+			"log_usec",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
 	/**
 	 * Options section
 	 */

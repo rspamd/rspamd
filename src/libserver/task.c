@@ -1066,11 +1066,11 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 					rspamd_printf_fstring (&symbuf, ",%s", sym->name);
 				}
 
-				if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_SCORES) {
+				if (lf->flags & RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES) {
 					rspamd_printf_fstring (&symbuf, "(%.2f)", sym->score);
 				}
 
-				if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_PARAMS) {
+				if (lf->flags & RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS) {
 					rspamd_printf_fstring (&symbuf, "{");
 
 					if (sym->options) {
@@ -1425,7 +1425,7 @@ rspamd_task_write_log (struct rspamd_task *task)
 			break;
 		default:
 			/* We have a variable in log format */
-			if (lf->flags & RSPAMD_LOG_FLAG_CONDITION) {
+			if (lf->flags & RSPAMD_LOG_FMT_FLAG_CONDITION) {
 				if (!rspamd_task_log_check_condition (task, lf)) {
 					continue;
 				}

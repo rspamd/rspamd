@@ -64,6 +64,15 @@ enum rspamd_log_type {
 	RSPAMD_LOG_FILE
 };
 
+enum rspamd_log_cfg_flags {
+	RSPAMD_LOG_FLAG_DEFAULT = 0,
+	RSPAMD_LOG_FLAG_SYSTEMD = (1 << 0),
+	RSPAMD_LOG_FLAG_COLOR = (1 << 1),
+	RSPAMD_LOG_FLAG_RE_CACHE = (1 << 2),
+	RSPAMD_LOG_FLAG_USEC = (1 << 3),
+	RSPAMD_LOG_FLAG_RSPAMADM = (1 << 4),
+};
+
 struct rspamd_worker_log_pipe {
 	gint fd;
 	gint type;
@@ -228,12 +237,12 @@ enum rspamd_log_format_type {
 };
 
 enum rspamd_log_format_flags {
-	RSPAMD_LOG_FLAG_DEFAULT = 0,
-	RSPAMD_LOG_FLAG_OPTIONAL = (1 << 0),
-	RSPAMD_LOG_FLAG_MIME_ALTERNATIVE = (1 << 1),
-	RSPAMD_LOG_FLAG_CONDITION = (1 << 2),
-	RSPAMD_LOG_FLAG_SYMBOLS_SCORES = (1 << 3),
-	RSPAMD_LOG_FLAG_SYMBOLS_PARAMS = (1 << 4)
+	RSPAMD_LOG_FMT_FLAG_DEFAULT = 0,
+	RSPAMD_LOG_FMT_FLAG_OPTIONAL = (1 << 0),
+	RSPAMD_LOG_FMT_FLAG_MIME_ALTERNATIVE = (1 << 1),
+	RSPAMD_LOG_FMT_FLAG_CONDITION = (1 << 2),
+	RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES = (1 << 3),
+	RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS = (1 << 4)
 };
 
 struct rspamd_log_format {
@@ -324,11 +333,7 @@ struct rspamd_config {
 	GList *debug_symbols;                           /**< symbols to debug									*/
 	GHashTable *debug_modules;                      /**< logging modules to debug							*/
 	struct rspamd_cryptobox_pubkey *log_encryption_key; /**< encryption key for logs						*/
-	gboolean log_color;                             /**< output colors for console output                   */
-	gboolean log_extended;                          /**< log extended information							*/
-	gboolean log_systemd;                           /**< special case for systemd logger					*/
-	gboolean log_re_cache;                          /**< show statistics about regexps						*/
-	gboolean log_usec;                              /**< log microseconds if possible						*/
+	guint log_flags;                                /**< logging flags										*/
 	guint log_error_elts;                           /**< number of elements in error logbuf					*/
 	guint log_error_elt_maxlen;                     /**< maximum size of error log element					*/
 	struct rspamd_worker_log_pipe *log_pipes;

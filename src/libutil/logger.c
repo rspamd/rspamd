@@ -78,6 +78,7 @@ struct rspamd_logger_s {
 		u_char *buf;
 	} io_buf;
 	gint fd;
+	guint flags;
 	gboolean is_buffered;
 	gboolean enabled;
 	gboolean is_debug;
@@ -433,6 +434,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	}
 
 	logger->cfg = cfg;
+	logger->flags = cfg->log_flags;
 
 	/* Set up buffer */
 	if (cfg->log_buffered) {
@@ -849,7 +851,7 @@ file_log_function (const gchar *module, const gchar *id,
 		const gchar *message,
 		gpointer arg)
 {
-	gchar tmpbuf[256], timebuf[64], modulebuf[64];
+	static gchar tmpbuf[256], timebuf[64], modulebuf[64];
 	gchar *m;
 	gdouble now;
 	struct tm *tms;
@@ -877,130 +879,130 @@ file_log_function (const gchar *module, const gchar *id,
 			return;
 		}
 	}
-	/* Check repeats */
-	mlen = strlen (message);
-	cksum = rspamd_log_calculate_cksum (message, mlen);
 
-	if (cksum == rspamd_log->last_line_cksum) {
-		rspamd_log->repeats++;
-		if (rspamd_log->repeats > REPEATS_MIN && rspamd_log->repeats <
-												 REPEATS_MAX) {
-			/* Do not log anything */
-			if (rspamd_log->saved_message == NULL) {
-				rspamd_log->saved_message = g_strdup (message);
-				rspamd_log->saved_function = g_strdup (function);
+	if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM)) {
+		/* Check repeats */
+		mlen = strlen (message);
+		cksum = rspamd_log_calculate_cksum (message, mlen);
 
-				if (module) {
-					rspamd_log->saved_module = g_strdup (module);
+		if (cksum == rspamd_log->last_line_cksum) {
+			rspamd_log->repeats++;
+			if (rspamd_log->repeats > REPEATS_MIN && rspamd_log->repeats <
+					REPEATS_MAX) {
+				/* Do not log anything */
+				if (rspamd_log->saved_message == NULL) {
+					rspamd_log->saved_message = g_strdup (message);
+					rspamd_log->saved_function = g_strdup (function);
+
+					if (module) {
+						rspamd_log->saved_module = g_strdup (module);
+					}
+
+					if (id) {
+						rspamd_log->saved_id = g_strdup (id);
+					}
+
+					rspamd_log->saved_loglevel = level_flags;
 				}
 
-				if (id) {
-					rspamd_log->saved_id = g_strdup (id);
+				return;
+			}
+			else if (rspamd_log->repeats > REPEATS_MAX) {
+				rspamd_snprintf (tmpbuf,
+						sizeof (tmpbuf),
+						"Last message repeated %ud times",
+						rspamd_log->repeats);
+				rspamd_log->repeats = 0;
+				/* It is safe to use temporary buffer here as it is not static */
+				if (rspamd_log->saved_message) {
+					file_log_function (rspamd_log->saved_module,
+							rspamd_log->saved_id,
+							rspamd_log->saved_function,
+							rspamd_log->saved_loglevel,
+							rspamd_log->saved_message,
+							arg);
+
+					g_free (rspamd_log->saved_message);
+					g_free (rspamd_log->saved_function);
+					g_free (rspamd_log->saved_module);
+					g_free (rspamd_log->saved_id);
+					rspamd_log->saved_message = NULL;
+					rspamd_log->saved_function = NULL;
+					rspamd_log->saved_module = NULL;
+					rspamd_log->saved_id = NULL;
 				}
 
-				rspamd_log->saved_loglevel = level_flags;
-			}
-
-			return;
-		}
-		else if (rspamd_log->repeats > REPEATS_MAX) {
-			rspamd_snprintf (tmpbuf,
-					sizeof (tmpbuf),
-					"Last message repeated %ud times",
-					rspamd_log->repeats);
-			rspamd_log->repeats = 0;
-			/* It is safe to use temporary buffer here as it is not static */
-			if (rspamd_log->saved_message) {
-				file_log_function (rspamd_log->saved_module,
-						rspamd_log->saved_id,
-						rspamd_log->saved_function,
+				file_log_function ("logger", NULL,
+						G_STRFUNC,
 						rspamd_log->saved_loglevel,
-						rspamd_log->saved_message,
+						tmpbuf,
 						arg);
-
-				g_free (rspamd_log->saved_message);
-				g_free (rspamd_log->saved_function);
-				g_free (rspamd_log->saved_module);
-				g_free (rspamd_log->saved_id);
-				rspamd_log->saved_message = NULL;
-				rspamd_log->saved_function = NULL;
-				rspamd_log->saved_module = NULL;
-				rspamd_log->saved_id = NULL;
-			}
-
-			file_log_function ("logger", NULL,
-					G_STRFUNC,
-					rspamd_log->saved_loglevel,
-					tmpbuf,
-					arg);
-			file_log_function (module, id,
-					function,
-					level_flags,
-					message,
-					arg);
-			rspamd_log->repeats = REPEATS_MIN + 1;
-			return;
-		}
-	}
-	else {
-		/* Reset counter if new message differs from saved message */
-		rspamd_log->last_line_cksum = cksum;
-		if (rspamd_log->repeats > REPEATS_MIN) {
-			rspamd_snprintf (tmpbuf,
-					sizeof (tmpbuf),
-					"Last message repeated %ud times",
-					rspamd_log->repeats);
-			rspamd_log->repeats = 0;
-			if (rspamd_log->saved_message) {
-				file_log_function (rspamd_log->saved_module,
-						rspamd_log->saved_id,
-						rspamd_log->saved_function,
-						rspamd_log->saved_loglevel,
-						rspamd_log->saved_message,
+				file_log_function (module, id,
+						function,
+						level_flags,
+						message,
 						arg);
-
-				g_free (rspamd_log->saved_message);
-				g_free (rspamd_log->saved_function);
-				g_free (rspamd_log->saved_module);
-				g_free (rspamd_log->saved_id);
-				rspamd_log->saved_message = NULL;
-				rspamd_log->saved_function = NULL;
-				rspamd_log->saved_module = NULL;
-				rspamd_log->saved_id = NULL;
+				rspamd_log->repeats = REPEATS_MIN + 1;
+				return;
 			}
-
-			file_log_function ("logger", NULL,
-					G_STRFUNC,
-					level_flags,
-					tmpbuf,
-					arg);
-			/* It is safe to use temporary buffer here as it is not static */
-			file_log_function (module, id,
-					function,
-					level_flags,
-					message,
-					arg);
-			return;
 		}
 		else {
-			rspamd_log->repeats = 0;
-		}
-	}
+			/* Reset counter if new message differs from saved message */
+			rspamd_log->last_line_cksum = cksum;
+			if (rspamd_log->repeats > REPEATS_MIN) {
+				rspamd_snprintf (tmpbuf,
+						sizeof (tmpbuf),
+						"Last message repeated %ud times",
+						rspamd_log->repeats);
+				rspamd_log->repeats = 0;
+				if (rspamd_log->saved_message) {
+					file_log_function (rspamd_log->saved_module,
+							rspamd_log->saved_id,
+							rspamd_log->saved_function,
+							rspamd_log->saved_loglevel,
+							rspamd_log->saved_message,
+							arg);
 
-	if (rspamd_log->cfg->log_extended) {
+					g_free (rspamd_log->saved_message);
+					g_free (rspamd_log->saved_function);
+					g_free (rspamd_log->saved_module);
+					g_free (rspamd_log->saved_id);
+					rspamd_log->saved_message = NULL;
+					rspamd_log->saved_function = NULL;
+					rspamd_log->saved_module = NULL;
+					rspamd_log->saved_id = NULL;
+				}
+
+				file_log_function ("logger", NULL,
+						G_STRFUNC,
+						level_flags,
+						tmpbuf,
+						arg);
+				/* It is safe to use temporary buffer here as it is not static */
+				file_log_function (module, id,
+						function,
+						level_flags,
+						message,
+						arg);
+				return;
+			}
+			else {
+				rspamd_log->repeats = 0;
+			}
+		}
 		if (!got_time) {
 			now = rspamd_get_calendar_ticks ();
 		}
 
 		/* Format time */
-		if (!rspamd_log->cfg->log_systemd) {
+		if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
 			time_t sec = now;
 			gsize r;
 
 			tms = localtime (&sec);
 			r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
 
-			if (rspamd_log->cfg->log_usec) {
+			if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
 				gchar usec_buf[16];
 
 				rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
@@ -1012,7 +1014,7 @@ file_log_function (const gchar *module, const gchar *id,
 
 		cptype = g_quark_to_string (rspamd_log->process_type);
 
-		if (rspamd_log->cfg->log_color) {
+		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
 			if (level_flags & G_LOG_LEVEL_INFO) {
 				/* White */
 				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;37m");
@@ -1030,7 +1032,7 @@ file_log_function (const gchar *module, const gchar *id,
 			r = 0;
 		}
 
-		if (!rspamd_log->cfg->log_systemd) {
+		if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
 			r += rspamd_snprintf (tmpbuf + r,
 					sizeof (tmpbuf) - r,
 					"%s #%P(%s) ",
@@ -1083,7 +1085,7 @@ file_log_function (const gchar *module, const gchar *id,
 		iov[3].iov_base = (void *) &lf_chr;
 		iov[3].iov_len = 1;
 
-		if (rspamd_log->cfg->log_color) {
+		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
 			iov[4].iov_base = "\033[0m";
 			iov[4].iov_len = sizeof ("\033[0m") - 1;
 			/* Call helper (for buffering) */
@@ -1095,19 +1097,48 @@ file_log_function (const gchar *module, const gchar *id,
 		}
 	}
 	else {
-		iov[0].iov_base = (void *) message;
-		iov[0].iov_len = mlen;
-		iov[1].iov_base = (void *) &lf_chr;
-		iov[1].iov_len = 1;
-		if (rspamd_log->cfg->log_color) {
-			iov[2].iov_base = "\033[0m";
-			iov[2].iov_len = sizeof ("\033[0m") - 1;
+		/* Rspamadm logging version */
+		mlen = strlen (message);
+
+		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
+			if (level_flags & G_LOG_LEVEL_INFO) {
+				/* White */
+				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;37m");
+			}
+			else if (level_flags & G_LOG_LEVEL_WARNING) {
+				/* Magenta */
+				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;32m");
+			}
+			else if (level_flags & G_LOG_LEVEL_CRITICAL) {
+				/* Red */
+				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[1;31m");
+			}
+
+			iov[0].iov_base = (void *) tmpbuf;
+			iov[0].iov_len = r;
+			iov[1].iov_base = (void *) message;
+			iov[1].iov_len = mlen;
+			r = 2;
+		}
+		else {
+			iov[0].iov_base = (void *) message;
+			iov[0].iov_len = mlen;
+			r = 1;
+		}
+
+
+		iov[r++].iov_base = (void *) &lf_chr;
+		iov[r++].iov_len = 1;
+
+		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
+			iov[r++].iov_base = "\033[0m";
+			iov[r++].iov_len = sizeof ("\033[0m") - 1;
 			/* Call helper (for buffering) */
-			file_log_helper (rspamd_log, iov, 3);
+			file_log_helper (rspamd_log, iov, r);
 		}
 		else {
 			/* Call helper (for buffering) */
-			file_log_helper (rspamd_log, iov, 2);
+			file_log_helper (rspamd_log, iov, r);
 		}
 	}
 }
