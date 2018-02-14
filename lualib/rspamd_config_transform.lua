@@ -152,16 +152,20 @@ local function symbol_transform(cfg, k, v)
       return
     end
   end
+  -- Now check what Rspamd knows about this symbol
+  local sym = rspamd_config:get_metric_symbol(k)
 
-  -- Otherwise we just use group 'ungrouped'
-  if not cfg.group.ungrouped then
-    cfg.group.ungrouped = {
-      symbols = {}
-    }
+  if not k or not k.group then
+    -- Otherwise we just use group 'ungrouped'
+    if not cfg.group.ungrouped then
+      cfg.group.ungrouped = {
+        symbols = {}
+      }
+    end
+
+    cfg.group.ungrouped.symbols[k] = v
+    logger.infox("adding symbol %s to the group 'ungrouped'", k)
   end
-
-  cfg.group.ungrouped.symbols[k] = v
-  logger.infox("adding symbol %s to the group 'ungrouped'", k)
 end
 
 local function test_groups(groups)
