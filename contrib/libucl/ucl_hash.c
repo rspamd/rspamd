@@ -424,11 +424,11 @@ void ucl_hash_reserve (ucl_hash_t *hashlin, size_t sz)
 			khash_t(ucl_hash_caseless_node) *h = (khash_t(
 					ucl_hash_caseless_node) *)
 					hashlin->hash;
-			kh_resize (ucl_hash_caseless_node, h, sz);
+			kh_resize (ucl_hash_caseless_node, h, sz * 2);
 		} else {
 			khash_t(ucl_hash_node) *h = (khash_t(ucl_hash_node) *)
 					hashlin->hash;
-			kh_resize (ucl_hash_node, h, sz);
+			kh_resize (ucl_hash_node, h, sz * 2);
 		}
 	}
 }
