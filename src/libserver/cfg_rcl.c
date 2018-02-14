@@ -3140,8 +3140,10 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
-				"non-empty array of strings is expected: %s",
-				ucl_object_key (obj));
+				"non-empty array of strings is expected: %s, "
+				"got: %s, of length: %d",
+				ucl_object_key (obj), ucl_object_type_to_string (obj->type),
+				obj->len);
 		return FALSE;
 	}
 
