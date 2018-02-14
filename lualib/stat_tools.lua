@@ -16,12 +16,11 @@ limitations under the License.
 
 local logger = require "rspamd_logger"
 local sqlite3 = require "rspamd_sqlite3"
-local redis = require "rspamd_redis"
 local util = require "rspamd_util"
 local lua_redis = require "lua_redis"
 local exports = {}
 
-local N = "stats_tools"
+local N = "stat_tools" -- luacheck: ignore (maybe unused)
 
 -- Performs synchronous conversion of redis schema
 local function convert_bayes_schema(redis_params,  symbol_spam, symbol_ham, expire)
@@ -35,7 +34,7 @@ local function convert_bayes_schema(redis_params,  symbol_spam, symbol_ham, expi
   -- So we can expire individual records, measure most popular elements by zranges,
   -- add new fields, such as tokens etc
 
-  local res,conn,_ = lua_redis.redis_connect_sync(redis_params, true)
+  local res,conn = lua_redis.redis_connect_sync(redis_params, true)
 
   if not res then
     logger.errx("cannot connect to redis server")
@@ -67,7 +66,8 @@ return nconverted
 ]]
 
   conn:add_cmd('EVAL', {lua_script, '3', symbol_spam, 'S', tostring(expire)})
-  local ret, res = conn:exec()
+  local ret
+  ret, res = conn:exec()
 
   if not ret then
     logger.errx('error converting symbol %s', symbol_spam)
@@ -105,7 +105,7 @@ end
 ]]
 
   conn:add_cmd('EVAL', {lua_script, '2', symbol_spam, 'learns_spam'})
-  local ret, _ = conn:exec()
+  ret = conn:exec()
 
   if not ret then
     logger.errx('error converting metadata for symbol %s', symbol_spam)
@@ -113,7 +113,7 @@ end
   end
 
   conn:add_cmd('EVAL', {lua_script, '2', symbol_ham, 'learns_ham'})
-  local ret, _ = conn:exec()
+  ret = conn:exec()
 
   if not ret then
     logger.errx('error converting metadata for symbol %s', symbol_ham)
@@ -156,7 +156,7 @@ local function convert_sqlite_to_redis(redis_params,
     return false
   end
 
-  local res,conn,_ = lua_redis.redis_connect_sync(redis_params, true)
+  local res,conn = lua_redis.redis_connect_sync(redis_params, true)
 
   if not res then
     logger.errx("cannot connect to redis server")

@@ -155,7 +155,7 @@ local function symbol_transform(cfg, k, v)
   -- Now check what Rspamd knows about this symbol
   local sym = rspamd_config:get_metric_symbol(k)
 
-  if not k or not k.group then
+  if not sym or not sym.group then
     -- Otherwise we just use group 'ungrouped'
     if not cfg.group.ungrouped then
       cfg.group.ungrouped = {
