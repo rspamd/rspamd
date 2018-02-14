@@ -786,6 +786,52 @@ lua_ucl_parser_parse_string (lua_State *L)
 	return ret;
 }
 
+struct _rspamd_lua_text {
+	const gchar *start;
+	guint len;
+	guint flags;
+};
+
+/***
+ * @method parser:parse_text(input)
+ * Parse UCL object from file.
+ * @param {string} input string to parse
+ * @return {bool[, string]} if res is `true` then file has been parsed successfully, otherwise an error string is also returned
+ */
+static int
+lua_ucl_parser_parse_text (lua_State *L)
+{
+	struct ucl_parser *parser;
+	struct _rspamd_lua_text *t;
+	enum ucl_parse_type type = UCL_PARSE_UCL;
+	int ret = 2;
+
+	parser = lua_ucl_parser_get (L, 1);
+	t = luaL_checkudata (L, 2, "rspamd{text}");
+
+	if (lua_type (L, 3) == LUA_TSTRING) {
+		type = lua_ucl_str_to_parse_type (lua_tostring (L, 3));
+	}
+
+	if (parser != NULL && t != NULL) {
+		if (ucl_parser_add_chunk_full (parser, (const unsigned char *)t->start,
+				t->len, 0, UCL_DUPLICATE_APPEND, type)) {
+			lua_pushboolean (L, true);
+			ret = 1;
+		}
+		else {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, ucl_parser_get_error (parser));
+		}
+	}
+	else {
+		lua_pushboolean (L, false);
+		lua_pushstring (L, "invalid arguments");
+	}
+
+	return ret;
+}
+
 /***
  * @method parser:get_object()
  * Get top object from parser and export it to lua representation.
@@ -1132,6 +1178,9 @@ lua_ucl_parser_mt (lua_State *L)
 
 	lua_pushcfunction (L, lua_ucl_parser_parse_string);
 	lua_setfield (L, -2, "parse_string");
+
+	lua_pushcfunction (L, lua_ucl_parser_parse_text);
+	lua_setfield (L, -2, "parse_text");
 
 	lua_pushcfunction (L, lua_ucl_parser_register_variable);
 	lua_setfield (L, -2, "register_variable");
