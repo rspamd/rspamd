@@ -29,6 +29,7 @@ local settings = {
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
 local fun = require "fun"
 local ucl = require("ucl")
 local E = {}
@@ -116,7 +117,7 @@ local function history_save(task)
     prefix = prefix .. '_zst'
   end
 
-  local ret, conn, _ = rspamd_redis_make_request(task,
+  local ret, conn, _ = lua_redis.rspamd_redis_make_request(task,
     redis_params, -- connect params
     nil, -- hash key
     true, -- is write
@@ -148,7 +149,7 @@ local function handle_history_request(task, conn, from, to, reset)
         conn:send_string('{"success":true}')
       end
     end
-    rspamd_redis_make_request(task,
+    lua_redis.rspamd_redis_make_request(task,
       redis_params, -- connect params
       nil, -- hash key
       true, -- is write
@@ -167,7 +168,7 @@ local function handle_history_request(task, conn, from, to, reset)
             fun.map(function(e)
               local _,dec = rspamd_util.zstd_decompress(e)
               if dec then
-                return tostring(dec)
+                return dec
               end
               return nil
             end, data)))
@@ -183,7 +184,7 @@ local function handle_history_request(task, conn, from, to, reset)
             end,
             fun.map(function(elt)
               local parser = ucl.parser()
-              local res,_ = parser:parse_string(elt)
+              local res,_ = parser:parse_text(elt)
 
               if res then
                 return true, parser:get_object()
@@ -204,13 +205,14 @@ local function handle_history_request(task, conn, from, to, reset)
         conn:send_error(504, '{"error": "' .. err .. '"}')
       end
     end
-    rspamd_redis_make_request(task,
+    lua_redis.rspamd_redis_make_request(task,
       redis_params, -- connect params
       nil, -- hash key
       false, -- is write
       redis_lrange_cb, --callback
       'LRANGE', -- command
-      {prefix, string.format('%d', from), string.format('%d', to)} -- arguments
+      {prefix, string.format('%d', from), string.format('%d', to)}, -- arguments
+      {opaque_data = true}
     )
   end
 end
