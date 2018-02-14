@@ -23,7 +23,7 @@ local exports = {}
 
 local N = "stats_tools"
 
--- Performs synchronous conversation of redis schema
+-- Performs synchronous conversion of redis schema
 local function convert_bayes_schema(redis_params,  symbol_spam, symbol_ham, expire)
 
   -- Old schema is the following one:
