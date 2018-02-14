@@ -2755,6 +2755,21 @@ ucl_object_new_full (ucl_type_t type, unsigned priority)
 	return new;
 }
 
+void ucl_object_reserve (ucl_object_t *obj, size_t reserved)
+{
+	if (obj->type == UCL_ARRAY) {
+		UCL_ARRAY_GET (vec, obj);
+
+		if (vec->m < reserved) {
+			/* Preallocate some space for arrays */
+			kv_resize (ucl_object_t *, *vec, reserved);
+		}
+	}
+	else if (obj->type == UCL_OBJECT) {
+		ucl_hash_reserve (obj->value.ov, reserved);
+	}
+}
+
 ucl_object_t*
 ucl_object_new_userdata (ucl_userdata_dtor dtor,
 		ucl_userdata_emitter emitter,

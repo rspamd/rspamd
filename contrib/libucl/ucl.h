@@ -463,6 +463,13 @@ UCL_EXTERN bool ucl_object_insert_key_merged (ucl_object_t *top, ucl_object_t *e
 		const char *key, size_t keylen, bool copy_key);
 
 /**
+ * Reserve space in ucl array or object for `elt` elements
+ * @param obj object to reserve
+ * @param reserved size to reserve in an object
+ */
+UCL_EXTERN void ucl_object_reserve (ucl_object_t *obj, size_t reserved);
+
+/**
  * Append an element to the end of array object
  * @param top destination object (must NOT be NULL)
  * @param elt element to append (must NOT be NULL)

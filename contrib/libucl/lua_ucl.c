@@ -355,7 +355,8 @@ ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags)
 			lua_pop (L, 1);
 		}
 	}
-	else if (is_array) {
+
+	if (is_array) {
 #if LUA_VERSION_NUM >= 502
 		max = lua_rawlen (L, idx);
 #else

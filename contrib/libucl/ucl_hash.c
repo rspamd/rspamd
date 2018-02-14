@@ -395,3 +395,25 @@ ucl_hash_delete (ucl_hash_t* hashlin, const ucl_object_t *obj)
 		}
 	}
 }
+
+void ucl_hash_reserve (ucl_hash_t *hashlin, size_t sz)
+{
+	if (hashlin == NULL) {
+		return;
+	}
+
+	if (sz > hashlin->ar.m) {
+		kv_resize (const ucl_object_t *, hashlin->ar, sz);
+
+		if (hashlin->caseless) {
+			khash_t(ucl_hash_caseless_node) *h = (khash_t(
+					ucl_hash_caseless_node) *)
+					hashlin->hash;
+			kh_resize (ucl_hash_caseless_node, h, sz);
+		} else {
+			khash_t(ucl_hash_node) *h = (khash_t(ucl_hash_node) *)
+					hashlin->hash;
+			kh_resize (ucl_hash_node, h, sz);
+		}
+	}
+}
