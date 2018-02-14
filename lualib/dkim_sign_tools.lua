@@ -37,7 +37,7 @@ local function prepare_dkim_signing(N, task, settings)
     rspamd_logger.debugm(N, task, 'mail is from address in sign_networks')
   elseif settings.sign_local and is_local then
     rspamd_logger.debugm(N, task, 'mail is from local address')
-  elseif settings.sign_received and not is_local and not auser then
+  elseif settings.sign_inbound and not is_local and not auser then
     rspamd_logger.debugm(N, task, 'mail was sent to us')
   else
     rspamd_logger.debugm(N, task, 'ignoring unauthenticated mail')
