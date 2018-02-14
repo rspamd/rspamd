@@ -469,7 +469,9 @@ end
 -- callback - function to be called upon request is completed
 -- command - redis command
 -- args - table of arguments
-local function rspamd_redis_make_request(task, redis_params, key, is_write, callback, command, args)
+-- extra_opts - table of optional request arguments
+local function rspamd_redis_make_request(task, redis_params, key, is_write,
+    callback, command, args, extra_opts)
   local addr
   local function rspamd_redis_make_request_cb(err, data)
     if err then
@@ -521,6 +523,12 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write, call
     args = args
   }
 
+  if extra_opts then
+    for k,v in pairs(extra_opts) do
+      options[k] = v
+    end
+  end
+
   if redis_params['password'] then
     options['password'] = redis_params['password']
   end
@@ -542,7 +550,8 @@ end
 exports.rspamd_redis_make_request = rspamd_redis_make_request
 exports.redis_make_request = rspamd_redis_make_request
 
-local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_write, callback, command, args)
+local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
+    is_write, callback, command, args, extra_opts)
   if not ev_base or not redis_params or not callback or not command then
     return false,nil,nil
   end
@@ -586,6 +595,12 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key, is_w
     cmd = command,
     args = args
   }
+  if extra_opts then
+    for k,v in pairs(extra_opts) do
+      options[k] = v
+    end
+  end
+
 
   if redis_params['password'] then
     options['password'] = redis_params['password']
