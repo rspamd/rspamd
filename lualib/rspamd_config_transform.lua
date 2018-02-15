@@ -164,7 +164,7 @@ local function symbol_transform(cfg, k, v)
     end
 
     cfg.group.ungrouped.symbols[k] = v
-    logger.infox("adding symbol %s to the group 'ungrouped'", k)
+    logger.debugx("adding symbol %s to the group 'ungrouped'", k)
   end
 end
 

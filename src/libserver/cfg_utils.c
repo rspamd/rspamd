@@ -1449,6 +1449,9 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	/* Search for symbol group */
 	if (group == NULL) {
 		group = "ungrouped";
+	}
+
+	if (strcmp (group, "ungrouped") == 0) {
 		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
 	}
 
