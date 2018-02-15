@@ -171,17 +171,27 @@ static gint
 lua_upstream_list_create (lua_State *L)
 {
 	struct upstream_list *new = NULL, **pnew;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_config *cfg = NULL;
 	const gchar *def;
 	guint default_port = 0;
+	gint top;
 
-	def = luaL_checkstring (L, 2);
-	if (def && cfg) {
-		if (lua_gettop (L) >= 3) {
-			default_port = luaL_checknumber (L, 3);
+
+	if (lua_type (L, 1) == LUA_TUSERDATA) {
+		cfg = lua_check_config (L, 1);
+		top = 2;
+	}
+	else {
+		top = 1;
+	}
+
+	def = luaL_checkstring (L, top);
+	if (def) {
+		if (lua_gettop (L) >= top + 1) {
+			default_port = luaL_checknumber (L, top + 1);
 		}
 
-		new = rspamd_upstreams_create (cfg->ups_ctx);
+		new = rspamd_upstreams_create (cfg ? cfg->ups_ctx : NULL);
 
 		if (rspamd_upstreams_parse_line (new, def, default_port, NULL)) {
 			pnew = lua_newuserdata (L, sizeof (struct upstream_list *));
