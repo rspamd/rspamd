@@ -292,7 +292,13 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
 
-	cfg->log_level = G_LOG_LEVEL_WARNING;
+	/* Setup logger */
+	if (verbose) {
+		cfg->log_level = G_LOG_LEVEL_DEBUG;
+	}
+	else {
+		cfg->log_level = G_LOG_LEVEL_INFO;
+	}
 
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	/* Avoid timestamps printing */
@@ -304,14 +310,6 @@ main (gint argc, gchar **argv, gchar **env)
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 	rspamd_config_post_load (cfg,
 			RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_NO_TLD);
-
-	/* Setup logger */
-	if (verbose) {
-		cfg->log_level = G_LOG_LEVEL_DEBUG;
-	}
-	else {
-		cfg->log_level = G_LOG_LEVEL_INFO;
-	}
 
 	gperf_profiler_init (cfg, "rspamadm");
 	setproctitle ("rspamdadm");
