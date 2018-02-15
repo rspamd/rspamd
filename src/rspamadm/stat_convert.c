@@ -24,6 +24,8 @@ static gchar *config_file = NULL;
 static gchar *symbol_ham = NULL;
 static gchar *symbol_spam = NULL;
 
+static gdouble expire = 0.0;
+
 /* Inputs */
 static gchar *spam_db = NULL;
 static gchar *ham_db = NULL;
@@ -51,6 +53,8 @@ static GOptionEntry entries[] = {
 				"Config file to read data from",      NULL},
 		{"reset", 'r', 0, G_OPTION_ARG_NONE, &reset_previous,
 				"Reset previous data instead of appending values", NULL},
+		{"expire", 'e', 0, G_OPTION_ARG_DOUBLE, &expire,
+				"Set expiration in seconds (can be fractional)", NULL},
 
 		{"symbol-spam", 0, 0, G_OPTION_ARG_STRING, &symbol_spam,
 				"Symbol for spam (e.g. BAYES_SPAM)", NULL},
@@ -83,6 +87,7 @@ rspamadm_statconvert_help (gboolean full_help)
 				"Where options are:\n\n"
 				"-c: config file to read data from\n"
 				"-r: reset previous data instead of increasing values\n"
+				"-e: set expire to that amount of seconds\n"
 				"** Or specify options directly **\n"
 				"--redis-host: output redis ip (in format ip:port)\n"
 				"--redis-db: output redis database\n"
@@ -235,6 +240,10 @@ rspamadm_statconvert (gint argc, gchar **argv)
 	ucl_object_insert_key (obj, ucl_object_frombool (reset_previous),
 			"reset_previous", 0, false);
 
+	if (expire != 0) {
+		ucl_object_insert_key (obj, ucl_object_fromdouble (expire),
+				"expire", 0, false);
+	}
 
 	rspamadm_execute_lua_ucl_subr (L,
 			argc,

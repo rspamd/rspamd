@@ -22,80 +22,100 @@ local exports = {}
 
 local E = {}
 
--- This function parses redis server definition using either
--- specific server string for this module or global
--- redis section
-local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
-
-  local result = {}
+local function try_load_redis_servers(options, rspamd_config, result)
   local default_port = 6379
   local default_timeout = 1.0
   local default_expand_keys = false
   local upstream_list = require "rspamd_upstream_list"
 
-  local function try_load_redis_servers(options)
-    -- Try to get read servers:
-    local upstreams_read, upstreams_write
+  -- Try to get read servers:
+  local upstreams_read, upstreams_write
 
-    if options['read_servers'] then
+  if options['read_servers'] then
+    if rspamd_config then
       upstreams_read = upstream_list.create(rspamd_config,
         options['read_servers'], default_port)
-    elseif options['servers'] then
+    else
+      upstreams_read = upstream_list.create(options['read_servers'],
+        default_port)
+    end
+  elseif options['servers'] then
+    if rspamd_config then
       upstreams_read = upstream_list.create(rspamd_config,
         options['servers'], default_port)
-    elseif options['server'] then
+    else
+      upstreams_read = upstream_list.create(options['servers'], default_port)
+    end
+  elseif options['server'] then
+    if rspamd_config then
       upstreams_read = upstream_list.create(rspamd_config,
         options['server'], default_port)
+    else
+      upstreams_read = upstream_list.create(options['server'], default_port)
     end
+  end
 
-    if upstreams_read then
-      if options['write_servers'] then
+  if upstreams_read then
+    if options['write_servers'] then
+      if rspamd_config then
         upstreams_write = upstream_list.create(rspamd_config,
           options['write_servers'], default_port)
       else
-        upstreams_write = upstreams_read
+        upstreams_write = upstream_list.create(options['write_servers'],
+          default_port)
       end
-    end
-
-    -- Store options
-    if not result['timeout'] or result['timeout'] == default_timeout then
-      if options['timeout'] then
-        result['timeout'] = tonumber(options['timeout'])
-      else
-        result['timeout'] = default_timeout
-      end
-    end
-
-    if options['prefix'] and not result['prefix'] then
-      result['prefix'] = options['prefix']
-    end
-
-    if type(options['expand_keys']) == 'boolean' then
-      result['expand_keys'] = options['expand_keys']
     else
-      result['expand_keys'] = default_expand_keys
+      upstreams_write = upstreams_read
     end
-
-    if not result['db'] then
-      if options['db'] then
-        result['db'] = tostring(options['db'])
-      elseif options['dbname'] then
-        result['db'] = tostring(options['dbname'])
-      end
-    end
-    if options['password'] and not result['password'] then
-      result['password'] = options['password']
-    end
-
-    if upstreams_write and upstreams_read then
-      result.read_servers = upstreams_read
-      result.write_servers = upstreams_write
-
-      return true
-    end
-
-    return false
   end
+
+  -- Store options
+  if not result['timeout'] or result['timeout'] == default_timeout then
+    if options['timeout'] then
+      result['timeout'] = tonumber(options['timeout'])
+    else
+      result['timeout'] = default_timeout
+    end
+  end
+
+  if options['prefix'] and not result['prefix'] then
+    result['prefix'] = options['prefix']
+  end
+
+  if type(options['expand_keys']) == 'boolean' then
+    result['expand_keys'] = options['expand_keys']
+  else
+    result['expand_keys'] = default_expand_keys
+  end
+
+  if not result['db'] then
+    if options['db'] then
+      result['db'] = tostring(options['db'])
+    elseif options['dbname'] then
+      result['db'] = tostring(options['dbname'])
+    end
+  end
+  if options['password'] and not result['password'] then
+    result['password'] = options['password']
+  end
+
+  if upstreams_write and upstreams_read then
+    result.read_servers = upstreams_read
+    result.write_servers = upstreams_write
+
+    return true
+  end
+
+  return false
+end
+
+exports.try_load_redis_servers = try_load_redis_servers
+
+-- This function parses redis server definition using either
+-- specific server string for this module or global
+-- redis section
+local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
+  local result = {}
 
   -- Try local options
   local opts
@@ -109,14 +129,14 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     local ret
 
     if opts.redis then
-      ret = try_load_redis_servers(opts.redis, result)
+      ret = try_load_redis_servers(opts.redis, rspamd_config, result)
 
       if ret then
         return result
       end
     end
 
-    ret = try_load_redis_servers(opts, result)
+    ret = try_load_redis_servers(opts, rspamd_config, result)
 
     if ret then
       return result
@@ -132,12 +152,12 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     local ret
 
     if opts[module_name] then
-      ret = try_load_redis_servers(opts[module_name], result)
+      ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
       if ret then
         return result
       end
     else
-      ret = try_load_redis_servers(opts, result)
+      ret = try_load_redis_servers(opts, rspamd_config, result)
 
       -- Exclude disabled
       if opts['disabled_modules'] then
