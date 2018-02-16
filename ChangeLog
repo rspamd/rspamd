@@ -1,3 +1,51 @@
+1.6.6: 16 Feb 2018
+	* [CritFix] Add sanity guards for badly broken HTML
+	* [CritFix] Another errors path handling fix
+	* [CritFix] Fix ARC chain verification
+	* [CritFix] Fix crash in milter errors handler
+	* [Feature] Allow to insert headers into specific position
+	* [Feature] Allow to receive signing keys from mempool vars
+	* [Feature] Authentication-Results: support hiding usernames
+	* [Fix] Another try to deal with #1998
+	* [Fix] Another try to fix #1998
+	* [Fix] Better handling of the legacy protocol
+	* [Fix] Check decoded headers sanity (e.g. by excluding \0)
+	* [Fix] Deal with nan and inf encoding in json/ucl
+	* [Fix] Deal with URLs wrapped in [] in text parts
+	* [Fix] DKIM signing: allow for auth_only to be false
+	* [Fix] Do not crash on empty subtype
+	* [Fix] Do not fail rbl plugin when there are no received or emails
+	* [Fix] Do not skip the last character
+	* [Fix] Do not try to dereference last character
+	* [Fix] Do not try to sign unknown domains
+	* [Fix] Exim Received header protocol parsing
+	* [Fix] First load selector_map and path_map. And only return false when domain not found if try_fallback is false
+	* [Fix] Fix bad archive characters stripping
+	* [Fix] Fix comparision
+	* [Fix] Fix connecting to a unix socket in rspamadm statconvert
+	* [Fix] Fix empty headers simple canonicalization
+	* [Fix] Fix extra hits in PCRE mode for regular expressions
+	* [Fix] Fix parsing of the per-user script
+	* [Fix] Fix processing of skip-hashes in fuzzy storage
+	* [Fix] Fix Redis timeout setup
+	* [Fix] Fix sanity checks on macro value
+	* [Fix] Fix text splitting: stack overflow (too many captures)
+	* [Fix] Fix urls/emails distinguishing found in queries
+	* [Fix] F-PROT Antivirus: only check return code to determine infection
+	* [Fix] Metadata exporter: check IP sanity
+	* [Fix] Multimap: received: filtering of artificial header
+	* [Fix] Plan new event on HTTP errors
+	* [Fix] Plug another possible memory leak
+	* [Fix] Remove hop-by-hop headers in proxy
+	* [Fix] Sanitize IP in history redis
+	* [Fix] Setting check_local / check_authed in plugins (#1954)
+	* [Fix] Settings: avoid checking invalid IP (#1981)
+	* [Fix] Try harder in passing IPv6 addresses
+	* [Fix] WebUI: use relative path for savemap (#1943)
+	* [WebUI] Fix message count in throughput summary (#1724)
+	* [WebUI] Fix NaNs display on Throughput graph
+	* [WebUI] Restore passwordless login support (#2003)
+
 1.6.5: 22 Oct 2017
 	* [CritFix] Another portion of tokenization fixes
 	* [CritFix] Fix memory leak in spf caching logic
