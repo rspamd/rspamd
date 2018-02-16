@@ -138,7 +138,8 @@ static void
 direct_write_log_line (rspamd_logger_t *rspamd_log,
 		void *data,
 		gsize count,
-		gboolean is_iov)
+		gboolean is_iov,
+		gint level_flags)
 {
 	gchar errmsg[128];
 	struct iovec *iov;
@@ -147,7 +148,17 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 	gint fd;
 
 	if (rspamd_log->type == RSPAMD_LOG_CONSOLE) {
-		fd = STDERR_FILENO;
+
+		if (rspamd_log->flags & RSPAMD_LOG_FLAG_RSPAMADM) {
+			fd = STDOUT_FILENO;
+
+			if (level_flags & G_LOG_LEVEL_CRITICAL) {
+				fd = STDERR_FILENO;
+			}
+		}
+		else {
+			fd = STDERR_FILENO;
+		}
 	}
 	else {
 		fd = rspamd_log->fd;
@@ -192,7 +203,7 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 		/* We cannot write message to file, so we need to detect error and make decision */
 		if (errno == EINTR) {
 			/* Try again */
-			direct_write_log_line (rspamd_log, data, count, is_iov);
+			direct_write_log_line (rspamd_log, data, count, is_iov, level_flags);
 			return;
 		}
 
@@ -522,7 +533,7 @@ rspamd_log_flush (rspamd_logger_t *rspamd_log)
 		direct_write_log_line (rspamd_log,
 				rspamd_log->io_buf.buf,
 				rspamd_log->io_buf.used,
-				FALSE);
+				FALSE, rspamd_log->cfg->log_level);
 		rspamd_log->io_buf.used = 0;
 	}
 }
@@ -764,14 +775,15 @@ fill_buffer (rspamd_logger_t *rspamd_log, const struct iovec *iov, gint iovcnt)
 static void
 file_log_helper (rspamd_logger_t *rspamd_log,
 		const struct iovec *iov,
-		guint iovcnt)
+		guint iovcnt,
+		gint level_flags)
 {
 	size_t len = 0;
 	guint i;
 
 	if (!rspamd_log->is_buffered) {
 		/* Write string directly */
-		direct_write_log_line (rspamd_log, (void *) iov, iovcnt, TRUE);
+		direct_write_log_line (rspamd_log, (void *) iov, iovcnt, TRUE, level_flags);
 	}
 	else {
 		/* Calculate total length */
@@ -782,7 +794,7 @@ file_log_helper (rspamd_logger_t *rspamd_log,
 		if (rspamd_log->io_buf.size < len) {
 			/* Buffer is too small to hold this string, so write it directly */
 			rspamd_log_flush (rspamd_log);
-			direct_write_log_line (rspamd_log, (void *) iov, iovcnt, TRUE);
+			direct_write_log_line (rspamd_log, (void *) iov, iovcnt, TRUE, level_flags);
 		}
 		else if (rspamd_log->io_buf.used + len >= rspamd_log->io_buf.size) {
 			/* Buffer is full, try to write it directly */
@@ -1089,11 +1101,11 @@ file_log_function (const gchar *module, const gchar *id,
 			iov[4].iov_base = "\033[0m";
 			iov[4].iov_len = sizeof ("\033[0m") - 1;
 			/* Call helper (for buffering) */
-			file_log_helper (rspamd_log, iov, 5);
+			file_log_helper (rspamd_log, iov, 5, level_flags);
 		}
 		else {
 			/* Call helper (for buffering) */
-			file_log_helper (rspamd_log, iov, 4);
+			file_log_helper (rspamd_log, iov, 4, level_flags);
 		}
 	}
 	else {
@@ -1134,11 +1146,11 @@ file_log_function (const gchar *module, const gchar *id,
 			iov[r++].iov_base = "\033[0m";
 			iov[r++].iov_len = sizeof ("\033[0m") - 1;
 			/* Call helper (for buffering) */
-			file_log_helper (rspamd_log, iov, r);
+			file_log_helper (rspamd_log, iov, r, level_flags);
 		}
 		else {
 			/* Call helper (for buffering) */
-			file_log_helper (rspamd_log, iov, r);
+			file_log_helper (rspamd_log, iov, r, level_flags);
 		}
 	}
 }
