@@ -927,8 +927,16 @@ lua_redis_make_request_sync (lua_State *L)
 
 	if (ret) {
 		double_to_tv (timeout, &tv);
-		ctx = redisConnectWithTimeout (rspamd_inet_address_to_string (addr->addr),
-				rspamd_inet_address_get_port (addr->addr), tv);
+
+		if (rspamd_inet_address_get_af (addr->addr) == AF_UNIX) {
+			ctx = redisConnectUnixWithTimeout (
+					rspamd_inet_address_to_string (addr->addr), tv);
+		}
+		else {
+			ctx = redisConnectWithTimeout (
+					rspamd_inet_address_to_string (addr->addr),
+					rspamd_inet_address_get_port (addr->addr), tv);
+		}
 
 		if (ip) {
 			rspamd_inet_address_free (ip);
@@ -1086,9 +1094,16 @@ lua_redis_connect_sync (lua_State *L)
 		ctx = g_slice_alloc0 (sizeof (struct lua_redis_ctx));
 		REF_INIT_RETAIN (ctx, lua_redis_dtor);
 		ctx->flags = flags;
-		ctx->d.sync = redisConnectWithTimeout (
-				rspamd_inet_address_to_string (addr->addr),
-				rspamd_inet_address_get_port (addr->addr), tv);
+
+		if (rspamd_inet_address_get_af (addr->addr) == AF_UNIX) {
+			ctx->d.sync = redisConnectUnixWithTimeout (
+					rspamd_inet_address_to_string (addr->addr), tv);
+		}
+		else {
+			ctx->d.sync = redisConnectWithTimeout (
+					rspamd_inet_address_to_string (addr->addr),
+					rspamd_inet_address_get_port (addr->addr), tv);
+		}
 
 		if (ip) {
 			rspamd_inet_address_free (ip);

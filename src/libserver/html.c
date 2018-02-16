@@ -1612,8 +1612,9 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 
 static void
 rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
-		GHashTable *target)
+		GHashTable *tbl_urls, GHashTable *tbl_emails)
 {
+	GHashTable *target_tbl;
 	struct rspamd_url *query_url, *existing;
 	gchar *url_str;
 	gint rc;
@@ -1631,13 +1632,20 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 					pool);
 
 			if (rc == URI_ERRNO_OK &&
-					url->hostlen > 0) {
+					query_url->hostlen > 0) {
 				msg_debug_html ("found url %s in query of url"
 						" %*s", url_str, url->querylen, url->query);
 
-				if ((existing = g_hash_table_lookup (target,
+				if (query_url->protocol == PROTOCOL_MAILTO) {
+					target_tbl = tbl_emails;
+				}
+				else {
+					target_tbl = tbl_urls;
+				}
+
+				if ((existing = g_hash_table_lookup (target_tbl,
 						query_url)) == NULL) {
-					g_hash_table_insert (target,
+					g_hash_table_insert (target_tbl,
 							query_url,
 							query_url);
 				}
@@ -2556,7 +2564,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 								if (turl == NULL && url != NULL) {
 									rspamd_process_html_url (pool,
 											url,
-											target_tbl);
+											urls, emails);
 								}
 							}
 
