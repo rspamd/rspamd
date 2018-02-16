@@ -1139,11 +1139,11 @@ file_log_function (const gchar *module, const gchar *id,
 		}
 
 
-		iov[r++].iov_base = (void *) &lf_chr;
+		iov[r].iov_base = (void *) &lf_chr;
 		iov[r++].iov_len = 1;
 
 		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
-			iov[r++].iov_base = "\033[0m";
+			iov[r].iov_base = "\033[0m";
 			iov[r++].iov_len = sizeof ("\033[0m") - 1;
 			/* Call helper (for buffering) */
 			file_log_helper (rspamd_log, iov, r, level_flags);
