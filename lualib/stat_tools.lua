@@ -73,7 +73,7 @@ return nconverted
     logger.errx('error converting symbol %s', symbol_spam)
     return false
   else
-    logger.infox('converted %s elements from symbol %s', res, symbol_spam)
+    logger.messagex('converted %s elements from symbol %s', res, symbol_spam)
   end
 
   conn:add_cmd('EVAL', {lua_script, '3', symbol_ham, 'H', tostring(expire)})
@@ -83,7 +83,7 @@ return nconverted
     logger.errx('error converting symbol %s', symbol_ham)
     return false
   else
-    logger.infox('converted %s elements from symbol %s', res, symbol_ham)
+    logger.messagex('converted %s elements from symbol %s', res, symbol_ham)
   end
 
   -- We can now convert metadata: set + learned + version
@@ -176,7 +176,7 @@ end
 ]]
     -- Common keys
     for _,sym in ipairs({symbol_spam, symbol_ham}) do
-      logger.infox('Cleaning up old data for %s', sym)
+      logger.messagex('Cleaning up old data for %s', sym)
       conn:add_cmd('EVAL', {script, '1', sym})
       conn:exec()
       conn:add_cmd('DEL', {sym .. "_version"})
@@ -186,7 +186,7 @@ end
 
     if learn_cache_db then
       -- Cleanup learned_cache
-      logger.infox('Cleaning up old data learned cache')
+      logger.messagex('Cleaning up old data learned cache')
       conn:add_cmd('DEL', {"learned_ids"})
       conn:exec()
     end
@@ -312,7 +312,7 @@ end
   end
 
   if learn_cache_db then
-    logger.infox('Convert learned ids from %s', learn_cache_db)
+    logger.messagex('Convert learned ids from %s', learn_cache_db)
     local db = sqlite3.open(learn_cache_db)
     local ret = true
     local err_str
@@ -349,14 +349,14 @@ end
     end
 
     if ret then
-      logger.infox('Converted %d cached items from sqlite3 learned cache to redis',
+      logger.messagex('Converted %d cached items from sqlite3 learned cache to redis',
         converted)
     else
       logger.errx('Error occurred during sending data to redis: ' .. err_str)
     end
   end
 
-  logger.infox('Migrated %d tokens for %d users for symbol %s',
+  logger.messagex('Migrated %d tokens for %d users for symbol %s',
       total, nusers, res['symbol'])
 end
 

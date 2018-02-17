@@ -27,9 +27,9 @@ return function (_, res)
 
       return false
     end
-    logger.infox('Converted classifier to the from sqlite to redis')
-    logger.infox('Suggested configuration:')
-    logger.infox(ucl.to_format(stat_tools.redis_classifier_from_sqlite(cls),
+    logger.messagex('Converted classifier to the from sqlite to redis')
+    logger.messagex('Suggested configuration:')
+    logger.messagex(ucl.to_format(stat_tools.redis_classifier_from_sqlite(cls),
       'config'))
   end
 end
