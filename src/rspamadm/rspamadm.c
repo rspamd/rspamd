@@ -297,7 +297,7 @@ main (gint argc, gchar **argv, gchar **env)
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
-		cfg->log_level = G_LOG_LEVEL_INFO;
+		cfg->log_level = G_LOG_LEVEL_MESSAGE;
 	}
 
 	cfg->log_type = RSPAMD_LOG_CONSOLE;

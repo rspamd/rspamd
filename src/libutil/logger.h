@@ -200,6 +200,10 @@ extern guint rspamd_task_log_id;
         NULL, NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_notice(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
+        NULL, NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 #define msg_debug(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
         NULL, NULL, \
         G_STRFUNC, \
@@ -217,6 +221,10 @@ extern guint rspamd_task_log_id;
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_task(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_notice_task(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
