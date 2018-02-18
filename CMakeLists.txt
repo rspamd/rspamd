@@ -920,6 +920,15 @@ CHECK_C_SOURCE_COMPILES(
 	int main(int argc, char** argv) {
   		return cmkcheckweak == NULL;
 	}" HAVE_WEAK_SYMBOLS)
+CHECK_C_SOURCE_COMPILES(
+		"#include <time.h>
+		extern char *tzname[2];
+		extern long timezone;
+		extern int daylight;
+	int main(int argc, char** argv) {
+		tzset();
+		return timezone;
+	}" HAVE_SANE_TZSET)
 
 IF(WITH_ICONV)
 	CHECK_C_SOURCE_COMPILES("

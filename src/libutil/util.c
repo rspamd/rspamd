@@ -2762,6 +2762,7 @@ rspamd_gmtime (gint64 ts, struct tm *dest)
 	dest->tm_zone = "GMT";
 }
 
+#ifdef HAVE_SANE_TZSET
 extern char *tzname[2];
 extern long timezone;
 extern int daylight;
@@ -2783,6 +2784,14 @@ void rspamd_localtime (gint64 ts, struct tm *dest)
 	dest->tm_gmtoff = timezone;
 #endif
 }
+
+#else
+void rspamd_localtime (gint64 ts, struct tm *dest)
+{
+	time_t t = ts;
+	localtime_r (&t, dest);
+}
+#endif
 
 gboolean
 rspamd_fstring_gzip (rspamd_fstring_t **in)
