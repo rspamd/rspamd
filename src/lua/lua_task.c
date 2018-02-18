@@ -3383,7 +3383,7 @@ lua_task_get_date (lua_State *L)
 				time_t tt;
 
 				tt = tim;
-				localtime_r (&tt, &t);
+				rspamd_localtime (tt, &t);
 #if !defined(__sun)
 				t.tm_gmtoff = 0;
 #endif
@@ -3404,7 +3404,7 @@ lua_task_get_date (lua_State *L)
 				tt = rspamd_parse_smtp_date (h->decoded, strlen (h->decoded));
 
 				if (!gmt) {
-					localtime_r (&tt, &t);
+					rspamd_localtime (tt, &t);
 #if !defined(__sun)
 					t.tm_gmtoff = 0;
 #endif

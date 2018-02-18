@@ -791,7 +791,7 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 	gchar timebuf[32];
 	gpointer k, v;
 	struct rspamd_worker_session_elt *elt;
-	struct tm *tms;
+	struct tm tms;
 	GPtrArray *res;
 	guint i;
 
@@ -808,8 +808,8 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 		g_ptr_array_sort (res, rspamd_session_cache_sort_cmp);
 
 		PTR_ARRAY_FOREACH (res, i, elt) {
-			tms = localtime (&elt->when);
-			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+			rspamd_localtime (elt->when, &tms);
+			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tms);
 
 			msg_warn ("redundant session; ptr: %p, "
 					"tag: %s, refcount: %d, time: %s",

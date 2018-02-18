@@ -1745,15 +1745,14 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 {
 	gchar datebuf[64];
 	gint meth_len = 0;
-	struct tm t, *ptm;
+	struct tm t;
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
 		if (msg->method < HTTP_SYMBOLS) {
 			rspamd_ftok_t status;
 
-			ptm = gmtime (&msg->date);
-			t = *ptm;
+			rspamd_gmtime (msg->date, &t);
 			rspamd_snprintf (datebuf, sizeof(datebuf),
 					"%s, %02d %s %4d %02d:%02d:%02d GMT", http_week[t.tm_wday],
 					t.tm_mday, http_month[t.tm_mon], t.tm_year + 1900,
@@ -3689,7 +3688,7 @@ rspamd_http_date_format (gchar *buf, gsize len, time_t time)
 {
 	struct tm tms;
 
-	tms = *gmtime (&time);
+	rspamd_gmtime (time, &tms);
 
 	return rspamd_snprintf (buf, len, "%s, %02d %s %4d %02d:%02d:%02d GMT",
 			http_week[tms.tm_wday], tms.tm_mday,

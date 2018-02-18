@@ -479,14 +479,14 @@ guint64 rspamd_tm_to_time (const struct tm *tm, glong tz);
  * @param ts
  * @param dest
  */
-void rspamd_gmtime (guint64 ts, struct tm *dest);
+void rspamd_gmtime (gint64 ts, struct tm *dest);
 
 /**
  * Split unix timestamp into struct tm using local timezone
  * @param ts
  * @param dest
  */
-void rspamd_localtime (guint64 ts, struct tm *dest);
+void rspamd_localtime (gint64 ts, struct tm *dest);
 
 #define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = g_ptr_array_index((ar), (i))) || 1); ++(i))
 

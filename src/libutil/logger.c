@@ -866,7 +866,7 @@ file_log_function (const gchar *module, const gchar *id,
 	static gchar tmpbuf[256], timebuf[64], modulebuf[64];
 	gchar *m;
 	gdouble now;
-	struct tm *tms;
+	struct tm tms;
 	struct iovec iov[5];
 	gulong r = 0, mr = 0;
 	guint64 cksum;
@@ -1011,8 +1011,8 @@ file_log_function (const gchar *module, const gchar *id,
 			time_t sec = now;
 			gsize r;
 
-			tms = localtime (&sec);
-			r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+			rspamd_localtime (sec, &tms);
+			r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tms);
 
 			if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
 				gchar usec_buf[16];

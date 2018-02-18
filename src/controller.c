@@ -1352,7 +1352,7 @@ rspamd_controller_handle_legacy_history (
 {
 	struct roll_history_row *row, *copied_rows;
 	guint i, rows_proc, row_num;
-	struct tm *tm;
+	struct tm tm;
 	gchar timebuf[32];
 	ucl_object_t *top, *obj;
 
@@ -1373,8 +1373,8 @@ rspamd_controller_handle_legacy_history (
 		row = &copied_rows[row_num];
 		/* Get only completed rows */
 		if (row->completed) {
-			tm = localtime (&row->tv.tv_sec);
-			strftime (timebuf, sizeof (timebuf) - 1, "%Y-%m-%d %H:%M:%S", tm);
+			rspamd_localtime (row->tv.tv_sec, &tm);
+			strftime (timebuf, sizeof (timebuf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 			obj = ucl_object_typed_new (UCL_OBJECT);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					timebuf),		  "time", 0, false);

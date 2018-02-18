@@ -2669,7 +2669,7 @@ rspamd_tm_to_time (const struct tm *tm, glong tz)
 
 
 void
-rspamd_gmtime (guint64 ts, struct tm *dest)
+rspamd_gmtime (gint64 ts, struct tm *dest)
 {
 	guint64 days, secs, years;
 	int remdays, remsecs, remyears;
@@ -2756,7 +2756,9 @@ rspamd_gmtime (guint64 ts, struct tm *dest)
 	dest->tm_hour = remsecs / 3600;
 	dest->tm_min = remsecs / 60 % 60;
 	dest->tm_sec = remsecs % 60;
+#if !defined(__sun)
 	dest->tm_gmtoff = 0;
+#endif
 	dest->tm_zone = "GMT";
 }
 
@@ -2764,9 +2766,9 @@ extern char *tzname[2];
 extern long timezone;
 extern int daylight;
 
-void rspamd_localtime (guint64 ts, struct tm *dest)
+void rspamd_localtime (gint64 ts, struct tm *dest)
 {
-	static guint64 last_tzcheck = 0;
+	static gint64 last_tzcheck = 0;
 	static const guint tz_check_interval = 120;
 
 	if (ts - last_tzcheck > tz_check_interval) {
@@ -2777,7 +2779,9 @@ void rspamd_localtime (guint64 ts, struct tm *dest)
 	ts += timezone;
 	rspamd_gmtime (ts, dest);
 	dest->tm_zone = daylight ? (tzname[1] ? tzname[1] : tzname[0]) : tzname[0];
+#if !defined(__sun)
 	dest->tm_gmtoff = timezone;
+#endif
 }
 
 gboolean
