@@ -2667,6 +2667,119 @@ rspamd_tm_to_time (const struct tm *tm, glong tz)
 	return result;
 }
 
+
+void
+rspamd_gmtime (guint64 ts, struct tm *dest)
+{
+	guint64 days, secs, years;
+	int remdays, remsecs, remyears;
+	int leap_400_cycles, leap_100_cycles, leap_4_cycles;
+	int months;
+	int wday, yday, leap;
+	/* From March */
+	static const uint8_t days_in_month[] = {31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29};
+	static const guint64 leap_epoch = 946684800ULL + 86400 * (31 + 29);
+	static const guint64 days_per_400y = 365*400 + 97;
+	static const guint64 days_per_100y = 365*100 + 24;
+	static const guint64 days_per_4y = 365*4 + 1;
+
+	secs = ts - leap_epoch;
+	days = secs / 86400;
+	remsecs = secs % 86400;
+
+	if (remsecs < 0) {
+		remsecs += 86400;
+		days--;
+	}
+
+	wday = (3 + days) % 7;
+	if (wday < 0) {
+		wday += 7;
+	}
+
+	/* Deal with gregorian adjustments */
+	leap_400_cycles = days / days_per_400y;
+	remdays = days % days_per_400y;
+
+	if (remdays < 0) {
+		remdays += days_per_400y;
+		leap_400_cycles--;
+	}
+
+	leap_100_cycles = remdays / days_per_100y;
+	if (leap_100_cycles == 4) {
+		/* 400 years */
+		leap_100_cycles--;
+	}
+
+	remdays -= leap_100_cycles * days_per_100y;
+
+	leap_4_cycles = remdays / days_per_4y;
+	if (leap_4_cycles == 25) {
+		/* 100 years */
+		leap_4_cycles--;
+	}
+	remdays -= leap_4_cycles * days_per_4y;
+
+	remyears = remdays / 365;
+	if (remyears == 4) {
+		/* Ordinary leap year */
+		remyears--;
+	}
+	remdays -= remyears * 365;
+
+	leap = !remyears && (leap_4_cycles || !leap_100_cycles);
+	yday = remdays + 31 + 28 + leap;
+
+	if (yday >= 365 + leap) {
+		yday -= 365 + leap;
+	}
+
+	years = remyears + 4 * leap_4_cycles + 100 * leap_100_cycles +
+			400ULL * leap_400_cycles;
+
+	for (months=0; days_in_month[months] <= remdays; months++) {
+		remdays -= days_in_month[months];
+	}
+
+	if (months >= 10) {
+		months -= 12;
+		years++;
+	}
+
+	dest->tm_year = years + 100;
+	dest->tm_mon = months + 2;
+	dest->tm_mday = remdays + 1;
+	dest->tm_wday = wday;
+	dest->tm_yday = yday;
+
+	dest->tm_hour = remsecs / 3600;
+	dest->tm_min = remsecs / 60 % 60;
+	dest->tm_sec = remsecs % 60;
+	dest->tm_gmtoff = 0;
+	dest->tm_zone = "GMT";
+}
+
+extern char *tzname[2];
+extern long timezone;
+extern int daylight;
+
+void rspamd_localtime (guint64 ts, struct tm *dest)
+{
+	static guint64 last_tzcheck = 0;
+	static const guint tz_check_interval = 120;
+
+	if (ts - last_tzcheck > tz_check_interval) {
+		tzset ();
+		last_tzcheck = ts;
+	}
+
+	ts += timezone;
+	rspamd_gmtime (ts, dest);
+	dest->tm_zone = daylight ? (tzname[1] ? tzname[1] : tzname[0]) : tzname[0];
+	dest->tm_gmtoff = timezone;
+}
+
 gboolean
 rspamd_fstring_gzip (rspamd_fstring_t **in)
 {
