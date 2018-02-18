@@ -177,7 +177,7 @@ local function elastic_collect(task)
   if not enabled then return end
   if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local row = {['rspam_meta'] = get_general_metadata(task),
-    ['@timestamp'] = tostring(util.get_time()).."000"}
+    ['@timestamp'] = tostring(util.get_time() * 1000)}
   table.insert(rows, row)
   nrows = nrows + 1
   if nrows > settings['limit'] then
