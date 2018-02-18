@@ -232,7 +232,7 @@ end
 
 local section = rspamd_config:get_all_opt("dynamic_conf")
 if section then
-  redis_params = rspamd_parse_redis_server('dynamic_conf')
+  redis_params = rspamd_redis.parse_redis_server('dynamic_conf')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     return
