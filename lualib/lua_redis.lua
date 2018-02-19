@@ -710,11 +710,14 @@ local function load_script_task(script, task)
     opt.task = task
     opt.callback = function(err, data)
       if err then
+        logger.errx(task, 'cannot upload script to %s: %s',
+          opt.upstream:get_addr(), err)
         opt.upstream:fail()
       else
         opt.upstream:ok()
         logger.infox(task,
-          "loaded redis script with id %s, sha: %s", script.id, data)
+          "uploaded redis script to %s with id %s, sha: %s",
+          opt.upstream:get_addr(), script.id, data)
         script.sha = data -- We assume that sha is the same on all servers
       end
       script.in_flight = script.in_flight - 1
@@ -727,7 +730,8 @@ local function load_script_task(script, task)
     local ret = rspamd_redis.make_request(opt)
 
     if not ret then
-      logger.errx('cannot execute redis request to load script')
+      logger.errx('cannot execute redis request to load script on %s',
+        opt.upstream:get_addr())
       script.in_flight = script.in_flight - 1
       opt.upstream:fail()
     end
@@ -747,11 +751,14 @@ local function load_script_taskless(script, cfg, ev_base)
     opt.ev_base = ev_base
     opt.callback = function(err, data)
       if err then
+        logger.errx(cfg, 'cannot upload script to %s: %s',
+          opt.upstream:get_addr(), err)
         opt.upstream:fail()
       else
         opt.upstream:ok()
         logger.infox(cfg,
-          "loaded redis script with id %s, sha: %s", script.id, data)
+          "uploaded redis script to %s with id %s, sha: %s",
+            opt.upstream:get_addr(), script.id, data)
         script.sha = data -- We assume that sha is the same on all servers
       end
       script.in_flight = script.in_flight - 1
@@ -763,7 +770,8 @@ local function load_script_taskless(script, cfg, ev_base)
     local ret = rspamd_redis.make_request(opt)
 
     if not ret then
-      logger.errx('cannot execute redis request to load script')
+      logger.errx('cannot execute redis request to load script on %s',
+        opt.upstream:get_addr())
       script.in_flight = script.in_flight - 1
       opt.upstream:fail()
     end
