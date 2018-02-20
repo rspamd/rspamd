@@ -37,6 +37,7 @@ function($, _, Humanize) {
       '=': '&#x3D;'
     };
     var htmlEscaper = /[&<>"'\/`=]/g;
+    var symbolDescriptions = {};
 
     EscapeHTML = function(string) {
       return ('' + string).replace(htmlEscaper, function(match) {
@@ -67,7 +68,9 @@ function($, _, Humanize) {
                             sym.name = key;
                         }
                         sym.name = EscapeHTML(key);
-                        sym.description = EscapeHTML(sym.description);
+                        if (sym.description) {
+	                        sym.description = EscapeHTML(sym.description);
+                        }
 
                         if (sym.options) {
                             escape_HTML_array(sym.options);
@@ -119,8 +122,15 @@ function($, _, Humanize) {
             preprocess_item(item);
             Object.keys(item.symbols).map(function(key) {
                 var sym = item.symbols[key];
-             
-                var str = '<strong>' + sym.name + '</strong>' + "(" + sym.score + ")";
+
+                if (sym.description) {
+	                var str = '<strong><abbr data-sym-key="' + key + '">' + sym.name + '</abbr></strong>' + "(" + sym.score + ")";
+
+	                // Store description for tooltip
+	                symbolDescriptions[key] = sym.description;
+                } else {
+	                var str = '<strong>' + sym.name + '</strong>' + "(" + sym.score + ")";
+                }
 
                if (sym.options) {
                    str += '[' + sym.options.join(",") + "]";
@@ -511,8 +521,20 @@ function($, _, Humanize) {
                         "sorting": {
                             "enabled": true
                         },
-                        components: {
-                            filtering: FooTable.actionFilter
+                        "components": {
+                            "filtering": FooTable.actionFilter
+                        },
+                        "on": {
+	                        "ready.ft.table": function () {
+		                        // Update symbol description tooltips
+		                        $.each(symbolDescriptions, function (key, description) {
+			                        $('abbr[data-sym-key=' + key + ']').tooltip({
+				                        "placement": "bottom",
+				                        "html": true,
+				                        "title": description
+			                        });
+		                        });
+	                        }
                         }
                     });
                 } else {
