@@ -2810,7 +2810,7 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 		return FALSE;
 	}
 
-	comp = rspamd_fstring_sized_new (MIN (buf->len, 32768));
+	comp = rspamd_fstring_sized_new (deflateBound (&strm, buf->len));
 
 	strm.avail_in = buf->len;
 	strm.next_in = (guchar *)buf->str;
@@ -2823,7 +2823,7 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 
 		rc = deflate (&strm, Z_FINISH);
 
-		if (rc != Z_OK) {
+		if (rc != Z_OK && rc != Z_BUF_ERROR) {
 			if (rc == Z_STREAM_END) {
 				break;
 			}
@@ -2840,8 +2840,7 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 		if (strm.avail_out == 0 && strm.avail_in != 0) {
 			/* Need to allocate more */
 			remain = comp->len;
-			comp = rspamd_fstring_grow (comp, comp->allocated +
-					strm.avail_in + 10);
+			comp = rspamd_fstring_grow (comp, strm.avail_in);
 			p = comp->str + remain;
 			remain = comp->allocated - remain;
 		}
