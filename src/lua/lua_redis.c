@@ -1124,6 +1124,7 @@ lua_redis_connect_sync (lua_State *L)
 			return 2;
 		}
 
+		lua_pushboolean (L, TRUE);
 		pctx = lua_newuserdata (L, sizeof (ctx));
 		*pctx = ctx;
 		rspamd_lua_setclass (L, "rspamd{redis}", -1);
@@ -1139,7 +1140,7 @@ lua_redis_connect_sync (lua_State *L)
 		return 2;
 	}
 
-	return 1;
+	return 2;
 }
 
 /***
