@@ -222,11 +222,12 @@ lua_sqlite3_push_row (lua_State *L, sqlite3_stmt *stmt)
 
 		switch (type) {
 		case SQLITE_INTEGER:
-			/* XXX: we represent int64 as strings, as we can nothing else to do
+			/*
+			 * XXX: we represent int64 as strings, as we can nothing else to do
 			 * about it portably
 			 */
 			num = sqlite3_column_int64 (stmt, i);
-			rspamd_snprintf (numbuf, sizeof (numbuf), "%L", num);
+			rspamd_snprintf (numbuf, sizeof (numbuf), "%uL", num);
 			lua_pushstring (L, numbuf);
 			break;
 		case SQLITE_FLOAT:
