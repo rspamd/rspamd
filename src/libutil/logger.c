@@ -1393,6 +1393,10 @@ rspamd_logger_add_debug_module (const gchar *mname)
 {
 	struct rspamd_log_module *m;
 
+	if (mname == NULL) {
+		return (guint)-1;
+	}
+
 	if (log_modules == NULL) {
 		log_modules = g_malloc0 (sizeof (*log_modules));
 		log_modules->modules = g_hash_table_new (rspamd_strcase_hash,
