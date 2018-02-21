@@ -1278,7 +1278,7 @@ lua_redis_exec (lua_State *L)
 	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
 	redisReply *r;
 	gint ret;
-	guint i, nret = 0;
+	guint i, nret = 0, pending;
 
 	if (ctx == NULL) {
 		lua_error (L);
@@ -1302,7 +1302,11 @@ lua_redis_exec (lua_State *L)
 				return luaL_error (L, "cannot resiz stack to fit %d commands",
 					ctx->cmds_pending);
 			}
-			for (i = 0; i < ctx->cmds_pending; i ++) {
+
+			pending = ctx->cmds_pending;
+			ctx->cmds_pending = 0;
+
+			for (i = 0; i < pending; i ++) {
 				ret = redisGetReply (ctx->d.sync, (void **)&r);
 
 				if (ret == REDIS_OK) {
@@ -1315,6 +1319,7 @@ lua_redis_exec (lua_State *L)
 						lua_pushboolean (L, FALSE);
 						lua_pushlstring (L, r->str, r->len);
 					}
+
 					freeReplyObject (r);
 				}
 				else {
