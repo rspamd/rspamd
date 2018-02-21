@@ -1,4 +1,4 @@
-local lua_redis = require "rspamd_redis"
+local lua_redis = require "lua_redis"
 local stat_tools = require "stat_tools"
 local ucl = require "ucl"
 local logger = require "rspamd_logger"

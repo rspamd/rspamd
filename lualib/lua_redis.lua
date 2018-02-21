@@ -914,6 +914,8 @@ local function redis_connect_sync(redis_params, is_write, key, cfg)
   if not ret then
     logger.errx('cannot execute redis request: %s', conn)
     addr:fail()
+
+    return false,nil,addr
   end
 
   if conn then

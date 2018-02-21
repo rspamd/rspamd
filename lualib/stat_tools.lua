@@ -223,7 +223,7 @@ end
       if is_spam then
         hash_key = 'S'
       end
-      for _,tok in tokens do
+      for _,tok in ipairs(tokens) do
         -- tok schema:
         -- tok[1] = token_id (uint64 represented as a string)
         -- tok[2] = token value (number)
@@ -356,8 +356,9 @@ end
     end
   end
 
-  logger.messagex('Migrated %d tokens for %d users for symbol %s',
-      total, nusers, res['symbol'])
+  logger.messagex('Migrated %s tokens for %s users for symbols (%s, %s)',
+      total, nusers, symbol_spam, symbol_ham)
+  return true
 end
 
 exports.convert_sqlite_to_redis = convert_sqlite_to_redis
