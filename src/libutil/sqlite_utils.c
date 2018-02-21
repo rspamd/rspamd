@@ -207,6 +207,8 @@ static gboolean
 rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 {
 	gint fd;
+	pid_t pid;
+	gssize r;
 	struct timespec sleep_ts = {
 		.tv_sec = 0,
 		.tv_nsec = 1000000
@@ -219,6 +221,46 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 
 			return FALSE;
 		}
+
+		fd = open (lock, O_RDONLY);
+
+		if (fd == -1) {
+			msg_err_pool_check ("cannot open lock file %s: %s", lock,
+					strerror (errno));
+
+			return FALSE;
+		}
+
+		r = read (fd, &pid, sizeof (pid));
+
+		if (r != sizeof (pid)) {
+			msg_warn_pool_check ("stale lock file %s, removing", lock);
+			unlink (lock);
+			close (fd);
+
+			return TRUE;
+		}
+
+		/* Now check for process existence */
+		if (pid == getpid ()) {
+			msg_warn_pool_check ("lock file %s, belongs to me, removing", lock);
+			unlink (lock);
+			close (fd);
+
+			return TRUE;
+		}
+		else if (kill (pid, 0) == -1) {
+			if (errno == ESRCH) {
+				/* Process is already dead */
+				msg_warn_pool_check ("stale lock file %s from pid: %P, removing",
+						lock, pid);
+				unlink (lock);
+				close (fd);
+
+				return TRUE;
+			}
+		}
+
 		if (nanosleep (&sleep_ts, NULL) == -1 && errno != EINTR) {
 			msg_err_pool_check ("cannot sleep open lock file %s: %s", lock,
 					strerror (errno));
@@ -308,7 +350,9 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		has_lock = FALSE;
 	}
 	else {
+		pid_t myself = getpid ();
 		msg_debug_pool_check ("locking %s to block other processes", lock_path);
+		(void)write (lock_fd, &myself, sizeof (myself));
 
 		g_assert (rspamd_file_lock (lock_fd, FALSE));
 		has_lock = TRUE;
