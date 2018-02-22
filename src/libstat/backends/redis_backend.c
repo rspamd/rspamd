@@ -1352,6 +1352,10 @@ rspamd_redis_parse_classifier_opts (struct redis_stat_ctx *backend,
 	}
 	else {
 		backend->new_schema = FALSE;
+
+		msg_warn_config ("you are using old bayes schema for redis statistics, "
+				"please consider converting it to a new one "
+				"by using 'rspamadm configwizard statistics'");
 	}
 
 	elt = ucl_object_lookup (obj, "signatures");

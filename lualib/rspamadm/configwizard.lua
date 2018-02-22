@@ -33,7 +33,8 @@ local rspamd_logo = [[
 ]]
 
 local function printf(fmt, ...)
-  print(string.format(fmt, ...))
+  io.write(string.format(fmt, ...))
+  io.write('\n')
 end
 
 local function highlight(str)
@@ -279,32 +280,84 @@ local function find_worker(cfg, wtype)
   return nil
 end
 
+
+
 return function(args, cfg)
   local changes = {
     l = {}, -- local changes
     o = {}, -- override changes
   }
 
+  local interactive_start = true
+  local checks = {}
+  local all_checks = {
+    'controller',
+    'redis',
+    'dkim',
+    'statistic',
+  }
+
+  if #args > 0 then
+    interactive_start = false
+
+    for _,arg in ipairs(args) do
+      if arg == 'all' then
+        checks = all_checks
+      elseif arg == 'list' then
+        printf(highlight(rspamd_logo))
+        printf('Available modules')
+        for _,c in ipairs(all_checks) do
+          printf('- %s', c)
+        end
+        return
+      else
+        table.insert(checks, arg)
+      end
+    end
+  else
+    checks = all_checks
+  end
+
+  local function has_check(check)
+    for _,c in ipairs(checks) do
+      if c == check then
+        return true
+      end
+    end
+
+    return false
+  end
+
   rspamd_util.umask('022')
-  printf(highlight(rspamd_logo))
-  printf("Welcome to the configuration tool")
-  printf("We use %s configuration file, writing results to %s",
-    highlight(cfg.config_path), highlight(local_conf))
-  plugins_stat(nil, nil)
-  if ask_yes_no("Do you wish to continue?", true) then
+  if interactive_start then
+    printf(highlight(rspamd_logo))
+    printf("Welcome to the configuration tool")
+    printf("We use %s configuration file, writing results to %s",
+      highlight(cfg.config_path), highlight(local_conf))
+    plugins_stat(nil, nil)
+  end
 
-    local controller = find_worker(cfg, 'controller')
-    if controller then
-      setup_controller(controller, changes)
+  if not interactive_start or
+      ask_yes_no("Do you wish to continue?", true) then
+
+    if has_check('controller') then
+      local controller = find_worker(cfg, 'controller')
+      if controller then
+        setup_controller(controller, changes)
+      end
     end
 
-    if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
-      setup_redis(cfg, changes)
+    if has_check('redis') then
+      if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
+        setup_redis(cfg, changes)
+      end
     end
 
-    if cfg.dkim_signing and not cfg.dkim_signing.domain then
-      if ask_yes_no('Do you want to setup dkim signing feature?') then
-        setup_dkim_signing(cfg, changes)
+    if has_check('dkim') then
+      if cfg.dkim_signing and not cfg.dkim_signing.domain then
+        if ask_yes_no('Do you want to setup dkim signing feature?') then
+          setup_dkim_signing(cfg, changes)
+        end
       end
     end
 
