@@ -138,12 +138,10 @@ exports.convert_bayes_schema = convert_bayes_schema
 local function convert_sqlite_to_redis(redis_params,
           sqlite_db_spam, sqlite_db_ham, symbol_spam, symbol_ham,
           learn_cache_db, expire, reset_previous)
-  local num = 0
-  local total = 0
   local nusers = 0
   local lim = 1000 -- Update each 1000 tokens
   local users_map = {}
-
+  local converted = 0
 
   local db_spam = sqlite3.open(sqlite_db_spam)
   if not db_spam then
@@ -240,7 +238,11 @@ end
     end
     -- Fill tokens, sending data to redis each `lim` records
 
+    local ntokens = db:query('SELECT count(*) as c FROM tokens')['c']
     local tokens = {}
+    local num = 0
+    local total = 0
+
     for row in db:rows('SELECT token,value,user FROM tokens;') do
       local user = ''
       if row.user ~= 0 and users_map[row.user] then
@@ -248,7 +250,6 @@ end
       end
 
       table.insert(tokens, {row.token, row.value, user})
-
       num = num + 1
       total = total + 1
       if num > lim then
@@ -264,6 +265,8 @@ end
         num = 0
         tokens = {}
       end
+
+      io.write(string.format('Processed batch: %s/%s\r', total, ntokens))
     end
     -- Last batch
     if #tokens > 0 then
@@ -273,7 +276,12 @@ end
         db:sql('COMMIT;')
         return false
       end
+
+      io.write(string.format('Processed batch: %s/%s\r', total, ntokens))
     end
+    io.write('\n')
+
+    converted = converted + total
 
     -- Close DB
     db:sql('COMMIT;')
@@ -303,10 +311,12 @@ end
     return conn:exec()
   end
 
+  logger.messagex('Convert spam tokens')
   if not convert_db(db_spam, true) then
     return false
   end
 
+  logger.messagex('Convert ham tokens')
   if not convert_db(db_ham, false) then
     return false
   end
@@ -345,11 +355,11 @@ end
     db:sql('COMMIT;')
 
     if ret then
-      ret,err_str = conn:exec()
+      conn:exec()
     end
 
     if ret then
-      logger.messagex('Converted %d cached items from sqlite3 learned cache to redis',
+      logger.messagex('Converted %s cached items from sqlite3 learned cache to redis',
         converted)
     else
       logger.errx('Error occurred during sending data to redis: ' .. err_str)
@@ -357,7 +367,7 @@ end
   end
 
   logger.messagex('Migrated %s tokens for %s users for symbols (%s, %s)',
-      total, nusers, symbol_spam, symbol_ham)
+      converted, nusers, symbol_spam, symbol_ham)
   return true
 end
 
@@ -382,8 +392,8 @@ local function load_sqlite_config(cfg)
     local tbl = {}
     if cls.cache then
       local cache = cls.cache
-      if cache.type == 'sqlite3' and (cls.file or cls.path) then
-        tbl.learn_cache = (cls.file or cls.path)
+      if cache.type == 'sqlite3' and (cache.file or cache.path) then
+        tbl.learn_cache = (cache.file or cache.path)
       end
     end
 
