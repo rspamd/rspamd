@@ -62,6 +62,8 @@ static const struct luaL_reg sqlitestmtlib_m[] = {
 	{NULL, NULL}
 };
 
+static void lua_sqlite3_push_row (lua_State *L, sqlite3_stmt *stmt);
+
 static sqlite3 *
 lua_check_sqlite3 (lua_State * L, gint pos)
 {
@@ -170,13 +172,12 @@ lua_sqlite3_sql (lua_State *L)
 	const gchar *query = luaL_checkstring (L, 2);
 	sqlite3_stmt *stmt;
 	gboolean ret = FALSE;
-	gint top, rc;
+	gint top = 1, rc;
 
 	if (db && query) {
 		if (sqlite3_prepare_v2 (db, query, -1, &stmt, NULL) != SQLITE_OK) {
 			msg_err ("cannot prepare query %s: %s", query, sqlite3_errmsg (db));
-			lua_pushstring (L, sqlite3_errmsg (db));
-			lua_error (L);
+			return luaL_error (L, sqlite3_errmsg (db));
 		}
 		else {
 			top = lua_gettop (L);
@@ -187,9 +188,15 @@ lua_sqlite3_sql (lua_State *L)
 			}
 
 			rc = sqlite3_step (stmt);
+			top = 1;
 
 			if (rc == SQLITE_ROW || rc == SQLITE_OK || rc == SQLITE_DONE) {
 				ret = TRUE;
+
+				if (rc == SQLITE_ROW) {
+					lua_sqlite3_push_row (L, stmt);
+					top = 2;
+				}
 			}
 			else {
 				msg_warn ("sqlite3 error: %s", sqlite3_errmsg (db));
@@ -201,7 +208,7 @@ lua_sqlite3_sql (lua_State *L)
 
 	lua_pushboolean (L, ret);
 
-	return 1;
+	return top;
 }
 
 static void

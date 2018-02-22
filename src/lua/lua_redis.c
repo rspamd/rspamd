@@ -1299,7 +1299,7 @@ lua_redis_exec (lua_State *L)
 		}
 		else {
 			if (!lua_checkstack (L, (ctx->cmds_pending * 2) + 1)) {
-				return luaL_error (L, "cannot resiz stack to fit %d commands",
+				return luaL_error (L, "cannot resize stack to fit %d commands",
 					ctx->cmds_pending);
 			}
 
