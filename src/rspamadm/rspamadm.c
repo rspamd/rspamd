@@ -240,9 +240,9 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	/* Push argv */
 	lua_newtable (L);
 
-	for (i = 0; i < argc; i ++) {
+	for (i = 1; i < argc; i ++) {
 		lua_pushstring (L, argv[i]);
-		lua_rawseti (L, -2, i + 1);
+		lua_rawseti (L, -2, i);
 	}
 
 	/* Push results */
