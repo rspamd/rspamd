@@ -51,13 +51,14 @@ rspamadm_configwizard_help (gboolean full_help)
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Perform initial configuration for Rspamd daemon\n\n"
-				"Usage: rspamadm configwizard [-c <config_name>]\n"
+		help_str = "Perform guided configuration for Rspamd daemon\n\n"
+				"Usage: rspamadm configwizard [-c <config_name>] [checks...]\n"
+		 		"       rspamadm configwizard [-c <config_name>] list\n"
 				"Where options are:\n\n"
 				"--help: shows available options and commands";
 	}
 	else {
-		help_str = "Perform initial configuration for Rspamd daemon";
+		help_str = "Perform guided configuration for Rspamd daemon";
 	}
 
 	return help_str;
@@ -91,10 +92,9 @@ rspamadm_configwizard (gint argc, gchar **argv)
 	gboolean ret = TRUE;
 	worker_t **pworker;
 	lua_State *L;
-	gint i;
 
 	context = g_option_context_new (
-			"keypair - create encryption keys");
+			"configwizard - perform guided configuration");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd administration utility version "
 					RVERSION
@@ -148,6 +148,7 @@ rspamadm_configwizard (gint argc, gchar **argv)
 
 	if (ret) {
 		L = cfg->lua_state;
+		rspamd_lua_set_path (L, cfg->rcl_obj, ucl_vars);
 		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (cfg->cfg_name),
 				"config_path", 0, false);
 
