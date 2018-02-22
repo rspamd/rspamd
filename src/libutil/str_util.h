@@ -76,15 +76,6 @@ gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
  */
 gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
 
-/**
- * Lowercase strlcpy variant
- * @param dst
- * @param src
- * @param siz
- * @return
- */
-gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
-
 /*
  * Try to convert string of length to long
  */
