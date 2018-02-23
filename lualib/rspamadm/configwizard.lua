@@ -367,9 +367,9 @@ end
 
 return ver
 ]]
-    local ver = conn:add_cmd('EVAL', {lua_script, '1', symbol_spam})
-
-    if ver ~= 2 then
+    conn:add_cmd('EVAL', {lua_script, '1', symbol_spam})
+    local _,ver = conn:exec()
+    if tonumber(ver) ~= 2 then
       printf("You have configured new schema for %s/%s but your DB has old data",
         symbol_spam, symbol_ham)
       try_convert()

@@ -304,11 +304,9 @@ end
         logger.errx('Cannot update learns for user: ' .. user)
         return false
       end
-      if user ~= '' then
-        if not conn:add_cmd('SADD', {symbol .. '_keys', 'RS' .. user}) then
-          logger.errx('Cannot update learns for user: ' .. user)
-          return false
-        end
+      if not conn:add_cmd('SADD', {symbol .. '_keys', 'RS' .. user}) then
+        logger.errx('Cannot update learns for user: ' .. user)
+        return false
       end
     end
     -- Set version
