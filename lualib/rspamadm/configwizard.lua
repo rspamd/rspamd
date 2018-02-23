@@ -291,45 +291,6 @@ local function setup_dkim_signing(cfg, changes)
   changes.l.dkim_signing = {domain = domains}
 end
 
-local function parse_time_interval(str)
-  local function parse_time_suffix(s)
-    if s == 's' then
-      return 1
-    elseif s == 'm' then
-      return 60
-    elseif s == 'h' then
-      return 3600
-    elseif s == 'd' then
-      return 86400
-    elseif s == 'y' then
-      return 365 * 86400;
-    end
-  end
-
-  local lpeg = require "lpeg"
-
-  local digit = lpeg.R("09")
-  local parser = {}
-  parser.integer =
-  (lpeg.S("+-") ^ -1) *
-      (digit   ^  1)
-  parser.fractional =
-  (lpeg.P(".")   ) *
-      (digit ^ 1)
-  parser.number =
-  (parser.integer *
-      (parser.fractional ^ -1)) +
-      (lpeg.S("+-") * parser.fractional)
-  parser.time = lpeg.Cf(lpeg.Cc(1) *
-      (parser.number / tonumber) *
-      ((lpeg.S("smhdy") / parse_time_suffix) ^ -1),
-    function (acc, val) return acc * val end)
-
-  local t = lpeg.match(parser.time, str)
-
-  return t
-end
-
 local function check_redis_classifier(cls, changes)
   local symbol_spam, symbol_ham
   -- Load symbols from statfiles
@@ -373,7 +334,7 @@ local function check_redis_classifier(cls, changes)
     if ask_yes_no("Do you wish to convert data to the new schema?", true) then
       local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
         '100d')
-      expire = parse_time_interval(expire)
+      expire = lua_util.parse_time_interval(expire)
 
       if not lua_stat_tools.convert_bayes_schema(parsed_redis, symbol_spam, symbol_ham) then
         printf("Conversion failed")
@@ -432,7 +393,7 @@ local function setup_statistic(cfg, changes)
       printf('You have %d sqlite classifiers', #sqlite_configs)
       local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
         '100d')
-      expire = parse_time_interval(expire)
+      expire = lua_util.parse_time_interval(expire)
 
       local reset_previous = ask_yes_no("Reset previuous data?")
       if ask_yes_no('Do you wish to convert them to Redis?', true) then

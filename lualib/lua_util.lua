@@ -215,4 +215,45 @@ end
 
 exports.disable_module = disable_module
 
+local function parse_time_interval(str)
+  local function parse_time_suffix(s)
+    if s == 's' then
+      return 1
+    elseif s == 'm' then
+      return 60
+    elseif s == 'h' then
+      return 3600
+    elseif s == 'd' then
+      return 86400
+    elseif s == 'y' then
+      return 365 * 86400;
+    end
+  end
+
+  local lpeg = require "lpeg"
+
+  local digit = lpeg.R("09")
+  local parser = {}
+  parser.integer =
+  (lpeg.S("+-") ^ -1) *
+      (digit   ^  1)
+  parser.fractional =
+  (lpeg.P(".")   ) *
+      (digit ^ 1)
+  parser.number =
+  (parser.integer *
+      (parser.fractional ^ -1)) +
+      (lpeg.S("+-") * parser.fractional)
+  parser.time = lpeg.Cf(lpeg.Cc(1) *
+      (parser.number / tonumber) *
+      ((lpeg.S("smhdy") / parse_time_suffix) ^ -1),
+    function (acc, val) return acc * val end)
+
+  local t = lpeg.match(parser.time, str)
+
+  return t
+end
+
+exports.parse_time_interval = parse_time_interval
+
 return exports

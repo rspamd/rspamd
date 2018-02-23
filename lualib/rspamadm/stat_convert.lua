@@ -2,10 +2,13 @@ local lua_redis = require "lua_redis"
 local stat_tools = require "lua_stat"
 local ucl = require "ucl"
 local logger = require "rspamd_logger"
-
+local lua_util = require "lua_util"
 
 return function (_, res)
   local redis_params = {}
+  if res.expire then
+    res.expire = lua_util.parse_time_interval(res.expire)
+  end
   if not lua_redis.try_load_redis_servers(res.redis, nil, redis_params) then
     logger.errx('cannot load redis server definition')
 
@@ -29,7 +32,7 @@ return function (_, res)
     end
     logger.messagex('Converted classifier to the from sqlite to redis')
     logger.messagex('Suggested configuration:')
-    logger.messagex(ucl.to_format(stat_tools.redis_classifier_from_sqlite(cls),
+    logger.messagex(ucl.to_format(stat_tools.redis_classifier_from_sqlite(cls, res.expire),
       'config'))
   end
 end

@@ -479,8 +479,9 @@ exports.load_sqlite_config = load_sqlite_config
 
 -- A helper method that suggests a user how to configure Redis based
 -- classifier based on the existing sqlite classifier
-local function redis_classifier_from_sqlite(sqlite_classifier)
+local function redis_classifier_from_sqlite(sqlite_classifier, expire)
   local result = {
+    new_schema = true,
     backend = 'redis',
     cache = {
       backend = 'redis'
@@ -494,6 +495,10 @@ local function redis_classifier_from_sqlite(sqlite_classifier)
       }
     }
   }
+
+  if expire then
+    result.expire = expire
+  end
 
   return {classifier = {bayes = result}}
 end
