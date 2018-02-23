@@ -296,7 +296,6 @@ local function check_redis_classifier(cls, changes)
   -- Load symbols from statfiles
   local statfiles = cls.statfile
   for _,stf in ipairs(statfiles) do
-    local path = (stf.file or stf.path or stf.db or stf.dbname)
     local symbol = stf.symbol or 'undefined'
 
     local spam
@@ -355,7 +354,7 @@ local function check_redis_classifier(cls, changes)
     printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
     try_convert()
   else
-    local res,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+    local _,conn = lua_redis.redis_connect_sync(parsed_redis, true)
     -- We still need to check versions
     local lua_script = [[
 local ver = 0
