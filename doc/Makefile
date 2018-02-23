@@ -2,6 +2,7 @@
 
 PANDOC ?= pandoc
 LUADOC ?= doxydown/doxydown.pl
+LLUADOC ?= ${LUADOC} -l lua -e lua
 
 all: man
 
@@ -14,49 +15,62 @@ rspamc.1: rspamc.1.md
 rspamadm.1: rspamadm.1.md
 	$(PANDOC) -s -f markdown -t man -o rspamadm.1 rspamadm.1.md
 
-lua-doc: lua_regexp lua_ip lua_config lua_task lua_ucl lua_http lua_trie \
-	lua_dns lua_redis lua_upstream lua_expression lua_mimepart lua_logger lua_url \
-	lua_tcp lua_mempool lua_html lua_util lua_fann lua_sqlite3 lua_cryptobox
+lua-dirs:
+	mkdir -p markdown/lua
 
-lua_regexp: ../src/lua/lua_regexp.c
-	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/regexp.md
-lua_ip: ../src/lua/lua_ip.c
-	$(LUADOC) < ../src/lua/lua_ip.c > markdown/lua/ip.md
-lua_config: ../src/lua/lua_config.c
-	$(LUADOC) < ../src/lua/lua_config.c > markdown/lua/config.md
-lua_task: ../src/lua/lua_task.c
+lua-doc: lua-dirs rspamd_regexp rspamd_ip rspamd_config task ucl rspamd_http rspamd_trie \
+	rspamd_resolver rspamd_redis rspamd_upstream_list rspamd_expression rspamd_mimepart rspamd_logger rspamd_url \
+	rspamd_tcp rspamd_mempool rspamd_html rspamd_util rspamd_fann rspamd_sqlite3 rspamd_cryptobox \
+	lua_redis lua_util lua_maps
+
+lua_redis:
+	$(LLUADOC) < ../lualib/lua_redis.lua > markdown/lua/lua_redis.md
+
+lua_util:
+	$(LLUADOC) < ../lualib/lua_util.lua > markdown/lua/lua_util.md
+
+lua_maps:
+	$(LLUADOC) < ../lualib/lua_maps.lua > markdown/lua/lua_maps.md
+
+rspamd_regexp: ../src/lua/lua_regexp.c
+	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/rspamd_regexp.md
+rspamd_ip: ../src/lua/lua_ip.c
+	$(LUADOC) < ../src/lua/lua_ip.c > markdown/lua/rspamd_ip.md
+rspamd_config: ../src/lua/lua_config.c
+	$(LUADOC) < ../src/lua/lua_config.c > markdown/lua/rspamd_config.md
+task: ../src/lua/lua_task.c
 	$(LUADOC) < ../src/lua/lua_task.c > markdown/lua/task.md
-lua_ucl: ../contrib/libucl/lua_ucl.c
+ucl: ../contrib/libucl/lua_ucl.c
 	$(LUADOC) < ../contrib/libucl/lua_ucl.c > markdown/lua/ucl.md
-lua_http: ../src/lua/lua_http.c
-	$(LUADOC) < ../src/lua/lua_http.c > markdown/lua/http.md
-lua_trie: ../src/lua/lua_trie.c
-	$(LUADOC) < ../src/lua/lua_trie.c > markdown/lua/trie.md
-lua_dns: ../src/lua/lua_dns.c
-	$(LUADOC) < ../src/lua/lua_dns.c > markdown/lua/dns.md
-lua_redis: ../src/lua/lua_redis.c
-	$(LUADOC) < ../src/lua/lua_redis.c > markdown/lua/redis.md
-lua_upstream: ../src/lua/lua_upstream.c
-	$(LUADOC) < ../src/lua/lua_upstream.c > markdown/lua/upstream.md
-lua_expression: ../src/lua/lua_expression.c
-	$(LUADOC) < ../src/lua/lua_expression.c > markdown/lua/expression.md
-lua_mimepart: ../src/lua/lua_mimepart.c
-	$(LUADOC) < ../src/lua/lua_mimepart.c > markdown/lua/mimepart.md
-lua_logger: ../src/lua/lua_logger.c
-	$(LUADOC) < ../src/lua/lua_logger.c > markdown/lua/logger.md
-lua_url: ../src/lua/lua_url.c
-	$(LUADOC) < ../src/lua/lua_url.c > markdown/lua/url.md
-lua_tcp: ../src/lua/lua_tcp.c
-	$(LUADOC) < ../src/lua/lua_tcp.c > markdown/lua/tcp.md
-lua_mempool: ../src/lua/lua_mempool.c
-	$(LUADOC) < ../src/lua/lua_mempool.c > markdown/lua/mempool.md
-lua_html: ../src/lua/lua_html.c
-	$(LUADOC) < ../src/lua/lua_html.c > markdown/lua/html.md
-lua_util: ../src/lua/lua_util.c
-	$(LUADOC) < ../src/lua/lua_util.c > markdown/lua/util.md
-lua_fann: ../src/lua/lua_fann.c
-	$(LUADOC) < ../src/lua/lua_fann.c > markdown/lua/fann.md
-lua_sqlite3: ../src/lua/lua_sqlite3.c
-	$(LUADOC) < ../src/lua/lua_sqlite3.c > markdown/lua/sqlite3.md
-lua_cryptobox: ../src/lua/lua_cryptobox.c
-	$(LUADOC) < ../src/lua/lua_cryptobox.c > markdown/lua/cryptobox.md
+rspamd_http: ../src/lua/lua_http.c
+	$(LUADOC) < ../src/lua/lua_http.c > markdown/lua/rspamd_http.md
+rspamd_trie: ../src/lua/lua_trie.c
+	$(LUADOC) < ../src/lua/lua_trie.c > markdown/lua/rspamd_trie.md
+rspamd_resolver: ../src/lua/lua_dns.c
+	$(LUADOC) < ../src/lua/lua_dns.c > markdown/lua/rspamd_resolver.md
+rspamd_redis: ../src/lua/lua_redis.c
+	$(LUADOC) < ../src/lua/lua_redis.c > markdown/lua/rspamd_redis.md
+rspamd_upstream_list: ../src/lua/lua_upstream.c
+	$(LUADOC) < ../src/lua/lua_upstream.c > markdown/lua/rspamd_upstream.md
+rspamd_expression: ../src/lua/lua_expression.c
+	$(LUADOC) < ../src/lua/lua_expression.c > markdown/lua/rspamd_expression.md
+rspamd_mimepart: ../src/lua/lua_mimepart.c
+	$(LUADOC) < ../src/lua/lua_mimepart.c > markdown/lua/rspamd_mimepart.md
+rspamd_logger: ../src/lua/lua_logger.c
+	$(LUADOC) < ../src/lua/lua_logger.c > markdown/lua/rspamd_logger.md
+rspamd_url: ../src/lua/lua_url.c
+	$(LUADOC) < ../src/lua/lua_url.c > markdown/lua/rspamd_url.md
+rspamd_tcp: ../src/lua/lua_tcp.c
+	$(LUADOC) < ../src/lua/lua_tcp.c > markdown/lua/rspamd_tcp.md
+rspamd_mempool: ../src/lua/lua_mempool.c
+	$(LUADOC) < ../src/lua/lua_mempool.c > markdown/lua/rspamd_mempool.md
+rspamd_html: ../src/lua/lua_html.c
+	$(LUADOC) < ../src/lua/lua_html.c > markdown/lua/rspamd_html.md
+rspamd_util: ../src/lua/lua_util.c
+	$(LUADOC) < ../src/lua/lua_util.c > markdown/lua/rspamd_util.md
+rspamd_fann: ../src/lua/lua_fann.c
+	$(LUADOC) < ../src/lua/lua_fann.c > markdown/lua/rspamd_fann.md
+rspamd_sqlite3: ../src/lua/lua_sqlite3.c
+	$(LUADOC) < ../src/lua/lua_sqlite3.c > markdown/lua/rspamd_sqlite3.md
+rspamd_cryptobox: ../src/lua/lua_cryptobox.c
+	$(LUADOC) < ../src/lua/lua_cryptobox.c > markdown/lua/rspamd_cryptobox.md

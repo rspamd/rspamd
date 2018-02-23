@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[[
+-- @module lua_util
+-- This module contains utility functions for working with Lua and/or Rspamd
+--]]
+
 local exports = {}
 local lpeg = require 'lpeg'
 
@@ -32,7 +37,16 @@ local function rspamd_str_split(s, sep)
   return gr:match(s)
 end
 
+--[[[
+-- @function lua_util.str_split(text, deliminator)
+-- Splits text into a numeric table by deliminator
+-- @param {string} text deliminated text
+-- @param {string} deliminator the deliminator
+-- @return {table} numeric table containing string parts
+--]]
+
 exports.rspamd_str_split = rspamd_str_split
+exports.str_split = rspamd_str_split
 
 local space = lpeg.S' \t\n\v\f\r'
 local nospace = 1 - space
@@ -42,11 +56,31 @@ exports.rspamd_str_trim = function(s)
   return match(ptrim, s)
 end
 
+--[[[
+-- @function lua_util.round(number, decimalPlaces)
+-- Round number to fixed number of decimal points
+-- @param {number} number number to round
+-- @param {number} decimalPlaces number of decimal points
+-- @return {number} rounded number
+--]]
+
 -- Robert Jay Gould http://lua-users.org/wiki/SimpleRound
 exports.round = function(num, numDecimalPlaces)
   local mult = 10^(numDecimalPlaces or 0)
   return math.floor(num * mult) / mult
 end
+
+--[[[
+-- @function lua_util.template(text, replacements)
+-- Replaces values in a text template
+-- Variable names can contain letters, numbers and underscores, are prefixed with `$` and may or not use curly braces.
+-- @param {string} text text containing variables
+-- @param {table} replacements key/value pairs for replacements
+-- @return {string} string containing replaced values
+-- @example
+-- local goop = lua_util.template("HELLO $FOO ${BAR}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- -- goop contains "HELLO LUA WORLD!"
+--]]
 
 exports.template = function(tmpl, keys)
   local var_lit = lpeg.P { lpeg.R("az") + lpeg.R("AZ") + lpeg.R("09") + "_" }
@@ -160,10 +194,25 @@ exports.is_rspamc_or_controller = function(task)
   return is_rspamc
 end
 
+--[[[
+-- @function lua_util.unpack(table)
+-- Converts numeric table to varargs
+-- This is `unpack` on Lua 5.1/5.2/LuaJIT and `table.unpack` on Lua 5.3
+-- @param {table} table numerically indexed table to unpack
+-- @return {varargs} unpacked table elements
+--]]
+
 local unpack_function = table.unpack or unpack
 exports.unpack = function(t)
   return unpack_function(t)
 end
+
+--[[[
+-- @function lua_util.spairs(table)
+-- Like `pairs` but keys are sorted lexicographically
+-- @param {table} table table containing key/value pairs
+-- @return {function} generator function returning key/value pairs
+--]]
 
 -- Sorted iteration:
 -- for k,v in spairs(t) do ... end
@@ -198,6 +247,13 @@ local function spairs(t, order, lim)
 end
 
 exports.spairs = spairs
+
+--[[[
+-- @function lua_util.disable_module(modname, how)
+-- Disables a plugin or disables redis for a plugin.
+-- @param {string} modname name of plugin to disable
+-- @param {string} how 'redis' to disable redis, 'config' to disable startup
+--]]
 
 local function disable_module(modname, how)
   if rspamd_plugins_state.enabled[modname] then
