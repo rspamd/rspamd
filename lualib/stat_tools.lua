@@ -192,6 +192,11 @@ end
 
   local function convert_db(db, is_spam)
     -- Map users and languages
+    local what = 'ham'
+    if is_spam then
+      what = 'spam'
+    end
+
     local learns = {}
     db:sql('BEGIN;')
     -- Fill users mapping
@@ -266,7 +271,7 @@ end
         tokens = {}
       end
 
-      io.write(string.format('Processed batch: %s/%s\r', total, ntokens))
+      io.write(string.format('Processed batch %s: %s/%s\r', what, total, ntokens))
     end
     -- Last batch
     if #tokens > 0 then
@@ -277,7 +282,7 @@ end
         return false
       end
 
-      io.write(string.format('Processed batch: %s/%s\r', total, ntokens))
+      io.write(string.format('Processed batch %s: %s/%s\r', what, total, ntokens))
     end
     io.write('\n')
 
@@ -325,8 +330,7 @@ end
     logger.messagex('Convert learned ids from %s', learn_cache_db)
     local db = sqlite3.open(learn_cache_db)
     local ret = true
-    local err_str
-    local converted = 0
+    local total = 0
 
     if not db then
       logger.errx('Cannot open cache database: ' .. learn_cache_db)
@@ -349,7 +353,7 @@ end
         logger.errx('Cannot add hash: ' .. digest)
         ret = false
       else
-        converted = converted + 1
+        total = total + 1
       end
     end
     db:sql('COMMIT;')
@@ -360,9 +364,9 @@ end
 
     if ret then
       logger.messagex('Converted %s cached items from sqlite3 learned cache to redis',
-        converted)
+        total)
     else
-      logger.errx('Error occurred during sending data to redis: ' .. err_str)
+      logger.errx('Error occurred during sending data to redis')
     end
   end
 

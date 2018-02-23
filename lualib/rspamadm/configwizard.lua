@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2018, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ local local_conf = rspamd_paths['CONFDIR']
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local lua_stat_tools = require "stat_tools"
+local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 
 local plugins_stat = require "rspamadm/plugins_stats"
@@ -31,6 +33,8 @@ local rspamd_logo = [[
  |_| \_\|___/| .__/  \__,_||_| |_| |_| \__,_|
              |_|
 ]]
+
+local redis_params
 
 local function printf(fmt, ...)
   io.write(string.format(fmt, ...))
@@ -73,7 +77,7 @@ end
 local function print_changes(changes)
   local function print_change(k, c, where)
     printf('File: %s, changes list:', highlight(local_conf .. '/'
-        .. where .. '/'.. k))
+        .. where .. '/'.. k .. '.conf'))
 
     for ek,ev in pairs(c) do
       printf("%s => %s", highlight(ek), rspamd_logger.slog("%s", ev))
@@ -185,9 +189,32 @@ local function setup_redis(cfg, changes)
       write_servers = read_servers
     end
 
+    redis_params = {
+      read_servers = rs,
+    }
+
     local ws = parse_servers(write_servers)
     if ws and #ws > 0 then
       changes.l['redis.conf']['write_servers'] = table.concat(ws, ",")
+      redis_params['write_servers'] = ws
+    end
+
+    if ask_yes_no('Do you have any password set for your Redis?') then
+      local passwd = readline_default("Enter Redis password:", nil)
+
+      if passwd then
+        changes.l['redis.conf']['password'] = passwd
+        redis_params['password'] = passwd
+      end
+    end
+
+    if ask_yes_no('Do you have any specific database for your Redis?') then
+      local db = readline_default("Enter Redis database:", nil)
+
+      if db then
+        changes.l['redis.conf']['db'] = db
+        redis_params['db'] = db
+      end
     end
   end
 end
@@ -261,7 +288,96 @@ local function setup_dkim_signing(cfg, changes)
     }
   until not ask_yes_no("Do you wish to add another DKIM domain?")
 
-  changes.l.dkim_signing= {domain = domains}
+  changes.l.dkim_signing = {domain = domains}
+end
+
+local function parse_time_interval(str)
+  local function parse_time_suffix(s)
+    if s == 's' then
+      return 1
+    elseif s == 'm' then
+      return 60
+    elseif s == 'h' then
+      return 3600
+    elseif s == 'd' then
+      return 86400
+    elseif s == 'y' then
+      return 365 * 86400;
+    end
+  end
+
+  local lpeg = require "lpeg"
+
+  local digit = lpeg.R("09")
+  local parser = {}
+  parser.integer =
+  (lpeg.S("+-") ^ -1) *
+      (digit   ^  1)
+  parser.fractional =
+  (lpeg.P(".")   ) *
+      (digit ^ 1)
+  parser.number =
+  (parser.integer *
+      (parser.fractional ^ -1)) +
+      (lpeg.S("+-") * parser.fractional)
+  parser.time = lpeg.Cf(lpeg.Cc(1) *
+      (parser.number / tonumber) *
+      ((lpeg.S("smhdy") / parse_time_suffix) ^ -1),
+    function (acc, val) return acc * val end)
+
+  local t = lpeg.match(parser.time, str)
+
+  return t
+end
+
+local function setup_statistic(cfg, changes)
+  local sqlite_configs = lua_stat_tools.load_sqlite_config(cfg)
+
+  if #sqlite_configs > 0 then
+
+    if not redis_params then
+      printf('You have %d sqlite classifiers, but you have no Redis servers being set',
+        #sqlite_configs)
+      return false
+    end
+
+    local parsed_redis = {}
+    if lua_redis.try_load_redis_servers(redis_params, nil, parsed_redis) then
+      printf('You have %d sqlite classifiers', #sqlite_configs)
+      local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
+        '100d')
+      expire = parse_time_interval(expire)
+
+      local reset_previous = ask_yes_no("Reset previuous data?")
+      if ask_yes_no('Do you wish to convert them to Redis?', true) then
+
+        for _,cls in ipairs(sqlite_configs) do
+          if not lua_stat_tools.convert_sqlite_to_redis(parsed_redis, cls.db_spam,
+            cls.db_ham, cls.symbol_spam, cls.symbol_ham, cls.learn_cache, expire,
+            reset_previous) then
+            rspamd_logger.errx('conversion failed')
+
+            return false
+          end
+          rspamd_logger.messagex('Converted classifier to the from sqlite to redis')
+          changes.l['classifier_bayes'] = {
+            backend = 'redis',
+            new_schema = true,
+          }
+
+          if expire then
+            changes.l['classifier_bayes'].expire = expire
+          end
+
+          if cls.learn_cache then
+            changes.l['classifier_bayes'].cache = {
+              backend = 'redis'
+            }
+          end
+        end
+      end
+    end
+  end
 end
 
 local function find_worker(cfg, wtype)
@@ -350,7 +466,11 @@ return function(args, cfg)
     if has_check('redis') then
       if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
         setup_redis(cfg, changes)
+      else
+        redis_params = cfg.redis
       end
+    else
+      redis_params = cfg.redis
     end
 
     if has_check('dkim') then
@@ -359,6 +479,10 @@ return function(args, cfg)
           setup_dkim_signing(cfg, changes)
         end
       end
+    end
+
+    if has_check('statistic') then
+      setup_statistic(cfg, changes)
     end
 
     local nchanges = 0

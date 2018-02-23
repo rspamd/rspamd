@@ -72,7 +72,7 @@ local function elastic_send_data(task)
   local bulk_json = table.concat(tbl, "\n")
   local function http_index_data_callback(_, code, body, _)
     -- todo error handling we may store the rows it into redis and send it again late
-    rspamd_logger.debugm(N, task, "After create data %1",body)
+    rspamd_logger.debugm(N, task, "After create data %1", body)
     if code ~= 200 then
       if settings['failover'] then
         local h = hash.create()
