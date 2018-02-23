@@ -1594,13 +1594,6 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 
 	p = strrchr (p, ':');
 
-	if (p != NULL) {
-		port = strtoul (p + 1, NULL, 10);
-	}
-	else {
-		port = cmd->is_controller ? DEFAULT_CONTROL_PORT : DEFAULT_PORT;
-	}
-
 	if (!hostbuf) {
 		if (p != NULL) {
 			hostbuf = g_malloc (p - connect_str + 1);
@@ -1609,6 +1602,27 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 		else {
 			hostbuf = g_strdup (connect_str);
 		}
+	}
+
+	if (p != NULL) {
+		port = strtoul (p + 1, NULL, 10);
+	}
+	else {
+		/*
+		 * If we connect to localhost, 127.0.0.1 or ::1, then try controller
+		 * port first
+		 */
+
+		if (strcmp (hostbuf, "localhost") == 0 ||
+				strcmp (hostbuf, "127.0.0.1") == 0 ||
+				strcmp (hostbuf, "::1") == 0 ||
+				strcmp (hostbuf, "[::1]") == 0) {
+			port = DEFAULT_CONTROL_PORT;
+		}
+		else {
+			port = cmd->is_controller ? DEFAULT_CONTROL_PORT : DEFAULT_PORT;
+		}
+
 	}
 
 	conn = rspamd_client_init (ev_base, hostbuf, port, timeout, key);
