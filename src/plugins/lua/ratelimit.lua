@@ -50,7 +50,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_lua_utils = require "lua_util"
 local lua_redis = require "lua_redis"
 local fun = require "fun"
-local lua_maps = require "maps"
+local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
 
 local user_keywords = {'user'}

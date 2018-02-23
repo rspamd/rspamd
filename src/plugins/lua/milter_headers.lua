@@ -350,7 +350,7 @@ local function milter_headers(task)
 
   routines['authentication-results'] = function()
     if skip_wanted('authentication-results') then return end
-    local ar = require "auth_results"
+    local ar = require "lua_auth_results"
 
     if settings.routines['authentication-results'].remove then
       remove[settings.routines['authentication-results'].header] =

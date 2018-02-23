@@ -1,5 +1,5 @@
 local lua_redis = require "lua_redis"
-local stat_tools = require "stat_tools"
+local stat_tools = require "lua_stat"
 local ucl = require "ucl"
 local logger = require "rspamd_logger"
 

@@ -3549,7 +3549,7 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 	gint err_idx, ret;
 	GString *tb;
 	gchar str[PATH_MAX];
-	static const char *transform_script = "rspamd_config_transform";
+	static const char *transform_script = "lua_cfg_transform";
 
 	g_assert (L != NULL);
 

@@ -17,7 +17,7 @@ limitations under the License.
 
 local lutil = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
-local dkim_sign_tools = require "dkim_sign_tools"
+local dkim_sign_tools = require "lua_dkim_tools"
 local rspamd_util = require "rspamd_util"
 
 if confighelp then

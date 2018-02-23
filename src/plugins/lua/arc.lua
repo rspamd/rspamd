@@ -16,12 +16,12 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
-local dkim_sign_tools = require "dkim_sign_tools"
+local dkim_sign_tools = require "lua_dkim_tools"
 local rspamd_util = require "rspamd_util"
 local rspamd_rsa_privkey = require "rspamd_rsa_privkey"
 local rspamd_rsa = require "rspamd_rsa"
 local fun = require "fun"
-local auth_results = require "auth_results"
+local auth_results = require "lua_auth_results"
 local hash = require "rspamd_cryptobox_hash"
 
 if confighelp then

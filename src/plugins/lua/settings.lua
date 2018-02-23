@@ -23,7 +23,7 @@ end
 -- https://rspamd.com/doc/configuration/settings.html
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_maps = require "maps"
+local rspamd_maps = require "lua_maps"
 local redis_params
 
 local settings = {}

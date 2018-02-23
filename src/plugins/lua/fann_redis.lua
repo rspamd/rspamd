@@ -27,7 +27,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local fun = require "fun"
-local meta_functions = require "meta_functions"
+local meta_functions = require "lua_meta"
 local use_torch = false
 local torch
 local nn

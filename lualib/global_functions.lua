@@ -17,8 +17,8 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
-local meta_functions = require "meta_functions"
-local maps = require "maps"
+local meta_functions = require "lua_meta"
+local maps = require "lua_maps"
 
 local exports = {}
 
