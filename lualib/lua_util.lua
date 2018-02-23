@@ -230,8 +230,6 @@ local function parse_time_interval(str)
     end
   end
 
-  local lpeg = require "lpeg"
-
   local digit = lpeg.R("09")
   local parser = {}
   parser.integer =
