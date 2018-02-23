@@ -22,6 +22,11 @@ local exports = {}
 
 local E = {}
 
+--[[[
+-- @module lua_redis
+-- This module contains helper functions for working with Redis
+--]]
+
 local function try_load_redis_servers(options, rspamd_config, result)
   local default_port = 6379
   local default_timeout = 1.0
@@ -184,6 +189,20 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     return nil
   end
 end
+
+--[[[
+-- @function lua_redis.parse_redis_server(module_name, module_opts, no_fallback)
+-- Extracts Redis server settings from configuration
+-- @param {string} module_name name of module to get settings for
+-- @param {table} module_opts settings for module or `nil` to fetch them from configuration
+-- @param {boolean} no_fallback should be `true` if global settings must not be used
+-- @return {table} redis server settings
+-- @example
+-- local rconfig = lua_redis.parse_redis_server('my_module')
+-- -- rconfig contains upstream_list objects in ['write_servers'] and ['read_servers']
+-- -- ['timeout'] contains timeout in seconds
+-- -- ['expand_keys'] if true tells that redis key expansion is enabled
+--]]
 
 exports.rspamd_parse_redis_server = rspamd_parse_redis_server
 exports.parse_redis_server = rspamd_parse_redis_server
@@ -567,6 +586,18 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
   return ret,conn,addr
 end
 
+--[[[
+-- @function lua_redis.redis_make_request(task, redis_params, key, is_write, callback, command, args)
+-- Sends a request to Redis
+-- @param {rspamd_task} task task object
+-- @param {table} redis_params redis configuration in format returned by lua_redis.parse_redis_server()
+-- @param {string} key key to use for sharding
+-- @param {boolean} is_write should be `true` if we are performing a write operating
+-- @param {function} callback callback function (first parameter is error if applicable, second is a 2D array (table))
+-- @param {string} command Redis command to run
+-- @param {table} args Numerically indexed table containing arguments for command
+--]]
+
 exports.rspamd_redis_make_request = rspamd_redis_make_request
 exports.redis_make_request = rspamd_redis_make_request
 
@@ -638,6 +669,12 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
 
   return ret,conn,addr
 end
+
+--[[[
+-- @function lua_redis.redis_make_request_taskless(ev_base, redis_params, key, is_write, callback, command, args)
+-- Sends a request to Redis in context where `task` is not available for some specific use-cases
+-- Identical to redis_make_request() except in that first parameter is an `event base` object
+--]]
 
 exports.rspamd_redis_make_request_taskless = redis_make_request_taskless
 exports.redis_make_request_taskless = redis_make_request_taskless

@@ -1,3 +1,8 @@
+--[[[
+-- @module lua_maps
+-- This module contains helper functions for managing rspamd maps
+--]]
+
 --[[
 Copyright (c) 2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
@@ -15,6 +20,16 @@ limitations under the License.
 ]]--
 
 local exports = {}
+
+--[[[
+-- @function lua_maps.map_add_from_ucl(opt, mtype, description)
+-- Creates a map from static data
+-- Returns true if map was added or nil
+-- @param {string or table} opt data for map (or URL)
+-- @param {string} mtype type of map (`set`, `map`, `radix`, `regexp`)
+-- @param {string} description human-readable description of map
+-- @return {bool} true on success, or `nil`
+--]]
 
 local function rspamd_map_add_from_ucl(opt, mtype, description)
   local ret = {
@@ -144,6 +159,17 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
   return nil
 end
 
+--[[[
+-- @function lua_maps.map_add(mname, optname, mtype, description)
+-- Creates a map from configuration elements (static data or URL)
+-- Returns true if map was added or nil
+-- @param {string} mname config section to use
+-- @param {string} optname option name to use
+-- @param {string} mtype type of map ('set', 'hash', 'radix', 'regexp')
+-- @param {string} description human-readable description of map
+-- @return {bool} true on success, or `nil`
+--]]
+
 local function rspamd_map_add(mname, optname, mtype, description)
   local opt = rspamd_config:get_module_opt(mname, optname)
 
@@ -151,7 +177,9 @@ local function rspamd_map_add(mname, optname, mtype, description)
 end
 
 exports.rspamd_map_add = rspamd_map_add
+exports.map_add = rspamd_map_add
 exports.rspamd_map_add_from_ucl = rspamd_map_add_from_ucl
+exports.map_add_from_ucl = rspamd_map_add_from_ucl
 
 -- Check `what` for being lua_map name, otherwise just compares key with what
 local function rspamd_maybe_check_map(key, what)
