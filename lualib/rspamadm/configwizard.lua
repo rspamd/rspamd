@@ -330,6 +330,92 @@ local function parse_time_interval(str)
   return t
 end
 
+local function check_redis_classifier(cls, changes)
+  local symbol_spam, symbol_ham
+  -- Load symbols from statfiles
+  local statfiles = cls.statfile
+  for _,stf in ipairs(statfiles) do
+    local path = (stf.file or stf.path or stf.db or stf.dbname)
+    local symbol = stf.symbol or 'undefined'
+
+    local spam
+    if stf.spam then
+      spam = stf.spam
+    else
+      if string.match(symbol:upper(), 'SPAM') then
+        spam = true
+      else
+        spam = false
+      end
+    end
+
+    if spam then
+      symbol_spam = symbol
+    else
+      symbol_ham = symbol
+    end
+  end
+
+  if not symbol_spam or not symbol_ham then
+    printf("Calssifier has no symbols defined")
+    return
+  end
+
+  local parsed_redis = {}
+  if not lua_redis.try_load_redis_servers(cls, nil, parsed_redis) then
+    if not lua_redis.try_load_redis_servers(redis_params, nil, parsed_redis) then
+      printf("Cannot parse Redis params")
+      return
+    end
+  end
+
+  local function try_convert()
+    if ask_yes_no("Do you wish to convert data to the new schema?", true) then
+      local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
+        '100d')
+      expire = parse_time_interval(expire)
+
+      if not lua_stat_tools.convert_bayes_schema(parsed_redis, symbol_spam, symbol_ham) then
+        printf("Conversion failed")
+      else
+        printf("Conversion succeed")
+        changes.l['classifier_bayes'] = {
+          new_schema = true,
+        }
+
+        if expire then
+          changes.l['classifier_bayes'].expire = expire
+        end
+      end
+    end
+  end
+
+  if not cls.new_schema then
+    printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
+    try_convert()
+  else
+    local res,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+    -- We still need to check versions
+    local lua_script = [[
+local ver = 0
+
+local tst = redis.call('GET', KEYS[1]..'_version')
+if tst then
+  ver = tonumber(tst) or 0
+end
+
+return ver
+]]
+    local ver = conn:add_cmd('EVAL', {lua_script, '1', symbol_spam})
+
+    if ver ~= 2 then
+      printf("You have configured new schema for %s/%s but your DB has old data",
+        symbol_spam, symbol_ham)
+      try_convert()
+    end
+  end
+end
+
 local function setup_statistic(cfg, changes)
   local sqlite_configs = lua_stat_tools.load_sqlite_config(cfg)
 
@@ -373,6 +459,36 @@ local function setup_statistic(cfg, changes)
             changes.l['classifier_bayes'].cache = {
               backend = 'redis'
             }
+          end
+        end
+      end
+    end
+  else
+    -- Check sanity for the existing Redis classifiers
+    local classifier = cfg.classifier
+
+    if classifier then
+      if classifier[1] then
+        for _,cls in ipairs(classifier) do
+          if cls.bayes then cls = cls.bayes end
+          if cls.backend and cls.backend == 'redis' then
+            check_redis_classifier(cls, changes)
+          end
+        end
+      else
+        if classifier.bayes then
+
+          classifier = classifier.bayes
+          if classifier[1] then
+            for _,cls in ipairs(classifier) do
+              if cls.backend and cls.backend == 'redis' then
+                check_redis_classifier(cls, changes)
+              end
+            end
+          else
+            if classifier.backend and classifier.backend == 'redis' then
+              check_redis_classifier(classifier, changes)
+            end
           end
         end
       end

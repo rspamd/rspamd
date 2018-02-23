@@ -449,6 +449,7 @@ local function load_sqlite_config(cfg)
   if classifier then
     if classifier[1] then
       for _,cls in ipairs(classifier) do
+        if cls.bayes then cls = cls.bayes end
         if cls.backend and cls.backend == 'sqlite3' then
           parse_classifier(cls)
         end
