@@ -525,6 +525,8 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 	ucl_object_t *ropts;
 
 	LL_FOREACH(value, cur_rule) {
+		monitored_domain = NULL;
+
 		cur = ucl_object_lookup (cur_rule, "enabled");
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (!ucl_object_toboolean (cur)) {
