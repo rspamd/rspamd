@@ -2423,23 +2423,31 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	gdouble timeout;
 	struct timeval tv;
 	struct rspamd_lua_periodic *periodic = ud;
-	struct rspamd_config **pcfg;
+	struct rspamd_config **pcfg, *cfg;
 	struct event_base **pev_base;
 	lua_State *L;
+	gint err_idx;
 	gboolean plan_more = FALSE;
+	GString *tb;
 
 	L = periodic->L;
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
 	lua_rawgeti (L, LUA_REGISTRYINDEX, periodic->cbref);
 	pcfg = lua_newuserdata (L, sizeof (*pcfg));
 	rspamd_lua_setclass (L, "rspamd{config}", -1);
-	*pcfg = periodic->cfg;
+	cfg = periodic->cfg;
+	*pcfg = cfg;
 	pev_base = lua_newuserdata (L, sizeof (*pev_base));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = periodic->ev_base;
 
-	if (lua_pcall (L, 2, 1, 0) != 0) {
-		msg_info ("call to periodic failed: %s", lua_tostring (L, -1));
-		lua_pop (L, 1);
+	if (lua_pcall (L, 2, 1, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_config ("call to finishing script failed: %v", tb);
+		g_string_free (tb, TRUE);
+		lua_pop (L, 2);
 	}
 	else {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
@@ -2451,7 +2459,7 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 			plan_more = timeout > 0 ? TRUE : FALSE;
 		}
 
-		lua_pop (L, 1);
+		lua_pop (L, 2); /* Return value + error function */
 	}
 
 	event_del (&periodic->ev);
