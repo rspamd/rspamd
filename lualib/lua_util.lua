@@ -271,6 +271,15 @@ end
 
 exports.disable_module = disable_module
 
+
+--[[[
+-- @function lua_util.parse_time_interval(str)
+-- Parses human readable time interval
+-- Accepts 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days,
+-- 'w' for weeks, 'y' for years
+-- @param {string} str input string
+-- @return {number|nil} parsed interval as seconds (might be fractional)
+--]]
 local function parse_time_interval(str)
   local function parse_time_suffix(s)
     if s == 's' then
@@ -281,6 +290,8 @@ local function parse_time_interval(str)
       return 3600
     elseif s == 'd' then
       return 86400
+    elseif s == 'w' then
+      return 86400 * 7
     elseif s == 'y' then
       return 365 * 86400;
     end
@@ -300,7 +311,7 @@ local function parse_time_interval(str)
       (lpeg.S("+-") * parser.fractional)
   parser.time = lpeg.Cf(lpeg.Cc(1) *
       (parser.number / tonumber) *
-      ((lpeg.S("smhdy") / parse_time_suffix) ^ -1),
+      ((lpeg.S("smhdwy") / parse_time_suffix) ^ -1),
     function (acc, val) return acc * val end)
 
   local t = lpeg.match(parser.time, str)
