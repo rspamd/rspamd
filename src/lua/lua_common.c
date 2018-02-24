@@ -1258,9 +1258,14 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 	struct rspamd_config **pcfg;
 	struct event_base **pev_base;
 	struct rspamd_worker **pw;
+	gint err_idx;
+	GString *tb;
 
 	/* Execute post load scripts */
 	LL_FOREACH (cfg->on_load, sc) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
 		lua_rawgeti (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
 		pcfg = lua_newuserdata (cfg->lua_state, sizeof (*pcfg));
 		*pcfg = cfg;
@@ -1274,13 +1279,16 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		*pw = w;
 		rspamd_lua_setclass (cfg->lua_state, "rspamd{worker}", -1);
 
-		if (lua_pcall (cfg->lua_state, 3, 0, 0) != 0) {
-			msg_err_config ("error executing post load code: %s",
-					lua_tostring (cfg->lua_state, -1));
-			lua_pop (cfg->lua_state, 1);
+		if (lua_pcall (cfg->lua_state, 3, 0, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err_config ("error executing post load code: %v", tb);
+			g_string_free (tb, TRUE);
+			lua_pop (L, 2);
 
 			return FALSE;
 		}
+
+		lua_pop (L, 1); /* Error function */
 	}
 
 	return TRUE;
