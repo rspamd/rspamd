@@ -117,7 +117,7 @@ rspamadm_rescore (gint argc, gchar **argv) {
 	}
 
 	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, NULL, NULL);
+	rspamd_lua_set_path (L, NULL, ucl_vars);
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 
