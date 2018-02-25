@@ -319,8 +319,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					if (!rspamd_parse_inet_address (&task->from_addr, hv->str, hv->len)) {
 						msg_err_task ("bad ip header: '%V'", hv);
 					}
-					debug_task ("read IP header, value: %V", hv);
-					has_ip = TRUE;
+					else {
+						debug_task ("read IP header, value: %V", hv);
+						has_ip = TRUE;
+					}
 				}
 				else {
 					debug_task ("wrong header: %V", hn);
