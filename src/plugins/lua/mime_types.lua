@@ -878,9 +878,9 @@ local function check_mime_type(task)
         local found
         local mult
         for _,v in ipairs(mt) do
+          mult = v.mult
           if ct == v.ct then
             found = true
-            mult = v.mult
             break
           end
         end
