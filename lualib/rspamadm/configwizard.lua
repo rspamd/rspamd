@@ -335,7 +335,8 @@ local function check_redis_classifier(cls, changes)
         '100d')
       expire = lua_util.parse_time_interval(expire)
 
-      if not lua_stat_tools.convert_bayes_schema(parsed_redis, symbol_spam, symbol_ham) then
+      if not lua_stat_tools.convert_bayes_schema(parsed_redis, symbol_spam,
+          symbol_ham, expire) then
         printf("Conversion failed")
       else
         printf("Conversion succeed")

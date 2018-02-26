@@ -50,15 +50,21 @@ local nconverted = 0
 
 for _,k in ipairs(keys) do
   local elts = redis.call('HGETALL', k)
+  local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
+  local real_key
 
-  for k,v in pairs(elts) do
-    local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
-    local nkey = string.format('%s_%s', neutral_prefix, k)
-    redis.call('HSET', nkey, KEYS[2], v)
-    if KEYS[4] and tonumber(KEYS[3]) ~= 0 then
-      redis.call('EXPIRE', nkey, KEYS[3])
+  for i,v in ipairs(elts) do
+
+    if i % 2 ~= 0 then
+      real_key = v
+    else
+      local nkey = string.format('%s_%s', neutral_prefix, real_key)
+      redis.call('HSET', nkey, KEYS[2], v)
+      if KEYS[3] and tonumber(KEYS[3]) > 0 then
+        redis.call('EXPIRE', nkey, KEYS[3])
+      end
+      nconverted = nconverted + 1
     end
-    nconverted = nconverted + 1
   end
 end
 
@@ -70,7 +76,7 @@ return nconverted
   ret, res = conn:exec()
 
   if not ret then
-    logger.errx('error converting symbol %s', symbol_spam)
+    logger.errx('error converting symbol %s: %s', symbol_spam, res)
     return false
   else
     logger.messagex('converted %s elements from symbol %s', res, symbol_spam)
@@ -80,7 +86,7 @@ return nconverted
   ret, res = conn:exec()
 
   if not ret then
-    logger.errx('error converting symbol %s', symbol_ham)
+    logger.errx('error converting symbol %s: %s', symbol_ham, res)
     return false
   else
     logger.messagex('converted %s elements from symbol %s', res, symbol_ham)
