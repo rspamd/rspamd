@@ -351,10 +351,7 @@ local function check_redis_classifier(cls, changes)
     end
   end
 
-  if not cls.new_schema then
-    printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
-    try_convert()
-  else
+  local function get_version()
     local _,conn = lua_redis.redis_connect_sync(parsed_redis, true)
     -- We still need to check versions
     local lua_script = [[
@@ -369,7 +366,33 @@ return ver
 ]]
     conn:add_cmd('EVAL', {lua_script, '1', symbol_spam})
     local _,ver = conn:exec()
-    if tonumber(ver) ~= 2 then
+
+    return tonumber(ver)
+  end
+
+  if not cls.new_schema then
+    local ver = get_version()
+
+    if ver ~= 2 then
+      printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
+      try_convert()
+    else
+      printf("You have configured an old schema for %s/%s but your data has new layout",
+          symbol_ham, symbol_spam)
+
+      if ask_yes_no("Switch config to the new schema?", true) then
+        changes.l['classifier_bayes'] = {
+          new_schema = true,
+        }
+
+        if expire then
+          changes.l['classifier_bayes'].expire = expire
+        end
+      end
+    end
+  else
+    local ver = get_version()
+    if ver ~= 2 then
       printf("You have configured new schema for %s/%s but your DB has old data",
         symbol_spam, symbol_ham)
       try_convert()
