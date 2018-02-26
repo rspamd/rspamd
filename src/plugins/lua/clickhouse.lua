@@ -686,37 +686,39 @@ if opts then
       end)
       -- Create tables on load
       rspamd_config:add_on_load(function(cfg, ev_base, worker)
-        -- XXX: need to call this script for all upstreams
-        local upstream = settings.upstream:get_upstream_round_robin()
-        local ip_addr = upstream:get_addr():to_string(true)
+        if worker:is_primary_controller() then
+          -- XXX: need to call this script for all upstreams
+          local upstream = settings.upstream:get_upstream_round_robin()
+          local ip_addr = upstream:get_addr():to_string(true)
 
-        local function http_cb(err_message, code, _, _)
-          if code ~= 200 or err_message then
-            rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s",
-              ip_addr, err_message)
-            upstream:fail()
-          else
-            upstream:ok()
+          local function http_cb(err_message, code, _, _)
+            if code ~= 200 or err_message then
+              rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s",
+                  ip_addr, err_message)
+              upstream:fail()
+            else
+              upstream:ok()
+            end
           end
-        end
 
-        local function send_req(elt, sql)
-          if not rspamd_http.request({
-            ev_base = ev_base,
-            config = cfg,
-            url = connect_prefix .. ip_addr,
-            body = sql,
-            callback = http_cb,
-            mime_type = 'text/plain',
-            timeout = settings['timeout'],
-          }) then
-            rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
-              elt, settings['server'])
+          local function send_req(elt, sql)
+            if not rspamd_http.request({
+              ev_base = ev_base,
+              config = cfg,
+              url = connect_prefix .. ip_addr,
+              body = sql,
+              callback = http_cb,
+              mime_type = 'text/plain',
+              timeout = settings['timeout'],
+            }) then
+              rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
+                  elt, settings['server'])
+            end
           end
-        end
 
-        for tab,sql in pairs(clickhouse_schema) do
-          send_req(tab, sql)
+          for tab,sql in pairs(clickhouse_schema) do
+            send_req(tab, sql)
+          end
         end
       end)
     end

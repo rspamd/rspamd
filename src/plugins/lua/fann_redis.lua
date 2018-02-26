@@ -1036,7 +1036,7 @@ else
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       check_fanns(rule, cfg, ev_base)
 
-      if worker:get_name() == 'controller' and worker:get_index() == 0 then
+      if worker:is_primary_controller() then
         -- We also want to train neural nets when they have enough data
         rspamd_config:add_periodic(ev_base, 0.0,
           function(_, _)

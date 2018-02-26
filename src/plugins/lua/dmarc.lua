@@ -306,7 +306,7 @@ local function dmarc_callback(task)
 
     for _,r in ipairs(results) do
       if failed_policy then break end
-      (function()
+      local function try()
         local elts = dmarc_grammar:match(r)
         if not elts then
           return
@@ -381,7 +381,8 @@ local function dmarc_callback(task)
             rua = elts['rua']
           end
         end
-      end)()
+      end
+      try()
     end
 
     if not found_policy then
@@ -642,7 +643,7 @@ if opts['reporting'] == true then
     end
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       load_scripts(cfg, ev_base)
-      if not (worker:get_name() == 'controller' and worker:get_index() == 0) then return end
+      if not worker:is_primary_controller() then return end
       local rresolver = rspamd_resolver.init(ev_base, rspamd_config)
       rspamd_config:register_finish_script(function ()
         local stamp = pool:get_variable(VAR_NAME, 'double')

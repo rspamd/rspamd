@@ -143,11 +143,18 @@ void rspamd_worker_unblock_signals (void);
 void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
 
 /**
- * Returns TRUE if a specific worker is normal worker
+ * Returns TRUE if a specific worker is a scanner worker
  * @param w
  * @return
  */
 gboolean rspamd_worker_is_scanner (struct rspamd_worker *w);
+
+/**
+ * Returns TRUE if a specific worker is a primary controller
+ * @param w
+ * @return
+ */
+gboolean rspamd_worker_is_primary_controller (struct rspamd_worker *w);
 
 /**
  * Creates new session cache

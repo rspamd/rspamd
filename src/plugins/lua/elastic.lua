@@ -373,8 +373,10 @@ if redis_params and opts then
     })
 
     rspamd_config:add_on_load(function(cfg, ev_base,worker)
-      check_elastic_server(cfg, ev_base, worker) -- check for elasticsearch requirements
-      initial_setup(cfg, ev_base, worker) -- import mappings pipeline and visualizations
+      if worker:is_scanner() then
+        check_elastic_server(cfg, ev_base, worker) -- check for elasticsearch requirements
+        initial_setup(cfg, ev_base, worker) -- import mappings pipeline and visualizations
+      end
     end)
   end
 

@@ -178,7 +178,7 @@ if opts and type(opts) == 'table' then
 
   if sane_config then
     rspamd_config:add_on_load(function(_, ev_base, worker)
-      if worker:get_name() == 'controller' and worker:get_index() == 0 then
+      if worker:is_primary_controller() then
         rspamd_config:add_periodic(ev_base, 0.0,
           function(_cfg, _ev_base)
             return collect_fuzzy_hashes(_cfg, _ev_base)

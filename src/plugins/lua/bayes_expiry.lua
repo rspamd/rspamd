@@ -213,7 +213,7 @@ end
 
 rspamd_config:add_on_load(function (_, ev_base, worker)
   -- Exit unless we're the first 'controller' worker
-  if not (worker:get_name() == 'controller' and worker:get_index() == 0) then return end
+  if not worker:is_primary_controller() then return end
 
   local unique_redis_params = {}
   -- Push redis script to all unique redis servers

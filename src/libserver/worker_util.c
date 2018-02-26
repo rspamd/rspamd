@@ -751,6 +751,17 @@ rspamd_worker_is_scanner (struct rspamd_worker *w)
 	return FALSE;
 }
 
+gboolean
+rspamd_worker_is_primary_controller (struct rspamd_worker *w)
+{
+
+	if (w) {
+		return !!(w->flags & RSPAMD_WORKER_CONTROLLER) && w->index == 0;
+	}
+
+	return FALSE;
+}
+
 struct rspamd_worker_session_elt {
 	void *ptr;
 	guint *pref;
