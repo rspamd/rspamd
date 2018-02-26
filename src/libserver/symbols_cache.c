@@ -79,7 +79,6 @@ struct symbols_cache {
 	guint stats_symbols_count;
 	guint64 total_hits;
 	struct rspamd_config *cfg;
-	rspamd_mempool_mutex_t *mtx;
 	gdouble reload_time;
 	gint peak_cb;
 };
@@ -977,7 +976,6 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->postfilters = g_ptr_array_new ();
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
-	cache->mtx = rspamd_mempool_get_mutex (cache->static_pool);
 	cache->reload_time = cfg->cache_reload_time;
 	cache->total_hits = 1;
 	cache->total_weight = 1.0;
@@ -2026,9 +2024,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	double_to_tv (tm, &tv);
 	event_add (&cbdata->resort_ev, &tv);
 
-	if (rspamd_worker_is_scanner (cbdata->w)) {
-		rspamd_mempool_lock_mutex (cache->mtx);
-
+	if (rspamd_worker_is_primary_controller (cbdata->w))
 		/* Gather stats from shared execution times */
 		for (i = 0; i < cache->items_by_id->len; i ++) {
 			item = g_ptr_array_index (cache->items_by_id, i);
@@ -2089,20 +2085,17 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 			}
 		}
 
-		/* Sync virtual symbols */
-		for (i = 0; i < cache->items_by_id->len; i ++) {
-			item = g_ptr_array_index (cache->items_by_id, i);
+	/* Sync virtual symbols */
+	for (i = 0; i < cache->items_by_id->len; i ++) {
+		item = g_ptr_array_index (cache->items_by_id, i);
 
-			if (item->parent != -1) {
-				parent = g_ptr_array_index (cache->items_by_id, item->parent);
+		if (item->parent != -1) {
+			parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
-				if (parent) {
-					item->st->avg_time = parent->st->avg_time;
-				}
+			if (parent) {
+				item->st->avg_time = parent->st->avg_time;
 			}
 		}
-
-		rspamd_mempool_unlock_mutex (cache->mtx);
 	}
 
 	cbdata->last_resort = cur_ticks;
@@ -2125,12 +2118,13 @@ rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
 	tm = rspamd_time_jitter (cache->reload_time, 0);
 	msg_debug_cache ("next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
-	evtimer_set (&cbdata->resort_ev, rspamd_symbols_cache_resort_cb, cbdata);
+	evtimer_set (&cbdata->resort_ev, rspamd_symbols_cache_resort_cb,
+			cbdata);
 	event_base_set (ev_base, &cbdata->resort_ev);
 	double_to_tv (tm, &tv);
 	event_add (&cbdata->resort_ev, &tv);
 	rspamd_mempool_add_destructor (cache->static_pool,
-			(rspamd_mempool_destruct_t)event_del,
+			(rspamd_mempool_destruct_t) event_del,
 			&cbdata->resort_ev);
 }
 
