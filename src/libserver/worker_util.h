@@ -147,7 +147,7 @@ void rspamd_hard_terminate (struct rspamd_main *rspamd_main) G_GNUC_NORETURN;
  * @param w
  * @return
  */
-gboolean rspamd_worker_is_normal (struct rspamd_worker *w);
+gboolean rspamd_worker_is_scanner (struct rspamd_worker *w);
 
 /**
  * Creates new session cache

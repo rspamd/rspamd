@@ -117,7 +117,8 @@ worker_t controller_worker = {
 	"controller",                   /* Name */
 	init_controller_worker,         /* Init function */
 	start_controller_worker,        /* Start function */
-	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
+	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE |
+			RSPAMD_WORKER_SCANNER | RSPAMD_WORKER_CONTROLLER,
 	RSPAMD_WORKER_SOCKET_TCP,       /* TCP socket */
 	RSPAMD_WORKER_VER       /* Version info */
 };

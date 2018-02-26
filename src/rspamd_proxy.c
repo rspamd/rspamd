@@ -72,7 +72,7 @@ worker_t rspamd_proxy_worker = {
 	"rspamd_proxy",               /* Name */
 	init_rspamd_proxy,            /* Init function */
 	start_rspamd_proxy,           /* Start function */
-	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
+	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE | RSPAMD_WORKER_SCANNER,
 	RSPAMD_WORKER_SOCKET_TCP,    /* TCP socket */
 	RSPAMD_WORKER_VER
 };

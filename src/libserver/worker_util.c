@@ -588,6 +588,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->srv = rspamd_main;
 	wrk->type = cf->type;
 	wrk->cf = cf;
+	wrk->flags = cf->worker->flags;
 	REF_RETAIN (cf);
 	wrk->index = index;
 	wrk->ctx = cf->ctx;
@@ -740,19 +741,11 @@ rspamd_hard_terminate (struct rspamd_main *rspamd_main)
 }
 
 gboolean
-rspamd_worker_is_normal (struct rspamd_worker *w)
+rspamd_worker_is_scanner (struct rspamd_worker *w)
 {
-	static GQuark normal_quark = (GQuark)0;
 
 	if (w) {
-		if (normal_quark) {
-			return w->type == normal_quark;
-		}
-		else {
-			normal_quark = g_quark_from_static_string ("normal");
-		}
-
-		return w->type == normal_quark;
+		return !!(w->flags & RSPAMD_WORKER_SCANNER);
 	}
 
 	return FALSE;

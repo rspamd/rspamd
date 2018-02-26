@@ -1308,7 +1308,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 						diff);
 			}
 
-			if (rspamd_worker_is_normal (task->worker)) {
+			if (rspamd_worker_is_scanner (task->worker)) {
 				rspamd_set_counter (item->cd, diff);
 			}
 
@@ -2026,7 +2026,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	double_to_tv (tm, &tv);
 	event_add (&cbdata->resort_ev, &tv);
 
-	if (rspamd_worker_is_normal (cbdata->w)) {
+	if (rspamd_worker_is_scanner (cbdata->w)) {
 		rspamd_mempool_lock_mutex (cache->mtx);
 
 		/* Gather stats from shared execution times */

@@ -52,6 +52,17 @@
 #define CR '\r'
 #define LF '\n'
 
+enum rspamd_worker_flags {
+	RSPAMD_WORKER_HAS_SOCKET = (1 << 0),
+	RSPAMD_WORKER_UNIQUE = (1 << 1),
+	RSPAMD_WORKER_THREADED = (1 << 2),
+	RSPAMD_WORKER_KILLABLE = (1 << 3),
+	RSPAMD_WORKER_ALWAYS_START = (1 << 4),
+	RSPAMD_WORKER_SCANNER = (1 << 5),
+	RSPAMD_WORKER_CONTROLLER = (1 << 6),
+};
+
+
 /**
  * Worker process structure
  */
@@ -68,6 +79,7 @@ struct rspamd_worker {
 	GList *accept_events;           /**< socket events									*/
 	struct rspamd_worker_conf *cf;  /**< worker config data								*/
 	gpointer ctx;                   /**< worker's specific data							*/
+	enum rspamd_worker_flags flags; /**< worker's flags									*/
 	gint control_pipe[2];           /**< control pipe. [0] is used by main process,
 	                                                   [1] is used by a worker			*/
 	gint srv_pipe[2];               /**< used by workers to request something from the
@@ -179,14 +191,6 @@ typedef struct module_s {
 	guint64 rspamd_version;
 	const gchar *rspamd_features;
 } module_t;
-
-enum rspamd_worker_flags {
-	RSPAMD_WORKER_HAS_SOCKET = (1 << 0),
-	RSPAMD_WORKER_UNIQUE = (1 << 1),
-	RSPAMD_WORKER_THREADED = (1 << 2),
-	RSPAMD_WORKER_KILLABLE = (1 << 3),
-	RSPAMD_WORKER_ALWAYS_START = (1 << 4),
-};
 
 enum rspamd_worker_socket_type {
 	RSPAMD_WORKER_SOCKET_NONE = 0,
