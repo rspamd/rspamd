@@ -140,11 +140,12 @@ local function update_dynamic_conf(cfg, ev_base, recv)
       rspamd_logger.errx(cfg, "cannot save dynamic conf to redis: %s", err)
     else
       rspamd_redis.redis_make_request_taskless(ev_base,
-        cfg,
-        settings.redis_key,
-        true,
-        redis_version_set_cb,
-        'HINCRBY', {settings.redis_key, 'v', '1'})
+          cfg,
+          redis_params,
+          settings.redis_key,
+          true,
+          redis_version_set_cb,
+          'HINCRBY', {settings.redis_key, 'v', '1'})
     end
   end
 
@@ -180,8 +181,9 @@ local function update_dynamic_conf(cfg, ev_base, recv)
     end
   end
   local newdata = ucl.to_format(cur_settings.data, 'json-compact')
-  rspamd_redis.redis_make_request_taskless(ev_base, cfg, settings.redis_key, true,
-          redis_data_set_cb, 'HSET', {settings.redis_key, 'd', newdata})
+  rspamd_redis.redis_make_request_taskless(ev_base, cfg, redis_params,
+      settings.redis_key, true,
+      redis_data_set_cb, 'HSET', {settings.redis_key, 'd', newdata})
 end
 
 local function check_dynamic_conf(cfg, ev_base)
@@ -214,8 +216,9 @@ local function check_dynamic_conf(cfg, ev_base)
         rspamd_logger.infox(cfg, "need to load fresh dynamic settings with version %s, local version is %s",
           rver, cur_settings.version)
         cur_settings.version = rver
-        rspamd_redis.redis_make_request_taskless(ev_base, cfg, settings.redis_key, false,
-          redis_load_cb, 'HGET', {settings.redis_key, 'd'})
+        rspamd_redis.redis_make_request_taskless(ev_base, cfg, redis_params,
+            settings.redis_key, false,
+            redis_load_cb, 'HGET', {settings.redis_key, 'd'})
       elseif cur_settings.updates.has_updates then
         -- Need to send our updates to Redis
         update_dynamic_conf(cfg, ev_base)
@@ -226,8 +229,9 @@ local function check_dynamic_conf(cfg, ev_base)
     end
   end
 
-  rspamd_redis.redis_make_request_taskless(ev_base, cfg, settings.redis_key, false,
-    redis_check_cb, 'HGET', {settings.redis_key, 'v'})
+  rspamd_redis.redis_make_request_taskless(ev_base, cfg, redis_params,
+      settings.redis_key, false,
+      redis_check_cb, 'HGET', {settings.redis_key, 'v'})
 end
 
 local section = rspamd_config:get_all_opt("dynamic_conf")
