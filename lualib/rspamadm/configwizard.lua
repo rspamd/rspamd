@@ -370,6 +370,27 @@ return ver
     return tonumber(ver)
   end
 
+  local function check_expire()
+    local _,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+    -- We still need to check versions
+    local lua_script = [[
+local ttl = 0
+
+local sc = redis.call('SCAN', 0, 'MATCH', 'RS*_*', 'COUNT', 1)
+local _,key = sc[1], sc[2]
+
+if key and key[1] then
+  ttl = redis.call('TTL', key[1])
+end
+
+return ttl
+]]
+    conn:add_cmd('EVAL', {lua_script, '0'})
+    local _,ttl = conn:exec()
+
+    return tonumber(ttl)
+  end
+
   if not cls.new_schema then
     local ver = get_version()
 
@@ -385,6 +406,7 @@ return ver
           new_schema = true,
         }
 
+        local expire = check_expire()
         if expire then
           changes.l['classifier_bayes'].expire = expire
         end
