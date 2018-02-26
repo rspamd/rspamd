@@ -713,7 +713,7 @@ if opts then
                 timeout = settings['timeout'],
               }) then
                 rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
-                    elt, ip_addr])
+                    elt, ip_addr)
               end
             end
 
