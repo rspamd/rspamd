@@ -225,7 +225,7 @@ local process_cmd = {
   eval = function(args)
     local idx_l = {}
     local numkeys = args[2]
-    if numkeys >= 1 then
+    if numkeys and tonumber(numkeys) >= 1 then
       for i = 3, numkeys + 2 do
         table.insert(idx_l, i)
       end
