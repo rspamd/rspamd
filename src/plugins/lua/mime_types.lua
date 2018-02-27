@@ -974,34 +974,34 @@ if opts then
     settings[k] = v
   end
 
-  -- Transform extension_map
-  for k,v in pairs(settings.extension_map) do
-    if type(v) == 'table' then
+  local function change_extension_map_entry(ext, ct, mult)
+    if type(ct) == 'table' then
       local tbl = {}
-      for _,elt in ipairs(v) do
+      for _,elt in ipairs(ct) do
         table.insert(tbl, {
           ct = elt,
-          mult = 1.0,
+          mult = mult,
         })
       end
-      settings.extension_map[k] = tbl
+      settings.extension_map[ext] = tbl
     else
-      settings.extension_map[k] = { [1] = {
-        ct = v,
-        mult = 1.0
+      settings.extension_map[ext] = { [1] = {
+        ct = ct,
+        mult = mult
       } }
     end
+  end
+
+  -- Transform extension_map
+  for ext,ct in pairs(settings.extension_map) do
+    change_extension_map_entry(ext, ct, 1.0)
   end
 
   -- Add all extensions
   for _,pair in ipairs(full_extensions_map) do
     local ext, ct = pair[1], pair[2]
-
     if not settings.extension_map[ext] then
-      settings.extension_map[ext] = { [1] = {
-        ct = ct,
-        mult = settings.other_extensions_mult
-      } }
+        change_extension_map_entry(ext, ct, settings.other_extensions_mult)
     end
   end
 
