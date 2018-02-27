@@ -225,7 +225,7 @@ local process_cmd = {
   eval = function(args)
     local idx_l = {}
     local numkeys = args[2]
-    if numkeys >= 1 then
+    if numkeys and tonumber(numkeys) >= 1 then
       for i = 3, numkeys + 2 do
         table.insert(idx_l, i)
       end
@@ -843,8 +843,8 @@ local function add_redis_script(script, redis_params)
 end
 exports.add_redis_script = add_redis_script
 
-local function exec_redis_script(id, params, callback, args)
-  local args_modified = false
+local function exec_redis_script(id, params, callback, keys, args)
+  local keys_modified = false
 
   if not redis_scripts[id] then
       logger.errx("cannot find registered script with id %s", id)
@@ -878,21 +878,26 @@ local function exec_redis_script(id, params, callback, args)
       end
     end
 
-    if not args_modified then
-      table.insert(args, 1, tostring(#args))
-      table.insert(args, 1, script.sha)
-      args_modified = true
+    if not keys_modified then
+      table.insert(keys, 1, tostring(#keys))
+      table.insert(keys, 1, script.sha)
+      if type(args) == 'table' then
+        for _, a in ipairs(args) do
+          table.insert(keys, a)
+        end
+      end
+      keys_modified = true
     end
 
     if params.task then
       if not rspamd_redis_make_request(params.task, script.redis_params,
-        params.key, params.is_write, redis_cb, 'EVALSHA', args) then
+        params.key, params.is_write, redis_cb, 'EVALSHA', keys) then
         callback('Cannot make redis request', nil)
       end
     else
       if not redis_make_request_taskless(params.ev_base, rspamd_config,
         script.redis_params,
-        params.key, params.is_write, redis_cb, 'EVALSHA', args) then
+        params.key, params.is_write, redis_cb, 'EVALSHA', keys) then
         callback('Cannot make redis request', nil)
       end
     end
