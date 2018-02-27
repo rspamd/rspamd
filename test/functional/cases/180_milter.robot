@@ -24,7 +24,6 @@ DEFER
   Milter Test  mt4.lua
 
 COMBINED TEST
-  [Tags]  isbroken
   Milter Test  combined.lua
 
 *** Keywords ***
