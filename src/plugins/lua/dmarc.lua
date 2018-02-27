@@ -1189,7 +1189,7 @@ if type(opts['report_settings']) == 'table' then
     report_settings[k] = v
   end
 end
-if dmarc_reporting then
+if opts['send_reports'] then
   for _, e in ipairs({'email', 'domain', 'org_name'}) do
     if not report_settings[e] then
       rspamd_logger.errx(rspamd_config, 'Missing required setting: report_settings.%s', e)
