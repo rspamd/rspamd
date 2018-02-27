@@ -316,16 +316,28 @@ static void
 lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 {
 	const char *name, *value;
+	gint i, sz;
 
 	lua_pushnil (L);
 	while (lua_next (L, -2) != 0) {
 
 		lua_pushvalue (L, -2);
 		name = lua_tostring (L, -1);
-		value = lua_tostring (L, -2);
-
-		if (name != NULL && value != NULL) {
-			rspamd_http_message_add_header (msg, name, value);
+		sz = rspamd_lua_table_size (L, -2);
+		if (sz != 0 && name != NULL) {
+			for (i = 1; i <= sz ; i++) {
+				lua_rawgeti (L, -2, i);
+				value = lua_tostring (L, -1);
+				if (value != NULL) {
+					rspamd_http_message_add_header (msg, name, value);
+				}
+				lua_pop (L, 1);
+			}
+		} else {
+			value = lua_tostring (L, -2);
+			if (name != NULL && value != NULL) {
+				rspamd_http_message_add_header (msg, name, value);
+			}
 		}
 		lua_pop (L, 2);
 	}
