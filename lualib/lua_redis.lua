@@ -843,7 +843,7 @@ local function add_redis_script(script, redis_params)
 end
 exports.add_redis_script = add_redis_script
 
-local function exec_redis_script(id, params, callback, args)
+local function exec_redis_script(id, params, callback, args, aargs)
   local args_modified = false
 
   if not redis_scripts[id] then
@@ -881,6 +881,11 @@ local function exec_redis_script(id, params, callback, args)
     if not args_modified then
       table.insert(args, 1, tostring(#args))
       table.insert(args, 1, script.sha)
+      if type(aargs) == 'table' then
+        for _, a in ipairs(aargs) do
+          table.insert(args, a)
+        end
+      end
       args_modified = true
     end
 

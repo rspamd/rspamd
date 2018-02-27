@@ -542,7 +542,7 @@ local function dmarc_callback(task)
 
       if report_data then
         rspamd_redis.exec_redis_script(take_report_id, {task = task, is_write = true}, dmarc_report_cb,
-          {2, idx_key, dmarc_domain_key, hfromdom, report_data})
+          {idx_key, dmarc_domain_key}, {hfromdom, report_data})
       end
     end
 
