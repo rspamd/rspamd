@@ -863,7 +863,8 @@ file_log_function (const gchar *module, const gchar *id,
 		const gchar *message,
 		gpointer arg)
 {
-	static gchar tmpbuf[256], timebuf[64], modulebuf[64];
+	static gchar timebuf[64], modulebuf[64];
+	gchar tmpbuf[256];
 	gchar *m;
 	gdouble now;
 	struct tm tms;
@@ -967,6 +968,7 @@ file_log_function (const gchar *module, const gchar *id,
 						"Last message repeated %ud times",
 						rspamd_log->repeats);
 				rspamd_log->repeats = 0;
+
 				if (rspamd_log->saved_message) {
 					file_log_function (rspamd_log->saved_module,
 							rspamd_log->saved_id,
