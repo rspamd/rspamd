@@ -77,7 +77,7 @@ end
 local function print_changes(changes)
   local function print_change(k, c, where)
     printf('File: %s, changes list:', highlight(local_conf .. '/'
-        .. where .. '/'.. k .. '.conf'))
+        .. where .. '/'.. k))
 
     for ek,ev in pairs(c) do
       printf("%s => %s", highlight(ek), rspamd_logger.slog("%s", ev))
@@ -103,7 +103,7 @@ local function apply_changes(changes)
   end
 
   local function apply_change(k, c, where)
-    local fname = local_conf .. '/' .. where .. '/'.. k .. '.conf'
+    local fname = local_conf .. '/' .. where .. '/'.. k
 
     if not rspamd_util.file_exists(fname) then
       printf("Create file %s", highlight(fname))
@@ -340,12 +340,12 @@ local function check_redis_classifier(cls, changes)
         printf("Conversion failed")
       else
         printf("Conversion succeed")
-        changes.l['classifier_bayes'] = {
+        changes.l['classifier-bayes.conf'] = {
           new_schema = true,
         }
 
         if expire then
-          changes.l['classifier_bayes'].expire = expire
+          changes.l['classifier-bayes.conf'].expire = expire
         end
       end
     end
@@ -402,13 +402,13 @@ return ttl
           symbol_ham, symbol_spam)
 
       if ask_yes_no("Switch config to the new schema?", true) then
-        changes.l['classifier_bayes'] = {
+        changes.l['classifier-bayes.conf'] = {
           new_schema = true,
         }
 
         local expire = check_expire()
         if expire then
-          changes.l['classifier_bayes'].expire = expire
+          changes.l['classifier-bayes.conf'].expire = expire
         end
       end
     end
@@ -452,17 +452,17 @@ local function setup_statistic(cfg, changes)
             return false
           end
           rspamd_logger.messagex('Converted classifier to the from sqlite to redis')
-          changes.l['classifier_bayes'] = {
+          changes.l['classifier-bayes.conf'] = {
             backend = 'redis',
             new_schema = true,
           }
 
           if expire then
-            changes.l['classifier_bayes'].expire = expire
+            changes.l['classifier-bayes.conf'].expire = expire
           end
 
           if cls.learn_cache then
-            changes.l['classifier_bayes'].cache = {
+            changes.l['classifier-bayes.conf'].cache = {
               backend = 'redis'
             }
           end
