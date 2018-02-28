@@ -473,7 +473,7 @@ function($, _, Humanize) {
             if (action instanceof FooTable.Filter) {
                 if(action.query.val() === 'reject -soft'){
                     this.$action.val('reject');
-                } else if( action.query.val() != 'reject -soft'){
+                } else {
                     this.$action.val(action.query.val());
                 }
             } else {
