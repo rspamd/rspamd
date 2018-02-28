@@ -547,7 +547,7 @@ local selectors = {
   dkim = dkim_selector
 }
 
-local function reputation_dns_init(rule)
+local function reputation_dns_init(rule, _, _, _)
   if not rule.backend.config.list then
     rspamd_logger.errx(rspamd_config, "rule %s with DNS backend has no `list` parameter defined",
       rule.symbol)
@@ -746,8 +746,20 @@ end
 local backends = {
   redis = {
     config = {
-      expiry = default_expiry
+      expiry = default_expiry,
+      buckets = {
+        {
+          time = 60 * 60,
+          name = '1h',
+        },
+        {
+          time = 60 * 60 * 24 * 30,
+          name = '1m',
+
+        }
+      }, -- What buckets should be used, default 1h and 1month
     },
+    init = reputation_redis_init,
     get_token = reputation_redis_get_token,
     set_token = reputation_redis_set_token,
   },
@@ -834,7 +846,9 @@ end
 
 local function callback_gen(cb, rule)
   return function(task)
-    cb(task, rule)
+    if rule.enabled then
+      cb(task, rule)
+    end
   end
 end
 
@@ -884,18 +898,30 @@ local function parse_rule(name, tbl)
   end
 
   rule.symbol = symbol
-
-  -- Perform additional initialization if needed
+  rule.enabled = true
   if rule.selector.init then
-    if not rule.selector.init(rule) then
-      return
-    end
+    rule.enabled = false
   end
   if rule.backend.init then
-    if not rule.backend.init(rule) then
-      return
-    end
+    rule.enabled = false
   end
+  -- Perform additional initialization if needed
+  rspamd_config:add_on_load(function(cfg, ev_base, worker)
+    if rule.selector.init then
+      if not rule.selector.init(rule, cfg, ev_base, worker) then
+        rule.enabled = false
+      else
+        rule.enabled = true
+      end
+    end
+    if rule.backend.init then
+      if not rule.backend.init(rule, cfg, ev_base, worker) then
+        rule.enabled = false
+      else
+        rule.enabled = true
+      end
+    end
+  end)
 
   -- We now generate symbol for checking
   local id = rspamd_config:register_symbol{
