@@ -844,7 +844,7 @@ end
 exports.add_redis_script = add_redis_script
 
 local function exec_redis_script(id, params, callback, keys, args)
-  local keys_modified = false
+  local redis_args = {}
 
   if not redis_scripts[id] then
       logger.errx("cannot find registered script with id %s", id)
@@ -878,26 +878,29 @@ local function exec_redis_script(id, params, callback, keys, args)
       end
     end
 
-    if not keys_modified then
-      table.insert(keys, 1, tostring(#keys))
-      table.insert(keys, 1, script.sha)
+    if #redis_args == 0 then
+      table.insert(redis_args, script.sha)
+      table.insert(redis_args, tostring(#keys))
+      for _,k in ipairs(keys) do
+        table.insert(redis_args, k)
+      end
+
       if type(args) == 'table' then
         for _, a in ipairs(args) do
-          table.insert(keys, a)
+          table.insert(redis_args, a)
         end
       end
-      keys_modified = true
     end
 
     if params.task then
       if not rspamd_redis_make_request(params.task, script.redis_params,
-        params.key, params.is_write, redis_cb, 'EVALSHA', keys) then
+        params.key, params.is_write, redis_cb, 'EVALSHA', redis_args) then
         callback('Cannot make redis request', nil)
       end
     else
       if not redis_make_request_taskless(params.ev_base, rspamd_config,
         script.redis_params,
-        params.key, params.is_write, redis_cb, 'EVALSHA', keys) then
+        params.key, params.is_write, redis_cb, 'EVALSHA', redis_args) then
         callback('Cannot make redis request', nil)
       end
     end
