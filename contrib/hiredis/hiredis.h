@@ -94,7 +94,7 @@
 /* "bad" GNU strerror_r we need to clean up after. */
 #define __redis_strerror_r(errno, buf, len)                                    \
     do {                                                                       \
-        char *err_str = strerror_r((errno), (buf), (len));                     \
+        char *err_str = strerror((errno));                                    \
         /* If return value _isn't_ the start of the buffer we passed in,       \
          * then GNU strerror_r returned an internal static buffer and we       \
          * need to copy the result into our private buffer. */                 \
