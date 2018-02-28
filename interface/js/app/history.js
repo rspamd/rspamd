@@ -457,7 +457,11 @@ function($, _, Humanize) {
         _onStatusDropdownChanged : function(e) {
             var self = e.data.self, selected = $(this).val();
             if (selected !== self.def) {
-                self.addFilter('action', selected, [ 'action' ]);
+                if(selected === "reject"){
+		  self.addFilter('action', 'reject -soft', [ 'action' ]);
+                } else {
+		  self.addFilter('action', selected, [ 'action' ]);
+		}
             } else {
                 self.removeFilter('action');
             }
