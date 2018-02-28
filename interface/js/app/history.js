@@ -471,7 +471,11 @@ function($, _, Humanize) {
             this._super();
             var action = this.find('action');
             if (action instanceof FooTable.Filter) {
-                this.$action.val(action.query.val());
+                if(action.query.val() === 'reject -soft'){
+                    this.$action.val('reject');
+                } else if( action.query.val() != 'reject -soft'){
+                    this.$action.val(action.query.val());
+                }
             } else {
                 this.$action.val(this.def);
             }
