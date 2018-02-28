@@ -34,8 +34,8 @@ local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 
 -- Get reputation from ham/spam/probable hits
-local function generic_reputation_calc(rule, token, mult)
-  local cfg = rule.selector.config
+local function generic_reputation_calc(token, rule, mult)
+  local cfg = rule.selector.config or E
 
   if cfg.score_calc_func then
     return cfg.score_calc_func(rule, token, mult)
@@ -51,6 +51,7 @@ local function generic_reputation_calc(rule, token, mult)
   local score = (ham_samples / total_samples) * -1.0 +
       (spam_samples / total_samples) +
       (probable_samples / total_samples) * 0.5
+
   return score
 end
 
@@ -400,7 +401,7 @@ local function ip_reputation_filter(task, rule)
       table.insert(description_t, string.format('ip: %s(%.2f)', ip, ip_score))
     end
 
-    if math.abs(score) > 1e-3 then
+    if math.abs(score) > 0.001 then
       task:insert_result(rule.symbol, score, table.concat(description_t, ', '))
     end
   end
@@ -659,7 +660,7 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
   end
   -- Init scripts for buckets
   local redis_get_script_tpl = [[
-local key = KEYS[1] .. ${name}
+local key = KEYS[1] .. '${name}'
 local vals = redis.call('HGETALL', key)
 for i=1,#vals,2 do
   local k = vals[i]
@@ -673,8 +674,7 @@ end
 ]]
   local redis_script_tbl = {'local scores = {}'}
   for _,bucket in ipairs(rule.backend.config.buckets) do
-    table.insert(redis_script_tbl, lua_util.template(redis_get_script_tpl,
-        fun.totable(fun.map(tostring, bucket))))
+    table.insert(redis_script_tbl, lua_util.template(redis_get_script_tpl, bucket))
   end
   table.insert(redis_script_tbl, [[
   local result = {}
@@ -690,7 +690,7 @@ end
 
   redis_script_tbl = {}
   local redis_set_script_tpl = [[
-local key = KEYS[1] .. ${name}
+local key = KEYS[1] .. '${name}'
 local last = tonumber(redis.call('HGET', key, 'start'))
 local now = tonumber(KEYS[2])
 if not last then
@@ -719,7 +719,7 @@ redis.call('HSET', key, 'last', now)
 ]]
   for _,bucket in ipairs(rule.backend.config.buckets) do
     table.insert(redis_script_tbl, lua_util.template(redis_set_script_tpl,
-        fun.totable(fun.map(tostring, bucket))))
+        bucket))
   end
 
   rule.backend.script_set = lua_redis.add_redis_script(table.concat(redis_script_tbl, '\n'),
@@ -789,10 +789,10 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
     table.insert(args, k)
     table.insert(args, v)
   end
-  local ret = lua_redis.exec_redis_script(rule.backend.script_get,
+  local ret = lua_redis.exec_redis_script(rule.backend.script_set,
       {task = task, is_write = true},
       redis_set_cb,
-      {token, tostring(rspamd_util:get_calendar_ticks()),
+      {token, tostring(rspamd_util:get_time()),
        tostring(rule.backend.config.expiry)}, args)
   if not ret then
     rspamd_logger.errx(task, 'got error while connecting to redis')
@@ -917,7 +917,8 @@ local function callback_gen(cb, rule)
 end
 
 local function parse_rule(name, tbl)
-  local selector = selectors[tbl.selector['type']]
+  local sel_type = tbl.selector['type']
+  local selector = selectors[sel_type]
 
   if not selector then
     rspamd_logger.errx(rspamd_config, "unknown selector defined for rule %s: %s", name,
@@ -931,7 +932,8 @@ local function parse_rule(name, tbl)
     return
   end
 
-  backend = backends[backend.type]
+  local bk_type = backend.type
+  backend = backends[bk_type]
   if not backend then
     rspamd_logger.errx(rspamd_config, "unknown backend defined for rule %s: %s", name,
       tbl.backend.type)
@@ -1018,6 +1020,8 @@ local function parse_rule(name, tbl)
     }
   end
 
+  rspamd_logger.infox('Enable %s(%s backend) rule for symbol %s',
+      sel_type, bk_type, rule.symbol)
 end
 
 redis_params = rspamd_parse_redis_server('reputation')
