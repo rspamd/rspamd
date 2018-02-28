@@ -288,7 +288,7 @@ local function setup_dkim_signing(cfg, changes)
     }
   until not ask_yes_no("Do you wish to add another DKIM domain?")
 
-  changes.l.dkim_signing = {domain = domains}
+  changes.l['dkim_signing.conf'] = {domain = domains}
 end
 
 local function check_redis_classifier(cls, changes)
