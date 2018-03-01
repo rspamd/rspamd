@@ -34,6 +34,26 @@ reconf['SUBJECT_NEEDS_ENCODING'] = {
   group = 'header'
 }
 
+local from_encoded_b64 = 'From=/=\\?\\S+\\?B\\?/iX'
+local from_encoded_qp = 'From=/=\\?\\S+\\?Q\\?/iX'
+local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/X'
+reconf['FROM_NEEDS_ENCODING'] = {
+  re = string.format('!(%s) & !(%s) & (%s)', from_encoded_b64, from_encoded_qp, from_needs_mime),
+  score = 1.0,
+  description = 'From header needs encoding',
+  group = 'header'
+}
+
+local to_encoded_b64 = 'To=/=\\?\\S+\\?B\\?/iX'
+local to_encoded_qp = 'To=/=\\?\\S+\\?Q\\?/iX'
+local to_needs_mime = 'To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/X'
+reconf['TO_NEEDS_ENCODING'] = {
+  re = string.format('!(%s) & !(%s) & (%s)', to_encoded_b64, to_encoded_qp, to_needs_mime),
+  score = 1.0,
+  description = 'To header needs encoding',
+  group = 'header'
+}
+
 -- Detects that there is no space in From header (e.g. Some Name<some@host>)
 reconf['R_NO_SPACE_IN_FROM'] = {
   re = 'From=/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/X',
