@@ -253,7 +253,7 @@ rspamd_config:register_dependency('SYMBOL_FROM', 'SYMBOL_TO')
 LUA_FUNCTION_DEF (config, register_dependency);
 
 /**
- * @method rspamd_config:set_metric_symbol({table})
+ * @method rspamd_config:set_symbol({table})
  * Sets the value of a specified symbol in a metric. This function accepts table with the following elements:
  *
  * - `name`: name of symbol (string)
@@ -272,7 +272,7 @@ LUA_FUNCTION_DEF (config, register_dependency);
 LUA_FUNCTION_DEF (config, set_metric_symbol);
 
 /**
- * @method rspamd_config:set_metric_action({table})
+ * @method rspamd_config:set_action({table})
  * Sets the score of a specified action in a metric. This function accepts table with the following elements:
  *
  * - `action`: name of action (string)
@@ -283,7 +283,7 @@ LUA_FUNCTION_DEF (config, set_metric_symbol);
 LUA_FUNCTION_DEF (config, set_metric_action);
 
 /**
- * @method rspamd_config:get_metric_symbol(name)
+ * @method rspamd_config:get_symbol(name)
  * Gets metric data for a specific symbol identified by `name`:
  *
  * - `score`: score for symbol (number)
@@ -300,13 +300,20 @@ LUA_FUNCTION_DEF (config, set_metric_action);
 LUA_FUNCTION_DEF (config, get_metric_symbol);
 
 /**
- * @method rspamd_config:get_metric_action(name)
- * Gets data for a specific action in a metric. This function returns number reperesenting action's score
+ * @method rspamd_config:get_action(name)
+ * Gets data for a specific action in config. This function returns number reperesenting action's score
  *
  * @param {string} name name of action
  * @return {number} action's score or nil in case of undefined score or action
  */
 LUA_FUNCTION_DEF (config, get_metric_action);
+
+/**
+ * @method rspamd_config:get_all_actions()
+ * Gets data for all action in config
+ * @return {table|str->num} action's score or nil in case of undefined score or action
+ */
+LUA_FUNCTION_DEF (config, get_all_actions);
 
 /**
  * @method rspamd_config:add_composite(name, expression)
@@ -526,6 +533,13 @@ LUA_FUNCTION_DEF (config, get_symbols_count);
 LUA_FUNCTION_DEF (config, get_symbols_cksum);
 
 /***
+ * @method rspamd_config:get_symbols_counters()
+ * Returns table of all counters in the cache (weights, frequencies etc)
+ * @return {table|tables} all symbols indexed by name
+ */
+LUA_FUNCTION_DEF (config, get_symbols_counters);
+
+/***
  * @method rspamd_config:get_symbol_callback(name)
  * Returns callback function for the specified symbol if it is a lua registered callback
  * @return {function} callback function or nil
@@ -673,9 +687,14 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, register_dependency),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
+	{"set_symbol", lua_config_set_metric_symbol},
 	LUA_INTERFACE_DEF (config, set_metric_action),
+	{"set_action", lua_config_set_metric_action},
 	LUA_INTERFACE_DEF (config, get_metric_symbol),
+	{"get_symbol", lua_config_get_metric_symbol},
 	LUA_INTERFACE_DEF (config, get_metric_action),
+	{"get_action", lua_config_get_metric_action},
+	LUA_INTERFACE_DEF (config, get_all_actions),
 	LUA_INTERFACE_DEF (config, add_composite),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_pre_filter),
@@ -692,6 +711,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_periodic),
 	LUA_INTERFACE_DEF (config, get_symbols_count),
 	LUA_INTERFACE_DEF (config, get_symbols_cksum),
+	LUA_INTERFACE_DEF (config, get_symbols_counters),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, get_symbol_stat),
@@ -1936,6 +1956,30 @@ lua_config_get_metric_action (lua_State * L)
 }
 
 static gint
+lua_config_get_all_actions (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	gint act = 0;
+
+	if (cfg) {
+		lua_newtable (L);
+
+		for (act = METRIC_ACTION_REJECT; act < METRIC_ACTION_MAX; act ++) {
+			if (!isnan (cfg->actions[act].score)) {
+				lua_pushstring (L, rspamd_action_to_str (act));
+				lua_pushnumber (L, cfg->actions[act].score);
+				lua_settable (L, -3);
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments, rspamd_config expected");
+	}
+
+	return 1;
+}
+
+static gint
 lua_config_add_composite (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
@@ -2551,6 +2595,24 @@ lua_config_get_symbols_cksum (lua_State *L)
 	pres = lua_newuserdata (L, sizeof (res));
 	*pres = res;
 	rspamd_lua_setclass (L, "rspamd{int64}", -1);
+
+	return 1;
+}
+
+static gint
+lua_config_get_symbols_counters (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	ucl_object_t *counters;
+
+	if (cfg != NULL) {
+		counters = rspamd_symbols_cache_counters (cfg->cache);
+		ucl_object_push_lua (L, counters, true);
+		ucl_object_unref (counters);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
