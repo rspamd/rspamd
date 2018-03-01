@@ -63,7 +63,7 @@ OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
-OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: OFF]" OFF)
+OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: ON]" ON)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
