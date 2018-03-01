@@ -328,6 +328,11 @@ void THSetNumThreads(int num_threads)
   extern void openblas_set_num_threads(int);
   openblas_set_num_threads(num_threads);
 #endif
+#ifdef TH_BLAS_MKL
+  extern void mkl_set_num_threads(int);
+  mkl_set_num_threads(num_threads);
+
+#endif
 }
 
 int THGetNumThreads(void)
@@ -342,7 +347,12 @@ int THGetNumThreads(void)
   bl_threads = openblas_get_num_threads();
   nthreads = nthreads > bl_threads ? bl_threads : nthreads;
 #endif
-
+#ifdef TH_BLAS_MKL
+  int bl_threads = 1;
+  extern int mkl_get_max_threads(void);
+  bl_threads = mkl_get_max_threads();
+  nthreads = nthreads > bl_threads ? bl_threads : nthreads;
+#endif
   return nthreads;
 }
 
