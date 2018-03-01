@@ -38,6 +38,7 @@ my $v4_zone         = "asn.rspamd.com";
 my $v6_zone         = "asn6.rspamd.com";
 my $v4_file         = "asn.zone";
 my $v6_file         = "asn6.zone";
+my $ns_servers      = ["asn-ns.rspamd.com", "asn-ns2.rspamd.com"];
 
 GetOptions(
   "download-asn" => \$download_asn,
@@ -50,6 +51,7 @@ GetOptions(
   "zone-v6=s"    => \$v6_zone,
   "file-v4=s"    => \$v4_file,
   "file-v6=s"    => \$v6_file,
+  "ns-server=s@" => \$ns_servers,
   "help|?"       => \$help,
   "man"          => \$man
 ) or pod2usage(2);
@@ -89,14 +91,18 @@ my $v6_fh;
 if ($v4) {
   open( $v4_fh, ">", $v4_file ) or die "Cannot open $v4_file for writing: $!";
   print $v4_fh
-    "\$SOA 43200 ns1.$v4_zone support.rspamd.com 0 600 300 86400 300\n";
-  print $v4_fh "\$NS 43200 ns1.$v4_zone\n";
+    "\$SOA 43200 $ns_servers->[0] support.rspamd.com 0 600 300 86400 300\n";
+  foreach my $ns (@{$ns_servers}) {
+    print $v4_fh "\$NS 43200 $ns\n";
+  }
 }
 if ($v6) {
   open( $v6_fh, ">", $v6_file ) or die "Cannot open $v6_file for writing: $!";
   print $v6_fh
-    "\$SOA 43200 ns1.$v6_zone support.rspamd.com 0 600 300 86400 300\n";
-  print $v6_fh "\$NS 43200 ns1.$v6_zone\n";
+    "\$SOA 43200 $ns_servers->[0] support.rspamd.com 0 600 300 86400 300\n";
+  foreach my $ns (@{$ns_servers}) {
+    print $v6_fh "\$NS 43200 $ns\n";
+  }
 }
 
 # Now load BGP data
