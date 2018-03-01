@@ -318,8 +318,8 @@ return function (args, cfg)
 
   new_symbol_scores = stitch_new_scores(all_symbols, new_symbol_scores)
 
-  if res["output"] then
-    write_scores(new_symbol_scores, res["output"])
+  if cfg["output"] then
+    write_scores(new_symbol_scores, cfg["output"])
   end
 
   if opts["diff"] then
