@@ -26,12 +26,12 @@
 
 static gchar *logdir = NULL;
 static gchar *output = "new.scores";
-static gdouble threshold = 15; /* Spam threshold */
 static gboolean score_diff = false;  /* Print score diff flag */
-static gint64 iters = 500; /* Perceptron max iterations */
-gdouble timeout = 60.0;
-
-/* TODO: think about adding the config file reading */
+static gchar *config = NULL;
+extern struct rspamd_main *rspamd_main;
+/* Defined in modules.c */
+extern module_t *modules[];
+extern worker_t *workers[];
 
 static void rspamadm_rescore (gint argc, gchar **argv);
 
@@ -51,12 +51,28 @@ static GOptionEntry entries[] = {
 				"Scores output locaiton",                       NULL},
 		{"diff",   'd', 0, G_OPTION_ARG_NONE,     &score_diff,
 				"Print score diff",                             NULL},
-		{"iters",  'i', 0, G_OPTION_ARG_INT64,    &iters,
-				"Max iterations for perceptron [Default: 500]", NULL},
-		{"timeout", 't', 0, G_OPTION_ARG_DOUBLE, &timeout,
-				"Timeout for connections [Default: 60]", NULL},
+		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
+				"Config file to use",     NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL,       NULL}
 };
+
+static void
+config_logger (rspamd_mempool_t *pool, gpointer ud)
+{
+	struct rspamd_main *rm = ud;
+
+	rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
+	rm->cfg->log_level = G_LOG_LEVEL_CRITICAL;
+
+	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), &rm->logger,
+			rm->server_pool);
+
+	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) ==
+			-1) {
+		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
+		exit (EXIT_FAILURE);
+	}
+}
 
 static const char *
 rspamadm_rescore_help (gboolean full_help) {
@@ -70,8 +86,7 @@ rspamadm_rescore_help (gboolean full_help) {
 				"-l: path to logs directory\n"
 				"-o: scores output file location\n"
 				"-d: print scores diff\n"
-				"-i: max iterations for perceptron\n"
-				"-t: timeout for rspamc operations (default: 60)\n";
+				"-i: max iterations for perceptron\n";
 	} else {
 		help_str = "Estimate optimal symbol weights from log files";
 	}
@@ -85,7 +100,10 @@ rspamadm_rescore (gint argc, gchar **argv) {
 	GOptionContext *context;
 	GError *error = NULL;
 	lua_State *L;
-	ucl_object_t *obj;
+	struct rspamd_config *cfg = rspamd_main->cfg, **pcfg;
+	gboolean ret = TRUE;
+	worker_t **pworker;
+	const gchar *confdir;
 
 	context = g_option_context_new (
 			"rescore - estimate optimal symbol weights from log files");
@@ -116,30 +134,66 @@ rspamadm_rescore (gint argc, gchar **argv) {
 		exit (EXIT_FAILURE);
 	}
 
-	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, NULL, ucl_vars);
+	if (config == NULL) {
+		if ((confdir = g_hash_table_lookup (ucl_vars, "CONFDIR")) == NULL) {
+			confdir = RSPAMD_CONFDIR;
+		}
 
-	obj = ucl_object_typed_new (UCL_OBJECT);
+		config = g_strdup_printf ("%s%c%s", confdir, G_DIR_SEPARATOR,
+				"rspamd.conf");
+	}
 
-	ucl_object_insert_key (obj, ucl_object_fromstring (logdir),
-			"logdir", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromstring (output),
-			"output", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (threshold),
-			"threshold", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (iters),
-			"iters", 0, false);
-	ucl_object_insert_key (obj, ucl_object_frombool (score_diff),
-			"diff", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (timeout),
-			"timeout", 0, false);
+	pworker = &workers[0];
+	while (*pworker) {
+		/* Init string quarks */
+		(void) g_quark_from_static_string ((*pworker)->name);
+		pworker++;
+	}
 
-	rspamadm_execute_lua_ucl_subr (L,
-			argc,
-			argv,
-			obj,
-			"rescore");
+	cfg->cache = rspamd_symbols_cache_new (cfg);
+	cfg->compiled_modules = modules;
+	cfg->compiled_workers = workers;
+	cfg->cfg_name = config;
 
-	lua_close (L);
-	ucl_object_unref (obj);
+	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
+			config_logger, rspamd_main, ucl_vars)) {
+		ret = FALSE;
+	}
+	else {
+		/* Do post-load actions */
+		rspamd_lua_post_load_config (cfg);
+
+		if (!rspamd_init_filters (cfg, FALSE)) {
+			ret = FALSE;
+		}
+
+		if (ret) {
+			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
+			rspamd_symbols_cache_validate (cfg->cache,
+					cfg,
+					FALSE);
+		}
+	}
+
+	if (ret) {
+		L = cfg->lua_state;
+		rspamd_lua_set_path (L, cfg->rcl_obj, ucl_vars);
+		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (cfg->cfg_name),
+				"config_path", 0, false);
+		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (logdir),
+				"logdir", 0, false);
+		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (output),
+				"output", 0, false);
+		ucl_object_insert_key (cfg->rcl_obj, ucl_object_frombool (score_diff),
+				"diff", 0, false);
+		pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
+		*pcfg = cfg;
+		lua_setglobal (L, "rspamd_config");
+		rspamadm_execute_lua_ucl_subr (L,
+				argc,
+				argv,
+				cfg->rcl_obj,
+				"rescore");
+	}
 }
