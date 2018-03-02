@@ -1,6 +1,5 @@
 #include "THGeneral.h"
 #include "THRandom.h"
-#include "ottery.h"
 
 /* Code for the Mersenne Twister random generator.... */
 #define n _MERSENNE_STATE_N
@@ -45,9 +44,35 @@ int THGenerator_isValid(THGenerator *_generator)
   return 0;
 }
 
+#ifndef _WIN32
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+static unsigned long readURandomLong()
+{
+  int randDev = open("/dev/urandom", O_RDONLY);
+  unsigned long randValue;
+  if (randDev < 0) {
+    THError("Unable to open /dev/urandom");
+  }
+  ssize_t readBytes = read(randDev, &randValue, sizeof(randValue));
+  if (readBytes < sizeof(randValue)) {
+    THError("Unable to read from /dev/urandom");
+  }
+  close(randDev);
+  return randValue;
+}
+#endif // _WIN32
+
 unsigned long THRandom_seed(THGenerator *_generator)
 {
-  unsigned long s = ottery_rand_uint64();
+#ifdef _WIN32
+  unsigned long s = (unsigned long)time(0);
+#else
+  unsigned long s = readURandomLong();
+#endif
   THRandom_manualSeed(_generator, s);
   return s;
 }

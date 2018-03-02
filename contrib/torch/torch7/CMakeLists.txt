@@ -63,7 +63,6 @@ SET(luasrc init.lua File.lua Tensor.lua CmdLine.lua FFInterface.lua Tester.lua T
 ADD_TORCH_PACKAGE(torch "${src}" "${luasrc}")
 
 TARGET_LINK_LIBRARIES(torch luaT TH)
-TARGET_LINK_LIBRARIES(torch ottery)
 
 IF(LUALIB)
   TARGET_LINK_LIBRARIES(torch ${LUALIB})
