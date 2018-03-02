@@ -291,6 +291,8 @@ IF(NOT MSVC)
   TARGET_LINK_LIBRARIES(TH m)
 ENDIF(NOT MSVC)
 
+TARGET_LINK_LIBRARIES(TH ottery)
+
 # Is __thread supported?
 IF(NOT MSVC)
   CHECK_C_SOURCE_COMPILES("static __thread int x = 1; int main() { return x; }" C_HAS_THREAD)
