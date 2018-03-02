@@ -70,7 +70,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 	struct rspamd_main *rm = ud;
 
 	rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
-	rm->cfg->log_level = G_LOG_LEVEL_CRITICAL;
+	rm->cfg->log_level = G_LOG_LEVEL_MESSAGE;
 
 	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), &rm->logger,
 			rm->server_pool);

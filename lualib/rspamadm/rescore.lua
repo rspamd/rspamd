@@ -144,21 +144,22 @@ end
 
 local function print_score_diff(new_symbol_scores, original_symbol_scores)
 
-  print(string.format("%-35s %-10s %-10s", "SYMBOL", "OLD_SCORE", "NEW_SCORE"))
+  logger.message(string.format("%-35s %-10s %-10s",
+      "SYMBOL", "OLD_SCORE", "NEW_SCORE"))
 
   for symbol, new_score in pairs(new_symbol_scores) do
-    print(string.format("%-35s %-10s %-10s",
+    logger.message(string.format("%-35s %-10s %-10s",
         symbol,
         original_symbol_scores[symbol] or 0,
         rescore_utility.round(new_score, 2)))
   end
 
-  print "\nClass changes \n"
+  logger.message("\nClass changes \n")
   for symbol, new_score in pairs(new_symbol_scores) do
     if original_symbol_scores[symbol] ~= nil then
       if (original_symbol_scores[symbol] > 0 and new_score < 0) or
           (original_symbol_scores[symbol] < 0 and new_score > 0) then
-        print(string.format("%-35s %-10s %-10s",
+        logger.message(string.format("%-35s %-10s %-10s",
             symbol,
             original_symbol_scores[symbol] or 0,
             rescore_utility.round(new_score, 2)))
@@ -192,9 +193,9 @@ False negative rate: %.2f %%
 Overall accuracy: %.2f %%
 ]]
 
-  io.write("\nStatistics at threshold: " .. threshold .. "\n")
+  logger.message("\nStatistics at threshold: " .. threshold)
 
-  io.write(string.format(file_stat_format,
+  logger.message(string.format(file_stat_format,
       file_stats.fscore,
       file_stats.false_positive_rate,
       file_stats.false_negative_rate,
@@ -222,7 +223,7 @@ local function override_defaults(def, override)
   end
 end
 
-local function get_threshold(opts)
+local function get_threshold()
   local actions = rspamd_config:get_all_actions()
 
   if opts['spam-action'] then
@@ -235,7 +236,7 @@ end
 return function (args, cfg)
   opts = default_opts
   override_defaults(opts, getopt.getopt(args, ''))
-  local threshold = get_threshold(opts)
+  local threshold = get_threshold()
   local logs = rescore_utility.get_all_logs(cfg["logdir"])
   local all_symbols = rescore_utility.get_all_symbols(logs)
   local original_symbol_scores = rescore_utility.get_all_symbol_scores(rspamd_config)
@@ -287,7 +288,7 @@ return function (args, cfg)
           linear_module.bias[1],
           threshold)
 
-      print("Cross-validation fscore: " .. fscore)
+      logger.messagex("Cross-validation fscore: %s", fscore)
 
       if best_fscore < fscore then
         best_fscore = fscore
@@ -300,15 +301,13 @@ return function (args, cfg)
     for _, weight in ipairs(penalty_weights) do
 
       trainer.weightDecay = weight
-      print("Learning with learning_rate: " .. learning_rate
-          .. " | l2_weight: " .. weight)
+      logger.messagex("Learning with learning_rate: %s, l2_weight: %s",
+          learning_rate, weight)
 
       linear_module.weight[1] = init_weights(all_symbols, original_symbol_scores)
 
       trainer.learningRate = learning_rate
       trainer:train(dataset)
-
-      print()
     end
   end
 
@@ -328,12 +327,12 @@ return function (args, cfg)
 
 
   -- Pre-rescore test stats
-  io.write("\n\nPre-rescore test stats\n\n")
+  logger.message("\n\nPre-rescore test stats\n")
   test_logs = update_logs(test_logs, original_symbol_scores)
   print_stats(test_logs, threshold)
 
   -- Post-rescore test stats
   test_logs = update_logs(test_logs, new_symbol_scores)
-  io.write("\n\nPost-rescore test stats\n\n")
+  logger.message("\n\nPost-rescore test stats\n")
   print_stats(test_logs, threshold)
 end
