@@ -2000,30 +2000,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			RSPAMD_CL_FLAG_STRING_PATH,
 			"Path to history file");
 	rspamd_rcl_add_default_handler (sub,
-			"use_mlock",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, mlock_statfile_pool),
-			0,
-			"Use mlock call for statistics to ensure that all files are in RAM");
-	rspamd_rcl_add_default_handler (sub,
-			"strict_protocol_headers",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, strict_protocol_headers),
-			0,
-			"Emit errors if there are unknown HTTP headers in a request");
-	rspamd_rcl_add_default_handler (sub,
-			"check_local",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_local),
-			0,
-			"Don't disable any checks for local networks");
-	rspamd_rcl_add_default_handler (sub,
-			"check_authed",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_authed),
-			0,
-			"Don't disable any checks for authenticated users");
-	rspamd_rcl_add_default_handler (sub,
 			"check_all_filters",
 			rspamd_rcl_parse_struct_boolean,
 			G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),

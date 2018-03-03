@@ -301,16 +301,12 @@ struct rspamd_config {
 	gboolean raw_mode;                              /**< work in raw mode instead of utf one				*/
 	gboolean one_shot_mode;                         /**< rules add only one symbol							*/
 	gboolean check_text_attachements;               /**< check text attachements as text					*/
-	gboolean convert_config;                        /**< convert config to XML format						*/
-	gboolean strict_protocol_headers;               /**< strictly check protocol headers					*/
 	gboolean check_all_filters;                     /**< check all filters									*/
 	gboolean allow_raw_input;                       /**< scan messages with invalid mime					*/
 	gboolean disable_hyperscan;                     /**< disable hyperscan usage							*/
 	gboolean vectorized_hyperscan;                  /**< use vectorized hyperscan matching					*/
 	gboolean enable_shutdown_workaround;            /**< enable workaround for legacy SA clients (exim)		*/
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
-	gboolean check_local;				/** Don't disable any checks for local networks */
-	gboolean check_authed;				/** Don't disable any checks for authenticated users */
 	gboolean enable_sessions_cache;                 /**< Enable session cache for debug */
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
@@ -338,16 +334,7 @@ struct rspamd_config {
 	guint log_error_elt_maxlen;                     /**< maximum size of error log element					*/
 	struct rspamd_worker_log_pipe *log_pipes;
 
-	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
 	gboolean compat_messages;                       /**< use old messages in the protocol (array) 			*/
-
-	gboolean delivery_enable;                       /**< is delivery agent is enabled						*/
-	gchar *deliver_host;                            /**< host for mail deliviring							*/
-	struct in_addr deliver_addr;                    /**< its address										*/
-	guint16 deliver_port;                           /**< port for deliviring								*/
-	guint16 deliver_family;                         /**< socket family for delivirnig						*/
-	gchar *deliver_agent_path;                      /**< deliver to pipe instead of socket					*/
-	gboolean deliver_lmtp;                          /**< use LMTP instead of SMTP							*/
 
 	GList *script_modules;                          /**< linked list of script modules to load				*/
 	GHashTable *explicit_modules;                   /**< modules that should be always loaded				*/
