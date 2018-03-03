@@ -307,7 +307,8 @@ struct rspamd_config {
 	gboolean vectorized_hyperscan;                  /**< use vectorized hyperscan matching					*/
 	gboolean enable_shutdown_workaround;            /**< enable workaround for legacy SA clients (exim)		*/
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
-	gboolean enable_sessions_cache;                 /**< Enable session cache for debug */
+	gboolean enable_sessions_cache;                 /**< Enable session cache for debug						*/
+	gboolean enable_experimental;                   /**< Enable experimental plugins						*/
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/

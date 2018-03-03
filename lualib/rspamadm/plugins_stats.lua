@@ -36,11 +36,13 @@ end
 return function(args, _)
   print_plugins_table(rspamd_plugins_state.enabled, "enabled")
   print_plugins_table(rspamd_plugins_state.disabled_explicitly,
-    "disabled (explicitly)")
+      "disabled (explicitly)")
   print_plugins_table(rspamd_plugins_state.disabled_unconfigured,
-    "disabled (unconfigured)")
+      "disabled (unconfigured)")
   print_plugins_table(rspamd_plugins_state.disabled_redis,
-    "disabled (no Redis)")
+      "disabled (no Redis)")
+  print_plugins_table(rspamd_plugins_state.disabled_experimental,
+      "disabled (experimental)")
   print_plugins_table(rspamd_plugins_state.disabled_failed,
-    "disabled (failed)")
+      "disabled (failed)")
 end

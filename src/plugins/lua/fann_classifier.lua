@@ -23,7 +23,9 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
+local lua_util = require "lua_util"
 local fun = require "fun"
+local N = 'fann_classifier'
 
 local redis_params
 local classifier_config = {
@@ -38,6 +40,10 @@ local current_classify_ann = {
   spam_learned = 0,
   ham_learned = 0
 }
+
+if not lua_util.check_experimental(N) then
+  return
+end
 
 redis_params = rspamd_parse_redis_server('fann_classifier')
 

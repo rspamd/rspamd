@@ -250,7 +250,7 @@ exports.spairs = spairs
 
 --[[[
 -- @function lua_util.disable_module(modname, how)
--- Disables a plugin or disables redis for a plugin.
+-- Disables a plugin or disables a plugin.
 -- @param {string} modname name of plugin to disable
 -- @param {string} how 'redis' to disable redis, 'config' to disable startup
 --]]
@@ -264,6 +264,8 @@ local function disable_module(modname, how)
     rspamd_plugins_state.disabled_redis[modname] = {}
   elseif how == 'config' then
     rspamd_plugins_state.disabled_unconfigured[modname] = {}
+  elseif how == 'experimental' then
+    rspamd_plugins_state.disabled_experimental[modname] = {}
   else
     rspamd_plugins_state.disabled_failed[modname] = {}
   end
@@ -271,6 +273,23 @@ end
 
 exports.disable_module = disable_module
 
+--[[[
+-- @function lua_util.disable_module(modname)
+-- Checks experimental plugins state and disable if needed
+-- @param {string} modname name of plugin to check
+-- @return {boolean} true if plugin should be enabled, false otherwise
+--]]
+local function check_experimental(modname)
+  if rspamd_config:experimental_enabled() then
+    return true
+  else
+    disable_module(modname, 'experimental')
+  end
+
+  return false
+end
+
+exports.check_experimental = check_experimental
 
 --[[[
 -- @function lua_util.parse_time_interval(str)

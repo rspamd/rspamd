@@ -352,6 +352,10 @@ local function url_reputation_check(task)
   end
 end
 
+if not lua_util.check_experimental(N) then
+  return
+end
+
 local opts = rspamd_config:get_all_opt(N)
 if not opts then return end
 redis_params = rspamd_parse_redis_server(N)

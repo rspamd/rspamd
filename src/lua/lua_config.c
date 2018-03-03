@@ -667,6 +667,13 @@ LUA_FUNCTION_DEF (config, get_cpu_flags);
  */
 LUA_FUNCTION_DEF (config, has_torch);
 
+/***
+ * @method rspamd_config:experimental_enabled()
+ * Returns true if experimental plugins are enabled
+ * @return {boolean} true if experimental plugins are enabled
+ */
+LUA_FUNCTION_DEF (config, experimental_enabled);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -722,6 +729,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, set_peak_cb),
 	LUA_INTERFACE_DEF (config, get_cpu_flags),
 	LUA_INTERFACE_DEF (config, has_torch),
+	LUA_INTERFACE_DEF (config, experimental_enabled),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -2948,6 +2956,22 @@ lua_config_has_torch (lua_State *L)
 
 	return 1;
 }
+
+static gint
+lua_config_experimental_enabled (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL) {
+		lua_pushboolean (L, cfg->enable_experimental);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_monitored_alive (lua_State *L)

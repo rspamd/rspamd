@@ -423,6 +423,7 @@ rspamd_lua_init ()
 	 *   disabled_redis = {},
 	 *   disabled_explicitly = {},
 	 *   disabled_failed = {},
+	 *   disabled_experimental = {},
 	 * }
 	 */
 #define ADD_TABLE(name) do { \
@@ -436,6 +437,7 @@ rspamd_lua_init ()
 	ADD_TABLE (disabled_redis);
 	ADD_TABLE (disabled_explicitly);
 	ADD_TABLE (disabled_failed);
+	ADD_TABLE (disabled_experimental);
 
 #undef ADD_TABLE
 	lua_setglobal (L, rspamd_modules_state_global);
