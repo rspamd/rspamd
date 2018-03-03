@@ -4,7 +4,7 @@ local fun = require "fun"
 
 local utility = {}
 
-function utility.get_all_symbols(logs)
+function utility.get_all_symbols(logs, ignore_symbols)
   -- Returns a list of all symbols
 
   local symbols_set = {}
@@ -22,7 +22,9 @@ function utility.get_all_symbols(logs)
   local all_symbols = {}
 
   for symbol, _ in pairs(symbols_set) do
-    all_symbols[#all_symbols + 1] = symbol
+    if not ignore_symbols[symbol] then
+      all_symbols[#all_symbols + 1] = symbol
+    end
   end
 
   table.sort(all_symbols)
@@ -65,12 +67,14 @@ function utility.get_all_logs(dir_path)
   return all_logs
 end
 
-function utility.get_all_symbol_scores(conf)
+function utility.get_all_symbol_scores(conf, ignore_symbols)
   local counters = conf:get_symbols_counters()
 
   return fun.tomap(fun.map(function(elt)
     return elt['symbol'],elt['weight']
-  end, counters))
+  end, fun.filter(function(elt)
+    return not ignore_symbols[elt['symbol']]
+  end, counters)))
 end
 
 function utility.generate_statistics_from_logs(logs, threshold)
