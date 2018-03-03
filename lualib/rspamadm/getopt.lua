@@ -1,6 +1,6 @@
 local function insert_option(tab, name, value)
   if tab[name] then
-    if type(tab[name] == 'table') then
+    if type(tab[name]) == 'table' then
       table.insert(tab[name], value)
     else
       local old_val = tab[name]
