@@ -2008,7 +2008,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	rspamd_rcl_add_default_handler (sub,
 			"enable_experimental",
 			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
+			G_STRUCT_OFFSET (struct rspamd_config, enable_experimental),
 			0,
 			"Enable experimental plugins");
 	rspamd_rcl_add_default_handler (sub,

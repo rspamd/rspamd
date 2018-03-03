@@ -166,11 +166,6 @@ reconf['TRACKER_ID'] = {
 }
 
 
--- From that contains encoded characters while base 64 is not needed as all symbols are 7bit
--- Regexp that checks that From header is encoded with base64 (search in raw headers)
-local from_encoded_b64 = 'From=/\\=\\?\\S+\\?B\\?/iX'
--- From contains only 7bit characters (parsed headers are used)
-local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
 -- Final rule
 reconf['FROM_EXCESS_BASE64'] = {
   re = string.format('%s & !%s', from_encoded_b64, from_needs_mime),
@@ -180,8 +175,6 @@ reconf['FROM_EXCESS_BASE64'] = {
 }
 
 -- From that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
--- Regexp that checks that From header is encoded with quoted-printable (search in raw headers)
-local from_encoded_qp = 'From=/\\=\\?\\S+\\?Q\\?/iX'
 -- Final rule
 reconf['FROM_EXCESS_QP'] = {
   re = string.format('%s & !%s', from_encoded_qp, from_needs_mime),
@@ -192,9 +185,6 @@ reconf['FROM_EXCESS_QP'] = {
 
 -- To that contains encoded characters while base 64 is not needed as all symbols are 7bit
 -- Regexp that checks that To header is encoded with base64 (search in raw headers)
-local to_encoded_b64 = 'To=/\\=\\?\\S+\\?B\\?/iX'
--- To contains only 7bit characters (parsed headers are used)
-local to_needs_mime = 'To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
 -- Final rule
 reconf['TO_EXCESS_BASE64'] = {
   re = string.format('%s & !%s', to_encoded_b64, to_needs_mime),
@@ -204,8 +194,6 @@ reconf['TO_EXCESS_BASE64'] = {
 }
 
 -- To that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
--- Regexp that checks that To header is encoded with quoted-printable (search in raw headers)
-local to_encoded_qp = 'To=/\\=\\?\\S+\\?Q\\?/iX'
 -- Final rule
 reconf['TO_EXCESS_QP'] = {
   re = string.format('%s & !%s', to_encoded_qp, to_needs_mime),
