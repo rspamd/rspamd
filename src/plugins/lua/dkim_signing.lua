@@ -66,8 +66,7 @@ local function dkim_signing_cb(task)
           rspamd_logger.infox(task, "cannot make request to load DKIM key for %s: %s",
               rk, err)
         elseif type(data) ~= 'string' then
-          rspamd_logger.debugm(N, task, "missing DKIM key for %s",
-              rk,)
+          rspamd_logger.debugm(N, task, "missing DKIM key for %s", rk)
         else
         p.rawkey = data
         local sret, _ = sign_func(task, p)
