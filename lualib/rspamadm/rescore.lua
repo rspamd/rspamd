@@ -300,7 +300,6 @@ return function (args, cfg)
   end
 
   if opts['i'] then opts['iters'] = opts['i'] end
-  logger.errx('%s', opts)
 
   local all_symbols = rescore_utility.get_all_symbols(logs, ignore_symbols)
   local original_symbol_scores = rescore_utility.get_all_symbol_scores(rspamd_config,
