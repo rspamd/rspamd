@@ -378,7 +378,7 @@ return function (args, cfg)
     write_scores(new_symbol_scores, cfg["output"])
   end
 
-  if opts["diff"] then
+  if cfg["diff"] then
     print_score_diff(new_symbol_scores, original_symbol_scores)
   end
 
