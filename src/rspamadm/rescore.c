@@ -48,7 +48,7 @@ static GOptionEntry entries[] = {
 		{"logdir", 'l', 0, G_OPTION_ARG_FILENAME, &logdir,
 				"Logs directory",                               NULL},
 		{"output", 'o', 0, G_OPTION_ARG_FILENAME, &output,
-				"Scores output locaiton",                       NULL},
+				"Scores output location",                       NULL},
 		{"diff",   'd', 0, G_OPTION_ARG_NONE,     &score_diff,
 				"Print score diff",                             NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
@@ -83,10 +83,10 @@ rspamadm_rescore_help (gboolean full_help) {
 		help_str = "Estimate optimal symbol weights from log files\n\n"
 				"Usage: rspamadm rescore -l <log_directory>\n"
 				"Where options are:\n\n"
-				"-l: path to logs directory\n"
-				"-o: scores output file location\n"
-				"-d: print scores diff\n"
-				"-i: max iterations for perceptron\n";
+				"-l: Logs of directory\n"
+				"-o: Scores output location\n"
+				"-d: Print score diff\n"
+				"-c: config file to use\n";
 	} else {
 		help_str = "Estimate optimal symbol weights from log files";
 	}
