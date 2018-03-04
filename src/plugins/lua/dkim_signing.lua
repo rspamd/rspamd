@@ -19,6 +19,7 @@ local lutil = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local rspamd_util = require "rspamd_util"
+local lua_redis = require "lua_redis"
 
 if confighelp then
   return
@@ -61,15 +62,18 @@ local function dkim_signing_cb(task)
       p.selector = selector
       local rk = string.format('%s.%s', p.selector, p.domain)
       local function redis_key_cb(err, data)
-        if err or type(data) ~= 'string' then
-          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s: %s",
-            rk, err)
+        if err then
+          rspamd_logger.infox(task, "cannot make request to load DKIM key for %s: %s",
+              rk, err)
+        elseif type(data) ~= 'string' then
+          rspamd_logger.debugm(N, task, "missing DKIM key for %s",
+              rk,)
         else
-          p.rawkey = data
-          local sret, _ = sign_func(task, p)
-          if sret then
-            task:insert_result(settings.symbol, 1.0)
-          end
+        p.rawkey = data
+        local sret, _ = sign_func(task, p)
+        if sret then
+          task:insert_result(settings.symbol, 1.0)
+        end
         end
       end
       local rret = rspamd_redis_make_request(task,
@@ -81,19 +85,19 @@ local function dkim_signing_cb(task)
         {settings.key_prefix, rk} -- arguments
       )
       if not rret then
-        rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM key for %s", rk)
+        rspamd_logger.infox(task, "cannot make request to load DKIM key for %s", rk)
       end
     end
     if settings.selector_prefix then
-      rspamd_logger.infox(rspamd_config, "Using selector prefix %s for domain %s", settings.selector_prefix, p.domain);
+      rspamd_logger.infox(task, "Using selector prefix %s for domain %s", settings.selector_prefix, p.domain);
       local function redis_selector_cb(err, data)
         if err or type(data) ~= 'string' then
-          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
+          rspamd_logger.infox(task, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
         else
           try_redis_key(data)
         end
       end
-      local rret = rspamd_redis_make_request(task,
+      local rret = lua_redis.redis_make_request(task,
         redis_params, -- connect params
         p.domain, -- hash key
         false, -- is write
@@ -102,7 +106,7 @@ local function dkim_signing_cb(task)
         {settings.selector_prefix, p.domain} -- arguments
       )
       if not rret then
-        rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for %s", p.domain)
+        rspamd_logger.infox(task, "cannot make request to load DKIM selector for %s", p.domain)
       end
     else
       if not p.selector then
@@ -146,10 +150,11 @@ if not (settings.use_redis or settings.path or settings.domain or settings.path_
   return
 end
 if settings.use_redis then
-  redis_params = rspamd_parse_redis_server('dkim_signing')
+  redis_params = lua_redis.parse_redis_server('dkim_signing')
 
   if not redis_params then
-    rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
+    rspamd_logger.errx(rspamd_config,
+        'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
     lutil.disable_module(N, "redis")
     return
   end

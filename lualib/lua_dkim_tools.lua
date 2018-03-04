@@ -118,6 +118,9 @@ local function prepare_dkim_signing(N, task, settings)
       edom = rspamd_util.get_tld(edom)
     end
   end
+
+  rspamd_logger.debugm(N, task, 'final DKIM domain: %s', dkim_domain)
+
   if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom then
     if settings.allow_hdrfrom_mismatch_local and is_local then
       rspamd_logger.debugm(N, task, 'domain mismatch allowed for local IP: %1 != %2', hdom, edom)
@@ -174,6 +177,7 @@ local function prepare_dkim_signing(N, task, settings)
     if data then
       p.selector = data
     elseif not settings.try_fallback then
+      rspamd_logger.debugm(N, task, 'no selector for %s', dkim_domain)
       return false,{}
     end
   end
@@ -183,6 +187,7 @@ local function prepare_dkim_signing(N, task, settings)
     if data then
       p.key = data
     elseif not settings.try_fallback then
+      rspamd_logger.debugm(N, task, 'no key for %s', dkim_domain)
       return false,{}
     end
   end
