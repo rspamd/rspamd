@@ -111,6 +111,11 @@ struct rspamd_lua_map {
 	} data;
 };
 
+struct rspamd_lua_cached_entry {
+	gint ref;
+	guint id;
+};
+
 /* Common utility functions */
 
 /**

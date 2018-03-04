@@ -204,9 +204,9 @@ rspamd_task_free (struct rspamd_task *task)
 	struct rspamd_mime_part *p;
 	struct rspamd_mime_text_part *tp;
 	struct rspamd_email_address *addr;
+	struct rspamd_lua_cached_entry *entry;
 	GHashTableIter it;
 	gpointer k, v;
-	gint lua_ref;
 	guint i;
 
 	if (task) {
@@ -301,9 +301,9 @@ rspamd_task_free (struct rspamd_task *task)
 				g_hash_table_iter_init (&it, task->lua_cache);
 
 				while (g_hash_table_iter_next (&it, &k, &v)) {
-					lua_ref = GPOINTER_TO_INT (v);
+					entry = (struct rspamd_lua_cached_entry *)v;
 					luaL_unref (task->cfg->lua_state,
-							LUA_REGISTRYINDEX, lua_ref);
+							LUA_REGISTRYINDEX, entry->ref);
 				}
 
 				g_hash_table_unref (task->lua_cache);

@@ -1029,34 +1029,38 @@ lua_check_text (lua_State * L, gint pos)
 
 static void
 lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
-		gint pos)
+		gint pos, guint id)
 {
-	gpointer elt;
-	gint lua_ref;
+	struct rspamd_lua_cached_entry *entry;
 
 	lua_pushvalue (L, pos);
 
-	elt = g_hash_table_lookup (task->lua_cache, key);
+	entry = g_hash_table_lookup (task->lua_cache, key);
 
-	if (G_UNLIKELY (elt != NULL)) {
+	if (G_UNLIKELY (entry != NULL)) {
 		/* Unref previous value */
-		lua_ref = GPOINTER_TO_INT (elt);
-		luaL_unref (L, LUA_REGISTRYINDEX, lua_ref);
+		luaL_unref (L, LUA_REGISTRYINDEX, entry->ref);
+	}
+	else {
+		entry = rspamd_mempool_alloc (task->task_pool, sizeof (*entry));
+		g_hash_table_insert (task->lua_cache, (void *)key, entry);
 	}
 
-	lua_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-	g_hash_table_insert (task->lua_cache, (void *)key, GINT_TO_POINTER (lua_ref));
+	entry->ref = luaL_ref (L, LUA_REGISTRYINDEX);
+	entry->id = id;
 }
 
+
 static gboolean
-lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key)
+lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
+		guint id)
 {
-	gpointer elt;
+	struct rspamd_lua_cached_entry *entry;
 
-	elt = g_hash_table_lookup (task->lua_cache, key);
+	entry = g_hash_table_lookup (task->lua_cache, key);
 
-	if (elt != NULL) {
-		lua_rawgeti (L, LUA_REGISTRYINDEX, GPOINTER_TO_INT (elt));
+	if (entry != NULL && entry->id == id) {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, entry->ref);
 
 		return TRUE;
 	}
@@ -1449,30 +1453,29 @@ lua_task_get_urls (lua_State * L)
 		}
 
 		if (need_emails) {
-			if (!lua_task_get_cached (L, task, "emails+urls")) {
-				sz = g_hash_table_size (task->urls);
-				sz += g_hash_table_size (task->emails);
+			sz = g_hash_table_size (task->urls) + g_hash_table_size (task->emails);
 
+			if (!lua_task_get_cached (L, task, "emails+urls", sz)) {
 				lua_createtable (L, sz, 0);
 				cb.i = 1;
 				cb.L = L;
 				g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
 				g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
 
-				lua_task_set_cached (L, task, "emails+urls", -1);
+				lua_task_set_cached (L, task, "emails+urls", -1, sz);
 			}
 
 		}
 		else {
-			if (!lua_task_get_cached (L, task, "urls")) {
-				sz = g_hash_table_size (task->urls);
+			sz = g_hash_table_size (task->urls);
 
+			if (!lua_task_get_cached (L, task, "urls", sz)) {
 				lua_createtable (L, sz, 0);
 				cb.i = 1;
 				cb.L = L;
 				g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
 
-				lua_task_set_cached (L, task, "urls", -1);
+				lua_task_set_cached (L, task, "urls", -1, sz);
 			}
 		}
 	}
@@ -1588,7 +1591,7 @@ lua_task_get_text_parts (lua_State * L)
 
 	if (task != NULL) {
 
-		if (!lua_task_get_cached (L, task, "text_parts")) {
+		if (!lua_task_get_cached (L, task, "text_parts", task->text_parts->len)) {
 			lua_createtable (L, task->text_parts->len, 0);
 
 			for (i = 0; i < task->text_parts->len; i ++) {
@@ -1600,7 +1603,7 @@ lua_task_get_text_parts (lua_State * L)
 				lua_rawseti (L, -2, i + 1);
 			}
 
-			lua_task_set_cached (L, task, "text_parts", -1);
+			lua_task_set_cached (L, task, "text_parts", -1, task->text_parts->len);
 		}
 	}
 	else {
@@ -1618,7 +1621,7 @@ lua_task_get_parts (lua_State * L)
 	struct rspamd_mime_part *part, **ppart;
 
 	if (task != NULL) {
-		if (!lua_task_get_cached (L, task, "mime_parts")) {
+		if (!lua_task_get_cached (L, task, "mime_parts", task->parts->len)) {
 			lua_createtable (L, task->parts->len, 0);
 
 			for (i = 0; i < task->parts->len; i ++) {
@@ -1630,7 +1633,7 @@ lua_task_get_parts (lua_State * L)
 				lua_rawseti (L, -2, i + 1);
 			}
 
-			lua_task_set_cached (L, task, "mime_parts", -1);
+			lua_task_set_cached (L, task, "mime_parts", -1, task->parts->len);
 		}
 	}
 	else {
@@ -1870,7 +1873,7 @@ lua_task_get_received_headers (lua_State * L)
 	guint i, k = 1;
 
 	if (task) {
-		if (!lua_task_get_cached (L, task, "received")) {
+		if (!lua_task_get_cached (L, task, "received", task->received->len)) {
 			lua_createtable (L, task->received->len, 0);
 
 			for (i = 0; i < task->received->len; i ++) {
@@ -1972,7 +1975,7 @@ lua_task_get_received_headers (lua_State * L)
 				lua_rawseti (L, -2, k ++);
 			}
 
-			lua_task_set_cached (L, task, "received", -1);
+			lua_task_set_cached (L, task, "received", -1, task->received->len);
 		}
 	}
 	else {
@@ -2939,7 +2942,7 @@ lua_task_get_images (lua_State *L)
 	struct rspamd_image **pimg;
 
 	if (task) {
-		if (!lua_task_get_cached (L, task, "images")) {
+		if (!lua_task_get_cached (L, task, "images", task->parts->len)) {
 			lua_createtable (L, task->parts->len, 0);
 
 			for (i = 0; i < task->parts->len; i ++) {
@@ -2953,7 +2956,7 @@ lua_task_get_images (lua_State *L)
 				}
 			}
 
-			lua_task_set_cached (L, task, "images", -1);
+			lua_task_set_cached (L, task, "images", -1, task->parts->len);
 		}
 	}
 	else {
@@ -2972,7 +2975,7 @@ lua_task_get_archives (lua_State *L)
 	struct rspamd_archive **parch;
 
 	if (task) {
-		if (!lua_task_get_cached (L, task, "archives")) {
+		if (!lua_task_get_cached (L, task, "archives", task->parts->len)) {
 			lua_createtable (L, task->parts->len, 0);
 
 			for (i = 0; i < task->parts->len; i ++) {
@@ -2986,7 +2989,7 @@ lua_task_get_archives (lua_State *L)
 				}
 			}
 
-			lua_task_set_cached (L, task, "archives", -1);
+			lua_task_set_cached (L, task, "archives", -1, task->parts->len);
 		}
 	}
 	else {
@@ -3908,9 +3911,14 @@ lua_task_cache_get (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *key = luaL_checkstring (L, 2);
+	guint id = 0;
 
 	if (task && key) {
-		if (!lua_task_get_cached (L, task, key)) {
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			id = lua_tonumber (L, 3);
+		}
+
+		if (!lua_task_get_cached (L, task, key, id)) {
 			lua_pushnil (L);
 		}
 	}
@@ -3926,9 +3934,14 @@ lua_task_cache_set (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *key = luaL_checkstring (L, 2);
+	guint id = 0;
 
 	if (task && key && lua_gettop (L) >= 3) {
-		lua_task_set_cached (L, task, key, 3);
+		if (lua_type (L, 4) == LUA_TNUMBER) {
+			id = lua_tonumber (L, 4);
+		}
+
+		lua_task_set_cached (L, task, key, 3, id);
 	}
 	else {
 		luaL_error (L, "invalid arguments");
