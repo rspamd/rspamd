@@ -36,9 +36,9 @@ reconf['SUBJECT_NEEDS_ENCODING'] = {
 
 local from_encoded_b64 = 'From=/=\\?\\S+\\?B\\?/iX'
 local from_encoded_qp = 'From=/=\\?\\S+\\?Q\\?/iX'
-local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/X'
+local raw_from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/X'
 reconf['FROM_NEEDS_ENCODING'] = {
-  re = string.format('!(%s) & !(%s) & (%s)', from_encoded_b64, from_encoded_qp, from_needs_mime),
+  re = string.format('!(%s) & !(%s) & (%s)', from_encoded_b64, from_encoded_qp, raw_from_needs_mime),
   score = 1.0,
   description = 'From header needs encoding',
   group = 'header'
@@ -46,9 +46,9 @@ reconf['FROM_NEEDS_ENCODING'] = {
 
 local to_encoded_b64 = 'To=/=\\?\\S+\\?B\\?/iX'
 local to_encoded_qp = 'To=/=\\?\\S+\\?Q\\?/iX'
-local to_needs_mime = 'To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/X'
+local raw_to_needs_mime = 'To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/X'
 reconf['TO_NEEDS_ENCODING'] = {
-  re = string.format('!(%s) & !(%s) & (%s)', to_encoded_b64, to_encoded_qp, to_needs_mime),
+  re = string.format('!(%s) & !(%s) & (%s)', to_encoded_b64, to_encoded_qp, raw_to_needs_mime),
   score = 1.0,
   description = 'To header needs encoding',
   group = 'header'
@@ -165,8 +165,9 @@ reconf['TRACKER_ID'] = {
   group = 'header'
 }
 
-
--- Final rule
+-- From contains only 7bit characters (parsed headers are used)
+local from_needs_mime = 'From=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
+-- From that contains encoded characters while base 64 is not needed as all symbols are 7bit
 reconf['FROM_EXCESS_BASE64'] = {
   re = string.format('%s & !%s', from_encoded_b64, from_needs_mime),
   score = 1.5,
@@ -175,7 +176,6 @@ reconf['FROM_EXCESS_BASE64'] = {
 }
 
 -- From that contains encoded characters while quoted-printable is not needed as all symbols are 7bit
--- Final rule
 reconf['FROM_EXCESS_QP'] = {
   re = string.format('%s & !%s', from_encoded_qp, from_needs_mime),
   score = 1.2,
@@ -183,9 +183,9 @@ reconf['FROM_EXCESS_QP'] = {
   group = 'excessqp'
 }
 
+-- To contains only 7bit characters (parsed headers are used)
+local to_needs_mime = 'To=/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\xff]/Hr'
 -- To that contains encoded characters while base 64 is not needed as all symbols are 7bit
--- Regexp that checks that To header is encoded with base64 (search in raw headers)
--- Final rule
 reconf['TO_EXCESS_BASE64'] = {
   re = string.format('%s & !%s', to_encoded_b64, to_needs_mime),
   score = 1.5,
