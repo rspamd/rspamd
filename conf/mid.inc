@@ -11,6 +11,7 @@ is-zakupki.com
 mirtesen.ru
 fcod.nalog.ru
 otc.ru
+client.rostelecom.ru
 sberbank-ast.ru
 crm.taxcom.ru
 wildberries.ru /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
