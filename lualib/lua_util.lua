@@ -250,7 +250,7 @@ exports.spairs = spairs
 
 --[[[
 -- @function lua_util.disable_module(modname, how)
--- Disables a plugin or disables a plugin.
+-- Disables a plugin
 -- @param {string} modname name of plugin to disable
 -- @param {string} how 'redis' to disable redis, 'config' to disable startup
 --]]
