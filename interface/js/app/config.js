@@ -217,17 +217,31 @@ function($) {
 
                 $('#saveActionsClusterBtn').on('click', function() {
                     var elts = loadActionsFromForm();
-                    rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
-                        data: elts,
-                        dataType: "json",
-                    });
+                    // String to array for comparison
+                    var eltsArray = JSON.parse(loadActionsFromForm());
+                    if(eltsArray[2]>=0){
+                        rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
+                            data: elts,
+                            dataType: "json",
+                        });
+                    }
+                    else{
+                        alert("Greylist can not be negative");
+                    }
                 });
                 $('#saveActionsBtn').on('click', function() {
                     var elts = loadActionsFromForm();
-                    rspamd.queryLocal('saveactions', null, null, "POST", {}, {
-                        data: elts,
-                        dataType: "json",
-                    });
+                    // String to array for comparison
+                    var eltsArray = JSON.parse(loadActionsFromForm());
+                    if(eltsArray[2]>=0){
+                        rspamd.queryLocal('saveactions', null, null, "POST", {}, {
+                            data: elts,
+                            dataType: "json",
+                        });
+                    }
+                    else{
+                        alert("Greylist can not be negative");
+                    }
                 });
             },
         });
