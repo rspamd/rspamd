@@ -28,9 +28,6 @@ static gchar *logdir = NULL;
 static gchar *output = "new.scores";
 static gboolean score_diff = false;  /* Print score diff flag */
 static gchar *config = NULL;
-static gboolean verbose = true;
-static gint threads = 1;
-static gint iters = 500;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -56,12 +53,6 @@ static GOptionEntry entries[] = {
 				"Print score diff",                             NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
 				"Config file to use",     NULL},
-		{"threads", 't', 0, G_OPTION_ARG_INT, &threads,
-				"No of threads to use [Default:1]",     NULL},
-		{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
-				"Enable verbose",     NULL},
-		{"iters", 'i', 0, G_OPTION_ARG_INT, &iters,
-				"Max iterations for perceptron [Default: 500]",     NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL,       NULL}
 };
 
@@ -96,8 +87,8 @@ rspamadm_rescore_help (gboolean full_help) {
 				"-o: Scores output location\n"
 				"-d: Print score diff\n"
 				"-c: Config file to use\n"
-				"-t: No of threads to use\n"
-				"-v: Enable verbose\n"
+				"--threads: No of threads to use\n"
+				"--verbose: Enable verbose\n"
 				"-i: Max iterations for perceptron [Default: 500]\n";
 	} else {
 		help_str = "Estimate optimal symbol weights from log files";
@@ -196,12 +187,6 @@ rspamadm_rescore (gint argc, gchar **argv) {
 				"logdir", 0, false);
 		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (output),
 				"output", 0, false);
-		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromint (threads),
-				"threads", 0, false);
-		ucl_object_insert_key (cfg->rcl_obj, ucl_object_frombool (verbose),
-				"verbose", 0, false);
-		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (iters),
-				"i", 0, false);
 		ucl_object_insert_key (cfg->rcl_obj, ucl_object_frombool (score_diff),
 				"diff", 0, false);
 		pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
