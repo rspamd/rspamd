@@ -219,7 +219,7 @@ function($) {
                     var elts = loadActionsFromForm();
                     // String to array for comparison
                     var eltsArray = JSON.parse(loadActionsFromForm());
-                    if(eltsArray[2]>=0){
+                    if(eltsArray[0]>=0 && eltsArray[1]>=0 && eltsArray[2]>=0){
                         rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
                             data: elts,
                             dataType: "json",
@@ -233,7 +233,7 @@ function($) {
                     var elts = loadActionsFromForm();
                     // String to array for comparison
                     var eltsArray = JSON.parse(loadActionsFromForm());
-                    if(eltsArray[2]>=0){
+                    if(eltsArray[0]>=0 && eltsArray[1]>=0 && eltsArray[2]>=0){
                         rspamd.queryLocal('saveactions', null, null, "POST", {}, {
                             data: elts,
                             dataType: "json",
