@@ -157,7 +157,7 @@ local function print_score_diff(new_symbol_scores, original_symbol_scores)
     logger.message(string.format("%-35s %-10s %-10s",
         symbol,
         original_symbol_scores[symbol] or 0,
-        rescore_utility.round(new_score, 2)))
+        lua_util.round(new_score, 2)))
   end
 
   logger.message("\nClass changes \n")
@@ -168,7 +168,7 @@ local function print_score_diff(new_symbol_scores, original_symbol_scores)
         logger.message(string.format("%-35s %-10s %-10s",
             symbol,
             original_symbol_scores[symbol] or 0,
-            rescore_utility.round(new_score, 2)))
+            lua_util.round(new_score, 2)))
       end
     end
   end
