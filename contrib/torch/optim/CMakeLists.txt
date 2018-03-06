@@ -1,0 +1,5 @@
+
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6 FATAL_ERROR)
+SET(src)
+FILE(GLOB luasrc *.lua)
+ADD_TORCH_PACKAGE(optim "${src}" "${luasrc}")
