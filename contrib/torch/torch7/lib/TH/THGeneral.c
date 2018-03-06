@@ -25,7 +25,7 @@
 static void defaultErrorHandlerFunction(const char *msg, void *data)
 {
   printf("$ Error: %s\n", msg);
-  exit(-1);
+  abort();
 }
 
 static THErrorHandlerFunction defaultErrorHandler = defaultErrorHandlerFunction;

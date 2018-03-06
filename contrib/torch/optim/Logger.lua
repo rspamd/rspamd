@@ -34,7 +34,6 @@ Example:
     logger:setlogscale(true)                 -- enable logscale on Y-axis
     logger:plot()                            -- and plot
 ]]
-require 'xlua'
 local Logger = torch.class('optim.Logger')
 
 function Logger:__init(filename, timestamp)
