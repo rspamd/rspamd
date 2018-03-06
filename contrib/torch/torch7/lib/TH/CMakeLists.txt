@@ -165,20 +165,12 @@ ENDIF()
 ######################################################################
 
 # IF ANY SIMD FOUND
-IF(C_AVX2_FOUND OR C_AVX_FOUND OR C_SSE4_2_FOUND OR C_SSE4_1_FOUND)
-  SET(simd generic/simd/convolve.c)
-ENDIF(C_AVX2_FOUND OR C_AVX_FOUND OR C_SSE4_2_FOUND OR C_SSE4_1_FOUND)
+IF ("${ARCH}" STREQUAL "x86_64")
+  SET(simd generic/simd/convolve.c generic/simd/convolve5x5_sse.c)
+  SET(CMAKE_C_FLAGS "-DUSE_SSE2 ${CMAKE_C_FLAGS}")
+  SET_SOURCE_FILES_PROPERTIES(generic/simd/convolve5x5_sse.c PROPERTIES COMPILE_FLAGS "-O3 -ffast-math")
+ENDIF()
 
-# IF SSE4 FOUND
-IF(C_SSE4_1_FOUND AND C_SSE4_2_FOUND)
-  SET(CMAKE_C_FLAGS "${C_SSE4_1_FLAGS} -DUSE_SSE4_1 ${C_SSE4_2_FLAGS} -DUSE_SSE4_2 ${CMAKE_C_FLAGS}")
-  IF(MSVC)
-    SET_SOURCE_FILES_PROPERTIES(generic/simd/convolve5x5_sse.c PROPERTIES COMPILE_FLAGS "/Ox /fp:fast")
-  ELSE(MSVC)
-    SET_SOURCE_FILES_PROPERTIES(generic/simd/convolve5x5_sse.c PROPERTIES COMPILE_FLAGS "-O3 -ffast-math")
-  ENDIF(MSVC)
-  SET(simd ${simd} generic/simd/convolve5x5_sse.c)
-ENDIF(C_SSE4_1_FOUND AND C_SSE4_2_FOUND)
 
 # IF AVX FOUND
 IF(FALSE)
