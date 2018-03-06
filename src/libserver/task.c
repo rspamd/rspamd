@@ -481,36 +481,47 @@ rspamd_task_load_message (struct rspamd_task *task,
 			return FALSE;
 		}
 
-		fd = open (fp, O_RDONLY);
-
-		if (fd == -1) {
-			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot open file (%s): %s", fp, strerror (errno));
-			return FALSE;
+		if (G_UNLIKELY (st.st_size == 0)) {
+			/* Empty file */
+			task->flags |= RSPAMD_TASK_FLAG_EMPTY;
+			task->msg.begin = rspamd_mempool_strdup (task->task_pool, "");
+			task->msg.len = 0;
 		}
+		else {
+			fd = open (fp, O_RDONLY);
 
-		map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+			if (fd == -1) {
+				g_set_error (&task->err, rspamd_task_quark (),
+						RSPAMD_PROTOCOL_ERROR,
+						"Cannot open file (%s): %s", fp, strerror (errno));
+				return FALSE;
+			}
+
+			map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
 
 
-		if (map == MAP_FAILED) {
+			if (map == MAP_FAILED) {
+				close (fd);
+				g_set_error (&task->err, rspamd_task_quark (),
+						RSPAMD_PROTOCOL_ERROR,
+						"Cannot mmap file (%s): %s", fp, strerror (errno));
+				return FALSE;
+			}
+
 			close (fd);
-			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot mmap file (%s): %s", fp, strerror (errno));
-			return FALSE;
+			task->msg.begin = map;
+			task->msg.len = st.st_size;
+			m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
+			m->begin = map;
+			m->len = st.st_size;
+
+			rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 		}
 
-		close (fd);
-		task->msg.begin = map;
-		task->msg.len = st.st_size;
 		task->msg.fpath = rspamd_mempool_strdup (task->task_pool, fp);
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
 
 		msg_info_task ("loaded message from file %s", fp);
-		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
-		m->begin = map;
-		m->len = st.st_size;
-
-		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 
 		return TRUE;
 	}
