@@ -269,7 +269,7 @@ local function train(dataset, opt, model, criterion, epoch,
 
       -- penalties (L1 and L2):
       local l1 = tonumber(opt.l1) or 0
-      local l2 = tonumber(opt.l1) or 0
+      local l2 = tonumber(opt.l2) or 0
       if l1 ~= 0 or l2 ~= 0 then
         -- locals:
         local norm,sign= torch.norm,torch.sign
