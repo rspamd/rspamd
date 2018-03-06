@@ -226,7 +226,16 @@ function($) {
                         });
                     }
                     else{
-                        alert("Greylist can not be negative");
+                        if(eltsArray[0]<0){
+                            rspamd.alertMessage('alert-modal alert-error', 'spam can not be negative');
+                        }
+                        else if(eltsArray[1]<0){
+                            rspamd.alertMessage('alert-modal alert-error', 'probable_spam can not be negative');
+                        }
+                        else if(eltsArray[2]<0){
+                            rspamd.alertMessage('alert-modal alert-error', 'greylist can not be negative');
+                        }
+                        
                     }
                 });
                 $('#saveActionsBtn').on('click', function() {
@@ -240,7 +249,16 @@ function($) {
                         });
                     }
                     else{
-                        alert("Greylist can not be negative");
+                        if(eltsArray[0]<0){
+                            rspamd.alertMessage('alert-modal alert-error', 'spam can not be negative');
+                        }
+                        else if(eltsArray[1]<0){
+                            rspamd.alertMessage('alert-modal alert-error', 'probable_spam can not be negative');
+                        }
+                        else if(eltsArray[2]<0){
+                            rspamd.alertMessage('alert-modal alert-error', 'greylist can not be negative');
+                        }
+                        
                     }
                 });
             },
