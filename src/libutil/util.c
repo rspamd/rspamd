@@ -2483,8 +2483,16 @@ rspamd_file_xmap (const char *fname, guint mode, gsize *size,
 		return NULL;
 	}
 
-	if (fstat (fd, &sb) == -1 || !S_ISREG (sb.st_mode) || sb.st_size == 0) {
+	if (fstat (fd, &sb) == -1 || !S_ISREG (sb.st_mode)) {
 		close (fd);
+		*size = (gsize)-1;
+
+		return NULL;
+	}
+
+	if (sb.st_size == 0) {
+		close (fd);
+		*size = (gsize)0;
 
 		return NULL;
 	}

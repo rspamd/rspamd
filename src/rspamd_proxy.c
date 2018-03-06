@@ -1193,9 +1193,12 @@ proxy_check_file (struct rspamd_http_message *msg,
 				TRUE);
 
 		if (session->map == NULL) {
-			msg_err_session ("cannot map %s: %s", file_str, strerror (errno));
+			if (session->map_len != 0) {
+				msg_err_session ("cannot map %s: %s", file_str,
+						strerror (errno));
 
-			return FALSE;
+				return FALSE;
+			}
 		}
 		/* Remove header after processing */
 		rspamd_http_message_remove_header (msg, "File");
@@ -1222,10 +1225,13 @@ proxy_check_file (struct rspamd_http_message *msg,
 						&session->map_len, TRUE);
 
 				if (session->map == NULL) {
-					msg_err_session ("cannot map %s: %s", file_str, strerror (errno));
-					g_hash_table_unref (query_args);
+					if (session->map_len != 0) {
+						msg_err_session ("cannot map %s: %s", file_str,
+								strerror (errno));
+						g_hash_table_unref (query_args);
 
-					return FALSE;
+						return FALSE;
+					}
 				}
 
 				/* We need to create a new URL with file attribute removed */
