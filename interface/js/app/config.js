@@ -215,51 +215,35 @@ function($) {
                     $('#actionsFormField').attr('disabled', true);
                 }
 
-                $('#saveActionsClusterBtn').on('click', function() {
+                function saveActions(callback) {
                     var elts = loadActionsFromForm();
                     // String to array for comparison
                     var eltsArray = JSON.parse(loadActionsFromForm());
-                    if(eltsArray[0]>=0 && eltsArray[1]>=0 && eltsArray[2]>=0){
-                        rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
+                    if(eltsArray[0]<0){
+                        rspamd.alertMessage('alert-modal alert-error', 'Spam can not be negative');
+                    }
+                    else if(eltsArray[1]<0){
+                        rspamd.alertMessage('alert-modal alert-error', 'Probable spam can not be negative');
+                    }
+                    else if(eltsArray[2]<0){
+                        rspamd.alertMessage('alert-modal alert-error', 'Greylist can not be negative');
+                    }
+                    else if(eltsArray[2]<eltsArray[1]<eltsArray[0]){
+                        callback('saveactions', null, null, "POST", {}, {
                             data: elts,
                             dataType: "json",
                         });
                     }
-                    else{
-                        if(eltsArray[0]<0){
-                            rspamd.alertMessage('alert-modal alert-error', 'spam can not be negative');
-                        }
-                        else if(eltsArray[1]<0){
-                            rspamd.alertMessage('alert-modal alert-error', 'probable_spam can not be negative');
-                        }
-                        else if(eltsArray[2]<0){
-                            rspamd.alertMessage('alert-modal alert-error', 'greylist can not be negative');
-                        }
-                        
+                    else {
+                        rspamd.alertMessage('alert-modal alert-error', 'Incorrect order of metric actions threshold');
                     }
-                });
+                };
+
                 $('#saveActionsBtn').on('click', function() {
-                    var elts = loadActionsFromForm();
-                    // String to array for comparison
-                    var eltsArray = JSON.parse(loadActionsFromForm());
-                    if(eltsArray[0]>=0 && eltsArray[1]>=0 && eltsArray[2]>=0){
-                        rspamd.queryLocal('saveactions', null, null, "POST", {}, {
-                            data: elts,
-                            dataType: "json",
-                        });
-                    }
-                    else{
-                        if(eltsArray[0]<0){
-                            rspamd.alertMessage('alert-modal alert-error', 'spam can not be negative');
-                        }
-                        else if(eltsArray[1]<0){
-                            rspamd.alertMessage('alert-modal alert-error', 'probable_spam can not be negative');
-                        }
-                        else if(eltsArray[2]<0){
-                            rspamd.alertMessage('alert-modal alert-error', 'greylist can not be negative');
-                        }
-                        
-                    }
+                    saveActions(rspamd.queryLocal);
+                });
+                $('#saveActionsClusterBtn').on('click', function() {
+                    saveActions(rspamd.queryNeighbours);
                 });
             },
         });
