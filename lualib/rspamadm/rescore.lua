@@ -355,8 +355,6 @@ local function train(dataset, opt, model, criterion, epoch,
   logger.messagex('confusion: %s', tostring(confusion))
   logger.messagex('%s mean class accuracy (train set)', confusion.totalValid * 100)
   confusion:zero()
-
-  epoch = epoch + 1
 end
 
 
