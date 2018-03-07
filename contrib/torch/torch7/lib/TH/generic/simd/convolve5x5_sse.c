@@ -1,4 +1,4 @@
-#include <smmintrin.h>
+#include <emmintrin.h>
 #include "common_simd.h"
 
 
