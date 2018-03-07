@@ -366,16 +366,16 @@ local default_opts = {
   batch_size = 1000,
   optimization = 'ADAM',
   learning_rate_decay = 0.001,
-  momentum = 0.0,
+  momentum = 0.1,
   l1 = 0.0,
   l2 = 0.0,
 }
 
 local learning_rates = {
-  0.01, 0.05, 0.1
+  0.01
 }
 local penalty_weights = {
-  0, 0.001, 0.01, 0.1, 0.5
+  0
 }
 
 local function override_defaults(def, override)
