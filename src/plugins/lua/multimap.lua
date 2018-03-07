@@ -708,8 +708,15 @@ local function multimap_callback(task, rule)
       end
     end,
     header = function()
-      local hv = task:get_header_full(rule['header'])
-      match_list(rule, hv, {'decoded'})
+      if type(rule['header']) == 'table' then
+        for _,rh in ipairs(rule['header']) do
+          local hv = task:get_header_full(rh)
+          match_list(rule, hv, {'decoded'})
+        end
+      else
+        local hv = task:get_header_full(rule['header'])
+        match_list(rule, hv, {'decoded'})
+      end
     end,
     rcpt = function()
       if task:has_recipients('smtp') then
