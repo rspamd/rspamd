@@ -228,7 +228,7 @@ function($) {
                     else if(eltsArray[2]<0){
                         rspamd.alertMessage('alert-modal alert-error', 'Greylist can not be negative');
                     }
-                    else if(eltsArray[2]<eltsArray[1]<eltsArray[0]){
+                    else if(eltsArray[2]<eltsArray[1] && eltsArray[1]<eltsArray[0]){
                         callback('saveactions', null, null, "POST", {}, {
                             data: elts,
                             dataType: "json",
