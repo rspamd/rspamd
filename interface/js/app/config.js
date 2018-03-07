@@ -215,19 +215,35 @@ function($) {
                     $('#actionsFormField').attr('disabled', true);
                 }
 
-                $('#saveActionsClusterBtn').on('click', function() {
+                function saveActions(callback) {
                     var elts = loadActionsFromForm();
-                    rspamd.queryNeighbours('saveactions', null, null, "POST", {}, {
-                        data: elts,
-                        dataType: "json",
-                    });
-                });
+                    // String to array for comparison
+                    var eltsArray = JSON.parse(loadActionsFromForm());
+                    if(eltsArray[0]<0){
+                        rspamd.alertMessage('alert-modal alert-error', 'Spam can not be negative');
+                    }
+                    else if(eltsArray[1]<0){
+                        rspamd.alertMessage('alert-modal alert-error', 'Probable spam can not be negative');
+                    }
+                    else if(eltsArray[2]<0){
+                        rspamd.alertMessage('alert-modal alert-error', 'Greylist can not be negative');
+                    }
+                    else if(eltsArray[2]<eltsArray[1] && eltsArray[1]<eltsArray[0]){
+                        callback('saveactions', null, null, "POST", {}, {
+                            data: elts,
+                            dataType: "json",
+                        });
+                    }
+                    else {
+                        rspamd.alertMessage('alert-modal alert-error', 'Incorrect order of metric actions threshold');
+                    }
+                };
+
                 $('#saveActionsBtn').on('click', function() {
-                    var elts = loadActionsFromForm();
-                    rspamd.queryLocal('saveactions', null, null, "POST", {}, {
-                        data: elts,
-                        dataType: "json",
-                    });
+                    saveActions(rspamd.queryLocal);
+                });
+                $('#saveActionsClusterBtn').on('click', function() {
+                    saveActions(rspamd.queryNeighbours);
                 });
             },
         });
