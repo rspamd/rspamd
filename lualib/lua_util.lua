@@ -292,6 +292,35 @@ end
 exports.check_experimental = check_experimental
 
 --[[[
+-- @function lua_util.list_to_hash(list)
+-- Converts numerically-indexed table to table indexed by values
+-- @param {table} list numerically-indexed table or string, which is treated as a one-element list
+-- @return {table} table indexed by values
+-- @example
+-- local h = lua_util.list_to_hash({"a", "b"})
+-- -- h contains {a = true, b = true}
+--]]
+local function list_to_hash(list)
+  if type(list) == 'table' then
+    if list[1] then
+      local h = {}
+      for _, e in ipairs(list) do
+        h[e] = true
+      end
+      return h
+    else
+      return list
+    end
+  elseif type(list) == 'string' then
+    local h = {}
+    h[list] = true
+    return h
+  end
+end
+
+exports.list_to_hash = list_to_hash
+
+--[[[
 -- @function lua_util.parse_time_interval(str)
 -- Parses human readable time interval
 -- Accepts 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days,

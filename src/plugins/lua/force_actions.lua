@@ -25,6 +25,7 @@ local E = {}
 local N = 'force_actions'
 
 local fun = require "fun"
+local lua_util = require "lua_util"
 local rspamd_cryptobox_hash = require "rspamd_cryptobox_hash"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_logger = require "rspamd_logger"
@@ -89,24 +90,6 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit)
 
 end
 
-local function list_to_hash(list)
-  if type(list) == 'table' then
-    if list[1] then
-      local h = {}
-      for _, e in ipairs(list) do
-        h[e] = true
-      end
-      return h
-    else
-      return list
-    end
-  elseif type(list) == 'string' then
-    local h = {}
-    h[list] = true
-    return h
-  end
-end
-
 local function configure_module()
   local opts = rspamd_config:get_all_opt(N)
   if not opts then
@@ -153,8 +136,8 @@ local function configure_module()
         local subject = sett.subject
         local message = sett.message
         local lim = sett.limit or 0
-        local raction = list_to_hash(sett.require_action)
-        local honor = list_to_hash(sett.honor_action)
+        local raction = lua_util.list_to_hash(sett.require_action)
+        local honor = lua_util.list_to_hash(sett.honor_action)
         local cb, atoms = gen_cb(expr, action, rspamd_config:get_mempool(),
           message, subject, raction, honor, lim)
         if cb and atoms then

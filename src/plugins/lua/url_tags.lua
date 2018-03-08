@@ -23,7 +23,7 @@ end
 
 local N = 'url_tags'
 
-local redis_params, redis_set_script_sha
+local redis_params, redis_set_script_id
 local settings = {
   -- lifetime for tags
   expire = 3600, -- 1 hour
@@ -36,59 +36,8 @@ local settings = {
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
+local lua_redis = require "lua_redis"
 local ucl = require "ucl"
-
--- This function is used for taskless redis requests (to load scripts)
-local function redis_make_request(ev_base, cfg, key, is_write, callback, command, args)
-  if not ev_base or not redis_params or not callback or not command then
-    return false,nil,nil
-  end
-
-  local addr
-  local rspamd_redis = require "rspamd_redis"
-
-  if key then
-    if is_write then
-      addr = redis_params['write_servers']:get_upstream_by_hash(key)
-    else
-      addr = redis_params['read_servers']:get_upstream_by_hash(key)
-    end
-  else
-    if is_write then
-      addr = redis_params['write_servers']:get_upstream_master_slave(key)
-    else
-      addr = redis_params['read_servers']:get_upstream_round_robin(key)
-    end
-  end
-
-  if not addr then
-    rspamd_logger.errx(cfg, 'cannot select server to make redis request')
-  end
-
-  local options = {
-    ev_base = ev_base,
-    config = cfg,
-    callback = callback,
-    host = addr:get_addr(),
-    timeout = redis_params['timeout'],
-    cmd = command,
-    args = args
-  }
-
-  if redis_params['password'] then
-    options['password'] = redis_params['password']
-  end
-
-  if redis_params['db'] then
-    options['dbname'] = redis_params['db']
-  end
-
-  local ret,conn = rspamd_redis.make_request(options)
-  if not ret then
-    rspamd_logger.errx('cannot execute redis request')
-  end
-  return ret,conn,addr
-end
 
 -- Tags are stored in format: [timestamp]|[tag1],[timestamp]|[tag2]
 local redis_set_script_head = 'local expiry = '
@@ -136,40 +85,16 @@ end
 
 -- Function to load the script
 local function load_scripts(cfg, ev_base)
-  local function redis_set_script_cb(err, data)
-    if err then
-      rspamd_logger.errx(cfg, 'Set script loading failed: ' .. err)
-    else
-      redis_set_script_sha = tostring(data)
-    end
-  end
   local set_script =
     redis_set_script_head ..
     settings.expire ..
     '\n' ..
     redis_set_script_tail
-  redis_make_request(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    redis_set_script_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', set_script}
-  )
+  redis_set_script_id = lua_redis.add_redis_script(set_script, redis_params)
 end
 
 -- Saves tags to redis
 local function tags_save(task)
-
-  -- Handle errors (reloads script if necessary)
-  local function redis_set_cb(err)
-    if err then
-      rspamd_logger.errx(task, 'Redis error: %s', err)
-      if string.match(err, 'NOSCRIPT') then
-        load_scripts(rspamd_config, task:get_ev_base())
-      end
-    end
-  end
 
   local tags = {}
   -- Figure out what tags are present for each TLD
@@ -251,26 +176,13 @@ local function tags_save(task)
     end
     table.insert(redis_args, table.concat(tmp4, '/'))
   end
-
-  local redis_final = {redis_set_script_sha}
-  table.insert(redis_final, #redis_keys)
-  for _, k in ipairs(redis_keys) do
-    table.insert(redis_final, k)
-  end
-  for _, a in ipairs(redis_args) do
-    table.insert(redis_final, a)
-  end
-  table.insert(redis_final, rspamd_util.get_time())
+  table.insert(redis_args, rspamd_util.get_time())
 
   -- Send query to redis
-  rspamd_redis_make_request(task,
-    redis_params,
-    nil,
-    true, -- is write
-    redis_set_cb, --callback
-    'EVALSHA', -- command
-    redis_final
-  )
+  lua_redis.exec_redis_script(
+    redis_set_script_id,
+    {task = task, is_write = true},
+    function() end, redis_keys, redis_args)
 end
 
 local function tags_restore(task)
@@ -362,26 +274,7 @@ end
 for k, v in pairs(opts) do
   settings[k] = v
 end
-local function list_to_hash(list)
-  if type(list) == 'table' then
-    if list[1] then
-      local h = {}
-      for _, e in ipairs(list) do
-        h[e] = true
-      end
-      return h
-    else
-      return list
-    end
-  elseif type(list) == 'string' then
-    local h = {}
-    h[list] = true
-    return h
-  else
-    return {}
-  end
-end
-settings.ignore_tags = list_to_hash(settings.ignore_tags)
+settings.ignore_tags = lua_util.list_to_hash(settings.ignore_tags)
 
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   load_scripts(cfg, ev_base)

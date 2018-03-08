@@ -24,7 +24,7 @@ end
 local E = {}
 local N = 'url_reputation'
 
-local whitelist, redis_params, redis_incr_script_sha
+local whitelist, redis_params, redis_incr_script_id
 local settings = {
   expire = 86400, -- 1 day
   key_prefix = 'Ur.',
@@ -74,21 +74,7 @@ end
 
 -- Function to load the script
 local function load_scripts(cfg, ev_base)
-  local function redis_incr_script_cb(err, data)
-    if err then
-      rspamd_logger.errx(cfg, 'Increment script loading failed: ' .. err)
-    else
-      redis_incr_script_sha = tostring(data)
-    end
-  end
-  rspamd_redis.redis_make_request_taskless(ev_base,
-    rspamd_config,
-    nil,
-    true, -- is write
-    redis_incr_script_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', redis_incr_script}
-  )
+  redis_incr_script_id = rspamd_redis.add_redis_script(redis_incr_script, redis_params)
 end
 
 -- Calculates URL reputation
@@ -175,8 +161,6 @@ local function url_reputation_check(task)
       if which then
         -- Update reputation for guilty domain only
         rk = {
-          redis_incr_script_sha,
-          2,
           settings.key_prefix .. which .. '_total',
           settings.key_prefix .. which .. '_' .. scale[reputation],
         }
@@ -248,7 +232,7 @@ local function url_reputation_check(task)
           end
         end
 
-        rk = {redis_incr_script_sha, 0}
+        rk = {}
         local added = 0
         if most_relevant then
           tlds = {most_relevant}
@@ -264,16 +248,11 @@ local function url_reputation_check(task)
           added = added + 1
         end
       end
-      if rk[3] then
-        rk[2] = (#rk - 2)
-        local ret = rspamd_redis_make_request(task,
-          redis_params,
-          rk[3],
-          true, -- is write
-          redis_incr_cb, --callback
-          'EVALSHA', -- command
-          rk
-        )
+      if rk[2] then
+        local ret = rspamd_redis.exec_redis_script(redis_incr_script_id,
+          {task = task, is_write = true},
+          redis_incr_cb,
+          rk)
         if not ret then
           rspamd_logger.errx(task, 'couldnt schedule increment')
         end

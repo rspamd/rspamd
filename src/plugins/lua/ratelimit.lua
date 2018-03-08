@@ -55,7 +55,7 @@ local lua_util = require "lua_util"
 
 local user_keywords = {'user'}
 
-local redis_script_sha
+local redis_script_id
 local redis_script = [[local bucket
 local limited = false
 local buckets = {}
@@ -160,29 +160,13 @@ end
 return results]]
 
 local function load_scripts(cfg, ev_base)
-  local function rl_script_cb(err, data)
-    if err then
-      rspamd_logger.errx(cfg, 'Script loading failed: ' .. err)
-    elseif type(data) == 'string' then
-      redis_script_sha = data
-    end
-  end
   local script
   if ratelimit_symbol then
     script = redis_script_symbol
   else
     script = redis_script
   end
-  lua_redis.redis_make_request_taskless(
-    ev_base,
-    cfg,
-    redis_params,
-    nil, -- key
-    true, -- is write
-    rl_script_cb, --callback
-    'SCRIPT', -- command
-    {'LOAD', script}
-  )
+  redis_script_id = lua_redis.add_redis_script(script, redis_params)
 end
 
 local limit_parser
@@ -410,9 +394,9 @@ local function process_buckets(task, buckets)
   end
   local redis_cb = rl_redis_cb
   if ratelimit_symbol then redis_cb = rl_symbol_redis_cb end
-  local args = {redis_script_sha, #buckets}
+  local kwargs, args = {}, {}
   for _, bucket in ipairs(buckets) do
-    table.insert(args, bucket[2])
+    table.insert(kwargs, bucket[2])
   end
   for _, bucket in ipairs(buckets) do
     if use_ip_score then
@@ -449,14 +433,7 @@ local function process_buckets(task, buckets)
   end
   table.insert(args, rspamd_util.get_time())
   table.insert(args, task:get_queue_id() or task:get_uid())
-  local ret = rspamd_redis_make_request(task,
-    redis_params, -- connect params
-    nil, -- hash key
-    true, -- is write
-    redis_cb, --callback
-    'evalsha', -- command
-    args -- arguments
-  )
+  local ret = lua_redis.exec_redis_script(redis_script_id, {task = task, is_write = true}, redis_cb, kwargs, args)
   if not ret then
     rspamd_logger.errx(task, 'got error connecting to redis')
   end
