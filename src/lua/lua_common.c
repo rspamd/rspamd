@@ -215,6 +215,12 @@ lua_add_actions_global (lua_State *L)
 	lua_setglobal (L, "rspamd_actions");
 }
 
+#ifndef __APPLE__
+#define OS_SO_SUFFIX ".so"
+#else
+#define OS_SO_SUFFIX ".dylib"
+#endif
+
 void
 rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars)
 {
@@ -335,10 +341,12 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	lua_getfield (L, -1, "cpath");
 	old_path = luaL_checkstring (L, -1);
 
+
 	rspamd_snprintf (path_buf, sizeof (path_buf),
-					"%s/?.so;"
+					"%s/?%s;"
 					"%s",
 			libdir,
+			OS_SO_SUFFIX,
 			old_path);
 	lua_pop (L, 1);
 	lua_pushstring (L, path_buf);
