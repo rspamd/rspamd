@@ -506,7 +506,7 @@ rspamd_content_disposition_parse (const gchar *in,
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
 		res->lc_data = rspamd_mempool_alloc (pool, len + 1);
-		rspamd_strlcpy (res->lc_data, in, len);
+		rspamd_strlcpy (res->lc_data, in, len + 1);
 		rspamd_str_lc (res->lc_data, len);
 	}
 	else {
