@@ -1,6 +1,6 @@
 [Unit]
 Description=rapid spam filtering system
-After=nss-lookup.target
+After=nss-lookup.target network-online.target
 Documentation=https://rspamd.com/doc/
 
 [Service]
