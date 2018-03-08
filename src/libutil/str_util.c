@@ -79,10 +79,12 @@ rspamd_str_lc (gchar *str, guint size)
 	switch (leftover) {
 	case 3:
 		*dest++ = lc_map[(guchar)str[i++]];
+		/* falltrough */
 	case 2:
 		*dest++ = lc_map[(guchar)str[i++]];
+		/* falltrough */
 	case 1:
-		*dest++ = lc_map[(guchar)str[i]];
+		*dest = lc_map[(guchar)str[i]];
 	}
 
 }

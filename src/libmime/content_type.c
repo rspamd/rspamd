@@ -502,8 +502,8 @@ rspamd_content_disposition_parse (const gchar *in,
 {
 	struct rspamd_content_disposition *res = NULL, val;
 
-	val.lc_data = rspamd_mempool_alloc (pool, len);
-	memcpy (val.lc_data, in, len);
+	val.lc_data = rspamd_mempool_alloc (pool, len + 1);
+	rspamd_strlcpy (val.lc_data, in, len);
 	rspamd_str_lc (val.lc_data, len);
 
 	if (rspamd_content_disposition_parser (in, len, &val, pool)) {
