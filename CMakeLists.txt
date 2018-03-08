@@ -425,16 +425,19 @@ MACRO(ProcessPackage PKG_NAME)
 			ENDIF(NOT _incl)
 
 			IF(_incl AND _lib)
+				# We need to apply heuristic to find the real dir name
+				STRING(REGEX REPLACE "/[^/]+$" "" _incl_path "${PKG_INCLUDE}")
+				STRING(REPLACE "${_incl_path}/" "" _stripped_incl "${_incl}")
 				GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
-				INCLUDE_DIRECTORIES("${_incl}")
+				INCLUDE_DIRECTORIES("${_stripped_incl}")
 				LINK_DIRECTORIES("${_lib_path}")
 				LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
-				SET(${PKG_NAME}_INCLUDE "${_incl}" CACHE INTERNAL "")
+				SET(${PKG_NAME}_INCLUDE "${_stripped_incl}" CACHE INTERNAL "")
 				SET(${PKG_NAME}_LIBRARY_PATH "${_lib_path}" CACHE INTERNAL "")
 				SET(${PKG_NAME}_LIBRARY "${_lib}" CACHE INTERNAL "")
 				SET(${PKG_NAME}_GUESSED 1 CACHE INTERNAL "")
 				SET(WITH_${PKG_NAME} 1 CACHE INTERNAL "")
-				MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_incl}' (${PKG_INCLUDE}).")
+				MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_stripped_incl}' (${PKG_INCLUDE}).")
 			ENDIF()
 
 		ELSE()
@@ -646,15 +649,15 @@ ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/e
 	ROOT ${LIBEVENT_ROOT_DIR} MODULES event libevent)
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite
 	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
-ProcessPackage(ICUDATA LIBRARY icudata INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
+ProcessPackage(ICUDATA LIBRARY icudata INCLUDE unicode/ucnv.h
 	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
-ProcessPackage(ICUC LIBRARY icuuc INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
+ProcessPackage(ICUC LIBRARY icuuc INCLUDE unicode/ucnv.h
 	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
-ProcessPackage(ICUI18N LIBRARY icui18n INCLUDE ucnv.h INCLUDE_SUFFIXES include/unicode
+ProcessPackage(ICUI18N LIBRARY icui18n INCLUDE unicode/ucnv.h
 	ROOT ${ICU_ROOT_DIR} MODULES icu-i18n)
-ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE err.h INCLUDE_SUFFIXES include/openssl
+ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE openssl/evp.h
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libcrypt)
-ProcessPackage(LIBSSL LIBRARY ssl INCLUDE ssl.h INCLUDE_SUFFIXES include/openssl
+ProcessPackage(LIBSSL LIBRARY ssl INCLUDE openssl/ssl.h
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libssl)
 ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libmagic
 	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
