@@ -533,7 +533,11 @@ local id = rspamd_config:register_symbol({
 local is_monitored = {}
 for key,rbl in pairs(opts['rbls']) do
   (function()
-    if rbl['disabled'] then return end
+    if type(rbl) ~= 'string' or rbl['disabled'] then
+      rspamd_logger.infox(rspamd_config, 'disable rbl "s"', key)
+      return
+    end
+
     for default, default_v in pairs(default_defaults) do
       if(rbl[default_v[2]] == nil) then
         rbl[default_v[2]] = opts[default]
