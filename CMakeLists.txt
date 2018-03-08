@@ -427,7 +427,7 @@ MACRO(ProcessPackage PKG_NAME)
 			IF(_incl AND _lib)
 				# We need to apply heuristic to find the real dir name
 				STRING(REGEX REPLACE "/[^/]+$" "" _incl_path "${PKG_INCLUDE}")
-				STRING(REPLACE "${_incl_path}/" "" _stripped_incl "${_incl}")
+				STRING(REGEX REPLACE "${_incl_path}/$" "" _stripped_incl "${_incl}")
 				GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
 				INCLUDE_DIRECTORIES("${_stripped_incl}")
 				LINK_DIRECTORIES("${_lib_path}")
