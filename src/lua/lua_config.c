@@ -2942,7 +2942,7 @@ lua_config_has_torch (lua_State *L)
 		lua_pushboolean (L, false);
 		(void)crypto_ctx;
 #else
-		if (crypto_ctx->cpu_config & CPUID_SSE41) {
+		if (crypto_ctx->cpu_config & CPUID_SSE2) {
 			lua_pushboolean (L, true);
 		}
 		else {
