@@ -1118,6 +1118,14 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable (parser, RSPAMD_BRANCH_VERSION_MACRO,
 			RSPAMD_VERSION_BRANCH);
 
+#if defined(WITH_TORCH) && defined(WITH_LUAJIT) && defined(__x86_64__)
+	ucl_parser_register_variable (parser, "HAS_TORCH",
+			"yes");
+#else
+	ucl_parser_register_variable (parser, "HAS_TORCH",
+			"no");
+#endif
+
 	if (vars != NULL) {
 		g_hash_table_iter_init (&it, vars);
 
@@ -1619,14 +1627,42 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	else {
 		enabled = ucl_object_lookup (conf, "enabled");
 
-		if (enabled && ucl_object_type (enabled) == UCL_BOOLEAN) {
-			if (!ucl_object_toboolean (enabled)) {
-				rspamd_plugins_table_push_elt (L,
-						"disabled_explicitly", module_name);
+		if (enabled) {
+			if (ucl_object_type (enabled) == UCL_BOOLEAN) {
+				if (!ucl_object_toboolean (enabled)) {
+					rspamd_plugins_table_push_elt (L,
+							"disabled_explicitly", module_name);
 
-				msg_info_config ("%s module %s is disabled in the configuration",
-						is_c ? "internal" : "lua", module_name);
-				return FALSE;
+					msg_info_config (
+							"%s module %s is disabled in the configuration",
+							is_c ? "internal" : "lua", module_name);
+					return FALSE;
+				}
+			}
+			else if (ucl_object_type (enabled) == UCL_STRING) {
+				gint ret;
+
+				ret = rspamd_config_parse_flag (ucl_object_tostring (enabled), 0);
+
+				if (ret == 0) {
+					rspamd_plugins_table_push_elt (L,
+							"disabled_explicitly", module_name);
+
+					msg_info_config (
+							"%s module %s is disabled in the configuration",
+							is_c ? "internal" : "lua", module_name);
+					return FALSE;
+				}
+				else if (ret == -1) {
+					rspamd_plugins_table_push_elt (L,
+							"disabled_failed", module_name);
+
+					msg_info_config (
+							"%s module %s has wrong enabled flag (%s) in the configuration",
+							is_c ? "internal" : "lua", module_name,
+							ucl_object_tostring (enabled));
+					return FALSE;
+				}
 			}
 		}
 	}
