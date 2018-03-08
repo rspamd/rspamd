@@ -1041,7 +1041,10 @@ else
   for _,rule in pairs(settings.rules) do
     load_scripts(rule.redis)
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
-      check_anns(rule, cfg, ev_base)
+      rspamd_config:add_periodic(ev_base, 0.0,
+          function(_, _)
+            return check_anns(rule, cfg, ev_base)
+          end)
 
       if worker:is_primary_controller() then
         -- We also want to train neural nets when they have enough data
