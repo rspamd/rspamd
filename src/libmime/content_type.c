@@ -502,13 +502,12 @@ rspamd_content_disposition_parse (const gchar *in,
 {
 	struct rspamd_content_disposition *res = NULL, val;
 
-	val.lc_data = rspamd_mempool_alloc (pool, len + 1);
-	rspamd_strlcpy (val.lc_data, in, len);
-	rspamd_str_lc (val.lc_data, len);
-
 	if (rspamd_content_disposition_parser (in, len, &val, pool)) {
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
+		res->lc_data = rspamd_mempool_alloc (pool, len + 1);
+		rspamd_strlcpy (res->lc_data, in, len);
+		rspamd_str_lc (res->lc_data, len);
 	}
 	else {
 		msg_warn_pool ("cannot parse content disposition: %*s",
