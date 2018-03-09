@@ -46,6 +46,7 @@ local settings = {
   failover = false,
   import_kibana = false,
   use_https = false,
+  allow_local = false,
 }
 
 local function read_file(path)
@@ -183,7 +184,7 @@ end
 
 local function elastic_collect(task)
   if not enabled then return end
-  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local row = {['rspamd_meta'] = get_general_metadata(task),
     ['@timestamp'] = tostring(util.get_time() * 1000)}
   table.insert(rows, row)
