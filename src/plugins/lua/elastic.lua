@@ -207,10 +207,10 @@ local function check_elastic_server(cfg, ev_base, _)
   local function http_callback(_, err, body, _)
     if err == 200 then
       local parser = ucl.parser()
-      local res,err = parser:parse_string(body)
+      local res,ucl_err = parser:parse_string(body)
       if not res then
         rspamd_logger.infox(rspamd_config, 'failed to parse reply from %s: %s',
-            plugins_url, err)
+            plugins_url, ucl_err)
         enabled = false;
         return
       end
