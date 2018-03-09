@@ -220,6 +220,12 @@ local function setup_redis(cfg, changes)
 end
 
 local function setup_dkim_signing(cfg, changes)
+  -- Remove the trailing slash of a pathname, if present.
+  local function remove_trailing_slash(path)
+    if string.sub(path, -1) ~= "/" then return path end
+    return string.sub(path, 1, string.len(path) - 1)
+  end
+
   local domains = {}
   local has_domains = false
 
@@ -227,7 +233,7 @@ local function setup_dkim_signing(cfg, changes)
 
   local prompt = string.format("Enter output directory for the keys [default: %s]: ",
     highlight(dkim_keys_dir))
-  dkim_keys_dir = readline_default(prompt, dkim_keys_dir)
+  dkim_keys_dir = remove_trailing_slash(readline_default(prompt, dkim_keys_dir))
 
   local ret, err = rspamd_util.mkdir(dkim_keys_dir, true)
 
@@ -258,7 +264,7 @@ local function setup_dkim_signing(cfg, changes)
       end
     until #domain ~= 0
 
-    local selector = readline_default("Enter domain to sign [default: dkim]: ", 'dkim')
+    local selector = readline_default("Enter selector [default: dkim]: ", 'dkim')
     if not selector then selector = 'dkim' end
 
     local privkey_file = string.format("%s/%s.%s.key", dkim_keys_dir, domain,
