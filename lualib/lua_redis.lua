@@ -820,7 +820,9 @@ local function load_script_taskless(script, cfg, ev_base)
 end
 
 local function load_redis_script(script, cfg, ev_base, _)
-  load_script_taskless(script, cfg, ev_base)
+  if script.redis_params then
+    load_script_taskless(script, cfg, ev_base)
+  end
 end
 
 local function add_redis_script(script, redis_params)
@@ -852,6 +854,10 @@ local function exec_redis_script(id, params, callback, keys, args)
   end
 
   local script = redis_scripts[id]
+  if not script.redis_params then
+    callback('no redis servers defined', nil)
+    return true
+  end
 
   local function do_call(can_reload)
     local function redis_cb(err, data)
