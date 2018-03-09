@@ -249,6 +249,58 @@ local function initial_setup(cfg, ev_base, worker)
 
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
+
+  local function push_kibana_template()
+    -- add kibana dashboard and visualizations
+    if settings['import_kibana'] then
+      local kibana_mappings = read_file(settings['kibana_file'])
+      if kibana_mappings then
+        local parser = ucl.parser()
+        local res,err = parser:parse_string(kibana_mappings)
+        if not res then
+          rspamd_logger.infox(rspamd_config, 'kibana template cannot be parsed: %s',
+              err)
+          enabled = false
+
+          return
+        end
+        local obj = parser:get_object()
+        local tbl = {}
+        for _,item in ipairs(obj) do
+          table.insert(tbl, '{ "index" : { "_index" : ".kibana", "_type" : "doc" ,"_id": "'..
+              item['_type'] .. ':' .. item["_id"]..'"} }')
+          table.insert(tbl, ucl.to_format(item['_source'], 'json-compact'))
+        end
+        table.insert(tbl, '') -- For last \n
+
+        local kibana_url = connect_prefix .. ip_addr ..'/.kibana/_bulk'
+        local function kibana_template_callback(_, code, body, _)
+          if code ~= 200 then
+            rspamd_logger.errx('cannot put template to %s: %s (%s)', kibana_url,
+                code, body)
+            enabled = false
+          else
+            rspamd_logger.debugm(N, 'pushed kibana template: %s', body)
+          end
+        end
+
+        rspamd_http.request({
+          url = kibana_url,
+          ev_base = ev_base,
+          config = cfg,
+          headers = {
+            ['Content-Type'] = 'application/x-ndjson',
+          },
+          body = table.concat(tbl, "\n"),
+          method = 'post',
+          callback = kibana_template_callback
+        })
+      else
+        rspamd_logger.infox(rspamd_config, 'kibana template file %s not found', settings['kibana_file'])
+      end
+    end
+  end
+
   if enabled then
     -- create ingest pipeline
     local geoip_url = connect_prefix .. ip_addr ..'/_ingest/pipeline/rspamd-geoip'
@@ -286,6 +338,9 @@ local function initial_setup(cfg, ev_base, worker)
       if code ~= 200 then
         rspamd_logger.errx('cannot put template to %s: %s (%s)', template_url, code, body)
         enabled = false
+      else
+        rspamd_logger.debugm(N, 'pushed rspamd template: %s', body)
+        push_kibana_template()
       end
     end
     local function http_template_exist_callback(_, code, _, _)
@@ -301,6 +356,8 @@ local function initial_setup(cfg, ev_base, worker)
           },
           callback = http_template_put_callback,
         })
+      else
+        push_kibana_template()
       end
     end
 
@@ -311,52 +368,7 @@ local function initial_setup(cfg, ev_base, worker)
       method = 'head',
       callback = http_template_exist_callback
     })
-    -- add kibana dashboard and visualizations
-    if enabled and settings['import_kibana'] then
-        local kibana_mappings = read_file(settings['kibana_file'])
-        if kibana_mappings then
-          local parser = ucl.parser()
-          local res,err = parser:parse_string(kibana_mappings)
-          if not res then
-            rspamd_logger.infox(rspamd_config, 'kibana template cannot be parsed: %s',
-              err)
-            enabled = false
 
-            return
-          end
-          local obj = parser:get_object()
-          local tbl = {}
-          for _,item in ipairs(obj) do
-            table.insert(tbl, '{ "index" : { "_index" : ".kibana", "_type" : "'..
-                item["_type"]..'" ,"_id": "'..
-                item["_id"]..'"} }')
-            table.insert(tbl, ucl.to_format(item['_source'], 'json-compact'))
-          end
-          table.insert(tbl, '') -- For last \n
-
-          local kibana_url = connect_prefix .. ip_addr ..'/.kibana/_bulk'
-          local function kibana_template_callback(_, code, body, _)
-            if code ~= 200 then
-              rspamd_logger.errx('cannot put template to %s: %s (%s)', kibana_url,
-                  code, body)
-              enabled = false
-            end
-          end
-          rspamd_http.request({
-            url = kibana_url,
-            ev_base = ev_base,
-            config = cfg,
-            headers = {
-              ['Content-Type'] = 'application/x-ndjson',
-            },
-            body = table.concat(tbl, "\n"),
-            method = 'post',
-            callback = kibana_template_callback
-          })
-        else
-          rspamd_logger.infox(rspamd_config, 'kibana templatefile not found')
-        end
-    end
   end
 end
 
