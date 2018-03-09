@@ -100,7 +100,9 @@
   }
 
   action Real_IP_Start {
-    real_ip_start = p;
+    if (real_ip_end == NULL) {
+      real_ip_start = p;
+    }
   }
   action Real_IP_End {
     if (ip_start && ip_end && ip_end > ip_start) {
