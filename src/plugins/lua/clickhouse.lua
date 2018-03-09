@@ -58,6 +58,7 @@ local settings = {
   enable_symbols = false,
   use_https = false,
   use_gzip = true,
+  allow_local = false,
 }
 
 local clickhouse_schema = {
@@ -363,7 +364,7 @@ local function clickhouse_quote(str)
 end
 
 local function clickhouse_collect(task)
-  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   local from_domain = ''
   local from_user = ''
   if task:has_from('smtp') then
