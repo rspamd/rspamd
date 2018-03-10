@@ -357,8 +357,7 @@ local function check_redis_classifier(cls, changes)
     end
   end
 
-  local function get_version()
-    local _,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+  local function get_version(conn)
     -- We still need to check versions
     local lua_script = [[
 local ver = 0
@@ -376,8 +375,7 @@ return ver
     return tonumber(ver)
   end
 
-  local function check_expire()
-    local _,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+  local function check_expire(conn)
     -- We still need to check versions
     local lua_script = [[
 local ttl = 0
@@ -397,8 +395,14 @@ return ttl
     return tonumber(ttl)
   end
 
+  local res,conn = lua_redis.redis_connect_sync(parsed_redis, true)
+  if not res then
+    printf("Cannot connect to Redis server")
+    return false
+  end
+
   if not cls.new_schema then
-    local ver = get_version()
+    local ver = get_version(conn)
 
     if ver ~= 2 then
       printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
@@ -412,14 +416,14 @@ return ttl
           new_schema = true,
         }
 
-        local expire = check_expire()
+        local expire = check_expire(conn)
         if expire then
           changes.l['classifier-bayes.conf'].expire = expire
         end
       end
     end
   else
-    local ver = get_version()
+    local ver = get_version(conn)
     if ver ~= 2 then
       printf("You have configured new schema for %s/%s but your DB has old data",
         symbol_spam, symbol_ham)
