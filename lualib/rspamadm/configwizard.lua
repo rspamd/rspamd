@@ -626,6 +626,7 @@ return function(args, cfg)
       if ask_yes_no("Apply changes?", true) then
         apply_changes(changes)
         printf("%d changes applied, the wizard is finished now", nchanges)
+        printf("*** Please reload the Rspamd configuration ***")
       else
         printf("No changes applied, the wizard is finished now")
       end
