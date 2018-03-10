@@ -446,7 +446,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 
 	hs_set_allocator (g_malloc, g_free);
 
-	msg_info_re_cache ("loaded hyperscan engine witch cpu tune '%s' and features '%V'",
+	msg_info_re_cache ("loaded hyperscan engine with cpu tune '%s' and features '%V'",
 			platform, features);
 
 	rspamd_fstring_free (features);
