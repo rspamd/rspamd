@@ -176,7 +176,7 @@ local function test_groups(groups)
       for _,_ in pairs(gr) do cnt = cnt + 1 end
 
       if cnt == 0 then
-        logger.errx('group %s is empty', gr_name)
+        logger.debugx('group %s is empty', gr_name)
       else
         logger.infox('group %s has no symbols', gr_name)
       end
