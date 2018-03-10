@@ -57,8 +57,8 @@ local default_options = {
   lock_expire = 600,
   learning_spawned = false,
   ann_expire = 60 * 60 * 24 * 2, -- 2 days
-  symbol_spam = 'FANNR_SPAM',
-  symbol_ham = 'FANNR_HAM',
+  symbol_spam = 'NEURAL_SPAM',
+  symbol_ham = 'NEURAL_HAM',
 }
 
 local settings = {
@@ -955,7 +955,7 @@ else
   end
 
   local id = rspamd_config:register_symbol({
-    name = 'FANN_CHECK',
+    name = 'NEURAL_CHECK',
     type = 'postfilter,nostat',
     priority = 6,
     callback = ann_scores_filter
@@ -1007,7 +1007,7 @@ else
     settings.rules[k] = def_rules
     rspamd_config:set_metric_symbol({
       name = def_rules.symbol_spam,
-      score = 3.0,
+      score = 0.0,
       description = 'Neural network SPAM',
       group = 'neural'
     })
@@ -1019,7 +1019,7 @@ else
 
     rspamd_config:set_metric_symbol({
       name = def_rules.symbol_ham,
-      score = -2.0,
+      score = -0.0,
       description = 'Neural network HAM',
       group = 'neural'
     })
@@ -1031,7 +1031,7 @@ else
   end
 
   rspamd_config:register_symbol({
-    name = 'FANN_VECTOR_PUSH',
+    name = 'NEURAL_LEARN',
     type = 'idempotent,nostat',
     priority = 5,
     callback = ann_push_vector
