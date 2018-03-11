@@ -621,7 +621,7 @@ local ua_pan = 'User-Agent=/^Pan/H'
 local ua_xnews = 'User-Agent=/^Xnews/H'
 local no_inr_yes_ref = string.format('(%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s) | (%s)', xm_gnus, xm_msoe5, xm_msoe6, xm_moz4, xm_skyri, xm_wwwmail, ua_gnus, ua_knode, ua_mutt, ua_pan, ua_xnews)
 local subj_re = 'Subject=/^R[eE]:/H'
-local has_ref = 'header_exists(References)'
+local has_ref = '(header_exists(References) | header_exists(In-Reply-To))'
 local missing_ref = string.format('!(%s)', has_ref)
 -- Fake reply (has RE in subject, but has not References header)
 reconf['FAKE_REPLY_C'] = {
