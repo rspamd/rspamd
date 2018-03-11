@@ -164,12 +164,12 @@ local expiry_script = [[
       local total = ham + spam
       if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
         redis.replicate_commands()
-        redis.call('EXPIRE', key, math.tointeger(KEYS[2]))
+        redis.call('EXPIRE', key, math.floor(KEYS[2]))
         extended = extended + 1
       elseif math.abs(ham - spam) <= total * ${epsilon_common} then
         local ttl = redis.call('TTL', key)
         redis.replicate_commands()
-        redis.call('EXPIRE', key, math.tointeger(tonumber(ttl) / ${common_ttl_divisor}))
+        redis.call('EXPIRE', key, math.floor(tonumber(ttl) / ${common_ttl_divisor}))
         discriminated = discriminated + 1
       end
     end
