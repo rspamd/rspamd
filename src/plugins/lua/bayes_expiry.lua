@@ -30,7 +30,7 @@ local settings = {
   count = 1000, -- check up to 1000 keys on each iteration
   threshold = 10, -- require at least 10 occurrences to increase expire
   epsilon_common = 0.01, -- eliminate common if spam to ham rate is equal to this epsilon
-  common_ttl_divisor = 100, -- how should we discriminate common elements
+  common_ttl_divisor = 10, -- how should we discriminate common elements
   significant_factor = 3.0 / 4.0, -- which tokens should we update
   classifiers = {},
 }
@@ -162,18 +162,15 @@ local expiry_script = [[
 
     if ham > ${threshold} or spam > ${threshold} then
       local total = ham + spam
-
-      if total > 0 then
-        if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
-          redis.replicate_commands()
-          redis.call('EXPIRE', key, KEYS[2])
-          extended = extended + 1
-        elseif math.abs(ham - spam) <= total * ${epsilon_common} then
-          local ttl = redis.call('TTL', key)
-          redis.replicate_commands()
-          redis.call('EXPIRE', key, tonumber(ttl) / ${common_ttl_divisor})
-          discriminated = discriminated + 1
-        end
+      if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
+        redis.replicate_commands()
+        redis.call('EXPIRE', key, math.tointeger(KEYS[2]))
+        extended = extended + 1
+      elseif math.abs(ham - spam) <= total * ${epsilon_common} then
+        local ttl = redis.call('TTL', key)
+        redis.replicate_commands()
+        redis.call('EXPIRE', key, math.tointeger(tonumber(ttl) / ${common_ttl_divisor}))
+        discriminated = discriminated + 1
       end
     end
     nelts = nelts + 1
