@@ -29,6 +29,8 @@ local lua_util = require "lua_util"
 local N = "rspamd_update"
 local rspamd_version = rspamd_version
 local maps = {}
+local allow_rules = false -- Deny for now
+local global_priority = 1 -- Default for local rules
 
 local function process_symbols(obj, priority)
   fun.each(function(sym, score)
@@ -102,12 +104,12 @@ local function gen_callback()
       if check_version(obj) then
 
         if obj['symbols'] then
-          process_symbols(obj['symbols'])
+          process_symbols(obj['symbols'], global_priority)
         end
         if obj['actions'] then
-          process_actions(obj['actions'])
+          process_actions(obj['actions'], global_priority)
         end
-        if obj['rules'] then
+        if allow_rules and obj['rules'] then
           process_rules(obj['rules'])
         end
 
