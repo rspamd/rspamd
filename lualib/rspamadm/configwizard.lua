@@ -335,7 +335,7 @@ local function check_redis_classifier(cls, changes)
     end
   end
 
-  local function try_convert()
+  local function try_convert(update_config)
     if ask_yes_no("Do you wish to convert data to the new schema?", true) then
       local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
         '100d')
@@ -346,12 +346,14 @@ local function check_redis_classifier(cls, changes)
         printf("Conversion failed")
       else
         printf("Conversion succeed")
-        changes.l['classifier-bayes.conf'] = {
-          new_schema = true,
-        }
+        if update_config then
+          changes.l['classifier-bayes.conf'] = {
+            new_schema = true,
+          }
 
-        if expire then
-          changes.l['classifier-bayes.conf'].expire = expire
+          if expire then
+            changes.l['classifier-bayes.conf'].expire = expire
+          end
         end
       end
     end
@@ -406,7 +408,7 @@ return ttl
 
     if ver ~= 2 then
       printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
-      try_convert()
+      try_convert(true)
     else
       printf("You have configured an old schema for %s/%s but your data has new layout",
           symbol_ham, symbol_spam)
@@ -427,7 +429,7 @@ return ttl
     if ver ~= 2 then
       printf("You have configured new schema for %s/%s but your DB has old data",
         symbol_spam, symbol_ham)
-      try_convert()
+      try_convert(false)
     end
   end
 end
