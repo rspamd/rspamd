@@ -945,10 +945,14 @@ rspamd_message_parse (struct rspamd_task *task)
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
+		enum rspamd_mime_parse_error ret;
 
 		debug_task ("construct mime parser from string length %d",
 				(gint) task->msg.len);
-		if (!rspamd_mime_parse_task (task, &err)) {
+		ret = rspamd_mime_parse_task (task, &err);
+
+		switch (ret) {
+		case RSPAMD_MIME_PARSE_FATAL:
 			msg_err_task ("cannot construct mime from stream: %e", err);
 
 			if (task->cfg && (!task->cfg->allow_raw_input)) {
@@ -963,6 +967,18 @@ rspamd_message_parse (struct rspamd_task *task)
 				task->flags &= ~RSPAMD_TASK_FLAG_MIME;
 				rspamd_message_from_data (task, p, len);
 			}
+			break;
+		case RSPAMD_MIME_PARSE_NESTING:
+			msg_warn_task ("cannot construct full mime from stream: %e", err);
+			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+			break;
+		case RSPAMD_MIME_PARSE_OK:
+		default:
+			break;
+		}
+
+		if (err) {
+			g_error_free (err);
 		}
 	}
 	else {

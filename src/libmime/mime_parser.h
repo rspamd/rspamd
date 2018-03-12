@@ -20,6 +20,13 @@
 
 struct rspamd_task;
 
-gboolean rspamd_mime_parse_task (struct rspamd_task *task, GError **err);
+enum rspamd_mime_parse_error {
+	RSPAMD_MIME_PARSE_OK = 0,
+	RSPAMD_MIME_PARSE_FATAL,
+	RSPAMD_MIME_PARSE_NESTING,
+};
+
+enum rspamd_mime_parse_error rspamd_mime_parse_task (struct rspamd_task *task,
+		GError **err);
 
 #endif /* SRC_LIBMIME_MIME_PARSER_H_ */
