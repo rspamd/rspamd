@@ -32,6 +32,7 @@ local settings = {
   common_ttl_divisor = 10, -- how should we discriminate common elements
   significant_factor = 3.0 / 4.0, -- which tokens should we update
   classifiers = {},
+  cluster_nodes = 0,
 }
 
 local template = {
@@ -130,7 +131,16 @@ if opts then
   end
 end
 
--- Fill template
+-- In clustered setup, we need to increase interval of expiration
+-- according to number of nodes in a cluster
+if settings.cluster_nodes == 0 then
+  local neighbours = obj.neighbours or {}
+  local n_neighbours = 0
+  for _,_ in pairs(neighbours) do n_neighbours = n_neighbours + 1 end
+  settings.cluster_nodes = n_neighbours
+end
+
+  -- Fill template
 template.count = settings.count
 template.threshold = settings.threshold
 template.common_ttl_divisor = settings.common_ttl_divisor
@@ -260,9 +270,11 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
 
   -- Expire tokens at regular intervals
   for _,cls in ipairs(settings.classifiers) do
-    rspamd_config:add_periodic(ev_base, settings['interval'], function ()
-      expire_step(cls, ev_base, worker)
-      return true
-    end, true)
+    rspamd_config:add_periodic(ev_base,
+        settings['interval'] * (tonumber(settings.cluster_nodes) + 1),
+        function ()
+          expire_step(cls, ev_base, worker)
+          return true
+        end, true)
   end
 end)
