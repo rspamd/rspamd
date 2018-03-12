@@ -263,6 +263,6 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
     rspamd_config:add_periodic(ev_base, settings['interval'], function ()
       expire_step(cls, ev_base, worker)
       return true
-    end)
+    end, true)
   end
 end)
