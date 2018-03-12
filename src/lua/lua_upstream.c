@@ -185,11 +185,12 @@ lua_upstream_list_create (lua_State *L)
 		top = 1;
 	}
 
-	def = luaL_checkstring (L, top);
-	if (def) {
-		if (lua_gettop (L) >= top + 1) {
-			default_port = luaL_checknumber (L, top + 1);
-		}
+	if (lua_gettop (L) >= top + 1) {
+		default_port = luaL_checknumber (L, top + 1);
+	}
+
+	if (lua_type (L, top) == LUA_TSTRING) {
+		def = luaL_checkstring (L, top);
 
 		new = rspamd_upstreams_create (cfg ? cfg->ups_ctx : NULL);
 
@@ -203,8 +204,24 @@ lua_upstream_list_create (lua_State *L)
 			lua_pushnil (L);
 		}
 	}
+	else if (lua_type (L, top) == LUA_TTABLE) {
+		new = rspamd_upstreams_create (cfg ? cfg->ups_ctx : NULL);
+		pnew = lua_newuserdata (L, sizeof (struct upstream_list *));
+		rspamd_lua_setclass (L, "rspamd{upstream_list}", -1);
+		*pnew = new;
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			def = lua_tostring (L, -1);
+
+			if (!def || !rspamd_upstreams_parse_line (new, def, default_port, NULL)) {
+				rspamd_upstreams_destroy (new);
+				msg_warn ("cannot parse %s", def);
+				lua_pushnil (L);
+			}
+		}
+	}
 	else {
-		lua_error (L);
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
