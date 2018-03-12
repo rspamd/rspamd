@@ -210,15 +210,17 @@ lua_upstream_list_create (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{upstream_list}", -1);
 		*pnew = new;
 
+		lua_pushvalue (L, top);
+
 		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 			def = lua_tostring (L, -1);
 
 			if (!def || !rspamd_upstreams_parse_line (new, def, default_port, NULL)) {
-				rspamd_upstreams_destroy (new);
-				msg_warn ("cannot parse %s", def);
-				lua_pushnil (L);
+				msg_warn ("cannot parse upstream %s", def);
 			}
 		}
+
+		lua_pop (L, 1);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
