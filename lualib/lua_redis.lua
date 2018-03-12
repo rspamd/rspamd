@@ -750,6 +750,7 @@ local function load_script_task(script, task)
         logger.errx(task, 'cannot upload script to %s: %s',
           opt.upstream:get_addr(), err)
         opt.upstream:fail()
+        script.fatal_error = err
       else
         opt.upstream:ok()
         logger.infox(task,
@@ -791,6 +792,7 @@ local function load_script_taskless(script, cfg, ev_base)
         logger.errx(cfg, 'cannot upload script to %s: %s',
           opt.upstream:get_addr(), err)
         opt.upstream:fail()
+        script.fatal_error = err
       else
         opt.upstream:ok()
         logger.infox(cfg,
@@ -853,7 +855,14 @@ local function exec_redis_script(id, params, callback, keys, args)
     return false
   end
 
+
   local script = redis_scripts[id]
+
+  if script.fatal_error then
+    callback(script.fatal_error, nil)
+    return true
+  end
+
   if not script.redis_params then
     callback('no redis servers defined', nil)
     return true
