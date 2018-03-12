@@ -1,3 +1,430 @@
+1.7.0: 12 Mar 2018
+	* [Conf] Add bayes_expiry as explicit module
+	* [Conf] Adjust names and weights for neural network plugin
+	* [Conf] Change updates url
+	* [Conf] Default statistics is stored in Redis now
+	* [Conf] Disable fann_redis module by default
+	* [Conf] Fix default elastic configuration
+	* [Conf] Fix double quote position
+	* [Conf] Massive config rework for new structure of symbols and scores
+	* [Conf] Rename Rambler BLs as they are now Rspamd's ones
+	* [Conf] Use dedicated rspamd.com subdomains
+	* [Conf] Use more data from rspamd.com fuzzy storage
+	* [CritFix] Add sanity guards for badly broken HTML
+	* [CritFix] Another errors path handling fix
+	* [CritFix] Another portion of tokenization fixes
+	* [CritFix] Do not send reject messages after set reply
+	* [CritFix] Fix ARC chain verification
+	* [CritFix] Fix crash in milter errors handler
+	* [CritFix] Fix memory leak in spf caching logic
+	* [CritFix] Fix milter commands pipelining
+	* [CritFix] Fix newlines detection
+	* [CritFix] Fix semicolons parsing in the content type
+	* [CritFix] Plug memory leak in zstd protocol compression
+	* [Feature] Add ability to match score in force_actions module
+	* [Feature] Add aes-rng PRF to libottery
+	* [Feature] Add 'composites' debug module
+	* [Feature] Add concept of experimental modules
+	* [Feature] Add DKIM trace symbol
+	* [Feature] Add EBL to the default config
+	* [Feature] Add expected ip check for emails plugin
+	* [Feature] Add framework to manage Redis scripts
+	* [Feature] Add framing for the new reputation generic plugin
+	* [Feature] Add function to show plugins stat
+	* [Feature] Add gzip compression support for clickhouse module
+	* [Feature] Add gzip compression support for rspamd controller
+	* [Feature] Add gzip support when sending lua http requests
+	* [Feature] Add json output for rspamd_stats
+	* [Feature] Add method to do a synchronous Redis connection
+	* [Feature] Add method to get all content-type attributes in Lua
+	* [Feature] Add `-m` flag to configdump to show modules states
+	* [Feature] Add mime types to extensions map
+	* [Feature] Add more features to rescore utility
+	* [Feature] Add more gtube like patterns to test other spam actions
+	* [Feature] Add more metafunctions, improve logging
+	* [Feature] Add more text attributes
+	* [Feature] Add new configwizard command to rspamadm
+	* [Feature] Add new tooling for stats conversation
+	* [Feature] Add old groups migration tool
+	* [Feature] Add plugins state variable
+	* [Feature] Add preliminary ecdsa keys support in DKIM
+	* [Feature] Add preliminary support of idempotent symbols
+	* [Feature] Add Redis server wizard
+	* [Feature] Add routine to convert old style stats to a new one
+	* [Feature] Add some sanity checks for actions and controller
+	* [Feature] Add statistic convertation module to configwizard
+	* [Feature] Add sugestions logic to mempool allocator
+	* [Feature] Add support of config transform in Lua
+	* [Feature] Add timeout to rspamc when doing corpus test
+	* [Feature] Add tooling to convert bayes schemas
+	* [Feature] Add torch conditional to configuration
+	* [Feature] Add torch-decisiontree package
+	* [Feature] Add torch-optim contrib package
+	* [Feature] Add TTL autodetection
+	* [Feature] Add urls reputation to the reputation framework
+	* [Feature] Allow floating and negative values in expressions limits
+	* [Feature] Allow multiple CTs in full extensions map
+	* [Feature] Allow multiple fann rules
+	* [Feature] Allow randomly select User-Agent from a list
+	* [Feature] Allow rspamadm commands to export methods in Lua
+	* [Feature] Allow rule specific min_bytes in fuzzy check
+	* [Feature] Allow to adjust symbols scores from Lua
+	* [Feature] Allow to attach stat signature to messages
+	* [Feature] Allow to change SMTP from via milter headers
+	* [Feature] Allow to configure monitored
+	* [Feature] Allow to create directories in Lua API
+	* [Feature] Allow to disable torch and skip train samples for ANN
+	* [Feature] Allow to discard messages dynamically
+	* [Feature] Allow to enable/disable languages from the detector
+	* [Feature] Allow to generate DKIM keys from rspamadm API
+	* [Feature] Allow to get CPU flags from Lua
+	* [Feature] Allow to have high precision timestamps in logs
+	* [Feature] Allow to insert headers into specific position
+	* [Feature] Allow to limit redirector requests per task
+	* [Feature] Allow to load and use dynamic ANNs with torch
+	* [Feature] Allow to quarantine rejected messages using milter interface
+	* [Feature] Allow to receive signing keys from mempool vars
+	* [Feature] Allow to reserve elements in libucl
+	* [Feature] Allow to reuse signal handlers chains
+	* [Feature] Allow to set custom mempool variables from settings
+	* [Feature] Allow to set headers from settings
+	* [Feature] Allow to set Settings-Id for all connections
+	* [Feature] Allow to skip real action and add a header instead
+	* [Feature] Allow to skip specific hashes in fuzzy storage
+	* [Feature] Allow to spawn asynchronous processes from Lua
+	* [Feature] Allow to specify number of threads for ANN learning
+	* [Feature] Allow to use global lua maps in settings
+	* [Feature] Allow to use postfilters in composites
+	* [Feature] Allow to verify signatures from HTTP headers in maps
+	* [Feature] Antivirus: ordered pattern matches
+	* [Feature] Authentication-Results: support hiding usernames
+	* [Feature] Automatically create tables in clickhouse
+	* [Feature] Catch next-to-last bad extension
+	* [Feature] Check cached maps more frequently
+	* [Feature] Check groups sanity
+	* [Feature] Deal with obscured URLs with @ symbols
+	* [Feature] Enhance task:store_in_file method
+	* [Feature] Export password encryption routines to Redis
+	* [Feature] Filter nan and inf when adding scores
+	* [Feature] Finalize 7zip files support
+	* [Feature] Further improvements in language detection
+	* [Feature] Further improvements in language detection algorithm
+	* [Feature] Generic key name expansion for Redis keys
+	* [Feature] Hash whitelist for fuzzy_check
+	* [Feature] Implement bayes signatures storage
+	* [Feature] Implement buckets for Redis backend
+	* [Feature] Implement DKIM reputation adjustments
+	* [Feature] Implement forked workers children monitoring
+	* [Feature] Implement headers flags in mime parser
+	* [Feature] Implement l1/l2 regularization against the current weights
+	* [Feature] Implement manual ANN train mode
+	* [Feature] Implement per-user ANN support
+	* [Feature] Implement torch based ANN learning
+	* [Feature] Implement upstreams logic for clickhouse exporter
+	* [Feature] Import torch to Rspamd...
+	* [Feature] Improve allocation policy when interacting with Lua
+	* [Feature] Improve Lua/C interaction in history_redis
+	* [Feature] Improve multiple fuzzy results combining
+	* [Feature] Improve parsing of DKIM keys: parse algorithm
+	* [Feature] Improve subprocesses termination handle
+	* [Feature] Improve symbol type parsing in Lua API
+	* [Feature] Metadata Exporter: e-Mail Alerts: support multiple recipients; alerting senders/recipients/users (#1600)
+	* [Feature] Milter headers: support adding/removing arbitrary headers from config
+	* [Feature] More metatokens
+	* [Feature] Multimap: checking of symbol options
+	* [Feature] Multimap: template URL filter
+	* [Feature] New bayes expiry plugin
+	* [Feature] Periodically save rspamd stats to disk
+	* [Feature] Preliminary import of the elasticsearch module
+	* [Feature] Ratelimit: allow full addresses in whitelisted_rcpts
+	* [Feature] Ratelimit: support fetching limits from Redis
+	* [Feature] RBL: received: filtering by position & flags
+	* [Feature] Read global maps for lua
+	* [Feature] Redis settings: support checking multiple keys
+	* [Feature] Rework fann plugin to be a normal post-filter
+	* [Feature] Rework logging configuration for rspamadm case
+	* [Feature] Rework short hashes generation to avoid FP
+	* [Feature] Save real ucl types when exporting to Lua
+	* [Feature] Set TCP_NODELAY for milter sockets
+	* [Feature] Setup DKIM signing from configwizard
+	* [Feature] Skip certain symbols from ANN classify
+	* [Feature] Store plugins state
+	* [Feature] Support etag for HTTP maps
+	* [Feature] Support Expires header when using HTTP maps
+	* [Feature] Support sending given header multiple times in lua_http
+	* [Feature] Support sha512 in DKIM signatures
+	* [Feature] Try to detect HTML messages better
+	* [Feature] Use array instead of queue to reduce memory fragmentation
+	* [Feature] Use controller port by default when connecting to local IP
+	* [Feature] Use rdtsc where possible
+	* [Fix] Actively load skip hashes map in fuzzy storage
+	* [Fix] Add another workaround to display history properly
+	* [Fix] Add definition for old glib compatibility method
+	* [Fix] Add missing rspamadm control options to help
+	* [Fix] Add workaround for IPv6 in sendmail
+	* [Fix] Add workaround for system with non-XSI compatible tzset
+	* [Fix] Allow oversigning in DKIM signatures
+	* [Fix] Allow to check negative scores in force_actions
+	* [Fix] Allow to have negative actions limits
+	* [Fix] Allow to set any layers number for fann rules
+	* [Fix] Another fix for rdtcs
+	* [Fix] Another fix to lua xmlrpc
+	* [Fix] Another try to deal with #1998
+	* [Fix] Another try to fix #1998
+	* [Fix] Another try to fix threading in torch
+	* [Fix] Apply language detection when adding fuzzy hashes
+	* [Fix] ARC: Fix Lua 5.3 compatibility; timestamp should be integer
+	* [Fix] Authentication Results: Fix SPF smtp.mail_from
+	* [Fix] Auth-Results: Multiple DKIM signatures
+	* [Fix] Avoid changing content-transfer-encoding header's value
+	* [Fix] Better handling of the legacy protocol
+	* [Fix] Check decoded headers sanity (e.g. by excluding \0)
+	* [Fix] Check for magic when checking for an archive
+	* [Fix] Cleanup mess with groups
+	* [Fix] Clickhouse: Insertion in the symbols table
+	* [Fix] Crash in URL processing
+	* [Fix] Deal with another case when processing exceptions
+	* [Fix] Deal with deeply nested messages more aggressively
+	* [Fix] Deal with nan and inf encoding in json/ucl
+	* [Fix] Deal with non-key arguments in lua_redis.exec_script
+	* [Fix] Deal with unknown weight
+	* [Fix] Deal with URLs with no slashes after protocol
+	* [Fix] Deal with URLs wrapped in [] in text parts
+	* [Fix] Deal with zero scores symbols
+	* [Fix] Default monitoring domain for surbl plugin
+	* [Fix] Delay upstream re-resolving when one upstream is defined
+	* [Fix] Detection of maillist optimized and fixed
+	* [Fix] DKIM signing: allow for auth_only to be false
+	* [Fix] DMARC: require report_settings for sending reports only
+	* [Fix] Do not allow garbadge when checking url domain
+	* [Fix] Do not cache SPF records with PTR elements
+	* [Fix] Do not constantly re-resolve failed upstreams with a single element
+	* [Fix] Do not crash if no words defined
+	* [Fix] Do not crash on empty subtype
+	* [Fix] Do not expose spamtrap messages to SMTP reply
+	* [Fix] Do not fail rbl plugin when there are no received or emails
+	* [Fix] Do not ignore short words
+	* [Fix] Do not include idempotent/nostat symbols to checksum
+	* [Fix] Do not override groups when converting metrics
+	* [Fix] Do not override unix socket group when group comes before owner
+	* [Fix] Do not skip the last character
+	* [Fix] Do not spawn too many workers by default
+	* [Fix] Do not stop monitored on dns errors
+	* [Fix] Do not stop parsing headers on bad IP header
+	* [Fix] Do not strip last character in the last word
+	* [Fix] Do not treat script content as text
+	* [Fix] Do not try to connect to non-supported addresses
+	* [Fix] Do not try to dereference last character
+	* [Fix] Do not try to sign unknown domains
+	* [Fix] Don't use whitelist/greylist maps as regexp, but as map
+	* [Fix] Erase unknown HTML entities
+	* [Fix] Exim Received header protocol parsing
+	* [Fix] First load selector_map and path_map. And only return false when domain not found if try_fallback is false
+	* [Fix] Fix a lot of FP in chartable in mixed languages
+	* [Fix] Fix ANN checks
+	* [Fix] Fix ANN loading logic
+	* [Fix] Fix another tokenization issue
+	* [Fix] Fix autolearn parameters reading
+	* [Fix] Fix bad archive characters stripping
+	* [Fix] Fix bad extension check
+	* [Fix] Fix bayes schema conversion
+	* [Fix] Fix blacklists and DMARC in whitelist
+	* [Fix] Fix brain-damaged torch build system
+	* [Fix] Fix build on FreeBSD
+	* [Fix] Fix clickhouse exporter
+	* [Fix] Fix clickhouse schema
+	* [Fix] Fix comparision
+	* [Fix] Fix composites processing
+	* [Fix] Fix connecting to a unix socket in rspamadm statconvert
+	* [Fix] Fix couple of warnings
+	* [Fix] Fix crashes in the rspamd_control path
+	* [Fix] Fix deletion from hash
+	* [Fix] Fix DKIM forgeries via multiple headers
+	* [Fix] FIx dynamic conf plugin
+	* [Fix] Fix emails detection
+	* [Fix] Fix empty headers simple canonicalization
+	* [Fix] Fix empty threshold check in greylisting module
+	* [Fix] Fix encrypted legacy reply in fuzzy storage
+	* [Fix] Fix enormous scores for R_WHITE_ON_WHITE
+	* [Fix] Fix exceptions list in surbl
+	* [Fix] Fix *_EXCESS_BASE64 rules
+	* [Fix] Fix expire rounding
+	* [Fix] Fix extra hits in PCRE mode for regular expressions
+	* [Fix] Fix format strings
+	* [Fix] Fix get_content method
+	* [Fix] Fix groups override when defining symbols
+	* [Fix] Fix learned count in new schema
+	* [Fix] Fix learn errors propagation
+	* [Fix] Fix loading of per-user redis backend for statistics
+	* [Fix] Fix logging buffer corruption in case of repeated messages
+	* [Fix] Fix lua cached elements invalidation
+	* [Fix] Fix merging of the implicit arrays
+	* [Fix] Fix mime_types scoring
+	* [Fix] Fix multiple headers in DKIM headers list
+	* [Fix] Fix null callee case in clang plugin
+	* [Fix] Fix obscured url in format user@@example.com
+	* [Fix] Fix parsing of the per-user script
+	* [Fix] Fix priorities in rspamd_update, disable rules execution
+	* [Fix] Fix processing of closed tags
+	* [Fix] Fix processing of idempotent rules when autolearn fails
+	* [Fix] Fix processing of multipart parts with no headers
+	* [Fix] Fix processing of skip-hashes in fuzzy storage
+	* [Fix] Fix PTR processing in SPF
+	* [Fix] Fix pushing country to clickhouse asn table
+	* [Fix] Fix random forests module
+	* [Fix] Fix real IP parsing for some strange Exim received
+	* [Fix] Fix Redis timeout setup
+	* [Fix] Fix reload crash when hyperscan is enabled
+	* [Fix] Fix reusing of redis connection after exec
+	* [Fix] Fix sanity checks on macro value
+	* [Fix] Fix setting of path and cpath for Lua
+	* [Fix] Fix setting of signals when spawning a thread
+	* [Fix] Fix text splitting: stack overflow (too many captures)
+	* [Fix] Fix ticks processing
+	* [Fix] Fix upstream addrs updating
+	* [Fix] Fix urls/emails distinguishing found in queries
+	* [Fix] Fix user settings check
+	* [Fix] Fix variable increment
+	* [Fix] Fix various issues in stat_convert
+	* [Fix] F-PROT Antivirus infection string for all known occurences
+	* [Fix] F-PROT Antivirus: only check return code to determine infection
+	* [Fix] Further fixes around floating point expressions
+	* [Fix] Further fixes to ANN module
+	* [Fix] Further fixes to rescore tool
+	* [Fix] Further fixes to support ES 6
+	* [Fix] Further tokenization fixes
+	* [Fix] Greylisting set phase is not idempotent
+	* [Fix] Handle proxy copy errors
+	* [Fix] Header checks: Fix get_raw_header method
+	* [Fix] Header checks: REPLYTO_UNPARSEABLE rule
+	* [Fix] Kill spawned processes on termination
+	* [Fix] Load skip map from all processes as shared cache is unavailable
+	* [Fix] Lowercase HTTP headers to make them searchable from Lua
+	* [Fix] Lowercase words
+	* [Fix] Lua_http: freeing
+	* [Fix] Lua: lpeg to be loaded with rspamd_lua_add_preload, to avoid "rspamd_config_read: rcl parse error: cannot init lua file […] module 'lpeg' not found"
+	* [Fix] Map absence is not an error
+	* [Fix] Metadata exporter: check IP sanity
+	* [Fix] Milter headers: custom headers: removing headers
+	* [Fix] Milter headers: skip_local / skip_authenticated settings
+	* [Fix] Milter headers: X-Spamd-Result header if X-Virus ran first
+	* [Fix] mime_types: fix next-to-last extension length check
+	* [Fix] More hacks to deal with old configs
+	* [Fix] Move composites second pass to the dedicated stage
+	* [Fix] Multimap: received: filtering of artificial header
+	* [Fix] Multiple fixes in torch based ANN plugins
+	* [Fix] Once more (#1879) fix bad extension check
+	* [Fix] Optimize rspamd_fstring_t reallocations
+	* [Fix] options.local_networks setting
+	* [Fix] Parse HREF urls without explicit prefix
+	* [Fix] Plan new event on HTTP errors
+	* [Fix] Plug another possible memory leak
+	* [Fix] Plug memory leak
+	* [Fix] Plug memory leak in lua_tcp
+	* [Fix] Plug memory leak when setting email addresses from Lua
+	* [Fix] Propagate learn/stat errors more precisely
+	* [Fix] Ratelimit: fix whitelisted_rcpts matching
+	* [Fix] Ratelimit: lowercase email addresses
+	* [Fix] RBL: received: deal with missing data (#1965)
+	* [Fix] Rebalance and slightly rework MX check plugin
+	* [Fix] Redis key expansion: EVAL: deal with strings
+	* [Fix] Redis script loading in DMARC; URL tags; URL reputation
+	* [Fix] Reject invalid bh for DKIM signatures earlier
+	* [Fix] Relax pem signature detection
+	* [Fix] Relax unicode properties requirements for chartable module
+	* [Fix] Remove extra noise from dkim and arc signing
+	* [Fix] Remove hop-by-hop headers in proxy
+	* [Fix] Remove incorrect method `task:set_metric_subject`
+	* [Fix] Replace space like characters in headers with plain space
+	* [Fix] Restore old style ratelimits support
+	* [Fix] Rework elasticsearch plugin
+	* [Fix] Rewriting subjects via force actions module
+	* [Fix] RPM postinstall
+	* [Fix] Sanitize IP in history redis
+	* [Fix] Select the correct signature when doing simple canon
+	* [Fix] Set CLOEXEC flag on files opened
+	* [Fix] Setting check_local / check_authed in plugins (#1954)
+	* [Fix] Settings: avoid checking invalid IP (#1981)
+	* [Fix] Settings: header: deal with multiple settings (#1988)
+	* [Fix] Skip checks if both extensions are not bad
+	* [Fix] Skip nostat tokens when get number of tokens
+	* [Fix] Some more fixes towards emails detection
+	* [Fix] SpamAssassin: Fail check_freemail_header if regexp didn't match
+	* [Fix] Stop using of g_slice...
+	* [Fix] Switch rspamadm logging to message level
+	* [Fix] Symbol 'FANNR_SPAM' has its score defined..
+	* [Fix] Table parameter for rspamd_config:add_doc()
+	* [Fix] Treat 'rewrite subject' as spam action
+	* [Fix] Try harder in passing IPv6 addresses
+	* [Fix] Try harder to find rfc822 notifications
+	* [Fix] Try harder to find urls
+	* [Fix] Use decoded values when parsing mime addresses
+	* [Fix] Use full URL when making an HTTP request
+	* [Fix] Use greylisting threshold in greylisting module
+	* [Fix] Use n_words attribute from ngramms
+	* [Fix] Use raw urls when sending requests to redirector
+	* [Fix] Use the right boolean operator on error check
+	* [Fix] Use weight from map for fuzzy scoring
+	* [Fix] Various fixes to elastic plugin
+	* [Fix] Various fixes to fann_redis instantiation
+	* [Fix] Various improvements in language detection
+	* [Fix] Virus infection string for F-PROT Antivirus
+	* [Fix] Virus infetction string for F-PROT Antivirus
+	* [Fix] WebUI: use relative path for savemap (#1943)
+	* [Fix] WHITE_ON_WHITE: Ensure score is matched to part that fired the rule
+	* [Fix] Write configuration changes as UCL config
+	* [Project] Add detection logic for words
+	* [Project] Add fast debug logging infrastructure
+	* [Project] Add more flags to languages
+	* [Project] Add n-gramms data files
+	* [Project] Add ngramms frequencies detector
+	* [Project] Add random words selection logic
+	* [Project] Add unigramms to language detection as well
+	* [Project] Convert all C modules to fast debug infrastructure
+	* [Project] Detect some languages based on unicode script
+	* [Project] Enable fast debug lookup for some modules
+	* [Project] Enable language detector init in scanner workers
+	* [Project] Further improvements to language detector
+	* [Project] Implement logic of ngramms application
+	* [Project] Improve weighting in lang_detection
+	* [Project] Initialize language detector
+	* [Project] Preliminary version of ngramms based language detector
+	* [Project] Preliminary version of the new stat_convert
+	* [Project] Remove old language detector
+	* [Project] Rework language detection ngramms structure
+	* [Project] Start language detection project
+	* [Project] Start rework of language detection to improve quality
+	* [Project] Use fast debug logging check
+	* [Rework] Add frame for new reputation based IP score module
+	* [Rework] Continue stat_convert rework task
+	* [Rework] Implement new version of fuzzy replies
+	* [Rework] Improve readability of xmlrpc API
+	* [Rework] Kill metrics!11
+	* [Rework] Ratelimit module
+	* [Rework] Rename fann_redis to neural plugin
+	* [Rework] Reorganize mime_types module
+	* [Rework] Rework rescore utility
+	* [Rework] Rewrite model and learning logic for rescore
+	* [Rework] Run post-loads when all initialization is completed
+	* [Rework] Simplify lua path initialization
+	* [Rework] Start major stat_convert rework
+	* [Rework] Start mempool fragmentation reduce project
+	* [Rework] Start moving of fann redis to torch
+	* [Rework] Stop embedding rspamadm scripts into C
+	* [Rework] Use floating point arithmetics in Rspamd expressions
+	* [Rework] Use frequencies distribution in language detector
+	* [Rules] Penalise R_BAD_CTE_7BIT for utf8 messages
+	* [WebUI] Compact graph selectors
+	* [WebUI] Escape strings inside HTML in history
+	* [WebUI] Fix message count in throughput summary (#1724)
+	* [WebUI] Fix NaNs display on Throughput graph
+	* [WebUI] Migrate widgets to D3 v4
+	* [WebUI] Restore passwordless login support (#2003)
+	* [WebUI] Show symbol descriptions as tooltips in history
+	* [WebUI] Stop using commas in pie chart tooltips
+	* [WebUI] Update D3 and jQuery
+	* [WebUI] Update D3Evolution 1.0.0 -> 1.1.0
+
 1.6.6: 16 Feb 2018
 	* [CritFix] Add sanity guards for badly broken HTML
 	* [CritFix] Another errors path handling fix
