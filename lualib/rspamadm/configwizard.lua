@@ -452,17 +452,24 @@ local function setup_statistic(cfg, changes)
         '100d')
       expire = lua_util.parse_time_interval(expire)
 
+
       local reset_previous = ask_yes_no("Reset previuous data?")
       if ask_yes_no('Do you wish to convert them to Redis?', true) then
 
         for _,cls in ipairs(sqlite_configs) do
-          if not lua_stat_tools.convert_sqlite_to_redis(parsed_redis, cls.db_spam,
-            cls.db_ham, cls.symbol_spam, cls.symbol_ham, cls.learn_cache, expire,
-            reset_previous) then
-            rspamd_logger.errx('conversion failed')
+          if rspamd_util.file_exists(cls.db_spam) and rspamd_util.file_exists(cls.db_ham) then
+            if not lua_stat_tools.convert_sqlite_to_redis(parsed_redis, cls.db_spam,
+                cls.db_ham, cls.symbol_spam, cls.symbol_ham, cls.learn_cache, expire,
+                reset_previous) then
+              rspamd_logger.errx('conversion failed')
 
-            return false
+              return false
+            end
+          else
+            rspamd_logger.messagex('cannot find %s and %s, skip conversation',
+                cls.db_spam, cls.db_ham)
           end
+
           rspamd_logger.messagex('Converted classifier to the from sqlite to redis')
           changes.l['classifier-bayes.conf'] = {
             backend = 'redis',
