@@ -622,7 +622,7 @@ return function(args, cfg)
       end
     end
 
-    if has_check('statistic') then
+    if has_check('statistic') or has_check('statistics') then
       setup_statistic(cfg, changes)
     end
 
