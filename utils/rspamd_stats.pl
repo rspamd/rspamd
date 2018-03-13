@@ -43,7 +43,7 @@ GetOptions(
   "log|l=s"               => \$log_file,
   "alpha-score|alpha|a=f" => \$diff_alpha,
   "correlations|c"        => \$correlations,
-  "nrelated"              => \$nrelated,
+  "nrelated=i"            => \$nrelated,
   "search-pattern=s"      => \$search_pattern,
   "start=s"               => \$startTime,
   "end=s"                 => \$endTime,
@@ -739,6 +739,7 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
    --symbol=sym           check specified symbol (perl regexps, '.*' by default)
    --alpha-score=score    set ignore score for symbols (0.1 by default)
    --correlations         enable correlations report
+   --nrelated=integer     show that amount of related symbols (10 by default)
    --search-pattern       do not process input unless the desired pattern is found
    --start                starting time (oldest) for log parsing
    --end                  ending time (newest) for log parsing
