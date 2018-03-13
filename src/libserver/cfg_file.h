@@ -234,6 +234,7 @@ enum rspamd_log_format_type {
 	RSPAMD_LOG_TIME_VIRTUAL,
 	RSPAMD_LOG_LUA,
 	RSPAMD_LOG_DIGEST,
+	RSPAMD_LOG_FILENAME,
 };
 
 enum rspamd_log_format_flags {

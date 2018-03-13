@@ -425,6 +425,9 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 			rspamd_ftok_cstr_equal (&tok, "checksum", TRUE)) {
 		type = RSPAMD_LOG_DIGEST;
 	}
+	else if (rspamd_ftok_cstr_equal (&tok, "filename", TRUE)) {
+		type = RSPAMD_LOG_FILENAME;
+	}
 	else {
 		msg_err_config ("unknown log variable: %T", &tok);
 		return FALSE;
