@@ -700,6 +700,7 @@ for k, r in pairs(settings.rules) do
     name = 'EXPORT_METADATA_' .. k,
     type = 'postfilter,idempotent',
     callback = gen_exporter(r),
-    priority = 10
+    priority = 10,
+    flags = 'empty',
   })
 end

@@ -414,7 +414,8 @@ if redis_params and opts then
       name = 'ELASTIC_COLLECT',
       type = 'idempotent',
       callback = elastic_collect,
-      priority = 10
+      priority = 10,
+      flags = 'empty',
     })
 
     rspamd_config:add_on_load(function(cfg, ev_base,worker)

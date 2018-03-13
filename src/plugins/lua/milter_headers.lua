@@ -530,5 +530,6 @@ rspamd_config:register_symbol({
   name = 'MILTER_HEADERS',
   type = 'postfilter,idempotent',
   callback = milter_headers,
-  priority = 10
+  priority = 10,
+  flags = 'empty',
 })

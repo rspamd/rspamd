@@ -424,13 +424,15 @@ if opts then
       name = 'GREYLIST_SAVE',
       type = 'postfilter',
       callback = greylist_set,
-      priority = 6
+      priority = 6,
+      flags = 'empty',
     })
     rspamd_config:register_symbol({
       name = 'GREYLIST_CHECK',
       type = 'prefilter',
       callback = greylist_check,
-      priority = 6
+      priority = 6,
+      flags = 'empty',
     })
   end
 end
