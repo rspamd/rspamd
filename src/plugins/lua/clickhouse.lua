@@ -678,7 +678,8 @@ if opts then
         name = 'CLICKHOUSE_COLLECT',
         type = 'idempotent',
         callback = clickhouse_collect,
-        priority = 10
+        priority = 10,
+        flags = 'empty',
       })
       rspamd_config:register_finish_script(function(task)
         if nrows > 0 then

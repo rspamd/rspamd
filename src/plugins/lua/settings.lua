@@ -716,7 +716,8 @@ if redis_section then
       name = 'REDIS_SETTINGS' .. tostring(id),
       type = 'prefilter,nostat',
       callback = gen_redis_callback(h, id),
-      priority = 10
+      priority = 10,
+      flags = 'empty',
     })
   end, redis_key_handlers)
 end
@@ -736,5 +737,6 @@ rspamd_config:register_symbol({
   name = 'SETTINGS_CHECK',
   type = 'prefilter,nostat',
   callback = check_settings,
-  priority = 10
+  priority = 10,
+  flags = 'empty',
 })

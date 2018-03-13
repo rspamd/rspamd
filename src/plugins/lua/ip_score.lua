@@ -384,12 +384,14 @@ if redis_params then
     type = 'postfilter,nostat',
     priority = 5,
     callback = ip_score_set,
+    flags = 'empty',
   })
   rspamd_config:register_symbol({
     name = options['symbol'],
     callback = ip_score_check,
     group = 'reputation',
-    score = 2.0
+    score = 2.0,
+    flags = 'empty',
   })
 else
   rspamd_lua_utils.disable_module(N, "redis")

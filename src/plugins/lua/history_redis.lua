@@ -232,6 +232,7 @@ if opts then
       name = 'HISTORY_SAVE',
       type = 'idempotent',
       callback = history_save,
+      flags = 'empty',
       priority = 150
     })
     rspamd_plugins['history'] = {

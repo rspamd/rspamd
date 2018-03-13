@@ -281,6 +281,7 @@ if opts then
     name = settings.symbol_bad_mx,
     type = 'normal',
     callback = mx_check,
+    flags = 'empty',
   })
   rspamd_config:register_symbol({
     name = settings.symbol_no_mx,

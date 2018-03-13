@@ -108,12 +108,14 @@ if configure_asn_module() then
     type = 'prefilter,nostat',
     callback = asn_check,
     priority = 5,
+    flags = 'empty',
   })
   if options['symbol'] then
     rspamd_config:register_symbol({
       name = options['symbol'],
       parent = id,
-      type = 'virtual'
+      type = 'virtual',
+      flags = 'empty',
     })
   end
 else
