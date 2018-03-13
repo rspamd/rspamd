@@ -713,6 +713,7 @@ if opts then
       name = 'RATELIMIT_CHECK',
       priority = 4,
       callback = ratelimit_cb,
+      flags = 'empty',
     }
     if use_ip_score then
       s.type = 'normal'
