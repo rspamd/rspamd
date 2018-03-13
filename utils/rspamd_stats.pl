@@ -112,9 +112,11 @@ elsif ( -d "$log_file" ) {
     open( $rspamd_log, "-|", "$dc $log_dir/$_" )
       or die "cannot execute $dc $log_dir/$_ : $!";
 
-    printf "\033[J  Parsing log files: [%d/%d] %s\033[G", $log_file_num++, scalar @logs, $_;
-    $spinner_update_time = 0;   # Force spinner update
-    &spinner;
+    if (!$json) {
+      printf "\033[J  Parsing log files: [%d/%d] %s\033[G", $log_file_num++, scalar @logs, $_;
+      $spinner_update_time = 0;   # Force spinner update
+      &spinner;
+    }
 
     &ProcessLog;
 
@@ -123,7 +125,12 @@ elsif ( -d "$log_file" ) {
   }
 }
 else {
-  open($rspamd_log, '<', $log_file) or die "cannot open $log_file";
+  my $ext = ($log_file =~ /[^.]+\.?([^.]*?)$/)[0];
+  my $dc = $decompressor{$ext} || 'cat';
+  open( $rspamd_log, "-|", "$dc $log_file" )
+    or die "cannot execute $dc $log_file : $!";
+  $spinner_update_time = 0;   # Force spinner update
+  &spinner;
   &ProcessLog();
 }
 
