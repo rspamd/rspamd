@@ -175,6 +175,13 @@ LUA_FUNCTION_DEF (task, has_urls);
 LUA_FUNCTION_DEF (task, get_content);
 
 /***
+ * @method task:get_filename()
+ * Returns filename for a specific task
+ * @return {string|nil} filename or nil if unknown
+ */
+LUA_FUNCTION_DEF (task, get_filename);
+
+/***
  * @method task:get_rawbody()
  * Get raw body for the specified task
  * @return {text} the data contained in the task
@@ -855,6 +862,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
 	LUA_INTERFACE_DEF (task, get_content),
+	LUA_INTERFACE_DEF (task, get_filename),
 	LUA_INTERFACE_DEF (task, get_rawbody),
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
@@ -1526,6 +1534,26 @@ lua_task_get_content (lua_State * L)
 		t->len = task->msg.len;
 		t->start = task->msg.begin;
 		t->flags = 0;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_filename (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		if (task->msg.fpath) {
+			lua_pushstring (L, task->msg.fpath);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
