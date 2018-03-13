@@ -2785,11 +2785,11 @@ void rspamd_localtime (gint64 ts, struct tm *dest)
 		last_tzcheck = ts;
 	}
 
-	ts += timezone;
+	ts -= timezone;
 	rspamd_gmtime (ts, dest);
 	dest->tm_zone = daylight ? (tzname[1] ? tzname[1] : tzname[0]) : tzname[0];
 #if !defined(__sun)
-	dest->tm_gmtoff = timezone;
+	dest->tm_gmtoff = -timezone;
 #endif
 }
 
