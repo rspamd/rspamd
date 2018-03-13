@@ -32,6 +32,13 @@ local N = "emails"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
+  if rule['whitelist'] then
+    if rule['whitelist']:get_key(addr.addr)
+      or rule['whitelist']:get_key(addr.domain) then
+        logger.debugm(N, task, "whitelisted address: %s", addr.addr)
+        return
+    end
+  end
   if rule['dnsbl'] then
     local email
     local to_resolve
@@ -173,6 +180,14 @@ if opts and type(opts) == 'table' then
 
     if not rule['delimiter'] then
       rule['delimiter'] = "@"
+    end
+
+    if rule['whitelist'] then
+      rule['whitelist'] = rspamd_config:add_map({
+        url = rule['whitelist'],
+        description = string.format('Emails rule %s whitelist', rule['symbol']),
+        type = 'set'
+      })
     end
 
     if rule['map'] then
