@@ -73,15 +73,16 @@ struct rspamd_client_connection * rspamd_client_init (
  * @return
  */
 gboolean rspamd_client_command (
-	struct rspamd_client_connection *conn,
-	const gchar *command,
-	GQueue *attrs,
-	FILE *in,
-	rspamd_client_callback cb,
-	gpointer ud,
-	gboolean compressed,
-	const gchar *comp_dictionary,
-	GError **err);
+		struct rspamd_client_connection *conn,
+		const gchar *command,
+		GQueue *attrs,
+		FILE *in,
+		rspamd_client_callback cb,
+		gpointer ud,
+		gboolean compressed,
+		const gchar *comp_dictionary,
+		const gchar *filename,
+		GError **err);
 
 /**
  * Destroy a connection to rspamd

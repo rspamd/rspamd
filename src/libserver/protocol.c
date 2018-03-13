@@ -24,6 +24,7 @@
 #include "unix-std.h"
 #include "protocol_internal.h"
 #include "libserver/mempool_vars_internal.h"
+#include "task.h"
 #include <math.h>
 
 static GQuark
@@ -259,6 +260,11 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 						msg_err_task ("bad from header: '%V'", hv);
 						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 					}
+				}
+				IF_HEADER (FILENAME_HEADER) {
+					task->msg.fpath = rspamd_mempool_ftokdup (task->task_pool,
+							hv_tok);
+					debug_task ("read filename header, value: %s", task->msg.fpath);
 				}
 				else {
 					debug_task ("wrong header: %V", hn);

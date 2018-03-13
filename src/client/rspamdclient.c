@@ -296,6 +296,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		FILE *in, rspamd_client_callback cb,
 		gpointer ud, gboolean compressed,
 		const gchar *comp_dictionary,
+		const gchar *filename,
 		GError **err)
 {
 	struct rspamd_client_request *req;
@@ -429,6 +430,10 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			rspamd_snprintf (dict_str, sizeof (dict_str), "%ud", dict_id);
 			rspamd_http_message_add_header (req->msg, "Dictionary", dict_str);
 		}
+	}
+
+	if (filename) {
+		rspamd_http_message_add_header (req->msg, "Filename", filename);
 	}
 
 	req->msg->url = rspamd_fstring_append (req->msg->url, "/", 1);

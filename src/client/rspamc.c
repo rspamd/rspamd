@@ -1630,22 +1630,26 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	if (conn != NULL) {
 		cbdata = g_malloc0 (sizeof (struct rspamc_callback_data));
 		cbdata->cmd = cmd;
-		cbdata->filename = g_strdup (name);
+
+		if (name) {
+			cbdata->filename = g_strdup (name);
+		}
 
 		if (cmd->need_input) {
 			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,
-				cbdata, compressed, dictionary, &err);
+				cbdata, compressed, dictionary, cbdata->filename, &err);
 		}
 		else {
 			rspamd_client_command (conn,
-				cmd->path,
-				attrs,
-				NULL,
-				rspamc_client_cb,
-				cbdata,
-				compressed,
-				dictionary,
-				&err);
+					cmd->path,
+					attrs,
+					NULL,
+					rspamc_client_cb,
+					cbdata,
+					compressed,
+					dictionary,
+					cbdata->filename,
+					&err);
 		}
 	}
 	else {
