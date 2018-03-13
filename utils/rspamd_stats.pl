@@ -15,6 +15,7 @@ my $reject_score = 15.0;
 my $junk_score = 6.0;
 my $diff_alpha = 0.1;
 my $correlations = 0;
+my $nrelated = 10;
 my $log_file = "";
 my $search_pattern = "";
 my $startTime="";
@@ -34,22 +35,23 @@ my %decompressor = (
 );
 
 GetOptions(
-  "reject-score|r=f" => \$reject_score,
-  "junk-score|j=f" => \$junk_score,
-  "symbol|s=s@" => \@symbols_search,
-  "symbol-bidir|S=s@" => \@symbols_bidirectional,
-  "exclude|X=s@" => \@symbols_exclude,
-  "log|l=s" => \$log_file,
+  "reject-score|r=f"      => \$reject_score,
+  "junk-score|j=f"        => \$junk_score,
+  "symbol|s=s@"           => \@symbols_search,
+  "symbol-bidir|S=s@"     => \@symbols_bidirectional,
+  "exclude|X=s@"          => \@symbols_exclude,
+  "log|l=s"               => \$log_file,
   "alpha-score|alpha|a=f" => \$diff_alpha,
-  "correlations|c" => \$correlations,
-  "search-pattern=s" => \$search_pattern,
-  "start=s" => \$startTime,
-  "end=s" => \$endTime,
-  "num-logs|n=i" => \$num_logs,
-  "exclude-logs|x=i" => \$exclude_logs,
-  "json|j" => \$json,
-  "help|?" => \$help,
-  "man" => \$man
+  "correlations|c"        => \$correlations,
+  "nrelated"              => \$nrelated,
+  "search-pattern=s"      => \$search_pattern,
+  "start=s"               => \$startTime,
+  "end=s"                 => \$endTime,
+  "num-logs|n=i"          => \$num_logs,
+  "exclude-logs|x=i"      => \$exclude_logs,
+  "json|j"                => \$json,
+  "help|?"                => \$help,
+  "man"                   => \$man
 ) or pod2usage(2);
 
 pod2usage(1) if $help;
@@ -141,7 +143,31 @@ else {
 
 exit;
 
-sub SymbolsStat() {
+sub GenRelated {
+  my ($htb, $target_sym) = @_;
+
+  my @result;
+  my $i = 0;
+  foreach my $sym (sort { $htb->{$b} <=> $htb->{$a} } keys %{$htb}) {
+    if ($sym ne $target_sym) {
+      my @elt = ($sym, $htb->{$sym});
+      push @result, \@elt;
+      $i ++;
+    }
+
+    last if $i > $nrelated;
+  }
+
+  return \@result;
+}
+
+sub StringifyRelated {
+  my ($ar, $total) = @_;
+  return join("\n", (map { sprintf "\t%s(%s: %.1f%%)",
+    $_->[0], $_->[1], $_->[1] / ($total * 1.0) * 100.0 } @{$ar}));
+}
+
+sub SymbolsStat {
   if ($total > 0) {
     my $has_comma = 0;
     while (my ($s, $r) = each(%sym_res)) {
@@ -237,6 +263,11 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
         }
 
         if ($correlations) {
+
+          my $spam_related = GenRelated($r->{symbols_met_spam}, $s);
+          my $junk_related = GenRelated($r->{symbols_met_junk}, $s);
+          my $ham_related = GenRelated($r->{symbols_met_ham}, $s);
+
           if (!$json) {
             print "Correlations report:\n";
 
@@ -246,18 +277,26 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
               printf "Probability of %s when %s fires: %.3f\n", $s, $cs,
                 ($corr_prob / $sym_prob);
             }
+
+            print "Related symbols report:\n";
+            printf "Top related in spam:\n %s\n", StringifyRelated($spam_related,
+              $r->{spam_hits});
+            printf "Top related in junk:\n %s\n", StringifyRelated($junk_related,
+              $r->{junk_hits});
+            printf "Top related in ham:\n %s\n", StringifyRelated($ham_related,
+              $r->{hits} - $r->{spam_hits} - $r->{junk_hits});
           }
           else {
             print ",";
             print "\"correllations\":{";
 
-            my $has_comma = 0;
+            my $has_comma_ = 0;
             while (my ($cs, $hits) = each %{$r->{corr}}) {
-              if ($has_comma) {
+              if ($has_comma_) {
                 print ",";
               }
               else {
-                $has_comma = 1;
+                $has_comma_ = 1;
               }
               my $corr_prob = $hits / $total;
               my $sym_prob = $r->{hits} / $total;
@@ -325,6 +364,41 @@ Messages scanned: $total";
       JsonObjectElt($a, $action{$a}, "%d");
     }
     print "},";
+  }
+}
+
+sub ProcessRelated {
+  my ($symbols, $target) = @_;
+
+  foreach my $s (@{$symbols}) {
+    $s =~ /^([^\(]+)(\(([^\)]+)\))?/;
+    my $sym_name = $1;
+    my $sym_score = 0;
+
+    if ($2) {
+      $sym_score = $3 * 1.0;
+
+      if (abs($sym_score) < $diff_alpha) {
+        next;
+      }
+
+      my $bm = $bidir_match{$sym_name};
+      if ($bm) {
+        if ($sym_score >= 0) {
+          $sym_name = $bm->{'spam'};
+        }
+        else {
+          $sym_name = $bm->{'ham'};
+        }
+      }
+    }
+
+    if (exists($target->{$sym_name})) {
+      $target->{$sym_name} ++;
+    }
+    else {
+      $target->{$sym_name} = 1;
+    }
   }
 }
 
@@ -429,13 +503,16 @@ sub ProcessLog {
 
             if (!$sym_res{$sym_name}) {
               $sym_res{$sym_name} = {
-                hits => 0,
-                spam_hits => 0,
-                junk_hits => 0,
-                spam_change => 0,
-                junk_change => 0,
-                weight => 0,
-                corr => {},
+                hits             => 0,
+                spam_hits        => 0,
+                junk_hits        => 0,
+                spam_change      => 0,
+                junk_change      => 0,
+                weight           => 0,
+                corr             => {},
+                symbols_met_spam => {},
+                symbols_met_ham  => {},
+                symbols_met_junk => {},
               };
             }
 
@@ -449,10 +526,21 @@ sub ProcessLog {
             if ($score >= $reject_score) {
               $is_spam = 1;
               $r->{spam_hits} ++;
+              if ($correlations) {
+                ProcessRelated(\@symbols, $r->{symbols_met_spam});
+              }
             }
             elsif ($score >= $junk_score) {
               $is_junk = 1;
               $r->{junk_hits} ++;
+              if ($correlations) {
+                ProcessRelated(\@symbols, $r->{symbols_met_junk});
+              }
+            }
+            else {
+              if ($correlations) {
+                ProcessRelated(\@symbols, $r->{symbols_met_ham});
+              }
             }
 
             if ($sym_score != 0) {
