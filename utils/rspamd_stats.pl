@@ -693,9 +693,10 @@ sub numeric {
 sub spinner {
     my @spinner = qw{/ - \ |};
     return
-      if ( ( time - $spinner_update_time ) < 1 );
-    printf "%s\033[1D", $spinner[ time % @spinner ];
+      if ( $json || ( time - $spinner_update_time ) < 1 );
+    printf "%s\r", $spinner[ $spinner_update_time % @spinner ];
     $spinner_update_time = time;
+    select()->flush();
 }
 
 # Convert syslog timestamp to "ISO 8601 like" format
