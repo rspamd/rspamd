@@ -4180,19 +4180,12 @@ lua_task_get_metric_action (lua_State *L)
 	enum rspamd_action_type action;
 
 	if (task) {
-		if ((metric_res = task->result) != NULL) {
-			if (task->result->action == METRIC_ACTION_MAX) {
-				action = rspamd_check_action_metric (task, metric_res);
-			}
-			else {
-				action = task->result->action;
-			}
+		if ((metric_res = task->result) == NULL) {
+			metric_res = rspamd_create_metric_result (task);
+		}
 
-			lua_pushstring (L, rspamd_action_to_str (action));
-		}
-		else {
-			lua_pushnil (L);
-		}
+		action = rspamd_check_action_metric (task, metric_res);
+		lua_pushstring (L, rspamd_action_to_str (action));
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
