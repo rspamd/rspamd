@@ -1374,6 +1374,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	rspamd_regexp_t *re;
 	hs_compile_error_t *hs_errors;
 	guint *hs_flags = NULL;
+	const hs_expr_ext_t **hs_exts = NULL;
 	const gchar **hs_pats = NULL;
 	gchar *hs_serialized;
 	gsize serialized_len, total = 0;
@@ -1435,6 +1436,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		hs_flags = g_malloc0 (sizeof (*hs_flags) * n);
 		hs_ids = g_malloc (sizeof (*hs_ids) * n);
 		hs_pats = g_malloc (sizeof (*hs_pats) * n);
+		hs_exts = g_malloc0 (sizeof (*hs_exts) * n);
 		i = 0;
 
 		while (g_hash_table_iter_next (&cit, &k, &v)) {
@@ -1452,6 +1454,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			hs_flags[i] = 0;
+			hs_exts[i] = NULL;
 #ifndef WITH_PCRE2
 			if (pcre_flags & PCRE_FLAG(UTF8)) {
 				hs_flags[i] |= HS_FLAG_UTF8;
@@ -1506,9 +1509,10 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 		if (n > 0) {
 			/* Create the hs tree */
-			if (hs_compile_multi (hs_pats,
+			if (hs_compile_ext_multi (hs_pats,
 					hs_flags,
 					hs_ids,
+					hs_exts,
 					n,
 					cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
 					&cache->plt,
@@ -1521,6 +1525,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				g_free (hs_flags);
 				g_free (hs_ids);
 				g_free (hs_pats);
+				g_free (hs_exts);
 				close (fd);
 				unlink (path);
 				hs_free_compile_error (hs_errors);
@@ -1529,6 +1534,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			g_free (hs_pats);
+			g_free (hs_exts);
 
 			if (hs_serialize_database (test_db, &hs_serialized,
 					&serialized_len) != HS_SUCCESS) {
