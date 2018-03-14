@@ -18,7 +18,7 @@ rspamadm.1: rspamadm.1.md
 lua-dirs:
 	mkdir -p markdown/lua
 
-lua-doc: lua-dirs rspamd_regexp rspamd_ip rspamd_config task ucl rspamd_http rspamd_trie \
+lua-doc: lua-dirs rspamd_regexp rspamd_ip rspamd_config rspamd_task ucl rspamd_http rspamd_trie \
 	rspamd_resolver rspamd_redis rspamd_upstream_list rspamd_expression rspamd_mimepart rspamd_logger rspamd_url \
 	rspamd_tcp rspamd_mempool rspamd_html rspamd_util rspamd_fann rspamd_sqlite3 rspamd_cryptobox \
 	lua_redis lua_util lua_maps
@@ -38,8 +38,8 @@ rspamd_ip: ../src/lua/lua_ip.c
 	$(LUADOC) < ../src/lua/lua_ip.c > markdown/lua/rspamd_ip.md
 rspamd_config: ../src/lua/lua_config.c
 	$(LUADOC) < ../src/lua/lua_config.c > markdown/lua/rspamd_config.md
-task: ../src/lua/lua_task.c
-	$(LUADOC) < ../src/lua/lua_task.c > markdown/lua/task.md
+rspamd_task: ../src/lua/lua_task.c
+	$(LUADOC) < ../src/lua/lua_task.c > markdown/lua/rspamd_task.md
 ucl: ../contrib/libucl/lua_ucl.c
 	$(LUADOC) < ../contrib/libucl/lua_ucl.c > markdown/lua/ucl.md
 rspamd_http: ../src/lua/lua_http.c
