@@ -1897,3 +1897,49 @@ rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
 		rspamd_mempool_add_destructor (pool, rspamd_lua_ref_dtor, cbdata);
 	}
 }
+
+gboolean
+rspamd_lua_require_function (lua_State *L, const gchar *modname,
+		const gchar *funcname)
+{
+	gint table_pos;
+
+	lua_getglobal (L, "require");
+
+	if (lua_isnil (L, -1)) {
+		lua_pop (L, 1);
+
+		return FALSE;
+	}
+
+	lua_pushstring (L, modname);
+
+	/* Now try to call */
+	if (lua_pcall (L, 1, 1, 0) != 0) {
+		lua_pop (L, 1);
+
+		return FALSE;
+	}
+
+	/* Now we should have a table with results */
+	if (!lua_istable (L, -1)) {
+		lua_pop (L, 1);
+
+		return FALSE;
+	}
+
+	table_pos = lua_gettop (L);
+	lua_pushstring (L, funcname);
+	lua_gettable (L, -2);
+
+	if (lua_type (L, -1) == LUA_TFUNCTION) {
+		/* Remove table, preserve just a function */
+		lua_remove (L, table_pos);
+
+		return TRUE;
+	}
+
+	lua_pop (L, 2);
+
+	return FALSE;
+}

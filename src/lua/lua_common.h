@@ -390,5 +390,15 @@ gboolean rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
 		gint ref);
 
+/**
+ * Tries to load some module using `require` and get some method from it
+ * @param L
+ * @param modname
+ * @param funcname
+ * @return TRUE if function exists in that module, the function is pushed in stack, otherwise stack is unchanged and FALSE is returned
+ */
+gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
+		const gchar *funcname);
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */
