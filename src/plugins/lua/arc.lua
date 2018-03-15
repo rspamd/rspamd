@@ -559,7 +559,7 @@ if settings.use_redis then
   end
 end
 
-id = rspamd_config:register_symbol({
+rspamd_config:register_symbol({
   name = settings['sign_symbol'],
   callback = arc_signing_cb
 })

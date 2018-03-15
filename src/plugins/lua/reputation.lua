@@ -990,7 +990,7 @@ local function parse_rule(name, tbl)
   end)
 
   -- We now generate symbol for checking
-  local id = rspamd_config:register_symbol{
+  rspamd_config:register_symbol{
     name = symbol,
     type = 'normal',
     callback = callback_gen(reputation_filter_cb, rule),

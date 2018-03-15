@@ -723,7 +723,7 @@ if opts then
     elseif info_symbol then
       s.name = info_symbol
     end
-    local id = rspamd_config:register_symbol(s)
+    rspamd_config:register_symbol(s)
     if use_ip_score then
       rspamd_config:register_dependency(s.name, 'IP_SCORE')
     end

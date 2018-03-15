@@ -114,7 +114,7 @@ local function configure_module()
               local h = rspamd_cryptobox_hash.create()
               h:update(expr)
               local name = 'FORCE_ACTION_' .. string.upper(string.sub(h:hex(), 1, 12))
-              local id = rspamd_config:register_symbol({
+              rspamd_config:register_symbol({
                 type = 'normal',
                 name = name,
                 callback = cb,
@@ -152,7 +152,7 @@ local function configure_module()
           t.name = 'FORCE_ACTION_' .. name
           t.callback = cb
           t.flags = 'empty'
-          local id = rspamd_config:register_symbol(t)
+          rspamd_config:register_symbol(t)
           if t.type == 'normal' then
             for _, a in ipairs(atoms) do
               rspamd_config:register_dependency(t.name, a)

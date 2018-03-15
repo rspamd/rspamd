@@ -255,7 +255,7 @@ local configure_whitelist_module = function()
           flags = 'empty'
         end
 
-        local id = rspamd_config:register_symbol({
+        rspamd_config:register_symbol({
           name = symbol,
           flags = flags,
           callback = gen_whitelist_cb(symbol, rule)
