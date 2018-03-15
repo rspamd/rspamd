@@ -1601,7 +1601,12 @@ lua_config_register_symbol (lua_State * L)
 			return luaL_error (L, "no callback for symbol %s", name);
 		}
 
-		type |= lua_parse_symbol_flags (flags_str);
+		if (flags_str) {
+			/* Turn off squeezing as well for now */
+			/* TODO: deal with it */
+			no_squeeze = TRUE;
+			type |= lua_parse_symbol_flags (flags_str);
+		}
 
 		ret = rspamd_register_symbol_fromlua (L,
 				cfg,
