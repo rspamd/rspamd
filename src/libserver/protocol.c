@@ -860,11 +860,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	gpointer h, v;
 	const gchar *subject;
 
-	if (mres->action == METRIC_ACTION_MAX) {
-		mres->action = rspamd_check_action_metric (task, mres);
-	}
-
-	action = mres->action;
+	action = rspamd_check_action_metric (task, mres);
 	is_spam = (action < METRIC_ACTION_GREYLIST);
 
 	if (task->cmd != CMD_CHECK_V2) {
