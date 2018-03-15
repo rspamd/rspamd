@@ -121,7 +121,7 @@ local function configure_module()
                 flags = 'empty',
               })
               for _, a in ipairs(atoms) do
-                rspamd_config:register_dependency(id, a)
+                rspamd_config:register_dependency(name, a)
               end
               rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]', name, expr, table.concat(atoms, ','))
             end
@@ -155,7 +155,7 @@ local function configure_module()
           local id = rspamd_config:register_symbol(t)
           if t.type == 'normal' then
             for _, a in ipairs(atoms) do
-              rspamd_config:register_dependency(id, a)
+              rspamd_config:register_dependency(t.name, a)
             end
             rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]', name, expr, table.concat(atoms, ','))
           else

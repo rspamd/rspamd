@@ -527,6 +527,7 @@ local need_dkim = false
 local id = rspamd_config:register_symbol({
   type = 'callback',
   callback = rbl_cb,
+  name = 'RBL_CALLBACK',
   flags = 'empty,nice'
 })
 
@@ -652,5 +653,5 @@ for _, w in pairs(white_symbols) do
   end
 end
 if need_dkim then
-  rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
+  rspamd_config:register_dependency('RBL_CALLBACK', symbols['dkim_allow_symbol'])
 end

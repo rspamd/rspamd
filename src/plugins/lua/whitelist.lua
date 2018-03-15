@@ -264,21 +264,21 @@ local configure_whitelist_module = function()
         local spf_dep = false
         local dkim_dep = false
         if rule['valid_spf'] then
-          rspamd_config:register_dependency(id, options['spf_allow_symbol'])
+          rspamd_config:register_dependency(symbol, options['spf_allow_symbol'])
           spf_dep = true
         end
         if rule['valid_dkim'] then
-          rspamd_config:register_dependency(id, options['dkim_allow_symbol'])
+          rspamd_config:register_dependency(symbol, options['dkim_allow_symbol'])
           dkim_dep = true
         end
         if rule['valid_dmarc'] then
           if not spf_dep then
-            rspamd_config:register_dependency(id, options['spf_allow_symbol'])
+            rspamd_config:register_dependency(symbol, options['spf_allow_symbol'])
           end
           if not dkim_dep then
-            rspamd_config:register_dependency(id, options['dkim_allow_symbol'])
+            rspamd_config:register_dependency(symbol, options['dkim_allow_symbol'])
           end
-          rspamd_config:register_dependency(id, 'DMARC_CALLBACK')
+          rspamd_config:register_dependency(symbol, 'DMARC_CALLBACK')
         end
 
         if rule['score'] then

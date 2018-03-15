@@ -998,7 +998,7 @@ local function parse_rule(name, tbl)
 
   if rule.selector.dependencies then
     fun.each(function(d)
-      rspamd_config:register_dependency(id, d)
+      rspamd_config:register_dependency(symbol, d)
     end, rule.selector.dependencies)
   end
 

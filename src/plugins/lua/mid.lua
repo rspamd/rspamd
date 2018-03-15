@@ -96,7 +96,7 @@ if opts then
     rspamd_config:add_composite(settings['csymbol_missing_mid_allowed'],
       settings['symbol_known_no_mid'] .. ' & ' .. settings['symbol_missing_mid'])
 
-    rspamd_config:register_dependency(id, settings['symbol_dkim_allow'])
+    rspamd_config:register_dependency('KNOWN_MID_CALLBACK', settings['symbol_dkim_allow'])
   else
     rspamd_logger.infox(rspamd_config, 'source is not specified, disabling module')
     lua_util.disable_module(N, "config")

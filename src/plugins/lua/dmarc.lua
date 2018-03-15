@@ -1260,6 +1260,6 @@ rspamd_config:register_symbol({
   type = 'virtual'
 })
 
-rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
-rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
+rspamd_config:register_dependency('DMARC_CALLBACK', symbols['spf_allow_symbol'])
+rspamd_config:register_dependency('DMARC_CALLBACK', symbols['dkim_allow_symbol'])
 
