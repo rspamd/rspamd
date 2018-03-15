@@ -753,6 +753,27 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_SYMCACHE) {
+		lua_State *L = cfg->lua_state;
+		int err_idx;
+
+		/* Process squeezed Lua rules */
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
+		if (rspamd_lua_require_function (cfg->lua_state, "lua_squeeze_rules",
+				"squeeze_init")) {
+			if (lua_pcall (L, 0, 0, err_idx) != 0) {
+				GString *tb = lua_touserdata (L, -1);
+				msg_err_config ("call to squeeze_init script failed: %v", tb);
+
+				if (tb) {
+					g_string_free (tb, TRUE);
+				}
+			}
+		}
+
+		lua_settop (L, err_idx - 1);
+
 		/* Init config cache */
 		rspamd_symbols_cache_init (cfg->cache);
 

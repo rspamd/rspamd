@@ -1818,24 +1818,21 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 
 static gboolean
 rspamd_lua_squeeze_dependency (lua_State *L, struct rspamd_config *cfg,
-		const gchar *name,
-		const gchar *from)
+		const gchar *child,
+		const gchar *parent)
 {
 	gint err_idx;
 	gboolean ret = FALSE;
+
+	g_assert (parent != NULL);
+	g_assert (child != NULL);
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
 	if (rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_dependency")) {
-		lua_pushstring (L, name);
-
-		if (from) {
-			lua_pushstring (L, from);
-		}
-		else {
-			lua_pushnil (L);
-		}
+		lua_pushstring (L, child);
+		lua_pushstring (L, parent);
 
 		if (lua_pcall (L, 2, 1, err_idx) != 0) {
 			GString *tb = lua_touserdata (L, -1);
@@ -1859,8 +1856,8 @@ static gint
 lua_config_register_dependency (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *name = NULL, *from = NULL;
-	gint id;
+	const gchar *parent = NULL, *child = NULL;
+	gint child_id;
 	gboolean skip_squeeze = FALSE;
 
 	if (cfg == NULL) {
@@ -1869,37 +1866,38 @@ lua_config_register_dependency (lua_State * L)
 	}
 
 	if (lua_type (L, 2) == LUA_TNUMBER) {
-		id = luaL_checknumber (L, 2);
-		name = luaL_checkstring (L, 3);
+		child_id = luaL_checknumber (L, 2);
+		parent = luaL_checkstring (L, 3);
 
 		if (lua_isboolean (L, 4)) {
 			skip_squeeze = lua_toboolean (L, 4);
 		}
 
 		msg_warn_config ("calling for obsolete method to register deps for symbol %d->%s",
-				id, name);
+				child_id, parent);
 
-		if (id > 0 && name != NULL) {
+		if (child_id > 0 && parent != NULL) {
 
-			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, name,
-					rspamd_symbols_cache_symbol_by_id (cfg->cache, id))) {
-				rspamd_symbols_cache_add_dependency (cfg->cache, id, name);
+			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg,
+					rspamd_symbols_cache_symbol_by_id (cfg->cache, child_id),
+					parent)) {
+				rspamd_symbols_cache_add_dependency (cfg->cache, child_id, parent);
 			}
 		}
 	}
 	else {
-		from = luaL_checkstring (L,2);
-		name = luaL_checkstring (L, 3);
+		child = luaL_checkstring (L,2);
+		parent = luaL_checkstring (L, 3);
 
 		if (lua_isboolean (L, 4)) {
 			skip_squeeze = lua_toboolean (L, 4);
 		}
 
-		if (from != NULL && name != NULL) {
+		if (child != NULL && child != NULL) {
 
-			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, name, from)) {
-				rspamd_symbols_cache_add_delayed_dependency (cfg->cache, from,
-						name);
+			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, child, parent)) {
+				rspamd_symbols_cache_add_delayed_dependency (cfg->cache, child,
+						parent);
 			}
 
 		}
