@@ -389,10 +389,12 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 		}
 
 		if (!isnan (sc)) {
-			mres->score = sc;
-		}
-		else {
-			mres->score = 0;
+			if (task->pre_result.action == METRIC_ACTION_NOACTION) {
+				mres->score = MIN (sc, mres->score);
+			}
+			else {
+				mres->score = sc;
+			}
 		}
 	}
 
