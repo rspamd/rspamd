@@ -1252,18 +1252,11 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		gint priority,
 		enum rspamd_symbol_type type,
 		gint parent,
-		gboolean optional)
+		gboolean optional,
+		gboolean no_squeeze)
 {
 	struct lua_callback_data *cd;
-	gint ret = -1;
-
-	cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
-			sizeof (struct lua_callback_data));
-	cd->magic = rspamd_lua_callback_magic;
-	cd->cb_is_ref = TRUE;
-	cd->callback.ref = ref;
-	cd->L = L;
-	cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
+	gint ret = -1, err_idx;
 
 	if (priority == 0 && weight < 0) {
 		priority = 1;
@@ -1283,20 +1276,86 @@ rspamd_register_symbol_fromlua (lua_State *L,
 	}
 
 	if (ref != -1) {
-		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
-				name,
-				priority,
-				lua_metric_symbol_callback,
-				cd,
-				type,
-				parent);
+		/*
+		 * We call for routine called lua_util.squeeze_rule if it exists
+		 */
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
+		if (!no_squeeze && (type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) &&
+				rspamd_lua_require_function (L, "lua_util", "squeeze_rule")) {
+			if (name) {
+				lua_pushstring (L, name);
+			}
+			else {
+				lua_pushnil (L);
+			}
+
+			/* Push function reference */
+			lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
+
+			/* Now call for squeeze function */
+			if (lua_pcall (L, 2, 1, err_idx) != 0) {
+				GString *tb = lua_touserdata (L, -1);
+				msg_err_config ("call to finishing script failed: %v", tb);
+
+				if (tb) {
+					g_string_free (tb, TRUE);
+				}
+			}
+
+			if (!lua_toboolean (L, -1)) {
+				/* Do direct registration */
+				cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
+						sizeof (struct lua_callback_data));
+				cd->magic = rspamd_lua_callback_magic;
+				cd->cb_is_ref = TRUE;
+				cd->callback.ref = ref;
+				cd->L = L;
+
+				if (name) {
+					cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
+				}
+
+				ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+						name,
+						priority,
+						lua_metric_symbol_callback,
+						cd,
+						type,
+						parent);
+			}
+		}
+		else {
+			cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
+					sizeof (struct lua_callback_data));
+			cd->magic = rspamd_lua_callback_magic;
+			cd->cb_is_ref = TRUE;
+			cd->callback.ref = ref;
+			cd->L = L;
+
+			if (name) {
+				cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
+			}
+
+			ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+					name,
+					priority,
+					lua_metric_symbol_callback,
+					cd,
+					type,
+					parent);
+		}
+
+		/* Cleanup lua stack */
+		lua_settop (L, err_idx - 1);
 	}
 	else {
 		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
 				name,
 				priority,
 				NULL,
-				cd,
+				NULL,
 				type,
 				parent);
 	}
@@ -1340,7 +1399,8 @@ lua_config_register_post_filter (lua_State *L)
 				order,
 				SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_CALLBACK,
 				-1,
-				FALSE);
+				FALSE,
+				TRUE);
 
 		lua_pushboolean (L, ret);
 	}
@@ -1383,7 +1443,8 @@ lua_config_register_pre_filter (lua_State *L)
 				order,
 				SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_CALLBACK,
 				-1,
-				FALSE);
+				FALSE,
+				TRUE);
 
 		lua_pushboolean (L, ret);
 	}
@@ -1505,7 +1566,7 @@ lua_config_register_symbol (lua_State * L)
 	const gchar *name = NULL, *flags_str = NULL, *type_str = NULL,
 			*description = NULL, *group = NULL;
 	double weight = 0, score = NAN;
-	gboolean one_shot = FALSE;
+	gboolean one_shot = FALSE, no_squeeze = FALSE;
 	gint ret = -1, cbref = -1, type, flags = 0;
 	gint64 parent = 0, priority = 0, nshots = 0;
 	GError *err = NULL;
@@ -1513,10 +1574,10 @@ lua_config_register_symbol (lua_State * L)
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=I;"
-				"score=D;description=S;group=S;one_shot=B;nshots=I",
+				"score=D;description=S;group=S;one_shot=B;nshots=I;no_squeeze=B",
 				&name, &weight, &cbref, &flags_str, &type_str,
 				&priority, &parent,
-				&score, &description, &group, &one_shot, &nshots)) {
+				&score, &description, &group, &one_shot, &nshots, &no_squeeze)) {
 			msg_err_config ("bad arguments: %e", err);
 			g_error_free (err);
 
@@ -1546,7 +1607,8 @@ lua_config_register_symbol (lua_State * L)
 				priority,
 				type,
 				parent == 0 ? -1 : parent,
-				FALSE);
+				FALSE,
+				no_squeeze);
 
 		if (!isnan (score)) {
 			if (one_shot) {
@@ -1609,6 +1671,7 @@ lua_config_register_symbols (lua_State *L)
 				0,
 				SYMBOL_TYPE_CALLBACK,
 				-1,
+				FALSE,
 				FALSE);
 
 		for (i = top; i <= lua_gettop (L); i++) {
@@ -1698,7 +1761,8 @@ lua_config_register_callback_symbol (lua_State * L)
 				0,
 				SYMBOL_TYPE_CALLBACK,
 				-1,
-				FALSE);
+				FALSE,
+				lua_type (L, top + 1) == LUA_TSTRING);
 	}
 
 	lua_pushnumber (L, ret);
@@ -1739,7 +1803,8 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 				priority,
 				SYMBOL_TYPE_CALLBACK,
 				-1,
-				FALSE);
+				FALSE,
+				lua_type (L, top + 2) == LUA_TSTRING);
 	}
 
 	lua_pushnumber (L, ret);
@@ -2047,7 +2112,7 @@ lua_config_newindex (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
 	gint id, nshots;
-	gboolean optional = FALSE;
+	gboolean optional = FALSE, no_squeeze = FALSE;
 
 	name = luaL_checkstring (L, 2);
 
@@ -2063,7 +2128,8 @@ lua_config_newindex (lua_State *L)
 					0,
 					SYMBOL_TYPE_NORMAL,
 					-1,
-					FALSE);
+					FALSE,
+					no_squeeze);
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
@@ -2129,6 +2195,22 @@ lua_config_newindex (lua_State *L)
 			}
 			lua_pop (L, 1);
 
+			lua_pushstring (L, "condition");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TFUNCTION) {
+				no_squeeze = TRUE;
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "no_squeeze");
+			lua_gettable (L, -2);
+
+			if (lua_toboolean (L, -1)) {
+				no_squeeze = TRUE;
+			}
+			lua_pop (L, 1);
+
 			id = rspamd_register_symbol_fromlua (L,
 					cfg,
 					name,
@@ -2137,7 +2219,8 @@ lua_config_newindex (lua_State *L)
 					priority,
 					type,
 					-1,
-					optional);
+					optional,
+					no_squeeze);
 
 			if (id != -1) {
 				/* Check for condition */
