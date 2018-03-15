@@ -265,6 +265,8 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 		exit (EXIT_FAILURE);
 	}
+
+	rspamd_logger_configure_modules (rspamd_main->cfg->debug_modules);
 }
 
 static void
