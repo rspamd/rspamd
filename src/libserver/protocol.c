@@ -1376,12 +1376,7 @@ end:
 
 		if (metric_res != NULL) {
 
-			if (metric_res->action != METRIC_ACTION_MAX) {
-				action = metric_res->action;
-			}
-			else {
-				action = rspamd_check_action_metric (task, metric_res);
-			}
+			action = rspamd_check_action_metric (task, metric_res);
 
 			if (action == METRIC_ACTION_SOFT_REJECT &&
 					(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {

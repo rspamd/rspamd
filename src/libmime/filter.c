@@ -353,7 +353,17 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	struct rspamd_action *action, *selected_action = NULL;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
+	gboolean set_action = FALSE;
 
+	if (task->processed_stages | (RSPAMD_TASK_STAGE_DONE|RSPAMD_TASK_STAGE_IDEMPOTENT)) {
+		if (mres->action != METRIC_ACTION_MAX) {
+			return mres->action;
+		}
+
+		set_action = TRUE;
+	}
+
+	/* We are not certain about the results during processing */
 	if (task->pre_result.action == METRIC_ACTION_MAX) {
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			action = &task->cfg->actions[i];
@@ -399,6 +409,10 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	}
 
 	if (selected_action) {
+		if (set_action) {
+			mres->action = selected_action->action;
+		}
+
 		return selected_action->action;
 	}
 

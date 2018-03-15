@@ -1121,9 +1121,6 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 					mres = task->result;
 
 					if (mres) {
-
-						mres->action = rspamd_check_action_metric (task, mres);
-
 						if (mres->score > rspamd_task_get_required_score (task, mres)) {
 							task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
 

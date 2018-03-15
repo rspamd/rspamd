@@ -1036,6 +1036,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	guint i, j;
 
 	mres = task->result;
+	rspamd_check_action_metric (task, mres);
 
 	if (mres != NULL) {
 		switch (lf->type) {
