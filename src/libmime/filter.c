@@ -378,6 +378,10 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 				max_score = sc;
 			}
 		}
+
+		if (set_action && selected_action == NULL) {
+			selected_action = &task->cfg->actions[METRIC_ACTION_NOACTION];
+		}
 	}
 	else {
 		sc = NAN;
