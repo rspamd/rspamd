@@ -338,8 +338,8 @@ local freemail_reply_neq_from_id = rspamd_config:register_symbol({
   score = 3.0,
   group = 'headers',
 })
-rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_REPLYTO')
-rspamd_config:register_dependency(freemail_reply_neq_from_id, 'FREEMAIL_FROM')
+rspamd_config:register_dependency('FREEMAIL_REPLYTO_NEQ_FROM_DOM', 'FREEMAIL_REPLYTO')
+rspamd_config:register_dependency('FREEMAIL_REPLYTO_NEQ_FROM_DOM', 'FREEMAIL_FROM')
 
 rspamd_config.OMOGRAPH_URL = {
   callback = function(task)

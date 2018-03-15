@@ -1277,13 +1277,13 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 	if (ref != -1) {
 		/*
-		 * We call for routine called lua_util.squeeze_rule if it exists
+		 * We call for routine called lua_squeeze_rules.squeeze_rule if it exists
 		 */
 		lua_pushcfunction (L, &rspamd_lua_traceback);
 		err_idx = lua_gettop (L);
 
 		if (!no_squeeze && (type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) &&
-				rspamd_lua_require_function (L, "lua_util", "squeeze_rule")) {
+				rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_rule")) {
 			if (name) {
 				lua_pushstring (L, name);
 			}
@@ -1297,14 +1297,16 @@ rspamd_register_symbol_fromlua (lua_State *L,
 			/* Now call for squeeze function */
 			if (lua_pcall (L, 2, 1, err_idx) != 0) {
 				GString *tb = lua_touserdata (L, -1);
-				msg_err_config ("call to finishing script failed: %v", tb);
+				msg_err_config ("call to squeeze_rule failed: %v", tb);
 
 				if (tb) {
 					g_string_free (tb, TRUE);
 				}
 			}
 
-			if (!lua_toboolean (L, -1)) {
+			ret = lua_tonumber (L, -1);
+
+			if (ret == -1) {
 				/* Do direct registration */
 				cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
 						sizeof (struct lua_callback_data));
@@ -1324,6 +1326,9 @@ rspamd_register_symbol_fromlua (lua_State *L,
 						cd,
 						type,
 						parent);
+				rspamd_mempool_add_destructor (cfg->cfg_pool,
+						(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
+						cd);
 			}
 		}
 		else {
@@ -1345,6 +1350,9 @@ rspamd_register_symbol_fromlua (lua_State *L,
 					cd,
 					type,
 					parent);
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
+					(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
+					cd);
 		}
 
 		/* Cleanup lua stack */
@@ -1359,10 +1367,6 @@ rspamd_register_symbol_fromlua (lua_State *L,
 				type,
 				parent);
 	}
-
-	rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
 
 	return ret;
 }
@@ -1812,12 +1816,52 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 	return 1;
 }
 
+static gboolean
+rspamd_lua_squeeze_dependency (lua_State *L, struct rspamd_config *cfg,
+		const gchar *name,
+		const gchar *from)
+{
+	gint err_idx;
+	gboolean ret = FALSE;
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	if (rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_dependency")) {
+		lua_pushstring (L, name);
+
+		if (from) {
+			lua_pushstring (L, from);
+		}
+		else {
+			lua_pushnil (L);
+		}
+
+		if (lua_pcall (L, 2, 1, err_idx) != 0) {
+			GString *tb = lua_touserdata (L, -1);
+			msg_err_config ("call to squeeze_dependency script failed: %v", tb);
+
+			if (tb) {
+				g_string_free (tb, TRUE);
+			}
+		}
+		else {
+			ret = lua_toboolean (L, -1);
+		}
+	}
+
+	lua_settop (L, err_idx - 1);
+
+	return ret;
+}
+
 static gint
 lua_config_register_dependency (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL, *from = NULL;
 	gint id;
+	gboolean skip_squeeze = FALSE;
 
 	if (cfg == NULL) {
 		lua_error (L);
@@ -1828,16 +1872,36 @@ lua_config_register_dependency (lua_State * L)
 		id = luaL_checknumber (L, 2);
 		name = luaL_checkstring (L, 3);
 
+		if (lua_isboolean (L, 4)) {
+			skip_squeeze = lua_toboolean (L, 4);
+		}
+
+		msg_warn_config ("calling for obsolete method to register deps for symbol %d->%s",
+				id, name);
+
 		if (id > 0 && name != NULL) {
-			rspamd_symbols_cache_add_dependency (cfg->cache, id, name);
+
+			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, name,
+					rspamd_symbols_cache_symbol_by_id (cfg->cache, id))) {
+				rspamd_symbols_cache_add_dependency (cfg->cache, id, name);
+			}
 		}
 	}
 	else {
 		from = luaL_checkstring (L,2);
 		name = luaL_checkstring (L, 3);
 
+		if (lua_isboolean (L, 4)) {
+			skip_squeeze = lua_toboolean (L, 4);
+		}
+
 		if (from != NULL && name != NULL) {
-			rspamd_symbols_cache_add_delayed_dependency (cfg->cache, from, name);
+
+			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, name, from)) {
+				rspamd_symbols_cache_add_delayed_dependency (cfg->cache, from,
+						name);
+			}
+
 		}
 	}
 

@@ -310,7 +310,7 @@ rspamd_config:register_symbol{
   group = 'headers',
 }
 
-rspamd_config:register_dependency(check_replyto_id, 'FROM_NAME_HAS_TITLE')
+rspamd_config:register_dependency('CHECK_REPLYTO', 'FROM_NAME_HAS_TITLE')
 
 local check_mime_id = rspamd_config:register_symbol{
   name = 'CHECK_MIME',

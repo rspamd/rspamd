@@ -22,6 +22,7 @@ limitations under the License.
 local exports = {}
 local lpeg = require 'lpeg'
 
+
 local split_grammar = {}
 local function rspamd_str_split(s, sep)
   local gr = split_grammar[sep]
