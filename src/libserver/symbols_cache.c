@@ -413,6 +413,8 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 					"%s is missing", ddep->from, ddep->to, ddep->from);
 		}
 		else {
+			msg_debug_cache ("delayed between %s(%d) -> %s", ddep->from,
+					it->id, ddep->to);
 			rspamd_symbols_cache_add_dependency (cache, it->id, ddep->to);
 		}
 
@@ -457,15 +459,24 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 					dit = g_ptr_array_index (cache->items_by_id, dit->parent);
 				}
 
-				rdep = rspamd_mempool_alloc (cache->static_pool, sizeof (*rdep));
-				rdep->sym = dep->sym;
-				rdep->item = it;
-				rdep->id = i;
-				g_ptr_array_add (dit->rdeps, rdep);
-				dep->item = dit;
-				dep->id = dit->id;
+				if (dit->id == i) {
+					msg_err_cache ("cannot add dependency on self: %s -> %s "
+							"(resolved to %s)",
+							it->symbol, dep->sym, dit->symbol);
+				}
+				else {
+					rdep = rspamd_mempool_alloc (cache->static_pool,
+							sizeof (*rdep));
+					rdep->sym = dep->sym;
+					rdep->item = it;
+					rdep->id = i;
+					g_ptr_array_add (dit->rdeps, rdep);
+					dep->item = dit;
+					dep->id = dit->id;
 
-				msg_debug_cache ("add dependency from %d on %d", it->id, dit->id);
+					msg_debug_cache ("add dependency from %d on %d", it->id,
+							dit->id);
+				}
 			}
 			else {
 				msg_err_cache ("cannot find dependency on symbol %s", dep->sym);
