@@ -24,6 +24,7 @@ end
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_maps = require "lua_maps"
+local lua_squeeze = require "lua_squeeze_rules"
 local redis_params
 
 local settings = {}
@@ -47,6 +48,7 @@ local function check_query_settings(task)
       local settings_obj = parser:get_object()
       task:set_settings(settings_obj)
       task:cache_set('settings', settings_obj)
+      lua_squeeze.handle_settings(task, settings_obj)
 
       return true
     else
@@ -75,6 +77,7 @@ local function check_query_settings(task)
 
       task:set_settings(nset)
       task:cache_set('settings', nset)
+      lua_squeeze.handle_settings(task, nset)
 
       return true
     end
@@ -87,6 +90,7 @@ local function check_query_settings(task)
     local elt = settings_ids[id_str]
     if elt and elt['apply'] then
       task:set_settings(elt['apply'])
+      lua_squeeze.handle_settings(task, elt['apply'])
       task:cache_set('settings', elt['apply'])
 
       if elt.apply['add_headers'] or elt.apply['remove_headers'] then
@@ -336,6 +340,7 @@ local function check_settings(task)
             task:get_message_id(), s.name)
           if rule['apply'] then
             task:set_settings(rule['apply'])
+            lua_squeeze.handle_settings(task, rule['apply'])
             task:cache_set('settings', rule['apply'])
             applied = true
           end
@@ -648,6 +653,7 @@ local function gen_redis_callback(handler, id)
               rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
                 task:get_message_id(), id)
               task:set_settings(obj)
+              lua_squeeze.handle_settings(task, obj)
               task:cache_set('settings', obj)
               break
             end
