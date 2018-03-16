@@ -169,9 +169,21 @@ exports.squeeze_init = function()
   for parent,children in pairs(squeezed_deps) do
     if not squeezed_symbols[parent] then
       -- Trivial case, external dependnency
-      logger.debugm(SN, rspamd_config, 'register external squeezed dependency on %s',
-          parent)
-      rspamd_config:register_dependency(squeeze_sym, parent, true)
+
+      for s,_ in pairs(children) do
+
+        if squeezed_symbols[s] then
+          -- External dep depends on a squeezed symbol
+          logger.debugm(SN, rspamd_config, 'register external squeezed dependency on %s',
+              parent)
+          rspamd_config:register_dependency(squeeze_sym, parent, true)
+        else
+          -- Generic rspamd symbols dependency
+          logger.debugm(SN, rspamd_config, 'register external dependency %s -> %s',
+              s, parent)
+          rspamd_config:register_dependency(s, parent, true)
+        end
+      end
     else
       -- Not so trivial case
       local ps = squeezed_symbols[parent]
