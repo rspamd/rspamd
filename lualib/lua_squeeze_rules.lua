@@ -38,7 +38,12 @@ local function gen_lua_squeeze_function(order)
         if type(first) == 'boolean' then
           if first then
             table.remove(ret, 1)
-            task:insert_result(sym, 1.0, ret)
+
+            if type(ret[1]) == 'table' then
+              task:insert_result(sym, 1.0, ret[1])
+            else
+              task:insert_result(sym, 1.0, ret)
+            end
           end
         elseif type(first) == 'number' then
           table.remove(ret, 1)
