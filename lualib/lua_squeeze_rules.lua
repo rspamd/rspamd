@@ -139,7 +139,7 @@ end
 
 exports.squeeze_init = function()
   -- Do topological sorting
-  for s,v in pairs(squeezed_symbols) do
+  for _,v in pairs(squeezed_symbols) do
     local function visit(node, order)
 
       if order > node.order then
