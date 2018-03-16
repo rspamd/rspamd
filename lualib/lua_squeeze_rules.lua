@@ -230,6 +230,7 @@ exports.squeeze_init = function()
     rspamd_config:register_symbol{
       type = 'virtual',
       name = k,
+      flags = 'squeezed',
       parent = squeeze_function_ids[v.order],
       no_squeeze = true, -- to avoid infinite recursion
     }

@@ -1508,6 +1508,9 @@ lua_parse_symbol_flags (const gchar *str)
 		if (strstr (str, "idempotent") != NULL) {
 			ret |= SYMBOL_TYPE_IDEMPOTENT;
 		}
+		if (strstr (str, "squeezed") != NULL) {
+			ret |= SYMBOL_TYPE_SQUEEZED;
+		}
 	}
 
 	return ret;

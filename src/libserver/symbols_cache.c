@@ -626,7 +626,8 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				}
 			}
 
-			if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
+			if ((item->type & SYMBOL_TYPE_VIRTUAL) &&
+					!(item->type & SYMBOL_TYPE_SQUEEZED) && item->parent != -1) {
 				g_assert (item->parent < (gint)cache->items_by_id->len);
 				parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
@@ -1077,7 +1078,8 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		item->priority ++;
 	}
 
-	if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
+	if ((item->type & SYMBOL_TYPE_VIRTUAL) &&
+			!(item->type & SYMBOL_TYPE_SQUEEZED) && item->parent != -1) {
 		g_assert (item->parent < (gint)cache->items_by_id->len);
 		parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
@@ -1269,6 +1271,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		setbit (checkpoint->processed_bits, item->id * 2);
 
 		if (!item->enabled ||
+				(item->type & SYMBOL_TYPE_SQUEEZED) ||
 				(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
 			check = FALSE;
 		}
@@ -1942,7 +1945,8 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 		ucl_object_insert_key (obj, ucl_object_fromstring (item->symbol),
 				"symbol", 0, false);
 
-		if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
+		if ((item->type & SYMBOL_TYPE_VIRTUAL) &&
+				!(item->type & SYMBOL_TYPE_SQUEEZED) && item->parent != -1) {
 			g_assert (item->parent < (gint)cbd->cache->items_by_id->len);
 			parent = g_ptr_array_index (cbd->cache->items_by_id,
 					item->parent);
