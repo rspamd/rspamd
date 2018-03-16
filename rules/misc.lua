@@ -331,7 +331,7 @@ local function freemail_reply_neq_from(task)
   return false
 end
 
-local freemail_reply_neq_from_id = rspamd_config:register_symbol({
+rspamd_config:register_symbol({
   name = 'FREEMAIL_REPLYTO_NEQ_FROM_DOM',
   callback = freemail_reply_neq_from,
   description = 'Freemail From and Reply-To, but to different Freemail services',
