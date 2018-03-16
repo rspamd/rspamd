@@ -50,7 +50,6 @@ local function gen_lua_squeeze_function(order)
 
           if first ~= 0 then
             task:insert_result(sym, first, ret)
-            end
           end
         else
           task:insert_result(sym, 1.0, ret)
