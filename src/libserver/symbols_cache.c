@@ -2369,7 +2369,7 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 		clrbit (checkpoint->processed_bits, item->id * 2);
 		clrbit (checkpoint->processed_bits, item->id * 2 + 1);
 
-		msg_debug_task ("enable execution of %s", symbol);
+		msg_debug_task ("enable execution of %s (%d)", symbol, id);
 	}
 	else {
 		msg_info_task ("cannot enable %s: not found", symbol);

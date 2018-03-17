@@ -1572,7 +1572,7 @@ lua_config_register_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL, *flags_str = NULL, *type_str = NULL,
 			*description = NULL, *group = NULL;
-	double weight = 0, score = NAN;
+	double weight = 0, score = NAN, parent_float = NAN;
 	gboolean one_shot = FALSE, no_squeeze = FALSE;
 	gint ret = -1, cbref = -1, type, flags = 0;
 	gint64 parent = 0, priority = 0, nshots = 0;
@@ -1580,10 +1580,10 @@ lua_config_register_symbol (lua_State * L)
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=I;"
+				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=D;"
 				"score=D;description=S;group=S;one_shot=B;nshots=I;no_squeeze=B",
 				&name, &weight, &cbref, &flags_str, &type_str,
-				&priority, &parent,
+				&priority, &parent_float,
 				&score, &description, &group, &one_shot, &nshots, &no_squeeze)) {
 			msg_err_config ("bad arguments: %e", err);
 			g_error_free (err);
@@ -1611,6 +1611,13 @@ lua_config_register_symbol (lua_State * L)
 			type |= lua_parse_symbol_flags (flags_str);
 		}
 
+		if (isnan (parent_float)) {
+			parent = -1;
+		}
+		else {
+			parent = parent_float;
+		}
+
 		ret = rspamd_register_symbol_fromlua (L,
 				cfg,
 				name,
@@ -1618,7 +1625,7 @@ lua_config_register_symbol (lua_State * L)
 				weight == 0 ? 1.0 : weight,
 				priority,
 				type,
-				parent == 0 ? -1 : parent,
+				parent,
 				FALSE,
 				no_squeeze);
 
