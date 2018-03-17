@@ -79,10 +79,10 @@ rspamd_str_lc (gchar *str, guint size)
 	switch (leftover) {
 	case 3:
 		*dest++ = lc_map[(guchar)str[i++]];
-		/* falltrough */
+		/* FALLTHRU */
 	case 2:
 		*dest++ = lc_map[(guchar)str[i++]];
-		/* falltrough */
+		/* FALLTHRU */
 	case 1:
 		*dest = lc_map[(guchar)str[i]];
 	}
@@ -122,13 +122,12 @@ rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
 	}
 
 	while (leftover > 0) {
-		if (g_ascii_tolower (*s) != g_ascii_tolower (*d)) {
-			return (*s) - (*d);
+		if (g_ascii_tolower (s[i]) != g_ascii_tolower (d[i])) {
+			return s[i] - d[i];
 		}
 
 		leftover--;
-		s++;
-		d++;
+		i++;
 	}
 
 	return ret;
@@ -221,17 +220,17 @@ rspamd_icase_hash (const gchar *in, gsize len, guint64 seed)
 
 	switch (leftover) {
 	case 7:
-		u.c.c7 = lc_map[(guchar)s[i++]]; /* fallthrough */
+		u.c.c7 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
 	case 6:
-		u.c.c6 = lc_map[(guchar)s[i++]]; /* fallthrough */
+		u.c.c6 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
 	case 5:
-		u.c.c5 = lc_map[(guchar)s[i++]]; /* fallthrough */
+		u.c.c5 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
 	case 4:
-		u.c.c4 = lc_map[(guchar)s[i++]]; /* fallthrough */
+		u.c.c4 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
 	case 3:
-		u.c.c3 = lc_map[(guchar)s[i++]]; /* fallthrough */
+		u.c.c3 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
 	case 2:
-		u.c.c2 = lc_map[(guchar)s[i++]]; /* fallthrough */
+		u.c.c2 = lc_map[(guchar)s[i++]]; /* FALLTHRU */
 	case 1:
 		u.c.c1 = lc_map[(guchar)s[i]];
 		break;
