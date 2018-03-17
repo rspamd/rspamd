@@ -723,6 +723,48 @@ sub syslog2iso {
     $month_map{$month} + 1, @t;
 }
 
+### Imported from IO::Interactive 1.022 Perl module
+sub is_interactive {
+    my ($out_handle) = (@_, select);    # Default to default output handle
+
+    # Not interactive if output is not to terminal...
+    return 0 if not -t $out_handle;
+
+    # If *ARGV is opened, we're interactive if...
+    if ( tied(*ARGV) or defined(fileno(ARGV)) ) { # this is what 'Scalar::Util::openhandle *ARGV' boils down to
+
+        # ...it's currently opened to the magic '-' file
+        return -t *STDIN if defined $ARGV && $ARGV eq '-';
+
+        # ...it's at end-of-file and the next file is the magic '-' file
+        return @ARGV>0 && $ARGV[0] eq '-' && -t *STDIN if eof *ARGV;
+
+        # ...it's directly attached to the terminal
+        return -t *ARGV;
+    }
+
+    # If *ARGV isn't opened, it will be interactive if *STDIN is attached
+    # to a terminal.
+    else {
+        return -t *STDIN;
+    }
+}
+
+### Imported from IO::Interactive 1.022 Perl module
+local (*DEV_NULL, *DEV_NULL2);
+my $dev_null;
+BEGIN {
+    pipe *DEV_NULL, *DEV_NULL2
+        or die "Internal error: can't create null filehandle";
+    $dev_null = \*DEV_NULL;
+}
+
+### Imported from IO::Interactive 1.022 Perl module
+sub interactive {
+    my ($out_handle) = (@_, \*STDOUT);      # Default to STDOUT
+    return &is_interactive ? $out_handle : $dev_null;
+}
+
 __END__
 
 =head1 NAME
