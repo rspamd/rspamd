@@ -30,6 +30,7 @@ static const gsize default_words = 80;
 static const gdouble update_prob = 0.6;
 static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
 
+#undef EXTRA_LANGDET_DEBUG
 
 struct rspamd_language_unicode_match {
 	const gchar *lang;
@@ -504,6 +505,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			}
 		}
 
+#ifdef EXTRA_LANGDET_DEBUG
 		/* Useful for debug */
 		for (i = 0; i < 10; i ++) {
 			ucs_elt = g_ptr_array_index (ngramms, i);
@@ -511,6 +513,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			msg_debug_lang_det_cfg ("%s -> %s: %d", nelt->name,
 					ucs_elt->utf, ucs_elt->freq);
 		}
+#endif
 
 		g_ptr_array_free (ngramms, TRUE);
 		nelt->mean = mean;
@@ -577,8 +580,10 @@ rspamd_language_detector_process_chain (struct rspamd_config *cfg,
 		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
 			if (elt->prob < mean) {
 				g_ptr_array_remove_index_fast (chain->languages, i);
+#ifdef EXTRA_LANGDET_DEBUG
 				msg_debug_lang_det_cfg ("remove %s from %s; prob: %.4f; mean: %.4f, std: %.4f",
 						elt->elt->name, chain->utf, elt->prob, mean, std);
+#endif
 			}
 		}
 	}
@@ -586,8 +591,10 @@ rspamd_language_detector_process_chain (struct rspamd_config *cfg,
 		/* We have a unique ngramm, increase its weigth */
 		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
 			elt->prob *= 4.0;
+#ifdef EXTRA_LANGDET_DEBUG
 			msg_debug_lang_det_cfg ("increase weight of %s in %s; prob: %.4f",
 					elt->elt->name, chain->utf, elt->prob);
+#endif
 		}
 	}
 }
