@@ -113,17 +113,16 @@ elsif ( -d "$log_file" ) {
     open( $rspamd_log, "-|", "$dc $log_dir/$_" )
       or die "cannot execute $dc $log_dir/$_ : $!";
 
-    if (!$json) {
-      printf "\033[J  Parsing log files: [%d/%d] %s\033[G", $log_file_num++, scalar @logs, $_;
-      $spinner_update_time = 0;   # Force spinner update
-      &spinner;
-    }
+    printf {interactive(*STDERR)} "\033[J  Parsing log files: [%d/%d] %s\033[G", $log_file_num++, scalar @logs, $_;
+    $spinner_update_time = 0;   # Force spinner update
+    &spinner;
 
     &ProcessLog;
 
     close($rspamd_log)
       or warn "cannot close $dc $log_dir/$_: $!";
   }
+  print {interactive(*STDERR)} "\033[J\033[G";   # Progress indicator clean-up
 }
 else {
   my $ext = ($log_file =~ /[^.]+\.?([^.]*?)$/)[0];
@@ -630,13 +629,11 @@ sub GetLogfilesList {
       splice( @logs, $exclude_logs, $num_logs ||= @logs - $exclude_logs );
 
   # Loop through array printing out filenames
-  if (!$json) {
-    print "\nLog files to process:\n";
-    foreach my $file (@logs) {
-      print "  $file\n";
-    }
-    print "\n";
+  print {interactive(*STDERR)} "\nLog files to process:\n";
+  foreach my $file (@logs) {
+    print {interactive(*STDERR)} "  $file\n";
   }
+  print {interactive(*STDERR)} "\n";
 
   return @logs;
 }
@@ -701,9 +698,9 @@ sub numeric {
 sub spinner {
     my @spinner = qw{/ - \ |};
     return
-      if ( $json || ( time - $spinner_update_time ) < 1 );
+      if ( ( time - $spinner_update_time ) < 1 );
     $spinner_update_time = time;
-    printf "%s\r", $spinner[ $spinner_update_time % @spinner ];
+    printf {interactive(*STDERR)} "%s\r", $spinner[ $spinner_update_time % @spinner ];
     select()->flush();
 }
 
