@@ -246,7 +246,9 @@ exports.squeeze_init = function()
         squeezed_groups[v.group] = {}
       end
 
-      table.insert(squeezed_groups[v.group], v)
+      table.insert(squeezed_groups[v.group], k)
+    else
+      logger.debugm(SN, rspamd_config, 'no metric symbol found for %s, maybe bug', k)
     end
     if not squeezed_rules[v.order] then
       squeezed_rules[v.order] = {}
