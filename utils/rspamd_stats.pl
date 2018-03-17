@@ -702,8 +702,8 @@ sub spinner {
     my @spinner = qw{/ - \ |};
     return
       if ( $json || ( time - $spinner_update_time ) < 1 );
-    printf "%s\r", $spinner[ $spinner_update_time % @spinner ];
     $spinner_update_time = time;
+    printf "%s\r", $spinner[ $spinner_update_time % @spinner ];
     select()->flush();
 }
 
