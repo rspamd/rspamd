@@ -1011,6 +1011,7 @@ if opts then
     'mime types map')
   if map then
     local id = rspamd_config:register_symbol({
+      name = 'MIME_TYPES_CALLBACK',
       callback = check_mime_type,
       type = 'callback,nostat'
     })

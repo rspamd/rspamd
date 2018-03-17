@@ -159,6 +159,7 @@ if opts then
   local id = -1
   if mime_trie or raw_trie or body_trie then
     id = rspamd_config:register_symbol({
+      name = 'TRIE_CALLBACK',
       type = 'callback',
       callback = tries_callback
     })

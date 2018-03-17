@@ -86,6 +86,7 @@ local opts =  rspamd_config:get_all_opt('forged_recipients')
 if opts then
   if opts['symbol_rcpt'] or opts['symbol_sender'] then
     local id = rspamd_config:register_symbol({
+      name = 'FORGED_CALLBACK',
       callback = check_forged_headers,
       type = 'callback',
     })
