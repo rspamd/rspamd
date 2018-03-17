@@ -2330,7 +2330,7 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 
 	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
 
-	if (id > 0) {
+	if (id >= 0) {
 		/* Set executed and finished flags */
 		item = g_ptr_array_index (cache->items_by_id, id);
 
@@ -2362,7 +2362,7 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 
 	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
 
-	if (id > 0) {
+	if (id >= 0) {
 		/* Set executed and finished flags */
 		item = g_ptr_array_index (cache->items_by_id, id);
 
