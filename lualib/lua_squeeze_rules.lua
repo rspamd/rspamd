@@ -239,7 +239,7 @@ exports.squeeze_init = function()
     if metric_sym then
       v.group = metric_sym.group
       v.score = metric_sym.score
-      v.description = description
+      v.description = metric_sym.description
 
       if not squeezed_groups[v.group] then
         logger.debugm(SN, rspamd_config, 'added squeezed group: %s', v.group)
@@ -262,52 +262,59 @@ exports.handle_settings = function(task, settings)
 
   if settings.default then settings = settings.default end
 
-  if settings.symbols_enabled then
-    for k,v in squeezed_symbols do
-      if not settings.symbols_enabled[k] then
+  local function disable_all()
+    for k,_ in pairs(squeezed_symbols) do
+      if not symbols_enabled[k] then
         symbols_disabled[k] = true
-        found = true
-      else
-        symbols_enabled[k] = true
+      end
+    end
+  end
+
+  if settings.symbols_enabled then
+    disable_all()
+    found = true
+    for _,s in ipairs(settings.symbols_enabled) do
+      if squeezed_symbols[s] then
+        logger.debugm(SN, task, 'enable symbol %s as it is in `symbols_enabled`', s)
+        symbols_enabled[s] = true
+        symbols_disabled[s] = nil
       end
     end
   end
 
   if settings.groups_enabled then
-    for k,syms in pairs(squeezed_groups) do
-      if not settings.groups_enabled[k] then
-        for _,sym in ipairs(syms) do
-          if not symbols_enabled[sym] then
-            symbols_disabled[sym] = true
-            found = true
-          end
-        end
-      else
-        for _,sym in ipairs(syms) do
-          if symbols_disabled[sym] then
-            symbols_disabled[sym] = nil
-          end
+    disable_all()
+    found = true
+    for _,gr in ipairs(settings.groups_enabled) do
+      if squeezed_groups[gr] then
+        for _,sym in ipairs(squeezed_groups[gr]) do
+          logger.debugm(SN, task, 'enable symbol %s as it is in `groups_enabled`', sym)
           symbols_enabled[sym] = true
+          symbols_disabled[sym] = nil
         end
       end
     end
   end
 
   if settings.symbols_disabled then
-    for k,v in squeezed_symbols do
-      if settings.symbols_disabled[k] then
-        symbols_disabled[k] = true
-        found = true
+    found = true
+    for _,s in ipairs(settings.symbols_disabled) do
+      if not symbols_enabled[s] then
+        symbols_disabled[s] = true
+        logger.debugm(SN, task, 'disable symbol %s as it is in `symbols_disabled`', s)
       end
     end
   end
 
   if settings.groups_disabled then
-    for k,syms in pairs(squeezed_groups) do
-      if settings.groups_disabled[k] then
-        for _,sym in ipairs(syms) do
-          symbols_disabled[sym] = true
-          found = true
+    found = true
+    for _,gr in ipairs(settings.groups_disabled) do
+      if squeezed_groups[gr] then
+        for _,sym in ipairs(squeezed_groups[gr]) do
+          if not symbols_enabled[sym] then
+            logger.debugm(SN, task, 'disable symbol %s as it is in `groups_disabled`', sym)
+            symbols_disabled[sym] = true
+          end
         end
       end
     end
