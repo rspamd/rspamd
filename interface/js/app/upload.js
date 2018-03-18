@@ -194,7 +194,7 @@ function($) {
             if (source == 'fuzzy') {
                 //To access the proper
                 headers.flag = $('#fuzzyFlagText').val();
-                headers.weigth = $('#fuzzyWeightText').val();
+                headers.weight = $('#fuzzyWeightText').val();
             } else {
                 data = $('#' + source + 'TextSource').val();
             }
