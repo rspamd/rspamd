@@ -588,7 +588,7 @@ rspamd_language_detector_process_chain (struct rspamd_config *cfg,
 		}
 	}
 	else {
-		/* We have a unique ngramm, increase its weigth */
+		/* We have a unique ngramm, increase its weight */
 		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
 			elt->prob *= 4.0;
 #ifdef EXTRA_LANGDET_DEBUG

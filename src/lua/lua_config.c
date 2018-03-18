@@ -1580,7 +1580,7 @@ lua_config_register_symbol (lua_State * L)
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=D;"
+				"name=S;weight=N;callback=F;flags=S;type=S;priority=I;parent=D;"
 				"score=D;description=S;group=S;one_shot=B;nshots=I;no_squeeze=B",
 				&name, &weight, &cbref, &flags_str, &type_str,
 				&priority, &parent_float,
