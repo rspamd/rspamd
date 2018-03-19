@@ -65,18 +65,34 @@ static gboolean cryptobox_loaded = FALSE;
 
 static const guchar n0[16] = {0};
 
+#define CRYPTOBOX_ALIGNMENT   16
+#define cryptobox_align_ptr(p, a)                                             \
+    (void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+
 #ifdef HAVE_WEAK_SYMBOLS
 __attribute__((weak)) void
-_dummy_symbol_to_prevent_lto(void * const pnt, const size_t len)
+_dummy_symbol_to_prevent_lto_memzero(void * const pnt, const size_t len);
+__attribute__((weak)) void
+_dummy_symbol_to_prevent_lto_memzero(void * const pnt, const size_t len)
 {
 	(void) pnt;
 	(void) len;
 }
-#endif
 
-#define CRYPTOBOX_ALIGNMENT   32    /* Better for AVX */
-#define cryptobox_align_ptr(p, a)                                             \
-    (void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+__attribute__((weak)) void
+_dummy_symbol_to_prevent_lto_memcmp(const unsigned char *b1,
+		const unsigned char *b2,
+		const size_t         len);
+__attribute__((weak)) void
+_dummy_symbol_to_prevent_lto_memcmp(const unsigned char *b1,
+		const unsigned char *b2,
+		const size_t         len)
+{
+	(void) b1;
+	(void) b2;
+	(void) len;
+}
+#endif
 
 void
 rspamd_explicit_memzero(void * const pnt, const gsize len)
@@ -89,7 +105,7 @@ rspamd_explicit_memzero(void * const pnt, const gsize len)
 	explicit_bzero (pnt, len);
 #elif defined(HAVE_WEAK_SYMBOLS)
 	memset (pnt, 0, len);
-	_dummy_symbol_to_prevent_lto (pnt, len);
+	_dummy_symbol_to_prevent_lto_memzero (pnt, len);
 #else
 	volatile unsigned char *pnt_ = (volatile unsigned char *) pnt;
 	gsize i = (gsize) 0U;
@@ -97,6 +113,32 @@ rspamd_explicit_memzero(void * const pnt, const gsize len)
 		pnt_[i++] = 0U;
 	}
 #endif
+}
+
+gint
+rspamd_cryptobox_memcmp (const void *const b1_, const void *const b2_, gsize len)
+{
+#ifdef HAVE_WEAK_SYMBOLS
+	const unsigned char *b1 = (const unsigned char *) b1_;
+	const unsigned char *b2 = (const unsigned char *) b2_;
+#else
+	const volatile unsigned char *volatile b1 =
+			(const volatile unsigned char *volatile) b1_;
+	const volatile unsigned char *volatile b2 =
+			(const volatile unsigned char *volatile) b2_;
+#endif
+	gsize i;
+	volatile unsigned char d = 0U;
+
+#if HAVE_WEAK_SYMBOLS
+	_dummy_symbol_to_prevent_lto_memcmp (b1, b2, len);
+#endif
+
+	for (i = 0U; i < len; i++) {
+		d |= b1[i] ^ b2[i];
+	}
+
+	return (1 & ((d - 1) >> 8)) - 1;
 }
 
 static void

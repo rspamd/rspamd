@@ -227,6 +227,16 @@ bool rspamd_cryptobox_verify (const guchar *sig,
 void rspamd_explicit_memzero (void * const buf, gsize buflen);
 
 /**
+ * Constant time memcmp
+ * @param b1_
+ * @param b2_
+ * @param len
+ * @return
+ */
+gint
+rspamd_cryptobox_memcmp (const void *const b1_, const void *const b2_, gsize len);
+
+/**
  * Calculates siphash-2-4 for a message
  * @param out (8 bytes output)
  * @param in
