@@ -868,15 +868,13 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	/* Get actions for default metric */
 	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 		act = &session->cfg->actions[i];
-		if (act->score >= 0) {
-			obj = ucl_object_typed_new (UCL_OBJECT);
-			ucl_object_insert_key (obj,
-					ucl_object_fromstring (rspamd_action_to_str (
-							act->action)), "action", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (
-					act->score), "value", 0, false);
-			ucl_array_append (top, obj);
-		}
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (obj,
+				ucl_object_fromstring (rspamd_action_to_str (
+						act->action)), "action", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromdouble (
+				act->score), "value", 0, false);
+		ucl_array_append (top, obj);
 	}
 
 	rspamd_controller_send_ucl (conn_ent, top);
@@ -2159,8 +2157,8 @@ rspamd_controller_handle_saveactions (
 	obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
 
-	if (obj->type != UCL_ARRAY || obj->len != 3) {
-		msg_err_session ("input is not an array of 3 elements");
+	if (obj->type != UCL_ARRAY || obj->len != 4) {
+		msg_err_session ("input is not an array of 4 elements");
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_object_unref (obj);
 		return 0;
@@ -2168,19 +2166,20 @@ rspamd_controller_handle_saveactions (
 
 	it = ucl_object_iterate_new (obj);
 
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < 4; i++) {
 		cur = ucl_object_iterate_safe (it, TRUE);
-		if (cur == NULL) {
-			break;
-		}
+
 		switch (i) {
 		case 0:
 			act = METRIC_ACTION_REJECT;
 			break;
 		case 1:
-			act = METRIC_ACTION_ADD_HEADER;
+			act = METRIC_ACTION_REWRITE_SUBJECT;
 			break;
 		case 2:
+			act = METRIC_ACTION_ADD_HEADER;
+			break;
+		case 3:
 			act = METRIC_ACTION_GREYLIST;
 			break;
 		}
@@ -2192,7 +2191,6 @@ rspamd_controller_handle_saveactions (
 		else {
 			score = ucl_object_todouble (cur);
 		}
-
 
 		if ((isnan (session->cfg->actions[act].score) != isnan (score)) ||
 				(session->cfg->actions[act].score != score)) {

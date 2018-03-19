@@ -137,10 +137,11 @@ function($) {
     function loadActionsFromForm() {
         var values = [];
         var inputs = $('#actionsForm :input[data-id="action"]');
-        // Rspamd order: [spam,probable_spam,greylist]
-        values[0] = parseFloat(inputs[2].value);
-        values[1] = parseFloat(inputs[1].value);
-        values[2] = parseFloat(inputs[0].value);
+        // Rspamd order: [spam, rewrite_subject, probable_spam, greylist]
+        values[0] = parseFloat(inputs[3].value);
+        values[1] = parseFloat(inputs[2].value);
+        values[2] = parseFloat(inputs[1].value);
+        values[3] = parseFloat(inputs[0].value);
 
         return JSON.stringify(values);
     }
@@ -155,12 +156,10 @@ function($) {
                 xhr.setRequestHeader('Password', rspamd.getPassword());
             },
             success: function (data) {
-                // Order of sliders greylist -> probable spam -> spam
+                // Order of sliders greylist -> probable spam -> rewrite subject -> spam
                 $('#actionsBody').empty();
                 $('#actionsForm').empty();
                 var items = [];
-                var min = 0;
-                var max = Number.MIN_VALUE;
                 $.each(data, function (i, item) {
                     var idx = -1;
                     var label;
@@ -188,12 +187,6 @@ function($) {
                                 '</div>'
                         });
                     }
-                    if (item.value > max) {
-                        max = item.value * 2;
-                    }
-                    if (item.value < min) {
-                        min = item.value;
-                    }
                 });
 
                 items.sort(function (a, b) {
@@ -219,25 +212,27 @@ function($) {
                     var elts = loadActionsFromForm();
                     // String to array for comparison
                     var eltsArray = JSON.parse(loadActionsFromForm());
-                    if(eltsArray[0]<0){
-                        rspamd.alertMessage('alert-modal alert-error', 'Spam can not be negative');
-                    }
-                    else if(eltsArray[1]<0){
-                        rspamd.alertMessage('alert-modal alert-error', 'Probable spam can not be negative');
-                    }
-                    else if(eltsArray[2]<0){
-                        rspamd.alertMessage('alert-modal alert-error', 'Greylist can not be negative');
-                    }
-                    else if(eltsArray[2]<eltsArray[1] && eltsArray[1]<eltsArray[0]){
-                        callback('saveactions', null, null, "POST", {}, {
+                    if (eltsArray[0] < 0) {
+                        rspamd.alertMessage("alert-modal alert-error", "Spam can not be negative");
+                    } else if (eltsArray[1] < 0) {
+                        rspamd.alertMessage("alert-modal alert-error", "Rewrite subject can not be negative");
+                    } else if (eltsArray[2] < 0) {
+                        rspamd.alertMessage("alert-modal alert-error", "Probable spam can not be negative");
+                    } else if (eltsArray[3] < 0) {
+                        rspamd.alertMessage("alert-modal alert-error", "Greylist can not be negative");
+                    } else if (
+                        (eltsArray[2] === null || eltsArray[3] < eltsArray[2]) &&
+                        (eltsArray[1] === null || eltsArray[2] < eltsArray[1]) &&
+                        (eltsArray[0] === null || eltsArray[1] < eltsArray[0])
+                    ) {
+                        callback("saveactions", null, null, "POST", {}, {
                             data: elts,
-                            dataType: "json",
+                            dataType: "json"
                         });
+                    } else {
+                        rspamd.alertMessage("alert-modal alert-error", "Incorrect order of metric actions threshold");
                     }
-                    else {
-                        rspamd.alertMessage('alert-modal alert-error', 'Incorrect order of metric actions threshold');
-                    }
-                };
+                }
 
                 $('#saveActionsBtn').on('click', function() {
                     saveActions(rspamd.queryLocal);
