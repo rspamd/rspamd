@@ -120,8 +120,16 @@ local function get_general_metadata(task)
     r.is_local = ip_addr:is_local()
     local origin = task:get_header('X-Originating-IP')
     if origin then
-      r.webmail = true
-      r.ip = origin
+      origin = string.sub(origin, 2, -2)
+      local rspamd_ip = require "rspamd_ip"
+      local test = rspamd_ip.from_string(origin)
+
+      if test and test:is_valid() then
+        r.webmail = true
+        r.ip = origin
+      else
+        r.ip = tostring(ip_addr)
+      end
     else
       r.ip = tostring(ip_addr)
     end
