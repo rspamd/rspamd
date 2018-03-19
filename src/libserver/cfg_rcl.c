@@ -38,6 +38,8 @@
 #include <glob.h>
 #endif
 
+#include <math.h>
+
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;
 	gchar *key;
@@ -450,16 +452,22 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			continue;
 		}
 		else {
-			if (!ucl_object_todouble_safe (cur, &action_score)) {
-				g_set_error (err,
-						CFG_RCL_ERROR,
-						EINVAL,
-						"invalid action definition: '%s'",
-						ucl_object_key (cur));
-				ucl_object_iterate_free (it);
-
-				return FALSE;
+			if (ucl_object_type (cur) == UCL_NULL) {
+				action_score = NAN;
 			}
+			else {
+				if (!ucl_object_todouble_safe (cur, &action_score)) {
+					g_set_error (err,
+							CFG_RCL_ERROR,
+							EINVAL,
+							"invalid action definition: '%s'",
+							ucl_object_key (cur));
+					ucl_object_iterate_free (it);
+
+					return FALSE;
+				}
+			}
+
 			rspamd_config_set_action_score (cfg,
 					ucl_object_key (cur),
 					action_score,
