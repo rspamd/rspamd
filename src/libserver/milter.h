@@ -44,6 +44,14 @@ struct rspamd_email_address;
 struct event_base;
 struct rspamd_http_message;
 
+struct rspamd_milter_context {
+	const gchar *spam_header;
+	const gchar *client_ca_name;
+	void *sessions_cache;
+	gboolean discard_on_reject;
+	gboolean quarantine_on_reject;
+};
+
 struct rspamd_milter_session {
 	GHashTable *macros;
 	rspamd_inet_addr_t *addr;
@@ -151,9 +159,7 @@ void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
  * Init internal milter context
  * @param spam_header spam header name (must NOT be NULL)
  */
-void rspamd_milter_init_library (const gchar *spam_header,
-		void *sessions_cache, gboolean discard_on_reject,
-		gboolean quarantine_on_reject);
+void rspamd_milter_init_library (const struct rspamd_milter_context *ctx);
 
 /**
  * Returns pool for a session

@@ -48,14 +48,7 @@
 
 INIT_LOG_MODULE(milter)
 
-struct rspamd_milter_context {
-	gchar *spam_header;
-	void *sessions_cache;
-	gboolean discard_on_reject;
-	gboolean quarantine_on_reject;
-};
-
-static struct rspamd_milter_context *milter_ctx = NULL;
+static const struct rspamd_milter_context *milter_ctx = NULL;
 
 static gboolean  rspamd_milter_handle_session (
 		struct rspamd_milter_session *session,
@@ -1301,6 +1294,7 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 		struct rspamd_http_message *msg)
 {
 	rspamd_ftok_t *found, srch;
+	struct rspamd_milter_private *priv = session->priv;
 
 	/*
 	 * We assume postfix macros here, sendmail ones might be slightly
@@ -1353,9 +1347,32 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 				found->begin, found->len);
 	}
 
-	IF_MACRO("{cert_subject}") {
-		rspamd_http_message_add_header_len (msg, USER_HEADER,
-				found->begin, found->len);
+	if (milter_ctx->client_ca_name) {
+		IF_MACRO ("{cert_issuer}") {
+			rspamd_http_message_add_header_len (msg, CERT_ISSUER_HEADER,
+					found->begin, found->len);
+
+			if (found->len == strlen (milter_ctx->client_ca_name) &&
+					rspamd_cryptobox_memcmp (found->begin,
+							milter_ctx->client_ca_name, found->len) == 0) {
+				msg_debug_milter ("process certificate issued by %T", found);
+				IF_MACRO("{cert_subject}") {
+					rspamd_http_message_add_header_len (msg, USER_HEADER,
+							found->begin, found->len);
+				}
+			}
+			else {
+				msg_debug_milter ("skip certificate issued by %T", found);
+			}
+
+
+		}
+	}
+	else {
+		IF_MACRO ("{cert_issuer}") {
+			rspamd_http_message_add_header_len (msg, CERT_ISSUER_HEADER,
+					found->begin, found->len);
+		}
 	}
 
 	if (!session->hostname || session->hostname->len == 0) {
@@ -1838,26 +1855,9 @@ cleanup:
 }
 
 void
-rspamd_milter_init_library (const gchar *spam_header, void *sessions_cache,
-		gboolean discard_on_reject, gboolean quarantine_on_reject)
+rspamd_milter_init_library (const struct rspamd_milter_context *ctx)
 {
-	if (milter_ctx) {
-		g_free (milter_ctx->spam_header);
-		g_free (milter_ctx);
-	}
-
-	milter_ctx = g_malloc (sizeof (*milter_ctx));
-
-	if (spam_header) {
-		milter_ctx->spam_header = g_strdup (spam_header);
-	}
-	else {
-		milter_ctx->spam_header = g_strdup (RSPAMD_MILTER_SPAM_HEADER);
-	}
-
-	milter_ctx->sessions_cache = sessions_cache;
-	milter_ctx->discard_on_reject = discard_on_reject;
-	milter_ctx->quarantine_on_reject = quarantine_on_reject;
+	milter_ctx = ctx;
 }
 
 rspamd_mempool_t *

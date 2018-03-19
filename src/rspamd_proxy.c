@@ -34,6 +34,7 @@
 #include "ottery.h"
 #include "unix-std.h"
 #include "libserver/milter.h"
+#include "libserver/milter_internal.h"
 #include "libmime/lang_detection.h"
 #include "contrib/zstd/zstd.h"
 
@@ -147,8 +148,11 @@ struct rspamd_proxy_ctx {
 	gboolean quarantine_on_reject;
 	/* Milter spam header */
 	gchar *spam_header;
+	/* CA name that can be used for client certificates */
+	gchar *client_ca_name;
 	/* Sessions cache */
 	void *sessions_cache;
+	struct rspamd_milter_context milter_ctx;
 	/* Language detector */
 	struct rspamd_lang_detector *lang_det;
 };
@@ -744,6 +748,7 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)rspamd_array_free_hard, ctx->cmp_refs);
 	ctx->max_retries = DEFAULT_RETRIES;
+	ctx->spam_header = RSPAMD_MILTER_SPAM_HEADER;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -834,7 +839,15 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, spam_header),
 			0,
-			"Use the specific spam header instead of X-Spam");
+			"Use the specific spam header (default: X-Spam)");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"client_ca_name",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, client_ca_name),
+			0,
+			"Allow certificates issued by this CA to be treated as client certificates");
 
 	return ctx;
 }
@@ -2160,8 +2173,13 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 				ctx->ev_base);
 	}
 
-	rspamd_milter_init_library (ctx->spam_header, ctx->sessions_cache,
-			ctx->discard_on_reject, ctx->quarantine_on_reject);
+	ctx->milter_ctx.spam_header = ctx->spam_header;
+	ctx->milter_ctx.discard_on_reject = ctx->discard_on_reject;
+	ctx->milter_ctx.quarantine_on_reject = ctx->quarantine_on_reject;
+	ctx->milter_ctx.sessions_cache = ctx->sessions_cache;
+	ctx->milter_ctx.client_ca_name = ctx->client_ca_name;
+	rspamd_milter_init_library (&ctx->milter_ctx);
+
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
 			worker);
 
