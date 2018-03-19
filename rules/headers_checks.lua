@@ -221,7 +221,13 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
             -- See if Reply-To matches the To address
             local to = task:get_recipients(2)
             if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
-              task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
+                -- Ignore this for mailing-lists and automatic submissions
+                if (not (task:get_header('List-Unsubscribe') or
+                         task:get_header('X-List') or
+                         task:get_header('Auto-Submitted'))) 
+                then
+                   task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
+                end
             else
               task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
 	    end
