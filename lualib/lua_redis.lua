@@ -98,6 +98,8 @@ local function try_load_redis_servers(options, rspamd_config, result)
       result['db'] = tostring(options['db'])
     elseif options['dbname'] then
       result['db'] = tostring(options['dbname'])
+    elseif options['database'] then
+      result['db'] = tostring(options['database'])
     end
   end
   if options['password'] and not result['password'] then

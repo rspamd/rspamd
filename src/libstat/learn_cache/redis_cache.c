@@ -274,7 +274,12 @@ rspamd_redis_cache_try_ucl (struct rspamd_redis_cache_ctx *cache_ctx,
 
 	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
 	if (elt) {
-		cache_ctx->dbname = ucl_object_tostring (elt);
+		if (ucl_object_type (elt) == UCL_STRING) {
+			cache_ctx->dbname = ucl_object_tostring (elt);
+		}
+		else if (ucl_object_type (elt) == UCL_INT) {
+			cache_ctx->dbname = ucl_object_tostring_forced (elt);
+		}
 	}
 	else {
 		cache_ctx->dbname = NULL;

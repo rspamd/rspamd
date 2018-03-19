@@ -1256,7 +1256,12 @@ rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
 
 	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
 	if (elt) {
-		backend->dbname = ucl_object_tostring (elt);
+		if (ucl_object_type (elt) == UCL_STRING) {
+			backend->dbname = ucl_object_tostring (elt);
+		}
+		else if (ucl_object_type (elt) == UCL_INT) {
+			backend->dbname = ucl_object_tostring_forced (elt);
+		}
 	}
 	else {
 		backend->dbname = NULL;
