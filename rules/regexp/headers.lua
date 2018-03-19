@@ -923,3 +923,36 @@ reconf['HAS_XOIP'] = {
   score = 0.0,
   group = 'headers'
 }
+
+reconf['HAS_LIST_UNSUB'] = {
+  re = string.format('%s', 'header_exists(List-Unsubscribe)'),
+  description = 'Has List-Unsubscribe header',
+  score = -0.01,
+  group = 'headers'
+}
+
+reconf['HAS_GUC_PROXY_URI'] = {
+   re = '/\\.googleusercontent\\.com\\/proxy/{raw_mime}i',
+   description = 'Has googleusercontent.com proxy URI',
+   score = 0.01,
+   group = 'experimental'
+}
+
+reconf['HAS_GOOGLE_REDIR'] = {
+  re = '/\\.google\\.com\\/url\\?/{raw_mime}i',
+  description = 'Has google.com/url redirection',
+  score = 0.01,
+  group = 'experimental'
+}
+
+reconf['XM_UA_NO_VERSION'] = {
+  re = string.format('(!%s && !%s) && (%s || %s)',
+                     'X-Mailer=/https?:/H',
+                     'User-Agent=/https?:/H',
+                     'X-Mailer=/^[^0-9]+$/H',
+                     'User-Agent=/^[^0-9]+$/H'),
+  description = 'X-Mailer/User-Agent has no version',
+  score = 0.01,
+  group = 'experimental'
+}
+
