@@ -2184,8 +2184,18 @@ rspamd_controller_handle_saveactions (
 			act = METRIC_ACTION_GREYLIST;
 			break;
 		}
-		score = ucl_object_todouble (cur);
-		if (session->cfg->actions[act].score != score) {
+
+		if (ucl_object_type (cur) == UCL_NULL) {
+			/* Assume NaN */
+			score = NAN;
+		}
+		else {
+			score = ucl_object_todouble (cur);
+		}
+
+
+		if ((isnan (session->cfg->actions[act].score) != isnan (score)) ||
+				(session->cfg->actions[act].score != score)) {
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
 			added ++;
 		}

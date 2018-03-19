@@ -21,6 +21,8 @@
 #include "unix-std.h"
 #include "lua/lua_common.h"
 
+#include <math.h>
+
 struct config_json_buf {
 	GString *buf;
 	struct rspamd_config *cfg;
@@ -95,9 +97,11 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 			ucl_object_iter_t nit = NULL;
 
 			while ((it_val = ucl_object_iterate (cur_nm, &nit, true))) {
-				if (ucl_object_lookup (it_val, "name") &&
-						ucl_object_lookup (it_val, "value")) {
-					name = ucl_object_tostring (ucl_object_lookup (it_val, "name"));
+				const ucl_object_t *n = ucl_object_lookup (it_val, "name");
+				const ucl_object_t *v = ucl_object_lookup (it_val, "value");
+
+				if (n != NULL && v != NULL) {
+					name = ucl_object_tostring (n);
 
 					if (!name || !rspamd_action_from_str (name, &test_act)) {
 						msg_err ("unknown action: %s",
@@ -105,8 +109,15 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 										"name")));
 						continue;
 					}
-					nscore = ucl_object_todouble (ucl_object_lookup (it_val,
-							"value"));
+
+
+					if (ucl_object_type (v) == UCL_NULL) {
+						nscore = NAN;
+					}
+					else {
+						nscore = ucl_object_todouble (v);
+					}
+
 					rspamd_config_set_action_score (cfg, name, nscore, priority);
 				}
 				else {
