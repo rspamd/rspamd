@@ -11,7 +11,7 @@ function utility.get_all_symbols(logs, ignore_symbols)
 
   for _, line in pairs(logs) do
     line = lua_util.rspamd_str_split(line, " ")
-    for i=4,#line do
+    for i=4,(#line-2) do
       line[i] = line[i]:gsub("%s+", "")
       if not symbols_set[line[i]] then
         symbols_set[line[i]] = true
@@ -54,7 +54,7 @@ function utility.get_all_logs(dir_path)
     dir_path = dir_path:sub(1, #dir_path -1)
   end
 
-  local files = rspamd_util.glob(dir_path .. "/*")
+  local files = rspamd_util.glob(dir_path .. "/*.log")
   local all_logs = {}
 
   for _, file in pairs(files) do
@@ -92,10 +92,15 @@ function utility.generate_statistics_from_logs(logs, threshold)
     false_negative_rate = 0,
     false_positive_rate = 0,
     overall_accuracy = 0,
-    fscore = 0
+    fscore = 0,
+    avg_scan_time = 0,
+    slowest_file = nil,
+    slowest = 0
   }
 
   local all_symbols_stats = {}
+  local all_fps = {}
+  local all_fns = {}
 
   local false_positives = 0
   local false_negatives = 0
@@ -124,13 +129,15 @@ function utility.generate_statistics_from_logs(logs, threshold)
       true_positives = true_positives + 1
     elseif is_spam and (score < threshold) then
       false_negatives = false_negatives + 1
+      table.insert(all_fns, log[#log])
     elseif not is_spam and (score >= threshold) then
       false_positives = false_positives + 1
+      table.insert(all_fps, log[#log])
     else
       true_negatives = true_negatives + 1
     end
 
-    for i=4, #log do
+    for i=4, (#log-2) do
       if all_symbols_stats[log[i]] == nil then
         all_symbols_stats[log[i]] = {
           name = log[i],
@@ -150,6 +157,12 @@ function utility.generate_statistics_from_logs(logs, threshold)
       else
         all_symbols_stats[log[i]].ham_hits =
         all_symbols_stats[log[i]].ham_hits + 1
+      end
+
+      -- Find slowest message
+      if (tonumber(log[#log-1]) > tonumber(file_stats.slowest)) then
+          file_stats.slowest = tostring(tonumber(log[#log-1]))
+          file_stats.slowest_file = log[#log]
       end
     end
   end
@@ -192,7 +205,7 @@ function utility.generate_statistics_from_logs(logs, threshold)
         (symbol_stats.spam_percent + symbol_stats.ham_percent)
   end
 
-  return file_stats, all_symbols_stats
+  return file_stats, all_symbols_stats, all_fps, all_fns
 end
 
 return utility
