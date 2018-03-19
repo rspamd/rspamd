@@ -468,10 +468,11 @@ return function (args, cfg)
 
   -- Display hit frequencies
   if opts['z'] then
-      local file_stats, all_symbols_stats = rescore_utility.generate_statistics_from_logs(logs, threshold)
+      local _, all_symbols_stats = rescore_utility.generate_statistics_from_logs(logs, threshold)
       local t = {}
       for _, symbol_stats in pairs(all_symbols_stats) do table.insert(t, symbol_stats) end
-      function compare_symbols (a, b) 
+
+      local function compare_symbols(a, b)
           if (a.spam_overall ~= b.spam_overall) then
               return b.spam_overall < a.spam_overall
           end
@@ -481,6 +482,7 @@ return function (args, cfg)
           return b.ham_hits < a.ham_hits
       end
       table.sort(t, compare_symbols)
+
       logger.message(string.format("%-40s %6s %6s %6s %6s %6s %6s %6s",
                      "NAME", "HITS", "HAM", "HAM%", "SPAM", "SPAM%", "S/O", "OVER%"))
       for _, symbol_stats in pairs(t) do
