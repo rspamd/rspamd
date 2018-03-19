@@ -138,12 +138,25 @@ reconf['HIDDEN_SOURCE_OBJ'] = {
   group = "compromised_hosts"
 }
 
-reconf['URI_HIDDEN_PATH'] = {
-  re = "/\\/\\..+/U",
-  description = "URL contains a UNIX hidden file/directory",
+local hidden_uri_re = rspamd_regexp.create_cached('/(?!\\/\\.well[-_]known\\/)(?:^\\.[A-Za-z0-9]|\\/\\.[A-Za-z0-9]|\\/\\.\\.\\/)/i')
+rspamd_config.URI_HIDDEN_PATH = {
+  callback = function (task)
+    local urls = task:get_urls(false)
+    if (urls) then
+        for _, url in ipairs(urls) do
+            if (not (url:is_subject() and url:is_html_displayed())) then
+                local path = url:get_path()
+                if (hidden_uri_re:match(path)) then
+                    -- TODO: need url:is_schemeless() to improve this
+                    return true, 1.0, url:get_text()
+                end
+            end
+        end
+    end
+  end,
+  description = 'Message contains URI with a hidden path',
   score = 1.0,
-  one_shot = true,
-  group = "compromised_hosts"
+  group = 'compromised_hosts',
 }
 
 reconf['MID_RHS_WWW'] = {

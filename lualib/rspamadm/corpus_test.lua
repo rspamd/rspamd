@@ -5,10 +5,10 @@ local lua_util = require "lua_util"
 local HAM = "HAM"
 local SPAM = "SPAM"
 
-local function scan_email(n_parellel, path, timeout)
+local function scan_email(n_parallel, path, timeout)
 
     local rspamc_command = string.format("rspamc -j --compact -n %s -t %.3f %s",
-        n_parellel, timeout, path)
+        n_parallel, timeout, path)
     local result = assert(io.popen(rspamc_command))
     result = result:read("*all")
     return result
@@ -24,6 +24,8 @@ local function write_results(results, file)
         for _, sym in pairs(result.symbols) do
             log_line = log_line .. " " .. sym
         end
+
+        log_line = log_line .. " " .. result.scan_time .. " " .. file .. ':' .. result.filename
 
         log_line = log_line .. "\r\n"
 
@@ -61,6 +63,9 @@ local function encoded_json_to_log(result)
     for sym, _ in pairs(result.symbols) do
         table.insert(filtered_result.symbols, sym)
     end
+
+    filtered_result.filename = result.filename
+    filtered_result.scan_time = result.scan_time
 
     return filtered_result   
 end
@@ -127,8 +132,10 @@ return function (_, res)
     write_results(results, output)
 
     io.write("\nStats: \n")
+    local elapsed_time = os.time() - start_time
+    local total_msgs = no_of_ham + no_of_spam
     io.write(string.format("Elapsed time: %ds\n", os.time() - start_time))
     io.write(string.format("No of ham: %d\n", no_of_ham))
     io.write(string.format("No of spam: %d\n", no_of_spam))
-
+    io.write(string.format("Messages/sec: %-.2f\n", (total_msgs/elapsed_time)))
 end

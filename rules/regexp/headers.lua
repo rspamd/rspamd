@@ -62,17 +62,23 @@ reconf['R_NO_SPACE_IN_FROM'] = {
   group = 'header'
 }
 
-rspamd_config.MISSING_SUBJECT = {
+-- Detects missing Subject header
+reconf['MISSING_SUBJECT'] = {
+  re = '!raw_header_exists(Subject)',
   score = 2.0,
-  description = 'Subject is missing inside message',
+  description = 'Subject header is missing',
+  group = 'header'
+}
+
+rspamd_config.EMPTY_SUBJECT = {
+  score = 1.0,
+  description = 'Subject header is empty',
   group = 'header',
   callback = function(task)
     local hdr = task:get_header('Subject')
-
-    if not hdr or #hdr == 0 then
+    if hdr and #hdr == 0 then
       return true
     end
-
     return false
   end
 }
@@ -917,3 +923,36 @@ reconf['HAS_XOIP'] = {
   score = 0.0,
   group = 'headers'
 }
+
+reconf['HAS_LIST_UNSUB'] = {
+  re = string.format('%s', 'header_exists(List-Unsubscribe)'),
+  description = 'Has List-Unsubscribe header',
+  score = -0.01,
+  group = 'headers'
+}
+
+reconf['HAS_GUC_PROXY_URI'] = {
+   re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
+   description = 'Has googleusercontent.com proxy URI',
+   score = 0.01,
+   group = 'experimental'
+}
+
+reconf['HAS_GOOGLE_REDIR'] = {
+  re = '/\\.google\\.com\\/url\\?/{url}i',
+  description = 'Has google.com/url redirection',
+  score = 0.01,
+  group = 'experimental'
+}
+
+reconf['XM_UA_NO_VERSION'] = {
+  re = string.format('(!%s && !%s) && (%s || %s)',
+                     'X-Mailer=/https?:/H',
+                     'User-Agent=/https?:/H',
+                     'X-Mailer=/^[^0-9]+$/H',
+                     'User-Agent=/^[^0-9]+$/H'),
+  description = 'X-Mailer/User-Agent has no version',
+  score = 0.01,
+  group = 'experimental'
+}
+
