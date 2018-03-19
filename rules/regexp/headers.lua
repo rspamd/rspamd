@@ -62,17 +62,23 @@ reconf['R_NO_SPACE_IN_FROM'] = {
   group = 'header'
 }
 
-rspamd_config.MISSING_SUBJECT = {
+-- Detects missing Subject header
+reconf['MISSING_SUBJECT'] = {
+  re = '!raw_header_exists(Subject)',
   score = 2.0,
-  description = 'Subject is missing inside message',
+  description = 'Subject header is missing',
+  group = 'header'
+}
+
+rspamd_config.EMPTY_SUBJECT = {
+  score = 1.0,
+  description = 'Subject header is empty',
   group = 'header',
   callback = function(task)
     local hdr = task:get_header('Subject')
-
-    if not hdr or #hdr == 0 then
+    if hdr and #hdr == 0 then
       return true
     end
-
     return false
   end
 }
