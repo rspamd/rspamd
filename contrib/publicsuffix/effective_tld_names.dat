@@ -445,6 +445,7 @@ arq.br
 art.br
 ato.br
 b.br
+barueri.br
 belem.br
 bhz.br
 bio.br
@@ -11244,7 +11245,6 @@ no.com
 qc.com
 ru.com
 sa.com
-se.com
 se.net
 uk.com
 uk.net
@@ -11291,6 +11291,7 @@ virtueeldomein.nl
 // Cloud66 : https://www.cloud66.com/
 // Submitted by Khash Sajadi <khash@cloud66.com>
 c66.me
+cloud66.ws
 
 // CloudAccess.net : https://www.cloudaccess.net/
 // Submitted by Pawel Panek <noc@cloudaccess.net>
@@ -11333,6 +11334,10 @@ cloudns.org
 cloudns.pro
 cloudns.pw
 cloudns.us
+
+// Cloudeity Inc : https://cloudeity.com
+// Submitted by Stefan Dimitrov <contact@cloudeity.com>
+cloudeity.net
 
 // CoDNS B.V.
 co.nl
@@ -12186,6 +12191,11 @@ git-repos.de
 lcube-server.de
 svn-repos.de
 
+// linkyard ldt: https://www.linkyard.ch/
+// Submitted by Mario Siegenthaler <mario.siegenthaler@linkyard.ch>
+linkyard.cloud
+linkyard-cloud.ch
+
 // LiquidNet Ltd : http://www.liquidnetlimited.com/
 // Submitted by Victor Velchev <admin@liquidnetlimited.com>
 we.bs
@@ -12227,6 +12237,10 @@ co.pl
 azurewebsites.net
 azure-mobile.net
 cloudapp.net
+
+// Mozilla Corporation : https://mozilla.com
+// Submitted by Ben Francis <bfrancis@mozilla.com>
+mozilla-iot.org
 
 // Mozilla Foundation : https://mozilla.org/
 // Submitted by glob <glob@mozilla.com>
@@ -12536,6 +12550,10 @@ sandcats.io
 logoip.de
 logoip.com
 
+// schokokeks.org GbR : https://schokokeks.org/
+// Submitted by Hanno Böck <hanno@schokokeks.org>
+schokokeks.net
+
 // Scry Security : http://www.scrysec.com
 // Submitted by Shante Adam <shante@skyhat.io>
 scrysec.com
@@ -12716,6 +12734,10 @@ inc.hk
 // Submitted by Ed Moore <Ed.Moore@lib.de.us>
 lib.de.us
 
+// VeryPositive SIA : http://very.lv
+// Submitted by Danko Aleksejevs <danko@very.lv>
+2038.io
+
 // Viprinet Europe GmbH : http://www.viprinet.com
 // Submitted by Simon Kissel <hostmaster@viprinet.com>
 router.management
@@ -12743,6 +12765,10 @@ wmflabs.org
 cistron.nl
 demon.nl
 xs4all.space
+
+// YesCourse Pty Ltd : https://yescourse.com
+// Submitted by Atul Bhouraskar <atul@yescourse.com>
+official.academy
 
 // Yola : https://www.yola.com/
 // Submitted by Stefano Rivera <stefano@yola.com>
