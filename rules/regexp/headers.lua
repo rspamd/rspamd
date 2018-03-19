@@ -932,14 +932,14 @@ reconf['HAS_LIST_UNSUB'] = {
 }
 
 reconf['HAS_GUC_PROXY_URI'] = {
-   re = '/\\.googleusercontent\\.com\\/proxy/{raw_mime}i',
+   re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
    description = 'Has googleusercontent.com proxy URI',
    score = 0.01,
    group = 'experimental'
 }
 
 reconf['HAS_GOOGLE_REDIR'] = {
-  re = '/\\.google\\.com\\/url\\?/{raw_mime}i',
+  re = '/\\.google\\.com\\/url\\?/{url}i',
   description = 'Has google.com/url redirection',
   score = 0.01,
   group = 'experimental'
