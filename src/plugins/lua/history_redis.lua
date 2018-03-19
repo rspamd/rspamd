@@ -26,7 +26,9 @@ local settings = {
   nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
   subject_privacy = false, -- subject privacy is off
-  subject_privacy_alg = 'md5', -- default hash-algorithm to obfuscate subject
+  subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
+  subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
+  subject_privacy_length = 16, -- cut the length of the hash
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -201,7 +203,7 @@ local function handle_history_request(task, conn, from, to, reset)
           elseif settings.subject_privacy then
             local hash_alg = settings.subject_privacy_alg
             local subject_hash = hash.create_specific(hash_alg, e.subject)
-            e.subject = hash_alg..':'..subject_hash:hex()
+            e.subject = settings.subject_privacy_prefix .. ':' .. subject_hash:hex():sub(1,settings.subject_privacy_length)
           end
         end, data)
         reply.rows = data
