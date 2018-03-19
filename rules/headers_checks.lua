@@ -1033,3 +1033,13 @@ rspamd_config.INVALID_RCPT_8BIT = {
   score = 6.0,
   group = 'headers'
 }
+
+rspamd_config.XM_CASE = {
+  callback = function (task)
+    local xm = task:get_header('X-mailer', true)
+    if (xm) then return true end
+  end,
+  description = 'X-mailer .vs. X-Mailer',
+  score = 0.5,
+  group = 'headers',
+}
