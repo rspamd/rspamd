@@ -19,11 +19,14 @@ if confighelp then
 end
 
 local redis_params
+local hash = require 'rspamd_cryptobox_hash'
 
 local settings = {
   key_prefix = 'rs_history', -- default key name
   nrows = 200, -- default rows limit
   compress = true, -- use zstd compression when storing data in redis
+  subject_privacy = false, -- subject privacy is off
+  subject_privacy_alg = 'md5', -- default hash-algorithm to obfuscate subject
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -195,6 +198,10 @@ local function handle_history_request(task, conn, from, to, reset)
         fun.each(function(e)
           if e.subject and not rspamd_util.is_valid_utf8(e.subject) then
             e.subject = '???'
+          elseif settings.subject_privacy then
+            local hash_alg = settings.subject_privacy_alg
+            local subject_hash = hash.create_specific(hash_alg, e.subject)
+            e.subject = hash_alg..':'..subject_hash:hex()
           end
         end, data)
         reply.rows = data
