@@ -50,7 +50,9 @@ local settings = {
   table = 'rspamd',
   attachments_table = 'rspamd_attachments',
   urls_table = 'rspamd_urls',
+  emails_table = 'rspamd_emails',
   symbols_table = 'rspamd_symbols',
+  asn_table = 'rspamd_asn',
   ipmask = 19,
   ipmask6 = 48,
   full_urls = false,
@@ -63,7 +65,7 @@ local settings = {
 
 local clickhouse_schema = {
 rspamd = [[
-CREATE TABLE IF NOT EXISTS rspamd
+CREATE TABLE IF NOT EXISTS ${table}
 (
     Date Date,
     TS DateTime,
@@ -91,7 +93,7 @@ CREATE TABLE IF NOT EXISTS rspamd
 ]],
 
   attachments = [[
-CREATE TABLE IF NOT EXISTS rspamd_attachments (
+CREATE TABLE IF NOT EXISTS ${attachments_table} (
     Date Date,
     Digest FixedString(32),
     `Attachments.FileName` Array(String),
@@ -102,7 +104,7 @@ CREATE TABLE IF NOT EXISTS rspamd_attachments (
 ]],
 
   urls = [[
-CREATE TABLE IF NOT EXISTS rspamd_urls (
+CREATE TABLE IF NOT EXISTS ${urls_table} (
     Date Date,
     Digest FixedString(32),
     `Urls.Tld` Array(String),
@@ -110,8 +112,16 @@ CREATE TABLE IF NOT EXISTS rspamd_urls (
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]],
 
+  emails = [[
+CREATE TABLE IF NOT EXISTS ${emails_table} (
+    Date Date,
+    Digest FixedString(32),
+    `Emails` Array(String),
+) ENGINE = MergeTree(Date, Digest, 8192)
+]],
+
   asn = [[
-CREATE TABLE IF NOT EXISTS rspamd_asn (
+CREATE TABLE IF NOT EXISTS ${asn_table} (
     Date Date,
     Digest FixedString(32),
     ASN String,
@@ -121,7 +131,7 @@ CREATE TABLE IF NOT EXISTS rspamd_asn (
 ]],
 
   symbols = [[
-CREATE TABLE IF NOT EXISTS rspamd_symbols (
+CREATE TABLE IF NOT EXISTS ${symbols_table} (
     Date Date,
     Digest FixedString(32),
     `Symbols.Names` Array(String),
@@ -720,7 +730,7 @@ if opts then
             end
 
             for tab,sql in pairs(clickhouse_schema) do
-              send_req(tab, sql)
+              send_req(tab, rspamd_lua_utils.template(sql, settings))
             end
           end
         end
