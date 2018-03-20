@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS ${urls_table} (
 CREATE TABLE IF NOT EXISTS ${emails_table} (
     Date Date,
     Digest FixedString(32),
-    `Emails` Array(String),
+    Emails Array(String)
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]],
 
@@ -704,17 +704,18 @@ if opts then
           for _,up in ipairs(upstreams) do
             local ip_addr = up:get_addr():to_string(true)
 
-            local function http_cb(err_message, code, _, _)
-              if code ~= 200 or err_message then
-                rspamd_logger.errx(rspamd_config, "cannot create table in clickhouse server %s: %s",
-                    ip_addr, err_message)
-                up:fail()
-              else
-                up:ok()
-              end
-            end
-
             local function send_req(elt, sql)
+              local function http_cb(err_message, code, data, _)
+                if code ~= 200 or err_message then
+                  if not err_message then err_message = data end
+                  rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: %s",
+                      elt, ip_addr, err_message)
+                  up:fail()
+                else
+                  up:ok()
+                end
+              end
+
               if not rspamd_http.request({
                 ev_base = ev_base,
                 config = cfg,
