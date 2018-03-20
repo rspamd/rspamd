@@ -263,15 +263,18 @@ local function clickhouse_send_data(task)
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
 
-  local function http_cb(err_message, code, _, _)
-    if code ~= 200 or err_message then
-      rspamd_logger.errx(task, "cannot send data to clickhouse server %s: %s",
-        ip_addr, err_message)
-      upstream:fail()
-    else
-      rspamd_logger.infox(task, "sent %s rows to clickhouse server %s",
-        settings['limit'], ip_addr)
-      upstream:ok()
+  local function gen_http_cb(what, how_many)
+    return function (err_message, code, data, _)
+      if code ~= 200 or err_message then
+        if not err_message then err_message = data end
+        rspamd_logger.errx(task, "cannot send %s data to clickhouse server %s: %s",
+            what, ip_addr, err_message)
+        upstream:fail()
+      else
+        rspamd_logger.infox(task, "sent %s rows of %s to clickhouse server %s",
+            how_many, what, ip_addr)
+        upstream:ok()
+      end
     end
   end
 
@@ -279,7 +282,7 @@ local function clickhouse_send_data(task)
   if not rspamd_http.request({
       task = task,
       url = connect_prefix .. ip_addr,
-      body = body,
+      body = gen_http_cb('generic data', #rows),
       callback = http_cb,
       gzip = settings.use_gzip,
       mime_type = 'text/plain',
@@ -295,7 +298,7 @@ local function clickhouse_send_data(task)
       task = task,
       url = connect_prefix .. ip_addr,
       body = body,
-      callback = http_cb,
+      callback = gen_http_cb('attachments data', #attachment_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
     }) then
@@ -309,7 +312,7 @@ local function clickhouse_send_data(task)
       task = task,
       url = connect_prefix .. ip_addr,
       body = body,
-      callback = http_cb,
+      callback = gen_http_cb('urls data', #urls_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
     }) then
@@ -323,7 +326,7 @@ local function clickhouse_send_data(task)
       task = task,
       url = connect_prefix .. ip_addr,
       body = body,
-      callback = http_cb,
+      callback = gen_http_cb('asn data', #asn_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
     }) then
@@ -338,7 +341,7 @@ local function clickhouse_send_data(task)
       task = task,
       url = connect_prefix .. ip_addr,
       body = body,
-      callback = http_cb,
+      callback = gen_http_cb('symbols data', #symbols_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
     }) then
@@ -354,7 +357,7 @@ local function clickhouse_send_data(task)
         task = task,
         url = connect_prefix .. ip_addr,
         body = body,
-        callback = http_cb,
+        callback = gen_http_cb('domain specific data ('..k..')', #specific),
         mime_type = 'text/plain',
         timeout = settings['timeout'],
       }) then
