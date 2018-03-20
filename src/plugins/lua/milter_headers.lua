@@ -57,6 +57,9 @@ local settings = {
       header = 'X-Rspamd-Queue-Id',
       remove = 1,
     },
+    ['remove-spam-flag'] = {
+      header = 'X-Spam',
+    },
     ['spam-header'] = {
       header = 'Deliver-To',
       value = 'Junk',
@@ -295,6 +298,10 @@ local function milter_headers(task)
     spam_header('spam-header', settings.routines['spam-header'].header, settings.routines['spam-header'].value, settings.routines['spam-header'].remove)
   end
 
+  routines['remove-spam-flag'] = function()
+    remove[settings.routines['remove-spam-flag'].header] = 1
+  end
+
   routines['x-virus'] = function()
     if skip_wanted('x-virus') then return end
     if not common.symbols_hash then
@@ -442,6 +449,7 @@ local function activate_routine(s)
     logger.errx(rspamd_config, 'routine "%s" does not exist', s)
   end
 end
+if opts['remove_upstream_spam_flag'] then activate_routine('remove-spam-flag') end
 if opts['extended_spam_headers'] then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
