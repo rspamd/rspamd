@@ -272,7 +272,7 @@ local function clickhouse_send_data(task)
         upstream:fail()
       else
         rspamd_logger.infox(task, "sent %s rows of %s to clickhouse server %s",
-            how_many, what, ip_addr)
+            how_many - 1, what, ip_addr)
         upstream:ok()
       end
     end
@@ -282,8 +282,8 @@ local function clickhouse_send_data(task)
   if not rspamd_http.request({
       task = task,
       url = connect_prefix .. ip_addr,
-      body = gen_http_cb('generic data', #rows),
-      callback = http_cb,
+      body = body,
+      callback = gen_http_cb('generic data', #rows),
       gzip = settings.use_gzip,
       mime_type = 'text/plain',
       timeout = settings['timeout'],
