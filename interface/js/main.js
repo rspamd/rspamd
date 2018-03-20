@@ -21,6 +21,11 @@ requirejs.config({
     }
 });
 
+document.title = window.location.hostname +
+    (window.location.port ? ":" + window.location.port : "") +
+    (window.location.pathname !== "/" ? window.location.pathname : "") +
+    " - Rspamd Web Interface";
+
 define("d3.global", ["d3"], function(_) {
   d3 = _;
 });
