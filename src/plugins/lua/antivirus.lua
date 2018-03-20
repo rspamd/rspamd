@@ -531,8 +531,6 @@ local function sophos_check(task, rule)
     local bye = 'BYE\n'
 
     local function sophos_callback(err, data, conn)
-      rspamd_logger.errx(task, 'err: %s', err)
-      rspamd_logger.errx(task, 'data: %s', tostring(data))
 
       if err then
         if err == 'IO timeout' then
