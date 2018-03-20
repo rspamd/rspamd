@@ -1,3 +1,28 @@
+1.7.1: 20 Mar 2018
+	* [CritFix] Fix lowercase comparison
+	* [CritFix] Timezone defines seconds WEST UTC not East
+	* [Feature] Add filename to log format
+	* [Feature] Add lua rules squeezing
+	* [Feature] Add related symbols analysis to rspamd_stats
+	* [Feature] Remove upstream `X-Spam: Yes` header by default
+	* [Feature] rspamd_stats: Output progress info on STDERR
+	* [Feature] Whitelist for emails module
+	* [Fix] Do not allow dependencies on self
+	* [Fix] Do not cache metric result
+	* [Fix] Do not trust all issuers as a client certificate
+	* [Fix] Fix dependencies in lua squeeze
+	* [Fix] Fix enabling/disabling squeezed rules
+	* [Fix] Fix enabling/disabling symbols
+	* [Fix] Fix external dependencies
+	* [Fix] Fix processing of a single compressed file
+	* [Fix] Fix some typos
+	* [Fix] Fix various modules in case of empty message
+	* [Fix] Handle callbacks that returns table of options
+	* [Fix] Improve cached action interaction
+	* [Fix] Make dynamic conf more NaN aware
+	* [Fix] Never hide actions from WebUI `configuration` tab
+	* [Project] Implementation of Lua rules squeezing
+
 1.7.0: 12 Mar 2018
 	* [Conf] Add bayes_expiry as explicit module
 	* [Conf] Adjust names and weights for neural network plugin
