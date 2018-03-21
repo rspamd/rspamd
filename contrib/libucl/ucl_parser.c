@@ -44,16 +44,17 @@ struct ucl_parser_saved_state {
  * @param len
  * @return new position in chunk
  */
-#define ucl_chunk_skipc(chunk, p)    do{					\
-    if (*(p) == '\n') {										\
-        (chunk)->line ++;									\
-        (chunk)->column = 0;								\
-    }														\
-    else (chunk)->column ++;								\
-    (p++);													\
-    (chunk)->pos ++;										\
-    (chunk)->remain --;										\
-    } while (0)
+#define ucl_chunk_skipc(chunk, p)    \
+do {                                 \
+	if (*(p) == '\n') {          \
+		(chunk)->line ++;    \
+		(chunk)->column = 0; \
+	}                            \
+	else (chunk)->column ++;     \
+	(p++);                       \
+	(chunk)->pos ++;             \
+	(chunk)->remain --;          \
+} while (0)
 
 static inline void
 ucl_set_err (struct ucl_parser *parser, int code, const char *str, UT_string **err)
@@ -1706,6 +1707,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 				}
 			}
 			/* Fallback to ordinary strings */
+			/* FALLTHRU */
 		default:
 parse_string:
 			if (obj == NULL) {
@@ -2506,6 +2508,16 @@ ucl_parser_set_default_priority (struct ucl_parser *parser, unsigned prio)
 	return true;
 }
 
+int
+ucl_parser_get_default_priority (struct ucl_parser *parser)
+{
+	if (parser == NULL) {
+		return -1;
+	}
+
+	return parser->default_priority;
+}
+
 void
 ucl_parser_register_macro (struct ucl_parser *parser, const char *macro,
 		ucl_macro_handler handler, void* ud)
@@ -2724,6 +2736,39 @@ ucl_parser_add_chunk (struct ucl_parser *parser, const unsigned char *data,
 }
 
 bool
+ucl_parser_insert_chunk (struct ucl_parser *parser, const unsigned char *data,
+                size_t len)
+{
+	if (parser == NULL || parser->top_obj == NULL) {
+		return false;
+	}
+
+	bool res;
+	struct ucl_chunk *chunk;
+
+	int state = parser->state;
+	parser->state = UCL_STATE_INIT;
+
+	/* Prevent inserted chunks from unintentionally closing the current object */
+	if (parser->stack != NULL && parser->stack->next != NULL) parser->stack->level = parser->stack->next->level;
+
+	res = ucl_parser_add_chunk_full (parser, data, len, parser->chunks->priority,
+					parser->chunks->strategy, parser->chunks->parse_type);
+
+	/* Remove chunk from the stack */
+	chunk = parser->chunks;
+	if (chunk != NULL) {
+		parser->chunks = chunk->next;
+		UCL_FREE (sizeof (struct ucl_chunk), chunk);
+		parser->recursion --;
+	}
+
+	parser->state = state;
+
+	return res;
+}
+
+bool
 ucl_parser_add_string_priority (struct ucl_parser *parser, const char *data,
 		size_t len, unsigned priority)
 {
@@ -2772,3 +2817,54 @@ ucl_set_include_path (struct ucl_parser *parser, ucl_object_t *paths)
 
 	return true;
 }
+
+unsigned char ucl_parser_chunk_peek (struct ucl_parser *parser)
+{
+	if (parser == NULL || parser->chunks == NULL || parser->chunks->pos == NULL || parser->chunks->end == NULL ||
+		parser->chunks->pos == parser->chunks->end) {
+		return 0;
+	}
+
+	return( *parser->chunks->pos );
+}
+
+bool ucl_parser_chunk_skip (struct ucl_parser *parser)
+{
+	if (parser == NULL || parser->chunks == NULL || parser->chunks->pos == NULL || parser->chunks->end == NULL ||
+		parser->chunks->pos == parser->chunks->end) {
+		return false;
+	}
+
+	const unsigned char *p = parser->chunks->pos;
+	ucl_chunk_skipc( parser->chunks, p );
+	if( parser->chunks->pos != NULL ) return true;
+	return false;
+}
+
+ucl_object_t* ucl_parser_get_current_stack_object (struct ucl_parser *parser, unsigned int depth)
+{
+	ucl_object_t *obj;
+
+	if (parser == NULL || parser->stack == NULL) {
+		return NULL;
+	}
+
+	struct ucl_stack *stack = parser->stack;
+	if(stack == NULL || stack->obj == NULL || ucl_object_type (stack->obj) != UCL_OBJECT)
+	{
+		return NULL;
+	}
+
+	for( unsigned int i = 0; i < depth; ++i )
+	{
+		stack = stack->next;
+		if(stack == NULL || stack->obj == NULL || ucl_object_type (stack->obj) != UCL_OBJECT)
+		{
+			return NULL;
+		}
+	}
+
+	obj = ucl_object_ref (stack->obj);
+	return obj;
+}
+
