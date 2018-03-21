@@ -177,7 +177,8 @@ typedef enum ucl_string_flags {
 } ucl_string_flags_t;
 
 /**
- * Basic flags for an object
+ * Basic flags for an object (can use up to 12 bits as higher 4 bits are used
+ * for priorities)
  */
 typedef enum ucl_object_flags {
 	UCL_OBJECT_ALLOCATED_KEY = (1 << 0), /**< An object has key allocated internally */
@@ -187,7 +188,8 @@ typedef enum ucl_object_flags {
 	UCL_OBJECT_MULTILINE = (1 << 4), /**< String should be displayed as multiline string */
 	UCL_OBJECT_MULTIVALUE = (1 << 5), /**< Object is a key with multiple values */
 	UCL_OBJECT_INHERITED = (1 << 6), /**< Object has been inherited from another */
-	UCL_OBJECT_BINARY = (1 << 7) /**< Object contains raw binary data */
+	UCL_OBJECT_BINARY = (1 << 7), /**< Object contains raw binary data */
+	UCL_OBJECT_SQUOTED = (1 << 8) /**< Object has been enclosed in single quotes */
 } ucl_object_flags_t;
 
 /**
@@ -539,6 +541,13 @@ UCL_EXTERN ucl_object_t* ucl_array_pop_last (ucl_object_t *top);
  * @return removed element or NULL if `top` is NULL or not an array
  */
 UCL_EXTERN ucl_object_t* ucl_array_pop_first (ucl_object_t *top);
+
+/**
+ * Return size of the array `top`
+ * @param top object to get size from (must be of type UCL_ARRAY)
+ * @return size of the array
+ */
+UCL_EXTERN unsigned int ucl_array_size (const ucl_object_t *top);
 
 /**
  * Return object identified by index of the array `top`
@@ -919,7 +928,7 @@ struct ucl_parser;
 UCL_EXTERN struct ucl_parser* ucl_parser_new (int flags);
 
 /**
- * Sets the default priority for the parser applied to chunks that does not
+ * Sets the default priority for the parser applied to chunks that do not
  * specify priority explicitly
  * @param parser parser object
  * @param prio default priority (0 .. 16)
@@ -927,6 +936,14 @@ UCL_EXTERN struct ucl_parser* ucl_parser_new (int flags);
  */
 UCL_EXTERN bool ucl_parser_set_default_priority (struct ucl_parser *parser,
 		unsigned prio);
+/**
+ * Gets the default priority for the parser applied to chunks that do not
+ * specify priority explicitly
+ * @param parser parser object
+ * @return true default priority (0 .. 16), -1 for failure
+ */
+UCL_EXTERN int ucl_parser_get_default_priority (struct ucl_parser *parser);
+
 /**
  * Register new handler for a macro
  * @param parser parser object
@@ -1004,6 +1021,16 @@ UCL_EXTERN bool ucl_parser_add_chunk_priority (struct ucl_parser *parser,
 		const unsigned char *data, size_t len, unsigned priority);
 
 /**
+ * Insert new chunk to a parser (must have previously processed data with an existing top object)
+ * @param parser parser structure
+ * @param data the pointer to the beginning of a chunk
+ * @param len the length of a chunk
+ * @return true if chunk has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_insert_chunk (struct ucl_parser *parser,
+		const unsigned char *data, size_t len);
+
+/**
  * Full version of ucl_add_chunk with priority and duplicate strategy
  * @param parser parser structure
  * @param data the pointer to the beginning of a chunk
@@ -1026,7 +1053,7 @@ UCL_EXTERN bool ucl_parser_add_chunk_full (struct ucl_parser *parser,
  * @return true if string has been added and false in case of error
  */
 UCL_EXTERN bool ucl_parser_add_string (struct ucl_parser *parser,
-		const char *data,size_t len);
+		const char *data, size_t len);
 
 /**
  * Load ucl object from a string
@@ -1063,6 +1090,20 @@ UCL_EXTERN bool ucl_parser_add_file_priority (struct ucl_parser *parser,
 		const char *filename, unsigned priority);
 
 /**
+ * Load and add data from a file
+ * @param parser parser structure
+ * @param filename the name of file
+ * @param priority the desired priority of a chunk (only 4 least significant bits
+ * are considered for this parameter)
+ * @param strat Merge strategy to use while parsing this file
+ * @param parse_type Parser type to use while parsing this file
+ * @return true if chunk has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_add_file_full (struct ucl_parser *parser, const char *filename,
+		unsigned priority, enum ucl_duplicate_strategy strat,
+		enum ucl_parse_type parse_type);
+
+/**
  * Load and add data from a file descriptor
  * @param parser parser structure
  * @param filename the name of file
@@ -1085,6 +1126,21 @@ UCL_EXTERN bool ucl_parser_add_fd_priority (struct ucl_parser *parser,
 		int fd, unsigned priority);
 
 /**
+ * Load and add data from a file descriptor
+ * @param parser parser structure
+ * @param filename the name of file
+ * @param err if *err is NULL it is set to parser error
+ * @param priority the desired priority of a chunk (only 4 least significant bits
+ * are considered for this parameter)
+ * @param strat Merge strategy to use while parsing this file
+ * @param parse_type Parser type to use while parsing this file
+ * @return true if chunk has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_add_fd_full (struct ucl_parser *parser, int fd,
+		unsigned priority, enum ucl_duplicate_strategy strat,
+		enum ucl_parse_type parse_type);
+
+/**
  * Provide a UCL_ARRAY of paths to search for include files. The object is
  * copied so caller must unref the object.
  * @param parser parser structure
@@ -1101,6 +1157,29 @@ UCL_EXTERN bool ucl_set_include_path (struct ucl_parser *parser,
  * @return top parser object or NULL
  */
 UCL_EXTERN ucl_object_t* ucl_parser_get_object (struct ucl_parser *parser);
+
+/**
+ * Get the current stack object as stack accessor function for use in macro
+ * functions (refcount is increased)
+ * @param parser parser object
+ * @param depth depth of stack to retrieve (top is 0)
+ * @return current stack object or NULL
+ */
+UCL_EXTERN ucl_object_t* ucl_parser_get_current_stack_object (struct ucl_parser *parser, unsigned int depth);
+
+/**
+ * Peek at the character at the current chunk position
+ * @param parser parser structure
+ * @return current chunk position character
+ */
+UCL_EXTERN unsigned char ucl_parser_chunk_peek (struct ucl_parser *parser);
+
+/**
+ * Skip the character at the current chunk position
+ * @param parser parser structure
+ * @return success boolean
+ */
+UCL_EXTERN bool ucl_parser_chunk_skip (struct ucl_parser *parser);
 
 /**
  * Get the error string if parsing has been failed

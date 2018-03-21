@@ -151,6 +151,40 @@ ucl_elt_string_write_json (const char *str, size_t size,
 }
 
 void
+ucl_elt_string_write_squoted (const char *str, size_t size,
+		struct ucl_emitter_context *ctx)
+{
+	const char *p = str, *c = str;
+	size_t len = 0;
+	const struct ucl_emitter_functions *func = ctx->func;
+
+	func->ucl_emitter_append_character ('\'', 1, func->ud);
+
+	while (size) {
+		if (*p == '\'') {
+			if (len > 0) {
+				func->ucl_emitter_append_len (c, len, func->ud);
+			}
+
+			len = 0;
+			c = ++p;
+			func->ucl_emitter_append_len ("\\\'", 2, func->ud);
+		}
+		else {
+			p ++;
+			len ++;
+		}
+		size --;
+	}
+
+	if (len > 0) {
+		func->ucl_emitter_append_len (c, len, func->ud);
+	}
+
+	func->ucl_emitter_append_character ('\'', 1, func->ud);
+}
+
+void
 ucl_elt_string_write_multiline (const char *str, size_t size,
 		struct ucl_emitter_context *ctx)
 {
@@ -207,18 +241,15 @@ ucl_utstring_append_double (double val, void *ud)
 	UT_string *buf = ud;
 	const double delta = 0.0000001;
 
-	if (isfinite (val)) {
-		if (val == (double) (int) val) {
-			utstring_printf (buf, "%.1lf", val);
-		} else if (fabs (val - (double) (int) val) < delta) {
-			/* Write at maximum precision */
-			utstring_printf (buf, "%.*lg", DBL_DIG, val);
-		} else {
-			utstring_printf (buf, "%lf", val);
-		}
+	if (val == (double)(int)val) {
+		utstring_printf (buf, "%.1lf", val);
+	}
+	else if (fabs (val - (double)(int)val) < delta) {
+		/* Write at maximum precision */
+		utstring_printf (buf, "%.*lg", DBL_DIG, val);
 	}
 	else {
-		utstring_append_len (buf, "null", 5);
+		utstring_printf (buf, "%lf", val);
 	}
 
 	return 0;
@@ -265,19 +296,15 @@ ucl_file_append_double (double val, void *ud)
 	FILE *fp = ud;
 	const double delta = 0.0000001;
 
-	if (isfinite (val)) {
-		if (val == (double) (int) val) {
-			fprintf (fp, "%.1lf", val);
-		} else if (fabs (val - (double) (int) val) < delta) {
-			/* Write at maximum precision */
-			fprintf (fp, "%.*lg", DBL_DIG, val);
-		} else {
-			fprintf (fp, "%lf", val);
-		}
+	if (val == (double)(int)val) {
+		fprintf (fp, "%.1lf", val);
+	}
+	else if (fabs (val - (double)(int)val) < delta) {
+		/* Write at maximum precision */
+		fprintf (fp, "%.*lg", DBL_DIG, val);
 	}
 	else {
-		/* Encode as null */
-		fprintf (fp, "null");
+		fprintf (fp, "%lf", val);
 	}
 
 	return 0;
@@ -343,18 +370,15 @@ ucl_fd_append_double (double val, void *ud)
 	const double delta = 0.0000001;
 	char nbuf[64];
 
-	if (isfinite (val)) {
-		if (val == (double) (int) val) {
-			snprintf (nbuf, sizeof (nbuf), "%.1lf", val);
-		} else if (fabs (val - (double) (int) val) < delta) {
-			/* Write at maximum precision */
-			snprintf (nbuf, sizeof (nbuf), "%.*lg", DBL_DIG, val);
-		} else {
-			snprintf (nbuf, sizeof (nbuf), "%lf", val);
-		}
+	if (val == (double)(int)val) {
+		snprintf (nbuf, sizeof (nbuf), "%.1lf", val);
+	}
+	else if (fabs (val - (double)(int)val) < delta) {
+		/* Write at maximum precision */
+		snprintf (nbuf, sizeof (nbuf), "%.*lg", DBL_DIG, val);
 	}
 	else {
-		memcpy (nbuf, "null", 5);
+		snprintf (nbuf, sizeof (nbuf), "%lf", val);
 	}
 
 	return write (fd, nbuf, strlen (nbuf));

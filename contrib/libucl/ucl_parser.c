@@ -557,13 +557,15 @@ ucl_expand_variable (struct ucl_parser *parser, unsigned char **dst,
  * @param need_unescape need to unescape source (and copy it)
  * @param need_lowercase need to lowercase value (and copy)
  * @param need_expand need to expand variables (and copy as well)
+ * @param unescape_squote unescape single quoted string
  * @return output length (excluding \0 symbol)
  */
 static inline ssize_t
 ucl_copy_or_store_ptr (struct ucl_parser *parser,
 		const unsigned char *src, unsigned char **dst,
 		const char **dst_const, size_t in_len,
-		bool need_unescape, bool need_lowercase, bool need_expand)
+		bool need_unescape, bool need_lowercase, bool need_expand,
+		bool unescape_squote)
 {
 	ssize_t ret = -1, tret;
 	unsigned char *tmp;
@@ -586,8 +588,14 @@ ucl_copy_or_store_ptr (struct ucl_parser *parser,
 		}
 
 		if (need_unescape) {
-			ret = ucl_unescape_json_string (*dst, ret);
+			if (!unescape_squote) {
+				ret = ucl_unescape_json_string (*dst, ret);
+			}
+			else {
+				ret = ucl_unescape_squoted_string (*dst, ret);
+			}
 		}
+
 		if (need_expand) {
 			tmp = *dst;
 			tret = ret;
@@ -962,7 +970,10 @@ ucl_lex_number (struct ucl_parser *parser,
  */
 static bool
 ucl_lex_json_string (struct ucl_parser *parser,
-		struct ucl_chunk *chunk, bool *need_unescape, bool *ucl_escape, bool *var_expand)
+		struct ucl_chunk *chunk,
+		bool *need_unescape,
+		bool *ucl_escape,
+		bool *var_expand)
 {
 	const unsigned char *p = chunk->pos;
 	unsigned char c;
@@ -1029,6 +1040,50 @@ ucl_lex_json_string (struct ucl_parser *parser,
 	}
 
 	ucl_set_err (parser, UCL_ESYNTAX, "no quote at the end of json string",
+			&parser->err);
+	return false;
+}
+
+/**
+ * Process single quoted string
+ * @param parser
+ * @param chunk
+ * @param need_unescape
+ * @return
+ */
+static bool
+ucl_lex_squoted_string (struct ucl_parser *parser,
+		struct ucl_chunk *chunk, bool *need_unescape)
+{
+	const unsigned char *p = chunk->pos;
+	unsigned char c;
+
+	while (p < chunk->end) {
+		c = *p;
+		if (c == '\\') {
+			ucl_chunk_skipc (chunk, p);
+
+			if (p >= chunk->end) {
+				ucl_set_err (parser, UCL_ESYNTAX, "unfinished escape character",
+						&parser->err);
+				return false;
+			}
+			else {
+				ucl_chunk_skipc (chunk, p);
+			}
+
+			*need_unescape = true;
+			continue;
+		}
+		else if (c == '\'') {
+			ucl_chunk_skipc (chunk, p);
+			return true;
+		}
+
+		ucl_chunk_skipc (chunk, p);
+	}
+
+	ucl_set_err (parser, UCL_ESYNTAX, "no quote at the end of single quoted string",
 			&parser->err);
 	return false;
 }
@@ -1369,7 +1424,8 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk,
 	/* Create a new object */
 	nobj = ucl_object_new_full (UCL_NULL, parser->chunks->priority);
 	keylen = ucl_copy_or_store_ptr (parser, c, &nobj->trash_stack[UCL_TRASH_KEY],
-			&key, end - c, need_unescape, parser->flags & UCL_PARSER_KEY_LOWERCASE, false);
+			&key, end - c, need_unescape, parser->flags & UCL_PARSER_KEY_LOWERCASE,
+			false, false);
 	if (keylen == -1) {
 		ucl_object_unref (nobj);
 		return false;
@@ -1565,7 +1621,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 	const unsigned char *p, *c;
 	ucl_object_t *obj = NULL;
 	unsigned int stripped_spaces;
-	int str_len;
+	ssize_t str_len;
 	bool need_unescape = false, ucl_escape = false, var_expand = false;
 
 	p = chunk->pos;
@@ -1603,13 +1659,41 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			if ((str_len = ucl_copy_or_store_ptr (parser, c + 1,
 					&obj->trash_stack[UCL_TRASH_VALUE],
 					&obj->value.sv, str_len, need_unescape, false,
-					var_expand)) == -1) {
+					var_expand, false)) == -1) {
 				return false;
 			}
+
+			obj->len = str_len;
+			parser->state = UCL_STATE_AFTER_VALUE;
+
+			return true;
+			break;
+		case '\'':
+			ucl_chunk_skipc (chunk, p);
+
+			if (!ucl_lex_squoted_string (parser, chunk, &need_unescape)) {
+				return false;
+			}
+
+			obj = ucl_parser_get_container (parser);
+			if (!obj) {
+				return false;
+			}
+
+			str_len = chunk->pos - c - 2;
+			obj->type = UCL_STRING;
+			obj->flags |= UCL_OBJECT_SQUOTED;
+
+			if ((str_len = ucl_copy_or_store_ptr (parser, c + 1,
+					&obj->trash_stack[UCL_TRASH_VALUE],
+					&obj->value.sv, str_len, need_unescape, false,
+					var_expand, true)) == -1) {
+				return false;
+			}
+
 			obj->len = str_len;
 
 			parser->state = UCL_STATE_AFTER_VALUE;
-			p = chunk->pos;
 
 			return true;
 			break;
@@ -1695,7 +1779,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 						if ((str_len = ucl_copy_or_store_ptr (parser, c,
 								&obj->trash_stack[UCL_TRASH_VALUE],
 								&obj->value.sv, str_len - 1, false,
-								false, var_expand)) == -1) {
+								false, var_expand, false)) == -1) {
 							return false;
 						}
 						obj->len = str_len;
@@ -1753,7 +1837,7 @@ parse_string:
 				if ((str_len = ucl_copy_or_store_ptr (parser, c,
 						&obj->trash_stack[UCL_TRASH_VALUE],
 						&obj->value.sv, str_len, need_unescape,
-						false, var_expand)) == -1) {
+						false, var_expand, false)) == -1) {
 					return false;
 				}
 				obj->len = str_len;

@@ -431,6 +431,69 @@ ucl_unescape_json_string (char *str, size_t len)
 	return (t - str);
 }
 
+size_t
+ucl_unescape_squoted_string (char *str, size_t len)
+{
+	char *t = str, *h = str;
+
+	if (len <= 1) {
+		return len;
+	}
+
+	/* t is target (tortoise), h is source (hare) */
+
+	while (len) {
+		if (*h == '\\') {
+			h ++;
+
+			if (len == 1) {
+				/*
+				 * If \ is last, then do not try to go further
+				 * Issue: #74
+				 */
+				len --;
+				*t++ = '\\';
+				continue;
+			}
+
+			switch (*h) {
+			case '\'':
+				*t++ = '\'';
+				break;
+			case '\n':
+				/* Ignore \<newline> style stuff */
+				break;
+			case '\r':
+				/* Ignore \r and the following \n if needed */
+				if (len > 1 && h[1] == '\n') {
+					h ++;
+					len --;
+				}
+				break;
+			default:
+				/* Ignore \ */
+				*t++ = '\\';
+				*t++ = *h;
+				break;
+			}
+
+			h ++;
+			len --;
+		}
+		else {
+			*t++ = *h++;
+		}
+
+		if (len > 0) {
+			len --;
+		}
+	}
+
+	*t = '\0';
+
+	return (t - str);
+}
+
 char *
 ucl_copy_key_trash (const ucl_object_t *obj)
 {

@@ -63,7 +63,9 @@
 #include <sys/stat.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+# ifndef _WIN32
+# include <sys/param.h>
+# endif
 #endif
 
 #ifdef HAVE_LIMITS_H
@@ -76,7 +78,9 @@
 #include <errno.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# ifndef _WIN32
+# include <unistd.h>
+# endif
 #endif
 #ifdef HAVE_CTYPE_H
 #include <ctype.h>
@@ -87,13 +91,40 @@
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
+#endif
+
+#if defined(_MSC_VER)
+/* Windows hacks */
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#define strdup _strdup
+#define snprintf _snprintf
+#define vsnprintf _vsnprintf
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#if _MSC_VER >= 1900
+#include <../ucrt/stdlib.h>
+#else
+#include <../include/stdlib.h>
+#endif
+#ifndef PATH_MAX
+#define PATH_MAX _MAX_PATH
+#endif
+
+/* Dirname, basename implementations */
+
+
+#endif
 
 #include "utlist.h"
 #include "utstring.h"
 #include "uthash.h"
 #include "ucl.h"
 #include "ucl_hash.h"
-#include "xxhash.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/evp.h>
@@ -228,6 +259,13 @@ struct ucl_object_userdata {
  */
 size_t ucl_unescape_json_string (char *str, size_t len);
 
+
+/**
+ * Unescape single quoted string inplace
+ * @param str
+ */
+size_t ucl_unescape_squoted_string (char *str, size_t len);
+
 /**
  * Handle include macro
  * @param data include data
@@ -321,7 +359,7 @@ ucl_create_err (UT_string **err, const char *fmt, ...)
 	}
 
 #ifdef UCL_FATAL_ERRORS
-	abort ();
+	assert (0);
 #endif
 }
 
@@ -430,6 +468,16 @@ ucl_emit_get_standard_context (enum ucl_emitter emit_type);
  * @param buf target buffer
  */
 void ucl_elt_string_write_json (const char *str, size_t size,
+		struct ucl_emitter_context *ctx);
+
+
+/**
+ * Serialize string as single quoted string
+ * @param str string to emit
+ * @param buf target buffer
+ */
+void
+ucl_elt_string_write_squoted (const char *str, size_t size,
 		struct ucl_emitter_context *ctx);
 
 /**
