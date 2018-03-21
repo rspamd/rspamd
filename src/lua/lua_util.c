@@ -2471,14 +2471,19 @@ COMPAT53_API void
 luaL_buffinit (lua_State *L, luaL_Buffer_53 *B)
 {
 	/* make it crash if used via pointer to a 5.1-style luaL_Buffer */
+#if LUA_VERSION_NUM < 502
 	B->b.p = NULL;
 	B->b.L = NULL;
 	B->b.lvl = 0;
 	/* reuse the buffer from the 5.1-style luaL_Buffer though! */
 	B->ptr = B->b.buffer;
-	B->capacity = LUAL_BUFFERSIZE;
 	B->nelems = 0;
-	B->L2 = L;
+#elif LUA_VERSION_NUM == 502
+        B->ptr = B->b.b;
+	B->nelems = B->b.n;
+#endif
+	B->capacity = LUAL_BUFFERSIZE;
+        B->L2 = L;
 }
 
 
@@ -2494,7 +2499,11 @@ luaL_prepbuffsize (luaL_Buffer_53 *B, size_t s)
 			luaL_error (B->L2, "buffer too large");
 		newptr = (char *) lua_newuserdata (B->L2, newcap);
 		memcpy(newptr, B->ptr, B->nelems);
+#if LUA_VERSION_NUM < 502
 		if (B->ptr != B->b.buffer)
+#elif LUA_VERSION_NUM == 502
+		if (B->ptr != B->b.b)
+#endif
 			lua_replace (B->L2, -2); /* remove old buffer */
 		B->ptr = newptr;
 		B->capacity = newcap;
@@ -2518,10 +2527,18 @@ luaL_addvalue (luaL_Buffer_53 *B)
 	const char *s = lua_tolstring (B->L2, -1, &len);
 	if (!s)
 		luaL_error (B->L2, "cannot convert value to string");
+#if LUA_VERSION_NUM < 502
 	if (B->ptr != B->b.buffer)
+#elif LUA_VERSION_NUM == 502
+	if (B->ptr != B->b.b)
+#endif
 		lua_insert (B->L2, -2); /* userdata buffer must be at stack top */
 	luaL_addlstring (B, s, len);
+#if LUA_VERSION_NUM < 502
 	lua_remove (B->L2, B->ptr != B->b.buffer ? -2 : -1);
+#elif LUA_VERSION_NUM == 502
+	lua_remove (B->L2, B->ptr != B->b.b ? -2 : -1);
+#endif
 }
 
 
@@ -2529,7 +2546,11 @@ COMPAT53_API void
 luaL_pushresult (luaL_Buffer_53 *B)
 {
 	lua_pushlstring (B->L2, B->ptr, B->nelems);
+#if LUA_VERSION_NUM < 502
 	if (B->ptr != B->b.buffer)
+#elif LUA_VERSION_NUM == 502
+	if (B->ptr != B->b.b)
+#endif
 		lua_replace (B->L2, -2); /* remove userdata buffer */
 }
 
