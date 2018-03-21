@@ -29,6 +29,7 @@ local E = {}
 local HOSTNAME = util.get_hostname()
 
 local settings = {
+  remove_upstream_spam_flag = true;
   skip_local = true,
   skip_authenticated = true,
   local_headers = {},
