@@ -486,11 +486,6 @@ if type(opts['custom']) == 'table' then
     end
   end
 end
-if opts['extended_spam_headers'] then
-  activate_routine('x-spamd-result')
-  activate_routine('x-rspamd-server')
-  activate_routine('x-rspamd-queue-id')
-end
 if type(opts['skip_local']) == 'boolean' then
   settings.skip_local = opts['skip_local']
 end
