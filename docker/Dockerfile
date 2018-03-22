@@ -1,25 +1,23 @@
+FROM debian:stretch
 
-FROM debian:latest
-MAINTAINER Matt Simerson <matt@tnpi.net>
+RUN	apt-get update \
+&&	apt-get install -y --no-install-recommends gnupg dirmngr curl \
+&&	curl -fsSL http://rspamd.com/apt-stable/gpg.key | apt-key add - \
+&&	apt-get purge -y --auto-remove curl \
+&&	rm -rf /var/lib/apt/lists/*
 
-# if Debian's ancient 0.6.10 is new enough...
-#RUN apt-get update && apt-get install -y rspamd
+RUN echo "deb http://rspamd.com/apt-stable/ stretch main" > /etc/apt/sources.list.d/rspamd.list
 
-# Instead, get latest release, from the source
-COPY rspamd.list /etc/apt/sources.list.d/rspamd.list
-RUN apt-get update \
-    && apt-get install -y curl \
-    && curl -o - http://rspamd.com/apt-stable/gpg.key | apt-key add - \
-    && apt-get install -y --force-yes \
-       rspamd \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN	apt-get update \
+&&	apt-get install -y rspamd \
+&&	rm -rf /var/lib/apt/lists/*
 
-# start up rspamd once, as it does some initialization
-RUN update-rc.d rspamd defaults && service rspamd start && sleep 30
+RUN	echo 'type = "console";' > /etc/rspamd/override.d/logging.inc \
+&&	echo 'bind_socket = "*:11334";' > /etc/rspamd/override.d/worker-controller.inc \
+&&	echo 'pidfile = false;' > /etc/rspamd/override.d/options.inc
 
-# Debian 8's rspamd.conf is for systemd, which is not running in container
-COPY rspamd.conf /etc/rspamd/rspamd.conf
-CMD ["/usr/bin/rspamd","-f", "-u", "_rspamd", "-g", "_rspamd"]
+VOLUME	[ "/var/lib/rspamd" ]
+
+CMD	[ "/usr/bin/rspamd", "-f", "-u", "_rspamd", "-g", "_rspamd" ]
 
 EXPOSE 11333 11334
