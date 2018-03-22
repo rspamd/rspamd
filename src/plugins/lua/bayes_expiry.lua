@@ -183,8 +183,12 @@ local expiry_script = [[
   end
   redis.replicate_commands()
 
-  local mean = sum / nelts
-  local stddev = math.sqrt(sum_squares / nelts - mean * mean)
+  local mean, stddev = 0, 0
+
+  if nelts > 0 then
+    mean = sum / nelts
+    stddev = math.sqrt(sum_squares / nelts - mean * mean)
+  end
 
   for key,token in pairs(tokens) do
     local ham, spam, ttl = token[1], token[2], token[3]
