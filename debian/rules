@@ -1,13 +1,13 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --with systemd --builddirectory=build-deb
+	dh $@ --with systemd
 
 .PHONY: override_dh_strip
 
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 override_dh_auto_configure:
-	dh_auto_configure -- -GNinja -DCONFDIR=/etc/rspamd \
+	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
 		-DMANDIR=/usr/share/man \
 		-DRUNDIR=/run/rspamd \
 		-DDBDIR=/var/lib/rspamd \
@@ -38,17 +38,12 @@ override_dh_makeshlibs:
 override_dh_strip:
 	dh_strip --dbg-package=rspamd-dbg
 
-override_dh_auto_build:
-	ninja -C build-deb -v
-
 override_dh_auto_install:
-	DESTDIR=$(CURDIR)/debian/rspamd ninja -C build-deb -v install
-
-override_dh_auto_test:
+	dh_auto_install --destdir=debian/rspamd
 
 override_dh_auto_clean:
 	dh_auto_clean
-	rm -rf build-deb
+	rm -f src/modules.c
 
 override_dh_fixperms:
 	dh_fixperms
