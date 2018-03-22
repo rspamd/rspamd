@@ -1056,7 +1056,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	GString *dkim_sig;
 	const ucl_object_t *milter_reply;
 
-	/* Check for cached reply */
+	rspamd_task_set_finish_time (task);
 	top = ucl_object_typed_new (UCL_OBJECT);
 
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
@@ -1607,8 +1607,6 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_PROCESS:
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
-			task->time_real_finish = rspamd_get_ticks (FALSE);
-			task->time_virtual_finish = rspamd_get_virtual_ticks ();
 			rspamd_protocol_http_reply (msg, task, NULL);
 			rspamd_protocol_write_log_pipe (task);
 			break;

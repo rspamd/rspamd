@@ -84,6 +84,8 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	gettimeofday (&new_task->tv, NULL);
 	new_task->time_real = rspamd_get_ticks (FALSE);
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
+	new_task->time_real_finish = NAN;
+	new_task->time_virtual_finish = NAN;
 	new_task->lang_det = lang_det;
 
 	if (pool == NULL) {
@@ -1593,4 +1595,18 @@ rspamd_task_profile_get (struct rspamd_task *task, const gchar *key)
 	}
 
 	return pval;
+}
+
+
+gboolean
+rspamd_task_set_finish_time (struct rspamd_task *task)
+{
+	if (isnan (task->time_real_finish)) {
+		task->time_real_finish = rspamd_get_ticks (FALSE);
+		task->time_virtual_finish = rspamd_get_virtual_ticks ();
+
+		return TRUE;
+	}
+
+	return FALSE;
 }

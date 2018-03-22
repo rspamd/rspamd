@@ -347,4 +347,11 @@ void rspamd_task_profile_set (struct rspamd_task *task, const gchar *key,
  */
 gdouble* rspamd_task_profile_get (struct rspamd_task *task, const gchar *key);
 
+/**
+ * Sets finishing time for a task if not yet set
+ * @param task
+ * @return
+ */
+gboolean rspamd_task_set_finish_time (struct rspamd_task *task);
+
 #endif /* TASK_H_ */
