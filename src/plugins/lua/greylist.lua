@@ -256,7 +256,7 @@ local function greylist_set(task)
       if action == 'greylist' then
         -- We are going to accept message
         rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
-        task:set_metric_action('default', 'no action')
+        task:disable_action('greylist')
       end
       return
     end
@@ -266,7 +266,7 @@ local function greylist_set(task)
     if action == 'greylist' then
       -- We are going to accept message
       rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
-      task:set_metric_action('default', 'no action')
+      task:disable_action('greylist')
     end
     return
   end
@@ -276,7 +276,7 @@ local function greylist_set(task)
       if action == 'greylist' then
         -- We are going to accept message
         rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
-        task:set_metric_action('default', 'no action')
+        task:disable_action('greylist')
       end
       return
     end
@@ -320,7 +320,7 @@ local function greylist_set(task)
     if action == 'greylist' then
       -- We are going to accept message
       rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
-      task:set_metric_action('default', 'no action')
+      task:disable_action('greylist')
     end
 
     task:insert_result(settings['symbol'], 0.0, 'pass', is_whitelisted)

@@ -50,13 +50,10 @@ rspamd_create_metric_result (struct rspamd_task *task)
 			metric_res->sym_groups);
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
-	metric_res->changes = 0;
 
 	for (i = 0; i < METRIC_ACTION_MAX; i++) {
 		metric_res->actions_limits[i] = task->cfg->actions[i].score;
 	}
-
-	metric_res->action = METRIC_ACTION_MAX;
 
 	return metric_res;
 }
@@ -244,10 +241,9 @@ insert_metric_result (struct rspamd_task *task,
 	}
 
 	msg_debug_task ("symbol %s, score %.2f, factor: %f",
-		symbol,
-		s->score,
-		w);
-	metric_res->changes ++;
+			symbol,
+			s->score,
+			w);
 
 	return s;
 }
@@ -355,14 +351,6 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	int i;
 	gboolean set_action = FALSE;
 
-	if (task->processed_stages | (RSPAMD_TASK_STAGE_DONE|RSPAMD_TASK_STAGE_IDEMPOTENT)) {
-		if (mres->action != METRIC_ACTION_MAX) {
-			return mres->action;
-		}
-
-		set_action = TRUE;
-	}
-
 	/* We are not certain about the results during processing */
 	if (task->pre_result.action == METRIC_ACTION_MAX) {
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
@@ -413,10 +401,6 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	}
 
 	if (selected_action) {
-		if (set_action) {
-			mres->action = selected_action->action;
-		}
-
 		return selected_action->action;
 	}
 

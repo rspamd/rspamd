@@ -801,8 +801,6 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			else {
 				mres->score = mres->actions_limits[act];
 			}
-
-			mres->action = act;
 		}
 
 		task->result = mres;

@@ -599,13 +599,6 @@ LUA_FUNCTION_DEF (task, get_metric_action);
  */
 LUA_FUNCTION_DEF (task, set_metric_score);
 /***
- * @method task:set_metric_action(name, action)
- * Set the current action of metric `name`. Should be used in post-filters only.
- * @param {string} name name of a metric
- * @param {string} action name to set
- */
-LUA_FUNCTION_DEF (task, set_metric_action);
-/***
  * @method task:set_metric_subject(subject)
  * Set the subject in the default metric
  * @param {string} subject subject to set
@@ -841,6 +834,15 @@ LUA_FUNCTION_DEF (task, get_protocol_reply);
  */
 LUA_FUNCTION_DEF (task, headers_foreach);
 
+/***
+ * @method task:disable_action(action)
+ * Disables some action for this task (e.g. 'greylist')
+ *
+ * @param {string} action action to disable
+ * @return {boolean} true if an action was enabled and is disabled after the method call
+ */
+LUA_FUNCTION_DEF (task, disable_action);
+
 static const struct luaL_reg tasklib_f[] = {
 	{NULL, NULL}
 };
@@ -914,7 +916,6 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_score),
-	LUA_INTERFACE_DEF (task, set_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_subject),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
@@ -934,6 +935,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, store_in_file),
 	LUA_INTERFACE_DEF (task, get_protocol_reply),
 	LUA_INTERFACE_DEF (task, headers_foreach),
+	LUA_INTERFACE_DEF (task, disable_action),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1344,7 +1346,6 @@ lua_task_set_pre_result (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_config *cfg;
-	struct rspamd_metric_result *mres;
 	gchar *action_str;
 	gint action = METRIC_ACTION_MAX;
 
@@ -1361,14 +1362,7 @@ lua_task_set_pre_result (lua_State * L)
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
 			if (!task->result) {
-				mres = rspamd_create_metric_result (task);
-				if (mres != NULL) {
-					mres->score = cfg->actions[action].score;
-					mres->action = action;
-				}
-			}
-			else {
-				task->result->action = action;
+				task->result = rspamd_create_metric_result (task);
 			}
 
 			task->pre_result.action = action;
@@ -4227,34 +4221,25 @@ lua_task_set_metric_score (lua_State *L)
 }
 
 static gint
-lua_task_set_metric_action (lua_State *L)
+lua_task_disable_action (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *metric_name, *action_name;
+	const gchar *action_name;
 	struct rspamd_metric_result *metric_res;
 	gint action;
 
-	metric_name = luaL_checkstring (L, 2);
+	action_name = luaL_checkstring (L, 2);
 
-	if (metric_name == NULL) {
-		metric_name = DEFAULT_METRIC;
-	}
-
-	action_name = luaL_checkstring (L, 3);
-
-	if (task && metric_name && action_name) {
-		if ((metric_res = task->result) != NULL) {
-
-			if (rspamd_action_from_str (action_name, &action)) {
-				metric_res->action = action;
-				lua_pushboolean (L, true);
-			}
-			else {
-				lua_pushboolean (L, false);
-			}
+	if (task && action_name && rspamd_action_from_str (action_name, &action)) {
+		if (!task->result) {
+			task->result = rspamd_create_metric_result (task);
+		}
+		if (isnan (task->result->actions_limits[action])) {
+			lua_pushboolean (L, false);
 		}
 		else {
-			lua_pushboolean (L, false);
+			task->result->actions_limits[action] = NAN;
+			lua_pushboolean (L, true);
 		}
 	}
 	else {

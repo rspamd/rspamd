@@ -40,8 +40,6 @@ struct rspamd_metric_result {
 	GHashTable *symbols;                            /**< symbols of metric						*/
 	GHashTable *sym_groups;							/**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
-	guint changes;
-	enum rspamd_action_type action;               /**< the current action						*/
 };
 
 /**

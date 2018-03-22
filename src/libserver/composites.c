@@ -433,8 +433,6 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 			cd->metric_res->score -= rd->ms->score;
 			rd->ms->score = 0.0;
 		}
-
-		cd->metric_res->changes ++;
 	}
 }
 

@@ -1033,10 +1033,11 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	rspamd_fstring_t *symbuf;
 	struct rspamd_symbol_result *sym;
 	GPtrArray *sorted_symbols;
+	enum rspamd_action_type act;
 	guint i, j;
 
 	mres = task->result;
-	rspamd_check_action_metric (task, mres);
+	act = rspamd_check_action_metric (task, mres);
 
 	if (mres != NULL) {
 		switch (lf->type) {
@@ -1044,7 +1045,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				res.begin = "S";
 			}
-			else if (mres->action == METRIC_ACTION_REJECT) {
+			else if (act == METRIC_ACTION_REJECT) {
 				res.begin = "T";
 			}
 			else {
@@ -1054,7 +1055,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			res.len = 1;
 			break;
 		case RSPAMD_LOG_ACTION:
-			res.begin = rspamd_action_to_str (mres->action);
+			res.begin = rspamd_action_to_str (act);
 			res.len = strlen (res.begin);
 			break;
 		case RSPAMD_LOG_SCORES:

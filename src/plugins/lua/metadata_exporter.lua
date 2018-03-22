@@ -229,7 +229,7 @@ local selectors = {
 local function maybe_defer(task, rule)
   if rule.defer then
     rspamd_logger.warnx(task, 'deferring message')
-    task:set_metric_action('default', 'soft reject')
+    task:set_pre_result('soft reject', 'deferred')
   end
 end
 
