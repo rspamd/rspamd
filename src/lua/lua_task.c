@@ -1345,12 +1345,10 @@ static gint
 lua_task_set_pre_result (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_config *cfg;
 	gchar *action_str;
 	gint action = METRIC_ACTION_MAX;
 
 	if (task != NULL) {
-		cfg = task->cfg;
 
 		if (lua_type (L, 2) == LUA_TNUMBER) {
 			action = lua_tointeger (L, 2);
@@ -1378,6 +1376,7 @@ lua_task_set_pre_result (lua_State * L)
 			else {
 				task->pre_result.str = "unknown";
 			}
+
 			msg_info_task ("<%s>: set pre-result to %s: '%s'",
 						task->message_id, rspamd_action_to_str (action),
 						task->pre_result.str);
@@ -4225,7 +4224,6 @@ lua_task_disable_action (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *action_name;
-	struct rspamd_metric_result *metric_res;
 	gint action;
 
 	action_name = luaL_checkstring (L, 2);

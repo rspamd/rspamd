@@ -2154,13 +2154,8 @@ lua_util_readline (lua_State *L)
 static gint
 lua_util_readpassphrase (lua_State *L)
 {
-	const gchar *prompt = NULL;
 	gchar test_password[8192];
 	gsize r;
-
-	if (lua_type (L, 1) == LUA_TSTRING) {
-		prompt = lua_tostring (L, 1);
-	}
 
 	r = rspamd_read_passphrase (test_password, sizeof (test_password), 0, NULL);
 

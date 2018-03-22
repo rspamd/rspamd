@@ -36,11 +36,16 @@
 #define lua_getuservalue	lua_getfenv
 #define lua_setuservalue	lua_setfenv
 
+#ifndef lua_rawlen
 #define lua_rawlen		lua_objlen
+#endif
 
+#ifndef luaL_setfuncs
 #define luaL_setfuncs(L,f,n)	luaL_register(L,NULL,f)
+#endif
+#ifndef luaL_newlib
 #define luaL_newlib(L,f)	luaL_register(L,"lpeg",f)
-
+#endif
 #endif
 
 

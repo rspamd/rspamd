@@ -74,7 +74,7 @@ static int torch_isatty(lua_State *L)
   return 1;
 }
 
-static double real_time()
+static double real_time(void)
 {
 #ifdef _WIN32
   if (ticksPerSecond.QuadPart == 0)
