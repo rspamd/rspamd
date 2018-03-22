@@ -555,7 +555,6 @@ local function sophos_check(task, rule)
       else
         upstream:ok()
         data = tostring(data)
-        rspamd_logger.errx(task, 'data2: %s', data)
         local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
           yield_result(task, rule, vname)
