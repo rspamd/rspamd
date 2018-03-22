@@ -481,10 +481,13 @@ local function clamav_check(task, rule)
         upstream:ok()
         data = tostring(data)
         local cached
+        rspamd_logger.debugm(N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
         if data == 'stream: OK' then
           cached = 'OK'
           if rule['log_clean'] then
             rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+          else
+            rspamd_logger.debugm(N, task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
