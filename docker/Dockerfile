@@ -1,25 +1,28 @@
+FROM debian:stretch
 
-FROM debian:latest
-MAINTAINER Matt Simerson <matt@tnpi.net>
+RUN	apt-get update && apt-get install -y --no-install-recommends gnupg dirmngr && rm -rf /var/lib/apt/lists/*
 
-# if Debian's ancient 0.6.10 is new enough...
-#RUN apt-get update && apt-get install -y rspamd
+RUN	set -x \
+# gpg: key FFA232EDBF21E25E: public key "Rspamd Nightly Builds (Rspamd Nightly Builds) <vsevolod@highsecure.ru>" imported
+	&& key='3FA347D5E599BE4595CA2576FFA232EDBF21E25E' \
+	&& export GNUPGHOME="$(mktemp -d)" \
+	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key" \
+	&& gpg --export "$key" > /etc/apt/trusted.gpg.d/rspamd.gpg \
+	&& rm -rf "$GNUPGHOME" \
+	&& apt-key list > /dev/null
 
-# Instead, get latest release, from the source
-COPY rspamd.list /etc/apt/sources.list.d/rspamd.list
-RUN apt-get update \
-    && apt-get install -y curl \
-    && curl -o - http://rspamd.com/apt-stable/gpg.key | apt-key add - \
-    && apt-get install -y --force-yes \
-       rspamd \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN	echo "deb http://rspamd.com/apt-stable/ stretch main" > /etc/apt/sources.list.d/rspamd.list
 
-# start up rspamd once, as it does some initialization
-RUN update-rc.d rspamd defaults && service rspamd start && sleep 30
+RUN	apt-get update \
+	&& apt-get install -y rspamd \
+	&& rm -rf /var/lib/apt/lists/*
 
-# Debian 8's rspamd.conf is for systemd, which is not running in container
-COPY rspamd.conf /etc/rspamd/rspamd.conf
-CMD ["/usr/bin/rspamd","-f", "-u", "_rspamd", "-g", "_rspamd"]
+RUN	echo 'type = "console";' > /etc/rspamd/override.d/logging.inc \
+	&& echo 'bind_socket = "*:11334";' > /etc/rspamd/override.d/worker-controller.inc \
+	&& echo 'pidfile = false;' > /etc/rspamd/override.d/options.inc
 
-EXPOSE 11333 11334
+VOLUME	[ "/var/lib/rspamd" ]
+
+CMD	[ "/usr/bin/rspamd", "-f", "-u", "_rspamd", "-g", "_rspamd" ]
+
+EXPOSE	11333 11334
