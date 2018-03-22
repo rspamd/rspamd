@@ -268,7 +268,7 @@ return function(cfg)
     if not cfg.actions['no action'] and not cfg.actions['no_action'] and
         not cfg.actions['accept'] then
       for _,d in ipairs(actions_defs) do
-        if cfg.actions[d] then
+        if cfg.actions[d] and type(cfg.actions[d]) == 'number' then
           if cfg.actions[d] < 0 then
             cfg.actions['no action'] = cfg.actions[d] - 0.001
             logger.infox('set no action score to: %s, as action %s has negative score',
