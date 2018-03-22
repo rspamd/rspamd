@@ -628,7 +628,9 @@ local function clickhouse_collect(task)
   local emails = {}
   if task:has_urls(true) then
     for _,u in ipairs(task:get_emails()) do
-      table.insert(emails, string.format("'%s'", clickhouse_quote(u:get_text())))
+      table.insert(emails, string.format("'%s'", clickhouse_quote(
+          string.format('%s@%s', u:get_user(), u:get_host())
+      )))
     end
   end
 
