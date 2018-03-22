@@ -1048,20 +1048,6 @@ rspamd_protocol_output_profiling (struct rspamd_task *task,
 	ucl_object_insert_key (top, prof, "profile", 0, false);
 }
 
-struct rspamd_saved_protocol_reply {
-	ucl_object_t *obj;
-	guint metric_changes;
-	enum rspamd_protocol_flags flags;
-};
-
-static void
-rspamd_protocol_cached_dtor (gpointer p)
-{
-	struct rspamd_saved_protocol_reply *cached = p;
-
-	ucl_object_unref (cached->obj);
-}
-
 ucl_object_t *
 rspamd_protocol_write_ucl (struct rspamd_task *task,
 		enum rspamd_protocol_flags flags)
@@ -1069,66 +1055,9 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	ucl_object_t *top = NULL;
 	GString *dkim_sig;
 	const ucl_object_t *milter_reply;
-	struct rspamd_saved_protocol_reply *cached;
-	static const gchar *varname = RSPAMD_MEMPOOL_CACHED_REPLY;
 
 	/* Check for cached reply */
-	cached = rspamd_mempool_get_variable (task->task_pool, varname);
-
-	if (cached) {
-		top = cached->obj;
-		/*
-		 * Update flags: we don't need to set more flags than we need,
-		 * so just xor previous flags and current flags and then or them
-		 * to the cached one
-		 */
-		flags ^= cached->flags;
-		cached->flags |= flags;
-
-		if (task->result &&
-				cached->metric_changes != task->result->changes) {
-			msg_info_task ("found metric modifications (%d) before we have "
-					"generated protocol results (%d), regenerate them",
-					task->result->changes, cached->metric_changes);
-
-			flags |= RSPAMD_PROTOCOL_METRICS;
-
-			if (task->cmd == CMD_CHECK_V2) {
-				ucl_object_delete_key (top, "symbols");
-			}
-			else {
-				ucl_object_delete_key (top, DEFAULT_METRIC);
-			}
-
-			/* That all is related to metric unfortunately */
-			ucl_object_delete_key (top, "is_spam");
-			ucl_object_delete_key (top, "is_skipped");
-			ucl_object_delete_key (top, "score");
-			ucl_object_delete_key (top, "required_score");
-			ucl_object_delete_key (top, "action");
-			ucl_object_delete_key (top, "subject");
-		}
-		if (task->result) {
-			cached->metric_changes = task->result->changes;
-		}
-	}
-	else {
-		top = ucl_object_typed_new (UCL_OBJECT);
-		cached = rspamd_mempool_alloc (task->task_pool, sizeof (*cached));
-		cached->obj = top;
-		cached->flags = flags;
-
-		if (task->result) {
-			cached->metric_changes = task->result->changes;
-		}
-
-		rspamd_mempool_set_variable (task->task_pool, varname,
-				cached, rspamd_protocol_cached_dtor);
-
-		/* We also set scan time here */
-		task->time_real_finish = rspamd_get_ticks (FALSE);
-		task->time_virtual_finish = rspamd_get_virtual_ticks ();
-	}
+	top = ucl_object_typed_new (UCL_OBJECT);
 
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
 		rspamd_metric_result_ucl (task, task->result, top);
@@ -1213,8 +1142,8 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 			 * space (ASCII 0x20) or tab (ASCII 0x09, or \t in C).
 			 * The line feed should NOT be preceded by a carriage return (ASCII 0x0d);
 			 * the MTA will add this automatically.
-			 * It is the filter writer's responsibility to ensure that no s
-			 * tandards are violated.
+			 * It is the filter writer's responsibility to ensure that no
+			 * standards are violated.
 			 */
 			ucl_object_insert_key (top,
 					ucl_object_fromstring_common (folded_header->str,
@@ -1678,6 +1607,8 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_PROCESS:
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
+			task->time_real_finish = rspamd_get_ticks (FALSE);
+			task->time_virtual_finish = rspamd_get_virtual_ticks ();
 			rspamd_protocol_http_reply (msg, task, NULL);
 			rspamd_protocol_write_log_pipe (task);
 			break;

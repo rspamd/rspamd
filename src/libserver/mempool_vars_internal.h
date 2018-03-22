@@ -24,7 +24,6 @@
 #define RSPAMD_MEMPOOL_SETTINGS_HASH "settings_hash"
 #define RSPAMD_MEMPOOL_MTA_TAG "MTA-Tag"
 #define RSPAMD_MEMPOOL_MTA_NAME "MTA-Name"
-#define RSPAMD_MEMPOOL_CACHED_REPLY "cached_reply"
 #define RSPAMD_MEMPOOL_SPF_DOMAIN "spf_domain"
 #define RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT "principal_recipient"
 #define RSPAMD_MEMPOOL_PROFILE "profile"
