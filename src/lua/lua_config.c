@@ -1041,7 +1041,6 @@ lua_watcher_callback (gpointer session_data, gpointer ud)
 
 		if (tb) {
 			g_string_free (tb, TRUE);
-			lua_pop (L, 1);
 		}
 	}
 	else {
@@ -1118,12 +1117,10 @@ lua_watcher_callback (gpointer session_data, gpointer ud)
 					}
 				}
 			}
-
-			lua_pop (L, nresults);
 		}
 	}
 
-	lua_pop (L, 1); /* Error function */
+	lua_settop (L, err_idx - 1);
 }
 
 static void

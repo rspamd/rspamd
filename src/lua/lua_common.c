@@ -1297,12 +1297,12 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 			tb = lua_touserdata (L, -1);
 			msg_err_config ("error executing post load code: %v", tb);
 			g_string_free (tb, TRUE);
-			lua_pop (L, 2);
+			lua_settop (L, err_idx - 1);
 
 			return FALSE;
 		}
 
-		lua_pop (L, 1); /* Error function */
+		lua_settop (L, err_idx - 1);
 	}
 
 	return TRUE;

@@ -323,6 +323,12 @@ lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 	}
 }
 
+#ifdef __GNUC__
+static void
+lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
+		const char *err, ...) __attribute__ ((format(printf, 3, 4)));
+#endif
+
 static void
 lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 		const char *err, ...)
@@ -330,7 +336,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	va_list ap, ap_copy;
 	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
-	gint cbref;
+	gint cbref, top;
 
 	va_start (ap, err);
 
@@ -338,7 +344,6 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 		hdl = g_queue_peek_head (cbd->handlers);
 
 		if (hdl == NULL) {
-			va_end (ap_copy);
 			break;
 		}
 
@@ -350,6 +355,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 		}
 
 		if (cbref != -1) {
+			top = lua_gettop (cbd->L);
 			lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbref);
 
 			/* Error message */
@@ -367,8 +373,9 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 
 			if (lua_pcall (cbd->L, 3, 0, 0) != 0) {
 				msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-				lua_pop (cbd->L, 1);
 			}
+
+			lua_settop (cbd->L, top);
 
 			REF_RELEASE (cbd);
 		}
@@ -391,7 +398,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 	struct rspamd_lua_text *t;
 	struct lua_tcp_cbdata **pcbd;
 	struct lua_tcp_handler *hdl;
-	gint cbref, arg_cnt;
+	gint cbref, arg_cnt, top;
 
 	hdl = g_queue_peek_head (cbd->handlers);
 
@@ -405,6 +412,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 	}
 
 	if (cbref != -1) {
+		top = lua_gettop (cbd->L);
 		lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbref);
 		/* Error */
 		lua_pushnil (cbd->L);
@@ -430,9 +438,9 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 
 		if (lua_pcall (cbd->L, arg_cnt, 0, 0) != 0) {
 			msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-			lua_pop (cbd->L, 1);
 		}
 
+		lua_settop (cbd->L, top);
 		REF_RELEASE (cbd);
 	}
 }
@@ -686,7 +694,9 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 
 				if (cbd->connect_cb != -1) {
 					struct lua_tcp_cbdata **pcbd;
+					gint top;
 
+					top = lua_gettop (cbd->L);
 					lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->connect_cb);
 					pcbd = lua_newuserdata (cbd->L, sizeof (*pcbd));
 					*pcbd = cbd;
@@ -695,8 +705,9 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 
 					if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
 						msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-						lua_pop (cbd->L, 1);
 					}
+
+					lua_settop (cbd->L, top);
 
 					REF_RELEASE (cbd);
 				}

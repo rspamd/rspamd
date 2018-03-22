@@ -733,7 +733,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 
 			if (luaL_loadstring (L, tb->str) != 0) {
 				/* Reset stack */
-				lua_settop (L, 0);
+				lua_settop (L, err_idx - 1);
 				lua_pushcfunction (L, &rspamd_lua_traceback);
 				err_idx = lua_gettop (L);
 				/* Try with no return */

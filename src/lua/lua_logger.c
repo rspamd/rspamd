@@ -317,8 +317,10 @@ lua_logger_out_boolean (lua_State *L, gint pos, gchar *outbuf, gsize len)
 static gsize
 lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
-	gint r;
+	gint r, top;
 	const gchar *str = NULL;
+
+	top = lua_gettop (L);
 
 	if (!lua_getmetatable (L, pos)) {
 		return 0;
@@ -328,7 +330,8 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	lua_gettable (L, -2);
 
 	if (!lua_istable (L, -1)) {
-		lua_pop (L, 2);
+		lua_settop (L, top);
+
 		return 0;
 	}
 
@@ -339,7 +342,8 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		lua_pushvalue (L, pos);
 
 		if (lua_pcall (L, 1, 1, 0) != 0) {
-			lua_pop (L, 3);
+			lua_settop (L, top);
+
 			return 0;
 		}
 
@@ -350,7 +354,8 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		lua_gettable (L, -2);
 
 		if (!lua_isstring (L, -1)) {
-			lua_pop (L, 3);
+			lua_settop (L, top);
+
 			return 0;
 		}
 
@@ -358,7 +363,7 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	}
 
 	r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", str, lua_touserdata (L, pos));
-	lua_pop (L, 3);
+	lua_settop (L, top);
 
 	return r;
 }
