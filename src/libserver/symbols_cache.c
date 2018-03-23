@@ -653,6 +653,8 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	return TRUE;
 }
 
+#define ROUND_DOUBLE(x) (floor((x) * 100.0) / 100.0)
+
 static gboolean
 rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 {
@@ -695,17 +697,21 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		item = v;
 		elt = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (elt, ucl_object_fromdouble (item->st->weight),
+		ucl_object_insert_key (elt,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
 				"weight", 0, false);
-		ucl_object_insert_key (elt, ucl_object_fromdouble (item->st->time_counter.mean),
+		ucl_object_insert_key (elt,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->time_counter.mean)),
 				"time", 0, false);
-		ucl_object_insert_key (elt, ucl_object_fromdouble (item->st->total_hits),
+		ucl_object_insert_key (elt, ucl_object_fromint (item->st->total_hits),
 				"count", 0, false);
 
 		freq = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (freq, ucl_object_fromdouble (item->st->frequency_counter.mean),
+		ucl_object_insert_key (freq,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->frequency_counter.mean)),
 				"avg", 0, false);
-		ucl_object_insert_key (freq, ucl_object_fromdouble (item->st->frequency_counter.stddev),
+		ucl_object_insert_key (freq,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->frequency_counter.stddev)),
 				"stddev", 0, false);
 		ucl_object_insert_key (elt, freq, "frequency", 0, false);
 
@@ -721,6 +727,8 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 
 	return ret;
 }
+
+#undef ROUND_DOUBLE
 
 gint
 rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
@@ -1930,6 +1938,8 @@ struct counters_cbdata {
 	struct symbols_cache *cache;
 };
 
+#define ROUND_DOUBLE(x) (floor((x) * 100.0) / 100.0)
+
 static void
 rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 {
@@ -1949,29 +1959,39 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 			g_assert (item->parent < (gint)cbd->cache->items_by_id->len);
 			parent = g_ptr_array_index (cbd->cache->items_by_id,
 					item->parent);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->weight),
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
 					"weight", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (parent->st->avg_frequency),
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_frequency)),
 					"frequency", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromint (parent->st->total_hits),
+			ucl_object_insert_key (obj,
+					ucl_object_fromint (parent->st->total_hits),
 					"hits", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (parent->st->avg_time),
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_time)),
 					"time", 0, false);
 		}
 		else {
-			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->weight),
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
 					"weight", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->avg_frequency),
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (item->st->avg_frequency)),
 					"frequency", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromint (item->st->total_hits),
+			ucl_object_insert_key (obj,
+					ucl_object_fromint (item->st->total_hits),
 					"hits", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (item->st->avg_time),
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (item->st->avg_time)),
 					"time", 0, false);
 		}
 
 		ucl_array_append (top, obj);
 	}
 }
+
+#undef ROUND_DOUBLE
 
 ucl_object_t *
 rspamd_symbols_cache_counters (struct symbols_cache * cache)

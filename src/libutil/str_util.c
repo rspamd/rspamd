@@ -1910,16 +1910,14 @@ static int
 rspamd_fstring_emit_append_double (double val, void *ud)
 {
 	rspamd_fstring_t **buf = ud;
-	const double delta = 0.0000001;
+#define MAX_PRECISION 6
 
 	if (isfinite (val)) {
 		if (val == (double) ((gint) val)) {
 			rspamd_printf_fstring (buf, "%.1f", val);
-		} else if (fabs (val - (double) (int) val) < delta) {
-			/* Write at maximum precision */
-			rspamd_printf_fstring (buf, "%.*g", DBL_DIG, val);
 		} else {
-			rspamd_printf_fstring (buf, "%f", val);
+			rspamd_printf_fstring (buf, "%." G_STRINGIFY (MAX_PRECISION) "f",
+					val);
 		}
 	}
 	else {
