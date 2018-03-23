@@ -169,6 +169,8 @@ local function handle_history_request(task, conn, from, to, reset)
           version = 2,
         }
         if settings.compress then
+          local t1 = rspamd_util:get_ticks()
+
           data = fun.totable(fun.filter(function(e) return e ~= nil end,
             fun.map(function(e)
               local _,dec = rspamd_util.zstd_decompress(e)
@@ -177,8 +179,12 @@ local function handle_history_request(task, conn, from, to, reset)
               end
               return nil
             end, data)))
+          rspamd_logger.debugm(N, task, 'decompress took %s ms',
+              (rspamd_util:get_ticks() - t1) * 1000.0)
+          collectgarbage()
         end
         -- Parse elements using ucl
+        local t1 = rspamd_util:get_ticks()
         data = fun.totable(
           fun.map(function (_, obj) return obj end,
           fun.filter(function(res, obj)
@@ -197,6 +203,10 @@ local function handle_history_request(task, conn, from, to, reset)
                 return false, nil
               end
             end, data))))
+        rspamd_logger.debugm(N, task, 'parse took %s ms',
+            (rspamd_util:get_ticks() - t1) * 1000.0)
+        collectgarbage()
+        t1 = rspamd_util:get_ticks()
         fun.each(function(e)
           if e.subject and not rspamd_util.is_valid_utf8(e.subject) then
             e.subject = '???'
@@ -208,6 +218,9 @@ local function handle_history_request(task, conn, from, to, reset)
         end, data)
         reply.rows = data
         conn:send_ucl(reply)
+        rspamd_logger.debugm(N, task, 'process + sending took %s ms',
+            (rspamd_util:get_ticks() - t1) * 1000.0)
+        collectgarbage()
       else
         rspamd_logger.errx(task, 'got error %s when getting history: %s',
           err)
