@@ -1271,7 +1271,6 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		setbit (checkpoint->processed_bits, item->id * 2);
 
 		if (!item->enabled ||
-				(item->type & SYMBOL_TYPE_SQUEEZED) ||
 				(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
 			check = FALSE;
 		}
@@ -2334,10 +2333,15 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 		/* Set executed and finished flags */
 		item = g_ptr_array_index (cache->items_by_id, id);
 
-		setbit (checkpoint->processed_bits, item->id * 2);
-		setbit (checkpoint->processed_bits, item->id * 2 + 1);
+		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
+			setbit (checkpoint->processed_bits, item->id * 2);
+			setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
-		msg_debug_task ("disable execution of %s", symbol);
+			msg_debug_task ("disable execution of %s", symbol);
+		}
+		else {
+			msg_debug_task ("skip squeezed symbol %s", symbol);
+		}
 	}
 	else {
 		msg_info_task ("cannot disable %s: not found", symbol);

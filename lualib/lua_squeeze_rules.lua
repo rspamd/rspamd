@@ -31,7 +31,6 @@ local function gen_lua_squeeze_function(order)
   return function(task)
     local symbols_disabled = task:cache_get('squeezed_disable')
     for _,data in ipairs(squeezed_rules[order]) do
-
       if not symbols_disabled or not symbols_disabled[data[2]] then
         local ret = {data[1](task)}
 
@@ -90,6 +89,7 @@ exports.squeeze_rule = function(s, func)
   if not squeeze_function_ids[1] then
     squeeze_function_ids[1] = rspamd_config:register_symbol{
       type = 'callback',
+      flags = 'squeezed',
       callback = gen_lua_squeeze_function(1),
       name = squeeze_sym,
       description = 'Meta rule for Lua rules that can be squeezed',
@@ -137,6 +137,7 @@ local function register_topology_symbol(order)
 
   squeeze_function_ids[order] = rspamd_config:register_symbol{
     type = 'callback',
+    flags = 'squeezed',
     callback = gen_lua_squeeze_function(order),
     name = ord_sym,
     description = 'Meta rule for Lua rules that can be squeezed, order ' .. tostring(order),
