@@ -700,6 +700,7 @@ local function clickhouse_collect(task)
     rows = {}
     attachment_rows = {}
     urls_rows = {}
+    emails_rows = {}
     specific_rows = {}
     asn_rows = {}
     symbols_rows = {}
