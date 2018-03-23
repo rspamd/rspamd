@@ -1314,7 +1314,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 				*total_diff += diff;
 			}
 
-			if (diff > slow_diff_limit) {
+			if (diff > slow_diff_limit && !(item->type & SYMBOL_TYPE_SQUEEZED)) {
 				msg_info_task ("slow rule: %s: %.0f ticks", item->symbol,
 						diff);
 			}
