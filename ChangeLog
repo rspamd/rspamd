@@ -1,3 +1,18 @@
+1.7.2: 23 Mar 2018
+	* [Feature] Store emails in Clickhouse
+	* [Feature] Support single quotes in config
+	* [Feature] Use templates when publishing CH schema
+	* [Feature] Improve Docker image
+	* [Fix] Add rounding when printing a lot of FP variables
+	* [Fix] Allow to disable certain actions by assigning null to them
+	* [Fix] Disable results caching
+	* [Fix] Fix disabling of squeezed symbols
+	* [Fix] Fix scan time set
+	* [Fix] Rework logic of actions setting
+	* [Fix] Try to fix various Lua stack issues
+	* [WebUI] Add link tag for favicon.ico
+	* [WebUI] Display hostname:port/path in the page title
+
 1.7.1: 20 Mar 2018
 	* [CritFix] Fix lowercase comparison
 	* [CritFix] Timezone defines seconds WEST UTC not East
