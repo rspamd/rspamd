@@ -211,28 +211,34 @@ local expiry_script = [[
 ]]
 
 local cur = 0
+local c_data = {0,0,0,0,0};
 
 local function expire_step(cls, ev_base, worker)
   local function redis_step_cb(err, data)
     if err then
       logger.errx(rspamd_config, 'cannot perform expiry step: %s', err)
     elseif type(data) == 'table' then
-      local next,nelts,extended,discriminated,mean,stddev = tonumber(data[1]),
-        tonumber(data[2]),
-        tonumber(data[3]),
-        tonumber(data[4]),
-        tonumber(data[5]),
-        tonumber(data[6])
+      for k,v in pairs(data) do data[k] = tonumber(v) end
+      cur = table.remove(data, 1)
 
-      if next ~= 0 then
-        logger.infox(rspamd_config, 'executed expiry step for bayes: %s items checked, %s extended, %s discriminated, %s mean, %s std',
-            nelts, extended, discriminated, mean, stddev)
-      else
-        logger.infox(rspamd_config, 'executed final expiry step for bayes: %s items checked, %s extended, %s discriminated, %s mean, %s std',
-            nelts, extended, discriminated, mean, stddev)
+      for k,v in pairs(data) do
+        if k == 4 then
+          c_data[k] = c_data[k] + v * data[1]
+        elseif k == 5 then
+          c_data[k] = c_data[k] + v * v * data[1]
+        else
+          c_data[k] = c_data[k] + v
+        end
       end
 
-      cur = next
+      logger.infox(rspamd_config, 'executed expiry step for bayes: %s items checked, %s extended, %s discriminated, %s mean, %s std',
+          data[1], data[2], data[3], data[4], data[5])
+
+      if cur == 0 then
+        logger.infox(rspamd_config, 'executed final expiry step for bayes, totals: %s items checked, %s extended, %s discriminated, %s mean, %s cv',
+            c_data[1], c_data[2], c_data[3], math.floor(.5 + c_data[4] / c_data[1]), math.floor(.5 + math.sqrt(c_data[5] / c_data[1])))
+        c_data = {0,0,0,0,0};
+      end
     end
   end
   lredis.exec_redis_script(cls.script,
