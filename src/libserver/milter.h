@@ -47,6 +47,7 @@ struct rspamd_http_message;
 struct rspamd_milter_context {
 	const gchar *spam_header;
 	const gchar *client_ca_name;
+	const gchar *reject_message;
 	void *sessions_cache;
 	gboolean discard_on_reject;
 	gboolean quarantine_on_reject;

@@ -1787,8 +1787,15 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 					sizeof (RSPAMD_MILTER_XCODE_REJECT) - 1);
 
 			if (!reply) {
-				reply = rspamd_fstring_new_init (RSPAMD_MILTER_REJECT_MESSAGE,
-						sizeof (RSPAMD_MILTER_REJECT_MESSAGE) - 1);
+				if (milter_ctx->reject_message == NULL) {
+					reply = rspamd_fstring_new_init (
+							RSPAMD_MILTER_REJECT_MESSAGE,
+							sizeof (RSPAMD_MILTER_REJECT_MESSAGE) - 1);
+				}
+				else {
+					reply = rspamd_fstring_new_init (milter_ctx->reject_message,
+							strlen (milter_ctx->reject_message));
+				}
 			}
 
 			rspamd_milter_set_reply (session, rcode, xcode, reply);
