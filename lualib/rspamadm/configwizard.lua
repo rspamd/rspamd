@@ -465,7 +465,7 @@ local function setup_statistic(cfg, changes)
       expire = lua_util.parse_time_interval(expire)
 
 
-      local reset_previous = ask_yes_no("Reset previuous data?")
+      local reset_previous = ask_yes_no("Reset previous data?")
       if ask_yes_no('Do you wish to convert them to Redis?', true) then
 
         for _,cls in ipairs(sqlite_configs) do
