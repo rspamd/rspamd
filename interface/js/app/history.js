@@ -482,6 +482,17 @@ function($, _, Humanize) {
         }
         });
 
+        var drawTooltips = function() {
+            // Update symbol description tooltips
+            $.each(symbolDescriptions, function (key, description) {
+                $('abbr[data-sym-key=' + key + ']').tooltip({
+                    "placement": "bottom",
+                    "html": true,
+                    "title": description
+                });
+            });
+        }
+
         if (checked_server === "All SERVERS") {
             rspamd.queryNeighbours("history", function (req_data) {
                 function differentVersions() {
@@ -533,16 +544,10 @@ function($, _, Humanize) {
                             "filtering": FooTable.actionFilter
                         },
                         "on": {
-	                        "ready.ft.table": function () {
-		                        // Update symbol description tooltips
-		                        $.each(symbolDescriptions, function (key, description) {
-			                        $('abbr[data-sym-key=' + key + ']').tooltip({
-				                        "placement": "bottom",
-				                        "html": true,
-				                        "title": description
-			                        });
-		                        });
-	                        }
+	                    "ready.ft.table": drawTooltips,
+	                    "after.ft.sorting": drawTooltips,
+	                    "after.ft.paging": drawTooltips,
+	                    "after.ft.filtering": drawTooltips
                         }
                     });
                 } else {
@@ -582,8 +587,14 @@ function($, _, Humanize) {
                         "sorting": {
                             "enabled": true
                         },
-                        components: {
-                            filtering: FooTable.actionFilter
+                        "components": {
+                            "filtering": FooTable.actionFilter
+                        },
+                        "on": {
+	                    "ready.ft.table": drawTooltips,
+	                    "after.ft.sorting": drawTooltips,
+	                    "after.ft.paging": drawTooltips,
+	                    "after.ft.filtering": drawTooltips
                         }
                     });
                 }
