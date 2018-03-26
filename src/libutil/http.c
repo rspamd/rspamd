@@ -3252,12 +3252,14 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 			http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
 
 			if (u.field_set & (1 << UF_PATH)) {
+				guint unnorm_len;
 				lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
 				lookup.len = u.field_data[UF_PATH].len;
 
 				rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
 						lookup.len,
-						&lookup.len);
+						&unnorm_len);
+				lookup.len = unnorm_len;
 			}
 			else {
 				lookup.begin = msg->url->str;
@@ -3712,7 +3714,7 @@ rspamd_http_message_unref (struct rspamd_http_message *msg)
 
 
 void
-rspamd_http_normalize_path_inplace (gchar *path, gsize len, gsize *nlen)
+rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 {
 	const gchar *p, *end, *slash = NULL, *dot = NULL;
 	gchar *o;

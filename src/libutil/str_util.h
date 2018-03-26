@@ -361,4 +361,14 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 	return FALSE;
 }
 
+/**
+ * Gets a string in UTF8 and normalises it to NFKC_Casefold form
+ * @param pool optional memory pool used for logging purposes
+ * @param start
+ * @param len
+ * @return TRUE if a string has been normalised
+ */
+gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
+		gchar *start, guint *len);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

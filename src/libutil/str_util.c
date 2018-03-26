@@ -18,7 +18,11 @@
 #include "cryptobox.h"
 #include "url.h"
 #include "str_util.h"
+#include "logger.h"
 #include "contrib/t1ha/t1ha.h"
+#include <unicode/uversion.h>
+#include <unicode/ucnv.h>
+#include <unicode/unorm2.h>
 #include <math.h>
 
 const guchar lc_map[256] = {
@@ -1957,4 +1961,83 @@ rspamd_memrchr (const void *m, gint c, gsize len)
 	}
 
 	return NULL;
+}
+
+gboolean
+rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
+		guint *len)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	static UConverter *utf8_conv = NULL;
+	static const UNormalizer2 *norm = NULL;
+	gint32 nsym, end;
+	UChar *src = NULL, *dest = NULL;
+	gboolean ret = FALSE;
+
+	if (utf8_conv == NULL) {
+		utf8_conv = ucnv_open ("UTF-8", &uc_err);
+		g_assert (U_SUCCESS (uc_err));
+		norm = unorm2_getInstance (NULL, "nfkc", UNORM2_COMPOSE, &uc_err);
+		g_assert (U_SUCCESS (uc_err));
+	}
+
+	/* We first need to convert data to UChars :( */
+	src = g_malloc ((*len + 1) * sizeof (*src));
+	nsym = ucnv_toUChars (utf8_conv, src, *len + 1,
+			start, *len, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		msg_warn_pool_check ("cannot normalise URL, cannot convert to unicode: %s",
+				u_errorName (uc_err));
+		goto out;
+	}
+
+	/* We can now check if we need to decompose */
+	end = unorm2_spanQuickCheckYes (norm, src, nsym, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		msg_warn_pool_check ("cannot normalise URL, cannot check normalisation: %s",
+				u_errorName (uc_err));
+		goto out;
+	}
+
+	if (end == nsym) {
+		/* No normalisation needed */
+		goto out;
+	}
+
+	/* We copy sub(src, 0, end) to dest and normalise the rest */
+	ret = TRUE;
+	dest = g_malloc (nsym * sizeof (*dest));
+	memcpy (dest, src, end * sizeof (*dest));
+	nsym = unorm2_normalizeSecondAndAppend (norm, dest, end, nsym,
+			src + end, nsym - end, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		msg_warn_pool_check ("cannot normalise URL: %s",
+				u_errorName (uc_err));
+		goto out;
+	}
+
+	/* We now convert it back to utf */
+	nsym = ucnv_fromUChars (utf8_conv, start, *len, dest, nsym, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		msg_warn_pool_check ("cannot normalise URL, cannot convert to UTF8: %s",
+				u_errorName (uc_err));
+		goto out;
+	}
+
+	*len = nsym;
+	out:
+
+	if (src) {
+		g_free (src);
+	}
+
+	if (dest) {
+		g_free (dest);
+	}
+
+	return ret;
 }

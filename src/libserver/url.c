@@ -1543,7 +1543,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	gchar *p, *comp;
 	const gchar *end;
 	guint i, complen, ret, flags = 0;
-	gsize unquoted_len = 0;
+	guint unquoted_len = 0;
 
 	memset (uri, 0, sizeof (*uri));
 	memset (&u, 0, sizeof (u));
@@ -1649,10 +1649,16 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 			uri->protocollen);
 	rspamd_url_shift (uri, unquoted_len, UF_SCHEMA);
 	unquoted_len = rspamd_url_decode (uri->host, uri->host, uri->hostlen);
+	if (rspamd_normalise_unicode_inplace (pool, uri->host, &unquoted_len)) {
+		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
 	if (uri->datalen) {
 		unquoted_len = rspamd_url_decode (uri->data, uri->data, uri->datalen);
+		if (rspamd_normalise_unicode_inplace (pool, uri->data, &unquoted_len)) {
+			uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+		}
 		rspamd_url_shift (uri, unquoted_len, UF_PATH);
 		/* We now normalize path */
 		rspamd_http_normalize_path_inplace (uri->data, uri->datalen, &unquoted_len);
@@ -1662,12 +1668,18 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		unquoted_len = rspamd_url_decode (uri->query,
 				uri->query,
 				uri->querylen);
+		if (rspamd_normalise_unicode_inplace (pool, uri->query, &unquoted_len)) {
+			uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+		}
 		rspamd_url_shift (uri, unquoted_len, UF_QUERY);
 	}
 	if (uri->fragmentlen) {
 		unquoted_len = rspamd_url_decode (uri->fragment,
 				uri->fragment,
 				uri->fragmentlen);
+		if (rspamd_normalise_unicode_inplace (pool, uri->fragment, &unquoted_len)) {
+			uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+		}
 		rspamd_url_shift (uri, unquoted_len, UF_FRAGMENT);
 	}
 

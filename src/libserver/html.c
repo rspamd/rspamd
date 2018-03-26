@@ -22,6 +22,7 @@
 #include "html_colors.h"
 #include "url.h"
 #include <unicode/uversion.h>
+#include <unicode/ucnv.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 46
 #include <unicode/uidna.h>
 #endif
@@ -1469,6 +1470,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 	*statep = state;
 }
 
+
+
 struct rspamd_url *
 rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		struct html_tag_component *comp)
@@ -1554,9 +1557,15 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	}
 
 	*d = '\0';
+	dlen = d - decoded;
 
 	url = rspamd_mempool_alloc0 (pool, sizeof (*url));
-	rc = rspamd_url_parse (url, decoded, d - decoded, pool);
+
+	if (rspamd_normalise_unicode_inplace (pool, decoded, &dlen)) {
+		url->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
+
+	rc = rspamd_url_parse (url, decoded, dlen, pool);
 
 	if (rc == URI_ERRNO_OK) {
 		if (has_bad_chars) {

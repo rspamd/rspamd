@@ -26,6 +26,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_HAS_PORT = 1 << 13,
 	RSPAMD_URL_FLAG_HAS_USER = 1 << 14,
 	RSPAMD_URL_FLAG_SCHEMALESS = 1 << 15,
+	RSPAMD_URL_FLAG_UNNORMALISED = 1 << 16,
 };
 
 struct rspamd_url_tag {
