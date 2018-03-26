@@ -1563,6 +1563,10 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
 		}
 
+		if (no_prefix) {
+			url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
+		}
+
 		decoded = url->string;
 		decoded_len = url->urllen;
 

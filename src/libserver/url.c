@@ -2388,6 +2388,10 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		rc = rspamd_url_parse (url, cb->url_str, strlen (cb->url_str), pool);
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
+			if (m.add_prefix) {
+				url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
+			}
+
 			if (cb->func) {
 				cb->func (url, cb->start - text, cb->fin - text, cb->funcd);
 			}
