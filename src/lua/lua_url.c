@@ -817,6 +817,7 @@ lua_url_all (lua_State *L)
  * - `has_port`: URL has port
  * - `has_user`: URL has user part
  * - `schemaless`: URL has no schema
+ * - `unnormalised`: URL has some unicode unnormalities
  * @return {table} URL flags
  */
 #define PUSH_FLAG(fl, name) do { \
@@ -854,6 +855,7 @@ lua_url_get_flags (lua_State *L)
 		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_PORT, "has_port");
 		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_USER, "has_user");
 		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS, "schemaless");
+		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED, "unnormalised");
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
