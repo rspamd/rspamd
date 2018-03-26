@@ -74,7 +74,8 @@ function($, d3pie, Humanize) {
                     '</strong>' + i + '</div>';
                 $(widget).appendTo(widgets);
             } else {
-                widget = '<li class="stat-box"><div class="widget"><strong>' +
+                var titleAtt = Humanize.intComma(item) + ' ' + i;
+                widget = '<li class="stat-box"><div class="widget" title="' + titleAtt + '"><strong>' +
                     Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
                 if (i == 'scanned') {
                     stat_w[0] = widget;
