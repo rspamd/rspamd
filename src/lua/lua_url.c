@@ -87,6 +87,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_tags),
 	LUA_INTERFACE_DEF (url, add_tag),
 	LUA_INTERFACE_DEF (url, get_count),
+	LUA_INTERFACE_DEF (url, get_flags),
 	{"get_redirected", lua_url_get_phished},
 	{"__tostring", lua_url_get_text},
 	{NULL, NULL}
