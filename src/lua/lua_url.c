@@ -49,6 +49,7 @@ LUA_FUNCTION_DEF (url, get_fragment);
 LUA_FUNCTION_DEF (url, get_text);
 LUA_FUNCTION_DEF (url, get_raw);
 LUA_FUNCTION_DEF (url, get_tld);
+LUA_FUNCTION_DEF (url, get_flags);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, is_redirected);
@@ -796,6 +797,72 @@ lua_url_all (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_flags()
+ * Return flags for a specified URL as map 'flag'->true for all flags set,
+ * possible flags are:
+ *
+ * - `phished`: URL is likely phished
+ * - `numeric`: URL is numeric (e.g. IP address)
+ * - `obscured`: URL was obscured
+ * - `redirected`: URL comes from redirector
+ * - `html_displayed`: URL is used just for displaying purposes
+ * - `text`: URL comes from the text
+ * - `subject`: URL comes from the subject
+ * - `host_encoded`: URL host part is encoded
+ * - `schema_encoded`: URL schema part is encoded
+ * - `query_encoded`: URL query part is encoded
+ * - `missing_slahes`: URL has some slashes missing
+ * - `idn`: URL has international characters
+ * - `has_port`: URL has port
+ * - `has_user`: URL has user part
+ * - `schemaless`: URL has no schema
+ * @return {table} URL flags
+ */
+#define PUSH_FLAG(fl, name) do { \
+	if (flags & (fl)) { \
+		lua_pushstring (L, (name)); \
+		lua_pushboolean (L, true); \
+		lua_settable (L, -3); \
+	} \
+} while (0)
+
+static gint
+lua_url_get_flags (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+	enum rspamd_url_flags flags;
+
+	if (url != NULL) {
+		flags = url->url->flags;
+
+		lua_createtable (L, 0, 4);
+
+		PUSH_FLAG (RSPAMD_URL_FLAG_PHISHED, "phished");
+		PUSH_FLAG (RSPAMD_URL_FLAG_NUMERIC, "numeric");
+		PUSH_FLAG (RSPAMD_URL_FLAG_OBSCURED, "obscured");
+		PUSH_FLAG (RSPAMD_URL_FLAG_REDIRECTED, "redirected");
+		PUSH_FLAG (RSPAMD_URL_FLAG_HTML_DISPLAYED, "html_displayed");
+		PUSH_FLAG (RSPAMD_URL_FLAG_FROM_TEXT, "text");
+		PUSH_FLAG (RSPAMD_URL_FLAG_SUBJECT, "subject");
+		PUSH_FLAG (RSPAMD_URL_FLAG_HOSTENCODED, "host_encoded");
+		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMAENCODED, "schema_encoded");
+		PUSH_FLAG (RSPAMD_URL_FLAG_PATHENCODED, "path_encoded");
+		PUSH_FLAG (RSPAMD_URL_FLAG_QUERYENCODED, "query_encoded");
+		PUSH_FLAG (RSPAMD_URL_FLAG_MISSINGSLASHES, "missing_slahes");
+		PUSH_FLAG (RSPAMD_URL_FLAG_IDN, "idn");
+		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_PORT, "has_port");
+		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_USER, "has_user");
+		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS, "schemaless");
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+#undef PUSH_FLAG
 
 static gint
 lua_load_url (lua_State * L)
