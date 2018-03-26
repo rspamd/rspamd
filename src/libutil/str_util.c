@@ -22,7 +22,9 @@
 #include "contrib/t1ha/t1ha.h"
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
+#if U_ICU_VERSION_MAJOR_NUM >= 44
 #include <unicode/unorm2.h>
+#endif
 #include <math.h>
 
 const guchar lc_map[256] = {
@@ -1967,6 +1969,7 @@ gboolean
 rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 		guint *len)
 {
+#if U_ICU_VERSION_MAJOR_NUM >= 44
 	UErrorCode uc_err = U_ZERO_ERROR;
 	static UConverter *utf8_conv = NULL;
 	static const UNormalizer2 *norm = NULL;
@@ -2040,4 +2043,8 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	}
 
 	return ret;
+#else
+	/* Kill that with fire please */
+	return FALSE;
+#endif
 }
