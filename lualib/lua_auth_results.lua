@@ -191,8 +191,10 @@ local function gen_auth_results(task, settings)
     table.insert(hdr_parts, hdr)
   end
 
+  local fold_symbol = task:has_flag("milter") and "\n" or "\r\n"
+
   if #hdr_parts > 0 then
-    return table.concat(hdr_parts, '; ')
+    return table.concat(hdr_parts, ';' .. fold_symbol)
   end
 
   return nil
