@@ -1634,6 +1634,10 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 	gchar *url_str;
 	gint rc;
 
+	if (url->flags & RSPAMD_URL_FLAG_UNNORMALISED) {
+		url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+	}
+
 	if (url->querylen > 0) {
 
 		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE,
@@ -1656,6 +1660,18 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 				}
 				else {
 					target_tbl = tbl_urls;
+				}
+
+				if (query_url->flags
+						& (RSPAMD_URL_FLAG_UNNORMALISED|RSPAMD_URL_FLAG_OBSCURED|
+							RSPAMD_URL_FLAG_NUMERIC)) {
+					/* Set obscured flag if query url is bad */
+					url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				}
+
+				/* And vice-versa */
+				if (url->flags & RSPAMD_URL_FLAG_OBSCURED) {
+					query_url->flags |= RSPAMD_URL_FLAG_OBSCURED;
 				}
 
 				if ((existing = g_hash_table_lookup (target_tbl,
