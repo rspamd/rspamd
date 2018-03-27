@@ -848,7 +848,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 
 	if (end > url_text + 4 &&
 			rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE,
-					&url_pos) &&
+					&url_pos, NULL) &&
 			url_str != NULL) {
 		if (url_pos > 0) {
 			/*
@@ -1633,6 +1633,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 	struct rspamd_url *query_url, *existing;
 	gchar *url_str;
 	gint rc;
+	gboolean prefix_added;
 
 	if (url->flags & RSPAMD_URL_FLAG_UNNORMALISED) {
 		url->flags |= RSPAMD_URL_FLAG_OBSCURED;
@@ -1641,7 +1642,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 	if (url->querylen > 0) {
 
 		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE,
-				NULL)) {
+				NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));
 
@@ -1660,6 +1661,10 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 				}
 				else {
 					target_tbl = tbl_urls;
+				}
+
+				if (prefix_added) {
+					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
 				}
 
 				if (query_url->flags
