@@ -602,7 +602,7 @@ local full_extensions_map = {
   {"roff", "application/x-troff"},
   {"rpm", "audio/x-pn-realaudio-plugin"},
   {"rqy", "text/x-ms-rqy"},
-  {"rtf", "application/rtf"},
+  {"rtf", {"application/rtf","application/msword"}},
   {"rtx", "text/richtext"},
   {"rvt", "application/octet-stream" },
   {"ruleset", "application/xml"},
