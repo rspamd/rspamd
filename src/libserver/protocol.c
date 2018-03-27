@@ -1059,6 +1059,9 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	rspamd_task_set_finish_time (task);
 	top = ucl_object_typed_new (UCL_OBJECT);
 
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)ucl_object_unref, top);
+
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
 		rspamd_metric_result_ucl (task, task->result, top);
 	}
