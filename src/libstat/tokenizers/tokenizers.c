@@ -338,7 +338,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 {
 	rspamd_stat_token_t token, buf;
 	const gchar *pos = NULL;
-	gsize l;
+	gsize l = 0;
 	GArray *res;
 	GList *cur = exceptions;
 	token_get_function func;

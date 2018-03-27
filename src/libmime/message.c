@@ -404,7 +404,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 						part->spaces ++;
 					}
 
-					if (*p == '\r' || *p == '\n') {
+					if (p < pe && (*p == '\r' || *p == '\n')) {
 						part->empty_lines ++;
 					}
 				}
@@ -419,6 +419,10 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 	/* Leftover */
 	if (p > c) {
+		if (p > pe) {
+			p = pe;
+		}
+
 		switch (state) {
 		case normal_char:
 			g_byte_array_append (part->stripped_content,
