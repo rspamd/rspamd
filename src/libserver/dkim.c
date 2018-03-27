@@ -54,7 +54,8 @@ enum rspamd_dkim_param_type {
 	DKIM_PARAM_BODYHASH,
 	DKIM_PARAM_BODYLENGTH,
 	DKIM_PARAM_IDX,
-	DKIM_PARAM_CV
+	DKIM_PARAM_CV,
+	DKIM_PARAM_IGNORE
 };
 
 /* Signature methods */
@@ -248,6 +249,7 @@ static const dkim_parse_param_f parser_funcs[] = {
 	[DKIM_PARAM_BODYLENGTH] = rspamd_dkim_parse_bodylength,
 	[DKIM_PARAM_IDX] = rspamd_dkim_parse_idx,
 	[DKIM_PARAM_CV] = rspamd_dkim_parse_cv,
+	[DKIM_PARAM_IGNORE] = rspamd_dkim_parse_ignore,
 };
 
 #define DKIM_ERROR dkim_error_quark ()
@@ -871,6 +873,9 @@ rspamd_create_dkim_context (const gchar *sig,
 					break;
 				case 'z':
 					param = DKIM_PARAM_COPIEDHDRS;
+					break;
+				case 'r':
+					param = DKIM_PARAM_IGNORE;
 					break;
 				default:
 					g_set_error (err,
