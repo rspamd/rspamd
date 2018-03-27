@@ -1162,6 +1162,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
 	struct timeval term_tv;
 	struct rspamd_main *rspamd_main;
+	gboolean skip_pid = FALSE;
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_thread_init (NULL);
@@ -1348,7 +1349,12 @@ main (gint argc, gchar **argv, gchar **env)
 	sigaction (SIGPIPE, &sigpipe_act, NULL);
 
 	if (rspamd_main->cfg->pid_file == NULL) {
-		msg_info("pid file is not specified, skipping writing it");
+		msg_info_main ("pid file is not specified, skipping writing it");
+		skip_pid = TRUE;
+	}
+	else if (no_fork) {
+		msg_info_main ("skip writing pid in no-fork mode");
+		skip_pid = TRUE;
 	}
 	else if (rspamd_write_pid (rspamd_main) == -1) {
 		msg_err_main ("cannot write pid file %s", rspamd_main->cfg->pid_file);
@@ -1479,11 +1485,16 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	msg_info_main ("terminating...");
+
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
 	g_hash_table_unref (rspamd_main->spairs);
 	rspamd_mempool_delete (rspamd_main->server_pool);
-	rspamd_pidfile_close (rspamd_main->pfh);
+
+	if (!skip_pid) {
+		rspamd_pidfile_close (rspamd_main->pfh);
+	}
+
 	g_free (rspamd_main);
 	event_base_free (ev_base);
 

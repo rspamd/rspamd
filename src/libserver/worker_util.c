@@ -629,7 +629,11 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		setrlimit (RLIMIT_STACK, &rlim);
 
 		setproctitle ("%s process", cf->worker->name);
-		rspamd_pidfile_close (rspamd_main->pfh);
+
+		if (rspamd_main->pfh) {
+			rspamd_pidfile_close (rspamd_main->pfh);
+		}
+
 		/* Do silent log reopen to avoid collisions */
 		rspamd_log_close (rspamd_main->logger);
 		rspamd_log_open (rspamd_main->logger);
@@ -658,7 +662,11 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		break;
 	case -1:
 		msg_err_main ("cannot fork main process. %s", strerror (errno));
-		rspamd_pidfile_remove (rspamd_main->pfh);
+
+		if (rspamd_main->pfh) {
+			rspamd_pidfile_remove (rspamd_main->pfh);
+		}
+
 		rspamd_hard_terminate (rspamd_main);
 		break;
 	default:
