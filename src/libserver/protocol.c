@@ -1127,11 +1127,11 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 
 			if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
 				folded_header = rspamd_header_value_fold ("DKIM-Signature",
-						dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF);
+						dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
 			}
 			else {
 				folded_header = rspamd_header_value_fold ("DKIM-Signature",
-						dkim_sig->str, 80, task->nlines_type);
+						dkim_sig->str, 80, task->nlines_type, NULL);
 			}
 			/*
 			 * According to milter docs, we need to be extra careful

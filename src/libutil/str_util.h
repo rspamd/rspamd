@@ -242,12 +242,16 @@ gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
  * Fold header using rfc822 rules, return new GString from the previous one
  * @param name name of header (used just for folding)
  * @param value value of header
+ * @param fold_max
+ * @param how
+ * @param fold_on_chars
  * @return new GString with the folded value
  */
 GString *rspamd_header_value_fold (const gchar *name,
 		const gchar *value,
 		guint fold_max,
-		enum rspamd_newlines_type how);
+		enum rspamd_newlines_type how,
+		const gchar *fold_on_chars);
 
 /**
  * Search for a substring `srch` in the text `in` using Apostolico-Crochemore algorithm

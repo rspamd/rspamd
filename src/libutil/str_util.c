@@ -918,7 +918,8 @@ GString *
 rspamd_header_value_fold (const gchar *name,
 		const gchar *value,
 		guint fold_max,
-		enum rspamd_newlines_type how)
+		enum rspamd_newlines_type how,
+		const gchar *fold_on_chars)
 {
 	GString *res;
 	const guint default_fold_max = 76;
@@ -1018,6 +1019,13 @@ rspamd_header_value_fold (const gchar *name,
 					p ++;
 					cur_len ++;
 				}
+			}
+			else if (fold_on_chars && strchr (fold_on_chars, *p) != NULL) {
+				fold_type = fold_after;
+				state = fold_token;
+				next_state = read_token;
+
+				p ++;
 			}
 			else {
 				p ++;
