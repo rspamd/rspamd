@@ -370,7 +370,21 @@ local pushers = {
         end
       end
       from_done_cb = function(merr, mdata)
-        local k = next(extra.mail_targets)
+        local k
+        if extra then
+          k = next(extra.mail_targets)
+        else
+          extra = {mail_targets = {}}
+          if type(rule.mail_to) == 'string' then
+            extra = {mail_targets = {}}
+            k = rule.mail_to
+          elseif type(rule.mail_to) == 'table' then
+            for _, r in ipairs(rule.mail_to) do
+              extra.mail_targets[r] = true
+            end
+            k = next(extra.mail_targets)
+          end
+        end
         extra.mail_targets[k] = nil
         conn:add_write(rcpt_cb, {'RCPT TO: <', k, '>\r\n'})
       end
