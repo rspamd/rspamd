@@ -843,6 +843,14 @@ LUA_FUNCTION_DEF (task, headers_foreach);
  */
 LUA_FUNCTION_DEF (task, disable_action);
 
+/***
+ * @method task:get_newlines_type()
+ * Returns the most frequent newlines type met in a task
+ *
+ * @return {string} "cr" for \r, "lf" for \n, "crlf" for \r\n
+ */
+LUA_FUNCTION_DEF (task, get_newlines_type);
+
 static const struct luaL_reg tasklib_f[] = {
 	{NULL, NULL}
 };
@@ -936,6 +944,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_protocol_reply),
 	LUA_INTERFACE_DEF (task, headers_foreach),
 	LUA_INTERFACE_DEF (task, disable_action),
+	LUA_INTERFACE_DEF (task, get_newlines_type),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -4238,6 +4247,32 @@ lua_task_disable_action (lua_State *L)
 		else {
 			task->result->actions_limits[action] = NAN;
 			lua_pushboolean (L, true);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_newlines_type (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		switch (task->nlines_type) {
+		case RSPAMD_TASK_NEWLINES_CR:
+			lua_pushstring (L, "cr");
+			break;
+		case RSPAMD_TASK_NEWLINES_LF:
+			lua_pushstring (L, "lf");
+			break;
+		case RSPAMD_TASK_NEWLINES_CRLF:
+		default:
+			lua_pushstring (L, "crlf");
+			break;
 		}
 	}
 	else {
