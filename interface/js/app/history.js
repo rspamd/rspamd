@@ -428,7 +428,7 @@ function($, _, Humanize) {
         construct : function(instance) {
             this._super(instance);
             this.actions = [ 'reject', 'add header', 'greylist',
-                    'no action', 'soft reject' ];
+                    'no action', 'soft reject', 'rewrite subject' ];
             this.def = 'Any action';
             this.$action = null;
         },
