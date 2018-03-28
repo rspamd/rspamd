@@ -319,7 +319,7 @@ local full_extensions_map = {
   {"dv", "video/x-dv"},
   {"dvi", "application/x-dvi"},
   {"dwf", "drawing/x-dwf"},
-  {"dwg", "application/acad"},
+  {"dwg", {"application/acad", "image/vnd.dwg"}},
   {"dwp", "application/octet-stream"},
   {"dxf", "application/x-dxf" },
   {"dxr", "application/x-director"},
