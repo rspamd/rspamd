@@ -21,6 +21,7 @@ limitations under the License.
 
 local exports = {}
 local lpeg = require 'lpeg'
+local rspamd_util = require "rspamd_util"
 
 
 local split_grammar = {}
@@ -419,5 +420,22 @@ local function table_cmp(table1, table2)
 end
 
 exports.table_cmp = table_cmp
+
+--[[[
+-- @function lua_util.table_cmp(task, name, value, stop_chars)
+-- Performs header folding
+--]]
+exports.fold_header = function(task, name, value, stop_chars)
+
+  local how
+
+  if task:has_flag("milter") then
+    how = "lf"
+  else
+    how = task:get_newlines_type()
+  end
+
+  return rspamd_util.fold_header(name, value, how, stop_chars)
+end
 
 return exports
