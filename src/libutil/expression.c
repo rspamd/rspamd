@@ -1144,7 +1144,12 @@ rspamd_ast_string_traverse (GNode *n, gpointer d)
 				(int)elt->p.atom->len, elt->p.atom->str);
 	}
 	else if (elt->type == ELT_LIMIT) {
-		rspamd_printf_gstring (res, "%f", elt->p.lim);
+		if (elt->p.lim == (double)(gint64)elt->p.lim) {
+			rspamd_printf_gstring (res, "%L", (gint64)elt->p.lim);
+		}
+		else {
+			rspamd_printf_gstring (res, "%f", elt->p.lim);
+		}
 	}
 	else {
 		op_str = rspamd_expr_op_to_str (elt->p.op);
