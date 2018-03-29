@@ -42,6 +42,45 @@ IF("${ARCH}" STREQUAL "x86_64")
 
 	SET(ASM_CODE "vpaddq %ymm0, %ymm0, %ymm0")
 	ASM_OP(HAVE_AVX2 "avx2")
+	# Handle broken compilers, sigh...
+	IF(HAVE_AVX2)
+		CHECK_C_SOURCE_COMPILES(
+"
+#include <stddef.h>
+#pragma GCC push_options
+#pragma GCC target(\"avx2\")
+#ifndef __SSE2__
+#define __SSE2__
+#endif
+#ifndef __SSE__
+#define __SSE__
+#endif
+#ifndef __SSE4_2__
+#define __SSE4_2__
+#endif
+#ifndef __SSE4_1__
+#define __SSE4_1__
+#endif
+#ifndef __SSEE3__
+#define __SSEE3__
+#endif
+#ifndef __AVX__
+#define __AVX__
+#endif
+#ifndef __AVX2__
+#define __AVX2__
+#endif
+
+#include <immintrin.h>
+void cmkcheckweak() __attribute__((weak));
+int main(int argc, char** argv) {
+	__m256i str = _mm256_loadu_si256((__m256i *)argv[0]);
+}" HAVE_AVX2_C_COMPILER)
+		IF(NOT HAVE_AVX2_C_COMPILER)
+			MESSAGE(STATUS "Your compiler has broken AVX2 support")
+			UNSET(HAVE_AVX2)
+		ENDIF()
+	ENDIF()
 	SET(ASM_CODE "vpaddq %xmm0, %xmm0, %xmm0")
 	ASM_OP(HAVE_AVX "avx")
 	SET(ASM_CODE "pmuludq %xmm0, %xmm0")
@@ -80,6 +119,7 @@ IF(HAVE_AVX2)
 	SET(POLYSRC ${POLYSRC} ${CMAKE_CURRENT_SOURCE_DIR}/poly1305/avx2.S)
 	SET(SIPHASHSRC ${SIPHASHSRC} ${CMAKE_CURRENT_SOURCE_DIR}/siphash/avx2.S)
 	SET(BASE64SRC ${BASE64SRC} ${CMAKE_CURRENT_SOURCE_DIR}/base64/avx2.c)
+	MESSAGE(STATUS "AVX2 support is added")
 ENDIF(HAVE_AVX2)
 IF(HAVE_AVX)
 	SET(CHACHASRC ${CHACHASRC} ${CMAKE_CURRENT_SOURCE_DIR}/chacha20/avx.S)
@@ -87,16 +127,20 @@ IF(HAVE_AVX)
 	SET(CURVESRC ${CURVESRC} ${CMAKE_CURRENT_SOURCE_DIR}/curve25519/avx.S
 			${CMAKE_CURRENT_SOURCE_DIR}/curve25519/avx.c)
 	SET(BLAKE2SRC ${BLAKE2SRC} ${CMAKE_CURRENT_SOURCE_DIR}/blake2/avx.S)
+	MESSAGE(STATUS "AVX support is added")
 ENDIF(HAVE_AVX)
 IF(HAVE_SSE2)
 	SET(CHACHASRC ${CHACHASRC} ${CMAKE_CURRENT_SOURCE_DIR}/chacha20/sse2.S)
 	SET(POLYSRC ${POLYSRC} ${CMAKE_CURRENT_SOURCE_DIR}/poly1305/sse2.S)
+	MESSAGE(STATUS "SSE2 support is added")
 ENDIF(HAVE_SSE2)
 IF(HAVE_SSE41)
 	SET(SIPHASHSRC ${SIPHASHSRC} ${CMAKE_CURRENT_SOURCE_DIR}/siphash/sse41.S)
+	MESSAGE(STATUS "SSE41 support is added")
 ENDIF(HAVE_SSE41)
 IF(HAVE_SSE42)
 	SET(BASE64SRC ${BASE64SRC} ${CMAKE_CURRENT_SOURCE_DIR}/base64/sse42.c)
+	MESSAGE(STATUS "SSE42 support is added")
 ENDIF(HAVE_SSE42)
 
 CONFIGURE_FILE(platform_config.h.in platform_config.h)
