@@ -21,6 +21,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <math.h>
 #include "ucl.h"
 #include "ucl_internal.h"
 #include "ucl_chartable.h"
@@ -1832,6 +1833,16 @@ parse_string:
 				obj->len = 0;
 				obj->type = UCL_NULL;
 			}
+			else if (str_len == 3 && memcmp (c, "nan", 3) == 0) {
+				obj->len = 0;
+				obj->type = UCL_FLOAT;
+				obj->value.dv = NAN;
+			}
+			else if (str_len == 3 && memcmp (c, "inf", 3) == 0) {
+				obj->len = 0;
+				obj->type = UCL_FLOAT;
+				obj->value.dv = INFINITY;
+			}
 			else if (!ucl_maybe_parse_boolean (obj, c, str_len)) {
 				obj->type = UCL_STRING;
 				if ((str_len = ucl_copy_or_store_ptr (parser, c,
@@ -1842,8 +1853,8 @@ parse_string:
 				}
 				obj->len = str_len;
 			}
+
 			parser->state = UCL_STATE_AFTER_VALUE;
-			p = chunk->pos;
 
 			return true;
 			break;
