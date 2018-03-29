@@ -1,5 +1,5 @@
 /*-
- * Copyright 2017 Vsevolod Stakhov
+ * Copyright 2018 Vsevolod Stakhov
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 /*-
 Copyright (c) 2013-2015, Alfred Klomp
-Copyright (c) 2016, Vsevolod Stakhov
+Copyright (c) 2018, Vsevolod Stakhov
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,7 @@ extern const uint8_t base64_table_dec[256];
 
 #ifdef RSPAMD_HAS_TARGET_ATTR
 #pragma GCC push_options
-#pragma GCC target("sse4.2")
+#pragma GCC target("avx2")
 #ifndef __SSE2__
 #define __SSE2__
 #endif
@@ -66,82 +66,100 @@ extern const uint8_t base64_table_dec[256];
 #ifndef __SSEE3__
 #define __SSEE3__
 #endif
-#include <xmmintrin.h>
-#include <nmmintrin.h>
+#ifndef __AVX__
+#define __AVX__
+#endif
+#ifndef __AVX2__
+#define __AVX2__
+#endif
 
+#include <immintrin.h>
 
-static inline __m128i
-dec_reshuffle (__m128i in) __attribute__((__target__("sse4.2")));
+#define CMPGT(s,n)	_mm256_cmpgt_epi8((s), _mm256_set1_epi8(n))
+#define CMPEQ(s,n)	_mm256_cmpeq_epi8((s), _mm256_set1_epi8(n))
+#define REPLACE(s,n)	_mm256_and_si256((s), _mm256_set1_epi8(n))
+#define RANGE(s,a,b)	_mm256_andnot_si256(CMPGT((s), (b)), CMPGT((s), (a) - 1))
 
-static inline __m128i dec_reshuffle (__m128i in)
+static inline __m256i
+dec_reshuffle (__m256i in) __attribute__((__target__("avx2")));
+
+static inline __m256i
+dec_reshuffle (__m256i in)
 {
-	// Mask in a single byte per shift:
-	const __m128i maskB2 = _mm_set1_epi32(0x003F0000);
-	const __m128i maskB1 = _mm_set1_epi32(0x00003F00);
+	// in, lower lane, bits, upper case are most significant bits, lower case are least significant bits:
+	// 00llllll 00kkkkLL 00jjKKKK 00JJJJJJ
+	// 00iiiiii 00hhhhII 00ggHHHH 00GGGGGG
+	// 00ffffff 00eeeeFF 00ddEEEE 00DDDDDD
+	// 00cccccc 00bbbbCC 00aaBBBB 00AAAAAA
 
-	// Pack bytes together:
-	__m128i out = _mm_srli_epi32(in, 16);
+	const __m256i merge_ab_and_bc = _mm256_maddubs_epi16(in, _mm256_set1_epi32(0x01400140));
+	// 0000kkkk LLllllll 0000JJJJ JJjjKKKK
+	// 0000hhhh IIiiiiii 0000GGGG GGggHHHH
+	// 0000eeee FFffffff 0000DDDD DDddEEEE
+	// 0000bbbb CCcccccc 0000AAAA AAaaBBBB
 
-	out = _mm_or_si128(out, _mm_srli_epi32(_mm_and_si128(in, maskB2), 2));
+	__m256i out = _mm256_madd_epi16(merge_ab_and_bc, _mm256_set1_epi32(0x00011000));
+	// 00000000 JJJJJJjj KKKKkkkk LLllllll
+	// 00000000 GGGGGGgg HHHHhhhh IIiiiiii
+	// 00000000 DDDDDDdd EEEEeeee FFffffff
+	// 00000000 AAAAAAaa BBBBbbbb CCcccccc
 
-	out = _mm_or_si128(out, _mm_slli_epi32(_mm_and_si128(in, maskB1), 12));
+	// Pack bytes together in each lane:
+	out = _mm256_shuffle_epi8(out, _mm256_setr_epi8(
+		2, 1, 0, 6, 5, 4, 10, 9, 8, 14, 13, 12, -1, -1, -1, -1,
+		2, 1, 0, 6, 5, 4, 10, 9, 8, 14, 13, 12, -1, -1, -1, -1));
+	// 00000000 00000000 00000000 00000000
+	// LLllllll KKKKkkkk JJJJJJjj IIiiiiii
+	// HHHHhhhh GGGGGGgg FFffffff EEEEeeee
+	// DDDDDDdd CCcccccc BBBBbbbb AAAAAAaa
 
-	out = _mm_or_si128(out, _mm_slli_epi32(in, 26));
-
-	// Reshuffle and repack into 12-byte output format:
-	return _mm_shuffle_epi8(out, _mm_setr_epi8(
-		 3,  2,  1,
-		 7,  6,  5,
-		11, 10,  9,
-		15, 14, 13,
-		-1, -1, -1, -1));
+	// Pack lanes
+	return _mm256_permutevar8x32_epi32(out, _mm256_setr_epi32(0, 1, 2, 4, 5, 6, -1, -1));
 }
 
-#define CMPGT(s,n)	_mm_cmpgt_epi8((s), _mm_set1_epi8(n))
 
-#define INNER_LOOP_SSE42 \
-	while (inlen >= 24) { \
-		__m128i str = _mm_loadu_si128((__m128i *)c); \
-		const __m128i lut = _mm_setr_epi8( \
-			19, 16,   4,   4, \
-			 4,  4,   4,   4, \
-			 4,  4,   4,   4, \
-			 0,  0, -71, -65 \
-		); \
-		const __m128i range = _mm_setr_epi8( \
-			'+','+', \
-			'+','+', \
-			'+','+', \
-			'+','+', \
-			'/','/', \
-			'0','9', \
-			'A','Z', \
-			'a','z'); \
-		if (_mm_cmpistrc(range, str, _SIDD_UBYTE_OPS | _SIDD_CMP_RANGES | _SIDD_NEGATIVE_POLARITY)) { \
+#define INNER_LOOP_AVX2 \
+	while (inlen >= 45) { \
+		__m256i str = _mm256_loadu_si256((__m256i *)c); \
+		const __m256i lut_lo = _mm256_setr_epi8( \
+			0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, \
+			0x11, 0x11, 0x13, 0x1A, 0x1B, 0x1B, 0x1B, 0x1A, \
+			0x15, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, \
+			0x11, 0x11, 0x13, 0x1A, 0x1B, 0x1B, 0x1B, 0x1A); \
+		const __m256i lut_hi = _mm256_setr_epi8( \
+			0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, \
+			0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, \
+			0x10, 0x10, 0x01, 0x02, 0x04, 0x08, 0x04, 0x08, \
+			0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10); \
+		const __m256i lut_roll = _mm256_setr_epi8( \
+			0,  16,  19,   4, -65, -65, -71, -71, \
+			0,   0,   0,   0,   0,   0,   0,   0, \
+			0,  16,  19,   4, -65, -65, -71, -71, \
+			0,   0,   0,   0,   0,   0,   0,   0); \
+		const __m256i mask_2F = _mm256_set1_epi8(0x2f); \
+		const __m256i hi_nibbles  = _mm256_and_si256(_mm256_srli_epi32(str, 4), mask_2F); \
+		const __m256i lo_nibbles  = _mm256_and_si256(str, mask_2F); \
+		const __m256i hi          = _mm256_shuffle_epi8(lut_hi, hi_nibbles); \
+		const __m256i lo          = _mm256_shuffle_epi8(lut_lo, lo_nibbles); \
+		const __m256i eq_2F       = _mm256_cmpeq_epi8(str, mask_2F); \
+		const __m256i roll        = _mm256_shuffle_epi8(lut_roll, _mm256_add_epi8(eq_2F, hi_nibbles)); \
+		if (!_mm256_testz_si256(lo, hi)) { \
 			break; \
 		} \
-		__m128i indices = _mm_subs_epu8(str, _mm_set1_epi8(46)); \
-		__m128i mask45 = CMPGT(str, 64); \
-		__m128i mask5  = CMPGT(str, 96); \
-		indices = _mm_andnot_si128(mask45, indices); \
-		mask45 = _mm_add_epi8(_mm_slli_epi16(_mm_abs_epi8(mask45), 4), mask45); \
-		indices = _mm_add_epi8(indices, mask45); \
-		indices = _mm_add_epi8(indices, mask5); \
-		__m128i delta = _mm_shuffle_epi8(lut, indices); \
-		str = _mm_add_epi8(str, delta); \
+		str = _mm256_add_epi8(str, roll); \
 		str = dec_reshuffle(str); \
-		_mm_storeu_si128((__m128i *)o, str); \
-		c += 16; \
-		o += 12; \
-		outl += 12; \
-		inlen -= 16; \
+		_mm256_storeu_si256((__m256i *)o, str); \
+		c += 32; \
+		o += 24; \
+		outl += 24; \
+		inlen -= 32; \
 	}
 
 int
-base64_decode_sse42 (const char *in, size_t inlen,
-		unsigned char *out, size_t *outlen) __attribute__((__target__("sse4.2")));
+base64_decode_avx2 (const char *in, size_t inlen,
+		unsigned char *out, size_t *outlen) __attribute__((__target__("avx2")));
 int
-base64_decode_sse42 (const char *in, size_t inlen,
+base64_decode_avx2 (const char *in, size_t inlen,
 		unsigned char *out, size_t *outlen)
 {
 	ssize_t ret = 0;
@@ -155,7 +173,7 @@ repeat:
 	switch (leftover) {
 		for (;;) {
 		case 0:
-			INNER_LOOP_SSE42
+			INNER_LOOP_AVX2
 
 			if (inlen-- == 0) {
 				ret = 1;
