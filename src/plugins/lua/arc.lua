@@ -418,11 +418,10 @@ local function arc_sign_seal(task, params, header)
 
   task:set_milter_reply({
     add_headers = {
-      ['ARC-Authentication-Results'] = cur_auth_results,
-      ['ARC-Message-Signature'] = header,
-      ['ARC-Seal'] = lua_util.fold_header(task,
-        'ARC-Seal',
-        cur_arc_seal),
+      ['ARC-Authentication-Results'] = {order = 0, value = cur_auth_results},
+      ['ARC-Message-Signature'] = {order = 0, value = header},
+      ['ARC-Seal'] = {order = 0, value = lua_util.fold_header(task,
+        'ARC-Seal', cur_arc_seal) }
     }
   })
   task:insert_result(settings.sign_symbol, 1.0, string.format('i=%d', cur_idx))
