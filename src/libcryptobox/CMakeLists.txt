@@ -72,13 +72,19 @@ IF("${ARCH}" STREQUAL "x86_64")
 #endif
 
 #include <immintrin.h>
-void cmkcheckweak() __attribute__((weak));
+static void foo(const char* a) __attribute__((__target__(\"avx2\")));
+static void foo(const char* a)
+{
+	__m256i str = _mm256_loadu_si256((__m256i *)a);
+	__m256i t = _mm256_loadu_si256((__m256i *)a + 1);
+	_mm256_add_epi8(str, t);
+}
 int main(int argc, char** argv) {
-	__m256i str = _mm256_loadu_si256((__m256i *)argv[0]);
+	foo(argv[0]);
 }" HAVE_AVX2_C_COMPILER)
 		IF(NOT HAVE_AVX2_C_COMPILER)
 			MESSAGE(STATUS "Your compiler has broken AVX2 support")
-			UNSET(HAVE_AVX2)
+			UNSET(HAVE_AVX2 CACHE)
 		ENDIF()
 	ENDIF()
 	SET(ASM_CODE "vpaddq %xmm0, %xmm0, %xmm0")
