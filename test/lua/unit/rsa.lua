@@ -5,6 +5,7 @@ context("RSA signature verification test", function()
   local rsa_pubkey = require "rspamd_rsa_pubkey"
   local rsa_signature = require "rspamd_rsa_signature"
   local rsa = require "rspamd_rsa"
+  local hash = require "rspamd_cryptobox_hash"
   local pubkey = 'testkey.pub'
   local privkey = 'testkey'
   local data = 'test.data'
@@ -14,19 +15,26 @@ context("RSA signature verification test", function()
   
   test("RSA sign", function()
     -- Signing test
-    local rsa_key = rsa_privkey.load(string.format('%s/%s', test_dir, privkey))
+    rsa_key = rsa_privkey.load_file(string.format('%s/%s', test_dir, privkey))
     assert_not_nil(rsa_key)
-    local rsa_sig = rsa.sign_file(rsa_key, string.format('%s/%s', test_dir, data))
-    assert_not_nil(rsa_sig)
-    rsa_sig:save(string.format('%s/%s', test_dir, signature), true)
+
+    local h = hash.create_specific('sha256')
+    local d = io.open(string.format('%s/%s', test_dir, data), "rb"):read "*a"
+    h:update(d)
+    local sig = rsa.sign_memory(rsa_key, h:bin())
+    assert_not_nil(sig)
+    sig:save(string.format('%s/%s', test_dir, signature), true)
   end)
   
   test("RSA verify", function()
     -- Verifying test
+    local h = hash.create_specific('sha256')
+    local d = io.open(string.format('%s/%s', test_dir, data), "rb"):read "*a"
+    h:update(d)
     rsa_key = rsa_pubkey.load(string.format('%s/%s', test_dir, pubkey))
     assert_not_nil(rsa_key)
     rsa_sig = rsa_signature.load(string.format('%s/%s', test_dir, signature))
     assert_not_nil(rsa_sig)
-    assert_true(rsa.verify_file(rsa_key, rsa_sig, string.format('%s/%s', test_dir, data)))
+    assert_true(rsa.verify_memory(rsa_key, rsa_sig, h:bin()))
   end)
 end)

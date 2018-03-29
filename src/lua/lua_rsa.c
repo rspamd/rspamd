@@ -585,7 +585,7 @@ lua_rsa_verify_memory (lua_State *L)
 	data = luaL_checkstring (L, 3);
 
 	if (rsa != NULL && signature != NULL && data != NULL) {
-		ret = RSA_verify (NID_sha1, data, strlen (data),
+		ret = RSA_verify (NID_sha256, data, strlen (data),
 				signature->str, signature->len, rsa);
 
 		if (ret == 0) {

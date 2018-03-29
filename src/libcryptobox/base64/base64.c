@@ -131,7 +131,6 @@ base64_test (bool generic, size_t niters, size_t len)
 
 	impl = generic ? &base64_list[0] : base64_opt;
 
-	printf("hui: %s\n", impl->desc);
 	out = rspamd_encode_base64 (in, len, 0, &outlen);
 	impl->decode (out, outlen, tmp, &len);
 
