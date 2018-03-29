@@ -71,6 +71,10 @@ IF("${ARCH}" STREQUAL "x86_64")
 #define __AVX2__
 #endif
 
+#if __GNUC__ <= 4 && __GNUC_MINOR__ <= 8
+#error Broken due to compiler bug
+#endif
+
 #include <immintrin.h>
 static void foo(const char* a) __attribute__((__target__(\"avx2\")));
 static void foo(const char* a)
