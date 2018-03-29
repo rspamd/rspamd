@@ -26,37 +26,35 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 context("Headers folding unit test", function()
   local util = require("rspamd_util")
-
-  test("Headers folding", function()
     -- {header, value}, "expected result"
-    local cases = {
-      {{"test", "test"}, "test"},
-      {{"test1", "_abc _def _ghi _fdjhfd _fhdjkfh _dkhkjd _fdjkf _dshfdks _fhdjfdkhfk _dshfds _fdsjk _fdkhfdks _fdsjf _dkf"},
-        "_abc _def _ghi _fdjhfd _fhdjkfh _dkhkjd _fdjkf _dshfdks _fhdjfdkhfk\r\n\t_dshfds _fdsjk _fdkhfdks _fdsjf _dkf"
-      },
-      {{"Test1", "_abc _def _ghi _fdjhfd _fhdjkfh _dkhaaaaaaaaaaakjdfdjkfdshfdksfhdjfdkhfkdshfdsfdsjkfdkhfdksfdsjf _dkf"},
-        "_abc _def _ghi _fdjhfd _fhdjkfh\r\n\t_dkhaaaaaaaaaaakjdfdjkfdshfdksfhdjfdkhfkdshfdsfdsjkfdkhfdksfdsjf _dkf"
-      },
-      {{"Content-Type", "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh fjsdhfkjsd fhdjsfhkj"},
-        "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh\r\n\tfjsdhfkjsd fhdjsfhkj"
-      },
-      {{"Content-Type", "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"},
-        "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"
-      },
-      {{"Content-Type", "Content-Type: multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj fdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"},
-        "Content-Type: multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj\r\n\tfdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
-      },
-      {{"X-Spam-Symbols", "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,R_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,RBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,RBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"},
-      "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,\r\n\tR_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"
-      },
-    }
+  local cases = {
+    {{"test", "test"}, "test"},
+    {{"test1", "_abc _def _ghi _fdjhfd _fhdjkfh _dkhkjd _fdjkf _dshfdks _fhdjfdkhfk _dshfds _fdsjk _fdkhfdks _fdsjf _dkf"},
+     "_abc _def _ghi _fdjhfd _fhdjkfh _dkhkjd _fdjkf _dshfdks\r\n\t_fhdjfdkhfk _dshfds _fdsjk _fdkhfdks _fdsjf _dkf"
+    },
+    {{"Test1", "_abc _def _ghi _fdjhfd _fhdjkfh _dkhaaaaaaaaaaakjdfdjkfdshfdksfhdjfdkhfkdshfdsfdsjkfdkhfdksfdsjf _dkf"},
+     "_abc _def _ghi _fdjhfd _fhdjkfh\r\n\t_dkhaaaaaaaaaaakjdfdjkfdshfdksfhdjfdkhfkdshfdsfdsjkfdkhfdksfdsjf\r\n\t_dkf"
+    },
+    {{"Content-Type", "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh fjsdhfkjsd fhdjsfhkj"},
+     "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh\r\n\tfjsdhfkjsd fhdjsfhkj"
+    },
+    {{"Content-Type", "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"},
+     "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"
+    },
+    {{"Content-Type", "Content-Type: multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj fdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"},
+     "Content-Type: multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj\r\n\tfdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
+    },
+    {{"X-Spam-Symbols", "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,R_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,RBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,RBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"},
+     "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,\r\n\tR_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"
+    },
+  }
 
-    for _,c in ipairs(cases) do
-      local fv = util.fold_header(c[1][1], c[1][2])
+  for i,c in ipairs(cases) do
+    test("Headers folding: " .. i, function()
+      local fv = util.fold_header(c[1][1], c[1][2], 'crlf', ';')
       assert_not_nil(fv)
       assert_equal(fv, c[2], string.format("'%s' doesn't match with '%s'",
-        c[2], fv))
-    end
-
-  end)
+              c[2], fv))
+    end)
+  end
 end)
