@@ -65,7 +65,7 @@ context("SMTP address check functions", function()
           assert_equal(str, ex)
         end
       end, case[2])
-      ffi.C.rspamd_email_address_unref(st)
+      ffi.C.rspamd_email_address_free(st)
     end, cases_valid)
 
     local cases_invalid = {
@@ -97,7 +97,7 @@ context("SMTP address check functions", function()
       local t1 = util.get_ticks()
       local st = ffi.C.rspamd_email_address_from_smtp(ncase, #ncase)
       local t2 = util.get_ticks()
-      ffi.C.rspamd_email_address_unref(st)
+      ffi.C.rspamd_email_address_free(st)
       total = total + t2 - t1
     end
 

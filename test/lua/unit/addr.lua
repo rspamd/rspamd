@@ -7,7 +7,7 @@ context("Inet addr check functions", function()
   typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
   bool rspamd_parse_inet_address (rspamd_inet_addr_t **target,
     const char *src);
-  void rspamd_inet_address_freefree (rspamd_inet_addr_t *addr);
+  void rspamd_inet_address_free (rspamd_inet_addr_t *addr);
   ]]
   
   test("Create inet addr from string", function()
