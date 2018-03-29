@@ -345,16 +345,11 @@ rspamd_config:register_dependency('ARC_CALLBACK', symbols['spf_allow_symbol'])
 rspamd_config:register_dependency('ARC_CALLBACK', symbols['dkim_allow_symbol'])
 
 local function arc_sign_seal(task, params, header)
-  local fold_type = "crlf"
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
   local arc_auth_results = task:get_header_full('ARC-Authentication-Results') or {}
   local cur_auth_results = auth_results.gen_auth_results(task) or ''
   local privkey
-
-  if task:has_flag("milter") then
-    fold_type = "lf"
-  end
 
   if params.rawkey then
     privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
@@ -394,13 +389,13 @@ local function arc_sign_seal(task, params, header)
     end
   end
 
-  header = rspamd_util.fold_header(
+  header = lua_util.fold_header(task,
     'ARC-Message-Signature',
-    header, fold_type)
+    header)
 
-  cur_auth_results = rspamd_util.fold_header(
+  cur_auth_results = lua_util.fold_header(task,
     'ARC-Authentication-Results',
-    cur_auth_results, fold_type)
+    cur_auth_results, ';')
 
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
   local s = dkim_canonicalize('ARC-Authentication-Results',
@@ -425,9 +420,9 @@ local function arc_sign_seal(task, params, header)
     add_headers = {
       ['ARC-Authentication-Results'] = cur_auth_results,
       ['ARC-Message-Signature'] = header,
-      ['ARC-Seal'] = rspamd_util.fold_header(
+      ['ARC-Seal'] = lua_util.fold_header(task,
         'ARC-Seal',
-        cur_arc_seal, fold_type),
+        cur_arc_seal),
     }
   })
   task:insert_result(settings.sign_symbol, 1.0, string.format('i=%d', cur_idx))

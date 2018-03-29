@@ -24,6 +24,7 @@ end
 local logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local N = 'milter_headers'
+local lua_util = require "lua_util"
 local E = {}
 
 local HOSTNAME = util.get_hostname()
@@ -49,6 +50,7 @@ local settings = {
     ['x-spamd-result'] = {
       header = 'X-Spamd-Result',
       remove = 1,
+      stop_chars = ' '
     },
     ['x-rspamd-server'] = {
       header = 'X-Rspamd-Server',
@@ -116,6 +118,7 @@ local settings = {
         quarantine = 'DMARC_POLICY_QUARANTINE',
       },
       add_smtp_user = true,
+      stop_chars = ';',
     },
     ['stat-signature'] = {
       header = 'X-Stat-Signature',
@@ -151,6 +154,7 @@ local function milter_headers(task)
       return found
     end
 
+
     if settings.extended_headers_rcpt and match_extended_headers_rcpt() then
       return false
     end
@@ -169,6 +173,18 @@ local function milter_headers(task)
   end
 
   local routines, common, add, remove = {}, {}, {}, {}
+
+  local function add_header(name, value, stop_chars, order)
+    if order then
+      add[settings.routines[name].header] = {
+        order = order,
+        value = lua_util.fold_header(task, name, value, stop_chars)
+      }
+    else
+      add[settings.routines[name].header] = lua_util.fold_header(task, name,
+              value, stop_chars)
+    end
+  end
 
   routines['x-spamd-result'] = function()
     if skip_wanted('x-spamd-result') then return end
@@ -195,7 +211,7 @@ local function milter_headers(task)
         ' ', s.name, '(', string.format('%.2f', s.score), ')[', table.concat(s.options, ','), ']',
       }))
     end
-    add[settings.routines['x-spamd-result'].header] = table.concat(buf, '\n\t')
+    add_header('x-spamd-result', table.concat(buf, '; '), ';')
   end
 
   routines['x-rspamd-queue-id'] = function()
@@ -328,7 +344,7 @@ local function milter_headers(task)
       end
     end
     if #virii > 0 then
-      add[settings.routines['x-virus'].header] = table.concat(virii, ',')
+      add_header('x-virus', table.concat(virii, ','))
     end
   end
 
@@ -353,7 +369,7 @@ local function milter_headers(task)
     if settings.routines['x-spam-status'].remove then
       remove[settings.routines['x-spam-status'].header] = settings.routines['x-spam-status'].remove
     end
-    add[settings.routines['x-spam-status'].header] = spamstatus
+    add_header('x-spam-status', spamstatus)
   end
 
   routines['authentication-results'] = function()
@@ -369,10 +385,7 @@ local function milter_headers(task)
       settings.routines['authentication-results'])
 
     if res then
-      add[settings.routines['authentication-results'].header] = {
-        value = res,
-        order = 0
-      }
+      add_header('authentication-results', res, ';', 0)
     end
   end
 
