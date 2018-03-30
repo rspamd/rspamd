@@ -3,40 +3,38 @@
 context("Trie search functions", function()
   local t = require "rspamd_trie"
   local logger = require "rspamd_logger"
+  local patterns = {
+    'test',
+    'est',
+    'he',
+    'she',
+    'str\0ing'
+  }
 
-  test("Trie search", function()
-    local patterns = {
-      'test',
-      'est',
-      'he',
-      'she',
-      'str\0ing'
-    }
-
-    local trie = t.create(patterns)
-    assert_not_nil(trie, "cannot create trie")
-
-    local cases = {
-      {'test', true, {{4, 1}, {4, 2}}},
-      {'she test test', true, {{3, 4}, {3, 3}, {8, 1}, {8, 2}, {13, 1}, {13, 2}}},
-      {'non-existent', false},
-      {'str\0ing test', true, {{7, 5}, {12, 1}, {12, 2}}},
-    }
-
-    local function comparetables(t1, t2)
-      if #t1 ~= #t2 then return false end
-      for i=1,#t1 do
-        if type(t1[i]) ~= type(t2[i]) then return false
-        elseif type(t1[i]) == 'table' then
-          if not comparetables(t1[i], t2[i]) then return false end
-        elseif t1[i] ~= t2[i] then
-          return false
-        end
+  local function comparetables(t1, t2)
+    if #t1 ~= #t2 then return false end
+    for i=1,#t1 do
+      if type(t1[i]) ~= type(t2[i]) then return false
+      elseif type(t1[i]) == 'table' then
+        if not comparetables(t1[i], t2[i]) then return false end
+      elseif t1[i] ~= t2[i] then
+        return false
       end
-      return true
     end
+    return true
+  end
 
-    for _,c in ipairs(cases) do
+  local trie = t.create(patterns)
+
+  local cases = {
+    {'test', true, {{4, 1}, {4, 2}}},
+    {'she test test', true, {{3, 4}, {3, 3}, {8, 1}, {8, 2}, {13, 1}, {13, 2}}},
+    {'non-existent', false},
+    {'str\0ing test', true, {{7, 5}, {12, 1}, {12, 2}}},
+  }
+
+  for i,c in ipairs(cases) do
+    test("Trie search " .. i, function()
       local res = {}
       local function cb(idx, pos)
         table.insert(res, {pos, idx})
@@ -53,11 +51,11 @@ context("Trie search functions", function()
         table.sort(c[3], function(a, b) return a[2] > b[2] end)
         local cmp = comparetables(res, c[3])
         assert_true(cmp, 'valid results for case: ' .. c[1] ..
-          ' got: ' .. logger.slog('%s', res) .. ' expected: ' ..
-          logger.slog('%s', c[3])
+                ' got: ' .. logger.slog('%s', res) .. ' expected: ' ..
+                logger.slog('%s', c[3])
         )
       end
-    end
+    end)
+  end
 
-  end)
 end)
