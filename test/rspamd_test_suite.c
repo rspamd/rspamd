@@ -19,7 +19,7 @@ main (int argc, char **argv)
 	rspamd_main->cfg = cfg;
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
-	cfg->log_level = G_LOG_LEVEL_INFO;
+	cfg->log_level = G_LOG_LEVEL_MESSAGE;
 
 	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"),
 			&rspamd_main->logger, rspamd_main->server_pool);
