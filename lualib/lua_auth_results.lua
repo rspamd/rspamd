@@ -16,6 +16,7 @@ limitations under the License.
 ]]--
 
 local global = require "global_functions"
+local rspamd_util = require "rspamd_util"
 
 local default_settings = {
   spf_symbols = {
@@ -76,10 +77,9 @@ local function gen_auth_results(task, settings)
     symbols = {}
   }
 
-  local received = task:get_received_headers() or {}
-  local mxname = (received[1] or {}).by_hostname
-  if mxname then
-    table.insert(hdr_parts, mxname)
+  local hostname = rspamd_util.get_hostname()
+  if hostname then
+    table.insert(hdr_parts, hostname)
   end
 
   for auth_type, symbols in pairs(auth_types) do
