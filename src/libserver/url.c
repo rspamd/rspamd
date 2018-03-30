@@ -708,7 +708,8 @@ static gint
 rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		gchar const **end, gboolean strict, guint *flags)
 {
-	const gchar *p = str, *c = str, *last = str + len, *slash = NULL;
+	const gchar *p = str, *c = str, *last = str + len, *slash = NULL,
+			*password_start = NULL, *user_start = NULL;
 	gchar t;
 	UChar32 uc;
 	glong pt;
@@ -828,6 +829,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					if (p - c == 0) {
 						goto out;
 					}
+					user_start = c;
 					st = parse_password_start;
 				}
 				else if (t == '@') {
@@ -868,11 +870,16 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				if (t == '@') {
 					/* Empty password */
 					SET_U (u, UF_USERINFO);
+					if (u != NULL && u->field_data[UF_USERINFO].len > 0) {
+						/* Eat semicolon */
+						u->field_data[UF_USERINFO].len--;
+					}
 					*flags |= RSPAMD_URL_FLAG_HAS_USER;
 					st = parse_at;
 				}
 				else {
 					c = p;
+					password_start = p;
 					st = parse_password;
 				}
 				p++;
@@ -880,8 +887,19 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			case parse_password:
 				if (t == '@') {
 					/* XXX: password is not stored */
-					*flags |= RSPAMD_URL_FLAG_HAS_USER;
-					SET_U (u, UF_USERINFO);
+					if (u != NULL) {
+						if (u->field_data[UF_USERINFO].len == 0
+								&& password_start
+								&& user_start && password_start > user_start + 1) {
+							*flags |= RSPAMD_URL_FLAG_HAS_USER;
+							u->field_set |= 1u << (UF_USERINFO);
+							u->field_data[UF_USERINFO].len =
+									password_start - user_start - 1;
+							u->field_data[UF_USERINFO].off =
+									user_start - str;
+						}
+
+					}
 					st = parse_at;
 				}
 				else if (!g_ascii_isgraph (t)) {
