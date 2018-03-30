@@ -235,6 +235,7 @@ rspamadm_control (gint argc, gchar **argv)
 	}
 
 	L = rspamd_lua_init ();
+	rspamd_lua_set_path (L, NULL, ucl_vars);
 
 	conn = rspamd_http_connection_new (NULL,
 			rspamd_control_error_handler,
