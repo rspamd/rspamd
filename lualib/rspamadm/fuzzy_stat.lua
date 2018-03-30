@@ -126,6 +126,8 @@ local function print_result(r)
       return 'v0.9'
     elseif num == 4 then
       return 'v1.0+'
+    elseif num == 5 then
+      return 'v1.7+'
     end
     return '???'
   end
