@@ -12,6 +12,8 @@ test:
     - mkdir ../build ; mkdir ../install ; cd ../build
     - cmake ../rspamd -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install -DENABLE_HIREDIS=ON
     - make install -j`nproc`
+    - make rspamd-test -j`nproc`
+    - test/rspamd-test -p /rspamd/lua
     - RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../rspamd/test/functional/cases
     - lcov --no-external -b ../rspamd -d ../rspamd -c --output-file coverage.info
     - if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info || true; fi
