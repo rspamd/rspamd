@@ -568,8 +568,11 @@ local function multimap_callback(task, rule)
 
   local function match_addr(r, addr)
     match_list(r, addr, {'addr'})
-    match_list(r, addr, {'domain'})
-    match_list(r, addr, {'user'})
+
+    if not r.filter then
+      match_list(r, addr, {'domain'})
+      match_list(r, addr, {'user'})
+    end
   end
 
   local function match_url(r, url)
