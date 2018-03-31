@@ -252,7 +252,7 @@ function($) {
             var editable = $(this).data('editable');
             var title = $(this).data('title');
             $('#modalTitle').html(title);
-            $('#modalBody ' + source).show();
+            $('#modalBody ' + source).first().show();
             var target = $(this).data('target');
             $(target + ' .progress').hide();
             $(target).modal(show = true, backdrop = true, keyboard = show);
