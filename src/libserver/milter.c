@@ -139,11 +139,6 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 			session->helo->len = 0;
 		}
 
-		if (session->hostname) {
-			msg_debug_milter ("cleanup hostname");
-			session->hostname->len = 0;
-		}
-
 		if (priv->headers) {
 			msg_debug_milter ("cleanup headers");
 			g_hash_table_remove_all (priv->headers);
@@ -155,6 +150,10 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 			msg_debug_milter ("cleanup addr");
 			rspamd_inet_address_free (session->addr);
 			session->addr = NULL;
+		}
+		if (session->hostname) {
+			msg_debug_milter ("cleanup hostname");
+			session->hostname->len = 0;
 		}
 	}
 
