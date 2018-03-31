@@ -177,7 +177,7 @@ rspamd_config.FROM_SERVICE_ACCT = {
     -- Sender
     local sender = task:get_header('Sender')
     if sender then
-      local s = util.parse_mail_address(sender)
+      local s = util.parse_mail_address(sender, task:get_mempool())
       if (s and s[1]) then
         if (re:match(s[1].addr)) then return true end
       end
@@ -185,7 +185,7 @@ rspamd_config.FROM_SERVICE_ACCT = {
     -- Reply-To
     local replyto = task:get_header('Reply-To')
     if replyto then
-      local rt = util.parse_mail_address(replyto)
+      local rt = util.parse_mail_address(replyto, task:get_mempool())
       if (rt and rt[1]) then
         if (re:match(rt[1].addr)) then return true end
       end

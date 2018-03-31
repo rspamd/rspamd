@@ -183,7 +183,7 @@ LUA_FUNCTION_DEF (util, get_tld);
 LUA_FUNCTION_DEF (util, glob);
 
 /***
- * @function util.parse_mail_address(str)
+ * @function util.parse_mail_address(str, pool)
  * Parses email address and returns a table of tables in the following format:
  *
  * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
@@ -192,6 +192,7 @@ LUA_FUNCTION_DEF (util, glob);
  * - `domain` - domain part (if present), e.g. `foo.com`
  *
  * @param {string} str input string
+ * @param {rspamd_mempool} pool memory pool to use
  * @return {table/tables} parsed list of mail addresses
  */
 LUA_FUNCTION_DEF (util, parse_mail_address);

@@ -184,7 +184,7 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
   function (task)
     local replyto = get_raw_header(task, 'Reply-To')
     if not replyto then return false end
-    local rt = util.parse_mail_address(replyto)
+    local rt = util.parse_mail_address(replyto, task:get_mempool())
     if not (rt and rt[1] and (string.len(rt[1].addr) > 0)) then
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
       return false
@@ -451,7 +451,7 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
 
     local header_cread = nil
     if cread then
-      local headers_cread = util.parse_mail_address(cread)
+      local headers_cread = util.parse_mail_address(cread, task:get_mempool())
       if headers_cread then header_cread = headers_cread[1] end
     end
 
@@ -480,7 +480,7 @@ rspamd_config.HEADER_FORGED_MDN = {
     end
 
     -- Parse mail addr
-    local headers_mdn = util.parse_mail_address(mdn)
+    local headers_mdn = util.parse_mail_address(mdn, task:get_mempool())
 
     if headers_mdn and not header_rp  then return true end
     if header_rp  and not headers_mdn then return false end
