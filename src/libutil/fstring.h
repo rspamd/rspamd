@@ -30,6 +30,9 @@ typedef struct f_str_s {
 	gchar str[];
 } rspamd_fstring_t;
 
+#define RSPAMD_FSTRING_DATA(s) ((s)->str)
+#define RSPAMD_FSTRING_LEN(s) ((s)->len)
+
 typedef struct f_str_tok {
 	gsize len;
 	const gchar *begin;

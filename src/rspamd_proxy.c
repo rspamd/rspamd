@@ -1229,7 +1229,8 @@ proxy_check_file (struct rspamd_http_message *msg,
 	}
 	else {
 		/* Need to parse query URL */
-		if (http_parser_parse_url (msg->url->str, msg->url->len, 0, &u) != 0) {
+		if (http_parser_parse_url (RSPAMD_FSTRING_DATA (msg->url),
+				RSPAMD_FSTRING_LEN (msg->url), 0, &u) != 0) {
 			msg_err_session ("bad request url: %V", msg->url);
 
 			return FALSE;
@@ -1258,7 +1259,7 @@ proxy_check_file (struct rspamd_http_message *msg,
 				}
 
 				/* We need to create a new URL with file attribute removed */
-				new_url = rspamd_fstring_new_init (msg->url->str,
+				new_url = rspamd_fstring_new_init (RSPAMD_FSTRING_DATA (msg->url),
 						u.field_data[UF_QUERY].off);
 				new_url = rspamd_fstring_append (new_url, "?", 1);
 

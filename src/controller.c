@@ -1725,15 +1725,17 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 	/* Find lua script */
 	if (msg->url != NULL && msg->url->len != 0) {
 
-		http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
+		http_parser_parse_url (RSPAMD_FSTRING_DATA (msg->url),
+				RSPAMD_FSTRING_LEN (msg->url), TRUE, &u);
 
 		if (u.field_set & (1 << UF_PATH)) {
-			lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
+			lookup.begin = RSPAMD_FSTRING_DATA (msg->url) +
+					u.field_data[UF_PATH].off;
 			lookup.len = u.field_data[UF_PATH].len;
 		}
 		else {
-			lookup.begin = msg->url->str;
-			lookup.len = msg->url->len;
+			lookup.begin = RSPAMD_FSTRING_DATA (msg->url);
+			lookup.len = RSPAMD_FSTRING_LEN (msg->url);
 		}
 
 		rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%T",
