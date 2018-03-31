@@ -8,7 +8,7 @@ context("Trie search functions", function()
     'est',
     'he',
     'she',
-    'str\0ing'
+    'str\1ing'
   }
 
   local function comparetables(t1, t2)
@@ -30,7 +30,7 @@ context("Trie search functions", function()
     {'test', true, {{4, 1}, {4, 2}}},
     {'she test test', true, {{3, 4}, {3, 3}, {8, 1}, {8, 2}, {13, 1}, {13, 2}}},
     {'non-existent', false},
-    {'str\0ing test', true, {{7, 5}, {12, 1}, {12, 2}}},
+    {'str\1ing test', true, {{7, 5}, {12, 1}, {12, 2}}},
   }
 
   for i,c in ipairs(cases) do
