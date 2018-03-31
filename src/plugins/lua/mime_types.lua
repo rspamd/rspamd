@@ -290,7 +290,7 @@ local full_extensions_map = {
   {"csv", "text/csv"},
   {"cur", "application/octet-stream"},
   {"cxx", "text/plain"},
-  {"dat", "application/octet-stream"},
+  {"dat", {"application/octet-stream", "application/ms-tnef"}},
   {"datasource", "application/xml"},
   {"dbproj", "text/plain"},
   {"dcr", "application/x-director"},
