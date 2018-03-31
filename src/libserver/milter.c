@@ -331,10 +331,14 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 			 */
 			if (session->hostname == NULL) {
 				session->hostname = rspamd_fstring_new_init (pos, zero - pos);
+				msg_debug_milter ("got hostname on connect phase: %V",
+						session->hostname);
 			}
 			else {
 				session->hostname = rspamd_fstring_assign (session->hostname,
 						pos, zero - pos);
+				msg_debug_milter ("rewrote hostname on connect phase: %V",
+						session->hostname);
 			}
 
 			pos = zero + 1;
