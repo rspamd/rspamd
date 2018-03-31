@@ -486,11 +486,6 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 					msg_debug_milter ("got macro: %T -> %T",
 							name_tok, value_tok);
 
-					if (rspamd_ftok_cstr_equal (name_tok, "{mail_host}", FALSE)) {
-						session->hostname = rspamd_fstring_assign (session->hostname,
-								value_tok->begin, value_tok->len);
-					}
-
 					cmdlen -= zero_val - pos;
 					pos = zero_val + 1;
 				}
