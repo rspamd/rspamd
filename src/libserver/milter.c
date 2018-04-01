@@ -1406,6 +1406,7 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 	struct rspamd_http_message *msg;
 	guint i;
 	struct rspamd_email_address *rcpt;
+	struct rspamd_milter_private *priv = session->priv;
 
 	g_assert (session != NULL);
 
@@ -1419,9 +1420,16 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 		session->message = NULL;
 	}
 
-	if (session->hostname && session->hostname->len > 0) {
-		rspamd_http_message_add_header_fstr (msg, HOSTNAME_HEADER,
-				session->hostname);
+	if (session->hostname && RSPAMD_FSTRING_LEN (session->hostname) > 0) {
+		if (!(session->hostname->len == sizeof ("unknown") - 1 &&
+				memcmp (RSPAMD_FSTRING_DATA (session->hostname), "unknown",
+						sizeof ("unknown") - 1) == 0)) {
+			rspamd_http_message_add_header_fstr (msg, HOSTNAME_HEADER,
+					session->hostname);
+		}
+		else {
+			msg_debug_milter ("skip unknown hostname from being added");
+		}
 	}
 
 	if (session->helo && session->helo->len > 0) {
