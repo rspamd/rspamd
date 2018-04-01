@@ -1375,8 +1375,15 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 
 	if (!session->hostname || session->hostname->len == 0) {
 		IF_MACRO("{client_name}") {
-			rspamd_http_message_add_header_len (msg, HOSTNAME_HEADER,
-					found->begin, found->len);
+			if (!(found->len == sizeof ("unknown") - 1 &&
+					memcmp (found->begin, "unknown",
+							sizeof ("unknown") - 1) == 0)) {
+				rspamd_http_message_add_header_len (msg, HOSTNAME_HEADER,
+						found->begin, found->len);
+			}
+			else {
+				msg_debug_milter ("skip unknown hostname from being added");
+			}
 		}
 	}
 
