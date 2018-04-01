@@ -266,9 +266,6 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							hv_tok);
 					debug_task ("read filename header, value: %s", task->msg.fpath);
 				}
-				else {
-					debug_task ("wrong header: %V", hn);
-				}
 				break;
 			case 'j':
 			case 'J':
