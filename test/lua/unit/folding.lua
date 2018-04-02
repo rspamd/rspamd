@@ -48,13 +48,19 @@ context("Headers folding unit test", function()
      "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,\r\n\tR_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"
     },
   }
+  local function escape_spaces(str)
+    str = string.gsub(str, '[\r\n]+', '<NL>')
+    str = string.gsub(str, '[ ]', '<SP>')
+    str = string.gsub(str, '[\t]', '<TB>')
 
+    return str
+  end
   for i,c in ipairs(cases) do
     test("Headers folding: " .. i, function()
       local fv = util.fold_header(c[1][1], c[1][2], 'crlf', ';')
       assert_not_nil(fv)
       assert_equal(fv, c[2], string.format("'%s' doesn't match with '%s'",
-              c[2], fv))
+              escape_spaces(c[2]), escape_spaces(fv)))
     end)
   end
 end)
