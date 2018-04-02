@@ -2728,6 +2728,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	gchar *b64_data;
 	guchar *rsa_buf;
 	guint rsa_len;
+	guint headers_len = 0;
 
 	g_assert (ctx != NULL);
 
@@ -2806,9 +2807,16 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 					NULL, NULL);
 		}
 
+		headers_len += (strlen (dh->name) + 1) * (dh->count + 1);
+
 		/* We allow oversigning if dh->count > number of headers with this name */
 		for (j = 0; j < dh->count + 1; j++) {
 			rspamd_printf_gstring (hdr, "%s:", dh->name);
+		}
+
+		if (headers_len > 60 && i < ctx->common.hlist->len - 1) {
+			rspamd_printf_gstring (hdr, "  ");
+			headers_len = 0;
 		}
 	}
 
