@@ -71,8 +71,10 @@ IF("${ARCH}" STREQUAL "x86_64")
 #define __AVX2__
 #endif
 
+#ifndef __clang__
 #if __GNUC__ <= 4 && __GNUC_MINOR__ <= 8
 #error Broken due to compiler bug
+#endif
 #endif
 
 #include <immintrin.h>
