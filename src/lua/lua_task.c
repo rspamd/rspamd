@@ -2926,7 +2926,7 @@ lua_task_get_hostname (lua_State *L)
 				 *  message sender's IP address enclosed in square
 				 *  brackets (e.g. `[a.b.c.d]')
 				 */
-				lua_pushstring (L, "unknown");
+				lua_pushnil (L);
 			}
 			else {
 				lua_pushstring (L, task->hostname);
