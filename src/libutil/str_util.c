@@ -1028,9 +1028,23 @@ rspamd_header_value_fold (const gchar *name,
 		case fold_token:
 			/* Here, we have token start at 'c' and token end at 'p' */
 			if (fold_type == fold_after) {
+				guint nspaces = 0;
+				const gchar *last;
 
 				if (p > c) {
 					g_string_append_len (res, c, p - c);
+
+					/*
+					 * Check any spaces that are appended to the result
+					 * before folding
+					 */
+					last = &res->str[res->len - 1];
+
+					while (g_ascii_isspace (*last)) {
+						last --;
+						nspaces ++;
+						res->len --;
+					}
 				}
 
 				switch (how) {
@@ -1049,6 +1063,12 @@ rspamd_header_value_fold (const gchar *name,
 				/* Skip space if needed */
 				if (g_ascii_isspace (*p)) {
 					p ++;
+				}
+
+				/* Move leftover spaces */
+				while (nspaces) {
+					g_string_append_c (res, ' ');
+					nspaces --;
 				}
 
 				cur_len = 0;
