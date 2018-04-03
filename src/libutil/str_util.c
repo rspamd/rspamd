@@ -958,10 +958,12 @@ rspamd_header_value_fold (const gchar *name,
 		switch (state) {
 
 		case read_token:
-			if (fold_on_chars && strchr (fold_on_chars, *p) != NULL) {
-				fold_type = fold_after;
-				state = fold_token;
-				next_state = read_token;
+			if (fold_on_chars) {
+				if (strchr (fold_on_chars, *p) != NULL) {
+					fold_type = fold_after;
+					state = fold_token;
+					next_state = read_token;
+				}
 
 				p ++;
 			}
@@ -1153,7 +1155,7 @@ rspamd_header_value_fold (const gchar *name,
 	/* Last token */
 	switch (state) {
 	case read_token:
-		if (cur_len > fold_max && !first_token) {
+		if (!fold_on_chars && cur_len > fold_max && !first_token) {
 			if (g_ascii_isspace (*c)) {
 				c ++;
 			}
