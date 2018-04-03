@@ -573,6 +573,7 @@ td.maps-cell {
   width: 100%;
 }
 #rrd-table {
+    margin-bottom: 2px;
     width: 100% !important;
     text-align: left;
     font-size: 12px;
@@ -581,6 +582,12 @@ td.maps-cell {
 #rrd-table td {
     padding-top: 2px;
     padding-bottom: 2px;
+}
+#rrd-total {
+    padding-left: 8px;
+    margin-bottom: 10px;
+    text-align: left;
+    font-size: 12px;
 }
 
 /* Throughput graph controls */
