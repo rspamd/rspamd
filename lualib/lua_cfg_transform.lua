@@ -263,16 +263,16 @@ return function(cfg)
   else
     -- Perform sanity check for actions
     local actions_defs = {'greylist', 'add header', 'add_header',
-      'rewrite subject', 'rewrite_subject', 'reject'}
+                          'rewrite subject', 'rewrite_subject', 'reject'}
 
     if not cfg.actions['no action'] and not cfg.actions['no_action'] and
-        not cfg.actions['accept'] then
+            not cfg.actions['accept'] then
       for _,d in ipairs(actions_defs) do
         if cfg.actions[d] and type(cfg.actions[d]) == 'number' then
           if cfg.actions[d] < 0 then
             cfg.actions['no action'] = cfg.actions[d] - 0.001
             logger.infox('set no action score to: %s, as action %s has negative score',
-              cfg.actions['no action'], d)
+                    cfg.actions['no action'], d)
             break
           end
         end
@@ -289,6 +289,23 @@ return function(cfg)
       ret = true
     end
     test_groups(cfg.group)
+  end
+
+  -- Deal with dkim settings
+  if not cfg.dkim then cfg.dkim = {} end
+
+  if not cfg.dkim.sign_headers then
+    local sec = cfg.dkim_signing
+    if sec and sec[1] then sec = cfg.dkim_signing[1] end
+
+    if sec and sec.sign_headers then
+      cfg.dkim.sign_headers = sec.sign_headers
+    end
+  end
+
+  if cfg.dkim and cfg.dkim.sign_headers and type(cfg.dkim.sign_headers) == 'table' then
+    -- Flatten
+    cfg.dkim.sign_headers = table.concat(cfg.dkim.sign_headers, ':')
   end
 
   return ret, cfg
