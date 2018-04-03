@@ -2760,7 +2760,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	gchar *b64_data;
 	guchar *rsa_buf;
 	guint rsa_len;
-	guint headers_len = 0;
+	guint headers_len = 0, cur_len = 0;
 	union rspamd_dkim_header_stat hstat;
 
 	g_assert (ctx != NULL);
@@ -2856,7 +2856,13 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 			}
 
 			/* Now add one more entry to oversign */
-			headers_len += (strlen (dh->name) + 1) * (count + 1);
+			cur_len = (strlen (dh->name) + 1) * (count + 1);
+			headers_len += cur_len;
+			if (headers_len > 70 && i > 0 && i < ctx->common.hlist->len - 1) {
+				rspamd_printf_gstring (hdr, "  ");
+				headers_len = cur_len;
+			}
+
 			for (j = 0; j < count + 1; j++) {
 				rspamd_printf_gstring (hdr, "%s:", dh->name);
 			}
@@ -2864,11 +2870,16 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 		else {
 			if (hstat.s.count > 0) {
 
+				cur_len = (strlen (dh->name) + 1) * (hstat.s.count);
+				headers_len += cur_len;
+				if (headers_len > 70 && i > 0 && i < ctx->common.hlist->len - 1) {
+					rspamd_printf_gstring (hdr, "  ");
+					headers_len = cur_len;
+				}
+
 				for (j = 0; j < hstat.s.count; j++) {
 					rspamd_printf_gstring (hdr, "%s:", dh->name);
 				}
-
-				headers_len += (strlen (dh->name) + 1) * (hstat.s.count);
 			}
 
 			if (g_hash_table_lookup (task->raw_headers, dh->name)) {
@@ -2877,16 +2888,12 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 			}
 		}
 
-		if (headers_len > 60 && i < ctx->common.hlist->len - 1) {
-			rspamd_printf_gstring (hdr, "  ");
-			headers_len = 0;
-		}
-
 		g_hash_table_remove (ctx->common.htable, dh->name);
 	}
 
 	/* Replace the last ':' with ';' */
 	hdr->str[hdr->len - 1] = ';';
+	msg_err ("%v", hdr);
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
 		if (!cached_bh->digest_normal) {

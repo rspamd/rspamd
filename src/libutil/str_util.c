@@ -925,6 +925,8 @@ rspamd_header_value_fold (const gchar *name,
 	const guint default_fold_max = 76;
 	guint cur_len;
 	const gchar *p, *c;
+	guint nspaces = 0;
+	const gchar *last;
 	gboolean first_token = TRUE;
 	enum {
 		fold_before = 0,
@@ -954,6 +956,7 @@ rspamd_header_value_fold (const gchar *name,
 
 	while (*p) {
 		switch (state) {
+
 		case read_token:
 			if (fold_on_chars && strchr (fold_on_chars, *p) != NULL) {
 				fold_type = fold_after;
@@ -1028,9 +1031,7 @@ rspamd_header_value_fold (const gchar *name,
 		case fold_token:
 			/* Here, we have token start at 'c' and token end at 'p' */
 			if (fold_type == fold_after) {
-				guint nspaces = 0;
-				const gchar *last;
-
+				nspaces = 0;
 				if (p > c) {
 					g_string_append_len (res, c, p - c);
 
@@ -1074,27 +1075,50 @@ rspamd_header_value_fold (const gchar *name,
 				cur_len = 0;
 			}
 			else {
+				const gchar *last;
+
 				/* Skip space if needed */
 				if (g_ascii_isspace (*c) && p > c) {
 					c ++;
 				}
 
-				switch (how) {
-				case RSPAMD_TASK_NEWLINES_LF:
-					g_string_append_len (res, "\n\t", 2);
-					break;
-				case RSPAMD_TASK_NEWLINES_CR:
-					g_string_append_len (res, "\r\t", 2);
-					break;
-				case RSPAMD_TASK_NEWLINES_CRLF:
-				default:
-					g_string_append_len (res, "\r\n\t", 3);
-					break;
+				/* Avoid double folding */
+				last = &res->str[res->len - 1];
+				last --;
+
+				if (*last != '\r' && *last != '\n') {
+					last ++;
+					while (g_ascii_isspace (*last)) {
+						last --;
+						nspaces ++;
+						res->len --;
+					}
+
+					switch (how) {
+					case RSPAMD_TASK_NEWLINES_LF:
+						g_string_append_len (res, "\n\t", 2);
+						break;
+					case RSPAMD_TASK_NEWLINES_CR:
+						g_string_append_len (res, "\r\t", 2);
+						break;
+					case RSPAMD_TASK_NEWLINES_CRLF:
+					default:
+						g_string_append_len (res, "\r\n\t", 3);
+						break;
+					}
+				}
+
+				/* Move leftover spaces */
+				cur_len = nspaces;
+
+				while (nspaces) {
+					g_string_append_c (res, ' ');
+					nspaces --;
 				}
 
 				if (p > c) {
 					g_string_append_len (res, c, p - c);
-					cur_len = p - c;
+					cur_len += p - c;
 				}
 				else {
 					cur_len = 0;
