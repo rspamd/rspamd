@@ -1467,7 +1467,7 @@ rspamd_task_write_log (struct rspamd_task *task)
 		}
 	}
 
-	msg_info_task ("%V", logbuf);
+	msg_notice_task ("%V", logbuf);
 
 	rspamd_fstring_free (logbuf);
 }

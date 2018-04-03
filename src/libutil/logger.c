@@ -1029,7 +1029,7 @@ file_log_function (const gchar *module, const gchar *id,
 		cptype = g_quark_to_string (rspamd_log->process_type);
 
 		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
-			if (level_flags & G_LOG_LEVEL_INFO) {
+			if (level_flags & (G_LOG_LEVEL_INFO|G_LOG_LEVEL_MESSAGE)) {
 				/* White */
 				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;37m");
 			}
@@ -1115,7 +1115,7 @@ file_log_function (const gchar *module, const gchar *id,
 		mlen = strlen (message);
 
 		if (rspamd_log->flags & RSPAMD_LOG_FLAG_COLOR) {
-			if (level_flags & G_LOG_LEVEL_INFO) {
+			if (level_flags & (G_LOG_LEVEL_INFO|G_LOG_LEVEL_MESSAGE)) {
 				/* White */
 				r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;37m");
 			}

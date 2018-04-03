@@ -686,7 +686,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			len = task->from_envelope->addr_len;
 		}
 
-		msg_info_task_encrypted ("<%s> %s: %*s; ip: %s; URL: %*s",
+		msg_notice_task_encrypted ("<%s> %s: %*s; ip: %s; URL: %*s",
 			task->message_id,
 			has_user ? "user" : "from",
 			len, user_field,
@@ -1211,7 +1211,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	if (task->cfg->log_flags & RSPAMD_LOG_FLAG_RE_CACHE) {
 		restat = rspamd_re_cache_get_stat (task->re_rt);
 		g_assert (restat != NULL);
-		msg_info_task (
+		msg_notice_task (
 				"regexp statistics: %ud pcre regexps scanned, %ud regexps matched,"
 				" %ud regexps total, %ud regexps cached,"
 				" %HL bytes scanned using pcre, %HL bytes scanned total",

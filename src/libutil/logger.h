@@ -244,6 +244,10 @@ extern guint rspamd_task_log_id;
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_notice_task_encrypted(...) rspamd_default_log_function (G_LOG_LEVEL_MESSAGE|RSPAMD_LOG_ENCRYPTED, \
+        task->task_pool->tag.tagname, task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 #define msg_info_task_encrypted(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO|RSPAMD_LOG_ENCRYPTED, \
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         G_STRFUNC, \
@@ -257,7 +261,11 @@ extern guint rspamd_task_log_id;
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_info_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+#define msg_info_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
+        task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_notice_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
         task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
