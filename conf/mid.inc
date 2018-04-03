@@ -11,9 +11,11 @@ is-zakupki.com
 mirtesen.ru
 fcod.nalog.ru
 otc.ru
+qiwi.ru
 client.rostelecom.ru
 sberbank-ast.ru
 crm.taxcom.ru
 wildberries.ru /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/
 promo.wildberries.ru /^[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12}$/
 taxi.yandex.ru /^[a-f0-9]{32}$/
+online.zcts.ru
