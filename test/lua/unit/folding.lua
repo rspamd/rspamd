@@ -42,7 +42,7 @@ context("Headers folding unit test", function()
      "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"
     },
     {{"Content-Type", "Content-Type: multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj fdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"},
-     "Content-Type: multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj\r\n\tfdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
+     "Content-Type: multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc\r\n\tdef ghfdgfdsgj fdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
     },
     {{"X-Spam-Symbols", "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,R_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,RBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,RBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10", ','},
      "Returnpath_BL2,\r\n\tHFILTER_FROM_BOUNCE,\r\n\tR_PARTS_DIFFER,\r\n\tR_IP_PBL,\r\n\tR_ONE_RCPT,\r\n\tR_googleredir,\r\n\tR_TO_SEEMS_AUTO,\r\n\tR_SPF_NEUTRAL,\r\n\tR_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,\r\n\tHFILTER_MID_NOT_FQDN,\r\n\tMISSING_CTE,\r\n\tR_HAS_URL,\r\n\tRBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,\r\n\tBAYES_SPAM,\r\n\tRECEIVED_RBL10"
