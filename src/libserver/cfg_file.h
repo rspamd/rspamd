@@ -325,6 +325,7 @@ struct rspamd_config {
 	gint log_level;                                 /**< log level trigger									*/
 	gchar *log_file;                                /**< path to logfile in case of file logging			*/
 	gboolean log_buffered;                          /**< whether logging is buffered						*/
+	gboolean log_silent_workers;                    /**< silence info messages from workers					*/
 	guint32 log_buf_size;                           /**< length of log buffer								*/
 	const ucl_object_t *debug_ip_map;               /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;                              /**< whether we should log URLs                         */
