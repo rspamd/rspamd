@@ -1164,10 +1164,8 @@ rspamd_header_value_fold (const gchar *name,
 	return res;
 }
 
-static inline bool rspamd_substring_cmp_func (guchar a, guchar b) RSPAMD_ALWAYS_INLINE;
 static inline bool rspamd_substring_cmp_func (guchar a, guchar b) { return a == b; }
 
-static inline bool rspamd_substring_casecmp_func (guchar a, guchar b) RSPAMD_ALWAYS_INLINE;
 static inline bool rspamd_substring_casecmp_func (guchar a, guchar b) { return lc_map[a] == lc_map[b]; }
 
 typedef bool (*rspamd_cmpchar_func_t) (guchar a, guchar b);
