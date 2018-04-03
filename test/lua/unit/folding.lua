@@ -36,16 +36,16 @@ context("Headers folding unit test", function()
      "_abc _def _ghi _fdjhfd _fhdjkfh\r\n\t_dkhaaaaaaaaaaakjdfdjkfdshfdksfhdjfdkhfkdshfdsfdsjkfdkhfdksfdsjf\r\n\t_dkf"
     },
     {{"Content-Type", "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh fjsdhfkjsd fhdjsfhkj"},
-     "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh\r\n\tfjsdhfkjsd fhdjsfhkj"
+     "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hhhhhhhhhhhhhhhhhhhhhhhhh\r\n\tfjsdhfkjsd fhdjsfhkj"
     },
     {{"Content-Type", "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"},
-     "multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"
+     "multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\"hkjhgkfhgfhgf\"hfkjdhf fhjf fghjghf fdshjfhdsj\" hgjhgfjk"
     },
     {{"Content-Type", "Content-Type: multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj fdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"},
-     "Content-Type: multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj\r\n\tfdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
+     "Content-Type: multipart/mixed; boundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj\r\n\tfdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
     },
-    {{"X-Spam-Symbols", "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,R_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,RBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,RBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"},
-     "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,\r\n\tR_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"
+    {{"X-Spam-Symbols", "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,R_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,RBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,RBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10", ','},
+     "Returnpath_BL2,\r\n\tHFILTER_FROM_BOUNCE,\r\n\tR_PARTS_DIFFER,\r\n\tR_IP_PBL,\r\n\tR_ONE_RCPT,\r\n\tR_googleredir,\r\n\tR_TO_SEEMS_AUTO,\r\n\tR_SPF_NEUTRAL,\r\n\tR_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,\r\n\tHFILTER_MID_NOT_FQDN,\r\n\tMISSING_CTE,\r\n\tR_HAS_URL,\r\n\tRBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,\r\n\tBAYES_SPAM,\r\n\tRECEIVED_RBL10"
     },
   }
   local function escape_spaces(str)
@@ -57,7 +57,7 @@ context("Headers folding unit test", function()
   end
   for i,c in ipairs(cases) do
     test("Headers folding: " .. i, function()
-      local fv = util.fold_header(c[1][1], c[1][2], 'crlf', ';')
+      local fv = util.fold_header(c[1][1], c[1][2], 'crlf', c[1][3])
       assert_not_nil(fv)
       assert_equal(fv, c[2], string.format("'%s' doesn't match with '%s'",
               escape_spaces(c[2]), escape_spaces(fv)))
