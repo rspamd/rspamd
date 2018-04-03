@@ -2895,7 +2895,6 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	/* Replace the last ':' with ';' */
 	hdr->str[hdr->len - 1] = ';';
-	msg_err ("%v", hdr);
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
 		if (!cached_bh->digest_normal) {
