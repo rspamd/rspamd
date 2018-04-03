@@ -135,7 +135,9 @@ function($, D3Evolution, unused) {
     }
 
     function drawRrdTable(data, unit) {
+        var total_messages = 0;
         var rows = data.map(function (curr, i) {
+            total_messages += curr.value;
             return {
                 options: {
                     style: {
@@ -145,6 +147,8 @@ function($, D3Evolution, unused) {
                 value: curr
             };
         }, []);
+
+        document.getElementById('rrd-total-value').innerHTML = total_messages;
 
         $('#rrd-table').footable({
             sorting: {
